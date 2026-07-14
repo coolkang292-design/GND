@@ -12,7 +12,17 @@ import {
   upsertMyProfile,
 } from "@/lib/crew";
 
-const AVATARS = ["🧔", "🧑", "👦", "👩", "🤓", "💁‍♀️", "🧗", "🏃"] as const;
+const AVATARS = [
+  "🧔",
+  "🧑",
+  "👦",
+  "👩",
+  "🤓",
+  "💁‍♀️",
+  "🤵",
+  "🧗",
+  "🏃",
+] as const;
 
 type Step = "profile" | "crew" | "create" | "join" | "done";
 
