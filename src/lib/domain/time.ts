@@ -1,0 +1,133 @@
+/**
+ * 시간 도메인 순수 함수 (§16 time.ts).
+ * 모든 함수는 I/O 없음. "순간"은 UTC Date, "달력 날짜"는 timezone 기준.
+ * 서버시간이 진실 — 클라 시간은 참고값(Ground Truth 1).
+ */
+
+export const DEFAULT_TIMEZONE = "Asia/Seoul";
+
+type WallClock = {
+  year: number;
+  month: number; // 1~12
+  day: number; // 1~31
+  hour: number;
+  minute: number;
+  second: number;
+};
+
+/** instant가 tz에서 가리키는 벽시계 시각 */
+function wallClock(instant: Date, timeZone: string): WallClock {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(instant);
+
+  const get = (type: string) =>
+    Number(parts.find((p) => p.type === type)?.value ?? NaN);
+
+  return {
+    year: get("year"),
+    month: get("month"),
+    day: get("day"),
+    // hourCycle 구현에 따라 자정이 24로 나오는 경우 방어
+    hour: get("hour") % 24,
+    minute: get("minute"),
+    second: get("second"),
+  };
+}
+
+/** tz의 벽시계 시각 → UTC 순간 (DST 경계 포함, 반복 보정 2회로 수렴) */
+function zonedTimeToInstant(
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number,
+  second: number,
+  timeZone: string,
+): Date {
+  const desired = Date.UTC(year, month - 1, day, hour, minute, second);
+  let ts = desired;
+  for (let i = 0; i < 2; i++) {
+    const wc = wallClock(new Date(ts), timeZone);
+    const actual = Date.UTC(
+      wc.year,
+      wc.month - 1,
+      wc.day,
+      wc.hour,
+      wc.minute,
+      wc.second,
+    );
+    ts += desired - actual;
+  }
+  return new Date(ts);
+}
+
+/** instant를 tz 기준 달력 날짜 "YYYY-MM-DD"로 */
+export function dayKey(instant: Date, timeZone: string): string {
+  const { year, month, day } = wallClock(instant, timeZone);
+  const mm = String(month).padStart(2, "0");
+  const dd = String(day).padStart(2, "0");
+  return `${year}-${mm}-${dd}`;
+}
+
+/** instant가 속한 tz 달력 날짜의 00:00 UTC 순간 */
+export function startOfDay(instant: Date, timeZone: string): Date {
+  const { year, month, day } = wallClock(instant, timeZone);
+  return zonedTimeToInstant(year, month, day, 0, 0, 0, timeZone);
+}
+
+/** [그날 00:00, 다음날 00:00) — 통계·스탬프 집계용 반열림 구간 */
+export function dayRange(
+  instant: Date,
+  timeZone: string,
+): { start: Date; end: Date } {
+  const { year, month, day } = wallClock(instant, timeZone);
+  return {
+    start: zonedTimeToInstant(year, month, day, 0, 0, 0, timeZone),
+    // Date.UTC가 월/연 경계를 넘는 day+1을 정규화해줌
+    end: zonedTimeToInstant(year, month, day + 1, 0, 0, 0, timeZone),
+  };
+}
+
+/** instant가 속한 주(월요일 시작)의 월요일 00:00 UTC 순간 */
+export function weekStart(instant: Date, timeZone: string): Date {
+  const { year, month, day } = wallClock(instant, timeZone);
+  // 달력 날짜만의 요일은 UTC로 취급해 계산해도 동일
+  const dow = new Date(Date.UTC(year, month - 1, day)).getUTCDay(); // 0=일
+  const daysFromMonday = (dow + 6) % 7;
+  return zonedTimeToInstant(
+    year,
+    month,
+    day - daysFromMonday,
+    0,
+    0,
+    0,
+    timeZone,
+  );
+}
+
+/** [월요일 00:00, 다음주 월요일 00:00) */
+export function weekRange(
+  instant: Date,
+  timeZone: string,
+): { start: Date; end: Date } {
+  const { year, month, day } = wallClock(instant, timeZone);
+  const dow = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+  const daysFromMonday = (dow + 6) % 7;
+  return {
+    start: zonedTimeToInstant(year, month, day - daysFromMonday, 0, 0, 0, timeZone),
+    end: zonedTimeToInstant(year, month, day - daysFromMonday + 7, 0, 0, 0, timeZone),
+  };
+}
+
+/** 두 순간이 tz 기준 같은 달력 날짜인가 */
+export function isSameDay(a: Date, b: Date, timeZone: string): boolean {
+  return dayKey(a, timeZone) === dayKey(b, timeZone);
+}

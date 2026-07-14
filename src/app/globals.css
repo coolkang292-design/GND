@@ -1,26 +1,117 @@
 @import "tailwindcss";
 
+/* ── GND 테마 토큰 (phase0-mockup.html :root 기준) ─────────────── */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --bg: #f5f8f7;
+  --surface: #ffffff;
+  --surface-2: #ecf2f1;
+  --text: #132320;
+  --muted: #5f6d6a;
+  --faint: #9aa7a4;
+  --line: #e0e8e6;
+  --accent: #0d9488;
+  --accent-ink: #ffffff;
+  --accent-weak: #d6f0ec;
+  --good: #16a34a;
+  --good-weak: #e4f4e9;
+  --warn: #d97706;
+  --shadow: 0 1px 2px rgba(19, 35, 32, 0.05), 0 8px 24px rgba(19, 35, 32, 0.06);
+  --r: 18px;
+  --r-sm: 12px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --bg: #0f1615;
+    --surface: #182220;
+    --surface-2: #20302d;
+    --text: #ecf3f1;
+    --muted: #93a19e;
+    --faint: #647471;
+    --line: #2a3835;
+    --accent: #2dd4bf;
+    --accent-ink: #062420;
+    --accent-weak: #123430;
+    --good: #3dd37e;
+    --good-weak: #183026;
+    --warn: #f0a64b;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 30px rgba(0, 0, 0, 0.35);
   }
 }
 
+:root[data-theme="light"] {
+  --bg: #f5f8f7;
+  --surface: #ffffff;
+  --surface-2: #ecf2f1;
+  --text: #132320;
+  --muted: #5f6d6a;
+  --faint: #9aa7a4;
+  --line: #e0e8e6;
+  --accent: #0d9488;
+  --accent-ink: #ffffff;
+  --accent-weak: #d6f0ec;
+  --good: #16a34a;
+  --good-weak: #e4f4e9;
+  --warn: #d97706;
+  --shadow: 0 1px 2px rgba(19, 35, 32, 0.05), 0 8px 24px rgba(19, 35, 32, 0.06);
+}
+
+:root[data-theme="dark"] {
+  --bg: #0f1615;
+  --surface: #182220;
+  --surface-2: #20302d;
+  --text: #ecf3f1;
+  --muted: #93a19e;
+  --faint: #647471;
+  --line: #2a3835;
+  --accent: #2dd4bf;
+  --accent-ink: #062420;
+  --accent-weak: #123430;
+  --good: #3dd37e;
+  --good-weak: #183026;
+  --warn: #f0a64b;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+/* Tailwind v4 유틸리티 매핑: bg-surface, text-accent, border-line 등 */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-weak: var(--accent-weak);
+  --color-good: var(--good);
+  --color-good-weak: var(--good-weak);
+  --color-warn: var(--warn);
+  --radius-card: var(--r);
+  --radius-card-sm: var(--r-sm);
+  --shadow-card: var(--shadow);
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto,
+    "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+html,
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(
+      1200px 600px at 50% -10%,
+      color-mix(in srgb, var(--accent) 8%, transparent),
+      transparent 60%
+    ),
+    var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.45;
+  min-height: 100dvh;
 }
