@@ -12,7 +12,7 @@ import {
   upsertMyProfile,
 } from "@/lib/crew";
 
-const AVATARS = ["🧔", "🧑", "👦", "👩", "🧗", "🏃"] as const;
+const AVATARS = ["🧔", "🧑", "👦", "👩", "🤓", "💁‍♀️", "🧗", "🏃"] as const;
 
 type Step = "profile" | "crew" | "create" | "join" | "done";
 
@@ -165,7 +165,7 @@ export default function OnboardingPage() {
           </p>
 
           <Label>프로필 사진</Label>
-          <div className="flex justify-center gap-2">
+          <div className="flex flex-wrap justify-center gap-2">
             {AVATARS.map((a) => (
               <button
                 key={a}
