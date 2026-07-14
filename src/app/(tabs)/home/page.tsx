@@ -1,4 +1,5 @@
 import { AuthStatus } from "@/components/auth-status";
+import { CrewCard } from "@/components/crew-card";
 
 export default function HomePage() {
   return (
@@ -19,6 +20,8 @@ export default function HomePage() {
           Phase 3에서 세션 기록이 열립니다.
         </p>
       </section>
+
+      <CrewCard />
 
       <AuthStatus />
     </div>
