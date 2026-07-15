@@ -30,8 +30,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ko" className="h-full antialiased">
-      <body className="min-h-full flex justify-center">
+    // suppressHydrationWarning: 카카오톡 등 인앱 브라우저가 로드 시
+    // html/body 속성을 주입해 생기는 하이드레이션 경고 무시 (1단계 속성만)
+    <html lang="ko" className="h-full antialiased" suppressHydrationWarning>
+      <body className="min-h-full flex justify-center" suppressHydrationWarning>
         <ServiceWorkerRegister />
         <AuthProvider>
           <div className="w-full max-w-[430px] h-dvh flex flex-col relative bg-bg">
