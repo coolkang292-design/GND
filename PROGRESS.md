@@ -54,6 +54,7 @@ CLI/DB 비밀번호 없음 → **사용자가 SQL Editor에 수동 붙여넣기*
 2. **plpgsql `returns table(...)` 컬럼명이 실제 테이블 컬럼과 겹치면** on conflict 등에서 42702 ambiguous → `#variable_conflict use_column` (0003).
 3. RLS는 반드시 실제 2인 픽스처로 검증 — 위 두 버그 모두 코드 리뷰가 아닌 실행 테스트로 발견됨.
 4. eslint `react-hooks/set-state-in-effect` — effect 안 동기 setState 금지. localStorage 프리필은 lazy useState 초기화로.
+5. **폰 실기기 테스트(IP 접속)는 두 가지가 함께 막는다**: ① Next 16은 크로스 오리진 dev 리소스를 기본 차단 → 하이드레이션 자체가 안 됨(화면은 SSR 초기 상태로 박제) → `next.config.ts allowedDevOrigins`에 IP 등록. ② http+IP는 비보안 컨텍스트 → `crypto.randomUUID`·`crypto.subtle` 없음 → `lib/workout.ts localId()` 폴백 사용. 실행: `pnpm exec next dev -H 0.0.0.0` 후 `http://192.168.219.112:3000`(LAN) 또는 `http://100.85.240.15:3000`(Tailscale).
 
 ## 다음 세션 할 일
 
