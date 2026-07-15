@@ -22,6 +22,7 @@ import {
   getMyActiveSession,
   getSessionById,
   loadDraft,
+  localId,
   newSet,
   saveDraft,
   saveSessionExercises,
@@ -32,7 +33,7 @@ import {
 } from "@/lib/workout";
 
 export default function RecordPage() {
-  const { userId, loading, configured } = useAuth();
+  const { userId, loading, configured, error } = useAuth();
 
   if (!configured) {
     return (
@@ -41,8 +42,16 @@ export default function RecordPage() {
       </p>
     );
   }
-  if (loading || !userId) {
+  if (loading) {
     return <p className="pt-10 text-center text-sm text-muted">불러오는 중…</p>;
+  }
+  if (!userId) {
+    return (
+      <p className="pt-10 text-center text-sm text-warn">
+        익명 인증에 실패했어요{error ? ` — ${error}` : ""}. 홈 탭에서 상태를
+        확인해 주세요.
+      </p>
+    );
   }
   return <WorkoutScreen userId={userId} />;
 }
@@ -174,7 +183,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
 
   function addExercise(item: CatalogExercise) {
     const ex: LocalExercise = {
-      key: crypto.randomUUID(),
+      key: localId(),
       name: item.name,
       bodyPart: item.body_part,
       exerciseType: item.exercise_type,

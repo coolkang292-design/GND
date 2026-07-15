@@ -17,12 +17,15 @@ type AuthState = {
   configured: boolean;
   loading: boolean;
   userId: string | null;
+  /** 인증 실패 사유 (성공 시 null) — 화면에 노출해 원인 파악 가능하게 */
+  error: string | null;
 };
 
 const AuthContext = createContext<AuthState>({
   configured: false,
   loading: true,
   userId: null,
+  error: null,
 });
 
 export function useAuth(): AuthState {
@@ -39,6 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     configured,
     loading: configured,
     userId: null,
+    error: null,
   });
 
   useEffect(() => {
@@ -54,7 +58,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (session) {
         if (!cancelled) {
-          setState({ configured: true, loading: false, userId: session.user.id });
+          setState({
+            configured: true,
+            loading: false,
+            userId: session.user.id,
+            error: null,
+          });
         }
         return;
       }
@@ -63,17 +72,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (cancelled) return;
       if (error) {
         console.error("익명 인증 실패:", error.message);
-        setState({ configured: true, loading: false, userId: null });
+        setState({
+          configured: true,
+          loading: false,
+          userId: null,
+          error: error.message,
+        });
         return;
       }
       setState({
         configured: true,
         loading: false,
         userId: data.user?.id ?? null,
+        error: null,
       });
     }
 
-    void ensureAnonymousSession();
+    // 예외로 죽으면 loading이 영원히 안 끝난다 — 반드시 여기서 회수
+    ensureAnonymousSession().catch((e: unknown) => {
+      if (cancelled) return;
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("익명 인증 예외:", e);
+      setState({ configured: true, loading: false, userId: null, error: msg });
+    });
     return () => {
       cancelled = true;
     };

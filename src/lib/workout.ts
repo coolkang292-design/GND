@@ -21,7 +21,7 @@ export type LocalSet = {
 
 export function newSet(partial: Partial<Omit<LocalSet, "key">> = {}): LocalSet {
   return {
-    key: crypto.randomUUID(),
+    key: localId(),
     weightKg: 0,
     reps: 0,
     distanceKm: 0,
@@ -47,6 +47,14 @@ export type WorkoutDraft = {
   restSeconds: number; // 세트 사이 휴식 사전설정 (§10, 기본 90초)
   exercises: LocalExercise[];
 };
+
+/** crypto.randomUUID는 보안 컨텍스트 전용 — http+LAN IP 테스트에서도 동작해야 함 */
+export function localId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
 
 export const DEFAULT_REST_SECONDS = 90;
 

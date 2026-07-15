@@ -3,7 +3,7 @@
 import { useAuth } from "@/components/auth-provider";
 
 export function AuthStatus() {
-  const { configured, loading, userId } = useAuth();
+  const { configured, loading, userId, error } = useAuth();
 
   if (!configured) {
     return (
@@ -27,8 +27,8 @@ export function AuthStatus() {
   if (!userId) {
     return (
       <div className="rounded-card-sm border border-line bg-surface p-3 text-xs text-warn">
-        익명 인증 실패 — Supabase 프로젝트에서 Anonymous Sign-in을 켰는지
-        확인하세요.
+        익명 인증 실패{error ? ` — ${error}` : ""}
+        {!error && " — Supabase 프로젝트에서 Anonymous Sign-in을 켰는지 확인하세요."}
       </div>
     );
   }
