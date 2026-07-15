@@ -1,4 +1,5 @@
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import type { CompletedSession } from "@/lib/domain/calendar";
 import type { VolumeSet } from "@/lib/domain/volume";
 import type {
   BodyPart,
@@ -361,4 +362,48 @@ export async function getLastRecordedSets(
       }),
     );
   return sets.length > 0 ? sets : null;
+}
+
+// ── 달력용 완료 세션 (§12 계산된 스탬프의 원천 데이터) ──────────────
+
+/** 달력 스탬프·상세 시트의 원천 — 완료 세션 + 종목명 (도메인 CompletedSession 확장) */
+export type CalendarSession = CompletedSession & {
+  id: string;
+  exerciseNames: string[];
+};
+
+/** 내 completed 세션 전체 (달력 스탬프·월간요약·상세시트·복사용) */
+export async function getCompletedSessions(
+  userId: string,
+): Promise<CalendarSession[]> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("workout_sessions")
+    .select(
+      "id, completed_at, duration_minutes, verification_status, workout_exercises(exercise_name, sort_order)",
+    )
+    .eq("user_id", userId)
+    .eq("status", "completed")
+    .is("deleted_at", null)
+    .not("completed_at", "is", null)
+    .order("completed_at", { ascending: false });
+  if (error) throw error;
+
+  type Row = {
+    id: string;
+    completed_at: string;
+    duration_minutes: number | null;
+    verification_status: CompletedSession["verification"];
+    workout_exercises: { exercise_name: string; sort_order: number }[] | null;
+  };
+
+  return ((data ?? []) as Row[]).map((r) => ({
+    id: r.id,
+    completedAt: new Date(r.completed_at),
+    verification: r.verification_status,
+    durationSeconds: (r.duration_minutes ?? 0) * 60,
+    exerciseNames: [...(r.workout_exercises ?? [])]
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map((e) => e.exercise_name),
+  }));
 }

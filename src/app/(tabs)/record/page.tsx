@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
+import { CalendarView } from "@/components/record/calendar-view";
 import { ExerciseCard } from "@/components/record/exercise-card";
 import { ExercisePicker } from "@/components/record/exercise-picker";
 import { RestBar } from "@/components/record/rest-bar";
@@ -73,6 +74,7 @@ function errorMessage(e: unknown): string {
 function WorkoutScreen({ userId }: { userId: string }) {
   // 임시저장 복구: 렌더 전 lazy 초기화 (§10 새로고침 복구)
   const [draft, setDraft] = useState(() => loadDraft(userId));
+  const [subTab, setSubTab] = useState<"workout" | "calendar">("workout");
   const [catalog, setCatalog] = useState<CatalogExercise[]>([]);
   const [groupId, setGroupId] = useState<string | null>(null);
   const [prevVolume, setPrevVolume] = useState<number | null>(null);
@@ -380,7 +382,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
           </p>
         </section>
         <p className="text-center text-xs text-muted">
-          인증사진·달력 스탬프는 Phase 4에서 열려요.
+          '달력' 탭에서 오늘 스탬프를 확인할 수 있어요. 인증사진은 곧 열려요.
         </p>
         <button
           onClick={() => setResult(null)}
@@ -401,7 +403,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
             {active ? "운동 중" : "준비"}
           </p>
         </div>
-        {active && (
+        {active && subTab === "workout" && (
           <button
             onClick={handleCancel}
             disabled={busy}
@@ -412,6 +414,27 @@ function WorkoutScreen({ userId }: { userId: string }) {
         )}
       </header>
 
+      {/* 운동 / 달력 서브탭 (§12) */}
+      <div className="flex gap-1 rounded-card border border-line bg-surface-2 p-1">
+        {(["workout", "calendar"] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setSubTab(t)}
+            className={`h-9 flex-1 rounded-[9px] text-sm font-bold transition-colors ${
+              subTab === t
+                ? "bg-surface text-accent shadow-card"
+                : "text-muted"
+            }`}
+          >
+            {t === "workout" ? "운동" : "달력"}
+          </button>
+        ))}
+      </div>
+
+      {subTab === "calendar" ? (
+        <CalendarView userId={userId} />
+      ) : (
+        <>
       {/* 세션 헤더 (§10) */}
       <section className="rounded-card border border-line bg-surface p-4 shadow-card">
         <div className="flex items-start justify-between">
@@ -538,6 +561,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
         >
           {toast}
         </div>
+      )}
+        </>
       )}
     </div>
   );
