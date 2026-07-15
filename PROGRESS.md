@@ -58,5 +58,5 @@ CLI/DB 비밀번호 없음 → **사용자가 SQL Editor에 수동 붙여넣기*
 
 ## 다음 세션 할 일
 
-1. 실기기 스모크: 운동 추가→시작→세트 완료(휴식 타이머)→종료→완료 화면, 새로고침 복구
+1. ~~실기기 스모크~~ ✅ 2026-07-16 PC+폰 통과 (allowedDevOrigins·localId 폴백 수정 후)
 2. Phase 4 착수 (완료 루프): 사진 압축·업로드·완료·달력 스탬프(계산)·날짜상세·지난 운동 복사 — `calendar.ts` tz TDD, Storage 버킷(avatars·workout-images) 생성 필요
