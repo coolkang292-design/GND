@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { AuthStatus } from "@/components/auth-status";
 import { CrewCard } from "@/components/crew-card";
 
@@ -13,13 +14,16 @@ export default function HomePage() {
         </div>
       </header>
 
-      <section className="rounded-[22px] bg-gradient-to-br from-accent to-[#0B6E66] p-5 text-accent-ink shadow-card">
+      <Link
+        href="/record"
+        className="block rounded-[22px] bg-gradient-to-br from-accent to-[#0B6E66] p-5 text-accent-ink shadow-card"
+      >
         <p className="text-xs font-bold opacity-80">오늘의 운동</p>
         <h2 className="mt-1 text-xl font-extrabold">운동 시작하기</h2>
         <p className="mt-1 text-sm opacity-90">
-          Phase 3에서 세션 기록이 열립니다.
+          30초면 기록할 수 있어요. 친구들이 기다리고 있어요.
         </p>
-      </section>
+      </Link>
 
       <CrewCard />
 
