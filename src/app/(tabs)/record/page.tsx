@@ -193,8 +193,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
       name: item.name,
       bodyPart: item.body_part,
       exerciseType: item.exercise_type,
+      measure: item.measure,
       isCustom: item.is_custom,
-      sets: defaultSets(item.exercise_type),
+      sets: defaultSets(item.exercise_type, item.measure),
     };
     setDraft((d) => ({ ...d, exercises: [...d.exercises, ex] }));
     setPickerOpen(false);
@@ -211,6 +212,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
     name: string;
     bodyPart: BodyPart;
     exerciseType: ExerciseType;
+    measure: "reps" | "time" | null;
   }) {
     try {
       const created = await createCustomExercise({ ...input, userId });
@@ -307,6 +309,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
         name: it.name,
         bodyPart: byName.get(it.name)?.body_part ?? "코어",
         exerciseType: it.exerciseType,
+        measure: it.measure,
         isCustom: byName.get(it.name)?.is_custom ?? false,
         sets: it.sets,
       }));
