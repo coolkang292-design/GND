@@ -53,7 +53,7 @@
 - **검증**: unit 115(+11) · RLS **107/107**(+5: 직접 insert 차단·not_eligible·self_view·not_crew·본인 select) · lint · typecheck · build 통과.
 - **한계(기록)**: view_record 정상 경로(5일 자격 통과)는 자동 테스트 불가 — completed_at이 서버시간이라 테스트에서 5개 고유 날짜를 만들 수 없음. 판정 로직은 unit이 검증, SQL은 같은 규칙의 이식. 실사용에서 자연 확인.
 - 열람권 자기 축하 배너·record_viewed 알림함 표시는 기존 알림 구조로 자동 처리(추가 코드 없음).
-- **스트릭 메시지 개편 (사용자 요청, `175985e`·`ce54521`)**: 손실회피(쌓아둔 n일을 잃는다는 숫자 프레이밍) + 능청 유머 톤. `STAGE_MESSAGES`가 스트릭 수를 받는 함수라 스트릭이 길수록 압박이 커짐. 문구 수정은 `streak-card.tsx` 한 곳만.
+- **스트릭 메시지 개편 (사용자 요청, `175985e`·`ce54521`+로테이션)**: 손실회피(쌓아둔 n일을 잃는다는 숫자 프레이밍) + 능청 유머 톤 + **날짜 기반 로테이션**(단계별 변형 2~3개, todayKey 해시로 하루마다 다른 문구·같은 날엔 고정 — 렌더 중 Math.random은 하이드레이션 불일치라 금지). 문구 추가·수정은 `streak-card.tsx`의 `STAGE_MESSAGES`·`TODAY_DONE_MESSAGES`·`EXPIRED_MESSAGES` 배열에 항목만 넣으면 됨.
 - **와이파이 IP 변동 대처 (`986497e`)**: DHCP 재할당으로 .112→.104. `ipconfig` 확인 → `next.config.ts allowedDevOrigins` 추가 → dev 서버 재시작. 이전 세션 dev 서버가 좀비로 남아 포트를 잡고 있으면 `taskkill /PID <pid> /F`.
 
 ### Phase 5.2~5.3 산출물 (2026-07-17, 커밋 `63e5c27`~`88d959b` + `b499510`)
