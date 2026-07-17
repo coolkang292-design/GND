@@ -7,17 +7,7 @@ import {
   getLatestCrewWorkoutWithPhoto,
   type LatestCrewWorkout,
 } from "@/lib/workout";
-
-function timeAgo(date: Date): string {
-  const diffMs = Date.now() - date.getTime();
-  const min = Math.floor(diffMs / 60000);
-  if (min < 1) return "방금 전";
-  if (min < 60) return `${min}분 전`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}시간 전`;
-  const day = Math.floor(hr / 24);
-  return `${day}일 전`;
-}
+import { timeAgo } from "@/lib/time-ago";
 
 /** 홈 '최근 친구 활동' 섹션 — 크루의 가장 최근 인증사진 운동 미리보기 */
 export function CrewLatestWorkout() {
