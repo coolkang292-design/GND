@@ -4,7 +4,11 @@ import { useState } from "react";
 import type { GoalType } from "@/lib/domain/goal-score";
 import { GOAL_TYPE_META, type GoalDraft } from "@/lib/challenge";
 
-const GOAL_TYPES = Object.keys(GOAL_TYPE_META) as GoalType[];
+// 총볼륨은 부위·종목별 중량이 달라 기간 목표로 감 잡기 어려움 → 선택지에서 제외
+// (기록 화면의 세션 볼륨 표시·과거 볼륨 목표 렌더링은 유지)
+const GOAL_TYPES: GoalType[] = (Object.keys(GOAL_TYPE_META) as GoalType[]).filter(
+  (t) => t !== "volume",
+);
 
 /** 하루 기준 입력의 기본값 (유형별) */
 const PER_DAY_DEFAULT: Record<GoalType, number> = {
@@ -206,7 +210,8 @@ export function ChallengeSetupSheet({
         </h3>
         <p className="mt-0.5 text-[11.5px] text-muted">
           종류가 달라도 각 목표를 &lsquo;내 목표 대비 %&rsquo;로 환산해
-          공평하게 점수화해요.
+          공평하게 점수화해요. 웨이트는 <b>운동 시간·횟수</b> 목표를
+          추천해요.
         </p>
 
         <div className="mt-3 flex-1 overflow-y-auto">
@@ -313,7 +318,11 @@ export function ChallengeSetupSheet({
                         }
                         className="mt-1 h-11 w-full rounded-card-sm border border-line bg-surface px-2 text-sm font-bold"
                       >
-                        {GOAL_TYPES.map((t) => (
+                        {/* 지난 KPI에 볼륨이 있으면 그 행에서만 옵션 유지 */}
+                        {(GOAL_TYPES.includes(row.type)
+                          ? GOAL_TYPES
+                          : [...GOAL_TYPES, row.type]
+                        ).map((t) => (
                           <option key={t} value={t}>
                             {GOAL_TYPE_META[t].label}
                           </option>

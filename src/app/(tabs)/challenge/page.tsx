@@ -40,7 +40,7 @@ const EMPTY_STATS: PeriodStats = {
   distanceKm: 0,
   durationMin: 0,
   volumeKg: 0,
-  bodyweightReps: 0,
+  totalReps: 0,
 };
 
 function periodDays(startDate: string, endDate: string): number {

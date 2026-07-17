@@ -12,8 +12,8 @@ export const GOAL_TYPE_META: Record<
   frequency: { label: "운동 횟수(일)", unit: "일", defaultTarget: 12 },
   distance: { label: "거리(km)", unit: "km", defaultTarget: 20 },
   duration: { label: "운동 시간(분)", unit: "분", defaultTarget: 600 },
-  volume: { label: "웨이트 총볼륨(kg)", unit: "kg", defaultTarget: 5000 },
-  reps: { label: "맨몸 총 횟수(회)", unit: "회", defaultTarget: 300 },
+  volume: { label: "웨이트 총볼륨(kg)", unit: "kg", defaultTarget: 5000 }, // 레거시 표시용 (선택지 제외)
+  reps: { label: "총 반복 횟수(회)", unit: "회", defaultTarget: 300 }, // 웨이트+맨몸 완료 세트 회수 합
 };
 
 export type GoalDraft = { type: GoalType; target: number };
@@ -169,7 +169,7 @@ export type PeriodStats = {
   distanceKm: number;
   durationMin: number;
   volumeKg: number;
-  bodyweightReps: number;
+  totalReps: number; // 웨이트+맨몸 완료 세트의 회수 합
 };
 
 const EMPTY_STATS: PeriodStats = {
@@ -177,7 +177,7 @@ const EMPTY_STATS: PeriodStats = {
   distanceKm: 0,
   durationMin: 0,
   volumeKg: 0,
-  bodyweightReps: 0,
+  totalReps: 0,
 };
 
 /** 목표 유형별 실적 값 */
@@ -192,7 +192,7 @@ export function actualForGoal(stats: PeriodStats, type: GoalType): number {
     case "volume":
       return stats.volumeKg;
     case "reps":
-      return stats.bodyweightReps;
+      return stats.totalReps;
   }
 }
 
@@ -259,8 +259,9 @@ export async function getPeriodStatsByUser(
         if (!s.is_completed) continue;
         if (ex.exercise_type === "weight") {
           entry.volumeKg += Number(s.weight_kg ?? 0) * (s.reps ?? 0);
+          entry.totalReps += s.reps ?? 0;
         } else if (ex.exercise_type === "bodyweight") {
-          entry.bodyweightReps += s.reps ?? 0;
+          entry.totalReps += s.reps ?? 0;
         } else {
           entry.distanceKm += Number(s.distance_meters ?? 0) / 1000;
         }
@@ -276,7 +277,7 @@ export async function getPeriodStatsByUser(
       distanceKm: entry.distanceKm,
       durationMin: entry.durationMin,
       volumeKg: entry.volumeKg,
-      bodyweightReps: entry.bodyweightReps,
+      totalReps: entry.totalReps,
     });
   }
   return result;
