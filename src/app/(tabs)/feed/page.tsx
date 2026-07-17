@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
+import { ActiveWorkoutCards } from "@/components/feed/active-workout-cards";
 import { FeedItemCard } from "@/components/feed/feed-item";
 import { getMyGroups } from "@/lib/crew";
 import {
@@ -68,6 +69,8 @@ export default function FeedPage() {
           </p>
         </div>
       </header>
+
+      <ActiveWorkoutCards />
 
       {!ready ? (
         <p className="py-10 text-center text-sm text-muted">불러오는 중…</p>

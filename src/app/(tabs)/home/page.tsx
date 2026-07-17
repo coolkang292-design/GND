@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AuthStatus } from "@/components/auth-status";
 import { CrewCard } from "@/components/crew-card";
+import { ActiveWorkoutCards } from "@/components/feed/active-workout-cards";
 import { CrewLatestWorkout } from "@/components/crew-latest-workout";
 
 export default function HomePage() {
@@ -25,6 +26,8 @@ export default function HomePage() {
           30초면 기록할 수 있어요. 친구들이 기다리고 있어요.
         </p>
       </Link>
+
+      <ActiveWorkoutCards />
 
       <CrewCard />
 
