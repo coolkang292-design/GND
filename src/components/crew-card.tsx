@@ -3,13 +3,16 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { getCrewProfiles, getMyGroups } from "@/lib/crew";
+import { getTodaysWorkoutUserIds, pokeUser, SocialError } from "@/lib/social";
 import type { Group, Profile } from "@/lib/types";
 
-/** 홈의 내 크루 카드 — 크루명·멤버·초대 링크 복사 */
+/** 홈의 내 크루 카드 — 크루명·멤버·오늘 미운동 찌르기·초대 링크 복사 */
 export function CrewCard() {
   const { userId, loading, configured } = useAuth();
   const [group, setGroup] = useState<Group | null>(null);
   const [members, setMembers] = useState<Profile[]>([]);
+  const [workedOut, setWorkedOut] = useState<Set<string>>(new Set());
+  const [notice, setNotice] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [ready, setReady] = useState(false);
 
@@ -25,7 +28,10 @@ export function CrewCard() {
         setGroup(g);
         if (g) {
           const crew = await getCrewProfiles(g.id);
-          if (!cancelled) setMembers(crew);
+          if (cancelled) return;
+          setMembers(crew);
+          const done = await getTodaysWorkoutUserIds(crew.map((c) => c.id));
+          if (!cancelled) setWorkedOut(done);
         }
       } finally {
         if (!cancelled) setReady(true);
@@ -36,6 +42,20 @@ export function CrewCard() {
       cancelled = true;
     };
   }, [configured, loading, userId]);
+
+  async function poke(target: Profile) {
+    try {
+      await pokeUser(target.id);
+      setNotice(`${target.nickname}님을 콕 찔렀어요 👉`);
+    } catch (e) {
+      if (e instanceof SocialError && e.code === "poke_cooldown") {
+        setNotice("오늘은 이미 찔렀어요");
+      } else {
+        setNotice("찌르기를 보내지 못했어요");
+      }
+    }
+    setTimeout(() => setNotice(null), 3000);
+  }
 
   if (!configured || !ready || !group) return null;
 
@@ -68,10 +88,24 @@ export function CrewCard() {
               {m.id === userId && (
                 <span className="ml-0.5 text-faint">(나)</span>
               )}
+              {workedOut.has(m.id) && <span className="ml-0.5">✅</span>}
             </span>
+            {m.id !== userId && !workedOut.has(m.id) && (
+              <button
+                onClick={() => void poke(m)}
+                aria-label={`${m.nickname} 찌르기`}
+                className="ml-0.5 rounded-full bg-accent-weak px-1.5 py-0.5 text-[11px] font-bold text-accent"
+              >
+                👉 콕
+              </button>
+            )}
           </div>
         ))}
       </div>
+
+      {notice && (
+        <p className="mt-2 text-xs font-bold text-accent">{notice}</p>
+      )}
 
       <button
         onClick={copyInvite}

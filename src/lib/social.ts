@@ -4,7 +4,7 @@ import {
   type SocialEvent,
 } from "@/lib/domain/social";
 import { currentStreak, workoutDayKeys } from "@/lib/domain/streak";
-import { DEFAULT_TIMEZONE, dayKey } from "@/lib/domain/time";
+import { DEFAULT_TIMEZONE, dayKey, dayRange } from "@/lib/domain/time";
 import { summarizeVolume, type VolumeSummary } from "@/lib/domain/volume";
 import type { ExerciseType } from "@/lib/types";
 
@@ -388,6 +388,25 @@ export async function getActiveCrewSessions(
       },
     ];
   });
+}
+
+/** 오늘(KST) 완료 운동이 있는 유저 id — 찌르기 버튼 노출 판단용 */
+export async function getTodaysWorkoutUserIds(
+  userIds: string[],
+): Promise<Set<string>> {
+  if (userIds.length === 0) return new Set();
+  const supabase = getSupabaseBrowserClient();
+  const { start, end } = dayRange(new Date(), DEFAULT_TIMEZONE);
+  const { data, error } = await supabase
+    .from("workout_sessions")
+    .select("user_id")
+    .in("user_id", userIds)
+    .eq("status", "completed")
+    .is("deleted_at", null)
+    .gte("completed_at", start.toISOString())
+    .lt("completed_at", end.toISOString());
+  if (error) throw error;
+  return new Set((data ?? []).map((r) => r.user_id));
 }
 
 // ── 응원·찌르기 RPC ──────────────────────────────────────────

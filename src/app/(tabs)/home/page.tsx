@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AuthStatus } from "@/components/auth-status";
 import { CrewCard } from "@/components/crew-card";
 import { ActiveWorkoutCards } from "@/components/feed/active-workout-cards";
+import { NotificationBell } from "@/components/notification-bell";
 import { CrewLatestWorkout } from "@/components/crew-latest-workout";
 
 export default function HomePage() {
@@ -14,6 +15,7 @@ export default function HomePage() {
             오늘도 GND 탈출하자 🔥
           </p>
         </div>
+        <NotificationBell />
       </header>
 
       <Link

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { ActiveWorkoutCards } from "@/components/feed/active-workout-cards";
 import { FeedItemCard } from "@/components/feed/feed-item";
+import { NotificationBell } from "@/components/notification-bell";
 import { getMyGroups } from "@/lib/crew";
 import {
   FEED_PAGE_SIZE,
@@ -68,6 +69,7 @@ export default function FeedPage() {
             크루의 운동, 같이 봐요 👀
           </p>
         </div>
+        <NotificationBell />
       </header>
 
       <ActiveWorkoutCards />
