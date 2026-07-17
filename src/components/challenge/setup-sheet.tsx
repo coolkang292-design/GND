@@ -2,21 +2,48 @@
 
 import { useState } from "react";
 import type { GoalType } from "@/lib/domain/goal-score";
-import { GOAL_TYPE_META, type GoalDraft } from "@/lib/challenge";
+import {
+  GOAL_TYPE_META,
+  goalLabel,
+  type GoalCategory,
+  type GoalDraft,
+} from "@/lib/challenge";
 
-// 총볼륨은 부위·종목별 중량이 달라 기간 목표로 감 잡기 어려움 → 선택지에서 제외
-// (기록 화면의 세션 볼륨 표시·과거 볼륨 목표 렌더링은 유지)
-const GOAL_TYPES: GoalType[] = (Object.keys(GOAL_TYPE_META) as GoalType[]).filter(
-  (t) => t !== "volume",
-);
+const CATEGORIES: { key: GoalCategory; label: string }[] = [
+  { key: "weight", label: "웨이트" },
+  { key: "cardio", label: "유산소" },
+  { key: "bodyweight", label: "맨몸" },
+];
 
-/** 하루 기준 입력의 기본값 (유형별) */
-const PER_DAY_DEFAULT: Record<GoalType, number> = {
-  frequency: 0, // 사용 안 함 (주 N일 자체가 목표)
-  distance: 5,
-  duration: 30,
-  volume: 2000,
-  reps: 100,
+/** 카테고리별 선택 가능한 지표 (레거시 volume 제외) */
+const CATEGORY_TYPES: Record<GoalCategory, GoalType[]> = {
+  weight: ["weight_reps", "weight_days"],
+  cardio: ["cardio_distance", "cardio_time"],
+  bodyweight: ["bodyweight_reps", "bodyweight_time", "bodyweight_days"],
+};
+
+/** 지표 짧은 라벨 (카테고리 우선 UI용) */
+const METRIC_LABEL: Record<GoalType, string> = {
+  weight_reps: "횟수",
+  weight_days: "운동일(부위)",
+  cardio_distance: "거리",
+  cardio_time: "시간",
+  bodyweight_reps: "횟수",
+  bodyweight_time: "시간",
+  bodyweight_days: "운동일(종목)",
+  volume: "총볼륨",
+};
+
+const DAYS_TYPES: GoalType[] = ["weight_days", "bodyweight_days"];
+const isDays = (t: GoalType) => DAYS_TYPES.includes(t);
+
+/** 하루 기준 입력 기본값 (일수형 제외) */
+const PER_DAY_DEFAULT: Partial<Record<GoalType, number>> = {
+  weight_reps: 30,
+  cardio_distance: 5,
+  cardio_time: 30,
+  bodyweight_reps: 30,
+  bodyweight_time: 10,
 };
 
 export type SetupSubmit = {
@@ -28,10 +55,12 @@ export type SetupSubmit = {
 };
 
 type GoalRow = {
+  category: GoalCategory;
   type: GoalType;
-  daysPerWeek: number; // 주 N일 (하루 기준 계산용)
-  perDay: number; // 하루 목표량
-  directTarget: number; // 총량 직접 입력값
+  daysPerWeek: number;
+  perDay: number;
+  directTarget: number;
+  qualifier: number; // 일수형: 하루 최소 부위/종목 수
 };
 
 function periodDaysOf(startDate: string, endDate: string): number {
@@ -51,29 +80,31 @@ function rowFromTarget(
   target: number,
   plannedDays: number,
   periodDays: number,
+  qualifier?: number | null,
 ): GoalRow {
   const daysPerWeek = Math.min(
     7,
     Math.max(
       1,
-      type === "frequency"
+      isDays(type)
         ? Math.round((target * 7) / periodDays) || plannedDays
         : plannedDays,
     ),
   );
   return {
+    category: GOAL_TYPE_META[type].category,
     type,
     daysPerWeek,
-    perDay:
-      type === "frequency"
-        ? 0
-        : round1((target * 7) / (daysPerWeek * periodDays)) ||
-          PER_DAY_DEFAULT[type],
+    perDay: isDays(type)
+      ? 0
+      : round1((target * 7) / (daysPerWeek * periodDays)) ||
+        PER_DAY_DEFAULT[type] ||
+        1,
     directTarget: target,
+    qualifier: isDays(type) ? (qualifier ?? 3) : 0,
   };
 }
 
-/** 새 챌린지 만들기(create) / 내 KPI 설정(goals) 공용 시트 (§5·§6, 목업 setupSheet) */
 export function ChallengeSetupSheet({
   mode,
   defaults,
@@ -85,9 +116,7 @@ export function ChallengeSetupSheet({
 }: {
   mode: "create" | "goals";
   defaults: SetupSubmit;
-  /** 지난 챌린지 KPI (없으면 버튼 숨김) */
   prevGoals: GoalDraft[] | null;
-  /** goals 모드: 이미 정해진 챌린지 기간 일수 */
   periodDaysFixed?: number;
   busy: boolean;
   onSubmit: (value: SetupSubmit) => void;
@@ -107,16 +136,15 @@ export function ChallengeSetupSheet({
 
   const [rows, setRows] = useState<GoalRow[]>(() =>
     defaults.goals.map((g) =>
-      rowFromTarget(g.type, g.target, defaults.plannedDays, periodDays),
+      rowFromTarget(g.type, g.target, defaults.plannedDays, periodDays, g.qualifier),
     ),
   );
 
   const weeks = periodDays / 7;
 
-  /** 행의 기간 총 목표 (점수 산식이 쓰는 값) */
   function totalOf(row: GoalRow): number {
     if (inputMode === "direct") return row.directTarget;
-    if (row.type === "frequency") {
+    if (isDays(row.type)) {
       return Math.max(1, Math.round(row.daysPerWeek * weeks));
     }
     return round1(row.perDay * row.daysPerWeek * weeks);
@@ -126,15 +154,34 @@ export function ChallengeSetupSheet({
     setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
   }
 
-  function changeType(i: number, type: GoalType) {
+  function changeCategory(i: number, category: GoalCategory) {
+    const type = CATEGORY_TYPES[category][0];
     setRows((rs) =>
       rs.map((r, idx) =>
         idx === i
           ? {
+              category,
               type,
               daysPerWeek: r.daysPerWeek || plannedDays,
-              perDay: PER_DAY_DEFAULT[type],
+              perDay: PER_DAY_DEFAULT[type] ?? 0,
               directTarget: GOAL_TYPE_META[type].defaultTarget,
+              qualifier: isDays(type) ? 3 : 0,
+            }
+          : r,
+      ),
+    );
+  }
+
+  function changeMetric(i: number, type: GoalType) {
+    setRows((rs) =>
+      rs.map((r, idx) =>
+        idx === i
+          ? {
+              ...r,
+              type,
+              perDay: PER_DAY_DEFAULT[type] ?? r.perDay,
+              directTarget: GOAL_TYPE_META[type].defaultTarget,
+              qualifier: isDays(type) ? r.qualifier || 3 : 0,
             }
           : r,
       ),
@@ -142,15 +189,16 @@ export function ChallengeSetupSheet({
   }
 
   function addRow() {
-    const unused = GOAL_TYPES.find((t) => !rows.some((r) => r.type === t));
-    const type = unused ?? "frequency";
+    const type: GoalType = "weight_reps";
     setRows((rs) => [
       ...rs,
       {
+        category: "weight",
         type,
         daysPerWeek: plannedDays,
-        perDay: PER_DAY_DEFAULT[type],
+        perDay: PER_DAY_DEFAULT[type] ?? 0,
         directTarget: GOAL_TYPE_META[type].defaultTarget,
+        qualifier: 0,
       },
     ]);
   }
@@ -163,7 +211,7 @@ export function ChallengeSetupSheet({
     if (!prevGoals || prevGoals.length === 0) return;
     setRows(
       prevGoals.map((g) =>
-        rowFromTarget(g.type, g.target, plannedDays, periodDays),
+        rowFromTarget(g.type, g.target, plannedDays, periodDays, g.qualifier),
       ),
     );
     setNotice("지난 챌린지 KPI를 불러왔어요 · 숫자만 수정하세요 ↺");
@@ -182,10 +230,14 @@ export function ChallengeSetupSheet({
     }
     const types = rows.map((r) => r.type);
     if (new Set(types).size !== types.length) {
-      setNotice("같은 유형의 목표가 두 개 있어요 — 하나로 합쳐주세요");
+      setNotice("같은 지표의 목표가 두 개 있어요 — 하나로 합쳐주세요");
       return;
     }
-    const goals = rows.map((r) => ({ type: r.type, target: totalOf(r) }));
+    const goals: GoalDraft[] = rows.map((r) => ({
+      type: r.type,
+      target: totalOf(r),
+      qualifier: isDays(r.type) ? r.qualifier : undefined,
+    }));
     if (goals.some((g) => !(g.target > 0))) {
       setNotice("목표값은 0보다 커야 해요");
       return;
@@ -209,9 +261,8 @@ export function ChallengeSetupSheet({
           {mode === "create" ? "새 챌린지 만들기" : "🎯 내 목표 (KPI) 설정"}
         </h3>
         <p className="mt-0.5 text-[11.5px] text-muted">
-          종류가 달라도 각 목표를 &lsquo;내 목표 대비 %&rsquo;로 환산해
-          공평하게 점수화해요. 웨이트는 <b>운동 시간·횟수</b> 목표를
-          추천해요.
+          카테고리(웨이트·유산소·맨몸)를 고르고 지표를 정하면, 종류가 달라도
+          &lsquo;내 목표 대비 %&rsquo;로 공평하게 점수화해요.
         </p>
 
         <div className="mt-3 flex-1 overflow-y-auto">
@@ -276,7 +327,6 @@ export function ChallengeSetupSheet({
               </div>
             </div>
 
-            {/* 입력 방식: 하루 기준 자동계산(기본) / 총량 직접 입력 */}
             <div className="mt-2 flex gap-1 rounded-card-sm border border-line bg-surface p-1">
               {(
                 [
@@ -288,9 +338,7 @@ export function ChallengeSetupSheet({
                   key={m}
                   onClick={() => setInputMode(m)}
                   className={`h-8 flex-1 rounded-[8px] text-[11.5px] font-bold ${
-                    inputMode === m
-                      ? "bg-accent-weak text-accent"
-                      : "text-muted"
+                    inputMode === m ? "bg-accent-weak text-accent" : "text-muted"
                   }`}
                 >
                   {label}
@@ -301,47 +349,61 @@ export function ChallengeSetupSheet({
             {rows.map((row, i) => {
               const meta = GOAL_TYPE_META[row.type];
               const total = totalOf(row);
+              const metricOptions = CATEGORY_TYPES[row.category].includes(row.type)
+                ? CATEGORY_TYPES[row.category]
+                : [...CATEGORY_TYPES[row.category], row.type];
               return (
                 <div
                   key={i}
                   className="mt-2 rounded-card-sm border border-line bg-surface p-2.5"
                 >
-                  <div className="flex items-end gap-2">
-                    <div className="flex-1">
-                      <label className="text-[11px] font-bold text-muted">
-                        목표 {i + 1}
-                      </label>
-                      <select
-                        value={row.type}
-                        onChange={(e) =>
-                          changeType(i, e.target.value as GoalType)
-                        }
-                        className="mt-1 h-11 w-full rounded-card-sm border border-line bg-surface px-2 text-sm font-bold"
-                      >
-                        {/* 지난 KPI에 볼륨이 있으면 그 행에서만 옵션 유지 */}
-                        {(GOAL_TYPES.includes(row.type)
-                          ? GOAL_TYPES
-                          : [...GOAL_TYPES, row.type]
-                        ).map((t) => (
-                          <option key={t} value={t}>
-                            {GOAL_TYPE_META[t].label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-muted">
+                      목표 {i + 1}
+                    </label>
                     <button
                       onClick={() => removeRow(i)}
                       disabled={rows.length <= 1}
                       aria-label={`목표 ${i + 1} 삭제`}
-                      className="grid h-11 w-9 place-items-center rounded-card-sm border border-line bg-surface text-xs disabled:opacity-40"
+                      className="grid h-7 w-7 place-items-center rounded-card-sm border border-line bg-surface text-xs disabled:opacity-40"
                     >
                       ✕
                     </button>
                   </div>
 
+                  {/* 카테고리 3버튼 */}
+                  <div className="mt-1 flex gap-1 rounded-card-sm border border-line bg-surface-2 p-1">
+                    {CATEGORIES.map((c) => (
+                      <button
+                        key={c.key}
+                        onClick={() => changeCategory(i, c.key)}
+                        className={`h-8 flex-1 rounded-[8px] text-[11.5px] font-bold ${
+                          row.category === c.key
+                            ? "bg-accent-weak text-accent"
+                            : "text-muted"
+                        }`}
+                      >
+                        {c.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* 지표 select */}
+                  <select
+                    value={row.type}
+                    onChange={(e) => changeMetric(i, e.target.value as GoalType)}
+                    className="mt-2 h-11 w-full rounded-card-sm border border-line bg-surface px-2 text-sm font-bold"
+                  >
+                    {metricOptions.map((t) => (
+                      <option key={t} value={t}>
+                        {METRIC_LABEL[t]}
+                      </option>
+                    ))}
+                  </select>
+
                   {inputMode === "auto" ? (
                     <div className="mt-2 flex items-end gap-2">
-                      {row.type !== "frequency" && (
+                      {!isDays(row.type) && (
                         <div className="flex-1">
                           <label className="text-[11px] font-bold text-muted">
                             하루 목표 ({meta.unit})
@@ -409,6 +471,47 @@ export function ChallengeSetupSheet({
                     </div>
                   )}
 
+                  {isDays(row.type) && (
+                    <div className="mt-2 rounded-card-sm border border-line bg-surface-2 p-2">
+                      <label className="text-[11px] font-bold text-muted">
+                        {row.type === "weight_days"
+                          ? "하루 최소 부위 수 — 이만큼 웨이트를 완료한 날만 인정"
+                          : "하루 최소 종목 수 — 이만큼 맨몸을 완료한 날만 인정"}
+                      </label>
+                      <div className="mt-1 flex items-center justify-between">
+                        <span className="text-[12px] font-bold">
+                          {goalLabel(row.type, row.qualifier)}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() =>
+                              updateRow(i, {
+                                qualifier: Math.max(1, row.qualifier - 1),
+                              })
+                            }
+                            className="h-8 w-8 rounded-full border border-line bg-surface text-base font-bold"
+                          >
+                            –
+                          </button>
+                          <span className="w-14 text-center font-mono text-sm font-extrabold">
+                            {row.qualifier}
+                            {row.type === "weight_days" ? "부위+" : "종목+"}
+                          </span>
+                          <button
+                            onClick={() =>
+                              updateRow(i, {
+                                qualifier: Math.min(7, row.qualifier + 1),
+                              })
+                            }
+                            className="h-8 w-8 rounded-full border border-line bg-surface text-base font-bold"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   <p className="mt-1.5 text-right text-[11.5px] font-bold text-accent">
                     → 기간 목표{" "}
                     <span className="font-mono">
@@ -418,7 +521,7 @@ export function ChallengeSetupSheet({
                     {inputMode === "auto" && (
                       <span className="font-normal text-muted">
                         {" "}
-                        {row.type === "frequency"
+                        {isDays(row.type)
                           ? `(주 ${row.daysPerWeek}일 × ${weeks.toFixed(1)}주)`
                           : `(${row.perDay}${meta.unit} × 주 ${row.daysPerWeek}일 × ${weeks.toFixed(1)}주)`}
                       </span>
