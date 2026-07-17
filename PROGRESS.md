@@ -3,26 +3,34 @@
 > 새 세션은 이 파일 + `C:\Users\SAMSUNG\Desktop\Workout app\IMPLEMENTATION_PLAN.md`(단일 진실)만 읽으면 바로 이어서 작업할 수 있다.
 > 시각 스펙: 같은 폴더의 `운동앱-목업.html`.
 
-## ⚠️ Phase 6 완료 — 실기기 확인 통과 (2026-07-17). 다음 작업: 꾸준왕 열람·홈 위젯
+## ⚠️ 꾸준왕 열람권 + 홈 위젯 구현 완료 — 실기기 확인 대기 (2026-07-17)
 
-**Phase 6 소셜 + 운동 다중 선택, 실기기 7항목 전부 통과(2026-07-17).** 코드·검증·문서 커밋 완료, 작업트리 클린.
+**코드·검증·커밋 완료(`5dd688c`~`59e62f9`), 0012 DB 적용 완료.** 남은 것은 사용자 실기기 확인뿐.
+
+**실기기 확인 항목 (폰, 계정 2개 권장):**
+1. 홈에 스트릭 카드(🔥 n일 + 최근 7일 요일 점) 표시
+2. 주간 stat 3칸(이번 주 운동 n/목표 · 달성률 % · 스트릭)
+3. 스트릭 있는 계정이 하루 쉬면 ⚠️ 소멸 경고 배너(D-4~D-1)
+4. 꾸준왕 카드: 이번 주 n/5일 진행 표시
+5. (5일 채운 계정) 🎟️ 열람권 → 크루원 선택 → 확인 모달 → 성과 시트(운동일·스트릭·챌린지 달성률·순위) → 상대에게 👀 알림 도착
+6. 열람 후 카드가 "사용했어요"로 바뀌고 재열람 시도 시 거절
 
 ### 다음 세션 시작 체크리스트
 
 1. 저장소 `C:\Users\SAMSUNG\workout-app`, 브랜치 `main`, 작업트리 클린(`.claude/`만 untracked — 커밋 금지). 되돌리기·리셋 불필요.
-2. **DB 0001~0011 전부 적용 완료 — SQL 파일 재실행 금지.**
-3. dev 서버는 세션 종료와 함께 꺼졌을 수 있음 → `pnpm exec next dev -H 0.0.0.0`으로 시작 (폰: `http://192.168.219.112:3000` / Tailscale `http://100.85.240.15:3000`). build 돌릴 땐 dev 서버 먼저 종료(교훈 8).
-4. 검증 명령: `pnpm test`(104) · `pnpm lint` · `pnpm typecheck` · `pnpm build` · `node scripts/rls-test.mjs`(102, 응원 쿨다운 대기 포함 약 40초).
+2. **DB 0001~0012 전부 적용 완료 — SQL 파일 재실행 금지.** (0012 = view_record RPC, 2026-07-17 적용·RLS 107/107 확인)
+3. dev 서버는 세션 종료와 함께 꺼졌을 수 있음 → `pnpm exec next dev -H 0.0.0.0`으로 시작 (폰: `http://192.168.219.112:3000` / Tailscale `http://100.85.240.15:3000`). build 돌릴 땐 dev 서버 먼저 종료(교훈 8 — 이전 세션 dev 서버가 좀비로 남아있으면 `taskkill /PID <pid> /F`).
+4. 검증 명령: `pnpm test`(115) · `pnpm lint` · `pnpm typecheck` · `pnpm build` · `node scripts/rls-test.mjs`(107, 응원 쿨다운 대기 포함 약 40초).
 5. E2E·스모크 스크립트는 세션 scratchpad에 있어 소멸됨 — 재작성 시 흐름: 익명 세션 쿠키(`sb-<ref>-auth-token`, base64- 접두) 파싱 → REST로 프로필·크루·세션 픽스처 → puppeteer-core(스크래치패드에 npm install)로 UI·Realtime 단언. 아래 "Phase 6 산출물" 참고.
 6. **다음 작업 우선순위:**
-   ① Phase 6 후속(별도 계획, brainstorming부터): 꾸준왕 성과 열람 UI + record_viewed 알림(테이블은 0011에 있음) + 홈 위젯(스트릭 카드·주간 stat·오늘 그룹 현황·꾸준왕).
-   ② 그다음 Phase 7(계획서 §18): 5일 소멸 스트릭 표시·아침 브리핑 크론·notification_settings UI·핵심 E2E·Vercel 배포·3명 4주 실사용.
+   ① 사용자 실기기 확인(위 6항목) → 통과하면 이 ⚠️ 섹션을 산출물로 병합 후 문서 커밋.
+   ② Phase 7(계획서 §18): 아침 브리핑 크론·notification_settings UI·핵심 E2E·Vercel 배포·3명 4주 실사용. (5일 소멸 스트릭 표시는 이번에 홈 경고 배너로 선반영됨)
 
 ---
 
 ## 현재 상태 (2026-07-17 기준)
 
-**Phase 0~6 완료 (2026-07-17 실기기 7항목 확인 통과). 다음 작업 = Phase 6 후속(꾸준왕 열람·홈 위젯) → Phase 7.**
+**Phase 0~6 완료 + 꾸준왕 열람권·홈 위젯 구현 완료(실기기 확인 대기, 2026-07-17). 다음 작업 = 실기기 확인 → Phase 7.**
 
 | Phase | 상태 | 비고 |
 |---|---|---|
@@ -34,6 +42,17 @@
 | 5 챌린지 | ✅ | goal-score TDD 20케이스·KPI 게이트·진행중 비공개·시상대(`ea6fb60`) — unit 83 + RLS 68/68 + E2E 통과 |
 | 6 소셜 | ✅ | 피드·반응·진행중 카드·Realtime 응원·찌르기·알림함 — unit 104 + RLS 102/102 + E2E 2인 14/14 + 실기기 7항목 통과 |
 | 7 | 대기 | 계획서 §18 참조 |
+
+### 꾸준왕 열람권 + 홈 위젯 산출물 (2026-07-17, `5dd688c`~`59e62f9`)
+
+- **설계·계획**: `docs/superpowers/specs/2026-07-17-king-viewing-pass-home-widgets-design.md` · `docs/superpowers/plans/2026-07-17-king-viewing-pass-home-widgets.md`. 핵심 결정: 꾸준왕=고정 주5일(운동한 '날' 기준, 하루 2회=1일) → 5일째 완료 시각부터 24h 유효·1회·주당 1장 열람권 → 크루원 1명 성과+진행중 챌린지 달성률·순위(Phase 5 🔒의 열쇠) 열람 → 👀 알림. 목업의 "꾸준왕 성과를 누구나 열람"을 사용자 결정으로 뒤집음.
+- **0012_record_view_rpc.sql** (적용 완료 ✅): A안(파생 상태) — 열람권 테이블 없이 `view_record` RPC가 열람 순간 자격 판정(주5일·24h·미사용·크루) 후 record_views insert + notify. 직접 insert 권한·정책 회수. 에러 코드: not_eligible/pass_expired/pass_used/not_crew/self_view.
+- `lib/domain/viewing-pass.ts`(TDD 11): `weekWorkoutDays`(주간 고유 운동일·5일째 시각)·`viewingPassStatus`(progress/available/used/expired). 서버와 같은 판정을 클라에서 재현.
+- I/O: `lib/social.ts` `viewRecord`·`getMyRecordViewAts`·`getCrewPerformance`(주간 운동일·스트릭·챌린지 달성률·순위), `lib/challenge.ts` `getActiveChallengeRanking`.
+- 홈 UI: `components/home/` — `home-client`(내 완료 세션 1회 fetch 공유, page.tsx 교체)·`streak-card`(🔥+요일 점+소멸 경고 D-4~D-1, streak.ts 재사용)·`weekly-stats`(운동일/달성률/스트릭)·`king-card`(상태별 카드·크루원 선택·확인 모달·성과 시트).
+- **검증**: unit 115(+11) · RLS **107/107**(+5: 직접 insert 차단·not_eligible·self_view·not_crew·본인 select) · lint · typecheck · build 통과.
+- **한계(기록)**: view_record 정상 경로(5일 자격 통과)는 자동 테스트 불가 — completed_at이 서버시간이라 테스트에서 5개 고유 날짜를 만들 수 없음. 판정 로직은 unit이 검증, SQL은 같은 규칙의 이식. 실사용에서 자연 확인.
+- 열람권 자기 축하 배너·record_viewed 알림함 표시는 기존 알림 구조로 자동 처리(추가 코드 없음).
 
 ### Phase 5.2~5.3 산출물 (2026-07-17, 커밋 `63e5c27`~`88d959b` + `b499510`)
 
@@ -104,6 +123,7 @@ Storage 버킷도 SQL로 생성 가능했음(`insert into storage.buckets`, 0005
 - 0009(burnfit 시드): 적용 완료 ✅ (2026-07-17, "Success. No rows returned" 확인)
 - 0010(맨몸 루틴 6종 시드): 적용 완료 ✅ (2026-07-17, REST 조회로 6/6 확인)
 - 0011(소셜: events·reactions·cheers·notifications 등): 적용 완료 ✅ (2026-07-17 "Success" 확인)
+- 0012(꾸준왕 열람권 view_record RPC): 적용 완료 ✅ (2026-07-17, RLS 107/107로 확인)
 - 컬럼 추가·시드 위주라 idempotent 안전장치(`on conflict`, `if not exists` 성격) 있는 편이나, 재실행 시 `alter table add column`은 중복 에러 → 각 파일 1회만.
 
 ## 코드 구조 요약
