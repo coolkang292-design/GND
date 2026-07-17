@@ -209,6 +209,103 @@ const EMPTY_STATS: PeriodStats = {
   bodyweightKindsByDay: {},
 };
 
+/** foldPeriodStats 입력 — DB 조회를 정규화한 순수 표현 */
+export type PeriodSessionRow = {
+  userId: string;
+  completedAt: string;
+  exercises: {
+    exerciseType: "weight" | "bodyweight" | "cardio";
+    exerciseName: string;
+    bodyPart: string | null;
+    sets: {
+      weightKg: number | null;
+      reps: number | null;
+      distanceMeters: number | null;
+      durationSeconds: number | null;
+      isCompleted: boolean;
+    }[];
+  }[];
+};
+
+/** 정규화 행 → 유저별 기간 실적 (순수·TDD 대상) */
+export function foldPeriodStats(
+  rows: PeriodSessionRow[],
+  startDate: string,
+  endDate: string,
+  timeZone: string,
+): Map<string, PeriodStats> {
+  type Acc = PeriodStats & {
+    days: Set<string>;
+    weightParts: Map<string, Set<string>>;
+    bodyweightKinds: Map<string, Set<string>>;
+  };
+  const byUser = new Map<string, Acc>();
+
+  for (const row of rows) {
+    const key = dayKey(new Date(row.completedAt), timeZone);
+    if (key < startDate || key > endDate) continue;
+
+    const entry: Acc = byUser.get(row.userId) ?? {
+      ...EMPTY_STATS,
+      weightPartsByDay: {},
+      bodyweightKindsByDay: {},
+      days: new Set<string>(),
+      weightParts: new Map<string, Set<string>>(),
+      bodyweightKinds: new Map<string, Set<string>>(),
+    };
+    entry.days.add(key);
+
+    for (const ex of row.exercises) {
+      let hasCompleted = false;
+      for (const s of ex.sets) {
+        if (!s.isCompleted) continue;
+        hasCompleted = true;
+        if (ex.exerciseType === "weight") {
+          entry.volumeKg += Number(s.weightKg ?? 0) * (s.reps ?? 0);
+          entry.weightReps += s.reps ?? 0;
+        } else if (ex.exerciseType === "bodyweight") {
+          entry.bodyweightReps += s.reps ?? 0;
+          entry.bodyweightTimeMin += (s.durationSeconds ?? 0) / 60;
+        } else {
+          entry.cardioDistanceKm += Number(s.distanceMeters ?? 0) / 1000;
+          entry.cardioTimeMin += (s.durationSeconds ?? 0) / 60;
+        }
+      }
+      if (!hasCompleted) continue;
+      if (ex.exerciseType === "weight") {
+        const parts = entry.weightParts.get(key) ?? new Set<string>();
+        parts.add(ex.bodyPart ?? ex.exerciseType);
+        entry.weightParts.set(key, parts);
+      } else if (ex.exerciseType === "bodyweight") {
+        const kinds = entry.bodyweightKinds.get(key) ?? new Set<string>();
+        kinds.add(ex.exerciseName);
+        entry.bodyweightKinds.set(key, kinds);
+      }
+    }
+    byUser.set(row.userId, entry);
+  }
+
+  const result = new Map<string, PeriodStats>();
+  for (const [userId, e] of byUser) {
+    const weightPartsByDay: Record<string, number> = {};
+    for (const [day, parts] of e.weightParts) weightPartsByDay[day] = parts.size;
+    const bodyweightKindsByDay: Record<string, number> = {};
+    for (const [day, kinds] of e.bodyweightKinds) bodyweightKindsByDay[day] = kinds.size;
+    result.set(userId, {
+      workoutDays: e.days.size,
+      weightReps: e.weightReps,
+      volumeKg: e.volumeKg,
+      cardioDistanceKm: e.cardioDistanceKm,
+      cardioTimeMin: e.cardioTimeMin,
+      bodyweightReps: e.bodyweightReps,
+      bodyweightTimeMin: e.bodyweightTimeMin,
+      weightPartsByDay,
+      bodyweightKindsByDay,
+    });
+  }
+  return result;
+}
+
 /** 목표 유형별 실적 값 (frequency는 qualifier=하루 최소 부위 수 조건) */
 export function actualForGoal(
   stats: PeriodStats,
@@ -246,12 +343,11 @@ export function actualForGoal(
  */
 export async function getPeriodStatsByUser(
   groupId: string,
-  startDate: string, // YYYY-MM-DD (포함)
-  endDate: string, // YYYY-MM-DD (포함)
+  startDate: string,
+  endDate: string,
   timeZone: string,
 ): Promise<Map<string, PeriodStats>> {
   const supabase = getSupabaseBrowserClient();
-  // tz 경계 여유를 두고 UTC로 넓게 가져온 뒤 dayKey로 정확히 거른다
   const fromIso = new Date(`${startDate}T00:00:00Z`);
   fromIso.setUTCDate(fromIso.getUTCDate() - 1);
   const toIso = new Date(`${endDate}T00:00:00Z`);
@@ -260,7 +356,7 @@ export async function getPeriodStatsByUser(
   const { data, error } = await supabase
     .from("workout_sessions")
     .select(
-      "user_id, completed_at, duration_minutes, workout_exercises(exercise_type, body_part, workout_sets(weight_kg, reps, distance_meters, is_completed))",
+      "user_id, completed_at, workout_exercises(exercise_type, exercise_name, body_part, workout_sets(weight_kg, reps, distance_meters, duration_seconds, is_completed))",
     )
     .eq("group_id", groupId)
     .eq("status", "completed")
@@ -269,79 +365,40 @@ export async function getPeriodStatsByUser(
     .lt("completed_at", toIso.toISOString());
   if (error) throw error;
 
-  type Row = {
+  type DbRow = {
     user_id: string;
     completed_at: string;
-    duration_minutes: number | null;
     workout_exercises:
       | {
           exercise_type: "weight" | "bodyweight" | "cardio";
+          exercise_name: string;
           body_part: string | null;
           workout_sets:
             | Pick<
                 WorkoutSet,
-                "weight_kg" | "reps" | "distance_meters" | "is_completed"
+                "weight_kg" | "reps" | "distance_meters" | "duration_seconds" | "is_completed"
               >[]
             | null;
         }[]
       | null;
   };
 
-  type Acc = PeriodStats & {
-    days: Set<string>;
-    weightParts: Map<string, Set<string>>; // dayKey → 완료 세트 있는 웨이트 부위
-  };
-  const byUser = new Map<string, Acc>();
+  const rows: PeriodSessionRow[] = ((data ?? []) as DbRow[]).map((r) => ({
+    userId: r.user_id,
+    completedAt: r.completed_at,
+    exercises: (r.workout_exercises ?? []).map((ex) => ({
+      exerciseType: ex.exercise_type,
+      exerciseName: ex.exercise_name,
+      bodyPart: ex.body_part,
+      sets: (ex.workout_sets ?? []).map((s) => ({
+        weightKg: s.weight_kg,
+        reps: s.reps,
+        distanceMeters: s.distance_meters,
+        durationSeconds: s.duration_seconds,
+        isCompleted: s.is_completed,
+      })),
+    })),
+  }));
 
-  for (const row of (data ?? []) as Row[]) {
-    const key = dayKey(new Date(row.completed_at), timeZone);
-    if (key < startDate || key > endDate) continue; // 기간 밖 (tz 기준)
-
-    const entry: Acc = byUser.get(row.user_id) ?? {
-      ...EMPTY_STATS,
-      days: new Set<string>(),
-      weightParts: new Map<string, Set<string>>(),
-    };
-    entry.days.add(key);
-    entry.durationMin += row.duration_minutes ?? 0;
-
-    for (const ex of row.workout_exercises ?? []) {
-      let hasCompleted = false;
-      for (const s of ex.workout_sets ?? []) {
-        if (!s.is_completed) continue;
-        hasCompleted = true;
-        if (ex.exercise_type === "weight") {
-          entry.volumeKg += Number(s.weight_kg ?? 0) * (s.reps ?? 0);
-          entry.totalReps += s.reps ?? 0;
-        } else if (ex.exercise_type === "bodyweight") {
-          entry.totalReps += s.reps ?? 0;
-        } else {
-          entry.distanceKm += Number(s.distance_meters ?? 0) / 1000;
-        }
-      }
-      if (hasCompleted && ex.exercise_type === "weight") {
-        const parts = entry.weightParts.get(key) ?? new Set<string>();
-        parts.add(ex.body_part ?? ex.exercise_type); // 부위 미상은 1부위로 취급
-        entry.weightParts.set(key, parts);
-      }
-    }
-    byUser.set(row.user_id, entry);
-  }
-
-  const result = new Map<string, PeriodStats>();
-  for (const [userId, entry] of byUser) {
-    const weightPartsByDay: Record<string, number> = {};
-    for (const [day, parts] of entry.weightParts) {
-      weightPartsByDay[day] = parts.size;
-    }
-    result.set(userId, {
-      workoutDays: entry.days.size,
-      distanceKm: entry.distanceKm,
-      durationMin: entry.durationMin,
-      volumeKg: entry.volumeKg,
-      totalReps: entry.totalReps,
-      weightPartsByDay,
-    });
-  }
-  return result;
+  return foldPeriodStats(rows, startDate, endDate, timeZone);
 }

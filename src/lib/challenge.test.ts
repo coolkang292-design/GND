@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   GOAL_TYPE_META,
   actualForGoal,
+  foldPeriodStats,
   goalLabel,
+  type PeriodSessionRow,
   type PeriodStats,
 } from "@/lib/challenge";
 
@@ -47,4 +49,67 @@ describe("actualForGoal", () => {
   });
   it("volume은 레거시 볼륨", () =>
     expect(actualForGoal(STATS, "volume")).toBe(3000));
+});
+
+describe("foldPeriodStats", () => {
+  const rows: PeriodSessionRow[] = [
+    {
+      userId: "u1",
+      completedAt: "2026-07-01T02:00:00Z", // KST 07-01 11시
+      exercises: [
+        {
+          exerciseType: "weight",
+          exerciseName: "벤치프레스",
+          bodyPart: "가슴",
+          sets: [
+            { weightKg: 60, reps: 10, distanceMeters: null, durationSeconds: null, isCompleted: true },
+            { weightKg: 60, reps: 8, distanceMeters: null, durationSeconds: null, isCompleted: false },
+          ],
+        },
+        {
+          exerciseType: "bodyweight",
+          exerciseName: "매달리기",
+          bodyPart: "등",
+          sets: [
+            { weightKg: null, reps: null, distanceMeters: null, durationSeconds: 180, isCompleted: true },
+          ],
+        },
+        {
+          exerciseType: "bodyweight",
+          exerciseName: "푸시업",
+          bodyPart: "가슴",
+          sets: [
+            { weightKg: null, reps: 20, distanceMeters: null, durationSeconds: null, isCompleted: true },
+          ],
+        },
+        {
+          exerciseType: "cardio",
+          exerciseName: "러닝",
+          bodyPart: "유산소",
+          sets: [
+            { weightKg: null, reps: null, distanceMeters: 5000, durationSeconds: 1800, isCompleted: true },
+          ],
+        },
+      ],
+    },
+  ];
+
+  it("카테고리별 완료 세트만 집계한다", () => {
+    const m = foldPeriodStats(rows, "2026-07-01", "2026-07-31", "Asia/Seoul");
+    const s = m.get("u1")!;
+    expect(s.workoutDays).toBe(1);
+    expect(s.weightReps).toBe(10); // 완료 세트만 (8은 미완료)
+    expect(s.volumeKg).toBe(600);
+    expect(s.bodyweightReps).toBe(20); // 푸시업
+    expect(s.bodyweightTimeMin).toBe(3); // 매달리기 180초=3분
+    expect(s.cardioDistanceKm).toBe(5);
+    expect(s.cardioTimeMin).toBe(30);
+    expect(s.weightPartsByDay["2026-07-01"]).toBe(1); // 가슴 1부위
+    expect(s.bodyweightKindsByDay["2026-07-01"]).toBe(2); // 매달리기·푸시업
+  });
+
+  it("기간 밖(tz 기준) 세션은 제외", () => {
+    const m = foldPeriodStats(rows, "2026-07-02", "2026-07-31", "Asia/Seoul");
+    expect(m.get("u1")).toBeUndefined();
+  });
 });
