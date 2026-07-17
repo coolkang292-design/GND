@@ -3,85 +3,6 @@
 > 새 세션은 이 파일 + `C:\Users\SAMSUNG\Desktop\Workout app\IMPLEMENTATION_PLAN.md`(단일 진실)만 읽으면 바로 이어서 작업할 수 있다.
 > 시각 스펙: 같은 폴더의 `운동앱-목업.html`.
 
-## ⚠️ 진행 중 작업 (2026-07-17, 미커밋 — 실기기 확인 후 커밋 대기)
-
-**세 작업 흐름의 코드는 완료·검증(typecheck·lint·test·build 통과)됐고 0007~0009 DB 적용도 확인됐다. 다만 `0007`·`0009` 파일, 홈 크루 사진 코드, 이 인수인계 문서는 아직 미커밋이며, 실기기 확인이 남았다.**
-메모리 규칙: 기능완성 → 검증 → **사용자 실기기 확인 → 그다음 커밋**. 아직 커밋하지 마라.
-
-### 1) 챌린지 목표 카테고리 우선 개편 (Phase 5.2) — 코드 커밋 완료(`63e5c27`~`88d959b`), DB 적용 확인 완료 ✅
-목표를 **웨이트/유산소/맨몸 카테고리 우선**으로 재편. goal_type 7종 + 레거시 volume:
-`weight_reps·weight_days·cardio_distance·cardio_time·bodyweight_reps·bodyweight_time·bodyweight_days`.
-맨몸운동은 `measure`(reps/time)로 횟수형/시간형 구분(매달리기·플랭크·사이드플랭크·핸드스탠드=time). `*_days`는 하루 N부위/N종목+ 조건(`qualifier`).
-설계·계획 문서: `docs/superpowers/specs/2026-07-17-challenge-category-goals-design.md`, `docs/superpowers/plans/2026-07-17-challenge-category-goals.md`.
-`supabase/migrations/0007_weight_days_goal.sql`과 위 계획 문서는 아직 Git 미추적 상태이므로 최종 커밋 범위에 명시적으로 포함할 것.
-
-**⚠️ DB 마이그레이션 의존성 (가장 중요한 인수인계 항목):**
-- 카테고리 코드는 `workout_exercises.body_part`·`user_goals.qualifier`(**0007**)와 `*.measure`·확장 goal_type(**0008**)를 **모두 쿼리**한다. 하나라도 미적용이면 챌린지 화면이 400/런타임 에러.
-- **0008 = 사용자 적용 완료 ✅** ("Success. No rows returned" 확인).
-- **0007 = 적용 완료 확인 ✅** — 2026-07-17 아래 검증 쿼리 결과 `has_body_part=true`, `has_qualifier=true`, `has_measure=true` 확인. 다시 실행하지 말 것:
-  ```sql
-  select
-    exists(select 1 from information_schema.columns
-           where table_name='workout_exercises' and column_name='body_part') as has_body_part,
-    exists(select 1 from information_schema.columns
-           where table_name='user_goals' and column_name='qualifier') as has_qualifier,
-    exists(select 1 from information_schema.columns
-           where table_name='exercise_catalog' and column_name='measure') as has_measure;
-  ```
-  위 결과는 적용 근거 기록용이다. 현재 셋 다 true이므로 **0007·0008을 다시 실행하지 말 것**.
-
-### 2) burnfit.io 운동 카탈로그 확장 (Phase 5.3) — 파일 미커밋, DB 적용 완료 ✅
-- `supabase/migrations/0009_burnfit_exercises.sql` (**사용자 적용 완료 ✅**, "Success. No rows returned" 확인) — https://burnfit.io/라이브러리/ 의 운동 40종 시드. 기존 시드(0004)·매달리기(0008)와 중복은 제외. 맨몸은 measure 지정, `on conflict (name) where created_by is null do nothing`로 재실행 안전.
-- 남은 확인: 실기기 운동 검색에서 `클린 앤 저크`·`사이드 플랭크`·`줄넘기` 중 하나가 조회되는지 확인.
-
-### 3-b) 맨몸 카테고리 칩 + 맨몸 루틴 종목 시드 (2026-07-17 사용자 요청) — 미커밋, **DB 0010 미적용**
-- `src/components/record/exercise-picker.tsx`: 부위 칩 뒤에 **"맨몸" 칩** 추가 — body_part가 아니라 `exercise_type === 'bodyweight'` 모달리티 필터(FILTERS = PARTS + 맨몸). 직접 만들기 부위 select에는 미포함(부위 아님).
-- `supabase/migrations/0010_bodyweight_routine_exercises.sql`: 맨몸 루틴 신규 6종 시드(점프 스쿼트·마운틴 클라이머·슈퍼맨 로우 / 인치웜 푸시업·라잉 Y 레이즈·타이슨 푸시업, 전부 bodyweight·reps). 푸시업(0004)·사이드/덤벨 레터럴 레이즈(0004·0009)는 기존 종목 사용으로 중복 제외. **사용자가 SQL Editor로 적용해야 신규 종목이 보임.**
-- 루틴 자체(종목 묶음 템플릿) 기능은 별개 주제 — 현재는 "지난 운동 복사"로 대체, 필요하면 Phase 6 이후 별도 설계.
-
-### 3) 홈 '최근 친구 활동' — 크루 최근 인증사진 (Phase 5.3) — 미커밋
-- `src/lib/workout.ts` → `getLatestCrewWorkoutWithPhoto(groupId)`: 크루 공개 완료 세션 중 인증사진 있는 최신 1건, 비공개 버킷이라 `createSignedUrl`(1h)로 노출. 반환 `LatestCrewWorkout`.
-- `src/components/crew-latest-workout.tsx`(신규): 사진 카드 + 닉네임·"n분 전 운동 완료" 오버레이. 사진 없으면 렌더 안 함.
-- `src/app/(tabs)/home/page.tsx`: **목업 순서 존중** — 크루 사진을 **"최근 친구 활동" 섹션(제목 + 피드 전체 링크) 자리**에 배치(운동 시작하기 바로 밑 아님). 앱 공통 디자인 토큰 사용.
-- 목업 홈의 스트릭 카드·주간 stat·그룹 공동목표·오늘 그룹 현황·꾸준왕 섹션은 **아직 미구현**(실데이터 필요 → Phase 6 소셜에서). 현재 홈 = 헤더 → 운동 시작하기 → 크루 카드 → 최근 친구 활동(사진) → 인증상태.
-
-### ✅ RLS 픽스처 보정 완료 (2026-07-17)
-
-- `scripts/rls-test.mjs` Phase 5 픽스처의 0008 이전 goal_type 3곳(`distance`×2 → `cardio_distance`, `frequency`×1 → `weight_days`) 보정 완료.
-- 보정 후 현재 DB(0008 적용 후) 대상 **RLS 68/68 통과 (2026-07-17)**. typecheck·lint·unit 96 tests도 같이 통과.
-- 참고: `distance` 2곳은 "≥400 기대" 네거티브 테스트라 보정 전에는 RLS가 아닌 check 제약 위반으로도 통과하는 가짜 통과였다 — 보정으로 실제 RLS 거부를 검증하게 됨.
-- `pnpm build`만 남음: 실기기 확인용 dev 서버가 떠 있어 동시 실행 금지(교훈 8) → 실기기 확인 끝나고 dev 서버 종료 후 실행.
-
-### 남은 절차
-1. 사용자: **0010을 SQL Editor로 적용**(파일 열기 → 전체 복사 → Run) — 그래야 맨몸 루틴 신규 6종이 검색됨.
-2. 사용자: **실기기 확인 6항목**(카테고리별 목표 설정·맨몸 시간형 분 입력·burnfit 신규 종목 검색·홈 크루 사진 노출·**맨몸 칩 필터**·**루틴 신규 종목 검색(0010 적용 후)**). dev 서버는 2026-07-17 현재 실행 중(localhost:3000 HTTP 200 확인).
-3. 확인 후 dev 서버 종료 → `pnpm build` 최종 확인.
-4. 아래 "커밋 대상" 파일만 명시적으로 커밋. `.claude/settings.local.json`은 개인 설정이므로 제외.
-5. 커밋 후 이 ⚠️ 섹션을 삭제하고 아래 Phase 5 산출물에 병합.
-
-### 다음 에이전트 시작 체크리스트
-
-1. 저장소 `C:\Users\SAMSUNG\workout-app`, 브랜치 `main`, 현재 HEAD `88d959b`에서 시작. 작업트리는 의도적으로 미커밋 상태이므로 초기화·되돌리기 금지.
-2. **DB 0007·0008·0009는 모두 적용 완료**. SQL 파일을 다시 실행하지 말 것.
-3. 현재 커밋 대상:
-   - `supabase/migrations/0007_weight_days_goal.sql`
-   - `supabase/migrations/0009_burnfit_exercises.sql`
-   - `supabase/migrations/0010_bodyweight_routine_exercises.sql`
-   - `src/lib/workout.ts`
-   - `src/components/crew-latest-workout.tsx`
-   - `src/components/record/exercise-picker.tsx` (맨몸 칩)
-   - `src/app/(tabs)/home/page.tsx`
-   - `docs/superpowers/plans/2026-07-17-challenge-category-goals.md`
-   - `docs/superpowers/plans/2026-07-17-phase5-closure-and-phase6-kickoff.md`
-   - `PROGRESS.md`
-   - `scripts/rls-test.mjs` (레거시 goal_type 픽스처 보정 완료, 68/68 통과)
-4. **커밋 제외:** `.claude/settings.local.json`(개인 설정). `git add .` 사용 금지. 위 파일을 경로로 명시해서 stage할 것.
-5. 개발 서버는 필요할 때 저장소 루트에서 `pnpm exec next dev -H 0.0.0.0`으로 시작. 현재 인수인계 작성 시점에는 3000번 포트 listener 없음.
-6. 픽스처 보정·typecheck·lint·unit 96·RLS 68/68은 2026-07-17 완료. 실기기 항목이 통과하면 **개발 서버를 먼저 종료하고 `pnpm build`만** 최종 확인하면 된다(맨몸 칩·0010 이후 코드 기준 build는 아직 안 돌림).
-7. 사용자 확인 전에는 커밋하지 말 것. 확인 후 기능 커밋을 만들고, 이 ⚠️ 섹션을 Phase 5 산출물로 병합한 뒤 문서 커밋.
-
----
-
 ## 현재 상태 (2026-07-17 기준)
 
 **Phase 0~5 완료 (2026-07-17). 다음 작업 = Phase 6 (소셜: 피드·반응·응원·찌르기·알림).**
@@ -95,6 +16,14 @@
 | 4 완료 루프 | ✅ | 달력(`9e540ef`)·지난 운동 복사(`1f3281d`)·인증사진(`a1a6e1a`) — unit 63 + RLS 54/54 + E2E 2종 통과 |
 | 5 챌린지 | ✅ | goal-score TDD 20케이스·KPI 게이트·진행중 비공개·시상대(`ea6fb60`) — unit 83 + RLS 68/68 + E2E 통과 |
 | 6~7 | 대기 | 계획서 §18 참조 |
+
+### Phase 5.2~5.3 산출물 (2026-07-17, 커밋 `63e5c27`~`88d959b` + `b499510`)
+
+- **챌린지 목표 카테고리 우선 개편 (5.2)**: goal_type 7종 + 레거시 volume(`weight_reps·weight_days·cardio_distance·cardio_time·bodyweight_reps·bodyweight_time·bodyweight_days`). 맨몸은 `measure`(reps/time)로 횟수형/시간형 구분(매달리기·플랭크·사이드플랭크·핸드스탠드=time), `*_days`는 하루 N부위/N종목+ 조건(`qualifier`, 0007). 설계·계획: `docs/superpowers/specs/2026-07-17-challenge-category-goals-design.md`, `docs/superpowers/plans/2026-07-17-challenge-category-goals.md`. 카테고리 코드는 0007(body_part·qualifier)+0008(measure·goal_type)을 모두 쿼리 — 하나라도 미적용이면 챌린지 화면 400.
+- **burnfit 카탈로그 40종 시드 (5.3, 0009)**: https://burnfit.io/라이브러리/ 기반, 기존 시드 중복 제외, `on conflict do nothing` 재실행 안전.
+- **맨몸 루틴 6종 시드 + 맨몸 칩 (0010)**: 점프 스쿼트·마운틴 클라이머·슈퍼맨 로우·인치웜 푸시업·라잉 Y 레이즈·타이슨 푸시업(전부 bodyweight·reps). `exercise-picker.tsx`에 "맨몸" 칩 — body_part가 아닌 `exercise_type==='bodyweight'` 모달리티 필터. 루틴 템플릿(종목 묶음) 기능은 별도 주제로 보류 — 현재는 "지난 운동 복사"로 대체.
+- **홈 크루 최근 인증사진 (5.3)**: `getLatestCrewWorkoutWithPhoto(groupId)`(signed URL 1h) + `crew-latest-workout.tsx` 카드, 홈 "최근 친구 활동" 자리 배치. 목업 홈의 스트릭 카드·주간 stat·그룹 공동목표·오늘 그룹 현황·꾸준왕은 Phase 6에서(실데이터 필요).
+- **RLS 픽스처 보정**: 0008 이전 goal_type 3곳(`distance`×2→`cardio_distance`, `frequency`→`weight_days`) 수정. `distance` 2곳은 네거티브 테스트라 보정 전엔 check 제약 위반으로도 통과하는 가짜 통과였음. 보정 후 현 DB 기준 **RLS 68/68**, unit **96 tests**, build, 실기기 확인 통과 후 커밋(`b499510`).
 
 ### Phase 5 산출물 (2026-07-17)
 
@@ -155,7 +84,7 @@ Storage 버킷도 SQL로 생성 가능했음(`insert into storage.buckets`, 0005
 - 0007(body_part·qualifier): 적용 완료 확인 ✅ (2026-07-17, 검증 쿼리 세 컬럼 모두 true)
 - 0008(measure·카테고리 goal_type): 적용 완료 ✅
 - 0009(burnfit 시드): 적용 완료 ✅ (2026-07-17, "Success. No rows returned" 확인)
-- **0010(맨몸 루틴 6종 시드): 미적용 ⏳ — 사용자가 SQL Editor로 적용 필요** (on conflict do nothing이라 재실행 안전)
+- 0010(맨몸 루틴 6종 시드): 적용 완료 ✅ (2026-07-17, REST 조회로 6/6 확인)
 - 컬럼 추가·시드 위주라 idempotent 안전장치(`on conflict`, `if not exists` 성격) 있는 편이나, 재실행 시 `alter table add column`은 중복 에러 → 각 파일 1회만.
 
 ## 코드 구조 요약
