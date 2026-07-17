@@ -20,6 +20,7 @@ export type UserGoal = {
   target_value: number;
   unit: string | null;
   planned_days: number;
+  qualifier: number | null; // frequency: 하루 최소 웨이트 부위 수
   created_at: string;
   updated_at: string;
 };
@@ -66,6 +67,7 @@ export type CatalogExercise = {
   name: string;
   body_part: BodyPart;
   exercise_type: ExerciseType;
+  measure: "reps" | "time" | null; // 맨몸 횟수형/시간형 (그 외 null)
   is_custom: boolean;
   created_by: string | null; // null = 기본 시드
   created_at: string;
@@ -101,6 +103,7 @@ export type WorkoutExercise = {
   session_id: string;
   exercise_name: string;
   exercise_type: ExerciseType;
+  measure: "reps" | "time" | null;
   sort_order: number;
   memo: string | null;
   previous_workout_exercise_id: string | null;

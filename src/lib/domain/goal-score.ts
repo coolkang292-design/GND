@@ -6,11 +6,14 @@
  */
 
 export type GoalType =
-  | "frequency" // 운동 일수
-  | "distance" // km
-  | "duration" // 분
-  | "volume" // 웨이트 총볼륨 kg
-  | "reps"; // 맨몸 총횟수
+  | "weight_reps" // 웨이트 완료세트 총 반복
+  | "weight_days" // 웨이트 운동일 (하루 N부위+)
+  | "cardio_distance" // 유산소 거리 km
+  | "cardio_time" // 유산소 지속 분
+  | "bodyweight_reps" // 맨몸 횟수형 총 반복
+  | "bodyweight_time" // 맨몸 시간형 지속 분
+  | "bodyweight_days" // 맨몸 운동일 (하루 N종목+)
+  | "volume"; // 레거시(웨이트 총볼륨) — 표시 전용
 
 export type ScoredGoal = {
   type: GoalType;
