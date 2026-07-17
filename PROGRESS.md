@@ -3,9 +3,27 @@
 > 새 세션은 이 파일 + `C:\Users\SAMSUNG\Desktop\Workout app\IMPLEMENTATION_PLAN.md`(단일 진실)만 읽으면 바로 이어서 작업할 수 있다.
 > 시각 스펙: 같은 폴더의 `운동앱-목업.html`.
 
+## ⚠️ Phase 6 구현 완료 — 실기기 확인 대기 (2026-07-17)
+
+**코드·검증 완료, 커밋도 태스크 단위로 완료(`fbd86b4`~`9f822ec`).** 남은 것은 사용자 실기기 확인뿐.
+(참고: 이번엔 계획 실행 흐름상 태스크별 커밋을 먼저 했다 — 실기기에서 문제가 나오면 수정 커밋으로 잇는다.)
+
+**실기기 확인 항목 (폰 2대 또는 폰+PC, 계정 2개):**
+1. A 운동 시작 → B 홈·피드에 "n분째 운동 중" 카드 노출
+2. B 응원(🔥💪👏🏁/✍️한마디) → A 화면 상단 응원 배너 실시간 수신
+3. 연속 응원 시 "잠시 후 다시" 안내, 4번째에 "3번까지" 안내
+4. A 완료 → B 피드에 완료 카드(종목·볼륨·시간·스트릭·인증사진) → 반응 토글
+5. 홈 크루 카드에서 오늘 미운동 크루원 "👉 콕" → 상대 알림함에 도착
+6. 🔔 뱃지 수 확인 → 알림함 열면 일괄 읽음 처리
+
+**검증 완료 증거 (2026-07-17):** unit 104 · RLS 102/102(실DB) · E2E 2인 14/14(헤드리스 Chrome 2컨텍스트, Realtime 배너 포함) · lint · typecheck · build 통과.
+E2E가 잡은 실버그 1건: 배너·벨이 같은 Realtime 채널 토픽을 재사용해 페이지 크래시 → 토픽 유니크화로 수정(`9f822ec`).
+
+---
+
 ## 현재 상태 (2026-07-17 기준)
 
-**Phase 0~5 완료 (2026-07-17). 다음 작업 = Phase 6 (소셜: 피드·반응·응원·찌르기·알림).**
+**Phase 0~5 완료, Phase 6(소셜) 구현 완료·실기기 확인 대기 (2026-07-17). 다음 작업 = 실기기 확인 → Phase 6 후속(꾸준왕 열람·홈 위젯) 또는 Phase 7.**
 
 | Phase | 상태 | 비고 |
 |---|---|---|
@@ -15,7 +33,8 @@
 | 3 운동 핵심 | ✅ | 세션·RPC·카탈로그·세트입력·휴식타이머·임시저장 — unit 47 + RLS 40/40 + PC·폰 스모크 통과 |
 | 4 완료 루프 | ✅ | 달력(`9e540ef`)·지난 운동 복사(`1f3281d`)·인증사진(`a1a6e1a`) — unit 63 + RLS 54/54 + E2E 2종 통과 |
 | 5 챌린지 | ✅ | goal-score TDD 20케이스·KPI 게이트·진행중 비공개·시상대(`ea6fb60`) — unit 83 + RLS 68/68 + E2E 통과 |
-| 6~7 | 대기 | 계획서 §18 참조 |
+| 6 소셜 | 🔶 실기기 대기 | 피드·반응·진행중 카드·Realtime 응원·찌르기·알림함 — unit 104 + RLS 102/102 + E2E 2인 14/14 |
+| 7 | 대기 | 계획서 §18 참조 |
 
 ### Phase 5.2~5.3 산출물 (2026-07-17, 커밋 `63e5c27`~`88d959b` + `b499510`)
 
@@ -110,7 +129,15 @@ Storage 버킷도 SQL로 생성 가능했음(`insert into storage.buckets`, 0005
 7. **카카오톡 인앱 브라우저는 HTML에 속성을 주입**해 하이드레이션 경고(1 Issue 오버레이)를 띄운다 — 실제 오류 아님. `layout.tsx`의 html/body에 `suppressHydrationWarning` 적용해 억제. dev 오버레이는 프로덕션에선 안 뜸.
 8. **개발 서버 실행 중 `pnpm build`를 동시에 돌리지 말 것** — 둘 다 `.next`를 사용해 기존 dev 서버가 3000번 포트를 잡은 채 요청에 응답하지 않는 상태가 발생했다. 최종 검증은 dev 서버를 먼저 종료하고 build를 실행한 뒤, 실기기 테스트가 더 필요하면 dev 서버를 새로 시작한다.
 
-## 다음 세션 할 일 = Phase 6 (소셜, 계획서 §9·§18)
+## Phase 6 산출물 (2026-07-17, `fbd86b4`~`9f822ec`)
+
+- **0011_social.sql** (적용 완료 ✅): workout_events·reactions·cheers·notifications·notification_settings·record_views + RLS + `send_cheer`(3회/10초 쿨다운)·`poke_user`(24h 1회) definer RPC + 반응 알림 트리거 + start/complete/cancel_workout·finalize_challenge 대체(이벤트·알림 추가) + notifications Realtime publication.
+- `lib/domain/social.ts`(TDD 8): `activeSessionIds`(6h 유령 컷)·`unreadCount`. `lib/social.ts`: 피드·반응 토글·응원·찌르기·알림함·`subscribeNotifications`(구독마다 유니크 토픽 — 재사용 시 크래시, `9f822ec`).
+- UI: `feed/page.tsx`(피드+페이지네이션)·`components/feed/`(feed-item·reaction-bar·active-workout-cards)·`cheer-banner`(레이아웃 장착)·`notification-bell`(홈·피드 헤더)·crew-card 찌르기(✅/👉콕). `lib/time-ago.ts` 공용화.
+- 검증: unit 104 · RLS 102/102 · E2E 2인 14/14(scratchpad `e2e-phase6.mjs`, 익명세션 쿠키 파싱→REST 픽스처→UI·Realtime 단언 — 재작성 시 이 흐름 참고) · build.
+- **후속(별도 계획)**: 꾸준왕 성과 열람 UI+record_viewed 알림, 홈 위젯(스트릭 카드·주간 stat·오늘 그룹 현황·꾸준왕), notification_settings UI(Phase 7).
+
+## Phase 6 설계 기록 (계획서 §9·§18)
 
 **설계·계획 완료 (2026-07-17):**
 - 스펙: `docs/superpowers/specs/2026-07-17-phase6-social-design.md` (핵심 결정: 알림=definer RPC+트리거, 응원 스팸제한=send_cheer RPC, Realtime=notifications 단일 구독, 진행중 카드=workout_events)
