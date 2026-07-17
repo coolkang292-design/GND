@@ -85,6 +85,7 @@ Storage 버킷도 SQL로 생성 가능했음(`insert into storage.buckets`, 0005
 - 0008(measure·카테고리 goal_type): 적용 완료 ✅
 - 0009(burnfit 시드): 적용 완료 ✅ (2026-07-17, "Success. No rows returned" 확인)
 - 0010(맨몸 루틴 6종 시드): 적용 완료 ✅ (2026-07-17, REST 조회로 6/6 확인)
+- **0011(소셜: events·reactions·cheers·notifications 등): 미적용 ⏳ — 사용자 SQL Editor 적용 필요** (if not exists/or replace로 재실행 안전)
 - 컬럼 추가·시드 위주라 idempotent 안전장치(`on conflict`, `if not exists` 성격) 있는 편이나, 재실행 시 `alter table add column`은 중복 에러 → 각 파일 1회만.
 
 ## 코드 구조 요약
@@ -111,7 +112,14 @@ Storage 버킷도 SQL로 생성 가능했음(`insert into storage.buckets`, 0005
 
 ## 다음 세션 할 일 = Phase 6 (소셜, 계획서 §9·§18)
 
-1. 마이그레이션 **0011**(0007~0010 사용됨): `reactions`(unique(session,user,type))·`cheers`(sender≠receiver, 크루 active 세션만)·`notifications`+`notification_settings`·`workout_events` + RLS(§14: 타인용 알림은 service_role만… MVP는 definer RPC로 대체 검토)
+**설계·계획 완료 (2026-07-17):**
+- 스펙: `docs/superpowers/specs/2026-07-17-phase6-social-design.md` (핵심 결정: 알림=definer RPC+트리거, 응원 스팸제한=send_cheer RPC, Realtime=notifications 단일 구독, 진행중 카드=workout_events)
+- 계획: `docs/superpowers/plans/2026-07-17-phase6-social.md` (Task 1 RLS 테스트 → 2 도메인 TDD → 3 I/O → 4 피드 → 5 응원·배너 → 6 찌르기·알림함 → 7 검증)
+- **`supabase/migrations/0011_social.sql` 작성 완료·미커밋·DB 미적용** — 사용자가 SQL Editor로 적용해야 Task 1부터 진행 가능. 파일은 Phase 6 기능 커밋 때 함께 커밋(0007·0009 전례).
+- 꾸준왕 열람 UI·홈 위젯은 후속 계획(record_views 테이블만 0011에 선반영).
+
+원래 백로그(참고):
+1. 마이그레이션 **0011**(0007~0010 사용됨): `reactions`(unique(session,user,type))·`cheers`(sender≠receiver, 크루 active 세션만)·`notifications`+`notification_settings`·`workout_events` + RLS(§14: 타인용 알림은 service_role만… MVP는 definer RPC로 대체 → 스펙 결정 1)
 2. **그룹 피드**: 크루 공개 completed 최신순 — 인증사진(signed URL)·요약(볼륨·시간)·현재 스트릭·반응
 3. **이모지 반응** fire/clap/like: 추가·취소·중복방지·낙관적 UI
 4. **운동 시작 알림 + 진행 중 카드**: start_workout RPC에 workout_events·크루 알림 추가(0004 RPC 수정 마이그레이션), 피드/홈 진행 중 카드
