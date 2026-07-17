@@ -228,5 +228,79 @@ check("A가 취소 RPC → cancelled", cancel.status === 200 && cancel.json?.sta
 const bCancelRpc = await api(B.token, "POST", "/rest/v1/rpc/complete_workout", { p_session_id: session2.id });
 check("B는 A 세션에 RPC 호출 불가 (session_not_found)", bCancelRpc.status >= 400);
 
+console.log("\n── Phase 4: 인증사진 (workout_images + storage) ──");
+// storage 헬퍼 — 바이너리 업로드/다운로드
+const fakeJpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0xff, 0xd9]);
+async function storagePut(token, path) {
+  const res = await fetch(`${URL_}/storage/v1/object/workout-images/${path}`, {
+    method: "POST",
+    headers: { apikey: KEY, Authorization: `Bearer ${token}`, "Content-Type": "image/jpeg" },
+    body: fakeJpeg,
+  });
+  return res.status;
+}
+async function storageGet(token, path) {
+  const res = await fetch(`${URL_}/storage/v1/object/workout-images/${path}`, {
+    headers: { apikey: KEY, Authorization: `Bearer ${token}` },
+  });
+  return res.status;
+}
+
+// 인증 없는 세션엔 RPC 거부 (image_not_found)
+const noImg = await api(A.token, "POST", "/rest/v1/rpc/set_workout_verification", {
+  p_session_id: session.id, p_source: "camera",
+});
+check("사진 없이 인증 RPC 불가 (image_not_found)", noImg.status >= 400, JSON.stringify(noImg.json));
+
+const imgPath = `${A.id}/${session.id}/test.jpg`;
+check("A가 본인 경로에 사진 업로드", (await storagePut(A.token, imgPath)) === 200);
+check("B는 A 경로에 업로드 불가", (await storagePut(B.token, `${A.id}/${session.id}/hack.jpg`)) >= 400);
+
+const imgRow = await api(A.token, "POST", "/rest/v1/workout_images", {
+  session_id: session.id, user_id: A.id, image_path: imgPath, source: "camera",
+});
+check("A가 이미지 행 생성", imgRow.status === 201, JSON.stringify(imgRow.json));
+
+const imgFake = await api(A.token, "POST", "/rest/v1/workout_images", {
+  session_id: session.id, user_id: A.id, image_path: imgPath, source: "camera",
+  server_uploaded_at: "2000-01-01T00:00:00Z",
+});
+check("server_uploaded_at 클라 직접 쓰기 불가 (컬럼 권한)", imgFake.status >= 400);
+
+const imgB = await api(B.token, "POST", "/rest/v1/workout_images", {
+  session_id: session.id, user_id: B.id, image_path: `${B.id}/x/x.jpg`, source: "album",
+});
+check("B는 A 세션에 이미지 행 생성 불가", imgB.status >= 400);
+
+const verify = await api(A.token, "POST", "/rest/v1/rpc/set_workout_verification", {
+  p_session_id: session.id, p_source: "camera",
+});
+check(
+  "A가 인증 RPC → camera_verified + 서버 server_uploaded_at",
+  verify.status === 200 && verify.json?.verification_status === "camera_verified" && !!verify.json?.server_uploaded_at,
+  JSON.stringify(verify.json),
+);
+
+const verifyB = await api(B.token, "POST", "/rest/v1/rpc/set_workout_verification", {
+  p_session_id: session.id, p_source: "camera",
+});
+check("B는 A 세션 인증 RPC 불가", verifyB.status >= 400);
+
+const bImgRow = await api(B.token, "GET", `/rest/v1/workout_images?session_id=eq.${session.id}`);
+check("B는 크루 공개 완료 세션의 이미지 행 조회 가능", bImgRow.status === 200 && bImgRow.json.length === 1);
+check("B는 크루 공개 세션의 사진 다운로드 가능", (await storageGet(B.token, imgPath)) === 200);
+
+// private 세션(session2) 사진은 크루원에게도 비공개
+const privPath = `${A.id}/${session2.id}/priv.jpg`;
+check("A가 private 세션 사진 업로드", (await storagePut(A.token, privPath)) === 200);
+const privRow = await api(A.token, "POST", "/rest/v1/workout_images", {
+  session_id: session2.id, user_id: A.id, image_path: privPath, source: "album",
+});
+check("A가 private 세션 이미지 행 생성", privRow.status === 201);
+
+const bPrivRow = await api(B.token, "GET", `/rest/v1/workout_images?session_id=eq.${session2.id}`);
+check("B는 private 세션 이미지 행 조회 불가", bPrivRow.status === 200 && bPrivRow.json.length === 0);
+check("B는 private 세션 사진 다운로드 불가", (await storageGet(B.token, privPath)) >= 400);
+
 console.log(`\n결과: ${passed} 통과 / ${failed} 실패`);
 process.exit(failed === 0 ? 0 : 1);

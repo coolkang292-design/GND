@@ -6,6 +6,7 @@ import { CalendarView } from "@/components/record/calendar-view";
 import { ExerciseCard } from "@/components/record/exercise-card";
 import { ExercisePicker } from "@/components/record/exercise-picker";
 import { RestBar } from "@/components/record/rest-bar";
+import { VerificationPhoto } from "@/components/record/verification-photo";
 import { summarizeVolume, type VolumeSummary } from "@/lib/domain/volume";
 import { getMyGroups } from "@/lib/crew";
 import type { BodyPart, CatalogExercise, ExerciseType } from "@/lib/types";
@@ -59,6 +60,8 @@ export default function RecordPage() {
 }
 
 type CompletedResult = {
+  sessionId: string;
+  completedAtMs: number;
   durationMinutes: number;
   summary: VolumeSummary;
 };
@@ -361,6 +364,10 @@ function WorkoutScreen({ userId }: { userId: string }) {
       await saveSessionExercises(draft.sessionId, draft.exercises);
       const s = await completeWorkout(draft.sessionId);
       setResult({
+        sessionId: s.id,
+        completedAtMs: s.completed_at
+          ? new Date(s.completed_at).getTime()
+          : Date.now(),
         durationMinutes: s.duration_minutes ?? 0,
         summary: summarizeVolume(toVolumeSets(draft.exercises)),
       });
@@ -420,9 +427,17 @@ function WorkoutScreen({ userId }: { userId: string }) {
             {result.summary.completedSetCount}개
           </p>
         </section>
+        {/* 인증사진 (§11) — 촬영/앨범/사진 없이 */}
+        <VerificationPhoto
+          userId={userId}
+          sessionId={result.sessionId}
+          durationMinutes={result.durationMinutes}
+          completedAtMs={result.completedAtMs}
+          onToast={showToast}
+        />
         <p className="text-center text-xs text-muted">
-          &lsquo;달력&rsquo; 탭에서 오늘 스탬프를 확인할 수 있어요. 인증사진은
-          곧 열려요.
+          &lsquo;달력&rsquo; 탭에서 오늘 스탬프를 확인할 수 있어요. 카메라
+          인증은 🔥, 업로드는 ●로 찍혀요.
         </p>
         <button
           onClick={() => setResult(null)}
@@ -430,6 +445,14 @@ function WorkoutScreen({ userId }: { userId: string }) {
         >
           확인
         </button>
+        {toast && (
+          <div
+            className="fixed inset-x-8 z-50 rounded-card border border-line bg-surface px-4 py-3 text-center text-sm font-bold shadow-card"
+            style={{ bottom: "calc(env(safe-area-inset-bottom) + 130px)" }}
+          >
+            {toast}
+          </div>
+        )}
       </div>
     );
   }

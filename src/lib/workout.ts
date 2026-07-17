@@ -364,6 +364,47 @@ export async function getLastRecordedSets(
   return sets.length > 0 ? sets : null;
 }
 
+// ── 인증사진 (§11) ───────────────────────────────────────────────
+
+export type VerificationSource = "camera" | "album";
+
+/**
+ * 압축된 사진을 비공개 버킷에 올리고 세션 인증 상태를 기록.
+ * verification_status/server_uploaded_at은 RPC(서버시간)만 쓴다.
+ */
+export async function uploadWorkoutImage(input: {
+  userId: string;
+  sessionId: string;
+  blob: Blob;
+  source: VerificationSource;
+  clientCapturedAt: Date | null;
+}): Promise<WorkoutSession> {
+  const supabase = getSupabaseBrowserClient();
+  const path = `${input.userId}/${input.sessionId}/${Date.now()}.jpg`;
+
+  const { error: upError } = await supabase.storage
+    .from("workout-images")
+    .upload(path, input.blob, { contentType: "image/jpeg" });
+  if (upError) throw upError;
+
+  const { error: rowError } = await supabase.from("workout_images").insert({
+    session_id: input.sessionId,
+    user_id: input.userId,
+    image_path: path,
+    source: input.source,
+    client_captured_at: input.clientCapturedAt?.toISOString() ?? null,
+  });
+  if (rowError) throw rowError;
+
+  const { data, error } = await supabase.rpc("set_workout_verification", {
+    p_session_id: input.sessionId,
+    p_source: input.source,
+    p_client_captured_at: input.clientCapturedAt?.toISOString() ?? null,
+  });
+  if (error) throw error;
+  return data as WorkoutSession;
+}
+
 // ── 지난 운동 복사 (§10) ─────────────────────────────────────────
 
 /**
