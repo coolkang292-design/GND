@@ -302,5 +302,67 @@ const bPrivRow = await api(B.token, "GET", `/rest/v1/workout_images?session_id=e
 check("B는 private 세션 이미지 행 조회 불가", bPrivRow.status === 200 && bPrivRow.json.length === 0);
 check("B는 private 세션 사진 다운로드 불가", (await storageGet(B.token, privPath)) >= 400);
 
+console.log("\n── Phase 5: 챌린지 (KPI 게이트·비공개·기록 보존) ──");
+const C = await anonUser(); // 비크루 외부인
+
+const chIns = await api(A.token, "POST", "/rest/v1/challenges", {
+  group_id: group.id, name: "RLS 챌린지", start_date: "2026-07-01", end_date: "2026-07-14",
+});
+const challenge = chIns.json?.[0];
+check("A가 챌린지 생성 (기본 setup)", chIns.status === 201 && challenge?.status === "setup", JSON.stringify(chIns.json));
+
+const chDup = await api(B.token, "POST", "/rest/v1/challenges", {
+  group_id: group.id, name: "중복", start_date: "2026-07-01", end_date: "2026-07-14",
+});
+check("살아있는 챌린지 중복 생성 차단 (unique)", chDup.status >= 400);
+
+const chStatusHack = await api(A.token, "PATCH", `/rest/v1/challenges?id=eq.${challenge.id}`, { status: "active" });
+check("status 직접 수정 불가 (컬럼 권한)", chStatusHack.status >= 400);
+
+const chC = await api(C.token, "GET", `/rest/v1/challenges?id=eq.${challenge.id}`);
+check("비크루 C는 챌린지 조회 불가", chC.status === 200 && chC.json.length === 0);
+
+const gateEarly = await api(A.token, "POST", "/rest/v1/rpc/start_challenge", { p_challenge_id: challenge.id });
+check("KPI 미완 시 시작 차단 (kpi_incomplete)", gateEarly.status >= 400 && JSON.stringify(gateEarly.json).includes("kpi_incomplete"), JSON.stringify(gateEarly.json));
+
+const goalA = await api(A.token, "POST", "/rest/v1/user_goals", {
+  user_id: A.id, challenge_id: challenge.id, group_id: group.id,
+  goal_type: "volume", target_value: 5000, unit: "kg", planned_days: 5,
+});
+check("A가 본인 KPI 생성", goalA.status === 201, JSON.stringify(goalA.json));
+
+const goalForge = await api(B.token, "POST", "/rest/v1/user_goals", {
+  user_id: A.id, challenge_id: challenge.id, group_id: group.id,
+  goal_type: "distance", target_value: 20, planned_days: 5,
+});
+check("B는 A 명의 KPI 생성 불가", goalForge.status >= 400);
+
+const goalC = await api(C.token, "POST", "/rest/v1/user_goals", {
+  user_id: C.id, challenge_id: challenge.id, group_id: group.id,
+  goal_type: "distance", target_value: 20, planned_days: 5,
+});
+check("비크루 C는 KPI 생성 불가", goalC.status >= 400);
+
+const goalB = await api(B.token, "POST", "/rest/v1/user_goals", {
+  user_id: B.id, challenge_id: challenge.id, group_id: group.id,
+  goal_type: "frequency", target_value: 12, planned_days: 4,
+});
+check("B가 본인 KPI 생성", goalB.status === 201);
+
+const cancelByB = await api(B.token, "POST", "/rest/v1/rpc/cancel_challenge", { p_challenge_id: challenge.id });
+check("비생성자 B는 챌린지 취소 불가", cancelByB.status >= 400);
+
+const started2 = await api(B.token, "POST", "/rest/v1/rpc/start_challenge", { p_challenge_id: challenge.id });
+check("전원 KPI 완료 후 크루원이 시작 가능 → active", started2.status === 200 && started2.json?.status === "active", JSON.stringify(started2.json));
+
+const goalEditAfter = await api(A.token, "PATCH", `/rest/v1/user_goals?id=eq.${goalA.json[0].id}`, { target_value: 1 });
+check("시작 후 KPI 수정 불가 (기록 보존)", goalEditAfter.status < 300 && (goalEditAfter.json ?? []).length === 0, JSON.stringify(goalEditAfter.json));
+
+const goalsSeen = await api(B.token, "GET", `/rest/v1/user_goals?challenge_id=eq.${challenge.id}`);
+check("크루원 B는 전체 KPI 조회 가능 (설정 현황·결과용)", goalsSeen.status === 200 && goalsSeen.json.length === 2);
+
+const finEarly = await api(A.token, "POST", "/rest/v1/rpc/finalize_challenge", { p_challenge_id: challenge.id });
+check("종료일 전 결과 확정...은 과거 종료일이라 성공해야 함 (ended)", finEarly.status === 200 && finEarly.json?.status === "ended", JSON.stringify(finEarly.json));
+
 console.log(`\n결과: ${passed} 통과 / ${failed} 실패`);
 process.exit(failed === 0 ? 0 : 1);

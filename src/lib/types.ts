@@ -1,3 +1,29 @@
+import type { GoalType } from "@/lib/domain/goal-score";
+
+export type Challenge = {
+  id: string;
+  group_id: string;
+  name: string;
+  start_date: string; // YYYY-MM-DD
+  end_date: string;
+  status: "setup" | "active" | "ended" | "cancelled";
+  created_by: string;
+  created_at: string;
+};
+
+export type UserGoal = {
+  id: string;
+  user_id: string;
+  challenge_id: string;
+  group_id: string;
+  goal_type: GoalType;
+  target_value: number;
+  unit: string | null;
+  planned_days: number;
+  created_at: string;
+  updated_at: string;
+};
+
 export type Profile = {
   id: string;
   nickname: string;
