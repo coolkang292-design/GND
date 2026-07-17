@@ -187,8 +187,10 @@ function WorkoutScreen({ userId }: { userId: string }) {
     [],
   );
 
-  function addExercise(item: CatalogExercise) {
-    const ex: LocalExercise = {
+  /** 선택한 운동 여러 개를 한 번에 추가 (다중 선택 피커) */
+  function addExercises(items: CatalogExercise[]) {
+    if (items.length === 0) return;
+    const added: LocalExercise[] = items.map((item) => ({
       key: localId(),
       name: item.name,
       bodyPart: item.body_part,
@@ -196,16 +198,22 @@ function WorkoutScreen({ userId }: { userId: string }) {
       measure: item.measure,
       isCustom: item.is_custom,
       sets: defaultSets(item.exercise_type, item.measure),
-    };
-    setDraft((d) => ({ ...d, exercises: [...d.exercises, ex] }));
+    }));
+    setDraft((d) => ({ ...d, exercises: [...d.exercises, ...added] }));
     setPickerOpen(false);
-    showToast(`'${item.name}' 추가됨`);
+    showToast(
+      items.length === 1
+        ? `'${items[0].name}' 추가됨`
+        : `운동 ${items.length}개 추가됨`,
+    );
     // 직전 기록 불러오기 (§10) — 있으면 세트 구조 프리필
-    getLastRecordedSets(userId, item.name)
-      .then((sets) => {
-        if (sets) updateExercise(ex.key, (e) => ({ ...e, sets }));
-      })
-      .catch(() => {});
+    for (const ex of added) {
+      getLastRecordedSets(userId, ex.name)
+        .then((sets) => {
+          if (sets) updateExercise(ex.key, (e) => ({ ...e, sets }));
+        })
+        .catch(() => {});
+    }
   }
 
   async function handleCreateCustom(input: {
@@ -213,13 +221,14 @@ function WorkoutScreen({ userId }: { userId: string }) {
     bodyPart: BodyPart;
     exerciseType: ExerciseType;
     measure: "reps" | "time" | null;
-  }) {
+  }): Promise<CatalogExercise | null> {
     try {
       const created = await createCustomExercise({ ...input, userId });
       setCatalog((c) => [...c, created]);
-      addExercise(created);
+      return created; // 피커가 선택 목록에 담는다 — 추가는 '선택한 n개 추가'로
     } catch (e) {
       showToast(errorMessage(e));
+      return null;
     }
   }
 
@@ -626,7 +635,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
         open={pickerOpen}
         catalog={catalog}
         onClose={() => setPickerOpen(false)}
-        onPick={addExercise}
+        onPickMany={addExercises}
         onCreateCustom={handleCreateCustom}
       />
 

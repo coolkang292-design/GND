@@ -26,25 +26,35 @@ export const TYPE_LABEL: Record<ExerciseType, string> = {
 type PickerProps = {
   catalog: CatalogExercise[];
   onClose: () => void;
-  onPick: (item: CatalogExercise) => void;
+  /** 선택한 운동 여러 개를 한 번에 추가 */
+  onPickMany: (items: CatalogExercise[]) => void;
+  /** 커스텀 운동 생성 — 생성된 항목을 반환하면 선택 목록에 담긴다 */
   onCreateCustom: (input: {
     name: string;
     bodyPart: BodyPart;
     exerciseType: ExerciseType;
     measure: "reps" | "time" | null;
-  }) => Promise<void>;
+  }) => Promise<CatalogExercise | null>;
 };
 
-/** 운동 추가 바텀시트 — Burnfit식 검색 + 부위 필터 + 직접 만들기 (§10) */
+/** 운동 추가 바텀시트 — 검색 + 부위 필터 + 다중 선택 + 직접 만들기 (§10) */
 export function ExercisePicker({ open, ...props }: PickerProps & { open: boolean }) {
   // 열 때마다 언마운트→마운트로 검색·필터 상태를 초기화 (effect 내 setState 금지)
   if (!open) return null;
   return <PickerSheet {...props} />;
 }
 
-function PickerSheet({ catalog, onClose, onPick, onCreateCustom }: PickerProps) {
+function PickerSheet({
+  catalog,
+  onClose,
+  onPickMany,
+  onCreateCustom,
+}: PickerProps) {
   const [query, setQuery] = useState("");
   const [part, setPart] = useState<(typeof FILTERS)[number]>("전체");
+  const [selected, setSelected] = useState<Map<string, CatalogExercise>>(
+    () => new Map(),
+  );
   const [customOpen, setCustomOpen] = useState(false);
   const [customPart, setCustomPart] = useState<BodyPart>("가슴");
   const [customType, setCustomType] = useState<ExerciseType>("weight");
@@ -62,17 +72,32 @@ function PickerSheet({ catalog, onClose, onPick, onCreateCustom }: PickerProps) 
       (!q || e.name.toLowerCase().includes(q)),
   );
 
+  function toggleSelect(item: CatalogExercise) {
+    setSelected((prev) => {
+      const next = new Map(prev);
+      if (next.has(item.id)) next.delete(item.id);
+      else next.set(item.id, item);
+      return next;
+    });
+  }
+
   async function createCustom() {
     const name = (nameRef.current?.value ?? "").trim();
     if (!name) return;
     setSaving(true);
     try {
-      await onCreateCustom({
+      const created = await onCreateCustom({
         name,
         bodyPart: customPart,
         exerciseType: customType,
         measure: customType === "bodyweight" ? customMeasure : null,
       });
+      // 만들면 곧바로 선택 목록에 담고 폼을 닫는다 — 기존 선택 유지
+      if (created) {
+        setSelected((prev) => new Map(prev).set(created.id, created));
+        setCustomOpen(false);
+        if (nameRef.current) nameRef.current.value = "";
+      }
     } finally {
       setSaving(false);
     }
@@ -114,28 +139,42 @@ function PickerSheet({ catalog, onClose, onPick, onCreateCustom }: PickerProps) 
 
         <div className="min-h-0 flex-1 overflow-y-auto">
           {list.length > 0 ? (
-            list.map((e) => (
-              <button
-                key={e.id}
-                onClick={() => onPick(e)}
-                className="flex w-full items-center justify-between border-b border-line py-2.5 text-left"
-              >
-                <span>
-                  <span className="block text-sm font-bold">
-                    {e.name}
-                    {e.is_custom && (
-                      <span className="ml-1.5 rounded bg-accent-weak px-1.5 py-0.5 text-[10px] font-bold text-accent">
-                        직접
-                      </span>
-                    )}
+            list.map((e) => {
+              const isSelected = selected.has(e.id);
+              return (
+                <button
+                  key={e.id}
+                  onClick={() => toggleSelect(e)}
+                  aria-pressed={isSelected}
+                  className={`flex w-full items-center justify-between border-b border-line py-2.5 text-left ${
+                    isSelected ? "bg-accent-weak/40" : ""
+                  }`}
+                >
+                  <span>
+                    <span className="block text-sm font-bold">
+                      {e.name}
+                      {e.is_custom && (
+                        <span className="ml-1.5 rounded bg-accent-weak px-1.5 py-0.5 text-[10px] font-bold text-accent">
+                          직접
+                        </span>
+                      )}
+                    </span>
+                    <span className="block text-xs text-muted">
+                      {e.body_part} · {TYPE_LABEL[e.exercise_type]}
+                    </span>
                   </span>
-                  <span className="block text-xs text-muted">
-                    {e.body_part} · {TYPE_LABEL[e.exercise_type]}
+                  <span
+                    className={`flex h-6 w-6 flex-none items-center justify-center rounded-full border text-sm font-bold ${
+                      isSelected
+                        ? "border-accent bg-accent text-accent-ink"
+                        : "border-line text-accent"
+                    }`}
+                  >
+                    {isSelected ? "✓" : "＋"}
                   </span>
-                </span>
-                <span className="text-lg font-bold text-accent">＋</span>
-              </button>
-            ))
+                </button>
+              );
+            })
           ) : (
             <p className="py-5 text-center text-sm text-muted">
               {query.trim()
@@ -216,6 +255,16 @@ function PickerSheet({ catalog, onClose, onPick, onCreateCustom }: PickerProps) 
             ＋ {query.trim() ? `'${query.trim()}' ` : ""}직접 만들기
           </button>
         )}
+
+        <button
+          onClick={() => onPickMany([...selected.values()])}
+          disabled={selected.size === 0}
+          className="mt-2 h-12 w-full flex-none rounded-card-sm bg-accent text-sm font-extrabold text-accent-ink disabled:opacity-40"
+        >
+          {selected.size > 0
+            ? `선택한 ${selected.size}개 운동 추가`
+            : "운동을 선택하세요"}
+        </button>
       </div>
     </>
   );
