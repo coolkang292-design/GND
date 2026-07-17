@@ -8,12 +8,18 @@ import {
 } from "@/lib/domain/streak";
 import { DEFAULT_TIMEZONE, dayKey } from "@/lib/domain/time";
 
-const STAGE_MESSAGES: Partial<Record<StreakStage, string>> = {
-  d4: "어제는 쉬었어요 — 불꽃은 아직 살아있어요 (소멸 D-4)",
-  d3: "이틀째 휴식 중 — 오늘 한 번 어때요? (소멸 D-3)",
-  d2: "불꽃이 흔들려요 — 사흘째 미운동이에요 (소멸 D-2)",
-  d1: "오늘 안 하면 내일 불꽃이 꺼져요! (소멸 D-1)",
-};
+// 손실회피 프레이밍: "얻는다"가 아니라 "쌓아둔 n일을 잃는다"를 숫자로 보여준다
+const STAGE_MESSAGES: Partial<Record<StreakStage, (streak: number) => string>> =
+  {
+    d4: (n) =>
+      `어제 걸렀어요 — 지금까지 쌓은 ${n}일 불꽃이 걸려 있어요 (소멸 D-4)`,
+    d3: (n) =>
+      `이틀째 멈췄어요 — 이대로면 ${n}일이 통째로 사라져요 (소멸 D-3)`,
+    d2: (n) =>
+      `위험! ${n}일 불꽃이 꺼지기 직전 — 잃으면 0일부터 다시예요 (소멸 D-2)`,
+    d1: (n) =>
+      `마지막 경고 — 오늘 안 하면 내일 ${n}일 불꽃이 전부 사라져요! (D-1)`,
+  };
 
 function weekdayLabel(key: string): string {
   const [y, m, d] = key.split("-").map(Number);
@@ -43,9 +49,9 @@ export function StreakCard({ completedAts }: { completedAts: Date[] }) {
         ? "오늘 완료! 🔥"
         : stage === "expired"
           ? "불꽃이 꺼졌어요 — 오늘 다시 시작!"
-          : (STAGE_MESSAGES[stage] ?? "");
+          : (STAGE_MESSAGES[stage]?.(streak) ?? "");
 
-  const warning = streak > 0 ? STAGE_MESSAGES[stage] : undefined;
+  const warning = streak > 0 ? STAGE_MESSAGES[stage]?.(streak) : undefined;
 
   return (
     <>
