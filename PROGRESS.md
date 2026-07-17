@@ -5,7 +5,7 @@
 
 ## 현재 상태 (2026-07-16 기준)
 
-**Phase 0·1·2·3 완료. Phase 4 진행 중 — 달력(§12) 완료·실기기 확인·커밋(`9e540ef`). 다음 = 지난 운동 복사 → 인증사진.**
+**Phase 0~4 완료 (2026-07-17). 다음 작업 = Phase 5 (챌린지·대시보드, goal-score TDD가 핵심).**
 
 | Phase | 상태 | 비고 |
 |---|---|---|
@@ -13,10 +13,14 @@
 | 1 웹앱 기반 | ✅ | 테마·5탭·익명인증·PWA·lib/domain/time (18 tests) |
 | 2 신원·크루 | ✅ | 온보딩·초대링크·RLS — 2인 테스트 통과 |
 | 3 운동 핵심 | ✅ | 세션·RPC·카탈로그·세트입력·휴식타이머·임시저장 — unit 47 + RLS 40/40 + PC·폰 스모크 통과 |
-| 4 완료 루프 | 🔄 | **달력 완료**(스탬프·월간요약·상세시트). 남은 것: 지난 운동 복사·인증사진(버킷·0005·업로드) |
+| 4 완료 루프 | ✅ | 달력(`9e540ef`)·지난 운동 복사(`1f3281d`)·인증사진(`a1a6e1a`) — unit 63 + RLS 54/54 + E2E 2종 통과 |
 | 5~7 | 대기 | 계획서 §18 참조 |
 
-### Phase 4 진행 상황 (2026-07-16)
+### Phase 4 산출물 (2026-07-16~17)
+
+- **인증사진** (`a1a6e1a`): 0005 마이그레이션(버킷 2개 SQL 생성·workout_images+RLS·storage 정책·`set_workout_verification` RPC — 사진 존재해야 인증 인정). 완료 화면에서 촬영/앨범 → `lib/image.ts` 압축(≤1280px JPEG) → 비공개 업로드 → 오버레이 스탬프(화면만). 세션당 1장(unique). 달력 스탬프 ✓→🔥/● 자동 전환 확인(E2E).
+- **지난 운동 복사** (`1f3281d`): 달력 상세 시트 "📋 복사" → 종목·세트 구조를 오늘 draft로(완료 여부 초기화), 운동 탭 자동 전환. 온보딩 게이트 401 경합 재시도 수정 포함.
+- **E2E 스크립트**(scratchpad, puppeteer-core+Chrome): 신규유저→온보딩→운동완료→달력→복사 / →사진 업로드→● 스탬프. 새 세션에서 재작성 필요하면 위 흐름 참고.
 
 - **달력 완료** (커밋 `9e540ef`):
   - `lib/domain/calendar.ts` — completed 세션 → tz 기준 날짜별 스탬프·월간요약·달성률. **순수함수 TDD 16케이스**(자정·월·연 경계 포함). unit 총 **63 tests**.
@@ -52,9 +56,9 @@
 ## DB 마이그레이션 절차 (중요)
 
 CLI/DB 비밀번호 없음 → **사용자가 SQL Editor에 수동 붙여넣기**로 적용한다.
-`supabase/migrations/` 번호 순서대로. **0001~0004 적용 완료됨** (재실행 금지).
+`supabase/migrations/` 번호 순서대로. **0001~0005 적용 완료됨** (재실행 금지).
 새 마이그레이션 만들면 사용자에게 "파일 열기 → 전체 복사 → SQL Editor → Run"으로 안내.
-Storage 버킷은 마이그레이션이 아니라 Dashboard → Storage에서 수동 생성 안내.
+Storage 버킷도 SQL로 생성 가능했음(`insert into storage.buckets`, 0005) — Dashboard 수동 생성 불필요.
 
 ## 코드 구조 요약
 
@@ -77,18 +81,14 @@ Storage 버킷은 마이그레이션이 아니라 Dashboard → Storage에서 �
 6. **Windows 방화벽은 인터페이스 프로필별로 먹는다** — 이 PC는 와이파이=Public, Tailscale=Private. Node 허용이 Public에만 있어서 Tailscale 접속만 타임아웃됐음. 포트 3000 Private 허용 규칙로 해결.
 7. **카카오톡 인앱 브라우저는 HTML에 속성을 주입**해 하이드레이션 경고(1 Issue 오버레이)를 띄운다 — 실제 오류 아님. `layout.tsx`의 html/body에 `suppressHydrationWarning` 적용해 억제. dev 오버레이는 프로덕션에선 안 뜸.
 
-## 다음 세션 할 일 = Phase 4 남은 작업 (계획서 §10·§11·§18)
+## 다음 세션 할 일 = Phase 5 (챌린지·대시보드, 계획서 §5·§6·§7·§18)
 
-> 달력(§12, 위 4·5번)은 완료·커밋됨(`9e540ef`). 남은 것 = 지난 운동 복사 + 인증사진.
+> **`lib/domain/goal-score.ts` TDD가 이 Phase의 핵심** (§7 — 계획서가 "가장 중요"로 지정).
 
-**① 지난 운동 복사 (§10) — 사용자 개입 없이 바로 착수 가능, 추천 첫 작업**
-- 목업 흐름: 상세 시트에서 "📋 복사" → 달력이 copy 모드(점선) → 넣을 날짜 선택 → 그 세션의 종목·세트 구조를 **새 draft(준비 상태)로** 생성. (phase0-mockup.html `startCopy`/`pasteTo`)
-- 이미 있는 부품: `sessionsOnDay`(복사 대상 찾기)·`getLastRecordedSets` 유사 로직·`LocalExercise/LocalSet`·draft 저장. 복사는 "종목명+세트 구조"만 가져오고 완료여부는 false로.
-- 주의: 달력 탭 ↔ 운동 탭 상태 전달(복사 시 subTab을 workout으로 전환하고 draft 채우기). 진행 중 draft가 있으면 덮어쓰기 확인.
-
-**② 인증사진 (§11) — 사용자 개입(버킷) 필요**
-1. **사용자 안내: Storage 버킷 생성** — Dashboard → Storage → `avatars`(public), `workout-images`(**private**)
-2. 마이그레이션 0005: `workout_images` 테이블 + RLS(본인만 원본, 크루 공개 완료분 연결 이미지만 크루원 조회) + storage 정책. 적용 후 `scripts/rls-test.mjs` 확장.
-3. 완료 화면 인증사진: 촬영/앨범 선택 → 브라우저 압축(≤1280px) → 비공개 업로드 → `verification_status`/`server_uploaded_at` 기록 → 화면 오버레이(파일에 안 구움). 유형 camera_verified/photo_uploaded/none.
-   - **연동 지점**: 이게 채워지면 달력 스탬프가 자동으로 🔥/● 로 전환됨(`getCompletedSessions`가 `verification_status`를 이미 읽음). 별도 달력 수정 불필요.
-4. 검증: 이미지 RLS(타인 원본 접근 차단) + lint·typecheck·build + 실기기 사진 업로드 스모크
+1. `lib/domain/goal-score.ts` TDD: 목표별 rate 정규화(%) → 평균 achievement → participation → overall(0.8/0.2, 100% 상한) → 동점 정렬 (§7 산식 그대로)
+2. 마이그레이션 0006: `challenges`(setup|active|ended|cancelled)·`user_goals`(유저당 challenge별 여러 행) + RLS(크루원 조회·본인 목표만 생성수정·종료 기록 보존) + 챌린지 시작 RPC(**전원 user_goals 존재 검증** 게이트, §15)
+3. 챌린지 탭 UI: 만들기(기간)→각자 KPI 설정(다중 목표, 지난 KPI 불러오기)→전원 완료 시 시작
+4. 진행 중: **내 진행률만 공개**(🔒), 참여자 목록은 잠금 표시. 결과 발표(종료일): 시상대+상세 순위 (§6, 목업 ch-live/ch-result)
+5. 달성률 계산: 완료 세션들에서 목표 유형별(frequency/distance/duration/volume/reps) 실적 집계 — volume.ts·calendar.ts 재사용
+6. 검증: goal-score TDD(핵심) + RLS(비크루 차단·목표 위조 차단) + lint·typecheck·build
+7. (Phase 5 안 하면) 실기기 스모크: 폰에서 사진 인증 → 달력 🔥/● 확인도 아직 안 됨 — 한번 해볼 것
