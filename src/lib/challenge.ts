@@ -1,6 +1,11 @@
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { dayKey } from "@/lib/domain/time";
-import type { GoalType } from "@/lib/domain/goal-score";
+import { DEFAULT_TIMEZONE, dayKey } from "@/lib/domain/time";
+import {
+  plannedDaysForPeriod,
+  rankParticipants,
+  type GoalType,
+  type RankedParticipant,
+} from "@/lib/domain/goal-score";
 import type { Challenge, UserGoal, WorkoutSet } from "@/lib/types";
 
 // ── 목표 유형 메타 (§5) ──────────────────────────────────────────
@@ -404,4 +409,50 @@ export async function getPeriodStatsByUser(
   }));
 
   return foldPeriodStats(rows, startDate, endDate, timeZone);
+}
+
+// ── 진행 중 챌린지 랭킹 스냅샷 (꾸준왕 성과 시트용) ────────────────
+
+export type ChallengeRanking = { name: string; list: RankedParticipant[] };
+
+function periodDaysCount(startDate: string, endDate: string): number {
+  const toUtc = (v: string) => {
+    const [y, m, d] = v.split("-").map(Number);
+    return Date.UTC(y, m - 1, d);
+  };
+  return Math.round((toUtc(endDate) - toUtc(startDate)) / 86_400_000) + 1;
+}
+
+/** 진행 중(active) 챌린지의 현재 순위 — 없으면 null */
+export async function getActiveChallengeRanking(
+  groupId: string,
+): Promise<ChallengeRanking | null> {
+  const ch = await getCurrentChallenge(groupId);
+  if (!ch || ch.status !== "active") return null;
+
+  const [goals, stats] = await Promise.all([
+    getChallengeGoals(ch.id),
+    getPeriodStatsByUser(groupId, ch.start_date, ch.end_date, DEFAULT_TIMEZONE),
+  ]);
+  const days = periodDaysCount(ch.start_date, ch.end_date);
+  const userIds = [...new Set(goals.map((g) => g.user_id))];
+
+  const list = rankParticipants(
+    userIds.map((uid) => {
+      const userGoals = goals.filter((g) => g.user_id === uid);
+      const s = stats.get(uid) ?? EMPTY_STATS;
+      return {
+        userId: uid,
+        goals: userGoals.map((g) => ({
+          type: g.goal_type,
+          target: Number(g.target_value),
+          actual: actualForGoal(s, g.goal_type, g.qualifier),
+        })),
+        workoutDays: s.workoutDays,
+        plannedDays: plannedDaysForPeriod(userGoals[0]?.planned_days ?? 5, days),
+        allGoalsCompletedAtMs: null,
+      };
+    }),
+  );
+  return { name: ch.name, list };
 }

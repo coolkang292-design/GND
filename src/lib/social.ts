@@ -5,6 +5,8 @@ import {
 } from "@/lib/domain/social";
 import { currentStreak, workoutDayKeys } from "@/lib/domain/streak";
 import { DEFAULT_TIMEZONE, dayKey, dayRange } from "@/lib/domain/time";
+import { weekWorkoutDays } from "@/lib/domain/viewing-pass";
+import { getActiveChallengeRanking } from "@/lib/challenge";
 import { summarizeVolume, type VolumeSummary } from "@/lib/domain/volume";
 import type { ExerciseType } from "@/lib/types";
 
@@ -44,7 +46,11 @@ export type SocialErrorCode =
   | "poke_cooldown"
   | "self_poke"
   | "not_crew"
-  | "pokes_disabled";
+  | "pokes_disabled"
+  | "not_eligible"
+  | "pass_expired"
+  | "pass_used"
+  | "self_view";
 
 const SOCIAL_ERROR_CODES: SocialErrorCode[] = [
   "cheer_limit",
@@ -56,6 +62,10 @@ const SOCIAL_ERROR_CODES: SocialErrorCode[] = [
   "self_poke",
   "not_crew",
   "pokes_disabled",
+  "not_eligible",
+  "pass_expired",
+  "pass_used",
+  "self_view",
 ];
 
 export class SocialError extends Error {
@@ -491,5 +501,74 @@ export function subscribeNotifications(
     .subscribe();
   return () => {
     void supabase.removeChannel(channel);
+  };
+}
+
+// ── 꾸준왕 열람권 (0012 view_record) ─────────────────────────
+
+export async function viewRecord(targetId: string): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  const { error } = await supabase.rpc("view_record", {
+    p_target_id: targetId,
+  });
+  if (error) throw toSocialError(error);
+}
+
+/** 내 열람 기록 viewed_at 목록(최신순) — 열람권 사용 여부 판정용 */
+export async function getMyRecordViewAts(userId: string): Promise<Date[]> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("record_views")
+    .select("viewed_at")
+    .eq("viewer_id", userId)
+    .order("viewed_at", { ascending: false })
+    .limit(10);
+  if (error) throw error;
+  return (data ?? []).map((r) => new Date(r.viewed_at as string));
+}
+
+export type CrewPerformance = {
+  weekDays: number; // 대상의 이번 주 운동일
+  streak: number;
+  challenge: { name: string; rate: number; rank: number; total: number } | null;
+};
+
+/** 열람 성공 후 대상 성과 계산 — 크루 공개 완료 세션 + 챌린지 랭킹 */
+export async function getCrewPerformance(
+  targetId: string,
+  groupId: string,
+): Promise<CrewPerformance> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("workout_sessions")
+    .select("completed_at")
+    .eq("user_id", targetId)
+    .eq("status", "completed")
+    .is("deleted_at", null)
+    .not("completed_at", "is", null);
+  if (error) throw error;
+
+  const instants = (data ?? []).map((r) => new Date(r.completed_at as string));
+  const now = new Date();
+  const { days } = weekWorkoutDays(instants, now, DEFAULT_TIMEZONE);
+  const streak = currentStreak(
+    workoutDayKeys(instants, DEFAULT_TIMEZONE),
+    dayKey(now, DEFAULT_TIMEZONE),
+  );
+
+  const ranking = await getActiveChallengeRanking(groupId);
+  const mine = ranking?.list.find((r) => r.userId === targetId) ?? null;
+  return {
+    weekDays: days.length,
+    streak,
+    challenge:
+      ranking && mine
+        ? {
+            name: ranking.name,
+            rate: Math.round(mine.achievement),
+            rank: mine.rank,
+            total: ranking.list.length,
+          }
+        : null,
   };
 }
