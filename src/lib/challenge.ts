@@ -24,7 +24,7 @@ export const GOAL_TYPE_META: Record<
 export type GoalDraft = {
   type: GoalType;
   target: number;
-  /** frequency: 하루 최소 웨이트 부위 수 (기본 3) */
+  /** *_days: 하루 최소 부위/종목 수 (기본 3) */
   qualifier?: number | null;
 };
 
@@ -115,7 +115,10 @@ export async function saveMyGoals(input: {
       target_value: g.target,
       unit: GOAL_TYPE_META[g.type].unit,
       planned_days: input.plannedDays,
-      qualifier: g.type === "frequency" ? (g.qualifier ?? 3) : null,
+      qualifier:
+        g.type === "weight_days" || g.type === "bodyweight_days"
+          ? (g.qualifier ?? 3)
+          : null,
     })),
   );
   if (error) throw error;

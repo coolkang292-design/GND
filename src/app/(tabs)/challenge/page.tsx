@@ -14,6 +14,7 @@ import {
   participationScore,
   plannedDaysForPeriod,
   rankParticipants,
+  type GoalType,
   type ParticipantInput,
 } from "@/lib/domain/goal-score";
 import { dayKey } from "@/lib/domain/time";
@@ -21,6 +22,7 @@ import { getCrewProfiles, getMyGroups, getMyProfile } from "@/lib/crew";
 import {
   GOAL_TYPE_META,
   actualForGoal,
+  goalLabel,
   cancelChallenge,
   createChallenge,
   finalizeChallenge,
@@ -37,10 +39,14 @@ import type { Challenge, Group, Profile, UserGoal } from "@/lib/types";
 
 const EMPTY_STATS: PeriodStats = {
   workoutDays: 0,
-  distanceKm: 0,
-  durationMin: 0,
+  weightReps: 0,
   volumeKg: 0,
-  totalReps: 0,
+  cardioDistanceKm: 0,
+  cardioTimeMin: 0,
+  bodyweightReps: 0,
+  bodyweightTimeMin: 0,
+  weightPartsByDay: {},
+  bodyweightKindsByDay: {},
 };
 
 function periodDays(startDate: string, endDate: string): number {
@@ -150,6 +156,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
           prev.map((p) => ({
             type: p.goal_type,
             target: Number(p.target_value),
+            qualifier: p.qualifier,
           })),
         );
         if (ch.status === "active" || ch.status === "ended") {
@@ -163,6 +170,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
           prev.map((p) => ({
             type: p.goal_type,
             target: Number(p.target_value),
+            qualifier: p.qualifier,
           })),
         );
       }
@@ -297,8 +305,9 @@ function ChallengeScreen({ userId }: { userId: string }) {
             ? myGoals.map((g) => ({
                 type: g.goal_type,
                 target: Number(g.target_value),
+                qualifier: g.qualifier,
               }))
-            : [{ type: "frequency", target: 12 }],
+            : [{ type: "weight_days", target: 12, qualifier: 3 }],
         plannedDays: myGoals[0]?.planned_days ?? 5,
       },
     });
@@ -323,7 +332,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
         goals: userGoals.map((g) => ({
           type: g.goal_type,
           target: Number(g.target_value),
-          actual: actualForGoal(s, g.goal_type),
+          actual: actualForGoal(s, g.goal_type, g.qualifier),
         })),
         workoutDays: s.workoutDays,
         plannedDays: plannedDaysForPeriod(userGoals[0]?.planned_days ?? 5, days),
@@ -337,6 +346,9 @@ function ChallengeScreen({ userId }: { userId: string }) {
     ? participationScore(me.workoutDays, me.plannedDays)
     : 0;
   const myOverall = overallScore(myAchievement, myParticipation);
+
+  const myQualifier = (type: GoalType) =>
+    myGoals.find((x) => x.goal_type === type)?.qualifier;
 
   const profileOf = (id: string) => members.find((m) => m.id === id);
 
@@ -411,7 +423,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
                     key={g.id}
                     className="flex justify-between rounded-card-sm bg-surface-2 px-3 py-2 text-[12.5px]"
                   >
-                    <span>{GOAL_TYPE_META[g.goal_type].label}</span>
+                    <span>{goalLabel(g.goal_type, g.qualifier)}</span>
                     <span className="font-mono font-bold">
                       {Number(g.target_value).toLocaleString()}
                       {g.unit}
@@ -534,7 +546,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
                     <div key={i}>
                       <div className="flex justify-between text-[12.5px]">
                         <span className="font-bold">
-                          {GOAL_TYPE_META[g.type].label}{" "}
+                          {goalLabel(g.type, myQualifier(g.type))}{" "}
                           {g.target.toLocaleString()}
                           {GOAL_TYPE_META[g.type].unit}
                         </span>
@@ -765,7 +777,7 @@ function ResultView({
                     className="flex justify-between rounded-card-sm bg-surface-2 px-3 py-1.5 text-[12px]"
                   >
                     <span>
-                      {GOAL_TYPE_META[g.goal_type].label}{" "}
+                      {goalLabel(g.goal_type, g.qualifier)}{" "}
                       {Number(g.target_value).toLocaleString()}
                       {g.unit}
                     </span>
