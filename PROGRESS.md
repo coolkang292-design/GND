@@ -5,7 +5,7 @@
 
 ## 현재 상태 (2026-07-16 기준)
 
-**Phase 0~4 완료 (2026-07-17). 다음 작업 = Phase 5 (챌린지·대시보드, goal-score TDD가 핵심).**
+**Phase 0~5 완료 (2026-07-17). 다음 작업 = Phase 6 (소셜: 피드·반응·응원·찌르기·알림).**
 
 | Phase | 상태 | 비고 |
 |---|---|---|
@@ -14,7 +14,17 @@
 | 2 신원·크루 | ✅ | 온보딩·초대링크·RLS — 2인 테스트 통과 |
 | 3 운동 핵심 | ✅ | 세션·RPC·카탈로그·세트입력·휴식타이머·임시저장 — unit 47 + RLS 40/40 + PC·폰 스모크 통과 |
 | 4 완료 루프 | ✅ | 달력(`9e540ef`)·지난 운동 복사(`1f3281d`)·인증사진(`a1a6e1a`) — unit 63 + RLS 54/54 + E2E 2종 통과 |
-| 5~7 | 대기 | 계획서 §18 참조 |
+| 5 챌린지 | ✅ | goal-score TDD 20케이스·KPI 게이트·진행중 비공개·시상대(`ea6fb60`) — unit 83 + RLS 68/68 + E2E 통과 |
+| 6~7 | 대기 | 계획서 §18 참조 |
+
+### Phase 5 산출물 (2026-07-17)
+
+- `lib/domain/goal-score.ts` TDD 20케이스 (§7 그대로): rate 정규화→평균(개수중립)→100% 상한→overall 0.8/0.2→동점 ①달성률②참여율③선착④완료목표수⑤공동순위. `plannedDaysForPeriod`(주N일→기간 환산)·`gndLabel`(탈출/탈출중/확정).
+- 0006: `challenges`(살아있는 챌린지 크루당 1개 partial unique)·`user_goals`(unique(user,challenge,type), **setup 단계만 쓰기 = 기록 보존**) + `start_challenge`(전원 KPI 게이트)·`cancel_challenge`(생성자)·`finalize_challenge`(KST 종료일 지나야) RPC.
+- `lib/challenge.ts`: CRUD·지난 KPI 불러오기·`getPeriodStatsByUser`(기간 실적: 운동일·볼륨·거리·시간·맨몸횟수 — tz dayKey로 기간 필터)·`actualForGoal`.
+- 챌린지 탭: 없음→만들기 시트 / setup→내 KPI·참여자 현황·전원 게이트 / active→내 진행률만(🔒 타인 잠금)·D-day / ended→시상대(👑)+상세 순위 카드.
+- **미구현(Phase 6으로)**: 등수변동 알림(§18 Phase 5 항목이지만 notifications 테이블이 Phase 6) — 진행중 비공개라 실질 발동은 종료 시점, Phase 6 알림함과 함께.
+- 한계(기록): 진행중 타인 진행률 숨김은 UI 레벨 — 완료 세션 자체는 크루 공개 데이터라 API로는 계산 가능. 실사용 리스크 낮음, §6 취지는 충족.
 
 ### Phase 4 산출물 (2026-07-16~17)
 
@@ -56,7 +66,7 @@
 ## DB 마이그레이션 절차 (중요)
 
 CLI/DB 비밀번호 없음 → **사용자가 SQL Editor에 수동 붙여넣기**로 적용한다.
-`supabase/migrations/` 번호 순서대로. **0001~0005 적용 완료됨** (재실행 금지).
+`supabase/migrations/` 번호 순서대로. **0001~0006 적용 완료됨** (재실행 금지).
 새 마이그레이션 만들면 사용자에게 "파일 열기 → 전체 복사 → SQL Editor → Run"으로 안내.
 Storage 버킷도 SQL로 생성 가능했음(`insert into storage.buckets`, 0005) — Dashboard 수동 생성 불필요.
 
@@ -81,14 +91,15 @@ Storage 버킷도 SQL로 생성 가능했음(`insert into storage.buckets`, 0005
 6. **Windows 방화벽은 인터페이스 프로필별로 먹는다** — 이 PC는 와이파이=Public, Tailscale=Private. Node 허용이 Public에만 있어서 Tailscale 접속만 타임아웃됐음. 포트 3000 Private 허용 규칙로 해결.
 7. **카카오톡 인앱 브라우저는 HTML에 속성을 주입**해 하이드레이션 경고(1 Issue 오버레이)를 띄운다 — 실제 오류 아님. `layout.tsx`의 html/body에 `suppressHydrationWarning` 적용해 억제. dev 오버레이는 프로덕션에선 안 뜸.
 
-## 다음 세션 할 일 = Phase 5 (챌린지·대시보드, 계획서 §5·§6·§7·§18)
+## 다음 세션 할 일 = Phase 6 (소셜, 계획서 §9·§18)
 
-> **`lib/domain/goal-score.ts` TDD가 이 Phase의 핵심** (§7 — 계획서가 "가장 중요"로 지정).
+1. 마이그레이션 0007: `reactions`(unique(session,user,type))·`cheers`(sender≠receiver, 크루 active 세션만)·`notifications`+`notification_settings`·`workout_events` + RLS(§14: 타인용 알림은 service_role만… MVP는 definer RPC로 대체 검토)
+2. **그룹 피드**: 크루 공개 completed 최신순 — 인증사진(signed URL)·요약(볼륨·시간)·현재 스트릭·반응
+3. **이모지 반응** fire/clap/like: 추가·취소·중복방지·낙관적 UI
+4. **운동 시작 알림 + 진행 중 카드**: start_workout RPC에 workout_events·크루 알림 추가(0004 RPC 수정 마이그레이션), 피드/홈 진행 중 카드
+5. **응원(cheer, Realtime)**: active 세션에 응원 → Realtime 인앱 배너. 스팸 제한(세션당 3회·10초 쿨다운·본인 금지)
+6. **찌르기**: 오늘 미운동 크루원 찌르기 → 알림
+7. 알림함(🔔+뱃지) + 등수변동 알림(Phase 5 이월분)
+8. 검증: RLS(스팸·크루 경계) + E2E(2인: A 시작→B 응원→A 완료→B 피드 반응) + lint·typecheck·build
 
-1. `lib/domain/goal-score.ts` TDD: 목표별 rate 정규화(%) → 평균 achievement → participation → overall(0.8/0.2, 100% 상한) → 동점 정렬 (§7 산식 그대로)
-2. 마이그레이션 0006: `challenges`(setup|active|ended|cancelled)·`user_goals`(유저당 challenge별 여러 행) + RLS(크루원 조회·본인 목표만 생성수정·종료 기록 보존) + 챌린지 시작 RPC(**전원 user_goals 존재 검증** 게이트, §15)
-3. 챌린지 탭 UI: 만들기(기간)→각자 KPI 설정(다중 목표, 지난 KPI 불러오기)→전원 완료 시 시작
-4. 진행 중: **내 진행률만 공개**(🔒), 참여자 목록은 잠금 표시. 결과 발표(종료일): 시상대+상세 순위 (§6, 목업 ch-live/ch-result)
-5. 달성률 계산: 완료 세션들에서 목표 유형별(frequency/distance/duration/volume/reps) 실적 집계 — volume.ts·calendar.ts 재사용
-6. 검증: goal-score TDD(핵심) + RLS(비크루 차단·목표 위조 차단) + lint·typecheck·build
-7. (Phase 5 안 하면) 실기기 스모크: 폰에서 사진 인증 → 달력 🔥/● 확인도 아직 안 됨 — 한번 해볼 것
+**실기기 스모크 (아직 안 한 것)**: 폰에서 사진 인증 → 달력 🔥/● 확인, 챌린지 2인 흐름(폰+PC로 KPI 게이트·진행중 잠금 확인)
