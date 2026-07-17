@@ -28,6 +28,7 @@ type PickerProps = {
     name: string;
     bodyPart: BodyPart;
     exerciseType: ExerciseType;
+    measure: "reps" | "time" | null;
   }) => Promise<void>;
 };
 
@@ -44,6 +45,7 @@ function PickerSheet({ catalog, onClose, onPick, onCreateCustom }: PickerProps) 
   const [customOpen, setCustomOpen] = useState(false);
   const [customPart, setCustomPart] = useState<BodyPart>("가슴");
   const [customType, setCustomType] = useState<ExerciseType>("weight");
+  const [customMeasure, setCustomMeasure] = useState<"reps" | "time">("reps");
   const [saving, setSaving] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
 
@@ -63,6 +65,7 @@ function PickerSheet({ catalog, onClose, onPick, onCreateCustom }: PickerProps) 
         name,
         bodyPart: customPart,
         exerciseType: customType,
+        measure: customType === "bodyweight" ? customMeasure : null,
       });
     } finally {
       setSaving(false);
@@ -175,6 +178,21 @@ function PickerSheet({ catalog, onClose, onPick, onCreateCustom }: PickerProps) 
                   <option value="cardio">유산소 (거리·시간)</option>
                 </select>
               </div>
+              {customType === "bodyweight" && (
+                <div className="flex-1">
+                  <label className="text-xs font-bold text-muted">측정</label>
+                  <select
+                    value={customMeasure}
+                    onChange={(e) =>
+                      setCustomMeasure(e.target.value as "reps" | "time")
+                    }
+                    className="mt-1 h-10 w-full rounded-card-sm border border-line bg-bg px-2 text-sm"
+                  >
+                    <option value="reps">횟수 (회)</option>
+                    <option value="time">시간 (분)</option>
+                  </select>
+                </div>
+              )}
             </div>
             <button
               onClick={createCustom}
