@@ -37,6 +37,7 @@ export type LocalExercise = {
   name: string;
   bodyPart: BodyPart;
   exerciseType: ExerciseType;
+  measure: "reps" | "time" | null;
   isCustom: boolean;
   sets: LocalSet[];
 };
@@ -102,9 +103,15 @@ export function clearDraft(userId: string): void {
 }
 
 /** 유형별 기본 첫 세트 (목업 addExercise 기준) */
-export function defaultSets(type: ExerciseType): LocalSet[] {
+export function defaultSets(
+  type: ExerciseType,
+  measure?: "reps" | "time" | null,
+): LocalSet[] {
   if (type === "weight") return [newSet({ weightKg: 20, reps: 10 })];
-  if (type === "bodyweight") return [newSet({ reps: 12 })];
+  if (type === "bodyweight") {
+    if (measure === "time") return [newSet({ durationMin: 1 })];
+    return [newSet({ reps: 12 })];
+  }
   return [newSet()]; // cardio: 거리·시간 1행
 }
 
@@ -138,6 +145,7 @@ export async function createCustomExercise(input: {
   name: string;
   bodyPart: BodyPart;
   exerciseType: ExerciseType;
+  measure: "reps" | "time" | null;
   userId: string;
 }): Promise<CatalogExercise> {
   const supabase = getSupabaseBrowserClient();
@@ -147,6 +155,7 @@ export async function createCustomExercise(input: {
       name: input.name.trim(),
       body_part: input.bodyPart,
       exercise_type: input.exerciseType,
+      measure: input.measure,
       is_custom: true,
       created_by: input.userId,
     })
@@ -255,6 +264,8 @@ export async function saveSessionExercises(
         session_id: sessionId,
         exercise_name: ex.name,
         exercise_type: ex.exerciseType,
+        body_part: ex.bodyPart,
+        measure: ex.measure,
         sort_order: i,
       })),
     )
@@ -264,19 +275,20 @@ export async function saveSessionExercises(
     throw new Error("운동 저장 결과가 요청과 다릅니다");
   }
 
-  const setRows = exercises.flatMap((ex, i) =>
-    ex.sets.map((s, si) => ({
+  const setRows = exercises.flatMap((ex, i) => {
+    const isCardio = ex.exerciseType === "cardio";
+    const isTime = ex.exerciseType === "bodyweight" && ex.measure === "time";
+    return ex.sets.map((s, si) => ({
       workout_exercise_id: inserted[i].id,
       set_number: si + 1,
       weight_kg: ex.exerciseType === "weight" ? s.weightKg : null,
-      reps: ex.exerciseType === "cardio" ? null : s.reps,
-      distance_meters:
-        ex.exerciseType === "cardio" ? Math.round(s.distanceKm * 1000) : null,
+      reps: isCardio || isTime ? null : s.reps,
+      distance_meters: isCardio ? Math.round(s.distanceKm * 1000) : null,
       duration_seconds:
-        ex.exerciseType === "cardio" ? Math.round(s.durationMin * 60) : null,
+        isCardio || isTime ? Math.round(s.durationMin * 60) : null,
       is_completed: s.done,
-    })),
-  );
+    }));
+  });
   if (setRows.length === 0) return;
 
   const { error: setError } = await supabase.from("workout_sets").insert(setRows);
@@ -415,13 +427,14 @@ export async function getSessionExerciseStructure(sessionId: string): Promise<
   {
     name: string;
     exerciseType: ExerciseType;
+    measure: "reps" | "time" | null;
     sets: LocalSet[];
   }[]
 > {
   const supabase = getSupabaseBrowserClient();
   const { data, error } = await supabase
     .from("workout_exercises")
-    .select("exercise_name, exercise_type, sort_order, workout_sets(*)")
+    .select("exercise_name, exercise_type, measure, sort_order, workout_sets(*)")
     .eq("session_id", sessionId)
     .order("sort_order", { ascending: true });
   if (error) throw error;
@@ -429,6 +442,7 @@ export async function getSessionExerciseStructure(sessionId: string): Promise<
   type Row = {
     exercise_name: string;
     exercise_type: ExerciseType;
+    measure: "reps" | "time" | null;
     sort_order: number;
     workout_sets: WorkoutSet[] | null;
   };
@@ -447,7 +461,8 @@ export async function getSessionExerciseStructure(sessionId: string): Promise<
     return {
       name: row.exercise_name,
       exerciseType: row.exercise_type,
-      sets: sets.length > 0 ? sets : defaultSets(row.exercise_type),
+      measure: row.measure,
+      sets: sets.length > 0 ? sets : defaultSets(row.exercise_type, row.measure),
     };
   });
 }
