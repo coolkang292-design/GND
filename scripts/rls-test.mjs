@@ -472,5 +472,28 @@ check("본인 알림 일괄 읽음 처리", nRead.status < 300 && (nRead.json ??
 const nTitle = await api(A.token, "PATCH", `/rest/v1/notifications?user_id=eq.${A.id}`, { title: "위조 제목" });
 check("알림 title 수정 차단 (컬럼 권한)", nTitle.status >= 400);
 
+console.log("\n── 0012: 꾸준왕 열람권 view_record ──");
+// 직접 insert 차단 (0012에서 권한 회수)
+const rvDirect = await api(A.token, "POST", "/rest/v1/record_views", {
+  viewer_id: A.id, target_id: B.id,
+});
+check("record_views 직접 insert 차단", rvDirect.status >= 400, `status=${rvDirect.status}`);
+
+// 본인 열람 기록 select는 여전히 가능 (0011 select 정책 유지)
+const rvSel = await api(A.token, "GET", `/rest/v1/record_views?viewer_id=eq.${A.id}`);
+check("본인 record_views select 허용", rvSel.status === 200);
+
+// 자격 미달 — A의 완료 세션은 전부 오늘(1일 < 5일)
+const vr1 = await api(A.token, "POST", "/rest/v1/rpc/view_record", { p_target_id: B.id });
+check("5일 미달 시 not_eligible", vr1.status >= 400 && JSON.stringify(vr1.json).includes("not_eligible"), JSON.stringify(vr1.json));
+
+// 본인 열람 금지
+const vr2 = await api(A.token, "POST", "/rest/v1/rpc/view_record", { p_target_id: A.id });
+check("본인 열람 self_view 거절", vr2.status >= 400 && JSON.stringify(vr2.json).includes("self_view"));
+
+// 크루 밖 대상 거절 — C는 비크루 외부인
+const vr3 = await api(C.token, "POST", "/rest/v1/rpc/view_record", { p_target_id: A.id });
+check("크루 밖 not_crew 거절", vr3.status >= 400 && JSON.stringify(vr3.json).includes("not_crew"));
+
 console.log(`\n결과: ${passed} 통과 / ${failed} 실패`);
 process.exit(failed === 0 ? 0 : 1);
