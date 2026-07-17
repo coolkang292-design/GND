@@ -5,18 +5,36 @@ import type { Challenge, UserGoal, WorkoutSet } from "@/lib/types";
 
 // ── 목표 유형 메타 (§5) ──────────────────────────────────────────
 
+export type GoalCategory = "weight" | "cardio" | "bodyweight";
+
 export const GOAL_TYPE_META: Record<
   GoalType,
-  { label: string; unit: string; defaultTarget: number }
+  { label: string; unit: string; defaultTarget: number; category: GoalCategory }
 > = {
-  frequency: { label: "운동 횟수(일)", unit: "일", defaultTarget: 12 },
-  distance: { label: "거리(km)", unit: "km", defaultTarget: 20 },
-  duration: { label: "운동 시간(분)", unit: "분", defaultTarget: 600 },
-  volume: { label: "웨이트 총볼륨(kg)", unit: "kg", defaultTarget: 5000 }, // 레거시 표시용 (선택지 제외)
-  reps: { label: "총 반복 횟수(회)", unit: "회", defaultTarget: 300 }, // 웨이트+맨몸 완료 세트 회수 합
+  weight_reps: { label: "웨이트 횟수", unit: "회", defaultTarget: 300, category: "weight" },
+  weight_days: { label: "웨이트 운동일", unit: "일", defaultTarget: 12, category: "weight" },
+  cardio_distance: { label: "유산소 거리", unit: "km", defaultTarget: 20, category: "cardio" },
+  cardio_time: { label: "유산소 시간", unit: "분", defaultTarget: 600, category: "cardio" },
+  bodyweight_reps: { label: "맨몸 횟수", unit: "회", defaultTarget: 300, category: "bodyweight" },
+  bodyweight_time: { label: "맨몸 시간", unit: "분", defaultTarget: 100, category: "bodyweight" },
+  bodyweight_days: { label: "맨몸 운동일", unit: "일", defaultTarget: 12, category: "bodyweight" },
+  volume: { label: "웨이트 총볼륨", unit: "kg", defaultTarget: 5000, category: "weight" }, // 레거시
 };
 
-export type GoalDraft = { type: GoalType; target: number };
+export type GoalDraft = {
+  type: GoalType;
+  target: number;
+  /** frequency: 하루 최소 웨이트 부위 수 (기본 3) */
+  qualifier?: number | null;
+};
+
+/** 목표 표시 라벨 (+조건) */
+export function goalLabel(type: GoalType, qualifier?: number | null): string {
+  const base = GOAL_TYPE_META[type].label;
+  if (type === "weight_days") return `${base}(하루 ${qualifier ?? 1}부위+)`;
+  if (type === "bodyweight_days") return `${base}(하루 ${qualifier ?? 1}종목+)`;
+  return base;
+}
 
 // ── challenges CRUD ──────────────────────────────────────────────
 
@@ -97,6 +115,7 @@ export async function saveMyGoals(input: {
       target_value: g.target,
       unit: GOAL_TYPE_META[g.type].unit,
       planned_days: input.plannedDays,
+      qualifier: g.type === "frequency" ? (g.qualifier ?? 3) : null,
     })),
   );
   if (error) throw error;
@@ -165,34 +184,58 @@ export async function finalizeChallenge(
 // ── 기간 실적 집계 (§7 실적 = 완료 세션에서 계산) ────────────────
 
 export type PeriodStats = {
-  workoutDays: number;
-  distanceKm: number;
-  durationMin: number;
-  volumeKg: number;
-  totalReps: number; // 웨이트+맨몸 완료 세트의 회수 합
+  workoutDays: number; // 아무 운동이든 한 날 수 (참여율용)
+  weightReps: number;
+  volumeKg: number; // 레거시 표시용
+  cardioDistanceKm: number;
+  cardioTimeMin: number;
+  bodyweightReps: number;
+  bodyweightTimeMin: number;
+  /** 날짜별 웨이트 완료 부위 수 — weight_days 판정 */
+  weightPartsByDay: Record<string, number>;
+  /** 날짜별 맨몸 완료 종목 수 — bodyweight_days 판정 */
+  bodyweightKindsByDay: Record<string, number>;
 };
 
 const EMPTY_STATS: PeriodStats = {
   workoutDays: 0,
-  distanceKm: 0,
-  durationMin: 0,
+  weightReps: 0,
   volumeKg: 0,
-  totalReps: 0,
+  cardioDistanceKm: 0,
+  cardioTimeMin: 0,
+  bodyweightReps: 0,
+  bodyweightTimeMin: 0,
+  weightPartsByDay: {},
+  bodyweightKindsByDay: {},
 };
 
-/** 목표 유형별 실적 값 */
-export function actualForGoal(stats: PeriodStats, type: GoalType): number {
+/** 목표 유형별 실적 값 (frequency는 qualifier=하루 최소 부위 수 조건) */
+export function actualForGoal(
+  stats: PeriodStats,
+  type: GoalType,
+  qualifier?: number | null,
+): number {
+  const daysAtLeast = (byDay: Record<string, number>) => {
+    const min = qualifier ?? 1;
+    return Object.values(byDay).filter((n) => n >= min).length;
+  };
   switch (type) {
-    case "frequency":
-      return stats.workoutDays;
-    case "distance":
-      return stats.distanceKm;
-    case "duration":
-      return stats.durationMin;
+    case "weight_reps":
+      return stats.weightReps;
+    case "weight_days":
+      return daysAtLeast(stats.weightPartsByDay);
+    case "cardio_distance":
+      return stats.cardioDistanceKm;
+    case "cardio_time":
+      return stats.cardioTimeMin;
+    case "bodyweight_reps":
+      return stats.bodyweightReps;
+    case "bodyweight_time":
+      return stats.bodyweightTimeMin;
+    case "bodyweight_days":
+      return daysAtLeast(stats.bodyweightKindsByDay);
     case "volume":
       return stats.volumeKg;
-    case "reps":
-      return stats.totalReps;
   }
 }
 
@@ -217,7 +260,7 @@ export async function getPeriodStatsByUser(
   const { data, error } = await supabase
     .from("workout_sessions")
     .select(
-      "user_id, completed_at, duration_minutes, workout_exercises(exercise_type, workout_sets(weight_kg, reps, distance_meters, is_completed))",
+      "user_id, completed_at, duration_minutes, workout_exercises(exercise_type, body_part, workout_sets(weight_kg, reps, distance_meters, is_completed))",
     )
     .eq("group_id", groupId)
     .eq("status", "completed")
@@ -233,6 +276,7 @@ export async function getPeriodStatsByUser(
     workout_exercises:
       | {
           exercise_type: "weight" | "bodyweight" | "cardio";
+          body_part: string | null;
           workout_sets:
             | Pick<
                 WorkoutSet,
@@ -243,20 +287,29 @@ export async function getPeriodStatsByUser(
       | null;
   };
 
-  const byUser = new Map<string, PeriodStats & { days: Set<string> }>();
+  type Acc = PeriodStats & {
+    days: Set<string>;
+    weightParts: Map<string, Set<string>>; // dayKey → 완료 세트 있는 웨이트 부위
+  };
+  const byUser = new Map<string, Acc>();
 
   for (const row of (data ?? []) as Row[]) {
     const key = dayKey(new Date(row.completed_at), timeZone);
     if (key < startDate || key > endDate) continue; // 기간 밖 (tz 기준)
 
-    const entry =
-      byUser.get(row.user_id) ?? { ...EMPTY_STATS, days: new Set<string>() };
+    const entry: Acc = byUser.get(row.user_id) ?? {
+      ...EMPTY_STATS,
+      days: new Set<string>(),
+      weightParts: new Map<string, Set<string>>(),
+    };
     entry.days.add(key);
     entry.durationMin += row.duration_minutes ?? 0;
 
     for (const ex of row.workout_exercises ?? []) {
+      let hasCompleted = false;
       for (const s of ex.workout_sets ?? []) {
         if (!s.is_completed) continue;
+        hasCompleted = true;
         if (ex.exercise_type === "weight") {
           entry.volumeKg += Number(s.weight_kg ?? 0) * (s.reps ?? 0);
           entry.totalReps += s.reps ?? 0;
@@ -266,18 +319,28 @@ export async function getPeriodStatsByUser(
           entry.distanceKm += Number(s.distance_meters ?? 0) / 1000;
         }
       }
+      if (hasCompleted && ex.exercise_type === "weight") {
+        const parts = entry.weightParts.get(key) ?? new Set<string>();
+        parts.add(ex.body_part ?? ex.exercise_type); // 부위 미상은 1부위로 취급
+        entry.weightParts.set(key, parts);
+      }
     }
     byUser.set(row.user_id, entry);
   }
 
   const result = new Map<string, PeriodStats>();
   for (const [userId, entry] of byUser) {
+    const weightPartsByDay: Record<string, number> = {};
+    for (const [day, parts] of entry.weightParts) {
+      weightPartsByDay[day] = parts.size;
+    }
     result.set(userId, {
       workoutDays: entry.days.size,
       distanceKm: entry.distanceKm,
       durationMin: entry.durationMin,
       volumeKg: entry.volumeKg,
       totalReps: entry.totalReps,
+      weightPartsByDay,
     });
   }
   return result;
