@@ -26,6 +26,8 @@ export function ExerciseCard({
 }) {
   const isWeight = exercise.exerciseType === "weight";
   const isCardio = exercise.exerciseType === "cardio";
+  const isTimeBodyweight =
+    exercise.exerciseType === "bodyweight" && exercise.measure === "time";
 
   const volumeKg = exercise.sets.reduce(
     (sum, s) =>
@@ -105,6 +107,45 @@ export function ExerciseCard({
               </button>
             </div>
           ))}
+        </div>
+      ) : isTimeBodyweight ? (
+        <div className="mt-3">
+          <p className="mb-2 text-xs text-muted">
+            지속 시간 · 완료 체크한 기록만 집계돼요
+          </p>
+          {exercise.sets.map((s, si) => (
+            <div key={s.key} className="mb-2 flex items-end gap-2">
+              <div className="flex-1">
+                <div className="mb-1 text-[11px] text-faint">시간 (분)</div>
+                {numInput(s.durationMin, (v) => onUpdateSet(si, { durationMin: v }), "numeric")}
+              </div>
+              <button
+                onClick={() => onToggleDone(si)}
+                aria-label={`${si + 1}세트 완료`}
+                className={`h-9 w-11 flex-none rounded-card-sm border text-sm font-bold ${
+                  s.done
+                    ? "border-good bg-good text-white"
+                    : "border-line bg-surface-2 text-faint"
+                } ${active ? "" : "opacity-60"}`}
+              >
+                ✓
+              </button>
+            </div>
+          ))}
+          <div className="mt-2 flex gap-2">
+            <button
+              onClick={onRemoveSet}
+              className="h-9 flex-1 rounded-card-sm border border-line text-xs font-bold text-muted"
+            >
+              – 세트
+            </button>
+            <button
+              onClick={onAddSet}
+              className="h-9 flex-1 rounded-card-sm bg-surface-2 text-xs font-bold text-accent"
+            >
+              + 세트
+            </button>
+          </div>
         </div>
       ) : (
         <>
