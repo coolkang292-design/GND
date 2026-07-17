@@ -474,8 +474,10 @@ export function subscribeNotifications(
   onInsert: (n: NotificationRow) => void,
 ): () => void {
   const supabase = getSupabaseBrowserClient();
+  // 같은 토픽명은 기존 채널 인스턴스를 재사용해 "subscribe 후 .on() 불가"
+  // 에러가 난다 (배너·벨 동시 구독) — 구독마다 유니크한 토픽을 쓴다.
   const channel = supabase
-    .channel(`notifications:${userId}`)
+    .channel(`notifications:${userId}:${Math.random().toString(36).slice(2)}`)
     .on(
       "postgres_changes",
       {
