@@ -364,5 +364,113 @@ check("크루원 B는 전체 KPI 조회 가능 (설정 현황·결과용)", goal
 const finEarly = await api(A.token, "POST", "/rest/v1/rpc/finalize_challenge", { p_challenge_id: challenge.id });
 check("종료일 전 결과 확정...은 과거 종료일이라 성공해야 함 (ended)", finEarly.status === 200 && finEarly.json?.status === "ended", JSON.stringify(finEarly.json));
 
+console.log("\n── Phase 6: 소셜 — workout_events (진행 중 카드 원천) ──");
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// 픽스처: A가 새 크루 공개 세션 시작 (기존 세션은 모두 completed/cancelled)
+const d6 = await api(A.token, "POST", "/rest/v1/workout_sessions", {
+  user_id: A.id, group_id: group.id, timezone: "Asia/Seoul",
+});
+const s6 = d6.json?.[0];
+const start6 = await api(A.token, "POST", "/rest/v1/rpc/start_workout", { p_session_id: s6.id });
+check("A가 소셜 픽스처 세션 시작", start6.status === 200 && start6.json?.status === "active", JSON.stringify(start6.json));
+
+const evB = await api(B.token, "GET", `/rest/v1/workout_events?session_id=eq.${s6.id}`);
+check("B(크루)는 시작 이벤트 조회 가능", evB.status === 200 && evB.json.length === 1 && evB.json[0].event_type === "workout_started", JSON.stringify(evB.json));
+const evC = await api(C.token, "GET", `/rest/v1/workout_events?session_id=eq.${s6.id}`);
+check("비크루 C는 이벤트 조회 불가", evC.status === 200 && evC.json.length === 0);
+const evPriv = await api(B.token, "GET", `/rest/v1/workout_events?session_id=eq.${session2.id}`);
+check("B는 private 세션 이벤트 조회 불가", evPriv.status === 200 && evPriv.json.length === 0);
+const evIns = await api(B.token, "POST", "/rest/v1/workout_events", {
+  session_id: s6.id, user_id: B.id, event_type: "workout_started",
+});
+check("이벤트 직접 insert 차단 (RPC만)", evIns.status >= 400);
+
+console.log("\n── Phase 6: 시작 알림 + notifications 경계 ──");
+const nStart = await api(B.token, "GET", `/rest/v1/notifications?type=eq.workout_started&reference_id=eq.${s6.id}`);
+check("B에게 운동 시작 알림 생성", nStart.status === 200 && nStart.json.length === 1, JSON.stringify(nStart.json));
+const nCross = await api(B.token, "GET", `/rest/v1/notifications?user_id=eq.${A.id}`);
+check("B는 A의 알림 조회 불가", nCross.status === 200 && nCross.json.length === 0);
+const nIns = await api(B.token, "POST", "/rest/v1/notifications", {
+  user_id: A.id, type: "poke", title: "위조 알림",
+});
+check("알림 직접 insert 차단", nIns.status >= 400);
+
+console.log("\n── Phase 6: 응원 (send_cheer 스팸 제한) ──");
+const ch1 = await api(B.token, "POST", "/rest/v1/rpc/send_cheer", { p_session_id: s6.id, p_cheer_type: "fire" });
+check("B가 응원 1회 성공", ch1.status === 200 && ch1.json?.cheer_type === "fire", JSON.stringify(ch1.json));
+const chSelf = await api(A.token, "POST", "/rest/v1/rpc/send_cheer", { p_session_id: s6.id, p_cheer_type: "fire" });
+check("본인 세션 응원 금지 (own_session)", chSelf.status >= 400 && JSON.stringify(chSelf.json).includes("own_session"));
+const chOut = await api(C.token, "POST", "/rest/v1/rpc/send_cheer", { p_session_id: s6.id, p_cheer_type: "fire" });
+check("비크루 응원 금지 (session_not_found)", chOut.status >= 400 && JSON.stringify(chOut.json).includes("session_not_found"));
+const chFast = await api(B.token, "POST", "/rest/v1/rpc/send_cheer", { p_session_id: s6.id, p_cheer_type: "clap" });
+check("10초 쿨다운 (cheer_cooldown)", chFast.status >= 400 && JSON.stringify(chFast.json).includes("cheer_cooldown"));
+
+console.log("  (쿨다운 10.5초 대기…)");
+await sleep(10500);
+const ch2 = await api(B.token, "POST", "/rest/v1/rpc/send_cheer", { p_session_id: s6.id, p_cheer_type: "power" });
+check("쿨다운 후 응원 2회 성공", ch2.status === 200, JSON.stringify(ch2.json));
+console.log("  (쿨다운 10.5초 대기…)");
+await sleep(10500);
+const ch3 = await api(B.token, "POST", "/rest/v1/rpc/send_cheer", { p_session_id: s6.id, p_cheer_type: "custom", p_message: "화이팅!" });
+check("커스텀 메시지 응원 3회 성공", ch3.status === 200 && ch3.json?.message === "화이팅!");
+const ch4 = await api(B.token, "POST", "/rest/v1/rpc/send_cheer", { p_session_id: s6.id, p_cheer_type: "fire" });
+check("세션당 3회 제한 (cheer_limit)", ch4.status >= 400 && JSON.stringify(ch4.json).includes("cheer_limit"));
+
+const nCheer = await api(A.token, "GET", "/rest/v1/notifications?type=eq.cheer_received");
+check("A에게 응원 알림 3건", nCheer.status === 200 && nCheer.json.length === 3, `${nCheer.json?.length}건`);
+
+const done6 = await api(A.token, "POST", "/rest/v1/rpc/complete_workout", { p_session_id: s6.id });
+check("A가 소셜 세션 완료", done6.status === 200 && done6.json?.status === "completed");
+const chEnded = await api(B.token, "POST", "/rest/v1/rpc/send_cheer", { p_session_id: s6.id, p_cheer_type: "finish" });
+check("종료된 세션 응원 차단 (not_active)", chEnded.status >= 400 && JSON.stringify(chEnded.json).includes("not_active"));
+
+console.log("\n── Phase 6: 반응 (unique·크루 경계·알림 트리거) ──");
+const r1 = await api(B.token, "POST", "/rest/v1/reactions", {
+  session_id: s6.id, user_id: B.id, reaction_type: "fire",
+});
+check("B가 완료 세션에 반응 추가", r1.status === 201, JSON.stringify(r1.json));
+const rDup = await api(B.token, "POST", "/rest/v1/reactions", {
+  session_id: s6.id, user_id: B.id, reaction_type: "fire",
+});
+check("중복 반응 차단 (unique)", rDup.status === 409);
+const rOut = await api(C.token, "POST", "/rest/v1/reactions", {
+  session_id: s6.id, user_id: C.id, reaction_type: "clap",
+});
+check("비크루 반응 차단", rOut.status >= 400);
+const rForge = await api(B.token, "POST", "/rest/v1/reactions", {
+  session_id: s6.id, user_id: A.id, reaction_type: "clap",
+});
+check("타인 명의 반응 차단", rForge.status >= 400);
+const nReact = await api(A.token, "GET", `/rest/v1/notifications?type=eq.reaction_received&reference_id=eq.${s6.id}`);
+check("반응 알림이 A에게 생성 (트리거)", nReact.status === 200 && nReact.json.length === 1);
+const rSelf = await api(A.token, "POST", "/rest/v1/reactions", {
+  session_id: s6.id, user_id: A.id, reaction_type: "like",
+});
+check("본인 세션 반응은 허용", rSelf.status === 201);
+const nSelfReact = await api(A.token, "GET", `/rest/v1/notifications?type=eq.reaction_received&reference_id=eq.${s6.id}&actor_id=eq.${A.id}`);
+check("본인 반응은 알림 생략", nSelfReact.status === 200 && nSelfReact.json.length === 0);
+const rDelForeign = await api(A.token, "DELETE", `/rest/v1/reactions?session_id=eq.${s6.id}&user_id=eq.${B.id}`);
+check("A는 B의 반응 삭제 불가", rDelForeign.status < 300 && (rDelForeign.json ?? []).length === 0);
+const rDel = await api(B.token, "DELETE", `/rest/v1/reactions?session_id=eq.${s6.id}&user_id=eq.${B.id}&reaction_type=eq.fire`);
+check("B가 본인 반응 삭제", rDel.status < 300 && (rDel.json ?? []).length === 1, JSON.stringify(rDel.json));
+
+console.log("\n── Phase 6: 찌르기 + 읽음 처리 ──");
+const pk1 = await api(B.token, "POST", "/rest/v1/rpc/poke_user", { p_target_id: A.id });
+check("B가 A 찌르기 성공", pk1.status === 200 || pk1.status === 204, JSON.stringify(pk1.json));
+const pk2 = await api(B.token, "POST", "/rest/v1/rpc/poke_user", { p_target_id: A.id });
+check("24시간 재찌르기 차단 (poke_cooldown)", pk2.status >= 400 && JSON.stringify(pk2.json).includes("poke_cooldown"));
+const pkSelf = await api(A.token, "POST", "/rest/v1/rpc/poke_user", { p_target_id: A.id });
+check("본인 찌르기 차단 (self_poke)", pkSelf.status >= 400 && JSON.stringify(pkSelf.json).includes("self_poke"));
+const pkOut = await api(C.token, "POST", "/rest/v1/rpc/poke_user", { p_target_id: A.id });
+check("비크루 찌르기 차단 (not_crew)", pkOut.status >= 400 && JSON.stringify(pkOut.json).includes("not_crew"));
+const nPoke = await api(A.token, "GET", "/rest/v1/notifications?type=eq.poke");
+check("찌르기 알림이 A에게 생성", nPoke.status === 200 && nPoke.json.length === 1);
+
+const nRead = await api(A.token, "PATCH", "/rest/v1/notifications?read_at=is.null", { read_at: new Date().toISOString() });
+check("본인 알림 일괄 읽음 처리", nRead.status < 300 && (nRead.json ?? []).length >= 5, `${nRead.json?.length}건`);
+const nTitle = await api(A.token, "PATCH", `/rest/v1/notifications?user_id=eq.${A.id}`, { title: "위조 제목" });
+check("알림 title 수정 차단 (컬럼 권한)", nTitle.status >= 400);
+
 console.log(`\n결과: ${passed} 통과 / ${failed} 실패`);
 process.exit(failed === 0 ? 0 : 1);
