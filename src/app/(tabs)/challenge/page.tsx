@@ -625,6 +625,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
         <ChallengeSetupSheet
           mode={sheet.mode}
           defaults={sheet.defaults}
+          periodDaysFixed={sheet.mode === "goals" && challenge ? days : undefined}
           prevGoals={prevGoals}
           busy={busy}
           onSubmit={sheet.mode === "create" ? handleCreate : handleSaveGoals}
