@@ -333,19 +333,19 @@ check("A가 본인 KPI 생성", goalA.status === 201, JSON.stringify(goalA.json)
 
 const goalForge = await api(B.token, "POST", "/rest/v1/user_goals", {
   user_id: A.id, challenge_id: challenge.id, group_id: group.id,
-  goal_type: "distance", target_value: 20, planned_days: 5,
+  goal_type: "cardio_distance", target_value: 20, planned_days: 5,
 });
 check("B는 A 명의 KPI 생성 불가", goalForge.status >= 400);
 
 const goalC = await api(C.token, "POST", "/rest/v1/user_goals", {
   user_id: C.id, challenge_id: challenge.id, group_id: group.id,
-  goal_type: "distance", target_value: 20, planned_days: 5,
+  goal_type: "cardio_distance", target_value: 20, planned_days: 5,
 });
 check("비크루 C는 KPI 생성 불가", goalC.status >= 400);
 
 const goalB = await api(B.token, "POST", "/rest/v1/user_goals", {
   user_id: B.id, challenge_id: challenge.id, group_id: group.id,
-  goal_type: "frequency", target_value: 12, planned_days: 4,
+  goal_type: "weight_days", target_value: 12, planned_days: 4,
 });
 check("B가 본인 KPI 생성", goalB.status === 201);
 

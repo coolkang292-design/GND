@@ -510,3 +510,71 @@ export async function getCompletedSessions(
       .map((e) => e.exercise_name),
   }));
 }
+
+// ── 홈: 크루의 가장 최근 인증사진 운동 (§소셜 미리보기) ──────────────
+
+export type LatestCrewWorkout = {
+  sessionId: string;
+  userId: string;
+  nickname: string;
+  avatarUrl: string | null;
+  imageUrl: string; // 서명된 임시 URL
+  completedAt: Date;
+};
+
+/**
+ * 크루의 공개 완료 세션 중 인증사진이 있는 가장 최근 1건.
+ * 비공개 버킷이라 서명 URL로 이미지를 노출한다. 없으면 null.
+ */
+export async function getLatestCrewWorkoutWithPhoto(
+  groupId: string,
+): Promise<LatestCrewWorkout | null> {
+  const supabase = getSupabaseBrowserClient();
+
+  const { data, error } = await supabase
+    .from("workout_sessions")
+    .select("id, user_id, completed_at, workout_images!inner(image_path)")
+    .eq("group_id", groupId)
+    .eq("status", "completed")
+    .eq("visibility", "group")
+    .is("deleted_at", null)
+    .not("completed_at", "is", null)
+    .order("completed_at", { ascending: false })
+    .limit(1);
+  if (error) throw error;
+
+  type Row = {
+    id: string;
+    user_id: string;
+    completed_at: string;
+    workout_images: { image_path: string }[] | { image_path: string } | null;
+  };
+
+  const row = (data ?? [])[0] as Row | undefined;
+  if (!row) return null;
+
+  const image = Array.isArray(row.workout_images)
+    ? row.workout_images[0]
+    : row.workout_images;
+  if (!image) return null;
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("nickname, avatar_url")
+    .eq("id", row.user_id)
+    .maybeSingle();
+
+  const { data: signed, error: signErr } = await supabase.storage
+    .from("workout-images")
+    .createSignedUrl(image.image_path, 3600);
+  if (signErr || !signed) return null;
+
+  return {
+    sessionId: row.id,
+    userId: row.user_id,
+    nickname: profile?.nickname ?? "크루원",
+    avatarUrl: profile?.avatar_url ?? null,
+    imageUrl: signed.signedUrl,
+    completedAt: new Date(row.completed_at),
+  };
+}

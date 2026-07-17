@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AuthStatus } from "@/components/auth-status";
 import { CrewCard } from "@/components/crew-card";
+import { CrewLatestWorkout } from "@/components/crew-latest-workout";
 
 export default function HomePage() {
   return (
@@ -26,6 +27,14 @@ export default function HomePage() {
       </Link>
 
       <CrewCard />
+
+      <div className="mt-1 flex items-center justify-between px-0.5">
+        <h3 className="text-sm font-extrabold">최근 친구 활동</h3>
+        <Link href="/feed" className="text-xs font-bold text-accent">
+          피드 전체
+        </Link>
+      </div>
+      <CrewLatestWorkout />
 
       <AuthStatus />
     </div>

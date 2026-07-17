@@ -14,6 +14,9 @@ const PARTS: readonly (BodyPart | "전체")[] = [
   "유산소",
 ];
 
+// 부위 칩 + 모달리티 칩(맨몸 = exercise_type 필터, body_part 아님)
+const FILTERS = [...PARTS, "맨몸"] as const;
+
 export const TYPE_LABEL: Record<ExerciseType, string> = {
   weight: "웨이트",
   bodyweight: "맨몸",
@@ -41,7 +44,7 @@ export function ExercisePicker({ open, ...props }: PickerProps & { open: boolean
 
 function PickerSheet({ catalog, onClose, onPick, onCreateCustom }: PickerProps) {
   const [query, setQuery] = useState("");
-  const [part, setPart] = useState<(typeof PARTS)[number]>("전체");
+  const [part, setPart] = useState<(typeof FILTERS)[number]>("전체");
   const [customOpen, setCustomOpen] = useState(false);
   const [customPart, setCustomPart] = useState<BodyPart>("가슴");
   const [customType, setCustomType] = useState<ExerciseType>("weight");
@@ -52,7 +55,10 @@ function PickerSheet({ catalog, onClose, onPick, onCreateCustom }: PickerProps) 
   const q = query.trim().toLowerCase();
   const list = catalog.filter(
     (e) =>
-      (part === "전체" || e.body_part === part) &&
+      (part === "전체" ||
+        (part === "맨몸"
+          ? e.exercise_type === "bodyweight"
+          : e.body_part === part)) &&
       (!q || e.name.toLowerCase().includes(q)),
   );
 
@@ -91,7 +97,7 @@ function PickerSheet({ catalog, onClose, onPick, onCreateCustom }: PickerProps) 
         />
 
         <div className="my-3 flex flex-none gap-1.5 overflow-x-auto">
-          {PARTS.map((p) => (
+          {FILTERS.map((p) => (
             <button
               key={p}
               onClick={() => setPart(p)}
