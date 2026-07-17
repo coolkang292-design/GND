@@ -3,40 +3,26 @@
 > 새 세션은 이 파일 + `C:\Users\SAMSUNG\Desktop\Workout app\IMPLEMENTATION_PLAN.md`(단일 진실)만 읽으면 바로 이어서 작업할 수 있다.
 > 시각 스펙: 같은 폴더의 `운동앱-목업.html`.
 
-## ⚠️ Phase 6 구현 완료 — 실기기 확인 대기 (2026-07-17 마감 시점 인수인계)
+## ⚠️ Phase 6 완료 — 실기기 확인 통과 (2026-07-17). 다음 작업: 꾸준왕 열람·홈 위젯
 
-**코드·검증·커밋 완료(`fbd86b4`~`4d60413`, 작업트리 클린).** 남은 것은 사용자 실기기 확인뿐.
-(참고: 이번엔 계획 실행 흐름상 태스크별 커밋을 먼저 했다 — 실기기에서 문제가 나오면 수정 커밋으로 잇는다.)
-
-**실기기 확인 항목 (폰 2대 또는 폰+PC, 계정 2개):**
-1. A 운동 시작 → B 홈·피드에 "n분째 운동 중" 카드 노출
-2. B 응원(🔥💪👏🏁/✍️한마디) → A 화면 상단 응원 배너 실시간 수신
-3. 연속 응원 시 "잠시 후 다시" 안내, 4번째에 "3번까지" 안내
-4. A 완료 → B 피드에 완료 카드(종목·볼륨·시간·스트릭·인증사진) → 반응 토글
-5. 홈 크루 카드에서 오늘 미운동 크루원 "👉 콕" → 상대 알림함에 도착
-6. 🔔 뱃지 수 확인 → 알림함 열면 일괄 읽음 처리
-7. 기록 탭 운동 추가: 여러 종목 탭(✓ 토글) → [선택한 n개 운동 추가] 한 번에 추가 (`4d60413`)
-
-**검증 완료 증거 (2026-07-17):** unit 104 · RLS 102/102(실DB) · E2E 2인 14/14(헤드리스 Chrome 2컨텍스트, Realtime 배너 포함) · 다중선택 스모크 5/5 · lint · typecheck · build 통과.
-E2E가 잡은 실버그 1건: 배너·벨이 같은 Realtime 채널 토픽을 재사용해 페이지 크래시 → 토픽 유니크화로 수정(`9f822ec`).
+**Phase 6 소셜 + 운동 다중 선택, 실기기 7항목 전부 통과(2026-07-17).** 코드·검증·문서 커밋 완료, 작업트리 클린.
 
 ### 다음 세션 시작 체크리스트
 
-1. 저장소 `C:\Users\SAMSUNG\workout-app`, 브랜치 `main`. HEAD = 이 인수인계 문서 커밋(기능 최종 커밋은 `4d60413` 다중 선택). 작업트리 클린(`.claude/`만 untracked — 커밋 금지). 되돌리기·리셋 불필요.
-2. **DB 0001~0011 전부 적용 완료** (0011 = 소셜 스키마+RPC, 2026-07-17 "Success" 확인). SQL 파일 재실행 금지.
+1. 저장소 `C:\Users\SAMSUNG\workout-app`, 브랜치 `main`, 작업트리 클린(`.claude/`만 untracked — 커밋 금지). 되돌리기·리셋 불필요.
+2. **DB 0001~0011 전부 적용 완료 — SQL 파일 재실행 금지.**
 3. dev 서버는 세션 종료와 함께 꺼졌을 수 있음 → `pnpm exec next dev -H 0.0.0.0`으로 시작 (폰: `http://192.168.219.112:3000` / Tailscale `http://100.85.240.15:3000`). build 돌릴 땐 dev 서버 먼저 종료(교훈 8).
 4. 검증 명령: `pnpm test`(104) · `pnpm lint` · `pnpm typecheck` · `pnpm build` · `node scripts/rls-test.mjs`(102, 응원 쿨다운 대기 포함 약 40초).
-5. E2E·스모크 스크립트는 세션 scratchpad에 있어 소멸됨 — 재작성 시 흐름: 익명 세션 쿠키(`sb-<ref>-auth-token`, base64- 접두) 파싱 → REST로 프로필·크루·세션 픽스처 → puppeteer-core(스크래치패드에 npm install)로 UI·Realtime 단언. 위 "Phase 6 산출물" 참고.
+5. E2E·스모크 스크립트는 세션 scratchpad에 있어 소멸됨 — 재작성 시 흐름: 익명 세션 쿠키(`sb-<ref>-auth-token`, base64- 접두) 파싱 → REST로 프로필·크루·세션 픽스처 → puppeteer-core(스크래치패드에 npm install)로 UI·Realtime 단언. 아래 "Phase 6 산출물" 참고.
 6. **다음 작업 우선순위:**
-   ① 사용자 실기기 7항목 확인 → 통과하면 이 ⚠️ 섹션을 Phase 6 산출물로 병합 후 문서 커밋.
-   ② Phase 6 후속(별도 계획, brainstorming부터): 꾸준왕 성과 열람 UI + record_viewed 알림(테이블은 0011에 있음) + 홈 위젯(스트릭 카드·주간 stat·오늘 그룹 현황·꾸준왕).
-   ③ 그다음 Phase 7(계획서 §18): 5일 소멸 스트릭 표시·아침 브리핑 크론·notification_settings UI·핵심 E2E·Vercel 배포·3명 4주 실사용.
+   ① Phase 6 후속(별도 계획, brainstorming부터): 꾸준왕 성과 열람 UI + record_viewed 알림(테이블은 0011에 있음) + 홈 위젯(스트릭 카드·주간 stat·오늘 그룹 현황·꾸준왕).
+   ② 그다음 Phase 7(계획서 §18): 5일 소멸 스트릭 표시·아침 브리핑 크론·notification_settings UI·핵심 E2E·Vercel 배포·3명 4주 실사용.
 
 ---
 
 ## 현재 상태 (2026-07-17 기준)
 
-**Phase 0~5 완료, Phase 6(소셜) 구현 완료·실기기 확인 대기 (2026-07-17). 다음 작업 = 실기기 확인 → Phase 6 후속(꾸준왕 열람·홈 위젯) 또는 Phase 7.**
+**Phase 0~6 완료 (2026-07-17 실기기 7항목 확인 통과). 다음 작업 = Phase 6 후속(꾸준왕 열람·홈 위젯) → Phase 7.**
 
 | Phase | 상태 | 비고 |
 |---|---|---|
@@ -46,7 +32,7 @@ E2E가 잡은 실버그 1건: 배너·벨이 같은 Realtime 채널 토픽을 �
 | 3 운동 핵심 | ✅ | 세션·RPC·카탈로그·세트입력·휴식타이머·임시저장 — unit 47 + RLS 40/40 + PC·폰 스모크 통과 |
 | 4 완료 루프 | ✅ | 달력(`9e540ef`)·지난 운동 복사(`1f3281d`)·인증사진(`a1a6e1a`) — unit 63 + RLS 54/54 + E2E 2종 통과 |
 | 5 챌린지 | ✅ | goal-score TDD 20케이스·KPI 게이트·진행중 비공개·시상대(`ea6fb60`) — unit 83 + RLS 68/68 + E2E 통과 |
-| 6 소셜 | 🔶 실기기 대기 | 피드·반응·진행중 카드·Realtime 응원·찌르기·알림함 — unit 104 + RLS 102/102 + E2E 2인 14/14 |
+| 6 소셜 | ✅ | 피드·반응·진행중 카드·Realtime 응원·찌르기·알림함 — unit 104 + RLS 102/102 + E2E 2인 14/14 + 실기기 7항목 통과 |
 | 7 | 대기 | 계획서 §18 참조 |
 
 ### Phase 5.2~5.3 산출물 (2026-07-17, 커밋 `63e5c27`~`88d959b` + `b499510`)
@@ -117,7 +103,7 @@ Storage 버킷도 SQL로 생성 가능했음(`insert into storage.buckets`, 0005
 - 0008(measure·카테고리 goal_type): 적용 완료 ✅
 - 0009(burnfit 시드): 적용 완료 ✅ (2026-07-17, "Success. No rows returned" 확인)
 - 0010(맨몸 루틴 6종 시드): 적용 완료 ✅ (2026-07-17, REST 조회로 6/6 확인)
-- **0011(소셜: events·reactions·cheers·notifications 등): 미적용 ⏳ — 사용자 SQL Editor 적용 필요** (if not exists/or replace로 재실행 안전)
+- 0011(소셜: events·reactions·cheers·notifications 등): 적용 완료 ✅ (2026-07-17 "Success" 확인)
 - 컬럼 추가·시드 위주라 idempotent 안전장치(`on conflict`, `if not exists` 성격) 있는 편이나, 재실행 시 `alter table add column`은 중복 에러 → 각 파일 1회만.
 
 ## 코드 구조 요약
@@ -149,6 +135,8 @@ Storage 버킷도 SQL로 생성 가능했음(`insert into storage.buckets`, 0005
 - UI: `feed/page.tsx`(피드+페이지네이션)·`components/feed/`(feed-item·reaction-bar·active-workout-cards)·`cheer-banner`(레이아웃 장착)·`notification-bell`(홈·피드 헤더)·crew-card 찌르기(✅/👉콕). `lib/time-ago.ts` 공용화.
 - 검증: unit 104 · RLS 102/102 · E2E 2인 14/14(scratchpad `e2e-phase6.mjs`, 익명세션 쿠키 파싱→REST 픽스처→UI·Realtime 단언 — 재작성 시 이 흐름 참고) · build.
 - **운동 추가 다중 선택**(`4d60413`): 피커 탭=✓ 토글, [선택한 n개 운동 추가] 일괄 추가, 직접 만들기=생성 즉시 선택 담김. 실브라우저 스모크 5/5.
+- **실기기 확인 통과 (2026-07-17, 계정 2개)**: ①진행중 카드 ②응원 배너 실시간 수신 ③스팸 제한 안내(쿨다운·3회 상한) ④완료 카드·반응 토글 ⑤찌르기→알림 도착 ⑥알림함 뱃지·일괄 읽음 ⑦운동 다중 선택 — 7항목 전부 통과.
+- E2E가 잡은 실버그 1건: 배너·벨이 같은 Realtime 채널 토픽을 재사용해 페이지 크래시 → 토픽 유니크화로 수정(`9f822ec`).
 - **후속(별도 계획)**: 꾸준왕 성과 열람 UI+record_viewed 알림, 홈 위젯(스트릭 카드·주간 stat·오늘 그룹 현황·꾸준왕), notification_settings UI(Phase 7).
 
 ## Phase 6 설계 기록 (계획서 §9·§18)
@@ -156,7 +144,7 @@ Storage 버킷도 SQL로 생성 가능했음(`insert into storage.buckets`, 0005
 **설계·계획 완료 (2026-07-17):**
 - 스펙: `docs/superpowers/specs/2026-07-17-phase6-social-design.md` (핵심 결정: 알림=definer RPC+트리거, 응원 스팸제한=send_cheer RPC, Realtime=notifications 단일 구독, 진행중 카드=workout_events)
 - 계획: `docs/superpowers/plans/2026-07-17-phase6-social.md` (Task 1 RLS 테스트 → 2 도메인 TDD → 3 I/O → 4 피드 → 5 응원·배너 → 6 찌르기·알림함 → 7 검증)
-- **`supabase/migrations/0011_social.sql` 작성 완료·미커밋·DB 미적용** — 사용자가 SQL Editor로 적용해야 Task 1부터 진행 가능. 파일은 Phase 6 기능 커밋 때 함께 커밋(0007·0009 전례).
+- `supabase/migrations/0011_social.sql` — 커밋·DB 적용 완료 ✅ (당시엔 미적용 상태로 설계 후 사용자 SQL Editor 적용, 0007·0009 전례).
 - 꾸준왕 열람 UI·홈 위젯은 후속 계획(record_views 테이블만 0011에 선반영).
 
 원래 백로그(참고):
