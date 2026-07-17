@@ -58,7 +58,14 @@ function totalTimeLabel(seconds: number): string {
   return `${Math.floor(min / 60)}:${pad(min % 60)}`;
 }
 
-export function CalendarView({ userId }: { userId: string }) {
+export function CalendarView({
+  userId,
+  onCopySession,
+}: {
+  userId: string;
+  /** 지난 운동 복사 (§10) — 세션의 종목·세트 구조를 오늘 draft로 */
+  onCopySession?: (sessionId: string) => void;
+}) {
   const [sessions, setSessions] = useState<CalendarSession[]>([]);
   const [timeZone, setTimeZone] = useState(
     () => Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Seoul",
@@ -322,10 +329,26 @@ export function CalendarView({ userId }: { userId: string }) {
                         {meta.label}
                       </p>
                     </div>
+                    {onCopySession && s.exerciseNames.length > 0 && (
+                      <button
+                        onClick={() => {
+                          setSelectedDate(null);
+                          onCopySession(s.id);
+                        }}
+                        className="shrink-0 rounded-full border border-line bg-surface px-3 py-1.5 text-[11px] font-bold text-accent"
+                      >
+                        📋 복사
+                      </button>
+                    )}
                   </div>
                 );
               })}
             </div>
+            {onCopySession && (
+              <p className="mt-2.5 text-left text-[11px] text-muted">
+                📋 복사하면 그날의 종목·세트 구조를 오늘 운동으로 불러와요.
+              </p>
+            )}
           </div>
         </>
       )}

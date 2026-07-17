@@ -364,6 +364,53 @@ export async function getLastRecordedSets(
   return sets.length > 0 ? sets : null;
 }
 
+// ── 지난 운동 복사 (§10) ─────────────────────────────────────────
+
+/**
+ * 지난 세션의 종목·세트 구조를 로컬 draft 재료로 조회.
+ * 값(중량·횟수·거리·시간)은 복사하되 완료 여부는 복사하지 않는다.
+ */
+export async function getSessionExerciseStructure(sessionId: string): Promise<
+  {
+    name: string;
+    exerciseType: ExerciseType;
+    sets: LocalSet[];
+  }[]
+> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("workout_exercises")
+    .select("exercise_name, exercise_type, sort_order, workout_sets(*)")
+    .eq("session_id", sessionId)
+    .order("sort_order", { ascending: true });
+  if (error) throw error;
+
+  type Row = {
+    exercise_name: string;
+    exercise_type: ExerciseType;
+    sort_order: number;
+    workout_sets: WorkoutSet[] | null;
+  };
+
+  return ((data ?? []) as Row[]).map((row) => {
+    const sets = [...(row.workout_sets ?? [])]
+      .sort((a, b) => a.set_number - b.set_number)
+      .map((s) =>
+        newSet({
+          weightKg: Number(s.weight_kg ?? 0),
+          reps: s.reps ?? 0,
+          distanceKm: Number(s.distance_meters ?? 0) / 1000,
+          durationMin: Math.round((s.duration_seconds ?? 0) / 60),
+        }),
+      );
+    return {
+      name: row.exercise_name,
+      exerciseType: row.exercise_type,
+      sets: sets.length > 0 ? sets : defaultSets(row.exercise_type),
+    };
+  });
+}
+
 // ── 달력용 완료 세션 (§12 계산된 스탬프의 원천 데이터) ──────────────
 
 /** 달력 스탬프·상세 시트의 원천 — 완료 세션 + 종목명 (도메인 CompletedSession 확장) */

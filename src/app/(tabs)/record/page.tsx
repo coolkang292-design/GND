@@ -22,6 +22,7 @@ import {
   getLastRecordedSets,
   getMyActiveSession,
   getSessionById,
+  getSessionExerciseStructure,
   loadDraft,
   localId,
   newSet,
@@ -278,6 +279,44 @@ function WorkoutScreen({ userId }: { userId: string }) {
     }));
   }
 
+  // 지난 운동 복사 (§10) — 종목·세트 구조를 오늘 draft로 (완료 여부는 초기화)
+  async function handleCopyFromPast(sessionId: string) {
+    if (active) {
+      showToast("운동 중에는 불러올 수 없어요");
+      return;
+    }
+    if (
+      draft.exercises.length > 0 &&
+      !window.confirm("준비 중인 운동 목록을 지우고 지난 운동으로 바꿀까요?")
+    ) {
+      return;
+    }
+    setBusy(true);
+    try {
+      const items = await getSessionExerciseStructure(sessionId);
+      if (items.length === 0) {
+        showToast("복사할 종목이 없어요");
+        return;
+      }
+      const byName = new Map(catalog.map((c) => [c.name, c]));
+      const exercises: LocalExercise[] = items.map((it) => ({
+        key: localId(),
+        name: it.name,
+        bodyPart: byName.get(it.name)?.body_part ?? "코어",
+        exerciseType: it.exerciseType,
+        isCustom: byName.get(it.name)?.is_custom ?? false,
+        sets: it.sets,
+      }));
+      setDraft((d) => ({ ...d, exercises }));
+      setSubTab("workout");
+      showToast("지난 운동을 불러왔어요 — 시작을 누르면 오늘 기록이 돼요 📋");
+    } catch (e) {
+      showToast(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handleStart() {
     if (draft.exercises.length === 0) {
       showToast("운동을 먼저 추가하세요");
@@ -382,7 +421,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
           </p>
         </section>
         <p className="text-center text-xs text-muted">
-          '달력' 탭에서 오늘 스탬프를 확인할 수 있어요. 인증사진은 곧 열려요.
+          &lsquo;달력&rsquo; 탭에서 오늘 스탬프를 확인할 수 있어요. 인증사진은
+          곧 열려요.
         </p>
         <button
           onClick={() => setResult(null)}
@@ -432,7 +472,17 @@ function WorkoutScreen({ userId }: { userId: string }) {
       </div>
 
       {subTab === "calendar" ? (
-        <CalendarView userId={userId} />
+        <>
+          <CalendarView userId={userId} onCopySession={handleCopyFromPast} />
+          {toast && (
+            <div
+              className="fixed inset-x-8 z-50 rounded-card border border-line bg-surface px-4 py-3 text-center text-sm font-bold shadow-card"
+              style={{ bottom: "calc(env(safe-area-inset-bottom) + 130px)" }}
+            >
+              {toast}
+            </div>
+          )}
+        </>
       ) : (
         <>
       {/* 세션 헤더 (§10) */}
