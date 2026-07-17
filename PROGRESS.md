@@ -19,7 +19,7 @@
 
 1. 저장소 `C:\Users\SAMSUNG\workout-app`, 브랜치 `main`, 작업트리 클린(`.claude/`만 untracked — 커밋 금지). 되돌리기·리셋 불필요.
 2. **DB 0001~0012 전부 적용 완료 — SQL 파일 재실행 금지.** (0012 = view_record RPC, 2026-07-17 적용·RLS 107/107 확인)
-3. dev 서버는 세션 종료와 함께 꺼졌을 수 있음 → `pnpm exec next dev -H 0.0.0.0`으로 시작 (폰: `http://192.168.219.112:3000` / Tailscale `http://100.85.240.15:3000`). build 돌릴 땐 dev 서버 먼저 종료(교훈 8 — 이전 세션 dev 서버가 좀비로 남아있으면 `taskkill /PID <pid> /F`).
+3. dev 서버는 세션 종료와 함께 꺼졌을 수 있음 → `pnpm exec next dev -H 0.0.0.0`으로 시작 (폰: `http://192.168.219.104:3000` / Tailscale `http://100.85.240.15:3000`). build 돌릴 땐 dev 서버 먼저 종료(교훈 8 — 이전 세션 dev 서버가 좀비로 남아있으면 `taskkill /PID <pid> /F`). 와이파이 IP는 DHCP라 바뀔 수 있음(2026-07-17 .112→.104) — 안 열리면 `ipconfig`로 확인 후 `next.config.ts allowedDevOrigins` 갱신.
 4. 검증 명령: `pnpm test`(115) · `pnpm lint` · `pnpm typecheck` · `pnpm build` · `node scripts/rls-test.mjs`(107, 응원 쿨다운 대기 포함 약 40초).
 5. E2E·스모크 스크립트는 세션 scratchpad에 있어 소멸됨 — 재작성 시 흐름: 익명 세션 쿠키(`sb-<ref>-auth-token`, base64- 접두) 파싱 → REST로 프로필·크루·세션 픽스처 → puppeteer-core(스크래치패드에 npm install)로 UI·Realtime 단언. 아래 "Phase 6 산출물" 참고.
 6. **다음 작업 우선순위:**
@@ -101,7 +101,7 @@
 - 스택: Next.js 16 App Router · TS strict · Tailwind v4 · pnpm · Vitest
 - 실행(PC만): `pnpm dev` → http://localhost:3000
 - **실행(폰 테스트 포함)**: `pnpm exec next dev -H 0.0.0.0` 후
-  - 같은 와이파이: `http://192.168.219.112:3000`
+  - 같은 와이파이: `http://192.168.219.104:3000` (DHCP라 변동 가능 — `ipconfig`로 확인)
   - Tailscale(외부에서도): `http://100.85.240.15:3000`
   - 두 IP는 `next.config.ts allowedDevOrigins`에 등록돼 있음. IP가 바뀌면 거기도 갱신할 것.
   - 방화벽: 포트 3000 Private 프로필 인바운드 허용 규칙("GND dev server 3000 (Private)") 추가돼 있음 (Tailscale 경로용). Node.js Public 허용은 원래 있었음(와이파이 경로용).
