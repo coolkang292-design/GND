@@ -3,12 +3,20 @@
 > 새 세션은 이 파일 + `C:\Users\SAMSUNG\Desktop\Workout app\IMPLEMENTATION_PLAN.md`(단일 진실)만 읽으면 바로 이어서 작업할 수 있다.
 > 시각 스펙: 같은 폴더의 `운동앱-목업.html`.
 
-## ⚠️ 다음 작업 = 핵심 E2E → 3명 4주 실사용 (Phase 7 진행 중)
+## ⚠️ 다음 작업 = 챌린지 사진 인증·레벨 시스템 이어서 (Task 2/7부터, 중단 지점 아래)
 
-**앱이 프로덕션에 떠 있다: https://gnd-one.vercel.app** — 실사용 시작 가능 상태. 2026-07-18 후반 완료: ①아침 브리핑 크론(0013 + `/api/briefing`, Vercel 크론 등록·프로덕션 dedupe 검증 완료) ②프로필 알림 설정 토글 5종 ③피드 사진 인증 모아보기 필터 → 전체 검증 후 **프로덕션 재배포 완료**. 상세는 아래 **"2026-07-18 후반 산출물"**. (오전분: 브랜딩·일지 공유·배포·피드 히스토리 — "2026-07-18 산출물" 참조.)
+**앱이 프로덕션에 떠 있다: https://gnd-one.vercel.app** — 실사용 시작 가능 상태이며, 브리핑 크론·알림설정·피드 사진필터는 배포까지 완료됨(2026-07-18 후반, 상세는 아래 산출물 섹션). **이 세션에서 이어서 새 기능 착수 중 사용자 요청으로 중단.**
 
-**폰 확인 대기 (배포 주소 https://gnd-one.vercel.app 기준):**
-① 프로필 탭 알림 토글 5종 저장·반영 ② 피드 "사진 인증" 필터 칩 ③ 내일 아침 9시대 알림함 브리핑 카드(불독 아이콘) 도착. (이전 3항목 — 익명 인증 홈 진입·온보딩→운동→사진 인증 사이클·피드 날짜 헤더 — 미확인이면 함께 볼 것.)
+### 🔴 중단 지점 — 챌린지 사진 인증 필수 + 레벨 시스템 (7태스크 중 Task 1만 완료)
+
+- **문서**: 설계 `docs/superpowers/specs/2026-07-18-challenge-photo-levels-design.md` · 계획 `docs/superpowers/plans/2026-07-18-challenge-photo-levels.md` (사용자 승인 완료, 커밋 `a727c70`·`6046890`).
+- **요구사항 요약**: ①새로 만드는 챌린지는 사진 인증한 운동만 목표·참여율·레벨에 집계(기존 챌린지는 소급 없음, DB `challenges.photo_required` 컬럼) ②챌린지 기간 전용 불독 5단계 레벨(Lv.1 잠만보 불독~Lv.5 개노답 탈출) — 시작일 기준 7일 블록에 5일+ 운동하면 +1(블록당 1회), 운동일 공백 5일(스트릭 소멸 규칙 재사용)마다 -1, 챌린지 종료 시 시상대에 최종 레벨 공개.
+- **완료**: **Task 1**(`5a7aeff`) — `src/lib/domain/level.ts` + TDD 15케이스. **아직 스펙 리뷰·코드 품질 리뷰 안 받음** — 재개 시 이 태스크의 2단계 리뷰부터 시작할 것 (subagent-driven-development 스킬, 커밋 안엔 문제없이 165 passed 확인됨).
+- **미착수**: Task 2(`PeriodStats.workoutDayKeys` 노출+`EMPTY_STATS` 단일화) → Task 3(`photo_required` 타입·생성·`getPeriodStatsByUser` 집계 게이트) → **Task 4(🛑 0014 마이그레이션 — SQL Editor 수동 적용 게이트 있음, 아직 파일도 안 만듦)** → Task 5(사진 필수 배지 UI) → Task 6(레벨 표시 UI) → Task 7(전체 검증·배포·PROGRESS 갱신).
+- **재개 방법**: 계획 파일을 읽고 `superpowers:subagent-driven-development`로 Task 2부터(Task 1은 리뷰만) 순서대로 진행. 새 세션이면 이 계획 파일 하나면 충분 — 대화 맥락 불필요.
+
+### 폰 확인 대기 (배포 주소 https://gnd-one.vercel.app 기준, 브리핑 크론 세션분 — 위 신규 기능과 무관, 아직 미확인)
+① 프로필 탭 알림 토글 5종 저장·반영 ② 피드 "사진 인증" 필터 칩 ③ 알림함 브리핑 카드(불독 아이콘) 도착(9시대 자동 발송 확인 필요 — 수동 curl로 오늘자는 이미 발송됨, 내일 아침 자동분으로 확인).
 
 **Vercel 운영 정보 (중요 — 이 섹션만 보면 배포 운영 가능):**
 - 프로덕션: **https://gnd-one.vercel.app** (별칭 gnd-gnd4.vercel.app 동일). 계정 coolkang292@gmail.com · 팀 `gnd4`(Hobby) · 프로젝트 `gnd`. CLI 로그인 완료 상태(device 인증).
