@@ -44,10 +44,11 @@ export type LocalExercise = {
 };
 
 export type WorkoutDraft = {
-  version: 2;
+  version: 3;
   sessionId: string | null;
   startedAtMs: number | null; // 서버 started_at (RPC 응답 기준)
   scheduledPlanId: string | null; // 예정표에서 불러온 경우, 운동 시작 성공 후 정리
+  effortMessage: string | null; // 지난 기록 불러오기 뒤 보여주는 선택형 노력 제안
   restSeconds: number; // 세트 사이 휴식 사전설정 (§10, 기본 90초)
   exercises: LocalExercise[];
 };
@@ -64,10 +65,11 @@ export const DEFAULT_REST_SECONDS = 90;
 
 export function emptyDraft(restSeconds = DEFAULT_REST_SECONDS): WorkoutDraft {
   return {
-    version: 2,
+    version: 3,
     sessionId: null,
     startedAtMs: null,
     scheduledPlanId: null,
+    effortMessage: null,
     restSeconds,
     exercises: [],
   };
@@ -79,14 +81,27 @@ export function loadDraft(userId: string): WorkoutDraft {
   try {
     const raw = localStorage.getItem(draftKey(userId));
     if (!raw) return emptyDraft();
-    const parsed = JSON.parse(raw) as WorkoutDraft | (Omit<WorkoutDraft, "version" | "scheduledPlanId"> & { version: 1 });
+    const parsed = JSON.parse(raw) as
+      | WorkoutDraft
+      | (Omit<WorkoutDraft, "version" | "scheduledPlanId" | "effortMessage"> & {
+          version: 1;
+        })
+      | (Omit<WorkoutDraft, "version" | "effortMessage"> & { version: 2 });
     if (!parsed || !Array.isArray(parsed.exercises)) {
       return emptyDraft();
     }
     if (parsed.version === 1) {
-      return { ...parsed, version: 2, scheduledPlanId: null };
+      return {
+        ...parsed,
+        version: 3,
+        scheduledPlanId: null,
+        effortMessage: null,
+      };
     }
-    if (parsed.version !== 2) return emptyDraft();
+    if (parsed.version === 2) {
+      return { ...parsed, version: 3, effortMessage: null };
+    }
+    if (parsed.version !== 3) return emptyDraft();
     return parsed;
   } catch {
     return emptyDraft();

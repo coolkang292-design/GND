@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import type { BodyPart, CatalogExercise, ExerciseType } from "@/lib/types";
+import type { CalendarSession } from "@/lib/workout";
 
 const PARTS: readonly (BodyPart | "전체")[] = [
   "전체",
@@ -25,9 +26,13 @@ export const TYPE_LABEL: Record<ExerciseType, string> = {
 
 type PickerProps = {
   catalog: CatalogExercise[];
+  pastSessions: CalendarSession[];
+  pastLoading: boolean;
   onClose: () => void;
   /** 선택한 운동 여러 개를 한 번에 추가 */
   onPickMany: (items: CatalogExercise[]) => void;
+  /** 지난 완료 기록 하나를 현재 준비 목록 뒤에 중복 없이 추가 */
+  onPickPast: (sessionId: string) => Promise<boolean>;
   /** 커스텀 운동 생성 — 생성된 항목을 반환하면 선택 목록에 담긴다 */
   onCreateCustom: (input: {
     name: string;
@@ -46,10 +51,14 @@ export function ExercisePicker({ open, ...props }: PickerProps & { open: boolean
 
 function PickerSheet({
   catalog,
+  pastSessions,
+  pastLoading,
   onClose,
   onPickMany,
+  onPickPast,
   onCreateCustom,
 }: PickerProps) {
+  const [tab, setTab] = useState<"catalog" | "past">("catalog");
   const [query, setQuery] = useState("");
   const [part, setPart] = useState<(typeof FILTERS)[number]>("전체");
   const [selected, setSelected] = useState<Map<string, CatalogExercise>>(
@@ -60,6 +69,7 @@ function PickerSheet({
   const [customType, setCustomType] = useState<ExerciseType>("weight");
   const [customMeasure, setCustomMeasure] = useState<"reps" | "time">("reps");
   const [saving, setSaving] = useState(false);
+  const [pastBusyId, setPastBusyId] = useState<string | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
 
   const q = query.trim().toLowerCase();
@@ -103,6 +113,16 @@ function PickerSheet({
     }
   }
 
+  async function pickPast(sessionId: string) {
+    setPastBusyId(sessionId);
+    try {
+      const added = await onPickPast(sessionId);
+      if (added) onClose();
+    } finally {
+      setPastBusyId(null);
+    }
+  }
+
   return (
     <>
       <div
@@ -114,14 +134,38 @@ function PickerSheet({
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
         <h3 className="mb-2.5 text-base font-extrabold">운동 추가</h3>
 
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="운동 검색 (예: 스쿼트, 벤치, 러닝)"
-          className="h-11 w-full rounded-card-sm border border-line bg-bg px-3 text-sm outline-none focus:border-accent"
-        />
+        <div className="mb-3 flex flex-none gap-1 rounded-card-sm border border-line bg-surface-2 p-1">
+          {(
+            [
+              ["catalog", "운동 찾기"],
+              ["past", "지난 기록"],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setTab(value)}
+              className={`h-9 flex-1 rounded-[7px] text-sm font-bold ${
+                tab === value
+                  ? "bg-surface text-accent shadow-card"
+                  : "text-muted"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
 
-        <div className="my-3 flex flex-none gap-1.5 overflow-x-auto">
+        {tab === "catalog" ? (
+          <>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="운동 검색 (예: 스쿼트, 벤치, 러닝)"
+              className="h-11 w-full rounded-card-sm border border-line bg-bg px-3 text-sm outline-none focus:border-accent"
+            />
+
+            <div className="my-3 flex flex-none gap-1.5 overflow-x-auto">
           {FILTERS.map((p) => (
             <button
               key={p}
@@ -135,9 +179,9 @@ function PickerSheet({
               {p}
             </button>
           ))}
-        </div>
+            </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="min-h-0 flex-1 overflow-y-auto">
           {list.length > 0 ? (
             list.map((e) => {
               const isSelected = selected.has(e.id);
@@ -182,9 +226,9 @@ function PickerSheet({
                 : "운동이 없어요."}
             </p>
           )}
-        </div>
+            </div>
 
-        {customOpen ? (
+            {customOpen ? (
           <div className="mt-3 flex-none rounded-card-sm border border-line bg-surface-2 p-3">
             <label className="text-xs font-bold text-muted">운동명</label>
             <input
@@ -247,24 +291,78 @@ function PickerSheet({
               {saving ? "만드는 중…" : "만들고 추가"}
             </button>
           </div>
-        ) : (
+            ) : (
           <button
             onClick={() => setCustomOpen(true)}
             className="mt-3 h-11 w-full flex-none rounded-card-sm border border-line text-sm font-bold text-accent"
           >
             ＋ {query.trim() ? `'${query.trim()}' ` : ""}직접 만들기
           </button>
-        )}
+            )}
 
-        <button
-          onClick={() => onPickMany([...selected.values()])}
-          disabled={selected.size === 0}
-          className="mt-2 h-12 w-full flex-none rounded-card-sm bg-accent text-sm font-extrabold text-accent-ink disabled:opacity-40"
-        >
-          {selected.size > 0
-            ? `선택한 ${selected.size}개 운동 추가`
-            : "운동을 선택하세요"}
-        </button>
+            <button
+              onClick={() => onPickMany([...selected.values()])}
+              disabled={selected.size === 0}
+              className="mt-2 h-12 w-full flex-none rounded-card-sm bg-accent text-sm font-extrabold text-accent-ink disabled:opacity-40"
+            >
+              {selected.size > 0
+                ? `선택한 ${selected.size}개 운동 추가`
+                : "운동을 선택하세요"}
+            </button>
+          </>
+        ) : (
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {pastLoading ? (
+              <p className="py-8 text-center text-sm text-muted">
+                지난 기록을 불러오는 중…
+              </p>
+            ) : pastSessions.length === 0 ? (
+              <div className="py-8 text-center">
+                <p className="text-sm font-bold">아직 완료한 운동이 없어요</p>
+                <p className="mt-1 text-xs text-muted">
+                  운동을 한 번 완료하면 여기서 다시 불러올 수 있어요.
+                </p>
+              </div>
+            ) : (
+              pastSessions.map((session) => {
+                const date = new Intl.DateTimeFormat("ko-KR", {
+                  month: "long",
+                  day: "numeric",
+                  weekday: "short",
+                }).format(session.completedAt);
+                const duration = Math.round(session.durationSeconds / 60);
+                return (
+                  <button
+                    key={session.id}
+                    type="button"
+                    disabled={pastBusyId !== null}
+                    onClick={() => void pickPast(session.id)}
+                    className="flex w-full items-center justify-between gap-3 border-b border-line py-3 text-left disabled:opacity-60"
+                  >
+                    <span className="min-w-0">
+                      <span className="block text-sm font-extrabold">
+                        {date}
+                        {duration > 0 && (
+                          <span className="ml-2 text-xs font-bold text-muted">
+                            {duration}분
+                          </span>
+                        )}
+                      </span>
+                      <span className="mt-1 block truncate text-xs text-muted">
+                        {session.exerciseNames.length > 0
+                          ? session.exerciseNames.join(" · ")
+                          : "운동 완료"}
+                      </span>
+                    </span>
+                    <span className="flex-none text-xs font-extrabold text-accent">
+                      {pastBusyId === session.id ? "불러오는 중…" : "불러오기"}
+                    </span>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        )}
       </div>
     </>
   );

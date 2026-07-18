@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { ActiveWorkoutCards } from "@/components/feed/active-workout-cards";
 import { FeedItemCard } from "@/components/feed/feed-item";
@@ -22,19 +22,11 @@ export default function FeedPage() {
   const [hasMore, setHasMore] = useState(false);
   const [ready, setReady] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [photoOnly, setPhotoOnly] = useState(false);
-  // loadMore 진행 중 필터가 바뀌면 이전 필터의 페이지가 섞이지 않도록 세대 가드
-  const photoOnlyRef = useRef(photoOnly);
-  useEffect(() => {
-    photoOnlyRef.current = photoOnly;
-  }, [photoOnly]);
-
   useEffect(() => {
     if (!configured || loading || !userId) return;
     let cancelled = false;
 
     async function load() {
-      // 필터 전환 시 이전 목록이 잠깐 보이지 않도록 리셋
       setReady(false);
       setItems([]);
       setHasMore(false);
@@ -44,7 +36,7 @@ export default function FeedPage() {
         const g = groups[0] ?? null;
         setGroup(g);
         if (g) {
-          const page = await getGroupFeed(g.id, userId!, undefined, photoOnly);
+          const page = await getGroupFeed(g.id, userId!);
           if (cancelled) return;
           setItems(page);
           setHasMore(page.length === FEED_PAGE_SIZE);
@@ -57,9 +49,9 @@ export default function FeedPage() {
     return () => {
       cancelled = true;
     };
-  }, [configured, loading, userId, photoOnly]);
+  }, [configured, loading, userId]);
 
-  // 날짜별 히스토리 그룹 — 크루 인증사진을 날짜 단위로 훑어볼 수 있게 (2026-07-18)
+  // 날짜별 히스토리 그룹 — 크루 운동을 날짜 단위로 훑어볼 수 있게 (2026-07-18)
   // 기준 시각은 마운트 시 1회 고정 (렌더 중 Date.now()는 purity 규칙 위반)
   const [dateRef] = useState(() => {
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -79,16 +71,14 @@ export default function FeedPage() {
     if (!group || !userId || items.length === 0) return;
     setLoadingMore(true);
     try {
-      const requested = photoOnly;
       const before = items[items.length - 1].completedAt.toISOString();
-      const page = await getGroupFeed(group.id, userId, before, requested);
-      if (photoOnlyRef.current !== requested) return; // 필터가 바뀐 요청 결과는 버림
+      const page = await getGroupFeed(group.id, userId, before);
       setItems((prev) => [...prev, ...page]);
       setHasMore(page.length === FEED_PAGE_SIZE);
     } finally {
       setLoadingMore(false);
     }
-  }, [group, userId, items, photoOnly]);
+  }, [group, userId, items]);
 
   return (
     <div className="flex flex-col gap-3">
@@ -104,29 +94,6 @@ export default function FeedPage() {
 
       <ActiveWorkoutCards />
 
-      <div className="flex gap-2">
-        {(
-          [
-            [false, "전체"],
-            [true, "📷 사진만"],
-          ] as const
-        ).map(([v, label]) => (
-          <button
-            key={label}
-            type="button"
-            aria-pressed={photoOnly === v}
-            onClick={() => setPhotoOnly(v)}
-            className={`h-8 rounded-full border px-3.5 text-xs font-bold ${
-              photoOnly === v
-                ? "border-accent bg-accent/15 text-accent"
-                : "border-line bg-surface text-muted"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
       {!ready ? (
         <p className="py-10 text-center text-sm text-muted">불러오는 중…</p>
       ) : !group ? (
@@ -137,21 +104,12 @@ export default function FeedPage() {
           </p>
         </section>
       ) : items.length === 0 ? (
-        photoOnly ? (
-          <section className="rounded-card border border-line bg-surface p-5 text-center shadow-card">
-            <p className="text-sm font-bold">아직 사진 인증이 없어요</p>
-            <p className="mt-1 text-xs text-muted">
-              운동 완료 후 사진을 남기면 여기에 모여요 📷
-            </p>
-          </section>
-        ) : (
-          <section className="rounded-card border border-line bg-surface p-5 text-center shadow-card">
-            <p className="text-sm font-bold">아직 크루 운동이 없어요</p>
-            <p className="mt-1 text-xs text-muted">
-              첫 운동을 완료하면 여기에 나타나요 💪
-            </p>
-          </section>
-        )
+        <section className="rounded-card border border-line bg-surface p-5 text-center shadow-card">
+          <p className="text-sm font-bold">아직 크루 운동이 없어요</p>
+          <p className="mt-1 text-xs text-muted">
+            첫 운동을 완료하면 여기에 나타나요 💪
+          </p>
+        </section>
       ) : (
         <>
           {dayGroups.map((g) => (

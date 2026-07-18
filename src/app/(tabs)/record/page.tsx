@@ -10,6 +10,10 @@ import { VerificationPhoto } from "@/components/record/verification-photo";
 import { summarizeVolume, type VolumeSummary } from "@/lib/domain/volume";
 import { formatWorkoutLog } from "@/lib/domain/workout-log";
 import {
+  buildEffortMessage,
+  mergeImportedExercises,
+} from "@/lib/domain/workout-import";
+import {
   toDraftExercises,
   toPlanExercises,
 } from "@/lib/domain/workout-plan";
@@ -30,6 +34,7 @@ import {
   createDraftSession,
   defaultSets,
   emptyDraft,
+  getCompletedSessions,
   getExerciseCatalog,
   getLastCompletedWeightVolume,
   getLastRecordedSets,
@@ -43,6 +48,7 @@ import {
   saveSessionExercises,
   startWorkout,
   toVolumeSets,
+  type CalendarSession,
   type LocalExercise,
   type LocalSet,
 } from "@/lib/workout";
@@ -96,6 +102,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const [groupId, setGroupId] = useState<string | null>(null);
   const [prevVolume, setPrevVolume] = useState<number | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [pastSessions, setPastSessions] = useState<CalendarSession[]>([]);
+  const [pastLoading, setPastLoading] = useState(false);
+  const [pastLoaded, setPastLoaded] = useState(false);
   const [restRemaining, setRestRemaining] = useState<number | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [result, setResult] = useState<CompletedResult | null>(null);
@@ -229,6 +238,61 @@ function WorkoutScreen({ userId }: { userId: string }) {
     }
   }
 
+  async function openExercisePicker() {
+    setPickerOpen(true);
+    if (pastLoaded || pastLoading) return;
+    setPastLoading(true);
+    try {
+      setPastSessions(await getCompletedSessions(userId));
+      setPastLoaded(true);
+    } catch {
+      showToast("지난 기록을 불러오지 못했어요");
+    } finally {
+      setPastLoading(false);
+    }
+  }
+
+  async function addPastSession(sessionId: string): Promise<boolean> {
+    try {
+      const items = await getSessionExerciseStructure(sessionId);
+      if (items.length === 0) {
+        showToast("불러올 운동 종목이 없어요");
+        return false;
+      }
+
+      const byName = new Map(catalog.map((item) => [item.name, item]));
+      const imported: LocalExercise[] = items.map((item) => ({
+        key: localId(),
+        name: item.name,
+        bodyPart: byName.get(item.name)?.body_part ?? item.bodyPart ?? "코어",
+        exerciseType: item.exerciseType,
+        measure: item.measure,
+        isCustom: byName.get(item.name)?.is_custom ?? false,
+        sets: item.sets.map((set) => ({ ...set, done: false })),
+      }));
+      const merged = mergeImportedExercises(draft.exercises, imported);
+
+      if (merged.added.length === 0) {
+        showToast("이 기록의 운동은 이미 모두 추가되어 있어요");
+        return false;
+      }
+
+      setDraft((current) => ({
+        ...current,
+        exercises: mergeImportedExercises(current.exercises, imported).exercises,
+        effortMessage: buildEffortMessage(merged.added),
+      }));
+      const skipped = merged.skippedCount > 0
+        ? ` · 중복 ${merged.skippedCount}개 제외`
+        : "";
+      showToast(`지난 기록에서 ${merged.added.length}개 추가했어요${skipped}`);
+      return true;
+    } catch (error) {
+      showToast(errorMessage(error));
+      return false;
+    }
+  }
+
   async function handleCreateCustom(input: {
     name: string;
     bodyPart: BodyPart;
@@ -357,6 +421,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
     setDraft((current) => ({
       ...current,
       scheduledPlanId: plan.id,
+      effortMessage: null,
       exercises,
     }));
     setSubTab("workout");
@@ -437,6 +502,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
       });
       clearDraft(userId);
       setDraft(emptyDraft(draft.restSeconds));
+      // 완료 직후 다시 운동을 준비할 때 방금 기록도 목록에 포함한다.
+      setPastLoaded(false);
+      setPastSessions([]);
       setRestRemaining(null);
       if (planCleanupFailed) {
         showToast("운동은 완료됐지만 예정표는 달력에서 직접 삭제해 주세요");
@@ -656,6 +724,28 @@ function WorkoutScreen({ userId }: { userId: string }) {
       </section>
 
       {/* 운동 카드 목록 */}
+      {draft.effortMessage && (
+        <section className="flex items-start gap-3 rounded-card border border-accent/40 bg-accent-weak px-4 py-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-extrabold text-accent">오늘의 한 번 더</p>
+            <p className="mt-1 text-sm leading-5 font-bold">
+              {draft.effortMessage}
+            </p>
+          </div>
+          <button
+            type="button"
+            aria-label="노력 제안 닫기"
+            title="닫기"
+            onClick={() =>
+              setDraft((current) => ({ ...current, effortMessage: null }))
+            }
+            className="flex h-8 w-8 flex-none items-center justify-center rounded-full text-lg text-muted"
+          >
+            ×
+          </button>
+        </section>
+      )}
+
       {draft.exercises.map((ex, i) => (
         <ExerciseCard
           key={ex.key}
@@ -672,7 +762,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
 
       <div className="flex gap-2">
         <button
-          onClick={() => setPickerOpen(true)}
+          onClick={() => void openExercisePicker()}
           className="h-12 flex-1 rounded-card border border-line bg-surface text-sm font-bold text-accent"
         >
           + 운동 추가
@@ -702,8 +792,11 @@ function WorkoutScreen({ userId }: { userId: string }) {
       <ExercisePicker
         open={pickerOpen}
         catalog={catalog}
+        pastSessions={pastSessions}
+        pastLoading={pastLoading}
         onClose={() => setPickerOpen(false)}
         onPickMany={addExercises}
+        onPickPast={addPastSession}
         onCreateCustom={handleCreateCustom}
       />
 

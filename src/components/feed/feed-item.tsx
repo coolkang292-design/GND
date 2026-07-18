@@ -1,7 +1,7 @@
 "use client";
 
-import { PhotoStamp } from "@/components/photo-stamp";
 import { ReactionBar } from "@/components/feed/reaction-bar";
+import { PhotoStamp } from "@/components/photo-stamp";
 import type { FeedItem } from "@/lib/social";
 import { timeAgo } from "@/lib/time-ago";
 
@@ -14,7 +14,20 @@ function exerciseSummary(names: string[]): string {
 
 type Props = { item: FeedItem; userId: string };
 
-/** 피드 카드 — 프로필·요약·인증사진·스트릭·반응 (§9 그룹 피드) */
+function WorkoutSummary({ item, stats }: { item: FeedItem; stats: string[] }) {
+  return (
+    <div className="px-4 pt-3 pb-2">
+      <p className="text-sm font-bold">{exerciseSummary(item.exerciseNames)}</p>
+      {stats.length > 0 && (
+        <p className="mt-0.5 text-xs font-bold text-muted">
+          {stats.join(" · ")}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** 사진 기록은 몰입형 카드, 일반 기록은 빠르게 읽는 요약 카드로 표시한다. */
 export function FeedItemCard({ item, userId }: Props) {
   const stats: string[] = [];
   if (item.durationMinutes > 0) stats.push(`${item.durationMinutes}분`);
@@ -25,42 +38,9 @@ export function FeedItemCard({ item, userId }: Props) {
   if (item.volume.cardioDistanceMeters > 0)
     stats.push(`${(item.volume.cardioDistanceMeters / 1000).toFixed(1)}km`);
 
-  return (
-    <article className="overflow-hidden rounded-card border border-line bg-surface shadow-card">
-      <div className="flex items-center justify-between px-4 pt-3.5">
-        <div className="flex items-center gap-2.5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-2 text-lg">
-            {item.avatarUrl ?? "👤"}
-          </span>
-          <div>
-            <p className="text-sm font-extrabold">
-              {item.nickname}
-              {item.userId === userId && (
-                <span className="ml-1 text-faint">(나)</span>
-              )}
-              {item.streak > 0 && (
-                <span className="ml-1.5 text-xs font-bold text-accent">
-                  🔥{item.streak}
-                </span>
-              )}
-            </p>
-            <p className="text-xs text-muted">
-              {timeAgo(item.completedAt)} 운동 완료
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="px-4 pt-2.5 pb-3">
-        <p className="text-sm font-bold">{exerciseSummary(item.exerciseNames)}</p>
-        {stats.length > 0 && (
-          <p className="mt-0.5 text-xs font-bold text-muted">
-            {stats.join(" · ")}
-          </p>
-        )}
-      </div>
-
-      {item.photoUrl && (
+  if (item.photoUrl) {
+    return (
+      <article className="overflow-hidden rounded-card border border-line bg-surface shadow-card">
         <div className="relative aspect-[4/3] w-full">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -72,10 +52,67 @@ export function FeedItemCard({ item, userId }: Props) {
           <PhotoStamp
             completedAt={item.completedAt}
             durationMinutes={item.durationMinutes}
+            position="top"
+          />
+          <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 bg-gradient-to-t from-black/75 to-transparent px-3.5 pt-10 pb-3 text-white">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-white/20 text-base backdrop-blur">
+                {item.avatarUrl ?? "👤"}
+              </span>
+              <p className="truncate text-sm font-extrabold">
+                {item.nickname}
+                {item.userId === userId && (
+                  <span className="ml-1 opacity-75">(나)</span>
+                )}
+                {item.streak > 0 && (
+                  <span className="ml-1.5 text-xs">🔥{item.streak}</span>
+                )}
+              </p>
+            </div>
+            <p className="flex-none text-right text-xs font-bold text-white/85">
+              {timeAgo(item.completedAt)} 운동 완료
+            </p>
+          </div>
+        </div>
+
+        <WorkoutSummary item={item} stats={stats} />
+        <div className="px-4 py-3">
+          <ReactionBar
+            sessionId={item.sessionId}
+            userId={userId}
+            counts={item.reactions}
+            myReactions={item.myReactions}
           />
         </div>
-      )}
+      </article>
+    );
+  }
 
+  return (
+    <article className="rounded-card border border-line bg-surface shadow-card">
+      <div className="flex items-center gap-2.5 px-4 pt-3.5">
+        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-2 text-lg">
+          {item.avatarUrl ?? "👤"}
+        </span>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-extrabold">
+            {item.nickname}
+            {item.userId === userId && (
+              <span className="ml-1 text-faint">(나)</span>
+            )}
+            {item.streak > 0 && (
+              <span className="ml-1.5 text-xs font-bold text-accent">
+                🔥{item.streak}
+              </span>
+            )}
+          </p>
+          <p className="text-xs text-muted">
+            {timeAgo(item.completedAt)} 운동 완료
+          </p>
+        </div>
+      </div>
+
+      <WorkoutSummary item={item} stats={stats} />
       <div className="px-4 py-3">
         <ReactionBar
           sessionId={item.sessionId}

@@ -6,7 +6,7 @@ afterEach(() => {
 });
 
 describe("loadDraft 예정표 버전 호환", () => {
-  it("기존 version 1 임시 운동을 version 2로 보존한다", () => {
+  it("기존 version 1 임시 운동을 version 3으로 보존한다", () => {
     vi.stubGlobal("localStorage", {
       getItem: () =>
         JSON.stringify({
@@ -19,9 +19,29 @@ describe("loadDraft 예정표 버전 호환", () => {
     });
 
     const draft = loadDraft("user-id");
-    expect(draft.version).toBe(2);
+    expect(draft.version).toBe(3);
     expect(draft.scheduledPlanId).toBeNull();
+    expect(draft.effortMessage).toBeNull();
     expect(draft.exercises[0].name).toBe("스쿼트");
+  });
+
+  it("기존 version 2 임시 운동을 version 3으로 보존한다", () => {
+    vi.stubGlobal("localStorage", {
+      getItem: () =>
+        JSON.stringify({
+          version: 2,
+          sessionId: null,
+          startedAtMs: null,
+          scheduledPlanId: null,
+          restSeconds: 90,
+          exercises: [{ key: "old-exercise", name: "벤치프레스", sets: [] }],
+        }),
+    });
+
+    const draft = loadDraft("user-id");
+    expect(draft.version).toBe(3);
+    expect(draft.effortMessage).toBeNull();
+    expect(draft.exercises[0].name).toBe("벤치프레스");
   });
 
   it("알 수 없는 버전은 안전하게 빈 임시 운동으로 초기화한다", () => {
