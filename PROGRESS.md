@@ -3,52 +3,39 @@
 > 새 세션은 이 파일 + `C:\Users\SAMSUNG\Desktop\Workout app\IMPLEMENTATION_PLAN.md`(단일 진실)만 읽으면 바로 이어서 작업할 수 있다.
 > 시각 스펙: 같은 폴더의 `운동앱-목업.html`.
 
-## ⚠️ 다음 작업 = Phase 7 (계획서 §18) — 꾸준왕·홈 위젯 실기기 확인 통과(2026-07-18)
+## ⚠️ 다음 작업 = 아침 브리핑 크론 (Phase 7 진행 중) — 2026-07-18 마감
 
-**꾸준왕 열람권 + 홈 위젯 완료 확정.** 실기기 확인 7항목 전부 통과(2026-07-18): ①스트릭 카드(유머 문구) ②주간 stat 3칸 ③소멸 경고 배너 ④꾸준왕 n/5일 ⑤열람권 전체 흐름(크루원 선택→모달→성과 시트→👀 알림) ⑥재열람 거절 ⑦홈·피드 사진 날짜·시간 스탬프.
+**앱이 프로덕션에 떠 있다: https://gnd-one.vercel.app** — 실사용 시작 가능 상태. 오늘 완료: ①꾸준왕·홈 위젯 실기기 7항목 통과 확정(+사진 스탬프 누락 수정 `c9c92f4`) ②블랙&골드 브랜딩 적용(`d1526bc`, 폰 확인 통과) ③운동 일지 텍스트 공유(`411797b`, 폰 확인 통과) ④Vercel 프로덕션 배포 + 익명인증 BOM 에러 수정 ⑤피드 날짜별 히스토리(`9e9eb56`). 상세는 아래 **"2026-07-18 산출물"**.
 
-- ⑦은 확인 중 발견된 버그 수정분(`c9c92f4`): 스탬프 오버레이가 완료 화면에만 있어 홈·피드는 원본 사진만 표시 → 공용 `components/photo-stamp.tsx` 추출, 홈(상단)·피드(하단)·완료 화면에서 재사용. 파일에 굽지 않는 §11 원칙 유지.
-- **2026-07-18 결정: 앱 디자인 = 블랙&골드 브랜딩** (GND 덤벨 로고·불독 마스코트·"NO EXCUSES. JUST RESULTS.", 대안 배색 틸·화이트는 보류) — 계획서 §2 결정 변경으로 기록. 적용은 Phase 7: 앱 아이콘 1024×1024·PWA manifest 아이콘·테마 토큰 재스킨(구조 유지, 값만 교체).
+**마지막 폰 확인 대기 (배포 주소 https://gnd-one.vercel.app 기준 3항목):**
+① 익명 인증 에러 없이 홈 진입 ② 온보딩→크루 만들기→운동→사진 인증 한 사이클 ③ 피드 날짜 헤더(오늘/어제/M월 D일). 통과하면 크루원에게 주소 공유 시작.
 
-**Phase 7 범위(계획서 §18)**: 아침 09:00 브리핑 크론 · notification_settings UI · ~~블랙&골드 브랜딩 적용~~✅ · 핵심 E2E · Vercel 배포 · 3명 4주 실사용. (5일 소멸 스트릭 표시는 홈 경고 배너로 선반영됨. 브리핑 크론은 배포 환경 필요 → Vercel 배포와 순서 조율. Vercel·GitHub 계정 준비 여부 = 사용자 "모름/확인 필요" — 배포 착수 시 확인)
+**Vercel 운영 정보 (중요 — 이 섹션만 보면 배포 운영 가능):**
+- 프로덕션: **https://gnd-one.vercel.app** (별칭 gnd-gnd4.vercel.app 동일). 계정 coolkang292@gmail.com · 팀 `gnd4`(Hobby) · 프로젝트 `gnd`. CLI 로그인 완료 상태(device 인증).
+- **재배포 = `pnpm dlx vercel deploy --prod --yes` 한 줄.** GitHub 미사용 — git은 여전히 로컬 전용.
+- **env 등록은 반드시 Bash로**: `printf '%s' "$VAL" | pnpm dlx vercel env add NAME production` (누적 교훈 9 — PowerShell 파이프는 BOM이 섞여 익명 인증이 통째로 깨졌음). 현재 `NEXT_PUBLIC_SUPABASE_URL`·`NEXT_PUBLIC_SUPABASE_ANON_KEY` Production 등록 완료. CLI가 `.env.local`에 `VERCEL_OIDC_TOKEN` 한 줄 추가함(무해).
+- **배포 도메인 = 새 오리진**: 로컬(localhost/IP)에서 쓰던 익명 계정·크루는 이어지지 않음(정상). 실사용 데이터는 배포 주소에서 새로 시작. https라 공유 시트·crypto 완전 동작.
 
-**블랙&골드 브랜딩 적용 완료 (2026-07-18, `94b355f`·`d1526bc`) — 폰 확인 통과 ✅:**
-- 스펙: `docs/superpowers/specs/2026-07-18-black-gold-branding-design.md`. 시안 원본: `Desktop\Workout app\GND 앱 아이콘 디자인 소개.png`.
-- 테마: 라이트/다크 분기 제거 → 항상 블랙&골드 단일 `:root`(`--bg #0B0B0C`·`--accent #E8B84B`·경고색 앰버→주황 `#FB8A3C` — 골드와 구분). 완료 초록 유지.
-- 아이콘: 시안 대형 패널 크롭(sharp) → `public/icons/` 192/512/maskable + `src/app/apple-icon.png`(180). manifest 색·태그라인, iOS 상태바 black-translucent, 온보딩 골드 로고타입. (기존 설치 PWA는 삭제 후 재설치해야 아이콘 갱신)
-- 검증: unit 115 · lint · typecheck · build 통과, 사용자 폰 확인 완료(2026-07-18).
-
-**운동 일지 텍스트 공유 완료 (2026-07-18, `cbe7c5e` 스펙·`411797b` 코드) — 폰 확인 대기:**
-- 그날 운동 기록을 사용자 예시 형식(`YYYY-MM-DD 운동 일지` + `n세트: 35kg 12회`)의 텍스트로 만들어 AI 코치에게 붙여넣는 기능.
-- `lib/domain/workout-log.ts` `formatWorkoutLog` TDD 10케이스: 완료 세트만·필터 후 재번호·웨이트/맨몸(reps·time)/유산소 줄 형식·소수 중량 유지·빈 종목 생략.
-- `lib/share.ts` `shareOrCopyText`: navigator.share(취소는 조용히)→클립보드→execCommand 폴백(http+IP 비보안 컨텍스트, 교훈 5).
-- 버튼 2곳: ① 달력 날짜 상세 시트 "📤 AI 코치에게 공유" — 시트 열릴 때 일지 프리페치(iOS는 share를 사용자 제스처 안에서 불러야 함), 그날 모든 세션 합침. ② 운동 완료 화면 — draft 지우기 전 logText를 result에 보관.
-- `getSessionLogExercises`: is_completed→done 그대로 매핑(복사용 `getSessionExerciseStructure`는 done 초기화라 용도 분리).
-- 검증: unit **125**(+10) · lint · typecheck · build 통과. 사용자 폰 확인 완료 ✅ (2026-07-18).
-
-**Vercel 배포 완료 (2026-07-18) ✅ — 실기기 확인 대기:**
-- **프로덕션 주소: https://gnd-one.vercel.app** (별칭 gnd-gnd4.vercel.app 동일). GitHub 없이 CLI 직접 배포(`pnpm dlx vercel deploy --prod --yes`) — 재배포도 이 명령 하나.
-- Vercel 계정: coolkang292@gmail.com, 팀 `gnd4`(Hobby), 프로젝트 `gnd`. CLI 로그인은 device 인증(브라우저 승인)으로 완료된 상태.
-- env: `NEXT_PUBLIC_SUPABASE_URL`·`NEXT_PUBLIC_SUPABASE_ANON_KEY` Production 등록 완료. CLI가 `.env.local`에 `VERCEL_OIDC_TOKEN` 한 줄 추가함(무해).
-- **주의: 배포 도메인은 새 오리진** — localhost/IP에서 쓰던 익명 계정·크루는 이어지지 않음. 실사용은 배포 주소에서 온보딩·크루 생성부터 새로 시작(https라 공유 시트·crypto도 정상 동작).
-- **배포 후 익명 인증 에러 수정 (2026-07-18)**: "String contains non ISO-8859-1 code point" — PowerShell 파이프로 env 등록 시 BOM이 값에 섞임. **교훈: Vercel env 등록은 Bash `printf '%s' | vercel env add`로** (PS 파이프 금지). rm 후 재등록·재배포, 배포 번들 바이트 검사로 URL·키 앞에 BOM 없음 확인.
-- **피드 날짜별 히스토리 (2026-07-18, `9e9eb56`)**: 크루 인증 카드를 날짜 헤더(오늘/어제/M월 D일 (요일) + 그날 운동 수)로 그룹핑. `lib/domain/social.ts` `groupByDay`·`feedDateLabel` TDD 6케이스(자정 경계 포함). unit **131**. 렌더 중 `Date.now()`는 purity 린트 위반 → lazy useState로 마운트 1회 고정(교훈 4 유사).
-- 다음: ① 폰에서 배포 주소 확인(온보딩→운동→공유→피드 날짜 헤더) ② 홈 화면 추가(새 아이콘·standalone) ③ 아침 브리핑 크론(vercel.json crons + route handler) ④ notification_settings UI ⑤ 핵심 E2E ⑥ 3명 4주 실사용.
+**아침 브리핑 크론 착수 메모 (다음 세션 첫 작업, 계획서 §18):**
+- 구조: `vercel.json`의 `crons` + `src/app/api/briefing/route.ts`(GET, `CRON_SECRET` Bearer 검증).
+- **service_role 키 필요** — 현재 없음. Supabase 대시보드(프로젝트 cjdskubyxlnojwzhwbfx) → Settings → API에서 확보, Vercel env에만 등록(클라 노출·커밋 금지).
+- **Hobby 플랜 크론 제약**: 프로젝트당 2개·하루 1회·실행 시각 최대 1시간 오차 — "아침 09:00" 정시성은 느슨함을 감안해 설계(웹푸시 없이는 인앱 알림함에 쌓이는 방식임도 유의, 계획서 §18 웹푸시 메모 참조).
+- notification_settings UI(알림 끄기 설정)와 같은 스펙으로 묶어 설계 권장. 이후: 핵심 E2E → 3명 4주 실사용.
 
 ### 다음 세션 시작 체크리스트
 
 1. 저장소 `C:\Users\SAMSUNG\workout-app`, 브랜치 `main`, 작업트리 클린(`.claude/`만 untracked — 커밋 금지). 되돌리기·리셋 불필요.
 2. **DB 0001~0012 전부 적용 완료 — SQL 파일 재실행 금지.** (0012 = view_record RPC, 2026-07-17 적용·RLS 107/107 확인)
-3. dev 서버는 세션 종료와 함께 꺼졌을 수 있음 → `pnpm exec next dev -H 0.0.0.0`으로 시작 (폰: `http://192.168.219.104:3000` / Tailscale `http://100.85.240.15:3000`). build 돌릴 땐 dev 서버 먼저 종료(교훈 8 — 이전 세션 dev 서버가 좀비로 남아있으면 `taskkill /PID <pid> /F`). 와이파이 IP는 DHCP라 바뀔 수 있음(2026-07-17 .112→.104) — 안 열리면 `ipconfig`로 확인 후 `next.config.ts allowedDevOrigins` 갱신.
-4. 검증 명령: `pnpm test`(115) · `pnpm lint` · `pnpm typecheck` · `pnpm build` · `node scripts/rls-test.mjs`(107, 응원 쿨다운 대기 포함 약 40초).
+3. dev 서버는 세션 종료와 함께 꺼졌을 수 있음 → `pnpm exec next dev -H 0.0.0.0`으로 시작 (폰: `http://192.168.219.104:3000` / Tailscale `http://100.85.240.15:3000`). build 돌릴 땐 dev 서버 먼저 종료(교훈 8 — 좀비면 `taskkill /PID <pid> /F`). 와이파이 IP는 DHCP라 변동 가능(.112→.104 전례) — 안 열리면 `ipconfig` 확인 후 `next.config.ts allowedDevOrigins` 갱신. 이제 순수 표시 확인은 배포 주소로도 가능.
+4. 검증 명령: `pnpm test`(**131**) · `pnpm lint` · `pnpm typecheck` · `pnpm build` · `node scripts/rls-test.mjs`(107, 응원 쿨다운 대기 포함 약 40초).
 5. E2E·스모크 스크립트는 세션 scratchpad에 있어 소멸됨 — 재작성 시 흐름: 익명 세션 쿠키(`sb-<ref>-auth-token`, base64- 접두) 파싱 → REST로 프로필·크루·세션 픽스처 → puppeteer-core(스크래치패드에 npm install)로 UI·Realtime 단언. 아래 "Phase 6 산출물" 참고.
-6. **다음 작업 = Phase 7** (위 범위). 시작 전 사용자 확인 필요: ① 첫 착수 항목(브랜딩 적용 권장 — 로컬 완결) ② 브랜딩 자산 원본(앱 아이콘 이미지 파일) 확보 ③ Vercel·GitHub 계정 준비 여부(현재 git 로컬 전용, 리모트 없음).
+6. **다음 작업 = 아침 브리핑 크론 + notification_settings UI** (위 착수 메모). 사용자에게 먼저 확인: 배포 주소 폰 확인 3항목 결과.
 
 ---
 
 ## 현재 상태 (2026-07-18 기준)
 
-**Phase 0~6 완료 + 꾸준왕 열람권·홈 위젯 완료(실기기 7항목 통과, 2026-07-18). 다음 작업 = Phase 7.**
+**Phase 0~6 완료 + Phase 7 진행 중(브랜딩·배포까지 완료). 프로덕션: https://gnd-one.vercel.app**
 
 | Phase | 상태 | 비고 |
 |---|---|---|
@@ -59,7 +46,16 @@
 | 4 완료 루프 | ✅ | 달력(`9e540ef`)·지난 운동 복사(`1f3281d`)·인증사진(`a1a6e1a`) — unit 63 + RLS 54/54 + E2E 2종 통과 |
 | 5 챌린지 | ✅ | goal-score TDD 20케이스·KPI 게이트·진행중 비공개·시상대(`ea6fb60`) — unit 83 + RLS 68/68 + E2E 통과 |
 | 6 소셜 | ✅ | 피드·반응·진행중 카드·Realtime 응원·찌르기·알림함 — unit 104 + RLS 102/102 + E2E 2인 14/14 + 실기기 7항목 통과 |
-| 7 | 대기 | 계획서 §18 참조 |
+| 7 안정화 | 🔶 진행 중 | 브랜딩 ✅·Vercel 배포 ✅·(추가: 일지 공유 ✅·피드 히스토리 ✅) — 남은 것: 브리핑 크론·알림설정 UI·핵심 E2E·3명 4주 실사용 |
+
+### 2026-07-18 산출물 (`c9c92f4`~`945890e`)
+
+- **꾸준왕·홈 위젯 실기기 7항목 통과 확정** — ①스트릭 카드 ②주간 stat ③소멸 경고 ④꾸준왕 n/5일 ⑤열람권 흐름 ⑥재열람 거절 ⑦사진 스탬프. ⑦은 확인 중 발견한 버그 수정(`c9c92f4`): 스탬프 오버레이가 완료 화면에만 있어 홈·피드는 원본만 표시 → 공용 `components/photo-stamp.tsx` 추출, 홈(상단)·피드(하단)·완료 화면 재사용. 파일에 굽지 않는 §11 원칙 유지.
+- **블랙&골드 브랜딩 적용** (`94b355f` 스펙·`d1526bc`, 폰 확인 통과): 계획서 §2 결정 변경(블랙&골드, GND 덤벨 로고+불독 마스코트, "NO EXCUSES. JUST RESULTS."). 라이트/다크 분기 제거 → 단일 `:root`(`--bg #0B0B0C`·`--accent #E8B84B`·경고색 앰버→주황 `#FB8A3C` 골드와 구분·완료 초록 유지). 아이콘 = 시안(`Desktop\Workout app\GND 앱 아이콘 디자인 소개.png`) 대형 패널을 sharp로 크롭 → 192/512/maskable + `apple-icon.png`(180). manifest 색·태그라인, iOS 상태바 black-translucent, 온보딩 골드 로고타입. 기존 설치 PWA는 삭제 후 재설치해야 아이콘 갱신.
+- **운동 일지 텍스트 공유** (`cbe7c5e` 스펙·`411797b`, 폰 확인 통과): AI 코치 붙여넣기용. `lib/domain/workout-log.ts` `formatWorkoutLog` TDD 10케이스(완료 세트만·재번호·유형별 줄 형식·소수 중량). `lib/share.ts` share→클립보드→execCommand 폴백. 버튼 2곳: 달력 날짜 상세 시트(시트 열릴 때 프리페치 — iOS는 share를 제스처 안에서 호출해야 함)·완료 화면(draft 지우기 전 logText 보관). `getSessionLogExercises`는 is_completed 유지 매핑(복사용과 용도 분리).
+- **Vercel 프로덕션 배포** (`1f36612`): CLI 직접 배포(GitHub 생략). 배포 직후 익명 인증 "non ISO-8859-1" 에러 → PowerShell 파이프 BOM이 env 값에 섞인 것. Bash printf로 재등록·재배포, 배포 번들 바이트 검사로 확인(교훈 9).
+- **피드 날짜별 히스토리** (`9e9eb56`, 사용자 요청): 크루 인증 카드를 날짜 헤더(오늘/어제/M월 D일 (요일) + 그날 운동 수)로 그룹핑, 페이지네이션 유지. `lib/domain/social.ts` `groupByDay`·`feedDateLabel` TDD 6케이스(자정·연 경계). 렌더 중 `Date.now()`는 purity 린트 위반 → lazy useState 1회 고정(교훈 10).
+- 검증 기준선: **unit 131** · RLS 107/107(오늘 DB 변경 없음) · lint · typecheck · build · 배포 200.
 
 ### 꾸준왕 열람권 + 홈 위젯 산출물 (2026-07-17, `5dd688c`~`59e62f9`)
 
@@ -167,6 +163,8 @@ Storage 버킷도 SQL로 생성 가능했음(`insert into storage.buckets`, 0005
 6. **Windows 방화벽은 인터페이스 프로필별로 먹는다** — 이 PC는 와이파이=Public, Tailscale=Private. Node 허용이 Public에만 있어서 Tailscale 접속만 타임아웃됐음. 포트 3000 Private 허용 규칙로 해결.
 7. **카카오톡 인앱 브라우저는 HTML에 속성을 주입**해 하이드레이션 경고(1 Issue 오버레이)를 띄운다 — 실제 오류 아님. `layout.tsx`의 html/body에 `suppressHydrationWarning` 적용해 억제. dev 오버레이는 프로덕션에선 안 뜸.
 8. **개발 서버 실행 중 `pnpm build`를 동시에 돌리지 말 것** — 둘 다 `.next`를 사용해 기존 dev 서버가 3000번 포트를 잡은 채 요청에 응답하지 않는 상태가 발생했다. 최종 검증은 dev 서버를 먼저 종료하고 build를 실행한 뒤, 실기기 테스트가 더 필요하면 dev 서버를 새로 시작한다.
+9. **Vercel env 등록에 PowerShell 파이프 금지** — `$val | vercel env add`는 인코딩 프리앰블(BOM, U+FEFF)이 값 앞에 섞여 저장되고, 그 값이 fetch 헤더에 들어가는 순간 "String contains non ISO-8859-1 code point"로 익명 인증이 통째로 깨진다. 반드시 Bash에서 `printf '%s' "$VAL" | pnpm dlx vercel env add NAME production`. 배포 후엔 번들에서 값 주변 바이트를 od로 확인하면 확실하다.
+10. **렌더 중 `Date.now()`·`new Date()` 호출은 purity 린트 위반** — "오늘" 기준값은 lazy `useState(() => ...)`로 마운트 시 1회 고정한다 (streak-card의 todayKey, feed의 dateRef 전례).
 
 ## Phase 6 산출물 (2026-07-17, `fbd86b4`~`9f822ec`)
 
