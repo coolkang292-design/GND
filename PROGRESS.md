@@ -31,7 +31,9 @@
 - Vercel 계정: coolkang292@gmail.com, 팀 `gnd4`(Hobby), 프로젝트 `gnd`. CLI 로그인은 device 인증(브라우저 승인)으로 완료된 상태.
 - env: `NEXT_PUBLIC_SUPABASE_URL`·`NEXT_PUBLIC_SUPABASE_ANON_KEY` Production 등록 완료. CLI가 `.env.local`에 `VERCEL_OIDC_TOKEN` 한 줄 추가함(무해).
 - **주의: 배포 도메인은 새 오리진** — localhost/IP에서 쓰던 익명 계정·크루는 이어지지 않음. 실사용은 배포 주소에서 온보딩·크루 생성부터 새로 시작(https라 공유 시트·crypto도 정상 동작).
-- 다음: ① 폰에서 배포 주소 확인(온보딩→운동→공유) ② 홈 화면 추가(새 아이콘·standalone) ③ 아침 브리핑 크론(vercel.json crons + route handler) ④ notification_settings UI ⑤ 핵심 E2E ⑥ 3명 4주 실사용.
+- **배포 후 익명 인증 에러 수정 (2026-07-18)**: "String contains non ISO-8859-1 code point" — PowerShell 파이프로 env 등록 시 BOM이 값에 섞임. **교훈: Vercel env 등록은 Bash `printf '%s' | vercel env add`로** (PS 파이프 금지). rm 후 재등록·재배포, 배포 번들 바이트 검사로 URL·키 앞에 BOM 없음 확인.
+- **피드 날짜별 히스토리 (2026-07-18, `9e9eb56`)**: 크루 인증 카드를 날짜 헤더(오늘/어제/M월 D일 (요일) + 그날 운동 수)로 그룹핑. `lib/domain/social.ts` `groupByDay`·`feedDateLabel` TDD 6케이스(자정 경계 포함). unit **131**. 렌더 중 `Date.now()`는 purity 린트 위반 → lazy useState로 마운트 1회 고정(교훈 4 유사).
+- 다음: ① 폰에서 배포 주소 확인(온보딩→운동→공유→피드 날짜 헤더) ② 홈 화면 추가(새 아이콘·standalone) ③ 아침 브리핑 크론(vercel.json crons + route handler) ④ notification_settings UI ⑤ 핵심 E2E ⑥ 3명 4주 실사용.
 
 ### 다음 세션 시작 체크리스트
 
