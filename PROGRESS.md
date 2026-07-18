@@ -24,7 +24,9 @@
 - `lib/share.ts` `shareOrCopyText`: navigator.share(취소는 조용히)→클립보드→execCommand 폴백(http+IP 비보안 컨텍스트, 교훈 5).
 - 버튼 2곳: ① 달력 날짜 상세 시트 "📤 AI 코치에게 공유" — 시트 열릴 때 일지 프리페치(iOS는 share를 사용자 제스처 안에서 불러야 함), 그날 모든 세션 합침. ② 운동 완료 화면 — draft 지우기 전 logText를 result에 보관.
 - `getSessionLogExercises`: is_completed→done 그대로 매핑(복사용 `getSessionExerciseStructure`는 done 초기화라 용도 분리).
-- 검증: unit **125**(+10) · lint · typecheck · build 통과. **폰 확인**: 달력에서 지난 운동 날짜 탭 → 공유 버튼 → 공유 시트/복사 확인(비보안 컨텍스트는 복사 폴백 동작).
+- 검증: unit **125**(+10) · lint · typecheck · build 통과. 사용자 폰 확인 완료 ✅ (2026-07-18).
+
+**다음 = Vercel 배포.** git 로컬 전용·gh CLI 미설치 → **GitHub 없이 Vercel CLI 직접 배포**(`pnpm dlx vercel`) 경로 권장. 필요한 것: ① Vercel 계정(무료, 이메일 또는 구글 가입) ② `.env.local`의 Supabase 키 2개를 Vercel 프로젝트 env로 등록 ③ 배포 후 Supabase Auth 허용 URL(redirect)에 배포 도메인 추가 검토 ④ 아침 브리핑 크론은 배포 후 vercel.json crons로.
 
 ### 다음 세션 시작 체크리스트
 
