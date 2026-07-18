@@ -3,6 +3,7 @@ import type { LocalExercise } from "@/lib/workout";
 import {
   buildEffortMessage,
   mergeImportedExercises,
+  replaceWithLastRecordedSets,
 } from "./workout-import";
 
 function exercise(
@@ -35,6 +36,34 @@ describe("mergeImportedExercises", () => {
     ]);
     expect(result.added).toEqual([imported[1]]);
     expect(result.skippedCount).toBe(1);
+  });
+});
+
+describe("replaceWithLastRecordedSets", () => {
+  it("기존 세트 대신 마지막 기록의 모든 세트를 완료 전 상태로 불러온다", () => {
+    const currentExercise = exercise({
+      key: "bench-press",
+      name: "벤치 프레스",
+      exerciseType: "weight",
+      sets: [
+        { key: "current-set", weightKg: 40, reps: 10, distanceKm: 0, durationMin: 0, done: true },
+      ],
+    });
+    const recordedSets = [
+      { key: "recorded-1", weightKg: 60, reps: 8, distanceKm: 0, durationMin: 0, done: true },
+      { key: "recorded-2", weightKg: 65, reps: 6, distanceKm: 0, durationMin: 0, done: true },
+    ];
+
+    const result = replaceWithLastRecordedSets(currentExercise, recordedSets);
+
+    expect(result).toEqual({
+      ...currentExercise,
+      sets: [
+        { ...recordedSets[0], done: false },
+        { ...recordedSets[1], done: false },
+      ],
+    });
+    expect(recordedSets.every((set) => set.done)).toBe(true);
   });
 });
 

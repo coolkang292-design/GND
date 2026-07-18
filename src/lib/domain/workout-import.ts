@@ -6,6 +6,16 @@ export type ImportMergeResult = {
   skippedCount: number;
 };
 
+export function replaceWithLastRecordedSets(
+  exercise: LocalExercise,
+  recordedSets: LocalSet[],
+): LocalExercise {
+  return {
+    ...exercise,
+    sets: recordedSets.map((set) => ({ ...set, done: false })),
+  };
+}
+
 function normalizedName(name: string): string {
   return name.trim().toLocaleLowerCase("ko-KR");
 }
