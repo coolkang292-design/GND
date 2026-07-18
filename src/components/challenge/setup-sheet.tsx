@@ -303,6 +303,9 @@ export function ChallengeSetupSheet({
               <p className="mt-1.5 text-right text-[11px] text-muted">
                 기간 {periodDays}일 ({weeks.toFixed(1)}주)
               </p>
+              <p className="mt-2 rounded-card-sm bg-accent/10 px-3 py-2 text-[11.5px] font-bold text-accent">
+                📷 이 챌린지는 사진 인증한 운동만 집계돼요
+              </p>
             </div>
           )}
 

@@ -354,9 +354,16 @@ function ChallengeScreen({ userId }: { userId: string }) {
           GND 챌린지
         </h1>
         {challenge && (
-          <p className="mt-0.5 text-[12.5px] text-muted">
-            {challenge.name} · {challenge.start_date} ~ {challenge.end_date}
-          </p>
+          <>
+            <p className="mt-0.5 text-[12.5px] text-muted">
+              {challenge.name} · {challenge.start_date} ~ {challenge.end_date}
+            </p>
+            {challenge.photo_required && (
+              <span className="mt-1.5 inline-block rounded-full border border-accent/40 bg-accent/10 px-2.5 py-1 text-[11px] font-bold text-accent">
+                📷 사진 인증 필수 · 사진 없는 운동은 집계되지 않아요
+              </span>
+            )}
+          </>
         )}
       </header>
 
