@@ -1,76 +1,24 @@
 @import "tailwindcss";
 
-/* ── GND 테마 토큰 (phase0-mockup.html :root 기준) ─────────────── */
+/* ── GND 테마 토큰 — 블랙&골드 단일 테마 (2026-07-18 브랜딩 결정, specs/2026-07-18) ── */
 :root {
-  --bg: #f5f8f7;
-  --surface: #ffffff;
-  --surface-2: #ecf2f1;
-  --text: #132320;
-  --muted: #5f6d6a;
-  --faint: #9aa7a4;
-  --line: #e0e8e6;
-  --accent: #0d9488;
-  --accent-ink: #ffffff;
-  --accent-weak: #d6f0ec;
-  --good: #16a34a;
-  --good-weak: #e4f4e9;
-  --warn: #d97706;
-  --shadow: 0 1px 2px rgba(19, 35, 32, 0.05), 0 8px 24px rgba(19, 35, 32, 0.06);
+  --bg: #0b0b0c;
+  --surface: #16161a;
+  --surface-2: #211f18;
+  --text: #f2efe6;
+  --muted: #a49e8d;
+  --faint: #6f6a5c;
+  --line: #2c2a24;
+  --accent: #e8b84b;
+  --accent-ink: #1c1403;
+  --accent-weak: #33290f;
+  --good: #3dd37e;
+  --good-weak: #15301f;
+  --warn: #fb8a3c;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 30px rgba(0, 0, 0, 0.35);
   --r: 18px;
   --r-sm: 12px;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0f1615;
-    --surface: #182220;
-    --surface-2: #20302d;
-    --text: #ecf3f1;
-    --muted: #93a19e;
-    --faint: #647471;
-    --line: #2a3835;
-    --accent: #2dd4bf;
-    --accent-ink: #062420;
-    --accent-weak: #123430;
-    --good: #3dd37e;
-    --good-weak: #183026;
-    --warn: #f0a64b;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 30px rgba(0, 0, 0, 0.35);
-  }
-}
-
-:root[data-theme="light"] {
-  --bg: #f5f8f7;
-  --surface: #ffffff;
-  --surface-2: #ecf2f1;
-  --text: #132320;
-  --muted: #5f6d6a;
-  --faint: #9aa7a4;
-  --line: #e0e8e6;
-  --accent: #0d9488;
-  --accent-ink: #ffffff;
-  --accent-weak: #d6f0ec;
-  --good: #16a34a;
-  --good-weak: #e4f4e9;
-  --warn: #d97706;
-  --shadow: 0 1px 2px rgba(19, 35, 32, 0.05), 0 8px 24px rgba(19, 35, 32, 0.06);
-}
-
-:root[data-theme="dark"] {
-  --bg: #0f1615;
-  --surface: #182220;
-  --surface-2: #20302d;
-  --text: #ecf3f1;
-  --muted: #93a19e;
-  --faint: #647471;
-  --line: #2a3835;
-  --accent: #2dd4bf;
-  --accent-ink: #062420;
-  --accent-weak: #123430;
-  --good: #3dd37e;
-  --good-weak: #183026;
-  --warn: #f0a64b;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 30px rgba(0, 0, 0, 0.35);
+  color-scheme: dark;
 }
 
 /* Tailwind v4 유틸리티 매핑: bg-surface, text-accent, border-line 등 */

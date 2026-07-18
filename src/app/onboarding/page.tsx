@@ -166,8 +166,13 @@ export default function OnboardingPage() {
     <Shell>
       {step === "profile" && (
         <>
-          <div className="text-5xl">🏋️‍♂️🔥</div>
-          <h1 className="mt-3 text-xl font-extrabold">
+          <p className="text-4xl font-black italic tracking-tight text-accent">
+            🏋️ GND
+          </p>
+          <p className="mt-1 text-[10px] font-bold tracking-[0.3em] text-accent/80">
+            NO EXCUSES. JUST RESULTS.
+          </p>
+          <h1 className="mt-4 text-xl font-extrabold">
             GND에 오신 걸 환영해요
           </h1>
           <p className="mt-1 text-[13px] text-muted">

@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
-    statusBarStyle: "default",
+    statusBarStyle: "black-translucent",
     title: "GND",
   },
 };
@@ -18,10 +18,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#F5F8F7" },
-    { media: "(prefers-color-scheme: dark)", color: "#0F1615" },
-  ],
+  themeColor: "#0B0B0C",
 };
 
 export default function RootLayout({
