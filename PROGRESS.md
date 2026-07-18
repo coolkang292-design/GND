@@ -3,17 +3,19 @@
 > 새 세션은 이 파일 + `C:\Users\SAMSUNG\Desktop\Workout app\IMPLEMENTATION_PLAN.md`(단일 진실)만 읽으면 바로 이어서 작업할 수 있다.
 > 시각 스펙: 같은 폴더의 `운동앱-목업.html`.
 
-## ⚠️ 다음 작업 = 챌린지 사진 인증·레벨 시스템 이어서 (Task 2/7부터, 중단 지점 아래)
+## ⚠️ 다음 작업 = 챌린지 사진 인증·레벨 운영 배포 승인 + 달력 복사 방식 결정
 
-**앱이 프로덕션에 떠 있다: https://gnd-one.vercel.app** — 실사용 시작 가능 상태이며, 브리핑 크론·알림설정·피드 사진필터는 배포까지 완료됨(2026-07-18 후반, 상세는 아래 산출물 섹션). **이 세션에서 이어서 새 기능 착수 중 사용자 요청으로 중단.**
+**앱이 프로덕션에 떠 있다: https://gnd-one.vercel.app** — 브리핑 크론·알림설정·피드 사진필터까지 배포 완료. 챌린지 사진 인증·레벨 코드는 로컬 구현과 검증까지 끝났지만 **아직 운영 배포하지 않음**.
 
-### 🔴 중단 지점 — 챌린지 사진 인증 필수 + 레벨 시스템 (7태스크 중 Task 1만 완료)
+### 🟡 배포 대기 — 챌린지 사진 인증 필수 + 레벨 시스템 (7태스크 구현·검증 완료)
 
 - **문서**: 설계 `docs/superpowers/specs/2026-07-18-challenge-photo-levels-design.md` · 계획 `docs/superpowers/plans/2026-07-18-challenge-photo-levels.md` (사용자 승인 완료, 커밋 `a727c70`·`6046890`).
 - **요구사항 요약**: ①새로 만드는 챌린지는 사진 인증한 운동만 목표·참여율·레벨에 집계(기존 챌린지는 소급 없음, DB `challenges.photo_required` 컬럼) ②챌린지 기간 전용 불독 5단계 레벨(Lv.1 잠만보 불독~Lv.5 개노답 탈출) — 시작일 기준 7일 블록에 5일+ 운동하면 +1(블록당 1회), 운동일 공백 5일(스트릭 소멸 규칙 재사용)마다 -1, 챌린지 종료 시 시상대에 최종 레벨 공개.
-- **완료**: **Task 1**(`5a7aeff`) — `src/lib/domain/level.ts` + TDD 15케이스. **아직 스펙 리뷰·코드 품질 리뷰 안 받음** — 재개 시 이 태스크의 2단계 리뷰부터 시작할 것 (subagent-driven-development 스킬, 커밋 안엔 문제없이 165 passed 확인됨).
-- **미착수**: Task 2(`PeriodStats.workoutDayKeys` 노출+`EMPTY_STATS` 단일화) → Task 3(`photo_required` 타입·생성·`getPeriodStatsByUser` 집계 게이트) → **Task 4(🛑 0014 마이그레이션 — SQL Editor 수동 적용 게이트 있음, 아직 파일도 안 만듦)** → Task 5(사진 필수 배지 UI) → Task 6(레벨 표시 UI) → Task 7(전체 검증·배포·PROGRESS 갱신).
-- **재개 방법**: 계획 파일을 읽고 `superpowers:subagent-driven-development`로 Task 2부터(Task 1은 리뷰만) 순서대로 진행. 새 세션이면 이 계획 파일 하나면 충분 — 대화 맥락 불필요.
+- **구현 완료**: Task 1 레벨 도메인(`5a7aeff`) · Task 2 운동일 배열(`4af8d12`) · Task 3 사진 필수 집계(`4b7f5b4`) · Task 4 DB 보안(`872ddcc`) · Task 5 안내 UI(`a659533`) · Task 6 레벨 UI(`d3d958b`). 각 단계 리뷰 완료.
+- **DB 완료**: `0014_challenge_photo_required.sql` 사용자가 SQL Editor에 적용. 실제 Storage 파일이 없는 가짜 인증 행과 연결 사진 삭제 우회를 차단하며, 새 챌린지는 `photo_required=true`만 생성 가능.
+- **최종 검증**: unit **166/166** · lint · typecheck · build · RLS **107/107** · 사진 인증 통합 **8/8** · 브리핑 통합 **8/8** (2026-07-18 실측).
+- **남은 게이트**: 사용자 승인 후 Vercel 운영 배포 → 배포 주소에서 새 챌린지 생성 안내·진행 중 내 레벨·종료 후 전원 레벨을 폰으로 확인.
+- **새 요청 대기**: 달력에서 과거 운동과 복사 대상 날짜를 고르는 개선. 대상 날짜에 `운동 예정표`로 저장할지 `완료된 운동 기록`으로 복제할지 사용자 결정 후 별도 설계·구현.
 
 ### 폰 확인 대기 (배포 주소 https://gnd-one.vercel.app 기준, 브리핑 크론 세션분 — 위 신규 기능과 무관, 아직 미확인)
 ① 프로필 탭 알림 토글 5종 저장·반영 ② 피드 "사진 인증" 필터 칩 ③ 알림함 브리핑 카드(불독 아이콘) 도착(9시대 자동 발송 확인 필요 — 수동 curl로 오늘자는 이미 발송됨, 내일 아침 자동분으로 확인).
@@ -32,9 +34,9 @@
 ### 다음 세션 시작 체크리스트
 
 1. 저장소 `C:\Users\SAMSUNG\workout-app`, 브랜치 `main`, 작업트리 클린(`.claude/`만 untracked — 커밋 금지). 되돌리기·리셋 불필요.
-2. **DB 0001~0013 전부 적용 완료 — SQL 파일 재실행 금지.** (0013 = 브리핑 dedupe_key + finalize ranks 존중, 2026-07-18 적용·통합 스크립트 8/8 확인)
+2. **DB 0001~0014 전부 적용 완료 — SQL 파일 재실행 금지.** (0014 = 챌린지 사진 필수 + 인증 우회 차단, 사진 통합 스크립트 8/8 확인)
 3. dev 서버는 세션 종료와 함께 꺼졌을 수 있음 → `pnpm exec next dev -H 0.0.0.0`으로 시작 (폰: `http://192.168.219.104:3000` / Tailscale `http://100.85.240.15:3000`). build 돌릴 땐 dev 서버 먼저 종료(교훈 8 — 좀비면 `taskkill /PID <pid> /F`). 와이파이 IP는 DHCP라 변동 가능(.112→.104 전례) — 안 열리면 `ipconfig` 확인 후 `next.config.ts allowedDevOrigins` 갱신. 이제 순수 표시 확인은 배포 주소로도 가능.
-4. 검증 명령: `pnpm test`(**150**) · `pnpm lint`(경고 1건 — `scripts/briefing-integration-test.mjs`, 무해) · `pnpm typecheck` · `pnpm build` · `node scripts/rls-test.mjs`(**107**, 응원 쿨다운 대기 포함 1~2분) · `node scripts/briefing-integration-test.mjs`(**8/8**, 실 DB).
+4. 검증 명령: `pnpm test`(**166**) · `pnpm lint` · `pnpm typecheck` · `pnpm build` · `node scripts/rls-test.mjs`(**107**, 응원 쿨다운 대기 포함 약 30초) · `node scripts/challenge-photo-test.mjs`(**8/8**, 실 DB) · `node scripts/briefing-integration-test.mjs`(**8/8**, 실 DB).
 5. E2E·스모크 스크립트는 세션 scratchpad에 있어 소멸됨 — 재작성 시 흐름: 익명 세션 쿠키(`sb-<ref>-auth-token`, base64- 접두) 파싱 → REST로 프로필·크루·세션 픽스처 → puppeteer-core(스크래치패드에 npm install)로 UI·Realtime 단언. 아래 "Phase 6 산출물" 참고.
 6. **다음 작업 = 핵심 E2E → 3명 4주 실사용.** 사용자에게 먼저 확인: 위 "폰 확인 대기" 항목 결과(알림 토글·사진 필터·브리핑 카드 도착).
 
@@ -53,7 +55,15 @@
 | 4 완료 루프 | ✅ | 달력(`9e540ef`)·지난 운동 복사(`1f3281d`)·인증사진(`a1a6e1a`) — unit 63 + RLS 54/54 + E2E 2종 통과 |
 | 5 챌린지 | ✅ | goal-score TDD 20케이스·KPI 게이트·진행중 비공개·시상대(`ea6fb60`) — unit 83 + RLS 68/68 + E2E 통과 |
 | 6 소셜 | ✅ | 피드·반응·진행중 카드·Realtime 응원·찌르기·알림함 — unit 104 + RLS 102/102 + E2E 2인 14/14 + 실기기 7항목 통과 |
-| 7 안정화 | 🔶 진행 중 | 브랜딩 ✅·Vercel 배포 ✅·일지 공유 ✅·피드 히스토리 ✅·브리핑 크론 ✅·알림설정 토글 ✅·피드 사진 필터 ✅ — 남은 것: 핵심 E2E·3명 4주 실사용 |
+| 7 안정화 | 🔶 진행 중 | 브랜딩 ✅·Vercel 배포 ✅·일지 공유 ✅·피드 히스토리 ✅·브리핑 크론 ✅·알림설정 토글 ✅·피드 사진 필터 ✅·챌린지 사진/레벨 로컬 검증 ✅(운영 배포 대기) — 남은 것: 핵심 E2E·3명 4주 실사용 |
+
+### 챌린지 사진 인증·레벨 산출물 (2026-07-18, `5a7aeff`~`d3d958b`, 운영 배포 대기)
+
+- **레벨 계산**: `lib/domain/level.ts` TDD 15케이스. 챌린지 기간의 고유 운동일로 주간 상승·5일 공백 하락을 계산하고 1~5 범위를 유지한다.
+- **사진 집계**: `PeriodStats.workoutDayKeys`를 노출하고, `photo_required=true`인 챌린지만 `workout_images`가 연결된 완료 세션을 목표·참여율·레벨에 사용한다. 기존 챌린지는 전체 완료 세션 집계를 유지한다.
+- **0014 보안**: 기존 챌린지는 `false`, 새 챌린지는 `true` 기본. 앱 우회 `false` 생성, Storage 실파일 없는 사진 행, 인증에 연결된 사진 파일의 사용자 직접 삭제를 차단한다.
+- **UI**: 사진 필수 챌린지 헤더·생성 시트 안내. 진행 중에는 본인 레벨만 공개하고, 종료 후 상세 순위에 전 참가자 최종 레벨을 표시한다.
+- **검증**: unit 166/166 · lint · typecheck · build · RLS 107/107 · `challenge-photo-test` 8/8 · 브리핑 통합 8/8. 새 브라우저가 미로그인 상태라 실제 사용자 데이터가 들어간 레벨 화면 육안 확인은 운영 배포 후 폰 확인으로 남김.
 
 ### 2026-07-18 후반 산출물 (`cdb89c1`~`a9cd612` + 프로덕션 재배포)
 
@@ -140,7 +150,7 @@
   - 2026-07-17 확인: 최초 `/home` 컴파일은 느린 파일시스템 경고와 함께 약 20초 걸렸지만 이후 Wi-Fi·Tailscale 주소 모두 HTTP 200(약 0.4초). 첫 접속만 기다릴 것.
 - 검증: `pnpm lint` · `pnpm typecheck` · `pnpm test` · `pnpm build`
 - Supabase: 프로젝트 `cjdskubyxlnojwzhwbfx`, 익명 인증 ON, 키는 `.env.local`(커밋 안 됨)
-- RLS 검증: `node scripts/rls-test.mjs` — 현재 107개 검사, 2026-07-18 기준 107/107 통과. 브리핑 통합: `node scripts/briefing-integration-test.mjs` — 8/8 통과.
+- RLS 검증: `node scripts/rls-test.mjs` — 현재 107개 검사, 2026-07-18 기준 107/107 통과. 사진 인증 통합: `node scripts/challenge-photo-test.mjs` — 8/8 통과. 브리핑 통합: `node scripts/briefing-integration-test.mjs` — 8/8 통과.
 
 ## DB 마이그레이션 절차 (중요)
 
@@ -157,6 +167,7 @@ Storage 버킷도 SQL로 생성 가능했음(`insert into storage.buckets`, 0005
 - 0011(소셜: events·reactions·cheers·notifications 등): 적용 완료 ✅ (2026-07-17 "Success" 확인)
 - 0012(꾸준왕 열람권 view_record RPC): 적용 완료 ✅ (2026-07-17, RLS 107/107로 확인)
 - 0013(브리핑 dedupe_key·finalize ranks 존중): 적용 완료 ✅ (2026-07-18, briefing-integration-test 8/8 + 프로덕션 크론 dedupe 검증으로 확인)
+- 0014(챌린지 사진 필수·인증 우회 차단): 적용 완료 ✅ (2026-07-18, challenge-photo-test 8/8 + RLS 107/107로 확인)
 - 컬럼 추가·시드 위주라 idempotent 안전장치(`on conflict`, `if not exists` 성격) 있는 편이나, 재실행 시 `alter table add column`은 중복 에러 → 각 파일 1회만.
 
 ## 코드 구조 요약
