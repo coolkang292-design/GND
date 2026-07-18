@@ -26,7 +26,12 @@
 - `getSessionLogExercises`: is_completed→done 그대로 매핑(복사용 `getSessionExerciseStructure`는 done 초기화라 용도 분리).
 - 검증: unit **125**(+10) · lint · typecheck · build 통과. 사용자 폰 확인 완료 ✅ (2026-07-18).
 
-**다음 = Vercel 배포.** git 로컬 전용·gh CLI 미설치 → **GitHub 없이 Vercel CLI 직접 배포**(`pnpm dlx vercel`) 경로 권장. 필요한 것: ① Vercel 계정(무료, 이메일 또는 구글 가입) ② `.env.local`의 Supabase 키 2개를 Vercel 프로젝트 env로 등록 ③ 배포 후 Supabase Auth 허용 URL(redirect)에 배포 도메인 추가 검토 ④ 아침 브리핑 크론은 배포 후 vercel.json crons로.
+**Vercel 배포 완료 (2026-07-18) ✅ — 실기기 확인 대기:**
+- **프로덕션 주소: https://gnd-one.vercel.app** (별칭 gnd-gnd4.vercel.app 동일). GitHub 없이 CLI 직접 배포(`pnpm dlx vercel deploy --prod --yes`) — 재배포도 이 명령 하나.
+- Vercel 계정: coolkang292@gmail.com, 팀 `gnd4`(Hobby), 프로젝트 `gnd`. CLI 로그인은 device 인증(브라우저 승인)으로 완료된 상태.
+- env: `NEXT_PUBLIC_SUPABASE_URL`·`NEXT_PUBLIC_SUPABASE_ANON_KEY` Production 등록 완료. CLI가 `.env.local`에 `VERCEL_OIDC_TOKEN` 한 줄 추가함(무해).
+- **주의: 배포 도메인은 새 오리진** — localhost/IP에서 쓰던 익명 계정·크루는 이어지지 않음. 실사용은 배포 주소에서 온보딩·크루 생성부터 새로 시작(https라 공유 시트·crypto도 정상 동작).
+- 다음: ① 폰에서 배포 주소 확인(온보딩→운동→공유) ② 홈 화면 추가(새 아이콘·standalone) ③ 아침 브리핑 크론(vercel.json crons + route handler) ④ notification_settings UI ⑤ 핵심 E2E ⑥ 3명 4주 실사용.
 
 ### 다음 세션 시작 체크리스트
 
