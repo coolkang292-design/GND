@@ -6,6 +6,7 @@ import {
   uploadWorkoutImage,
   type VerificationSource,
 } from "@/lib/workout";
+import { PhotoStamp } from "@/components/photo-stamp";
 
 /** 완료 화면 인증사진 (§11) — 촬영/앨범 → 압축 → 비공개 업로드 → 화면 오버레이 */
 export function VerificationPhoto({
@@ -37,21 +38,6 @@ export function VerificationPhoto({
   }, [previewUrl]);
 
   const completedAt = new Date(completedAtMs);
-  const dateLabel = new Intl.DateTimeFormat("en-CA", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  })
-    .format(completedAt)
-    .replaceAll("-", ".");
-  const weekday = new Intl.DateTimeFormat("en-US", { weekday: "short" })
-    .format(completedAt)
-    .toUpperCase();
-  const timeLabel = new Intl.DateTimeFormat("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  }).format(completedAt);
 
   async function handleFile(file: File, source: VerificationSource) {
     setState("uploading");
@@ -115,17 +101,11 @@ export function VerificationPhoto({
             📷 사진을 올리면 여기에 표시돼요
           </div>
         )}
-        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3 text-white">
-          <p className="font-mono text-sm font-extrabold">
-            {dateLabel} {weekday}
-          </p>
-          <p className="font-mono text-[11px] opacity-90">
-            {timeLabel} · {durationMinutes}분{streakLabel ? ` · ${streakLabel}` : ""}
-          </p>
-          <p className="text-[9px] font-bold tracking-[0.2em] opacity-75">
-            WORKOUT COMPLETED
-          </p>
-        </div>
+        <PhotoStamp
+          completedAt={completedAt}
+          durationMinutes={durationMinutes}
+          streakLabel={streakLabel}
+        />
       </div>
 
       {state === "done" ? (

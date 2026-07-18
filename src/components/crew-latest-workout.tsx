@@ -8,6 +8,7 @@ import {
   type LatestCrewWorkout,
 } from "@/lib/workout";
 import { timeAgo } from "@/lib/time-ago";
+import { PhotoStamp } from "@/components/photo-stamp";
 
 /** 홈 '최근 친구 활동' 섹션 — 크루의 가장 최근 인증사진 운동 미리보기 */
 export function CrewLatestWorkout() {
@@ -48,6 +49,7 @@ export function CrewLatestWorkout() {
           alt={`${item.nickname}님의 운동 인증`}
           className="h-full w-full object-cover"
         />
+        <PhotoStamp completedAt={item.completedAt} position="top" />
         <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/70 to-transparent px-3.5 pt-8 pb-3">
           <div className="flex items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/20 text-base backdrop-blur">

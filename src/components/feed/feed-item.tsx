@@ -1,5 +1,6 @@
 "use client";
 
+import { PhotoStamp } from "@/components/photo-stamp";
 import { ReactionBar } from "@/components/feed/reaction-bar";
 import type { FeedItem } from "@/lib/social";
 import { timeAgo } from "@/lib/time-ago";
@@ -60,13 +61,17 @@ export function FeedItemCard({ item, userId }: Props) {
       </div>
 
       {item.photoUrl && (
-        <div className="aspect-[4/3] w-full">
+        <div className="relative aspect-[4/3] w-full">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={item.photoUrl}
             alt={`${item.nickname}님의 운동 인증`}
             className="h-full w-full object-cover"
             loading="lazy"
+          />
+          <PhotoStamp
+            completedAt={item.completedAt}
+            durationMinutes={item.durationMinutes}
           />
         </div>
       )}
