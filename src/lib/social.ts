@@ -131,18 +131,26 @@ type FeedSessionRow = {
  * 크루 공개 완료 세션 피드 한 페이지.
  * `before`(ISO)보다 이전 completed_at만 — 페이지네이션 커서.
  * 스트릭은 내가 볼 수 있는 세션(본인 전체 + 크루 공개) 기준 근사치.
+ * `photoOnly`: true면 인증사진이 있는 세션만 (workout_images!inner).
  */
 export async function getGroupFeed(
   groupId: string,
   myUserId: string,
   before?: string,
+  photoOnly = false,
 ): Promise<FeedItem[]> {
   const supabase = getSupabaseBrowserClient();
+
+  // photoOnly: workout_images!inner = 인증사진 있는 세션만 (세션당 1장
+  // unique(0005)라 join 중복 없음). 정렬·커서는 전체 피드와 동일.
+  const imagesEmbed = photoOnly
+    ? "workout_images!inner(image_path)"
+    : "workout_images(image_path)";
 
   let query = supabase
     .from("workout_sessions")
     .select(
-      "id, user_id, title, completed_at, duration_minutes, workout_exercises(exercise_name, exercise_type, sort_order, workout_sets(weight_kg, reps, duration_seconds, distance_meters, is_completed)), workout_images(image_path)",
+      `id, user_id, title, completed_at, duration_minutes, workout_exercises(exercise_name, exercise_type, sort_order, workout_sets(weight_kg, reps, duration_seconds, distance_meters, is_completed)), ${imagesEmbed}`,
     )
     .eq("group_id", groupId)
     .eq("status", "completed")
