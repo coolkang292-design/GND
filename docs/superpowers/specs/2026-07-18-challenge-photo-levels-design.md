@@ -34,9 +34,40 @@
 ```sql
 alter table public.challenges
   add column if not exists photo_required boolean not null default false;
+
+alter table public.challenges
+  alter column photo_required set default true;
+
+grant insert (photo_required) on public.challenges to authenticated;
+
+alter policy "challenges_insert_member" on public.challenges
+  with check (
+    created_by = auth.uid()
+    and public.is_group_member(group_id, auth.uid())
+    and status = 'setup'
+    and photo_required = true
+  );
+
+alter policy "images_insert_own" on public.workout_images
+  with check (
+    user_id = auth.uid()
+    and public.owns_workout_session(session_id)
+    and (storage.foldername(image_path))[1] = auth.uid()::text
+    and (storage.foldername(image_path))[2] = session_id::text
+    and exists (
+      select 1 from storage.objects stored
+      where stored.bucket_id = 'workout-images'
+        and stored.name = image_path
+    )
+  );
+
+drop policy if exists "workout_images_delete_own" on storage.objects;
 ```
 
-- 기존 챌린지 전부 `false` → 기존 규칙 그대로. RLS·함수 변경 없음 (`finalize_challenge`는 점수를 계산하지 않으므로 무관).
+- 컬럼 추가 시 기존 챌린지는 `false`로 채우고, 이후 기본값은 `true`로 전환한다. 따라서 기존 규칙은 유지되고 새 챌린지는 이전 앱에서도 사진 필수로 생성된다.
+- 0006의 컬럼별 INSERT 권한에 `photo_required`를 추가하고, INSERT 정책에서 `true`를 강제한다. 앱을 우회한 `false` 요청도 거부된다.
+- `workout_images` INSERT 정책은 실제 Storage 파일 존재와 경로의 세션 ID 일치를 확인한다. 파일 없는 가짜 사진 행으로 챌린지 집계를 우회할 수 없다.
+- 사용자 토큰의 Storage 파일 직접 삭제를 닫아 사진 행 생성과 파일 삭제의 동시 요청 우회를 막는다. 현재 앱에는 인증사진 삭제 기능이 없으며 운영 정리는 `service_role` 서버 경로만 사용한다.
 - `select("*")` 패턴이라 컬럼 추가는 기존 배포 코드에 무해. 단 **`createChallenge`가 `photo_required`를 insert하는 새 코드는 0014 적용 후에만 배포** (순서 게이트).
 
 ### 3.2 타입·생성
@@ -103,7 +134,7 @@ export function challengeLevel(
 
 - **level.test.ts (TDD)**: 운동 없음→1 / 블록 5일→2 / 4블록 연속→5 캡 / 업 후 5일 공백→다운 / Lv.1 floor / 블록에 걸친 4+1일→업 없음 / 잘린 마지막 블록 / trailing 공백 / 종료 후 endDate 고정 / 공백 5일째 복귀(다운 우선) — 10케이스 내외.
 - **foldPeriodStats**: `workoutDayKeys` 정렬·기간 필터 케이스 추가.
-- **0014 실 DB 검증 스크립트**(`scripts/challenge-photo-test.mjs`): 익명 유저 픽스처로 사진 有/無 세션 만들고 `photo_required` on/off 쿼리 결과 비교 (rls-test.mjs 인프라 참고). SQL Editor 적용 게이트 후 실행.
+- **0014 실 DB 검증 스크립트**(`scripts/challenge-photo-test.mjs`): 익명 유저 픽스처로 가짜 사진 행 거부, 실제 Storage 업로드·인증 성공, 연결된 파일 삭제 거부, `photo_required` on/off 쿼리 결과를 비교한다. SQL Editor 적용 게이트 후 실행.
 - 회귀: unit 150+신규 · RLS 107 · build.
 
 ## 6. 적용 순서 (게이트)

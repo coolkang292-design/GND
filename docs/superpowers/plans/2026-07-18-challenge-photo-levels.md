@@ -444,19 +444,51 @@ git commit -m "기능: challenges.photo_required 게이트 — 사진 세션만 
 -- 실행: Supabase Dashboard → SQL Editor에 전체 붙여넣기 → Run (1회)
 -- ============================================================
 -- 기존 챌린지 = false(기존 규칙 유지). 새 챌린지는 앱이 true로 insert.
--- RLS·함수 변경 없음: finalize_challenge는 점수를 계산하지 않는다.
+-- finalize_challenge 함수는 변경하지 않고, 생성 RLS만 photo_required=true를 강제한다.
 alter table public.challenges
   add column if not exists photo_required boolean not null default false;
+
+alter table public.challenges
+  alter column photo_required set default true;
+
+grant insert (photo_required) on public.challenges to authenticated;
+
+alter policy "challenges_insert_member" on public.challenges
+  with check (
+    created_by = auth.uid()
+    and public.is_group_member(group_id, auth.uid())
+    and status = 'setup'
+    and photo_required = true
+  );
+
+alter policy "images_insert_own" on public.workout_images
+  with check (
+    user_id = auth.uid()
+    and public.owns_workout_session(session_id)
+    and (storage.foldername(image_path))[1] = auth.uid()::text
+    and (storage.foldername(image_path))[2] = session_id::text
+    and exists (
+      select 1 from storage.objects stored
+      where stored.bucket_id = 'workout-images'
+        and stored.name = image_path
+    )
+  );
+
+drop policy if exists "workout_images_delete_own" on storage.objects;
 ```
 
-- [ ] **Step 2: 실 DB 검증 스크립트** — `scripts/challenge-photo-test.mjs` 작성. `scripts/rls-test.mjs`의 기존 인프라(익명 유저 생성·크루 픽스처·정리 패턴)를 읽고 같은 방식으로 작성한다. 검증 케이스 4개:
+- [ ] **Step 2: 실 DB 검증 스크립트** — `scripts/challenge-photo-test.mjs` 작성. `scripts/rls-test.mjs`의 기존 인프라(익명 유저 생성·크루 픽스처·정리 패턴)를 읽고 같은 방식으로 작성한다. 검증 케이스 8개:
 
-1. **컬럼 존재·기본값**: 익명 유저가 크루 생성 → `challenges` insert(photo_required 미지정) → select 시 `photo_required === false`
-2. **true insert**: `photo_required: true`로 insert한 챌린지가 select에서 `true`
-3. **필터 동작**: 완료 세션 A(사진 없음)·B(사진 있음 — `workout_images`에 `session_id`+`image_path` insert) 생성 후, `workout_images!inner(image_path)` embed 포함 조회 → **B만 반환**, embed 없는 조회 → A·B 모두 반환
-4. **집계 등가성**: 같은 조회를 `getPeriodStatsByUser`가 쓰는 select 문자열(Task 3의 것과 동일)로 실행해 photoRequired on/off의 행 수가 3번과 일치
+1. **새 행 기본값**: 익명 유저가 크루 생성 → `challenges` insert(photo_required 미지정) → select 시 `photo_required === true`
+2. **false 우회 차단**: `photo_required: false` 직접 insert는 RLS에서 거부
+3. **true insert**: `photo_required: true`로 insert한 챌린지가 select에서 `true`
+4. **가짜 행 차단**: Storage 파일 없이 `workout_images` 행만 insert하면 RLS에서 거부
+5. **실제 업로드·인증**: Storage 업로드 후 사진 행 insert와 `set_workout_verification` RPC 성공
+6. **사용자 파일 삭제 차단**: 인증 사용자의 Storage 직접 DELETE는 거부하고, 테스트 정리는 `service_role`만 수행
+7. **필터 동작**: 완료 세션 A(사진 없음)·B(사진 있음) 생성 후, `workout_images!inner(image_path)` embed 포함 조회 → **B만 반환**, embed 없는 조회 → A·B 모두 반환
+8. **집계 등가성**: 같은 조회를 `getPeriodStatsByUser`가 쓰는 select 문자열(Task 3의 것과 동일)로 실행해 photoRequired on/off의 행 수가 7번과 일치
 
-출력 형식은 rls-test.mjs와 동일한 통과/실패 카운트(`✅ n/4`). 실패 시 exit 1.
+출력 형식은 통과/실패 카운트(`n/8 passed`). 실패 시 exit 1.
 
 - [ ] **Step 3: PART 1 Commit**
 
@@ -472,7 +504,7 @@ git commit -m "DB: 0014 challenges.photo_required + 실 DB 검증 스크립트"
 - [ ] **Step 5: 실 DB 검증 실행**
 
 Run: `node scripts/challenge-photo-test.mjs`
-Expected: 4/4 passed
+Expected: 8/8 passed
 
 - [ ] **Step 6: RLS 회귀**
 
@@ -618,7 +650,7 @@ pnpm lint && pnpm typecheck
 pnpm build
 node scripts/rls-test.mjs                  # 기대: 107/107
 node scripts/briefing-integration-test.mjs # 기대: 8/8
-node scripts/challenge-photo-test.mjs      # 기대: 4/4
+node scripts/challenge-photo-test.mjs      # 기대: 8/8
 ```
 
 - [ ] **Step 2: 프로덕션 배포**
@@ -629,7 +661,7 @@ pnpm dlx vercel deploy --prod --yes
 
 Expected: READY, https://gnd-one.vercel.app 접근 시 307→/home 200
 
-- [ ] **Step 3: PROGRESS.md 갱신 + 최종 커밋** — ⚠️ 섹션 "다음 작업"에 완료 반영(챌린지 사진 인증·레벨 완료, 다음 = 핵심 E2E → 3명 4주 실사용), 적용 마이그레이션 0001~**0014**, 검증 기준선(unit 166 · RLS 107 · briefing 8/8 · challenge-photo 4/4), 산출물 목록에 기능 2종 추가. 폰 확인 대기 항목: ① 새 챌린지 생성 시 📷 안내·배지 ② active 히어로 내 레벨 뱃지 ③ 사진 없는 운동이 새 챌린지 집계에서 빠지는지.
+- [ ] **Step 3: PROGRESS.md 갱신 + 최종 커밋** — ⚠️ 섹션 "다음 작업"에 완료 반영(챌린지 사진 인증·레벨 완료, 다음 = 핵심 E2E → 3명 4주 실사용), 적용 마이그레이션 0001~**0014**, 검증 기준선(unit 166 · RLS 107 · briefing 8/8 · challenge-photo 8/8), 산출물 목록에 기능 2종 추가. 폰 확인 대기 항목: ① 새 챌린지 생성 시 📷 안내·배지 ② active 히어로 내 레벨 뱃지 ③ 사진 없는 운동이 새 챌린지 집계에서 빠지는지.
 
 ```bash
 git add PROGRESS.md
