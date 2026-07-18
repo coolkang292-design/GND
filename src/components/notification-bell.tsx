@@ -108,7 +108,16 @@ export function NotificationBell() {
                     key={n.id}
                     className="flex items-start gap-2.5 border-b border-line py-3 last:border-b-0"
                   >
-                    <span className="mt-0.5 text-lg">{TYPE_ICON[n.type]}</span>
+                    {n.type === "morning_briefing" ? (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img
+                        src="/icons/icon-192.png"
+                        alt="GND"
+                        className="mt-0.5 h-7 w-7 flex-none rounded-lg"
+                      />
+                    ) : (
+                      <span className="mt-0.5 text-lg">{TYPE_ICON[n.type]}</span>
+                    )}
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-bold">{n.title}</p>
                       {n.body && (
