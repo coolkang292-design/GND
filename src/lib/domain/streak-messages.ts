@@ -5,6 +5,9 @@
  */
 import type { StreakStage } from "./streak";
 
+// 손실회피 + 능청 유머: 잃을 숫자(n일)는 정확히 찌르되, 약올리듯 능청스럽게.
+// 단계마다 변형 여러 개 — 날짜 기반으로 하루마다 돌아가며 나온다(렌더 중 랜덤은
+// 하이드레이션 불일치·재렌더마다 문구 바뀜 문제가 있어 결정적 로테이션 사용).
 export const STAGE_MESSAGES: Partial<
   Record<StreakStage, ((streak: number) => string)[]>
 > = {
