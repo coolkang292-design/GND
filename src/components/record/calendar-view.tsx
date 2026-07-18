@@ -9,8 +9,14 @@ import {
   type Verification,
 } from "@/lib/domain/calendar";
 import { dayKey } from "@/lib/domain/time";
+import { formatWorkoutLog } from "@/lib/domain/workout-log";
 import { getMyProfile } from "@/lib/crew";
-import { getCompletedSessions, type CalendarSession } from "@/lib/workout";
+import { shareOrCopyText, shareResultToast } from "@/lib/share";
+import {
+  getCompletedSessions,
+  getSessionLogExercises,
+  type CalendarSession,
+} from "@/lib/workout";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -132,6 +138,49 @@ export function CalendarView({
       selectedDate ? sessionsOnDay(sessions, timeZone, selectedDate) : [],
     [selectedDate, sessions, timeZone],
   );
+
+  // 공유용 일지 텍스트 프리페치 — iOS는 navigator.share를 사용자 제스처 안에서
+  // 불러야 하므로, 시트가 열릴 때 미리 만들어 두고 클릭 시 즉시 공유한다.
+  const [dayLog, setDayLog] = useState<{ date: string; text: string } | null>(
+    null,
+  );
+  const [shareToast, setShareToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      if (!selectedDate || selectedSessions.length === 0) return;
+      try {
+        const lists = await Promise.all(
+          selectedSessions.map((s) => getSessionLogExercises(s.id)),
+        );
+        if (!cancelled) {
+          setDayLog({
+            date: selectedDate,
+            text: formatWorkoutLog(selectedDate, lists.flat()),
+          });
+        }
+      } catch {
+        // 조회 실패 시 버튼이 비활성으로 남는다 — 재시도는 시트 재오픈으로
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDate, selectedSessions]);
+
+  const readyLogText =
+    dayLog && dayLog.date === selectedDate ? dayLog.text : null;
+
+  async function handleShareDay() {
+    if (!readyLogText) return;
+    const msg = shareResultToast(await shareOrCopyText(readyLogText));
+    if (msg) {
+      setShareToast(msg);
+      setTimeout(() => setShareToast(null), 2500);
+    }
+  }
 
   function shiftMonth(delta: number) {
     setView((v) => {
@@ -344,12 +393,30 @@ export function CalendarView({
                 );
               })}
             </div>
+            {selectedSessions.length > 0 && (
+              <button
+                onClick={handleShareDay}
+                disabled={!readyLogText}
+                className="mt-3 h-11 w-full rounded-card bg-accent text-sm font-extrabold text-accent-ink disabled:opacity-60"
+              >
+                📤 AI 코치에게 공유
+              </button>
+            )}
             {onCopySession && (
               <p className="mt-2.5 text-left text-[11px] text-muted">
-                📋 복사하면 그날의 종목·세트 구조를 오늘 운동으로 불러와요.
+                📋 복사하면 그날의 종목·세트 구조를 오늘 운동으로 불러와요. 📤
+                공유는 세트별 기록을 텍스트로 내보내요.
               </p>
             )}
           </div>
+          {shareToast && (
+            <div
+              className="fixed inset-x-8 z-[60] rounded-card border border-line bg-surface px-4 py-3 text-center text-sm font-bold shadow-card"
+              style={{ bottom: "calc(env(safe-area-inset-bottom) + 130px)" }}
+            >
+              {shareToast}
+            </div>
+          )}
         </>
       )}
     </div>

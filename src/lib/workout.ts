@@ -1,6 +1,7 @@
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { CompletedSession } from "@/lib/domain/calendar";
 import type { VolumeSet } from "@/lib/domain/volume";
+import type { LogExercise } from "@/lib/domain/workout-log";
 import type {
   BodyPart,
   CatalogExercise,
@@ -465,6 +466,45 @@ export async function getSessionExerciseStructure(sessionId: string): Promise<
       sets: sets.length > 0 ? sets : defaultSets(row.exercise_type, row.measure),
     };
   });
+}
+
+/**
+ * 공유용 운동 일지 데이터 — 종목+세트를 완료 여부(is_completed) 그대로 조회.
+ * (getSessionExerciseStructure는 '지난 운동 복사'용이라 done을 초기화함 — 용도 분리)
+ */
+export async function getSessionLogExercises(
+  sessionId: string,
+): Promise<LogExercise[]> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("workout_exercises")
+    .select("exercise_name, exercise_type, measure, sort_order, workout_sets(*)")
+    .eq("session_id", sessionId)
+    .order("sort_order", { ascending: true });
+  if (error) throw error;
+
+  type Row = {
+    exercise_name: string;
+    exercise_type: ExerciseType;
+    measure: "reps" | "time" | null;
+    sort_order: number;
+    workout_sets: WorkoutSet[] | null;
+  };
+
+  return ((data ?? []) as Row[]).map((row) => ({
+    name: row.exercise_name,
+    exerciseType: row.exercise_type,
+    measure: row.measure,
+    sets: [...(row.workout_sets ?? [])]
+      .sort((a, b) => a.set_number - b.set_number)
+      .map((s) => ({
+        weightKg: Number(s.weight_kg ?? 0),
+        reps: s.reps ?? 0,
+        distanceKm: Number(s.distance_meters ?? 0) / 1000,
+        durationMin: Math.round((s.duration_seconds ?? 0) / 60),
+        done: s.is_completed,
+      })),
+  }));
 }
 
 // ── 달력용 완료 세션 (§12 계산된 스탬프의 원천 데이터) ──────────────

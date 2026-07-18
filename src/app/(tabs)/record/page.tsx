@@ -8,6 +8,9 @@ import { ExercisePicker } from "@/components/record/exercise-picker";
 import { RestBar } from "@/components/record/rest-bar";
 import { VerificationPhoto } from "@/components/record/verification-photo";
 import { summarizeVolume, type VolumeSummary } from "@/lib/domain/volume";
+import { formatWorkoutLog } from "@/lib/domain/workout-log";
+import { dayKey } from "@/lib/domain/time";
+import { shareOrCopyText, shareResultToast } from "@/lib/share";
 import { getMyGroups } from "@/lib/crew";
 import type { BodyPart, CatalogExercise, ExerciseType } from "@/lib/types";
 import {
@@ -64,6 +67,7 @@ type CompletedResult = {
   completedAtMs: number;
   durationMinutes: number;
   summary: VolumeSummary;
+  logText: string; // 완료 시점에 미리 생성 — draft가 비워진 뒤에도 공유 가능
 };
 
 function errorMessage(e: unknown): string {
@@ -375,13 +379,21 @@ function WorkoutScreen({ userId }: { userId: string }) {
     try {
       await saveSessionExercises(draft.sessionId, draft.exercises);
       const s = await completeWorkout(draft.sessionId);
+      const completedAtMs = s.completed_at
+        ? new Date(s.completed_at).getTime()
+        : Date.now();
       setResult({
         sessionId: s.id,
-        completedAtMs: s.completed_at
-          ? new Date(s.completed_at).getTime()
-          : Date.now(),
+        completedAtMs,
         durationMinutes: s.duration_minutes ?? 0,
         summary: summarizeVolume(toVolumeSets(draft.exercises)),
+        logText: formatWorkoutLog(
+          dayKey(
+            new Date(completedAtMs),
+            Intl.DateTimeFormat().resolvedOptions().timeZone,
+          ),
+          draft.exercises,
+        ),
       });
       clearDraft(userId);
       setDraft(emptyDraft(draft.restSeconds));
@@ -451,6 +463,15 @@ function WorkoutScreen({ userId }: { userId: string }) {
           &lsquo;달력&rsquo; 탭에서 오늘 스탬프를 확인할 수 있어요. 카메라
           인증은 🔥, 업로드는 ●로 찍혀요.
         </p>
+        <button
+          onClick={async () => {
+            const msg = shareResultToast(await shareOrCopyText(result.logText));
+            if (msg) showToast(msg);
+          }}
+          className="h-12 rounded-card border border-line bg-surface-2 text-sm font-bold"
+        >
+          📤 AI 코치에게 공유
+        </button>
         <button
           onClick={() => setResult(null)}
           className="h-12 rounded-card bg-accent text-sm font-extrabold text-accent-ink"
