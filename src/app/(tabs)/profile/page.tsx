@@ -27,6 +27,10 @@ export default function ProfilePage() {
     DEFAULT_NOTIFICATION_SETTINGS,
   );
   const [ready, setReady] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [pending, setPending] = useState<Set<keyof NotificationSettings>>(
+    () => new Set(),
+  );
 
   useEffect(() => {
     if (!configured || loading || !userId) return;
@@ -35,7 +39,9 @@ export default function ProfilePage() {
       .then((s) => {
         if (!cancelled) setSettings(s);
       })
-      .catch(() => {})
+      .catch(() => {
+        if (!cancelled) setLoadError(true);
+      })
       .finally(() => {
         if (!cancelled) setReady(true);
       });
@@ -45,13 +51,20 @@ export default function ProfilePage() {
   }, [configured, loading, userId]);
 
   async function toggle(key: keyof NotificationSettings) {
-    if (!userId) return;
+    if (!userId || pending.has(key)) return;
+    setPending((p) => new Set(p).add(key));
     const next = !settings[key];
     setSettings((s) => ({ ...s, [key]: next })); // 낙관적 갱신
     try {
       await updateNotificationSettings(userId, { [key]: next });
     } catch {
       setSettings((s) => ({ ...s, [key]: !next })); // 실패 롤백
+    } finally {
+      setPending((p) => {
+        const n = new Set(p);
+        n.delete(key);
+        return n;
+      });
     }
   }
 
@@ -61,6 +74,12 @@ export default function ProfilePage() {
         <h1 className="text-[19px] font-extrabold tracking-tight">내 정보</h1>
         <p className="mt-0.5 text-[12.5px] text-muted">알림 설정</p>
       </header>
+
+      {loadError && (
+        <p className="rounded-card-sm border border-line bg-surface px-3 py-2.5 text-xs text-muted">
+          설정을 불러오지 못했어요. 새로고침 후 다시 시도해주세요.
+        </p>
+      )}
 
       <section className="rounded-card border border-line bg-surface shadow-card">
         {TOGGLES.map((t, i) => (
@@ -78,7 +97,7 @@ export default function ProfilePage() {
               role="switch"
               aria-checked={settings[t.key]}
               aria-label={`${t.label} 알림`}
-              disabled={!ready}
+              disabled={!ready || loadError || pending.has(t.key)}
               onClick={() => void toggle(t.key)}
               className={`relative h-6 w-11 flex-none rounded-full transition-colors disabled:opacity-50 ${
                 settings[t.key] ? "bg-accent" : "border border-line bg-surface-2"
