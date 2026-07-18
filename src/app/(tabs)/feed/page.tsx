@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { ActiveWorkoutCards } from "@/components/feed/active-workout-cards";
 import { FeedItemCard } from "@/components/feed/feed-item";
@@ -23,6 +23,11 @@ export default function FeedPage() {
   const [ready, setReady] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [photoOnly, setPhotoOnly] = useState(false);
+  // loadMore 진행 중 필터가 바뀌면 이전 필터의 페이지가 섞이지 않도록 세대 가드
+  const photoOnlyRef = useRef(photoOnly);
+  useEffect(() => {
+    photoOnlyRef.current = photoOnly;
+  }, [photoOnly]);
 
   useEffect(() => {
     if (!configured || loading || !userId) return;
@@ -74,8 +79,10 @@ export default function FeedPage() {
     if (!group || !userId || items.length === 0) return;
     setLoadingMore(true);
     try {
+      const requested = photoOnly;
       const before = items[items.length - 1].completedAt.toISOString();
-      const page = await getGroupFeed(group.id, userId, before, photoOnly);
+      const page = await getGroupFeed(group.id, userId, before, requested);
+      if (photoOnlyRef.current !== requested) return; // 필터가 바뀐 요청 결과는 버림
       setItems((prev) => [...prev, ...page]);
       setHasMore(page.length === FEED_PAGE_SIZE);
     } finally {
@@ -106,6 +113,8 @@ export default function FeedPage() {
         ).map(([v, label]) => (
           <button
             key={label}
+            type="button"
+            aria-pressed={photoOnly === v}
             onClick={() => setPhotoOnly(v)}
             className={`h-8 rounded-full border px-3.5 text-xs font-bold ${
               photoOnly === v
