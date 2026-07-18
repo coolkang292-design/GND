@@ -12,12 +12,19 @@
 
 **Phase 7 범위(계획서 §18)**: 아침 09:00 브리핑 크론 · notification_settings UI · ~~블랙&골드 브랜딩 적용~~✅ · 핵심 E2E · Vercel 배포 · 3명 4주 실사용. (5일 소멸 스트릭 표시는 홈 경고 배너로 선반영됨. 브리핑 크론은 배포 환경 필요 → Vercel 배포와 순서 조율. Vercel·GitHub 계정 준비 여부 = 사용자 "모름/확인 필요" — 배포 착수 시 확인)
 
-**블랙&골드 브랜딩 적용 완료 (2026-07-18, `94b355f`·`d1526bc`) — 폰 육안 확인 대기:**
+**블랙&골드 브랜딩 적용 완료 (2026-07-18, `94b355f`·`d1526bc`) — 폰 확인 통과 ✅:**
 - 스펙: `docs/superpowers/specs/2026-07-18-black-gold-branding-design.md`. 시안 원본: `Desktop\Workout app\GND 앱 아이콘 디자인 소개.png`.
 - 테마: 라이트/다크 분기 제거 → 항상 블랙&골드 단일 `:root`(`--bg #0B0B0C`·`--accent #E8B84B`·경고색 앰버→주황 `#FB8A3C` — 골드와 구분). 완료 초록 유지.
-- 아이콘: 시안 대형 패널 크롭(sharp) → `public/icons/` 192/512/maskable + `src/app/apple-icon.png`(180). manifest 색·태그라인, iOS 상태바 black-translucent, 온보딩 골드 로고타입.
-- **폰 확인 항목**: ① 전 탭 가독성(골드 버튼·경고 배너 구분) ② 홈 화면 추가 시 새 아이콘(기존 설치 PWA는 삭제 후 재설치해야 아이콘 갱신) ③ 온보딩 로고타입(새 계정 또는 시크릿 창).
-- 검증: unit 115 · lint · typecheck 통과. build는 폰 확인 후 dev 서버 내리고 실행 예정.
+- 아이콘: 시안 대형 패널 크롭(sharp) → `public/icons/` 192/512/maskable + `src/app/apple-icon.png`(180). manifest 색·태그라인, iOS 상태바 black-translucent, 온보딩 골드 로고타입. (기존 설치 PWA는 삭제 후 재설치해야 아이콘 갱신)
+- 검증: unit 115 · lint · typecheck · build 통과, 사용자 폰 확인 완료(2026-07-18).
+
+**운동 일지 텍스트 공유 완료 (2026-07-18, `cbe7c5e` 스펙·`411797b` 코드) — 폰 확인 대기:**
+- 그날 운동 기록을 사용자 예시 형식(`YYYY-MM-DD 운동 일지` + `n세트: 35kg 12회`)의 텍스트로 만들어 AI 코치에게 붙여넣는 기능.
+- `lib/domain/workout-log.ts` `formatWorkoutLog` TDD 10케이스: 완료 세트만·필터 후 재번호·웨이트/맨몸(reps·time)/유산소 줄 형식·소수 중량 유지·빈 종목 생략.
+- `lib/share.ts` `shareOrCopyText`: navigator.share(취소는 조용히)→클립보드→execCommand 폴백(http+IP 비보안 컨텍스트, 교훈 5).
+- 버튼 2곳: ① 달력 날짜 상세 시트 "📤 AI 코치에게 공유" — 시트 열릴 때 일지 프리페치(iOS는 share를 사용자 제스처 안에서 불러야 함), 그날 모든 세션 합침. ② 운동 완료 화면 — draft 지우기 전 logText를 result에 보관.
+- `getSessionLogExercises`: is_completed→done 그대로 매핑(복사용 `getSessionExerciseStructure`는 done 초기화라 용도 분리).
+- 검증: unit **125**(+10) · lint · typecheck · build 통과. **폰 확인**: 달력에서 지난 운동 날짜 탭 → 공유 버튼 → 공유 시트/복사 확인(비보안 컨텍스트는 복사 폴백 동작).
 
 ### 다음 세션 시작 체크리스트
 
