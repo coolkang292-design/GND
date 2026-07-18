@@ -10,6 +10,13 @@ import {
 
 const STATS: PeriodStats = {
   workoutDays: 5,
+  workoutDayKeys: [
+    "2026-07-01",
+    "2026-07-02",
+    "2026-07-03",
+    "2026-07-04",
+    "2026-07-05",
+  ],
   weightReps: 240,
   volumeKg: 3000,
   cardioDistanceKm: 12,
@@ -111,5 +118,33 @@ describe("foldPeriodStats", () => {
   it("기간 밖(tz 기준) 세션은 제외", () => {
     const m = foldPeriodStats(rows, "2026-07-02", "2026-07-31", "Asia/Seoul");
     expect(m.get("u1")).toBeUndefined();
+  });
+});
+
+describe("foldPeriodStats - workoutDayKeys (레벨 재료)", () => {
+  const row = (userId: string, completedAt: string): PeriodSessionRow => ({
+    userId,
+    completedAt,
+    exercises: [],
+  });
+
+  it("기간 내 운동일을 오름차순 dayKey 배열로 노출한다 (중복 세션은 1일)", () => {
+    const stats = foldPeriodStats(
+      [
+        row("u1", "2026-07-03T10:00:00+09:00"),
+        row("u1", "2026-07-01T09:00:00+09:00"),
+        row("u1", "2026-07-01T20:00:00+09:00"),
+        row("u1", "2026-06-30T10:00:00+09:00"),
+      ],
+      "2026-07-01",
+      "2026-07-28",
+      "Asia/Seoul",
+    );
+
+    expect(stats.get("u1")!.workoutDayKeys).toEqual([
+      "2026-07-01",
+      "2026-07-03",
+    ]);
+    expect(stats.get("u1")!.workoutDays).toBe(2);
   });
 });

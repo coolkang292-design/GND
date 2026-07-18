@@ -20,6 +20,7 @@ import {
 import { dayKey } from "@/lib/domain/time";
 import { getCrewProfiles, getMyGroups, getMyProfile } from "@/lib/crew";
 import {
+  EMPTY_STATS,
   GOAL_TYPE_META,
   actualForGoal,
   goalLabel,
@@ -36,18 +37,6 @@ import {
   type PeriodStats,
 } from "@/lib/challenge";
 import type { Challenge, Group, Profile, UserGoal } from "@/lib/types";
-
-const EMPTY_STATS: PeriodStats = {
-  workoutDays: 0,
-  weightReps: 0,
-  volumeKg: 0,
-  cardioDistanceKm: 0,
-  cardioTimeMin: 0,
-  bodyweightReps: 0,
-  bodyweightTimeMin: 0,
-  weightPartsByDay: {},
-  bodyweightKindsByDay: {},
-};
 
 function periodDays(startDate: string, endDate: string): number {
   const toUtc = (d: string) => {

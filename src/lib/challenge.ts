@@ -193,6 +193,8 @@ export async function finalizeChallenge(
 
 export type PeriodStats = {
   workoutDays: number; // 아무 운동이든 한 날 수 (참여율용)
+  /** 기간 내 운동일 dayKey 오름차순 - 챌린지 레벨 계산 재료 */
+  workoutDayKeys: string[];
   weightReps: number;
   volumeKg: number; // 레거시 표시용
   cardioDistanceKm: number;
@@ -205,8 +207,9 @@ export type PeriodStats = {
   bodyweightKindsByDay: Record<string, number>;
 };
 
-const EMPTY_STATS: PeriodStats = {
+export const EMPTY_STATS: PeriodStats = {
   workoutDays: 0,
+  workoutDayKeys: [],
   weightReps: 0,
   volumeKg: 0,
   cardioDistanceKm: 0,
@@ -301,6 +304,7 @@ export function foldPeriodStats(
     for (const [day, kinds] of e.bodyweightKinds) bodyweightKindsByDay[day] = kinds.size;
     result.set(userId, {
       workoutDays: e.days.size,
+      workoutDayKeys: [...e.days].sort(),
       weightReps: e.weightReps,
       volumeKg: e.volumeKg,
       cardioDistanceKm: e.cardioDistanceKm,
