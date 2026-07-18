@@ -10,6 +10,7 @@ export function ExerciseCard({
   index,
   active,
   loadingLast,
+  loadLastDisabled,
   onLoadLast,
   onUpdateSet,
   onToggleDone,
@@ -21,6 +22,7 @@ export function ExerciseCard({
   index: number;
   active: boolean;
   loadingLast: boolean;
+  loadLastDisabled: boolean;
   onLoadLast: () => void;
   onUpdateSet: (setIndex: number, patch: Partial<LocalSet>) => void;
   onToggleDone: (setIndex: number) => void;
@@ -103,7 +105,7 @@ export function ExerciseCard({
         <button
           type="button"
           onClick={onLoadLast}
-          disabled={active || loadingLast}
+          disabled={active || loadLastDisabled}
           aria-label={`${exercise.name} 직전 기록 불러오기`}
           className="h-8 flex-none rounded-card-sm border border-line bg-surface-2 px-2.5 text-xs font-bold text-accent disabled:cursor-not-allowed disabled:opacity-40"
         >

@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type SetStateAction,
+} from "react";
 import { useAuth } from "@/components/auth-provider";
 import { CalendarView } from "@/components/record/calendar-view";
 import { ExerciseCard } from "@/components/record/exercise-card";
@@ -10,9 +16,9 @@ import { VerificationPhoto } from "@/components/record/verification-photo";
 import { summarizeVolume, type VolumeSummary } from "@/lib/domain/volume";
 import { formatWorkoutLog } from "@/lib/domain/workout-log";
 import {
+  applyLastRecordedSetsToExercises,
   buildEffortMessage,
   mergeImportedExercises,
-  replaceWithLastRecordedSets,
 } from "@/lib/domain/workout-import";
 import {
   toDraftExercises,
@@ -52,6 +58,7 @@ import {
   type CalendarSession,
   type LocalExercise,
   type LocalSet,
+  type WorkoutDraft,
 } from "@/lib/workout";
 
 export default function RecordPage() {
@@ -97,7 +104,14 @@ function errorMessage(e: unknown): string {
 
 function WorkoutScreen({ userId }: { userId: string }) {
   // 임시저장 복구: 렌더 전 lazy 초기화 (§10 새로고침 복구)
-  const [draft, setDraft] = useState(() => loadDraft(userId));
+  const [draft, setDraftState] = useState(() => loadDraft(userId));
+  const draftRef = useRef(draft);
+  const setDraft = useCallback((action: SetStateAction<WorkoutDraft>) => {
+    const nextDraft =
+      typeof action === "function" ? action(draftRef.current) : action;
+    draftRef.current = nextDraft;
+    setDraftState(nextDraft);
+  }, []);
   const [subTab, setSubTab] = useState<"workout" | "calendar">("workout");
   const [catalog, setCatalog] = useState<CatalogExercise[]>([]);
   const [groupId, setGroupId] = useState<string | null>(null);
@@ -178,7 +192,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [userId, showToast]);
+  }, [userId, showToast, setDraft]);
 
   // 경과 시간 틱
   useEffect(() => {
@@ -208,7 +222,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
         exercises: d.exercises.map((ex) => (ex.key === key ? updater(ex) : ex)),
       }));
     },
-    [],
+    [setDraft],
   );
 
   /** 선택한 운동 여러 개를 한 번에 추가 (다중 선택 피커) */
@@ -243,17 +257,22 @@ function WorkoutScreen({ userId }: { userId: string }) {
         return;
       }
 
-      const loaded = replaceWithLastRecordedSets(exercise, recordedSets);
-      setDraft((current) => ({
+      const current = draftRef.current;
+      const applied = applyLastRecordedSetsToExercises({
+        active: current.sessionId !== null && current.startedAtMs !== null,
+        exercises: current.exercises,
+        targetKey: exercise.key,
+        recordedSets,
+      });
+      if (!applied.loaded) return;
+
+      const nextDraft = {
         ...current,
-        exercises: current.exercises.map((currentExercise) =>
-          currentExercise.key === exercise.key
-            ? { ...currentExercise, sets: loaded.sets }
-            : currentExercise,
-        ),
-        effortMessage: buildEffortMessage([loaded]),
-      }));
-      showToast(`${exercise.name} 직전 기록을 불러왔어요`);
+        exercises: applied.exercises,
+        effortMessage: buildEffortMessage([applied.loaded]),
+      };
+      setDraft(nextDraft);
+      showToast(`${applied.loaded.name} 직전 기록을 불러왔어요`);
     } catch (error) {
       showToast(errorMessage(error));
     } finally {
@@ -453,6 +472,10 @@ function WorkoutScreen({ userId }: { userId: string }) {
   }
 
   async function handleStart() {
+    if (loadingExerciseKey !== null) {
+      showToast("직전 기록을 불러오는 중이에요. 잠시만 기다려 주세요");
+      return;
+    }
     if (draft.exercises.length === 0) {
       showToast("운동을 먼저 추가하세요");
       return;
@@ -776,6 +799,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
           index={i}
           active={active}
           loadingLast={loadingExerciseKey === ex.key}
+          loadLastDisabled={loadingExerciseKey !== null}
           onLoadLast={() => void loadLastExercise(ex)}
           onUpdateSet={(si, patch) => updateSet(ex.key, si, patch)}
           onToggleDone={(si) => toggleDone(ex.key, si)}
@@ -794,7 +818,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
         </button>
         <button
           onClick={active ? handleFinish : handleStart}
-          disabled={busy}
+          disabled={busy || loadingExerciseKey !== null}
           className={`h-12 flex-1 rounded-card text-sm font-extrabold disabled:opacity-60 ${
             active ? "bg-good text-white" : "bg-accent text-accent-ink"
           }`}

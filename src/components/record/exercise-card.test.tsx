@@ -25,9 +25,11 @@ const exercise: LocalExercise = {
 function renderCard({
   active = false,
   loadingLast = false,
+  loadLastDisabled = false,
 }: {
   active?: boolean;
   loadingLast?: boolean;
+  loadLastDisabled?: boolean;
 } = {}) {
   return renderToStaticMarkup(
     <ExerciseCard
@@ -35,6 +37,7 @@ function renderCard({
       index={0}
       active={active}
       loadingLast={loadingLast}
+      loadLastDisabled={loadLastDisabled}
       onLoadLast={vi.fn()}
       onUpdateSet={vi.fn()}
       onToggleDone={vi.fn()}
@@ -69,9 +72,17 @@ describe("ExerciseCard 직전 기록 불러오기", () => {
   });
 
   it("직전 기록을 조회하는 동안 문구를 바꾸고 버튼을 비활성화한다", () => {
-    const html = renderCard({ loadingLast: true });
+    const html = renderCard({ loadingLast: true, loadLastDisabled: true });
 
     expect(html).toContain("불러오는 중…");
+    expect(loadLastButton(html)).toContain('disabled=""');
+  });
+
+  it("다른 종목의 직전 기록을 조회하는 동안에도 버튼을 비활성화한다", () => {
+    const html = renderCard({ loadLastDisabled: true });
+
+    expect(html).toContain("↻ 불러오기");
+    expect(html).not.toContain("불러오는 중…");
     expect(loadLastButton(html)).toContain('disabled=""');
   });
 });

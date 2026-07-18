@@ -16,6 +16,31 @@ export function replaceWithLastRecordedSets(
   };
 }
 
+export function applyLastRecordedSetsToExercises({
+  active,
+  exercises,
+  targetKey,
+  recordedSets,
+}: {
+  active: boolean;
+  exercises: LocalExercise[];
+  targetKey: string;
+  recordedSets: LocalSet[];
+}): { exercises: LocalExercise[]; loaded: LocalExercise | null } {
+  if (active) return { exercises, loaded: null };
+
+  const target = exercises.find((exercise) => exercise.key === targetKey);
+  if (!target) return { exercises, loaded: null };
+
+  const loaded = replaceWithLastRecordedSets(target, recordedSets);
+  return {
+    exercises: exercises.map((exercise) =>
+      exercise.key === targetKey ? loaded : exercise,
+    ),
+    loaded,
+  };
+}
+
 function normalizedName(name: string): string {
   return name.trim().toLocaleLowerCase("ko-KR");
 }

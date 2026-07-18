@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { LocalExercise } from "@/lib/workout";
 import {
+  applyLastRecordedSetsToExercises,
   buildEffortMessage,
   mergeImportedExercises,
   replaceWithLastRecordedSets,
@@ -64,6 +65,64 @@ describe("replaceWithLastRecordedSets", () => {
       ],
     });
     expect(recordedSets.every((set) => set.done)).toBe(true);
+  });
+});
+
+describe("applyLastRecordedSetsToExercises", () => {
+  const recordedSets = [
+    { key: "recorded", weightKg: 70, reps: 5, distanceKm: 0, durationMin: 0, done: true },
+  ];
+
+  it("운동이 시작됐으면 응답을 적용하지 않는다", () => {
+    const exercises = [exercise({ key: "bench", name: "벤치 프레스", exerciseType: "weight" })];
+
+    const result = applyLastRecordedSetsToExercises({
+      active: true,
+      exercises,
+      targetKey: "bench",
+      recordedSets,
+    });
+
+    expect(result).toEqual({ exercises, loaded: null });
+  });
+
+  it("응답 전에 대상 카드가 삭제됐으면 적용하지 않는다", () => {
+    const exercises = [exercise({ key: "squat", name: "스쿼트", exerciseType: "weight" })];
+
+    const result = applyLastRecordedSetsToExercises({
+      active: false,
+      exercises,
+      targetKey: "bench",
+      recordedSets,
+    });
+
+    expect(result).toEqual({ exercises, loaded: null });
+  });
+
+  it("최신 대상 카드에 세트를 교체하고 다른 카드는 그대로 보존한다", () => {
+    const latestTarget = exercise({
+      key: "bench",
+      name: "수정된 벤치 프레스",
+      exerciseType: "weight",
+      sets: [
+        { key: "edited", weightKg: 55, reps: 9, distanceKm: 0, durationMin: 0, done: false },
+      ],
+    });
+    const other = exercise({ key: "squat", name: "스쿼트", exerciseType: "weight" });
+
+    const result = applyLastRecordedSetsToExercises({
+      active: false,
+      exercises: [latestTarget, other],
+      targetKey: "bench",
+      recordedSets,
+    });
+
+    expect(result.loaded).toEqual({
+      ...latestTarget,
+      sets: [{ ...recordedSets[0], done: false }],
+    });
+    expect(result.exercises).toEqual([result.loaded, other]);
+    expect(result.exercises[1]).toBe(other);
   });
 });
 
