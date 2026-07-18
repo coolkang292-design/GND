@@ -3,33 +3,32 @@
 > 새 세션은 이 파일 + `C:\Users\SAMSUNG\Desktop\Workout app\IMPLEMENTATION_PLAN.md`(단일 진실)만 읽으면 바로 이어서 작업할 수 있다.
 > 시각 스펙: 같은 폴더의 `운동앱-목업.html`.
 
-## ⚠️ 다음 작업 = 아침 브리핑 크론 (Phase 7 진행 중) — 2026-07-18 마감
+## ⚠️ 다음 작업 = 핵심 E2E → 3명 4주 실사용 (Phase 7 진행 중)
 
-**앱이 프로덕션에 떠 있다: https://gnd-one.vercel.app** — 실사용 시작 가능 상태. 오늘 완료: ①꾸준왕·홈 위젯 실기기 7항목 통과 확정(+사진 스탬프 누락 수정 `c9c92f4`) ②블랙&골드 브랜딩 적용(`d1526bc`, 폰 확인 통과) ③운동 일지 텍스트 공유(`411797b`, 폰 확인 통과) ④Vercel 프로덕션 배포 + 익명인증 BOM 에러 수정 ⑤피드 날짜별 히스토리(`9e9eb56`). 상세는 아래 **"2026-07-18 산출물"**.
+**앱이 프로덕션에 떠 있다: https://gnd-one.vercel.app** — 실사용 시작 가능 상태. 2026-07-18 후반 완료: ①아침 브리핑 크론(0013 + `/api/briefing`, Vercel 크론 등록·프로덕션 dedupe 검증 완료) ②프로필 알림 설정 토글 5종 ③피드 사진 인증 모아보기 필터 → 전체 검증 후 **프로덕션 재배포 완료**. 상세는 아래 **"2026-07-18 후반 산출물"**. (오전분: 브랜딩·일지 공유·배포·피드 히스토리 — "2026-07-18 산출물" 참조.)
 
-**마지막 폰 확인 대기 (배포 주소 https://gnd-one.vercel.app 기준 3항목):**
-① 익명 인증 에러 없이 홈 진입 ② 온보딩→크루 만들기→운동→사진 인증 한 사이클 ③ 피드 날짜 헤더(오늘/어제/M월 D일). 통과하면 크루원에게 주소 공유 시작.
+**폰 확인 대기 (배포 주소 https://gnd-one.vercel.app 기준):**
+① 프로필 탭 알림 토글 5종 저장·반영 ② 피드 "사진 인증" 필터 칩 ③ 내일 아침 9시대 알림함 브리핑 카드(불독 아이콘) 도착. (이전 3항목 — 익명 인증 홈 진입·온보딩→운동→사진 인증 사이클·피드 날짜 헤더 — 미확인이면 함께 볼 것.)
 
 **Vercel 운영 정보 (중요 — 이 섹션만 보면 배포 운영 가능):**
 - 프로덕션: **https://gnd-one.vercel.app** (별칭 gnd-gnd4.vercel.app 동일). 계정 coolkang292@gmail.com · 팀 `gnd4`(Hobby) · 프로젝트 `gnd`. CLI 로그인 완료 상태(device 인증).
 - **재배포 = `pnpm dlx vercel deploy --prod --yes` 한 줄.** GitHub 미사용 — git은 여전히 로컬 전용.
-- **env 등록은 반드시 Bash로**: `printf '%s' "$VAL" | pnpm dlx vercel env add NAME production` (누적 교훈 9 — PowerShell 파이프는 BOM이 섞여 익명 인증이 통째로 깨졌음). 현재 `NEXT_PUBLIC_SUPABASE_URL`·`NEXT_PUBLIC_SUPABASE_ANON_KEY` Production 등록 완료. CLI가 `.env.local`에 `VERCEL_OIDC_TOKEN` 한 줄 추가함(무해).
+- **env 등록은 반드시 Bash로**: `printf '%s' "$VAL" | pnpm dlx vercel env add NAME production` (누적 교훈 9 — PowerShell 파이프는 BOM이 섞여 익명 인증이 통째로 깨졌음). 현재 `NEXT_PUBLIC_SUPABASE_URL`·`NEXT_PUBLIC_SUPABASE_ANON_KEY`·`CRON_SECRET`·`SUPABASE_SERVICE_ROLE_KEY` Production 등록 완료. CLI가 `.env.local`에 `VERCEL_OIDC_TOKEN` 한 줄 추가함(무해).
 - **배포 도메인 = 새 오리진**: 로컬(localhost/IP)에서 쓰던 익명 계정·크루는 이어지지 않음(정상). 실사용 데이터는 배포 주소에서 새로 시작. https라 공유 시트·crypto 완전 동작.
 
-**아침 브리핑 크론 착수 메모 (다음 세션 첫 작업, 계획서 §18):**
-- 구조: `vercel.json`의 `crons` + `src/app/api/briefing/route.ts`(GET, `CRON_SECRET` Bearer 검증).
-- **service_role 키 필요** — 현재 없음. Supabase 대시보드(프로젝트 cjdskubyxlnojwzhwbfx) → Settings → API에서 확보, Vercel env에만 등록(클라 노출·커밋 금지).
-- **Hobby 플랜 크론 제약** (공식 문서 2026-06 확인·정정): 프로젝트당 **100개**까지 등록 가능. 실제 제약은 각 크론 **하루 1회 이하**(더 잦은 표현식은 배포 실패) + 실행 시각 **최대 59분 오차**(9시 지정 → 09:00~09:59). "아침 09:00" 정시성은 느슨함을 감안해 설계(웹푸시 없이는 인앱 알림함에 쌓이는 방식임도 유의, 계획서 §18 웹푸시 메모 참조).
-- notification_settings UI(알림 끄기 설정)와 같은 스펙으로 묶어 설계 권장. 이후: 핵심 E2E → 3명 4주 실사용.
+**브리핑 크론 운영 메모 (구현 완료 — 운영 참고):**
+- 구조: `vercel.json` crons `/api/briefing?hour=9`·스케줄 `0 0 * * *`(UTC 0시 = KST 09시) + `src/app/api/briefing/route.ts`(GET, `CRON_SECRET` Bearer 검증·hour 파라미터 검증). `CRON_SECRET`·`SUPABASE_SERVICE_ROLE_KEY`는 Vercel env + `.env.local`에 등록돼 있음(NEXT_PUBLIC_ 아님 — 클라 노출·커밋 금지).
+- **Hobby 플랜 크론 제약** (공식 문서 2026-06 확인): 각 크론 **하루 1회 이하** + 실행 시각 **최대 59분 오차**(9시 지정 → 09:00~09:59). 웹푸시 없이 인앱 알림함에 쌓이는 방식(계획서 §18 웹푸시 메모 참조).
+- 수동 발송 테스트: Bash에서 `SECRET=$(grep '^CRON_SECRET=' .env.local | cut -d= -f2)` 후 `curl -H "Authorization: Bearer $SECRET" "https://gnd-one.vercel.app/api/briefing?hour=9"`. dedupe_key(0013) 덕에 재호출은 `sent:0` — 하루 1건 멱등. 크론 등록 확인: `pnpm dlx vercel crons ls`.
 
 ### 다음 세션 시작 체크리스트
 
 1. 저장소 `C:\Users\SAMSUNG\workout-app`, 브랜치 `main`, 작업트리 클린(`.claude/`만 untracked — 커밋 금지). 되돌리기·리셋 불필요.
-2. **DB 0001~0012 전부 적용 완료 — SQL 파일 재실행 금지.** (0012 = view_record RPC, 2026-07-17 적용·RLS 107/107 확인)
+2. **DB 0001~0013 전부 적용 완료 — SQL 파일 재실행 금지.** (0013 = 브리핑 dedupe_key + finalize ranks 존중, 2026-07-18 적용·통합 스크립트 8/8 확인)
 3. dev 서버는 세션 종료와 함께 꺼졌을 수 있음 → `pnpm exec next dev -H 0.0.0.0`으로 시작 (폰: `http://192.168.219.104:3000` / Tailscale `http://100.85.240.15:3000`). build 돌릴 땐 dev 서버 먼저 종료(교훈 8 — 좀비면 `taskkill /PID <pid> /F`). 와이파이 IP는 DHCP라 변동 가능(.112→.104 전례) — 안 열리면 `ipconfig` 확인 후 `next.config.ts allowedDevOrigins` 갱신. 이제 순수 표시 확인은 배포 주소로도 가능.
-4. 검증 명령: `pnpm test`(**131**) · `pnpm lint` · `pnpm typecheck` · `pnpm build` · `node scripts/rls-test.mjs`(107, 응원 쿨다운 대기 포함 약 40초).
+4. 검증 명령: `pnpm test`(**150**) · `pnpm lint`(경고 1건 — `scripts/briefing-integration-test.mjs`, 무해) · `pnpm typecheck` · `pnpm build` · `node scripts/rls-test.mjs`(**107**, 응원 쿨다운 대기 포함 1~2분) · `node scripts/briefing-integration-test.mjs`(**8/8**, 실 DB).
 5. E2E·스모크 스크립트는 세션 scratchpad에 있어 소멸됨 — 재작성 시 흐름: 익명 세션 쿠키(`sb-<ref>-auth-token`, base64- 접두) 파싱 → REST로 프로필·크루·세션 픽스처 → puppeteer-core(스크래치패드에 npm install)로 UI·Realtime 단언. 아래 "Phase 6 산출물" 참고.
-6. **다음 작업 = 아침 브리핑 크론 + notification_settings UI** (위 착수 메모). 사용자에게 먼저 확인: 배포 주소 폰 확인 3항목 결과.
+6. **다음 작업 = 핵심 E2E → 3명 4주 실사용.** 사용자에게 먼저 확인: 위 "폰 확인 대기" 항목 결과(알림 토글·사진 필터·브리핑 카드 도착).
 
 ---
 
@@ -46,7 +45,16 @@
 | 4 완료 루프 | ✅ | 달력(`9e540ef`)·지난 운동 복사(`1f3281d`)·인증사진(`a1a6e1a`) — unit 63 + RLS 54/54 + E2E 2종 통과 |
 | 5 챌린지 | ✅ | goal-score TDD 20케이스·KPI 게이트·진행중 비공개·시상대(`ea6fb60`) — unit 83 + RLS 68/68 + E2E 통과 |
 | 6 소셜 | ✅ | 피드·반응·진행중 카드·Realtime 응원·찌르기·알림함 — unit 104 + RLS 102/102 + E2E 2인 14/14 + 실기기 7항목 통과 |
-| 7 안정화 | 🔶 진행 중 | 브랜딩 ✅·Vercel 배포 ✅·(추가: 일지 공유 ✅·피드 히스토리 ✅) — 남은 것: 브리핑 크론·알림설정 UI·핵심 E2E·3명 4주 실사용 |
+| 7 안정화 | 🔶 진행 중 | 브랜딩 ✅·Vercel 배포 ✅·일지 공유 ✅·피드 히스토리 ✅·브리핑 크론 ✅·알림설정 토글 ✅·피드 사진 필터 ✅ — 남은 것: 핵심 E2E·3명 4주 실사용 |
+
+### 2026-07-18 후반 산출물 (`cdb89c1`~`a9cd612` + 프로덕션 재배포)
+
+- **설계·계획**: `docs/superpowers/specs/2026-07-18-briefing-cron-notification-settings-design.md` · `docs/superpowers/plans/2026-07-18-briefing-cron-notification-settings.md` (9개 태스크, TDD·커밋 분리·0013 게이트).
+- **아침 브리핑 크론** (`ca37e98`~`f06c5f6`, 0013): `lib/domain/time.ts` `hourOfDay`(tz 기준 시각) + `lib/domain/briefing.ts` 발송 판정 TDD 16케이스(스펙 §3). 스트릭 카피는 `lib/domain/streak-messages.ts`로 공용 추출(`bbf407b`, streak-card와 브리핑이 재사용). **0013_briefing_dedupe_ranks_setting.sql**(적용 완료 ✅): notifications `dedupe_key` unique(하루 1건 멱등 upsert) + finalize_challenge가 ranks 알림 설정 존중. `src/app/api/briefing/route.ts`(GET, CRON_SECRET Bearer·hour 검증) + `src/lib/supabase/admin.ts`(service_role 클라, 서버 전용) + `vercel.json` crons. 알림함 브리핑 카드에 앱 아이콘 표시(`b82c3b4`).
+- **알림 설정 토글 5종** (`920ed06`·`6f54f09`): 프로필 탭 — morning_brief(아침 브리핑)·cheers(응원)·pokes(찌르기)·ranks(챌린지 순위)·record_views(성과 열람). `lib/notification-settings.ts`, **행 없음=전부 on** 기본(0011 관례), 부분 upsert 저장, 토글 in-flight 가드·로드 실패 표시(리뷰 반영).
+- **피드 사진 인증 모아보기 필터** (`8e52e91`·`a9cd612`): 피드 상단 칩 — `workout_images` inner join으로 사진 인증 세션만, 페이지네이션·날짜 헤더 유지, 필터 전환 중 스테일 페이지 가드·칩 `aria-pressed`(리뷰 반영).
+- **전체 검증 (이 세션 실측)**: unit **150** · lint(경고 1건 — briefing-integration-test.mjs, 무해) · typecheck · build · RLS **107/107** · 브리핑 통합 `scripts/briefing-integration-test.mjs` **8/8**(dedupe 멱등·finalize ranks on/off).
+- **프로덕션 재배포 + 크론 검증**: `pnpm dlx vercel deploy --prod --yes` → READY, https://gnd-one.vercel.app 200(`/`→`/home` 307은 정상 리다이렉트). 프로덕션 `/api/briefing?hour=9` 수동 호출 1차 `sent:2, errors:[]` → 2차 `sent:0, alreadySent:23`(dedupe 정상). skipped `no_history` 23건은 운동 기록 없는 테스트 잔여 익명 유저 — 정상. `pnpm dlx vercel crons ls`로 크론 등록 확인(`/api/briefing?hour=9` · `0 0 * * *`).
 
 ### 2026-07-18 산출물 (`c9c92f4`~`945890e`)
 
@@ -124,7 +132,7 @@
   - 2026-07-17 확인: 최초 `/home` 컴파일은 느린 파일시스템 경고와 함께 약 20초 걸렸지만 이후 Wi-Fi·Tailscale 주소 모두 HTTP 200(약 0.4초). 첫 접속만 기다릴 것.
 - 검증: `pnpm lint` · `pnpm typecheck` · `pnpm test` · `pnpm build`
 - Supabase: 프로젝트 `cjdskubyxlnojwzhwbfx`, 익명 인증 ON, 키는 `.env.local`(커밋 안 됨)
-- RLS 검증: `node scripts/rls-test.mjs` (68개 검사). 2026-07-17 픽스처 보정 후 현재 DB 기준 68/68 통과.
+- RLS 검증: `node scripts/rls-test.mjs` — 현재 107개 검사, 2026-07-18 기준 107/107 통과. 브리핑 통합: `node scripts/briefing-integration-test.mjs` — 8/8 통과.
 
 ## DB 마이그레이션 절차 (중요)
 
@@ -132,7 +140,7 @@ CLI/DB 비밀번호 없음 → **사용자가 SQL Editor에 수동 붙여넣기*
 `supabase/migrations/` 번호 순서대로. 새 마이그레이션 만들면 사용자에게 "파일 열기 → 전체 복사 → SQL Editor → Run"으로 안내.
 Storage 버킷도 SQL로 생성 가능했음(`insert into storage.buckets`, 0005) — Dashboard 수동 생성 불필요.
 
-**적용 현황 (2026-07-17):**
+**적용 현황 (2026-07-18):**
 - 0001~0006: 적용 완료 (재실행 금지)
 - 0007(body_part·qualifier): 적용 완료 확인 ✅ (2026-07-17, 검증 쿼리 세 컬럼 모두 true)
 - 0008(measure·카테고리 goal_type): 적용 완료 ✅
@@ -140,6 +148,7 @@ Storage 버킷도 SQL로 생성 가능했음(`insert into storage.buckets`, 0005
 - 0010(맨몸 루틴 6종 시드): 적용 완료 ✅ (2026-07-17, REST 조회로 6/6 확인)
 - 0011(소셜: events·reactions·cheers·notifications 등): 적용 완료 ✅ (2026-07-17 "Success" 확인)
 - 0012(꾸준왕 열람권 view_record RPC): 적용 완료 ✅ (2026-07-17, RLS 107/107로 확인)
+- 0013(브리핑 dedupe_key·finalize ranks 존중): 적용 완료 ✅ (2026-07-18, briefing-integration-test 8/8 + 프로덕션 크론 dedupe 검증으로 확인)
 - 컬럼 추가·시드 위주라 idempotent 안전장치(`on conflict`, `if not exists` 성격) 있는 편이나, 재실행 시 `alter table add column`은 중복 에러 → 각 파일 1회만.
 
 ## 코드 구조 요약
