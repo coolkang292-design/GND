@@ -138,10 +138,14 @@ describe("isSameDay — tz 기준 같은 달력 날짜인가", () => {
 
 describe("hourOfDay — instant가 tz에서 가리키는 시(0~23)", () => {
   test("UTC 00:30 = KST 09시", () => {
-    expect(hourOfDay(new Date("2026-07-18T00:30:00Z"), "Asia/Seoul")).toBe(9);
+    expect(hourOfDay(new Date("2026-07-18T00:30:00Z"), SEOUL)).toBe(9);
   });
 
   test("UTC 23:30 = KST 다음날 08시 (날짜 경계)", () => {
-    expect(hourOfDay(new Date("2026-07-17T23:30:00Z"), "Asia/Seoul")).toBe(8);
+    expect(hourOfDay(new Date("2026-07-17T23:30:00Z"), SEOUL)).toBe(8);
+  });
+
+  test("KST 자정 정각은 0시 (24 아님)", () => {
+    expect(hourOfDay(new Date("2026-07-15T15:00:00Z"), SEOUL)).toBe(0);
   });
 });
