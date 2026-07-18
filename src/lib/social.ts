@@ -1,7 +1,9 @@
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   activeSessionIds,
+  firstWorkoutImagePath,
   type SocialEvent,
+  type WorkoutImageRelation,
 } from "@/lib/domain/social";
 import { currentStreak, workoutDayKeys } from "@/lib/domain/streak";
 import { DEFAULT_TIMEZONE, dayKey, dayRange } from "@/lib/domain/time";
@@ -124,7 +126,7 @@ type FeedSessionRow = {
           | null;
       }[]
     | null;
-  workout_images: { image_path: string }[] | null;
+  workout_images: WorkoutImageRelation;
 };
 
 /**
@@ -290,7 +292,7 @@ async function signFirstImages(
 ): Promise<Map<string, string>> {
   const supabase = getSupabaseBrowserClient();
   const withImage = rows
-    .map((r) => ({ id: r.id, path: r.workout_images?.[0]?.image_path }))
+    .map((r) => ({ id: r.id, path: firstWorkoutImagePath(r.workout_images) }))
     .filter((r): r is { id: string; path: string } => !!r.path);
   if (withImage.length === 0) return new Map();
 

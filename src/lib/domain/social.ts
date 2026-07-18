@@ -8,6 +8,20 @@ export type SocialEvent = {
   created_at: string;
 };
 
+export type WorkoutImageRelation =
+  | { image_path: string }
+  | { image_path: string }[]
+  | null;
+
+export function firstWorkoutImagePath(
+  relation: WorkoutImageRelation,
+): string | null {
+  if (relation === null) return null;
+  return Array.isArray(relation)
+    ? relation[0]?.image_path ?? null
+    : relation.image_path;
+}
+
 /** 유령 세션 컷오프: 시작 후 6시간 지나면 진행 중으로 안 본다 */
 const ACTIVE_MAX_MS = 6 * 60 * 60 * 1000;
 

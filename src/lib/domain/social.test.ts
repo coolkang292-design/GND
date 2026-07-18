@@ -2,10 +2,33 @@ import { describe, expect, it } from "vitest";
 import {
   activeSessionIds,
   feedDateLabel,
+  firstWorkoutImagePath,
   groupByDay,
   unreadCount,
   type SocialEvent,
 } from "./social";
+
+describe("firstWorkoutImagePath", () => {
+  it("객체 관계에서 사진 경로를 반환한다", () => {
+    expect(firstWorkoutImagePath({ image_path: "photos/object.jpg" })).toBe(
+      "photos/object.jpg",
+    );
+  });
+
+  it("배열 관계에서 첫 사진 경로를 반환한다", () => {
+    expect(
+      firstWorkoutImagePath([
+        { image_path: "photos/first.jpg" },
+        { image_path: "photos/second.jpg" },
+      ]),
+    ).toBe("photos/first.jpg");
+  });
+
+  it("null 또는 빈 배열이면 null을 반환한다", () => {
+    expect(firstWorkoutImagePath(null)).toBeNull();
+    expect(firstWorkoutImagePath([])).toBeNull();
+  });
+});
 
 const ev = (
   sid: string,
