@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { ActiveWorkoutCards } from "@/components/feed/active-workout-cards";
 import { FeedItemCard } from "@/components/feed/feed-item";
 import { NotificationBell } from "@/components/notification-bell";
+import { feedDateLabel, groupByDay } from "@/lib/domain/social";
+import { dayKey } from "@/lib/domain/time";
 import { getMyGroups } from "@/lib/crew";
 import {
   FEED_PAGE_SIZE,
@@ -46,6 +48,22 @@ export default function FeedPage() {
       cancelled = true;
     };
   }, [configured, loading, userId]);
+
+  // 날짜별 히스토리 그룹 — 크루 인증사진을 날짜 단위로 훑어볼 수 있게 (2026-07-18)
+  // 기준 시각은 마운트 시 1회 고정 (렌더 중 Date.now()는 purity 규칙 위반)
+  const [dateRef] = useState(() => {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const now = Date.now();
+    return {
+      tz,
+      todayKey: dayKey(new Date(now), tz),
+      yesterdayKey: dayKey(new Date(now - 24 * 60 * 60 * 1000), tz),
+    };
+  });
+  const dayGroups = useMemo(
+    () => groupByDay(items, dateRef.tz),
+    [items, dateRef],
+  );
 
   const loadMore = useCallback(async () => {
     if (!group || !userId || items.length === 0) return;
@@ -92,8 +110,23 @@ export default function FeedPage() {
         </section>
       ) : (
         <>
-          {items.map((item) => (
-            <FeedItemCard key={item.sessionId} item={item} userId={userId!} />
+          {dayGroups.map((g) => (
+            <section key={g.dateKey} className="flex flex-col gap-3">
+              <p className="mt-1 flex items-center gap-2 text-xs font-extrabold text-muted">
+                <span className="text-accent">📅</span>
+                {feedDateLabel(g.dateKey, dateRef.todayKey, dateRef.yesterdayKey)}
+                <span className="font-bold text-faint">
+                  운동 {g.items.length}
+                </span>
+              </p>
+              {g.items.map((item) => (
+                <FeedItemCard
+                  key={item.sessionId}
+                  item={item}
+                  userId={userId!}
+                />
+              ))}
+            </section>
           ))}
           {hasMore && (
             <button
