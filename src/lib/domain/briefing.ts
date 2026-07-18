@@ -77,6 +77,12 @@ function briefingBody(friendCount: number | null): string | null {
     : "어제는 다들 쉬었네요. 오늘 첫 타자 어때요? 🏃";
 }
 
+/**
+ * 유저별 아침 브리핑 발송 판정 (스킵 사유 포함).
+ * invocationHourOverride는 **전 유저의 시각 판정을 하나의 값으로 강제**한다
+ * (수동 검증·향후 크론 슬롯용) — 프로덕션 다중 tz 판정은 override를 생략해야
+ * 유저별 hourOfDay(now, timezone) 게이트가 동작한다.
+ */
 export function buildBriefings(
   users: BriefingUser[],
   completedAtsByUser: Map<string, Date[]>,
