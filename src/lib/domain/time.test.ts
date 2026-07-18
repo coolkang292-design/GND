@@ -3,6 +3,7 @@ import {
   DEFAULT_TIMEZONE,
   dayKey,
   dayRange,
+  hourOfDay,
   isSameDay,
   startOfDay,
   weekRange,
@@ -132,5 +133,15 @@ describe("isSameDay — tz 기준 같은 달력 날짜인가", () => {
         SEOUL,
       ),
     ).toBe(false);
+  });
+});
+
+describe("hourOfDay — instant가 tz에서 가리키는 시(0~23)", () => {
+  test("UTC 00:30 = KST 09시", () => {
+    expect(hourOfDay(new Date("2026-07-18T00:30:00Z"), "Asia/Seoul")).toBe(9);
+  });
+
+  test("UTC 23:30 = KST 다음날 08시 (날짜 경계)", () => {
+    expect(hourOfDay(new Date("2026-07-17T23:30:00Z"), "Asia/Seoul")).toBe(8);
   });
 });

@@ -77,6 +77,11 @@ export function dayKey(instant: Date, timeZone: string): string {
   return `${year}-${mm}-${dd}`;
 }
 
+/** instant가 tz에서 가리키는 시(0~23) — 브리핑 시각 매칭용 */
+export function hourOfDay(instant: Date, timeZone: string): number {
+  return wallClock(instant, timeZone).hour;
+}
+
 /** instant가 속한 tz 달력 날짜의 00:00 UTC 순간 */
 export function startOfDay(instant: Date, timeZone: string): Date {
   const { year, month, day } = wallClock(instant, timeZone);
