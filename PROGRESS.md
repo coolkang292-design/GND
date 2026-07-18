@@ -3,9 +3,9 @@
 > 새 세션은 이 파일 + `C:\Users\SAMSUNG\Desktop\Workout app\IMPLEMENTATION_PLAN.md`(단일 진실)만 읽으면 바로 이어서 작업할 수 있다.
 > 시각 스펙: 같은 폴더의 `운동앱-목업.html`.
 
-## ⚠️ 다음 작업 = 챌린지 사진 인증·레벨 운영 배포 승인 + 달력 복사 방식 결정
+## ⚠️ 다음 작업 = 챌린지 사진·레벨 + 달력 운동 예정표 운영 배포 승인
 
-**앱이 프로덕션에 떠 있다: https://gnd-one.vercel.app** — 브리핑 크론·알림설정·피드 사진필터까지 배포 완료. 챌린지 사진 인증·레벨 코드는 로컬 구현과 검증까지 끝났지만 **아직 운영 배포하지 않음**.
+**앱이 프로덕션에 떠 있다: https://gnd-one.vercel.app** — 브리핑 크론·알림설정·피드 사진필터까지 배포 완료. 챌린지 사진 인증·레벨과 달력 운동 예정표는 로컬 구현·DB 적용·검증까지 끝났지만 **아직 운영 배포하지 않음**.
 
 ### 🟡 배포 대기 — 챌린지 사진 인증 필수 + 레벨 시스템 (7태스크 구현·검증 완료)
 
@@ -15,7 +15,15 @@
 - **DB 완료**: `0014_challenge_photo_required.sql` 사용자가 SQL Editor에 적용. 실제 Storage 파일이 없는 가짜 인증 행과 연결 사진 삭제 우회를 차단하며, 새 챌린지는 `photo_required=true`만 생성 가능.
 - **최종 검증**: unit **166/166** · lint · typecheck · build · RLS **107/107** · 사진 인증 통합 **8/8** · 브리핑 통합 **8/8** (2026-07-18 실측).
 - **남은 게이트**: 사용자 승인 후 Vercel 운영 배포 → 배포 주소에서 새 챌린지 생성 안내·진행 중 내 레벨·종료 후 전원 레벨을 폰으로 확인.
-- **새 요청 대기**: 달력에서 과거 운동과 복사 대상 날짜를 고르는 개선. 대상 날짜에 `운동 예정표`로 저장할지 `완료된 운동 기록`으로 복제할지 사용자 결정 후 별도 설계·구현.
+
+### 🟡 배포 대기 — 달력 운동 예정표 계정 동기화
+
+- **문서**: 설계 `docs/superpowers/specs/2026-07-18-calendar-workout-plans-design.md` · 계획 `docs/superpowers/plans/2026-07-18-calendar-workout-plans.md`.
+- **구현 완료**: 과거 운동 `복사` → 오늘 이후 날짜 선택 → 날짜별 예정표 저장 → 달력 `예정` 표시 → 당일 `운동 준비하기` → 실제 완료 후 예정표 제거. 미래 예정표는 날짜 이동·삭제 가능.
+- **통계 안전**: 예정표는 완료 세션과 별도 `workout_plans`에 저장하므로 실제 완료 전에는 월간 통계·챌린지·레벨에 포함되지 않는다.
+- **DB 완료**: `0015_workout_plans.sql` 적용 완료. 본인만 CRUD 가능하고, 타인 세션 원본·타인 수정/삭제/RPC 이동·과거 날짜·확인 없는 교체를 차단한다.
+- **검증**: unit **175/175** · lint 오류 0 · typecheck · build · 예정표 실 DB **15/15** · 기존 RLS **107/107**. 커밋 `21cb611`·`6ec7c91`·`8af3918`.
+- **남은 게이트**: 운영 배포 후 폰에서 복사→날짜 선택→예정 표시→당일 준비 흐름을 육안 확인.
 
 ### 폰 확인 대기 (배포 주소 https://gnd-one.vercel.app 기준, 브리핑 크론 세션분 — 위 신규 기능과 무관, 아직 미확인)
 ① 프로필 탭 알림 토글 5종 저장·반영 ② 피드 "사진 인증" 필터 칩 ③ 알림함 브리핑 카드(불독 아이콘) 도착(9시대 자동 발송 확인 필요 — 수동 curl로 오늘자는 이미 발송됨, 내일 아침 자동분으로 확인).
@@ -34,9 +42,9 @@
 ### 다음 세션 시작 체크리스트
 
 1. 저장소 `C:\Users\SAMSUNG\workout-app`, 브랜치 `main`, 작업트리 클린(`.claude/`만 untracked — 커밋 금지). 되돌리기·리셋 불필요.
-2. **DB 0001~0014 전부 적용 완료 — SQL 파일 재실행 금지.** (0014 = 챌린지 사진 필수 + 인증 우회 차단, 사진 통합 스크립트 8/8 확인)
+2. **DB 0001~0015 전부 적용 완료 — SQL 파일 재실행 금지.** (0015 = 날짜별 운동 예정표, 전용 실 DB 검사 15/15 확인)
 3. dev 서버는 세션 종료와 함께 꺼졌을 수 있음 → `pnpm exec next dev -H 0.0.0.0`으로 시작 (폰: `http://192.168.219.104:3000` / Tailscale `http://100.85.240.15:3000`). build 돌릴 땐 dev 서버 먼저 종료(교훈 8 — 좀비면 `taskkill /PID <pid> /F`). 와이파이 IP는 DHCP라 변동 가능(.112→.104 전례) — 안 열리면 `ipconfig` 확인 후 `next.config.ts allowedDevOrigins` 갱신. 이제 순수 표시 확인은 배포 주소로도 가능.
-4. 검증 명령: `pnpm test`(**166**) · `pnpm lint` · `pnpm typecheck` · `pnpm build` · `node scripts/rls-test.mjs`(**107**, 응원 쿨다운 대기 포함 약 30초) · `node scripts/challenge-photo-test.mjs`(**8/8**, 실 DB) · `node scripts/briefing-integration-test.mjs`(**8/8**, 실 DB).
+4. 검증 명령: `pnpm test`(**175**) · `pnpm lint` · `pnpm typecheck` · `pnpm build` · `node scripts/rls-test.mjs`(**107**, 응원 쿨다운 대기 포함 약 30초) · `node scripts/workout-plan-test.mjs`(**15/15**, 실 DB) · `node scripts/challenge-photo-test.mjs`(**8/8**, 실 DB) · `node scripts/briefing-integration-test.mjs`(**8/8**, 실 DB).
 5. E2E·스모크 스크립트는 세션 scratchpad에 있어 소멸됨 — 재작성 시 흐름: 익명 세션 쿠키(`sb-<ref>-auth-token`, base64- 접두) 파싱 → REST로 프로필·크루·세션 픽스처 → puppeteer-core(스크래치패드에 npm install)로 UI·Realtime 단언. 아래 "Phase 6 산출물" 참고.
 6. **다음 작업 = 핵심 E2E → 3명 4주 실사용.** 사용자에게 먼저 확인: 위 "폰 확인 대기" 항목 결과(알림 토글·사진 필터·브리핑 카드 도착).
 
@@ -55,7 +63,7 @@
 | 4 완료 루프 | ✅ | 달력(`9e540ef`)·지난 운동 복사(`1f3281d`)·인증사진(`a1a6e1a`) — unit 63 + RLS 54/54 + E2E 2종 통과 |
 | 5 챌린지 | ✅ | goal-score TDD 20케이스·KPI 게이트·진행중 비공개·시상대(`ea6fb60`) — unit 83 + RLS 68/68 + E2E 통과 |
 | 6 소셜 | ✅ | 피드·반응·진행중 카드·Realtime 응원·찌르기·알림함 — unit 104 + RLS 102/102 + E2E 2인 14/14 + 실기기 7항목 통과 |
-| 7 안정화 | 🔶 진행 중 | 브랜딩 ✅·Vercel 배포 ✅·일지 공유 ✅·피드 히스토리 ✅·브리핑 크론 ✅·알림설정 토글 ✅·피드 사진 필터 ✅·챌린지 사진/레벨 로컬 검증 ✅(운영 배포 대기) — 남은 것: 핵심 E2E·3명 4주 실사용 |
+| 7 안정화 | 🔶 진행 중 | 브랜딩 ✅·Vercel 배포 ✅·일지 공유 ✅·피드 히스토리 ✅·브리핑 크론 ✅·알림설정 토글 ✅·피드 사진 필터 ✅·챌린지 사진/레벨 ✅·달력 예정표 ✅(신규 2종 운영 배포 대기) — 남은 것: 핵심 E2E·3명 4주 실사용 |
 
 ### 챌린지 사진 인증·레벨 산출물 (2026-07-18, `5a7aeff`~`d3d958b`, 운영 배포 대기)
 
@@ -117,7 +125,7 @@
 ### Phase 4 산출물 (2026-07-16~17)
 
 - **인증사진** (`a1a6e1a`): 0005 마이그레이션(버킷 2개 SQL 생성·workout_images+RLS·storage 정책·`set_workout_verification` RPC — 사진 존재해야 인증 인정). 완료 화면에서 촬영/앨범 → `lib/image.ts` 압축(≤1280px JPEG) → 비공개 업로드 → 오버레이 스탬프(화면만). 세션당 1장(unique). 달력 스탬프 ✓→🔥/● 자동 전환 확인(E2E).
-- **지난 운동 복사** (`1f3281d`): 달력 상세 시트 "📋 복사" → 종목·세트 구조를 오늘 draft로(완료 여부 초기화), 운동 탭 자동 전환. 온보딩 게이트 401 경합 재시도 수정 포함.
+- **지난 운동 복사** (`1f3281d` → `8af3918` 개선): 달력 상세 시트 `복사` → 오늘 이후 날짜의 계정 동기화 예정표로 저장. 당일에만 운동 준비 목록으로 불러오며 완료 여부는 항상 초기화한다. 실제 완료 후에만 예정표가 제거되고 통계에 반영된다.
 - **E2E 스크립트**(scratchpad, puppeteer-core+Chrome): 신규유저→온보딩→운동완료→달력→복사 / →사진 업로드→● 스탬프. 새 세션에서 재작성 필요하면 위 흐름 참고.
 
 - **달력 완료** (커밋 `9e540ef`):
@@ -150,7 +158,7 @@
   - 2026-07-17 확인: 최초 `/home` 컴파일은 느린 파일시스템 경고와 함께 약 20초 걸렸지만 이후 Wi-Fi·Tailscale 주소 모두 HTTP 200(약 0.4초). 첫 접속만 기다릴 것.
 - 검증: `pnpm lint` · `pnpm typecheck` · `pnpm test` · `pnpm build`
 - Supabase: 프로젝트 `cjdskubyxlnojwzhwbfx`, 익명 인증 ON, 키는 `.env.local`(커밋 안 됨)
-- RLS 검증: `node scripts/rls-test.mjs` — 현재 107개 검사, 2026-07-18 기준 107/107 통과. 사진 인증 통합: `node scripts/challenge-photo-test.mjs` — 8/8 통과. 브리핑 통합: `node scripts/briefing-integration-test.mjs` — 8/8 통과.
+- RLS 검증: `node scripts/rls-test.mjs` — 현재 107개 검사, 2026-07-18 기준 107/107 통과. 운동 예정표 통합: `node scripts/workout-plan-test.mjs` — 15/15 통과. 사진 인증 통합: `node scripts/challenge-photo-test.mjs` — 8/8 통과. 브리핑 통합: `node scripts/briefing-integration-test.mjs` — 8/8 통과.
 
 ## DB 마이그레이션 절차 (중요)
 
@@ -168,6 +176,7 @@ Storage 버킷도 SQL로 생성 가능했음(`insert into storage.buckets`, 0005
 - 0012(꾸준왕 열람권 view_record RPC): 적용 완료 ✅ (2026-07-17, RLS 107/107로 확인)
 - 0013(브리핑 dedupe_key·finalize ranks 존중): 적용 완료 ✅ (2026-07-18, briefing-integration-test 8/8 + 프로덕션 크론 dedupe 검증으로 확인)
 - 0014(챌린지 사진 필수·인증 우회 차단): 적용 완료 ✅ (2026-07-18, challenge-photo-test 8/8 + RLS 107/107로 확인)
+- 0015(날짜별 운동 예정표·본인 전용 RLS·이동 RPC): 적용 완료 ✅ (2026-07-18, workout-plan-test 15/15 + RLS 107/107로 확인)
 - 컬럼 추가·시드 위주라 idempotent 안전장치(`on conflict`, `if not exists` 성격) 있는 편이나, 재실행 시 `alter table add column`은 중복 에러 → 각 파일 1회만.
 
 ## 코드 구조 요약
