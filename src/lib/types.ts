@@ -6,6 +6,8 @@ export type Challenge = {
   name: string;
   start_date: string; // YYYY-MM-DD
   end_date: string;
+  /** 사진 인증한 운동만 집계 (0014) - 새 챌린지는 항상 true */
+  photo_required: boolean;
   status: "setup" | "active" | "ended" | "cancelled";
   created_by: string;
   created_at: string;

@@ -150,7 +150,13 @@ function ChallengeScreen({ userId }: { userId: string }) {
         );
         if (ch.status === "active" || ch.status === "ended") {
           setStats(
-            await getPeriodStatsByUser(g.id, ch.start_date, ch.end_date, tz),
+            await getPeriodStatsByUser(
+              g.id,
+              ch.start_date,
+              ch.end_date,
+              tz,
+              ch.photo_required,
+            ),
           );
         }
       } else {

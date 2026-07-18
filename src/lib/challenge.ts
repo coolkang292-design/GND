@@ -74,6 +74,7 @@ export async function createChallenge(input: {
       name: input.name.trim(),
       start_date: input.startDate,
       end_date: input.endDate,
+      photo_required: true,
     })
     .select()
     .single();
@@ -358,6 +359,7 @@ export async function getPeriodStatsByUser(
   startDate: string,
   endDate: string,
   timeZone: string,
+  photoRequired = false,
 ): Promise<Map<string, PeriodStats>> {
   const supabase = getSupabaseBrowserClient();
   const fromIso = new Date(`${startDate}T00:00:00Z`);
@@ -365,11 +367,14 @@ export async function getPeriodStatsByUser(
   const toIso = new Date(`${endDate}T00:00:00Z`);
   toIso.setUTCDate(toIso.getUTCDate() + 2);
 
+  // 세션당 사진은 1장이므로 inner join으로 집계 행이 중복되지 않는다.
+  const select =
+    "user_id, completed_at, workout_exercises(exercise_type, exercise_name, body_part, workout_sets(weight_kg, reps, distance_meters, duration_seconds, is_completed))" +
+    (photoRequired ? ", workout_images!inner(image_path)" : "");
+
   const { data, error } = await supabase
     .from("workout_sessions")
-    .select(
-      "user_id, completed_at, workout_exercises(exercise_type, exercise_name, body_part, workout_sets(weight_kg, reps, distance_meters, duration_seconds, is_completed))",
-    )
+    .select(select)
     .eq("group_id", groupId)
     .eq("status", "completed")
     .is("deleted_at", null)
@@ -395,7 +400,9 @@ export async function getPeriodStatsByUser(
       | null;
   };
 
-  const rows: PeriodSessionRow[] = ((data ?? []) as DbRow[]).map((r) => ({
+  // 조건부 select 문자열은 Supabase의 정적 문자열 파서가 해석할 수 없어
+  // 런타임 응답을 위에서 정의한 실제 행 모양으로 명시한다.
+  const rows: PeriodSessionRow[] = ((data ?? []) as unknown as DbRow[]).map((r) => ({
     userId: r.user_id,
     completedAt: r.completed_at,
     exercises: (r.workout_exercises ?? []).map((ex) => ({
@@ -436,7 +443,13 @@ export async function getActiveChallengeRanking(
 
   const [goals, stats] = await Promise.all([
     getChallengeGoals(ch.id),
-    getPeriodStatsByUser(groupId, ch.start_date, ch.end_date, DEFAULT_TIMEZONE),
+    getPeriodStatsByUser(
+      groupId,
+      ch.start_date,
+      ch.end_date,
+      DEFAULT_TIMEZONE,
+      ch.photo_required,
+    ),
   ]);
   const days = periodDaysCount(ch.start_date, ch.end_date);
   const userIds = [...new Set(goals.map((g) => g.user_id))];
