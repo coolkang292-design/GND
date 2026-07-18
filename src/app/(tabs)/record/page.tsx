@@ -9,10 +9,19 @@ import { RestBar } from "@/components/record/rest-bar";
 import { VerificationPhoto } from "@/components/record/verification-photo";
 import { summarizeVolume, type VolumeSummary } from "@/lib/domain/volume";
 import { formatWorkoutLog } from "@/lib/domain/workout-log";
+import {
+  toDraftExercises,
+  toPlanExercises,
+} from "@/lib/domain/workout-plan";
 import { dayKey } from "@/lib/domain/time";
 import { shareOrCopyText, shareResultToast } from "@/lib/share";
 import { getMyGroups } from "@/lib/crew";
 import type { BodyPart, CatalogExercise, ExerciseType } from "@/lib/types";
+import {
+  deleteWorkoutPlan,
+  saveWorkoutPlan,
+  type WorkoutPlan,
+} from "@/lib/workout-plan";
 import {
   cancelWorkout,
   clearDraft,
@@ -297,43 +306,62 @@ function WorkoutScreen({ userId }: { userId: string }) {
     }));
   }
 
-  // 지난 운동 복사 (§10) — 종목·세트 구조를 오늘 draft로 (완료 여부는 초기화)
-  async function handleCopyFromPast(sessionId: string) {
-    if (active) {
-      showToast("운동 중에는 불러올 수 없어요");
-      return;
-    }
-    if (
-      draft.exercises.length > 0 &&
-      !window.confirm("준비 중인 운동 목록을 지우고 지난 운동으로 바꿀까요?")
-    ) {
-      return;
-    }
+  async function handleScheduleFromPast(
+    sessionId: string,
+    planDate: string,
+  ): Promise<WorkoutPlan> {
     setBusy(true);
     try {
       const items = await getSessionExerciseStructure(sessionId);
       if (items.length === 0) {
-        showToast("복사할 종목이 없어요");
-        return;
+        throw new Error("복사할 종목이 없어요");
       }
       const byName = new Map(catalog.map((c) => [c.name, c]));
       const exercises: LocalExercise[] = items.map((it) => ({
         key: localId(),
         name: it.name,
-        bodyPart: byName.get(it.name)?.body_part ?? "코어",
+        bodyPart: byName.get(it.name)?.body_part ?? it.bodyPart ?? "코어",
         exerciseType: it.exerciseType,
         measure: it.measure,
         isCustom: byName.get(it.name)?.is_custom ?? false,
         sets: it.sets,
       }));
-      setDraft((d) => ({ ...d, exercises }));
-      setSubTab("workout");
-      showToast("지난 운동을 불러왔어요 — 시작을 누르면 오늘 기록이 돼요 📋");
+      const plan = await saveWorkoutPlan({
+        userId,
+        planDate,
+        sourceSessionId: sessionId,
+        exercises: toPlanExercises(exercises),
+      });
+      showToast(`${Number(planDate.slice(5, 7))}월 ${Number(planDate.slice(8))}일 예정표로 저장했어요`);
+      return plan;
     } catch (e) {
       showToast(errorMessage(e));
+      throw e;
     } finally {
       setBusy(false);
     }
+  }
+
+  function handleLoadPlan(plan: WorkoutPlan): boolean {
+    if (active) {
+      showToast("운동 중에는 다른 예정표를 불러올 수 없어요");
+      return false;
+    }
+    if (
+      draft.exercises.length > 0 &&
+      !window.confirm("준비 중인 운동 목록을 지우고 예정표로 바꿀까요?")
+    ) {
+      return false;
+    }
+    const exercises = toDraftExercises(plan.exercises, localId);
+    setDraft((current) => ({
+      ...current,
+      scheduledPlanId: plan.id,
+      exercises,
+    }));
+    setSubTab("workout");
+    showToast("예정표를 불러왔어요 — 준비되면 운동을 시작하세요");
+    return true;
   }
 
   async function handleStart() {
@@ -353,7 +381,11 @@ function WorkoutScreen({ userId }: { userId: string }) {
       }
       const started = await startWorkout(sessionId);
       const startedAtMs = new Date(started.started_at!).getTime();
-      setDraft((d) => ({ ...d, sessionId, startedAtMs }));
+      setDraft((d) => ({
+        ...d,
+        sessionId,
+        startedAtMs,
+      }));
       showToast("운동 시작! 💪");
     } catch (e) {
       showToast(errorMessage(e));
@@ -382,6 +414,14 @@ function WorkoutScreen({ userId }: { userId: string }) {
       const completedAtMs = s.completed_at
         ? new Date(s.completed_at).getTime()
         : Date.now();
+      let planCleanupFailed = false;
+      if (draft.scheduledPlanId) {
+        try {
+          await deleteWorkoutPlan(draft.scheduledPlanId);
+        } catch {
+          planCleanupFailed = true;
+        }
+      }
       setResult({
         sessionId: s.id,
         completedAtMs,
@@ -398,6 +438,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
       clearDraft(userId);
       setDraft(emptyDraft(draft.restSeconds));
       setRestRemaining(null);
+      if (planCleanupFailed) {
+        showToast("운동은 완료됐지만 예정표는 달력에서 직접 삭제해 주세요");
+      }
     } catch (e) {
       showToast(errorMessage(e));
     } finally {
@@ -529,7 +572,11 @@ function WorkoutScreen({ userId }: { userId: string }) {
 
       {subTab === "calendar" ? (
         <>
-          <CalendarView userId={userId} onCopySession={handleCopyFromPast} />
+          <CalendarView
+            userId={userId}
+            onScheduleSession={handleScheduleFromPast}
+            onLoadPlan={handleLoadPlan}
+          />
           {toast && (
             <div
               className="fixed inset-x-8 z-50 rounded-card border border-line bg-surface px-4 py-3 text-center text-sm font-bold shadow-card"

@@ -9,6 +9,10 @@ import {
   type Verification,
 } from "@/lib/domain/calendar";
 import { dayKey } from "@/lib/domain/time";
+import {
+  addDaysToDateKey,
+  isPlanDateAllowed,
+} from "@/lib/domain/workout-plan";
 import { formatWorkoutLog } from "@/lib/domain/workout-log";
 import { getMyProfile } from "@/lib/crew";
 import { shareOrCopyText, shareResultToast } from "@/lib/share";
@@ -17,6 +21,12 @@ import {
   getSessionLogExercises,
   type CalendarSession,
 } from "@/lib/workout";
+import {
+  deleteWorkoutPlan,
+  getWorkoutPlans,
+  moveWorkoutPlan,
+  type WorkoutPlan,
+} from "@/lib/workout-plan";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -66,13 +76,18 @@ function totalTimeLabel(seconds: number): string {
 
 export function CalendarView({
   userId,
-  onCopySession,
+  onScheduleSession,
+  onLoadPlan,
 }: {
   userId: string;
-  /** 지난 운동 복사 (§10) — 세션의 종목·세트 구조를 오늘 draft로 */
-  onCopySession?: (sessionId: string) => void;
+  onScheduleSession: (
+    sessionId: string,
+    planDate: string,
+  ) => Promise<WorkoutPlan>;
+  onLoadPlan: (plan: WorkoutPlan) => boolean;
 }) {
   const [sessions, setSessions] = useState<CalendarSession[]>([]);
+  const [plans, setPlans] = useState<WorkoutPlan[]>([]);
   const [timeZone, setTimeZone] = useState(
     () => Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Seoul",
   );
@@ -86,14 +101,20 @@ export function CalendarView({
     return { year: y, month: m };
   });
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [moveDate, setMoveDate] = useState("");
+  const [copySource, setCopySource] = useState<CalendarSession | null>(null);
+  const [copyDate, setCopyDate] = useState("");
+  const [planBusy, setPlanBusy] = useState(false);
+  const [planToast, setPlanToast] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [profile, list] = await Promise.all([
+        const [profile, list, savedPlans] = await Promise.all([
           getMyProfile(userId),
           getCompletedSessions(userId),
+          getWorkoutPlans(userId),
         ]);
         if (cancelled) return;
         if (profile) {
@@ -101,6 +122,7 @@ export function CalendarView({
           setWeeklyGoal(profile.weekly_goal);
         }
         setSessions(list);
+        setPlans(savedPlans);
       } catch {
         if (!cancelled) setLoadError(true);
       } finally {
@@ -133,11 +155,17 @@ export function CalendarView({
     return map;
   }, [sessions, timeZone, view]);
 
+  const planByDate = useMemo(
+    () => new Map(plans.map((plan) => [plan.planDate, plan])),
+    [plans],
+  );
+
   const selectedSessions = useMemo(
     () =>
       selectedDate ? sessionsOnDay(sessions, timeZone, selectedDate) : [],
     [selectedDate, sessions, timeZone],
   );
+  const selectedPlan = selectedDate ? planByDate.get(selectedDate) : undefined;
 
   // 공유용 일지 텍스트 프리페치 — iOS는 navigator.share를 사용자 제스처 안에서
   // 불러야 하므로, 시트가 열릴 때 미리 만들어 두고 클릭 시 즉시 공유한다.
@@ -179,6 +207,81 @@ export function CalendarView({
     if (msg) {
       setShareToast(msg);
       setTimeout(() => setShareToast(null), 2500);
+    }
+  }
+
+  function showPlanToast(message: string) {
+    setPlanToast(message);
+    setTimeout(() => setPlanToast(null), 2500);
+  }
+
+  function openDate(date: string) {
+    setSelectedDate(date);
+    setMoveDate(date);
+  }
+
+  async function handleSaveCopy() {
+    if (!copySource || !isPlanDateAllowed(copyDate, todayKey)) return;
+    const existing = planByDate.get(copyDate);
+    if (
+      existing &&
+      !window.confirm("이 날짜의 기존 예정표를 새 운동으로 교체할까요?")
+    ) {
+      return;
+    }
+    setPlanBusy(true);
+    try {
+      const saved = await onScheduleSession(copySource.id, copyDate);
+      setPlans((current) => [
+        ...current.filter((plan) => plan.planDate !== saved.planDate),
+        saved,
+      ]);
+      setCopySource(null);
+    } catch {
+      // 상위 화면 토스트에 상세 오류가 표시된다.
+    } finally {
+      setPlanBusy(false);
+    }
+  }
+
+  async function handleMovePlan() {
+    if (!selectedPlan || !isPlanDateAllowed(moveDate, todayKey)) return;
+    if (moveDate === selectedPlan.planDate) return;
+    const existing = planByDate.get(moveDate);
+    const replace = Boolean(existing && existing.id !== selectedPlan.id);
+    if (replace && !window.confirm("이 날짜의 기존 예정표를 교체할까요?")) {
+      return;
+    }
+    setPlanBusy(true);
+    try {
+      const moved = await moveWorkoutPlan(selectedPlan.id, moveDate, replace);
+      setPlans((current) => [
+        ...current.filter(
+          (plan) => plan.id !== moved.id && plan.planDate !== moved.planDate,
+        ),
+        moved,
+      ]);
+      setSelectedDate(moveDate);
+      showPlanToast("예정 날짜를 옮겼어요");
+    } catch {
+      showPlanToast("예정 날짜를 옮기지 못했어요");
+    } finally {
+      setPlanBusy(false);
+    }
+  }
+
+  async function handleDeletePlan() {
+    if (!selectedPlan || !window.confirm("이 운동 예정표를 삭제할까요?")) return;
+    setPlanBusy(true);
+    try {
+      await deleteWorkoutPlan(selectedPlan.id);
+      setPlans((current) => current.filter((plan) => plan.id !== selectedPlan.id));
+      if (selectedSessions.length === 0) setSelectedDate(null);
+      showPlanToast("예정표를 삭제했어요");
+    } catch {
+      showPlanToast("예정표를 삭제하지 못했어요");
+    } finally {
+      setPlanBusy(false);
     }
   }
 
@@ -280,19 +383,22 @@ export function CalendarView({
             if (day === null) return <div key={`e${i}`} className="aspect-square" />;
             const dateKey = `${view.year}-${pad(view.month)}-${pad(day)}`;
             const stamp = stampByDate.get(dateKey);
+            const plan = planByDate.get(dateKey);
             const meta = stamp ? VERIFICATION_META[stamp.verification] : null;
             const isToday = dateKey === todayKey;
             return (
               <button
                 key={dateKey}
-                onClick={() => stamp && setSelectedDate(dateKey)}
-                disabled={!stamp}
+                onClick={() => (stamp || plan) && openDate(dateKey)}
+                disabled={!stamp && !plan}
                 className={`relative flex aspect-square flex-col items-center justify-center gap-0.5 rounded-[11px] border text-xs ${
                   meta?.camera
                     ? "border-accent/35 bg-accent-weak"
+                    : plan
+                      ? "border-good/40 bg-good-weak"
                     : "border-line bg-surface"
                 } ${isToday ? "outline outline-2 outline-accent outline-offset-1" : ""} ${
-                  stamp ? "cursor-pointer" : "cursor-default"
+                  stamp || plan ? "cursor-pointer" : "cursor-default"
                 }`}
               >
                 <span
@@ -301,6 +407,11 @@ export function CalendarView({
                   {day}
                 </span>
                 {meta && <span className="text-[15px] leading-none">{meta.glyph}</span>}
+                {plan && (
+                  <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 text-[8px] leading-none font-extrabold text-good">
+                    예정
+                  </span>
+                )}
                 {stamp && stamp.count > 1 && (
                   <span className="absolute right-0.5 top-0.5 grid h-[15px] min-w-[15px] place-items-center rounded-full bg-accent px-0.5 font-mono text-[9px] font-extrabold text-accent-ink">
                     {stamp.count}
@@ -322,10 +433,13 @@ export function CalendarView({
             사진 업로드
           </span>
           <span className="inline-flex items-center gap-1">✓ 사진 없음</span>
+          <span className="inline-flex items-center gap-1 font-bold text-good">
+            예정
+          </span>
         </div>
       </section>
 
-      {sessions.length === 0 && (
+      {sessions.length === 0 && plans.length === 0 && (
         <p className="text-center text-xs text-muted">
           아직 완료한 운동이 없어요. 첫 운동을 기록하면 스탬프가 찍혀요 💪
         </p>
@@ -340,7 +454,7 @@ export function CalendarView({
             className="fixed inset-0 z-40 bg-black/40"
           />
           <div
-            className="fixed inset-x-0 bottom-0 z-50 rounded-t-[20px] border-t border-line bg-surface p-5"
+            className="fixed inset-x-0 bottom-0 z-50 max-h-[88dvh] overflow-y-auto rounded-t-[20px] border-t border-line bg-surface p-5"
             style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 20px)" }}
           >
             <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
@@ -357,6 +471,59 @@ export function CalendarView({
               </button>
             </div>
             <div className="flex flex-col gap-2">
+              {selectedPlan && (
+                <div className="rounded-card border border-good/40 bg-good-weak p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-extrabold text-good">운동 예정</p>
+                      <p className="mt-0.5 break-words text-sm font-bold">
+                        {selectedPlan.exercises.map((exercise) => exercise.name).join(" · ")}
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-muted">
+                        {selectedPlan.exercises.length}종목 · 완료 전에는 통계에 포함되지 않아요
+                      </p>
+                    </div>
+                    <button
+                      onClick={handleDeletePlan}
+                      disabled={planBusy}
+                      className="shrink-0 text-xs font-bold text-warn disabled:opacity-50"
+                    >
+                      삭제
+                    </button>
+                  </div>
+                  {selectedDate === todayKey && (
+                    <button
+                      onClick={() => {
+                        if (onLoadPlan(selectedPlan)) setSelectedDate(null);
+                      }}
+                      disabled={planBusy}
+                      className="mt-3 h-10 w-full rounded-card-sm bg-good text-sm font-extrabold text-white disabled:opacity-50"
+                    >
+                      운동 준비하기
+                    </button>
+                  )}
+                  <div className="mt-2 flex items-center gap-2">
+                    <input
+                      type="date"
+                      min={todayKey}
+                      value={moveDate}
+                      onChange={(event) => setMoveDate(event.target.value)}
+                      className="h-10 min-w-0 flex-1 rounded-card-sm border border-line bg-surface px-2 text-xs"
+                    />
+                    <button
+                      onClick={handleMovePlan}
+                      disabled={
+                        planBusy ||
+                        moveDate === selectedPlan.planDate ||
+                        !isPlanDateAllowed(moveDate, todayKey)
+                      }
+                      className="h-10 shrink-0 rounded-card-sm border border-line bg-surface px-3 text-xs font-bold text-accent disabled:opacity-40"
+                    >
+                      날짜 이동
+                    </button>
+                  </div>
+                </div>
+              )}
               {selectedSessions.map((s) => {
                 const meta = VERIFICATION_META[s.verification];
                 return (
@@ -378,11 +545,12 @@ export function CalendarView({
                         {meta.label}
                       </p>
                     </div>
-                    {onCopySession && s.exerciseNames.length > 0 && (
+                    {s.exerciseNames.length > 0 && (
                       <button
                         onClick={() => {
                           setSelectedDate(null);
-                          onCopySession(s.id);
+                          setCopySource(s);
+                          setCopyDate(addDaysToDateKey(todayKey, 1));
                         }}
                         className="shrink-0 rounded-full border border-line bg-surface px-3 py-1.5 text-[11px] font-bold text-accent"
                       >
@@ -402,10 +570,10 @@ export function CalendarView({
                 📤 AI 코치에게 공유
               </button>
             )}
-            {onCopySession && (
+            {selectedSessions.length > 0 && (
               <p className="mt-2.5 text-left text-[11px] text-muted">
-                📋 복사하면 그날의 종목·세트 구조를 오늘 운동으로 불러와요. 📤
-                공유는 세트별 기록을 텍스트로 내보내요.
+                📋 복사는 종목·세트를 선택한 날짜의 예정표로 저장해요. 📤 공유는
+                세트별 기록을 텍스트로 내보내요.
               </p>
             )}
           </div>
@@ -418,6 +586,57 @@ export function CalendarView({
             </div>
           )}
         </>
+      )}
+
+      {copySource && (
+        <>
+          <button
+            aria-label="복사 취소"
+            onClick={() => setCopySource(null)}
+            className="fixed inset-0 z-40 bg-black/40"
+          />
+          <div
+            className="fixed inset-x-0 bottom-0 z-50 rounded-t-[20px] border-t border-line bg-surface p-5"
+            style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 20px)" }}
+          >
+            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
+            <h3 className="text-base font-extrabold">운동 예정표로 복사</h3>
+            <p className="mt-1 break-words text-xs text-muted">
+              {copySource.exerciseNames.join(" · ")}
+            </p>
+            <label className="mt-4 block text-[11px] font-bold text-muted">
+              운동할 날짜
+            </label>
+            <input
+              type="date"
+              min={todayKey}
+              value={copyDate}
+              onChange={(event) => setCopyDate(event.target.value)}
+              className="mt-1 h-11 w-full rounded-card-sm border border-line bg-surface-2 px-3 text-sm font-bold"
+            />
+            {planByDate.has(copyDate) && (
+              <p className="mt-2 text-[11px] font-bold text-warn">
+                이 날짜에는 이미 예정표가 있어요. 저장할 때 교체 확인을 받습니다.
+              </p>
+            )}
+            <button
+              onClick={handleSaveCopy}
+              disabled={planBusy || !isPlanDateAllowed(copyDate, todayKey)}
+              className="mt-4 h-11 w-full rounded-card bg-accent text-sm font-extrabold text-accent-ink disabled:opacity-50"
+            >
+              {planBusy ? "저장 중…" : "예정표로 저장"}
+            </button>
+          </div>
+        </>
+      )}
+
+      {planToast && (
+        <div
+          className="fixed inset-x-8 z-[60] rounded-card border border-line bg-surface px-4 py-3 text-center text-sm font-bold shadow-card"
+          style={{ bottom: "calc(env(safe-area-inset-bottom) + 130px)" }}
+        >
+          {planToast}
+        </div>
       )}
     </div>
   );

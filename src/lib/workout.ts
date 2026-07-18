@@ -44,9 +44,10 @@ export type LocalExercise = {
 };
 
 export type WorkoutDraft = {
-  version: 1;
+  version: 2;
   sessionId: string | null;
   startedAtMs: number | null; // 서버 started_at (RPC 응답 기준)
+  scheduledPlanId: string | null; // 예정표에서 불러온 경우, 운동 시작 성공 후 정리
   restSeconds: number; // 세트 사이 휴식 사전설정 (§10, 기본 90초)
   exercises: LocalExercise[];
 };
@@ -63,9 +64,10 @@ export const DEFAULT_REST_SECONDS = 90;
 
 export function emptyDraft(restSeconds = DEFAULT_REST_SECONDS): WorkoutDraft {
   return {
-    version: 1,
+    version: 2,
     sessionId: null,
     startedAtMs: null,
+    scheduledPlanId: null,
     restSeconds,
     exercises: [],
   };
@@ -77,10 +79,14 @@ export function loadDraft(userId: string): WorkoutDraft {
   try {
     const raw = localStorage.getItem(draftKey(userId));
     if (!raw) return emptyDraft();
-    const parsed = JSON.parse(raw) as WorkoutDraft;
-    if (parsed?.version !== 1 || !Array.isArray(parsed.exercises)) {
+    const parsed = JSON.parse(raw) as WorkoutDraft | (Omit<WorkoutDraft, "version" | "scheduledPlanId"> & { version: 1 });
+    if (!parsed || !Array.isArray(parsed.exercises)) {
       return emptyDraft();
     }
+    if (parsed.version === 1) {
+      return { ...parsed, version: 2, scheduledPlanId: null };
+    }
+    if (parsed.version !== 2) return emptyDraft();
     return parsed;
   } catch {
     return emptyDraft();
@@ -429,13 +435,16 @@ export async function getSessionExerciseStructure(sessionId: string): Promise<
     name: string;
     exerciseType: ExerciseType;
     measure: "reps" | "time" | null;
+    bodyPart: BodyPart | null;
     sets: LocalSet[];
   }[]
 > {
   const supabase = getSupabaseBrowserClient();
   const { data, error } = await supabase
     .from("workout_exercises")
-    .select("exercise_name, exercise_type, measure, sort_order, workout_sets(*)")
+    .select(
+      "exercise_name, exercise_type, measure, body_part, sort_order, workout_sets(*)",
+    )
     .eq("session_id", sessionId)
     .order("sort_order", { ascending: true });
   if (error) throw error;
@@ -444,6 +453,7 @@ export async function getSessionExerciseStructure(sessionId: string): Promise<
     exercise_name: string;
     exercise_type: ExerciseType;
     measure: "reps" | "time" | null;
+    body_part: BodyPart | null;
     sort_order: number;
     workout_sets: WorkoutSet[] | null;
   };
@@ -463,6 +473,7 @@ export async function getSessionExerciseStructure(sessionId: string): Promise<
       name: row.exercise_name,
       exerciseType: row.exercise_type,
       measure: row.measure,
+      bodyPart: row.body_part,
       sets: sets.length > 0 ? sets : defaultSets(row.exercise_type, row.measure),
     };
   });
