@@ -20,12 +20,21 @@ export async function GET(req: Request) {
   }
 
   const hourParam = new URL(req.url).searchParams.get("hour");
-  const invocationHour = hourParam === null ? undefined : Number(hourParam);
+  let invocationHour: number | undefined;
+  if (hourParam !== null) {
+    const n = Number(hourParam);
+    if (!Number.isInteger(n) || n < 0 || n > 23) {
+      return NextResponse.json({ error: "invalid_hour" }, { status: 400 });
+    }
+    invocationHour = n;
+  }
 
   const admin = getSupabaseAdminClient();
   const [profilesRes, sessionsRes, settingsRes, membersRes] =
     await Promise.all([
       admin.from("profiles").select("id, timezone"),
+      // 전체 완료 세션 조회 — PostgREST 기본 row cap(1000)에 걸리면 조용히 잘려
+      // 스트릭이 과소계산된다. 크루 3~5명 규모에선 무관, 확장 시 기간 필터/페이지네이션 필요.
       admin
         .from("workout_sessions")
         .select("user_id, completed_at")
