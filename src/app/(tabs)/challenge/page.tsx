@@ -17,6 +17,7 @@ import {
   type GoalType,
   type ParticipantInput,
 } from "@/lib/domain/goal-score";
+import { challengeLevel, levelLabel } from "@/lib/domain/level";
 import { dayKey } from "@/lib/domain/time";
 import { getCrewProfiles, getMyGroups, getMyProfile } from "@/lib/crew";
 import {
@@ -347,6 +348,16 @@ function ChallengeScreen({ userId }: { userId: string }) {
 
   const profileOf = (id: string) => members.find((m) => m.id === id);
 
+  const levelOf = (id: string): number =>
+    challenge
+      ? challengeLevel(
+          stats?.get(id)?.workoutDayKeys ?? [],
+          challenge.start_date,
+          challenge.end_date,
+          todayKey,
+        )
+      : 1;
+
   return (
     <div className="flex flex-col gap-3 pb-10">
       <header className="pt-2 pb-1">
@@ -504,7 +515,14 @@ function ChallengeScreen({ userId }: { userId: string }) {
       {group && challenge?.status === "active" && (
         <>
           <section className="rounded-card bg-gradient-to-br from-accent to-[#0B6E66] p-5 text-accent-ink shadow-card">
-            <p className="text-xs font-bold opacity-80">{challenge.name}</p>
+            <div className="flex items-start justify-between gap-2">
+              <p className="min-w-0 break-all text-xs font-bold opacity-80">
+                {challenge.name}
+              </p>
+              <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-extrabold">
+                {levelLabel(levelOf(userId))}
+              </span>
+            </div>
             <div className="mt-2 flex items-end justify-between">
               <div>
                 <p className="text-[13px] opacity-90">
@@ -632,6 +650,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
           goals={goals}
           profileOf={profileOf}
           myUserId={userId}
+          levelOf={levelOf}
         />
       )}
 
@@ -665,11 +684,13 @@ function ResultView({
   goals,
   profileOf,
   myUserId,
+  levelOf,
 }: {
   participants: ParticipantInput[];
   goals: UserGoal[];
   profileOf: (id: string) => Profile | undefined;
   myUserId: string;
+  levelOf: (id: string) => number;
 }) {
   const ranked = rankParticipants(participants);
   const total = ranked.length;
@@ -753,6 +774,9 @@ function ResultView({
                   )}{" "}
                   <span className="text-[11px] font-bold text-muted">
                     {gndLabel(r.rank, total)}
+                  </span>
+                  <span className="ml-1 rounded-full bg-surface-2 px-1.5 py-0.5 text-[10px] font-bold text-muted">
+                    {levelLabel(levelOf(r.userId))}
                   </span>
                 </p>
                 <p className="text-[11px] text-muted">
