@@ -12,6 +12,7 @@ import { formatWorkoutLog } from "@/lib/domain/workout-log";
 import {
   buildEffortMessage,
   mergeImportedExercises,
+  replaceWithLastRecordedSets,
 } from "@/lib/domain/workout-import";
 import {
   toDraftExercises,
@@ -109,6 +110,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [result, setResult] = useState<CompletedResult | null>(null);
   const [busy, setBusy] = useState(false);
+  const [loadingExerciseKey, setLoadingExerciseKey] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -228,13 +230,34 @@ function WorkoutScreen({ userId }: { userId: string }) {
         ? `'${items[0].name}' 추가됨`
         : `운동 ${items.length}개 추가됨`,
     );
-    // 직전 기록 불러오기 (§10) — 있으면 세트 구조 프리필
-    for (const ex of added) {
-      getLastRecordedSets(userId, ex.name)
-        .then((sets) => {
-          if (sets) updateExercise(ex.key, (e) => ({ ...e, sets }));
-        })
-        .catch(() => {});
+  }
+
+  async function loadLastExercise(exercise: LocalExercise) {
+    if (active || loadingExerciseKey !== null) return;
+
+    setLoadingExerciseKey(exercise.key);
+    try {
+      const recordedSets = await getLastRecordedSets(userId, exercise.name);
+      if (!recordedSets) {
+        showToast("아직 불러올 직전 기록이 없어요");
+        return;
+      }
+
+      const loaded = replaceWithLastRecordedSets(exercise, recordedSets);
+      setDraft((current) => ({
+        ...current,
+        exercises: current.exercises.map((currentExercise) =>
+          currentExercise.key === exercise.key
+            ? { ...currentExercise, sets: loaded.sets }
+            : currentExercise,
+        ),
+        effortMessage: buildEffortMessage([loaded]),
+      }));
+      showToast(`${exercise.name} 직전 기록을 불러왔어요`);
+    } catch (error) {
+      showToast(errorMessage(error));
+    } finally {
+      setLoadingExerciseKey(null);
     }
   }
 
@@ -752,6 +775,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
           exercise={ex}
           index={i}
           active={active}
+          loadingLast={loadingExerciseKey === ex.key}
+          onLoadLast={() => void loadLastExercise(ex)}
           onUpdateSet={(si, patch) => updateSet(ex.key, si, patch)}
           onToggleDone={(si) => toggleDone(ex.key, si)}
           onAddSet={() => addSet(ex.key)}

@@ -9,6 +9,8 @@ export function ExerciseCard({
   exercise,
   index,
   active,
+  loadingLast,
+  onLoadLast,
   onUpdateSet,
   onToggleDone,
   onAddSet,
@@ -18,6 +20,8 @@ export function ExerciseCard({
   exercise: LocalExercise;
   index: number;
   active: boolean;
+  loadingLast: boolean;
+  onLoadLast: () => void;
   onUpdateSet: (setIndex: number, patch: Partial<LocalSet>) => void;
   onToggleDone: (setIndex: number) => void;
   onAddSet: () => void;
@@ -79,11 +83,36 @@ export function ExerciseCard({
         </button>
       </div>
 
+      <div className="mt-2 flex items-center justify-between gap-3">
+        <p className="min-w-0 text-xs text-muted">
+          {isWeight ? (
+            <>
+              현재 완료 볼륨{" "}
+              <span className="font-mono font-bold text-text">
+                {volumeKg.toLocaleString()}kg
+              </span>
+            </>
+          ) : isCardio ? (
+            "유산소 · 완료 체크한 기록만 집계돼요"
+          ) : isTimeBodyweight ? (
+            "지속 시간 · 완료 체크한 기록만 집계돼요"
+          ) : (
+            "맨몸 운동 · 완료 세트 집계"
+          )}
+        </p>
+        <button
+          type="button"
+          onClick={onLoadLast}
+          disabled={active || loadingLast}
+          aria-label={`${exercise.name} 직전 기록 불러오기`}
+          className="h-8 flex-none rounded-card-sm border border-line bg-surface-2 px-2.5 text-xs font-bold text-accent disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {loadingLast ? "불러오는 중…" : "↻ 불러오기"}
+        </button>
+      </div>
+
       {isCardio ? (
         <div className="mt-3">
-          <p className="mb-2 text-xs text-muted">
-            유산소 · 완료 체크한 기록만 집계돼요
-          </p>
           {exercise.sets.map((s, si) => (
             <div key={s.key} className="flex items-end gap-2">
               <div className="flex-1">
@@ -110,9 +139,6 @@ export function ExerciseCard({
         </div>
       ) : isTimeBodyweight ? (
         <div className="mt-3">
-          <p className="mb-2 text-xs text-muted">
-            지속 시간 · 완료 체크한 기록만 집계돼요
-          </p>
           {exercise.sets.map((s, si) => (
             <div key={s.key} className="mb-2 flex items-end gap-2">
               <div className="flex-1">
@@ -149,18 +175,6 @@ export function ExerciseCard({
         </div>
       ) : (
         <>
-          <p className="mt-2 text-xs text-muted">
-            {isWeight ? (
-              <>
-                현재 완료 볼륨{" "}
-                <span className="font-mono font-bold text-text">
-                  {volumeKg.toLocaleString()}kg
-                </span>
-              </>
-            ) : (
-              "맨몸 운동 · 완료 세트 집계"
-            )}
-          </p>
           <table className="mt-2 w-full">
             <thead>
               <tr className="text-[11px] text-faint">
