@@ -10,7 +10,8 @@
 - **5초 비프음 (A안)**: 웨이트·맨몸 휴식 5·4·3·2초 짧은 `삠` + 1초 긴 `삐임`, 음성 나레이션 없음, 유산소는 휴식 타이머·비프음 제외 유지. `getRestCountdownBeep` 짧은 비프 범위만 2~5초로 확장(구현 `f70d3b6`, main 병합 `7c62f8a`). TDD RED→GREEN, 스펙 리뷰·코드 품질 리뷰 통과, 사용자 폰+이어폰 실기기 확인 완료(2026-07-19).
 - **배포 직전 전체 게이트 (실측)**: unit **229/229**(21파일) · typecheck · lint(오류 0, 무해 경고 2 — briefing-integration-test.mjs 본체+워크트리 사본) · build · RLS **107/107** · workout-plan **15/15** · challenge-photo **8/8** · briefing **8/8**. DB 0001~0015는 기적용이라 재실행하지 않음.
 - **배포 결과**: `pnpm dlx vercel deploy --prod --yes` → 배포 `gnd-57c1ffnw4-gnd4.vercel.app` `● Ready`(target production), `https://gnd-one.vercel.app/home`·`/record` HTTP **200** 확인.
-- **배포 후 폰 확인 항목(배포 주소 기준)**: ①휴식 비프음 5초 패턴 ②새 챌린지 사진 인증 안내·진행 중 내 레벨·종료 후 전원 레벨 ③달력 복사→날짜 선택→예정 표시→당일 운동 준비 흐름.
+- **iOS 오디오 후속 수정 (같은 날, `43f038a` + 재배포)**: 배포 확인에서 아이폰 무음 스위치가 웹 비프음을 통째로 음소거하는 문제 발견(교훈 11). 실기기 실험으로 `navigator.audioSession`(iOS 17+) 유형별 트레이드오프 확정 후 사용자 결정 = **음악 공존 우선**: `transient` 세션 선언 + 비프 게인 0.06→0.25(음악에 묻힘 방지). 멜론 재생 중 비프음 공존을 dev 실기기에서 확인(진단 로그 `resume:ok(running)→play:beep`). 재배포 `gnd-amopssaai-gnd4.vercel.app` `● Ready`, `/record` 200, 번들에 `transient`·`.25` 반영 확인. **아이폰은 벨소리(소리) 모드여야 비프음이 난다 — 무음 모드 무성은 iOS 정책상 정상.**
+- **배포 후 폰 확인 항목(배포 주소 기준)**: ①휴식 비프음 5초 패턴 — 벨소리 모드 + 음악 재생 중 공존까지 ②새 챌린지 사진 인증 안내·진행 중 내 레벨·종료 후 전원 레벨 ③달력 복사→날짜 선택→예정 표시→당일 운동 준비 흐름.
 
 **관련 문서**: 설계 `docs/superpowers/specs/2026-07-19-rest-countdown-beeps-design.md` · 계획 `docs/superpowers/plans/2026-07-19-five-second-rest-beeps-and-deploy.md`(체크박스 완료 처리됨).
 
@@ -209,6 +210,7 @@ Storage 버킷도 SQL로 생성 가능했음(`insert into storage.buckets`, 0005
 8. **개발 서버 실행 중 `pnpm build`를 동시에 돌리지 말 것** — 둘 다 `.next`를 사용해 기존 dev 서버가 3000번 포트를 잡은 채 요청에 응답하지 않는 상태가 발생했다. 최종 검증은 dev 서버를 먼저 종료하고 build를 실행한 뒤, 실기기 테스트가 더 필요하면 dev 서버를 새로 시작한다.
 9. **Vercel env 등록에 PowerShell 파이프 금지** — `$val | vercel env add`는 인코딩 프리앰블(BOM, U+FEFF)이 값 앞에 섞여 저장되고, 그 값이 fetch 헤더에 들어가는 순간 "String contains non ISO-8859-1 code point"로 익명 인증이 통째로 깨진다. 반드시 Bash에서 `printf '%s' "$VAL" | pnpm dlx vercel env add NAME production`. 배포 후엔 번들에서 값 주변 바이트를 od로 확인하면 확실하다.
 10. **렌더 중 `Date.now()`·`new Date()` 호출은 purity 린트 위반** — "오늘" 기준값은 lazy `useState(() => ...)`로 마운트 시 1회 고정한다 (streak-card의 todayKey, feed의 dateRef 전례).
+11. **iOS 무음 스위치는 Web Audio를 통째로 음소거한다** (이어폰이어도) — 웹앱 대응은 `navigator.audioSession`(iOS 17+)뿐이며, `"playback"`은 무음을 이기지만 백그라운드 음악(멜론 등 네이티브 앱)을 끊고, `"transient"`는 음악과 섞이지만 무음 스위치를 따른다. 둘 다 만족은 네이티브 전용 옵션이라 웹에선 불가. GND는 음악 공존 우선(`transient`) + 비프 게인 0.25 채택 — 무음 모드에서 비프가 안 나는 건 정상이고, 음악에 묻히는 건 게인으로 해결한다. 브라우저 내 재생(네이버)과 네이티브 앱 재생(멜론)은 오디오 세션 동작이 다르니 실기기 확인은 네이티브 음악 앱으로 할 것.
 
 ## Phase 6 산출물 (2026-07-17, `fbd86b4`~`9f822ec`)
 
