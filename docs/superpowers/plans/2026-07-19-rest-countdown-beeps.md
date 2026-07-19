@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 운동 중 세트 사이 휴식이 3초, 2초, 1초 남았을 때 `짧게`, `짧게`, `길게` 비프음을 재생한다.
+**Goal:** 운동 중 웨이트·맨몸 세트 사이 휴식이 3초, 2초, 1초 남았을 때 `짧게`, `짧게`, `길게` 비프음을 재생하고 유산소는 제외한다.
 
-**Architecture:** 남은 초를 비프음 길이로 바꾸는 규칙은 순수 도메인 함수로 분리한다. 브라우저 오디오 모듈은 `AudioContext` 생성·재사용·오류 격리를 맡고, 기록 페이지는 세트 완료 클릭에서 오디오를 준비한 뒤 휴식 초가 바뀔 때 해당 모듈을 호출한다. 타이머, 저장 구조, 화면 UI는 변경하지 않는다.
+**Architecture:** 남은 초를 비프음 길이로 바꾸는 규칙과 운동 종류별 적용 여부는 순수 도메인 함수로 분리한다. 브라우저 오디오 모듈은 `AudioContext` 생성·재사용·오류 격리를 맡고, 기록 페이지는 웨이트·맨몸 세트 완료 클릭에서만 오디오와 휴식을 준비한다. 타이머, 저장 구조, 화면 UI는 변경하지 않는다.
 
 **Tech Stack:** Next.js 16, React 19, TypeScript, Web Audio API, Vitest
 
@@ -315,7 +315,94 @@ git commit -m "feat: play beeps before rest ends"
 
 ---
 
-### Task 4: Verify The Complete Countdown Flow
+### Task 4: Exclude Cardio Exercises
+
+**Files:**
+- Modify: `src/lib/domain/rest-countdown.ts`
+- Modify: `src/lib/domain/rest-countdown.test.ts`
+- Modify: `src/app/(tabs)/record/page.tsx`
+
+- [ ] **Step 1: Write the failing eligibility tests**
+
+Add to `src/lib/domain/rest-countdown.test.ts`:
+
+```ts
+import { shouldStartRestCountdown } from "./rest-countdown";
+
+describe("shouldStartRestCountdown", () => {
+  it.each([
+    ["weight", true],
+    ["bodyweight", true],
+    ["cardio", false],
+  ] as const)("%s 운동의 휴식 적용 여부를 반환한다", (exerciseType, expected) => {
+    expect(shouldStartRestCountdown(exerciseType)).toBe(expected);
+  });
+});
+```
+
+- [ ] **Step 2: Run the focused test and verify RED**
+
+Run:
+
+```powershell
+pnpm test -- src/lib/domain/rest-countdown.test.ts
+```
+
+Expected: FAIL because `shouldStartRestCountdown` is not exported.
+
+- [ ] **Step 3: Implement the exercise-type rule**
+
+Add to `src/lib/domain/rest-countdown.ts`:
+
+```ts
+import type { ExerciseType } from "@/lib/types";
+
+export function shouldStartRestCountdown(
+  exerciseType: ExerciseType,
+): boolean {
+  return exerciseType === "weight" || exerciseType === "bodyweight";
+}
+```
+
+- [ ] **Step 4: Apply the rule in the set completion handler**
+
+Import `shouldStartRestCountdown` beside `getRestCountdownBeep`, then update `toggleDone`:
+
+```ts
+const willDone = !set.done;
+const usesRestCountdown = shouldStartRestCountdown(ex.exerciseType);
+if (willDone && usesRestCountdown) prepareRestCountdownAudio();
+updateSet(exKey, si, { done: willDone });
+if (!usesRestCountdown) return;
+if (willDone) {
+  startRest(sourceKey, draft.restSeconds);
+} else {
+  cancelRestForSource(sourceKey);
+}
+```
+
+Returning for cardio must not call `stopRest`; an existing weight or bodyweight rest continues unchanged.
+
+- [ ] **Step 5: Run verification and commit**
+
+Run:
+
+```powershell
+pnpm test -- src/lib/domain/rest-countdown.test.ts src/hooks/use-rest-countdown.test.tsx
+pnpm typecheck
+pnpm lint
+```
+
+Expected: focused tests and typecheck pass; lint has zero errors and may retain the unrelated existing warning.
+
+```powershell
+git add -- src/lib/domain/rest-countdown.ts src/lib/domain/rest-countdown.test.ts "src/app/(tabs)/record/page.tsx"
+git commit -m "feat: limit rest beeps to strength exercises"
+```
+
+---
+
+### Task 5: Verify The Complete Countdown Flow
 
 **Files:**
 - Modify: `docs/superpowers/plans/2026-07-19-rest-countdown-beeps.md`
@@ -342,11 +429,12 @@ Open `http://localhost:3000/record` at 390×844, start a test workout with a 10-
 On the user's phone with earphones connected:
 
 1. Set rest to 10 seconds before starting the workout.
-2. Start the workout and complete one set.
+2. Start the workout and complete one weight or bodyweight set.
 3. Confirm 3 seconds and 2 seconds produce short `삠` sounds.
 4. Confirm 1 second produces a longer `삐임` sound.
 5. Confirm there is no spoken narration.
 6. Press `건너뛰기` on another rest and confirm no later beep plays.
+7. Complete a cardio set and confirm no rest bar or beep starts.
 
 Expected: `짧게`, `짧게`, `길게` only. This audible check cannot be proven by automated browser tests and must be reported as unverified until the user confirms it on the phone.
 
