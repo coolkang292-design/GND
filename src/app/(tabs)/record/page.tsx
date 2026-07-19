@@ -25,7 +25,7 @@ import {
   toDraftExercises,
   toPlanExercises,
 } from "@/lib/domain/workout-plan";
-import { shouldStartRestCountdown } from "@/lib/domain/rest-countdown";
+import { getRestCountdownTogglePlan } from "@/lib/domain/rest-countdown";
 import { dayKey } from "@/lib/domain/time";
 import { shareOrCopyText, shareResultToast } from "@/lib/share";
 import { prepareRestCountdownAudio } from "@/lib/rest-countdown-audio";
@@ -366,13 +366,12 @@ function WorkoutScreen({ userId }: { userId: string }) {
 
     const willDone = !set.done;
     const sourceKey = `${exKey}:${set.key}`;
-    const usesRestCountdown = shouldStartRestCountdown(ex.exerciseType);
-    if (willDone && usesRestCountdown) prepareRestCountdownAudio();
+    const restPlan = getRestCountdownTogglePlan(ex.exerciseType, willDone);
+    if (restPlan.prepareAudio) prepareRestCountdownAudio();
     updateSet(exKey, si, { done: willDone });
-    if (!usesRestCountdown) return;
-    if (willDone) {
+    if (restPlan.timerAction === "start") {
       startRest(sourceKey, draft.restSeconds);
-    } else {
+    } else if (restPlan.timerAction === "cancel") {
       cancelRestForSource(sourceKey);
     }
   }

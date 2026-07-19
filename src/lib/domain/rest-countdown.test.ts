@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   getRestCountdownBeep,
+  getRestCountdownTogglePlan,
   shouldStartRestCountdown,
 } from "./rest-countdown";
 
@@ -32,6 +33,38 @@ describe("shouldStartRestCountdown", () => {
     "returns whether %s exercises use rest countdowns",
     (exerciseType, expected) => {
       expect(shouldStartRestCountdown(exerciseType)).toBe(expected);
+    },
+  );
+});
+
+describe("getRestCountdownTogglePlan", () => {
+  it.each(["weight", "bodyweight"] as const)(
+    "prepares and starts rest when completing a %s set",
+    (exerciseType) => {
+      expect(getRestCountdownTogglePlan(exerciseType, true)).toEqual({
+        prepareAudio: true,
+        timerAction: "start",
+      });
+    },
+  );
+
+  it.each(["weight", "bodyweight"] as const)(
+    "cancels the matching rest when unchecking a %s set",
+    (exerciseType) => {
+      expect(getRestCountdownTogglePlan(exerciseType, false)).toEqual({
+        prepareAudio: false,
+        timerAction: "cancel",
+      });
+    },
+  );
+
+  it.each([true, false])(
+    "keeps the existing rest unchanged when cardio done becomes %s",
+    (willDone) => {
+      expect(getRestCountdownTogglePlan("cardio", willDone)).toEqual({
+        prepareAudio: false,
+        timerAction: "keep",
+      });
     },
   );
 });
