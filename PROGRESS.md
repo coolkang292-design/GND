@@ -15,7 +15,9 @@
 
 - **전문가 평가·강화 패스 (`e80a04a` + 최종 배포 `gnd-kajhy44t1`)**: 배포 전 3축 평가(보안 96 · 코드/테스트 94 · UX/운영 95 → 종합 95/100) 후 보완 — ①비프 창·길이 상수화 ②CRON_SECRET 타이밍 안전 비교(sha256+timingSafeEqual, 운영에서 유효 200/무효 401 검증) ③`src/lib/supabase/admin.ts`에 `server-only` 가드(클라 import 시 빌드 실패) ④lint 경고 0 달성. 남은 백로그: record/page.tsx(823줄) 분할, 오프라인 캐시(P1).
 - **프로덕션 데이터 전체 초기화 (2026-07-19, 사용자 승인)**: 테스트 잔여물 전부 삭제 — groups 39 · auth 익명 유저 112 · workout-images 파일 44. 16개 테이블+auth 전부 0 검증, 운동 카탈로그 77종 유지. 리셋 후 신규 익명 가입·온보딩 정상 확인(확인용 계정도 삭제, 최종 0명). **크루 온보딩 대기 상태.** 순서 주의: groups 먼저(owner_id FK 비cascade) → auth 유저(cascade) → storage.
-- **크루 사용 안내서**: `docs/GND-크루-사용안내.md` — 초대 링크 열기 → 온보딩 → 홈 화면 설치(iOS/Android) → 사용법 → 계정 유실 주의(브라우저 데이터 삭제 금지·같은 폰 유지) 순.
+- **크루 사용 안내서**: `docs/GND-크루-사용안내.md` — 설치 먼저 → 홈 화면 앱에서 1회 가입(초대 코드 입력) → 푸시 켜기 → 사용법 → 계정 유실 주의 순 (웹 푸시·중복 가입 방지 반영, 2026-07-19 갱신).
+- **웹 푸시 알림 완료 (2026-07-19, `70b7837`~`2d619ed`)**: 설계 `docs/superpowers/specs/2026-07-19-web-push-design.md` · 계획 `docs/superpowers/plans/2026-07-19-web-push.md`. 알림함에 저장되는 모든 알림을 잠금화면 푸시로 발송 — **0016**(push_subscriptions 본인 RLS + notifications.pushed_at + pg_net 트리거→`/api/push/notify`) 적용 ✅, 발송 API는 service_role 재조회·pushed_at 원자 선점·만료 구독(404/410) 자동 삭제, 도메인 TDD 16케이스(payload url 매핑·10분 창), sw.js push/notificationclick 핸들러, `lib/push.ts` 구독 헬퍼 + 프로필 "기기 푸시 알림" 토글 + 홈 1회 안내 카드. VAPID 3종 env는 `.env.local`+Vercel Production(Bash printf). **검증 실측**: unit 251/251 · push RLS 8/8(`scripts/push-rls-test.mjs`) · 발송 API invalid_id/not_found/already_pushed 경로 · **실기기 잠금화면 수신 확인**(테스트 알림 → pushed_at 마킹 → 폰 도착). 제약: 아이폰은 iOS 16.4+·홈 화면 설치 앱에서만.
+- **중복 가입 정리 + 방지 (2026-07-19)**: 사파리↔홈 화면 앱 저장소 분리로 오뎅끼데스까·스칼레또 각 2계정 발생 → 사용자 확인 후 중복 2계정·빈 불꽃 크루 삭제(잔존: 리얼GND + 실사용 2계정). **0017**(닉네임 lower(trim) 유니크) 적용 ✅ — 중복 닉네임 재가입 409 차단 실검증, `upsertMyProfile`이 23505를 친절한 안내로 변환. 안내서도 "설치 먼저 → 앱에서 1회 가입" 순서로 재작성해 원인 차단.
 
 **관련 문서**: 설계 `docs/superpowers/specs/2026-07-19-rest-countdown-beeps-design.md` · 계획 `docs/superpowers/plans/2026-07-19-five-second-rest-beeps-and-deploy.md`(체크박스 완료 처리됨).
 
@@ -189,6 +191,8 @@ Storage 버킷도 SQL로 생성 가능했음(`insert into storage.buckets`, 0005
 - 0013(브리핑 dedupe_key·finalize ranks 존중): 적용 완료 ✅ (2026-07-18, briefing-integration-test 8/8 + 프로덕션 크론 dedupe 검증으로 확인)
 - 0014(챌린지 사진 필수·인증 우회 차단): 적용 완료 ✅ (2026-07-18, challenge-photo-test 8/8 + RLS 107/107로 확인)
 - 0015(날짜별 운동 예정표·본인 전용 RLS·이동 RPC): 적용 완료 ✅ (2026-07-18, workout-plan-test 15/15 + RLS 107/107로 확인)
+- 0016(웹 푸시 구독·pushed_at·pg_net 발송 트리거): 적용 완료 ✅ (2026-07-19, push-rls-test 8/8 + 실기기 잠금화면 수신으로 확인)
+- 0017(닉네임 유니크 — 중복 가입 방지): 적용 완료 ✅ (2026-07-19, 중복 닉네임 409 차단 실검증)
 - 컬럼 추가·시드 위주라 idempotent 안전장치(`on conflict`, `if not exists` 성격) 있는 편이나, 재실행 시 `alter table add column`은 중복 에러 → 각 파일 1회만.
 
 ## 코드 구조 요약
