@@ -215,6 +215,7 @@ Storage 버킷도 SQL로 생성 가능했음(`insert into storage.buckets`, 0005
 9. **Vercel env 등록에 PowerShell 파이프 금지** — `$val | vercel env add`는 인코딩 프리앰블(BOM, U+FEFF)이 값 앞에 섞여 저장되고, 그 값이 fetch 헤더에 들어가는 순간 "String contains non ISO-8859-1 code point"로 익명 인증이 통째로 깨진다. 반드시 Bash에서 `printf '%s' "$VAL" | pnpm dlx vercel env add NAME production`. 배포 후엔 번들에서 값 주변 바이트를 od로 확인하면 확실하다.
 10. **렌더 중 `Date.now()`·`new Date()` 호출은 purity 린트 위반** — "오늘" 기준값은 lazy `useState(() => ...)`로 마운트 시 1회 고정한다 (streak-card의 todayKey, feed의 dateRef 전례).
 11. **iOS 무음 스위치는 Web Audio를 통째로 음소거한다** (이어폰이어도) — 웹앱 대응은 `navigator.audioSession`(iOS 17+)뿐이며, `"playback"`은 무음을 이기지만 백그라운드 음악(멜론 등 네이티브 앱)을 끊고, `"transient"`는 음악과 섞이지만 무음 스위치를 따른다. 둘 다 만족은 네이티브 전용 옵션이라 웹에선 불가. GND는 음악 공존 우선(`transient`) + 비프 게인 0.25 채택 — 무음 모드에서 비프가 안 나는 건 정상이고, 음악에 묻히는 건 게인으로 해결한다. 브라우저 내 재생(네이버)과 네이티브 앱 재생(멜론)은 오디오 세션 동작이 다르니 실기기 확인은 네이티브 음악 앱으로 할 것.
+12. **서버에서 계정을 삭제해도 클라이언트 세션은 토큰 만료 전까지 살아 있다** — 2026-07-19 데이터 리셋 직후 기존 기기들이 삭제된 계정의 유령 세션으로 동작해 온보딩 프로필 저장이 "저장 실패"로 죽었다. `getSession()`은 로컬 저장소만 보므로, 세션이 있으면 `getUser()`로 서버 실존을 확인하고 401/403이면 signOut 후 새 익명 계정을 자동 발급한다(`ea3d557`, auth-provider 테스트 4케이스). 네트워크 오류는 로컬 세션을 유지한다(오프라인 보호). 앞으로 계정을 지울 일이 있으면 이 자동 복구가 기기들을 알아서 회복시킨다.
 
 ## Phase 6 산출물 (2026-07-17, `fbd86b4`~`9f822ec`)
 
