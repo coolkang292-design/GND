@@ -31,7 +31,11 @@ export function getRestCountdownTogglePlan(
 export function getRestCountdownBeep(
   remainingSeconds: number | null,
 ): RestCountdownBeep | null {
-  if (remainingSeconds === 3 || remainingSeconds === 2) {
+  if (
+    remainingSeconds !== null &&
+    remainingSeconds >= 2 &&
+    remainingSeconds <= 5
+  ) {
     return { durationSeconds: 0.12 };
   }
 

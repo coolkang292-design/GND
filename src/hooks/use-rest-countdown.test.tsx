@@ -32,24 +32,26 @@ describe("useRestCountdown", () => {
     vi.useRealTimers();
   });
 
-  it("plays the short-short-long pattern once each at 3, 2, and 1", () => {
+  it("plays four short beeps and one long beep once each at 5 through 1", () => {
     const { result } = renderHook(() => useRestCountdown(true, vi.fn()));
 
-    act(() => result.current.startRest("squat:set-1", 3));
-    advanceSeconds(3);
+    act(() => result.current.startRest("squat:set-1", 5));
+    advanceSeconds(5);
 
     expect(prepareAudio).not.toHaveBeenCalled();
     expect(playBeep).toHaveBeenNthCalledWith(1, { durationSeconds: 0.12 });
     expect(playBeep).toHaveBeenNthCalledWith(2, { durationSeconds: 0.12 });
-    expect(playBeep).toHaveBeenNthCalledWith(3, { durationSeconds: 0.35 });
-    expect(playBeep).toHaveBeenCalledTimes(3);
+    expect(playBeep).toHaveBeenNthCalledWith(3, { durationSeconds: 0.12 });
+    expect(playBeep).toHaveBeenNthCalledWith(4, { durationSeconds: 0.12 });
+    expect(playBeep).toHaveBeenNthCalledWith(5, { durationSeconds: 0.35 });
+    expect(playBeep).toHaveBeenCalledTimes(5);
     expect(result.current.remainingSeconds).toBeNull();
   });
 
   it("does not run a stale tick or beep after skip", () => {
     const { result } = renderHook(() => useRestCountdown(true, vi.fn()));
 
-    act(() => result.current.startRest("squat:set-1", 4));
+    act(() => result.current.startRest("squat:set-1", 10));
     act(() => result.current.stopRest());
     advanceSeconds(5);
 
@@ -64,7 +66,7 @@ describe("useRestCountdown", () => {
       { initialProps: { active: true } },
     );
 
-    act(() => result.current.startRest("squat:set-1", 4));
+    act(() => result.current.startRest("squat:set-1", 10));
     rerender({ active: false });
     rerender({ active: true });
     advanceSeconds(5);
@@ -84,7 +86,7 @@ describe("useRestCountdown", () => {
     advanceSeconds(30);
 
     expect(result.current.remainingSeconds).toBe(3);
-    expect(playBeep).toHaveBeenCalledTimes(2);
+    expect(playBeep).toHaveBeenCalledTimes(4);
     expect(playBeep).toHaveBeenLastCalledWith({ durationSeconds: 0.12 });
   });
 
@@ -104,8 +106,10 @@ describe("useRestCountdown", () => {
 
     expect(playBeep).toHaveBeenNthCalledWith(1, { durationSeconds: 0.12 });
     expect(playBeep).toHaveBeenNthCalledWith(2, { durationSeconds: 0.12 });
-    expect(playBeep).toHaveBeenNthCalledWith(3, { durationSeconds: 0.35 });
-    expect(playBeep).toHaveBeenCalledTimes(3);
+    expect(playBeep).toHaveBeenNthCalledWith(3, { durationSeconds: 0.12 });
+    expect(playBeep).toHaveBeenNthCalledWith(4, { durationSeconds: 0.12 });
+    expect(playBeep).toHaveBeenNthCalledWith(5, { durationSeconds: 0.35 });
+    expect(playBeep).toHaveBeenCalledTimes(5);
     expect(result.current.remainingSeconds).toBeNull();
     expect(onRestComplete).toHaveBeenCalledOnce();
   });
@@ -127,7 +131,7 @@ describe("useRestCountdown", () => {
   it("does not play after the workout stop path", () => {
     const { result } = renderHook(() => useRestCountdown(true, vi.fn()));
 
-    act(() => result.current.startRest("squat:set-1", 4));
+    act(() => result.current.startRest("squat:set-1", 10));
     act(() => result.current.stopRest());
     advanceSeconds(5);
 
