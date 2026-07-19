@@ -7,6 +7,7 @@ import { AuthStatus } from "@/components/auth-status";
 import { CrewCard } from "@/components/crew-card";
 import { ActiveWorkoutCards } from "@/components/feed/active-workout-cards";
 import { NotificationBell } from "@/components/notification-bell";
+import { PushEnableCard } from "@/components/push-enable-card";
 import { CrewLatestWorkout } from "@/components/crew-latest-workout";
 import { StreakCard } from "@/components/home/streak-card";
 import { WeeklyStats } from "@/components/home/weekly-stats";
@@ -68,6 +69,8 @@ export function HomeClient() {
           30초면 기록할 수 있어요. 친구들이 기다리고 있어요.
         </p>
       </Link>
+
+      <PushEnableCard />
 
       {completedAts && (
         <>

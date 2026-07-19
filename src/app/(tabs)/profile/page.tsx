@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
+import { PushSettings } from "@/components/push-settings";
 import {
   DEFAULT_NOTIFICATION_SETTINGS,
   getNotificationSettings,
@@ -74,6 +75,8 @@ export default function ProfilePage() {
         <h1 className="text-[19px] font-extrabold tracking-tight">내 정보</h1>
         <p className="mt-0.5 text-[12.5px] text-muted">알림 설정</p>
       </header>
+
+      <PushSettings />
 
       {loadError && (
         <p className="rounded-card-sm border border-line bg-surface px-3 py-2.5 text-xs text-muted">
