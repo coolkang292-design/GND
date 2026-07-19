@@ -22,6 +22,7 @@ function feedItem(photoUrl: string | null): FeedItem {
     },
     photoUrl,
     streak: 3,
+    recordNote: null,
     reactions: { fire: 1, clap: 0, like: 0 },
     myReactions: new Set(),
   };

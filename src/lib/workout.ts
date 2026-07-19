@@ -44,10 +44,11 @@ export type LocalExercise = {
 };
 
 export type WorkoutDraft = {
-  version: 3;
+  version: 4;
   sessionId: string | null;
   startedAtMs: number | null; // 서버 started_at (RPC 응답 기준)
   scheduledPlanId: string | null; // 예정표에서 불러온 경우, 운동 시작 성공 후 정리
+  sourceSessionId: string | null; // 복사 예정표의 원본 세션 — 기록 갱신 판정용
   effortMessage: string | null; // 지난 기록 불러오기 뒤 보여주는 선택형 노력 제안
   restSeconds: number; // 세트 사이 휴식 사전설정 (§10, 기본 90초)
   exercises: LocalExercise[];
@@ -65,10 +66,11 @@ export const DEFAULT_REST_SECONDS = 90;
 
 export function emptyDraft(restSeconds = DEFAULT_REST_SECONDS): WorkoutDraft {
   return {
-    version: 3,
+    version: 4,
     sessionId: null,
     startedAtMs: null,
     scheduledPlanId: null,
+    sourceSessionId: null,
     effortMessage: null,
     restSeconds,
     exercises: [],
@@ -83,25 +85,38 @@ export function loadDraft(userId: string): WorkoutDraft {
     if (!raw) return emptyDraft();
     const parsed = JSON.parse(raw) as
       | WorkoutDraft
-      | (Omit<WorkoutDraft, "version" | "scheduledPlanId" | "effortMessage"> & {
-          version: 1;
+      | (Omit<
+          WorkoutDraft,
+          "version" | "scheduledPlanId" | "sourceSessionId" | "effortMessage"
+        > & { version: 1 })
+      | (Omit<WorkoutDraft, "version" | "sourceSessionId" | "effortMessage"> & {
+          version: 2;
         })
-      | (Omit<WorkoutDraft, "version" | "effortMessage"> & { version: 2 });
+      | (Omit<WorkoutDraft, "version" | "sourceSessionId"> & { version: 3 });
     if (!parsed || !Array.isArray(parsed.exercises)) {
       return emptyDraft();
     }
     if (parsed.version === 1) {
       return {
         ...parsed,
-        version: 3,
+        version: 4,
         scheduledPlanId: null,
+        sourceSessionId: null,
         effortMessage: null,
       };
     }
     if (parsed.version === 2) {
-      return { ...parsed, version: 3, effortMessage: null };
+      return {
+        ...parsed,
+        version: 4,
+        sourceSessionId: null,
+        effortMessage: null,
+      };
     }
-    if (parsed.version !== 3) return emptyDraft();
+    if (parsed.version === 3) {
+      return { ...parsed, version: 4, sourceSessionId: null };
+    }
+    if (parsed.version !== 4) return emptyDraft();
     return parsed;
   } catch {
     return emptyDraft();
@@ -249,6 +264,19 @@ export async function completeWorkout(
   });
   if (error) throw error;
   return data as WorkoutSession;
+}
+
+/** 기록 갱신 마킹 (0018 definer RPC) — 세션에 문구 저장 + 크루 알림/푸시 */
+export async function markRecordBeaten(
+  sessionId: string,
+  note: string,
+): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  const { error } = await supabase.rpc("mark_record_beaten", {
+    p_session_id: sessionId,
+    p_note: note,
+  });
+  if (error) throw error;
 }
 
 export async function cancelWorkout(
@@ -539,6 +567,7 @@ export async function getSessionLogExercises(
 export type CalendarSession = CompletedSession & {
   id: string;
   exerciseNames: string[];
+  recordNote: string | null; // 🏅 기록 갱신 문구 (0018)
 };
 
 /** 내 completed 세션 전체 (달력 스탬프·월간요약·상세시트·복사용) */
@@ -549,7 +578,7 @@ export async function getCompletedSessions(
   const { data, error } = await supabase
     .from("workout_sessions")
     .select(
-      "id, completed_at, duration_minutes, verification_status, workout_exercises(exercise_name, sort_order)",
+      "id, completed_at, duration_minutes, verification_status, record_note, workout_exercises(exercise_name, sort_order)",
     )
     .eq("user_id", userId)
     .eq("status", "completed")
@@ -563,6 +592,7 @@ export async function getCompletedSessions(
     completed_at: string;
     duration_minutes: number | null;
     verification_status: CompletedSession["verification"];
+    record_note?: string | null; // 0018 적용 전에는 컬럼이 없을 수 있음
     workout_exercises: { exercise_name: string; sort_order: number }[] | null;
   };
 
@@ -574,6 +604,7 @@ export async function getCompletedSessions(
     exerciseNames: [...(r.workout_exercises ?? [])]
       .sort((a, b) => a.sort_order - b.sort_order)
       .map((e) => e.exercise_name),
+    recordNote: r.record_note ?? null,
   }));
 }
 

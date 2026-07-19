@@ -7,6 +7,7 @@ export type PushPayload = {
 // 알림 유형별 푸시 탭 이동 목적지 (설계 §3)
 const PUSH_URL_BY_TYPE: Record<string, string> = {
   reaction_received: "/feed",
+  record_beaten: "/feed",
   rank_change: "/challenge",
   challenge_started: "/challenge",
   challenge_ended: "/challenge",

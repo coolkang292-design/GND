@@ -15,6 +15,7 @@ describe("ExercisePicker", () => {
             verification: "none",
             durationSeconds: 2_700,
             exerciseNames: ["벤치프레스", "랫풀다운"],
+            recordNote: null,
           },
         ]}
         pastLoading={false}

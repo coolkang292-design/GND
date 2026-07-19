@@ -23,6 +23,11 @@ function WorkoutSummary({ item, stats }: { item: FeedItem; stats: string[] }) {
           {stats.join(" · ")}
         </p>
       )}
+      {item.recordNote && (
+        <p className="mt-1.5 inline-block rounded-full bg-accent-weak px-2.5 py-1 text-[11px] font-extrabold text-accent">
+          🏅 기록 갱신 · {item.recordNote}
+        </p>
+      )}
     </div>
   );
 }

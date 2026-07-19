@@ -26,6 +26,7 @@ import {
   toDraftExercises,
   toPlanExercises,
 } from "@/lib/domain/workout-plan";
+import { effortTotals, recordBeatenNote } from "@/lib/domain/record-beaten";
 import { moveItem } from "@/lib/domain/reorder";
 import { getRestCountdownTogglePlan } from "@/lib/domain/rest-countdown";
 import { dayKey } from "@/lib/domain/time";
@@ -53,8 +54,10 @@ import {
   getMyActiveSession,
   getSessionById,
   getSessionExerciseStructure,
+  getSessionLogExercises,
   loadDraft,
   localId,
+  markRecordBeaten,
   newSet,
   saveDraft,
   saveSessionExercises,
@@ -96,6 +99,7 @@ type CompletedResult = {
   durationMinutes: number;
   summary: VolumeSummary;
   logText: string; // 완료 시점에 미리 생성 — draft가 비워진 뒤에도 공유 가능
+  recordNote: string | null; // 기록 갱신 문구 (원본 세션 초과 시)
 };
 
 function errorMessage(e: unknown): string {
@@ -473,6 +477,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
     setDraft((current) => ({
       ...current,
       scheduledPlanId: plan.id,
+      sourceSessionId: plan.sourceSessionId,
       effortMessage: null,
       exercises,
     }));
@@ -544,6 +549,41 @@ function WorkoutScreen({ userId }: { userId: string }) {
           planCleanupFailed = true;
         }
       }
+      // 기록 갱신 판정 — 복사 예정표 운동만. 실패해도 완료 흐름은 계속된다.
+      let recordNote: string | null = null;
+      if (draft.sourceSessionId) {
+        try {
+          const original = await getSessionLogExercises(draft.sourceSessionId);
+          recordNote = recordBeatenNote(
+            effortTotals(
+              original.map((ex) => ({
+                exerciseType: ex.exerciseType,
+                measure: ex.measure,
+                sets: ex.sets.map((set) => ({
+                  ...set,
+                  isCompleted: set.done,
+                })),
+              })),
+            ),
+            effortTotals(
+              draft.exercises.map((ex) => ({
+                exerciseType: ex.exerciseType,
+                measure: ex.measure,
+                sets: ex.sets.map((set) => ({
+                  weightKg: set.weightKg,
+                  reps: set.reps,
+                  distanceKm: set.distanceKm,
+                  durationMin: set.durationMin,
+                  isCompleted: set.done,
+                })),
+              })),
+            ),
+          );
+          if (recordNote) await markRecordBeaten(s.id, recordNote);
+        } catch {
+          recordNote = null;
+        }
+      }
       setResult({
         sessionId: s.id,
         completedAtMs,
@@ -556,6 +596,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
           ),
           draft.exercises,
         ),
+        recordNote,
       });
       clearDraft(userId);
       setDraft(emptyDraft(draft.restSeconds));
@@ -617,6 +658,11 @@ function WorkoutScreen({ userId }: { userId: string }) {
             {result.summary.weightVolumeKg.toLocaleString()}kg · 완료 세트{" "}
             {result.summary.completedSetCount}개
           </p>
+          {result.recordNote && (
+            <p className="mt-2 rounded-card-sm bg-accent-weak px-3 py-2 text-sm font-extrabold text-accent">
+              🏅 기록 갱신! 지난번보다 {result.recordNote}
+            </p>
+          )}
         </section>
         {/* 인증사진 (§11) — 촬영/앨범/사진 없이 */}
         <VerificationPhoto

@@ -98,6 +98,7 @@ export type FeedItem = {
   volume: VolumeSummary;
   photoUrl: string | null;
   streak: number;
+  recordNote: string | null; // 🏅 기록 갱신 문구 (0018)
   reactions: Record<ReactionType, number>;
   myReactions: Set<ReactionType>;
 };
@@ -110,6 +111,8 @@ type FeedSessionRow = {
   title: string | null;
   completed_at: string;
   duration_minutes: number | null;
+  record_note?: string | null; // 0018 적용 전에는 컬럼이 없을 수 있음
+
   workout_exercises:
     | {
         exercise_name: string;
@@ -152,7 +155,7 @@ export async function getGroupFeed(
   let query = supabase
     .from("workout_sessions")
     .select(
-      `id, user_id, title, completed_at, duration_minutes, workout_exercises(exercise_name, exercise_type, sort_order, workout_sets(weight_kg, reps, duration_seconds, distance_meters, is_completed)), ${imagesEmbed}`,
+      `id, user_id, title, completed_at, duration_minutes, record_note, workout_exercises(exercise_name, exercise_type, sort_order, workout_sets(weight_kg, reps, duration_seconds, distance_meters, is_completed)), ${imagesEmbed}`,
     )
     .eq("group_id", groupId)
     .eq("status", "completed")
@@ -205,6 +208,7 @@ export async function getGroupFeed(
       volume: summarizeVolume(sets),
       photoUrl: photoUrls.get(r.id) ?? null,
       streak: streaks.get(r.user_id) ?? 0,
+      recordNote: r.record_note ?? null,
       reactions: reaction?.counts ?? { fire: 0, clap: 0, like: 0 },
       myReactions: reaction?.mine.get(myUserId) ?? new Set<ReactionType>(),
     };

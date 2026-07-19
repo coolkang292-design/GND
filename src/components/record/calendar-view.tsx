@@ -614,6 +614,11 @@ export function CalendarView({
                       <p className="mt-0.5 text-[11.5px] text-muted">
                         {durationLabel(s.durationSeconds)} · {meta.glyph}{" "}
                         {meta.label}
+                        {s.recordNote && (
+                          <span className="ml-1 font-bold text-accent">
+                            · 🏅 {s.recordNote}
+                          </span>
+                        )}
                       </p>
                     </div>
                     {s.exerciseNames.length > 0 && (
