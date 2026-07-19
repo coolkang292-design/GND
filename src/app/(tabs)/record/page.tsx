@@ -13,9 +13,9 @@ import { ExerciseCard } from "@/components/record/exercise-card";
 import { ExercisePicker } from "@/components/record/exercise-picker";
 import { RestBar } from "@/components/record/rest-bar";
 import { VerificationPhoto } from "@/components/record/verification-photo";
+import { useRestCountdown } from "@/hooks/use-rest-countdown";
 import { summarizeVolume, type VolumeSummary } from "@/lib/domain/volume";
 import { formatWorkoutLog } from "@/lib/domain/workout-log";
-import { getRestCountdownBeep } from "@/lib/domain/rest-countdown";
 import {
   applyLastRecordedSetsToExercises,
   buildEffortMessage,
@@ -27,10 +27,7 @@ import {
 } from "@/lib/domain/workout-plan";
 import { dayKey } from "@/lib/domain/time";
 import { shareOrCopyText, shareResultToast } from "@/lib/share";
-import {
-  playRestCountdownBeep,
-  prepareRestCountdownAudio,
-} from "@/lib/rest-countdown-audio";
+import { prepareRestCountdownAudio } from "@/lib/rest-countdown-audio";
 import { getMyGroups } from "@/lib/crew";
 import type { BodyPart, CatalogExercise, ExerciseType } from "@/lib/types";
 import {
@@ -125,7 +122,6 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const [pastSessions, setPastSessions] = useState<CalendarSession[]>([]);
   const [pastLoading, setPastLoading] = useState(false);
   const [pastLoaded, setPastLoaded] = useState(false);
-  const [restRemaining, setRestRemaining] = useState<number | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [result, setResult] = useState<CompletedResult | null>(null);
   const [busy, setBusy] = useState(false);
@@ -140,6 +136,15 @@ function WorkoutScreen({ userId }: { userId: string }) {
     if (toastTimer.current) clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(null), 2500);
   }, []);
+  const {
+    remainingSeconds: restRemaining,
+    startRest,
+    extendRest,
+    stopRest,
+    cancelRestForSource,
+  } = useRestCountdown(active, () => {
+    showToast("휴식 끝! 다음 세트 시작 💪");
+  });
 
   // 자동 임시저장 (§10)
   useEffect(() => {
@@ -205,26 +210,6 @@ function WorkoutScreen({ userId }: { userId: string }) {
     const t = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(t);
   }, [active]);
-
-  // 휴식 카운트다운 (완료 체크 시 사전설정 시간으로 시작)
-  useEffect(() => {
-    if (restRemaining === null) return;
-    const t = setTimeout(() => {
-      if (restRemaining <= 1) {
-        setRestRemaining(null);
-        showToast("휴식 끝! 다음 세트 시작 💪");
-      } else {
-        setRestRemaining(restRemaining - 1);
-      }
-    }, 1000);
-    return () => clearTimeout(t);
-  }, [restRemaining, showToast]);
-
-  useEffect(() => {
-    if (!active) return;
-    const beep = getRestCountdownBeep(restRemaining);
-    if (beep) playRestCountdownBeep(beep);
-  }, [active, restRemaining]);
 
   const updateExercise = useCallback(
     (key: string, updater: (ex: LocalExercise) => LocalExercise) => {
@@ -375,10 +360,18 @@ function WorkoutScreen({ userId }: { userId: string }) {
       return;
     }
     const ex = draft.exercises.find((e) => e.key === exKey);
-    const willDone = !ex?.sets[si]?.done;
+    const set = ex?.sets[si];
+    if (!set) return;
+
+    const willDone = !set.done;
+    const sourceKey = `${exKey}:${set.key}`;
     if (willDone) prepareRestCountdownAudio();
     updateSet(exKey, si, { done: willDone });
-    if (willDone) setRestRemaining(draft.restSeconds);
+    if (willDone) {
+      startRest(sourceKey, draft.restSeconds);
+    } else {
+      cancelRestForSource(sourceKey);
+    }
   }
 
   function addSet(exKey: string) {
@@ -530,6 +523,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
     ) {
       return;
     }
+    stopRest();
     setBusy(true);
     try {
       await saveSessionExercises(draft.sessionId, draft.exercises);
@@ -563,7 +557,6 @@ function WorkoutScreen({ userId }: { userId: string }) {
       // 완료 직후 다시 운동을 준비할 때 방금 기록도 목록에 포함한다.
       setPastLoaded(false);
       setPastSessions([]);
-      setRestRemaining(null);
       if (planCleanupFailed) {
         showToast("운동은 완료됐지만 예정표는 달력에서 직접 삭제해 주세요");
       }
@@ -578,11 +571,11 @@ function WorkoutScreen({ userId }: { userId: string }) {
     if (!window.confirm("운동을 취소할까요? 이번 기록은 저장되지 않아요.")) {
       return;
     }
+    stopRest();
     setBusy(true);
     try {
       if (draft.sessionId) await cancelWorkout(draft.sessionId);
       setDraft(emptyDraft(draft.restSeconds));
-      setRestRemaining(null);
       showToast("운동을 취소했어요");
     } catch (e) {
       showToast(errorMessage(e));
@@ -845,8 +838,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
       {restRemaining !== null && (
         <RestBar
           remainingSeconds={restRemaining}
-          onExtend={() => setRestRemaining((r) => (r === null ? r : r + 30))}
-          onSkip={() => setRestRemaining(null)}
+          onExtend={extendRest}
+          onSkip={stopRest}
         />
       )}
 
