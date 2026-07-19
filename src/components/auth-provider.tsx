@@ -57,15 +57,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } = await supabase.auth.getSession();
 
       if (session) {
-        if (!cancelled) {
-          setState({
-            configured: true,
-            loading: false,
-            userId: session.user.id,
-            error: null,
-          });
+        // 로컬 세션은 서버에서 계정이 삭제돼도 토큰 만료 전까지 살아 있다
+        // (데이터 리셋 후 "저장 실패"의 원인). 서버에 실존 여부를 확인해
+        // 유령 세션이면 지우고 새 익명 계정을 발급한다. 네트워크 오류 등
+        // 그 외 실패는 로컬 세션을 그대로 신뢰한다.
+        const { error: userError } = await supabase.auth.getUser();
+        const isGhostSession =
+          userError !== null &&
+          userError !== undefined &&
+          (userError.status === 401 || userError.status === 403);
+
+        if (!isGhostSession) {
+          if (!cancelled) {
+            setState({
+              configured: true,
+              loading: false,
+              userId: session.user.id,
+              error: null,
+            });
+          }
+          return;
         }
-        return;
+
+        await supabase.auth.signOut();
+        if (cancelled) return;
       }
 
       const { data, error } = await supabase.auth.signInAnonymously();
