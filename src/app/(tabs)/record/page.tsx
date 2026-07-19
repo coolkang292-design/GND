@@ -15,6 +15,7 @@ import { RestBar } from "@/components/record/rest-bar";
 import { VerificationPhoto } from "@/components/record/verification-photo";
 import { summarizeVolume, type VolumeSummary } from "@/lib/domain/volume";
 import { formatWorkoutLog } from "@/lib/domain/workout-log";
+import { getRestCountdownBeep } from "@/lib/domain/rest-countdown";
 import {
   applyLastRecordedSetsToExercises,
   buildEffortMessage,
@@ -26,6 +27,10 @@ import {
 } from "@/lib/domain/workout-plan";
 import { dayKey } from "@/lib/domain/time";
 import { shareOrCopyText, shareResultToast } from "@/lib/share";
+import {
+  playRestCountdownBeep,
+  prepareRestCountdownAudio,
+} from "@/lib/rest-countdown-audio";
 import { getMyGroups } from "@/lib/crew";
 import type { BodyPart, CatalogExercise, ExerciseType } from "@/lib/types";
 import {
@@ -215,6 +220,12 @@ function WorkoutScreen({ userId }: { userId: string }) {
     return () => clearTimeout(t);
   }, [restRemaining, showToast]);
 
+  useEffect(() => {
+    if (!active) return;
+    const beep = getRestCountdownBeep(restRemaining);
+    if (beep) playRestCountdownBeep(beep);
+  }, [active, restRemaining]);
+
   const updateExercise = useCallback(
     (key: string, updater: (ex: LocalExercise) => LocalExercise) => {
       setDraft((d) => ({
@@ -365,6 +376,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
     }
     const ex = draft.exercises.find((e) => e.key === exKey);
     const willDone = !ex?.sets[si]?.done;
+    if (willDone) prepareRestCountdownAudio();
     updateSet(exKey, si, { done: willDone });
     if (willDone) setRestRemaining(draft.restSeconds);
   }
