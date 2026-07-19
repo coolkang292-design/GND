@@ -11,6 +11,7 @@ import { useAuth } from "@/components/auth-provider";
 import { CalendarView } from "@/components/record/calendar-view";
 import { ExerciseCard } from "@/components/record/exercise-card";
 import { ExercisePicker } from "@/components/record/exercise-picker";
+import { ExerciseReorderSheet } from "@/components/record/exercise-reorder-sheet";
 import { RestBar } from "@/components/record/rest-bar";
 import { VerificationPhoto } from "@/components/record/verification-photo";
 import { useRestCountdown } from "@/hooks/use-rest-countdown";
@@ -25,6 +26,7 @@ import {
   toDraftExercises,
   toPlanExercises,
 } from "@/lib/domain/workout-plan";
+import { moveItem } from "@/lib/domain/reorder";
 import { getRestCountdownTogglePlan } from "@/lib/domain/rest-countdown";
 import { dayKey } from "@/lib/domain/time";
 import { shareOrCopyText, shareResultToast } from "@/lib/share";
@@ -120,6 +122,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const [groupId, setGroupId] = useState<string | null>(null);
   const [prevVolume, setPrevVolume] = useState<number | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [reorderOpen, setReorderOpen] = useState(false);
   const [pastSessions, setPastSessions] = useState<CalendarSession[]>([]);
   const [pastLoading, setPastLoading] = useState(false);
   const [pastLoaded, setPastLoaded] = useState(false);
@@ -813,8 +816,23 @@ function WorkoutScreen({ userId }: { userId: string }) {
           onAddSet={() => addSet(ex.key)}
           onRemoveSet={() => removeSet(ex.key)}
           onRemoveExercise={() => removeExercise(ex.key)}
+          onLongPress={() => setReorderOpen(true)}
         />
       ))}
+
+      {reorderOpen && (
+        <ExerciseReorderSheet
+          exercises={draft.exercises}
+          onMove={(from, to) =>
+            setDraft((d) => ({
+              ...d,
+              exercises: moveItem(d.exercises, from, to),
+            }))
+          }
+          onRemove={removeExercise}
+          onClose={() => setReorderOpen(false)}
+        />
+      )}
 
       <div className="flex gap-2">
         <button

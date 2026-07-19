@@ -1,5 +1,6 @@
 "use client";
 
+import { useLongPress } from "@/hooks/use-long-press";
 import { setVolumeKg } from "@/lib/domain/volume";
 import type { LocalExercise, LocalSet } from "@/lib/workout";
 import { TYPE_LABEL } from "./exercise-picker";
@@ -17,6 +18,7 @@ export function ExerciseCard({
   onAddSet,
   onRemoveSet,
   onRemoveExercise,
+  onLongPress,
 }: {
   exercise: LocalExercise;
   index: number;
@@ -29,7 +31,10 @@ export function ExerciseCard({
   onAddSet: () => void;
   onRemoveSet: () => void;
   onRemoveExercise: () => void;
+  onLongPress: () => void;
 }) {
+  // 제목 줄을 약 0.5초 길게 누르면 순서 이동 시트 (설계 2026-07-19)
+  const longPressHandlers = useLongPress(onLongPress);
   const isWeight = exercise.exerciseType === "weight";
   const isCardio = exercise.exerciseType === "cardio";
   const isTimeBodyweight =
@@ -63,7 +68,7 @@ export function ExerciseCard({
 
   return (
     <section className="rounded-card border border-line bg-surface p-4 shadow-card">
-      <div className="flex items-center gap-2">
+      <div className="flex select-none items-center gap-2" {...longPressHandlers}>
         <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-accent-weak text-xs font-extrabold text-accent">
           {index + 1}
         </span>

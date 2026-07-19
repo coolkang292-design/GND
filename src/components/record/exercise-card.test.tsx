@@ -41,6 +41,7 @@ function renderCard({
       onLoadLast={vi.fn()}
       onUpdateSet={vi.fn()}
       onToggleDone={vi.fn()}
+      onLongPress={vi.fn()}
       onAddSet={vi.fn()}
       onRemoveSet={vi.fn()}
       onRemoveExercise={vi.fn()}
