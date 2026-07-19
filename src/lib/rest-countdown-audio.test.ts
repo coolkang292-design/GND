@@ -58,7 +58,7 @@ describe("rest countdown audio", () => {
     expect(gain.gain.setValueAtTime).toHaveBeenCalledWith(0.0001, 10);
     expect(gain.gain.linearRampToValueAtTime).toHaveBeenNthCalledWith(
       1,
-      0.06,
+      0.25,
       10.01,
     );
     expect(gain.gain.linearRampToValueAtTime).toHaveBeenNthCalledWith(
@@ -145,6 +145,57 @@ describe("rest countdown audio", () => {
       expect(oscillator.stop).toHaveBeenCalledOnce();
     },
   );
+
+  it("declares a transient audio session during preparation when supported", async () => {
+    class FakeAudioContext {
+      state: AudioContextState = "running";
+      resume = vi.fn(() => Promise.resolve());
+    }
+
+    const audioSession = { type: "auto" };
+
+    vi.stubGlobal("window", {
+      AudioContext: FakeAudioContext,
+      navigator: { audioSession },
+    });
+
+    const { prepareRestCountdownAudio } = await import("./rest-countdown-audio");
+
+    prepareRestCountdownAudio();
+
+    expect(audioSession.type).toBe("transient");
+  });
+
+  it("still prepares audio when setting the audio session type fails", async () => {
+    class FakeAudioContext {
+      static instances: FakeAudioContext[] = [];
+
+      state: AudioContextState = "running";
+      resume = vi.fn(() => Promise.resolve());
+
+      constructor() {
+        FakeAudioContext.instances.push(this);
+      }
+    }
+
+    const audioSession = {};
+    Object.defineProperty(audioSession, "type", {
+      get: () => "auto",
+      set: () => {
+        throw new Error("Audio session is locked");
+      },
+    });
+
+    vi.stubGlobal("window", {
+      AudioContext: FakeAudioContext,
+      navigator: { audioSession },
+    });
+
+    const { prepareRestCountdownAudio } = await import("./rest-countdown-audio");
+
+    expect(() => prepareRestCountdownAudio()).not.toThrow();
+    expect(FakeAudioContext.instances).toHaveLength(1);
+  });
 
   it("does not throw when audio resume is rejected", async () => {
     class RejectingAudioContext {
