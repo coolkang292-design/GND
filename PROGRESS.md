@@ -14,12 +14,12 @@
 - **이번 세션 완료**: 설계 갱신·승인·커밋 `968e68b`, 실행 계획 작성·커밋 `27ebe8b`.
 - **격리 작업공간**: `C:\Users\SAMSUNG\workout-app\.worktrees\five-second-rest-beeps`, 브랜치 `feat/five-second-rest-beeps`. `pnpm install --frozen-lockfile` 완료, 변경 전 기준 테스트 **21파일 / 227개 전부 통과**.
 - **정확한 중지 상태**: 계획 Task 1·2의 체크박스는 전부 미완료. 5초·4초 테스트와 구현 코드는 아직 수정하지 않았고, 구현 서브에이전트도 시작하지 않았다. 전체 정적 검사·DB/RLS 통합 검사·Vercel 배포도 아직 실행하지 않았다.
-- **현재 Git 상태**: `main`과 기능 브랜치가 모두 `27ebe8b`를 가리킨다. 두 작업트리는 코드 변경 없이 깨끗하고, 메인 저장소의 사용자 전용 `.claude/`만 untracked이므로 커밋하지 않는다.
+- **현재 Git 상태**: 기능 브랜치 `feat/five-second-rest-beeps`는 계획 커밋 `27ebe8b`를 가리키고, `main`은 그 위에 이 인수인계 문서 커밋만 추가된 상태다. 기능 작업트리는 깨끗하고, 메인 저장소의 사용자 전용 `.claude/`만 untracked이므로 커밋하지 않는다.
 - **현재 로컬 서버**: `C:\Users\SAMSUNG\workout-app`의 `main`에서 `http://localhost:3000` 실행 중. 현재 화면은 기존 3초 패턴 코드다.
 
 #### 다음 세션 재개 순서
 
-1. `C:\Users\SAMSUNG\workout-app\.worktrees\five-second-rest-beeps`에서 브랜치와 깨끗한 상태를 확인한다.
+1. `C:\Users\SAMSUNG\workout-app\.worktrees\five-second-rest-beeps`에서 브랜치와 깨끗한 상태를 확인한 뒤 `git merge main`으로 이 인수인계 문서 커밋을 먼저 가져온다.
 2. `docs/superpowers/plans/2026-07-19-five-second-rest-beeps-and-deploy.md`를 읽고 Task 1을 TDD로 실행한다. 먼저 5초·4초 테스트가 `null` 때문에 실패하는 RED를 직접 확인한다.
 3. `getRestCountdownBeep`의 짧은 비프 범위를 2~5초로 넓히고 훅 기대값을 짧은 4회 + 긴 1회로 수정한다.
 4. Task 1 구현 후 스펙 리뷰 → 코드 품질 리뷰를 각각 통과시키고 기능 브랜치를 `main`에 로컬 병합한다.
