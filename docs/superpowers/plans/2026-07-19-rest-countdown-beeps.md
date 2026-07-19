@@ -16,7 +16,7 @@
 - Create: `src/lib/domain/rest-countdown.ts`
 - Create: `src/lib/domain/rest-countdown.test.ts`
 
-- [ ] **Step 1: Write the failing pattern tests**
+- [x] **Step 1: Write the failing pattern tests**
 
 Create `src/lib/domain/rest-countdown.test.ts`:
 
@@ -39,7 +39,7 @@ describe("getRestCountdownBeep", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test and verify RED**
+- [x] **Step 2: Run the test and verify RED**
 
 Run:
 
@@ -49,7 +49,7 @@ pnpm test -- src/lib/domain/rest-countdown.test.ts
 
 Expected: FAIL because `src/lib/domain/rest-countdown.ts` does not exist.
 
-- [ ] **Step 3: Implement the beep pattern**
+- [x] **Step 3: Implement the beep pattern**
 
 Create `src/lib/domain/rest-countdown.ts`:
 
@@ -74,7 +74,7 @@ export function getRestCountdownBeep(
 }
 ```
 
-- [ ] **Step 4: Run the focused test and verify GREEN**
+- [x] **Step 4: Run the focused test and verify GREEN**
 
 Run:
 
@@ -84,7 +84,7 @@ pnpm test -- src/lib/domain/rest-countdown.test.ts
 
 Expected: 7 tests pass.
 
-- [ ] **Step 5: Commit the countdown rule**
+- [x] **Step 5: Commit the countdown rule**
 
 ```powershell
 git add -- src/lib/domain/rest-countdown.ts src/lib/domain/rest-countdown.test.ts
@@ -100,7 +100,7 @@ git commit -m "feat: define rest countdown beep pattern"
 - Create: `src/lib/rest-countdown-audio.test.ts`
 - Read: `src/lib/domain/rest-countdown.ts`
 
-- [ ] **Step 1: Write failing audio-safety tests**
+- [x] **Step 1: Write failing audio-safety tests**
 
 Create `src/lib/rest-countdown-audio.test.ts`:
 
@@ -140,7 +140,7 @@ describe("rest countdown audio", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test and verify RED**
+- [x] **Step 2: Run the test and verify RED**
 
 Run:
 
@@ -150,7 +150,7 @@ pnpm test -- src/lib/rest-countdown-audio.test.ts
 
 Expected: FAIL because `src/lib/rest-countdown-audio.ts` does not exist.
 
-- [ ] **Step 3: Implement the browser audio module**
+- [x] **Step 3: Implement the browser audio module**
 
 Create `src/lib/rest-countdown-audio.ts`:
 
@@ -229,7 +229,7 @@ export function playRestCountdownBeep(beep: RestCountdownBeep): void {
 }
 ```
 
-- [ ] **Step 4: Run audio and domain tests**
+- [x] **Step 4: Run audio and domain tests**
 
 Run:
 
@@ -239,7 +239,7 @@ pnpm test -- src/lib/rest-countdown-audio.test.ts src/lib/domain/rest-countdown.
 
 Expected: 2 test files and 9 tests pass.
 
-- [ ] **Step 5: Commit the audio module**
+- [x] **Step 5: Commit the audio module**
 
 ```powershell
 git add -- src/lib/rest-countdown-audio.ts src/lib/rest-countdown-audio.test.ts
@@ -255,7 +255,7 @@ git commit -m "feat: add safe rest countdown beep player"
 - Modify: `src/app/(tabs)/record/page.tsx:204-216`
 - Modify: `src/app/(tabs)/record/page.tsx:361-370`
 
-- [ ] **Step 1: Import the countdown rule and audio functions**
+- [x] **Step 1: Import the countdown rule and audio functions**
 
 Add these imports to `src/app/(tabs)/record/page.tsx`:
 
@@ -267,7 +267,7 @@ import {
 } from "@/lib/rest-countdown-audio";
 ```
 
-- [ ] **Step 2: Prepare audio from the set-complete user action**
+- [x] **Step 2: Prepare audio from the set-complete user action**
 
 Update the successful completion path in `toggleDone`:
 
@@ -280,7 +280,7 @@ if (willDone) setRestRemaining(draft.restSeconds);
 
 This call must remain inside the button-triggered handler so mobile browsers can unlock audio from a direct user action.
 
-- [ ] **Step 3: Play one beep when the remaining second changes**
+- [x] **Step 3: Play one beep when the remaining second changes**
 
 Add a separate effect immediately after the existing rest countdown effect:
 
@@ -294,7 +294,7 @@ useEffect(() => {
 
 The effect does not change timer state. Skipping or ending rest sets `restRemaining` to `null`, so no later beep is selected.
 
-- [ ] **Step 4: Run focused and full static verification**
+- [x] **Step 4: Run focused and full static verification**
 
 Run:
 
@@ -306,7 +306,7 @@ pnpm lint
 
 Expected: focused tests and typecheck pass; lint has zero errors. Record the existing `scripts/briefing-integration-test.mjs:23` warning separately if it remains.
 
-- [ ] **Step 5: Commit the page integration**
+- [x] **Step 5: Commit the page integration**
 
 ```powershell
 git add -- "src/app/(tabs)/record/page.tsx"
@@ -320,7 +320,7 @@ git commit -m "feat: play beeps before rest ends"
 **Files:**
 - Modify: `docs/superpowers/plans/2026-07-19-rest-countdown-beeps.md`
 
-- [ ] **Step 1: Run all automated verification**
+- [x] **Step 1: Run all automated verification**
 
 Run:
 
@@ -333,7 +333,7 @@ pnpm build
 
 Expected: all tests, typecheck, and build pass; lint has zero errors. Keep unrelated existing warnings visible in the completion report.
 
-- [ ] **Step 2: Verify the visual timer on mobile width**
+- [x] **Step 2: Verify the visual timer on mobile width**
 
 Open `http://localhost:3000/record` at 390×844, start a test workout with a 10-second rest, complete one set, and confirm the rest bar counts down without horizontal overflow. Skip or cancel the test workout afterward so no test session remains active.
 
