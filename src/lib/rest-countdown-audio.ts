@@ -18,8 +18,12 @@ function getRestCountdownAudioContext(): AudioContext | null {
       return null;
     }
 
-    if (restCountdownAudioContext?.state !== "closed") {
-      return restCountdownAudioContext;
+    if (restCountdownAudioContext) {
+      if (restCountdownAudioContext.state !== "closed") {
+        return restCountdownAudioContext;
+      }
+
+      restCountdownAudioContext = null;
     }
 
     const audioWindow = window as AudioContextWindow;
