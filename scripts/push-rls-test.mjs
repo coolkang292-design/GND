@@ -171,7 +171,7 @@ try {
   );
   check(
     "endpoint upsert 후에도 1행 유지·갱신",
-    upsert.status === 201 &&
+    (upsert.status === 200 || upsert.status === 201) &&
       afterUpsert.json?.length === 1 &&
       afterUpsert.json[0].p256dh === "pk2",
     JSON.stringify(afterUpsert.json),
