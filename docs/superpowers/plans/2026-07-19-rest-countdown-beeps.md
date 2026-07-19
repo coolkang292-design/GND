@@ -428,7 +428,7 @@ Fresh verification after cardio exclusion: 21 test files / 227 tests passed, typ
 
 Open `http://localhost:3000/record` at 390×844, start a test workout with a 10-second rest, complete one set, and confirm the rest bar counts down without horizontal overflow. Skip or cancel the test workout afterward so no test session remains active.
 
-- [ ] **Step 3: Verify the audible pattern with the user**
+- [x] **Step 3: Verify the audible pattern with the user**
 
 On the user's phone with earphones connected:
 
@@ -442,7 +442,9 @@ On the user's phone with earphones connected:
 
 Expected: `짧게`, `짧게`, `길게` only. This audible check cannot be proven by automated browser tests and must be reported as unverified until the user confirms it on the phone.
 
-- [ ] **Step 4: Mark this plan complete and commit verification state**
+User confirmed the audible behavior and cardio exclusion on 2026-07-19.
+
+- [x] **Step 4: Mark this plan complete and commit verification state**
 
 Change completed checklist entries in this file from `[ ]` to `[x]`, then run:
 
