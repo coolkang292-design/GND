@@ -20,7 +20,8 @@ if (!URL_ || !ANON || !SERVICE) throw new Error(".env.local에 Supabase 설정�
 let pass = 0, fail = 0;
 function check(name, ok, detail = "") {
   console.log(`${ok ? "✅" : "❌"} ${name}${ok ? "" : ` — ${detail}`}`);
-  ok ? pass++ : fail++;
+  if (ok) pass++;
+  else fail++;
 }
 
 async function api(token, method, path, body, headers = {}) {

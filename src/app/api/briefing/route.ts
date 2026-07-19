@@ -1,8 +1,16 @@
+import { createHash, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { buildBriefings, type BriefingUser } from "@/lib/domain/briefing";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
+
+// 해시 후 비교해 길이 차이까지 숨기는 타이밍 안전 문자열 비교.
+function secretsMatch(provided: string, expected: string): boolean {
+  const providedDigest = createHash("sha256").update(provided).digest();
+  const expectedDigest = createHash("sha256").update(expected).digest();
+  return timingSafeEqual(providedDigest, expectedDigest);
+}
 
 /**
  * 아침 브리핑 디스패처 (스펙 §2·§3) — Vercel Cron이 매일 UTC 0시(KST 9시,
@@ -14,7 +22,10 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "env_missing" }, { status: 500 });
   }
   if (
-    req.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`
+    !secretsMatch(
+      req.headers.get("authorization") ?? "",
+      `Bearer ${process.env.CRON_SECRET}`,
+    )
   ) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
