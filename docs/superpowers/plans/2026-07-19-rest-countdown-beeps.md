@@ -322,7 +322,7 @@ git commit -m "feat: play beeps before rest ends"
 - Modify: `src/lib/domain/rest-countdown.test.ts`
 - Modify: `src/app/(tabs)/record/page.tsx`
 
-- [ ] **Step 1: Write the failing eligibility tests**
+- [x] **Step 1: Write the failing eligibility tests**
 
 Add to `src/lib/domain/rest-countdown.test.ts`:
 
@@ -340,7 +340,7 @@ describe("shouldStartRestCountdown", () => {
 });
 ```
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run:
 
@@ -350,7 +350,7 @@ pnpm test -- src/lib/domain/rest-countdown.test.ts
 
 Expected: FAIL because `shouldStartRestCountdown` is not exported.
 
-- [ ] **Step 3: Implement the exercise-type rule**
+- [x] **Step 3: Implement the exercise-type rule**
 
 Add to `src/lib/domain/rest-countdown.ts`:
 
@@ -364,7 +364,7 @@ export function shouldStartRestCountdown(
 }
 ```
 
-- [ ] **Step 4: Apply the rule in the set completion handler**
+- [x] **Step 4: Apply the rule in the set completion handler**
 
 Import `shouldStartRestCountdown` beside `getRestCountdownBeep`, then update `toggleDone`:
 
@@ -383,7 +383,9 @@ if (willDone) {
 
 Returning for cardio must not call `stopRest`; an existing weight or bodyweight rest continues unchanged.
 
-- [ ] **Step 5: Run verification and commit**
+Quality review added `getRestCountdownTogglePlan` so the strength start/cancel and cardio keep behavior are covered by regression tests, while the page only executes the returned action.
+
+- [x] **Step 5: Run verification and commit**
 
 Run:
 
@@ -419,6 +421,8 @@ pnpm build
 ```
 
 Expected: all tests, typecheck, and build pass; lint has zero errors. Keep unrelated existing warnings visible in the completion report.
+
+Fresh verification after cardio exclusion: 21 test files / 227 tests passed, typecheck passed, lint had 0 errors and 1 pre-existing warning, and the production build passed.
 
 - [x] **Step 2: Verify the visual timer on mobile width**
 
