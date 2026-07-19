@@ -17,7 +17,7 @@
 - Modify: `src/lib/domain/social.test.ts`
 - Modify: `src/lib/social.ts`
 
-- [ ] **Step 1: Write failing relation-shape tests**
+- [x] **Step 1: Write failing relation-shape tests**
 
 `src/lib/domain/social.test.ts`에 다음 테스트와 import를 추가한다.
 
@@ -51,7 +51,7 @@ describe("firstWorkoutImagePath", () => {
 });
 ```
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run:
 
@@ -61,7 +61,7 @@ pnpm test -- src/lib/domain/social.test.ts
 
 Expected: FAIL because `firstWorkoutImagePath` is not exported.
 
-- [ ] **Step 3: Implement the relation normalizer**
+- [x] **Step 3: Implement the relation normalizer**
 
 `src/lib/domain/social.ts`에 다음 타입과 함수를 추가한다.
 
@@ -79,7 +79,7 @@ export function firstWorkoutImagePath(
 }
 ```
 
-- [ ] **Step 4: Use the normalizer in the feed query result**
+- [x] **Step 4: Use the normalizer in the feed query result**
 
 `src/lib/social.ts`에서 도메인 함수를 import하고 관계 타입과 서명 대상 변환을 변경한다.
 
@@ -104,7 +104,7 @@ const withImage = rows
   .filter((row): row is { id: string; path: string } => row.path !== null);
 ```
 
-- [ ] **Step 5: Run feed-focused tests and commit**
+- [x] **Step 5: Run feed-focused tests and commit**
 
 Run:
 
@@ -127,7 +127,7 @@ git commit -m "fix: restore workout photos in feed"
 - Modify: `src/lib/domain/workout-import.ts`
 - Modify: `src/lib/domain/workout-import.test.ts`
 
-- [ ] **Step 1: Write a failing set-replacement test**
+- [x] **Step 1: Write a failing set-replacement test**
 
 `src/lib/domain/workout-import.test.ts`에 다음 테스트와 import를 추가한다.
 
@@ -163,7 +163,7 @@ describe("replaceWithLastRecordedSets", () => {
 });
 ```
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run:
 
@@ -173,7 +173,7 @@ pnpm test -- src/lib/domain/workout-import.test.ts
 
 Expected: FAIL because `replaceWithLastRecordedSets` is not exported.
 
-- [ ] **Step 3: Implement the replacement rule**
+- [x] **Step 3: Implement the replacement rule**
 
 `src/lib/domain/workout-import.ts`에 다음 함수를 추가한다.
 
@@ -189,7 +189,7 @@ export function replaceWithLastRecordedSets(
 }
 ```
 
-- [ ] **Step 4: Run the focused test and commit**
+- [x] **Step 4: Run the focused test and commit**
 
 Run:
 
@@ -213,7 +213,7 @@ git commit -m "feat: define individual exercise reload rules"
 - Modify: `src/components/record/exercise-card.tsx`
 - Modify: `src/app/(tabs)/record/page.tsx`
 
-- [ ] **Step 1: Write failing button-state tests**
+- [x] **Step 1: Write failing button-state tests**
 
 `src/components/record/exercise-card.test.tsx`를 다음 내용으로 만든다.
 
@@ -271,7 +271,7 @@ describe("ExerciseCard 직전 기록 불러오기", () => {
 });
 ```
 
-- [ ] **Step 2: Run the component test and verify RED**
+- [x] **Step 2: Run the component test and verify RED**
 
 Run:
 
@@ -281,7 +281,7 @@ pnpm test -- src/components/record/exercise-card.test.tsx
 
 Expected: FAIL because `loadingLast` and `onLoadLast` are not component props.
 
-- [ ] **Step 3: Add the button to the shared exercise summary row**
+- [x] **Step 3: Add the button to the shared exercise summary row**
 
 `src/components/record/exercise-card.tsx`에 props를 추가한다.
 
@@ -304,7 +304,7 @@ onLoadLast: () => void;
 </button>
 ```
 
-- [ ] **Step 4: Replace automatic preload with an explicit page handler**
+- [x] **Step 4: Replace automatic preload with an explicit page handler**
 
 `src/app/(tabs)/record/page.tsx`에서 `addExercises`의 `getLastRecordedSets` 반복 호출을 제거한다. 화면 상태와 다음 처리 함수를 추가한다.
 
@@ -354,7 +354,7 @@ loadingLast={loadingExerciseKey === ex.key}
 onLoadLast={() => void loadLastExercise(ex)}
 ```
 
-- [ ] **Step 5: Run record-focused tests and commit**
+- [x] **Step 5: Run record-focused tests and commit**
 
 Run:
 
@@ -376,7 +376,7 @@ git commit -m "feat: add per-exercise previous record reload"
 **Files:**
 - Modify: `docs/superpowers/plans/2026-07-19-feed-photo-exercise-reload.md`
 
-- [ ] **Step 1: Run all automated verification**
+- [x] **Step 1: Run all automated verification**
 
 Run:
 
@@ -389,15 +389,15 @@ pnpm build
 
 Expected: all tests and build pass; lint has zero errors. Record any pre-existing warning separately.
 
-- [ ] **Step 2: Verify the local feed with real data**
+- [x] **Step 2: Verify the local feed with real data**
 
 Open `http://localhost:3000/feed` and confirm the latest `camera_verified` session renders a large image with the date at the top and profile/completion time at the bottom.
 
-- [ ] **Step 3: Verify individual exercise reload on mobile width**
+- [x] **Step 3: Verify individual exercise reload on mobile width**
 
-Open `http://localhost:3000/record`, add `랫풀다운`, confirm its values start empty, press `↻ 불러오기`, and verify the latest weight, rep values, and set count replace the card with all completion checks off. Remove the temporary draft exercise after verification.
+Open `http://localhost:3000/record`, add an exercise, confirm it starts with the normal new-exercise defaults rather than an automatic history lookup, press `↻ 불러오기`, and verify the latest weight, rep values, and set count replace the card with all completion checks off. Remove the temporary draft exercise after verification.
 
-- [ ] **Step 4: Mark this plan complete and commit verification state**
+- [x] **Step 4: Mark this plan complete and commit verification state**
 
 Change completed checklist entries in this file from `[ ]` to `[x]`, then run:
 
