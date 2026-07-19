@@ -17,7 +17,7 @@
 - Modify: `src/lib/domain/rest-countdown.ts`
 - Modify: `src/hooks/use-rest-countdown.test.tsx`
 
-- [ ] **Step 1: Write the failing domain tests**
+- [x] **Step 1: Write the failing domain tests**
 
 Replace the beep-pattern tests with:
 
@@ -45,7 +45,7 @@ describe("getRestCountdownBeep", () => {
 });
 ```
 
-- [ ] **Step 2: Run the domain test and verify RED**
+- [x] **Step 2: Run the domain test and verify RED**
 
 Run:
 
@@ -55,7 +55,7 @@ pnpm test -- src/lib/domain/rest-countdown.test.ts
 
 Expected: the 5-second and 4-second cases fail because the current function returns `null`.
 
-- [ ] **Step 3: Implement the minimal domain change**
+- [x] **Step 3: Implement the minimal domain change**
 
 Replace the short-beep condition in `src/lib/domain/rest-countdown.ts` with:
 
@@ -71,7 +71,7 @@ if (
 
 Keep the 1-second long beep and all cardio eligibility logic unchanged.
 
-- [ ] **Step 4: Verify GREEN for the domain rule**
+- [x] **Step 4: Verify GREEN for the domain rule**
 
 Run:
 
@@ -81,7 +81,7 @@ pnpm test -- src/lib/domain/rest-countdown.test.ts
 
 Expected: all rest countdown domain tests pass.
 
-- [ ] **Step 5: Extend the hook integration test**
+- [x] **Step 5: Extend the hook integration test**
 
 Replace the first hook test with:
 
@@ -103,7 +103,7 @@ it("plays four short beeps and one long beep once each at 5 through 1", () => {
 });
 ```
 
-- [ ] **Step 6: Run focused tests and commit**
+- [x] **Step 6: Run focused tests and commit**
 
 Run:
 
@@ -126,11 +126,11 @@ git commit -m "feat: start rest beeps at five seconds"
 - Modify: `PROGRESS.md`
 - Modify: `docs/superpowers/plans/2026-07-19-five-second-rest-beeps-and-deploy.md`
 
-- [ ] **Step 1: Stop the local development server before building**
+- [x] **Step 1: Stop the local development server before building**
 
 Stop the running `pnpm dev` process with `Ctrl+C`. This prevents the development server and production build from writing to `.next` at the same time.
 
-- [ ] **Step 2: Run the full local verification gate**
+- [x] **Step 2: Run the full local verification gate**
 
 Run each command from `C:\Users\SAMSUNG\workout-app`:
 
@@ -143,7 +143,7 @@ pnpm build
 
 Expected: all tests, typecheck, lint, and the production build pass. Do not deploy if any command fails.
 
-- [ ] **Step 3: Re-run the database and integration gates for the features entering production**
+- [x] **Step 3: Re-run the database and integration gates for the features entering production**
 
 Run:
 
@@ -156,7 +156,7 @@ node scripts/briefing-integration-test.mjs
 
 Expected: RLS `107/107`, workout plans `15/15`, challenge photos `8/8`, and briefing integration `8/8`. The scripts must clean up their own test records. Do not rerun migration SQL files.
 
-- [ ] **Step 4: Confirm the Vercel project link without changing secrets**
+- [x] **Step 4: Confirm the Vercel project link without changing secrets**
 
 Read `.vercel/project.json` and confirm:
 
@@ -170,7 +170,7 @@ Read `.vercel/project.json` and confirm:
 
 Do not add, remove, or rewrite any Vercel environment variable.
 
-- [ ] **Step 5: Deploy the verified working tree to production**
+- [x] **Step 5: Deploy the verified working tree to production**
 
 Run:
 
@@ -180,7 +180,7 @@ pnpm dlx vercel deploy --prod --yes
 
 Expected: Vercel reports `Ready` and assigns the production alias `https://gnd-one.vercel.app`.
 
-- [ ] **Step 6: Verify the production routes**
+- [x] **Step 6: Verify the production routes**
 
 Run:
 
@@ -191,7 +191,7 @@ Run:
 
 Expected: both routes return HTTP `200`.
 
-- [ ] **Step 7: Record the completed deployment**
+- [x] **Step 7: Record the completed deployment**
 
 Update `PROGRESS.md` so it states:
 
@@ -207,7 +207,7 @@ git add -- PROGRESS.md docs/superpowers/plans/2026-07-19-five-second-rest-beeps-
 git commit -m "docs: record five-second beep production deploy"
 ```
 
-- [ ] **Step 8: Restart the local development server**
+- [x] **Step 8: Restart the local development server**
 
 Run:
 

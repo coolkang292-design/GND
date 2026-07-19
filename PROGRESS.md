@@ -3,50 +3,34 @@
 > 새 세션은 이 파일 + `C:\Users\SAMSUNG\Desktop\Workout app\IMPLEMENTATION_PLAN.md`(단일 진실)만 읽으면 바로 이어서 작업할 수 있다.
 > 시각 스펙: 같은 폴더의 `운동앱-목업.html`.
 
-## ⚠️ 작업 중지 인수인계 — 5초 휴식 비프음 + 운영 배포
+## ✅ 2026-07-19 — 5초 휴식 비프음 + 운영 배포 완료
 
-**앱이 프로덕션에 떠 있다: https://gnd-one.vercel.app** — 브리핑 크론·알림설정·피드 사진필터까지 배포 완료. 챌린지 사진 인증·레벨과 달력 운동 예정표는 로컬 구현·DB 적용·검증까지 끝났지만 **아직 운영 배포하지 않음**.
+**앱 프로덕션: https://gnd-one.vercel.app** — 이번 배포로 **5초 휴식 비프음, 챌린지 사진 인증·레벨, 달력 운동 예정표**가 모두 운영에 반영됐다. 남은 것은 재배포가 아니라 배포 주소에서의 폰 확인뿐이다.
 
-### ⏸️ 2026-07-19 중지 지점 — 구현 전, 배포 전
+- **5초 비프음 (A안)**: 웨이트·맨몸 휴식 5·4·3·2초 짧은 `삠` + 1초 긴 `삐임`, 음성 나레이션 없음, 유산소는 휴식 타이머·비프음 제외 유지. `getRestCountdownBeep` 짧은 비프 범위만 2~5초로 확장(구현 `f70d3b6`, main 병합 `7c62f8a`). TDD RED→GREEN, 스펙 리뷰·코드 품질 리뷰 통과, 사용자 폰+이어폰 실기기 확인 완료(2026-07-19).
+- **배포 직전 전체 게이트 (실측)**: unit **229/229**(21파일) · typecheck · lint(오류 0, 무해 경고 2 — briefing-integration-test.mjs 본체+워크트리 사본) · build · RLS **107/107** · workout-plan **15/15** · challenge-photo **8/8** · briefing **8/8**. DB 0001~0015는 기적용이라 재실행하지 않음.
+- **배포 결과**: `pnpm dlx vercel deploy --prod --yes` → 배포 `gnd-57c1ffnw4-gnd4.vercel.app` `● Ready`(target production), `https://gnd-one.vercel.app/home`·`/record` HTTP **200** 확인.
+- **배포 후 폰 확인 항목(배포 주소 기준)**: ①휴식 비프음 5초 패턴 ②새 챌린지 사진 인증 안내·진행 중 내 레벨·종료 후 전원 레벨 ③달력 복사→날짜 선택→예정 표시→당일 운동 준비 흐름.
 
-- **사용자 확정 패턴**: A안 — 웨이트·맨몸 휴식이 5·4·3·2초 남았을 때 짧은 `삠`, 1초 남았을 때 긴 `삐임`. 유산소는 휴식 타이머·비프음에서 계속 제외한다.
-- **기존 3초 기능 완료 상태**: 3·2초 짧게 + 1초 길게, 음성 나레이션 없음, 유산소 제외를 `main`에 로컬 병합했다(`6edf574`). 자동 테스트 227개·typecheck·lint·build와 사용자 이어폰 확인까지 완료했지만 이 최신 `main`은 아직 운영 배포하지 않았다.
-- **이번 세션 완료**: 설계 갱신·승인·커밋 `968e68b`, 실행 계획 작성·커밋 `27ebe8b`.
-- **격리 작업공간**: `C:\Users\SAMSUNG\workout-app\.worktrees\five-second-rest-beeps`, 브랜치 `feat/five-second-rest-beeps`. `pnpm install --frozen-lockfile` 완료, 변경 전 기준 테스트 **21파일 / 227개 전부 통과**.
-- **정확한 중지 상태**: 계획 Task 1·2의 체크박스는 전부 미완료. 5초·4초 테스트와 구현 코드는 아직 수정하지 않았고, 구현 서브에이전트도 시작하지 않았다. 전체 정적 검사·DB/RLS 통합 검사·Vercel 배포도 아직 실행하지 않았다.
-- **현재 Git 상태**: 기능 브랜치 `feat/five-second-rest-beeps`는 계획 커밋 `27ebe8b`를 가리키고, `main`은 그 위에 이 인수인계 문서 커밋만 추가된 상태다. 기능 작업트리는 깨끗하고, 메인 저장소의 사용자 전용 `.claude/`만 untracked이므로 커밋하지 않는다.
-- **현재 로컬 서버**: `C:\Users\SAMSUNG\workout-app`의 `main`에서 `http://localhost:3000` 실행 중. 현재 화면은 기존 3초 패턴 코드다.
+**관련 문서**: 설계 `docs/superpowers/specs/2026-07-19-rest-countdown-beeps-design.md` · 계획 `docs/superpowers/plans/2026-07-19-five-second-rest-beeps-and-deploy.md`(체크박스 완료 처리됨).
 
-#### 다음 세션 재개 순서
-
-1. `C:\Users\SAMSUNG\workout-app\.worktrees\five-second-rest-beeps`에서 브랜치와 깨끗한 상태를 확인한 뒤 `git merge main`으로 이 인수인계 문서 커밋을 먼저 가져온다.
-2. `docs/superpowers/plans/2026-07-19-five-second-rest-beeps-and-deploy.md`를 읽고 Task 1을 TDD로 실행한다. 먼저 5초·4초 테스트가 `null` 때문에 실패하는 RED를 직접 확인한다.
-3. `getRestCountdownBeep`의 짧은 비프 범위를 2~5초로 넓히고 훅 기대값을 짧은 4회 + 긴 1회로 수정한다.
-4. Task 1 구현 후 스펙 리뷰 → 코드 품질 리뷰를 각각 통과시키고 기능 브랜치를 `main`에 로컬 병합한다.
-5. 실행 중인 dev 서버를 중지한 뒤 `pnpm test`, `pnpm typecheck`, `pnpm lint`, `pnpm build`를 `main`에서 다시 실행한다.
-6. 이번 배포에는 아직 운영에 없는 챌린지 사진·레벨과 달력 예정표도 함께 들어가므로 `rls-test` 107/107, `workout-plan-test` 15/15, `challenge-photo-test` 8/8, `briefing-integration-test` 8/8을 다시 통과시킨다. **DB 0001~0015 마이그레이션은 이미 적용됐으므로 재실행하지 않는다.**
-7. 사용자가 운영 배포를 이미 승인했다. 모든 게이트 통과 후 `pnpm dlx vercel deploy --prod --yes`를 실행하고 `https://gnd-one.vercel.app/home`, `/record` HTTP 200을 확인한다.
-8. 실제 배포 결과를 이 문서에 기록하고 계획 체크박스를 완료 처리한 뒤, `main` 개발 서버를 다시 시작한다.
-
-**관련 문서**: 설계 `docs/superpowers/specs/2026-07-19-rest-countdown-beeps-design.md` · 계획 `docs/superpowers/plans/2026-07-19-five-second-rest-beeps-and-deploy.md`.
-
-### 🟡 배포 대기 — 챌린지 사진 인증 필수 + 레벨 시스템 (7태스크 구현·검증 완료)
+### ✅ 운영 배포 완료 (2026-07-19) — 챌린지 사진 인증 필수 + 레벨 시스템
 
 - **문서**: 설계 `docs/superpowers/specs/2026-07-18-challenge-photo-levels-design.md` · 계획 `docs/superpowers/plans/2026-07-18-challenge-photo-levels.md` (사용자 승인 완료, 커밋 `a727c70`·`6046890`).
 - **요구사항 요약**: ①새로 만드는 챌린지는 사진 인증한 운동만 목표·참여율·레벨에 집계(기존 챌린지는 소급 없음, DB `challenges.photo_required` 컬럼) ②챌린지 기간 전용 불독 5단계 레벨(Lv.1 잠만보 불독~Lv.5 개노답 탈출) — 시작일 기준 7일 블록에 5일+ 운동하면 +1(블록당 1회), 운동일 공백 5일(스트릭 소멸 규칙 재사용)마다 -1, 챌린지 종료 시 시상대에 최종 레벨 공개.
 - **구현 완료**: Task 1 레벨 도메인(`5a7aeff`) · Task 2 운동일 배열(`4af8d12`) · Task 3 사진 필수 집계(`4b7f5b4`) · Task 4 DB 보안(`872ddcc`) · Task 5 안내 UI(`a659533`) · Task 6 레벨 UI(`d3d958b`). 각 단계 리뷰 완료.
 - **DB 완료**: `0014_challenge_photo_required.sql` 사용자가 SQL Editor에 적용. 실제 Storage 파일이 없는 가짜 인증 행과 연결 사진 삭제 우회를 차단하며, 새 챌린지는 `photo_required=true`만 생성 가능.
 - **최종 검증**: unit **166/166** · lint · typecheck · build · RLS **107/107** · 사진 인증 통합 **8/8** · 브리핑 통합 **8/8** (2026-07-18 실측).
-- **남은 게이트**: 사용자 승인 후 Vercel 운영 배포 → 배포 주소에서 새 챌린지 생성 안내·진행 중 내 레벨·종료 후 전원 레벨을 폰으로 확인.
+- **남은 게이트**: 배포 주소에서 새 챌린지 생성 안내·진행 중 내 레벨·종료 후 전원 레벨을 폰으로 확인 (배포는 2026-07-19 완료).
 
-### 🟡 배포 대기 — 달력 운동 예정표 계정 동기화
+### ✅ 운영 배포 완료 (2026-07-19) — 달력 운동 예정표 계정 동기화
 
 - **문서**: 설계 `docs/superpowers/specs/2026-07-18-calendar-workout-plans-design.md` · 계획 `docs/superpowers/plans/2026-07-18-calendar-workout-plans.md`.
 - **구현 완료**: 과거 운동 `복사` → 오늘 이후 날짜 선택 → 날짜별 예정표 저장 → 달력 `예정` 표시 → 당일 `운동 준비하기` → 실제 완료 후 예정표 제거. 미래 예정표는 날짜 이동·삭제 가능.
 - **통계 안전**: 예정표는 완료 세션과 별도 `workout_plans`에 저장하므로 실제 완료 전에는 월간 통계·챌린지·레벨에 포함되지 않는다.
 - **DB 완료**: `0015_workout_plans.sql` 적용 완료. 본인만 CRUD 가능하고, 타인 세션 원본·타인 수정/삭제/RPC 이동·과거 날짜·확인 없는 교체를 차단한다.
 - **검증**: unit **175/175** · lint 오류 0 · typecheck · build · 예정표 실 DB **15/15** · 기존 RLS **107/107**. 커밋 `21cb611`·`6ec7c91`·`8af3918`.
-- **남은 게이트**: 운영 배포 후 폰에서 복사→날짜 선택→예정 표시→당일 준비 흐름을 육안 확인.
+- **남은 게이트**: 배포 주소에서 폰으로 복사→날짜 선택→예정 표시→당일 준비 흐름을 육안 확인 (배포는 2026-07-19 완료).
 
 ### 폰 확인 대기 (배포 주소 https://gnd-one.vercel.app 기준, 브리핑 크론 세션분 — 위 신규 기능과 무관, 아직 미확인)
 ① 프로필 탭 알림 토글 5종 저장·반영 ② 피드 "사진 인증" 필터 칩 ③ 알림함 브리핑 카드(불독 아이콘) 도착(9시대 자동 발송 확인 필요 — 수동 curl로 오늘자는 이미 발송됨, 내일 아침 자동분으로 확인).
@@ -86,9 +70,9 @@
 | 4 완료 루프 | ✅ | 달력(`9e540ef`)·지난 운동 복사(`1f3281d`)·인증사진(`a1a6e1a`) — unit 63 + RLS 54/54 + E2E 2종 통과 |
 | 5 챌린지 | ✅ | goal-score TDD 20케이스·KPI 게이트·진행중 비공개·시상대(`ea6fb60`) — unit 83 + RLS 68/68 + E2E 통과 |
 | 6 소셜 | ✅ | 피드·반응·진행중 카드·Realtime 응원·찌르기·알림함 — unit 104 + RLS 102/102 + E2E 2인 14/14 + 실기기 7항목 통과 |
-| 7 안정화 | 🔶 진행 중 | 브랜딩 ✅·Vercel 배포 ✅·일지 공유 ✅·피드 히스토리 ✅·브리핑 크론 ✅·알림설정 토글 ✅·피드 사진 필터 ✅·챌린지 사진/레벨 ✅·달력 예정표 ✅(신규 2종 운영 배포 대기) — 남은 것: 핵심 E2E·3명 4주 실사용 |
+| 7 안정화 | 🔶 진행 중 | 브랜딩 ✅·Vercel 배포 ✅·일지 공유 ✅·피드 히스토리 ✅·브리핑 크론 ✅·알림설정 토글 ✅·피드 사진 필터 ✅·챌린지 사진/레벨 ✅·달력 예정표 ✅·5초 휴식 비프음 ✅(2026-07-19 전부 운영 배포 완료) — 남은 것: 핵심 E2E·3명 4주 실사용 |
 
-### 챌린지 사진 인증·레벨 산출물 (2026-07-18, `5a7aeff`~`d3d958b`, 운영 배포 대기)
+### 챌린지 사진 인증·레벨 산출물 (2026-07-18, `5a7aeff`~`d3d958b`, 2026-07-19 운영 배포 완료)
 
 - **레벨 계산**: `lib/domain/level.ts` TDD 15케이스. 챌린지 기간의 고유 운동일로 주간 상승·5일 공백 하락을 계산하고 1~5 범위를 유지한다.
 - **사진 집계**: `PeriodStats.workoutDayKeys`를 노출하고, `photo_required=true`인 챌린지만 `workout_images`가 연결된 완료 세션을 목표·참여율·레벨에 사용한다. 기존 챌린지는 전체 완료 세션 집계를 유지한다.
