@@ -71,6 +71,28 @@ describe("useRestCountdown", () => {
     expect(playBeep).toHaveBeenLastCalledWith({ durationSeconds: 0.12 });
   });
 
+  it("restarts the countdown when a new source starts with the same seconds", () => {
+    const onRestComplete = vi.fn();
+    const { result } = renderHook(() =>
+      useRestCountdown(true, onRestComplete),
+    );
+
+    act(() => result.current.startRest("squat:set-1", 60));
+    act(() => result.current.startRest("bench:set-1", 60));
+    advanceSeconds(57);
+
+    expect(result.current.remainingSeconds).toBe(3);
+
+    advanceSeconds(3);
+
+    expect(playBeep).toHaveBeenNthCalledWith(1, { durationSeconds: 0.12 });
+    expect(playBeep).toHaveBeenNthCalledWith(2, { durationSeconds: 0.12 });
+    expect(playBeep).toHaveBeenNthCalledWith(3, { durationSeconds: 0.35 });
+    expect(playBeep).toHaveBeenCalledTimes(3);
+    expect(result.current.remainingSeconds).toBeNull();
+    expect(onRestComplete).toHaveBeenCalledOnce();
+  });
+
   it("only cancels rest when the same source set is unchecked", () => {
     const { result } = renderHook(() => useRestCountdown(true, vi.fn()));
 

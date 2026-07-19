@@ -14,6 +14,7 @@ export function useRestCountdown(
   onRestComplete: () => void,
 ) {
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
+  const [restGeneration, setRestGeneration] = useState(0);
   const restRef = useRef<RestState | null>(null);
   const generationRef = useRef(0);
   const onRestCompleteRef = useRef(onRestComplete);
@@ -27,6 +28,7 @@ export function useRestCountdown(
     generationRef.current += 1;
     restRef.current = null;
     playedBeepRef.current = null;
+    setRestGeneration(generationRef.current);
     setRemainingSeconds(null);
   }, []);
 
@@ -39,6 +41,7 @@ export function useRestCountdown(
     generationRef.current = rest.generation;
     restRef.current = rest;
     playedBeepRef.current = null;
+    setRestGeneration(rest.generation);
     setRemainingSeconds(seconds);
   }, []);
 
@@ -54,6 +57,7 @@ export function useRestCountdown(
     generationRef.current = rest.generation;
     restRef.current = rest;
     playedBeepRef.current = null;
+    setRestGeneration(rest.generation);
     setRemainingSeconds(rest.remainingSeconds);
   }, []);
 
@@ -103,7 +107,7 @@ export function useRestCountdown(
     }, 1_000);
 
     return () => clearTimeout(timeout);
-  }, [active, remainingSeconds]);
+  }, [active, remainingSeconds, restGeneration]);
 
   useEffect(() => {
     const current = restRef.current;
@@ -119,7 +123,7 @@ export function useRestCountdown(
 
     playedBeepRef.current = beepKey;
     playRestCountdownBeep(beep);
-  }, [active, remainingSeconds]);
+  }, [active, remainingSeconds, restGeneration]);
 
   return {
     remainingSeconds: active ? remainingSeconds : null,
