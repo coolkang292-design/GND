@@ -57,6 +57,23 @@ describe("useRestCountdown", () => {
     expect(playBeep).not.toHaveBeenCalled();
   });
 
+  it("clears rest permanently when the workout becomes inactive", () => {
+    const onRestComplete = vi.fn();
+    const { result, rerender } = renderHook(
+      ({ active }) => useRestCountdown(active, onRestComplete),
+      { initialProps: { active: true } },
+    );
+
+    act(() => result.current.startRest("squat:set-1", 4));
+    rerender({ active: false });
+    rerender({ active: true });
+    advanceSeconds(5);
+
+    expect(result.current.remainingSeconds).toBeNull();
+    expect(playBeep).not.toHaveBeenCalled();
+    expect(onRestComplete).not.toHaveBeenCalled();
+  });
+
   it("keeps the extended time and can play the pattern again", () => {
     const { result } = renderHook(() => useRestCountdown(true, vi.fn()));
 

@@ -15,10 +15,16 @@ export function useRestCountdown(
 ) {
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
   const [restGeneration, setRestGeneration] = useState(0);
+  const [previousActive, setPreviousActive] = useState(active);
   const restRef = useRef<RestState | null>(null);
   const generationRef = useRef(0);
   const onRestCompleteRef = useRef(onRestComplete);
   const playedBeepRef = useRef<string | null>(null);
+
+  if (active !== previousActive) {
+    setPreviousActive(active);
+    if (!active) setRemainingSeconds(null);
+  }
 
   useEffect(() => {
     onRestCompleteRef.current = onRestComplete;
