@@ -9,6 +9,7 @@ type AudioContextWindow = Window &
   typeof globalThis & {
     webkitAudioContext?: typeof AudioContext;
   };
+type ResumableAudioContextState = AudioContextState | "interrupted";
 
 let restCountdownAudioContext: AudioContext | null = null;
 
@@ -53,6 +54,12 @@ function resumeAudioContext(context: AudioContext): void {
   }
 }
 
+function isResumableAudioContextState(
+  state: ResumableAudioContextState,
+): boolean {
+  return state === "suspended" || state === "interrupted";
+}
+
 function scheduleRestCountdownBeep(
   context: AudioContext,
   beep: RestCountdownBeep,
@@ -82,7 +89,10 @@ export function prepareRestCountdownAudio(): void {
   try {
     const context = getRestCountdownAudioContext();
 
-    if (context?.state === "suspended") {
+    if (
+      context &&
+      isResumableAudioContextState(context.state as ResumableAudioContextState)
+    ) {
       resumeAudioContext(context);
     }
   } catch {
@@ -98,16 +108,15 @@ export function playRestCountdownBeep(beep: RestCountdownBeep): void {
       return;
     }
 
-    if (context.state === "running") {
+    const state = context.state as ResumableAudioContextState;
+
+    if (state === "running") {
       scheduleRestCountdownBeep(context, beep);
       return;
     }
 
-    if (context.state === "suspended") {
-      void context
-        .resume()
-        .then(() => scheduleRestCountdownBeep(context, beep))
-        .catch(ignoreAudioError);
+    if (isResumableAudioContextState(state)) {
+      resumeAudioContext(context);
     }
   } catch {
     ignoreAudioError();
