@@ -698,8 +698,10 @@ function WorkoutScreen({ userId }: { userId: string }) {
         <>
           <CalendarView
             userId={userId}
+            catalog={catalog}
             onScheduleSession={handleScheduleFromPast}
             onLoadPlan={handleLoadPlan}
+            onCreateCustom={handleCreateCustom}
           />
           {toast && (
             <div

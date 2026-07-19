@@ -52,7 +52,8 @@ export async function getWorkoutPlans(userId: string): Promise<WorkoutPlan[]> {
 export async function saveWorkoutPlan(input: {
   userId: string;
   planDate: string;
-  sourceSessionId: string;
+  /** 지난 세션 복사면 세션 id, 새로 짠 계획이면 null (0015 RLS가 둘 다 허용) */
+  sourceSessionId: string | null;
   exercises: PlanExercise[];
 }): Promise<WorkoutPlan> {
   const supabase = getSupabaseBrowserClient();

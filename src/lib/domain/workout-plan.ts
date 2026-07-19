@@ -1,4 +1,4 @@
-import type { BodyPart, ExerciseType } from "@/lib/types";
+import type { BodyPart, CatalogExercise, ExerciseType } from "@/lib/types";
 
 export type PlanSet = {
   weightKg: number;
@@ -130,6 +130,18 @@ export function parsePlanExercises(value: unknown): PlanExercise[] {
     });
   }
   return parsed;
+}
+
+/** 카탈로그 다중 선택 → 새 계획 운동 (0값 세트 1개 — 기록 탭 "운동 추가"와 동일 기본값) */
+export function newPlanExercises(catalog: CatalogExercise[]): PlanExercise[] {
+  return catalog.map((item) => ({
+    name: item.name,
+    bodyPart: item.body_part,
+    exerciseType: item.exercise_type,
+    measure: item.measure,
+    isCustom: item.is_custom,
+    sets: [{ weightKg: 0, reps: 0, distanceKm: 0, durationMin: 0 }],
+  }));
 }
 
 export function toPlanExercises(exercises: LocalExerciseInput[]): PlanExercise[] {

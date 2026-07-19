@@ -12,10 +12,16 @@ import { dayKey } from "@/lib/domain/time";
 import {
   addDaysToDateKey,
   isPlanDateAllowed,
+  newPlanExercises,
 } from "@/lib/domain/workout-plan";
 import { formatWorkoutLog } from "@/lib/domain/workout-log";
 import { getMyProfile } from "@/lib/crew";
 import { shareOrCopyText, shareResultToast } from "@/lib/share";
+import type {
+  BodyPart,
+  CatalogExercise,
+  ExerciseType,
+} from "@/lib/types";
 import {
   getCompletedSessions,
   getSessionLogExercises,
@@ -25,8 +31,10 @@ import {
   deleteWorkoutPlan,
   getWorkoutPlans,
   moveWorkoutPlan,
+  saveWorkoutPlan,
   type WorkoutPlan,
 } from "@/lib/workout-plan";
+import { ExercisePicker } from "./exercise-picker";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -76,15 +84,24 @@ function totalTimeLabel(seconds: number): string {
 
 export function CalendarView({
   userId,
+  catalog,
   onScheduleSession,
   onLoadPlan,
+  onCreateCustom,
 }: {
   userId: string;
+  catalog: CatalogExercise[];
   onScheduleSession: (
     sessionId: string,
     planDate: string,
   ) => Promise<WorkoutPlan>;
   onLoadPlan: (plan: WorkoutPlan) => boolean;
+  onCreateCustom: (input: {
+    name: string;
+    bodyPart: BodyPart;
+    exerciseType: ExerciseType;
+    measure: "reps" | "time" | null;
+  }) => Promise<CatalogExercise | null>;
 }) {
   const [sessions, setSessions] = useState<CalendarSession[]>([]);
   const [plans, setPlans] = useState<WorkoutPlan[]>([]);
@@ -106,6 +123,7 @@ export function CalendarView({
   const [copyDate, setCopyDate] = useState("");
   const [planBusy, setPlanBusy] = useState(false);
   const [planToast, setPlanToast] = useState<string | null>(null);
+  const [planPickerDate, setPlanPickerDate] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -280,6 +298,48 @@ export function CalendarView({
       showPlanToast("예정표를 삭제했어요");
     } catch {
       showPlanToast("예정표를 삭제하지 못했어요");
+    } finally {
+      setPlanBusy(false);
+    }
+  }
+
+  function applySavedPlan(saved: WorkoutPlan) {
+    setPlans((current) => [
+      ...current.filter((plan) => plan.planDate !== saved.planDate),
+      saved,
+    ]);
+    setPlanPickerDate(null);
+    showPlanToast("운동 계획을 저장했어요");
+  }
+
+  async function handleNewPlanPick(items: CatalogExercise[]) {
+    if (!planPickerDate || items.length === 0 || planBusy) return;
+    setPlanBusy(true);
+    try {
+      applySavedPlan(
+        await saveWorkoutPlan({
+          userId,
+          planDate: planPickerDate,
+          sourceSessionId: null,
+          exercises: newPlanExercises(items),
+        }),
+      );
+    } catch {
+      showPlanToast("운동 계획을 저장하지 못했어요");
+    } finally {
+      setPlanBusy(false);
+    }
+  }
+
+  async function handleNewPlanFromPast(sessionId: string): Promise<boolean> {
+    if (!planPickerDate || planBusy) return false;
+    setPlanBusy(true);
+    try {
+      applySavedPlan(await onScheduleSession(sessionId, planPickerDate));
+      return true;
+    } catch {
+      showPlanToast("운동 계획을 저장하지 못했어요");
+      return false;
     } finally {
       setPlanBusy(false);
     }
@@ -471,6 +531,17 @@ export function CalendarView({
               </button>
             </div>
             <div className="flex flex-col gap-2">
+              {!selectedPlan && isPlanDateAllowed(selectedDate, todayKey) && (
+                <button
+                  onClick={() => {
+                    setPlanPickerDate(selectedDate);
+                    setSelectedDate(null);
+                  }}
+                  className="h-11 w-full rounded-card border border-accent bg-surface text-sm font-extrabold text-accent"
+                >
+                  ➕ 새 운동 계획 만들기
+                </button>
+              )}
               {selectedPlan && (
                 <div className="rounded-card border border-good/40 bg-good-weak p-3">
                   <div className="flex items-start justify-between gap-2">
@@ -629,6 +700,18 @@ export function CalendarView({
           </div>
         </>
       )}
+
+      {/* 새 운동 계획 피커 — 기록 탭과 같은 피커 재사용 (설계 2026-07-19) */}
+      <ExercisePicker
+        open={planPickerDate !== null}
+        catalog={catalog}
+        pastSessions={sessions}
+        pastLoading={false}
+        onClose={() => setPlanPickerDate(null)}
+        onPickMany={(items) => void handleNewPlanPick(items)}
+        onPickPast={handleNewPlanFromPast}
+        onCreateCustom={onCreateCustom}
+      />
 
       {planToast && (
         <div

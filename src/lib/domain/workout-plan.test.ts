@@ -2,11 +2,63 @@ import { describe, expect, it } from "vitest";
 import {
   addDaysToDateKey,
   isPlanDateAllowed,
+  newPlanExercises,
   parsePlanExercises,
   toDraftExercises,
   toPlanExercises,
   type PlanExercise,
 } from "./workout-plan";
+import type { CatalogExercise } from "@/lib/types";
+
+const catalogItem: CatalogExercise = {
+  id: "cat-1",
+  name: "랫풀다운",
+  body_part: "등",
+  exercise_type: "weight",
+  measure: null,
+  is_custom: false,
+  created_by: null,
+  created_at: "2026-07-01T00:00:00Z",
+};
+
+describe("newPlanExercises", () => {
+  it("카탈로그 선택을 0값 세트 1개짜리 계획 운동으로 변환한다", () => {
+    expect(newPlanExercises([catalogItem])).toEqual([
+      {
+        name: "랫풀다운",
+        bodyPart: "등",
+        exerciseType: "weight",
+        measure: null,
+        isCustom: false,
+        sets: [{ weightKg: 0, reps: 0, distanceKm: 0, durationMin: 0 }],
+      },
+    ]);
+  });
+
+  it("맨몸 시간형의 measure와 커스텀 여부를 보존한다", () => {
+    const result = newPlanExercises([
+      {
+        ...catalogItem,
+        name: "플랭크",
+        body_part: "코어",
+        exercise_type: "bodyweight",
+        measure: "time",
+        is_custom: true,
+      },
+    ]);
+    expect(result[0]).toMatchObject({
+      name: "플랭크",
+      bodyPart: "코어",
+      exerciseType: "bodyweight",
+      measure: "time",
+      isCustom: true,
+    });
+  });
+
+  it("빈 선택은 빈 배열", () => {
+    expect(newPlanExercises([])).toEqual([]);
+  });
+});
 
 const plan: PlanExercise[] = [
   {
