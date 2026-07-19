@@ -3,9 +3,32 @@
 > 새 세션은 이 파일 + `C:\Users\SAMSUNG\Desktop\Workout app\IMPLEMENTATION_PLAN.md`(단일 진실)만 읽으면 바로 이어서 작업할 수 있다.
 > 시각 스펙: 같은 폴더의 `운동앱-목업.html`.
 
-## ⚠️ 다음 작업 = 챌린지 사진·레벨 + 달력 운동 예정표 운영 배포 승인
+## ⚠️ 작업 중지 인수인계 — 5초 휴식 비프음 + 운영 배포
 
 **앱이 프로덕션에 떠 있다: https://gnd-one.vercel.app** — 브리핑 크론·알림설정·피드 사진필터까지 배포 완료. 챌린지 사진 인증·레벨과 달력 운동 예정표는 로컬 구현·DB 적용·검증까지 끝났지만 **아직 운영 배포하지 않음**.
+
+### ⏸️ 2026-07-19 중지 지점 — 구현 전, 배포 전
+
+- **사용자 확정 패턴**: A안 — 웨이트·맨몸 휴식이 5·4·3·2초 남았을 때 짧은 `삠`, 1초 남았을 때 긴 `삐임`. 유산소는 휴식 타이머·비프음에서 계속 제외한다.
+- **기존 3초 기능 완료 상태**: 3·2초 짧게 + 1초 길게, 음성 나레이션 없음, 유산소 제외를 `main`에 로컬 병합했다(`6edf574`). 자동 테스트 227개·typecheck·lint·build와 사용자 이어폰 확인까지 완료했지만 이 최신 `main`은 아직 운영 배포하지 않았다.
+- **이번 세션 완료**: 설계 갱신·승인·커밋 `968e68b`, 실행 계획 작성·커밋 `27ebe8b`.
+- **격리 작업공간**: `C:\Users\SAMSUNG\workout-app\.worktrees\five-second-rest-beeps`, 브랜치 `feat/five-second-rest-beeps`. `pnpm install --frozen-lockfile` 완료, 변경 전 기준 테스트 **21파일 / 227개 전부 통과**.
+- **정확한 중지 상태**: 계획 Task 1·2의 체크박스는 전부 미완료. 5초·4초 테스트와 구현 코드는 아직 수정하지 않았고, 구현 서브에이전트도 시작하지 않았다. 전체 정적 검사·DB/RLS 통합 검사·Vercel 배포도 아직 실행하지 않았다.
+- **현재 Git 상태**: `main`과 기능 브랜치가 모두 `27ebe8b`를 가리킨다. 두 작업트리는 코드 변경 없이 깨끗하고, 메인 저장소의 사용자 전용 `.claude/`만 untracked이므로 커밋하지 않는다.
+- **현재 로컬 서버**: `C:\Users\SAMSUNG\workout-app`의 `main`에서 `http://localhost:3000` 실행 중. 현재 화면은 기존 3초 패턴 코드다.
+
+#### 다음 세션 재개 순서
+
+1. `C:\Users\SAMSUNG\workout-app\.worktrees\five-second-rest-beeps`에서 브랜치와 깨끗한 상태를 확인한다.
+2. `docs/superpowers/plans/2026-07-19-five-second-rest-beeps-and-deploy.md`를 읽고 Task 1을 TDD로 실행한다. 먼저 5초·4초 테스트가 `null` 때문에 실패하는 RED를 직접 확인한다.
+3. `getRestCountdownBeep`의 짧은 비프 범위를 2~5초로 넓히고 훅 기대값을 짧은 4회 + 긴 1회로 수정한다.
+4. Task 1 구현 후 스펙 리뷰 → 코드 품질 리뷰를 각각 통과시키고 기능 브랜치를 `main`에 로컬 병합한다.
+5. 실행 중인 dev 서버를 중지한 뒤 `pnpm test`, `pnpm typecheck`, `pnpm lint`, `pnpm build`를 `main`에서 다시 실행한다.
+6. 이번 배포에는 아직 운영에 없는 챌린지 사진·레벨과 달력 예정표도 함께 들어가므로 `rls-test` 107/107, `workout-plan-test` 15/15, `challenge-photo-test` 8/8, `briefing-integration-test` 8/8을 다시 통과시킨다. **DB 0001~0015 마이그레이션은 이미 적용됐으므로 재실행하지 않는다.**
+7. 사용자가 운영 배포를 이미 승인했다. 모든 게이트 통과 후 `pnpm dlx vercel deploy --prod --yes`를 실행하고 `https://gnd-one.vercel.app/home`, `/record` HTTP 200을 확인한다.
+8. 실제 배포 결과를 이 문서에 기록하고 계획 체크박스를 완료 처리한 뒤, `main` 개발 서버를 다시 시작한다.
+
+**관련 문서**: 설계 `docs/superpowers/specs/2026-07-19-rest-countdown-beeps-design.md` · 계획 `docs/superpowers/plans/2026-07-19-five-second-rest-beeps-and-deploy.md`.
 
 ### 🟡 배포 대기 — 챌린지 사진 인증 필수 + 레벨 시스템 (7태스크 구현·검증 완료)
 
