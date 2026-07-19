@@ -13,6 +13,10 @@
 - **iOS 오디오 후속 수정 (같은 날, `43f038a` + 재배포)**: 배포 확인에서 아이폰 무음 스위치가 웹 비프음을 통째로 음소거하는 문제 발견(교훈 11). 실기기 실험으로 `navigator.audioSession`(iOS 17+) 유형별 트레이드오프 확정 후 사용자 결정 = **음악 공존 우선**: `transient` 세션 선언 + 비프 게인 0.06→0.25(음악에 묻힘 방지). 멜론 재생 중 비프음 공존을 dev 실기기에서 확인(진단 로그 `resume:ok(running)→play:beep`). 재배포 `gnd-amopssaai-gnd4.vercel.app` `● Ready`, `/record` 200, 번들에 `transient`·`.25` 반영 확인. **아이폰은 벨소리(소리) 모드여야 비프음이 난다 — 무음 모드 무성은 iOS 정책상 정상.**
 - **배포 후 폰 확인 항목(배포 주소 기준)**: ①휴식 비프음 5초 패턴 — 벨소리 모드 + 음악 재생 중 공존까지 ②새 챌린지 사진 인증 안내·진행 중 내 레벨·종료 후 전원 레벨 ③달력 복사→날짜 선택→예정 표시→당일 운동 준비 흐름.
 
+- **전문가 평가·강화 패스 (`e80a04a` + 최종 배포 `gnd-kajhy44t1`)**: 배포 전 3축 평가(보안 96 · 코드/테스트 94 · UX/운영 95 → 종합 95/100) 후 보완 — ①비프 창·길이 상수화 ②CRON_SECRET 타이밍 안전 비교(sha256+timingSafeEqual, 운영에서 유효 200/무효 401 검증) ③`src/lib/supabase/admin.ts`에 `server-only` 가드(클라 import 시 빌드 실패) ④lint 경고 0 달성. 남은 백로그: record/page.tsx(823줄) 분할, 오프라인 캐시(P1).
+- **프로덕션 데이터 전체 초기화 (2026-07-19, 사용자 승인)**: 테스트 잔여물 전부 삭제 — groups 39 · auth 익명 유저 112 · workout-images 파일 44. 16개 테이블+auth 전부 0 검증, 운동 카탈로그 77종 유지. 리셋 후 신규 익명 가입·온보딩 정상 확인(확인용 계정도 삭제, 최종 0명). **크루 온보딩 대기 상태.** 순서 주의: groups 먼저(owner_id FK 비cascade) → auth 유저(cascade) → storage.
+- **크루 사용 안내서**: `docs/GND-크루-사용안내.md` — 초대 링크 열기 → 온보딩 → 홈 화면 설치(iOS/Android) → 사용법 → 계정 유실 주의(브라우저 데이터 삭제 금지·같은 폰 유지) 순.
+
 **관련 문서**: 설계 `docs/superpowers/specs/2026-07-19-rest-countdown-beeps-design.md` · 계획 `docs/superpowers/plans/2026-07-19-five-second-rest-beeps-and-deploy.md`(체크박스 완료 처리됨).
 
 ### ✅ 운영 배포 완료 (2026-07-19) — 챌린지 사진 인증 필수 + 레벨 시스템
