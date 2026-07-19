@@ -24,7 +24,15 @@ export async function upsertMyProfile(input: {
     ...input,
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Seoul",
   });
-  if (error) throw error;
+  if (error) {
+    // 0017 유니크 위반 — 같은 사람이 다른 기기/브라우저로 또 가입하는 사고 방지
+    if (error.code === "23505") {
+      throw new Error(
+        "이미 사용 중인 닉네임이에요. 본인 계정이 이미 있다면 원래 쓰던 기기·브라우저로 접속해 주세요.",
+      );
+    }
+    throw error;
+  }
 }
 
 /** 크루 만들기 — 그룹 생성 + owner 멤버십 (단일 트랜잭션 RPC) */
