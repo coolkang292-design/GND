@@ -207,11 +207,17 @@ export async function createCustomExercise(input: {
 export async function createDraftSession(input: {
   groupId: string | null;
   timezone: string;
+  /** 타바타 코스 분수 (4|8|16) — 일반 운동은 생략 (0019) */
+  tabataMinutes?: number;
 }): Promise<WorkoutSession> {
   const supabase = getSupabaseBrowserClient();
   const { data, error } = await supabase
     .from("workout_sessions")
-    .insert({ group_id: input.groupId, timezone: input.timezone })
+    .insert({
+      group_id: input.groupId,
+      timezone: input.timezone,
+      ...(input.tabataMinutes ? { tabata_minutes: input.tabataMinutes } : {}),
+    })
     .select()
     .single();
   if (error) throw error;
@@ -568,6 +574,7 @@ export type CalendarSession = CompletedSession & {
   id: string;
   exerciseNames: string[];
   recordNote: string | null; // 🏅 기록 갱신 문구 (0018)
+  tabataMinutes: number | null; // 🔥 타바타 코스 분수 (0019)
 };
 
 /** 내 completed 세션 전체 (달력 스탬프·월간요약·상세시트·복사용) */
@@ -578,7 +585,7 @@ export async function getCompletedSessions(
   const { data, error } = await supabase
     .from("workout_sessions")
     .select(
-      "id, completed_at, duration_minutes, verification_status, record_note, workout_exercises(exercise_name, sort_order)",
+      "id, completed_at, duration_minutes, verification_status, record_note, tabata_minutes, workout_exercises(exercise_name, sort_order)",
     )
     .eq("user_id", userId)
     .eq("status", "completed")
@@ -593,6 +600,7 @@ export async function getCompletedSessions(
     duration_minutes: number | null;
     verification_status: CompletedSession["verification"];
     record_note?: string | null; // 0018 적용 전에는 컬럼이 없을 수 있음
+    tabata_minutes?: number | null; // 0019
     workout_exercises: { exercise_name: string; sort_order: number }[] | null;
   };
 
@@ -605,6 +613,7 @@ export async function getCompletedSessions(
       .sort((a, b) => a.sort_order - b.sort_order)
       .map((e) => e.exercise_name),
     recordNote: r.record_note ?? null,
+    tabataMinutes: r.tabata_minutes ?? null,
   }));
 }
 

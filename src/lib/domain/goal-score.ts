@@ -13,6 +13,7 @@ export type GoalType =
   | "bodyweight_reps" // 맨몸 횟수형 총 반복
   | "bodyweight_time" // 맨몸 시간형 지속 분
   | "bodyweight_days" // 맨몸 운동일 (하루 N종목+)
+  | "tabata_count" // 타바타 세션 수 (0019)
   | "volume"; // 레거시(웨이트 총볼륨) — 표시 전용
 
 export type ScoredGoal = {

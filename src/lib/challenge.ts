@@ -23,6 +23,7 @@ export const GOAL_TYPE_META: Record<
   bodyweight_reps: { label: "맨몸 횟수", unit: "회", defaultTarget: 300, category: "bodyweight" },
   bodyweight_time: { label: "맨몸 시간", unit: "분", defaultTarget: 100, category: "bodyweight" },
   bodyweight_days: { label: "맨몸 운동일", unit: "일", defaultTarget: 12, category: "bodyweight" },
+  tabata_count: { label: "타바타 횟수", unit: "회", defaultTarget: 12, category: "bodyweight" },
   volume: { label: "웨이트 총볼륨", unit: "kg", defaultTarget: 5000, category: "weight" }, // 레거시
 };
 
@@ -202,6 +203,8 @@ export type PeriodStats = {
   cardioTimeMin: number;
   bodyweightReps: number;
   bodyweightTimeMin: number;
+  /** 기간 내 타바타 표식 세션 수 — tabata_count 판정 (0019) */
+  tabataCount: number;
   /** 날짜별 웨이트 완료 부위 수 — weight_days 판정 */
   weightPartsByDay: Record<string, number>;
   /** 날짜별 맨몸 완료 종목 수 — bodyweight_days 판정 */
@@ -217,6 +220,7 @@ export const EMPTY_STATS: PeriodStats = {
   cardioTimeMin: 0,
   bodyweightReps: 0,
   bodyweightTimeMin: 0,
+  tabataCount: 0,
   weightPartsByDay: {},
   bodyweightKindsByDay: {},
 };
@@ -225,6 +229,8 @@ export const EMPTY_STATS: PeriodStats = {
 export type PeriodSessionRow = {
   userId: string;
   completedAt: string;
+  /** 타바타 코스 분수 (0019) — 일반 세션은 생략/null */
+  tabataMinutes?: number | null;
   exercises: {
     exerciseType: "weight" | "bodyweight" | "cardio";
     exerciseName: string;
@@ -266,6 +272,7 @@ export function foldPeriodStats(
       bodyweightKinds: new Map<string, Set<string>>(),
     };
     entry.days.add(key);
+    if (row.tabataMinutes) entry.tabataCount += 1;
 
     for (const ex of row.exercises) {
       let hasCompleted = false;
@@ -312,6 +319,7 @@ export function foldPeriodStats(
       cardioTimeMin: e.cardioTimeMin,
       bodyweightReps: e.bodyweightReps,
       bodyweightTimeMin: e.bodyweightTimeMin,
+      tabataCount: e.tabataCount,
       weightPartsByDay,
       bodyweightKindsByDay,
     });
@@ -344,6 +352,8 @@ export function actualForGoal(
       return stats.bodyweightTimeMin;
     case "bodyweight_days":
       return daysAtLeast(stats.bodyweightKindsByDay);
+    case "tabata_count":
+      return stats.tabataCount;
     case "volume":
       return stats.volumeKg;
   }
@@ -369,7 +379,7 @@ export async function getPeriodStatsByUser(
 
   // 세션당 사진은 1장이므로 inner join으로 집계 행이 중복되지 않는다.
   const select =
-    "user_id, completed_at, workout_exercises(exercise_type, exercise_name, body_part, workout_sets(weight_kg, reps, distance_meters, duration_seconds, is_completed))" +
+    "user_id, completed_at, tabata_minutes, workout_exercises(exercise_type, exercise_name, body_part, workout_sets(weight_kg, reps, distance_meters, duration_seconds, is_completed))" +
     (photoRequired ? ", workout_images!inner(image_path)" : "");
 
   const { data, error } = await supabase
@@ -385,6 +395,7 @@ export async function getPeriodStatsByUser(
   type DbRow = {
     user_id: string;
     completed_at: string;
+    tabata_minutes: number | null;
     workout_exercises:
       | {
           exercise_type: "weight" | "bodyweight" | "cardio";
@@ -405,6 +416,7 @@ export async function getPeriodStatsByUser(
   const rows: PeriodSessionRow[] = ((data ?? []) as unknown as DbRow[]).map((r) => ({
     userId: r.user_id,
     completedAt: r.completed_at,
+    tabataMinutes: r.tabata_minutes,
     exercises: (r.workout_exercises ?? []).map((ex) => ({
       exerciseType: ex.exercise_type,
       exerciseName: ex.exercise_name,

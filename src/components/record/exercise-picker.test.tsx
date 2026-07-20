@@ -16,6 +16,7 @@ describe("ExercisePicker", () => {
             durationSeconds: 2_700,
             exerciseNames: ["벤치프레스", "랫풀다운"],
             recordNote: null,
+            tabataMinutes: null,
           },
         ]}
         pastLoading={false}

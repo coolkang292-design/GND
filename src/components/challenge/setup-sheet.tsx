@@ -19,7 +19,7 @@ const CATEGORIES: { key: GoalCategory; label: string }[] = [
 const CATEGORY_TYPES: Record<GoalCategory, GoalType[]> = {
   weight: ["weight_reps", "weight_days"],
   cardio: ["cardio_distance", "cardio_time"],
-  bodyweight: ["bodyweight_reps", "bodyweight_time", "bodyweight_days"],
+  bodyweight: ["bodyweight_reps", "bodyweight_time", "bodyweight_days", "tabata_count"],
 };
 
 /** 지표 짧은 라벨 (카테고리 우선 UI용) */
@@ -31,6 +31,7 @@ const METRIC_LABEL: Record<GoalType, string> = {
   bodyweight_reps: "횟수",
   bodyweight_time: "시간",
   bodyweight_days: "운동일(종목)",
+  tabata_count: "타바타",
   volume: "총볼륨",
 };
 
@@ -44,6 +45,7 @@ const PER_DAY_DEFAULT: Partial<Record<GoalType, number>> = {
   cardio_time: 30,
   bodyweight_reps: 30,
   bodyweight_time: 10,
+  tabata_count: 1,
 };
 
 export type SetupSubmit = {

@@ -130,6 +130,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [reorderOpen, setReorderOpen] = useState(false);
   const [tabataOpen, setTabataOpen] = useState(false);
+  const tabataMinutesRef = useRef<number | null>(null);
   const [pastSessions, setPastSessions] = useState<CalendarSession[]>([]);
   const [pastLoading, setPastLoading] = useState(false);
   const [pastLoaded, setPastLoaded] = useState(false);
@@ -467,7 +468,10 @@ function WorkoutScreen({ userId }: { userId: string }) {
 
   // ── 타바타 모드 (설계 2026-07-19) — 시작/자동완료/취소를 기존 세션 흐름에 위임 ──
 
-  async function beginTabata(picked: CatalogExercise[]): Promise<boolean> {
+  async function beginTabata(
+    picked: CatalogExercise[],
+    minutes: number,
+  ): Promise<boolean> {
     if (active) {
       showToast("이미 운동 중이에요");
       return false;
@@ -482,7 +486,12 @@ function WorkoutScreen({ userId }: { userId: string }) {
       ...emptyDraft(d.restSeconds),
       exercises: tabataDraftExercises(picked, localId),
     }));
-    await handleStart();
+    tabataMinutesRef.current = minutes;
+    try {
+      await handleStart();
+    } finally {
+      tabataMinutesRef.current = null; // 일반 운동 시작에 표식이 새지 않게
+    }
     return draftRef.current.startedAtMs !== null;
   }
 
@@ -548,7 +557,11 @@ function WorkoutScreen({ userId }: { userId: string }) {
       if (!sessionId) {
         const tz =
           Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Seoul";
-        const s = await createDraftSession({ groupId, timezone: tz });
+        const s = await createDraftSession({
+          groupId,
+          timezone: tz,
+          tabataMinutes: tabataMinutesRef.current ?? undefined,
+        });
         sessionId = s.id;
         setDraft((d) => ({ ...d, sessionId }));
       }

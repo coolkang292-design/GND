@@ -4,6 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import {
   TABATA_EXERCISE_COUNT,
   TABATA_TRACKS,
+  tabataTrackForMinutes,
+  type TabataMinutes,
+  type TabataTrack,
 } from "@/lib/domain/tabata";
 import type {
   BodyPart,
@@ -12,8 +15,6 @@ import type {
 } from "@/lib/types";
 import type { CalendarSession } from "@/lib/workout";
 import { ExercisePicker } from "./exercise-picker";
-
-const TRACK = TABATA_TRACKS[0];
 
 type WakeLockNavigator = Navigator & {
   wakeLock?: { request: (type: "screen") => Promise<{ release: () => Promise<void> }> };
@@ -43,8 +44,8 @@ type TabataProps = {
     exerciseType: ExerciseType;
     measure: "reps" | "time" | null;
   }) => Promise<CatalogExercise | null>;
-  /** 선택 운동으로 세션을 시작한다. 성공 시 true */
-  onBegin: (picked: CatalogExercise[]) => Promise<boolean>;
+  /** 선택 운동·코스로 세션을 시작한다. 성공 시 true */
+  onBegin: (picked: CatalogExercise[], minutes: TabataMinutes) => Promise<boolean>;
   /** 음원 종료 — 전 세트 완료 처리 후 세션 자동 완료 */
   onComplete: () => Promise<void>;
   /** 재생 중단 — 세션 취소 */
@@ -60,12 +61,16 @@ function TabataSheetBody({
   onCancelWorkout,
 }: TabataProps) {
   const [picked, setPicked] = useState<CatalogExercise[]>([]);
+  const [minutes, setMinutes] = useState<TabataMinutes>(4);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [phase, setPhase] = useState<"setup" | "playing" | "finishing">("setup");
   const [remaining, setRemaining] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
+  const [playError, setPlayError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const wakeLockRef = useRef<{ release: () => Promise<void> } | null>(null);
+
+  const track = tabataTrackForMinutes(minutes) ?? TABATA_TRACKS[0];
 
   useEffect(() => {
     return () => {
@@ -94,12 +99,13 @@ function TabataSheetBody({
   async function start() {
     if (busy || picked.length !== TABATA_EXERCISE_COUNT) return;
     setBusy(true);
+    setPlayError(null);
     try {
       const audio = audioRef.current;
       if (!audio) return;
       // iOS는 사용자 제스처 안에서 play()가 시작돼야 한다 — 세션 생성보다 먼저.
       await audio.play();
-      const ok = await onBegin(picked);
+      const ok = await onBegin(picked, minutes);
       if (!ok) {
         audio.pause();
         audio.currentTime = 0;
@@ -107,8 +113,11 @@ function TabataSheetBody({
       }
       await acquireWakeLock();
       setPhase("playing");
-    } catch {
+    } catch (e) {
       setPhase("setup");
+      setPlayError(
+        `음원을 재생하지 못했어요 (${e instanceof Error ? e.name : "오류"}). 기기 소리 출력과 볼륨을 확인하고 다시 눌러주세요.`,
+      );
     } finally {
       setBusy(false);
     }
@@ -149,11 +158,12 @@ function TabataSheetBody({
       />
       <div className="fixed inset-x-0 bottom-0 z-50 flex max-h-[88dvh] flex-col overflow-y-auto rounded-t-[22px] border-t border-line bg-surface p-5">
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
-        <h3 className="text-base font-extrabold">🔥 타바타 — {TRACK.title}</h3>
+        <h3 className="text-base font-extrabold">🔥 타바타 — {track.title}</h3>
 
         <audio
+          key={track.src}
           ref={audioRef}
-          src={TRACK.src}
+          src={track.src}
           preload="metadata"
           onTimeUpdate={(e) => {
             const el = e.currentTarget;
@@ -167,9 +177,26 @@ function TabataSheetBody({
         {phase === "setup" && (
           <>
             <p className="mt-1 text-xs text-muted">
-              구성 운동 {TABATA_EXERCISE_COUNT}개를 고르고 시작하세요. 음원이
-              끝나면 자동으로 기록되고, 인증샷만 찍으면 돼요.
+              코스와 구성 운동 {TABATA_EXERCISE_COUNT}개를 고르고 시작하세요.
+              음원이 끝나면 자동으로 기록되고, 인증샷만 찍으면 돼요.
             </p>
+
+            <div className="mt-3 flex gap-1.5">
+              {TABATA_TRACKS.map((t: TabataTrack) => (
+                <button
+                  key={t.id}
+                  onClick={() => setMinutes(t.minutes)}
+                  aria-pressed={minutes === t.minutes}
+                  className={`h-11 flex-1 rounded-card-sm text-sm font-extrabold ${
+                    minutes === t.minutes
+                      ? "bg-accent text-accent-ink"
+                      : "border border-line bg-surface-2 text-muted"
+                  }`}
+                >
+                  {t.minutes}분
+                </button>
+              ))}
+            </div>
 
             <div className="mt-3 flex flex-col gap-1.5">
               {picked.map((item) => (
@@ -201,6 +228,11 @@ function TabataSheetBody({
               + 운동 고르기 ({picked.length}/{TABATA_EXERCISE_COUNT})
             </button>
 
+            {playError && (
+              <p className="mt-2 rounded-card-sm border border-line bg-surface-2 px-3 py-2 text-xs text-warn">
+                {playError}
+              </p>
+            )}
             <button
               onClick={() => void start()}
               disabled={busy || picked.length !== TABATA_EXERCISE_COUNT}

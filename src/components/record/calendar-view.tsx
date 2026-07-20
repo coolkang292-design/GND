@@ -614,6 +614,11 @@ export function CalendarView({
                       <p className="mt-0.5 text-[11.5px] text-muted">
                         {durationLabel(s.durationSeconds)} · {meta.glyph}{" "}
                         {meta.label}
+                        {s.tabataMinutes && (
+                          <span className="ml-1 font-bold text-accent">
+                            · 🔥 타바타 {s.tabataMinutes}분
+                          </span>
+                        )}
                         {s.recordNote && (
                           <span className="ml-1 font-bold text-accent">
                             · 🏅 {s.recordNote}

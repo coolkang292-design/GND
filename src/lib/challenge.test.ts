@@ -23,6 +23,7 @@ const STATS: PeriodStats = {
   cardioTimeMin: 90,
   bodyweightReps: 180,
   bodyweightTimeMin: 24,
+  tabataCount: 0,
   weightPartsByDay: { "2026-07-01": 3, "2026-07-02": 1, "2026-07-03": 4 },
   bodyweightKindsByDay: { "2026-07-01": 2, "2026-07-04": 3 },
 };
@@ -56,6 +57,8 @@ describe("actualForGoal", () => {
   });
   it("volume은 레거시 볼륨", () =>
     expect(actualForGoal(STATS, "volume")).toBe(3000));
+  it("tabata_count는 타바타 세션 수", () =>
+    expect(actualForGoal({ ...STATS, tabataCount: 5 }, "tabata_count")).toBe(5));
 });
 
 describe("foldPeriodStats", () => {
@@ -113,6 +116,17 @@ describe("foldPeriodStats", () => {
     expect(s.cardioTimeMin).toBe(30);
     expect(s.weightPartsByDay["2026-07-01"]).toBe(1); // 가슴 1부위
     expect(s.bodyweightKindsByDay["2026-07-01"]).toBe(2); // 매달리기·푸시업
+  });
+
+  it("타바타 표식 세션 수를 집계한다 (일반 세션 제외)", () => {
+    const tabataRows: PeriodSessionRow[] = [
+      { ...rows[0], tabataMinutes: 4 },
+      { ...rows[0], completedAt: "2026-07-02T02:00:00Z", tabataMinutes: 8 },
+      { ...rows[0], completedAt: "2026-07-03T02:00:00Z" }, // 일반
+      { ...rows[0], completedAt: "2026-08-05T02:00:00Z", tabataMinutes: 4 }, // 기간 밖
+    ];
+    const m = foldPeriodStats(tabataRows, "2026-07-01", "2026-07-31", "Asia/Seoul");
+    expect(m.get("u1")!.tabataCount).toBe(2);
   });
 
   it("기간 밖(tz 기준) 세션은 제외", () => {
