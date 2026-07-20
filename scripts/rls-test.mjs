@@ -62,7 +62,7 @@ console.log(`  A=${A.id.slice(0, 8)}… B=${B.id.slice(0, 8)}…`);
 
 // A: 프로필 + 크루 생성
 const pA = await api(A.token, "POST", "/rest/v1/profiles", {
-  id: A.id, nickname: "유저A", avatar_url: "🧔", weekly_goal: 3,
+  id: A.id, nickname: `유저A-${Date.now().toString(36)}`, avatar_url: "🧔", weekly_goal: 3,
 });
 check("A가 본인 프로필 생성", pA.status === 201, JSON.stringify(pA.json));
 
@@ -72,7 +72,7 @@ check("A가 크루 생성(RPC)", gA.status === 200 && group?.invite_code?.starts
 
 // B: 프로필 생성
 const pB = await api(B.token, "POST", "/rest/v1/profiles", {
-  id: B.id, nickname: "유저B", avatar_url: "👩", weekly_goal: 5,
+  id: B.id, nickname: `유저B-${Date.now().toString(36)}`, avatar_url: "👩", weekly_goal: 5,
 });
 check("B가 본인 프로필 생성", pB.status === 201);
 
@@ -494,6 +494,27 @@ check("본인 열람 self_view 거절", vr2.status >= 400 && JSON.stringify(vr2.
 // 크루 밖 대상 거절 — C는 비크루 외부인
 const vr3 = await api(C.token, "POST", "/rest/v1/rpc/view_record", { p_target_id: A.id });
 check("크루 밖 not_crew 거절", vr3.status >= 400 && JSON.stringify(vr3.json).includes("not_crew"));
+
+// ── 정리: 픽스처 크루·계정 제거 — 잔여물은 0017 닉네임 유니크와 충돌하고 DB에 쌓인다 ──
+const SERVICE = env.SUPABASE_SERVICE_ROLE_KEY;
+if (SERVICE) {
+  const adminHeaders = { apikey: SERVICE, Authorization: `Bearer ${SERVICE}` };
+  // groups.owner_id는 cascade가 아니므로 크루를 유저보다 먼저 지운다
+  await fetch(`${URL_}/rest/v1/groups?id=eq.${group.id}`, {
+    method: "DELETE",
+    headers: adminHeaders,
+  });
+  for (const u of [A, B, C]) {
+    const res = await fetch(`${URL_}/auth/v1/admin/users/${u.id}`, {
+      method: "DELETE",
+      headers: adminHeaders,
+    });
+    if (!res.ok) console.log(`정리 실패(${u.id.slice(0, 8)}): ${res.status}`);
+  }
+  console.log("픽스처 정리 완료");
+} else {
+  console.log("SUPABASE_SERVICE_ROLE_KEY 없음 — 픽스처 정리 생략");
+}
 
 console.log(`\n결과: ${passed} 통과 / ${failed} 실패`);
 process.exit(failed === 0 ? 0 : 1);
