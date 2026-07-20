@@ -161,8 +161,8 @@ function PickerSheet({
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="운동 검색 (예: 스쿼트, 벤치, 러닝)"
-              className="h-11 w-full rounded-card-sm border border-line bg-bg px-3 text-sm outline-none focus:border-accent"
+              placeholder="🔍 운동 검색 (예: 스쿼트, 벤치)"
+              className="h-16 w-full flex-none rounded-card border-2 border-line bg-bg px-4 text-base outline-none focus:border-accent"
             />
 
             <div className="my-3 flex flex-none gap-1.5 overflow-x-auto">
