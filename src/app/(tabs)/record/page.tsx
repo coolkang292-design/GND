@@ -12,6 +12,7 @@ import { CalendarView } from "@/components/record/calendar-view";
 import { ExerciseCard } from "@/components/record/exercise-card";
 import { ExercisePicker } from "@/components/record/exercise-picker";
 import { ExerciseReorderSheet } from "@/components/record/exercise-reorder-sheet";
+import { TabataSheet } from "@/components/record/tabata-sheet";
 import { RestBar } from "@/components/record/rest-bar";
 import { VerificationPhoto } from "@/components/record/verification-photo";
 import { useRestCountdown } from "@/hooks/use-rest-countdown";
@@ -27,6 +28,7 @@ import {
   toPlanExercises,
 } from "@/lib/domain/workout-plan";
 import { effortTotals, recordBeatenNote } from "@/lib/domain/record-beaten";
+import { tabataDraftExercises } from "@/lib/domain/tabata";
 import { moveItem } from "@/lib/domain/reorder";
 import { getRestCountdownTogglePlan } from "@/lib/domain/rest-countdown";
 import { dayKey } from "@/lib/domain/time";
@@ -127,6 +129,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const [prevVolume, setPrevVolume] = useState<number | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [reorderOpen, setReorderOpen] = useState(false);
+  const [tabataOpen, setTabataOpen] = useState(false);
   const [pastSessions, setPastSessions] = useState<CalendarSession[]>([]);
   const [pastLoading, setPastLoading] = useState(false);
   const [pastLoaded, setPastLoaded] = useState(false);
@@ -462,6 +465,48 @@ function WorkoutScreen({ userId }: { userId: string }) {
     }
   }
 
+  // ── 타바타 모드 (설계 2026-07-19) — 시작/자동완료/취소를 기존 세션 흐름에 위임 ──
+
+  async function beginTabata(picked: CatalogExercise[]): Promise<boolean> {
+    if (active) {
+      showToast("이미 운동 중이에요");
+      return false;
+    }
+    if (
+      draftRef.current.exercises.length > 0 &&
+      !window.confirm("준비 중인 운동 목록을 지우고 타바타를 시작할까요?")
+    ) {
+      return false;
+    }
+    setDraft((d) => ({
+      ...emptyDraft(d.restSeconds),
+      exercises: tabataDraftExercises(picked, localId),
+    }));
+    await handleStart();
+    return draftRef.current.startedAtMs !== null;
+  }
+
+  async function completeTabata() {
+    setDraft((d) => ({
+      ...d,
+      exercises: d.exercises.map((ex) => ({
+        ...ex,
+        sets: ex.sets.map((set) => ({ ...set, done: true })),
+      })),
+    }));
+    await handleFinish();
+  }
+
+  async function cancelTabata() {
+    const d = draftRef.current;
+    try {
+      if (d.sessionId) await cancelWorkout(d.sessionId);
+    } catch {
+      // 세션 취소 실패해도 로컬 초기화는 진행 — 다음 시작 시 대사로 복구됨
+    }
+    setDraft(emptyDraft(d.restSeconds));
+  }
+
   function handleLoadPlan(plan: WorkoutPlan): boolean {
     if (active) {
       showToast("운동 중에는 다른 예정표를 불러올 수 없어요");
@@ -487,6 +532,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
   }
 
   async function handleStart() {
+    // 타바타 등에서 setDraft 직후 같은 틱에 호출돼도 최신 상태를 보도록 ref 사용
+    const draft = draftRef.current;
     if (loadingExerciseKey !== null) {
       showToast("직전 기록을 불러오는 중이에요. 잠시만 기다려 주세요");
       return;
@@ -521,6 +568,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
   }
 
   async function handleFinish() {
+    // 타바타 자동 완료가 setDraft 직후 호출해도 최신 상태를 보도록 ref 사용
+    const draft = draftRef.current;
     if (!draft.sessionId) return;
     const incomplete = draft.exercises
       .flatMap((e) => e.sets)
@@ -899,9 +948,28 @@ function WorkoutScreen({ userId }: { userId: string }) {
           {busy ? "처리 중…" : active ? "운동 종료" : "운동 시작"}
         </button>
       </div>
+      {!active && (
+        <button
+          onClick={() => setTabataOpen(true)}
+          disabled={busy}
+          className="h-12 rounded-card border border-accent bg-surface text-sm font-extrabold text-accent disabled:opacity-60"
+        >
+          🔥 타바타 — 음원 따라 4분, 기록은 자동
+        </button>
+      )}
       <p className="text-center text-xs text-muted">
         완료 체크한 세트만 볼륨에 반영돼요. 새로고침해도 진행 중 기록은 복구됩니다.
       </p>
+
+      <TabataSheet
+        open={tabataOpen}
+        catalog={catalog}
+        onClose={() => setTabataOpen(false)}
+        onCreateCustom={handleCreateCustom}
+        onBegin={beginTabata}
+        onComplete={completeTabata}
+        onCancelWorkout={cancelTabata}
+      />
 
       {restRemaining !== null && (
         <RestBar
