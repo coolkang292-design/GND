@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { effortTotals, recordBeatenNote } from "./record-beaten";
+import {
+  effortTotals,
+  findComparableSession,
+  recordBeatenNote,
+} from "./record-beaten";
 
 type Input = Parameters<typeof effortTotals>[0][number];
 
@@ -140,5 +144,89 @@ describe("recordBeatenNote", () => {
 
   it("원본이 전부 0이면 null", () => {
     expect(recordBeatenNote(base, { ...base, weightVolumeKg: 300 })).toBeNull();
+  });
+});
+
+describe("findComparableSession", () => {
+  function candidate(
+    id: string,
+    completedAt: string,
+    exerciseNames: string[],
+    isTabata = false,
+  ) {
+    return { id, completedAt: new Date(completedAt), exerciseNames, isTabata };
+  }
+
+  it("같은 종목 집합의 세션을 찾는다", () => {
+    const found = findComparableSession(
+      ["벤치프레스", "스쿼트"],
+      [candidate("a", "2026-07-01T10:00:00Z", ["벤치프레스", "스쿼트"])],
+    );
+    expect(found?.id).toBe("a");
+  });
+
+  it("순서가 달라도 같은 집합이면 찾는다", () => {
+    const found = findComparableSession(
+      ["벤치프레스", "스쿼트"],
+      [candidate("a", "2026-07-01T10:00:00Z", ["스쿼트", "벤치프레스"])],
+    );
+    expect(found?.id).toBe("a");
+  });
+
+  it("종목이 하나라도 다르면 비교하지 않는다", () => {
+    expect(
+      findComparableSession(
+        ["벤치프레스", "스쿼트"],
+        [
+          candidate("a", "2026-07-01T10:00:00Z", ["벤치프레스"]),
+          candidate("b", "2026-07-02T10:00:00Z", [
+            "벤치프레스",
+            "스쿼트",
+            "데드리프트",
+          ]),
+        ],
+      ),
+    ).toBeNull();
+  });
+
+  it("조건을 만족하는 후보 중 가장 최근 것을 고른다", () => {
+    const found = findComparableSession(
+      ["벤치프레스"],
+      [
+        candidate("old", "2026-07-01T10:00:00Z", ["벤치프레스"]),
+        candidate("new", "2026-07-05T10:00:00Z", ["벤치프레스"]),
+        candidate("mid", "2026-07-03T10:00:00Z", ["벤치프레스"]),
+      ],
+    );
+    expect(found?.id).toBe("new");
+  });
+
+  it("타바타 세션은 후보에서 제외한다", () => {
+    const found = findComparableSession(
+      ["버피"],
+      [
+        candidate("tabata", "2026-07-05T10:00:00Z", ["버피"], true),
+        candidate("normal", "2026-07-01T10:00:00Z", ["버피"]),
+      ],
+    );
+    expect(found?.id).toBe("normal");
+  });
+
+  it("후보가 없으면 null", () => {
+    expect(findComparableSession(["벤치프레스"], [])).toBeNull();
+  });
+
+  it("이번 운동에 종목이 없으면 비교하지 않는다", () => {
+    expect(
+      findComparableSession([], [candidate("a", "2026-07-01T10:00:00Z", [])]),
+    ).toBeNull();
+  });
+
+  it("같은 종목이 중복돼도 집합으로 비교한다", () => {
+    const found = findComparableSession(
+      ["벤치프레스", "벤치프레스"],
+      [candidate("a", "2026-07-01T10:00:00Z", ["벤치프레스"])],
+    );
+    expect(found?.id).toBe("a");
   });
 });
