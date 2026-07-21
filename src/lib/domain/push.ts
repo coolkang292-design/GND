@@ -8,6 +8,8 @@ export type PushPayload = {
 const PUSH_URL_BY_TYPE: Record<string, string> = {
   reaction_received: "/feed",
   record_beaten: "/feed",
+  // 배지 진열대가 기록 탭 달력에 있다 (설계 2026-07-21)
+  badge_earned: "/record",
   rank_change: "/challenge",
   challenge_started: "/challenge",
   challenge_ended: "/challenge",

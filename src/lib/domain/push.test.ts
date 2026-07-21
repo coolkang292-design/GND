@@ -25,6 +25,7 @@ describe("pushPayloadFor", () => {
     ["record_viewed", "/home"],
     ["reaction_received", "/feed"],
     ["record_beaten", "/feed"],
+    ["badge_earned", "/record"],
     ["rank_change", "/challenge"],
     ["challenge_started", "/challenge"],
     ["challenge_ended", "/challenge"],
