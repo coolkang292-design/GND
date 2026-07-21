@@ -28,9 +28,10 @@ import {
   toPlanExercises,
 } from "@/lib/domain/workout-plan";
 import {
-  effortTotals,
-  findComparableSession,
-  recordBeatenNote,
+  exerciseImprovementNote,
+  exerciseMetric,
+  recordBeatenSummary,
+  type ExerciseImprovement,
 } from "@/lib/domain/record-beaten";
 import { tabataDraftExercises } from "@/lib/domain/tabata";
 import { moveItem } from "@/lib/domain/reorder";
@@ -58,9 +59,9 @@ import {
   getLastCompletedWeightVolume,
   getLastRecordedSets,
   getMyActiveSession,
+  getPreviousExerciseRecords,
   getSessionById,
   getSessionExerciseStructure,
-  getSessionLogExercises,
   loadDraft,
   localId,
   markRecordBeaten,
@@ -615,55 +616,47 @@ function WorkoutScreen({ userId }: { userId: string }) {
           planCleanupFailed = true;
         }
       }
-      // 기록 갱신 판정 — 복사 원본이 있으면 그것과, 없으면 같은 구성의 내
-      // 직전 운동과 비교한다. 판정·RPC 실패는 완료 흐름을 막지 않는다.
+      // 기록 갱신 판정 — 종목마다 그 종목의 직전 기록과 비교한다. 구성이
+      // 달라도 성립한다. 판정·RPC 실패는 완료 흐름을 막지 않는다.
       let recordNote: string | null = null;
       try {
-        let compareSessionId: string | null = draft.sourceSessionId;
-        if (!compareSessionId) {
-          const past = await getCompletedSessions(userId);
-          const match = findComparableSession(
-            draft.exercises.map((ex) => ex.name),
-            past
-              .filter((row) => row.id !== s.id)
-              .map((row) => ({
-                id: row.id,
-                completedAt: row.completedAt,
-                exerciseNames: row.exerciseNames,
-                isTabata: row.tabataMinutes !== null,
-              })),
-          );
-          compareSessionId = match?.id ?? null;
+        const names = draft.exercises.map((ex) => ex.name);
+        const previousByName = await getPreviousExerciseRecords(
+          userId,
+          names,
+          s.id,
+        );
+
+        const improvements: ExerciseImprovement[] = [];
+        for (const ex of draft.exercises) {
+          const previous = previousByName.get(ex.name);
+          if (!previous) continue;
+
+          const current = {
+            name: ex.name,
+            exerciseType: ex.exerciseType,
+            measure: ex.measure,
+            sets: ex.sets.map((set) => ({
+              weightKg: set.weightKg,
+              reps: set.reps,
+              distanceKm: set.distanceKm,
+              durationMin: set.durationMin,
+              isCompleted: set.done,
+            })),
+          };
+
+          const note = exerciseImprovementNote(previous, current);
+          if (!note) continue;
+
+          const before = exerciseMetric(previous);
+          improvements.push({
+            note,
+            ratio: before > 0 ? (exerciseMetric(current) - before) / before : 0,
+          });
         }
-        if (compareSessionId) {
-          const original = await getSessionLogExercises(compareSessionId);
-          recordNote = recordBeatenNote(
-            effortTotals(
-              original.map((ex) => ({
-                exerciseType: ex.exerciseType,
-                measure: ex.measure,
-                sets: ex.sets.map((set) => ({
-                  ...set,
-                  isCompleted: set.done,
-                })),
-              })),
-            ),
-            effortTotals(
-              draft.exercises.map((ex) => ({
-                exerciseType: ex.exerciseType,
-                measure: ex.measure,
-                sets: ex.sets.map((set) => ({
-                  weightKg: set.weightKg,
-                  reps: set.reps,
-                  distanceKm: set.distanceKm,
-                  durationMin: set.durationMin,
-                  isCompleted: set.done,
-                })),
-              })),
-            ),
-          );
-          if (recordNote) await markRecordBeaten(s.id, recordNote);
-        }
+
+        recordNote = recordBeatenSummary(improvements);
+        if (recordNote) await markRecordBeaten(s.id, recordNote);
       } catch {
         recordNote = null;
       }
