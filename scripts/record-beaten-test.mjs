@@ -184,10 +184,12 @@ try {
     `/rest/v1/notifications?type=eq.record_beaten&reference_id=eq.${sessionId}&select=title,body,user_id`,
   );
   check(
-    "크루원(B)에게 record_beaten 알림 생성",
+    "크루원(B)에게 칭찬 요청 알림 생성",
     notifs.status === 200 &&
       notifs.json?.length === 1 &&
-      notifs.json[0].body.includes("볼륨 +12.5kg"),
+      notifs.json[0].body.includes("볼륨 +12.5kg") &&
+      notifs.json[0].body.includes("칭찬 한마디") &&
+      notifs.json[0].title.includes("칭찬해주세요"),
     JSON.stringify(notifs.json),
   );
 

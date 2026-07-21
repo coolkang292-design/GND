@@ -1,8 +1,10 @@
 import type { RestCountdownBeep } from "@/lib/domain/rest-countdown";
 
 const BEEP_FREQUENCY_HZ = 880;
-// 음악 재생 중에도 비프음이 묻히지 않도록 키운 음량 (2026-07-19 실기기 확인).
-const BEEP_GAIN = 0.25;
+// 음악 재생 중에도 비프음이 묻히지 않도록 키운 음량.
+// 0.06 → 0.25(2026-07-19) → 0.5(2026-07-21, 음악에 여전히 가려진다는 사용자 신고).
+// 사인파 단일 오실레이터라 0.5에서도 클리핑이 없다.
+const BEEP_GAIN = 0.5;
 const FADE_IN_SECONDS = 0.01;
 const SILENT_GAIN = 0.0001;
 

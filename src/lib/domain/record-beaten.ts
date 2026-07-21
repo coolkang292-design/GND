@@ -82,3 +82,49 @@ export function recordBeatenNote(
   }
   return null;
 }
+
+/** 기록 갱신 비교 후보 (설계 2026-07-21) */
+export type ComparableCandidate = {
+  id: string;
+  completedAt: Date;
+  exerciseNames: string[];
+  isTabata: boolean;
+};
+
+function sameComposition(a: string[], b: string[]): boolean {
+  const setA = new Set(a);
+  const setB = new Set(b);
+  if (setA.size !== setB.size) return false;
+  for (const name of setA) {
+    if (!setB.has(name)) return false;
+  }
+  return true;
+}
+
+/**
+ * 종목 구성이 똑같은 내 가장 최근 완료 세션. 구성이 같아야 총량 비교가
+ * 공정하다(종목을 추가하면 볼륨은 당연히 늘어난다). 타바타는 세트 실적이
+ * 0이라 비교 대상이 되면 판정을 무의미하게 만들므로 제외한다.
+ */
+export function findComparableSession(
+  currentExerciseNames: string[],
+  candidates: ComparableCandidate[],
+): ComparableCandidate | null {
+  if (currentExerciseNames.length === 0) return null;
+
+  let best: ComparableCandidate | null = null;
+  for (const candidate of candidates) {
+    if (candidate.isTabata) continue;
+    if (!sameComposition(currentExerciseNames, candidate.exerciseNames)) {
+      continue;
+    }
+    // 완료 시각이 같으면 먼저 만난 후보를 쓴다 — 목록 순서에 의존하지 않도록 동작을 고정한다.
+    if (
+      best === null ||
+      candidate.completedAt.getTime() > best.completedAt.getTime()
+    ) {
+      best = candidate;
+    }
+  }
+  return best;
+}
