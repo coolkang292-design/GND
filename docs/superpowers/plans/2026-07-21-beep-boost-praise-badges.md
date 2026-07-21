@@ -37,7 +37,7 @@
 
 - [ ] **Step 2: 실패 확인**
 
-Run: `pnpm test -- src/lib/rest-countdown-audio.test.ts`
+Run: `pnpm exec vitest run src/lib/rest-countdown-audio.test.ts`
 Expected: FAIL — 1번째 호출이 `0.25`로 왔다는 diff.
 
 - [ ] **Step 3: 음량 상수 2배로 올리기**
@@ -54,8 +54,8 @@ const BEEP_GAIN = 0.5;
 
 - [ ] **Step 4: 통과 확인**
 
-Run: `pnpm test -- src/lib/rest-countdown-audio.test.ts`
-Expected: PASS (9 tests)
+Run: `pnpm exec vitest run src/lib/rest-countdown-audio.test.ts`
+Expected: PASS (10 tests)
 
 - [ ] **Step 5: 커밋**
 
@@ -174,7 +174,7 @@ describe("findComparableSession", () => {
 
 - [ ] **Step 2: 실패 확인**
 
-Run: `pnpm test -- src/lib/domain/record-beaten.test.ts`
+Run: `pnpm exec vitest run src/lib/domain/record-beaten.test.ts`
 Expected: FAIL — `findComparableSession is not a function` 혹은 import 오류.
 
 - [ ] **Step 3: 최소 구현 추가**
@@ -230,7 +230,7 @@ export function findComparableSession(
 
 - [ ] **Step 4: 통과 확인**
 
-Run: `pnpm test -- src/lib/domain/record-beaten.test.ts`
+Run: `pnpm exec vitest run src/lib/domain/record-beaten.test.ts`
 Expected: PASS (기존 11케이스 + 신규 8케이스)
 
 - [ ] **Step 5: 커밋**
@@ -402,7 +402,7 @@ describe("earnedBadgeCount", () => {
 
 - [ ] **Step 2: 실패 확인**
 
-Run: `pnpm test -- src/lib/domain/badges.test.ts`
+Run: `pnpm exec vitest run src/lib/domain/badges.test.ts`
 Expected: FAIL — `Failed to resolve import "./badges"`
 
 - [ ] **Step 3: 카탈로그 구현**
@@ -474,7 +474,7 @@ export function earnedBadgeCount(earned: EarnedBadge[]): number {
 
 - [ ] **Step 4: 통과 확인**
 
-Run: `pnpm test -- src/lib/domain/badges.test.ts`
+Run: `pnpm exec vitest run src/lib/domain/badges.test.ts`
 Expected: PASS (7 tests)
 
 - [ ] **Step 5: 커밋**
@@ -691,7 +691,7 @@ Task 6·7은 0020 적용 없이도 진행할 수 있다.
 
 - [ ] **Step 2: 실패 확인**
 
-Run: `pnpm test -- src/lib/domain/push.test.ts`
+Run: `pnpm exec vitest run src/lib/domain/push.test.ts`
 Expected: FAIL — `badge_earned`가 `/home`으로 매핑됨.
 
 - [ ] **Step 3: 매핑 추가**
@@ -712,7 +712,7 @@ const PUSH_URL_BY_TYPE: Record<string, string> = {
 
 - [ ] **Step 4: 통과 확인**
 
-Run: `pnpm test -- src/lib/domain/push.test.ts`
+Run: `pnpm exec vitest run src/lib/domain/push.test.ts`
 Expected: PASS
 
 - [ ] **Step 5: 커밋**
