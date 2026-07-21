@@ -229,4 +229,23 @@ describe("findComparableSession", () => {
     );
     expect(found?.id).toBe("a");
   });
+
+  it("완료 시각이 같으면 먼저 만난 후보를 고른다", () => {
+    const found = findComparableSession(
+      ["벤치프레스"],
+      [
+        candidate("first", "2026-07-05T10:00:00Z", ["벤치프레스"]),
+        candidate("second", "2026-07-05T10:00:00Z", ["벤치프레스"]),
+      ],
+    );
+    expect(found?.id).toBe("first");
+  });
+
+  it("양쪽에 중복이 있어도 집합이 같으면 찾는다", () => {
+    const found = findComparableSession(
+      ["벤치프레스", "벤치프레스", "스쿼트"],
+      [candidate("a", "2026-07-01T10:00:00Z", ["벤치프레스", "스쿼트", "스쿼트"])],
+    );
+    expect(found?.id).toBe("a");
+  });
 });

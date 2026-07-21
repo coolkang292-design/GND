@@ -118,6 +118,7 @@ export function findComparableSession(
     if (!sameComposition(currentExerciseNames, candidate.exerciseNames)) {
       continue;
     }
+    // 완료 시각이 같으면 먼저 만난 후보를 쓴다 — 목록 순서에 의존하지 않도록 동작을 고정한다.
     if (
       best === null ||
       candidate.completedAt.getTime() > best.completedAt.getTime()
