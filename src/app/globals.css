@@ -49,6 +49,36 @@ body {
   height: 100%;
 }
 
+/* ── 모바일 터치 문제 대응 (2026-07-21) ──────────────────────────
+   ① iOS Safari는 폰트 16px 미만인 입력창에 포커스하면 페이지를 강제로
+      확대하고, 확대된 상태에서 스스로 돌아오지 않는다. 그러면 화면이 밀려
+      버튼을 눌러도 엉뚱한 곳이 눌린다. Tailwind의 text-sm 같은 클래스가
+      우선하므로 !important로 플랫폼 제약을 못 박는다.
+   ② touch-action: manipulation은 더블탭 확대를 끄고, 그걸 기다리느라
+      생기는 약 300ms 탭 지연을 없앤다.
+   user-scalable=no로 막는 방법은 쓰지 않는다 — iOS 10+ Safari가 무시하는
+   데다 저시력 사용자의 확대까지 막아버린다. */
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+input,
+select,
+textarea {
+  font-size: 16px !important;
+}
+
+button,
+a,
+label,
+input,
+select,
+textarea,
+[role="button"],
+[role="switch"] {
+  touch-action: manipulation;
+}
+
 body {
   background:
     radial-gradient(
