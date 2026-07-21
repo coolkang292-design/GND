@@ -3,6 +3,19 @@
 > 새 세션은 이 파일 + `C:\Users\SAMSUNG\Desktop\Workout app\IMPLEMENTATION_PLAN.md`(단일 진실)만 읽으면 바로 이어서 작업할 수 있다.
 > 시각 스펙: 같은 폴더의 `운동앱-목업.html`.
 
+## ✅ 2026-07-21 — 기록 갱신을 종목별 판정으로 교체
+
+- **문서**: 설계 `docs/superpowers/specs/2026-07-21-per-exercise-record-beaten-design.md` · 계획 `docs/superpowers/plans/2026-07-21-per-exercise-record-beaten.md`.
+- **왜 바꿨나**: 세션 총합 비교는 ①종목 구성이 하나만 달라도 판정 자체를 안 하고 ②종목을 빼면 유리해지는 악용 경로가 있었으며 ③"볼륨 +300kg"이 어느 종목인지 알 수 없었다.
+- **새 규칙**: 종목마다 **그 종목의 직전 기록**(최근 20세션, 타바타·당일 세션 제외)과 비교. 문구는 실제로 변한 항목으로 쓴다 — 세트↑ → "N세트 더", 무게↑ → "Nkg 더 무겁게", 횟수↑ → "N회 더". 조사(을/를)는 받침으로 고른다.
+- **알림**: 세션당 **1건**으로 묶는다. 대표는 개선율 최대 종목, 나머지는 "외 N종목 갱신". **개선폭 문턱 없음**(사용자 확정 — 1회만 더 해도 발송).
+- **0021 적용 ✅**: `mark_record_beaten`의 문구 길이 40 → 80, 알림 body가 `{닉네임}님이 {문구}. 칭찬 한마디 남겨주세요! 👏`. 배지 로직은 0020과 동일.
+- **쿼리 개선**: 완료 시 이력 전체를 긁던 것을 종목 이름으로 묶어 **쿼리 2회**로 줄였다 — 이전 백로그 항목 해소.
+- **알려진 한계**: 시간은 분 단위 정수 입력이라 플랭크 60초→90초 같은 개선은 잡히지 않는다(1분→2분이어야 함).
+- **검증 실측**: unit 314/314 · typecheck · lint 0 · build · RLS 107 · 예정표 15 · 사진 8 · 브리핑 8 · 푸시 8 · 기록갱신 9/9 · 배지 9/9.
+- **커밋**: `09daf4e`(도메인 TDD)·`f03dbe4`(배치 조회)·`e0e3537`(완료 흐름)·`be750b6`(0021)·`8f7cb29`(실 DB 검증).
+- **실기기 확인 대기**: 같은 종목을 지난번보다 1회 더 하고 완료 → 완료 화면에 종목 이름 든 문구 · 피드 🏅 · 크루 폰 "○○님이 △△를 N회 더 하셨어요" 푸시.
+
 ## ✅ 2026-07-21 — 비프음 2배 + 칭찬 알림 + 배지 시스템 (0020 적용 ✅, 운영 배포 ✅)
 
 - **문서**: 설계 `docs/superpowers/specs/2026-07-21-beep-boost-praise-badges-design.md` · 계획 `docs/superpowers/plans/2026-07-21-beep-boost-praise-badges.md`. 브랜치 `feat/beep-badges`(main 미병합).
@@ -75,7 +88,7 @@
 ### 다음 세션 시작 체크리스트
 
 1. 저장소 `C:\Users\SAMSUNG\workout-app`, 브랜치 `main`, 작업트리 클린(`.claude/`만 untracked — 커밋 금지). 되돌리기·리셋 불필요.
-2. **DB 0001~0020 전부 적용 완료 — SQL 파일 재실행 금지.** (0020 = 배지 시스템, 전용 실 DB 검사 9/9 확인)
+2. **DB 0001~0021 전부 적용 완료 — SQL 파일 재실행 금지.** (0021 = 종목별 기록 갱신 문구, 전용 실 DB 검사 기록갱신 9/9·배지 9/9 확인)
 3. dev 서버는 세션 종료와 함께 꺼졌을 수 있음 → `pnpm exec next dev -H 0.0.0.0`으로 시작 (폰: `http://192.168.219.104:3000` / Tailscale `http://100.85.240.15:3000`). build 돌릴 땐 dev 서버 먼저 종료(교훈 8 — 좀비면 `taskkill /PID <pid> /F`). 와이파이 IP는 DHCP라 변동 가능(.112→.104 전례) — 안 열리면 `ipconfig` 확인 후 `next.config.ts allowedDevOrigins` 갱신. 이제 순수 표시 확인은 배포 주소로도 가능.
 4. 검증 명령: `pnpm test`(**175**) · `pnpm lint` · `pnpm typecheck` · `pnpm build` · `node scripts/rls-test.mjs`(**107**, 응원 쿨다운 대기 포함 약 30초) · `node scripts/workout-plan-test.mjs`(**15/15**, 실 DB) · `node scripts/challenge-photo-test.mjs`(**8/8**, 실 DB) · `node scripts/briefing-integration-test.mjs`(**8/8**, 실 DB).
 5. E2E·스모크 스크립트는 세션 scratchpad에 있어 소멸됨 — 재작성 시 흐름: 익명 세션 쿠키(`sb-<ref>-auth-token`, base64- 접두) 파싱 → REST로 프로필·크루·세션 픽스처 → puppeteer-core(스크래치패드에 npm install)로 UI·Realtime 단언. 아래 "Phase 6 산출물" 참고.
