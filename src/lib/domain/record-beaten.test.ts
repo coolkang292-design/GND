@@ -1,251 +1,221 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  effortTotals,
-  findComparableSession,
-  recordBeatenNote,
+  exerciseImprovementNote,
+  exerciseMetric,
+  recordBeatenSummary,
 } from "./record-beaten";
 
-type Input = Parameters<typeof effortTotals>[0][number];
-
-function weight(sets: Array<[number, number, boolean]>): Input {
+function weightEx(
+  sets: Array<[weightKg: number, reps: number, done?: boolean]>,
+) {
   return {
-    exerciseType: "weight",
+    name: "벤치프레스",
+    exerciseType: "weight" as const,
     measure: null,
-    sets: sets.map(([weightKg, reps, isCompleted]) => ({
+    sets: sets.map(([weightKg, reps, done = true]) => ({
       weightKg,
       reps,
       distanceKm: 0,
       durationMin: 0,
-      isCompleted,
+      isCompleted: done,
     })),
   };
 }
 
-describe("effortTotals", () => {
-  it("완료 세트만 유형별로 합산한다", () => {
-    const totals = effortTotals([
-      weight([
-        [60, 10, true],
-        [60, 10, false],
-      ]),
-      {
-        exerciseType: "bodyweight",
-        measure: "reps",
-        sets: [
-          { weightKg: 0, reps: 15, distanceKm: 0, durationMin: 0, isCompleted: true },
-        ],
-      },
-      {
-        exerciseType: "bodyweight",
-        measure: "time",
-        sets: [
-          { weightKg: 0, reps: 0, distanceKm: 0, durationMin: 3, isCompleted: true },
-        ],
-      },
-      {
-        exerciseType: "cardio",
-        measure: null,
-        sets: [
-          { weightKg: 0, reps: 0, distanceKm: 5, durationMin: 30, isCompleted: true },
-          { weightKg: 0, reps: 0, distanceKm: 2, durationMin: 10, isCompleted: false },
-        ],
-      },
-    ]);
-    expect(totals).toEqual({
-      weightVolumeKg: 600,
-      bodyweightReps: 15,
-      bodyweightTimeMin: 3,
-      cardioDistanceKm: 5,
-      cardioTimeMin: 30,
-    });
-  });
-
-  it("빈 입력은 전부 0", () => {
-    expect(effortTotals([])).toEqual({
-      weightVolumeKg: 0,
-      bodyweightReps: 0,
-      bodyweightTimeMin: 0,
-      cardioDistanceKm: 0,
-      cardioTimeMin: 0,
-    });
-  });
-});
-
-describe("recordBeatenNote", () => {
-  const base = {
-    weightVolumeKg: 0,
-    bodyweightReps: 0,
-    bodyweightTimeMin: 0,
-    cardioDistanceKm: 0,
-    cardioTimeMin: 0,
+function bodyweightEx(
+  name: string,
+  measure: "reps" | "time",
+  sets: Array<[reps: number, durationMin: number]>,
+) {
+  return {
+    name,
+    exerciseType: "bodyweight" as const,
+    measure,
+    sets: sets.map(([reps, durationMin]) => ({
+      weightKg: 0,
+      reps,
+      distanceKm: 0,
+      durationMin,
+      isCompleted: true,
+    })),
   };
+}
 
-  it("웨이트 볼륨 초과를 알린다", () => {
-    expect(
-      recordBeatenNote(
-        { ...base, weightVolumeKg: 600 },
-        { ...base, weightVolumeKg: 612.5 },
-      ),
-    ).toBe("볼륨 +12.5kg");
+function cardioEx(
+  name: string,
+  sets: Array<[distanceKm: number, durationMin: number]>,
+) {
+  return {
+    name,
+    exerciseType: "cardio" as const,
+    measure: null,
+    sets: sets.map(([distanceKm, durationMin]) => ({
+      weightKg: 0,
+      reps: 0,
+      distanceKm,
+      durationMin,
+      isCompleted: true,
+    })),
+  };
+}
+
+describe("exerciseMetric", () => {
+  it("웨이트는 볼륨(무게×횟수) 합계", () => {
+    expect(exerciseMetric(weightEx([[30, 10], [30, 10]]))).toBe(600);
   });
 
-  it("우선순위 — 볼륨 초과가 있으면 그 문구를 쓴다", () => {
-    expect(
-      recordBeatenNote(
-        { ...base, weightVolumeKg: 600, bodyweightReps: 10 },
-        { ...base, weightVolumeKg: 700, bodyweightReps: 30 },
-      ),
-    ).toBe("볼륨 +100kg");
+  it("미완료 세트는 세지 않는다", () => {
+    expect(exerciseMetric(weightEx([[30, 10], [30, 10, false]]))).toBe(300);
   });
 
-  it("볼륨이 같으면 다음 지표(횟수)로 판정한다", () => {
-    expect(
-      recordBeatenNote(
-        { ...base, weightVolumeKg: 600, bodyweightReps: 10 },
-        { ...base, weightVolumeKg: 600, bodyweightReps: 25 },
-      ),
-    ).toBe("횟수 +15회");
+  it("맨몸 횟수형은 총 횟수", () => {
+    expect(exerciseMetric(bodyweightEx("푸시업", "reps", [[20, 0], [15, 0]]))).toBe(35);
   });
 
-  it("원본에 없던 지표는 갱신으로 치지 않는다", () => {
-    expect(
-      recordBeatenNote(
-        { ...base, weightVolumeKg: 600 },
-        { ...base, weightVolumeKg: 600, cardioDistanceKm: 5 },
-      ),
-    ).toBeNull();
+  it("맨몸 시간형은 총 시간(분)", () => {
+    expect(exerciseMetric(bodyweightEx("플랭크", "time", [[0, 2], [0, 1]]))).toBe(3);
   });
 
-  it.each([
-    ["맨몸 시간", { bodyweightTimeMin: 3 }, { bodyweightTimeMin: 5 }, "맨몸 시간 +2분"],
-    ["거리", { cardioDistanceKm: 5 }, { cardioDistanceKm: 5.5 }, "거리 +0.5km"],
-    ["유산소 시간", { cardioTimeMin: 30 }, { cardioTimeMin: 42 }, "유산소 +12분"],
-  ])("%s 초과 문구", (_label, prev, curr, expected) => {
-    expect(recordBeatenNote({ ...base, ...prev }, { ...base, ...curr })).toBe(
-      expected,
-    );
+  it("유산소는 거리 km", () => {
+    expect(exerciseMetric(cardioEx("러닝", [[3, 20]]))).toBe(3);
   });
 
-  it("동률·미달이면 null", () => {
-    expect(
-      recordBeatenNote(
-        { ...base, weightVolumeKg: 600 },
-        { ...base, weightVolumeKg: 600 },
-      ),
-    ).toBeNull();
-    expect(
-      recordBeatenNote(
-        { ...base, weightVolumeKg: 600 },
-        { ...base, weightVolumeKg: 500 },
-      ),
-    ).toBeNull();
-  });
-
-  it("원본이 전부 0이면 null", () => {
-    expect(recordBeatenNote(base, { ...base, weightVolumeKg: 300 })).toBeNull();
+  it("유산소 거리가 0이면 시간(분)을 쓴다", () => {
+    expect(exerciseMetric(cardioEx("러닝", [[0, 25]]))).toBe(25);
   });
 });
 
-describe("findComparableSession", () => {
-  function candidate(
-    id: string,
-    completedAt: string,
-    exerciseNames: string[],
-    isTabata = false,
-  ) {
-    return { id, completedAt: new Date(completedAt), exerciseNames, isTabata };
-  }
-
-  it("같은 종목 집합의 세션을 찾는다", () => {
-    const found = findComparableSession(
-      ["벤치프레스", "스쿼트"],
-      [candidate("a", "2026-07-01T10:00:00Z", ["벤치프레스", "스쿼트"])],
-    );
-    expect(found?.id).toBe("a");
-  });
-
-  it("순서가 달라도 같은 집합이면 찾는다", () => {
-    const found = findComparableSession(
-      ["벤치프레스", "스쿼트"],
-      [candidate("a", "2026-07-01T10:00:00Z", ["스쿼트", "벤치프레스"])],
-    );
-    expect(found?.id).toBe("a");
-  });
-
-  it("종목이 하나라도 다르면 비교하지 않는다", () => {
+describe("exerciseImprovementNote", () => {
+  it("세트가 늘면 세트 문구", () => {
     expect(
-      findComparableSession(
-        ["벤치프레스", "스쿼트"],
-        [
-          candidate("a", "2026-07-01T10:00:00Z", ["벤치프레스"]),
-          candidate("b", "2026-07-02T10:00:00Z", [
-            "벤치프레스",
-            "스쿼트",
-            "데드리프트",
-          ]),
-        ],
+      exerciseImprovementNote(
+        weightEx([[30, 10], [30, 10], [30, 10], [30, 10]]),
+        weightEx([[30, 10], [30, 10], [30, 10], [30, 10], [30, 10]]),
       ),
-    ).toBeNull();
+    ).toBe("벤치프레스를 1세트 더 하셨어요");
   });
 
-  it("조건을 만족하는 후보 중 가장 최근 것을 고른다", () => {
-    const found = findComparableSession(
-      ["벤치프레스"],
-      [
-        candidate("old", "2026-07-01T10:00:00Z", ["벤치프레스"]),
-        candidate("new", "2026-07-05T10:00:00Z", ["벤치프레스"]),
-        candidate("mid", "2026-07-03T10:00:00Z", ["벤치프레스"]),
-      ],
-    );
-    expect(found?.id).toBe("new");
-  });
-
-  it("타바타 세션은 후보에서 제외한다", () => {
-    const found = findComparableSession(
-      ["버피"],
-      [
-        candidate("tabata", "2026-07-05T10:00:00Z", ["버피"], true),
-        candidate("normal", "2026-07-01T10:00:00Z", ["버피"]),
-      ],
-    );
-    expect(found?.id).toBe("normal");
-  });
-
-  it("후보가 없으면 null", () => {
-    expect(findComparableSession(["벤치프레스"], [])).toBeNull();
-  });
-
-  it("이번 운동에 종목이 없으면 비교하지 않는다", () => {
+  it("세트가 같고 무게가 오르면 무게 문구", () => {
     expect(
-      findComparableSession([], [candidate("a", "2026-07-01T10:00:00Z", [])]),
+      exerciseImprovementNote(weightEx([[60, 5]]), weightEx([[65, 5]])),
+    ).toBe("벤치프레스를 5kg 더 무겁게 드셨어요");
+  });
+
+  it("세트·무게가 같고 횟수가 늘면 횟수 문구", () => {
+    expect(
+      exerciseImprovementNote(weightEx([[30, 8]]), weightEx([[30, 10]])),
+    ).toBe("벤치프레스를 2회 더 하셨어요");
+  });
+
+  it("맨몸 횟수형", () => {
+    expect(
+      exerciseImprovementNote(
+        bodyweightEx("푸시업", "reps", [[20, 0]]),
+        bodyweightEx("푸시업", "reps", [[25, 0]]),
+      ),
+    ).toBe("푸시업을 5회 더 하셨어요");
+  });
+
+  it("맨몸 시간형", () => {
+    expect(
+      exerciseImprovementNote(
+        bodyweightEx("플랭크", "time", [[0, 1]]),
+        bodyweightEx("플랭크", "time", [[0, 3]]),
+      ),
+    ).toBe("플랭크를 2분 더 버텼어요");
+  });
+
+  it("유산소 거리", () => {
+    expect(
+      exerciseImprovementNote(cardioEx("러닝", [[3, 20]]), cardioEx("러닝", [[3.5, 20]])),
+    ).toBe("러닝을 0.5km 더 뛰었어요");
+  });
+
+  it("유산소 시간 (거리 없음)", () => {
+    expect(
+      exerciseImprovementNote(cardioEx("러닝", [[0, 20]]), cardioEx("러닝", [[0, 25]])),
+    ).toBe("러닝을 5분 더 뛰었어요");
+  });
+
+  it("동률이면 null", () => {
+    expect(
+      exerciseImprovementNote(weightEx([[30, 10]]), weightEx([[30, 10]])),
     ).toBeNull();
   });
 
-  it("같은 종목이 중복돼도 집합으로 비교한다", () => {
-    const found = findComparableSession(
-      ["벤치프레스", "벤치프레스"],
-      [candidate("a", "2026-07-01T10:00:00Z", ["벤치프레스"])],
-    );
-    expect(found?.id).toBe("a");
+  it("줄었으면 null", () => {
+    expect(
+      exerciseImprovementNote(weightEx([[30, 10]]), weightEx([[30, 8]])),
+    ).toBeNull();
   });
 
-  it("완료 시각이 같으면 먼저 만난 후보를 고른다", () => {
-    const found = findComparableSession(
-      ["벤치프레스"],
-      [
-        candidate("first", "2026-07-05T10:00:00Z", ["벤치프레스"]),
-        candidate("second", "2026-07-05T10:00:00Z", ["벤치프레스"]),
-      ],
-    );
-    expect(found?.id).toBe("first");
+  it("직전 실적이 0이면 null", () => {
+    expect(
+      exerciseImprovementNote(weightEx([[0, 0]]), weightEx([[30, 10]])),
+    ).toBeNull();
   });
 
-  it("양쪽에 중복이 있어도 집합이 같으면 찾는다", () => {
-    const found = findComparableSession(
-      ["벤치프레스", "벤치프레스", "스쿼트"],
-      [candidate("a", "2026-07-01T10:00:00Z", ["벤치프레스", "스쿼트", "스쿼트"])],
+  it("받침 있는 이름엔 '을'을 쓴다", () => {
+    expect(
+      exerciseImprovementNote(
+        bodyweightEx("랫풀다운", "reps", [[10, 0]]),
+        bodyweightEx("랫풀다운", "reps", [[12, 0]]),
+      ),
+    ).toBe("랫풀다운을 2회 더 하셨어요");
+  });
+
+  it("한글이 아닌 이름엔 '를'을 쓴다", () => {
+    expect(
+      exerciseImprovementNote(
+        bodyweightEx("Burpee", "reps", [[10, 0]]),
+        bodyweightEx("Burpee", "reps", [[12, 0]]),
+      ),
+    ).toBe("Burpee를 2회 더 하셨어요");
+  });
+
+  it("소수는 2자리까지만 남긴다", () => {
+    expect(
+      exerciseImprovementNote(cardioEx("러닝", [[3, 20]]), cardioEx("러닝", [[3.333, 20]])),
+    ).toBe("러닝을 0.33km 더 뛰었어요");
+  });
+});
+
+describe("recordBeatenSummary", () => {
+  const bench = { note: "벤치프레스를 2회 더 하셨어요", ratio: 0.2 };
+  const squat = { note: "스쿼트를 1세트 더 하셨어요", ratio: 0.5 };
+  const run = { note: "러닝을 5분 더 뛰었어요", ratio: 0.1 };
+
+  it("개선이 없으면 null", () => {
+    expect(recordBeatenSummary([])).toBeNull();
+  });
+
+  it("1종목이면 그 문구 그대로", () => {
+    expect(recordBeatenSummary([bench])).toBe("벤치프레스를 2회 더 하셨어요");
+  });
+
+  it("여러 종목이면 개선율이 가장 큰 종목 + 외 N종목", () => {
+    expect(recordBeatenSummary([bench, squat, run])).toBe(
+      "스쿼트를 1세트 더 하셨어요 외 2종목 갱신",
     );
-    expect(found?.id).toBe("a");
+  });
+
+  it("개선율이 같으면 먼저 온 종목을 대표로 쓴다", () => {
+    expect(
+      recordBeatenSummary([
+        { note: "먼저를 1회 더 하셨어요", ratio: 0.3 },
+        { note: "나중을 1회 더 하셨어요", ratio: 0.3 },
+      ]),
+    ).toBe("먼저를 1회 더 하셨어요 외 1종목 갱신");
+  });
+
+  it("문구는 80자를 넘지 않는다", () => {
+    const long = {
+      note: "아주아주긴이름의커스텀운동종목이름입니다를 1000회 더 하셨어요",
+      ratio: 1,
+    };
+    const summary = recordBeatenSummary([long, bench, squat]);
+    expect(summary).not.toBeNull();
+    expect(summary!.length).toBeLessThanOrEqual(80);
   });
 });

@@ -1,15 +1,8 @@
 import type { ExerciseType } from "@/lib/types";
 
-/** 기록 갱신 판정용 유형별 완료 합계 (설계 2026-07-19) */
-export type EffortTotals = {
-  weightVolumeKg: number;
-  bodyweightReps: number;
-  bodyweightTimeMin: number;
-  cardioDistanceKm: number;
-  cardioTimeMin: number;
-};
-
-type EffortExercise = {
+/** 판정 입력 — 종목 하나의 완료 실적 (설계 2026-07-21) */
+export type ComparableExercise = {
+  name: string;
   exerciseType: ExerciseType;
   measure: "reps" | "time" | null;
   sets: Array<{
@@ -21,110 +14,121 @@ type EffortExercise = {
   }>;
 };
 
-export function effortTotals(exercises: EffortExercise[]): EffortTotals {
-  const totals: EffortTotals = {
-    weightVolumeKg: 0,
-    bodyweightReps: 0,
-    bodyweightTimeMin: 0,
-    cardioDistanceKm: 0,
-    cardioTimeMin: 0,
-  };
+function completedSets(exercise: ComparableExercise) {
+  return exercise.sets.filter((set) => set.isCompleted);
+}
 
-  for (const exercise of exercises) {
-    for (const set of exercise.sets) {
-      if (!set.isCompleted) continue;
-      if (exercise.exerciseType === "weight") {
-        totals.weightVolumeKg += set.weightKg * set.reps;
-      } else if (exercise.exerciseType === "bodyweight") {
-        if (exercise.measure === "time") {
-          totals.bodyweightTimeMin += set.durationMin;
-        } else {
-          totals.bodyweightReps += set.reps;
-        }
-      } else {
-        totals.cardioDistanceKm += set.distanceKm;
-        totals.cardioTimeMin += set.durationMin;
-      }
-    }
-  }
-  return totals;
+function sum(values: number[]): number {
+  return values.reduce((total, value) => total + value, 0);
 }
 
 function trimNumber(value: number): string {
   return String(Math.round(value * 100) / 100);
 }
 
-// 우선순위 순서 — 첫 번째로 초과한 지표의 문구를 쓴다.
-const METRICS: Array<{
-  key: keyof EffortTotals;
-  format: (delta: number) => string;
-}> = [
-  { key: "weightVolumeKg", format: (d) => `볼륨 +${trimNumber(d)}kg` },
-  { key: "bodyweightReps", format: (d) => `횟수 +${trimNumber(d)}회` },
-  { key: "bodyweightTimeMin", format: (d) => `맨몸 시간 +${trimNumber(d)}분` },
-  { key: "cardioDistanceKm", format: (d) => `거리 +${trimNumber(d)}km` },
-  { key: "cardioTimeMin", format: (d) => `유산소 +${trimNumber(d)}분` },
-];
-
-/**
- * 원본 대비 갱신 문구. 원본에 실적이 있던 지표만 비교하고(새 종목 추가는
- * 갱신 아님), 아무 지표도 넘지 못하면 null.
- */
-export function recordBeatenNote(
-  previous: EffortTotals,
-  current: EffortTotals,
-): string | null {
-  for (const metric of METRICS) {
-    const prev = previous[metric.key];
-    if (prev <= 0) continue;
-    const delta = current[metric.key] - prev;
-    if (delta > 0) return metric.format(delta);
-  }
-  return null;
+/** 한글 마지막 글자에 받침이 있으면 "을", 아니면 "를". 비한글은 "를". */
+function objectParticle(name: string): string {
+  const last = name.trim().at(-1);
+  if (!last) return "를";
+  const code = last.charCodeAt(0);
+  if (code < 0xac00 || code > 0xd7a3) return "를";
+  return (code - 0xac00) % 28 === 0 ? "를" : "을";
 }
 
-/** 기록 갱신 비교 후보 (설계 2026-07-21) */
-export type ComparableCandidate = {
-  id: string;
-  completedAt: Date;
-  exerciseNames: string[];
-  isTabata: boolean;
+/**
+ * 종목 하나를 유형에 맞는 지표 하나로 환산한다. 완료 세트만 센다.
+ * 유산소는 거리를 쓰되, 거리 기록이 없으면 시간을 쓴다.
+ */
+export function exerciseMetric(exercise: ComparableExercise): number {
+  const sets = completedSets(exercise);
+  if (exercise.exerciseType === "weight") {
+    return sum(sets.map((set) => set.weightKg * set.reps));
+  }
+  if (exercise.exerciseType === "bodyweight") {
+    return exercise.measure === "time"
+      ? sum(sets.map((set) => set.durationMin))
+      : sum(sets.map((set) => set.reps));
+  }
+  const distance = sum(sets.map((set) => set.distanceKm));
+  return distance > 0 ? distance : sum(sets.map((set) => set.durationMin));
+}
+
+/**
+ * 종목 하나가 직전보다 나아졌으면 사람 말 문구, 아니면 null.
+ * 판정은 지표로 하고, 문구는 실제로 변한 항목으로 쓴다.
+ */
+export function exerciseImprovementNote(
+  previous: ComparableExercise,
+  current: ComparableExercise,
+): string | null {
+  const before = exerciseMetric(previous);
+  const after = exerciseMetric(current);
+  if (before <= 0 || after <= before) return null;
+
+  const name = current.name;
+  const particle = objectParticle(name);
+
+  if (current.exerciseType === "weight") {
+    const prevSets = completedSets(previous);
+    const currSets = completedSets(current);
+
+    const setDelta = currSets.length - prevSets.length;
+    if (setDelta > 0) return `${name}${particle} ${setDelta}세트 더 하셨어요`;
+
+    const prevTopWeight = Math.max(...prevSets.map((set) => set.weightKg), 0);
+    const currTopWeight = Math.max(...currSets.map((set) => set.weightKg), 0);
+    const weightDelta = currTopWeight - prevTopWeight;
+    if (weightDelta > 0) {
+      return `${name}${particle} ${trimNumber(weightDelta)}kg 더 무겁게 드셨어요`;
+    }
+
+    const repsDelta =
+      sum(currSets.map((set) => set.reps)) - sum(prevSets.map((set) => set.reps));
+    if (repsDelta > 0) return `${name}${particle} ${repsDelta}회 더 하셨어요`;
+
+    return `${name} 볼륨이 ${trimNumber(after - before)}kg 늘었어요`;
+  }
+
+  if (current.exerciseType === "bodyweight") {
+    return current.measure === "time"
+      ? `${name}${particle} ${trimNumber(after - before)}분 더 버텼어요`
+      : `${name}${particle} ${trimNumber(after - before)}회 더 하셨어요`;
+  }
+
+  const usesDistance = sum(completedSets(current).map((set) => set.distanceKm)) > 0;
+  return usesDistance
+    ? `${name}${particle} ${trimNumber(after - before)}km 더 뛰었어요`
+    : `${name}${particle} ${trimNumber(after - before)}분 더 뛰었어요`;
+}
+
+/** 개선된 종목 하나 — 문구와 개선율(비율) */
+export type ExerciseImprovement = {
+  note: string;
+  ratio: number;
 };
 
-function sameComposition(a: string[], b: string[]): boolean {
-  const setA = new Set(a);
-  const setB = new Set(b);
-  if (setA.size !== setB.size) return false;
-  for (const name of setA) {
-    if (!setB.has(name)) return false;
-  }
-  return true;
-}
+/** record_note 컬럼과 RPC가 허용하는 최대 길이 (0021) */
+const NOTE_MAX_LENGTH = 80;
 
 /**
- * 종목 구성이 똑같은 내 가장 최근 완료 세션. 구성이 같아야 총량 비교가
- * 공정하다(종목을 추가하면 볼륨은 당연히 늘어난다). 타바타는 세트 실적이
- * 0이라 비교 대상이 되면 판정을 무의미하게 만들므로 제외한다.
+ * 개선된 종목들을 알림 1건짜리 문구로 묶는다. 대표는 개선율이 가장 큰
+ * 종목이고, 동률이면 먼저 온 종목을 쓴다. 나머지는 "외 N종목 갱신".
  */
-export function findComparableSession(
-  currentExerciseNames: string[],
-  candidates: ComparableCandidate[],
-): ComparableCandidate | null {
-  if (currentExerciseNames.length === 0) return null;
+export function recordBeatenSummary(
+  improvements: ExerciseImprovement[],
+): string | null {
+  if (improvements.length === 0) return null;
 
-  let best: ComparableCandidate | null = null;
-  for (const candidate of candidates) {
-    if (candidate.isTabata) continue;
-    if (!sameComposition(currentExerciseNames, candidate.exerciseNames)) {
-      continue;
-    }
-    // 완료 시각이 같으면 먼저 만난 후보를 쓴다 — 목록 순서에 의존하지 않도록 동작을 고정한다.
-    if (
-      best === null ||
-      candidate.completedAt.getTime() > best.completedAt.getTime()
-    ) {
-      best = candidate;
-    }
+  let top = improvements[0];
+  for (const improvement of improvements) {
+    if (improvement.ratio > top.ratio) top = improvement;
   }
-  return best;
+
+  const others = improvements.length - 1;
+  const summary =
+    others > 0 ? `${top.note} 외 ${others}종목 갱신` : top.note;
+
+  return summary.length > NOTE_MAX_LENGTH
+    ? summary.slice(0, NOTE_MAX_LENGTH)
+    : summary;
 }
