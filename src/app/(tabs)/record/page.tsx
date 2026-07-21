@@ -27,7 +27,11 @@ import {
   toDraftExercises,
   toPlanExercises,
 } from "@/lib/domain/workout-plan";
-import { effortTotals, recordBeatenNote } from "@/lib/domain/record-beaten";
+import {
+  effortTotals,
+  findComparableSession,
+  recordBeatenNote,
+} from "@/lib/domain/record-beaten";
 import { tabataDraftExercises } from "@/lib/domain/tabata";
 import { moveItem } from "@/lib/domain/reorder";
 import { getRestCountdownTogglePlan } from "@/lib/domain/rest-countdown";
@@ -611,11 +615,28 @@ function WorkoutScreen({ userId }: { userId: string }) {
           planCleanupFailed = true;
         }
       }
-      // 기록 갱신 판정 — 복사 예정표 운동만. 실패해도 완료 흐름은 계속된다.
+      // 기록 갱신 판정 — 복사 원본이 있으면 그것과, 없으면 같은 구성의 내
+      // 직전 운동과 비교한다. 판정·RPC 실패는 완료 흐름을 막지 않는다.
       let recordNote: string | null = null;
-      if (draft.sourceSessionId) {
-        try {
-          const original = await getSessionLogExercises(draft.sourceSessionId);
+      try {
+        let compareSessionId: string | null = draft.sourceSessionId;
+        if (!compareSessionId) {
+          const past = await getCompletedSessions(userId);
+          const match = findComparableSession(
+            draft.exercises.map((ex) => ex.name),
+            past
+              .filter((row) => row.id !== s.id)
+              .map((row) => ({
+                id: row.id,
+                completedAt: row.completedAt,
+                exerciseNames: row.exerciseNames,
+                isTabata: row.tabataMinutes !== null,
+              })),
+          );
+          compareSessionId = match?.id ?? null;
+        }
+        if (compareSessionId) {
+          const original = await getSessionLogExercises(compareSessionId);
           recordNote = recordBeatenNote(
             effortTotals(
               original.map((ex) => ({
@@ -642,9 +663,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
             ),
           );
           if (recordNote) await markRecordBeaten(s.id, recordNote);
-        } catch {
-          recordNote = null;
         }
+      } catch {
+        recordNote = null;
       }
       setResult({
         sessionId: s.id,
