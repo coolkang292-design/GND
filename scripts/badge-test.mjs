@@ -127,7 +127,7 @@ try {
   const first = await completedSession(userA, groupId);
   const mark1 = await api(userA.token, "POST", "/rest/v1/rpc/mark_record_beaten", {
     p_session_id: first,
-    p_note: "볼륨 +10kg",
+    p_note: "벤치프레스를 1회 더 하셨어요",
   });
   check(
     "1회차 마킹 성공",
@@ -169,7 +169,7 @@ try {
     praise.status === 200 &&
       praise.json?.length === 1 &&
       praise.json[0].title.includes("칭찬해주세요") &&
-      praise.json[0].body.includes("칭찬 한마디"),
+      praise.json[0].body.includes("님이 벤치프레스를 1회 더 하셨어요"),
     JSON.stringify(praise.json),
   );
 
@@ -178,7 +178,7 @@ try {
     const sessionId = await completedSession(userA, groupId);
     await api(userA.token, "POST", "/rest/v1/rpc/mark_record_beaten", {
       p_session_id: sessionId,
-      p_note: `볼륨 +${i}kg`,
+      p_note: `스쿼트를 ${i}회 더 하셨어요`,
     });
   }
 
@@ -208,7 +208,7 @@ try {
   const fifth = await completedSession(userA, groupId);
   await api(userA.token, "POST", "/rest/v1/rpc/mark_record_beaten", {
     p_session_id: fifth,
-    p_note: "볼륨 +50kg",
+    p_note: "러닝을 5분 더 뛰었어요",
   });
 
   const afterFive = await api(

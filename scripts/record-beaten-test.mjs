@@ -115,7 +115,7 @@ try {
 
   const early = await api(userA.token, "POST", "/rest/v1/rpc/mark_record_beaten", {
     p_session_id: sessionId,
-    p_note: "볼륨 +10kg",
+    p_note: "벤치프레스를 2회 더 하셨어요",
   });
   check(
     "미완료 세션 마킹 거절 (invalid_status)",
@@ -151,9 +151,19 @@ try {
     JSON.stringify(badNote.json),
   );
 
+  const tooLong = await api(userA.token, "POST", "/rest/v1/rpc/mark_record_beaten", {
+    p_session_id: sessionId,
+    p_note: "가".repeat(81),
+  });
+  check(
+    "80자 초과 문구 거절 (invalid_note)",
+    tooLong.status >= 400 && JSON.stringify(tooLong.json).includes("invalid_note"),
+    JSON.stringify(tooLong.json),
+  );
+
   const mark = await api(userA.token, "POST", "/rest/v1/rpc/mark_record_beaten", {
     p_session_id: sessionId,
-    p_note: "볼륨 +12.5kg",
+    p_note: "벤치프레스를 2회 더 하셨어요",
   });
   check("본인 완료 세션 마킹 성공", mark.status === 204 || mark.status === 200, JSON.stringify(mark.json));
 
@@ -164,13 +174,13 @@ try {
   );
   check(
     "record_note 저장 확인",
-    row.json?.[0]?.record_note === "볼륨 +12.5kg",
+    row.json?.[0]?.record_note === "벤치프레스를 2회 더 하셨어요",
     JSON.stringify(row.json),
   );
 
   const again = await api(userA.token, "POST", "/rest/v1/rpc/mark_record_beaten", {
     p_session_id: sessionId,
-    p_note: "볼륨 +99kg",
+    p_note: "스쿼트를 1세트 더 하셨어요",
   });
   check(
     "재마킹 거절 (already_marked)",
@@ -187,7 +197,7 @@ try {
     "크루원(B)에게 칭찬 요청 알림 생성",
     notifs.status === 200 &&
       notifs.json?.length === 1 &&
-      notifs.json[0].body.includes("볼륨 +12.5kg") &&
+      notifs.json[0].body.includes("님이 벤치프레스를 2회 더 하셨어요") &&
       notifs.json[0].body.includes("칭찬 한마디") &&
       notifs.json[0].title.includes("칭찬해주세요"),
     JSON.stringify(notifs.json),
