@@ -9,6 +9,19 @@ describe("badgeShelf", () => {
     );
   });
 
+  it("획득 순서와 무관하게 카탈로그 순서로 보여준다", () => {
+    const earnedAt = new Date("2026-07-21T10:00:00Z");
+    const shelf = badgeShelf([
+      { badgeKey: "record_beaten_10", earnedAt },
+      { badgeKey: "record_beaten_1", earnedAt },
+    ]);
+    expect(shelf.map((b) => b.key)).toEqual([
+      "record_beaten_1",
+      "record_beaten_5",
+      "record_beaten_10",
+    ]);
+  });
+
   it("획득하지 않은 배지는 earnedAt이 null이다", () => {
     expect(badgeShelf([]).every((b) => b.earnedAt === null)).toBe(true);
   });
@@ -49,5 +62,15 @@ describe("earnedBadgeCount", () => {
 
   it("없으면 0", () => {
     expect(earnedBadgeCount([])).toBe(0);
+  });
+
+  it("같은 배지가 중복으로 들어와도 한 번만 센다", () => {
+    const earnedAt = new Date("2026-07-21T10:00:00Z");
+    expect(
+      earnedBadgeCount([
+        { badgeKey: "record_beaten_1", earnedAt },
+        { badgeKey: "record_beaten_1", earnedAt },
+      ]),
+    ).toBe(1);
   });
 });

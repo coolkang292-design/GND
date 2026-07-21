@@ -56,5 +56,8 @@ export function badgeShelf(earned: EarnedBadge[]): BadgeShelfItem[] {
 
 export function earnedBadgeCount(earned: EarnedBadge[]): number {
   const keys = new Set(BADGE_CATALOG.map((meta) => meta.key));
-  return earned.filter((badge) => keys.has(badge.badgeKey)).length;
+  const owned = new Set(
+    earned.map((badge) => badge.badgeKey).filter((key) => keys.has(key)),
+  );
+  return owned.size;
 }
