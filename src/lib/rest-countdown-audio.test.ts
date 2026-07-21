@@ -58,7 +58,7 @@ describe("rest countdown audio", () => {
     expect(gain.gain.setValueAtTime).toHaveBeenCalledWith(0.0001, 10);
     expect(gain.gain.linearRampToValueAtTime).toHaveBeenNthCalledWith(
       1,
-      0.25,
+      0.5,
       10.01,
     );
     expect(gain.gain.linearRampToValueAtTime).toHaveBeenNthCalledWith(
