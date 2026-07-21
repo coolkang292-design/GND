@@ -2,6 +2,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { CompletedSession } from "@/lib/domain/calendar";
 import type { VolumeSet } from "@/lib/domain/volume";
 import type { LogExercise } from "@/lib/domain/workout-log";
+import type { ComparableExercise } from "@/lib/domain/record-beaten";
 import type {
   BodyPart,
   CatalogExercise,
@@ -270,6 +271,90 @@ export async function completeWorkout(
   });
   if (error) throw error;
   return data as WorkoutSession;
+}
+
+/** 직전 기록 조회 범위 — 이보다 오래된 기록과는 비교하지 않는다 */
+const PREVIOUS_RECORD_SESSION_LIMIT = 20;
+
+/** 조회 결과 — 판정 입력에 어느 세션에서 왔는지를 더한 것 */
+export type PreviousExerciseRecord = ComparableExercise & {
+  sessionId: string;
+};
+
+/**
+ * 오늘 한 종목들의 **직전 기록**을 한 번에 가져온다 (설계 2026-07-21).
+ * 쿼리 2회로 끝낸다. 방금 완료한 세션과 타바타 세션은 후보에서 뺀다 —
+ * 타바타는 세트 실적이 0이라 정상 기록을 가린다.
+ */
+export async function getPreviousExerciseRecords(
+  userId: string,
+  exerciseNames: string[],
+  excludeSessionId: string,
+): Promise<Map<string, PreviousExerciseRecord>> {
+  const result = new Map<string, PreviousExerciseRecord>();
+  if (exerciseNames.length === 0) return result;
+
+  const supabase = getSupabaseBrowserClient();
+
+  const { data: sessions, error: sErr } = await supabase
+    .from("workout_sessions")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("status", "completed")
+    .is("deleted_at", null)
+    .is("tabata_minutes", null)
+    .neq("id", excludeSessionId)
+    .order("completed_at", { ascending: false })
+    .limit(PREVIOUS_RECORD_SESSION_LIMIT);
+  if (sErr) throw sErr;
+
+  const sessionIds = (sessions ?? []).map((s) => s.id);
+  if (sessionIds.length === 0) return result;
+
+  const { data: exercises, error: eErr } = await supabase
+    .from("workout_exercises")
+    .select("session_id, exercise_name, exercise_type, measure, workout_sets(*)")
+    .in("session_id", sessionIds)
+    .in("exercise_name", exerciseNames);
+  if (eErr) throw eErr;
+
+  type Row = {
+    session_id: string;
+    exercise_name: string;
+    exercise_type: ExerciseType;
+    measure: "reps" | "time" | null;
+    workout_sets: WorkoutSet[] | null;
+  };
+
+  // sessionIds는 최신순이므로 인덱스가 작을수록 최근이다.
+  const recencyOf = new Map(sessionIds.map((id, index) => [id, index]));
+
+  for (const row of (exercises ?? []) as Row[]) {
+    const rank = recencyOf.get(row.session_id);
+    if (rank === undefined) continue;
+
+    const existing = result.get(row.exercise_name);
+    if (existing) {
+      const existingRank = recencyOf.get(existing.sessionId);
+      if (existingRank !== undefined && existingRank <= rank) continue;
+    }
+
+    result.set(row.exercise_name, {
+      sessionId: row.session_id,
+      name: row.exercise_name,
+      exerciseType: row.exercise_type,
+      measure: row.measure,
+      sets: (row.workout_sets ?? []).map((s) => ({
+        weightKg: Number(s.weight_kg ?? 0),
+        reps: s.reps ?? 0,
+        distanceKm: Number(s.distance_meters ?? 0) / 1000,
+        durationMin: Math.round((s.duration_seconds ?? 0) / 60),
+        isCompleted: s.is_completed,
+      })),
+    });
+  }
+
+  return result;
 }
 
 /** 기록 갱신 마킹 (0018 definer RPC) — 세션에 문구 저장 + 크루 알림/푸시 */
