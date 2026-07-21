@@ -3,6 +3,18 @@
 > 새 세션은 이 파일 + `C:\Users\SAMSUNG\Desktop\Workout app\IMPLEMENTATION_PLAN.md`(단일 진실)만 읽으면 바로 이어서 작업할 수 있다.
 > 시각 스펙: 같은 폴더의 `운동앱-목업.html`.
 
+## ✅ 2026-07-21 — 비프음 2배 + 칭찬 알림 + 배지 시스템 (0020 적용 ✅, 배포 대기)
+
+- **문서**: 설계 `docs/superpowers/specs/2026-07-21-beep-boost-praise-badges-design.md` · 계획 `docs/superpowers/plans/2026-07-21-beep-boost-praise-badges.md`. 브랜치 `feat/beep-badges`(main 미병합).
+- **비프음 2배** (`9e9d1f2`): `BEEP_GAIN` 0.25 → **0.5**. 음악에 여전히 묻힌다는 사용자 신고. 사인파 단일 오실레이터라 0.5에서도 클리핑 없음(호출 간격 1초 > 최장 비프 0.35초라 중첩도 없음).
+- **판정 범위 확대** (`c618bd6`·`ab56dea`·`75e6d84`): 복사 예정표뿐 아니라 **종목 이름 집합이 똑같은 내 직전 완료 세션**과 자동 비교. `findComparableSession` TDD 10케이스(집합 일치·순서 무관·최근 우선·동점은 먼저 만난 것·타바타 제외·자기 자신 제외). 타바타는 세트 실적이 0이라 후보가 되면 정상 후보를 가리므로 뺀다. 복사 원본(`sourceSessionId`)이 있으면 그쪽 우선 — 기존 동작 보존.
+- **칭찬 CTA** (0020): 크루 알림이 `🏅 기록 갱신! 칭찬해주세요` / `…님이 지난 기록을 넘었어요 — {문구}. 칭찬 한마디 남겨주세요! 👏`.
+- **모으는 배지** (`51020e9`·`5c74f8a`·`dcbff0e` + **0020 적용 ✅**): `user_badges`(PK `user_id,badge_key`) — authenticated에겐 **select만** 부여해 앱에서 위조 불가, 지급은 definer RPC 경로 전용. `mark_record_beaten`이 갱신 횟수 1·5·10 도달 시 지급하고 **새로 얻었을 때만** 본인에게 `badge_earned` 알림 1건. 기록 탭 달력 상단 진열대, 미획득은 🔒.
+- **배지 늘리는 법**: `src/lib/domain/badges.ts` 카탈로그에 한 줄 + 새 마이그레이션에 임계값 한 줄. **임계값은 SQL이 단일 원천**이고 TS는 표시 메타만 갖는다(양쪽에 두면 어긋날 때 조용히 틀림). 키 불일치는 `src/lib/badge-keys.test.ts`(`42dc295`)가 마이그레이션을 파싱해 잡는다 — 오타 주입으로 실제 검출 확인함.
+- **검증 실측 (2026-07-21)**: unit **311/311**(29파일) · typecheck · lint 0 · build · RLS **107/107** · 예정표 **15/15** · 사진 **8/8** · 브리핑 **8/8** · 푸시 **8/8** · 기록갱신 **8/8** · **배지 9/9**(지급·중복 방지·직접 insert 차단·타인 배지 비노출).
+- **남은 게이트**: 실기기 3항목 — ①음악 재생 중 휴식 비프음이 들리는지(아이폰은 벨소리 모드) ②같은 구성으로 직전보다 더 한 운동 완료 시 완료 화면 축하·피드 🏅·크루 폰 "칭찬해주세요" 푸시 ③달력 상단 배지 진열대와 첫 배지 획득. 그 후 `pnpm dlx vercel deploy --prod --yes`.
+- **백로그 (이번에 알면서 남긴 것)**: ①복사가 아닌 운동을 완료할 때마다 `getCompletedSessions`로 **완료 이력 전체를 무제한 조회**한다 — 세션이 수백 개면 완료 탭 지연이 커진다. 쿼리 제한·`pastSessions` 캐시 재사용·`setResult` 이후로 판정 미루기 중 택일. ②`mark_record_beaten`은 **클라이언트가 계산한 문구를 그대로 믿는다**(0018부터). 마음먹으면 빈 세션으로 배지 파밍·칭찬 알림 스팸이 가능하다. 근본 해결은 서버에서 총량 재계산. 3인 사적 크루 기준으로 수용 중.
+
 ## ✅ 2026-07-19 — 5초 휴식 비프음 + 운영 배포 완료
 
 **앱 프로덕션: https://gnd-one.vercel.app** — 이번 배포로 **5초 휴식 비프음, 챌린지 사진 인증·레벨, 달력 운동 예정표**가 모두 운영에 반영됐다. 남은 것은 재배포가 아니라 배포 주소에서의 폰 확인뿐이다.
@@ -62,7 +74,7 @@
 ### 다음 세션 시작 체크리스트
 
 1. 저장소 `C:\Users\SAMSUNG\workout-app`, 브랜치 `main`, 작업트리 클린(`.claude/`만 untracked — 커밋 금지). 되돌리기·리셋 불필요.
-2. **DB 0001~0015 전부 적용 완료 — SQL 파일 재실행 금지.** (0015 = 날짜별 운동 예정표, 전용 실 DB 검사 15/15 확인)
+2. **DB 0001~0020 전부 적용 완료 — SQL 파일 재실행 금지.** (0020 = 배지 시스템, 전용 실 DB 검사 9/9 확인)
 3. dev 서버는 세션 종료와 함께 꺼졌을 수 있음 → `pnpm exec next dev -H 0.0.0.0`으로 시작 (폰: `http://192.168.219.104:3000` / Tailscale `http://100.85.240.15:3000`). build 돌릴 땐 dev 서버 먼저 종료(교훈 8 — 좀비면 `taskkill /PID <pid> /F`). 와이파이 IP는 DHCP라 변동 가능(.112→.104 전례) — 안 열리면 `ipconfig` 확인 후 `next.config.ts allowedDevOrigins` 갱신. 이제 순수 표시 확인은 배포 주소로도 가능.
 4. 검증 명령: `pnpm test`(**175**) · `pnpm lint` · `pnpm typecheck` · `pnpm build` · `node scripts/rls-test.mjs`(**107**, 응원 쿨다운 대기 포함 약 30초) · `node scripts/workout-plan-test.mjs`(**15/15**, 실 DB) · `node scripts/challenge-photo-test.mjs`(**8/8**, 실 DB) · `node scripts/briefing-integration-test.mjs`(**8/8**, 실 DB).
 5. E2E·스모크 스크립트는 세션 scratchpad에 있어 소멸됨 — 재작성 시 흐름: 익명 세션 쿠키(`sb-<ref>-auth-token`, base64- 접두) 파싱 → REST로 프로필·크루·세션 픽스처 → puppeteer-core(스크래치패드에 npm install)로 UI·Realtime 단언. 아래 "Phase 6 산출물" 참고.
