@@ -12,9 +12,11 @@ import { CrewLatestWorkout } from "@/components/crew-latest-workout";
 import { StreakCard } from "@/components/home/streak-card";
 import { WeeklyStats } from "@/components/home/weekly-stats";
 import { KingCard } from "@/components/home/king-card";
+import { CharacterCard } from "@/components/home/character-card";
 import { getMyProfile } from "@/lib/crew";
 import { getMyRecordViewAts } from "@/lib/social";
 import { getCompletedSessions } from "@/lib/workout";
+import { getProgressSummary, type ProgressSummary } from "@/lib/progression";
 
 /** 홈 전체 — 내 완료 세션을 한 번만 조회해 위젯들이 공유한다 */
 export function HomeClient() {
@@ -22,6 +24,8 @@ export function HomeClient() {
   const [completedAts, setCompletedAts] = useState<Date[] | null>(null);
   const [weeklyGoal, setWeeklyGoal] = useState(3);
   const [viewAts, setViewAts] = useState<Date[]>([]);
+  const [summary, setSummary] = useState<ProgressSummary | null>(null);
+  const [summaryError, setSummaryError] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -40,6 +44,18 @@ export function HomeClient() {
         setViewAts(views);
       } catch {
         if (!cancelled) setCompletedAts([]);
+      }
+    })();
+    // 성장 카드는 별도 조회 — 실패해도 홈의 다른 기능은 유지(修正14)
+    (async () => {
+      try {
+        const s = await getProgressSummary();
+        if (!cancelled) {
+          setSummary(s);
+          setSummaryError(false);
+        }
+      } catch {
+        if (!cancelled) setSummaryError(true);
       }
     })();
     return () => {
@@ -89,6 +105,13 @@ export function HomeClient() {
           viewAts={viewAts}
           onViewed={() => setRefreshKey((k) => k + 1)}
         />
+      )}
+
+      {summary && <CharacterCard summary={summary} />}
+      {summaryError && (
+        <p className="rounded-card-sm border border-line bg-surface px-3 py-2.5 text-xs text-muted">
+          성장 정보를 불러오지 못했어요.
+        </p>
       )}
 
       <div className="mt-1 flex items-center justify-between px-0.5">
