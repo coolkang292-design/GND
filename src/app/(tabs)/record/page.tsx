@@ -37,6 +37,8 @@ import { tabataDraftExercises } from "@/lib/domain/tabata";
 import { moveItem } from "@/lib/domain/reorder";
 import { getRestCountdownTogglePlan } from "@/lib/domain/rest-countdown";
 import { dayKey } from "@/lib/domain/time";
+import { XpResultModal } from "@/components/record/xp-result-modal";
+import { buildXpEvents, type XpEvent } from "@/lib/domain/xp-events";
 import { shareOrCopyText, shareResultToast } from "@/lib/share";
 import { prepareRestCountdownAudio } from "@/lib/rest-countdown-audio";
 import { getMyGroups } from "@/lib/crew";
@@ -49,7 +51,7 @@ import {
 import {
   cancelWorkout,
   clearDraft,
-  completeWorkout,
+  completeWorkoutV2,
   createCustomExercise,
   createDraftSession,
   defaultSets,
@@ -141,6 +143,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const [pastLoaded, setPastLoaded] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [result, setResult] = useState<CompletedResult | null>(null);
+  const [xpEvents, setXpEvents] = useState<XpEvent[]>([]);
   const [busy, setBusy] = useState(false);
   const [loadingExerciseKey, setLoadingExerciseKey] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -604,8 +607,12 @@ function WorkoutScreen({ userId }: { userId: string }) {
     setBusy(true);
     try {
       await saveSessionExercises(draft.sessionId, draft.exercises);
-      const s = await completeWorkout(draft.sessionId);
-      const completedAtMs = s.completed_at
+      // 완료 + XP를 한 트랜잭션으로 처리한다(0022 complete_workout_v2).
+      // v2는 XP 결과만 돌려주므로 완료 시각·소요 시간은 세션을 다시 읽는다.
+      const sessionId = draft.sessionId;
+      const xp = await completeWorkoutV2(sessionId);
+      const s = await getSessionById(sessionId);
+      const completedAtMs = s?.completed_at
         ? new Date(s.completed_at).getTime()
         : Date.now();
       let planCleanupFailed = false;
@@ -624,7 +631,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
         const previousByName = await getPreviousExerciseRecords(
           userId,
           names,
-          s.id,
+          sessionId,
         );
 
         const improvements: ExerciseImprovement[] = [];
@@ -656,14 +663,14 @@ function WorkoutScreen({ userId }: { userId: string }) {
         }
 
         recordNote = recordBeatenSummary(improvements);
-        if (recordNote) await markRecordBeaten(s.id, recordNote);
+        if (recordNote) await markRecordBeaten(sessionId, recordNote);
       } catch {
         recordNote = null;
       }
       setResult({
-        sessionId: s.id,
+        sessionId,
         completedAtMs,
-        durationMinutes: s.duration_minutes ?? 0,
+        durationMinutes: s?.duration_minutes ?? 0,
         summary: summarizeVolume(toVolumeSets(draft.exercises)),
         logText: formatWorkoutLog(
           dayKey(
@@ -674,6 +681,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
         ),
         recordNote,
       });
+      setXpEvents(buildXpEvents(xp)); // 멱등 재생·XP 0이면 빈 배열 → 모달 없음
       clearDraft(userId);
       setDraft(emptyDraft(draft.restSeconds));
       // 완료 직후 다시 운동을 준비할 때 방금 기록도 목록에 포함한다.
@@ -767,6 +775,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
         >
           확인
         </button>
+        {xpEvents.length > 0 && (
+          <XpResultModal events={xpEvents} onClose={() => setXpEvents([])} />
+        )}
         {toast && (
           <div
             className="fixed inset-x-8 z-50 rounded-card border border-line bg-surface px-4 py-3 text-center text-sm font-bold shadow-card"
