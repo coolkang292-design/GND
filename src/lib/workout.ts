@@ -273,6 +273,45 @@ export async function completeWorkout(
   return data as WorkoutSession;
 }
 
+export interface WorkoutXpResult {
+  idempotentReplay: boolean;
+  awarded: boolean;
+  xpAwarded?: number;
+  breakdown?: {
+    baseXp: number;
+    durationXp: number;
+    planXp: number;
+    recordXp: number;
+    photoXp: number;
+  };
+  newTotalXp?: number;
+  previousLevel?: number;
+  newLevel?: number;
+  previousStage?: number;
+  newStage?: number;
+  levelUp?: boolean;
+  stageUp?: boolean;
+  unlockedRewards?: { key: string; label: string }[];
+  // 멱등 재생 응답 필드
+  originalXpAwarded?: number;
+  currentTotalXp?: number;
+  currentLevel?: number;
+  currentStage?: number;
+  rejectionReason?: string;
+}
+
+/** 완료 + XP를 원자 처리하는 신규 경로. 세션 객체 대신 XP 결과를 반환한다. */
+export async function completeWorkoutV2(
+  sessionId: string,
+): Promise<WorkoutXpResult> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase.rpc("complete_workout_v2", {
+    p_session_id: sessionId,
+  });
+  if (error) throw error;
+  return data as WorkoutXpResult;
+}
+
 /** 직전 기록 조회 범위 — 이보다 오래된 기록과는 비교하지 않는다 */
 const PREVIOUS_RECORD_SESSION_LIMIT = 20;
 
