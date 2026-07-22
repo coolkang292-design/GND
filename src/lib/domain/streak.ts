@@ -49,6 +49,18 @@ export function currentStreak(dayKeys: string[], todayKey: string): number {
   return streak;
 }
 
+/**
+ * 마지막 운동일로부터 오늘까지의 일수. 기록이 없으면 null.
+ * 0 = 오늘 함, 1 = 어제가 마지막(= 오늘만 아직), 2 = 어제는 쉼 …
+ */
+export function daysSinceLastWorkout(
+  dayKeys: string[],
+  todayKey: string,
+): number | null {
+  const last = [...dayKeys].sort().at(-1);
+  return last ? daysBetween(last, todayKey) : null;
+}
+
 /** 단계 판정: 오늘완료 / D-4 ~ D-1 / 소멸 (§8 6단계 중 카피 제외 판정부) */
 export function streakStage(dayKeys: string[], todayKey: string): StreakStage {
   const last = [...dayKeys].sort().at(-1);

@@ -2,6 +2,7 @@
 
 import {
   currentStreak,
+  daysSinceLastWorkout,
   streakStage,
   workoutDayKeys,
 } from "@/lib/domain/streak";
@@ -34,6 +35,9 @@ export function StreakCard({ completedAts }: { completedAts: Date[] }) {
     return { key: k, done: keySet.has(k) };
   });
 
+  // 카드 부제는 **사실 상태**, 아래 경고 배너는 **재촉 카피**로 나눈다.
+  // 예전엔 둘 다 STAGE_MESSAGES를 계산해 같은 문장이 두 번 보였다(2026-07-23).
+  const gap = daysSinceLastWorkout(keys, todayKey);
   const sub =
     stage === "none"
       ? "운동을 시작하면 불꽃이 켜져요"
@@ -41,9 +45,9 @@ export function StreakCard({ completedAts }: { completedAts: Date[] }) {
         ? pickByDay(TODAY_DONE_MESSAGES, todayKey)
         : stage === "expired"
           ? pickByDay(EXPIRED_MESSAGES, todayKey)
-          : (STAGE_MESSAGES[stage] &&
-              pickByDay(STAGE_MESSAGES[stage], todayKey)(streak)) ||
-            "";
+          : gap === 1
+            ? `어제 운동했어요 · 오늘 하면 ${streak + 1}일째`
+            : `${gap}일째 쉬는 중 · 오늘 하면 ${streak + 1}일째`;
 
   const warning =
     streak > 0 && STAGE_MESSAGES[stage]
