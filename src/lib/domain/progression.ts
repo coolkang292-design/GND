@@ -50,6 +50,50 @@ export const LEVEL_DEFS: LevelDefinition[] = CUTS.map((xp, i) => {
 
 export const MAX_LEVEL = 35;
 
+/**
+ * 단계별 상태 설명(설계 §7). 이름은 `STAGES`가 기준이며, 아래 `name`이
+ * 어긋나면 테스트가 실패한다 — 표시 문구가 두 곳으로 갈라지는 걸 막는다.
+ */
+export const STAGE_DESCRIPTIONS: Record<number, { name: string; desc: string }> = {
+  1: { name: "개노답", desc: "생각은 많지만 아직 움직이지 않는 상태. 작은 행동 하나가 탈출의 시작이다." },
+  2: { name: "눈떴개", desc: "문제를 깨닫고 처음 움직이기 시작한 상태." },
+  3: { name: "일단하개", desc: "완벽하지 않아도 바로 행동하는 상태." },
+  4: { name: "물고가개", desc: "목표 하나를 물고 놓지 않는 상태." },
+  5: { name: "미쳐보개", desc: "실행에 완전히 빠져든 상태." },
+  6: { name: "판을짜개", desc: "결과로 새로운 판을 만드는 상태." },
+  7: { name: "전설이개", desc: "실행 자체가 정체성이 된 상태." },
+};
+
+export interface StageGroup {
+  stageIndex: number;
+  stageKey: StageKey;
+  stageName: string;
+  description: string;
+  startLevel: number;
+  endLevel: number;
+  requiredTotalXp: number; // 이 단계 첫 레벨의 누적 XP = 해금 기준
+  characterPath: string;
+}
+
+/** `LEVEL_DEFS`를 7단계로 묶는다 — 성장 허브 캐러셀·다음 단계 미리보기용. */
+export function getStageGroups(): StageGroup[] {
+  return STAGES.map(([stageKey, stageName], i) => {
+    const stageIndex = i + 1;
+    const levels = LEVEL_DEFS.filter((d) => d.stageIndex === stageIndex);
+    const first = levels[0];
+    return {
+      stageIndex,
+      stageKey,
+      stageName,
+      description: STAGE_DESCRIPTIONS[stageIndex].desc,
+      startLevel: first.level,
+      endLevel: levels[levels.length - 1].level,
+      requiredTotalXp: first.requiredTotalXp,
+      characterPath: first.characterPath,
+    };
+  });
+}
+
 export function getLevelFromTotalXp(totalXp: number): LevelDefinition {
   if (!Number.isFinite(totalXp) || totalXp < 0) {
     throw new Error("totalXp must be a non-negative finite number");

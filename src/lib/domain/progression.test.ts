@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { LEVEL_DEFS, getLevelFromTotalXp, getLevelProgress } from "./progression";
+import {
+  LEVEL_DEFS,
+  STAGE_DESCRIPTIONS,
+  getLevelFromTotalXp,
+  getLevelProgress,
+  getStageGroups,
+} from "./progression";
 
 describe("LEVEL_DEFS", () => {
   it("35개, 오름차순 컷", () => {
@@ -42,5 +48,53 @@ describe("getLevelProgress — 구간 기준", () => {
     expect(p.percent).toBe(100);
     expect(p.nextLevelRequiredXp).toBeNull();
     expect(p.xpToNextLevel).toBe(0);
+  });
+});
+
+describe("getStageGroups — 성장 허브 7단계", () => {
+  it("7칸, 각 5레벨 구간", () => {
+    const groups = getStageGroups();
+    expect(groups).toHaveLength(7);
+    expect(groups[0]).toMatchObject({
+      stageIndex: 1,
+      stageName: "개노답",
+      startLevel: 1,
+      endLevel: 5,
+      requiredTotalXp: 0,
+      characterPath: "/characters/char-1.png",
+    });
+    expect(groups[6]).toMatchObject({
+      stageIndex: 7,
+      stageName: "전설이개",
+      startLevel: 31,
+      endLevel: 35,
+      requiredTotalXp: 21000,
+      characterPath: "/characters/char-7.png",
+    });
+  });
+
+  it("구간이 끊김 없이 이어지고 해금 XP는 오름차순", () => {
+    const groups = getStageGroups();
+    groups.forEach((g, i) => {
+      if (i === 0) return;
+      expect(g.startLevel).toBe(groups[i - 1].endLevel + 1);
+      expect(g.requiredTotalXp).toBeGreaterThan(groups[i - 1].requiredTotalXp);
+    });
+    expect(groups.flatMap((g) => g.endLevel - g.startLevel + 1)).toHaveLength(7);
+    expect(groups[6].endLevel).toBe(LEVEL_DEFS.length);
+  });
+
+  it("단계 해금 XP는 그 단계 첫 레벨 컷과 같다", () => {
+    for (const g of getStageGroups()) {
+      expect(getLevelFromTotalXp(g.requiredTotalXp).level).toBe(g.startLevel);
+      expect(getLevelFromTotalXp(g.requiredTotalXp).stageIndex).toBe(g.stageIndex);
+    }
+  });
+
+  it("STAGE_DESCRIPTIONS 이름이 LEVEL_DEFS 단계명과 일치", () => {
+    for (const g of getStageGroups()) {
+      expect(STAGE_DESCRIPTIONS[g.stageIndex].name).toBe(g.stageName);
+      expect(STAGE_DESCRIPTIONS[g.stageIndex].desc.length).toBeGreaterThan(0);
+    }
   });
 });
