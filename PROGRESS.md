@@ -3,21 +3,24 @@
 > 새 세션은 이 파일 + `C:\Users\SAMSUNG\Desktop\Workout app\IMPLEMENTATION_PLAN.md`(단일 진실)만 읽으면 바로 이어서 작업할 수 있다.
 > 시각 스펙: 같은 폴더의 `운동앱-목업.html`.
 
-## 🔶 2026-07-23 — XP·35레벨·7단계 캐릭터 시스템 (Task 1~13 완료 · **배포 대기**)
+## ✅ 2026-07-23 — XP·35레벨·7단계 캐릭터 시스템 (Task 1~14 완료 · **운영 배포 ✅**)
 
 - **문서**: 설계 `docs/superpowers/specs/2026-07-23-xp-level-character-system-design.md` · 계획 `docs/superpowers/plans/2026-07-23-xp-level-character-system.md` · 인수인계 `docs/superpowers/HANDOFF-2026-07-23-xp-system.md`.
-- **브랜치 `feat/xp-level-character-system`(main 미병합·미배포).** 남은 것은 **Task 14 = 사용자 실기기 검수 → 배포**뿐이다.
+- **배포 완료 (2026-07-23)**: `feat/xp-level-character-system` → main **fast-forward 병합**(11커밋, `ba79ef8`) → `pnpm dlx vercel deploy --prod --yes` → `gnd-oiutfai04-gnd4.vercel.app` ● Ready(target production). `/home`·`/profile`·`/record`·`/feed` 전부 **HTTP 200**, `char-1.png` 200(**248,857B** = 최적화본이 실제로 서빙됨).
+- **번들 실검증(교훈 9 절차)**: 배포된 청크에서 `7단계 캐릭터 진화`·`판을짜개`·`성장 타임라인`·`준비 중`·`XP 획득 방법` 전부 확인. 홈 카드는 `` `오늘 운동하면 최대 ${MAX_DAILY_WORKOUT_XP_NOW} XP` `` 로 상수 참조하며, **옛 하드코딩 "최대 180 XP"는 0건**.
+- **실기기 검수에서 잡힌 것 1건 (`ba79ef8`)**: "7단계 안내 ›"가 캐러셀로 스크롤만 해서, 캐러셀이 이미 화면에 보이는 위치라 **아무 동작도 하지 않았다**(계획서 지시대로 만든 결과). 라벨이 약속하는 설명이 실제로 없었으므로 `StageGuideSheet`(7단계 전체 · 캐릭터 · 레벨구간 · 상태설명 · 해금 XP · 남은 XP)를 만들고, 진입점 3개(현재단계 "7단계 안내 ›" · 캐러셀 헤더 `?` · 캐러셀 타일 — 뒤 둘도 눌러도 무반응이었다)를 여기에 연결했다.
 - **Phase A 엔진 (Task 1~8B)**: `0022_xp_level_system.sql` **운영 DB 적용 완료 → 절대 수정 금지**(추가 변경은 0023+). 5테이블·RLS·35레벨 seed·`complete_workout_v2`(멱등)·`apply_xp_and_progress`(공통)·`award_workout_photo_xp`·`is_valid_workout`(내부전용). 성장 레벨(영구 1~35, `domain/progression.ts`)은 **챌린지 레벨(임시 1~5, `domain/level.ts`)과 완전 별개**.
 - **Phase B 화면 (Task 9~13)**: 홈 캐릭터 카드 · **내 정보 성장 허브**(7단계 캐러셀·현재 단계·레벨 혜택·다음 단계 미리보기·성장 타임라인·최근 XP 내역, 알림 설정은 우상단 톱니로 이동) · **XP 획득 방법 시트** · **운동 완료 순차 이벤트 모달**(xp → level_up → stage_up → reward).
 - **완료 경로 교체**: `completeWorkout` → **`completeWorkoutV2`**. 타바타 자동 완료도 `handleFinish`를 지나므로 같은 경로로 XP를 받는다. v2는 세션 행을 안 주므로 완료 시각·소요 시간은 `getSessionById`로 다시 읽는다(조회 실패해도 완료 흐름은 막지 않음).
 - **정정 — 최대 XP는 180이 아니라 160**: 홈 카드가 "최대 180 XP"라고 안내했지만 운영 RPC가 `v_plan := 0`이라 계획 완료 +20이 **지급되지 않는다**. 실제 상한 = 100+40+10+10 = **160**. `MAX_DAILY_WORKOUT_XP_NOW`로 단일화했고, 0023에서 계획 XP가 실제 지급되면 180으로 올린다. 지급 안 되는 XP를 지급되는 것처럼 안내하지 않는다(修正17).
 - **"준비 중" 규칙(修正2)**: `reward_status='coming_soon'` 혜택은 레벨을 넘겨도 "해금됨"이 아니라 **"준비 중"** 배지로만 표시한다. `data_only`는 노출하지 않는다. 핵심 기능(기록·피드·통계)은 Lv.1부터 전부 열려 있다.
 - **캐릭터 이미지 최적화**: char-1~7+fallback이 각 ~2MB(1086×1448, 총 16.9MB)라 Next Image 최적화가 느려 프리뷰 스크린샷이 타임아웃됐다. sharp로 600×800 + 팔레트 양자화 → **1.88MB(-89%)**. 파일명·확장자는 유지(DB `character_path`가 `.png`로 seed됨). 실측: 캐러셀 7장 최적화 **1.6초**, w=128 각 12.8KB.
-- **검증 실측 (2026-07-23)**: unit **387/387**(34파일, 이전 358에서 +29) · typecheck · lint 0 · build ✅ · **실 DB `node scripts/xp-test.mjs` 15/15**(멱등·RLS·타바타·DB↔TS 미러·360분·내부함수 보호, 픽스처 자동 정리) · `/profile`·`/record` dev 200.
-- **커밋**: `139df4a`(이미지 최적화) · `5303389`(160 정정) · `ce632f7`(XP 시트) · `f3770bb`(성장 허브) · `783bd3d`(완료 모달+v2 경로).
-- **실기기 확인 대기 (배포 전 필수)**: ①내 정보 — 캐러셀 가로 스크롤·잠긴 단계 실루엣·진행바·타임라인·톱니→알림설정 ②운동 완료 → XP 합계 모달, 레벨업/진화 케이스, 중복 클릭 시 XP 1회 ③홈 카드 즉시 반영 ④320px·safe-area.
+- **검증 실측 (2026-07-23, 배포 직전 main에서)**: unit **392/392**(34파일, 이전 358에서 +34) · typecheck · lint 0 · build ✅ · **실 DB `node scripts/xp-test.mjs` 15/15**(멱등·RLS·타바타·DB↔TS 미러·360분·내부함수 보호, 픽스처 자동 정리).
+- **커밋**: `139df4a`(이미지 최적화) · `5303389`(160 정정) · `ce632f7`(XP 시트) · `f3770bb`(성장 허브) · `783bd3d`(완료 모달+v2 경로) · `cf8b91c`(문서) · `ba79ef8`(7단계 안내 시트).
+- **검수 방식**: Vercel **프리뷰 배포**(`target: null`, Production 무영향)로 실기기 확인 후 배포했다. Preview 환경에 공개 키 2개(`NEXT_PUBLIC_SUPABASE_URL`·`ANON_KEY`)만 넣었고 서비스 롤 키는 넣지 않았다. 프리뷰는 Vercel SSO로 보호되므로 계정 로그인 후 접근한다.
 - **알려진 것**: 성장 타임라인에 **날짜는 없다** — 0022에 레벨 이력 테이블이 없어 추정 날짜를 지어내지 않았다. 레벨·누적 XP·상태만 보여준다.
-- **다음**: Task 14(실기기→배포) → 그 뒤 `docs/superpowers/plans/2026-07-23-plan-completion-xp.md`(0023 계획 완료 +20).
+- **배포 후 폰 확인 잔여**: 푸시 알림·아침 브리핑 크론은 프리뷰에서 검증하지 않았다(VAPID·CRON_SECRET을 Preview에 안 넣음). **운영 주소에서** 기존대로 동작하는지 한 번 봐야 한다 — 이번 변경이 건드린 영역은 아니다.
+- **다음**: `docs/superpowers/plans/2026-07-23-plan-completion-xp.md`(0023 계획 완료 +20). 착수 시 `MAX_DAILY_WORKOUT_XP_NOW`를 **160 → 180**으로 올리는 것도 함께.
 
 ## ✅ 2026-07-21 — 기록 갱신을 종목별 판정으로 교체
 
