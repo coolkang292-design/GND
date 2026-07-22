@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { CurrentStageCard } from "@/components/profile/current-stage-card";
 import { GrowthTimeline } from "@/components/profile/growth-timeline";
 import { LevelRewards } from "@/components/profile/level-rewards";
 import { NextStagePreview } from "@/components/profile/next-stage-preview";
 import { StageCarousel } from "@/components/profile/stage-carousel";
+import { StageGuideSheet } from "@/components/profile/stage-guide-sheet";
 import { XpGuideSheet } from "@/components/profile/xp-guide-sheet";
 import { XpHistory } from "@/components/profile/xp-history";
 import {
@@ -33,6 +34,7 @@ export function GrowthHub() {
   const [failed, setFailed] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [guideOpen, setGuideOpen] = useState(false);
+  const [stageGuideOpen, setStageGuideOpen] = useState(false);
 
   useEffect(() => {
     if (!configured || loading || !userId) return;
@@ -54,16 +56,6 @@ export function GrowthHub() {
       cancelled = true;
     };
   }, [configured, loading, userId, reloadKey]);
-
-  // "7단계 안내 ›" — 캐러셀로 스크롤. 감소 모션 설정이면 즉시 이동한다.
-  const scrollToCarousel = useCallback(() => {
-    const el = document.getElementById("stage-carousel");
-    if (!el) return;
-    const reduced = window.matchMedia?.(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
-    el.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
-  }, []);
 
   // 修正14: 오류를 색만으로 알리지 않고 문구 + "다시 시도" 버튼을 함께 준다.
   if (failed) {
@@ -103,9 +95,15 @@ export function GrowthHub() {
 
   return (
     <>
-      <StageCarousel currentStage={summary.currentStage} />
+      <StageCarousel
+        currentStage={summary.currentStage}
+        onHelpClick={() => setStageGuideOpen(true)}
+      />
 
-      <CurrentStageCard summary={summary} onGuideClick={scrollToCarousel} />
+      <CurrentStageCard
+        summary={summary}
+        onGuideClick={() => setStageGuideOpen(true)}
+      />
 
       <LevelRewards
         rewards={rewards}
@@ -135,6 +133,14 @@ export function GrowthHub() {
       </button>
 
       {guideOpen && <XpGuideSheet onClose={() => setGuideOpen(false)} />}
+
+      {stageGuideOpen && (
+        <StageGuideSheet
+          currentStage={summary.currentStage}
+          totalXp={summary.totalXp}
+          onClose={() => setStageGuideOpen(false)}
+        />
+      )}
     </>
   );
 }

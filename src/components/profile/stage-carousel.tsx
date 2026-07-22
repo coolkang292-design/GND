@@ -9,19 +9,26 @@ import { getStageGroups } from "@/lib/domain/progression";
  */
 export function StageCarousel({
   currentStage,
-  onSelect,
+  onHelpClick,
 }: {
   currentStage: number;
-  onSelect?: (stageIndex: number) => void;
+  onHelpClick: () => void;
 }) {
   const groups = getStageGroups();
 
   return (
-    <section
-      id="stage-carousel"
-      className="rounded-card border border-line bg-surface p-4 shadow-card"
-    >
-      <h2 className="text-sm font-extrabold">나의 캐릭터 성장</h2>
+    <section className="rounded-card border border-line bg-surface p-4 shadow-card">
+      <div className="flex items-start justify-between gap-2">
+        <h2 className="text-sm font-extrabold">나의 캐릭터 성장</h2>
+        <button
+          type="button"
+          onClick={onHelpClick}
+          aria-label="7단계 진화 안내 보기"
+          className="flex h-6 w-6 flex-none items-center justify-center rounded-full border border-line text-[11px] font-extrabold text-muted"
+        >
+          ?
+        </button>
+      </div>
       <p className="mt-0.5 text-[11px] text-muted">
         레벨 5개마다 한 단계씩 진화해요. 총 7단계.
       </p>
@@ -34,11 +41,11 @@ export function StageCarousel({
             <li key={g.stageKey} className="flex-none">
               <button
                 type="button"
-                onClick={() => onSelect?.(g.stageIndex)}
+                onClick={onHelpClick}
                 aria-current={current ? "step" : undefined}
                 aria-label={`${g.stageIndex}단계 ${g.stageName} · Lv.${g.startLevel}~${g.endLevel}${
                   locked ? " · 잠김" : current ? " · 현재 단계" : " · 달성"
-                }`}
+                } · 안내 보기`}
                 className={`block w-[76px] rounded-card-sm border p-1.5 text-center transition-colors ${
                   current
                     ? "border-accent bg-accent-weak"

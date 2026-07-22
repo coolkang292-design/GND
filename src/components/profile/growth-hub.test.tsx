@@ -4,6 +4,8 @@ import { CurrentStageCard } from "./current-stage-card";
 import { GrowthTimeline } from "./growth-timeline";
 import { LevelRewards } from "./level-rewards";
 import { NextStagePreview } from "./next-stage-preview";
+import { StageCarousel } from "./stage-carousel";
+import { StageGuideSheet } from "./stage-guide-sheet";
 import { XpGuideSheet } from "./xp-guide-sheet";
 import type { LevelReward, ProgressSummary } from "@/lib/progression";
 
@@ -137,6 +139,65 @@ describe("GrowthTimeline", () => {
       <GrowthTimeline currentLevel={4} totalXp={740} />,
     );
     expect(html).toContain("눈떴개 진화"); // Lv.6
+  });
+});
+
+describe("StageGuideSheet — '7단계 안내'가 실제로 설명한다", () => {
+  it("7단계 전부를 이름·레벨구간·설명과 함께 보여준다", () => {
+    const html = renderToStaticMarkup(
+      <StageGuideSheet currentStage={1} totalXp={110} onClose={() => {}} />,
+    );
+    for (const name of [
+      "개노답",
+      "눈떴개",
+      "일단하개",
+      "물고가개",
+      "미쳐보개",
+      "판을짜개",
+      "전설이개",
+    ]) {
+      expect(html).toContain(name);
+    }
+    expect(html).toContain("Lv.1~5");
+    expect(html).toContain("Lv.31~35");
+    expect(html).toContain("생각은 많지만 아직 움직이지 않는 상태");
+    expect(html).toContain("레벨 5개마다 한 단계씩 진화");
+  });
+
+  it("현재 단계는 '현재' 배지, 잠긴 단계는 남은 XP를 보여준다", () => {
+    const html = renderToStaticMarkup(
+      <StageGuideSheet currentStage={1} totalXp={110} onClose={() => {}} />,
+    );
+    expect(html).toContain("현재");
+    expect(html).toContain("890 XP 남음"); // 눈떴개 1000 - 110
+  });
+
+  it("접근성: dialog 역할과 제목 연결", () => {
+    const html = renderToStaticMarkup(
+      <StageGuideSheet currentStage={3} totalXp={4000} onClose={() => {}} />,
+    );
+    expect(html).toContain('role="dialog"');
+    expect(html).toContain('aria-modal="true"');
+    expect(html).toContain('aria-labelledby="stage-guide-title"');
+    expect(html).toContain('id="stage-guide-title"');
+  });
+});
+
+describe("StageCarousel", () => {
+  it("헤더 ? 버튼으로 안내를 열 수 있다", () => {
+    const html = renderToStaticMarkup(
+      <StageCarousel currentStage={1} onHelpClick={() => {}} />,
+    );
+    expect(html).toContain('aria-label="7단계 진화 안내 보기"');
+  });
+
+  it("잠긴 단계는 저채도·자물쇠, 현재 단계는 aria-current", () => {
+    const html = renderToStaticMarkup(
+      <StageCarousel currentStage={1} onHelpClick={() => {}} />,
+    );
+    expect(html).toContain("grayscale");
+    expect(html).toContain('aria-current="step"');
+    expect(html).toContain("· 잠김 · 안내 보기");
   });
 });
 
