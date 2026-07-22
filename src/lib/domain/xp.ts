@@ -30,6 +30,19 @@ export function minutesFromSeconds(seconds: number): number {
 /** 6시간(360분) 이상은 이상치로 보고 XP를 지급하지 않는다. */
 export const MAX_XP_DURATION_MINUTES = 360;
 
+/**
+ * **지금 실제로 받을 수 있는** 하루 최대 운동 XP = 160
+ * (기본 100 + 시간 40 + 기록 10 + 사진 10).
+ *
+ * 이 함수의 이론적 최대는 180이지만, 계획 완료 +20은 운영 중인
+ * `complete_workout_v2`가 `v_plan := 0`으로 고정해 두어 **지급되지 않는다**
+ * (계획-실행 필수판정 스키마가 없음 → 0023에서 교체 예정).
+ *
+ * 안내 문구는 반드시 이 상수를 써서 **받을 수 없는 XP를 받을 수 있는 것처럼
+ * 알리지 않는다**(修正17). 0023 적용 시 180으로 올린다.
+ */
+export const MAX_DAILY_WORKOUT_XP_NOW = 160;
+
 const ZERO: WorkoutXpBreakdown = {
   baseXp: 0, durationXp: 0, planXp: 0, recordXp: 0, photoXp: 0, totalXp: 0,
 };

@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { MAX_DAILY_WORKOUT_XP_NOW } from "@/lib/domain/xp";
 import type { ProgressSummary } from "@/lib/progression";
 
 /** 홈 하단 "나의 캐릭터" 카드 — 현재 단계·레벨·구간 진행바·오늘 XP 상태. */
@@ -43,7 +44,7 @@ export function CharacterCard({ summary }: { summary: ProgressSummary }) {
           <p className="mt-0.5 text-[11px] font-semibold text-accent">
             {summary.hasReceivedTodayWorkoutXp
               ? "오늘의 운동 XP 획득 완료"
-              : "오늘 운동하면 최대 180 XP"}
+              : `오늘 운동하면 최대 ${MAX_DAILY_WORKOUT_XP_NOW} XP`}
           </p>
         </div>
         <span className="flex-none text-xs font-bold text-accent">성장 보기 ›</span>
