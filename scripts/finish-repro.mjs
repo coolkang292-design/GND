@@ -78,16 +78,19 @@ console.log(`  1차 종료: status=${f2a.status} awarded=${f2a.json?.awarded} xp
 const f2b = await finish(A, s2.id);
 console.log(`  2차 종료(replay): status=${f2b.status} replay=${f2b.json?.idempotentReplay} ⚠️msg=${JSON.stringify(f2b.json)}`);
 
-console.log("\n=== 시나리오 2b: finishWorkout 래퍼 로직 — 재종료가 '이미 완료'로 회복되나 ===");
-// 클라 finishWorkout: RPC가 incomplete_xp_processing을 던지면 세션 상태를 확인,
-// completed면 조용한 성공으로 처리한다.
+console.log("\n=== 시나리오 2b: 0 XP 세션 재종료가 오류 없이 처리되나 ===");
+// 0023 적용 후: RPC가 400 대신 200 멱등 응답을 준다(원인 해결).
+// 0023 적용 전: 400(incomplete_xp_processing) → 클라 finishWorkout이 세션
+//   상태를 확인해 completed면 조용한 성공으로 회복(방어).
 const f2c = await finish(A, s2.id);
-let recovered = false;
-if (f2c.status === 400 && String(f2c.json?.message).includes("incomplete_xp_processing")) {
-  const g = await getSession(A, s2.id);
-  recovered = g.json?.[0]?.status === "completed";
+let ok = false;
+if (f2c.status === 200 && f2c.json?.idempotentReplay === true) {
+  ok = true; // 0023 적용됨 — RPC 자체가 정상 응답
+} else if (f2c.status === 400 && String(f2c.json?.message).includes("incomplete_xp_processing")) {
+  const g = await getSession(A, s2.id); // 0023 미적용 — 클라 방어로 회복 가능
+  ok = g.json?.[0]?.status === "completed";
 }
-console.log(`  400 → 세션 completed 확인 → 성공 처리: ${recovered ? "✅ 회복됨" : "❌ 회복 실패"}`);
+console.log(`  재종료 처리: ${ok ? "✅ 정상(오류로 안 막힘)" : "❌ 막힘"}  [status=${f2c.status}]`);
 
 console.log("\n=== 시나리오 3: 무효 운동(1세트<3) 완료 후 재종료(replay) ===");
 const B = await anonUser();
