@@ -1,19 +1,22 @@
--- 0023: complete_workout_v2 — 0 XP로 완료된 세션 재종료 시 오류 대신 멱등 응답
+-- 0023: complete_workout_v2 두 가지 결함 수정 + 백필
 -- 적용: SQL Editor에 전체 붙여넣기 → Run (1회). 0022는 수정하지 않는다.
 --
--- 문제(2026-07-24 사용자 신고 "운동 종료가 안 됨"):
---   당일 2번째 운동 또는 무효 운동(완료 세트 3 미만)은 XP 0으로 완료되며,
---   `workout_completed` 원장이 생기지 않는다. 이런 세션을 재종료하면 0022의
---   replay 분기가 원장이 없다는 이유로 `incomplete_xp_processing`을 raise해
---   HTTP 400을 낸다. 운동은 이미 완료됐는데도 클라이언트가 종료 실패로 처리하면
---   (로컬 draft가 완료 세션을 계속 가리키는 경우) 영영 종료를 못 하게 갇힌다.
+-- ⚠️ 이 마이그레이션은 선택이 아니라 필수다. 적용 전까지 v2로 완료한 운동은
+--    크루 피드에 최대 6시간 '운동 중'으로 남는다(아래 결함 A).
 --
--- 조사 근거: scripts/finish-repro.mjs 시나리오 2·3에서 status=400 재현.
+-- 결함 A (2026-07-24 사용자 신고 "종료했는데 200분 넘게 운동중"):
+--   구 complete_workout(0011)은 완료 시 workout_events에 'workout_completed'를
+--   남겨, 진행 중 카드(active-workout-cards)가 이 이벤트로 완료를 판정한다.
+--   complete_workout_v2(0022)는 이 이벤트를 **안 남긴다**. 그래서 v2로 완료한
+--   세션은 workout_started만 있고 닫는 이벤트가 없어, 시작 후 6시간(유령 컷오프)
+--   동안 '운동 중'으로 표시된다. 실제로 스칼레또 7/23 세션 1건이 이 상태였다.
 --
--- 수정: 완료 세션에 원장이 없으면 "0 XP로 이미 완료됨"이 정상 상태이므로,
---   raise 대신 idempotentReplay 응답(originalXpAwarded=0)을 돌려준다.
---   0 XP 원장이 실제로 존재하는 정상 지급 세션은 기존대로 그 금액을 돌려준다.
---   (클라이언트에도 방어 로직을 뒀지만, 원인은 이 함수라 여기서 바로잡는다.)
+-- 결함 B (같은 신고 계열 "종료가 안 됨"):
+--   0 XP로 완료된 세션(당일 2번째·완료 세트 3 미만)은 workout_completed 원장이
+--   없어, 재종료 시 replay 분기가 incomplete_xp_processing을 raise → HTTP 400.
+--   운동은 이미 완료됐으므로 raise 대신 멱등 응답을 돌려준다.
+--
+-- 조사 근거: scripts/finish-repro.mjs, workout_events 실 DB 조회.
 
 create or replace function public.complete_workout_v2(p_session_id uuid)
 returns jsonb
@@ -35,8 +38,8 @@ begin
   if s.status = 'cancelled' then
     raise exception 'invalid_status:cancelled';
   elsif s.status = 'completed' then
-    -- 완료된 세션 재종료: 원장이 있으면 그 금액, 없으면 0 XP로 완료된 것.
-    -- 어느 쪽이든 raise하지 않는다 — 운동은 이미 끝났고 재종료는 무해하다.
+    -- 결함 B: 원장이 있으면 그 금액, 없으면 0 XP로 완료된 것. 어느 쪽이든
+    -- raise하지 않는다 — 운동은 이미 끝났고 재종료는 무해하다.
     select amount into v_orig from xp_transactions
     where user_id = s.user_id and reason = 'workout_completed'
       and source_type = 'workout' and source_id = p_session_id::text
@@ -59,6 +62,11 @@ begin
       duration_minutes = floor(extract(epoch from now() - s.started_at) / 60)::int
   where id = p_session_id
   returning * into s;
+
+  -- 결함 A: 진행 중 카드가 이 이벤트로 완료를 판정한다(구 complete_workout과 동일).
+  -- 없으면 크루 피드에 최대 6시간 '운동 중'으로 남는다.
+  insert into workout_events (session_id, user_id, event_type)
+  values (s.id, s.user_id, 'workout_completed');
 
   v_dur := s.duration_minutes;
   v_tabata := s.tabata_minutes is not null;
@@ -124,3 +132,18 @@ begin
 end $$;
 revoke all on function public.complete_workout_v2(uuid) from public, anon;
 grant execute on function public.complete_workout_v2(uuid) to authenticated;
+
+-- ── 백필 ─────────────────────────────────────────────────────
+-- v2로 완료됐지만 완료 이벤트가 없어 '운동 중'으로 남은 세션에 이벤트를 채운다.
+-- workout_started가 있고 닫는 이벤트(completed/cancelled)가 없는 완료 세션만.
+-- not exists 가드로 재실행해도 중복 삽입되지 않는다(멱등).
+insert into public.workout_events (session_id, user_id, event_type)
+select s.id, s.user_id, 'workout_completed'
+from public.workout_sessions s
+where s.status = 'completed'
+  and exists (
+    select 1 from public.workout_events e
+    where e.session_id = s.id and e.event_type = 'workout_started')
+  and not exists (
+    select 1 from public.workout_events e
+    where e.session_id = s.id and e.event_type in ('workout_completed', 'workout_cancelled'));

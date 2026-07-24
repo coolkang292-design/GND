@@ -51,6 +51,10 @@ async function finish(u, sessionId) {
 async function getSession(u, sessionId) {
   return api(u.token, "GET", `/rest/v1/workout_sessions?id=eq.${sessionId}&select=*`);
 }
+async function events(u, sessionId) {
+  const r = await api(u.token, "GET", `/rest/v1/workout_events?session_id=eq.${sessionId}&select=event_type`);
+  return (r.json ?? []).map((e) => e.event_type);
+}
 
 const A = await anonUser();
 await api(A.token, "POST", "/rest/v1/profiles", { id: A.id, nickname: `repro-${Date.now().toString(36)}`, weekly_goal: 3 });
@@ -61,6 +65,9 @@ const f1a = await finish(A, s1.id);
 console.log(`  1차 종료: status=${f1a.status} awarded=${f1a.json?.awarded} xp=${f1a.json?.xpAwarded}`);
 const g1 = await getSession(A, s1.id);
 console.log(`  getSessionById: status=${g1.status} completed_at=${g1.json?.[0]?.completed_at ? "있음" : "없음"}`);
+// 결함 A: 완료 시 workout_completed 이벤트가 있어야 '운동 중'이 사라진다.
+const ev1 = await events(A, s1.id);
+console.log(`  workout_events=[${ev1.join(",")}] → 완료이벤트 ${ev1.includes("workout_completed") ? "✅ 있음(0023 적용됨)" : "❌ 없음(0023 미적용 → 최대 6h '운동 중')"}`);
 const f1b = await finish(A, s1.id);
 console.log(`  2차 종료(replay): status=${f1b.status} replay=${f1b.json?.idempotentReplay} msg=${f1b.json?.message ?? f1b.json?.code ?? ""}`);
 

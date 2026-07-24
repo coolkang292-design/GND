@@ -7,9 +7,10 @@
 
 XP 시스템 배포 직후 사용자 실사용에서 나온 이슈 3건을 고쳐 재배포했다.
 
-- **운동 종료 불가 버그 (근본 원인 규명)** — 커밋 `5b48716`. **0 XP로 완료된 세션**(당일 2번째 운동·무효 운동=완료 세트 3 미만)을 재종료하면 `complete_workout_v2`(0022)가 `workout_completed` 원장이 없다는 이유로 `incomplete_xp_processing`(HTTP 400)을 raise했다. 운동은 이미 완료됐는데 클라가 종료 실패로 처리하고 draft를 안 지우면(재시도·중복탭·새로고침 복구) **이후 모든 종료가 400 → 영영 종료 불가**. XP 지급된 세션(시나리오 1)은 200 정상이라, Task 13 v2 전환 때 0 XP replay 경로를 테스트가 안 덮어 배포됐다. 재현: `scripts/finish-repro.mjs`(시나리오 2·3 status=400).
-  - **수정 ①(즉시 배포)**: `finishWorkout` 래퍼가 '이미 완료' 오류를 잡아 세션 상태를 확인, completed면 조용한 성공(모달 없음)으로 처리. `handleFinish`에 종료 재진입 가드(`finishingRef`). 실 DB로 회복·완료세션 쓰기 가능 확인 → 이미 갇힌 사용자도 **다음 종료 탭에서 탈출**.
-  - **수정 ②(⚠️ 사용자 SQL 적용 대기)**: `supabase/migrations/0023_fix_zero_xp_replay.sql` — RPC replay 분기가 원장 없어도 raise 대신 idempotentReplay(originalXpAwarded=0) 반환. **0022 수정 금지라 새 파일.** 클라 수정만으로 사용자 이슈는 해소됐고, 0023은 원인 자체를 없애는 방어. **SQL Editor에 붙여넣고 Run 1회 하면 됨(선택).**
+- **🔴 "종료했는데 200분 넘게 운동중" — 진짜 원인 (마이그레이션 0023 필수)** — 진행 중 카드(`active-workout-cards`)는 세션 status가 아니라 **`workout_events`로 완료를 판정**한다(`activeSessionIds`: workout_started 있고 닫는 이벤트 없으면 시작 후 6h까지 '운동 중'). 구 `complete_workout`(0011)은 완료 시 `workout_completed` 이벤트를 남겼지만 **`complete_workout_v2`(0022)는 안 남긴다**. 그래서 v2로 완료한 운동은 크루 피드에 최대 6시간 '운동 중'으로 남는다. 실 DB 확인: 스칼레또 7/23·오뎅끼 7/23 세션(=배포 후 v2로 완료된 유일한 2건)만 `events=[workout_started]`, 나머지 전부 `[started,completed]`. **클라에서 workout_events insert 권한 없음(정의자 RPC 전용) → 서버 수정만 가능.**
+- **운동 종료 400 버그 (같은 계열)** — **0 XP로 완료된 세션**(당일 2번째·완료 세트 3 미만)을 재종료하면 v2가 원장 없다고 `incomplete_xp_processing`(400)을 raise. 재시도·중복탭·새로고침 복구로 draft가 완료 세션을 가리키면 종료 불가에 갇힘. 재현: `scripts/finish-repro.mjs`.
+  - **수정 ①(즉시 배포 `5b48716`)**: `finishWorkout` 래퍼가 '이미 완료' 오류를 잡아 completed면 조용한 성공 처리. `handleFinish` 종료 재진입 가드. → 갇힌 사용자 다음 종료 탭에서 탈출.
+  - **수정 ②(⚠️ SQL 적용 필수)**: `supabase/migrations/0023_fix_complete_workout_v2.sql` — (A) v2 완료 경로에 **workout_completed 이벤트 insert 추가**(200분 버그 근본 해결) (B) replay 분기가 원장 없어도 idempotentReplay 반환(400 해결) (C) 이미 이벤트 없이 완료된 세션 **백필**(대상 2건 확인). **0022 수정 금지라 새 파일. SQL Editor에 붙여넣고 Run 1회 — 적용 전까지 모든 v2 완료가 6h '운동 중'으로 남으므로 이번 건은 선택이 아니라 필수.**
 - **스트릭 문구 오류** — 커밋 `7837755`. d4 단계는 "어제 운동했고 오늘만 아직"인데 문구 3개가 전부 "어제 쉬셨다"로 단정. gap과 일수가 d4만 하루 밀려 있었다. STAGE_MESSAGES는 아침 브리핑 푸시와 공용이라 알림에도 나갔다. 카드 부제(사실)와 경고 배너(재촉)가 같은 문장을 반복하던 것도 분리. 회귀 테스트로 옛 문구 되돌리면 실패 확인.
 - **홈 레이아웃** — 커밋 `58811e5`. 캐릭터/레벨 카드를 "운동 시작하기" 바로 아래로 이동(사용자 요청).
 - **검증**: unit **409/409**(37파일) · typecheck · lint 0 · build ✅ · 배포 번들에서 종료 복원 로직 반영 확인. 배포 `gnd-ll0n2nn9g-gnd4.vercel.app` production Ready, `/home`·`/record` 200.
