@@ -51,7 +51,7 @@ import {
 import {
   cancelWorkout,
   clearDraft,
-  completeWorkoutV2,
+  finishWorkout,
   createCustomExercise,
   createDraftSession,
   defaultSets,
@@ -145,6 +145,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const [result, setResult] = useState<CompletedResult | null>(null);
   const [xpEvents, setXpEvents] = useState<XpEvent[]>([]);
   const [busy, setBusy] = useState(false);
+  const finishingRef = useRef(false); // 종료 재진입 방지
   const [loadingExerciseKey, setLoadingExerciseKey] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -592,6 +593,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
     // 타바타 자동 완료가 setDraft 직후 호출해도 최신 상태를 보도록 ref 사용
     const draft = draftRef.current;
     if (!draft.sessionId) return;
+    // 재진입 방지 — 버튼 disabled와 별개로, 타바타 자동 완료가 진행 중인
+    // 수동 종료와 겹치면 같은 세션을 두 번 종료하려다 오류가 난다.
+    if (finishingRef.current) return;
     const incomplete = draft.exercises
       .flatMap((e) => e.sets)
       .filter((s) => !s.done).length;
@@ -601,16 +605,19 @@ function WorkoutScreen({ userId }: { userId: string }) {
         `미완료 세트 ${incomplete}개는 볼륨에 반영되지 않아요.\n이대로 완료할까요?`,
       )
     ) {
-      return;
+      return; // 취소 — 아직 가드를 세우지 않았으므로 다음 종료가 막히지 않는다
     }
+    finishingRef.current = true;
     stopRest();
     setBusy(true);
     try {
       await saveSessionExercises(draft.sessionId, draft.exercises);
       // 완료 + XP를 한 트랜잭션으로 처리한다(0022 complete_workout_v2).
+      // finishWorkout는 이미 완료된 세션(0 XP 재종료 등)을 오류가 아니라
+      // 조용한 성공으로 처리해, 종료 불가 상태에 갇히지 않게 한다.
       // v2는 XP 결과만 돌려주므로 완료 시각·소요 시간은 세션을 다시 읽는다.
       const sessionId = draft.sessionId;
-      const xp = await completeWorkoutV2(sessionId);
+      const xp = await finishWorkout(sessionId);
       const s = await getSessionById(sessionId);
       const completedAtMs = s?.completed_at
         ? new Date(s.completed_at).getTime()
@@ -694,6 +701,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
       showToast(errorMessage(e));
     } finally {
       setBusy(false);
+      finishingRef.current = false;
     }
   }
 

@@ -312,6 +312,41 @@ export async function completeWorkoutV2(
   return data as WorkoutXpResult;
 }
 
+/**
+ * complete_workout_v2가 던진 오류가 "세션은 이미 완료됨"으로 간주 가능한지.
+ *
+ * 0 XP로 완료된 세션(당일 2번째 운동·무효 운동 = 완료 세트 3 미만)은
+ * `workout_completed` 원장이 없다. 이 세션을 재종료하면 RPC가
+ * `incomplete_xp_processing`을 던진다(0022, 운영 적용됨·수정 불가). 하지만
+ * 운동 자체는 이미 완료 상태이므로 종료 실패로 취급하면 사용자가 영영
+ * 종료를 못 하게 갇힌다(로컬 draft가 완료된 세션을 계속 가리키는 경우).
+ */
+export function isAlreadyCompletedFinishError(message: string): boolean {
+  return (
+    message.includes("incomplete_xp_processing") ||
+    message.includes("invalid_status:completed")
+  );
+}
+
+/**
+ * 종료 경로 래퍼 — 이미 완료된 세션은 오류가 아니라 **조용한 성공**으로 처리한다.
+ * RPC가 완료 세션 재종료에서 던지면, 세션 상태를 확인해 실제로 completed면
+ * 멱등 재생 결과(모달 없음)를 돌려주고, 아니면 원래 오류를 다시 던진다.
+ */
+export async function finishWorkout(sessionId: string): Promise<WorkoutXpResult> {
+  try {
+    return await completeWorkoutV2(sessionId);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (!isAlreadyCompletedFinishError(msg)) throw e;
+    const session = await getSessionById(sessionId);
+    if (session?.status === "completed") {
+      return { idempotentReplay: true, awarded: false };
+    }
+    throw e;
+  }
+}
+
 /** 직전 기록 조회 범위 — 이보다 오래된 기록과는 비교하지 않는다 */
 const PREVIOUS_RECORD_SESSION_LIMIT = 20;
 
