@@ -192,6 +192,16 @@ function ChallengeScreen({ userId }: { userId: string }) {
     for (const g of goals) m.set(g.user_id, (m.get(g.user_id) ?? 0) + 1);
     return m;
   }, [goals]);
+  // 크루원별 실제 목표 목록 — setup에서 누가 무슨 목표를 세팅했는지 보여준다
+  const goalsByUser = useMemo(() => {
+    const m = new Map<string, UserGoal[]>();
+    for (const g of goals) {
+      const list = m.get(g.user_id) ?? [];
+      list.push(g);
+      m.set(g.user_id, list);
+    }
+    return m;
+  }, [goals]);
 
   const todayKey = dayKey(new Date(), timeZone);
   const endedByDate = challenge ? challenge.end_date < todayKey : false;
@@ -465,25 +475,46 @@ function ChallengeScreen({ userId }: { userId: string }) {
             </div>
             {members.map((m) => {
               const count = goalCountByUser.get(m.id) ?? 0;
+              const theirGoals = goalsByUser.get(m.id) ?? [];
               return (
-                <div key={m.id} className="flex items-center gap-2.5 py-1.5">
-                  <span className="grid h-8 w-8 place-items-center rounded-full bg-surface-2 text-base">
-                    {m.avatar_url ?? "👤"}
-                  </span>
-                  <span className="flex-1 text-[13.5px] font-bold">
-                    {m.nickname}
-                    {m.id === userId && (
-                      <span className="ml-1 text-faint">(나)</span>
+                <div key={m.id} className="border-t border-line py-2 first:border-t-0 first:pt-1">
+                  <div className="flex items-center gap-2.5">
+                    <span className="grid h-8 w-8 place-items-center rounded-full bg-surface-2 text-base">
+                      {m.avatar_url ?? "👤"}
+                    </span>
+                    <span className="flex-1 text-[13.5px] font-bold">
+                      {m.nickname}
+                      {m.id === userId && (
+                        <span className="ml-1 text-faint">(나)</span>
+                      )}
+                    </span>
+                    {count > 0 ? (
+                      <span className="rounded-full bg-good-weak px-2.5 py-1 text-[11px] font-bold text-good">
+                        목표 {count}개 ✓
+                      </span>
+                    ) : (
+                      <span className="rounded-full bg-surface-2 px-2.5 py-1 text-[11px] font-bold text-muted">
+                        설정 대기
+                      </span>
                     )}
-                  </span>
-                  {count > 0 ? (
-                    <span className="rounded-full bg-good-weak px-2.5 py-1 text-[11px] font-bold text-good">
-                      목표 {count}개 ✓
-                    </span>
-                  ) : (
-                    <span className="rounded-full bg-surface-2 px-2.5 py-1 text-[11px] font-bold text-muted">
-                      설정 대기
-                    </span>
+                  </div>
+                  {theirGoals.length > 0 && (
+                    <div className="mt-1.5 ml-[42px] flex flex-col gap-1">
+                      {theirGoals.map((g) => (
+                        <div
+                          key={g.id}
+                          className="flex justify-between gap-2 rounded-card-sm bg-surface-2 px-2.5 py-1.5 text-[11.5px]"
+                        >
+                          <span className="min-w-0 truncate text-muted">
+                            {goalLabel(g.goal_type, g.qualifier)}
+                          </span>
+                          <span className="flex-none font-mono font-bold">
+                            {Number(g.target_value).toLocaleString()}
+                            {g.unit}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
               );
@@ -508,9 +539,9 @@ function ChallengeScreen({ userId }: { userId: string }) {
             <button
               onClick={handleCancel}
               disabled={busy}
-              className="text-xs font-bold text-faint"
+              className="h-11 rounded-card border border-line bg-surface text-[13px] font-bold text-muted disabled:opacity-50"
             >
-              챌린지 취소
+              🗑 챌린지 취소하고 새로 만들기
             </button>
           )}
         </>
@@ -640,9 +671,9 @@ function ChallengeScreen({ userId }: { userId: string }) {
             <button
               onClick={handleCancel}
               disabled={busy}
-              className="text-xs font-bold text-faint"
+              className="h-11 rounded-card border border-line bg-surface text-[13px] font-bold text-muted disabled:opacity-50"
             >
-              챌린지 취소
+              🗑 챌린지 취소
             </button>
           )}
         </>
@@ -650,13 +681,22 @@ function ChallengeScreen({ userId }: { userId: string }) {
 
       {/* ── ended: 시상대 + 상세 순위 (§6) ───────────── */}
       {group && challenge?.status === "ended" && (
-        <ResultView
-          participants={participantInputs}
-          goals={goals}
-          profileOf={profileOf}
-          myUserId={userId}
-          levelOf={levelOf}
-        />
+        <>
+          <ResultView
+            participants={participantInputs}
+            goals={goals}
+            profileOf={profileOf}
+            myUserId={userId}
+            levelOf={levelOf}
+          />
+          {/* 챌린지가 끝났으면 새 챌린지를 시작할 수 있게 (추가 생성) */}
+          <button
+            onClick={() => openSheet("create")}
+            className="h-12 rounded-card bg-accent text-sm font-extrabold text-accent-ink"
+          >
+            ＋ 새 챌린지 만들기
+          </button>
+        </>
       )}
 
       {sheet && group && (
