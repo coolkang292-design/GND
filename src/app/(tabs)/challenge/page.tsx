@@ -8,6 +8,8 @@ import {
 } from "@/components/challenge/setup-sheet";
 import {
   achievementScore,
+  completedGoalBonus,
+  completedGoalCountOf,
   gndLabel,
   goalRate,
   overallScore,
@@ -341,7 +343,10 @@ function ChallengeScreen({ userId }: { userId: string }) {
   const myParticipation = me
     ? participationScore(me.workoutDays, me.plannedDays)
     : 0;
-  const myOverall = overallScore(myAchievement, myParticipation);
+  // 순위 계산(rankParticipants)과 동일하게 완료 목표 보너스를 포함한다.
+  const myOverall =
+    overallScore(myAchievement, myParticipation) +
+    (me ? completedGoalBonus(completedGoalCountOf(me.goals)) : 0);
 
   const myQualifier = (type: GoalType) =>
     myGoals.find((x) => x.goal_type === type)?.qualifier;

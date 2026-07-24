@@ -332,6 +332,11 @@ export function ChallengeSetupSheet({
               </div>
             </div>
 
+            <p className="mt-1.5 text-[11px] text-muted">
+              💡 목표를 여러 개 걸고 <b className="text-accent">달성</b>하면
+              종합점수에 보너스가 붙어요 (완료 1개당 +3점, 최대 3개).
+            </p>
+
             <div className="mt-2 flex gap-1 rounded-card-sm border border-line bg-surface p-1">
               {(
                 [

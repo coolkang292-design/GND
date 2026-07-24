@@ -54,6 +54,20 @@ export function overallScore(
   return achievement * 0.8 + participation * 0.2;
 }
 
+/** 완료(100%+) 목표 1개당 보너스 점수, 최대 개수 */
+export const COMPLETED_GOAL_BONUS_PER = 3;
+export const COMPLETED_GOAL_BONUS_MAX = 3;
+
+/**
+ * 완료 목표 수 보너스 — 목표를 많이 걸고 **실제로 달성할수록** 유리하게.
+ * 설정(개수)만이 아니라 100% 달성한 목표 수에 비례하므로, 쉬운 목표만
+ * 여러 개 걸고 방치하는 어뷰징은 억제된다. 최대 3개까지 인정.
+ */
+export function completedGoalBonus(completedGoalCount: number): number {
+  const n = Math.min(Math.max(0, completedGoalCount), COMPLETED_GOAL_BONUS_MAX);
+  return n * COMPLETED_GOAL_BONUS_PER;
+}
+
 /** 주 N일 계획 → 기간 전체 계획일 수 (반올림, 최소 1) */
 export function plannedDaysForPeriod(
   weeklyDays: number,
@@ -82,6 +96,11 @@ export type RankedParticipant = {
 
 const EPSILON = 1e-9;
 
+/** 100% 이상 달성한 목표 수 (완료 목표 보너스·동점 규칙 공용) */
+export function completedGoalCountOf(goals: ScoredGoal[]): number {
+  return goals.filter((g) => goalRate(g.target, g.actual) >= 1 - EPSILON).length;
+}
+
 /**
  * 종합점수 내림차순 + 동점 규칙 (§7):
  * ① 평균 달성률 ② 참여율 ③ 먼저 전 목표 달성한 시각 ④ 완료 목표 수 ⑤ 공동
@@ -92,14 +111,16 @@ export function rankParticipants(
   const scored = list.map((p) => {
     const achievement = achievementScore(p.goals);
     const participation = participationScore(p.workoutDays, p.plannedDays);
+    const completedGoalCount = completedGoalCountOf(p.goals);
     return {
       userId: p.userId,
       achievement,
       participation,
-      overall: overallScore(achievement, participation),
-      completedGoalCount: p.goals.filter(
-        (g) => goalRate(g.target, g.actual) >= 1 - EPSILON,
-      ).length,
+      // 목표를 많이 걸고 실제로 달성할수록 종합점수에 보너스가 붙는다.
+      overall:
+        overallScore(achievement, participation) +
+        completedGoalBonus(completedGoalCount),
+      completedGoalCount,
       allGoalsCompletedAtMs: p.allGoalsCompletedAtMs ?? null,
     };
   });
