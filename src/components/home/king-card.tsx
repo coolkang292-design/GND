@@ -5,6 +5,7 @@ import { useAuth } from "@/components/auth-provider";
 import { DEFAULT_TIMEZONE } from "@/lib/domain/time";
 import { KING_DAYS, viewingPassStatus } from "@/lib/domain/viewing-pass";
 import { getCrewProfiles, getMyGroups } from "@/lib/crew";
+import { getCurrentChallenge } from "@/lib/challenge";
 import {
   getCrewPerformance,
   viewRecord,
@@ -42,6 +43,8 @@ export function KingCard({
     data: CrewPerformance;
   } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // 챌린지 진행 중일 때만 열람권 카드를 노출한다(평소 비활성). null=판정 전.
+  const [challengeActive, setChallengeActive] = useState<boolean | null>(null);
 
   const now = new Date();
   const status = viewingPassStatus(completedAts, viewAts, now, DEFAULT_TIMEZONE);
@@ -53,12 +56,21 @@ export function KingCard({
       try {
         const groups = await getMyGroups();
         const g = groups[0];
-        if (!g || cancelled) return;
+        if (!g || cancelled) {
+          if (!cancelled) setChallengeActive(false);
+          return;
+        }
         setGroupId(g.id);
-        const crew = await getCrewProfiles(g.id);
-        if (!cancelled) setMembers(crew.filter((m) => m.id !== userId));
+        const [crew, challenge] = await Promise.all([
+          getCrewProfiles(g.id),
+          getCurrentChallenge(g.id),
+        ]);
+        if (cancelled) return;
+        setMembers(crew.filter((m) => m.id !== userId));
+        setChallengeActive(challenge?.status === "active");
       } catch {
-        /* 크루 없음 — 카드에 목록만 안 뜸 */
+        /* 크루/챌린지 조회 실패 — 카드 숨김 */
+        if (!cancelled) setChallengeActive(false);
       }
     })();
     return () => {
@@ -91,6 +103,9 @@ export function KingCard({
         Math.ceil((status.expiresAt.getTime() - now.getTime()) / 3_600_000),
       )
     : 0;
+
+  // 진행 중 챌린지가 없으면 열람권 카드를 숨긴다(판정 전에도 숨겨 깜빡임 방지).
+  if (challengeActive !== true) return null;
 
   return (
     <section className="rounded-card border border-line bg-surface p-4 shadow-card">

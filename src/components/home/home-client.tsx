@@ -8,7 +8,6 @@ import { CrewCard } from "@/components/crew-card";
 import { ActiveWorkoutCards } from "@/components/feed/active-workout-cards";
 import { NotificationBell } from "@/components/notification-bell";
 import { PushEnableCard } from "@/components/push-enable-card";
-import { CrewLatestWorkout } from "@/components/crew-latest-workout";
 import { StreakCard } from "@/components/home/streak-card";
 import { WeeklyStats } from "@/components/home/weekly-stats";
 import { KingCard } from "@/components/home/king-card";
@@ -107,6 +106,7 @@ export function HomeClient() {
 
       <CrewCard />
 
+      {/* 꾸준왕 열람권은 챌린지가 진행 중일 때만 노출한다(평소 비활성) */}
       {completedAts && (
         <KingCard
           completedAts={completedAts}
@@ -114,14 +114,6 @@ export function HomeClient() {
           onViewed={() => setRefreshKey((k) => k + 1)}
         />
       )}
-
-      <div className="mt-1 flex items-center justify-between px-0.5">
-        <h3 className="text-sm font-extrabold">최근 친구 활동</h3>
-        <Link href="/feed" className="text-xs font-bold text-accent">
-          피드 전체
-        </Link>
-      </div>
-      <CrewLatestWorkout />
 
       <AuthStatus />
     </div>
