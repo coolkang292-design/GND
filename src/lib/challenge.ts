@@ -179,6 +179,39 @@ export async function cancelChallenge(
   return data as Challenge;
 }
 
+/** 챌린지 목표에 동의(1회 기록). setup·전원 목표 세팅 완료 상태에서만. */
+export async function approveChallengeGoals(challengeId: string): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  const { error } = await supabase.rpc("approve_challenge_goals", {
+    p_challenge_id: challengeId,
+  });
+  if (error) throw error;
+}
+
+/** 내 동의 철회 */
+export async function unapproveChallengeGoals(
+  challengeId: string,
+): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  const { error } = await supabase.rpc("unapprove_challenge_goals", {
+    p_challenge_id: challengeId,
+  });
+  if (error) throw error;
+}
+
+/** 이 챌린지에 동의한 크루원 id 집합 (setup 현황·시작 게이트용) */
+export async function getChallengeApprovals(
+  challengeId: string,
+): Promise<Set<string>> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("challenge_goal_approvals")
+    .select("approver_id")
+    .eq("challenge_id", challengeId);
+  if (error) throw error;
+  return new Set((data ?? []).map((r) => r.approver_id as string));
+}
+
 /** 종료일 지난 active 챌린지를 ended로 확정 (결과는 저장 않고 계산) */
 export async function finalizeChallenge(
   challengeId: string,

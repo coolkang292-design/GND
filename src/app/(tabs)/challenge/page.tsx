@@ -26,16 +26,19 @@ import {
   EMPTY_STATS,
   GOAL_TYPE_META,
   actualForGoal,
+  approveChallengeGoals,
   goalLabel,
   cancelChallenge,
   createChallenge,
   finalizeChallenge,
+  getChallengeApprovals,
   getChallengeGoals,
   getCurrentChallenge,
   getMyPreviousGoals,
   getPeriodStatsByUser,
   saveMyGoals,
   startChallenge,
+  unapproveChallengeGoals,
   type GoalDraft,
   type PeriodStats,
 } from "@/lib/challenge";
@@ -53,6 +56,9 @@ function errorMessage(e: unknown): string {
   const msg = e instanceof Error ? e.message : String(e);
   if (msg.includes("kpi_incomplete")) {
     return `아직 KPI 미설정 크루원이 있어요 (${msg.split(":")[1] ?? ""}) 🔒`;
+  }
+  if (msg.includes("consent_incomplete")) {
+    return `아직 목표에 동의하지 않은 크루원이 있어요 (${msg.split(":")[1] ?? ""}) 🤝`;
   }
   if (msg.includes("not_ended_yet")) return "아직 종료일이 지나지 않았어요";
   if (msg.includes("invalid_status"))
@@ -92,6 +98,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
   const [members, setMembers] = useState<Profile[]>([]);
   const [challenge, setChallenge] = useState<Challenge | null>(null);
   const [goals, setGoals] = useState<UserGoal[]>([]);
+  const [approvals, setApprovals] = useState<Set<string>>(new Set());
   const [stats, setStats] = useState<Map<string, PeriodStats> | null>(null);
   const [timeZone, setTimeZone] = useState("Asia/Seoul");
   const [prevGoals, setPrevGoals] = useState<GoalDraft[] | null>(null);
@@ -139,11 +146,13 @@ function ChallengeScreen({ userId }: { userId: string }) {
       setChallenge(ch);
 
       if (ch) {
-        const [chGoals, prev] = await Promise.all([
+        const [chGoals, prev, appr] = await Promise.all([
           getChallengeGoals(ch.id),
           getMyPreviousGoals(userId, g.id, ch.id),
+          getChallengeApprovals(ch.id),
         ]);
         setGoals(chGoals);
+        setApprovals(appr);
         setPrevGoals(
           prev.map((p) => ({
             type: p.goal_type,
@@ -203,6 +212,14 @@ function ChallengeScreen({ userId }: { userId: string }) {
     return m;
   }, [goals]);
 
+  const allSet =
+    members.length > 0 &&
+    members.every((m) => (goalCountByUser.get(m.id) ?? 0) > 0);
+  const allApproved =
+    members.length > 0 && members.every((m) => approvals.has(m.id));
+  const iApproved = approvals.has(userId);
+  const approvedCount = members.filter((m) => approvals.has(m.id)).length;
+
   const todayKey = dayKey(new Date(), timeZone);
   const endedByDate = challenge ? challenge.end_date < todayKey : false;
   const dday = challenge ? periodDays(todayKey, challenge.end_date) - 1 : 0;
@@ -261,6 +278,20 @@ function ChallengeScreen({ userId }: { userId: string }) {
     try {
       await startChallenge(challenge.id);
       showToast("🏁 챌린지 시작! 오늘부터 기록이 반영돼요");
+      reload();
+    } catch (e) {
+      showToast(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleApprove() {
+    if (!challenge) return;
+    setBusy(true);
+    try {
+      if (iApproved) await unapproveChallengeGoals(challenge.id);
+      else await approveChallengeGoals(challenge.id);
       reload();
     } catch (e) {
       showToast(errorMessage(e));
@@ -488,15 +519,26 @@ function ChallengeScreen({ userId }: { userId: string }) {
                         <span className="ml-1 text-faint">(나)</span>
                       )}
                     </span>
-                    {count > 0 ? (
-                      <span className="rounded-full bg-good-weak px-2.5 py-1 text-[11px] font-bold text-good">
-                        목표 {count}개 ✓
-                      </span>
-                    ) : (
-                      <span className="rounded-full bg-surface-2 px-2.5 py-1 text-[11px] font-bold text-muted">
-                        설정 대기
-                      </span>
-                    )}
+                    <span className="flex flex-none items-center gap-1.5">
+                      {count > 0 ? (
+                        <span className="rounded-full bg-good-weak px-2.5 py-1 text-[11px] font-bold text-good">
+                          목표 {count}개 ✓
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-surface-2 px-2.5 py-1 text-[11px] font-bold text-muted">
+                          설정 대기
+                        </span>
+                      )}
+                      {approvals.has(m.id) ? (
+                        <span className="rounded-full bg-accent-weak px-2.5 py-1 text-[11px] font-bold text-accent">
+                          동의 👍
+                        </span>
+                      ) : count > 0 ? (
+                        <span className="rounded-full bg-surface-2 px-2.5 py-1 text-[11px] font-bold text-muted">
+                          동의 대기
+                        </span>
+                      ) : null}
+                    </span>
                   </div>
                   {theirGoals.length > 0 && (
                     <div className="mt-1.5 ml-[42px] flex flex-col gap-1">
@@ -520,20 +562,37 @@ function ChallengeScreen({ userId }: { userId: string }) {
               );
             })}
             <p className="mt-2 text-[11px] text-muted">
-              🔒 <b>전원 KPI 설정 완료</b> 시 챌린지가 시작돼요.
+              🔒 <b>전원 KPI 설정 + 전원 동의</b> 시 챌린지가 시작돼요.
             </p>
           </section>
 
+          {/* 내 동의 버튼 — 전원 목표 세팅 후에만 의미 있음 */}
+          {allSet && (
+            <button
+              onClick={handleApprove}
+              disabled={busy}
+              className={`h-11 rounded-card border text-[13px] font-extrabold disabled:opacity-50 ${
+                iApproved
+                  ? "border-line bg-surface text-muted"
+                  : "border-accent bg-accent-weak text-accent"
+              }`}
+            >
+              {iApproved
+                ? "✓ 동의함 (누르면 철회)"
+                : "크루 전원의 목표에 동의하기 👍"}
+            </button>
+          )}
+
           <button
             onClick={handleStart}
-            disabled={
-              busy || members.some((m) => (goalCountByUser.get(m.id) ?? 0) === 0)
-            }
+            disabled={busy || !allSet || !allApproved}
             className="h-12 rounded-card bg-accent text-sm font-extrabold text-accent-ink disabled:opacity-50"
           >
-            {members.some((m) => (goalCountByUser.get(m.id) ?? 0) === 0)
-              ? "전원 완료 대기 중…"
-              : "챌린지 시작 🏁"}
+            {!allSet
+              ? "전원 목표 세팅 대기 중…"
+              : !allApproved
+                ? `전원 동의 대기 중… (${approvedCount}/${members.length})`
+                : "챌린지 시작 🏁"}
           </button>
           {challenge.created_by === userId && (
             <button
