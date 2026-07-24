@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  CHALLENGE_PASS_HOURS,
   KING_DAYS,
   PASS_HOURS,
+  challengePassStatus,
+  hasConsecutiveWorkoutDays,
   viewingPassStatus,
   weekWorkoutDays,
 } from "./viewing-pass";
@@ -130,5 +133,83 @@ describe("viewingPassStatus — 열람권 상태", () => {
       acquiredAt: null,
       expiresAt: null,
     });
+  });
+});
+
+// ── 챌린지 열람권: 엄밀 연속 5일 + 2시간 (D1·D3) ──────────────
+const at = (day: string) => new Date(`${day}T03:00:00Z`); // KST 정오
+
+describe("hasConsecutiveWorkoutDays — 오늘 포함 최근 N일 모두 운동", () => {
+  it("5일 연속이면 true, 하루라도 빠지면 false", () => {
+    const keys = [
+      "2026-07-20",
+      "2026-07-21",
+      "2026-07-22",
+      "2026-07-23",
+      "2026-07-24",
+    ];
+    expect(hasConsecutiveWorkoutDays(keys, "2026-07-24", 5)).toBe(true);
+    const gap = ["2026-07-20", "2026-07-22", "2026-07-23", "2026-07-24"]; // 21 빠짐
+    expect(hasConsecutiveWorkoutDays(gap, "2026-07-24", 5)).toBe(false);
+  });
+  it("오늘 미운동이면 false (연속의 끝은 오늘이어야)", () => {
+    const keys = [
+      "2026-07-19",
+      "2026-07-20",
+      "2026-07-21",
+      "2026-07-22",
+      "2026-07-23",
+    ];
+    expect(hasConsecutiveWorkoutDays(keys, "2026-07-24", 5)).toBe(false);
+  });
+  it("월 경계를 넘어도 정확히 이어짐", () => {
+    const keys = [
+      "2026-06-28",
+      "2026-06-29",
+      "2026-06-30",
+      "2026-07-01",
+      "2026-07-02",
+    ];
+    expect(hasConsecutiveWorkoutDays(keys, "2026-07-02", 5)).toBe(true);
+  });
+});
+
+describe("challengePassStatus — 연속 5일 만든 시각부터 2시간 공개", () => {
+  it("CHALLENGE_PASS_HOURS는 2", () => {
+    expect(CHALLENGE_PASS_HOURS).toBe(2);
+  });
+  it("5일 연속 직후는 unlocked, 2시간 지나면 locked_expired", () => {
+    const days = [
+      at("2026-07-20"),
+      at("2026-07-21"),
+      at("2026-07-22"),
+      at("2026-07-23"),
+      at("2026-07-24"),
+    ];
+    const justNow = new Date(at("2026-07-24").getTime() + 30 * 60_000); // 30분 후
+    const later = new Date(at("2026-07-24").getTime() + 3 * 3600_000); // 3시간 후
+    expect(challengePassStatus(days, justNow, TZ).state).toBe("unlocked");
+    expect(challengePassStatus(days, later, TZ).state).toBe("locked_expired");
+  });
+  it("연속 5일 미달이면 locked_progress + consecutiveDays", () => {
+    const days = [at("2026-07-22"), at("2026-07-23"), at("2026-07-24")];
+    const s = challengePassStatus(days, at("2026-07-24"), TZ);
+    expect(s.state).toBe("locked_progress");
+    expect(s.consecutiveDays).toBe(3);
+  });
+  it("unlocked면 expiresAt = 5일째 첫 완료 시각 + 2h", () => {
+    const days = [
+      at("2026-07-20"),
+      at("2026-07-21"),
+      at("2026-07-22"),
+      at("2026-07-23"),
+      at("2026-07-24"),
+    ];
+    const s = challengePassStatus(days, at("2026-07-24"), TZ);
+    expect(s.state).toBe("unlocked");
+    expect(s.fifthAt?.getTime()).toBe(at("2026-07-24").getTime());
+    expect(s.expiresAt?.getTime()).toBe(
+      at("2026-07-24").getTime() + 2 * 3600_000,
+    );
   });
 });

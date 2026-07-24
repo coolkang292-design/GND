@@ -75,3 +75,78 @@ export function viewingPassStatus(
     expiresAt,
   };
 }
+
+// ── 챌린지 크루 성과 열람권: 엄밀 연속 5일 + 2시간 (D1·D3) ──────
+
+export const CHALLENGE_PASS_HOURS = 2;
+
+/** todayKey에서 하루씩 뒤로 가며 dayKey를 만든다 (월 경계 안전, UTC 산술) */
+function dayKeyBack(todayKey: string, back: number): string {
+  const [y, m, d] = todayKey.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d - back));
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`;
+}
+
+/** 오늘(todayKey) 포함 최근 n일 캘린더 날짜가 모두 운동일이면 true */
+export function hasConsecutiveWorkoutDays(
+  dayKeys: string[],
+  todayKey: string,
+  n: number,
+): boolean {
+  const set = new Set(dayKeys);
+  for (let i = 0; i < n; i++) {
+    if (!set.has(dayKeyBack(todayKey, i))) return false;
+  }
+  return true;
+}
+
+export type ChallengePassState =
+  | "locked_progress"
+  | "unlocked"
+  | "locked_expired";
+
+export type ChallengePassStatus = {
+  state: ChallengePassState;
+  consecutiveDays: number; // 오늘부터 뒤로 이어진 연속 운동일 수
+  fifthAt: Date | null; // 5일 연속을 만든(=오늘 5일째) 첫 완료 시각
+  expiresAt: Date | null; // fifthAt + 2h
+};
+
+/** 연속 5일 달성 시각부터 2시간 공개. completedAts=내 완료 시각 목록 */
+export function challengePassStatus(
+  completedAts: Date[],
+  now: Date,
+  timeZone: string,
+  requiredDays = KING_DAYS, // 5
+): ChallengePassStatus {
+  const keys = new Set(completedAts.map((d) => dayKey(d, timeZone)));
+  const todayKey = dayKey(now, timeZone);
+  // 오늘부터 뒤로 연속 일수
+  let consecutive = 0;
+  for (let i = 0; ; i++) {
+    if (keys.has(dayKeyBack(todayKey, i))) consecutive++;
+    else break;
+  }
+  if (consecutive < requiredDays) {
+    return {
+      state: "locked_progress",
+      consecutiveDays: consecutive,
+      fifthAt: null,
+      expiresAt: null,
+    };
+  }
+  // 오늘 완료들 중 첫 시각 = 5일째를 만든 시각
+  const todays = completedAts
+    .filter((dt) => dayKey(dt, timeZone) === todayKey)
+    .sort((a, b) => a.getTime() - b.getTime());
+  const fifthAt = todays[0] ?? now;
+  const expiresAt = new Date(
+    fifthAt.getTime() + CHALLENGE_PASS_HOURS * 3_600_000,
+  );
+  return {
+    state: now >= expiresAt ? "locked_expired" : "unlocked",
+    consecutiveDays: consecutive,
+    fifthAt,
+    expiresAt,
+  };
+}

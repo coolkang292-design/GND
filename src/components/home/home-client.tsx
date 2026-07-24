@@ -10,10 +10,9 @@ import { NotificationBell } from "@/components/notification-bell";
 import { PushEnableCard } from "@/components/push-enable-card";
 import { StreakCard } from "@/components/home/streak-card";
 import { WeeklyStats } from "@/components/home/weekly-stats";
-import { KingCard } from "@/components/home/king-card";
+import { ChallengePerformanceCard } from "@/components/home/challenge-performance-card";
 import { CharacterCard } from "@/components/home/character-card";
 import { getMyProfile } from "@/lib/crew";
-import { getMyRecordViewAts } from "@/lib/social";
 import { getCompletedSessions } from "@/lib/workout";
 import { getProgressSummary, type ProgressSummary } from "@/lib/progression";
 
@@ -22,25 +21,21 @@ export function HomeClient() {
   const { userId, loading, configured } = useAuth();
   const [completedAts, setCompletedAts] = useState<Date[] | null>(null);
   const [weeklyGoal, setWeeklyGoal] = useState(3);
-  const [viewAts, setViewAts] = useState<Date[]>([]);
   const [summary, setSummary] = useState<ProgressSummary | null>(null);
   const [summaryError, setSummaryError] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     if (!configured || loading || !userId) return;
     let cancelled = false;
     (async () => {
       try {
-        const [sessions, profile, views] = await Promise.all([
+        const [sessions, profile] = await Promise.all([
           getCompletedSessions(userId),
           getMyProfile(userId),
-          getMyRecordViewAts(userId),
         ]);
         if (cancelled) return;
         setCompletedAts(sessions.map((s) => s.completedAt));
         if (profile) setWeeklyGoal(profile.weekly_goal);
-        setViewAts(views);
       } catch {
         if (!cancelled) setCompletedAts([]);
       }
@@ -60,7 +55,7 @@ export function HomeClient() {
     return () => {
       cancelled = true;
     };
-  }, [configured, loading, userId, refreshKey]);
+  }, [configured, loading, userId]);
 
   return (
     <div className="flex flex-col gap-3">
@@ -106,14 +101,8 @@ export function HomeClient() {
 
       <CrewCard />
 
-      {/* 꾸준왕 열람권은 챌린지가 진행 중일 때만 노출한다(평소 비활성) */}
-      {completedAts && (
-        <KingCard
-          completedAts={completedAts}
-          viewAts={viewAts}
-          onViewed={() => setRefreshKey((k) => k + 1)}
-        />
-      )}
+      {/* 챌린지 크루 성과 — 챌린지 active일 때만, 5일 연속으로 2시간 열림 */}
+      {completedAts && <ChallengePerformanceCard completedAts={completedAts} />}
 
       <AuthStatus />
     </div>
