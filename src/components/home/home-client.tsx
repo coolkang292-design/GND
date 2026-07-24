@@ -86,6 +86,14 @@ export function HomeClient() {
         </p>
       </Link>
 
+      {/* 성장 카드는 "운동 시작하기" 바로 아래로 — 레벨을 눈에 먼저 띄운다 */}
+      {summary && <CharacterCard summary={summary} />}
+      {summaryError && (
+        <p className="rounded-card-sm border border-line bg-surface px-3 py-2.5 text-xs text-muted">
+          성장 정보를 불러오지 못했어요.
+        </p>
+      )}
+
       <PushEnableCard />
 
       {completedAts && (
@@ -105,13 +113,6 @@ export function HomeClient() {
           viewAts={viewAts}
           onViewed={() => setRefreshKey((k) => k + 1)}
         />
-      )}
-
-      {summary && <CharacterCard summary={summary} />}
-      {summaryError && (
-        <p className="rounded-card-sm border border-line bg-surface px-3 py-2.5 text-xs text-muted">
-          성장 정보를 불러오지 못했어요.
-        </p>
       )}
 
       <div className="mt-1 flex items-center justify-between px-0.5">
