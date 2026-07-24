@@ -3,6 +3,17 @@
 > 새 세션은 이 파일 + `C:\Users\SAMSUNG\Desktop\Workout app\IMPLEMENTATION_PLAN.md`(단일 진실)만 읽으면 바로 이어서 작업할 수 있다.
 > 시각 스펙: 같은 폴더의 `운동앱-목업.html`.
 
+## ✅ 2026-07-24 — 배포 후 핫픽스 3건 (스트릭 문구·운동 종료 버그·홈 레이아웃)
+
+XP 시스템 배포 직후 사용자 실사용에서 나온 이슈 3건을 고쳐 재배포했다.
+
+- **운동 종료 불가 버그 (근본 원인 규명)** — 커밋 `5b48716`. **0 XP로 완료된 세션**(당일 2번째 운동·무효 운동=완료 세트 3 미만)을 재종료하면 `complete_workout_v2`(0022)가 `workout_completed` 원장이 없다는 이유로 `incomplete_xp_processing`(HTTP 400)을 raise했다. 운동은 이미 완료됐는데 클라가 종료 실패로 처리하고 draft를 안 지우면(재시도·중복탭·새로고침 복구) **이후 모든 종료가 400 → 영영 종료 불가**. XP 지급된 세션(시나리오 1)은 200 정상이라, Task 13 v2 전환 때 0 XP replay 경로를 테스트가 안 덮어 배포됐다. 재현: `scripts/finish-repro.mjs`(시나리오 2·3 status=400).
+  - **수정 ①(즉시 배포)**: `finishWorkout` 래퍼가 '이미 완료' 오류를 잡아 세션 상태를 확인, completed면 조용한 성공(모달 없음)으로 처리. `handleFinish`에 종료 재진입 가드(`finishingRef`). 실 DB로 회복·완료세션 쓰기 가능 확인 → 이미 갇힌 사용자도 **다음 종료 탭에서 탈출**.
+  - **수정 ②(⚠️ 사용자 SQL 적용 대기)**: `supabase/migrations/0023_fix_zero_xp_replay.sql` — RPC replay 분기가 원장 없어도 raise 대신 idempotentReplay(originalXpAwarded=0) 반환. **0022 수정 금지라 새 파일.** 클라 수정만으로 사용자 이슈는 해소됐고, 0023은 원인 자체를 없애는 방어. **SQL Editor에 붙여넣고 Run 1회 하면 됨(선택).**
+- **스트릭 문구 오류** — 커밋 `7837755`. d4 단계는 "어제 운동했고 오늘만 아직"인데 문구 3개가 전부 "어제 쉬셨다"로 단정. gap과 일수가 d4만 하루 밀려 있었다. STAGE_MESSAGES는 아침 브리핑 푸시와 공용이라 알림에도 나갔다. 카드 부제(사실)와 경고 배너(재촉)가 같은 문장을 반복하던 것도 분리. 회귀 테스트로 옛 문구 되돌리면 실패 확인.
+- **홈 레이아웃** — 커밋 `58811e5`. 캐릭터/레벨 카드를 "운동 시작하기" 바로 아래로 이동(사용자 요청).
+- **검증**: unit **409/409**(37파일) · typecheck · lint 0 · build ✅ · 배포 번들에서 종료 복원 로직 반영 확인. 배포 `gnd-ll0n2nn9g-gnd4.vercel.app` production Ready, `/home`·`/record` 200.
+
 ## ✅ 2026-07-23 — XP·35레벨·7단계 캐릭터 시스템 (Task 1~14 완료 · **운영 배포 ✅**)
 
 - **문서**: 설계 `docs/superpowers/specs/2026-07-23-xp-level-character-system-design.md` · 계획 `docs/superpowers/plans/2026-07-23-xp-level-character-system.md` · 인수인계 `docs/superpowers/HANDOFF-2026-07-23-xp-system.md`.
