@@ -229,7 +229,8 @@ export default function OnboardingPage() {
           <div className="text-5xl">👥</div>
           <h1 className="mt-3 text-xl font-extrabold">크루에 들어가요</h1>
           <p className="mt-1 text-[13px] text-muted">
-            GND는 친구 크루 단위로 겨뤄요. 만들거나, 초대받아 참여하세요.
+            친구 크루와 함께하면 더 강해져요. 지금 만들거나 초대받아
+            참여하고, 혼자 시작해서 나중에 합류해도 돼요.
           </p>
           <div className="mt-6 flex flex-col gap-2">
             <Primary onClick={() => setStep("create")}>
@@ -238,6 +239,12 @@ export default function OnboardingPage() {
             <Outline onClick={() => setStep("join")}>
               초대 코드로 참여하기
             </Outline>
+            <button
+              onClick={() => router.replace("/home")}
+              className="mt-1 w-full py-2 text-[13px] font-bold text-muted underline underline-offset-4"
+            >
+              혼자 시작하기 (나중에 크루 참여)
+            </button>
           </div>
         </>
       )}
