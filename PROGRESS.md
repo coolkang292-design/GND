@@ -3,6 +3,16 @@
 > 새 세션은 이 파일 + `C:\Users\SAMSUNG\Desktop\Workout app\IMPLEMENTATION_PLAN.md`(단일 진실)만 읽으면 바로 이어서 작업할 수 있다.
 > 시각 스펙: 같은 폴더의 `운동앱-목업.html`.
 
+## ✅ 2026-07-24 — 혼자모드 + 챌린지 동의 게이트 + 성과 열람권 개편 (운영 배포 ✅)
+
+계획 `docs/superpowers/plans/2026-07-24-challenge-consent-and-performance-pass.md`(§1 결정 3건 모두 권장안 확정: **엄밀 연속 5일 · 크루 전체 순위판 · 달성 시각부터 2h**). 세 작업 모두 커밋·배포·검증 완료. 배포 `gnd-qjdgtrrj0-gnd4.vercel.app` production Ready.
+
+- **리라 → 리얼GND 크루 제거** (운영 DB 직접, service_role): 리라는 목표 0개라 동의 게이트를 영구 차단하므로 크루에서 제거(계정은 유지·크루 멤버십만 삭제). 리얼GND = 오뎅끼데스까(owner)·스칼레또·낭만송곳니 **3명**.
+- **혼자모드** (`7842d29`): GND는 이미 크루 없이 기록·XP·성장이 되도록 설계됨(`workout_sessions.group_id` nullable, RLS도 null 허용). 유일한 관문이 **온보딩의 크루 강제**였다. ① 온보딩 crew 스텝에 "혼자 시작하기(나중에 크루 참여)" 탈출구 ② 크루 없을 때 홈 `CrewCard`가 null 대신 **NoCrewCard**(만들기/초대코드 참여) 렌더 — 앱 내 최초의 크루 진입점(피드·챌린지의 "홈에서 참여" 안내가 이제 실제로 동작). 브라우저 E2E로 혼자 유저 홈(캐릭터·기록·스트릭 전부 정상) 확인.
+- **Phase A — 목표 상호 동의 게이트** (`68096ed`, 마이그레이션 **0025 운영 적용 ✅**): `challenge_goal_approvals` 테이블 + RLS(크루만 조회, 직접 쓰기 차단) + `approve`/`unapprove_challenge_goals` RPC + `start_challenge` 재정의(**전원 목표 + 전원 동의** 게이트, 미달 시 `consent_incomplete`). setup UI에 참여자별 동의 배지·내 동의/철회 버튼·전원 동의 시에만 "시작" 활성화. 실 DB `node scripts/challenge-consent-test.mjs` **20/20**(멱등·철회·직접쓰기 차단·비크루 조회 차단·active 전환). 브라우저 E2E로 동의→게이트 해제 확인.
+- **Phase B — 성과 열람권 개편** (`25dddec`): 열람 자격을 **엄밀 연속 5일**(`hasConsecutiveWorkoutDays`), 창을 **2시간**(`challengePassStatus`, `CHALLENGE_PASS_HOURS=2`)으로. 홈 **ChallengePerformanceCard** — 챌린지 active일 때만, 평소 순위판을 블러+🔒+"N/5일"로 가리고 5일 연속 달성 시각부터 2h 크루 전체 순위판 공개, **D-day 항상 표시**. **보안**: 잠금 상태에선 `getActiveChallengeRanking`을 호출하지 않아 순위 데이터가 클라에 안 내려감(블러는 시각 처리일 뿐). B2(view_record 2h RPC)는 D2=순위판 확정으로 **건너뜀**. KingCard는 렌더만 제거하고 파일 보존(롤백 대비). 도메인 TDD + 브라우저 E2E로 잠금/언락 양쪽 확인.
+- **검증 실측**: unit **423/423**(38파일, 이전 412에서 +11) · typecheck · lint 0 · build ✅ · 배포 번들 grep 4/4(`크루 전원의 목표에 동의하기`·`전원 동의 대기 중`·`챌린지 크루 성과`·`5일 연속 운동하면 열려요`) · `/home`·`/challenge`·`/onboarding`·`/record` 200. 테스트 계정 전부 정리(잔여물 0), 실계정·리얼GND 미접촉.
+
 ## ✅ 2026-07-24 — 배포 후 핫픽스 3건 (스트릭 문구·운동 종료 버그·홈 레이아웃)
 
 XP 시스템 배포 직후 사용자 실사용에서 나온 이슈 3건을 고쳐 재배포했다.
