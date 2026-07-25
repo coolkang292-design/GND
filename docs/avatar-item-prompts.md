@@ -9,9 +9,9 @@ ChatGPT Image에 **그대로 복사·붙여넣기**하면 되도록 각 프롬�
 
 ```
 ① char-3.png 첨부  →  A-3 (일단하개 아바타) 생성      ← 스타일 기준점
-② A-3 마음에 들 때까지 반복. 확정.
-③ 확정된 A-3 첨부  →  A-1, A-2, A-4 ~ A-7 생성        ← 나머지 6장
-④ 확정된 A-3 첨부  →  아이템 29장 생성                 ← 위치·크기 기준
+② A-3 얼굴 튜닝 (A-3b) — 몸은 그대로, 얼굴만 귀엽게
+③ 확정된 A-3b 첨부  →  A-1, A-2, A-4 ~ A-7 생성       ← 나머지 6장
+④ 확정된 A-3b 첨부  →  아이템 29장 생성                ← 위치·크기 기준
 ```
 
 **참조 이미지 첨부는 선택이 아니라 필수다.** 텍스트만으로는 GND 화풍이 재현되지
@@ -20,7 +20,7 @@ ChatGPT Image에 **그대로 복사·붙여넣기**하면 되도록 각 프롬�
 **그린스크린으로 만들지 말 것.** 누끼를 따도 털 가장자리에 초록 픽셀이 남아
 아이템을 겹칠 때 테두리가 지저분해진다. 반드시 투명 배경으로 받는다.
 
-각 장을 받으면 **A-3 위에 겹쳐서** 어깨선·발바닥이 맞는지 확인한다. 어긋나면 그 장만 재생성.
+각 장을 받으면 **A-3b 위에 겹쳐서** 어깨선·발바닥이 맞는지 확인한다. 어긋나면 그 장만 재생성.
 
 ---
 
@@ -70,7 +70,52 @@ LAYOUT — keep these exact:
 
 ---
 
-### A-1 ~ A-7 공통 (A-3 제외) · **확정된 A-3 첨부**
+## A-3b · 얼굴 튜닝 ← 위에서 나온 A-3 첨부
+
+A-3의 얼굴은 눈이 작고 사납고 송곳니가 나와 위협적으로 나온다. 두 가지 이유로
+귀엽게 다듬는다.
+
+1. **애착이 목적이다.** 무서운 캐릭터엔 애착이 잘 붙지 않는다. 거친 분위기는
+   기존 풀씬 7장이 이미 담당하고 있다.
+2. **작게 뜬다.** 이 아바타는 피드·크루 카드에 썸네일로 들어간다. 눈이 작으면
+   축소했을 때 표정이 아예 안 읽힌다.
+
+```
+Use the attached image as the exact reference. Reproduce it identically —
+same character, same stylized 3D illustration style, same body proportions,
+same A-pose, same camera angle, same canvas placement, same body size,
+same black sleeveless tank top and black short tights, same bare paws,
+same fur pattern and colors, same fully transparent background.
+
+Change ONLY the face, to make it noticeably cuter and more lovable:
+- Eyes: much larger and rounder, roughly 1.6x their current size, with big
+  glossy catchlight highlights and enlarged dark pupils. Warm and friendly,
+  looking straight at the viewer. Not glaring, not narrowed.
+- Brows: remove the angry V-shaped furrow completely. Set them level or very
+  slightly raised, giving a gentle open expression.
+- Teeth: remove the protruding fangs entirely. Closed mouth with a small soft
+  upward curve at the corners — a subtle content smile.
+- Muzzle: shorter and rounder, with softer shallower wrinkles.
+- Cheeks: fuller, rounder, slightly puffy.
+- Head: overall rounder, and slightly larger relative to the body.
+
+Everything below the neck must stay pixel-identical to the attached image.
+
+CANVAS: 1024x1536, transparent PNG.
+Fully transparent background — no backdrop, no shadow, no green screen.
+```
+
+**귀여움 조절 — 이 세 줄만 만진다**
+
+| | 더 귀엽게 | 덜 귀엽게 |
+|---|---|---|
+| 눈 크기 | `1.6x` → `2x` | `1.6x` → `1.3x` |
+| 눈썹 | `raised, gently drooping outer ends` | `level` 유지 |
+| 입 | `open happy smile with the tongue slightly out` | `neutral closed mouth` |
+
+---
+
+### A-1 ~ A-7 공통 (A-3 제외) · **확정된 A-3b 첨부**
 
 아래 6개는 전부 이 문장으로 시작한다. 뒤의 4줄만 다르다.
 
@@ -81,8 +126,12 @@ proportions, same dog anatomy, same A-pose, same camera angle, same canvas
 placement, same body size, same tight black sleeveless tank top and tight black
 short tights, same bare paws, same fully transparent background.
 
-Change ONLY the four attributes listed below. The body, pose, clothing, and
-layout must be pixel-identical to the attached image.
+Keep the cute face structure of the reference: the same large round eyes with
+glossy highlights, the same short rounded muzzle, the same full cheeks, and no
+protruding fangs. Only the emotion changes, not the underlying face design.
+
+Change ONLY the four attributes listed below. The body, pose, clothing, face
+structure, and layout must be pixel-identical to the attached image.
 
 CANVAS: 1024x1536, transparent PNG. No green screen, no backdrop, no shadow.
 GENDER: strictly gender-neutral.
@@ -93,10 +142,11 @@ GENDER: strictly gender-neutral.
 ```
 [위 공통 문단]
 
-EXPRESSION: exhausted, defeated, heavy-lidded eyes looking slightly down.
-FUR: dull, matted, patchy, unkempt.
+EXPRESSION: sleepy and deflated but still cute — big round eyes half-closed,
+outer brow ends drooping, mouth in a small downward pout.
+FUR: dull, slightly messy and tousled.
 AURA: none.
-MOOD: someone who has given up but is still standing.
+MOOD: worn out and a little sorry for itself. Endearing, not menacing.
 ```
 
 ## A-2 · 눈떴개
@@ -104,10 +154,11 @@ MOOD: someone who has given up but is still standing.
 ```
 [위 공통 문단]
 
-EXPRESSION: just woke up, one eyebrow raised, a first spark of awareness.
-FUR: still rough but no longer patchy.
+EXPRESSION: wide-awake surprise — big round eyes fully open, one brow raised
+higher than the other, small open mouth as if just realizing something.
+FUR: tidier, a few strands still sticking up.
 AURA: a very faint warm glow at the silhouette edge.
-MOOD: the moment of noticing something has to change.
+MOOD: the cute moment of noticing something has to change.
 ```
 
 ## A-4 · 물고가개
@@ -115,10 +166,12 @@ MOOD: the moment of noticing something has to change.
 ```
 [위 공통 문단]
 
-EXPRESSION: stubborn, teeth slightly gritted, intense focused stare.
+EXPRESSION: determined pout — big round eyes narrowed slightly in focus,
+brows pulled together just a little, lips pressed into a firm small line,
+cheeks puffed as if holding a breath.
 FUR: clean, with a slight sheen of sweat.
 AURA: faint heat shimmer around the shoulders.
-MOOD: refusing to let go.
+MOOD: stubbornly hanging on. Cute effort, not aggression.
 ```
 
 ## A-5 · 미쳐보개
@@ -126,10 +179,11 @@ MOOD: refusing to let go.
 ```
 [위 공통 문단]
 
-EXPRESSION: wild-eyed intensity, slight manic grin, pupils sharp.
-FUR: damp with sweat, bristling slightly.
+EXPRESSION: thrilled and fired up — big round eyes sparkling wide with bright
+highlights, brows raised, wide open happy grin with the tongue slightly out.
+FUR: damp with sweat, a few strands flying up with the energy.
 AURA: violet electric arcs crackling faintly around the arms.
-MOOD: past the point of reason.
+MOOD: having way too much fun. Excited, not unhinged.
 ```
 
 ## A-6 · 판을짜개
@@ -137,10 +191,12 @@ MOOD: past the point of reason.
 ```
 [위 공통 문단]
 
-EXPRESSION: calm, calculating, faint knowing smirk, sharp confident eyes.
-FUR: immaculate, well-conditioned.
+EXPRESSION: smug and pleased with itself — big round eyes half-lidded in a
+knowing look, one brow arched, a small lopsided smirk lifting one corner
+of the mouth.
+FUR: immaculate, glossy and well-groomed.
 AURA: thin cool blue outline light.
-MOOD: in control, several moves ahead.
+MOOD: cheekily several moves ahead of everyone.
 ```
 
 ## A-7 · 전설이개
@@ -148,17 +204,19 @@ MOOD: in control, several moves ahead.
 ```
 [위 공통 문단]
 
-EXPRESSION: serene authority, eyes glowing faint gold, utterly composed.
+EXPRESSION: proud and beaming — big round eyes glowing faint gold with bright
+catchlights, brows relaxed and level, a wide warm confident closed-mouth smile,
+chin lifted just slightly.
 FUR: pristine with a subtle golden sheen at the highlights.
 AURA: warm golden light along the silhouette edge.
-MOOD: nothing left to prove.
+MOOD: quietly delighted with how far it came. Nothing left to prove.
 ```
 
 ---
 
 # PART 2 — 착용 아이템 23장
 
-**전부 확정된 A-3을 첨부한다.** 아래 공통 문단 + 아이템 줄로 조합한다.
+**전부 확정된 A-3b를 첨부한다.** 아래 공통 문단 + 아이템 줄로 조합한다.
 
 ### 착용 아이템 공통 문단
 
@@ -496,9 +554,9 @@ avatar can stand in front of it.
 
 - [ ] 배경이 **완전 투명**인가 (그린스크린·흰 배경·그림자 없음)
 - [ ] 캔버스가 1024×1536인가
-- [ ] 아바타: A-3 위에 겹쳤을 때 어깨선·발바닥이 맞는가
+- [ ] 아바타: A-3b 위에 겹쳤을 때 어깨선·발바닥이 맞는가
 - [ ] 아바타: 사람 비율이 아니라 다부진 3~4등신인가
 - [ ] 아바타: 기본 복장이 밀착 검은 탱크톱+숏타이츠+맨발인가
 - [ ] 아이템: 캐릭터가 같이 그려지지 않았는가
-- [ ] 아이템: A-3 위에 겹쳤을 때 위치가 맞는가
+- [ ] 아이템: A-3b 위에 겹쳤을 때 위치가 맞는가
 - [ ] 상의·하의: 밑의 검은 베이스 레이어가 가장자리로 삐져나오지 않는가
