@@ -56,7 +56,41 @@ char-5는 데드리프트 로우앵글). 같은 후드티 PNG를 붙일 자리�
 > 같은 옷이 한쪽에선 헐렁하고 한쪽에선 터진다. 성장감은 기존 풀씬 7장이
 > 이미 담당하므로, 아바타는 옷걸이 역할만 한다.
 
-**단계 차이는 이것으로만 낸다:** 표정 · 눈빛 · 털 상태 · 기본 복장 · 오라
+### 성별 — 구분하지 않는다
+
+아바타는 **중성 불독 한 세트**다. 남/여를 나누지 않는다.
+
+- GND의 캐릭터는 불독이지 사람이 아니다. "여성 불독"을 그리려면 속눈썹·리본·
+  잘록한 허리 같은 걸 붙여야 하는데, 그 순간 스테레오타입만 남고 캐릭터성이 죽는다.
+- 기존 성장 캐릭터 7장이 이미 무성별이다. 아바타만 성별이 있으면 같은 사람의
+  두 모습으로 안 읽힌다.
+- 성별을 나누면 몸 실루엣이 달라져 **아이템도 전부 2배**가 된다(29장 → 58장).
+  이후 아이템을 추가할 때마다 영구적으로 2장씩이다.
+
+성별 표현이 필요하면 **아이템으로 고르게** 한다 — 버킨백·플랩백을 들든,
+백팩을 메든 사용자가 정한다. 중성 실루엣이라 무엇을 얹어도 맞는다.
+
+### 기본 복장 — 7장 모두 동일한 최소 베이스
+
+```
+상체   몸에 밀착된 검은 민소매 탱크톱
+하체   몸에 밀착된 검은 숏 타이츠
+발     맨발
+```
+
+**단계별로 기본 복장을 다르게 하면 안 된다.** 아이템은 이 위에 덮이는데,
+기본 복장이 두꺼우면 밑에서 삐져나온다.
+
+```
+아바타가 컷오프 후드 조끼를 입고 있음
+  + 나이개 드라이핏 티셔츠 장착
+  = 후드 조끼가 티셔츠 밑으로 삐져나옴   ← 깨짐
+```
+
+밀착 베이스 레이어여야 어떤 상의·하의·신발을 얹어도 완전히 가려진다.
+게임의 기본 아바타가 속옷 차림인 이유가 이것이다.
+
+**그래서 단계 차이는 이 넷으로만 낸다:** 표정 · 눈빛 · 털 상태 · 오라
 
 ---
 
@@ -92,8 +126,20 @@ STRICT LAYOUT REQUIREMENTS:
 - Body centered horizontally, shoulder width 42% of canvas width
 - Identical body proportions and muscle mass in every variant
 
+GENDER: strictly gender-neutral. No eyelashes, no lipstick, no hair bow,
+no cinched waist, no chest definition, no other gendered features.
+A single unisex silhouette used by every user.
+
+BASE CLOTHING — IDENTICAL IN ALL SEVEN VARIANTS, DO NOT CHANGE:
+- Tight-fitting plain black sleeveless tank top
+- Tight-fitting plain black short tights
+- Bare feet
+- No jacket, no hood, no shoes, no hat, no accessories, no held objects
+- The base layer must be skin-tight so that clothing items drawn on top
+  completely cover it with nothing peeking out underneath
+
 Semi-realistic 3D render style, dramatic rim lighting from the upper left,
-gritty urban streetwear aesthetic, high detail, clean alpha edges.
+high detail, clean alpha edges.
 ```
 
 ### 1단계 — 개노답
@@ -101,10 +147,9 @@ gritty urban streetwear aesthetic, high detail, clean alpha edges.
 ```
 [공통 접두]
 
-STAGE VARIATION:
+STAGE VARIATION (base clothing stays exactly as specified above):
 Expression: exhausted, defeated, heavy-lidded eyes looking slightly down.
-Fur: dull, matted, unkempt.
-Base clothing: torn oversized gray hoodie with holes, faded sweatpants, bare feet.
+Fur: dull, matted, patchy, unkempt.
 Aura: none.
 Mood: someone who has given up but is still standing.
 ```
@@ -114,11 +159,10 @@ Mood: someone who has given up but is still standing.
 ```
 [공통 접두]
 
-STAGE VARIATION:
+STAGE VARIATION (base clothing stays exactly as specified above):
 Expression: just woke up, one eyebrow raised, a first spark of awareness in the eyes.
-Fur: still rough but slightly cleaner.
-Base clothing: plain gray hoodie (intact, no holes), simple sweatpants, cheap slides.
-Aura: a very faint warm glow at the edges.
+Fur: still rough but no longer patchy.
+Aura: a very faint warm glow at the silhouette edge.
 Mood: the moment of noticing something has to change.
 ```
 
@@ -127,10 +171,9 @@ Mood: the moment of noticing something has to change.
 ```
 [공통 접두]
 
-STAGE VARIATION:
+STAGE VARIATION (base clothing stays exactly as specified above):
 Expression: neutral determination, jaw set, eyes forward and steady.
 Fur: clean, groomed.
-Base clothing: plain black training tee, black jogger pants, basic running shoes.
 Aura: none.
 Mood: not motivated, just showing up anyway.
 ```
@@ -140,10 +183,9 @@ Mood: not motivated, just showing up anyway.
 ```
 [공통 접두]
 
-STAGE VARIATION:
+STAGE VARIATION (base clothing stays exactly as specified above):
 Expression: stubborn, teeth slightly gritted, intense focused stare.
-Fur: clean, slight sheen of sweat.
-Base clothing: black sleeveless training top, compression shorts, worn training shoes.
+Fur: clean, with a slight sheen of sweat.
 Aura: faint heat shimmer around the shoulders.
 Mood: refusing to let go.
 ```
@@ -153,10 +195,9 @@ Mood: refusing to let go.
 ```
 [공통 접두]
 
-STAGE VARIATION:
+STAGE VARIATION (base clothing stays exactly as specified above):
 Expression: wild-eyed intensity, slight manic grin, pupils sharp.
 Fur: damp with sweat, bristling slightly.
-Base clothing: black cutoff hoodie vest, tactical joggers, lifting shoes, wrist wraps.
 Aura: violet electric arcs crackling faintly around the arms.
 Mood: past the point of reason.
 ```
@@ -166,10 +207,9 @@ Mood: past the point of reason.
 ```
 [공통 접두]
 
-STAGE VARIATION:
+STAGE VARIATION (base clothing stays exactly as specified above):
 Expression: calm, calculating, faint knowing smirk, sharp confident eyes.
 Fur: immaculate, well-conditioned.
-Base clothing: fitted black technical training jacket, tapered black pants, premium trainers.
 Aura: thin cool blue outline light.
 Mood: in control, several moves ahead.
 ```
@@ -179,10 +219,9 @@ Mood: in control, several moves ahead.
 ```
 [공통 접두]
 
-STAGE VARIATION:
+STAGE VARIATION (base clothing stays exactly as specified above):
 Expression: serene authority, eyes glowing faint gold, utterly composed.
 Fur: pristine with a subtle golden sheen at the highlights.
-Base clothing: matte black training set with fine gold trim, elite trainers.
 Aura: warm golden light along the silhouette edge.
 Mood: nothing left to prove.
 ```
@@ -212,6 +251,9 @@ Mood: nothing left to prove.
 Draw ONLY the {아이템 이름} positioned exactly where it would be worn on the
 attached character. Output on a 1024x1536 fully transparent canvas with the item
 at its exact worn position — do NOT draw the character, only the item.
+The item must be fully opaque and large enough to completely cover the
+character's black base layer underneath — no part of the base tank top or
+tights may remain visible around the edges.
 Match the attached image's lighting: rim light from the upper left.
 Semi-realistic 3D render style, clean alpha edges, no shadow on the background.
 ```
@@ -252,3 +294,44 @@ Semi-realistic 3D render style, clean alpha edges, no shadow on the background.
 아이템을 `public/`에 두면 아이템 하나 추가할 때마다 재배포해야 하고 번들이
 계속 커진다. Storage에 두면 **① PNG 업로드 ② items 테이블에 row 1줄**로
 상점에 즉시 등장한다.
+
+---
+
+## 6. 제작 목록 — 총 36장
+
+### 아바타 7장 (필수 · 먼저)
+
+| 파일 | 단계 |
+|---|---|
+| `avatar-1.png` ~ `avatar-7.png` | 개노답 · 눈떴개 · 일단하개 · 물고가개 · 미쳐보개 · 판을짜개 · 전설이개 |
+
+7장이 없으면 아이템을 만들 기준(참조 이미지)이 없다. **3단계부터.**
+
+### 아이템 29장
+
+| 슬롯 | 장수 | 아이템 |
+|---|---:|---|
+| `head` | 4 | 나이개 캡 · 레이개 선글 · 버버개 버킷햇 · (구찌개 선글 예비) |
+| `top` | 6 | 나이개 드라이핏 · 아디다개 트랙탑 · 노개페이스 눕시 · 몽클개 패딩 · 버버개 트렌치 · 구찌개 트랙수트 |
+| `bottom` | 2 | 나이개 테크 조거 · 리바개 501 |
+| `shoes` | 4 | 아디다개 울트라부스트 · 개조던 1 · 발렌시개 트리플S · 구찌개 로퍼 |
+| `wrist` | 3 | 애플워개 울트라 · 롤렉개스 · 파텍개립 |
+| `bag` | 3 | 루이비개 백팩 · 개넬 플랩백 · 에르개스 버킨 |
+| `hand` | 2 | 개페리뇽 샴페인 · 루이비개 서류가방 |
+| `prop` | 6 | 테슬개 · 포르개 911 · 벤개 G바겐 · 람보르개니 · 펜트개우스 · 전용기 |
+
+### 단계별 최소 세트
+
+전부 만들고 시작할 필요는 없다. 구현 단계에 맞춰 나눠 만든다.
+
+| 구현 단계 | 필요한 이미지 | 장수 |
+|---|---|---:|
+| A 배지 엔진 | **없음** | 0 |
+| B 포인트 원장 | **없음** | 0 |
+| C 아바타·합성 | 아바타 7장 + 아무 아이템 3장 (슬롯이 다른 것으로 — 예: top·shoes·prop) | 10 |
+| D 상점·꾸미기 | common·rare 14장 | 14 |
+| E 소셜 노출 | 추가 없음 | 0 |
+| 이후 | epic·legend 12장을 여유 있게 | 12 |
+
+**A·B는 이미지가 한 장도 필요 없다.** 배지 따서 포인트 쌓이는 것까지는
+아트 작업과 무관하게 먼저 굴러간다.
