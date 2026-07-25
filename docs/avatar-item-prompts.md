@@ -8,11 +8,15 @@ ChatGPT Image에 **그대로 복사·붙여넣기**하면 되도록 각 프롬�
 ## 사용법 — 이 순서를 지킬 것
 
 ```
-① char-3.png 첨부  →  A-3 (일단하개 아바타) 생성      ← 스타일 기준점
-② A-3 얼굴 튜닝 (A-3b) — 몸은 그대로, 얼굴만 귀엽게
+① char-3.png 첨부  →  A-3 (일단하개 아바타) 생성      ← 화풍 기준점
+② A-3 첨부        →  A-3b 옷 벗기기 (베이스 레이어)   ← 최종 기준점
 ③ 확정된 A-3b 첨부  →  A-1, A-2, A-4 ~ A-7 생성       ← 나머지 6장
 ④ 확정된 A-3b 첨부  →  아이템 29장 생성                ← 위치·크기 기준
 ```
+
+**②를 건너뛰면 안 된다.** ①에서 나온 아바타는 후드·트랙팬츠·스니커즈·헤어밴드를
+다 입고 나온다(참조로 쓴 char-3이 그 차림이라 당연하다). 그 상태로 아이템을 얹으면
+후드가 티셔츠 밑으로 삐져나오고, 신발 위에 신발이 신겨진다.
 
 **참조 이미지 첨부는 선택이 아니라 필수다.** 텍스트만으로는 GND 화풍이 재현되지
 않는다 — 사람 보디빌더 몸에 개 머리를 붙인 결과가 나온다.
@@ -70,71 +74,112 @@ LAYOUT — keep these exact:
 
 ---
 
-## A-3b · 얼굴 튜닝 ← 위에서 나온 A-3 첨부
+## A-3b · 표정 완화 ← **`char-3.png` + A-3, 두 장 첨부**
 
-A-3의 얼굴은 눈이 작고 사납고 송곳니가 나와 위협적으로 나온다. 두 가지 이유로
-귀엽게 다듬는다.
+A-3의 얼굴은 눈이 작고 사납고 송곳니가 나와 위협적이다. 표정만 조금 눅인다.
 
-1. **애착이 목적이다.** 무서운 캐릭터엔 애착이 잘 붙지 않는다. 거친 분위기는
-   기존 풀씬 7장이 이미 담당하고 있다.
-2. **작게 뜬다.** 이 아바타는 피드·크루 카드에 썸네일로 들어간다. 눈이 작으면
-   축소했을 때 표정이 아예 안 읽힌다.
+> ⚠️ **"cuter", "lovable", "귀엽게" 같은 단어를 쓰면 안 된다.**
+> 모델이 얼굴만이 아니라 렌더링 스타일 전체를 봉제인형으로 갈아버린다.
+> 실제로 1차 시도에서 조명이 평면 스튜디오로, 털이 매끈한 봉제 재질로,
+> 몸이 근육 없는 동글동글한 인형으로 바뀌어 GND 화풍이 통째로 날아갔다.
+>
+> 대신 **구체적 변경 3개만** 지시하고 나머지는 전부 "바꾸지 말 것"으로 잠근다.
+> 목표는 귀여움이 아니라 **"터프하되 적대적이지 않음"**이다.
+
+참조를 두 장 넣는 게 핵심이다 — 화풍은 `char-3.png`에서, 포즈·레이아웃은 A-3에서.
 
 ```
-Use the attached image as the exact reference. Reproduce it identically —
-same character, same stylized 3D illustration style, same body proportions,
-same A-pose, same camera angle, same canvas placement, same body size,
-same black sleeveless tank top and black short tights, same bare paws,
-same fur pattern and colors, same fully transparent background.
+Two reference images are attached.
+IMAGE 1 (char-3.png) is the STYLE reference — the rendering style is law.
+IMAGE 2 is the POSE and LAYOUT reference.
 
-Change ONLY the face, to make it noticeably cuter and more lovable:
-- Eyes: much larger and rounder, roughly 1.6x their current size, with big
-  glossy catchlight highlights and enlarged dark pupils. Warm and friendly,
-  looking straight at the viewer. Not glaring, not narrowed.
-- Brows: remove the angry V-shaped furrow completely. Set them level or very
-  slightly raised, giving a gentle open expression.
-- Teeth: remove the protruding fangs entirely. Closed mouth with a small soft
-  upward curve at the corners — a subtle content smile.
-- Muzzle: shorter and rounder, with softer shallower wrinkles.
-- Cheeks: fuller, rounder, slightly puffy.
-- Head: overall rounder, and slightly larger relative to the body.
+Produce a full-body character sheet with IMAGE 2's pose, layout and clothing,
+rendered in IMAGE 1's style.
 
-Everything below the neck must stay pixel-identical to the attached image.
+STYLE — copy from IMAGE 1 exactly. This is the most important requirement:
+- Gritty semi-realistic 3D character render with heavy detail
+- Individual fur strands visible, coarse and slightly unkempt
+- Deep wrinkled skin folds across the muzzle and brow
+- Strong directional warm golden rim light from the upper left
+- Deep dark shadows down the right side of the body and under the jaw
+- High contrast, cinematic, rich saturated color
+- Athletic muscular stocky build with real shoulder and arm mass under the fur
 
+DO NOT produce any of the following:
+- a soft plush toy, a stuffed animal, a smooth vinyl collectible figure
+- flat even studio lighting, or a shadowless evenly-lit render
+- a rounded weightless body with no visible muscle
+- pastel, washed out, or low-contrast coloring
+
+POSE, LAYOUT AND CLOTHING — copy from IMAGE 2 exactly:
+- Standing upright, facing the camera, symmetrical, relaxed A-pose
+- Tight black sleeveless tank top and tight black short tights, bare paws
+- No shoes, no hat, no accessories, nothing in the hands
+- Fully transparent background, no backdrop, no ground, no cast shadow
+
+FACE — start from IMAGE 1's face and make these three changes only:
+1. Enlarge the eyes about 1.3x and add one bright round catchlight in each.
+   The gaze stays intense and focused.
+2. Relax the angry V-shaped brow furrow to neutral — alert, not hostile.
+3. Remove the protruding fangs. Closed mouth, corners very slightly lifted.
+
+Keep everything else about the face from IMAGE 1: the deep wrinkles, the heavy
+brow ridge, the broad jaw, the coarse fur. The character must still read as
+tough and characterful — approachable, not harmless.
+
+GENDER: strictly gender-neutral.
 CANVAS: 1024x1536, transparent PNG.
-Fully transparent background — no backdrop, no shadow, no green screen.
+LAYOUT: head top 8%, eye line 20%, shoulder line 34%, waist 55%,
+soles 93%, centered, shoulder width 48% of canvas width.
 ```
 
-**귀여움 조절 — 이 세 줄만 만진다**
+**표정 강도 조절 — 이 두 줄만 만진다**
 
-| | 더 귀엽게 | 덜 귀엽게 |
+| | 더 부드럽게 | 더 사납게 |
 |---|---|---|
-| 눈 크기 | `1.6x` → `2x` | `1.6x` → `1.3x` |
-| 눈썹 | `raised, gently drooping outer ends` | `level` 유지 |
-| 입 | `open happy smile with the tongue slightly out` | `neutral closed mouth` |
+| 눈 크기 | `1.3x` → `1.5x` | `1.3x` → `1.15x` |
+| 눈썹 | `to neutral` → `to slightly raised` | `to neutral` → `keep a light furrow` |
+
+`DO NOT produce` 블록은 어느 경우에도 지운다.
 
 ---
 
 ### A-1 ~ A-7 공통 (A-3 제외) · **확정된 A-3b 첨부**
 
-아래 6개는 전부 이 문장으로 시작한다. 뒤의 4줄만 다르다.
+**7장의 차이는 표정뿐이다.** 털 상태나 오라를 단계별로 그려 넣지 않는다.
+두 가지 이유다.
+
+1. **옷에 가려진다.** 몸통 털이나 팔 주위 오라를 아바타에 그려도 상의를 입는
+   순간 덮인다. 옷에 안 가려지는 건 얼굴뿐이다.
+2. **아이템 호환성.** 표정만 바꾸면 목 아래가 7장 모두 픽셀 단위로 동일해져
+   어느 단계에서든 아이템이 정확히 맞는다.
+
+단계별 오라는 이미지에 굽지 않고 **CSS glow 레이어**로 합성 스택 최상단에 얹는다
+(`docs/avatar-item-asset-guide.md` §4). 그래야 패딩을 입어도 오라가 옷 바깥
+실루엣을 따라 살아난다.
+
+아래 6개는 전부 이 문장으로 시작한다. 뒤의 EXPRESSION 블록만 다르다.
 
 ```
 Use the attached image as the exact reference. Reproduce it identically —
-same character, same stylized 3D illustration style, same exaggerated cartoon
-proportions, same dog anatomy, same A-pose, same camera angle, same canvas
-placement, same body size, same tight black sleeveless tank top and tight black
-short tights, same bare paws, same fully transparent background.
+same character, same gritty semi-realistic 3D render style, same coarse fur
+detail, same warm golden rim lighting, same deep shadows and high contrast,
+same stocky muscular build, same body proportions, same A-pose, same camera
+angle, same canvas placement, same body size, same tight black sleeveless tank
+top and tight black short tights, same bare paws, same fully transparent
+background.
 
-Keep the cute face structure of the reference: the same large round eyes with
-glossy highlights, the same short rounded muzzle, the same full cheeks, and no
-protruding fangs. Only the emotion changes, not the underlying face design.
+Change ONLY the facial expression, exactly as described below.
 
-Change ONLY the four attributes listed below. The body, pose, clothing, face
-structure, and layout must be pixel-identical to the attached image.
+Everything from the neck down must be pixel-identical to the attached image.
+Do not change the fur, do not add any aura, glow, sparks or particle effects,
+do not change the lighting, do not change the rendering style.
 
-CANVAS: 1024x1536, transparent PNG. No green screen, no backdrop, no shadow.
+Do NOT turn this into a soft plush toy or a flat evenly-lit render.
+The gritty style of the attached image is law.
+
 GENDER: strictly gender-neutral.
+CANVAS: 1024x1536, transparent PNG. No backdrop, no ground, no cast shadow.
 ```
 
 ## A-1 · 개노답
@@ -142,11 +187,12 @@ GENDER: strictly gender-neutral.
 ```
 [위 공통 문단]
 
-EXPRESSION: sleepy and deflated but still cute — big round eyes half-closed,
-outer brow ends drooping, mouth in a small downward pout.
-FUR: dull, slightly messy and tousled.
-AURA: none.
-MOOD: worn out and a little sorry for itself. Endearing, not menacing.
+EXPRESSION — exhausted and defeated:
+- Eyes half-closed and heavy-lidded, gaze cast downward
+- Outer ends of the brows drooping
+- Mouth corners pulled down, jaw slack
+- Ears hanging lower than in the reference
+MOOD: worn down and out of fuel, but still on its feet.
 ```
 
 ## A-2 · 눈떴개
@@ -154,11 +200,12 @@ MOOD: worn out and a little sorry for itself. Endearing, not menacing.
 ```
 [위 공통 문단]
 
-EXPRESSION: wide-awake surprise — big round eyes fully open, one brow raised
-higher than the other, small open mouth as if just realizing something.
-FUR: tidier, a few strands still sticking up.
-AURA: a very faint warm glow at the silhouette edge.
-MOOD: the cute moment of noticing something has to change.
+EXPRESSION — just woke up:
+- Eyes wide open for the first time, alert, looking straight ahead
+- One brow raised noticeably higher than the other
+- Mouth slightly open, as if caught mid-realization
+- Ears perked up
+MOOD: the moment of noticing something has to change.
 ```
 
 ## A-4 · 물고가개
@@ -166,12 +213,12 @@ MOOD: the cute moment of noticing something has to change.
 ```
 [위 공통 문단]
 
-EXPRESSION: determined pout — big round eyes narrowed slightly in focus,
-brows pulled together just a little, lips pressed into a firm small line,
-cheeks puffed as if holding a breath.
-FUR: clean, with a slight sheen of sweat.
-AURA: faint heat shimmer around the shoulders.
-MOOD: stubbornly hanging on. Cute effort, not aggression.
+EXPRESSION — grinding through it:
+- Eyes narrowed to a hard focused squint
+- Brows pulled tightly together at the center
+- Teeth clenched, jaw muscles visibly tensed
+- Deep strain lines across the brow
+MOOD: refusing to let go, hanging on by sheer stubbornness.
 ```
 
 ## A-5 · 미쳐보개
@@ -179,11 +226,12 @@ MOOD: stubbornly hanging on. Cute effort, not aggression.
 ```
 [위 공통 문단]
 
-EXPRESSION: thrilled and fired up — big round eyes sparkling wide with bright
-highlights, brows raised, wide open happy grin with the tongue slightly out.
-FUR: damp with sweat, a few strands flying up with the energy.
-AURA: violet electric arcs crackling faintly around the arms.
-MOOD: having way too much fun. Excited, not unhinged.
+EXPRESSION — gone past reason:
+- Eyes bulging wide, whites visible all around the iris, pupils small and sharp
+- Brows raised high and asymmetric
+- Wide open snarling grin with teeth bared
+- Face flushed, veins faintly visible at the temple
+MOOD: manic, running on pure adrenaline.
 ```
 
 ## A-6 · 판을짜개
@@ -191,12 +239,12 @@ MOOD: having way too much fun. Excited, not unhinged.
 ```
 [위 공통 문단]
 
-EXPRESSION: smug and pleased with itself — big round eyes half-lidded in a
-knowing look, one brow arched, a small lopsided smirk lifting one corner
-of the mouth.
-FUR: immaculate, glossy and well-groomed.
-AURA: thin cool blue outline light.
-MOOD: cheekily several moves ahead of everyone.
+EXPRESSION — calculating:
+- Eyes narrowed to cool half-lidded slits, gaze steady and unbothered
+- One brow arched high, the other level
+- A small lopsided smirk lifting only one corner of the mouth
+- Head absolutely still, no strain anywhere on the face
+MOOD: several moves ahead and enjoying it.
 ```
 
 ## A-7 · 전설이개
@@ -204,12 +252,12 @@ MOOD: cheekily several moves ahead of everyone.
 ```
 [위 공통 문단]
 
-EXPRESSION: proud and beaming — big round eyes glowing faint gold with bright
-catchlights, brows relaxed and level, a wide warm confident closed-mouth smile,
-chin lifted just slightly.
-FUR: pristine with a subtle golden sheen at the highlights.
-AURA: warm golden light along the silhouette edge.
-MOOD: quietly delighted with how far it came. Nothing left to prove.
+EXPRESSION — serene authority:
+- Eyes half-closed in complete ease, irises a deep warm gold
+- Brows relaxed and level, no tension anywhere
+- Mouth closed with the faintest confident curve
+- Chin lifted just slightly, looking slightly down at the viewer
+MOOD: nothing left to prove.
 ```
 
 ---
