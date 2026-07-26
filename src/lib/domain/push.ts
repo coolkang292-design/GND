@@ -10,6 +10,8 @@ const PUSH_URL_BY_TYPE: Record<string, string> = {
   record_beaten: "/feed",
   // 배지 진열대가 기록 탭 달력에 있다 (설계 2026-07-21)
   badge_earned: "/record",
+  // 크루의 레벨업 — 성장 허브가 내 정보 탭에 있다 (0029)
+  level_up: "/profile",
   rank_change: "/challenge",
   challenge_started: "/challenge",
   challenge_ended: "/challenge",

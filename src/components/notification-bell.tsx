@@ -21,6 +21,10 @@ const TYPE_ICON: Record<NotificationRow["type"], string> = {
   morning_briefing: "☀️",
   challenge_started: "🚀",
   challenge_ended: "🏁",
+  // 아래 셋은 타입 유니온에 빠져 있어 아이콘이 undefined로 렌더되던 것들이다
+  record_beaten: "🏅",
+  badge_earned: "🎖️",
+  level_up: "⬆️",
 };
 
 /** 🔔 + 미읽음 뱃지 + 알림함 바텀시트 (§9 알림함 — durable 저장 원천) */

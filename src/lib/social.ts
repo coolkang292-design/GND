@@ -30,7 +30,10 @@ export type NotificationRow = {
     | "record_viewed"
     | "morning_briefing"
     | "challenge_started"
-    | "challenge_ended";
+    | "challenge_ended"
+    | "record_beaten" // 0018
+    | "badge_earned" // 0020
+    | "level_up"; // 0029
   reference_id: string | null;
   title: string;
   body: string | null;
@@ -46,6 +49,7 @@ export type SocialErrorCode =
   | "not_active"
   | "session_not_found"
   | "poke_cooldown"
+  | "poke_requires_workout" // 0028 — 오늘 운동한 사람만 찌를 수 있다
   | "self_poke"
   | "not_crew"
   | "pokes_disabled"
@@ -61,6 +65,7 @@ const SOCIAL_ERROR_CODES: SocialErrorCode[] = [
   "not_active",
   "session_not_found",
   "poke_cooldown",
+  "poke_requires_workout",
   "self_poke",
   "not_crew",
   "pokes_disabled",

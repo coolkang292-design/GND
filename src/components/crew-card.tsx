@@ -56,8 +56,11 @@ export function CrewCard() {
       await pokeUser(target.id);
       setNotice(`${target.nickname}님을 콕 찔렀어요 👉`);
     } catch (e) {
-      if (e instanceof SocialError && e.code === "poke_cooldown") {
+      const code = e instanceof SocialError ? e.code : null;
+      if (code === "poke_cooldown") {
         setNotice("오늘은 이미 찔렀어요");
+      } else if (code === "poke_requires_workout") {
+        setNotice("오늘 운동을 마쳐야 콕 할 수 있어요 💪");
       } else {
         setNotice("찌르기를 보내지 못했어요");
       }
@@ -76,6 +79,13 @@ export function CrewCard() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
+
+  // 콕은 오늘 운동을 마친 사람만 보낼 수 있다(0028). 서버가 최종 판정하지만,
+  // 누를 수 없는 버튼을 살아 있는 것처럼 보여주지 않는다.
+  const iWorkedOut = !!userId && workedOut.has(userId);
+  const pokeTargets = members.filter(
+    (m) => m.id !== userId && !workedOut.has(m.id),
+  );
 
   return (
     <section className="rounded-card border border-line bg-surface p-4 shadow-card">
@@ -103,8 +113,13 @@ export function CrewCard() {
             {m.id !== userId && !workedOut.has(m.id) && (
               <button
                 onClick={() => void poke(m)}
+                disabled={!iWorkedOut}
                 aria-label={`${m.nickname} 찌르기`}
-                className="ml-0.5 rounded-full bg-accent-weak px-1.5 py-0.5 text-[11px] font-bold text-accent"
+                className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-bold ${
+                  iWorkedOut
+                    ? "bg-accent-weak text-accent"
+                    : "bg-surface text-faint opacity-60"
+                }`}
               >
                 👉 콕
               </button>
@@ -112,6 +127,12 @@ export function CrewCard() {
           </div>
         ))}
       </div>
+
+      {!iWorkedOut && pokeTargets.length > 0 && (
+        <p className="mt-2 text-[11px] text-muted">
+          오늘 운동을 마치면 크루를 콕 찌를 수 있어요 👉
+        </p>
+      )}
 
       {notice && (
         <p className="mt-2 text-xs font-bold text-accent">{notice}</p>
