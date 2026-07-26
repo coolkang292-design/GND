@@ -26,7 +26,7 @@ const CORE_FRAC = 0.74; // 배지 본체가 캔버스에서 차지할 비율 (�
 const MAP = {
   "(1)": ["workout_1","workout_10","minutes_300","streak_5","volume_1t","volume_5t","cardio_10k","record_beaten_1","record_beaten_5"],
   "(2)": ["workout_30","workout_50","minutes_1200","streak_best_15","volume_20t","volume_50t","cardio_42k","cardio_100k","record_beaten_10"],
-  "(3)": ["workout_100","minutes_3000","streak_best_30","streak_best_60","volume_100t","cardio_250k","record_beaten_25", null],
+  "(3)": ["workout_100","minutes_3000","streak_best_30","streak_best_60","volume_100t","cardio_250k","record_beaten_25"],
   "(4)": ["workout_200","minutes_6000","streak_best_100","volume_250t","cardio_500k"],
 };
 
