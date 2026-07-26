@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { compressImage } from "@/lib/image";
 import {
+  awardWorkoutPhotoXp,
   uploadWorkoutImage,
   type VerificationSource,
 } from "@/lib/workout";
@@ -60,9 +61,18 @@ export function VerificationPhoto({
       });
       setVerified(source);
       setState("done");
-      onToast(
-        source === "camera" ? "카메라 인증 완료 🔥" : "사진 업로드 완료 ●",
-      );
+      const label =
+        source === "camera" ? "카메라 인증 완료 🔥" : "사진 업로드 완료 ●";
+      // 사진 XP는 완료 RPC가 줄 수 없다(사진이 늘 완료 뒤에 올라온다) — 여기서
+      // 따로 청구한다. 실패해도 사진은 이미 저장됐으므로 인증은 성공으로 둔다.
+      try {
+        const xp = await awardWorkoutPhotoXp(sessionId);
+        onToast(
+          xp.awarded ? `${label} · 인증 사진 +${xp.xpAwarded ?? 10} XP` : label,
+        );
+      } catch {
+        onToast(label);
+      }
     } catch (e) {
       setState("idle");
       const msg = e instanceof Error ? e.message : String(e);

@@ -632,6 +632,43 @@ export async function uploadWorkoutImage(input: {
   return data as WorkoutSession;
 }
 
+export type PhotoXpResult = {
+  awarded: boolean;
+  xpAwarded?: number;
+  /** 미지급 사유 — no_photo · too_late · not_daily_workout · already_awarded */
+  reason?: string;
+  levelUp?: boolean;
+  newLevel?: number;
+};
+
+/**
+ * 인증사진 XP 후등록 (0022 award_workout_photo_xp).
+ *
+ * 인증사진은 **완료 화면에만** 있으므로 사진 행은 항상 완료 뒤에 생긴다.
+ * 그래서 완료 RPC의 사진 판정(완료 시점에 사진이 있는가)은 정상 흐름에서
+ * 참이 될 수 없다 — 이 함수를 업로드 직후 불러야 10 XP가 지급된다.
+ * (2026-07-26까지 호출부가 없어 사진 XP 지급 이력이 0건이었다.)
+ *
+ * 지급 조건은 서버가 판정한다: 완료 30분 이내 · 그날 첫 유효 운동 · 사진 실재.
+ */
+export async function awardWorkoutPhotoXp(
+  sessionId: string,
+): Promise<PhotoXpResult> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase.rpc("award_workout_photo_xp", {
+    p_session_id: sessionId,
+  });
+  if (error) throw error;
+  const row = (data ?? {}) as PhotoXpResult;
+  return {
+    awarded: row.awarded === true,
+    xpAwarded: row.xpAwarded,
+    reason: row.reason,
+    levelUp: row.levelUp,
+    newLevel: row.newLevel,
+  };
+}
+
 // ── 지난 운동 복사 (§10) ─────────────────────────────────────────
 
 /**
