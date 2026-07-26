@@ -61,13 +61,19 @@ export interface XpTransactionRow {
   createdAt: string;
 }
 
-/** 내 정보 XP 획득 내역 최근 20건. error는 throw. */
+/**
+ * 내 정보 XP 획득 내역 최근 20건. error는 throw.
+ *
+ * 회수(reverse)만 뺀다. 정정 거래(admin_adjustment)는 보여줘야 한다 —
+ * 안 보이면 누적 XP만 조용히 늘어나 사용자가 이유를 알 수 없다.
+ */
 export async function getRecentXpTransactions(): Promise<XpTransactionRow[]> {
   const supabase = getSupabaseBrowserClient();
   const { data, error } = await supabase
     .from("xp_transactions")
     .select("id, amount, reason, metadata, created_at")
-    .eq("transaction_type", "earn")
+    .neq("transaction_type", "reverse")
+    .gt("amount", 0)
     .order("created_at", { ascending: false })
     .limit(20);
   if (error) throw error;
