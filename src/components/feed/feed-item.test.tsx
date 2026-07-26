@@ -32,12 +32,34 @@ function feedItem(photoUrl: string | null): FeedItem {
 describe("FeedItemCard", () => {
   it("사진 기록은 날짜를 위에, 사용자와 완료 시간을 사진 아래쪽에 겹쳐 표시한다", () => {
     const html = renderToStaticMarkup(
-      <FeedItemCard item={feedItem("https://example.com/workout.jpg")} userId="me" />,
+      <FeedItemCard
+        item={feedItem("https://example.com/workout.jpg")}
+        userId="me"
+        onProfileClick={() => {}}
+      />,
     );
 
     expect(html).toContain("absolute inset-x-0 top-0");
     expect(html).toContain("absolute inset-x-0 bottom-0");
     expect(html).toContain("오빙크");
     expect(html).toContain("운동 완료");
+  });
+
+  it("사진 카드에서 닉네임을 프로필 버튼으로 감싼다", () => {
+    const html = renderToStaticMarkup(
+      <FeedItemCard
+        item={feedItem("https://example.com/workout.jpg")}
+        userId="me"
+        onProfileClick={() => {}}
+      />,
+    );
+    expect(html).toContain('aria-label="오빙크 프로필 보기"');
+  });
+
+  it("일반 카드에서도 닉네임을 프로필 버튼으로 감싼다", () => {
+    const html = renderToStaticMarkup(
+      <FeedItemCard item={feedItem(null)} userId="me" onProfileClick={() => {}} />,
+    );
+    expect(html).toContain('aria-label="오빙크 프로필 보기"');
   });
 });

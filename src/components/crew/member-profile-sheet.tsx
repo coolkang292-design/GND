@@ -1,0 +1,199 @@
+"use client";
+
+import Image from "next/image";
+import { useEffect, useState } from "react";
+import { badgeShelf, earnedBadgeCount } from "@/lib/domain/badges";
+import {
+  getCrewMemberProfile,
+  type CrewMemberProfile,
+} from "@/lib/progression";
+
+/**
+ * 시트 본문 — 조회가 끝난 뒤의 표시만 담당한다.
+ * 셸에서 분리해 둬야 표시 로직을 SSR 테스트로 덮을 수 있다.
+ */
+export function MemberProfileBody({ profile }: { profile: CrewMemberProfile }) {
+  const pct = Math.min(100, Math.round(profile.levelProgressPercent));
+  const maxed = profile.nextLevelRequiredXp === null;
+  // 카탈로그에 없는 badge_key는 badgeShelf가 자연히 걸러낸다 —
+  // 배지가 46개로 늘어도 이 컴포넌트는 그대로다.
+  const shelf = badgeShelf(profile.badges);
+  const owned = earnedBadgeCount(profile.badges);
+
+  return (
+    <>
+      <div className="mt-4 flex items-center gap-3.5">
+        <Image
+          src={profile.characterPath}
+          alt={`${profile.stageName} 캐릭터`}
+          width={96}
+          height={128}
+          sizes="96px"
+          className="flex-none rounded-card-sm object-cover"
+        />
+        <div className="min-w-0 flex-1">
+          <p className="text-xl font-extrabold text-accent">
+            {profile.stageName} Lv.{profile.currentLevel}
+          </p>
+          <p className="mt-1.5 text-[11px] text-faint">
+            누적 {profile.totalXp.toLocaleString()} XP
+          </p>
+          <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-surface-2">
+            <div
+              className="h-full rounded-full bg-accent"
+              style={{ width: `${pct}%` }}
+              role="progressbar"
+              aria-valuenow={pct}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="현재 레벨 구간 진행률"
+            />
+          </div>
+          <p className="mt-1.5 text-[11.5px] text-muted">
+            {maxed
+              ? "최고 레벨을 달성했어요 🏆"
+              : `다음 레벨까지 ${profile.xpToNextLevel.toLocaleString()} XP`}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-4 border-t border-line pt-3.5">
+        <div className="flex items-baseline justify-between">
+          <h4 className="text-sm font-extrabold">배지</h4>
+          <p className="text-[11px] text-muted">
+            {owned} / {shelf.length}
+          </p>
+        </div>
+        {owned === 0 && (
+          <p className="mt-1.5 text-[11.5px] text-muted">
+            아직 획득한 배지가 없어요
+          </p>
+        )}
+        <div className="mt-2 flex flex-wrap gap-2">
+          {shelf.map((badge) => (
+            <span
+              key={badge.key}
+              className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-extrabold ${
+                badge.earnedAt
+                  ? "border-accent bg-accent-weak text-accent"
+                  : "border-line bg-surface-2 text-faint opacity-60"
+              }`}
+            >
+              <span className="text-sm">
+                {badge.earnedAt ? badge.emoji : "🔒"}
+              </span>
+              {badge.name}
+            </span>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
+/** 크루원 프로필 바텀시트 — 피드·크루 카드가 공유한다. */
+export function MemberProfileSheet({
+  userId,
+  nickname,
+  avatarUrl,
+  streak,
+  onClose,
+}: {
+  userId: string;
+  nickname: string;
+  avatarUrl: string | null;
+  streak?: number;
+  onClose: () => void;
+}) {
+  const [profile, setProfile] = useState<CrewMemberProfile | null>(null);
+  const [failure, setFailure] = useState<"not_crew" | "failed" | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  // 실패 상태 초기화는 재시도 핸들러가 한다 — effect 본문에서 setState를 동기로
+  // 부르면 렌더가 연쇄된다.
+  useEffect(() => {
+    let cancelled = false;
+    getCrewMemberProfile(userId)
+      .then((p) => {
+        if (!cancelled) setProfile(p);
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        const message = e instanceof Error ? e.message : String(e);
+        setFailure(message.includes("not_crew") ? "not_crew" : "failed");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, reloadKey]);
+
+  return (
+    <>
+      <div
+        className="fixed inset-0 z-40 bg-black/40"
+        onClick={onClose}
+        aria-hidden
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="member-profile-title"
+        className="fixed inset-x-0 bottom-0 z-50 max-h-[85vh] overflow-y-auto rounded-t-[22px] border-t border-line bg-surface p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-card"
+      >
+        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
+
+        <div className="flex items-center gap-3">
+          <span className="flex h-11 w-11 flex-none items-center justify-center rounded-full bg-surface-2 text-2xl">
+            {avatarUrl ?? "👤"}
+          </span>
+          <p id="member-profile-title" className="text-lg font-extrabold">
+            {nickname}님
+          </p>
+          {streak !== undefined && streak > 0 && (
+            <span className="text-xs font-extrabold text-accent">
+              🔥{streak}
+            </span>
+          )}
+        </div>
+
+        {failure === "not_crew" && (
+          <p className="mt-4 text-sm text-muted">크루원만 볼 수 있어요</p>
+        )}
+
+        {failure === "failed" && (
+          <>
+            <p className="mt-4 text-sm text-muted">
+              성장 정보를 불러오지 못했어요. 네트워크 상태를 확인해주세요.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setFailure(null);
+                setReloadKey((k) => k + 1);
+              }}
+              className="mt-3 h-11 w-full rounded-card border border-line bg-surface-2 text-sm font-extrabold text-accent"
+            >
+              다시 시도
+            </button>
+          </>
+        )}
+
+        {!failure && !profile && (
+          <p aria-busy="true" className="mt-4 text-[12.5px] text-muted">
+            불러오는 중…
+          </p>
+        )}
+
+        {!failure && profile && <MemberProfileBody profile={profile} />}
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="mt-5 h-12 w-full rounded-card bg-accent text-sm font-extrabold text-accent-ink"
+        >
+          닫기
+        </button>
+      </div>
+    </>
+  );
+}

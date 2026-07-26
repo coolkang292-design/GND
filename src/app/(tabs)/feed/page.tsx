@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
+import { MemberProfileSheet } from "@/components/crew/member-profile-sheet";
 import { ActiveWorkoutCards } from "@/components/feed/active-workout-cards";
 import { FeedItemCard } from "@/components/feed/feed-item";
 import { NotificationBell } from "@/components/notification-bell";
@@ -22,6 +23,8 @@ export default function FeedPage() {
   const [hasMore, setHasMore] = useState(false);
   const [ready, setReady] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  // 시트는 화면당 1개만 띄운다 — 카드마다 두면 DOM이 항목 수만큼 늘어난다
+  const [selected, setSelected] = useState<FeedItem | null>(null);
   useEffect(() => {
     if (!configured || loading || !userId) return;
     let cancelled = false;
@@ -126,6 +129,7 @@ export default function FeedPage() {
                   key={item.sessionId}
                   item={item}
                   userId={userId!}
+                  onProfileClick={() => setSelected(item)}
                 />
               ))}
             </section>
@@ -140,6 +144,16 @@ export default function FeedPage() {
             </button>
           )}
         </>
+      )}
+
+      {selected && (
+        <MemberProfileSheet
+          userId={selected.userId}
+          nickname={selected.nickname}
+          avatarUrl={selected.avatarUrl}
+          streak={selected.streak}
+          onClose={() => setSelected(null)}
+        />
       )}
     </div>
   );

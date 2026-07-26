@@ -12,7 +12,12 @@ function exerciseSummary(names: string[]): string {
   return names.length > 3 ? `${head} 외 ${names.length - 3}종` : head;
 }
 
-type Props = { item: FeedItem; userId: string };
+type Props = {
+  item: FeedItem;
+  userId: string;
+  /** 닉네임·아바타 탭 — 호출부가 프로필 시트를 연다 */
+  onProfileClick: () => void;
+};
 
 function WorkoutSummary({ item, stats }: { item: FeedItem; stats: string[] }) {
   return (
@@ -38,7 +43,7 @@ function WorkoutSummary({ item, stats }: { item: FeedItem; stats: string[] }) {
 }
 
 /** 사진 기록은 몰입형 카드, 일반 기록은 빠르게 읽는 요약 카드로 표시한다. */
-export function FeedItemCard({ item, userId }: Props) {
+export function FeedItemCard({ item, userId, onProfileClick }: Props) {
   const stats: string[] = [];
   if (item.durationMinutes > 0) stats.push(`${item.durationMinutes}분`);
   if (item.volume.weightVolumeKg > 0)
@@ -65,7 +70,12 @@ export function FeedItemCard({ item, userId }: Props) {
             position="top"
           />
           <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 bg-gradient-to-t from-black/75 to-transparent px-3.5 pt-10 pb-3 text-white">
-            <div className="flex min-w-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={onProfileClick}
+              aria-label={`${item.nickname} 프로필 보기`}
+              className="flex min-w-0 items-center gap-2 text-left"
+            >
               <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-white/20 text-base backdrop-blur">
                 {item.avatarUrl ?? "👤"}
               </span>
@@ -78,7 +88,7 @@ export function FeedItemCard({ item, userId }: Props) {
                   <span className="ml-1.5 text-xs">🔥{item.streak}</span>
                 )}
               </p>
-            </div>
+            </button>
             <p className="flex-none text-right text-xs font-bold text-white/85">
               {timeAgo(item.completedAt)} 운동 완료
             </p>
@@ -101,25 +111,32 @@ export function FeedItemCard({ item, userId }: Props) {
   return (
     <article className="rounded-card border border-line bg-surface shadow-card">
       <div className="flex items-center gap-2.5 px-4 pt-3.5">
-        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-2 text-lg">
-          {item.avatarUrl ?? "👤"}
-        </span>
-        <div className="min-w-0">
-          <p className="truncate text-sm font-extrabold">
-            {item.nickname}
-            {item.userId === userId && (
-              <span className="ml-1 text-faint">(나)</span>
-            )}
-            {item.streak > 0 && (
-              <span className="ml-1.5 text-xs font-bold text-accent">
-                🔥{item.streak}
-              </span>
-            )}
-          </p>
-          <p className="text-xs text-muted">
-            {timeAgo(item.completedAt)} 운동 완료
-          </p>
-        </div>
+        <button
+          type="button"
+          onClick={onProfileClick}
+          aria-label={`${item.nickname} 프로필 보기`}
+          className="flex min-w-0 items-center gap-2.5 text-left"
+        >
+          <span className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-surface-2 text-lg">
+            {item.avatarUrl ?? "👤"}
+          </span>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-extrabold">
+              {item.nickname}
+              {item.userId === userId && (
+                <span className="ml-1 text-faint">(나)</span>
+              )}
+              {item.streak > 0 && (
+                <span className="ml-1.5 text-xs font-bold text-accent">
+                  🔥{item.streak}
+                </span>
+              )}
+            </p>
+            <p className="text-xs text-muted">
+              {timeAgo(item.completedAt)} 운동 완료
+            </p>
+          </div>
+        </button>
       </div>
 
       <WorkoutSummary item={item} stats={stats} />

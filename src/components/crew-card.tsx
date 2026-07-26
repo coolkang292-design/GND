@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
+import { MemberProfileSheet } from "@/components/crew/member-profile-sheet";
 import {
   createGroup,
   getCrewProfiles,
@@ -23,6 +24,7 @@ export function CrewCard() {
   const [copied, setCopied] = useState(false);
   const [ready, setReady] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [selected, setSelected] = useState<Profile | null>(null);
 
   useEffect(() => {
     if (!configured || loading || !userId) return;
@@ -100,16 +102,24 @@ export function CrewCard() {
             key={m.id}
             className="flex items-center gap-1.5 rounded-full border border-line bg-surface-2 py-1 pr-2.5 pl-1"
           >
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-surface text-sm">
-              {m.avatar_url ?? "👤"}
-            </span>
-            <span className="text-xs font-bold">
-              {m.nickname}
-              {m.id === userId && (
-                <span className="ml-0.5 text-faint">(나)</span>
-              )}
-              {workedOut.has(m.id) && <span className="ml-0.5">✅</span>}
-            </span>
+            {/* 콕 버튼과 형제로 둔다 — 칩 전체를 버튼으로 감싸면 버튼이 중첩된다 */}
+            <button
+              type="button"
+              onClick={() => setSelected(m)}
+              aria-label={`${m.nickname} 프로필 보기`}
+              className="flex items-center gap-1.5"
+            >
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-surface text-sm">
+                {m.avatar_url ?? "👤"}
+              </span>
+              <span className="text-xs font-bold">
+                {m.nickname}
+                {m.id === userId && (
+                  <span className="ml-0.5 text-faint">(나)</span>
+                )}
+                {workedOut.has(m.id) && <span className="ml-0.5">✅</span>}
+              </span>
+            </button>
             {m.id !== userId && !workedOut.has(m.id) && (
               <button
                 onClick={() => void poke(m)}
@@ -149,6 +159,16 @@ export function CrewCard() {
           {copied ? "복사됨 ✓" : "초대 링크 복사"}
         </span>
       </button>
+
+      {/* 크루 카드는 스트릭 값을 갖고 있지 않아 streak을 넘기지 않는다 */}
+      {selected && (
+        <MemberProfileSheet
+          userId={selected.id}
+          nickname={selected.nickname}
+          avatarUrl={selected.avatar_url}
+          onClose={() => setSelected(null)}
+        />
+      )}
     </section>
   );
 }
