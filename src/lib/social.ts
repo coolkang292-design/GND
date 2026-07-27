@@ -34,7 +34,9 @@ export type NotificationRow = {
     | "record_beaten" // 0018
     | "badge_earned" // 0020
     | "level_up" // 0029
-    | "app_update"; // 0034 — 배포·업데이트 소식
+    | "app_update" // 0034 — 배포·업데이트 소식
+    | "crew_request" // 0038 — 크루 요청 도착
+    | "crew_accepted"; // 0038 — 상대가 내 요청을 수락
   reference_id: string | null;
   title: string;
   body: string | null;
@@ -57,7 +59,14 @@ export type SocialErrorCode =
   | "not_eligible"
   | "pass_expired"
   | "pass_used"
-  | "self_view";
+  | "self_view"
+  | "self_request" // 0038 — 자기 자신에게 요청
+  | "already_crew" // 0038 — 이미 크루
+  | "request_exists" // 0038 — 진행 중 요청이 이미 있음(거절 후 7일 쿨다운 포함)
+  | "target_not_found" // 0038 — 그 닉네임의 사람이 없음
+  | "not_addressee" // 0038 — 내가 받은 요청이 아님
+  | "not_pending" // 0038 — 이미 처리된 요청
+  | "not_requester"; // 0038 — 내가 보낸 요청이 아님
 
 const SOCIAL_ERROR_CODES: SocialErrorCode[] = [
   "cheer_limit",
@@ -74,6 +83,16 @@ const SOCIAL_ERROR_CODES: SocialErrorCode[] = [
   "pass_expired",
   "pass_used",
   "self_view",
+  // 0038 — 이 배열이 런타임 매칭의 원천이다. 유니온만 고치면 타입은 통과하는데
+  // 코드가 null로 떨어져 화면엔 "알 수 없는 오류"만 뜬다.
+  // not_crew는 위에 이미 있어 다시 넣지 않는다(remove_crew 실패 코드로 재사용).
+  "self_request",
+  "already_crew",
+  "request_exists",
+  "target_not_found",
+  "not_addressee",
+  "not_pending",
+  "not_requester",
 ];
 
 export class SocialError extends Error {
@@ -84,7 +103,8 @@ export class SocialError extends Error {
   }
 }
 
-function toSocialError(error: { message?: string }): SocialError {
+/** RPC 에러 → SocialError. SOCIAL_ERROR_CODES 배열이 유일한 매칭 원천이다. */
+export function toSocialError(error: { message?: string }): SocialError {
   const message = error.message ?? "unknown";
   const code = SOCIAL_ERROR_CODES.find((c) => message.includes(c)) ?? null;
   return new SocialError(message, code);

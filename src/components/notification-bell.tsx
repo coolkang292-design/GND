@@ -28,6 +28,10 @@ const TYPE_ICON: Record<NotificationRow["type"], string> = {
   badge_earned: "🎖️",
   level_up: "⬆️",
   app_update: "🆕",
+  // 0038 — 이 Record가 exhaustive라 알림 유형을 늘리면 여기가 먼저 깨진다.
+  // 클릭 시 /crew로 보내는 라우팅은 크루 화면이 생기는 Task 7에서 붙인다.
+  crew_request: "🤝",
+  crew_accepted: "🤝",
 };
 
 /** 🔔 + 미읽음 뱃지 + 알림함 바텀시트 (§9 알림함 — durable 저장 원천) */
