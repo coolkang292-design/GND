@@ -3,6 +3,18 @@
 > 새 세션은 이 파일 + `C:\Users\SAMSUNG\Desktop\Workout app\IMPLEMENTATION_PLAN.md`(단일 진실)만 읽으면 바로 이어서 작업할 수 있다.
 > 시각 스펙: 같은 폴더의 `운동앱-목업.html`.
 
+## ✅ 2026-07-27 — 업적(배지) 퀘스트 UX v2.0 (운영 배포 ✅)
+
+설계=사용자 피드백 13항목, 계획 `docs/superpowers/plans/2026-07-27-badge-quest-ux.md`. 배지 화면을 "도감"에서 **다음 목표·진행률·남은수치·희귀도·완료율의 퀘스트 화면**으로. 서브에이전트 구동(구현 태스크별 에이전트 + opus 최종 리뷰)으로 실행. 마이그레이션 **0036·0037 운영 적용 ✅**. 배포 `gnd-5txy2wpe3-gnd4.vercel.app` Ready.
+
+- **진행 지표 원천 = 판정과 같은 SQL(0036)** — 진행바의 "7/10"은 사용자 현재 지표가 필요한데, `evaluate_badges`가 이미 내부에서 계산하던 지표 6종 집계를 `badge_metrics(uuid)`로 빼고 `evaluate_badges`도 그걸 부르게 리팩터(DRY). 클라는 `get_my_badge_metrics()`로 읽는다. 진행바와 실제 지급이 갈라지는 "조용한 버그"를 원천 차단. 신규 `scripts/badge-metrics-check.mjs`가 RPC↔직접집계를 실계정으로 대조.
+- **희귀도(0037)** — `badge_definitions.rarity`(common/rare/epic/legend/mythic) 컬럼 + 30종 seed. 분포 common 8·rare 9·epic 7·legend 5·mythic 1. 이름 2건 변경(서울 탈출·반도 횡단), 설명은 사실 한 줄("운동 30회 달성")로 통일(이전 위트 설명 대체 — 위트는 이름이 담당).
+- **도메인(`src/lib/domain/achievements.ts`, 순수·TDD)** — `Achievement` 모델, `buildAchievements`(진행률·남은수치·반복배지 다음배수 목표), `selectNextGoal`(미획득 1회성 중 진행률 최고·동률 시 보상), `categoryCompletion`·`overallCompletion`, `toDisplayUnit`(분→시간·kg→톤·m→km)·`toRemainingDisplay`(올림).
+- **UI** — 최상단 `NextGoalCard`(다음 목표), `BadgeSheet` 재작성(전체·카테고리 완료율 바 + 배지별 진행바·현재/목표·남은수치·희귀도 pill·보상·잠금 "🔒 앞으로 N"), `ProgressBar`·`RarityPill` 분리, 획득 연출 자리(`badge-earn-animation.tsx`) 구조만.
+- **최종 리뷰가 잡은 2건 수정**: (1) 불꽃처럼 지표가 내려가는 배지는 이미 획득해도 "3/30일(10%)"로 보이던 모순 → 획득한 1회성은 완료로 고정. (2) 남은수치 반올림이 "앞으로 0시간"으로 뭉개지던 것 → `toRemainingDisplay` 올림으로 최소단위 보장.
+- **검증 실측**: unit **483/483**(49파일, 이전 462에서 +21) · typecheck · lint 0 · build ✅ · 실 DB `badge-metrics-check` 4/4 · `badge-point-check` 14/14 · `streak-parity` 불일치 0건(판정 DRY 리팩터 무영향 확인) · `/profile` 200 · 번들 grep(`다음 목표`·`앞으로`·`EPIC`·`MYTHIC`·`보유 배지`).
+- **범위 밖**: 보상 확장(프로필 테두리·아이템 해금 — 구조만 여지), 획득 애니메이션 실제 연출(자리만), 아이템 상점.
+
 ## ✅ 2026-07-27 (후속) — 크루원 프로필 배지 개선 + 배포 소식 알림 (운영 배포 ✅)
 
 배지·포인트 배포 직후 사용자 요청 2건. 커밋 `d80dd63`·`8572794`·`e9ce66c`.
