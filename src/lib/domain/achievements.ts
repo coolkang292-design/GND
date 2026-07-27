@@ -1,4 +1,4 @@
-import type { BadgeMetricKey, BadgeRarity } from "./badges";
+import type { BadgeMeta, BadgeMetricKey, BadgeRarity, EarnedBadge } from "./badges";
 
 export const RARITY_META: Record<
   BadgeRarity,
@@ -31,4 +31,68 @@ export function toDisplayUnit(
     default:
       return { amount: raw, unit: "회" };
   }
+}
+
+export type Achievement = {
+  key: string;
+  title: string;
+  description: string;
+  emoji: string;
+  metricKey: BadgeMetricKey;
+  rarity: BadgeRarity;
+  rewardPoint: number;
+  repeatable: boolean;
+  currentValue: number;
+  targetValue: number;
+  progress: number; // 0..1
+  remainingValue: number;
+  unlocked: boolean;
+  count: number; // 반복 획득 횟수
+};
+
+function nextRepeatTarget(current: number, step: number): number {
+  return (Math.floor(current / step) + 1) * step;
+}
+
+/** 카탈로그 + 획득 + 현재 지표 → 퀘스트 모델. sortOrder 순. */
+export function buildAchievements(
+  catalog: BadgeMeta[],
+  earned: EarnedBadge[],
+  metrics: Record<BadgeMetricKey, number>,
+): Achievement[] {
+  const earnedByKey = new Map<string, EarnedBadge[]>();
+  for (const e of earned) {
+    const list = earnedByKey.get(e.badgeKey) ?? [];
+    list.push(e);
+    earnedByKey.set(e.badgeKey, list);
+  }
+
+  return [...catalog]
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((m) => {
+      const rows = earnedByKey.get(m.key) ?? [];
+      const current = metrics[m.metricKey] ?? 0;
+      const target =
+        m.repeatable && m.repeatStep
+          ? nextRepeatTarget(current, m.repeatStep)
+          : m.threshold;
+      const remaining = Math.max(0, target - current);
+      const progress = target <= 0 ? 0 : Math.min(1, current / target);
+      return {
+        key: m.key,
+        title: m.name,
+        description: m.description,
+        emoji: m.emoji,
+        metricKey: m.metricKey,
+        rarity: m.rarity,
+        rewardPoint: m.pointReward,
+        repeatable: m.repeatable,
+        currentValue: current,
+        targetValue: target,
+        progress,
+        remainingValue: remaining,
+        unlocked: rows.length > 0,
+        count: rows.length,
+      };
+    });
 }
