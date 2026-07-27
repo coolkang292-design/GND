@@ -3,6 +3,15 @@
 > 새 세션은 이 파일 + `C:\Users\SAMSUNG\Desktop\Workout app\IMPLEMENTATION_PLAN.md`(단일 진실)만 읽으면 바로 이어서 작업할 수 있다.
 > 시각 스펙: 같은 폴더의 `운동앱-목업.html`.
 
+## ✅ 2026-07-27 (후속) — 크루원 프로필 배지 개선 + 배포 소식 알림 (운영 배포 ✅)
+
+배지·포인트 배포 직후 사용자 요청 2건. 커밋 `d80dd63`·`8572794`·`e9ce66c`.
+
+- **크루원 프로필은 보유 배지만 + 의미·보상** (`d80dd63`) — 남의 프로필(`MemberProfileBody`)에서 미획득·자물쇠를 빼고 보유한 것만 리스트로 진열한다. 각 항목에 배지 그림·이름·**의미(설명)**·**획득 보상(+포인트)**를 함께 보여 그 사람이 무엇을 어떻게 땄는지 한눈에 보이게 했다. 미획득을 목표로 진열하는 동기 설계는 **본인 성장 허브 전체 시트에만** 남긴다(남과 나의 목적이 다르다). SSR 테스트로 보유만 표시·미획득 숨김·설명·보상 문구 고정.
+- **배포 소식 알림 + 새 소식(`/whats-new`)** (`8572794`, 마이그레이션 **0034 적용 ✅**) — 배포 내용을 알림으로 띄우고 클릭 시 릴리스 노트 상세로 보낸다. `app_update` 알림 유형 추가(0034가 `notifications_type_check` 확장), 푸시 url→`/whats-new`, 인앱 알림함 행을 **클릭 가능**하게(탭하면 그 유형 상세로 — 푸시든 인앱이든 성립). 발송은 `scripts/broadcast-release.mjs`가 전 사용자에 알림 insert → 0016 트리거가 구독자에게 푸시. **실측**: 4명 인앱 도달·`pushed_at` 전부 기록, 구독 보유 3명에 웹푸시.
+- **릴리스 알림 프로세스 굳힘** (`e9ce66c`) — 사용자 요청 "매번 새 기능마다 업데이트 알림". 릴리스 노트를 `src/lib/domain/release-notes.data.json` **단일 원천**으로 두고(화면·알림·스크립트가 같은 파일), 발송 스크립트가 **최신 항목을 자동으로 읽어** 아직 안 보낸 것이면 보낸다(제목=릴리스로 **멱등**, 재실행 안전). **새 기능 배포 절차 = ① 그 json 맨 앞에 항목 추가 → ② `pnpm release:notify` (미리보기) → `pnpm release:notify -- --send`**. 0034 같은 새 타입이 필요 없는 한 매 배포에 이 두 단계면 끝.
+- **검증 실측**: unit **462/462**(43파일) · typecheck · lint 0 · build ✅ · `/whats-new` 200(릴리스 내용 SSR) · 배포 `gnd-g34yem2xt-gnd4.vercel.app` production Ready.
+
 ## ✅ 2026-07-27 — 배지 30종 + 포인트 경제 (운영 배포 ✅)
 
 설계 `docs/superpowers/specs/2026-07-27-badge-catalog-and-point-economy-design.md` · 계획 `docs/superpowers/plans/2026-07-27-badge-catalog-and-point-economy.md`. 배지를 3개 → **30종**으로 늘리고 **포인트 경제**를 붙였다. 마이그레이션 **0031·0032·0033 운영 적용 ✅**. 배포 `gnd-jdfmnf0if-gnd4.vercel.app` production Ready → `gnd-one.vercel.app` 별칭.
