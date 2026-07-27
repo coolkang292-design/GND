@@ -105,6 +105,15 @@ try {
   });
   if (join.status !== 200) throw new Error("크루 참여 실패");
 
+  // 0039부터 기록 갱신 팬아웃은 group_members가 아니라 crew_links를 훑는다.
+  // 그룹만 엮어서는 칭찬 요청 알림이 가지 않으므로 연결을 실제로 맺는다.
+  const linkReq = await api(userA.token, "POST", "/rest/v1/rpc/send_crew_request", {
+    p_target_id: userB.id,
+  });
+  await api(userB.token, "POST", "/rest/v1/rpc/accept_crew_request", {
+    p_request_id: linkReq.json?.requestId,
+  });
+
   const draft = await api(userA.token, "POST", "/rest/v1/workout_sessions", {
     user_id: userA.id,
     group_id: groupId,

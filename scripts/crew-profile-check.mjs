@@ -95,6 +95,16 @@ try {
     p_code: ab?.invite_code,
   });
 
+  // 0039부터 "크루"는 같은 그룹이 아니라 서로 수락한 사이다. get_crew_member_profile의
+  // 판정이 is_crew_with로 바뀌었으므로 A·B를 실제로 연결해야 아래 단언이 성립한다.
+  // C는 일부러 연결하지 않는다 — "크루가 아니면 not_crew"를 그대로 검증하기 위해서다.
+  const linkReq = await api(userA.token, "POST", "/rest/v1/rpc/send_crew_request", {
+    p_target_id: userB.id,
+  });
+  await api(userB.token, "POST", "/rest/v1/rpc/accept_crew_request", {
+    p_request_id: linkReq.json?.requestId,
+  });
+
   const gC = await api(userC.token, "POST", "/rest/v1/rpc/create_group", {
     p_name: `남의크루-${RUN}`,
   });

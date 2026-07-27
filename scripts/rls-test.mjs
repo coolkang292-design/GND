@@ -109,6 +109,18 @@ check("참여 후 B가 크루원 A 프로필 조회 가능", prof1.status === 20
 const mem = await api(B.token, "GET", `/rest/v1/group_members?group_id=eq.${group.id}`);
 check("멤버 목록 2명", mem.status === 200 && mem.json.length === 2, JSON.stringify(mem.json));
 
+// 0039부터 "크루"는 같은 그룹이 아니라 서로 수락한 사이다. 이 스크립트는 픽스처를
+// 그룹으로만 엮어 왔으므로, 아래 단언들이 통과하려면 크루 연결을 따로 맺어야 한다.
+// 그룹은 챌린지 몫으로 그대로 두고(Phase 5가 쓴다) 연결만 추가한다.
+const linkReq = await api(A.token, "POST", "/rest/v1/rpc/send_crew_request", {
+  p_target_id: B.id,
+});
+check("A가 B에게 크루 요청 (0039 픽스처)", linkReq.status === 200, JSON.stringify(linkReq.json));
+const linkAcc = await api(B.token, "POST", "/rest/v1/rpc/accept_crew_request", {
+  p_request_id: linkReq.json?.requestId,
+});
+check("B가 수락 → A·B 크루 연결 (0039 픽스처)", linkAcc.status === 200, JSON.stringify(linkAcc.json));
+
 console.log("\n── 쓰기 경계 ──");
 const upd = await api(B.token, "PATCH", `/rest/v1/profiles?id=eq.${A.id}`, { nickname: "해킹됨" });
 check("B는 A 프로필 수정 불가", upd.status < 300 && (upd.json ?? []).length === 0, JSON.stringify(upd.json));
