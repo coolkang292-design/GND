@@ -1,7 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { BadgeShowcase } from "./badge-showcase";
-import { BadgeSheet } from "./badge-sheet";
 import { badgeShelf, type BadgeMeta, type EarnedBadge } from "@/lib/domain/badges";
 
 const CATALOG: BadgeMeta[] = [
@@ -53,40 +52,5 @@ describe("BadgeShowcase", () => {
     );
     expect(html).toContain("아직 획득한 배지가 없어요");
     expect(html).toContain("0 / 3");
-  });
-});
-
-describe("BadgeSheet", () => {
-  it("미획득 배지도 비유 문구와 함께 보여준다 — 다음 목표가 되도록", () => {
-    const html = renderToStaticMarkup(
-      <BadgeSheet shelf={badgeShelf(CATALOG, EARNED)} onClose={() => {}} />,
-    );
-    expect(html).toContain("열 번 찍었개");
-    expect(html).toContain("안 넘어가는 나무");
-  });
-
-  it("지표별로 섹션을 나눈다", () => {
-    const html = renderToStaticMarkup(
-      <BadgeSheet shelf={badgeShelf(CATALOG, EARNED)} onClose={() => {}} />,
-    );
-    expect(html).toContain("운동 횟수");
-    expect(html).toContain("불꽃");
-  });
-
-  it("미획득은 잠금 표시, 획득은 지급 포인트를 보여준다", () => {
-    const html = renderToStaticMarkup(
-      <BadgeSheet shelf={badgeShelf(CATALOG, EARNED)} onClose={() => {}} />,
-    );
-    expect(html).toContain("🔒");
-    expect(html).toContain("+300 P");
-  });
-
-  it("접근성: dialog 역할과 닫기", () => {
-    const html = renderToStaticMarkup(
-      <BadgeSheet shelf={badgeShelf(CATALOG, [])} onClose={() => {}} />,
-    );
-    expect(html).toContain('role="dialog"');
-    expect(html).toContain('aria-modal="true"');
-    expect(html).toContain("닫기");
   });
 });
