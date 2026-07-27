@@ -6,6 +6,7 @@ import {
   RARITY_META,
   selectNextGoal,
   toDisplayUnit,
+  toRemainingDisplay,
 } from "./achievements";
 import type { BadgeMeta, EarnedBadge } from "./badges";
 
@@ -43,6 +44,18 @@ describe("toDisplayUnit", () => {
   });
 });
 
+describe("toRemainingDisplay", () => {
+  it("남은 값이 0보다 크면 0으로 뭉개지 않는다(올림)", () => {
+    expect(toRemainingDisplay("total_minutes", 10)).toEqual({ amount: 1, unit: "시간" });
+    expect(toRemainingDisplay("cardio_distance_m", 40)).toEqual({ amount: 0.1, unit: "km" });
+    expect(toRemainingDisplay("weight_volume_kg", 40)).toEqual({ amount: 0.1, unit: "톤" });
+  });
+  it("회·일은 그대로", () => {
+    expect(toRemainingDisplay("workout_count", 3)).toEqual({ amount: 3, unit: "회" });
+    expect(toRemainingDisplay("streak_days", 4)).toEqual({ amount: 4, unit: "일" });
+  });
+});
+
 describe("buildAchievements", () => {
   const metrics = {
     workout_count: 7, total_minutes: 0, streak_days: 7,
@@ -66,6 +79,22 @@ describe("buildAchievements", () => {
     expect(a.unlocked).toBe(true);
     expect(a.progress).toBe(1);
     expect(a.remainingValue).toBe(0);
+  });
+
+  it("획득한 1회성은 지표가 내려가도 완료로 고정한다(불꽃 리셋)", () => {
+    const earned: EarnedBadge[] = [
+      { badgeKey: "streak_best_30", periodKey: "lifetime", earnedAt: new Date("2026-07-01") },
+    ];
+    // 사슬이 끊겨 현재 불꽃은 3일이지만, 한 번 딴 30일 배지는 완료여야 한다.
+    const [a] = buildAchievements(
+      [meta({ key: "streak_best_30", metricKey: "streak_days", threshold: 30 })],
+      earned,
+      { ...metrics, streak_days: 3 },
+    );
+    expect(a.unlocked).toBe(true);
+    expect(a.progress).toBe(1);
+    expect(a.remainingValue).toBe(0);
+    expect(a.currentValue).toBe(30); // "3 / 30일"이 아니라 "30 / 30일"
   });
 
   it("반복 배지: 목표는 다음 배수, 남은 수치도 그 기준", () => {

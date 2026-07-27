@@ -22,6 +22,7 @@ for (const p of profs) {
   const rec = sessions.filter((s) => s.record_note !== null).length;
   const ok = Number(m.workout_count) === wc && Number(m.total_minutes) === mins && Number(m.record_beaten) === rec;
   console.log(`${ok ? "PASS" : "FAIL"} ${p.nickname}  RPC(운동 ${m.workout_count}·분 ${m.total_minutes}·기록 ${m.record_beaten}) vs 직접(${wc}·${mins}·${rec})`);
-  ok ? pass++ : fail++;
+  if (ok) pass++;
+  else fail++;
 }
 console.log(`\n${pass}/${pass + fail} passed`);

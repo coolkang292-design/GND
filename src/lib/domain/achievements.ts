@@ -33,6 +33,32 @@ export function toDisplayUnit(
   }
 }
 
+/**
+ * 남은 수치 표시용. toDisplayUnit과 달리 **올림**한다 —
+ * 잠긴 배지의 남은 값이 반올림으로 "앞으로 0시간"처럼 뭉개지면
+ * "다 왔다"로 오해되기 때문. 남은 게 조금이라도 있으면 최소 단위로 보인다.
+ */
+export function toRemainingDisplay(
+  metricKey: BadgeMetricKey,
+  raw: number,
+): { amount: number; unit: string } {
+  const ceil1 = (n: number) => Math.ceil(n * 10) / 10;
+  switch (metricKey) {
+    case "total_minutes":
+      return { amount: Math.ceil(raw / 60), unit: "시간" };
+    case "weight_volume_kg":
+      return { amount: ceil1(raw / 1000), unit: "톤" };
+    case "cardio_distance_m":
+      return { amount: ceil1(raw / 1000), unit: "km" };
+    case "streak_days":
+      return { amount: raw, unit: "일" };
+    case "workout_count":
+    case "record_beaten":
+    default:
+      return { amount: raw, unit: "회" };
+  }
+}
+
 export type Achievement = {
   key: string;
   title: string;
@@ -71,11 +97,15 @@ export function buildAchievements(
     .sort((a, b) => a.sortOrder - b.sortOrder)
     .map((m) => {
       const rows = earnedByKey.get(m.key) ?? [];
-      const current = metrics[m.metricKey] ?? 0;
+      const unlocked = rows.length > 0;
+      const raw = metrics[m.metricKey] ?? 0;
       const target =
         m.repeatable && m.repeatStep
-          ? nextRepeatTarget(current, m.repeatStep)
+          ? nextRepeatTarget(raw, m.repeatStep)
           : m.threshold;
+      // 획득한 1회성 배지는 완료로 고정한다. 불꽃(streak_days)처럼 지표가
+      // 내려가도 "획득했는데 3/30일(10%)" 같은 모순된 행이 안 나오게.
+      const current = unlocked && !m.repeatable ? target : raw;
       const remaining = Math.max(0, target - current);
       const progress = target <= 0 ? 0 : Math.min(1, current / target);
       return {
@@ -91,7 +121,7 @@ export function buildAchievements(
         targetValue: target,
         progress,
         remainingValue: remaining,
-        unlocked: rows.length > 0,
+        unlocked,
         count: rows.length,
       };
     });

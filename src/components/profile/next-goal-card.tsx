@@ -1,5 +1,9 @@
 import Image from "next/image";
-import { toDisplayUnit, type Achievement } from "@/lib/domain/achievements";
+import {
+  toDisplayUnit,
+  toRemainingDisplay,
+  type Achievement,
+} from "@/lib/domain/achievements";
 import { ProgressBar } from "./progress-bar";
 
 /** 최상단 "다음 목표" 카드 — 열자마자 한 번 더 하게 만드는 핵심. */
@@ -14,7 +18,7 @@ export function NextGoalCard({ goal }: { goal: Achievement | null }) {
   }
   const cur = toDisplayUnit(goal.metricKey, goal.currentValue);
   const tgt = toDisplayUnit(goal.metricKey, goal.targetValue);
-  const rem = toDisplayUnit(goal.metricKey, goal.remainingValue);
+  const rem = toRemainingDisplay(goal.metricKey, goal.remainingValue);
   return (
     <section className="rounded-card border border-accent/40 bg-accent-weak p-4 shadow-card">
       <p className="text-[11px] font-extrabold text-accent">다음 목표</p>

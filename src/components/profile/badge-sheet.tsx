@@ -5,6 +5,7 @@ import {
   categoryCompletion,
   overallCompletion,
   toDisplayUnit,
+  toRemainingDisplay,
   type Achievement,
 } from "@/lib/domain/achievements";
 import type { BadgeMetricKey } from "@/lib/domain/badges";
@@ -23,7 +24,7 @@ const METRIC_LABEL: Record<BadgeMetricKey, string> = {
 function AchievementRow({ a }: { a: Achievement }) {
   const cur = toDisplayUnit(a.metricKey, a.currentValue);
   const tgt = toDisplayUnit(a.metricKey, a.targetValue);
-  const rem = toDisplayUnit(a.metricKey, a.remainingValue);
+  const rem = toRemainingDisplay(a.metricKey, a.remainingValue);
   const state = a.unlocked ? "earned" : a.progress > 0 ? "active" : "locked";
   return (
     <li className="rounded-card-sm border border-line bg-surface-2 p-3">

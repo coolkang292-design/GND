@@ -1,4 +1,4 @@
-import type { BadgeMeta, BadgeRarity, EarnedBadge } from "@/lib/domain/badges";
+import type { BadgeMeta, EarnedBadge } from "@/lib/domain/badges";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 /** 배지 카탈로그 (0031). 전역 데이터라 누구나 읽는다. */
