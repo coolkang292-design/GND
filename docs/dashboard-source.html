@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>GND 사용자 현황 대시보드</title>
+  <style>
+    :root{
+      --bg:#090a0c;--panel:#111216;--panel2:#15161b;--line:#262830;
+      --text:#f2efe6;--muted:#858893;--gold:#efbb47;--gold2:#ffd36d;
+      --green:#4fd197;--orange:#f5a84b;--red:#ff7474
+    }
+    *{box-sizing:border-box}html{scroll-behavior:smooth}
+    body{margin:0;background:radial-gradient(circle at 85% -10%,#2a211125,transparent 28%),var(--bg);
+      color:var(--text);font:14px Arial,"Apple SD Gothic Neo","Noto Sans KR",sans-serif}
+    button,input{font:inherit}button{color:inherit;cursor:pointer}
+    .sidebar{position:fixed;inset:0 auto 0 0;width:225px;padding:24px 16px 18px;
+      display:flex;flex-direction:column;background:#0d0e11;border-right:1px solid #202126}
+    .brand{display:flex;align-items:center;gap:11px;padding:0 10px 22px;border-bottom:1px solid var(--line)}
+    .brand-icon{display:grid;place-items:center;width:40px;height:40px;border:1px solid #705723;
+      border-radius:12px;background:#211b10;font-size:20px}
+    .brand b{display:block;color:var(--gold);font-size:22px;font-style:italic}
+    .brand small{color:#756c55;font-size:8px;letter-spacing:.2em}
+    nav{padding-top:23px;display:grid;gap:6px}
+    nav a{display:flex;align-items:center;gap:12px;min-height:45px;padding:0 12px;border-radius:9px;
+      color:#888b94;text-decoration:none;font-weight:700;font-size:13px}
+    nav a:hover,nav a.active{color:var(--gold2);background:linear-gradient(90deg,#efbb4728,#efbb4708)}
+    nav i{display:grid;place-items:center;width:24px;height:24px;border:1px solid #30323a;border-radius:7px;
+      font-style:normal;font-size:11px}.sidebar-foot{margin-top:auto;color:#686b75;font-size:11px;padding:12px}
+    .main{width:calc(100% - 225px);max-width:1500px;margin-left:225px;padding:36px 40px 28px}
+    header{display:flex;justify-content:space-between;align-items:end;gap:20px;margin-bottom:25px}
+    .kicker{margin:0 0 7px;color:var(--gold);font-size:9px;font-weight:800;letter-spacing:.18em}
+    h1{margin:0 0 7px;font-size:36px;letter-spacing:-.04em}header p:last-child{margin:0;color:var(--muted)}
+    .actions{display:flex;gap:9px;align-items:center}.live{padding:11px;border:1px solid #1e3c31;border-radius:8px;
+      color:#78dcb0;background:#4fd1970d;font-size:10px;font-weight:800}
+    .live:before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:7px;background:var(--green)}
+    .seg,.ghost{padding:3px;border:1px solid var(--line);border-radius:8px;background:#111217}
+    .seg button{height:30px;padding:0 11px;border:0;border-radius:6px;background:transparent;color:#737680;font-weight:700}
+    .seg button.on{color:var(--gold2);background:#2a2519}.ghost{height:38px;padding:0 13px;color:#c4c5ca}
+    .notice{display:flex;gap:9px;margin-bottom:13px;padding:10px 13px;border:1px solid #efbb472e;border-radius:9px;
+      background:#efbb470c;color:#9b927b;font-size:11px}.notice b{color:#cdbd8b}
+    .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px}
+    .card,.panel{border:1px solid var(--line);border-radius:13px;background:linear-gradient(145deg,#15161a,#0f1013)}
+    .card{padding:18px 19px;min-height:151px}.card.accent{border-color:#efbb4747;background:radial-gradient(circle at 100% 0,#efbb4721,transparent 55%),#111113}
+    .card-head{display:flex;justify-content:space-between;color:#92949d;font-size:11px}.card-head i{font-style:normal;color:var(--gold)}
+    .card strong{display:block;margin:17px 0 11px;font-size:34px}.card strong small{font-size:11px;color:#9b9da5;margin-left:4px}
+    .card-foot{display:flex;justify-content:space-between;font-size:9px}.up{color:var(--green)}.sub{color:#656872}
+    .grid{display:grid;grid-template-columns:1.75fr .8fr;gap:12px;margin-bottom:12px}.grid.equal{grid-template-columns:1fr 1fr}
+    .panel{padding:21px}.panel-title{display:flex;justify-content:space-between;align-items:start;margin-bottom:20px}
+    .panel-title h2{margin:0;font-size:16px}.muted{color:var(--muted);font-size:9px}
+    .bars{height:180px;display:flex;align-items:end;gap:10px;padding:8px 5px 24px;
+      border-bottom:1px solid var(--line);background:repeating-linear-gradient(to bottom,transparent 0,transparent 36px,#23252c 37px)}
+    .bar-wrap{position:relative;flex:1;height:100%;display:flex;align-items:center;justify-content:end;flex-direction:column}
+    .bar{width:min(100%,25px);border-radius:4px 4px 2px 2px;background:linear-gradient(var(--gold2),#a76f18);transition:.25s}
+    .bar-wrap span{position:absolute;top:calc(100% + 9px);font-size:8px;color:#666975}
+    .summary{display:grid;grid-template-columns:repeat(4,1fr);margin-top:20px;border:1px solid var(--line);border-radius:8px}
+    .summary div{padding:11px 13px;border-right:1px solid var(--line)}.summary div:last-child{border:0}
+    .summary small{display:block;color:var(--muted);font-size:8px}.summary b{font-size:18px}.summary .gold{color:var(--gold)}
+    .rings{display:flex;justify-content:space-around;margin:23px 0}.ring{--p:180deg;width:83px;height:83px;border-radius:50%;
+      display:grid;place-items:center;background:conic-gradient(var(--gold) var(--p),#25272e 0);position:relative}
+    .ring:after{content:"";position:absolute;inset:7px;border-radius:50%;background:#121317}
+    .ring div{position:relative;z-index:1;text-align:center}.ring b{display:block;font-size:17px}.ring small{color:var(--muted)}
+    .insight{padding:12px;border:1px solid #2d302d;border-radius:8px;background:#141815;color:#8b928d;font-size:10px;line-height:1.6}
+    .insight b{color:#bec8c1}.funnel{display:grid;gap:11px}.frow{display:grid;grid-template-columns:130px 1fr 36px;align-items:center;gap:10px}
+    .frow label{display:flex;justify-content:space-between;font-size:10px;color:#a2a4aa}.track{height:18px;border-radius:4px;overflow:hidden;background:#25272e}
+    .track i{display:block;height:100%;background:linear-gradient(90deg,#9d6b1b,var(--gold))}.loss{color:#6d7079;font-size:9px}
+    .challenges{display:grid;gap:14px}.challenge{display:grid;grid-template-columns:42px 1fr;gap:11px;align-items:center}
+    .challenge-icon{height:42px;display:grid;place-items:center;border:1px solid #493821;border-radius:10px;background:#211b11}
+    .challenge-top{display:flex;justify-content:space-between;font-size:11px}.challenge p{margin:4px 0 7px;color:var(--muted);font-size:9px}
+    .progress{height:5px;border-radius:4px;background:#25272e;overflow:hidden}.progress i{display:block;height:100%;background:linear-gradient(90deg,#9d6b1b,var(--gold))}
+    .table-panel{margin-top:12px;padding-bottom:7px}.table-top{display:flex;justify-content:space-between;gap:15px;align-items:center}
+    .filters{display:flex;gap:8px}.search{display:flex;align-items:center;border:1px solid var(--line);border-radius:8px;background:#0e0f12;padding:0 10px}
+    .search input{width:160px;height:34px;border:0;outline:0;background:transparent;color:var(--text);font-size:10px}
+    .status-buttons{display:flex;padding:3px;border:1px solid var(--line);border-radius:8px}
+    .status-buttons button{border:0;border-radius:5px;background:transparent;color:#747781;padding:0 9px;font-size:10px}
+    .status-buttons button.on{background:#2a2519;color:var(--gold2)}
+    .table-wrap{overflow:auto;margin:0 -21px}table{width:100%;min-width:800px;border-collapse:collapse}
+    th,td{padding:11px 13px;border-bottom:1px solid #22242a;text-align:left;font-size:9px}
+    th{color:#62656e;background:#101115}th:first-child,td:first-child{padding-left:21px}
+    tbody tr:hover{background:#efbb4708}.user{display:flex;align-items:center;gap:8px}.avatar{display:grid;place-items:center;width:29px;height:29px;border:1px solid #343640;border-radius:50%;background:#202128}
+    td b{font-size:10px;color:#deddd8}.pill{display:inline-flex;padding:5px 8px;border-radius:5px;font-size:8px;font-weight:800}
+    .level{color:#d8aa48;background:#201a10;border:1px solid #4a3b1f}.active{color:#69d7a7;background:#4fd19716}
+    .warn{color:#efaa5a;background:#f5a84b16}.sleep{color:#858892;background:#8b8e9816}
+    .risk:before{content:"";display:inline-block;width:6px;height:6px;margin-right:5px;border-radius:50%}.low:before{background:var(--green)}
+    .mid:before{background:var(--orange)}.high:before{background:var(--red)}footer{display:flex;justify-content:space-between;color:#565862;font-size:8px;padding-top:17px}
+    @media(max-width:1080px){.metrics{grid-template-columns:1fr 1fr}.grid,.grid.equal{grid-template-columns:1fr}}
+    @media(max-width:720px){.sidebar{inset:auto 0 0;width:100%;height:64px;padding:6px;z-index:5}.brand,.sidebar-foot{display:none}nav{grid-template-columns:repeat(5,1fr);padding:0}nav a{min-height:50px;display:grid;place-items:center;padding:2px;font-size:0}nav i{font-size:11px}
+      .main{width:100%;margin:0;padding:24px 15px 82px}header{align-items:start;flex-direction:column}.actions{width:100%;flex-wrap:wrap}.live{display:none}
+      .metrics{grid-template-columns:1fr 1fr}.summary{grid-template-columns:1fr 1fr}.table-top,.filters{align-items:stretch;flex-direction:column}.search input{width:100%}}
+    @media(max-width:430px){.metrics{grid-template-columns:1fr}.frow{grid-template-columns:105px 1fr}.loss{display:none}}
+  </style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand"><span class="brand-icon">🏋️</span><div><b>GND</b><small>ADMIN</small></div></div>
+    <nav>
+      <a class="active" href="#overview"><i>▦</i>대시보드</a>
+      <a href="#users"><i>♙</i>사용자</a>
+      <a href="#activity"><i>↗</i>운동 기록</a>
+      <a href="#challenges"><i>♛</i>챌린지</a>
+      <a href="#levels"><i>✦</i>성장·XP</a>
+    </nav>
+    <div class="sidebar-foot">GND ADMIN · 운영자 전용</div>
+  </aside>
+
+  <main class="main">
+    <header>
+      <div><p class="kicker">GND PERFORMANCE CENTER</p><h1>사용자 현황</h1><p>유저가 들어오고, 운동하고, 다시 돌아오는지 확인합니다.</p></div>
+      <div class="actions">
+        <span class="live">데이터 정상</span>
+        <button class="ghost" id="exportBtn">↓ CSV 내보내기</button>
+        <div class="seg" id="periodButtons"><button data-period="7">7일</button><button class="on" data-period="28">28일</button><button data-period="90">90일</button></div>
+      </div>
+    </header>
+
+    <div class="notice"><span>ⓘ</span><div><b>샘플 데이터로 미리보기 중</b> 실제 Supabase를 연결하면 실시간 지표로 교체됩니다.</div></div>
+
+    <section class="metrics" id="overview">
+      <article class="card"><div class="card-head"><span>활성 사용자</span><i>♙</i></div><strong id="mUsers">112<small>명</small></strong><div class="card-foot"><span class="up" id="dUsers">↗ 14.8%</span><span class="sub" id="newUsers">신규 +29명</span></div></article>
+      <article class="card"><div class="card-head"><span>완료 운동</span><i>✓</i></div><strong id="mWorkouts">638<small>회</small></strong><div class="card-foot"><span class="up" id="dWorkouts">↗ 18.3%</span><span class="sub">취소 21회</span></div></article>
+      <article class="card"><div class="card-head"><span>운동 완료율</span><i>◎</i></div><strong id="mCompletion">74.6<small>%</small></strong><div class="card-foot"><span class="up" id="dCompletion">↗ 5.2%p</span><span class="sub">목표 80%</span></div></article>
+      <article class="card accent"><div class="card-head"><span>1인당 운동</span><i>⚡</i></div><strong id="mAvg">5.7<small>회</small></strong><div class="card-foot"><span class="up" id="dAvg">↗ 0.8회</span><span class="sub">상위 25% 8.4회</span></div></article>
+    </section>
+
+    <section class="grid" id="activity">
+      <article class="panel">
+        <div class="panel-title"><div><p class="kicker">ACTIVE USERS</p><h2>일별 활성 사용자</h2></div><span class="muted" id="chartMax">최대 45명</span></div>
+        <div class="bars" id="activityChart" aria-label="일별 활성 사용자 막대그래프"></div>
+        <div class="summary"><div><small>DAU · 오늘</small><b>41</b></div><div><small>WAU · 주간</small><b>74</b></div><div><small>MAU · 월간</small><b>112</b></div><div><small>DAU / MAU</small><b class="gold">36.6%</b></div></div>
+      </article>
+      <article class="panel">
+        <div class="panel-title"><div><p class="kicker">RETENTION</p><h2>유저 재방문</h2></div><span class="muted">목표 D7 40%</span></div>
+        <div class="rings"><div class="ring" style="--p:244.8deg"><div><b>68%</b><small>D1</small></div></div><div class="ring" style="--p:169.2deg"><div><b>47%</b><small>D7</small></div></div><div class="ring" style="--p:111.6deg"><div><b>31%</b><small>D28</small></div></div></div>
+        <div class="insight"><b>D7 리텐션이 목표보다 7%p 높습니다.</b><br>첫 3회 운동 완료 유저는 D7 재방문이 1.8배 높습니다.</div>
+      </article>
+    </section>
+
+    <section class="grid equal">
+      <article class="panel">
+        <div class="panel-title"><div><p class="kicker">ACTIVATION FUNNEL</p><h2>가입 후 첫 운동 전환</h2></div><span class="muted">신규 29명</span></div>
+        <div class="funnel">
+          <div class="frow"><label><span>가입 완료</span><b>29명</b></label><div class="track"><i style="width:100%"></i></div><span class="loss">-10%</span></div>
+          <div class="frow"><label><span>프로필 설정</span><b>26명</b></label><div class="track"><i style="width:90%"></i></div><span class="loss">-14%</span></div>
+          <div class="frow"><label><span>운동 계획 생성</span><b>22명</b></label><div class="track"><i style="width:76%"></i></div><span class="loss">-14%</span></div>
+          <div class="frow"><label><span>첫 운동 완료</span><b>18명</b></label><div class="track"><i style="width:62%"></i></div><span class="loss">-17%</span></div>
+          <div class="frow"><label><span>3회 운동 완료</span><b>13명</b></label><div class="track"><i style="width:45%"></i></div><span></span></div>
+        </div>
+      </article>
+      <article class="panel" id="challenges">
+        <div class="panel-title"><div><p class="kicker">CHALLENGE HEALTH</p><h2>진행 중 챌린지</h2></div><span class="muted">3개</span></div>
+        <div class="challenges">
+          <div class="challenge"><div class="challenge-icon">🔥</div><div><div class="challenge-top"><b>7월 GND 탈출반</b><span>D-4</span></div><p>42명 참여 · 달성률 68%</p><div class="progress"><i style="width:68%"></i></div></div></div>
+          <div class="challenge"><div class="challenge-icon">⚡</div><div><div class="challenge-top"><b>주 3회 지키개</b><span>D-11</span></div><p>31명 참여 · 달성률 81%</p><div class="progress"><i style="width:81%"></i></div></div></div>
+          <div class="challenge"><div class="challenge-icon">☀️</div><div><div class="challenge-top"><b>아침 6시 출석</b><span>D-2</span></div><p>18명 참여 · 달성률 54%</p><div class="progress"><i style="width:54%"></i></div></div></div>
+        </div>
+      </article>
+    </section>
+
+    <section class="panel table-panel" id="users">
+      <div class="panel-title table-top">
+        <div><p class="kicker">USER HEALTH</p><h2>사용자 활동 현황</h2></div>
+        <div class="filters">
+          <label class="search">⌕&nbsp;<input id="searchInput" placeholder="이름 또는 레벨 검색"></label>
+          <div class="status-buttons" id="statusButtons"><button class="on">전체</button><button>활성</button><button>주의</button><button>휴면</button></div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table><thead><tr><th>사용자</th><th>성장 단계</th><th>28일 운동</th><th>스트릭</th><th>마지막 활동</th><th>상태</th><th>이탈 위험</th></tr></thead><tbody id="userRows"></tbody></table>
+      </div>
+    </section>
+    <footer><span>샘플 데이터 · Supabase 연결 전</span><span>GND Analytics HTML Prototype</span></footer>
+  </main>
+
+  <script>
+    const periods={
+      7:{users:74,newUsers:11,workouts:184,completion:78.2,avg:2.49,du:8.4,dw:12.6,dc:3.1,da:.3,chart:[18,21,17,26,32,29,41],labels:["월","화","수","목","금","토","일"]},
+      28:{users:112,newUsers:29,workouts:638,completion:74.6,avg:5.7,du:14.8,dw:18.3,dc:5.2,da:.8,chart:[22,24,21,28,25,34,31,36,38,34,42,39,45,41],labels:["7/1","","","7/7","","","","7/14","","","","7/21","","오늘"]},
+      90:{users:128,newUsers:63,workouts:1824,completion:71.4,avg:14.25,du:31.9,dw:42.1,dc:7.8,da:2.1,chart:[12,16,18,17,22,25,24,29,31,34,32,38,41,44],labels:["5월","","","","6월","","","","","7월","","","","오늘"]}
+    };
+    const users=[
+      {name:"민규",avatar:"🧔",level:"판을짜개",workouts:26,streak:18,last:"오늘 05:42",status:"활성",risk:"낮음"},
+      {name:"아라",avatar:"👩",level:"물고가개",workouts:18,streak:9,last:"오늘 07:18",status:"활성",risk:"낮음"},
+      {name:"준호",avatar:"👨",level:"일단하개",workouts:12,streak:4,last:"어제 21:03",status:"활성",risk:"낮음"},
+      {name:"지민",avatar:"👩‍🦰",level:"눈떴개",workouts:6,streak:0,last:"3일 전",status:"주의",risk:"중간"},
+      {name:"성우",avatar:"👨‍🦱",level:"일단하개",workouts:9,streak:0,last:"5일 전",status:"주의",risk:"높음"},
+      {name:"수진",avatar:"👩‍🦱",level:"개노답",workouts:1,streak:0,last:"12일 전",status:"휴면",risk:"높음"},
+      {name:"태현",avatar:"🧑",level:"눈떴개",workouts:3,streak:0,last:"18일 전",status:"휴면",risk:"높음"}
+    ];
+    let currentStatus="전체",query="";
+    const $=id=>document.getElementById(id);
+    function drawPeriod(key){
+      const d=periods[key],max=Math.max(...d.chart);
+      $("mUsers").innerHTML=d.users+"<small>명</small>";$("newUsers").textContent="신규 +"+d.newUsers+"명";
+      $("mWorkouts").innerHTML=d.workouts.toLocaleString()+"<small>회</small>";
+      $("mCompletion").innerHTML=d.completion+"<small>%</small>";$("mAvg").innerHTML=d.avg+"<small>회</small>";
+      $("dUsers").textContent="↗ "+d.du+"%";$("dWorkouts").textContent="↗ "+d.dw+"%";
+      $("dCompletion").textContent="↗ "+d.dc+"%p";$("dAvg").textContent="↗ "+d.da+"회";$("chartMax").textContent="최대 "+max+"명";
+      $("activityChart").innerHTML=d.chart.map((v,i)=>`<div class="bar-wrap" title="${v}명"><div class="bar" style="height:${Math.max(12,v/max*100)}%"></div><span>${d.labels[i]}</span></div>`).join("");
+    }
+    function renderUsers(){
+      const list=users.filter(u=>(currentStatus==="전체"||u.status===currentStatus)&&(u.name.includes(query)||u.level.includes(query)));
+      $("userRows").innerHTML=list.map(u=>{
+        const sc=u.status==="활성"?"active":u.status==="주의"?"warn":"sleep",rc=u.risk==="낮음"?"low":u.risk==="중간"?"mid":"high";
+        return `<tr><td><div class="user"><span class="avatar">${u.avatar}</span><b>${u.name}</b></div></td><td><span class="pill level">${u.level}</span></td><td><b>${u.workouts}회</b></td><td>${u.streak?"🔥 "+u.streak+"일":"—"}</td><td>${u.last}</td><td><span class="pill ${sc}">${u.status}</span></td><td><span class="risk ${rc}">${u.risk}</span></td></tr>`
+      }).join("");
+      return list;
+    }
+    $("periodButtons").addEventListener("click",e=>{if(e.target.tagName!=="BUTTON")return;document.querySelectorAll("#periodButtons button").forEach(b=>b.classList.remove("on"));e.target.classList.add("on");drawPeriod(e.target.dataset.period)});
+    $("statusButtons").addEventListener("click",e=>{if(e.target.tagName!=="BUTTON")return;document.querySelectorAll("#statusButtons button").forEach(b=>b.classList.remove("on"));e.target.classList.add("on");currentStatus=e.target.textContent;renderUsers()});
+    $("searchInput").addEventListener("input",e=>{query=e.target.value.trim();renderUsers()});
+    $("exportBtn").addEventListener("click",()=>{
+      const rows=renderUsers(),head="사용자,레벨,28일 운동,연속 기록,마지막 활동,상태,이탈 위험";
+      const csv=[head,...rows.map(u=>[u.name,u.level,u.workouts,u.streak,u.last,u.status,u.risk].join(","))].join("\n");
+      const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["\ufeff"+csv],{type:"text/csv"}));a.download="gnd-users.csv";a.click();URL.revokeObjectURL(a.href)
+    });
+    drawPeriod(28);renderUsers();
+  </script>
+</body>
+</html>
