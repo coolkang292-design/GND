@@ -344,6 +344,145 @@ try {
     hasCode(r, "not_crew"),
     `${r.status} ${JSON.stringify(r.json)}`,
   );
+
+  // ══════════════════════════════════════════════════════════
+  // 0039 회귀 — 여기부터는 0039가 적용된 뒤에만 통과한다.
+  // 0038까지만 적용된 상태에서 돌리면 [34]~[47]이 무더기로 FAIL한다(정상).
+  //
+  // 이 시점의 관계: a↔c 는 크루(역방향 자동수락으로 맺음), a↔d 는 비크루.
+  // a는 어떤 그룹에도 속하지 않는다 = 혼자모드. 그룹 없이도 크루에게 알림이
+  // 가는지가 0039의 핵심이다.
+  // ══════════════════════════════════════════════════════════
+  console.log("\n-- 0039 회귀 (0038까지만 적용됐다면 아래는 실패가 정상) --");
+
+  // group_id 없이 세션을 만든다. visibility는 0004에서 기본값이 'group'이다.
+  const draft = await api(a.token, "POST", "/rest/v1/workout_sessions", {
+    user_id: a.id,
+    timezone: "Asia/Seoul",
+  });
+  const sessionId = draft.json?.[0]?.id;
+  check("[34] 세션 생성 (혼자모드 — group_id 없음)", Boolean(sessionId), JSON.stringify(draft.json));
+
+  await rpc(a.token, "start_workout", { p_session_id: sessionId });
+
+  r = await api(c.token, "GET", "/rest/v1/notifications?type=eq.workout_started&select=id,actor_id");
+  check(
+    "[35] 팬아웃①: 크루(C)에게 운동시작 도달 — 그룹 없이도",
+    (r.json ?? []).some((n) => n.actor_id === a.id),
+    `${r.status} ${JSON.stringify(r.json)}`,
+  );
+
+  r = await api(d.token, "GET", "/rest/v1/notifications?type=eq.workout_started&select=id,actor_id");
+  check(
+    "[36] 팬아웃①: 비크루(D)에게는 안 간다",
+    !(r.json ?? []).some((n) => n.actor_id === a.id),
+    `${r.status} ${JSON.stringify(r.json)}`,
+  );
+
+  // 응원 — 0039가 send_cheer의 그룹 관문을 크루로 바꿨는지
+  r = await rpc(c.token, "send_cheer", { p_session_id: sessionId, p_cheer_type: "fire" });
+  check("[37] 응원: 크루(C)는 보낼 수 있다", r.status === 200, `${r.status} ${JSON.stringify(r.json)}`);
+
+  r = await rpc(d.token, "send_cheer", { p_session_id: sessionId, p_cheer_type: "fire" });
+  check(
+    "[38] 응원: 비크루(D)는 session_not_found",
+    hasCode(r, "session_not_found"),
+    `${r.status} ${JSON.stringify(r.json)}`,
+  );
+
+  // 본인 응원은 own_session이어야 한다. 판정을 한 덩어리로 두면 session_not_found로
+  // 새고 own_session이 죽은 코드가 된다(rls-test.mjs:403이 이걸 잡는다).
+  r = await rpc(a.token, "send_cheer", { p_session_id: sessionId, p_cheer_type: "fire" });
+  check(
+    "[39] 응원: 본인 세션은 own_session (session_not_found로 새면 안 된다)",
+    hasCode(r, "own_session"),
+    `${r.status} ${JSON.stringify(r.json)}`,
+  );
+
+  await rpc(a.token, "complete_workout", { p_session_id: sessionId });
+
+  await rpc(a.token, "mark_record_beaten", {
+    p_session_id: sessionId,
+    p_note: "벤치프레스 지난 기록을 넘었어요",
+  });
+
+  r = await api(c.token, "GET", "/rest/v1/notifications?type=eq.record_beaten&select=id,actor_id");
+  check(
+    "[40] 팬아웃②: 크루(C)에게 기록갱신 도달",
+    (r.json ?? []).some((n) => n.actor_id === a.id),
+    `${r.status} ${JSON.stringify(r.json)}`,
+  );
+
+  r = await api(d.token, "GET", "/rest/v1/notifications?type=eq.record_beaten&select=id,actor_id");
+  check(
+    "[41] 팬아웃②: 비크루(D)에게는 안 간다",
+    !(r.json ?? []).some((n) => n.actor_id === a.id),
+    `${r.status} ${JSON.stringify(r.json)}`,
+  );
+
+  // 세션 열람 RLS
+  r = await api(c.token, "GET", `/rest/v1/workout_sessions?id=eq.${sessionId}&select=id`);
+  check("[42] 열람: 크루(C)는 완료 세션이 보인다", (r.json ?? []).length === 1, `${r.status} ${JSON.stringify(r.json)}`);
+
+  r = await api(d.token, "GET", `/rest/v1/workout_sessions?id=eq.${sessionId}&select=id`);
+  check("[43] 열람: 비크루(D)에게는 안 보인다", (r.json ?? []).length === 0, `${r.status} ${JSON.stringify(r.json)}`);
+
+  // ⚠ 여기 3건이 DB 리뷰가 잡은 블로커를 지킨다.
+  // 옛 판정 is_group_member(s.group_id, auth.uid())는 세션 주인 본인에게 true였다.
+  // is_crew_with는 crew_links의 check (user_a < user_b) 때문에 자기 자신에겐
+  // 구조적으로 항상 false다. workout_session_crew_visible에 자기접근 분기를
+  // 남기지 않으면 reactions 정책 두 개가 뒤집힌다 — 거기 user_id는 세션 주인이
+  // 아니라 "반응을 누른 사람"이라 앞단 self 분기가 없기 때문이다(0011:124·128).
+  r = await api(a.token, "POST", "/rest/v1/reactions", {
+    session_id: sessionId, user_id: a.id, reaction_type: "fire",
+  });
+  check("[44] 반응: 본인 세션에 본인이 남길 수 있다", r.status === 201, `${r.status} ${JSON.stringify(r.json)}`);
+
+  r = await api(c.token, "POST", "/rest/v1/reactions", {
+    session_id: sessionId, user_id: c.id, reaction_type: "clap",
+  });
+  check("[45] 반응: 크루(C)가 남길 수 있다", r.status === 201, `${r.status} ${JSON.stringify(r.json)}`);
+
+  r = await api(a.token, "GET", `/rest/v1/reactions?session_id=eq.${sessionId}&select=user_id,reaction_type`);
+  check(
+    "[46] 반응: 내 카드에서 크루가 누른 반응이 보인다 (0으로 뭉개지면 안 된다)",
+    (r.json ?? []).some((x) => x.user_id === c.id),
+    `${r.status} ${JSON.stringify(r.json)}`,
+  );
+
+  // 비크루 차단 3종
+  r = await rpc(d.token, "get_crew_member_profile", { p_target_id: a.id });
+  check("[47] 차단: 비크루(D) 프로필 조회", hasCode(r, "not_crew"), `${r.status} ${JSON.stringify(r.json)}`);
+
+  r = await rpc(c.token, "get_crew_member_profile", { p_target_id: a.id });
+  check("[48] 허용: 크루(C) 프로필 조회", r.status === 200, `${r.status} ${JSON.stringify(r.json)}`);
+
+  r = await rpc(d.token, "poke_user", { p_target_id: a.id });
+  check(
+    "[49] 차단: 비크루(D) 콕 찌르기",
+    hasCode(r, "not_crew") || hasCode(r, "poke_requires_workout"),
+    `${r.status} ${JSON.stringify(r.json)}`,
+  );
+
+  r = await rpc(d.token, "view_record", { p_target_id: a.id });
+  check(
+    "[50] 차단: 비크루(D) 성과 열람",
+    hasCode(r, "not_crew") || hasCode(r, "not_eligible"),
+    `${r.status} ${JSON.stringify(r.json)}`,
+  );
+
+  // 팬아웃③(레벨업)은 런타임으로 재현할 수 없다. 조용히 빠뜨리면 나중에
+  // "전부 검증됨"으로 읽히므로 한계를 출력에 남긴다.
+  console.log(
+    "SKIP 팬아웃③(레벨업): Lv.2가 200 XP인데 하루 최대 획득이 150(기본 100 + 보너스)이고\n" +
+      "     같은 날 두 번째 운동은 0 XP라 스크립트 한 번으로 레벨업을 못 일으킨다.\n" +
+      "     대신 구조로 확인할 것 — SQL Editor에서:\n" +
+      "       select position('crew_links' in pg_get_functiondef(p.oid)) > 0 as uses_crew_links,\n" +
+      "              position('group_members' in pg_get_functiondef(p.oid)) > 0 as uses_group_members\n" +
+      "       from pg_proc p join pg_namespace n on n.oid = p.pronamespace\n" +
+      "       where n.nspname='public' and p.proname='apply_xp_and_progress';\n" +
+      "     기대: uses_crew_links=true, uses_group_members=false",
+  );
 } finally {
   for (const u of users) await deleteAuthUser(u.id);
 }
