@@ -1,63 +1,95 @@
 /**
- * 배지 카탈로그 (설계 2026-07-21).
+ * 배지 도메인 (설계 2026-07-27).
  *
- * 여기는 **표시용 메타만** 갖는다. 취득 임계값은 SQL(0020의
- * mark_record_beaten)이 단일 원천이다. 양쪽에 규칙을 두면 어긋날 때
- * 조용히 틀리기 때문이다.
- *
- * 배지를 늘릴 땐 이 배열에 한 줄 + 마이그레이션에 취득 규칙 한 줄.
+ * 카탈로그는 **DB(`badge_definitions`)가 단일 원천**이다. 여기는 표시 계산만 한다.
+ * 예전에는 카탈로그가 이 파일의 상수(3종)였으나, 30종으로 늘리면서 데이터로 뺐다.
+ * 배지를 추가하는 일이 seed 한 줄이어야 하기 때문이다.
  */
+export type BadgeTier = "bronze" | "silver" | "gold" | "legend";
+
+export type BadgeMetricKey =
+  | "workout_count"
+  | "total_minutes"
+  | "streak_days"
+  | "weight_volume_kg"
+  | "cardio_distance_m"
+  | "record_beaten";
+
 export type BadgeMeta = {
   key: string;
   emoji: string;
   name: string;
   description: string;
+  tier: BadgeTier;
+  metricKey: BadgeMetricKey;
+  /** 임계값. 시간=분, 볼륨=kg, 거리=m, 나머지=회/일 */
+  threshold: number;
+  pointReward: number;
+  repeatable: boolean;
+  repeatStep: number | null;
+  sortOrder: number;
 };
 
-export const BADGE_CATALOG: readonly BadgeMeta[] = [
-  {
-    key: "record_beaten_1",
-    emoji: "🏅",
-    name: "첫 기록 갱신",
-    description: "지난 기록을 처음으로 넘었어요",
-  },
-  {
-    key: "record_beaten_5",
-    emoji: "💪",
-    name: "기록 갱신 5회",
-    description: "기록을 5번 갱신했어요",
-  },
-  {
-    key: "record_beaten_10",
-    emoji: "🔥",
-    name: "기록 갱신 10회",
-    description: "기록을 10번 갱신했어요",
-  },
-] as const;
-
-/** DB에서 읽어온 내 획득 배지 */
+/** DB에서 읽어온 획득 배지. 반복 배지는 같은 key가 여러 행으로 온다. */
 export type EarnedBadge = {
   badgeKey: string;
+  /** 1회성은 'lifetime', 반복형은 달성한 날(KST 'YYYY-MM-DD') */
+  periodKey: string;
   earnedAt: Date;
 };
 
 /** 진열대 한 칸 — earnedAt이 null이면 미획득(잠금) */
 export type BadgeShelfItem = BadgeMeta & {
   earnedAt: Date | null;
+  /** 획득 횟수. 반복 배지는 2 이상이 될 수 있다. */
+  count: number;
 };
 
-export function badgeShelf(earned: EarnedBadge[]): BadgeShelfItem[] {
-  const earnedAtByKey = new Map(earned.map((b) => [b.badgeKey, b.earnedAt]));
-  return BADGE_CATALOG.map((meta) => ({
-    ...meta,
-    earnedAt: earnedAtByKey.get(meta.key) ?? null,
-  }));
+export function badgeShelf(
+  catalog: BadgeMeta[],
+  earned: EarnedBadge[],
+): BadgeShelfItem[] {
+  const byKey = new Map<string, EarnedBadge[]>();
+  for (const b of earned) {
+    const list = byKey.get(b.badgeKey) ?? [];
+    list.push(b);
+    byKey.set(b.badgeKey, list);
+  }
+
+  return [...catalog]
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((meta) => {
+      const rows = byKey.get(meta.key) ?? [];
+      // 대표 획득일은 가장 최근 것 — 반복 배지에서 "마지막으로 딴 날"이 자연스럽다
+      const latest = rows.reduce<Date | null>(
+        (acc, r) => (acc === null || r.earnedAt > acc ? r.earnedAt : acc),
+        null,
+      );
+      return { ...meta, earnedAt: latest, count: rows.length };
+    });
 }
 
-export function earnedBadgeCount(earned: EarnedBadge[]): number {
-  const keys = new Set(BADGE_CATALOG.map((meta) => meta.key));
-  const owned = new Set(
-    earned.map((badge) => badge.badgeKey).filter((key) => keys.has(key)),
-  );
-  return owned.size;
+/** 획득한 배지 **종류** 수. 반복 배지를 여러 번 따도 1로 센다. */
+export function earnedBadgeCount(
+  catalog: BadgeMeta[],
+  earned: EarnedBadge[],
+): number {
+  const keys = new Set(catalog.map((m) => m.key));
+  return new Set(earned.map((b) => b.badgeKey).filter((k) => keys.has(k))).size;
+}
+
+export type BadgeGroup = {
+  metricKey: BadgeMetricKey;
+  items: BadgeShelfItem[];
+};
+
+/** 지표별 묶음. 배지 전체 화면이 섹션으로 나눠 그릴 때 쓴다. */
+export function groupByMetric(shelf: BadgeShelfItem[]): BadgeGroup[] {
+  const groups: BadgeGroup[] = [];
+  for (const item of shelf) {
+    const g = groups.find((x) => x.metricKey === item.metricKey);
+    if (g) g.items.push(item);
+    else groups.push({ metricKey: item.metricKey, items: [item] });
+  }
+  return groups;
 }

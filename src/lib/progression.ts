@@ -133,7 +133,7 @@ type CrewProfileRow = {
   totalXp?: number;
   currentLevel?: number;
   currentStage?: number;
-  badges?: { badgeKey: string; earnedAt: string }[];
+  badges?: { badgeKey: string; periodKey: string; earnedAt: string }[];
 };
 
 /**
@@ -166,6 +166,7 @@ export async function getCrewMemberProfile(
     levelProgressPercent: p.percent,
     badges: (row.badges ?? []).map((b) => ({
       badgeKey: b.badgeKey,
+      periodKey: b.periodKey,
       earnedAt: new Date(b.earnedAt),
     })),
   };
