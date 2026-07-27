@@ -96,3 +96,47 @@ export function buildAchievements(
       };
     });
 }
+
+/** 다음 목표: 미획득 1회성 중 진행률 최고, 동률이면 보상 큰 쪽. 없으면 null. */
+export function selectNextGoal(items: Achievement[]): Achievement | null {
+  const candidates = items.filter((a) => !a.unlocked && !a.repeatable);
+  if (candidates.length === 0) return null;
+  return candidates.reduce((best, a) => {
+    if (a.progress !== best.progress) return a.progress > best.progress ? a : best;
+    return a.rewardPoint > best.rewardPoint ? a : best;
+  });
+}
+
+export type CategoryCompletion = {
+  metricKey: BadgeMetricKey;
+  done: number;
+  total: number;
+  pct: number;
+};
+
+/** 카테고리(지표)별 완료율. 등장 순서 유지. */
+export function categoryCompletion(items: Achievement[]): CategoryCompletion[] {
+  const out: CategoryCompletion[] = [];
+  for (const a of items) {
+    let c = out.find((x) => x.metricKey === a.metricKey);
+    if (!c) {
+      c = { metricKey: a.metricKey, done: 0, total: 0, pct: 0 };
+      out.push(c);
+    }
+    c.total += 1;
+    if (a.unlocked) c.done += 1;
+  }
+  for (const c of out) c.pct = c.total === 0 ? 0 : Math.round((c.done / c.total) * 100);
+  return out;
+}
+
+/** 전체 완료율. */
+export function overallCompletion(items: Achievement[]): {
+  done: number;
+  total: number;
+  pct: number;
+} {
+  const done = items.filter((a) => a.unlocked).length;
+  const total = items.length;
+  return { done, total, pct: total === 0 ? 0 : Math.round((done / total) * 100) };
+}
