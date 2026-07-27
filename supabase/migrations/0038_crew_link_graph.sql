@@ -96,3 +96,235 @@ where not exists (select 1 from public.crew_links)
   and exists (select 1 from public.profiles p where p.id = a.user_id)
   and exists (select 1 from public.profiles p where p.id = b.user_id)
 on conflict do nothing;
+
+-- ── 7. RPC ───────────────────────────────────────────────────
+-- 검색은 정확 일치 1행만 준다. 앞글자 검색을 열면 전체 가입자 명단을 훑을 수
+-- 있고, 유료 확장 시 그대로 위험이 된다. 닉네임은 0017에서 유일값이다.
+-- relation을 서버가 실어 주므로 화면이 버튼 상태를 추측하지 않는다.
+create or replace function public.search_profile_by_nickname(p_nickname text)
+returns table (
+  id uuid, nickname text, avatar_url text,
+  relation text, request_id uuid
+)
+language sql stable security definer set search_path = public as $$
+  select
+    p.id, p.nickname, p.avatar_url,
+    case
+      when p.id = auth.uid()            then 'self'
+      when public.is_crew_with(p.id)    then 'crew'
+      when r_out.id is not null         then 'request_sent'
+      when r_in.id is not null          then 'request_received'
+      else 'none'
+    end,
+    coalesce(r_out.id, r_in.id)
+  from public.profiles p
+  left join public.crew_requests r_out
+    on r_out.requester_id = auth.uid()
+   and r_out.addressee_id = p.id
+   and r_out.status = 'pending'
+  left join public.crew_requests r_in
+    on r_in.requester_id = p.id
+   and r_in.addressee_id = auth.uid()
+   and r_in.status = 'pending'
+  where auth.uid() is not null
+    and btrim(p_nickname) <> ''
+    and lower(btrim(p.nickname)) = lower(btrim(p_nickname))
+  limit 1
+$$;
+revoke all on function public.search_profile_by_nickname(text) from public, anon;
+grant execute on function public.search_profile_by_nickname(text) to authenticated;
+
+-- 수락 RPC (요청 RPC가 이걸 부르므로 먼저 정의한다)
+create or replace function public.accept_crew_request(p_request_id uuid)
+returns jsonb
+language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_me uuid := auth.uid();
+  v_req crew_requests%rowtype;
+  v_nick text;
+begin
+  if v_me is null then raise exception 'not_authenticated'; end if;
+
+  select * into v_req from crew_requests where id = p_request_id for update;
+  if not found or v_req.addressee_id <> v_me then
+    raise exception 'not_addressee';
+  end if;
+  if v_req.status <> 'pending' then
+    raise exception 'not_pending';
+  end if;
+
+  insert into crew_links (user_a, user_b)
+  values (least(v_req.requester_id, v_req.addressee_id),
+          greatest(v_req.requester_id, v_req.addressee_id))
+  on conflict do nothing;
+
+  update crew_requests
+     set status = 'accepted', responded_at = now()
+   where id = p_request_id;
+
+  -- 반대 방향에 남아 있던 pending도 함께 닫는다. 안 닫으면 이미 크루가 된
+  -- 뒤에도 상대 받은함에 요청이 남아 "수락" 버튼이 계속 보인다.
+  update crew_requests
+     set status = 'accepted', responded_at = now()
+   where requester_id = v_req.addressee_id
+     and addressee_id = v_req.requester_id
+     and status = 'pending';
+
+  select nickname into v_nick from profiles where id = v_me;
+  perform notify(
+    v_req.requester_id, v_me, 'crew_accepted', p_request_id,
+    coalesce(v_nick, '누군가') || '님과 크루가 됐어요 🤝',
+    '이제 서로의 운동 소식을 받아볼 수 있어요'
+  );
+  return jsonb_build_object('status', 'accepted');
+end $$;
+revoke all on function public.accept_crew_request(uuid) from public, anon;
+grant execute on function public.accept_crew_request(uuid) to authenticated;
+
+-- 요청 RPC (역방향 자동 수락 포함)
+create or replace function public.send_crew_request(p_target_id uuid)
+returns jsonb
+language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_me uuid := auth.uid();
+  v_nick text;
+  v_reverse crew_requests%rowtype;
+  v_id uuid;
+begin
+  if v_me is null then raise exception 'not_authenticated'; end if;
+  if p_target_id = v_me then raise exception 'self_request'; end if;
+  if not exists (select 1 from profiles where id = p_target_id) then
+    raise exception 'target_not_found';
+  end if;
+  if public.is_crew_with(p_target_id) then raise exception 'already_crew'; end if;
+
+  -- 역방향 pending이 있으면 양쪽이 서로를 원한 것이다 → 즉시 맺는다.
+  -- 이게 없으면 "둘 다 요청했는데 아무 일도 안 일어남"이 되고, 사용자는
+  -- 원인을 알 수 없다.
+  select * into v_reverse from crew_requests
+  where requester_id = p_target_id and addressee_id = v_me
+    and status = 'pending'
+  limit 1;
+  if found then
+    perform public.accept_crew_request(v_reverse.id);
+    return jsonb_build_object('status', 'accepted', 'requestId', v_reverse.id);
+  end if;
+
+  if exists (select 1 from crew_requests
+             where requester_id = v_me and addressee_id = p_target_id
+               and status = 'pending') then
+    raise exception 'request_exists';
+  end if;
+
+  insert into crew_requests (requester_id, addressee_id)
+  values (v_me, p_target_id)
+  returning id into v_id;
+
+  select nickname into v_nick from profiles where id = v_me;
+  perform notify(
+    p_target_id, v_me, 'crew_request', v_id,
+    coalesce(v_nick, '누군가') || '님이 크루 요청을 보냈어요 🤝',
+    '수락하면 서로의 운동 소식을 받아볼 수 있어요'
+  );
+  return jsonb_build_object('status', 'pending', 'requestId', v_id);
+end $$;
+revoke all on function public.send_crew_request(uuid) from public, anon;
+grant execute on function public.send_crew_request(uuid) to authenticated;
+
+-- 거절·취소·해제 RPC — 세 개 모두 알림을 보내지 않는다.
+-- 거절당한 사실을 통보하면 지인 기반 앱에서 관계가 상한다.
+-- cancel_crew_request는 서버에만 둔다. 화면에서 request_sent는 비활성
+-- "요청됨"이라 취소 버튼이 없다. 나중에 취소 UI를 붙일 때 RPC는 이미 있다.
+create or replace function public.reject_crew_request(p_request_id uuid)
+returns jsonb
+language plpgsql volatile security definer set search_path = public as $$
+declare v_req crew_requests%rowtype;
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  select * into v_req from crew_requests where id = p_request_id for update;
+  if not found or v_req.addressee_id <> auth.uid() then
+    raise exception 'not_addressee';
+  end if;
+  if v_req.status <> 'pending' then raise exception 'not_pending'; end if;
+  update crew_requests set status = 'rejected', responded_at = now()
+   where id = p_request_id;
+  return jsonb_build_object('status', 'rejected');
+end $$;
+
+create or replace function public.cancel_crew_request(p_request_id uuid)
+returns jsonb
+language plpgsql volatile security definer set search_path = public as $$
+declare v_req crew_requests%rowtype;
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  select * into v_req from crew_requests where id = p_request_id for update;
+  if not found or v_req.requester_id <> auth.uid() then
+    raise exception 'not_requester';
+  end if;
+  if v_req.status <> 'pending' then raise exception 'not_pending'; end if;
+  update crew_requests set status = 'canceled', responded_at = now()
+   where id = p_request_id;
+  return jsonb_build_object('status', 'canceled');
+end $$;
+
+create or replace function public.remove_crew(p_target_id uuid)
+returns jsonb
+language plpgsql volatile security definer set search_path = public as $$
+declare v_count int;
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  delete from crew_links
+   where user_a = least(auth.uid(), p_target_id)
+     and user_b = greatest(auth.uid(), p_target_id);
+  get diagnostics v_count = row_count;
+  if v_count = 0 then raise exception 'not_crew'; end if;
+  return jsonb_build_object('status', 'removed');
+end $$;
+
+revoke all on function public.reject_crew_request(uuid) from public, anon;
+revoke all on function public.cancel_crew_request(uuid) from public, anon;
+revoke all on function public.remove_crew(uuid) from public, anon;
+grant execute on function public.reject_crew_request(uuid) to authenticated;
+grant execute on function public.cancel_crew_request(uuid) to authenticated;
+grant execute on function public.remove_crew(uuid) to authenticated;
+
+-- 목록 조회 RPC 2개 — user_progress는 본인 전용 RLS(0022)라 클라가 남의
+-- 레벨을 직접 못 읽는다. 0026이 쓴 정의자 패턴을 그대로 따라 레벨까지 함께
+-- 돌려준다(왕복 1회, 권한 검사 1곳).
+create or replace function public.get_my_crew()
+returns table (
+  id uuid, nickname text, avatar_url text,
+  total_xp integer, current_level smallint, current_stage smallint,
+  linked_at timestamptz
+)
+language sql stable security definer set search_path = public as $$
+  select p.id, p.nickname, p.avatar_url,
+         coalesce(up.total_xp, 0),
+         coalesce(up.current_level, 1::smallint),
+         coalesce(up.current_stage, 1::smallint),
+         l.created_at
+  from public.crew_links l
+  join public.profiles p
+    on p.id = case when l.user_a = auth.uid() then l.user_b else l.user_a end
+  left join public.user_progress up on up.user_id = p.id
+  where auth.uid() in (l.user_a, l.user_b)
+  order by p.nickname
+$$;
+
+create or replace function public.get_incoming_crew_requests()
+returns table (
+  request_id uuid, requester_id uuid,
+  nickname text, avatar_url text, created_at timestamptz
+)
+language sql stable security definer set search_path = public as $$
+  select r.id, r.requester_id, p.nickname, p.avatar_url, r.created_at
+  from public.crew_requests r
+  join public.profiles p on p.id = r.requester_id
+  where r.addressee_id = auth.uid() and r.status = 'pending'
+  order by r.created_at desc
+$$;
+
+revoke all on function public.get_my_crew() from public, anon;
+revoke all on function public.get_incoming_crew_requests() from public, anon;
+grant execute on function public.get_my_crew() to authenticated;
+grant execute on function public.get_incoming_crew_requests() to authenticated;
