@@ -30,6 +30,7 @@ describe("pushPayloadFor", () => {
     ["rank_change", "/challenge"],
     ["challenge_started", "/challenge"],
     ["challenge_ended", "/challenge"],
+    ["app_update", "/whats-new"],
     ["unknown_type", "/home"],
   ])("maps %s to url %s", (type, url) => {
     expect(pushPayloadFor({ type, title: "t", body: "b" }).url).toBe(url);

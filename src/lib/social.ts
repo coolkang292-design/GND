@@ -33,7 +33,8 @@ export type NotificationRow = {
     | "challenge_ended"
     | "record_beaten" // 0018
     | "badge_earned" // 0020
-    | "level_up"; // 0029
+    | "level_up" // 0029
+    | "app_update"; // 0034 — 배포·업데이트 소식
   reference_id: string | null;
   title: string;
   body: string | null;

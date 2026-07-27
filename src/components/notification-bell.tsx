@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
+import { pushPayloadFor } from "@/lib/domain/push";
 import {
   getNotifications,
   getUnreadNotificationCount,
@@ -25,11 +27,13 @@ const TYPE_ICON: Record<NotificationRow["type"], string> = {
   record_beaten: "🏅",
   badge_earned: "🎖️",
   level_up: "⬆️",
+  app_update: "🆕",
 };
 
 /** 🔔 + 미읽음 뱃지 + 알림함 바텀시트 (§9 알림함 — durable 저장 원천) */
 export function NotificationBell() {
   const { userId, loading, configured } = useAuth();
+  const router = useRouter();
   const [unread, setUnread] = useState(0);
   const [open, setOpen] = useState(false);
   const [rows, setRows] = useState<NotificationRow[]>([]);
@@ -108,9 +112,20 @@ export function NotificationBell() {
                 </p>
               ) : (
                 rows.map((n) => (
-                  <div
+                  <button
                     key={n.id}
-                    className="flex items-start gap-2.5 border-b border-line py-3 last:border-b-0"
+                    type="button"
+                    onClick={() => {
+                      setOpen(false);
+                      router.push(
+                        pushPayloadFor({
+                          type: n.type,
+                          title: n.title,
+                          body: n.body,
+                        }).url,
+                      );
+                    }}
+                    className="flex w-full items-start gap-2.5 border-b border-line py-3 text-left last:border-b-0"
                   >
                     {n.type === "morning_briefing" ? (
                       /* eslint-disable-next-line @next/next/no-img-element */
@@ -136,7 +151,7 @@ export function NotificationBell() {
                     {n.read_at === null && (
                       <span className="mt-1.5 h-2 w-2 flex-none rounded-full bg-accent" />
                     )}
-                  </div>
+                  </button>
                 ))
               )}
             </div>

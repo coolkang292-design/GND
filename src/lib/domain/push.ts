@@ -15,6 +15,8 @@ const PUSH_URL_BY_TYPE: Record<string, string> = {
   rank_change: "/challenge",
   challenge_started: "/challenge",
   challenge_ended: "/challenge",
+  // 배포·업데이트 소식 → 새 소식 상세 (A)
+  app_update: "/whats-new",
 };
 
 const DEFAULT_PUSH_URL = "/home";
