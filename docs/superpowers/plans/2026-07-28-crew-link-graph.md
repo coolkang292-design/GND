@@ -501,6 +501,20 @@ git add supabase/migrations/0038_crew_link_graph.sql
 git commit -m "feat(0038): 크루 요청·수락·해제·검색 RPC"
 ```
 
+### 실행 중 확정된 변경 (DB 보안 리뷰 반영, 커밋 `d9206d9`)
+
+**위 SQL 블록은 리뷰 전 초안이다. 최종본은 `supabase/migrations/0038_crew_link_graph.sql`이며 아래 7개가 더 들어가 있다.** 0039를 쓰거나 이 파일을 다시 읽을 때는 파일을 기준으로 삼아라.
+
+| # | 변경 | 왜 |
+|---|---|---|
+| 1 | `send_crew_request`·`accept_crew_request` 앞머리에 **쌍 단위 `pg_advisory_xact_lock`** | 셋을 한 번에 막는다 — 상호 동시 수락의 `40P01` 데드락, 상호 동시 요청 시 **D6 자동수락 불발**, 빠른 두 번 탭의 raw `23505` (설계 D13) |
+| 2 | `accept_crew_request`는 잠금 키를 얻으려 **락 없는 사전 읽기**를 먼저 한다 | 상대가 requester인지 addressee인지 알아야 키를 만든다. 실제 검증은 그 뒤 `for update` 재읽기가 그대로 한다 |
+| 3 | 수락 알림을 `begin … exception when others then null; end;`로 감쌈 | 알림이 죽어도 연결은 남아야 한다 (설계 D14). `send_crew_request`의 알림은 **감싸지 않는다** |
+| 4 | **거절 후 7일 재요청 금지** (`already_crew` 뒤, 역방향 조회 앞) | 무한 재요청 스팸 차단. 코드는 `request_exists` 재사용 (설계 D12) |
+| 5 | 검색의 `request_id`를 `crew`·`self`일 때 `null::uuid`로 | 계약(§6.1)을 쿼리가 스스로 강제하게 |
+| 6 | 검색에 `order by p.created_at` | `limit 1`의 결정론이 0017 유니크 인덱스 존재에만 기대고 있었다 |
+| 7 | 읽기 RPC의 `auth.uid()`를 `(select auth.uid())`로 | `is_crew_with`와 형태 통일 — 행마다 재평가 대신 InitPlan |
+
 ---
 
 ## Task 3: 0038 적용 + 실 DB 검증

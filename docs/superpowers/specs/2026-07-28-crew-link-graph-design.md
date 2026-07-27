@@ -70,6 +70,9 @@ UI·코드·문서 어디에도 새로 쓰지 않는다. 개념이 하나인데 
 | D9 | 기존 크루원은 **자동으로 서로 연결** | 리얼GND 3명이 전환 직후에도 지금과 똑같은 화면을 본다. 체감상 끊김이 없다. |
 | D10 | `profiles` SELECT RLS만 **그룹 조건을 남긴다** | 챌린지 랭킹판에 참가자 닉네임이 떠야 한다. 챌린지 개편 때 사라질 **한시적 잔여물**이다(§14). |
 | D11 | 차단은 이번에 넣지 않는다 | 지인 3명 단계에선 과잉. 해제만으로 충분하다. |
+| D12 | **거절 후 7일간 재요청 금지** | 거절은 조용하고(D7) 차단도 없으니(D11), 이 가드가 없으면 요청↔거절을 무한 반복하며 상대에게 알림을 계속 꽂을 수 있고 받는 쪽에 방어 수단이 없다. 콕 찌르기의 24h 쿨다운(0011)과 같은 결의 장치다. 에러 코드는 `request_exists`를 **재사용**한다 — 보내는 쪽에 "이미 요청을 보냈어요"로만 보여야 거절당했다는 사실이 드러나지 않는다(D7 유지). |
+| D13 | **쌍 단위 advisory lock**으로 요청·수락을 직렬화 | 없으면 셋이 한꺼번에 터진다: ① 서로 동시에 수락할 때 락 순서가 엇갈려 `40P01` 데드락 ② 서로 동시에 요청할 때 역방향을 못 봐 **D6 자동수락이 불발**(정확히 D6가 막으려던 상황이 재현된다) ③ 빠른 두 번 탭이 `request_exists` 대신 raw `23505`를 뱉는다. `pg_advisory_xact_lock(hashtext(정렬된 쌍))` 하나가 셋을 함께 막는다. |
+| D14 | 수락 알림 실패는 **연결을 되돌리지 않는다** | 연결이 본체고 알림은 곁가지다. 알림 실패는 결정적으로 재현되므로(예: 후속 마이그레이션이 `notifications_type_check`에서 `crew_accepted`를 빠뜨림) 감싸지 않으면 그 두 계정은 **영영 크루가 될 수 없다**. 0029에서 알림 insert 하나가 운동 완료 트랜잭션을 통째로 롤백시킨 전례가 있다. 반대로 `send_crew_request`의 알림은 **감싸지 않는다** — 거기선 알림이 곧 전달 수단이라 못 보내면 요청도 없던 일이 되는 게 맞다. |
 
 ---
 
@@ -174,7 +177,7 @@ returns table (id uuid, nickname text, avatar_url text,
 
 | RPC | 하는 일 | 에러 코드 |
 |---|---|---|
-| `send_crew_request(p_target_id)` | pending 요청 생성 + `crew_request` 알림. **역방향 pending이 있으면 그 요청을 수락 처리**(D6) | `self_request` `already_crew` `request_exists` `target_not_found` |
+| `send_crew_request(p_target_id)` | pending 요청 생성 + `crew_request` 알림. **역방향 pending이 있으면 그 요청을 수락 처리**(D6). 거절당한 뒤 **7일간 재요청 불가**(D12) | `self_request` `already_crew` `request_exists` `target_not_found` |
 | `accept_crew_request(p_request_id)` | addressee만 가능. `crew_links` 삽입 + status `accepted` + `crew_accepted` 알림 | `not_addressee` `not_pending` |
 | `reject_crew_request(p_request_id)` | status `rejected`. **알림 없음** | `not_addressee` `not_pending` |
 | `cancel_crew_request(p_request_id)` | requester만. status `canceled`. **알림 없음** | `not_requester` `not_pending` |
