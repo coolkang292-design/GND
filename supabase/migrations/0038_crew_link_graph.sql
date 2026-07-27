@@ -110,25 +110,30 @@ language sql stable security definer set search_path = public as $$
   select
     p.id, p.nickname, p.avatar_url,
     case
-      when p.id = auth.uid()            then 'self'
-      when public.is_crew_with(p.id)    then 'crew'
-      when r_out.id is not null         then 'request_sent'
-      when r_in.id is not null          then 'request_received'
+      when p.id = (select auth.uid())         then 'self'
+      when public.is_crew_with(p.id)          then 'crew'
+      when r_out.id is not null               then 'request_sent'
+      when r_in.id is not null                then 'request_received'
       else 'none'
     end,
-    coalesce(r_out.id, r_in.id)
+    case
+      when p.id = (select auth.uid())    then null::uuid
+      when public.is_crew_with(p.id)     then null::uuid
+      else coalesce(r_out.id, r_in.id)
+    end
   from public.profiles p
   left join public.crew_requests r_out
-    on r_out.requester_id = auth.uid()
+    on r_out.requester_id = (select auth.uid())
    and r_out.addressee_id = p.id
    and r_out.status = 'pending'
   left join public.crew_requests r_in
     on r_in.requester_id = p.id
-   and r_in.addressee_id = auth.uid()
+   and r_in.addressee_id = (select auth.uid())
    and r_in.status = 'pending'
-  where auth.uid() is not null
+  where (select auth.uid()) is not null
     and btrim(p_nickname) <> ''
     and lower(btrim(p.nickname)) = lower(btrim(p_nickname))
+  order by p.created_at
   limit 1
 $$;
 revoke all on function public.search_profile_by_nickname(text) from public, anon;
@@ -142,8 +147,22 @@ declare
   v_me uuid := auth.uid();
   v_req crew_requests%rowtype;
   v_nick text;
+  v_other uuid;
 begin
   if v_me is null then raise exception 'not_authenticated'; end if;
+
+  -- 잠금 키를 얻기 위한 사전 읽기(락 없음). 상대가 requester인지 addressee인지
+  -- 아직 모르므로 행을 한 번 읽어서만 판단하고, 실제 검증은 아래에서 다시 한다.
+  select * into v_req from crew_requests where id = p_request_id;
+  if not found then raise exception 'not_addressee'; end if;
+  v_other := case when v_req.requester_id = v_me then v_req.addressee_id else v_req.requester_id end;
+
+  -- 쌍 단위 직렬화. 이게 없으면 (a) 서로 동시에 수락할 때 락 순서가 엇갈려
+  -- 40P01 데드락, (b) 서로 동시에 요청할 때 역방향을 못 봐서 자동수락이 불발,
+  -- (c) 빠른 두 번 탭이 request_exists 대신 23505를 그대로 뱉는다.
+  perform pg_advisory_xact_lock(
+    hashtext(least(v_me, v_other)::text || greatest(v_me, v_other)::text)
+  );
 
   select * into v_req from crew_requests where id = p_request_id for update;
   if not found or v_req.addressee_id <> v_me then
@@ -171,11 +190,16 @@ begin
      and status = 'pending';
 
   select nickname into v_nick from profiles where id = v_me;
-  perform notify(
-    v_req.requester_id, v_me, 'crew_accepted', p_request_id,
-    coalesce(v_nick, '누군가') || '님과 크루가 됐어요 🤝',
-    '이제 서로의 운동 소식을 받아볼 수 있어요'
-  );
+  -- 알림 실패가 연결까지 되돌리면 안 된다. 연결이 본체고 알림은 곁가지다.
+  -- (0029에서 알림 insert 하나가 운동 완료 트랜잭션을 통째로 롤백시킨 전례가 있다.)
+  begin
+    perform notify(
+      v_req.requester_id, v_me, 'crew_accepted', p_request_id,
+      coalesce(v_nick, '누군가') || '님과 크루가 됐어요 🤝',
+      '이제 서로의 운동 소식을 받아볼 수 있어요'
+    );
+  exception when others then null;
+  end;
   return jsonb_build_object('status', 'accepted');
 end $$;
 revoke all on function public.accept_crew_request(uuid) from public, anon;
@@ -193,10 +217,33 @@ declare
 begin
   if v_me is null then raise exception 'not_authenticated'; end if;
   if p_target_id = v_me then raise exception 'self_request'; end if;
+
+  -- 쌍 단위 직렬화. 이게 없으면 (a) 서로 동시에 수락할 때 락 순서가 엇갈려
+  -- 40P01 데드락, (b) 서로 동시에 요청할 때 역방향을 못 봐서 자동수락이 불발,
+  -- (c) 빠른 두 번 탭이 request_exists 대신 23505를 그대로 뱉는다.
+  perform pg_advisory_xact_lock(
+    hashtext(least(v_me, p_target_id)::text || greatest(v_me, p_target_id)::text)
+  );
+
   if not exists (select 1 from profiles where id = p_target_id) then
     raise exception 'target_not_found';
   end if;
   if public.is_crew_with(p_target_id) then raise exception 'already_crew'; end if;
+
+  -- 거절당한 뒤 7일은 같은 사람에게 다시 못 보낸다. 거절은 조용히 처리되고(D7)
+  -- 차단도 없어서(D11), 이 가드가 없으면 요청↔거절을 무한 반복하며 상대에게
+  -- 알림을 계속 꽂을 수 있다. 콕 찌르기의 24h 쿨다운(0011)과 같은 결의 장치다.
+  -- 에러 코드를 request_exists로 재사용하는 이유: 보내는 쪽에 "이미 요청을
+  -- 보냈어요"로만 보여야 거절당했다는 사실이 드러나지 않는다(D7 유지).
+  if exists (
+    select 1 from crew_requests
+    where requester_id = v_me
+      and addressee_id = p_target_id
+      and status = 'rejected'
+      and responded_at > now() - interval '7 days'
+  ) then
+    raise exception 'request_exists';
+  end if;
 
   -- 역방향 pending이 있으면 양쪽이 서로를 원한 것이다 → 즉시 맺는다.
   -- 이게 없으면 "둘 다 요청했는데 아무 일도 안 일어남"이 되고, 사용자는
@@ -291,6 +338,8 @@ grant execute on function public.remove_crew(uuid) to authenticated;
 -- 목록 조회 RPC 2개 — user_progress는 본인 전용 RLS(0022)라 클라가 남의
 -- 레벨을 직접 못 읽는다. 0026이 쓴 정의자 패턴을 그대로 따라 레벨까지 함께
 -- 돌려준다(왕복 1회, 권한 검사 1곳).
+-- returns table의 컬럼 이름·타입은 create or replace로 못 바꾼다. 나중에 필드를
+-- 추가하려면 drop function을 먼저 해야 한다(안 그러면 Run이 42P13으로 죽는다).
 create or replace function public.get_my_crew()
 returns table (
   id uuid, nickname text, avatar_url text,
@@ -305,9 +354,9 @@ language sql stable security definer set search_path = public as $$
          l.created_at
   from public.crew_links l
   join public.profiles p
-    on p.id = case when l.user_a = auth.uid() then l.user_b else l.user_a end
+    on p.id = case when l.user_a = (select auth.uid()) then l.user_b else l.user_a end
   left join public.user_progress up on up.user_id = p.id
-  where auth.uid() in (l.user_a, l.user_b)
+  where (select auth.uid()) in (l.user_a, l.user_b)
   order by p.nickname
 $$;
 
@@ -320,7 +369,7 @@ language sql stable security definer set search_path = public as $$
   select r.id, r.requester_id, p.nickname, p.avatar_url, r.created_at
   from public.crew_requests r
   join public.profiles p on p.id = r.requester_id
-  where r.addressee_id = auth.uid() and r.status = 'pending'
+  where r.addressee_id = (select auth.uid()) and r.status = 'pending'
   order by r.created_at desc
 $$;
 
