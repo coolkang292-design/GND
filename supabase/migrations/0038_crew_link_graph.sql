@@ -26,6 +26,8 @@ create unique index if not exists crew_requests_pending_unique
   where status = 'pending';
 create index if not exists crew_requests_inbox_idx
   on public.crew_requests (addressee_id, status);
+create index if not exists crew_requests_outbox_idx
+  on public.crew_requests (requester_id, status);
 
 -- ── 2. 수락된 연결 ───────────────────────────────────────────
 -- user_a < user_b 정규화: 대칭 관계를 두 행으로 저장하면 한쪽만 지워진 반쪽
@@ -49,24 +51,26 @@ grant select on public.crew_links to authenticated;
 
 drop policy if exists "crew_requests_mine_select" on public.crew_requests;
 create policy "crew_requests_mine_select" on public.crew_requests
-  for select using (requester_id = auth.uid() or addressee_id = auth.uid());
+  for select to authenticated
+  using (requester_id = auth.uid() or addressee_id = auth.uid());
 
 drop policy if exists "crew_links_mine_select" on public.crew_links;
 create policy "crew_links_mine_select" on public.crew_links
-  for select using (user_a = auth.uid() or user_b = auth.uid());
+  for select to authenticated
+  using (user_a = auth.uid() or user_b = auth.uid());
 
 -- ── 4. 관계 판정 — 0039가 shares_group_with 자리에 이걸 넣는다 ─
+-- RLS 정책이 부르는 판정 함수라 revoke하지 않는다(0001의 shares_group_with와 같다).
+-- 정책은 호출자 권한으로 평가되므로 revoke하면 anon 요청이 0행이 아니라 42501로 죽는다.
 create or replace function public.is_crew_with(uid uuid)
 returns boolean
 language sql stable security definer set search_path = public as $$
   select exists (
     select 1 from public.crew_links
-    where user_a = least(auth.uid(), uid)
-      and user_b = greatest(auth.uid(), uid)
+    where user_a = least((select auth.uid()), uid)
+      and user_b = greatest((select auth.uid()), uid)
   )
 $$;
-revoke all on function public.is_crew_with(uuid) from public, anon;
-grant execute on function public.is_crew_with(uuid) to authenticated;
 
 -- ── 5. 알림 유형 2종 추가 (0034 목록에 이어붙임) ─────────────
 alter table public.notifications drop constraint if exists notifications_type_check;
@@ -80,13 +84,15 @@ alter table public.notifications add constraint notifications_type_check check (
 
 -- ── 6. 기존 크루원 자동 연결 ─────────────────────────────────
 -- 같은 그룹에 있던 모든 쌍을 연결로 옮긴다. 리얼GND 3명 → 3쌍.
--- on conflict do nothing이라 재실행해도 안전(멱등).
+-- crew_links가 비어 있을 때만 돈다 — 이 파일을 다시 Run해도 "해제한 사이"가
+-- 되살아나지 않게 하려는 것이다. on conflict만으로는 중복만 막고 삭제는 못 막는다.
 -- 프로필 없는 계정(온보딩 미완)은 FK가 막으므로 미리 걸러 낸다.
 insert into public.crew_links (user_a, user_b)
 select distinct a.user_id, b.user_id
 from public.group_members a
 join public.group_members b
   on a.group_id = b.group_id and a.user_id < b.user_id
-where exists (select 1 from public.profiles p where p.id = a.user_id)
+where not exists (select 1 from public.crew_links)
+  and exists (select 1 from public.profiles p where p.id = a.user_id)
   and exists (select 1 from public.profiles p where p.id = b.user_id)
 on conflict do nothing;
