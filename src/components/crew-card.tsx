@@ -25,6 +25,9 @@ export function CrewCard() {
   const [ready, setReady] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [selected, setSelected] = useState<Profile | null>(null);
+  // 내가 이번에 찌른(또는 24시간 쿨다운에 걸린) 대상 — 버튼을 "✅ 찌름"으로 잠근다.
+  // 서버가 최종 판정(24h/대상별)하지만, 누른 즉시 시각적으로 잠가야 또 누르지 않는다.
+  const [poked, setPoked] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!configured || loading || !userId) return;
@@ -56,11 +59,14 @@ export function CrewCard() {
   async function poke(target: Profile) {
     try {
       await pokeUser(target.id);
+      setPoked((s) => new Set(s).add(target.id));
       setNotice(`${target.nickname}님을 콕 찔렀어요 👉`);
     } catch (e) {
       const code = e instanceof SocialError ? e.code : null;
       if (code === "poke_cooldown") {
-        setNotice("오늘은 이미 찔렀어요");
+        // 이미 24시간 안에 찔렀다 — 버튼을 잠가 다시 못 누르게 한다.
+        setPoked((s) => new Set(s).add(target.id));
+        setNotice("24시간 안엔 한 번만 찌를 수 있어요");
       } else if (code === "poke_requires_workout") {
         setNotice("오늘 운동을 마쳐야 콕 할 수 있어요 💪");
       } else {
@@ -120,20 +126,29 @@ export function CrewCard() {
                 {workedOut.has(m.id) && <span className="ml-0.5">✅</span>}
               </span>
             </button>
-            {m.id !== userId && !workedOut.has(m.id) && (
-              <button
-                onClick={() => void poke(m)}
-                disabled={!iWorkedOut}
-                aria-label={`${m.nickname} 찌르기`}
-                className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-bold ${
-                  iWorkedOut
-                    ? "bg-accent-weak text-accent"
-                    : "bg-surface text-faint opacity-60"
-                }`}
-              >
-                👉 콕
-              </button>
-            )}
+            {m.id !== userId &&
+              !workedOut.has(m.id) &&
+              (poked.has(m.id) ? (
+                <span
+                  aria-label={`${m.nickname} 찌름 완료`}
+                  className="ml-0.5 rounded-full bg-surface px-1.5 py-0.5 text-[11px] font-bold text-faint opacity-70"
+                >
+                  ✅ 찌름
+                </span>
+              ) : (
+                <button
+                  onClick={() => void poke(m)}
+                  disabled={!iWorkedOut}
+                  aria-label={`${m.nickname} 찌르기`}
+                  className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-bold ${
+                    iWorkedOut
+                      ? "bg-accent-weak text-accent"
+                      : "bg-surface text-faint opacity-60"
+                  }`}
+                >
+                  👉 콕
+                </button>
+              ))}
           </div>
         ))}
       </div>
