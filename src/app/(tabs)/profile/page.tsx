@@ -1,9 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { GrowthHub } from "@/components/profile/growth-hub";
 import { PushSettings } from "@/components/push-settings";
+import { getIncomingCrewRequests } from "@/lib/crew-link";
 import {
   DEFAULT_NOTIFICATION_SETTINGS,
   getNotificationSettings,
@@ -34,6 +36,21 @@ export default function ProfilePage() {
   const [pending, setPending] = useState<Set<keyof NotificationSettings>>(
     () => new Set(),
   );
+  const [requestCount, setRequestCount] = useState(0);
+
+  // 받은 크루 요청 수 — 진입점에 뱃지로 띄운다. 실패하면 뱃지만 안 뜬다.
+  useEffect(() => {
+    if (!configured || loading || !userId) return;
+    let cancelled = false;
+    getIncomingCrewRequests()
+      .then((rows) => {
+        if (!cancelled) setRequestCount(rows.length);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [configured, loading, userId]);
 
   // 알림 설정은 톱니를 열었을 때만 조회한다 — 성장 허브 첫 렌더를 늦추지 않는다.
   useEffect(() => {
@@ -143,6 +160,21 @@ export default function ProfilePage() {
       )}
 
       <GrowthHub />
+
+      <Link
+        href="/crew"
+        className="flex items-center justify-between rounded-card border border-line bg-surface px-3.5 py-3.5 shadow-card"
+      >
+        <span className="flex items-center gap-2 text-[14px] font-extrabold">
+          🤝 크루
+          {requestCount > 0 && (
+            <span className="rounded-full bg-accent px-2 py-0.5 text-[11px] font-extrabold text-accent-ink">
+              {requestCount}
+            </span>
+          )}
+        </span>
+        <span className="text-[13px] text-muted">닉네임으로 찾기 ›</span>
+      </Link>
     </div>
   );
 }

@@ -17,6 +17,10 @@ const PUSH_URL_BY_TYPE: Record<string, string> = {
   challenge_ended: "/challenge",
   // 배포·업데이트 소식 → 새 소식 상세 (A)
   app_update: "/whats-new",
+  // 크루 요청·수락 → 크루 화면 (0038). 요청은 받은함에서 바로 수락해야 하고,
+  // 수락 알림은 새 크루원을 목록에서 확인하게 된다.
+  crew_request: "/crew",
+  crew_accepted: "/crew",
 };
 
 const DEFAULT_PUSH_URL = "/home";

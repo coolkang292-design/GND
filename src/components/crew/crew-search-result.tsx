@@ -32,7 +32,7 @@ export function CrewSearchResult({
         type="button"
         disabled={disabled}
         onClick={() => onAction(result)}
-        className="shrink-0 rounded-full bg-accent px-3.5 py-1.5 text-[12.5px] font-extrabold text-white disabled:bg-line disabled:text-muted"
+        className="shrink-0 rounded-full bg-accent px-3.5 py-1.5 text-[12.5px] font-extrabold text-accent-ink disabled:bg-line disabled:text-muted"
       >
         {pending ? "처리 중…" : button.label}
       </button>

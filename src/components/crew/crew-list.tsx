@@ -45,7 +45,7 @@ export function CrewList({
                   type="button"
                   disabled={pendingIds.has(r.requestId)}
                   onClick={() => onAccept(r)}
-                  className="rounded-full bg-accent px-3 py-1.5 text-[12.5px] font-extrabold text-white disabled:bg-line disabled:text-muted"
+                  className="rounded-full bg-accent px-3 py-1.5 text-[12.5px] font-extrabold text-accent-ink disabled:bg-line disabled:text-muted"
                 >
                   수락
                 </button>

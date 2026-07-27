@@ -31,6 +31,8 @@ describe("pushPayloadFor", () => {
     ["challenge_started", "/challenge"],
     ["challenge_ended", "/challenge"],
     ["app_update", "/whats-new"],
+    ["crew_request", "/crew"],
+    ["crew_accepted", "/crew"],
     ["unknown_type", "/home"],
   ])("maps %s to url %s", (type, url) => {
     expect(pushPayloadFor({ type, title: "t", body: "b" }).url).toBe(url);
