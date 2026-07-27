@@ -12,10 +12,16 @@ import { XpGuideSheet } from "@/components/profile/xp-guide-sheet";
 import { XpHistory } from "@/components/profile/xp-history";
 import { BadgeSheet } from "@/components/profile/badge-sheet";
 import { BadgeShowcase } from "@/components/profile/badge-showcase";
+import { NextGoalCard } from "@/components/profile/next-goal-card";
 import { PointSummary } from "@/components/profile/point-summary";
-import { getBadgeCatalog, getMyBadges } from "@/lib/badges";
+import { getBadgeCatalog, getMyBadgeMetrics, getMyBadges } from "@/lib/badges";
 import { getMyWallet } from "@/lib/points";
-import { badgeShelf, type BadgeShelfItem } from "@/lib/domain/badges";
+import {
+  buildAchievements,
+  selectNextGoal,
+  type Achievement,
+} from "@/lib/domain/achievements";
+import { badgeShelf, type BadgeMetricKey, type BadgeShelfItem } from "@/lib/domain/badges";
 import { currentStreak, workoutDayKeys } from "@/lib/domain/streak";
 import { DEFAULT_TIMEZONE, dayKey } from "@/lib/domain/time";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -37,6 +43,7 @@ interface HubData {
   balance: number;
   streakDays: number;
   shelf: BadgeShelfItem[];
+  achievements: Achievement[];
 }
 
 /** 내 정보 성장 허브 — 7단계·현재 단계·혜택·다음 단계·타임라인·XP 내역. */
@@ -55,7 +62,7 @@ export function GrowthHub() {
     (async () => {
       try {
         const supabase = getSupabaseBrowserClient();
-        const [summary, rewards, unlocks, transactions, wallet, catalog, earned, sessions] =
+        const [summary, rewards, unlocks, transactions, wallet, catalog, earned, sessions, metrics] =
           await Promise.all([
             getProgressSummary(),
             getLevelRewards(),
@@ -70,6 +77,7 @@ export function GrowthHub() {
               .eq("status", "completed")
               .is("deleted_at", null)
               .not("completed_at", "is", null),
+            getMyBadgeMetrics(),
           ]);
         if (sessions.error) throw sessions.error;
         const instants = (sessions.data ?? []).map(
@@ -85,6 +93,7 @@ export function GrowthHub() {
             balance: wallet.balance,
             streakDays,
             shelf: badgeShelf(catalog, earned),
+            achievements: buildAchievements(catalog, earned, metrics as Record<BadgeMetricKey, number>),
           });
       } catch {
         if (!cancelled) setFailed(true);
@@ -129,7 +138,7 @@ export function GrowthHub() {
     );
   }
 
-  const { summary, rewards, unlocks, transactions, balance, streakDays, shelf } = data;
+  const { summary, rewards, unlocks, transactions, balance, streakDays, shelf, achievements } = data;
 
   return (
     <>
@@ -144,6 +153,8 @@ export function GrowthHub() {
       />
 
       <PointSummary balance={balance} streakDays={streakDays} />
+
+      <NextGoalCard goal={selectNextGoal(achievements)} />
 
       <BadgeShowcase shelf={shelf} onOpenAll={() => setBadgeSheetOpen(true)} />
 
@@ -185,7 +196,7 @@ export function GrowthHub() {
       )}
 
       {badgeSheetOpen && (
-        <BadgeSheet shelf={shelf} onClose={() => setBadgeSheetOpen(false)} />
+        <BadgeSheet achievements={achievements} onClose={() => setBadgeSheetOpen(false)} />
       )}
     </>
   );
