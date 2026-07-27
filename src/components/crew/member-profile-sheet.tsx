@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import { useEffect, useState } from "react";
-import { badgeShelf, earnedBadgeCount } from "@/lib/domain/badges";
+import { badgeShelf, earnedBadgeCount, type BadgeMeta } from "@/lib/domain/badges";
+import { getBadgeCatalog } from "@/lib/badges";
 import {
   getCrewMemberProfile,
   type CrewMemberProfile,
@@ -12,13 +13,19 @@ import {
  * 시트 본문 — 조회가 끝난 뒤의 표시만 담당한다.
  * 셸에서 분리해 둬야 표시 로직을 SSR 테스트로 덮을 수 있다.
  */
-export function MemberProfileBody({ profile }: { profile: CrewMemberProfile }) {
+export function MemberProfileBody({
+  profile,
+  catalog,
+}: {
+  profile: CrewMemberProfile;
+  catalog: BadgeMeta[];
+}) {
   const pct = Math.min(100, Math.round(profile.levelProgressPercent));
   const maxed = profile.nextLevelRequiredXp === null;
   // 카탈로그에 없는 badge_key는 badgeShelf가 자연히 걸러낸다 —
   // 배지가 46개로 늘어도 이 컴포넌트는 그대로다.
-  const shelf = badgeShelf(profile.badges);
-  const owned = earnedBadgeCount(profile.badges);
+  const shelf = badgeShelf(catalog, profile.badges);
+  const owned = earnedBadgeCount(catalog, profile.badges);
 
   return (
     <>
@@ -79,9 +86,11 @@ export function MemberProfileBody({ profile }: { profile: CrewMemberProfile }) {
                   : "border-line bg-surface-2 text-faint opacity-60"
               }`}
             >
-              <span className="text-sm">
-                {badge.earnedAt ? badge.emoji : "🔒"}
-              </span>
+              {badge.earnedAt ? (
+                <Image src={`/badges/${badge.key}.png`} alt="" width={18} height={18} />
+              ) : (
+                <span className="text-sm">🔒</span>
+              )}
               {badge.name}
             </span>
           ))}
@@ -106,6 +115,7 @@ export function MemberProfileSheet({
   onClose: () => void;
 }) {
   const [profile, setProfile] = useState<CrewMemberProfile | null>(null);
+  const [catalog, setCatalog] = useState<BadgeMeta[] | null>(null);
   const [failure, setFailure] = useState<"not_crew" | "failed" | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -113,9 +123,11 @@ export function MemberProfileSheet({
   // 부르면 렌더가 연쇄된다.
   useEffect(() => {
     let cancelled = false;
-    getCrewMemberProfile(userId)
-      .then((p) => {
-        if (!cancelled) setProfile(p);
+    Promise.all([getCrewMemberProfile(userId), getBadgeCatalog()])
+      .then(([p, c]) => {
+        if (cancelled) return;
+        setProfile(p);
+        setCatalog(c);
       })
       .catch((e: unknown) => {
         if (cancelled) return;
@@ -178,13 +190,15 @@ export function MemberProfileSheet({
           </>
         )}
 
-        {!failure && !profile && (
+        {!failure && (!profile || !catalog) && (
           <p aria-busy="true" className="mt-4 text-[12.5px] text-muted">
             불러오는 중…
           </p>
         )}
 
-        {!failure && profile && <MemberProfileBody profile={profile} />}
+        {!failure && profile && catalog && (
+          <MemberProfileBody profile={profile} catalog={catalog} />
+        )}
 
         <button
           type="button"

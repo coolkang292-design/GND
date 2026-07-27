@@ -10,6 +10,15 @@ import { StageCarousel } from "@/components/profile/stage-carousel";
 import { StageGuideSheet } from "@/components/profile/stage-guide-sheet";
 import { XpGuideSheet } from "@/components/profile/xp-guide-sheet";
 import { XpHistory } from "@/components/profile/xp-history";
+import { BadgeSheet } from "@/components/profile/badge-sheet";
+import { BadgeShowcase } from "@/components/profile/badge-showcase";
+import { PointSummary } from "@/components/profile/point-summary";
+import { getBadgeCatalog, getMyBadges } from "@/lib/badges";
+import { getMyWallet } from "@/lib/points";
+import { badgeShelf, type BadgeShelfItem } from "@/lib/domain/badges";
+import { currentStreak, workoutDayKeys } from "@/lib/domain/streak";
+import { DEFAULT_TIMEZONE, dayKey } from "@/lib/domain/time";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   getLevelRewards,
   getMyUnlocks,
@@ -25,6 +34,9 @@ interface HubData {
   rewards: LevelReward[];
   unlocks: Set<string>;
   transactions: XpTransactionRow[];
+  balance: number;
+  streakDays: number;
+  shelf: BadgeShelfItem[];
 }
 
 /** 내 정보 성장 허브 — 7단계·현재 단계·혜택·다음 단계·타임라인·XP 내역. */
@@ -35,19 +47,45 @@ export function GrowthHub() {
   const [reloadKey, setReloadKey] = useState(0);
   const [guideOpen, setGuideOpen] = useState(false);
   const [stageGuideOpen, setStageGuideOpen] = useState(false);
+  const [badgeSheetOpen, setBadgeSheetOpen] = useState(false);
 
   useEffect(() => {
     if (!configured || loading || !userId) return;
     let cancelled = false;
     (async () => {
       try {
-        const [summary, rewards, unlocks, transactions] = await Promise.all([
-          getProgressSummary(),
-          getLevelRewards(),
-          getMyUnlocks(),
-          getRecentXpTransactions(),
-        ]);
-        if (!cancelled) setData({ summary, rewards, unlocks, transactions });
+        const supabase = getSupabaseBrowserClient();
+        const [summary, rewards, unlocks, transactions, wallet, catalog, earned, sessions] =
+          await Promise.all([
+            getProgressSummary(),
+            getLevelRewards(),
+            getMyUnlocks(),
+            getRecentXpTransactions(),
+            getMyWallet(),
+            getBadgeCatalog(),
+            getMyBadges(),
+            supabase
+              .from("workout_sessions")
+              .select("completed_at")
+              .eq("status", "completed")
+              .is("deleted_at", null)
+              .not("completed_at", "is", null),
+          ]);
+        if (sessions.error) throw sessions.error;
+        const instants = (sessions.data ?? []).map(
+          (r) => new Date(r.completed_at as string),
+        );
+        const streakDays = currentStreak(
+          workoutDayKeys(instants, DEFAULT_TIMEZONE),
+          dayKey(new Date(), DEFAULT_TIMEZONE),
+        );
+        if (!cancelled)
+          setData({
+            summary, rewards, unlocks, transactions,
+            balance: wallet.balance,
+            streakDays,
+            shelf: badgeShelf(catalog, earned),
+          });
       } catch {
         if (!cancelled) setFailed(true);
       }
@@ -91,7 +129,7 @@ export function GrowthHub() {
     );
   }
 
-  const { summary, rewards, unlocks, transactions } = data;
+  const { summary, rewards, unlocks, transactions, balance, streakDays, shelf } = data;
 
   return (
     <>
@@ -104,6 +142,10 @@ export function GrowthHub() {
         summary={summary}
         onGuideClick={() => setStageGuideOpen(true)}
       />
+
+      <PointSummary balance={balance} streakDays={streakDays} />
+
+      <BadgeShowcase shelf={shelf} onOpenAll={() => setBadgeSheetOpen(true)} />
 
       <LevelRewards
         rewards={rewards}
@@ -140,6 +182,10 @@ export function GrowthHub() {
           totalXp={summary.totalXp}
           onClose={() => setStageGuideOpen(false)}
         />
+      )}
+
+      {badgeSheetOpen && (
+        <BadgeSheet shelf={shelf} onClose={() => setBadgeSheetOpen(false)} />
       )}
     </>
   );

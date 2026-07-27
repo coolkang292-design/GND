@@ -34,7 +34,6 @@ import {
   saveWorkoutPlan,
   type WorkoutPlan,
 } from "@/lib/workout-plan";
-import { BadgeShelf } from "./badge-shelf";
 import { ExercisePicker } from "./exercise-picker";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
@@ -428,8 +427,6 @@ export function CalendarView({
           </div>
         </div>
       </section>
-
-      <BadgeShelf />
 
       {/* 달력 그리드 */}
       <section className="rounded-card border border-line bg-surface p-4 shadow-card">

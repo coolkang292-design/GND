@@ -2,6 +2,22 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { MemberProfileBody, MemberProfileSheet } from "./member-profile-sheet";
 import type { CrewMemberProfile } from "@/lib/progression";
+import type { BadgeMeta } from "@/lib/domain/badges";
+
+const CATALOG: BadgeMeta[] = [
+  { key: "record_beaten_1", emoji: "🏅", name: "어제의 나를 이겼개",
+    description: "처음으로 지난 기록을 넘었개", tier: "bronze",
+    metricKey: "record_beaten", threshold: 1, pointReward: 300,
+    repeatable: false, repeatStep: null, sortOrder: 601 },
+  { key: "record_beaten_5", emoji: "💪", name: "다섯 번 넘었개",
+    description: "우연이 아니었개", tier: "bronze",
+    metricKey: "record_beaten", threshold: 5, pointReward: 300,
+    repeatable: false, repeatStep: null, sortOrder: 602 },
+  { key: "record_beaten_10", emoji: "🔥", name: "기록이 무섭개",
+    description: "열 번을 갱신했개", tier: "silver",
+    metricKey: "record_beaten", threshold: 10, pointReward: 800,
+    repeatable: false, repeatStep: null, sortOrder: 603 },
+];
 
 function profile(over: Partial<CrewMemberProfile> = {}): CrewMemberProfile {
   return {
@@ -14,14 +30,10 @@ function profile(over: Partial<CrewMemberProfile> = {}): CrewMemberProfile {
     xpToNextLevel: 380,
     levelProgressPercent: 52.5,
     badges: [
-      {
-        badgeKey: "record_beaten_1",
-        earnedAt: new Date("2026-07-20T10:00:00+09:00"),
-      },
-      {
-        badgeKey: "record_beaten_5",
-        earnedAt: new Date("2026-07-24T10:00:00+09:00"),
-      },
+      { badgeKey: "record_beaten_1", periodKey: "lifetime",
+        earnedAt: new Date("2026-07-20T10:00:00+09:00") },
+      { badgeKey: "record_beaten_5", periodKey: "lifetime",
+        earnedAt: new Date("2026-07-24T10:00:00+09:00") },
     ],
     ...over,
   };
@@ -29,7 +41,9 @@ function profile(over: Partial<CrewMemberProfile> = {}): CrewMemberProfile {
 
 describe("MemberProfileBody — 레벨", () => {
   it("단계·레벨·누적 XP·진행률·남은 XP를 표시한다", () => {
-    const html = renderToStaticMarkup(<MemberProfileBody profile={profile()} />);
+    const html = renderToStaticMarkup(
+      <MemberProfileBody profile={profile()} catalog={CATALOG} />,
+    );
     expect(html).toContain("물고가개 Lv.17");
     expect(html).toContain("누적 7,220 XP");
     expect(html).toContain('aria-valuenow="53"'); // 52.5 반올림
@@ -45,6 +59,7 @@ describe("MemberProfileBody — 레벨", () => {
           xpToNextLevel: 0,
           levelProgressPercent: 100,
         })}
+        catalog={CATALOG}
       />,
     );
     expect(html).toContain("최고 레벨");
@@ -53,18 +68,20 @@ describe("MemberProfileBody — 레벨", () => {
 });
 
 describe("MemberProfileBody — 배지", () => {
-  it("획득 배지는 이모지와 이름, 미획득은 자물쇠로 표시한다", () => {
-    const html = renderToStaticMarkup(<MemberProfileBody profile={profile()} />);
-    expect(html).toContain("첫 기록 갱신");
-    expect(html).toContain("기록 갱신 5회");
-    expect(html).toContain("기록 갱신 10회"); // 미획득도 진열한다
+  it("획득 배지는 그림과 이름, 미획득은 자물쇠로 표시한다", () => {
+    const html = renderToStaticMarkup(
+      <MemberProfileBody profile={profile()} catalog={CATALOG} />,
+    );
+    expect(html).toContain("어제의 나를 이겼개");
+    expect(html).toContain("다섯 번 넘었개");
+    expect(html).toContain("기록이 무섭개"); // 미획득도 진열한다
     expect(html).toContain("🔒");
     expect(html).toContain("2 / 3");
   });
 
   it("배지가 하나도 없으면 안내 문구를 보여준다", () => {
     const html = renderToStaticMarkup(
-      <MemberProfileBody profile={profile({ badges: [] })} />,
+      <MemberProfileBody profile={profile({ badges: [] })} catalog={CATALOG} />,
     );
     expect(html).toContain("아직 획득한 배지가 없어요");
     expect(html).toContain("0 / 3");
@@ -75,9 +92,11 @@ describe("MemberProfileBody — 배지", () => {
       <MemberProfileBody
         profile={profile({
           badges: [
-            { badgeKey: "future_badge_99", earnedAt: new Date("2026-07-26") },
+            { badgeKey: "future_badge_99", periodKey: "lifetime",
+              earnedAt: new Date("2026-07-26") },
           ],
         })}
+        catalog={CATALOG}
       />,
     );
     expect(html).not.toContain("future_badge_99");
