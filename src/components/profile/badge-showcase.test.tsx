@@ -6,13 +6,13 @@ import { badgeShelf, type BadgeMeta, type EarnedBadge } from "@/lib/domain/badge
 
 const CATALOG: BadgeMeta[] = [
   { key: "workout_1", emoji: "🐣", name: "첫 발", description: "시작이 반이라지만",
-    tier: "bronze", metricKey: "workout_count", threshold: 1, pointReward: 300,
+    tier: "bronze", rarity: "common", metricKey: "workout_count", threshold: 1, pointReward: 300,
     repeatable: false, repeatStep: null, sortOrder: 101 },
   { key: "workout_10", emoji: "🦴", name: "열 번 찍었개", description: "안 넘어가는 나무",
-    tier: "bronze", metricKey: "workout_count", threshold: 10, pointReward: 300,
+    tier: "bronze", rarity: "common", metricKey: "workout_count", threshold: 10, pointReward: 300,
     repeatable: false, repeatStep: null, sortOrder: 102 },
   { key: "streak_5", emoji: "🔥", name: "불꽃 5일", description: "또 모았개",
-    tier: "bronze", metricKey: "streak_days", threshold: 5, pointReward: 500,
+    tier: "bronze", rarity: "common", metricKey: "streak_days", threshold: 5, pointReward: 500,
     repeatable: true, repeatStep: 5, sortOrder: 301 },
 ];
 

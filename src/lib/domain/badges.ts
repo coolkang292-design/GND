@@ -7,6 +7,8 @@
  */
 export type BadgeTier = "bronze" | "silver" | "gold" | "legend";
 
+export type BadgeRarity = "common" | "rare" | "epic" | "legend" | "mythic";
+
 export type BadgeMetricKey =
   | "workout_count"
   | "total_minutes"
@@ -21,6 +23,7 @@ export type BadgeMeta = {
   name: string;
   description: string;
   tier: BadgeTier;
+  rarity: BadgeRarity;
   metricKey: BadgeMetricKey;
   /** 임계값. 시간=분, 볼륨=kg, 거리=m, 나머지=회/일 */
   threshold: number;

@@ -6,15 +6,15 @@ import type { BadgeMeta } from "@/lib/domain/badges";
 
 const CATALOG: BadgeMeta[] = [
   { key: "record_beaten_1", emoji: "🏅", name: "어제의 나를 이겼개",
-    description: "처음으로 지난 기록을 넘었개", tier: "bronze",
+    description: "기록 1회 갱신", tier: "bronze", rarity: "common",
     metricKey: "record_beaten", threshold: 1, pointReward: 300,
     repeatable: false, repeatStep: null, sortOrder: 601 },
   { key: "record_beaten_5", emoji: "💪", name: "다섯 번 넘었개",
-    description: "우연이 아니었개", tier: "bronze",
+    description: "기록 5회 갱신", tier: "bronze", rarity: "rare",
     metricKey: "record_beaten", threshold: 5, pointReward: 300,
     repeatable: false, repeatStep: null, sortOrder: 602 },
   { key: "record_beaten_10", emoji: "🔥", name: "기록이 무섭개",
-    description: "열 번을 갱신했개", tier: "silver",
+    description: "기록 10회 갱신", tier: "silver", rarity: "epic",
     metricKey: "record_beaten", threshold: 10, pointReward: 800,
     repeatable: false, repeatStep: null, sortOrder: 603 },
 ];
@@ -73,9 +73,9 @@ describe("MemberProfileBody — 배지 (보유만 + 의미·보상)", () => {
       <MemberProfileBody profile={profile()} catalog={CATALOG} />,
     );
     expect(html).toContain("어제의 나를 이겼개");
-    expect(html).toContain("처음으로 지난 기록을 넘었개"); // 의미(설명)
+    expect(html).toContain("기록 1회 갱신"); // 의미(설명)
     expect(html).toContain("다섯 번 넘었개");
-    expect(html).toContain("우연이 아니었개");
+    expect(html).toContain("기록 5회 갱신");
     expect(html).toContain("+300 P"); // 획득 보상
     expect(html).toContain("2 / 3");
   });

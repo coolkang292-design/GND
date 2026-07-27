@@ -9,13 +9,13 @@ import {
 
 const CATALOG: BadgeMeta[] = [
   { key: "workout_1", emoji: "🐣", name: "첫 발", description: "d1", tier: "bronze",
-    metricKey: "workout_count", threshold: 1, pointReward: 300, repeatable: false,
+    rarity: "common", metricKey: "workout_count", threshold: 1, pointReward: 300, repeatable: false,
     repeatStep: null, sortOrder: 101 },
   { key: "workout_10", emoji: "🦴", name: "열 번", description: "d2", tier: "bronze",
-    metricKey: "workout_count", threshold: 10, pointReward: 300, repeatable: false,
+    rarity: "common", metricKey: "workout_count", threshold: 10, pointReward: 300, repeatable: false,
     repeatStep: null, sortOrder: 102 },
   { key: "streak_5", emoji: "🔥", name: "불꽃 5일", description: "d3", tier: "bronze",
-    metricKey: "streak_days", threshold: 5, pointReward: 500, repeatable: true,
+    rarity: "common", metricKey: "streak_days", threshold: 5, pointReward: 500, repeatable: true,
     repeatStep: 5, sortOrder: 301 },
 ];
 
