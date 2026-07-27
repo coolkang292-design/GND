@@ -3,6 +3,20 @@
 > 새 세션은 이 파일 + `C:\Users\SAMSUNG\Desktop\Workout app\IMPLEMENTATION_PLAN.md`(단일 진실)만 읽으면 바로 이어서 작업할 수 있다.
 > 시각 스펙: 같은 폴더의 `운동앱-목업.html`.
 
+## ✅ 2026-07-27 — 배지 30종 + 포인트 경제 (운영 배포 ✅)
+
+설계 `docs/superpowers/specs/2026-07-27-badge-catalog-and-point-economy-design.md` · 계획 `docs/superpowers/plans/2026-07-27-badge-catalog-and-point-economy.md`. 배지를 3개 → **30종**으로 늘리고 **포인트 경제**를 붙였다. 마이그레이션 **0031·0032·0033 운영 적용 ✅**. 배포 `gnd-jdfmnf0if-gnd4.vercel.app` production Ready → `gnd-one.vercel.app` 별칭.
+
+- **0031 스키마 + 배지 30종 seed** — 배지 조건을 `badge_definitions` **테이블**로 둬 30종을 SQL 함수에 하드코딩하지 않는다(배지 추가 = seed 한 줄). `user_badges` PK를 `(user_id, badge_key, period_key)`로 확장해 반복 획득을 담고 기존 2건은 `period_key='lifetime'`으로 보존. `point_transactions` 원장 + `user_wallet`.
+- **0032 판정·지급 엔진** — 포인트는 **운동마다 100 + 배지 보너스**(배지에서만 나오면 다 딴 순간 수입이 끊기고 ⚡배수가 곱할 대상을 잃는다). 불꽃은 **홈 🔥와 같은 사슬 규칙**(`current_streak_days`가 `domain/streak.ts`와 동일), 불꽃 배지는 **5일마다 스택**(재달성 방식이면 배지를 더 받으려 5일 쉬는 게 이득이 된다). 반복 배지 멱등키 = **달성한 날(KST)**. 하루 2번째 운동은 **XP·포인트 모두 0**. RPC가 `pointsAwarded·pointMultiplier·streakDays·newBadges`를 완료 응답에 실어 준다.
+- **0033 기존 실적 소급** — 판정은 운동 완료 때만 도므로 이미 쌓인 실적에 1회 돌려 도입 즉시 진열대를 채웠다(`evaluate_badges` 멱등). 사용자 Run 실측: 오뎅끼데스까 7종·스칼레또 6종·낭만송곳니 1종.
+- **화면**: 내 정보 성장 허브에 **포인트 3칸**(잔액·⚡배수·🔥연속)·**배지 진열**·**전체 시트**(30종 지표별 묶음, 미획득은 비유 문구) 배선. 불꽃은 홈과 같은 `currentStreak()`으로 계산해 화면끼리 안 어긋난다. 운동 완료 모달에 `xp → point → badge` 순차 이벤트 추가. 배지 진열을 **기록 탭에서 프로필로 일원화**(`badge-shelf.tsx` 삭제). 크루원 프로필 시트도 새 시그니처(`badgeShelf(catalog, earned)`) + 배지 이미지.
+- **조용히 틀릴 수 있는 3곳 = 테스트로 고정**: 불꽃 SQL↔TS(`scripts/streak-parity-check.mjs`), 배수 구간표 SQL↔`point-summary.tsx` TIERS(`point-summary.test.tsx` 경계 10개), 배지 키↔이미지 파일명(`badge-keys.test.ts`). 배지 이미지 `public/badges/` 30장(384², 파일명=`badge_key`).
+- **검증 실측**: unit **455/455**(42파일, 이전 438에서 +17) · typecheck · lint 0 · build ✅ · 실 DB `badge-point-check.mjs` **14/14** · `streak-parity-check.mjs` **불일치 0건** · 배포 번들 grep(`GND 포인트`·`포인트 배수`·`보유 배지`·`아직 획득한 배지가 없어요`) 4/4 · `/home`·`/feed`·`/record`·`/profile` 200.
+- **커밋**: `0b0ce5d`(배지 이미지) · `266e188`(0031) · `98d7bbf`(0032) · `a63c9ce`(실DB검증) · `7028b0e`(카탈로그 DB 단일원천) · `62c9789`(포인트요약·배지진열) · `e7b35b6`(프로필 배선·기록탭 정리) · `cbfd687`(완료 모달 포인트·배지) · `2ec0a8a`(0033).
+- **계정 정리 (운영 DB 직접, service_role · 사용자 요청)** — 사용자 지정으로 실사용 4계정만 남기고 정리했다. **auth 28→4명** · profiles 9→4개 · groups 7→1개(리얼GND). 삭제: 지정 5명(오뎅끼·눈·ㄹ홀·리라·웅, 각 1인 '불꽃 크루' 4개 + 눈의 챌린지 1개 연쇄) + **프로필 없는 익명 orphan 24개**(온보딩 미완 세션, `RLS테스트크루` 2개 포함). 남긴 4명 = 오뎅끼데스까·스칼레또·낭만송곳니·repro-mry7tyx0. 삭제 전 "크루에 보존 멤버가 있으면 중단"·"보존 4계정이 프로필을 갖는지 단언" 안전장치 통과. 리얼GND(멤버 3명) 온전.
+- **범위 밖 (다음 스펙)**: 아이템 상점·구매·장착(포인트 `spend` 쪽은 스키마만·UI 없음), 가격표 재산정(설계 §5.4 — 목업 롤렉스 1,500P가 운동당 100P×배수 수입 구조와 안 맞음), 드림 아이템 진행바, 포인트 내역 화면(`getRecentPointTransactions`는 만들어 뒀으나 미사용), 프로필 5개 섹션 재배치.
+
 ## ✅ 2026-07-26 — XP 보너스 버그 2건 + 콕 게이트 + 레벨업 알림 + 크루원 프로필 시트 (운영 배포 ✅)
 
 마이그레이션 **0026~0029 운영 적용 ✅**. 커밋 `69598a6`·`8e28d7b`·`0ac26ac`·`9db6242`.
