@@ -10,7 +10,9 @@ export type XpEvent =
   | { type: "xp"; amount: number; breakdown: XpBreakdownLine[] }
   | { type: "level_up"; from: number; to: number }
   | { type: "stage_up"; from: number; to: number }
-  | { type: "reward"; rewards: { key: string; label: string }[] };
+  | { type: "reward"; rewards: { key: string; label: string }[] }
+  | { type: "point"; amount: number; multiplier: number; streakDays: number }
+  | { type: "badge"; badges: { badgeKey: string; name: string; points: number }[] };
 
 export interface XpBreakdownLine {
   label: string;
@@ -52,6 +54,16 @@ export function buildXpEvents(result: WorkoutXpResult): XpEvent[] {
     });
   }
 
+  const points = result.pointsAwarded ?? 0;
+  if (points > 0) {
+    events.push({
+      type: "point",
+      amount: points,
+      multiplier: result.pointMultiplier ?? 1,
+      streakDays: result.streakDays ?? 0,
+    });
+  }
+
   if (
     result.levelUp &&
     typeof result.previousLevel === "number" &&
@@ -78,6 +90,17 @@ export function buildXpEvents(result: WorkoutXpResult): XpEvent[] {
 
   if (result.unlockedRewards && result.unlockedRewards.length > 0) {
     events.push({ type: "reward", rewards: result.unlockedRewards });
+  }
+
+  if (result.newBadges && result.newBadges.length > 0) {
+    events.push({
+      type: "badge",
+      badges: result.newBadges.map((b) => ({
+        badgeKey: b.badgeKey,
+        name: b.name,
+        points: b.points,
+      })),
+    });
   }
 
   return events;

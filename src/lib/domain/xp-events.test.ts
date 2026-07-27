@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildXpEvents } from "./xp-events";
+import { buildXpEvents, type XpEvent } from "./xp-events";
 import type { WorkoutXpResult } from "@/lib/workout";
 
 const awarded: WorkoutXpResult = {
@@ -89,5 +89,36 @@ describe("buildXpEvents", () => {
       newLevel: undefined,
     });
     expect(events.map((e) => e.type)).toEqual(["xp"]);
+  });
+});
+
+describe("buildXpEvents — 포인트·배지 (0032)", () => {
+  it("포인트를 받으면 point 이벤트가 xp 다음에 온다", () => {
+    const events = buildXpEvents({
+      idempotentReplay: false, awarded: true, xpAwarded: 140,
+      pointsAwarded: 150, pointMultiplier: 1.5, streakDays: 5,
+    });
+    expect(events.map((e) => e.type)).toEqual(["xp", "point"]);
+    const point = events[1] as Extract<XpEvent, { type: "point" }>;
+    expect(point.amount).toBe(150);
+    expect(point.multiplier).toBe(1.5);
+  });
+
+  it("신규 배지가 있으면 badge 이벤트가 마지막에 온다", () => {
+    const events = buildXpEvents({
+      idempotentReplay: false, awarded: true, xpAwarded: 100,
+      pointsAwarded: 100, pointMultiplier: 1,
+      newBadges: [
+        { badgeKey: "workout_1", emoji: "🐣", name: "첫 발", tier: "bronze", points: 300 },
+      ],
+    });
+    expect(events.at(-1)?.type).toBe("badge");
+  });
+
+  it("포인트가 0이면 point 이벤트를 만들지 않는다", () => {
+    const events = buildXpEvents({
+      idempotentReplay: false, awarded: false, xpAwarded: 0, pointsAwarded: 0,
+    });
+    expect(events).toEqual([]);
   });
 });

@@ -187,6 +187,50 @@ function EventBody({ event }: { event: XpEvent }) {
     );
   }
 
+  if (event.type === "point") {
+    return (
+      <div className="mt-2 text-center">
+        <p className="text-center text-5xl">🅿️</p>
+        <p
+          id="xp-result-title"
+          className="mt-3 text-center text-2xl font-extrabold text-accent"
+        >
+          +{event.amount.toLocaleString()} P
+        </p>
+        <p className="mt-1 text-center text-[12.5px] text-muted">
+          불꽃 {event.streakDays}일 · 배수 ×{event.multiplier}
+        </p>
+      </div>
+    );
+  }
+
+  if (event.type === "badge") {
+    return (
+      <div className="mt-2">
+        <p id="xp-result-title" className="text-center text-lg font-extrabold">
+          🏅 새 배지!
+        </p>
+        <ul className="mt-3 flex flex-col gap-2">
+          {event.badges.map((b) => (
+            <li key={b.badgeKey} className="flex items-center gap-2.5">
+              <Image
+                src={`/badges/${b.badgeKey}.png`}
+                alt=""
+                width={40}
+                height={40}
+                sizes="40px"
+              />
+              <span className="flex-1 text-left text-sm font-bold">{b.name}</span>
+              <span className="text-xs font-extrabold text-accent">
+                +{b.points} P
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
   return (
     <div className="mt-2 text-center">
       <div className="text-4xl">🎁</div>

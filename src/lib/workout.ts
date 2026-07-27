@@ -292,6 +292,17 @@ export interface WorkoutXpResult {
   levelUp?: boolean;
   stageUp?: boolean;
   unlockedRewards?: { key: string; label: string }[];
+  // 0032 포인트·배지
+  pointsAwarded?: number;
+  pointMultiplier?: number;
+  streakDays?: number;
+  newBadges?: {
+    badgeKey: string;
+    emoji: string;
+    name: string;
+    tier: string;
+    points: number;
+  }[];
   // 멱등 재생 응답 필드
   originalXpAwarded?: number;
   currentTotalXp?: number;
