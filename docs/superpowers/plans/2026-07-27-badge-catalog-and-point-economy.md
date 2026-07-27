@@ -240,14 +240,11 @@ git commit -m "feat: 0031 배지 정의·포인트 원장 스키마 + 30종 seed
 
 > `supabase/migrations/0031_badge_point_schema.sql` 전체를 SQL Editor에 붙여넣고 Run 해주세요.
 > 마지막에 나오는 표 세 개를 확인하고 싶습니다:
-> ① 티어별 개수 = bronze 8 · silver 9 · gold 7 · legend 6
-> ② 총 배지수 = 30
+> ① 티어별 개수 = **bronze 9 · silver 9 · gold 7 · legend 5**
+> ② 총 배지수 = **30**
 > ③ 기존 배지 2건이 `period_key = lifetime`으로 살아있는지
-
-> **티어 개수 주의:** legend는 6이 맞다 — 설계 §5.1의 5개에 `streak_5`(bronze)를 뺀
-> 수가 아니라, seed 실제 값 기준이다. bronze 8 = workout_1·10, minutes_300,
-> streak_5, volume_1t·5t, record_beaten_1·5. silver 9, gold 7, legend 5.
-> **합계 29 + streak_5 중복 계산 금지 → bronze 8에 streak_5가 포함되어 총 30이다.**
+>
+> (bronze 9에는 반복형 `streak_5`가 포함된다. 설계 §5.1의 "🥉 8"은 1회성만 센 수다.)
 
 ---
 
