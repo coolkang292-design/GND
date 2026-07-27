@@ -67,16 +67,25 @@ describe("MemberProfileBody — 레벨", () => {
   });
 });
 
-describe("MemberProfileBody — 배지", () => {
-  it("획득 배지는 그림과 이름, 미획득은 자물쇠로 표시한다", () => {
+describe("MemberProfileBody — 배지 (보유만 + 의미·보상)", () => {
+  it("보유 배지만 이름·의미·보상과 함께 보여준다", () => {
     const html = renderToStaticMarkup(
       <MemberProfileBody profile={profile()} catalog={CATALOG} />,
     );
     expect(html).toContain("어제의 나를 이겼개");
+    expect(html).toContain("처음으로 지난 기록을 넘었개"); // 의미(설명)
     expect(html).toContain("다섯 번 넘었개");
-    expect(html).toContain("기록이 무섭개"); // 미획득도 진열한다
-    expect(html).toContain("🔒");
+    expect(html).toContain("우연이 아니었개");
+    expect(html).toContain("+300 P"); // 획득 보상
     expect(html).toContain("2 / 3");
+  });
+
+  it("미획득 배지와 자물쇠는 보여주지 않는다", () => {
+    const html = renderToStaticMarkup(
+      <MemberProfileBody profile={profile()} catalog={CATALOG} />,
+    );
+    expect(html).not.toContain("기록이 무섭개"); // 미획득은 숨김
+    expect(html).not.toContain("🔒");
   });
 
   it("배지가 하나도 없으면 안내 문구를 보여준다", () => {

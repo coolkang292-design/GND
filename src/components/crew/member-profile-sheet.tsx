@@ -26,6 +26,8 @@ export function MemberProfileBody({
   // 배지가 46개로 늘어도 이 컴포넌트는 그대로다.
   const shelf = badgeShelf(catalog, profile.badges);
   const owned = earnedBadgeCount(catalog, profile.badges);
+  // 남의 프로필에서는 보유한 배지만 보여준다 — 미획득은 본인 성장 허브에서만 목표로 진열한다.
+  const earned = shelf.filter((b) => b.earnedAt !== null);
 
   return (
     <>
@@ -66,35 +68,50 @@ export function MemberProfileBody({
 
       <div className="mt-4 border-t border-line pt-3.5">
         <div className="flex items-baseline justify-between">
-          <h4 className="text-sm font-extrabold">배지</h4>
+          <h4 className="text-sm font-extrabold">보유 배지</h4>
           <p className="text-[11px] text-muted">
             {owned} / {shelf.length}
           </p>
         </div>
-        {owned === 0 && (
+        {earned.length === 0 ? (
           <p className="mt-1.5 text-[11.5px] text-muted">
             아직 획득한 배지가 없어요
           </p>
+        ) : (
+          <ul className="mt-2 flex flex-col gap-2">
+            {earned.map((badge) => (
+              <li
+                key={badge.key}
+                className="flex items-center gap-2.5 rounded-card-sm border border-line bg-surface-2 px-3 py-2"
+              >
+                <Image
+                  src={`/badges/${badge.key}.png`}
+                  alt=""
+                  width={36}
+                  height={36}
+                  sizes="36px"
+                  className="flex-none"
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] font-extrabold">
+                    {badge.name}
+                    {badge.count > 1 && (
+                      <span className="ml-1 text-[11px] font-bold text-muted">
+                        ×{badge.count}
+                      </span>
+                    )}
+                  </p>
+                  <p className="mt-0.5 text-[11.5px] leading-snug text-muted">
+                    {badge.description}
+                  </p>
+                </div>
+                <span className="flex-none text-[11px] font-extrabold text-accent">
+                  +{badge.pointReward} P
+                </span>
+              </li>
+            ))}
+          </ul>
         )}
-        <div className="mt-2 flex flex-wrap gap-2">
-          {shelf.map((badge) => (
-            <span
-              key={badge.key}
-              className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-extrabold ${
-                badge.earnedAt
-                  ? "border-accent bg-accent-weak text-accent"
-                  : "border-line bg-surface-2 text-faint opacity-60"
-              }`}
-            >
-              {badge.earnedAt ? (
-                <Image src={`/badges/${badge.key}.png`} alt="" width={18} height={18} />
-              ) : (
-                <span className="text-sm">🔒</span>
-              )}
-              {badge.name}
-            </span>
-          ))}
-        </div>
       </div>
     </>
   );
