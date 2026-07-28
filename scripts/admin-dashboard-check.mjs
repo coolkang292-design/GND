@@ -32,7 +32,8 @@ let pass = 0;
 let fail = 0;
 const check = (name, ok, detail = "") => {
   console.log(`  ${ok ? "✅" : "❌"} ${name}${detail ? ` — ${detail}` : ""}`);
-  ok ? pass++ : fail++;
+  if (ok) pass++;
+  else fail++;
 };
 
 console.log("\n=== 1. queries.ts가 읽는 테이블·컬럼이 실제로 존재하는가 ===");
