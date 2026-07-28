@@ -8,7 +8,7 @@ import {
   type ChallengePassStatus,
 } from "@/lib/domain/viewing-pass";
 import { challengeDaysLeft } from "@/lib/domain/challenge-time";
-import { getCrewProfiles, getMyGroups } from "@/lib/crew";
+import { getGroupMemberProfiles, getMyGroups } from "@/lib/crew";
 import {
   getActiveChallengeRanking,
   getCurrentChallenge,
@@ -52,7 +52,8 @@ export function ChallengePerformanceCard({
         if (p.state === "unlocked") {
           const [rank, crew] = await Promise.all([
             getActiveChallengeRanking(g.id),
-            getCrewProfiles(g.id),
+            // 챌린지 순위표의 닉네임 맵이라 그룹 참가자가 맞다(0039 범위 밖).
+            getGroupMemberProfiles(g.id),
           ]);
           if (cancelled) return;
           setRanking(rank);

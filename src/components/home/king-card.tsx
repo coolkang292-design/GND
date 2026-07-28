@@ -54,19 +54,23 @@ export function KingCard({
     let cancelled = false;
     (async () => {
       try {
-        const groups = await getMyGroups();
-        const g = groups[0];
-        if (!g || cancelled) {
-          if (!cancelled) setChallengeActive(false);
-          return;
-        }
-        setGroupId(g.id);
-        const [crew, challenge] = await Promise.all([
-          getCrewProfiles(g.id),
-          getCurrentChallenge(g.id),
+        // 열람권이 0039로 크루 기준이 됐으므로 후보도 크루다. 챌린지 진행 여부는
+        // 아직 그룹 기반이라 그룹 조회는 남긴다 — 그룹이 없으면 챌린지도 없다.
+        const [groups, crew] = await Promise.all([
+          getMyGroups(),
+          getCrewProfiles(userId),
         ]);
         if (cancelled) return;
         setMembers(crew.filter((m) => m.id !== userId));
+
+        const g = groups[0];
+        if (!g) {
+          setChallengeActive(false);
+          return;
+        }
+        setGroupId(g.id);
+        const challenge = await getCurrentChallenge(g.id);
+        if (cancelled) return;
         setChallengeActive(challenge?.status === "active");
       } catch {
         /* 크루/챌린지 조회 실패 — 카드 숨김 */

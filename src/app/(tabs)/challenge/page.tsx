@@ -21,7 +21,7 @@ import {
 } from "@/lib/domain/goal-score";
 import { challengeLevel, levelLabel } from "@/lib/domain/level";
 import { dayKey } from "@/lib/domain/time";
-import { getCrewProfiles, getMyGroups, getMyProfile } from "@/lib/crew";
+import { getGroupMemberProfiles, getMyGroups, getMyProfile } from "@/lib/crew";
 import {
   EMPTY_STATS,
   GOAL_TYPE_META,
@@ -138,7 +138,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
       if (!g) return;
 
       const [crew, ch] = await Promise.all([
-        getCrewProfiles(g.id),
+        getGroupMemberProfiles(g.id),
         getCurrentChallenge(g.id),
       ]);
       if (cancelled) return;

@@ -166,13 +166,33 @@ type FeedSessionRow = {
  * 스트릭은 내가 볼 수 있는 세션(본인 전체 + 크루 공개) 기준 근사치.
  * `photoOnly`: true면 인증사진이 있는 세션만 (workout_images!inner).
  */
-export async function getGroupFeed(
-  groupId: string,
+/**
+ * 내 크루의 user_id 목록 (본인 제외).
+ *
+ * crew_links는 0038에서 authenticated에 select만 열려 있고 정책이 "내가 낀 행"으로
+ * 좁히므로, 필터 없이 읽어도 내 연결만 온다. get_my_crew() RPC를 쓰지 않는 이유는
+ * 두 가지다 — 여기서는 id만 필요한데 그 RPC는 profiles·user_progress까지 조인하고,
+ * crew-link.ts가 social.ts의 toSocialError를 쓰고 있어 서로 import하면 순환이 된다.
+ */
+async function fetchCrewIds(myUserId: string): Promise<string[]> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("crew_links")
+    .select("user_a, user_b");
+  if (error) throw error;
+  return ((data ?? []) as { user_a: string; user_b: string }[]).map((l) =>
+    l.user_a === myUserId ? l.user_b : l.user_a,
+  );
+}
+
+export async function getCrewFeed(
   myUserId: string,
   before?: string,
   photoOnly = false,
 ): Promise<FeedItem[]> {
   const supabase = getSupabaseBrowserClient();
+  // RLS가 이미 크루 기준이지만 클라 쿼리도 좁혀야 FEED_PAGE_SIZE가 정확하다.
+  const visibleIds = [myUserId, ...(await fetchCrewIds(myUserId))];
 
   // photoOnly: workout_images!inner = 인증사진 있는 세션만 (세션당 1장
   // unique(0005)라 join 중복 없음). 정렬·커서는 전체 피드와 동일.
@@ -185,7 +205,7 @@ export async function getGroupFeed(
     .select(
       `id, user_id, title, completed_at, duration_minutes, record_note, tabata_minutes, workout_exercises(exercise_name, exercise_type, sort_order, workout_sets(weight_kg, reps, duration_seconds, distance_meters, is_completed)), ${imagesEmbed}`,
     )
-    .eq("group_id", groupId)
+    .in("user_id", visibleIds)
     .eq("status", "completed")
     .eq("visibility", "group")
     .is("deleted_at", null)
@@ -385,16 +405,12 @@ export type ActiveCrewSession = {
 
 /** 크루원들의 진행 중 세션 (본인 포함 — 표시 제외는 UI 책임) */
 export async function getActiveCrewSessions(
-  groupId: string,
+  myUserId: string,
 ): Promise<ActiveCrewSession[]> {
   const supabase = getSupabaseBrowserClient();
 
-  const { data: members, error: mErr } = await supabase
-    .from("group_members")
-    .select("user_id")
-    .eq("group_id", groupId);
-  if (mErr) throw mErr;
-  const memberIds = (members ?? []).map((m) => m.user_id);
+  // 0039: 그룹 멤버 → 크루 연결. 본인을 포함하는 이유는 위 주석 그대로다.
+  const memberIds = [myUserId, ...(await fetchCrewIds(myUserId))];
   if (memberIds.length === 0) return [];
 
   // 최근 24h 이벤트만 — 진행 중 판정(6h 컷)은 도메인 함수가 한다

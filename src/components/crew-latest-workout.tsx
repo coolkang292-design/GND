@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
-import { getMyGroups } from "@/lib/crew";
 import {
   getLatestCrewWorkoutWithPhoto,
   type LatestCrewWorkout,
@@ -22,11 +21,8 @@ export function CrewLatestWorkout() {
 
     async function load() {
       try {
-        const groups = await getMyGroups();
-        if (cancelled) return;
-        const g = groups[0];
-        if (!g) return;
-        const latest = await getLatestCrewWorkoutWithPhoto(g.id);
+        // 0039: 그룹 → 크루 연결. 본인 인증사진도 후보에 든다("(나)" 표시는 카드가 한다).
+        const latest = await getLatestCrewWorkoutWithPhoto(userId!);
         if (!cancelled) setItem(latest);
       } finally {
         if (!cancelled) setReady(true);

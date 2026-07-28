@@ -8,17 +8,14 @@ import { FeedItemCard } from "@/components/feed/feed-item";
 import { NotificationBell } from "@/components/notification-bell";
 import { feedDateLabel, groupByDay } from "@/lib/domain/social";
 import { dayKey } from "@/lib/domain/time";
-import { getMyGroups } from "@/lib/crew";
 import {
   FEED_PAGE_SIZE,
-  getGroupFeed,
+  getCrewFeed,
   type FeedItem,
 } from "@/lib/social";
-import type { Group } from "@/lib/types";
 
 export default function FeedPage() {
   const { userId, loading, configured } = useAuth();
-  const [group, setGroup] = useState<Group | null>(null);
   const [items, setItems] = useState<FeedItem[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [ready, setReady] = useState(false);
@@ -34,16 +31,12 @@ export default function FeedPage() {
       setItems([]);
       setHasMore(false);
       try {
-        const groups = await getMyGroups();
+        // 0039: 그룹 소속이 아니라 크루 연결 기준. 크루가 없어도 내 운동은 보이므로
+        // 그룹 유무로 피드 전체를 접던 가드를 없앴다.
+        const page = await getCrewFeed(userId!);
         if (cancelled) return;
-        const g = groups[0] ?? null;
-        setGroup(g);
-        if (g) {
-          const page = await getGroupFeed(g.id, userId!);
-          if (cancelled) return;
-          setItems(page);
-          setHasMore(page.length === FEED_PAGE_SIZE);
-        }
+        setItems(page);
+        setHasMore(page.length === FEED_PAGE_SIZE);
       } finally {
         if (!cancelled) setReady(true);
       }
@@ -71,17 +64,17 @@ export default function FeedPage() {
   );
 
   const loadMore = useCallback(async () => {
-    if (!group || !userId || items.length === 0) return;
+    if (!userId || items.length === 0) return;
     setLoadingMore(true);
     try {
       const before = items[items.length - 1].completedAt.toISOString();
-      const page = await getGroupFeed(group.id, userId, before);
+      const page = await getCrewFeed(userId, before);
       setItems((prev) => [...prev, ...page]);
       setHasMore(page.length === FEED_PAGE_SIZE);
     } finally {
       setLoadingMore(false);
     }
-  }, [group, userId, items]);
+  }, [userId, items]);
 
   return (
     <div className="flex flex-col gap-3">
@@ -99,18 +92,14 @@ export default function FeedPage() {
 
       {!ready ? (
         <p className="py-10 text-center text-sm text-muted">불러오는 중…</p>
-      ) : !group ? (
-        <section className="rounded-card border border-line bg-surface p-5 text-center shadow-card">
-          <p className="text-sm font-bold">아직 크루가 없어요</p>
-          <p className="mt-1 text-xs text-muted">
-            홈에서 크루를 만들거나 초대 링크로 참여해보세요.
-          </p>
-        </section>
       ) : items.length === 0 ? (
         <section className="rounded-card border border-line bg-surface p-5 text-center shadow-card">
-          <p className="text-sm font-bold">아직 크루 운동이 없어요</p>
+          <p className="text-sm font-bold">아직 운동 기록이 없어요</p>
           <p className="mt-1 text-xs text-muted">
             첫 운동을 완료하면 여기에 나타나요 💪
+          </p>
+          <p className="mt-1 text-xs text-muted">
+            내 정보 › 크루에서 닉네임으로 크루를 추가하면 서로의 운동도 보여요.
           </p>
         </section>
       ) : (

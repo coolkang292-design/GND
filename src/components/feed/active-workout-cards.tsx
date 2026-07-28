@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
-import { getMyGroups } from "@/lib/crew";
 import {
   getActiveCrewSessions,
   sendCheer,
@@ -39,11 +38,8 @@ export function ActiveWorkoutCards() {
 
     async function load() {
       try {
-        const groups = await getMyGroups();
-        if (cancelled) return;
-        const g = groups[0];
-        if (!g) return;
-        const active = await getActiveCrewSessions(g.id);
+        // 0039: 그룹 소속 → 크루 연결. 그룹이 없어도 크루가 있으면 보여야 한다.
+        const active = await getActiveCrewSessions(userId!);
         if (!cancelled) setSessions(active);
       } catch {
         /* 진행 중 카드는 부가 정보 — 실패해도 화면을 막지 않는다 */

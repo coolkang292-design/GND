@@ -35,17 +35,16 @@ export function CrewCard() {
 
     async function load() {
       try {
-        const groups = await getMyGroups();
+        // 그룹은 챌린지·초대 링크 CTA용으로만 남는다. 멤버 목록은 0039부터 크루 연결 기준.
+        const [groups, crew] = await Promise.all([
+          getMyGroups(),
+          getCrewProfiles(userId!),
+        ]);
         if (cancelled) return;
-        const g = groups[0] ?? null;
-        setGroup(g);
-        if (g) {
-          const crew = await getCrewProfiles(g.id);
-          if (cancelled) return;
-          setMembers(crew);
-          const done = await getTodaysWorkoutUserIds(crew.map((c) => c.id));
-          if (!cancelled) setWorkedOut(done);
-        }
+        setGroup(groups[0] ?? null);
+        setMembers(crew);
+        const done = await getTodaysWorkoutUserIds(crew.map((c) => c.id));
+        if (!cancelled) setWorkedOut(done);
       } finally {
         if (!cancelled) setReady(true);
       }

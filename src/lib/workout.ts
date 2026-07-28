@@ -840,14 +840,26 @@ export type LatestCrewWorkout = {
  * 비공개 버킷이라 서명 URL로 이미지를 노출한다. 없으면 null.
  */
 export async function getLatestCrewWorkoutWithPhoto(
-  groupId: string,
+  myUserId: string,
 ): Promise<LatestCrewWorkout | null> {
   const supabase = getSupabaseBrowserClient();
+
+  // 0039: 그룹 → 크루 연결. 본인도 포함한다 — 홈 카드가 "(나)" 표시를 이미 한다.
+  const { data: links, error: lErr } = await supabase
+    .from("crew_links")
+    .select("user_a, user_b");
+  if (lErr) throw lErr;
+  const visibleIds = [
+    myUserId,
+    ...((links ?? []) as { user_a: string; user_b: string }[]).map((l) =>
+      l.user_a === myUserId ? l.user_b : l.user_a,
+    ),
+  ];
 
   const { data, error } = await supabase
     .from("workout_sessions")
     .select("id, user_id, completed_at, workout_images!inner(image_path)")
-    .eq("group_id", groupId)
+    .in("user_id", visibleIds)
     .eq("status", "completed")
     .eq("visibility", "group")
     .is("deleted_at", null)
