@@ -9,15 +9,17 @@ import {
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 /**
- * 이 브라우저가 어떤 계정으로 접속했는지 **자기 것만** 보여준다. 게이트 없음.
+ * 이 브라우저가 /admin에 왜 들어가지고/못 들어가는지 보여준다. 게이트 없음.
  *
  * 왜 필요한가: GND는 익명 인증이라 브라우저마다 계정이 다르고, 브라우저 데이터를
- * 지우면 새 계정이 생긴다. 그래서 ADMIN_USER_IDS에 무엇을 넣어야 하는지 알 수가
- * 없다. auth.users를 last_sign_in_at으로 추측하는 것은 틀린다 — 그 값은 새로
- * 로그인할 때만 갱신되고 세션 재사용 때는 그대로다.
+ * 지우면 새 계정이 생긴다. 무엇이 막고 있는지 알 방법이 없으면 404만 보고
+ * 추측하게 된다(실제로 그렇게 여러 번 헛짚었다).
  *
- * 보안: 요청자가 이미 자기 브라우저에 갖고 있는 값만 되돌려준다. 남의 정보는
- * 일절 노출하지 않으므로 게이트를 걸 이유가 없다(걸면 정작 막힌 사람이 못 쓴다).
+ * **진단은 세션이 없어도 보여준다.** 암호키 경로는 세션 없이도 통과하므로,
+ * 세션이 없을 때야말로 이 화면이 필요하다.
+ *
+ * 보안: 요청자가 이미 자기 브라우저에 갖고 있는 값(자기 UID)만 되돌려주고,
+ * 허용목록과 암호키는 **개수·불리언만** 노출한다. 남의 UID도 키도 새지 않는다.
  */
 export const dynamic = "force-dynamic";
 
@@ -26,8 +28,6 @@ export default async function WhoAmIPage() {
   const { data } = await supabase.auth.getUser();
   const userId = data.user?.id ?? null;
 
-  // 진단: 서버가 나를 관리자로 보는가. 허용목록의 **개수만** 노출하고
-  // 값은 절대 찍지 않는다 — 남의 UID도, 암호키도 새면 안 된다.
   const adminIds = parseAdminIds(process.env.ADMIN_USER_IDS);
   const cookieValue = (await cookies()).get(ADMIN_COOKIE)?.value ?? null;
   const accessKey = process.env.ADMIN_ACCESS_KEY;
@@ -37,77 +37,83 @@ export default async function WhoAmIPage() {
   const allowed = hasAdminAccess({ userId, adminIds, cookieValue, accessKey });
 
   return (
-    <main className="main" style={{ width: "100%", margin: 0, maxWidth: 720 }}>
+    <main className="main" style={{ width: "100%", margin: 0, maxWidth: 760 }}>
       <header>
         <div>
           <p className="kicker">ADMIN ACCESS</p>
-          <h1>내 계정 UID</h1>
-          <p>이 브라우저가 접속에 쓰는 계정입니다.</p>
+          <h1>{allowed ? "접근 가능" : "차단됨"}</h1>
+          <p>이 브라우저가 /admin에 들어갈 수 있는지 진단합니다.</p>
         </div>
       </header>
 
       <article className="panel">
-        {userId ? (
-          <>
-            <div className="panel-title">
-              <div>
-                <p className="kicker">USER ID</p>
-                <h2 style={{ fontSize: 15, wordBreak: "break-all" }}>
-                  {userId}
-                </h2>
-              </div>
-            </div>
-            <div className="summary" style={{ marginBottom: 14 }}>
-              <div>
-                <small>서버 판정</small>
-                <b className={allowed ? "up" : ""} style={{ fontSize: 14 }}>
-                  {allowed ? "✅ 관리자" : "❌ 차단"}
-                </b>
-              </div>
-              <div>
-                <small>UID 허용목록</small>
-                <b style={{ fontSize: 14 }}>
-                  {byUid ? "✅ 포함" : `❌ (${adminIds.length}개 등록됨)`}
-                </b>
-              </div>
-              <div>
-                <small>암호키 쿠키</small>
-                <b style={{ fontSize: 14 }}>
-                  {byKey ? "✅ 유효" : cookieValue ? "❌ 불일치" : "없음"}
-                </b>
-              </div>
-              <div>
-                <small>서버 암호키 설정</small>
-                <b style={{ fontSize: 14 }}>{accessKey ? "✅ 있음" : "❌ 없음"}</b>
-              </div>
-            </div>
-
-            <div className="insight">
-              {allowed ? (
-                <>
-                  <b>이 브라우저는 관리자입니다.</b> <b>/admin</b>이 열립니다.
-                </>
-              ) : (
-                <>
-                  <b>여는 방법 두 가지.</b>
-                  <br />① 주소 뒤에 <b>?key=암호</b>를 붙여 한 번 열면 이
-                  브라우저에 쿠키가 남아 계속 열립니다(권장 — 재배포 불필요).
-                  <br />② 위 UID를 <b>ADMIN_USER_IDS</b>에 추가하고 재배포합니다.
-                </>
-              )}
-              <br />
-              브라우저 데이터를 지우면 익명 계정 UID도 쿠키도 사라집니다 — 그때
-              ①을 다시 하면 됩니다.
-            </div>
-          </>
-        ) : (
-          <div className="insight">
-            <b>세션이 없습니다.</b>
-            <br />
-            앱을 한 번 연 뒤(<b>gnd-one.vercel.app</b>) 이 페이지를 새로고침하세요.
-            익명 로그인이 끝나야 UID가 생깁니다.
+        <div className="summary" style={{ marginTop: 0, marginBottom: 16 }}>
+          <div>
+            <small>최종 판정</small>
+            <b className={allowed ? "up" : ""} style={{ fontSize: 14 }}>
+              {allowed ? "✅ 관리자" : "❌ 차단"}
+            </b>
           </div>
-        )}
+          <div>
+            <small>암호키 쿠키</small>
+            <b style={{ fontSize: 14 }}>
+              {byKey ? "✅ 유효" : cookieValue ? "❌ 불일치" : "— 없음"}
+            </b>
+          </div>
+          <div>
+            <small>UID 허용목록</small>
+            <b style={{ fontSize: 14 }}>
+              {byUid ? "✅ 포함" : `❌ (${adminIds.length}개 등록)`}
+            </b>
+          </div>
+          <div>
+            <small>서버 암호키</small>
+            <b style={{ fontSize: 14 }}>{accessKey ? "✅ 설정됨" : "❌ 없음"}</b>
+          </div>
+        </div>
+
+        <div className="panel-title" style={{ marginBottom: 8 }}>
+          <div>
+            <p className="kicker">이 브라우저의 계정 UID</p>
+            <h2 style={{ fontSize: 14, wordBreak: "break-all" }}>
+              {userId ?? "세션 없음 (익명 로그인 전)"}
+            </h2>
+          </div>
+        </div>
+
+        <div className="insight">
+          {allowed ? (
+            <>
+              <b>이 브라우저는 /admin이 열립니다.</b>
+              <br />
+              암호키 쿠키는 180일간 유지됩니다. 브라우저 데이터를 지우면 사라지니
+              그때 다시 <b>?key=</b>로 한 번 열면 됩니다.
+            </>
+          ) : !accessKey ? (
+            <>
+              <b>서버에 암호키가 설정돼 있지 않습니다.</b> Vercel 환경변수
+              <b> ADMIN_ACCESS_KEY</b>를 등록하고 재배포해야 합니다. 설정이 없으면
+              무엇을 보내도 통과하지 않습니다(fail-closed).
+            </>
+          ) : cookieValue ? (
+            <>
+              <b>쿠키는 있는데 서버 키와 다릅니다.</b> 키가 바뀌었거나 오타로
+              들어왔습니다. <b>/admin?key=…</b>를 다시 열어 주세요 — 주소를 직접
+              입력하면 대소문자·하이픈에서 틀리기 쉬우니 <b>복사해서 붙여넣기</b>를
+              권합니다.
+            </>
+          ) : (
+            <>
+              <b>아직 암호키로 연 적이 없습니다.</b>
+              <br />
+              <b>/admin?key=암호</b> 형태로 한 번 열면 이 브라우저에 쿠키가 남아
+              이후로는 <b>/admin</b>만으로 열립니다. 세션이 없어도 됩니다.
+              <br />
+              주소를 손으로 입력하면 틀리기 쉽습니다 —{" "}
+              <b>복사해서 붙여넣으세요.</b>
+            </>
+          )}
+        </div>
       </article>
     </main>
   );

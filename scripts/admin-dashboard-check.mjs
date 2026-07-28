@@ -106,9 +106,16 @@ const adminIds = (env.ADMIN_USER_IDS ?? "")
   .split(",").map((s) => s.trim()).filter(Boolean);
 check("ADMIN_USER_IDS 설정됨", adminIds.length > 0,
   adminIds.length === 0 ? "비어 있음 — 전원 404가 된다" : `${adminIds.length}개`);
+// 관리자가 프로필을 가질 필요는 없다 — /admin은 프로필을 요구하지 않고,
+// 익명 계정으로 접속하는 브라우저는 프로필이 없는 것이 정상이다. 참고 표시만 한다.
 for (const id of adminIds) {
   const p = (profiles.data ?? []).find((x) => x.id === id);
-  check(`  ${id.slice(0, 8)}… 계정 존재`, Boolean(p), p ? p.nickname : "profiles에 없음");
+  const known = (auth.data?.users ?? []).some((u) => u.id === id);
+  check(
+    `  ${id.slice(0, 8)}… auth 계정 존재`,
+    known,
+    p ? `프로필: ${p.nickname}` : "프로필 없음(정상 — 관리자에 프로필 불필요)",
+  );
 }
 
 console.log("\n=== 3. 대시보드가 보여줄 실제 숫자 (미리보기) ===");
