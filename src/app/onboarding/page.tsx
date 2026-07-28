@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 import { normalizeInviteCode } from "@/lib/domain/invite-code";
@@ -221,6 +222,16 @@ export default function OnboardingPage() {
           <Primary onClick={submitProfile} busy={busy}>
             다음
           </Primary>
+
+          {/* 세션이 끊겨 온보딩으로 떨어진 기존 사용자의 탈출구.
+              여기서 "다음"을 누르면 새 계정이 생겨 기존 기록과 분리되므로,
+              돌아갈 문을 같은 화면에 둔다. */}
+          <Link
+            href="/login"
+            className="mt-4 block text-[13px] text-muted underline"
+          >
+            이미 계정이 있나요? 로그인
+          </Link>
         </>
       )}
 
