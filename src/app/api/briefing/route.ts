@@ -41,7 +41,7 @@ export async function GET(req: Request) {
   }
 
   const admin = getSupabaseAdminClient();
-  const [profilesRes, sessionsRes, settingsRes, membersRes] =
+  const [profilesRes, sessionsRes, settingsRes] =
     await Promise.all([
       admin.from("profiles").select("id, timezone"),
       // 전체 완료 세션 조회 — PostgREST 기본 row cap(1000)에 걸리면 조용히 잘려
@@ -53,9 +53,8 @@ export async function GET(req: Request) {
         .is("deleted_at", null)
         .not("completed_at", "is", null),
       admin.from("notification_settings").select("user_id, morning_brief"),
-      admin.from("group_members").select("group_id, user_id"),
     ]);
-  const queryError = [profilesRes, sessionsRes, settingsRes, membersRes].find(
+  const queryError = [profilesRes, sessionsRes, settingsRes].find(
     (r) => r.error,
   )?.error;
   if (queryError) {
@@ -71,27 +70,13 @@ export async function GET(req: Request) {
   const settings = new Map(
     (settingsRes.data ?? []).map((s) => [s.user_id, s.morning_brief as boolean]),
   );
-  const membersByGroup = new Map<string, string[]>();
-  const groupsByUser = new Map<string, string[]>();
-  for (const m of membersRes.data ?? []) {
-    membersByGroup.set(m.group_id, [
-      ...(membersByGroup.get(m.group_id) ?? []),
-      m.user_id,
-    ]);
-    groupsByUser.set(m.user_id, [
-      ...(groupsByUser.get(m.user_id) ?? []),
-      m.group_id,
-    ]);
-  }
-
+  // 크루 조회는 없앴다(2026-07-28). 브리핑은 본문을 안 보내므로 크루 집계가 필요
+  // 없고, 0039 이후 group_members는 크루의 원천도 아니다.
   const users: BriefingUser[] = (profilesRes.data ?? []).map((p) => ({
     userId: p.id,
     timezone: (p.timezone as string) || "Asia/Seoul",
     completedAts: completedAtsByUser.get(p.id) ?? [],
     morningBrief: settings.get(p.id) ?? true,
-    crewMemberIds: (groupsByUser.get(p.id) ?? []).flatMap(
-      (g) => membersByGroup.get(g) ?? [],
-    ),
   }));
 
   const { briefings, skipped } = buildBriefings(

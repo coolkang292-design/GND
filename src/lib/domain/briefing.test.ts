@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   buildBriefings,
-  crewFriendsWorkedYesterday,
   DEFAULT_BRIEF_HOUR,
   type BriefingUser,
 } from "./briefing";
@@ -17,37 +16,9 @@ function user(over: Partial<BriefingUser>): BriefingUser {
     timezone: TZ,
     completedAts: [kst("2026-07-14T19:00:00")], // 4일 전 → d1
     morningBrief: true,
-    crewMemberIds: [],
     ...over,
   };
 }
-
-describe("crewFriendsWorkedYesterday", () => {
-  const byUser = new Map<string, Date[]>([
-    ["me", [kst("2026-07-17T20:00:00")]],
-    ["f1", [kst("2026-07-17T07:00:00")]],
-    ["f2", [kst("2026-07-16T07:00:00")]], // 그저께 — 카운트 제외
-    ["f3", [kst("2026-07-17T23:59:00")]], // 어제 자정 직전 — 포함
-  ]);
-
-  it("어제 운동한 친구만 센다 (그저께 제외)", () => {
-    expect(
-      crewFriendsWorkedYesterday("me", ["f1", "f2"], byUser, NOW, TZ),
-    ).toBe(1);
-  });
-  it("다중 크루 중복 인원은 1명", () => {
-    expect(
-      crewFriendsWorkedYesterday("me", ["f1", "f1", "f3"], byUser, NOW, TZ),
-    ).toBe(2);
-  });
-  it("본인은 제외 — 어제 나만 운동이면 0", () => {
-    expect(crewFriendsWorkedYesterday("me", ["me"], byUser, NOW, TZ)).toBe(0);
-  });
-  it("tz 자정 경계: KST 7/18 00:00(UTC 7/17 15:00)은 어제가 아니다", () => {
-    const m = new Map([["f1", [new Date("2026-07-17T15:00:00Z")]]]);
-    expect(crewFriendsWorkedYesterday("me", ["f1"], m, NOW, TZ)).toBe(0);
-  });
-});
 
 describe("buildBriefings — skip 판정", () => {
   it("완료 세션 없으면 no_history", () => {
@@ -101,31 +72,18 @@ describe("buildBriefings — 제목(스트릭 단계)", () => {
   });
 });
 
-describe("buildBriefings — 본문(크루 한 줄)·dedupe_key", () => {
+describe("buildBriefings — 본문·dedupe_key", () => {
   const byUser = new Map<string, Date[]>([
     ["f1", [kst("2026-07-17T07:00:00")]],
     ["f2", [kst("2026-07-17T08:00:00")]],
   ]);
 
-  it("친구 2명 어제 운동 → n명 문구", () => {
-    const { briefings } = buildBriefings(
-      [user({ crewMemberIds: ["me", "f1", "f2"] })], byUser, NOW,
-    );
-    expect(briefings[0].body).toBe("어제 크루 친구 2명이 운동했어요 💪");
-  });
-  it("친구는 있는데 어제 0명 → 독려 문구", () => {
-    const { briefings } = buildBriefings(
-      [user({ crewMemberIds: ["me", "f9"] })], byUser, NOW,
-    );
-    expect(briefings[0].body).toBe(
-      "어제는 다들 쉬었네요. 오늘 첫 타자 어때요? 🏃",
-    );
-  });
-  it("크루 없음(혼자 크루 포함) → 본문 null", () => {
-    const { briefings } = buildBriefings(
-      [user({ crewMemberIds: ["me"] })], byUser, NOW,
-    );
-    expect(briefings[0].body).toBeNull();
+  it("본문은 언제나 null — 크루 집계 문구를 없앴다 (2026-07-28)", () => {
+    // 어제 운동한 사람이 있든 없든, 크루가 있든 없든 결과가 같아야 한다.
+    expect(buildBriefings([user({})], byUser, NOW).briefings[0].body).toBeNull();
+    expect(
+      buildBriefings([user({})], new Map(), NOW).briefings[0].body,
+    ).toBeNull();
   });
   it("dedupe_key = morning_briefing:{userId}:{tz 로컬 날짜}", () => {
     const { briefings } = buildBriefings([user({})], new Map(), NOW);

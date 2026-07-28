@@ -20,7 +20,6 @@ export type BriefingUser = {
   timezone: string;
   completedAts: Date[]; // 본인 완료 순간 전체
   morningBrief: boolean; // notification_settings.morning_brief (행 없음 = true)
-  crewMemberIds: string[]; // 소속 전체 크루 멤버 합집합 (중복·본인 포함 가능)
 };
 
 export type Briefing = {
@@ -35,28 +34,6 @@ export type BriefingSkip = {
   reason: "no_history" | "opted_out" | "hour_mismatch";
 };
 
-/**
- * 어제(유저 tz) 운동한 크루 친구 수 — user_id 중복 제거, 본인 제외,
- * 현재 멤버십 기준 (스펙 §3 집계 정의).
- */
-export function crewFriendsWorkedYesterday(
-  myId: string,
-  crewMemberIds: string[],
-  completedAtsByUser: Map<string, Date[]>,
-  now: Date,
-  timeZone: string,
-): number {
-  const yesterdayKey = dayKey(new Date(now.getTime() - 86_400_000), timeZone);
-  const friends = new Set(crewMemberIds);
-  friends.delete(myId);
-  let n = 0;
-  for (const id of friends) {
-    const ats = completedAtsByUser.get(id) ?? [];
-    if (ats.some((t) => dayKey(t, timeZone) === yesterdayKey)) n++;
-  }
-  return n;
-}
-
 /** 브리핑용 제목 조립 — 카피 데이터는 홈 카드와 공용, 조립만 채널별 (스펙 §2) */
 function briefingTitle(
   stage: StreakStage,
@@ -70,13 +47,6 @@ function briefingTitle(
   return `🔥 스트릭 ${streak}일 유지 중이에요`; // 방어 — none은 호출 전 제외됨
 }
 
-function briefingBody(friendCount: number | null): string | null {
-  if (friendCount === null) return null; // 크루 친구 없음 → 본문 생략
-  return friendCount >= 1
-    ? `어제 크루 친구 ${friendCount}명이 운동했어요 💪`
-    : "어제는 다들 쉬었네요. 오늘 첫 타자 어때요? 🏃";
-}
-
 /**
  * 유저별 아침 브리핑 발송 판정 (스킵 사유 포함).
  * invocationHourOverride는 **전 유저의 시각 판정을 하나의 값으로 강제**한다
@@ -85,7 +55,9 @@ function briefingBody(friendCount: number | null): string | null {
  */
 export function buildBriefings(
   users: BriefingUser[],
-  completedAtsByUser: Map<string, Date[]>,
+  // 크루 집계 문구를 없애면서 쓰지 않게 됐다(2026-07-28). 라우트가 이미 넘기고
+  // 있어 시그니처는 그대로 둔다 — 지우면 호출부까지 흔들린다.
+  _completedAtsByUser: Map<string, Date[]>,
   now: Date,
   invocationHourOverride?: number,
 ): { briefings: Briefing[]; skipped: BriefingSkip[] } {
@@ -112,17 +84,12 @@ export function buildBriefings(
     const stage = streakStage(keys, todayKey);
     const streak = currentStreak(keys, todayKey);
 
-    const hasFriends = u.crewMemberIds.some((id) => id !== u.userId);
-    const friendCount = hasFriends
-      ? crewFriendsWorkedYesterday(
-          u.userId, u.crewMemberIds, completedAtsByUser, now, u.timezone,
-        )
-      : null;
-
     briefings.push({
       userId: u.userId,
       title: briefingTitle(stage, streak, todayKey),
-      body: briefingBody(friendCount),
+      // 크루 집계 문구를 없앴다(2026-07-28). 타입은 null 허용으로 남긴다 —
+      // 알림 INSERT와 푸시 페이로드가 body를 그대로 넘기고 있다.
+      body: null,
       dedupeKey: `morning_briefing:${u.userId}:${todayKey}`,
     });
   }
