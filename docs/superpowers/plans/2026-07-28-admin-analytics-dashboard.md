@@ -1430,7 +1430,12 @@ export interface AdminDataset {
   profiles: AdminProfileRow[];
   sessions: SessionRow[];
   totalXpByUser: Map<string, number>;
-  crewMemberUserIds: string[];
+  /**
+   * 크루 참여율의 원천은 **crew_links**다(0039부터 "크루" = 상호 수락 연결).
+   * group_members는 0039 이후 **챌린지 전용**으로만 남았다 — 크루 지표에 쓰면 틀린다.
+   * (`src/lib/crew.ts`의 getGroupMemberProfiles 주석 참고)
+   */
+  crewLinkUserIds: string[];
 }
 
 /**
@@ -1448,7 +1453,8 @@ export async function fetchAdminDataset(): Promise<AdminDataset> {
         .is("deleted_at", null),
       db.from("profiles").select("id,nickname,avatar_url,created_at"),
       db.from("user_progress").select("user_id,total_xp"),
-      db.from("group_members").select("user_id"),
+      // 0039부터 "크루" = crew_links(상호 수락). group_members는 챌린지 전용이다.
+      db.from("crew_links").select("user_a,user_b"),
       db.auth.admin.listUsers({ page: 1, perPage: 1000 }),
     ]);
 
@@ -1456,7 +1462,7 @@ export async function fetchAdminDataset(): Promise<AdminDataset> {
     ["workout_sessions", sessionsRes],
     ["profiles", profilesRes],
     ["user_progress", progressRes],
-    ["group_members", membersRes],
+    ["crew_links", membersRes],
   ] as const) {
     if (res.error) throw new Error(`${name} 조회 실패: ${res.error.message}`);
   }
@@ -1488,7 +1494,11 @@ export async function fetchAdminDataset(): Promise<AdminDataset> {
         r.total_xp as number,
       ]),
     ),
-    crewMemberUserIds: (membersRes.data ?? []).map((r) => r.user_id as string),
+    // 연결의 양쪽 끝을 모두 "크루 보유자"로 센다
+    crewLinkUserIds: (membersRes.data ?? []).flatMap((r) => [
+      r.user_a as string,
+      r.user_b as string,
+    ]),
   };
 }
 ```
@@ -2014,6 +2024,8 @@ export async function fetchActiveChallenges(
     .eq("status", "active");
   if (error) throw new Error(`challenges 조회 실패: ${error.message}`);
 
+  // 챌린지 참여 인원은 group_members가 맞다 — 0039 이후에도 챌린지는 그룹 기반이다.
+  // (크루 참여율만 crew_links를 쓴다. 두 개념이 갈라졌으니 섞지 말 것.)
   const { data: members, error: mErr } = await db
     .from("group_members")
     .select("group_id,user_id");
@@ -2072,7 +2084,7 @@ import { ChallengePanel } from "./_components/challenge-panel";
 ```tsx
 const retention = reworkoutRetention(data.profiles, data.sessions, now);
 const funnel = activationFunnel(data.authUsers, data.profiles, data.sessions);
-const crew = crewParticipation(data.profiles, data.crewMemberUserIds);
+const crew = crewParticipation(data.profiles, data.crewLinkUserIds);
 const challenges = await fetchActiveChallenges(now);
 ```
 
