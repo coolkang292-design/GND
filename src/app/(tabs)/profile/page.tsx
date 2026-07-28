@@ -113,6 +113,21 @@ export default function ProfilePage() {
 
       {showSettings && (
         <>
+          {/* 계정(이메일·비밀번호)은 알림 설정과 성격이 다르지만, 톱니 안이
+              사용자가 "설정"을 찾는 유일한 곳이라 여기에 둔다. */}
+          <Link
+            href="/account"
+            className="flex items-center justify-between rounded-card border border-line bg-surface p-4 shadow-card"
+          >
+            <div>
+              <p className="text-sm font-bold">계정</p>
+              <p className="mt-0.5 text-xs text-muted">
+                로그인 이메일 확인 · 비밀번호 변경
+              </p>
+            </div>
+            <span className="text-muted">›</span>
+          </Link>
+
           <PushSettings />
 
           {loadError && (
