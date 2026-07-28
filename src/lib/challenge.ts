@@ -518,3 +518,45 @@ export async function getActiveChallengeRanking(
   );
   return { name: ch.name, list };
 }
+
+// ── 성과 열람 지정 (0040) ─────────────────────────────────────
+// 열람 창은 KST 하루에 하나라 선택도 하루 하나다. 이미 고른 게 있으면 RPC가
+// 그걸 그대로 돌려주므로, 두 번째 호출은 실패가 아니라 조회가 된다.
+
+/** 오늘 이 챌린지에서 내가 고른 열람 대상 — 아직 안 골랐으면 null */
+export async function getTodaysPeekTarget(
+  challengeId: string,
+): Promise<string | null> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("challenge_peek_picks")
+    .select("target_id, pick_date")
+    .eq("challenge_id", challengeId)
+    .order("pick_date", { ascending: false })
+    .limit(1);
+  if (error) throw error;
+  const row = (data ?? [])[0] as
+    | { target_id: string; pick_date: string }
+    | undefined;
+  if (!row) return null;
+  // 어제 창의 선택이 오늘로 새지 않게 KST 날짜를 다시 확인한다.
+  const todayKst = new Date(Date.now() + 9 * 3_600_000)
+    .toISOString()
+    .slice(0, 10);
+  return row.pick_date === todayKst ? row.target_id : null;
+}
+
+/** 열람 대상 지정 — 이미 고른 사람이 있으면 그 사람이 그대로 돌아온다 */
+export async function pickPeekTarget(
+  challengeId: string,
+  targetId: string,
+): Promise<{ targetId: string; locked: boolean }> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase.rpc("pick_challenge_peek", {
+    p_challenge_id: challengeId,
+    p_target_id: targetId,
+  });
+  if (error) throw error;
+  const row = data as { targetId: string; locked: boolean };
+  return { targetId: row.targetId, locked: row.locked };
+}

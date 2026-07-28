@@ -12,8 +12,11 @@ import { getGroupMemberProfiles, getMyGroups } from "@/lib/crew";
 import {
   getActiveChallengeRanking,
   getCurrentChallenge,
+  getTodaysPeekTarget,
+  pickPeekTarget,
   type ChallengeRanking,
 } from "@/lib/challenge";
+import { peekRows } from "@/lib/domain/challenge-peek";
 
 /**
  * 홈 챌린지 크루 성과 카드 — 챌린지 active일 때만 노출.
@@ -31,6 +34,10 @@ export function ChallengePerformanceCard({
   const [pass, setPass] = useState<ChallengePassStatus | null>(null);
   const [ranking, setRanking] = useState<ChallengeRanking | null>(null);
   const [names, setNames] = useState<Map<string, string>>(new Map());
+  const [challengeId, setChallengeId] = useState<string | null>(null);
+  const [target, setTarget] = useState<string | null>(null);
+  const [picking, setPicking] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!userId) return;
@@ -50,16 +57,19 @@ export function ChallengePerformanceCard({
         const p = challengePassStatus(completedAts, new Date(), DEFAULT_TIMEZONE);
         // 보안: unlocked일 때만 순위를 조회한다. 잠금 상태에선 순위가 클라에 없다.
         if (p.state === "unlocked") {
-          const [rank, crew] = await Promise.all([
+          const [rank, crew, picked] = await Promise.all([
             getActiveChallengeRanking(g.id),
             // 챌린지 순위표의 닉네임 맵이라 그룹 참가자가 맞다(0039 범위 밖).
             getGroupMemberProfiles(g.id),
+            getTodaysPeekTarget(ch.id),
           ]);
           if (cancelled) return;
           setRanking(rank);
           setNames(new Map(crew.map((c) => [c.id, c.nickname])));
+          setTarget(picked);
         }
         if (cancelled) return;
+        setChallengeId(ch.id);
         setEndDate(ch.end_date);
         setPass(p);
         setReady(true);
@@ -71,6 +81,25 @@ export function ChallengePerformanceCard({
       cancelled = true;
     };
   }, [userId, completedAts]);
+
+  async function pick(targetId: string) {
+    if (!challengeId) return;
+    setPicking(targetId);
+    try {
+      const res = await pickPeekTarget(challengeId, targetId);
+      setTarget(res.targetId);
+      // 서버가 이미 고른 사람을 돌려줬다 = 다른 기기·창에서 먼저 골랐다는 뜻.
+      if (res.locked) {
+        setNotice(
+          `오늘은 ${names.get(res.targetId) ?? "크루원"}님만 볼 수 있어요`,
+        );
+      }
+    } catch {
+      setNotice("지금은 열람할 수 없어요");
+    } finally {
+      setPicking(null);
+    }
+  }
 
   if (!ready || !pass || !endDate) return null; // 챌린지 active 아니면 숨김
 
@@ -99,26 +128,68 @@ export function ChallengePerformanceCard({
 
       <div className="relative mt-3">
         {unlocked && ranking ? (
-          <ul className="flex flex-col gap-1.5">
-            {ranking.list.map((r) => (
-              <li
-                key={r.userId}
-                className={`flex items-center justify-between rounded-card-sm px-3 py-2 text-[12.5px] ${
-                  r.userId === userId ? "bg-accent-weak" : "bg-surface-2"
-                }`}
-              >
-                <span className="font-bold">
-                  {r.rank}위 · {names.get(r.userId) ?? "크루원"}
-                  {r.userId === userId && (
-                    <span className="ml-0.5 text-faint">(나)</span>
-                  )}
-                </span>
-                <span className="font-mono font-bold text-accent">
-                  {Math.round(r.overall)}점
-                </span>
-              </li>
-            ))}
-          </ul>
+          <>
+            {/* 아직 안 골랐으면 대상 선택 — 이 목록엔 순위·점수를 노출하지 않는다 */}
+            {!target && (
+              <div className="flex flex-col gap-1.5">
+                <p className="text-[11px] text-muted">
+                  성과를 볼 크루원 한 명을 고르세요. 오늘은 바꿀 수 없어요.
+                </p>
+                {ranking.list
+                  .filter((r) => r.userId !== userId)
+                  .map((r) => (
+                    <button
+                      key={r.userId}
+                      type="button"
+                      disabled={picking !== null}
+                      onClick={() => void pick(r.userId)}
+                      className="flex items-center justify-between rounded-card-sm bg-surface-2 px-3 py-2 text-left text-[12.5px] disabled:opacity-50"
+                    >
+                      <span className="font-bold">
+                        {names.get(r.userId) ?? "크루원"}
+                      </span>
+                      <span className="text-xs font-bold text-accent">
+                        {picking === r.userId ? "여는 중…" : "성과 보기 ›"}
+                      </span>
+                    </button>
+                  ))}
+                {ranking.list.filter((r) => r.userId !== userId).length === 0 && (
+                  <p className="rounded-card-sm bg-surface-2 px-3 py-2 text-[12.5px] text-muted">
+                    아직 함께 참가한 크루원이 없어요
+                  </p>
+                )}
+              </div>
+            )}
+
+            {target && (
+              <ul className="flex flex-col gap-1.5">
+                {peekRows(ranking.list, userId ?? "", target).map((r) => (
+                  <li
+                    key={r.userId}
+                    className={`flex items-center justify-between rounded-card-sm px-3 py-2 text-[12.5px] ${
+                      r.userId === userId ? "bg-accent-weak" : "bg-surface-2"
+                    }`}
+                  >
+                    <span className="font-bold">
+                      {r.rank}위 · {names.get(r.userId) ?? "크루원"}
+                      {r.userId === userId && (
+                        <span className="ml-0.5 text-faint">(나)</span>
+                      )}
+                    </span>
+                    <span className="font-mono font-bold text-accent">
+                      {Math.round(r.overall)}점
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {notice && (
+              <p className="mt-1.5 text-[11px] font-bold text-accent">
+                {notice}
+              </p>
+            )}
+          </>
         ) : (
           <>
             {/* 잠금: 실제 순위 없이 자리표시자만 블러 처리 */}
