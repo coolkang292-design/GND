@@ -47,9 +47,14 @@ begin
 
   select * into s from workout_sessions where id = p_session_id;
 
-  -- 판정을 세 토막으로 나눈 이유(0039): is_crew_with는 자기 자신에게 항상
-  -- false라, 한 덩어리로 두면 본인 응원 시도가 own_session이 아니라
-  -- session_not_found로 새고 own_session이 죽은 코드가 된다.
+  -- 0039: 그룹 소속 → 크루 연결. group_id 조건도 함께 뺀다.
+  --
+  -- ⚠ 판정을 세 토막으로 나눈 이유. 옛 is_group_member(s.group_id, auth.uid())는
+  --   세션 주인 본인에게 true라 본인 응원 시도가 이 관문을 통과해 아래
+  --   own_session에 걸렸다. is_crew_with는 자기 자신에게 항상 false라, 한 덩어리로
+  --   두면 본인 시도가 own_session이 아니라 session_not_found로 나가고 own_session
+  --   블록이 도달 불가능한 죽은 코드가 된다.
+  --   scripts/rls-test.mjs:403 "본인 세션 응원 금지 (own_session)"이 이걸 잡는다.
   if not found or s.visibility <> 'group' then
     raise exception 'session_not_found';
   end if;
