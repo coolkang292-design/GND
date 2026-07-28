@@ -3,6 +3,21 @@
 > 새 세션은 이 파일 + `C:\Users\SAMSUNG\Desktop\Workout app\IMPLEMENTATION_PLAN.md`(단일 진실)만 읽으면 바로 이어서 작업할 수 있다.
 > 시각 스펙: 같은 폴더의 `운동앱-목업.html`.
 
+## ✅ 2026-07-28 — 크루 연결 그래프: 닉네임 검색 · 상호 수락 (운영 배포 ✅)
+
+설계 `docs/superpowers/specs/2026-07-28-crew-link-graph-design.md` · 계획 `docs/superpowers/plans/2026-07-28-crew-link-graph.md`(12 태스크). **"같은 그룹이니 크루" → "닉네임으로 찾아 서로 수락했으니 크루"**. 마이그레이션 **0038·0039·0040 운영 적용 ✅**. 그룹은 지우지 않았다 — 챌린지가 아직 그룹 기반이라 의미만 축소했다.
+
+- **왜 두 개로 쪼갰나** — 0038(추가만·무해) 적용 후 `/crew` 화면을 먼저 배포해 실기기로 확인하고, 그 뒤 0039(전환)로 넘어갔다. 한 번에 하면 "요청도 안 되고 피드도 비어 있는" 상태에서 원인을 못 가른다.
+- **0038** — `crew_requests`(요청 이력) + `crew_links`(수락된 연결, `user_a < user_b` 정규화라 쌍 하나 = 행 하나) + `is_crew_with()` + RPC 8개. 쌍 단위 `pg_advisory_xact_lock`으로 동시성 3종(상호 동시수락 데드락·상호 동시요청 시 자동수락 불발·두 번 탭의 raw 23505) 차단. 거절 후 **7일 재요청 쿨다운**(에러코드는 `request_exists` 재사용 — 거절 사실을 숨긴다). 기존 3명 → **3쌍 백필**, 재실행이 해제한 사이를 되살리지 않게 `where not exists` 가드.
+- **0039 — 전환 지점이 계획서의 9곳이 아니라 11곳이었다.** 마이그레이션 전수 조사로 찾았다. 계획서에 **없던 2곳**: `session_crew_shared`(0011:84 — `workout_events`·`cheers` SELECT를 여는 헬퍼. 피드 "운동 중" 카드의 판정 원천)와 `send_cheer`(0011:319 — 안 고치면 크루끼리 응원 불가, 혼자모드는 영영 응원받지 못함). 계획서에 **있었지만 뺀 1곳**: `record_views` insert 정책 — 0012가 이미 지웠다. 정책 이름도 정정(`profiles_select_self_or_crew` → 실제 `profiles_select_own_or_crew`) — 틀린 이름이면 `drop`이 조용히 no-op 하고 옛 그룹 정책이 OR로 살아남아 전환이 무효가 된다.
+- **🔴 DB 리뷰(opus)가 잡은 블로커** — `workout_session_crew_visible`의 자기접근. 옛 판정 `is_group_member(s.group_id, auth.uid())`는 세션 주인 본인에게 true였는데 `is_crew_with`는 `check (user_a < user_b)` 때문에 자기 자신에겐 구조적으로 **항상 false**다. `reactions` 정책 두 개가 앞단에 self 분기가 없어(거기 `user_id`는 세션 주인이 아니라 "반응을 누른 사람") 그대로 뒀으면 **내 카드의 반응이 0으로 뭉개지고 내 카드엔 반응을 못 달았다** — 알림은 트리거가 definer라 계속 와서 눈치채기 어렵다. `send_cheer`의 `own_session`이 `session_not_found`로 새던 것도 같이 고쳤다.
+- **혼자모드 알림이 0건이던 것도 같이 고쳤다** — 팬아웃 3곳이 `group_id is not null` 게이트를 통과해야 발송되는데 혼자모드는 `group_id`가 null이라 지금까지 한 건도 안 나갔다. "혼자 시작 → 나중에 크루 추가" 흐름이 이제 실제로 성립한다.
+- **0040 — 챌린지 성과 열람을 "지정한 한 명"으로**(사용자 요청). 5일 연속 달성으로 열리는 2시간 창에서 전원 순위표가 통째로 보이던 것을 "내 성과 + 고른 한 명"으로 좁혔다. 그 창 동안 바꿀 수 없다(자유롭게 바꾸면 사실상 전원 열람). 선택 목록엔 점수를 노출하지 않는다. **한계**: 순위 점수는 클라가 `user_goals`·`workout_sessions`를 읽어 직접 계산하고 그 RLS는 여전히 그룹 기준이라 **화면 규칙이지 데이터 경계가 아니다** — 진짜 경계는 챌린지 개편 때.
+- **검증 실측**: unit **517/517**(54파일, 483에서 +34) · typecheck · lint 0 · build ✅ · 실 DB `crew-link-check` **50/50** · `challenge-peek-check` **11/11** · `crew-profile-check` 8/8 · `record-beaten-test` 9/9 · `badge-point-check` 14/14 · `xp-bonus-check` 6/6. 기존 스크립트 3개는 픽스처가 그룹으로만 엮여 있어 크루 연결 단계를 더했다(rls-test 25실패 → 6). **rls-test에 남은 6건은 0039와 무관한 기존 노후** — 찌르기 3건은 0028의 `poke_requires_workout`(B가 자기 운동을 완료한 적 없음), 챌린지 3건은 0025의 전원 동의 단계가 스크립트에 아예 없음.
+- **레벨업 팬아웃은 런타임 재현 불가** — Lv.2가 200 XP인데 하루 최대 획득이 150(기본 100 + 보너스)이고 같은 날 두 번째 운동은 0 XP다. 스크립트가 이 한계와 `pg_get_functiondef` 대체 확인 쿼리를 출력에 남긴다.
+- **배포 사고** — Vercel이 커밋 이메일(`atty2@naver.com`)을 GitHub 계정에 매칭하지 못해 `Deployment Blocked`. GitHub에 이메일 추가·인증(A안)도, noreply 이메일로 커밋(B안)도 통하지 않았다. **`git archive HEAD`로 추적 파일만 `.git` 없는 임시 폴더에 풀고 거기서 배포하면 통과한다**(C안) — git 메타데이터가 없으면 매칭할 이메일도 없다. 다음 배포도 이 방법으로.
+- **범위 밖**: 챌린지 개편(내가 만들고 크루를 초대하는 방), 차단(block), 크루 추천·수 상한, QR·링크로 크루 맺기, 앞글자 검색, `profiles` SELECT RLS의 `or shares_group_with(id)` 제거(챌린지 랭킹판 닉네임 때문에 한시 유지).
+
 ## ✅ 2026-07-27 — 업적(배지) 퀘스트 UX v2.0 (운영 배포 ✅)
 
 설계=사용자 피드백 13항목, 계획 `docs/superpowers/plans/2026-07-27-badge-quest-ux.md`. 배지 화면을 "도감"에서 **다음 목표·진행률·남은수치·희귀도·완료율의 퀘스트 화면**으로. 서브에이전트 구동(구현 태스크별 에이전트 + opus 최종 리뷰)으로 실행. 마이그레이션 **0036·0037 운영 적용 ✅**. 배포 `gnd-5txy2wpe3-gnd4.vercel.app` Ready.
