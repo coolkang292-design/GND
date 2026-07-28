@@ -1,4 +1,11 @@
-import { isAdminUser, parseAdminIds } from "@/lib/domain/admin-access";
+import { cookies } from "next/headers";
+import { ADMIN_COOKIE } from "@/lib/admin/auth";
+import {
+  hasAdminAccess,
+  isAdminUser,
+  isValidAccessKey,
+  parseAdminIds,
+} from "@/lib/domain/admin-access";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 /**
@@ -20,9 +27,14 @@ export default async function WhoAmIPage() {
   const userId = data.user?.id ?? null;
 
   // 진단: 서버가 나를 관리자로 보는가. 허용목록의 **개수만** 노출하고
-  // 값은 절대 찍지 않는다 — 남의 UID가 새면 안 된다.
+  // 값은 절대 찍지 않는다 — 남의 UID도, 암호키도 새면 안 된다.
   const adminIds = parseAdminIds(process.env.ADMIN_USER_IDS);
-  const allowed = isAdminUser(userId, adminIds);
+  const cookieValue = (await cookies()).get(ADMIN_COOKIE)?.value ?? null;
+  const accessKey = process.env.ADMIN_ACCESS_KEY;
+
+  const byUid = isAdminUser(userId, adminIds);
+  const byKey = isValidAccessKey(cookieValue, accessKey);
+  const allowed = hasAdminAccess({ userId, adminIds, cookieValue, accessKey });
 
   return (
     <main className="main" style={{ width: "100%", margin: 0, maxWidth: 720 }}>
@@ -49,12 +61,24 @@ export default async function WhoAmIPage() {
               <div>
                 <small>서버 판정</small>
                 <b className={allowed ? "up" : ""} style={{ fontSize: 14 }}>
-                  {allowed ? "✅ 관리자" : "❌ 허용목록에 없음"}
+                  {allowed ? "✅ 관리자" : "❌ 차단"}
                 </b>
               </div>
               <div>
-                <small>ADMIN_USER_IDS 항목 수</small>
-                <b style={{ fontSize: 14 }}>{adminIds.length}개</b>
+                <small>UID 허용목록</small>
+                <b style={{ fontSize: 14 }}>
+                  {byUid ? "✅ 포함" : `❌ (${adminIds.length}개 등록됨)`}
+                </b>
+              </div>
+              <div>
+                <small>암호키 쿠키</small>
+                <b style={{ fontSize: 14 }}>
+                  {byKey ? "✅ 유효" : cookieValue ? "❌ 불일치" : "없음"}
+                </b>
+              </div>
+              <div>
+                <small>서버 암호키 설정</small>
+                <b style={{ fontSize: 14 }}>{accessKey ? "✅ 있음" : "❌ 없음"}</b>
               </div>
             </div>
 
@@ -63,20 +87,17 @@ export default async function WhoAmIPage() {
                 <>
                   <b>이 브라우저는 관리자입니다.</b> <b>/admin</b>이 열립니다.
                 </>
-              ) : adminIds.length === 0 ? (
-                <>
-                  <b>ADMIN_USER_IDS가 서버에 없습니다.</b> 환경변수를 등록하고
-                  재배포해야 합니다(값이 없으면 fail-closed로 전원 차단).
-                </>
               ) : (
                 <>
-                  위 UID를 <b>ADMIN_USER_IDS</b>에 쉼표로 추가한 뒤 재배포하면 이
-                  브라우저에서 <b>/admin</b>이 열립니다.
+                  <b>여는 방법 두 가지.</b>
+                  <br />① 주소 뒤에 <b>?key=암호</b>를 붙여 한 번 열면 이
+                  브라우저에 쿠키가 남아 계속 열립니다(권장 — 재배포 불필요).
+                  <br />② 위 UID를 <b>ADMIN_USER_IDS</b>에 추가하고 재배포합니다.
                 </>
               )}
               <br />
-              브라우저 데이터를 지우면 새 익명 계정이 만들어져 UID가 바뀝니다 —
-              그때 이 페이지를 다시 열면 됩니다.
+              브라우저 데이터를 지우면 익명 계정 UID도 쿠키도 사라집니다 — 그때
+              ①을 다시 하면 됩니다.
             </div>
           </>
         ) : (

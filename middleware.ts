@@ -1,5 +1,9 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { isValidAccessKey } from "@/lib/domain/admin-access";
+
+/** 관리자 암호키 쿠키 이름 — requireAdmin()이 같은 이름을 읽는다 */
+export const ADMIN_COOKIE = "gnd_admin";
 
 /**
  * `/admin`에서만 동작한다(아래 matcher).
@@ -12,6 +16,29 @@ import { NextResponse, type NextRequest } from "next/server";
  * 여기서 권한을 판정하지 않는다 — 게이트는 requireAdmin() 한 곳이다.
  */
 export async function middleware(request: NextRequest) {
+  // ── ?key=… 로 들어오면 쿠키로 바꾸고 주소에서 지운다 ──────────────
+  // 쿠키로 옮기는 이유: 암호가 주소창·방문기록·공유 링크에 계속 남지 않게.
+  // 쿠키는 httpOnly라 JS로 못 읽고, path를 /admin으로 좁혀 다른 경로엔 안 실린다.
+  const provided = request.nextUrl.searchParams.get("key");
+  if (provided !== null) {
+    const url = request.nextUrl.clone();
+    url.searchParams.delete("key");
+    const redirect = NextResponse.redirect(url);
+
+    if (isValidAccessKey(provided, process.env.ADMIN_ACCESS_KEY)) {
+      redirect.cookies.set(ADMIN_COOKIE, provided, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "lax",
+        path: "/admin",
+        maxAge: 60 * 60 * 24 * 180, // 180일
+      });
+    }
+    // 틀린 키는 쿠키를 안 심고 그냥 보낸다 — requireAdmin()이 404로 막는다.
+    // 여기서 "틀렸다"고 알려주면 키를 맞출 때까지 시도할 단서를 준다.
+    return redirect;
+  }
+
   let response = NextResponse.next({ request });
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
