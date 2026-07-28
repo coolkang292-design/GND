@@ -214,9 +214,14 @@ begin
 
   select * into s from workout_sessions where id = p_session_id;
 
-  -- 판정을 세 토막으로 나눈 이유(0039): is_crew_with는 자기 자신에게 항상
-  -- false라, 한 덩어리로 두면 본인 응원 시도가 own_session이 아니라
-  -- session_not_found로 새고 own_session이 죽은 코드가 된다.
+  -- 0039: 그룹 소속 → 크루 연결. group_id 조건도 함께 뺀다.
+  --
+  -- ⚠ 판정을 세 토막으로 나눈 이유. 옛 is_group_member(s.group_id, auth.uid())는
+  --   세션 주인 본인에게 true라 본인 응원 시도가 이 관문을 통과해 아래
+  --   own_session에 걸렸다. is_crew_with는 자기 자신에게 항상 false라, 한 덩어리로
+  --   두면 본인 시도가 own_session이 아니라 session_not_found로 나가고 own_session
+  --   블록이 도달 불가능한 죽은 코드가 된다.
+  --   scripts/rls-test.mjs:403 "본인 세션 응원 금지 (own_session)"이 이걸 잡는다.
   if not found or s.visibility <> 'group' then
     raise exception 'session_not_found';
   end if;
@@ -305,6 +310,8 @@ sed -n '509,580p' supabase/migrations/0039_crew_link_switchover.sql
 ```
 
 확인할 것: 판정 4개(`session_not_found`·`own_session`·`session_not_found`·`not_active`)의 순서, `v_count >= 3`, `interval '10 seconds'`, `notify(...)` 인자 6개.
+
+**주석도 대조 대상이다.** 이 저장소의 주석에는 회귀를 잡는 테스트 위치가 박혀 있다(예: 옛 판정 관련 주석의 `scripts/rls-test.mjs:403`). 주석을 요약하면 그 포인터가 사라지고, 다음 사람이 왜 이렇게 쪼갰는지 모르는 채 다시 합친다. **위 SQL 블록을 그대로 믿지 말고 `0039` 원문과 기계적으로 diff할 것** — 계획서를 쓰는 과정에서 주석이 축약될 수 있다.
 
 - [ ] **Step 3: 커밋**
 
