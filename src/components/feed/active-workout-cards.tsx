@@ -10,6 +10,7 @@ import {
   type CheerType,
 } from "@/lib/social";
 import { minutesSince } from "@/lib/time-ago";
+import { cheerToastMessage } from "@/lib/domain/cheer-points";
 
 const CHEER_BUTTONS: { type: CheerType; emoji: string; label: string }[] = [
   { type: "fire", emoji: "🔥", label: "불태워" },
@@ -81,10 +82,10 @@ function ActiveWorkoutCard({
     setSending(true);
     setNotice(null);
     try {
-      await sendCheer(session.sessionId, type, message);
+      const { pointsAwarded } = await sendCheer(session.sessionId, type, message);
       setSent(true);
       setCustomOpen(false);
-      setNotice("응원을 보냈어요! 📣");
+      setNotice(cheerToastMessage(pointsAwarded));
       setTimeout(() => {
         setSent(false);
         setNotice(null);
