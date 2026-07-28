@@ -32,12 +32,14 @@
 
 ### 브랜치
 
-작업 브랜치는 이미 있다: `feat/challenge-rooms`. 응원 포인트는 챌린지 개편과 독립이므로 **`main`에서 새 브랜치를 뗀다.**
+`feat/challenge-rooms`에는 지금 **설계·계획 문서 3개만** 들어 있고 구현은 한 줄도 없다. 이 계획서 자체가 거기 있으므로 **그 위에서 새 브랜치를 뗀다.**
 
 ```bash
-git checkout main
+git checkout feat/challenge-rooms
 git checkout -b feat/cheer-points
 ```
+
+챌린지 개편 설계 문서가 같이 따라오지만 문서라 무해하고, 어차피 `main`에 들어가야 할 것들이다. 챌린지 개편 **구현**은 나중에 `feat/challenge-rooms`에서 따로 진행한다.
 
 ---
 
