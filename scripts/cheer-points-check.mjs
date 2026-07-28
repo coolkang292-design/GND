@@ -178,14 +178,28 @@ async function balanceOf(user) {
   return r.json?.[0]?.balance ?? 0;
 }
 
+/**
+ * SQL의 (now() at time zone 'Asia/Seoul')::date와 같은 값을 돌려준다.
+ * Asia/Seoul은 DST가 없어 항상 UTC+9로 고정이라 이렇게 계산해도 안전하다.
+ */
+function kstToday() {
+  return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
 let users = [];
 
 try {
+  // ⚠ 생성 직후 바로 push한다. 끝에서 한 번에 배열을 할당하면 세 번째
+  //   anonUser()가 실패했을 때 이미 만들어진 a·b가 users에 없어 finally에서
+  //   지워지지 않는다 — 프로덕션 auth에 버려진 테스트 계정이 남는다.
   const a = await anonUser("a"); // 세션 주인 (응원 받는 사람)
+  users.push(a);
   const b = await anonUser("b"); // 응원 보내는 사람
+  users.push(b);
   const c = await anonUser("c"); // 두 번째 대상
+  users.push(c);
   const d = await anonUser("d"); // 비크루
-  users = [a, b, c, d];
+  users.push(d);
 
   await linkCrew(b, a);
   await linkCrew(b, c);
@@ -337,11 +351,17 @@ try {
 
   // ── KST 날짜 경계 ──
   // 어제 날짜로 원장을 옮겨 두면 오늘 다시 지급돼야 한다.
+  //
+  // ⚠ 이 시점에 b는 cheer_sent 행을 2건 갖고 있다(a 앞, c 앞). source_id까지
+  //   필터에 넣지 않으면 이 PATCH가 둘 다 건드려 c 앞 원장도 함께 어제
+  //   날짜로 밀려난다 — 지금은 그 값을 아무도 다시 읽지 않아 무해하지만,
+  //   순서가 바뀌면 조용히 깨진다. a 앞으로 만든 행 하나만 정확히 겨냥한다.
   const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+  const todayForA = `${a.id}:${kstToday()}`;
   await api(
     SERVICE_KEY,
     "PATCH",
-    `/rest/v1/point_transactions?user_id=eq.${b.id}&reason=eq.cheer_sent`,
+    `/rest/v1/point_transactions?user_id=eq.${b.id}&reason=eq.cheer_sent&source_id=eq.${todayForA}`,
     { source_id: `${a.id}:${yesterday}` },
     "return=minimal",
   );
@@ -362,7 +382,13 @@ try {
   console.log("\n  ⚠ [16] 예외 격리(지급 실패해도 응원 유지)는 이 스크립트가 검증하지 않는다.");
   console.log("     계획서 Task 4 Step 4의 수동 절차를 반드시 수행할 것.");
 } finally {
+  // ⚠ 정리만 한다. try에서 던진 예외가 있으면 이 finally를 통과한 뒤
+  //   그대로 다시 던져져야 한다 — 여기서 process.exit()을 부르면 그 예외가
+  //   조용히 삼켜지고(스택트레이스도 메시지도 없이) failed===0인 채 exit 0으로
+  //   끝난다. 이 스크립트는 0041이 제대로 적용됐는지 판정하는 게이트이므로
+  //   "마이그레이션 미적용"이나 "엔드포인트 다운"이 "정상"으로 보이면 안 된다.
   for (const u of users) await deleteAuthUser(u.id);
-  console.log(`\n${passed} passed, ${failed} failed`);
-  process.exit(failed > 0 ? 1 : 0);
 }
+
+console.log(`\n${passed} passed, ${failed} failed`);
+if (failed > 0) process.exit(1);
