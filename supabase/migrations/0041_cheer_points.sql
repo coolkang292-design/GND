@@ -4,8 +4,21 @@
 -- 적용: SQL Editor에 전체 붙여넣기 → Run (1회만). 0001~0040은 수정 금지.
 --
 -- ⚠ 부분 선택 실행 금지. send_cheer를 드롭했다가 다시 만들기 때문에,
---    중간에 끊기면 응원 기능이 없는 상태로 남는다. 파일 전체를 한 번에 Run하면
---    한 트랜잭션으로 처리되어 그 창이 생기지 않는다.
+--    중간에 끊기면 응원 기능이 없는 상태로 남는다. 이 파일은 begin;~commit;으로
+--    명시적으로 감싼다 — "전체를 붙여넣으면 한 트랜잭션"이라는 건 simple query
+--    protocol의 동작이라 클라이언트에 따라 달라질 수 있어, 여기 기대지 않는다.
+--    명시적 트랜잭션은 부분 실행도 막는다: begin;부터 잘린 조각은 커밋되지
+--    않고, begin; 없이 뒷부분만 돌리면 남는 commit;에서 에러가 나 그 자리에
+--    멈춘다. 어느 쪽이든 절반만 적용되는 일은 없다.
+--
+-- 되돌리기(하는 법): 0039_crew_link_switchover.sql:509-579를 그대로 다시
+--    붙여넣어 send_cheer를 public.cheers 반환으로 되돌리고,
+--    point_transactions_reason_check를 5개 값(cheer_sent 제외)으로 되돌리면
+--    된다. 위험은 낮다 — 현재 배포된 클라이언트는 RPC 응답 바디를 버리고
+--    에러 여부만 보므로, 예전의 단순 cheers 반환 모양으로 돌아가도 그대로
+--    잘 동작한다.
+
+begin;
 
 -- ── 1. 포인트 사유에 cheer_sent 추가 ─────────────────────────
 -- ⚠ 기존 5개 값을 하나도 빠뜨리면 안 된다. 빠뜨리면 그 값을 쓰는 기존 지급이
@@ -97,10 +110,16 @@ begin
   -- ⚠ 격리 범위는 이 호출 하나뿐이다. 넓히면 위의 권한·상태 검사 실패까지
   --    삼켜서 비크루가 응원에 성공하게 된다.
   begin
+    -- to_char로 날짜를 굳이 문자열화하는 이유: date::text는 DateStyle GUC를
+    -- 거친다. 기본값(ISO, MDY)에서는 2026-07-29가 나오지만 세션의 DateStyle이
+    -- SQL이나 German이면 07/29/2026처럼 다르게 나와, 같은 KST 하루인데
+    -- source_id가 갈려 하루 상한이 조용히 2회로 늘어난다. to_char은 GUC와
+    -- 무관하게 고정 포맷을 낸다 — 0032:116(evaluate_badges)의 v_today와 동일한
+    -- 이유로 동일한 방식을 쓴다.
     v_points := public.award_points(
       auth.uid(), 10, 'cheer_sent',
       'cheer',
-      s.user_id::text || ':' || (now() at time zone 'Asia/Seoul')::date::text,
+      s.user_id::text || ':' || to_char((now() at time zone 'Asia/Seoul')::date, 'YYYY-MM-DD'),
       null::numeric,
       jsonb_build_object('session_id', p_session_id, 'cheer_type', p_cheer_type));
   exception when others then
@@ -132,3 +151,36 @@ end $$;
 -- ⚠ drop이 권한도 함께 지웠으므로 반드시 다시 준다.
 revoke execute on function public.send_cheer(uuid, text, text) from anon, public;
 grant execute on function public.send_cheer(uuid, text, text) to authenticated;
+
+commit;
+
+-- PostgREST는 함수 시그니처를 캐시한다. Supabase의 DDL 이벤트 트리거가
+-- 스키마 캐시를 비동기로 재로딩하므로, 커밋 직후 짧은 창 동안 PostgREST가
+-- 여전히 send_cheer가 public.cheers를 반환한다고 알고 있어 PGRST202로
+-- 응답할 수 있다. 배포된 클라이언트는 응답 바디는 버려도 에러는 그대로
+-- 보여주므로, 그 창에서 보낸 응원은 사용자에게 실패로 보인다. 재로딩을
+-- 명시적으로 요청해 그 창을 최대한 좁힌다.
+notify pgrst, 'reload schema';
+
+-- ── 적용 전/후 확인 (SQL Editor에서 따로 실행) ────────────────
+-- 이 마이그레이션이 조용히 반쪽만 성공할 수 있는 지점은 위 1번의
+-- drop constraint if exists다. point_transactions_reason_check라는 이름이
+-- Postgres가 실제로 생성한 이름과 다르면 drop이 조용히 no-op되고, add는
+-- 새 이름으로 성공해 reason 제약이 2개가 된다. 그러면 옛 5개 값짜리 제약이
+-- 여전히 살아 있어 'cheer_sent'를 거부하고, award_points가 check_violation을
+-- 낸다 — 그런데 위에서 일부러 만든 exception 격리가 그 오류를 그대로
+-- 삼킨다. 결과: 응원은 정상적으로 되고, 포인트만 영원히 0이고, HTTP는
+-- 200이고, 화면 어디에도 이상 신호가 없다.
+--
+--   select conname, pg_get_constraintdef(oid)
+--   from pg_constraint
+--   where conrelid = 'public.point_transactions'::regclass and contype = 'c';
+--   → 정확히 2행. reason 쪽 이름이 point_transactions_reason_check가 아니면
+--     위 drop이 조용히 no-op이 되고 제약이 3개가 된다. 그러면 award_points가
+--     check_violation을 내는데 아래 exception 블록이 그걸 삼켜서, 응원은 되고
+--     포인트만 영영 0이 된다 — 화면에는 아무 이상이 없어 보인다.
+--
+--   select p.proname, pg_get_function_result(p.oid), r.rolname as owner, p.proacl
+--   from pg_proc p join pg_roles r on r.oid = p.proowner
+--   where p.proname = 'send_cheer';
+--   → jsonb · owner postgres · authenticated=X/postgres (PUBLIC 실행권 없음)
