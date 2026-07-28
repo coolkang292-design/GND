@@ -110,8 +110,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error("익명 인증 예외:", e);
       setState({ configured: true, loading: false, userId: null, error: msg });
     });
+    // 로그인·로그아웃으로 계정이 바뀌면 여기서 userId를 갱신한다.
+    // 이게 없으면 /login에서 로그인해도 provider가 **이전 익명 userId**를 계속
+    // 들고 있어, 화면은 남의 빈 계정을 조회하고 온보딩으로 튕긴다.
+    // 익명 세션 발급은 위 ensureAnonymousSession이 이미 처리하므로
+    // 여기서는 세션이 생겼을 때만 반영한다(없어졌다고 새로 발급하지 않는다).
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (cancelled) return;
+      const nextId = session?.user?.id ?? null;
+      setState((prev) =>
+        prev.userId === nextId && !prev.loading
+          ? prev
+          : { configured: true, loading: false, userId: nextId, error: null },
+      );
+    });
+
     return () => {
       cancelled = true;
+      subscription.unsubscribe();
     };
   }, [configured]);
 

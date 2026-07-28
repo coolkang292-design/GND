@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 /**
@@ -16,7 +15,6 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
  * 밀어내 버린다.
  */
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -50,10 +48,11 @@ export default function LoginPage() {
       return;
     }
 
-    // 로그인하면 익명 세션이 이 계정으로 바뀐다. 홈이 새 세션으로 그리도록
-    // replace + refresh를 함께 쓴다.
-    router.replace("/home");
-    router.refresh();
+    // ⚠️ router.replace를 쓰면 안 된다. AuthProvider는 루트 레이아웃에 있어
+    // 클라이언트 이동으로는 다시 초기화되지 않고, **이전 익명 userId를 그대로
+    // 들고** 조회한다 → 프로필이 없다고 판단해 온보딩("닉네임부터")으로 보내고
+    // 데이터가 안 보인다. 전체 페이지 로드로 세션을 처음부터 다시 읽게 한다.
+    window.location.assign("/home");
   }
 
   return (

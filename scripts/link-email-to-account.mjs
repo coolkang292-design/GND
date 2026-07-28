@@ -9,7 +9,8 @@
  *
  * 실행:
  *   node scripts/link-email-to-account.mjs <uid> <email>            # 미리보기
- *   node scripts/link-email-to-account.mjs <uid> <email> --apply    # 실제 적용
+ *   node scripts/link-email-to-account.mjs <uid> <email> --apply    # 임시 비밀번호 생성
+ *   node scripts/link-email-to-account.mjs <uid> <email> --apply --password=지정값
  */
 import { createClient } from "@supabase/supabase-js";
 import { randomBytes } from "node:crypto";
@@ -96,7 +97,13 @@ if (!apply) {
 
 // ── 2. 적용 ────────────────────────────────────────────────────────────
 // email_confirm: true — 확인 메일 없이 즉시 쓸 수 있게 한다(SMTP 미설정 환경).
-const password = randomBytes(12).toString("base64url");
+const chosen = flags.find((f) => f.startsWith("--password="));
+const password = chosen
+  ? chosen.slice("--password=".length)
+  : randomBytes(12).toString("base64url");
+
+// 길이 제약은 Supabase 프로젝트 설정이 정한다. 여기서 미리 막지 않고
+// API가 거절하면 그 메시지를 그대로 보여준다 — 실제 정책과 어긋나지 않게.
 
 const { error: updErr } = await db.auth.admin.updateUserById(uid, {
   email,
