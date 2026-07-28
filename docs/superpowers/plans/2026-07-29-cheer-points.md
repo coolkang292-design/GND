@@ -532,11 +532,13 @@ async function balanceOf(user) {
 let users = [];
 
 try {
-  const a = await anonUser("a"); // 세션 주인 (응원 받는 사람)
-  const b = await anonUser("b"); // 응원 보내는 사람
-  const c = await anonUser("c"); // 두 번째 대상
-  const d = await anonUser("d"); // 비크루
-  users = [a, b, c, d];
+  // 만들자마자 users에 넣는다. 넷 다 만든 뒤에 한 번에 담으면, 셋째에서
+  // 터졌을 때 이미 만들어진 둘이 users에 없어 finally가 못 지우고
+  // 프로덕션 auth에 떠돌이 계정으로 남는다.
+  const a = await anonUser("a"); users.push(a); // 세션 주인 (응원 받는 사람)
+  const b = await anonUser("b"); users.push(b); // 응원 보내는 사람
+  const c = await anonUser("c"); users.push(c); // 두 번째 대상
+  const d = await anonUser("d"); users.push(d); // 비크루
 
   await linkCrew(b, a);
   await linkCrew(b, c);
@@ -686,11 +688,16 @@ try {
 
   // ── KST 날짜 경계 ──
   // 어제 날짜로 원장을 옮겨 두면 오늘 다시 지급돼야 한다.
-  const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+  const kstDay = (offsetMs = 0) =>
+    new Date(Date.now() + 9 * 3_600_000 + offsetMs).toISOString().slice(0, 10);
+  const yesterday = kstDay(-86_400_000);
+  // ⚠ source_id까지 걸어야 한다. user_id+reason만으로 거르면 b가 c에게 보낸
+  //    행까지 같이 덮어써서, 나중에 순서를 바꿀 때 엉뚱한 통과/실패가 난다.
   await api(
     SERVICE_KEY,
     "PATCH",
-    `/rest/v1/point_transactions?user_id=eq.${b.id}&reason=eq.cheer_sent`,
+    `/rest/v1/point_transactions?user_id=eq.${b.id}&reason=eq.cheer_sent` +
+      `&source_id=eq.${a.id}:${kstDay()}`,
     { source_id: `${a.id}:${yesterday}` },
     "return=minimal",
   );
@@ -711,10 +718,16 @@ try {
   console.log("\n  ⚠ [16] 예외 격리(지급 실패해도 응원 유지)는 이 스크립트가 검증하지 않는다.");
   console.log("     계획서 Task 4 Step 4의 수동 절차를 반드시 수행할 것.");
 } finally {
+  // 정리만 한다. 요약과 exit를 여기 두면 안 된다 — process.exit()가 즉시
+  // 종료하면서 try에서 올라오던 예외를 삼킨다. 셋업 도중에 터지면 check()가
+  // 한 번도 안 돌아 failed=0이라, 아무것도 검증하지 못한 실행이 exit 0으로
+  // "정상"이라 보고된다. 이 스크립트는 마이그레이션 게이트라 그게 치명적이다.
+  // (crew-link-check.mjs·challenge-peek-check.mjs도 밖에 둔다)
   for (const u of users) await deleteAuthUser(u.id);
-  console.log(`\n${passed} passed, ${failed} failed`);
-  process.exit(failed > 0 ? 1 : 0);
 }
+
+console.log(`\n${passed} passed, ${failed} failed`);
+process.exit(failed > 0 ? 1 : 0);
 ```
 
 - [ ] **Step 2: 0041 적용 전이므로 실패하는지 확인**
