@@ -488,13 +488,18 @@ async function finish(owner, sessionId, withWork = false) {
       sort_order: 0,
     });
     const exerciseId = ex.json?.[0]?.id;
-    await api(owner.token, "POST", "/rest/v1/workout_sets", {
-      workout_exercise_id: exerciseId,
-      set_number: 1,
-      weight_kg: 50,
-      reps: 10,
-      is_completed: true,
-    });
+    // ⚠ 완료 세트가 3개 이상이어야 유효한 운동이다 (is_valid_workout, 0024:36-42).
+    //    1개만 넣으면 v_valid=false라 XP도 포인트도 0이 되고, [11] 회귀 검증이
+    //    0041과 무관한 이유로 실패한다.
+    for (let n = 1; n <= 3; n++) {
+      await api(owner.token, "POST", "/rest/v1/workout_sets", {
+        workout_exercise_id: exerciseId,
+        set_number: n,
+        weight_kg: 50,
+        reps: 10,
+        is_completed: true,
+      });
+    }
   }
   // 포인트를 주는 것은 v2다. 구버전 complete_workout은 원장을 남기지 않는다.
   return rpc(owner.token, "complete_workout_v2", { p_session_id: sessionId });
@@ -659,8 +664,11 @@ try {
   check("[8] 비크루는 session_not_found", hasCode(r, "session_not_found"));
 
   await finish(a, sA3);
-  await rewindCheers(c.id);
-  r = await rpc(c.token, "send_cheer", { p_session_id: sA3, p_cheer_type: "fire" });
+  // ⚠ b로 보내야 한다. c는 a와 크루가 아니고(연결은 b↔a, b↔c뿐), 크루 판정이
+  //    상태 판정보다 먼저라 c가 보내면 not_active가 아니라 session_not_found가
+  //    나온다. b는 이 세션에서 이미 3회 상한에 걸렸지만, 상태 판정이 응원 횟수
+  //    판정보다 먼저라 not_active가 정상적으로 나온다.
+  r = await rpc(b.token, "send_cheer", { p_session_id: sA3, p_cheer_type: "fire" });
   check("[9] 완료된 세션은 not_active", hasCode(r, "not_active"));
 
   // ── 회귀: 기존 workout_completed 지급이 CHECK 변경 후에도 동작 ──
