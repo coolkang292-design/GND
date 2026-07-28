@@ -7,7 +7,15 @@
   --green:#4fd197;--orange:#f5a84b;--red:#ff7474
 }
 .admin-root *{box-sizing:border-box}
-.admin-root{margin:0;min-height:100dvh;
+
+/* 루트 레이아웃(src/app/layout.tsx)이 모든 페이지를 모바일 셸로 감싼다:
+ *   <div class="w-full max-w-[430px] h-dvh flex flex-col relative bg-bg">
+ * 대시보드는 사이드바 225px + .main margin-left:225px의 데스크톱 구조라
+ * 430px 안에 갇히면 콘텐츠가 화면 밖으로 밀려 배경만 보인다(검정화면).
+ * position:fixed로 뷰포트 전체를 덮어 셸을 빠져나온다 — 조상에 transform이
+ * 없으므로 fixed의 기준은 뷰포트다. 다른 라우트의 셸은 건드리지 않는다. */
+.admin-root{position:fixed;inset:0;overflow-y:auto;overflow-x:hidden;z-index:50;
+  margin:0;
   background:radial-gradient(circle at 85% -10%,#2a211125,transparent 28%),var(--bg);
   color:var(--text);font:14px Arial,"Apple SD Gothic Neo","Noto Sans KR",sans-serif}
 .admin-root button,.admin-root input{font:inherit}
