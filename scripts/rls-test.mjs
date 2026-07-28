@@ -410,7 +410,8 @@ check("알림 직접 insert 차단", nIns.status >= 400);
 
 console.log("\n── Phase 6: 응원 (send_cheer 스팸 제한) ──");
 const ch1 = await api(B.token, "POST", "/rest/v1/rpc/send_cheer", { p_session_id: s6.id, p_cheer_type: "fire" });
-check("B가 응원 1회 성공", ch1.status === 200 && ch1.json?.cheer_type === "fire", JSON.stringify(ch1.json));
+// 0041부터 send_cheer는 {cheer, points_awarded}를 돌려준다 (예전엔 cheers 행 자체).
+check("B가 응원 1회 성공", ch1.status === 200 && ch1.json?.cheer?.cheer_type === "fire", JSON.stringify(ch1.json));
 const chSelf = await api(A.token, "POST", "/rest/v1/rpc/send_cheer", { p_session_id: s6.id, p_cheer_type: "fire" });
 check("본인 세션 응원 금지 (own_session)", chSelf.status >= 400 && JSON.stringify(chSelf.json).includes("own_session"));
 const chOut = await api(C.token, "POST", "/rest/v1/rpc/send_cheer", { p_session_id: s6.id, p_cheer_type: "fire" });
@@ -425,7 +426,7 @@ check("쿨다운 후 응원 2회 성공", ch2.status === 200, JSON.stringify(ch2
 console.log("  (쿨다운 10.5초 대기…)");
 await sleep(10500);
 const ch3 = await api(B.token, "POST", "/rest/v1/rpc/send_cheer", { p_session_id: s6.id, p_cheer_type: "custom", p_message: "화이팅!" });
-check("커스텀 메시지 응원 3회 성공", ch3.status === 200 && ch3.json?.message === "화이팅!");
+check("커스텀 메시지 응원 3회 성공", ch3.status === 200 && ch3.json?.cheer?.message === "화이팅!");
 const ch4 = await api(B.token, "POST", "/rest/v1/rpc/send_cheer", { p_session_id: s6.id, p_cheer_type: "fire" });
 check("세션당 3회 제한 (cheer_limit)", ch4.status >= 400 && JSON.stringify(ch4.json).includes("cheer_limit"));
 
