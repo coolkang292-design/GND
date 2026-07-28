@@ -789,13 +789,19 @@ alter table point_transactions drop constraint tmp_fail;
 
 - [ ] **Step 5: 기존 회귀 스크립트 확인**
 
-`rls-test.mjs`는 아직 옛 반환 모양을 기대하므로 **2건이 실패하는 것이 정상**이다. Task 6에서 고친다.
+**Task 6을 이미 끝냈으므로 `0 failed`가 나와야 한다.**
 
 ```bash
 node scripts/rls-test.mjs
 ```
 
-기대: `B가 응원 1회 성공`과 `커스텀 메시지 응원 3회 성공`만 FAIL. 다른 항목이 추가로 깨지면 0041이 뭔가를 망가뜨린 것이므로 멈추고 원인을 찾는다.
+기대: `0 failed`. 하나라도 깨지면 0041이 뭔가를 망가뜨린 것이므로 멈추고 원인을 찾는다.
+
+```bash
+node scripts/crew-link-check.mjs
+```
+
+기대: `0 failed`. 이 스크립트는 status와 에러코드만 보므로 수정 없이 통과해야 한다.
 
 ---
 
@@ -909,6 +915,12 @@ git commit -m "feat: 응원 토스트에 지급 포인트 표시 (서버 반환�
 
 ## Task 6: `rls-test.mjs` 회귀 단언 수정
 
+> ⚠ **실행 순서: 이 태스크는 Task 4(0041 적용)보다 먼저 한다.** 번호는 Task 6이지만 순서는 Task 3 다음이다.
+>
+> 이 태스크는 테스트 스크립트만 고치므로 마이그레이션 적용 여부와 무관하게 지금 할 수 있다. 먼저 하지 않으면 Task 4의 회귀 확인에서 빨간 줄 2개가 뜨는데, 그게 "알려진 실패"인지 "0041이 진짜로 뭘 망가뜨렸는지" 구분되지 않는다. 게이트는 `0 failed`가 나와야 게이트다.
+>
+> 다만 이 수정을 하면 **0041 적용 전에는** 그 2건이 반대로 실패한다(옛 반환 모양을 더 이상 기대하지 않으므로). 그건 정상이며 Task 4 적용 직후 사라진다.
+
 **파일:**
 - 수정: `scripts/rls-test.mjs:413`, `scripts/rls-test.mjs:429`
 
@@ -942,25 +954,17 @@ check("커스텀 메시지 응원 3회 성공", ch3.status === 200 && ch3.json?.
 check("커스텀 메시지 응원 3회 성공", ch3.status === 200 && ch3.json?.cheer?.message === "화이팅!");
 ```
 
-- [ ] **Step 3: 전체 회귀 실행**
+- [ ] **Step 3: 수정한 두 줄만 확인**
+
+0041이 아직 적용되지 않았다면 전체 실행은 이 2건이 실패한다(위 경고 참조). 지금은 **수정이 문법적으로 맞는지만** 확인하고, 실제 통과 확인은 Task 4 Step 5에서 한다.
 
 ```bash
-node scripts/rls-test.mjs
+node --check scripts/rls-test.mjs
 ```
 
-기대: `0 failed`
+기대: 출력 없음(문법 오류 없음)
 
-- [ ] **Step 4: 크루 연결 회귀도 확인**
-
-`crew-link-check.mjs`는 status와 에러코드만 보므로 수정 없이 통과해야 한다. 통과하지 않으면 0041이 판정 로직을 건드린 것이다.
-
-```bash
-node scripts/crew-link-check.mjs
-```
-
-기대: `0 failed`
-
-- [ ] **Step 5: 커밋**
+- [ ] **Step 4: 커밋**
 
 ```bash
 git add scripts/rls-test.mjs
