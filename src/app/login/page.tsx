@@ -21,6 +21,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -29,14 +30,22 @@ export default function LoginPage() {
     setError(null);
 
     const supabase = getSupabaseBrowserClient();
+    // 이메일은 소문자로 눕힌다 — iOS가 첫 글자를 대문자로 바꿔 보내는 일이 잦다
     const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
+      email: email.trim().toLowerCase(),
       password,
     });
 
     if (signInError) {
-      // 원인을 구체적으로 알려주면 계정 존재 여부가 새므로 문구는 하나로 둔다
-      setError("이메일 또는 비밀번호가 맞지 않아요.");
+      // 자격증명 오류는 계정 존재 여부가 새지 않게 문구를 하나로 통일한다.
+      // 그 외(제공자 꺼짐·네트워크 등)는 구분해서 보여준다 — 안 그러면
+      // 설정 문제를 "비밀번호 틀림"으로 오인해 원인을 못 찾는다.
+      const credential = /invalid login credentials/i.test(signInError.message);
+      setError(
+        credential
+          ? "이메일 또는 비밀번호가 맞지 않아요."
+          : `로그인에 실패했어요 (${signInError.message})`,
+      );
       setBusy(false);
       return;
     }
@@ -64,10 +73,15 @@ export default function LoginPage() {
         <label className="mt-3 block text-left text-[11px] font-bold text-muted">
           이메일
         </label>
+        {/* autoCapitalize·autoCorrect가 없으면 iOS가 첫 글자를 대문자로 바꿔
+            "Atty2@..."로 보내고, 사용자는 이유를 모른 채 실패만 본다 */}
         <input
           type="email"
           inputMode="email"
           autoComplete="email"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -75,12 +89,26 @@ export default function LoginPage() {
           className="mt-1 w-full rounded-xl border border-line bg-surface px-4 py-3 text-[15px] outline-none focus:border-accent"
         />
 
-        <label className="mt-4 block text-left text-[11px] font-bold text-muted">
-          비밀번호
-        </label>
+        <div className="mt-4 flex items-baseline justify-between">
+          <label className="text-left text-[11px] font-bold text-muted">
+            비밀번호
+          </label>
+          {/* 임시 비밀번호는 대소문자가 섞여 폰에서 틀리기 쉽다.
+              무엇을 쳤는지 볼 수 있어야 스스로 고칠 수 있다. */}
+          <button
+            type="button"
+            onClick={() => setShowPassword((v) => !v)}
+            className="text-[11px] text-muted underline"
+          >
+            {showPassword ? "숨기기" : "보기"}
+          </button>
+        </div>
         <input
-          type="password"
+          type={showPassword ? "text" : "password"}
           autoComplete="current-password"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
           required
           value={password}
           onChange={(e) => setPassword(e.target.value)}
