@@ -471,17 +471,42 @@ try {
     `${r.status} ${JSON.stringify(r.json)}`,
   );
 
-  // 팬아웃③(레벨업)은 런타임으로 재현할 수 없다. 조용히 빠뜨리면 나중에
-  // "전부 검증됨"으로 읽히므로 한계를 출력에 남긴다.
-  console.log(
-    "SKIP 팬아웃③(레벨업): Lv.2가 200 XP인데 하루 최대 획득이 150(기본 100 + 보너스)이고\n" +
-      "     같은 날 두 번째 운동은 0 XP라 스크립트 한 번으로 레벨업을 못 일으킨다.\n" +
-      "     대신 구조로 확인할 것 — SQL Editor에서:\n" +
-      "       select position('crew_links' in pg_get_functiondef(p.oid)) > 0 as uses_crew_links,\n" +
-      "              position('group_members' in pg_get_functiondef(p.oid)) > 0 as uses_group_members\n" +
-      "       from pg_proc p join pg_namespace n on n.oid = p.pronamespace\n" +
-      "       where n.nspname='public' and p.proname='apply_xp_and_progress';\n" +
-      "     기대: uses_crew_links=true, uses_group_members=false",
+  // ── 팬아웃③ 레벨업 ─────────────────────────────────────────
+  // 정상 운동 경로로는 재현할 수 없다 — Lv.2가 200 XP인데 하루 최대 획득이
+  // 150(기본 100 + 보너스)이고 같은 날 두 번째 운동은 0 XP다.
+  //
+  // 대신 apply_xp_and_progress를 service_role로 직접 부른다. 0029/0039가
+  // public·anon·authenticated에서만 회수했고 service_role은 회수 대상이 아니다.
+  // XP를 한 번에 크게 주면 레벨이 올라가 팬아웃이 그대로 돈다.
+  const xp = await api(SERVICE_KEY, "POST", "/rest/v1/rpc/apply_xp_and_progress", {
+    p_user_id: a.id,
+    p_amount: 500, // Lv.1(0) → Lv.3 이상. 컷은 level_definitions가 원천
+    // reason은 0022가 허용 목록으로 제약한다. 임의 문자열은 23514로 막힌다.
+    p_reason: "admin_adjustment",
+    p_reward_group: "test",
+    p_source_type: "test",
+    p_source_id: `crewlink-${RUN}-levelup`,
+    p_effective_date: new Date().toISOString().slice(0, 10),
+    p_metadata: {},
+  });
+  check(
+    "[51] 팬아웃③ 사전: 레벨업이 실제로 일어났다",
+    xp.status === 200 && xp.json?.levelUp === true,
+    `${xp.status} ${JSON.stringify(xp.json)}`,
+  );
+
+  r = await api(c.token, "GET", "/rest/v1/notifications?type=eq.level_up&select=id,actor_id");
+  check(
+    "[52] 팬아웃③: 크루(C)에게 레벨업 도달",
+    (r.json ?? []).some((n) => n.actor_id === a.id),
+    `${r.status} ${JSON.stringify(r.json)}`,
+  );
+
+  r = await api(d.token, "GET", "/rest/v1/notifications?type=eq.level_up&select=id,actor_id");
+  check(
+    "[53] 팬아웃③: 비크루(D)에게는 안 간다",
+    !(r.json ?? []).some((n) => n.actor_id === a.id),
+    `${r.status} ${JSON.stringify(r.json)}`,
   );
 } finally {
   for (const u of users) await deleteAuthUser(u.id);
