@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { DEFAULT_TIMEZONE, dayKey } from "@/lib/domain/time";
 import {
@@ -47,8 +48,9 @@ export function goalLabel(type: GoalType, qualifier?: number | null): string {
 /** 크루의 살아있는(취소 아닌) 최신 챌린지 */
 export async function getCurrentChallenge(
   groupId: string,
+  client?: SupabaseClient,
 ): Promise<Challenge | null> {
-  const supabase = getSupabaseBrowserClient();
+  const supabase = client ?? getSupabaseBrowserClient();
   const { data, error } = await supabase
     .from("challenges")
     .select("*")
@@ -86,8 +88,9 @@ export async function createChallenge(input: {
 /** 챌린지의 전체 참가자 목표 (RLS: 크루원만) */
 export async function getChallengeGoals(
   challengeId: string,
+  client?: SupabaseClient,
 ): Promise<UserGoal[]> {
-  const supabase = getSupabaseBrowserClient();
+  const supabase = client ?? getSupabaseBrowserClient();
   const { data, error } = await supabase
     .from("user_goals")
     .select("*")
@@ -403,8 +406,9 @@ export async function getPeriodStatsByUser(
   endDate: string,
   timeZone: string,
   photoRequired = false,
+  client?: SupabaseClient,
 ): Promise<Map<string, PeriodStats>> {
-  const supabase = getSupabaseBrowserClient();
+  const supabase = client ?? getSupabaseBrowserClient();
   const fromIso = new Date(`${startDate}T00:00:00Z`);
   fromIso.setUTCDate(fromIso.getUTCDate() - 1);
   const toIso = new Date(`${endDate}T00:00:00Z`);
@@ -479,21 +483,29 @@ function periodDaysCount(startDate: string, endDate: string): number {
   return Math.round((toUtc(endDate) - toUtc(startDate)) / 86_400_000) + 1;
 }
 
-/** 진행 중(active) 챌린지의 현재 순위 — 없으면 null */
+/**
+ * 진행 중(active) 챌린지의 현재 순위 — 없으면 null
+ *
+ * `client`는 서버(관리자 대시보드)에서 service_role 클라이언트를 넣기 위한 것이다.
+ * 생략하면 지금까지처럼 브라우저 클라이언트를 쓴다 — 기존 호출부는 영향 없다.
+ * 달성률 계산을 서버용으로 복제하지 않으려고 주입 방식을 택했다(두 벌이 되면 갈라진다).
+ */
 export async function getActiveChallengeRanking(
   groupId: string,
+  client?: SupabaseClient,
 ): Promise<ChallengeRanking | null> {
-  const ch = await getCurrentChallenge(groupId);
+  const ch = await getCurrentChallenge(groupId, client);
   if (!ch || ch.status !== "active") return null;
 
   const [goals, stats] = await Promise.all([
-    getChallengeGoals(ch.id),
+    getChallengeGoals(ch.id, client),
     getPeriodStatsByUser(
       groupId,
       ch.start_date,
       ch.end_date,
       DEFAULT_TIMEZONE,
       ch.photo_required,
+      client,
     ),
   ]);
   const days = periodDaysCount(ch.start_date, ch.end_date);
