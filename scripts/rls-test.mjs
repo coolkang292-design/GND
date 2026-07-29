@@ -1,6 +1,7 @@
 // RLS 2인 픽스처 테스트 (§19) — 익명 유저 A·B를 만들어 경계를 검증한다.
 // 실행: node scripts/rls-test.mjs  (사전조건: 0001~0004 마이그레이션 적용됨)
 import { readFileSync } from "node:fs";
+import { createDeleteGuard } from "./_safe-delete.mjs";
 
 const env = Object.fromEntries(
   readFileSync(".env.local", "utf8")
@@ -11,6 +12,14 @@ const env = Object.fromEntries(
 const URL_ = env.NEXT_PUBLIC_SUPABASE_URL;
 const KEY = env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 if (!URL_ || !KEY) throw new Error(".env.local에 Supabase 설정이 없습니다");
+
+// 삭제 가드 — 실행 시작 시점에 있던 계정은 절대 지우지 않는다.
+// ⚠ 반드시 첫 anonUser()보다 **앞에서** 만들어야 한다. 뒤에서 만들면 이 실행이
+//   만든 픽스처까지 "기존 계정"으로 잡혀 정리가 통째로 거부된다.
+const _guard = await createDeleteGuard({
+  url: URL_,
+  serviceKey: env.SUPABASE_SERVICE_ROLE_KEY,
+});
 
 let passed = 0;
 let failed = 0;
@@ -518,10 +527,7 @@ if (SERVICE) {
     headers: adminHeaders,
   });
   for (const u of [A, B, C]) {
-    const res = await fetch(`${URL_}/auth/v1/admin/users/${u.id}`, {
-      method: "DELETE",
-      headers: adminHeaders,
-    });
+    const res = await _guard.deleteIfCreatedThisRun(u.id);
     if (!res.ok) console.log(`정리 실패(${u.id.slice(0, 8)}): ${res.status}`);
   }
   console.log("픽스처 정리 완료");

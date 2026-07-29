@@ -2,6 +2,7 @@
 // 실행: node scripts/challenge-consent-test.mjs  (사전조건: 0025 적용됨)
 // 익명 유저 A(owner)·B(member) 2인 크루 + 챌린지(setup)로 동의 게이트를 검증한다.
 import { readFileSync } from "node:fs";
+import { createDeleteGuard } from "./_safe-delete.mjs";
 
 const env = Object.fromEntries(
   readFileSync(".env.local", "utf8")
@@ -12,6 +13,9 @@ const env = Object.fromEntries(
 const URL_ = env.NEXT_PUBLIC_SUPABASE_URL;
 const KEY = env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const SERVICE = env.SUPABASE_SERVICE_ROLE_KEY;
+
+// 삭제 가드 — 실행 시작 시점에 있던 계정은 절대 지우지 않는다.
+const _guard = await createDeleteGuard({ url: URL_, serviceKey: SERVICE });
 if (!URL_ || !KEY) throw new Error(".env.local에 Supabase 설정이 없습니다");
 
 let passed = 0;
@@ -155,7 +159,7 @@ if (SERVICE) {
   const adminHeaders = { apikey: SERVICE, Authorization: `Bearer ${SERVICE}` };
   await fetch(`${URL_}/rest/v1/groups?id=eq.${group.id}`, { method: "DELETE", headers: adminHeaders });
   for (const u of [A, B, C]) {
-    const res = await fetch(`${URL_}/auth/v1/admin/users/${u.id}`, { method: "DELETE", headers: adminHeaders });
+    const res = await _guard.deleteIfCreatedThisRun(u.id);
     if (!res.ok) console.log(`정리 실패(${u.id.slice(0, 8)}): ${res.status}`);
   }
   console.log("\n픽스처 정리 완료");

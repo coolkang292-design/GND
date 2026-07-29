@@ -6,6 +6,7 @@
 // 전원 동의 게이트를 통과해야 해서, 이 스크립트가 검증하려는 것과 무관한
 // 셋업이 길어진다. 여기서 볼 것은 pick_challenge_peek의 판정뿐이다.
 import { readFileSync } from "node:fs";
+import { createDeleteGuard } from "./_safe-delete.mjs";
 
 const env = Object.fromEntries(
   readFileSync(".env.local", "utf8")
@@ -20,6 +21,9 @@ const env = Object.fromEntries(
 const URL = env.NEXT_PUBLIC_SUPABASE_URL;
 const ANON_KEY = env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const SERVICE_KEY = env.SUPABASE_SERVICE_ROLE_KEY;
+
+// 삭제 가드 — 실행 시작 시점에 있던 계정은 절대 지우지 않는다.
+const _guard = await createDeleteGuard({ url: URL, serviceKey: SERVICE_KEY });
 if (!URL || !ANON_KEY || !SERVICE_KEY) {
   throw new Error(".env.local에 Supabase 설정이 없습니다");
 }
@@ -77,11 +81,7 @@ async function anonUser(tag) {
   return user;
 }
 
-const deleteAuthUser = (id) =>
-  fetch(`${URL}/auth/v1/admin/users/${id}`, {
-    method: "DELETE",
-    headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
-  });
+const deleteAuthUser = (id) => _guard.deleteIfCreatedThisRun(id);
 
 const hasCode = (r, code) =>
   r.status >= 400 && JSON.stringify(r.json ?? {}).includes(code);

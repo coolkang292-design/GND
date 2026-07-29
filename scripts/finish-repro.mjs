@@ -1,6 +1,7 @@
 // 운동 종료 버그 재현 — 실 클라이언트 흐름을 그대로 모사한다.
 // complete_workout_v2 를 다양한 상태에서 호출해 무엇이 던지는지 본다.
 import { readFileSync } from "node:fs";
+import { createDeleteGuard } from "./_safe-delete.mjs";
 
 const env = Object.fromEntries(
   readFileSync(".env.local", "utf8")
@@ -11,6 +12,9 @@ const env = Object.fromEntries(
 const URL_ = env.NEXT_PUBLIC_SUPABASE_URL;
 const KEY = env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const SERVICE = env.SUPABASE_SERVICE_ROLE_KEY;
+
+// 삭제 가드 — 실행 시작 시점에 있던 계정은 절대 지우지 않는다.
+const _guard = await createDeleteGuard({ url: URL_, serviceKey: SERVICE });
 
 async function api(token, method, path, body) {
   const res = await fetch(`${URL_}${path}`, {
@@ -104,6 +108,6 @@ console.log(`  2차 종료(replay): status=${f3b.status} ⚠️msg=${JSON.string
 // 정리
 const admin = { apikey: SERVICE, Authorization: `Bearer ${SERVICE}`, "Content-Type": "application/json" };
 for (const u of [A, B]) {
-  await fetch(`${URL_}/auth/v1/admin/users/${u.id}`, { method: "DELETE", headers: admin });
+  await _guard.deleteIfCreatedThisRun(u.id);
 }
 console.log("\n픽스처 정리 완료");

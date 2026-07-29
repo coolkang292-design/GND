@@ -5,6 +5,7 @@
 // 쿨다운(10초)은 기다리지 않고 service_role로 cheers.created_at을 과거로
 // 당겨 통과시킨다. 기다리면 실행이 1분을 넘고, 그건 검증이 아니라 대기다.
 import { readFileSync } from "node:fs";
+import { createDeleteGuard } from "./_safe-delete.mjs";
 
 const env = Object.fromEntries(
   readFileSync(".env.local", "utf8")
@@ -60,6 +61,10 @@ const rpc = (token, name, args) =>
 const hasCode = (r, code) =>
   r.status >= 400 && JSON.stringify(r.json ?? {}).includes(code);
 
+// 삭제는 가드를 통해서만 한다 (_safe-delete.mjs). 실행 시작 시점에 있던
+// 계정은 무슨 일이 있어도 지우지 않는다 — 프로덕션에 붙어 도는 스크립트다.
+const guard = await createDeleteGuard({ url: URL, serviceKey: SERVICE_KEY });
+
 async function anonUser(tag) {
   const res = await fetch(`${URL}/auth/v1/signup`, {
     method: "POST",
@@ -84,14 +89,9 @@ async function anonUser(tag) {
   if (created.status >= 400) {
     throw new Error(`프로필 생성 실패(${tag}): ${JSON.stringify(created.json)}`);
   }
+  guard.register(user.id);
   return user;
 }
-
-const deleteAuthUser = (id) =>
-  fetch(`${URL}/auth/v1/admin/users/${id}`, {
-    method: "DELETE",
-    headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
-  });
 
 /** 두 사람을 상호 크루로 만든다 (0038 RPC). */
 async function linkCrew(from, to) {
@@ -190,22 +190,15 @@ function kstDay(offsetMs = 0) {
 const kstToday = () => kstDay();
 const kstYesterday = () => kstDay(-86_400_000);
 
-let users = [];
-
 try {
-  // ⚠ 생성 직후 바로 push한다. 끝에서 한 번에 배열을 할당하면 세 번째
-  //   anonUser()가 실패했을 때 이미 만들어진 a·b가 users에 없어 finally에서
-  //   지워지지 않는다 — 프로덕션 auth에 버려진 테스트 계정이 남는다.
+  // 계정 등록은 anonUser()가 생성 직후 guard.register()로 한다. 여기서 배열에
+  // 따로 모으지 않는 이유는 장부가 둘이 되면 갈라지기 때문이다 — 중간에
+  // anonUser()가 실패해도 그때까지 만들어진 계정은 이미 가드에 등록돼 있다.
   const a = await anonUser("a"); // 세션 주인 (응원 받는 사람)
-  users.push(a);
   const b = await anonUser("b"); // 응원 보내는 사람
-  users.push(b);
   const c = await anonUser("c"); // 두 번째 대상
-  users.push(c);
   const d = await anonUser("d"); // 비크루
-  users.push(d);
   const e = await anonUser("e"); // [17] 전용 — 아직 한 번도 응원받지 않은 상대
-  users.push(e);
 
   await linkCrew(b, a);
   await linkCrew(b, c);
@@ -406,7 +399,7 @@ try {
   //   조용히 삼켜지고(스택트레이스도 메시지도 없이) failed===0인 채 exit 0으로
   //   끝난다. 이 스크립트는 0041이 제대로 적용됐는지 판정하는 게이트이므로
   //   "마이그레이션 미적용"이나 "엔드포인트 다운"이 "정상"으로 보이면 안 된다.
-  for (const u of users) await deleteAuthUser(u.id);
+  await guard.cleanup();
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

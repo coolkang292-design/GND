@@ -2,6 +2,7 @@
 // 실행: node scripts/badge-point-check.mjs
 // 사전조건: 0031·0032 적용.
 import { readFileSync } from "node:fs";
+import { createDeleteGuard } from "./_safe-delete.mjs";
 
 const env = Object.fromEntries(
   readFileSync(".env.local", "utf8")
@@ -16,6 +17,9 @@ const env = Object.fromEntries(
 const URL = env.NEXT_PUBLIC_SUPABASE_URL;
 const ANON_KEY = env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const SERVICE_KEY = env.SUPABASE_SERVICE_ROLE_KEY;
+
+// 삭제 가드 — 실행 시작 시점에 있던 계정은 절대 지우지 않는다.
+const _guard = await createDeleteGuard({ url: URL, serviceKey: SERVICE_KEY });
 if (!URL || !ANON_KEY || !SERVICE_KEY) {
   throw new Error(".env.local에 Supabase 설정이 없습니다");
 }
@@ -68,12 +72,7 @@ async function anonUser(nick) {
   return user;
 }
 
-async function deleteAuthUser(id) {
-  return fetch(`${URL}/auth/v1/admin/users/${id}`, {
-    method: "DELETE",
-    headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
-  });
-}
+const deleteAuthUser = (id) => _guard.deleteIfCreatedThisRun(id);
 
 /** 지정한 종목·세트로 세션을 만들고 완료까지 */
 async function runWorkout(user, exercises) {
