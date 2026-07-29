@@ -9,6 +9,7 @@
 // 알지도 못하는 id라 건드릴 수 없다. profiles → crew_links/crew_requests가 전부
 // on delete cascade라, auth 계정을 지우면 이 스크립트가 만든 행은 함께 사라진다.
 import { readFileSync } from "node:fs";
+import { createDeleteGuard } from "./_safe-delete.mjs";
 
 const env = Object.fromEntries(
   readFileSync(".env.local", "utf8")
@@ -23,6 +24,9 @@ const env = Object.fromEntries(
 const URL = env.NEXT_PUBLIC_SUPABASE_URL;
 const ANON_KEY = env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const SERVICE_KEY = env.SUPABASE_SERVICE_ROLE_KEY;
+
+// 삭제 가드 — 실행 시작 시점에 있던 계정은 절대 지우지 않는다.
+const _guard = await createDeleteGuard({ url: URL, serviceKey: SERVICE_KEY });
 if (!URL || !ANON_KEY || !SERVICE_KEY) {
   throw new Error(".env.local에 Supabase 설정이 없습니다");
 }
@@ -84,12 +88,7 @@ async function anonUser(tag) {
   return user;
 }
 
-async function deleteAuthUser(id) {
-  return fetch(`${URL}/auth/v1/admin/users/${id}`, {
-    method: "DELETE",
-    headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
-  });
-}
+const deleteAuthUser = (id) => _guard.deleteIfCreatedThisRun(id);
 
 /** RPC 실패 응답이 기대한 에러 코드를 담고 있는가 */
 function hasCode(result, code) {

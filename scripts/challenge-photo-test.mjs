@@ -2,6 +2,7 @@
 // 실행: node scripts/challenge-photo-test.mjs
 // 사전조건: 0014_challenge_photo_required.sql이 적용되어 있어야 한다.
 import { readFileSync } from "node:fs";
+import { createDeleteGuard } from "./_safe-delete.mjs";
 
 const env = Object.fromEntries(
   readFileSync(".env.local", "utf8")
@@ -16,6 +17,9 @@ const env = Object.fromEntries(
 const URL = env.NEXT_PUBLIC_SUPABASE_URL;
 const ANON_KEY = env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const SERVICE_KEY = env.SUPABASE_SERVICE_ROLE_KEY;
+
+// 삭제 가드 — 실행 시작 시점에 있던 계정은 절대 지우지 않는다.
+const _guard = await createDeleteGuard({ url: URL, serviceKey: SERVICE_KEY });
 if (!URL || !ANON_KEY || !SERVICE_KEY) {
   throw new Error(".env.local에 Supabase 설정이 없습니다");
 }
@@ -93,16 +97,7 @@ async function storageDelete(token, path) {
   return response.status;
 }
 
-async function deleteAuthUser(userId) {
-  const response = await fetch(`${URL}/auth/v1/admin/users/${userId}`, {
-    method: "DELETE",
-    headers: {
-      apikey: SERVICE_KEY,
-      Authorization: `Bearer ${SERVICE_KEY}`,
-    },
-  });
-  return response.status;
-}
+const deleteAuthUser = (userId) => _guard.deleteIfCreatedThisRun(userId);
 
 async function completedSession(user, groupId, onCreated) {
   const draft = await api(user.token, "POST", "/rest/v1/workout_sessions", {

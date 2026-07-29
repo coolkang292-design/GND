@@ -1,6 +1,7 @@
 // RLS 2인 픽스처 테스트 (§19) — 익명 유저 A·B를 만들어 경계를 검증한다.
 // 실행: node scripts/rls-test.mjs  (사전조건: 0001~0004 마이그레이션 적용됨)
 import { readFileSync } from "node:fs";
+import { createDeleteGuard } from "./_safe-delete.mjs";
 
 const env = Object.fromEntries(
   readFileSync(".env.local", "utf8")
@@ -11,6 +12,14 @@ const env = Object.fromEntries(
 const URL_ = env.NEXT_PUBLIC_SUPABASE_URL;
 const KEY = env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 if (!URL_ || !KEY) throw new Error(".env.local에 Supabase 설정이 없습니다");
+
+// 삭제 가드 — 실행 시작 시점에 있던 계정은 절대 지우지 않는다.
+// ⚠ 반드시 첫 anonUser()보다 **앞에서** 만들어야 한다. 뒤에서 만들면 이 실행이
+//   만든 픽스처까지 "기존 계정"으로 잡혀 정리가 통째로 거부된다.
+const _guard = await createDeleteGuard({
+  url: URL_,
+  serviceKey: env.SUPABASE_SERVICE_ROLE_KEY,
+});
 
 let passed = 0;
 let failed = 0;
@@ -410,7 +419,8 @@ check("알림 직접 insert 차단", nIns.status >= 400);
 
 console.log("\n── Phase 6: 응원 (send_cheer 스팸 제한) ──");
 const ch1 = await api(B.token, "POST", "/rest/v1/rpc/send_cheer", { p_session_id: s6.id, p_cheer_type: "fire" });
-check("B가 응원 1회 성공", ch1.status === 200 && ch1.json?.cheer_type === "fire", JSON.stringify(ch1.json));
+// 0041부터 send_cheer는 {cheer, points_awarded}를 돌려준다 (예전엔 cheers 행 자체).
+check("B가 응원 1회 성공", ch1.status === 200 && ch1.json?.cheer?.cheer_type === "fire", JSON.stringify(ch1.json));
 const chSelf = await api(A.token, "POST", "/rest/v1/rpc/send_cheer", { p_session_id: s6.id, p_cheer_type: "fire" });
 check("본인 세션 응원 금지 (own_session)", chSelf.status >= 400 && JSON.stringify(chSelf.json).includes("own_session"));
 const chOut = await api(C.token, "POST", "/rest/v1/rpc/send_cheer", { p_session_id: s6.id, p_cheer_type: "fire" });
@@ -425,7 +435,7 @@ check("쿨다운 후 응원 2회 성공", ch2.status === 200, JSON.stringify(ch2
 console.log("  (쿨다운 10.5초 대기…)");
 await sleep(10500);
 const ch3 = await api(B.token, "POST", "/rest/v1/rpc/send_cheer", { p_session_id: s6.id, p_cheer_type: "custom", p_message: "화이팅!" });
-check("커스텀 메시지 응원 3회 성공", ch3.status === 200 && ch3.json?.message === "화이팅!");
+check("커스텀 메시지 응원 3회 성공", ch3.status === 200 && ch3.json?.cheer?.message === "화이팅!");
 const ch4 = await api(B.token, "POST", "/rest/v1/rpc/send_cheer", { p_session_id: s6.id, p_cheer_type: "fire" });
 check("세션당 3회 제한 (cheer_limit)", ch4.status >= 400 && JSON.stringify(ch4.json).includes("cheer_limit"));
 
@@ -517,10 +527,7 @@ if (SERVICE) {
     headers: adminHeaders,
   });
   for (const u of [A, B, C]) {
-    const res = await fetch(`${URL_}/auth/v1/admin/users/${u.id}`, {
-      method: "DELETE",
-      headers: adminHeaders,
-    });
+    const res = await _guard.deleteIfCreatedThisRun(u.id);
     if (!res.ok) console.log(`정리 실패(${u.id.slice(0, 8)}): ${res.status}`);
   }
   console.log("픽스처 정리 완료");

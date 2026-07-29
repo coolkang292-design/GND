@@ -8,6 +8,7 @@
 //   원래 null이라, 웨이트를 아무리 꼼꼼히 기록해도 유산소 1세트가 섞이면 0점이 됐다.
 //   실제 피해: 오뎅끼데스까 7/25 세션(웨이트 21세트 + 트레드밀 1세트) → 기록 0점.
 import { readFileSync } from "node:fs";
+import { createDeleteGuard } from "./_safe-delete.mjs";
 
 const env = Object.fromEntries(
   readFileSync(".env.local", "utf8")
@@ -22,6 +23,9 @@ const env = Object.fromEntries(
 const URL = env.NEXT_PUBLIC_SUPABASE_URL;
 const ANON_KEY = env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const SERVICE_KEY = env.SUPABASE_SERVICE_ROLE_KEY;
+
+// 삭제 가드 — 실행 시작 시점에 있던 계정은 절대 지우지 않는다.
+const _guard = await createDeleteGuard({ url: URL, serviceKey: SERVICE_KEY });
 if (!URL || !ANON_KEY || !SERVICE_KEY) {
   throw new Error(".env.local에 Supabase 설정이 없습니다");
 }
@@ -74,12 +78,7 @@ async function anonUser(nick) {
   return user;
 }
 
-async function deleteAuthUser(userId) {
-  return fetch(`${URL}/auth/v1/admin/users/${userId}`, {
-    method: "DELETE",
-    headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
-  });
-}
+const deleteAuthUser = (userId) => _guard.deleteIfCreatedThisRun(userId);
 
 /**
  * 인증사진 등록 — 앱과 같은 순서로 한다.

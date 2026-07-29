@@ -2,6 +2,7 @@
 // 사전조건: 0022_xp_level_system.sql 적용됨.
 // 실행: node scripts/xp-test.mjs
 import { readFileSync } from "node:fs";
+import { createDeleteGuard } from "./_safe-delete.mjs";
 
 const env = Object.fromEntries(
   readFileSync(".env.local", "utf8")
@@ -12,6 +13,9 @@ const env = Object.fromEntries(
 const URL_ = env.NEXT_PUBLIC_SUPABASE_URL;
 const KEY = env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const SERVICE = env.SUPABASE_SERVICE_ROLE_KEY;
+
+// 삭제 가드 — 실행 시작 시점에 있던 계정은 절대 지우지 않는다.
+const _guard = await createDeleteGuard({ url: URL_, serviceKey: SERVICE });
 if (!URL_ || !KEY) throw new Error(".env.local에 Supabase 설정이 없습니다");
 
 let passed = 0, failed = 0;
@@ -146,7 +150,7 @@ check("is_valid_workout 직접 실행 거부", ivw.status >= 400, `status=${ivw.
 console.log("\n── 정리 ──");
 if (adminHeaders) {
   for (const u of [A, B]) {
-    const res = await fetch(`${URL_}/auth/v1/admin/users/${u.id}`, { method: "DELETE", headers: adminHeaders });
+    const res = await _guard.deleteIfCreatedThisRun(u.id);
     if (!res.ok) console.log(`정리 실패(${u.id.slice(0, 8)}): ${res.status}`);
   }
   console.log("픽스처 정리 완료");

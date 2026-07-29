@@ -5,6 +5,7 @@ import {
   type SocialEvent,
   type WorkoutImageRelation,
 } from "@/lib/domain/social";
+import { pointsAwardedFrom } from "@/lib/domain/cheer-points";
 import { currentStreak, workoutDayKeys } from "@/lib/domain/streak";
 import { DEFAULT_TIMEZONE, dayKey, dayRange } from "@/lib/domain/time";
 import { weekWorkoutDays } from "@/lib/domain/viewing-pass";
@@ -480,18 +481,24 @@ export async function getTodaysWorkoutUserIds(
 
 // ── 응원·찌르기 RPC ──────────────────────────────────────────
 
+/**
+ * 응원 보내기. 반환값의 pointsAwarded는 **서버가 실제로 지급한 액수**다(0041).
+ * 클라이언트가 "오늘 이 사람에게 응원했었나"를 로컬로 추측하면 다른 기기·다른
+ * 탭에서 0P인데 +10P로 표시된다.
+ */
 export async function sendCheer(
   sessionId: string,
   type: CheerType,
   message?: string,
-): Promise<void> {
+): Promise<{ pointsAwarded: number }> {
   const supabase = getSupabaseBrowserClient();
-  const { error } = await supabase.rpc("send_cheer", {
+  const { data, error } = await supabase.rpc("send_cheer", {
     p_session_id: sessionId,
     p_cheer_type: type,
     p_message: message ?? null,
   });
   if (error) throw toSocialError(error);
+  return { pointsAwarded: pointsAwardedFrom(data) };
 }
 
 export async function pokeUser(targetId: string): Promise<void> {

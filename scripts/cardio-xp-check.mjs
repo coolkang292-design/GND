@@ -1,6 +1,10 @@
+
+// 삭제 가드 — 실행 시작 시점에 있던 계정은 절대 지우지 않는다.
+const _guard = await createDeleteGuard({ url: URL_, serviceKey: SERVICE });
 // 유산소·시간 종목이 XP를 받는지 검증 (0024 적용 전후).
 // 적용 전: 러닝 1세트 = 무효 → 0 XP.  적용 후: 유효 → 100+ XP.
 import { readFileSync } from "node:fs";
+import { createDeleteGuard } from "./_safe-delete.mjs";
 const env = Object.fromEntries(
   readFileSync(".env.local", "utf8").split(/\r?\n/).filter((l) => l.includes("="))
     .map((l) => [l.slice(0, l.indexOf("=")).trim(), l.slice(l.indexOf("=") + 1).trim()]),
@@ -29,4 +33,4 @@ const r = await cardioWorkout(A);
 const xp = r.json?.xpAwarded ?? 0;
 console.log(`러닝 1세트(5km·30분) 완료 → xpAwarded=${xp} awarded=${r.json?.awarded}`);
 console.log(xp >= 100 ? "  ✅ 0024 적용됨 — 유산소도 XP 받음" : "  ❌ 아직 0 XP — 0024 미적용 (러닝이 무효 처리됨)");
-await fetch(`${URL_}/auth/v1/admin/users/${A.id}`, { method: "DELETE", headers: { apikey: SERVICE, Authorization: `Bearer ${SERVICE}` } });
+await _guard.deleteIfCreatedThisRun(A.id);
