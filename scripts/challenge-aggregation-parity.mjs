@@ -103,6 +103,21 @@ for (const ch of actives) {
     `A만 ${onlyA.length}건 ${JSON.stringify(onlyA)} · B만 ${onlyB.length}건 ${JSON.stringify(onlyB)}`,
   );
 
+  // 공허한 통과를 막는다. 두 집합이 모두 비어 있으면 차집합도 0이 되어 위
+  // 두 단언이 **아무것도 대조하지 않고** PASS로 찍힌다. 필터 문법이 틀려
+  // PostgREST가 200 + []를 주는 경우가 정확히 그렇다 — 에러가 아니라 정상
+  // 응답이므로 rest()의 throw에 걸리지 않는다.
+  //
+  // 갓 시작해 아직 운동이 없는 챌린지는 실제로 0건일 수 있다. 그때도 FAIL이
+  // 맞다 — 이 스크립트는 "전환해도 안전하다"를 증명하는 게이트이고, 0건이면
+  // 증명한 것이 없기 때문이다. 통과 여부가 아니라 근거 유무를 보는 단언이다.
+  check(
+    "대조가 공허하지 않다 (기간 내 세션 1건 이상)",
+    idsB.size > 0,
+    "기간 내 세션이 0건이라 위 집합 비교가 아무것도 검증하지 않았다. " +
+      "갓 시작한 챌린지라면 정상이지만, 그 경우 이 실행은 전환 안전성의 근거가 되지 못한다.",
+  );
+
   const goals = await rest(
     `user_goals?select=user_id,goal_type,target_value,qualifier&challenge_id=eq.${ch.id}`,
   );
