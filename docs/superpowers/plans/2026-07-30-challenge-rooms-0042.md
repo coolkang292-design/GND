@@ -1461,7 +1461,17 @@ git commit -m "feat(0042): 기존 챌린지 참가자 백필 — 행 단위 재�
 
 **⑥ 그룹을 유저보다 먼저 지운다.** `groups.owner_id`는 `on delete cascade`가 **아니다**. 그룹이 남아 있으면 그 방장 계정 삭제가 500으로 실패하고 테스트 계정이 프로덕션 auth에 떠돌이로 남는다. 2026-07-30 실행에서 실제로 2개가 남았다. `rls-test.mjs:524`가 같은 이유로 그룹을 먼저 지운다.
 
-**⑦ PostgREST는 오류 시 배열이 아니라 에러 객체를 준다.** 테이블이 없거나 권한이 없으면 `{code, message}`가 온다. 그걸 그대로 `.some()`에 넘기면 `ps.some is not a function`으로 실행이 통째로 죽는다 — 적용 전 실행에서 실제로 그랬다. 배열 반환 헬퍼는 `Array.isArray(r.json) ? r.json : []`로 감싼다.
+**⑦ 컬럼명을 스키마에서 확인하고 쓴다.** 0042가 `create_challenge_room`에서 `order by gm.created_at`을 썼는데 `group_members`에는 그 컬럼이 없다 — 실제 이름은 `joined_at`이다(`0001:32`). 챌린지 생성이 `42703`으로 통째로 실패했고, 그 함수를 쓰는 후속 단언 20여 개가 `chId=undefined`로 연쇄 실패했다. **0043이 이것만 고친다.**
+
+이런 종류는 SQL을 적용해 보기 전엔 안 드러난다. 계획서 SQL을 쓸 때 참조하는 테이블의 컬럼을 실제로 조회해 대조하는 편이 싸다:
+
+```sql
+select table_name, column_name from information_schema.columns
+where table_schema = 'public' and table_name in ('group_members','challenges','user_goals')
+order by table_name, ordinal_position;
+```
+
+**⑧ PostgREST는 오류 시 배열이 아니라 에러 객체를 준다.** 테이블이 없거나 권한이 없으면 `{code, message}`가 온다. 그걸 그대로 `.some()`에 넘기면 `ps.some is not a function`으로 실행이 통째로 죽는다 — 적용 전 실행에서 실제로 그랬다. 배열 반환 헬퍼는 `Array.isArray(r.json) ? r.json : []`로 감싼다.
 
 - [ ] **Step 1: 스크립트 작성**
 
