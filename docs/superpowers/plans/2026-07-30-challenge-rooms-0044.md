@@ -231,6 +231,21 @@ for (const ch of actives) {
     `A만 ${onlyA.length}건 ${JSON.stringify(onlyA)} · B만 ${onlyB.length}건 ${JSON.stringify(onlyB)}`,
   );
 
+  // 공허한 통과를 막는다. 두 집합이 모두 비어 있으면 차집합도 0이 되어 위
+  // 두 단언이 **아무것도 대조하지 않고** PASS로 찍힌다. 필터 문법이 틀려
+  // PostgREST가 200 + []를 주는 경우가 정확히 그렇다 — 에러가 아니라 정상
+  // 응답이므로 rest()의 throw에 걸리지 않는다.
+  //
+  // 갓 시작해 아직 운동이 없는 챌린지는 실제로 0건일 수 있다. 그때도 FAIL이
+  // 맞다 — 이 스크립트는 "전환해도 안전하다"를 증명하는 게이트이고, 0건이면
+  // 증명한 것이 없기 때문이다. 통과 여부가 아니라 근거 유무를 보는 단언이다.
+  check(
+    "대조가 공허하지 않다 (기간 내 세션 1건 이상)",
+    idsB.size > 0,
+    "기간 내 세션이 0건이라 위 집합 비교가 아무것도 검증하지 않았다. " +
+      "갓 시작한 챌린지라면 정상이지만, 그 경우 이 실행은 전환 안전성의 근거가 되지 못한다.",
+  );
+
   const goals = await rest(
     `user_goals?select=user_id,goal_type,target_value,qualifier&challenge_id=eq.${ch.id}`,
   );
@@ -250,7 +265,9 @@ if (failed > 0) {
 
 Run: `node scripts/challenge-aggregation-parity.mjs`
 
-Expected: `3/3 passed` (진행 중 챌린지 1건 × 단언 3개). 출력에 `기간 내 세션 집합 동일 (group_id 9건 · 참가자 9건)`처럼 양쪽 건수가 같게 찍힌다.
+Expected: `4/4 passed` (진행 중 챌린지 1건 × 단언 4개). 출력에 `기간 내 세션 집합 동일 (group_id 9건 · 참가자 9건)`처럼 양쪽 건수가 같게 찍힌다.
+
+**요약만 보지 마라.** `3/3`·`4/4` 같은 합계는 대조 대상이 0건이어도 찍힐 수 있었다 — 그래서 네 번째 단언("대조가 공허하지 않다")을 넣었다. 그래도 **건수가 0이 아닌지 눈으로 확인**하는 습관을 유지하라.
 
 **하나라도 FAIL이면 여기서 멈추고 사용자에게 보고하라.** 집계 전환을 0045로 미루고 Task 4·5를 이 계획에서 빼야 한다 — 그 경우 0044는 인덱스 드롭(Task 1·2) + 화면(Task 7·8·9) + 크론(Task 10)으로 좁아진다.
 
@@ -699,7 +716,7 @@ Run: `pnpm typecheck && pnpm test`
 Expected: typecheck 통과 · 655/655
 
 Run: `node scripts/challenge-aggregation-parity.mjs`
-Expected: `3/3 passed` — Step 1과 **같은 건수**
+Expected: `4/4 passed` — Step 1과 **같은 건수**(0건이 아닌 것까지 확인)
 
 그리고 실제 실적값을 대조한다. 임시 vitest로 실제 함수를 부른다 (재구현하면 재구현의 버그가 판정을 오염시킨다). `src/lib/__parity.tmp.test.ts`를 만들고:
 
