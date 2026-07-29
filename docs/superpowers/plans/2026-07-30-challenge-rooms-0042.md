@@ -20,7 +20,8 @@
 - 알림 유형 `challenge_invite` 추가
 - RPC 6개: 생성·초대·수락·거절·자동시작·자동종료
 - 기존 챌린지의 `group_members`를 참가자로 백필
-- 순수 도메인 함수 2개 (대표 챌린지 선택, 목표 하한선) + 단위 테스트
+- 순수 도메인 함수 3개 (대표 챌린지 선택, 목표 하한선, 부위조건 환산) + 단위 테스트
+- **버그 수정 2건** — `weight_days` 집계 기준(부위→종목), 타바타 분수가 `bodyweight_time`에 미반영
 - 통합 검증 스크립트
 
 **0042에서 하지 않는 것** — 착수하지 말 것
@@ -35,7 +36,16 @@
 | 화면 변경 일체 (챌린지 탭 목록화·홈 대표 챌린지) | 0043 |
 | `groups`·`group_members`·`group_id` 드롭 | 0044 |
 
-**0042 적용 후에도 앱은 지금과 100% 동일하게 돌아야 한다.** 그게 이 단계의 성공 기준이다. 화면에서 뭔가 달라 보이면 잘못 만든 것이다.
+**0042 적용 후에도 앱은 지금과 동일하게 돌아야 한다 — 딱 하나만 빼고.** 그게 이 단계의 성공 기준이다.
+
+**의도한 유일한 예외: Task 2B·2C의 버그 수정.** 진행 중인 챌린지가 지금 잘못 채점되고 있어 함께 고친다.
+
+| 무엇 | 지금 | 수정 후 |
+|---|---|---|
+| `weight_days` 집계 | 하루 **부위** 수 | 하루 **종목** 수 |
+| 타바타 분수 | 버려짐 | `bodyweight_time`에 더해짐 |
+
+**그 둘 외에 화면에서 뭔가 달라 보이면 잘못 만든 것이다.**
 
 ---
 
@@ -96,8 +106,13 @@ notify(p_user_id uuid, p_actor_id uuid, p_type text,
 | `src/lib/domain/challenge-room.ts` | 순수 계산 — 대표 챌린지 선택, 목표 하한선 | 신규 |
 | `src/lib/domain/challenge-room.test.ts` | 위 함수 테스트 | 신규 |
 | `scripts/challenge-room-check.mjs` | 통합 검증 | 신규 |
+| `src/lib/challenge.ts` | `weight_days` 집계 기준·타바타 분수 (Task 2B·2C) | 수정 |
+| `src/lib/challenge.test.ts` | 위 두 수정의 테스트 | 수정 |
+| `src/components/challenge/setup-sheet.tsx` | 부위→종목 라벨 (Task 2B) | 수정 |
 
-**앱 코드(`src/lib/challenge.ts`·화면)는 이번에 건드리지 않는다.** 0042는 DB만 추가하는 단계이고, 도메인 함수 2개는 0043이 쓸 재료를 미리 TDD로 굳혀 두는 것이다. 순수 함수라 지금 만들어도 기존 동작에 영향이 없다.
+**도메인 함수 3개(Task 1·2)는 0043이 쓸 재료를 미리 TDD로 굳혀 두는 것이다.** 순수 함수라 지금 만들어도 기존 동작에 영향이 없다.
+
+**`challenge.ts`와 `setup-sheet.tsx`를 건드리는 것은 Task 2B·2C뿐이고, 그건 버그 수정이다.** 화면 구조(챌린지 탭 목록화·홈 대표 챌린지)는 0043 몫으로 그대로 남긴다.
 
 ---
 
@@ -283,7 +298,7 @@ git commit -m "feat: 대표 챌린지 선택 순수 함수 (0043 준비)"
 `src/lib/domain/challenge-room.test.ts` 끝에 이어 붙인다:
 
 ```ts
-import { goalFloor, FLOOR_BASELINE_DAYS } from "./challenge-room";
+import { goalFloor, daysMeetingQualifier, FLOOR_BASELINE_DAYS } from "./challenge-room";
 
 describe("goalFloor", () => {
   it("기준일과 같은 기간이면 실적이 그대로 하한", () => {
@@ -337,6 +352,50 @@ describe("goalFloor", () => {
 
   it("기준 구간은 28일", () => {
     expect(FLOOR_BASELINE_DAYS).toBe(28);
+  });
+});
+
+// ── *_days 유형의 부위 조건 (2026-07-30 실측으로 드러난 구멍) ────────
+//
+// weight_days·bodyweight_days는 "하루 N부위 이상 한 날"을 센다. 그래서 같은
+// 과거 데이터라도 N이 몇이냐에 따라 실적이 달라진다. 실측 예: 스칼레또님의
+// 최근 웨이트는 하루 최대 3부위였는데 목표를 qualifier=4로 세워서, 19일
+// 목표가 영구히 0일이 됐다.
+//
+// baselineActual을 qualifier 없이 계산해 넘기면 하한선이 이 경우를 못 잡는다.
+// 아래 헬퍼가 "이 qualifier로 세면 과거에 며칠이었나"를 돌려주고, 호출부는
+// **사용자가 지금 고른 qualifier로** 과거를 다시 세어 넘겨야 한다.
+describe("daysMeetingQualifier", () => {
+  const partsByDay = {
+    "2026-07-27": 1,
+    "2026-07-28": 3,
+    "2026-07-29": 1,
+  };
+
+  it("조건을 만족한 날만 센다", () => {
+    expect(daysMeetingQualifier(partsByDay, 1)).toBe(3);
+    expect(daysMeetingQualifier(partsByDay, 3)).toBe(1);
+  });
+
+  it("아무 날도 못 만족하면 0 — 목표가 불가능해지는 지점", () => {
+    expect(daysMeetingQualifier(partsByDay, 4)).toBe(0);
+  });
+
+  it("qualifier가 없으면 1부위로 본다 (actualForGoal과 같은 기본값)", () => {
+    expect(daysMeetingQualifier(partsByDay, null)).toBe(3);
+    expect(daysMeetingQualifier(partsByDay, undefined)).toBe(3);
+  });
+
+  it("빈 기록은 0", () => {
+    expect(daysMeetingQualifier({}, 3)).toBe(0);
+  });
+
+  it("하한선과 함께 쓰면 qualifier가 하한을 바꾼다", () => {
+    // 같은 과거 데이터인데 qualifier에 따라 하한이 달라져야 한다.
+    const days3 = daysMeetingQualifier(partsByDay, 3); // 1일
+    const days4 = daysMeetingQualifier(partsByDay, 4); // 0일
+    expect(goalFloor("weight_days", days3, 28)).toBe(1);
+    expect(goalFloor("weight_days", days4, 28)).toBe(0);
   });
 });
 ```
@@ -397,6 +456,28 @@ export function goalFloor(
   const units = Math.ceil(Number((raw / step).toFixed(6)));
   return Number((units * step).toFixed(1));
 }
+
+/**
+ * *_days 유형의 과거 실적 — "하루 N부위/종목 이상 한 날" 수.
+ *
+ * weight_days·bodyweight_days는 qualifier에 따라 **같은 과거 데이터의 실적이
+ * 달라진다**. 2026-07-30 실측에서 이게 실제로 문제가 됐다: 최근 웨이트가 하루
+ * 최대 3부위였던 사용자가 목표를 qualifier=4로 세워서 19일 목표가 영구히
+ * 0일이 됐고, 화면은 아무 경고도 하지 않았다.
+ *
+ * 그래서 goalFloor에 넘길 baselineActual은 **사용자가 지금 고른 qualifier로**
+ * 다시 센 값이어야 한다. qualifier를 무시하고 센 값을 넘기면 하한선이
+ * *_days에서 무의미해진다.
+ *
+ * 기본값 1은 actualForGoal(`challenge.ts:372`)의 `qualifier ?? 1`과 같다.
+ */
+export function daysMeetingQualifier(
+  countByDay: Record<string, number>,
+  qualifier: number | null | undefined,
+): number {
+  const min = qualifier ?? 1;
+  return Object.values(countByDay).filter((n) => n >= min).length;
+}
 ```
 
 - [ ] **Step 4: 테스트 통과 확인**
@@ -405,7 +486,7 @@ export function goalFloor(
 npx vitest run src/lib/domain/challenge-room.test.ts
 ```
 
-기대: PASS (20 tests — Task 1의 8건 + 12건)
+기대: PASS (25 tests — Task 1의 8건 + 하한선 12건 + 부위조건 5건)
 
 - [ ] **Step 5: 전체 테스트·타입 확인**
 
@@ -426,6 +507,448 @@ npx tsc --noEmit
 ```bash
 git add src/lib/domain/challenge-room.ts src/lib/domain/challenge-room.test.ts
 git commit -m "feat: 목표 하한선 순수 함수 — 유형별 올림 단위 (0043 준비)"
+```
+
+---
+
+## Task 2B: `weight_days`를 부위 대신 종목 수로 (버그 수정)
+
+2026-07-30 실측에서 드러난 문제다. 진행 중 챌린지에서 **웨이트 5종목·13세트를 한 날이 0일로 집계**됐다.
+
+```
+스칼레또 7/28 (KST): 힙어브덕션(하체) 이너따이(하체) 덤벨(팔) 랫풀다운(등) 스쿼트(하체)
+  → 종목 5개, 부위 3개
+  → weight_days qualifier=4 → 부위 3 < 4 → 인정 안 됨 → 0일
+```
+
+`weight_days`는 "하루 N**부위** 이상"을 세는데, 하체를 집중적으로 하는 사람은 종목을 아무리 늘려도 부위가 안 늘어난다. 결과적으로 목표가 **영구히 도달 불가**가 되고 화면은 아무 경고도 하지 않는다.
+
+**결정(사용자):** 부위 대신 **종목 수**로 센다. `bodyweight_days`가 이미 종목 수로 세므로(`challenge.ts:336`) 두 유형의 규칙이 일치하는 부수 효과도 있다.
+
+⚠ **이것은 0042에서 의도적으로 만드는 유일한 동작 변화다.** 0042의 기본 원칙은 "아무것도 달라지지 않는다"인데, 이 건은 진행 중인 챌린지가 지금 잘못 채점되고 있어 예외로 둔다. Task 8 실기기 확인에서 이 변화만은 **보여야** 한다.
+
+**파일:**
+- 수정: `src/lib/challenge.ts` (`PeriodStats` 필드명·`foldPeriodStats`·`actualForGoal`·`goalLabel`)
+- 수정: `src/lib/challenge.test.ts`
+- 수정: `src/components/challenge/setup-sheet.tsx` (라벨)
+- 수정: `src/lib/domain/goal-score.ts:10` · `src/lib/types.ts:25` (주석)
+
+- [ ] **Step 1: 실패하는 테스트로 바꾼다**
+
+`src/lib/challenge.test.ts:117`의 단언을 종목 기준으로 바꾼다. 현재:
+
+```ts
+    expect(s.weightPartsByDay["2026-07-01"]).toBe(1); // 가슴 1부위
+```
+
+이것으로:
+
+```ts
+    expect(s.weightKindsByDay["2026-07-01"]).toBe(1); // 벤치프레스 1종목
+```
+
+같은 파일 27행의 픽스처 필드명도 바꾼다. 현재:
+
+```ts
+  weightPartsByDay: { "2026-07-01": 3, "2026-07-02": 1, "2026-07-03": 4 },
+```
+
+이것으로:
+
+```ts
+  weightKindsByDay: { "2026-07-01": 3, "2026-07-02": 1, "2026-07-03": 4 },
+```
+
+그리고 파일 끝에 **부위가 같아도 종목이 다르면 따로 센다**를 고정하는 테스트를 추가한다. 이게 이번 수정의 본질이다.
+
+```ts
+describe("foldPeriodStats — weight_days는 종목 수로 센다 (2026-07-30 수정)", () => {
+  // 실측 재현: 하체 3종목 + 팔 1종목 + 등 1종목 = 종목 5개, 부위 3개.
+  // 부위로 세면 3, 종목으로 세면 5다. qualifier=4를 만족해야 한다.
+  const row = {
+    userId: "u1",
+    completedAt: "2026-07-28T13:05:00Z",
+    exercises: [
+      ["힙 어브덕션", "하체"],
+      ["이너따이", "하체"],
+      ["스쿼트", "하체"],
+      ["덤벨", "팔"],
+      ["랫풀다운", "등"],
+    ].map(([exerciseName, bodyPart]) => ({
+      exerciseType: "weight" as const,
+      exerciseName,
+      bodyPart,
+      sets: [
+        {
+          weightKg: 10,
+          reps: 25,
+          distanceMeters: null,
+          durationSeconds: null,
+          isCompleted: true,
+        },
+      ],
+    })),
+  };
+
+  it("같은 부위의 다른 종목을 각각 센다", () => {
+    const s = foldPeriodStats([row], "2026-07-27", "2026-09-30", "Asia/Seoul").get("u1")!;
+    expect(s.weightKindsByDay["2026-07-28"]).toBe(5);
+  });
+
+  it("qualifier 4를 만족한다 — 부위로 셌을 때 0이던 것이 1이 된다", () => {
+    const s = foldPeriodStats([row], "2026-07-27", "2026-09-30", "Asia/Seoul").get("u1")!;
+    expect(actualForGoal(s, "weight_days", 4)).toBe(1);
+    expect(actualForGoal(s, "weight_days", 6)).toBe(0);
+  });
+
+  it("완료되지 않은 세트만 있는 종목은 세지 않는다", () => {
+    const incomplete = {
+      ...row,
+      exercises: row.exercises.map((ex) => ({
+        ...ex,
+        sets: ex.sets.map((st) => ({ ...st, isCompleted: false })),
+      })),
+    };
+    const s = foldPeriodStats([incomplete], "2026-07-27", "2026-09-30", "Asia/Seoul").get("u1")!;
+    expect(s.weightKindsByDay["2026-07-28"] ?? 0).toBe(0);
+  });
+});
+```
+
+`foldPeriodStats`·`actualForGoal`이 이 테스트 파일에 이미 import돼 있는지 확인하고, 없으면 추가한다.
+
+- [ ] **Step 2: 테스트가 실패하는지 확인**
+
+```bash
+npx vitest run src/lib/challenge.test.ts
+```
+
+기대: FAIL — `weightKindsByDay` 필드가 없어 `undefined`. 그리고 `actualForGoal(s, "weight_days", 4)`가 부위 3개 기준으로 `0`이 나온다.
+
+- [ ] **Step 3: `PeriodStats` 필드명 변경**
+
+`src/lib/challenge.ts:244-245`. 현재:
+
+```ts
+  /** 날짜별 웨이트 완료 부위 수 — weight_days 판정 */
+  weightPartsByDay: Record<string, number>;
+```
+
+이것으로:
+
+```ts
+  /**
+   * 날짜별 웨이트 완료 **종목** 수 — weight_days 판정.
+   *
+   * 2026-07-30까지는 부위 수였다. 하체를 집중적으로 하는 사람이 종목을
+   * 아무리 늘려도 부위가 안 늘어나서, 5종목·13세트를 한 날이 qualifier=4에
+   * 걸려 0일로 집계됐다. bodyweight_days가 이미 종목 수로 세므로 두 유형의
+   * 규칙도 이제 일치한다.
+   */
+  weightKindsByDay: Record<string, number>;
+```
+
+- [ ] **Step 4: 나머지 필드명·집계 기준 변경**
+
+`src/lib/challenge.ts` 안에서 순서대로 고친다.
+
+**(a) `EMPTY_STATS` (260행)** — `weightPartsByDay: {},` → `weightKindsByDay: {},`
+
+**(b) `Acc` 타입 (293행)** — `weightParts: Map<string, Set<string>>;` → `weightKinds: Map<string, Set<string>>;`
+
+**(c) 초기화 (304·307행)**
+
+```ts
+      weightPartsByDay: {},
+      ...
+      weightParts: new Map<string, Set<string>>(),
+```
+
+→
+
+```ts
+      weightKindsByDay: {},
+      ...
+      weightKinds: new Map<string, Set<string>>(),
+```
+
+**(d) 집계 (330~333행) — 여기가 실제 수정이다**
+
+```ts
+      if (ex.exerciseType === "weight") {
+        const parts = entry.weightParts.get(key) ?? new Set<string>();
+        parts.add(ex.bodyPart ?? ex.exerciseType);
+        entry.weightParts.set(key, parts);
+      } else if (ex.exerciseType === "bodyweight") {
+```
+
+→
+
+```ts
+      if (ex.exerciseType === "weight") {
+        // 부위(bodyPart)가 아니라 종목명으로 센다 — 2026-07-30 수정.
+        // 바로 아래 bodyweight 쪽과 같은 기준이다.
+        const kinds = entry.weightKinds.get(key) ?? new Set<string>();
+        kinds.add(ex.exerciseName);
+        entry.weightKinds.set(key, kinds);
+      } else if (ex.exerciseType === "bodyweight") {
+```
+
+**(e) 결과 조립 (345~346·359행)**
+
+```ts
+    const weightPartsByDay: Record<string, number> = {};
+    for (const [day, parts] of e.weightParts) weightPartsByDay[day] = parts.size;
+```
+
+→
+
+```ts
+    const weightKindsByDay: Record<string, number> = {};
+    for (const [day, kinds] of e.weightKinds) weightKindsByDay[day] = kinds.size;
+```
+
+그리고 359행의 `weightPartsByDay,` → `weightKindsByDay,`
+
+**(f) `actualForGoal` (380행)** — `return daysAtLeast(stats.weightPartsByDay);` → `return daysAtLeast(stats.weightKindsByDay);`
+
+**(g) `actualForGoal` 주석 (366행)**
+
+```ts
+/** 목표 유형별 실적 값 (frequency는 qualifier=하루 최소 부위 수 조건) */
+```
+
+→
+
+```ts
+/** 목표 유형별 실적 값 (*_days는 qualifier=하루 최소 종목 수 조건) */
+```
+
+- [ ] **Step 5: 테스트 통과 확인**
+
+```bash
+npx vitest run src/lib/challenge.test.ts
+```
+
+기대: PASS
+
+- [ ] **Step 6: 화면 문구를 종목으로 바꾼다**
+
+**(a) `src/lib/challenge.ts:41`**
+
+```ts
+  if (type === "weight_days") return `${base}(하루 ${qualifier ?? 1}부위+)`;
+```
+
+→
+
+```ts
+  if (type === "weight_days") return `${base}(하루 ${qualifier ?? 1}종목+)`;
+```
+
+**(b) `src/lib/challenge.ts:34`** — `/** *_days: 하루 최소 부위/종목 수 (기본 3) */` → `/** *_days: 하루 최소 종목 수 (기본 3) */`
+
+**(c) `src/components/challenge/setup-sheet.tsx:28`** — `weight_days: "운동일(부위)",` → `weight_days: "운동일(종목)",`
+
+**(d) `src/components/challenge/setup-sheet.tsx:65`** — `qualifier: number; // 일수형: 하루 최소 부위/종목 수` → `qualifier: number; // 일수형: 하루 최소 종목 수`
+
+**(e) `src/components/challenge/setup-sheet.tsx:487-489`** — 현재:
+
+```tsx
+                        {row.type === "weight_days"
+                          ? "하루 최소 부위 수 — 이만큼 웨이트를 완료한 날만 인정"
+                          : "하루 최소 종목 수 — 이만큼 맨몸을 완료한 날만 인정"}
+```
+
+→
+
+```tsx
+                        {row.type === "weight_days"
+                          ? "하루 최소 종목 수 — 이만큼 웨이트를 완료한 날만 인정"
+                          : "하루 최소 종목 수 — 이만큼 맨몸을 완료한 날만 인정"}
+```
+
+**(f) `src/components/challenge/setup-sheet.tsx:508`** — 두 분기가 같아지므로 삼항을 없앤다. 현재:
+
+```tsx
+                            {row.type === "weight_days" ? "부위+" : "종목+"}
+```
+
+→
+
+```tsx
+                            종목+
+```
+
+**(g) `src/lib/domain/goal-score.ts:10`** — `| "weight_days" // 웨이트 운동일 (하루 N부위+)` → `| "weight_days" // 웨이트 운동일 (하루 N종목+)`
+
+**(h) `src/lib/types.ts:25`** — `qualifier: number | null; // frequency: 하루 최소 웨이트 부위 수` → `qualifier: number | null; // *_days: 하루 최소 종목 수`
+
+- [ ] **Step 7: 전체 확인**
+
+```bash
+grep -rn "weightPartsByDay\|weightParts\b" src/
+```
+
+기대: 출력 없음 (전부 `weightKinds`로 바뀜)
+
+```bash
+npx tsc --noEmit
+```
+
+기대: 오류 없음
+
+```bash
+npm test
+```
+
+기대: 전체 PASS
+
+```bash
+npm run lint
+```
+
+기대: 오류 없음
+
+- [ ] **Step 8: 커밋**
+
+```bash
+git add src/lib/challenge.ts src/lib/challenge.test.ts src/components/challenge/setup-sheet.tsx src/lib/domain/goal-score.ts src/lib/types.ts
+git commit -m "fix: weight_days를 부위 대신 종목 수로 집계"
+```
+
+---
+
+## Task 2C: 타바타 시간을 `bodyweight_time`에 반영 (버그 수정)
+
+2026-07-30 실측에서 드러난 두 번째 문제다.
+
+타바타 세션의 맨몸 세트는 `reps=0`, `duration_seconds=null`로 저장되고 **분수는 세션의 `tabata_minutes`에만** 있다. 그런데 `foldPeriodStats`는 그 값을 타바타 횟수 세는 데만 쓴다 (`challenge.ts:311`).
+
+```ts
+if (row.tabataMinutes) entry.tabataCount += 1;   // 분수는 버려진다
+```
+
+`bodyweightTimeMin`은 세트의 `durationSeconds`만 더하므로, **타바타를 아무리 해도 `bodyweight_time` 목표는 0**이다. 실측에서 한 참가자의 `bodyweight_time` 56.6분 목표가 정확히 이 경우였다.
+
+**파일:**
+- 수정: `src/lib/challenge.ts:311`
+- 수정: `src/lib/challenge.test.ts`
+
+- [ ] **Step 1: 실패하는 테스트 작성**
+
+`src/lib/challenge.test.ts` 끝에 추가한다:
+
+```ts
+describe("foldPeriodStats — 타바타 분수가 맨몸 시간에 들어간다 (2026-07-30 수정)", () => {
+  // 실측 재현: 타바타 세트는 reps=0·durationSeconds=null이고 분수는
+  // 세션의 tabataMinutes에만 있다.
+  const tabataRow = {
+    userId: "u1",
+    completedAt: "2026-07-29T07:06:00Z",
+    tabataMinutes: 8,
+    exercises: ["점프 스쿼트", "마운틴 클라이머"].map((exerciseName) => ({
+      exerciseType: "bodyweight" as const,
+      exerciseName,
+      bodyPart: "하체",
+      sets: [
+        {
+          weightKg: null,
+          reps: 0,
+          distanceMeters: null,
+          durationSeconds: null,
+          isCompleted: true,
+        },
+      ],
+    })),
+  };
+
+  it("타바타 분수가 bodyweightTimeMin에 더해진다", () => {
+    const s = foldPeriodStats([tabataRow], "2026-07-27", "2026-09-30", "Asia/Seoul").get("u1")!;
+    expect(s.bodyweightTimeMin).toBe(8);
+  });
+
+  it("bodyweight_time 목표에 반영된다", () => {
+    const s = foldPeriodStats([tabataRow], "2026-07-27", "2026-09-30", "Asia/Seoul").get("u1")!;
+    expect(actualForGoal(s, "bodyweight_time")).toBe(8);
+  });
+
+  it("타바타 횟수는 그대로 1회 — 분수를 더해도 중복 집계되지 않는다", () => {
+    const s = foldPeriodStats([tabataRow], "2026-07-27", "2026-09-30", "Asia/Seoul").get("u1")!;
+    expect(s.tabataCount).toBe(1);
+  });
+
+  it("세트에 durationSeconds가 있으면 그것과 함께 더해진다", () => {
+    const mixed = {
+      ...tabataRow,
+      tabataMinutes: 4,
+      exercises: [
+        {
+          ...tabataRow.exercises[0],
+          sets: [{ ...tabataRow.exercises[0].sets[0], durationSeconds: 120 }],
+        },
+      ],
+    };
+    const s = foldPeriodStats([mixed], "2026-07-27", "2026-09-30", "Asia/Seoul").get("u1")!;
+    expect(s.bodyweightTimeMin).toBe(6); // 타바타 4분 + 세트 120초
+  });
+
+  it("타바타가 아닌 세션은 영향 없다", () => {
+    const plain = { ...tabataRow, tabataMinutes: null };
+    const s = foldPeriodStats([plain], "2026-07-27", "2026-09-30", "Asia/Seoul").get("u1")!;
+    expect(s.bodyweightTimeMin).toBe(0);
+    expect(s.tabataCount).toBe(0);
+  });
+});
+```
+
+- [ ] **Step 2: 테스트가 실패하는지 확인**
+
+```bash
+npx vitest run src/lib/challenge.test.ts
+```
+
+기대: FAIL — `expected 0 to be 8` (타바타 분수가 버려지고 있다)
+
+- [ ] **Step 3: 구현**
+
+`src/lib/challenge.ts:311`. 현재:
+
+```ts
+    if (row.tabataMinutes) entry.tabataCount += 1;
+```
+
+이것으로:
+
+```ts
+    if (row.tabataMinutes) {
+      entry.tabataCount += 1;
+      // 타바타 세트는 reps=0·durationSeconds=null로 저장되고 분수는 여기에만
+      // 있다. 이 줄이 없으면 타바타를 아무리 해도 bodyweight_time 목표가
+      // 영구히 0이다 (2026-07-30 수정).
+      entry.bodyweightTimeMin += row.tabataMinutes;
+    }
+```
+
+- [ ] **Step 4: 테스트 통과 확인**
+
+```bash
+npx vitest run src/lib/challenge.test.ts
+```
+
+기대: PASS
+
+```bash
+npm test
+```
+
+기대: 전체 PASS
+
+- [ ] **Step 5: 커밋**
+
+```bash
+git add src/lib/challenge.ts src/lib/challenge.test.ts
+git commit -m "fix: 타바타 분수를 bodyweight_time 목표에 반영"
 ```
 
 ---
@@ -1411,9 +1934,25 @@ npm run build
 
 **사용자가 폰에서 직접 확인한다. 이 확인 전에는 `main`에 머지하지 않는다.**
 
-0042의 성공 기준은 "새 기능이 보인다"가 아니라 **"아무것도 달라지지 않았다"** 다.
+0042의 성공 기준은 "새 기능이 보인다"가 아니라 **"버그 수정 두 건만 달라졌다"** 다.
 
-- [ ] **Step 1: 확인 항목**
+- [ ] **Step 1: 달라져야 하는 것 — Task 2B·2C 확인**
+
+**A. `weight_days`가 종목 수로 센다 (Task 2B)**
+
+챌린지 탭에서 목표 라벨이 `웨이트 운동일(하루 N종목+)`으로 보인다 (`부위+`가 아니다).
+
+그리고 **하체만 여러 종목 한 날이 운동일로 인정된다.** 실측 기준으로 스칼레또님의 7/28(5종목·하체3+팔1+등1)이
+`weight_days` qualifier=4를 만족해 **0일 → 1일**로 올라가야 한다. 참가자 본인 화면에서 진행률이 0%가 아니게 된다.
+
+**B. 타바타가 맨몸 시간에 잡힌다 (Task 2C)**
+
+`bodyweight_time` 목표가 있는 참가자(실측 기준 낭만송곳니님, 56.6분)의 진행률이 타바타 분수만큼 올라가야 한다.
+0이었다면 0이 아니게 된다.
+
+⚠ 둘 다 **기간 내(7/27 이후) 기록만** 반영된다. 7/26 이전 세션은 챌린지 시작 전이라 잡히지 않는다.
+
+- [ ] **Step 2: 달라지지 않아야 하는 것**
 
 1. 챌린지 탭이 **지금과 똑같이** 보인다 (진행 중 챌린지 하나, 목록 아님)
 2. 홈 화면이 **지금과 똑같다** (성과 카드·꾸준왕 카드)
@@ -1422,13 +1961,13 @@ npm run build
 5. 알림이 정상 도착한다 (운동 시작·응원)
 6. 크루 화면이 정상이다
 
-**하나라도 달라 보이면 0042가 잘못 만들어진 것이다.** 추가만 하는 단계이므로 화면 변화는 그 자체로 결함이다.
+**Step 2의 6개 중 하나라도 달라 보이면 0042가 잘못 만들어진 것이다.** Task 2B·2C 외에는 추가만 하는 단계이므로 그 밖의 화면 변화는 그 자체로 결함이다.
 
-- [ ] **Step 2: 사용자 확인 대기**
+- [ ] **Step 3: 사용자 확인 대기**
 
-6개 항목이 모두 확인될 때까지 진행하지 않는다.
+Step 1의 두 건이 **달라졌고**, Step 2의 여섯 건이 **그대로**인 것이 모두 확인될 때까지 진행하지 않는다.
 
-- [ ] **Step 3: main 머지**
+- [ ] **Step 4: main 머지**
 
 ```bash
 git checkout main
@@ -1436,7 +1975,7 @@ git merge --no-ff feat/challenge-rooms-0042
 git push
 ```
 
-- [ ] **Step 4: 다음 단계 계획서 작성**
+- [ ] **Step 5: 다음 단계 계획서 작성**
 
 0043(전환) 계획서를 쓴다. 0042를 실기기로 확인한 뒤에 써야 나중에 안 고친다.
 
@@ -1463,6 +2002,8 @@ git push
 | §7 0042 백필 (행 단위·host 우선) | Task 5 · Task 7 Step 4 |
 | §8 검증 | Task 6 · Task 7 |
 | `challenge_invite` 알림 유형 | Task 3 · Task 6 [6] |
+| §5.2 `*_days` 부위조건 → 종목조건 (실측 버그) | Task 2B |
+| 타바타 분수 → `bodyweight_time` (실측 버그) | Task 2C |
 
 **설계서와 의도적으로 다르게 한 것 두 가지**
 
