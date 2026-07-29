@@ -117,6 +117,30 @@ async function seedProgress(userId, totalXp, level, stage) {
   });
 }
 
+/**
+ * 두 사람을 상호 크루로 만든다 (0038 RPC).
+ *
+ * 0039부터 "크루"는 같은 그룹이 아니라 서로 수락한 사이다. 이 스크립트는
+ * create_group + join_group_with_code로만 엮어 왔는데, 그래서 poke_user·
+ * 레벨업 팬아웃이 전부 not_crew로 막혀 있었다(2026-07-30 기준 7건 실패).
+ * 그룹은 세션의 group_id 때문에 그대로 두고 연결만 추가한다.
+ */
+async function linkCrew(from, to) {
+  const req = await api(from.token, "POST", "/rest/v1/rpc/send_crew_request", {
+    p_target_id: to.id,
+  });
+  const requestId = req.json?.requestId;
+  if (!requestId) {
+    throw new Error(`크루 요청 실패: ${req.status} ${JSON.stringify(req.json)}`);
+  }
+  const acc = await api(to.token, "POST", "/rest/v1/rpc/accept_crew_request", {
+    p_request_id: requestId,
+  });
+  if (acc.status >= 400) {
+    throw new Error(`크루 수락 실패: ${acc.status} ${JSON.stringify(acc.json)}`);
+  }
+}
+
 let users = [];
 let groupId = null;
 
@@ -137,6 +161,13 @@ try {
       p_code: g.invite_code,
     });
   }
+
+  // B가 관찰자다 — 콕은 A→B, 레벨업·진화 팬아웃은 C·D에서 B로 온다.
+  // 그래서 B가 A·C·D 셋 다와 크루여야 한다.
+  await linkCrew(A, B);
+  await linkCrew(C, B);
+  await linkCrew(D, B);
+  check("픽스처: B가 A·C·D와 크루 연결 (0039 기준)", true, "");
 
   // ── 0028: 콕 발신자 게이트 ────────────────────────────────
   const before = await api(A.token, "POST", "/rest/v1/rpc/poke_user", {

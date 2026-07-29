@@ -64,7 +64,7 @@ e77f9de fix: 타바타 분수를 bodyweight_time 목표에 반영
 | 항목 | 결과 |
 |---|---|
 | `scripts/challenge-room-check.mjs` | **32 / 0** |
-| `scripts/rls-test.mjs` | 103 통과 / **6 실패 — 기존 기준선 그대로** (§6.4) |
+| `scripts/rls-test.mjs` | **113 통과 / 0 실패** (2026-07-30 정리 후, §6.4) |
 | 백필 재실행 안전성 | 행 수 유지 · `dropped` 미부활 · 부분 삭제 복구 — 3종 통과 |
 | 단위 테스트 | 650 / 650 |
 | 빌드 | 성공 |
@@ -181,20 +181,23 @@ order by table_name, ordinal_position;
 
 그룹을 남긴 채 방장 계정을 지우면 **500**으로 실패하고 테스트 계정이 프로덕션 auth에 떠돌이로 남는다. 2026-07-30에 실제로 2개가 남아서 손으로 치웠다. **정리는 그룹 먼저, 유저 나중.** `rls-test.mjs:524`가 같은 이유로 그렇게 한다.
 
-### 6.4 `rls-test.mjs`의 6건 실패는 **기존 문제**다 — 회귀로 착각하지 마라
+### 6.4 회귀 기준선은 이제 **전부 0 failed**다 (2026-07-30 정리 완료)
 
-`103 통과 / 6 실패`가 현재 기준선이다. `0 failed`가 아니다.
+낡은 스크립트 3종을 고쳤다. **이제 실패가 하나라도 있으면 회귀다.**
 
-| 실패 | 원인 |
-|---|---|
-| 챌린지 3건 (`consent_incomplete`) | `0025`가 전원 동의 게이트를 추가했는데 스크립트가 `approve_challenge_goals`를 **0번** 부른다 |
-| 찌르기 3건 (`poke_requires_workout`) | `0028`이 "찌르려면 오늘 운동" 게이트를 추가했는데 스크립트는 운동 안 한 B로 찌른다 |
+| 스크립트 | 이전 | 지금 |
+|---|---|---|
+| `scripts/rls-test.mjs` | 103 통과 / 6 실패 | **113 통과 / 0 실패** |
+| `scripts/poke-levelup-check.mjs` | 3 / 10 | **11 / 11** |
+| `scripts/challenge-consent-test.mjs` | 20 / 0 | 20 / 0 (원래 정상) |
 
-기능 자체는 멀쩡하다 — `challenge-consent-test.mjs`가 20/0으로 통과한다. **판정 기준은 "실패가 그 6건 그대로인가"다.** 6건을 넘으면 뭔가 망가진 것이다.
+무엇이 문제였나 — 셋 다 같은 패턴이다. **마이그레이션이 새 전제조건을 추가할 때 전용 스크립트를 새로 만들고 `rls-test.mjs`는 안 고쳤다.**
 
-`poke-levelup-check.mjs`도 3/10인데 7건 전부 `not_crew`다. `create_group`으로 크루를 만드는데 `0039`가 크루의 뜻을 상호 수락으로 바꿔서다. 역시 기존 문제.
+- **챌린지 3건** — `0025`가 `start_challenge`에 전원 동의 게이트를 더했는데 스크립트가 `approve_challenge_goals`를 한 번도 안 불렀다. 호출을 넣고, 덤으로 "동의 없으면 `consent_incomplete`로 막힌다"는 단언을 새로 추가했다(0025 게이트에 대한 커버리지가 아예 없었다)
+- **찌르기 3건** — `0028`이 "오늘 운동을 마친 사람만"을 더했는데 이 스크립트에서 운동을 완료하는 건 A뿐이었다. B가 세션을 만들어 완료하게 했다. 세트는 필요 없다 — 게이트가 보는 건 `status='completed'`와 오늘 KST 날짜뿐이다
+- **`poke-levelup-check.mjs` 7건** — `create_group` + `join_group_with_code`로만 크루를 엮었는데 `0039`가 크루의 뜻을 `crew_links` 상호 수락으로 바꿨다. `linkCrew` 헬퍼(0038 RPC)를 넣어 **B를 A·C·D 셋 다와** 연결했다. B가 관찰자라서 셋 다 필요하다. 그룹은 세션의 `group_id` 때문에 그대로 둔다
 
-**이 셋을 정리하는 별도 작업 칩이 띄워져 있다.** 거기에 `rls-test.mjs`의 `try/finally` 누락도 포함하면 좋다 — 중간에 죽으면 픽스처가 그대로 남는다(rate limit으로 실제로 겪음).
+**`rls-test.mjs`에 `try/finally`를 넣었다.** 이전엔 중간에 죽으면 픽스처가 프로덕션 auth에 그대로 남았다(rate limit으로 실제로 겪음). 요약과 `process.exit`은 `finally` **밖**에 둔다 — 안에 두면 예외를 삼켜 아무것도 검증 못 한 실행이 exit 0으로 보고된다.
 
 ### 6.5 익명 가입 rate limit (429)
 

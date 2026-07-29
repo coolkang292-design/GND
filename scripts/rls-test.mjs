@@ -64,9 +64,18 @@ async function anonUser() {
   return { token: json.access_token, id: json.user.id };
 }
 
+// 중간에 죽어도 픽스처를 지우기 위해 여기서 선언하고 finally에서 정리한다.
+// 2026-07-30에 익명 가입 rate limit(429)으로 실행이 끊기며 계정이 남았다.
+let A;
+let B;
+let C;
+let group;
+
+try {
+
 console.log("── 픽스처 생성: 익명 유저 A, B ──");
-const A = await anonUser();
-const B = await anonUser();
+A = await anonUser();
+B = await anonUser();
 console.log(`  A=${A.id.slice(0, 8)}… B=${B.id.slice(0, 8)}…`);
 
 // A: 프로필 + 크루 생성
@@ -76,7 +85,7 @@ const pA = await api(A.token, "POST", "/rest/v1/profiles", {
 check("A가 본인 프로필 생성", pA.status === 201, JSON.stringify(pA.json));
 
 const gA = await api(A.token, "POST", "/rest/v1/rpc/create_group", { p_name: "RLS테스트크루" });
-const group = gA.json;
+group = gA.json;
 check("A가 크루 생성(RPC)", gA.status === 200 && group?.invite_code?.startsWith("GND-"), JSON.stringify(group));
 
 // B: 프로필 생성
@@ -324,7 +333,7 @@ check("B는 private 세션 이미지 행 조회 불가", bPrivRow.status === 200
 check("B는 private 세션 사진 다운로드 불가", (await storageGet(B.token, privPath)) >= 400);
 
 console.log("\n── Phase 5: 챌린지 (KPI 게이트·비공개·기록 보존) ──");
-const C = await anonUser(); // 비크루 외부인
+C = await anonUser(); // 비크루 외부인
 
 const chIns = await api(A.token, "POST", "/rest/v1/challenges", {
   group_id: group.id, name: "RLS 챌린지", start_date: "2026-07-01", end_date: "2026-07-14",
@@ -373,8 +382,26 @@ check("B가 본인 KPI 생성", goalB.status === 201);
 const cancelByB = await api(B.token, "POST", "/rest/v1/rpc/cancel_challenge", { p_challenge_id: challenge.id });
 check("비생성자 B는 챌린지 취소 불가", cancelByB.status >= 400);
 
+// 0025가 start_challenge에 "전원 목표 동의" 게이트를 더했다. KPI만 채우고
+// 시작하려 하면 consent_incomplete로 막힌다.
+const gateConsent = await api(A.token, "POST", "/rest/v1/rpc/start_challenge", { p_challenge_id: challenge.id });
+check(
+  "전원 KPI 완료해도 동의 없으면 차단 (consent_incomplete)",
+  gateConsent.status >= 400 && JSON.stringify(gateConsent.json).includes("consent_incomplete"),
+  JSON.stringify(gateConsent.json),
+);
+
+// 동의 게이트의 세부(멱등·철회·위조 차단)는 challenge-consent-test.mjs 몫이다.
+// 여기서는 게이트를 통과시켜 뒤따르는 RLS 단언 2개(시작 후 KPI 잠금·결과 확정)에
+// 도달하는 것이 목적이다 — 2026-07-30까지 이 두 줄이 없어 그 2개가 원인 없이
+// 연쇄 실패했다.
+const apprA = await api(A.token, "POST", "/rest/v1/rpc/approve_challenge_goals", { p_challenge_id: challenge.id });
+check("A가 목표에 동의", apprA.status < 300, JSON.stringify(apprA.json));
+const apprB = await api(B.token, "POST", "/rest/v1/rpc/approve_challenge_goals", { p_challenge_id: challenge.id });
+check("B가 목표에 동의", apprB.status < 300, JSON.stringify(apprB.json));
+
 const started2 = await api(B.token, "POST", "/rest/v1/rpc/start_challenge", { p_challenge_id: challenge.id });
-check("전원 KPI 완료 후 크루원이 시작 가능 → active", started2.status === 200 && started2.json?.status === "active", JSON.stringify(started2.json));
+check("전원 KPI·동의 완료 후 크루원이 시작 가능 → active", started2.status === 200 && started2.json?.status === "active", JSON.stringify(started2.json));
 
 const goalEditAfter = await api(A.token, "PATCH", `/rest/v1/user_goals?id=eq.${goalA.json[0].id}`, { target_value: 1 });
 check("시작 후 KPI 수정 불가 (기록 보존)", goalEditAfter.status < 300 && (goalEditAfter.json ?? []).length === 0, JSON.stringify(goalEditAfter.json));
@@ -478,6 +505,18 @@ const rDel = await api(B.token, "DELETE", `/rest/v1/reactions?session_id=eq.${s6
 check("B가 본인 반응 삭제", rDel.status < 300 && (rDel.json ?? []).length === 1, JSON.stringify(rDel.json));
 
 console.log("\n── Phase 6: 찌르기 + 읽음 처리 ──");
+
+// 0028이 "오늘 운동을 마친 사람만 찌를 수 있다"를 더했다(현행 0039:37).
+// 이 스크립트에서 운동을 완료하는 건 A뿐이어서 B의 찌르기가 막혀 있었다.
+// 세트는 필요 없다 — 게이트가 보는 건 status='completed'와 오늘 날짜뿐이다.
+const pokeDraft = await api(B.token, "POST", "/rest/v1/workout_sessions", {
+  user_id: B.id, group_id: group.id, timezone: "Asia/Seoul",
+});
+const pokeSession = pokeDraft.json?.[0];
+await api(B.token, "POST", "/rest/v1/rpc/start_workout", { p_session_id: pokeSession.id });
+const pokeDone = await api(B.token, "POST", "/rest/v1/rpc/complete_workout", { p_session_id: pokeSession.id });
+check("찌르기 전제: B가 오늘 운동 완료 (0028 게이트)", pokeDone.status === 200, JSON.stringify(pokeDone.json));
+
 const pk1 = await api(B.token, "POST", "/rest/v1/rpc/poke_user", { p_target_id: A.id });
 check("B가 A 찌르기 성공", pk1.status === 200 || pk1.status === 204, JSON.stringify(pk1.json));
 const pk2 = await api(B.token, "POST", "/rest/v1/rpc/poke_user", { p_target_id: A.id });
@@ -517,23 +556,35 @@ check("본인 열람 self_view 거절", vr2.status >= 400 && JSON.stringify(vr2.
 const vr3 = await api(C.token, "POST", "/rest/v1/rpc/view_record", { p_target_id: A.id });
 check("크루 밖 not_crew 거절", vr3.status >= 400 && JSON.stringify(vr3.json).includes("not_crew"));
 
-// ── 정리: 픽스처 크루·계정 제거 — 잔여물은 0017 닉네임 유니크와 충돌하고 DB에 쌓인다 ──
-const SERVICE = env.SUPABASE_SERVICE_ROLE_KEY;
-if (SERVICE) {
-  const adminHeaders = { apikey: SERVICE, Authorization: `Bearer ${SERVICE}` };
-  // groups.owner_id는 cascade가 아니므로 크루를 유저보다 먼저 지운다
-  await fetch(`${URL_}/rest/v1/groups?id=eq.${group.id}`, {
-    method: "DELETE",
-    headers: adminHeaders,
-  });
-  for (const u of [A, B, C]) {
-    const res = await _guard.deleteIfCreatedThisRun(u.id);
-    if (!res.ok) console.log(`정리 실패(${u.id.slice(0, 8)}): ${res.status}`);
+} catch (e) {
+  console.error("\n실행 중단:", e.message);
+  failed++;
+} finally {
+  // ── 정리: 픽스처 크루·계정 제거 — 잔여물은 0017 닉네임 유니크와 충돌하고 DB에 쌓인다 ──
+  const SERVICE = env.SUPABASE_SERVICE_ROLE_KEY;
+  if (SERVICE) {
+    const adminHeaders = { apikey: SERVICE, Authorization: `Bearer ${SERVICE}` };
+    // ⚠ groups.owner_id는 on delete cascade가 아니므로 크루를 유저보다 먼저
+    //   지운다. 남겨두면 방장 계정 삭제가 500으로 실패한다.
+    if (group?.id) {
+      await fetch(`${URL_}/rest/v1/groups?id=eq.${group.id}`, {
+        method: "DELETE",
+        headers: adminHeaders,
+      });
+    }
+    for (const u of [A, B, C]) {
+      if (!u?.id) continue;
+      const res = await _guard.deleteIfCreatedThisRun(u.id);
+      if (!res.ok) console.log(`정리 실패(${u.id.slice(0, 8)}): ${res.status}`);
+    }
+    console.log("픽스처 정리 완료");
+  } else {
+    console.log("SUPABASE_SERVICE_ROLE_KEY 없음 — 픽스처 정리 생략");
   }
-  console.log("픽스처 정리 완료");
-} else {
-  console.log("SUPABASE_SERVICE_ROLE_KEY 없음 — 픽스처 정리 생략");
 }
 
+// ⚠ 요약과 exit는 finally 밖이다. 안에 두면 process.exit()이 즉시 종료하며
+//   try에서 올라오던 예외를 삼켜, 아무것도 검증 못 한 실행이 exit 0으로
+//   "정상"이라 보고된다.
 console.log(`\n결과: ${passed} 통과 / ${failed} 실패`);
-process.exit(failed === 0 ? 0 : 1);
+if (failed !== 0) process.exit(1);
