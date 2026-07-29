@@ -355,6 +355,38 @@ end $$;
 revoke all on function public.autofinalize_due_challenges() from public, anon;
 grant execute on function public.autofinalize_due_challenges() to authenticated;
 
+-- ── 6. 기존 챌린지 백필 ──────────────────────────────────────
+-- 재실행 안전성: 행 단위 on conflict do nothing이다.
+--
+-- ⚠ 챌린지 단위 where not exists 가드를 쓰지 않는다. 참가자 3명 중 1명만
+--    들어간 상태에서 재실행하면 "이미 행이 있으니 통째로 건너뜀"이 되어
+--    나머지 2명이 영영 안 들어온다. 행 단위여야 부분 실패를 복구한다.
+--    (0038은 테이블 단위 가드를 썼는데, 그건 백필 대상이 한 덩어리였기
+--     때문이고 여기는 챌린지마다 참가자가 여러 명이라 사정이 다르다.)
+--
+-- ⚠ do update를 쓰면 안 된다. dropped를 joined로 되살린다.
+
+-- 6.1 방장 먼저 — created_by를 group_members 조인이 아니라 challenges에서
+--     직접 뽑는다. 방장이 그룹을 나갔어도 host로 들어가야 한다. 방장 없는
+--     챌린지가 생기면 취소할 사람이 없어진다.
+--
+-- ⚠ 순서가 중요하다. 6.2를 먼저 돌리면 방장이 member로 들어가고 do nothing에
+--    막혀 host가 못 된다. challenge_participants_one_host 유니크 인덱스가
+--    있으므로 나중에 role만 바꾸는 것도 깔끔하지 않다.
+insert into challenge_participants (challenge_id, user_id, role, status, joined_at)
+select ch.id, ch.created_by, 'host', 'joined', ch.created_at
+from challenges ch
+where exists (select 1 from profiles p where p.id = ch.created_by)
+on conflict (challenge_id, user_id) do nothing;
+
+-- 6.2 나머지 그룹원
+insert into challenge_participants (challenge_id, user_id, role, status, joined_at)
+select ch.id, gm.user_id, 'member', 'joined', ch.created_at
+from challenges ch
+join group_members gm on gm.group_id = ch.group_id
+where exists (select 1 from profiles p where p.id = gm.user_id)
+on conflict (challenge_id, user_id) do nothing;
+
 commit;
 
 -- ── 적용 전/후 확인 (SQL Editor에서 따로 실행) ───────────────
