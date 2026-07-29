@@ -1459,6 +1459,10 @@ git commit -m "feat(0042): 기존 챌린지 참가자 백필 — 행 단위 재�
 
 **⑤ RPC 인자 이름을 짐작하지 않는다.** `create_group(p_name)`, `join_group_with_code(p_code)`, `send_crew_request(p_target_id)`, `accept_crew_request(p_request_id)`.
 
+**⑥ 그룹을 유저보다 먼저 지운다.** `groups.owner_id`는 `on delete cascade`가 **아니다**. 그룹이 남아 있으면 그 방장 계정 삭제가 500으로 실패하고 테스트 계정이 프로덕션 auth에 떠돌이로 남는다. 2026-07-30 실행에서 실제로 2개가 남았다. `rls-test.mjs:524`가 같은 이유로 그룹을 먼저 지운다.
+
+**⑦ PostgREST는 오류 시 배열이 아니라 에러 객체를 준다.** 테이블이 없거나 권한이 없으면 `{code, message}`가 온다. 그걸 그대로 `.some()`에 넘기면 `ps.some is not a function`으로 실행이 통째로 죽는다 — 적용 전 실행에서 실제로 그랬다. 배열 반환 헬퍼는 `Array.isArray(r.json) ? r.json : []`로 감싼다.
+
 - [ ] **Step 1: 스크립트 작성**
 
 `scripts/challenge-room-check.mjs`:
