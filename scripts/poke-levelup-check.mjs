@@ -167,7 +167,15 @@ try {
   await linkCrew(A, B);
   await linkCrew(C, B);
   await linkCrew(D, B);
-  check("픽스처: B가 A·C·D와 크루 연결 (0039 기준)", true, "");
+  // RPC가 200을 줬다는 것과 행이 생겼다는 것은 다르다. 팬아웃이 읽는 건
+  // crew_links 행이므로 그것을 직접 센다 — B 기준 3행(A·C·D)이어야 한다.
+  // 0038의 crew_links_mine_select가 본인이 낀 행만 돌려주므로 필터가 필요 없다.
+  const myLinks = await api(B.token, "GET", "/rest/v1/crew_links?select=user_a,user_b");
+  check(
+    "픽스처: B가 A·C·D와 크루 연결 (crew_links 3행)",
+    myLinks.status === 200 && myLinks.json?.length === 3,
+    `${myLinks.status} ${JSON.stringify(myLinks.json)}`,
+  );
 
   // ── 0028: 콕 발신자 게이트 ────────────────────────────────
   const before = await api(A.token, "POST", "/rest/v1/rpc/poke_user", {
