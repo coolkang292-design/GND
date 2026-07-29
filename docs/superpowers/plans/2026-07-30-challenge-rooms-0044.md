@@ -185,7 +185,7 @@ for (const ch of actives) {
   console.log(`── ${ch.name} (${ch.start_date} ~ ${ch.end_date}) ──`);
 
   const parts = await rest(
-    `challenge_participants?select=user_id,role,status&challenge_id=eq.${ch.id}`,
+    `challenge_participants?select=user_id,status&challenge_id=eq.${ch.id}`,
   );
   const joined = parts.filter((p) => p.status === "joined").map((p) => p.user_id);
   const members = (
@@ -253,13 +253,39 @@ for (const ch of actives) {
 }
 
 console.log(`\n${passed}/${passed + failed} passed`);
+
+// 단언이 0건이면 실패다. actives가 비면 루프 본문이 한 번도 돌지 않아
+// passed=failed=0이 되고, failed > 0이 거짓이라 exit 0으로 끝난다 — 아무것도
+// 검증하지 않았는데 게이트 통과로 읽힌다. 위 네 번째 단언과 같은 계열의
+// 구멍이 한 단계 위에 있는 것이다.
+//
+// rest()가 §6.6 방어로 배열 아닌 응답을 []로 바꾸므로, 최초 challenges 조회가
+// 필터 오류로 200 + []를 받으면 정확히 이 경로를 탄다.
+if (passed + failed === 0) {
+  console.log(
+    "\n⚠ 검증한 단언이 0건이다 — 활성 챌린지가 없거나 최초 조회가 비어 있다." +
+      " 이 실행은 전환 안전성의 근거가 되지 못한다.",
+  );
+  // ⚠ process.exit(1)이 아니라 exitCode만 세팅한다. 이 분기는 최초 fetch 한 건만
+  //   await한 직후라 이벤트 루프가 거의 비어 있는데, 그 시점에 강제 exit를 부르면
+  //   Node 24 + Windows에서 undici의 내부 핸들이 정리되기 전에 libuv가 죽는다
+  //   ("Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)"). 그러면 종료
+  //   코드가 1이 아니라 **127**이 된다 — 관례상 "command not found"라서 게이트
+  //   실패를 디버깅하는 사람을 엉뚱한 곳으로 보낸다.
+  //   2026-07-30에 실제 스크립트로 3/3 재현했다. 단발 fetch로는 재현되지 않고
+  //   Supabase 연결에서만 난다.
+  process.exitCode = 1;
+}
 if (failed > 0) {
   console.log(
     "\n⚠ 하나라도 실패했으면 집계 전환을 0045로 미루고, 0044를 인덱스 드롭과 화면 변경만으로 좁혀라.",
   );
-  process.exit(1);
+  // 위와 같은 이유로 강제 exit 대신 exitCode만 세팅한다.
+  process.exitCode = 1;
 }
 ```
+
+> **이 저장소의 다른 스크립트도 같은 잠재 결함을 갖고 있다.** 대부분 성공 경로에서는 `process.exit`을 아예 부르지 않아 드러나지 않지만, **실패 경로에서 종료 코드가 127로 뒤바뀔 수 있다** — 정확히 신뢰할 수 있는 종료 코드가 필요한 순간이다. 이번 계획의 범위 밖이라 고치지 않는다. 나중에 스크립트를 손볼 때 `process.exit(n)` → `process.exitCode = n`으로 함께 옮기면 좋다.
 
 - [ ] **Step 2: 돌려서 전부 통과하는지 본다**
 
