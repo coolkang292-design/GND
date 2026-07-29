@@ -42,6 +42,18 @@
 - `workout_sessions.group_id` · `challenges.group_id` · `user_goals.group_id` 드롭, `groups` · `group_members` 드롭, `is_group_member` · `shares_group_with` 드롭
 - 혼자모드 유저의 챌린지 생성 (지금은 `create_challenge_room`이 `challenges.group_id`(not null)를 채워야 해서 `no_group_yet`으로 막힌다)
 
+**0045에 반드시 들고 갈 것 — DB 리뷰(opus)가 짚은 것들**
+
+- **정책을 좁힐 때는 `drop policy` + `create policy`가 아니라 `alter policy`를 써라.** 0044는 순수 확대(OR로 덧붙이기)라 정책 이름을 틀려도 옛 정책이 OR 합집합에 흡수되어 **결과 predicate가 같다** — 즉 무해하다. 0045는 그룹 arm을 **제거**하므로 정반대다: 이름을 틀리면 `drop`이 조용히 no-op 하고 0006의 옛 정책이 살아남아 **그룹 arm이 되살아난다.** `alter policy`는 이름이 틀리면 `42704`로 죽어 실패가 드러나고, `cmd`·`roles`도 보존한다. `0014:19`가 이미 이 관용구를 쓴 선례다.
+- **`0039_crew_link_switchover.sql:143-150`의 `select c.id into v_challenge_id ... status='active' ... limit 1`.** 살아있는 챌린지가 여러 개면 **임의의 한 건**이 `record_views.challenge_id`에 박힌다. 0044 시점에는 잘못되지 않지만(챌린지가 1개), 두 번째 active가 생기는 순간부터 열람 기록이 엉뚱한 챌린지에 붙을 수 있다. 0040의 `challenge_peek_picks`가 이 값을 쓰므로 **0045에서 결정적 선택으로 바꿔라** — 대표 챌린지 규칙(`pickPrimaryChallenge`)과 같은 기준이어야 화면과 서버가 안 갈라진다.
+- **`user_goals`의 대체 인덱스를 만들지 마라.** `challenges_one_live`는 `challenges(group_id)`를 커버하던 유일한 인덱스였고, 드롭 후 `group_id` 조회는 seq scan이 된다. **`challenges`가 1행이라 무의미하고, 0045가 그 컬럼을 지울 예정이라 지금 인덱스를 만드는 것은 낭비다.**
+
+**의도적으로 받아들인 것 (리뷰가 제기하고 판단해 남긴 것)**
+
+- **`invited` 상태도 그 방의 목표를 읽는다.** `is_challenge_participant`가 `status`를 안 보기 때문이다. 수락 전에 KPI 타깃·`planned_days`가 보이는 것은 필요보다 넓다. 다만 **새로운 주체 부류가 생기는 것은 아니다** — `0042:77`이 이미 초대받은 사람에게 참가자 명단을 열어 줬고 프로덕션에 적용돼 있다. 방 안에서는 원래 전원 공개 데이터이며 민감정보가 아니다. 좁히려면 `status in ('joined','dropped')` 서브쿼리로 바꿀 수 있으나(다른 테이블이라 `42P17` 재귀 위험 없음) 이번 범위에서는 하지 않는다.
+- **`dropped`는 영구 잔존이라 읽기 권한도 영구다.** `0042:288`이 `crew_links`의 근거를 보존하려고 행을 남긴다. 되돌릴 RPC가 없다. 리크는 아니지만(실제로 수락해 들어왔던 사람) **취소 불가한 영구 grant**라는 점은 기록해 둔다.
+- **`notify pgrst, 'reload schema'`는 이 마이그레이션에 불필요하다.** 테이블·컬럼·함수·관계를 하나도 바꾸지 않고, PostgREST는 정책·인덱스를 캐시하지 않는다. 무해하고 `0043:55-57`도 같은 논리로 남겼으므로 습관으로 유지한다.
+
 ### 지시서에 없었지만 0044에 넣는 것 — 근거
 
 **`challenges`·`user_goals`의 SELECT RLS를 참가자에게도 연다.** 현행은 그룹 기준 한 줄뿐이다.
@@ -447,7 +459,24 @@ Expected: **`[21]`만 실패하고 나머지는 통과** (`31/32`). `[21]`은 "�
 
 Run: `node scripts/rls-test.mjs`
 
-Expected: **113 통과 / 0 실패**. 특히 `비크루 C는 챌린지 조회 불가`가 계속 통과해야 한다 — C는 참가자도 그룹멤버도 아니므로 확대된 정책에서도 막힌다. 이게 깨지면 정책을 잘못 쓴 것이다.
+Expected: **112 통과 / 1 실패**. 실패는 정확히 **`살아있는 챌린지 중복 생성 차단 (unique)`**(`rls-test.mjs:343-346`) 하나여야 한다. 이 단언은 `challenges_one_live`에 의존하는 직접 insert 테스트라, 인덱스를 지우면 201이 돌아와 실패한다 — `[21]`과 같이 **0044가 적용됐다는 증거**다. Task 11에서 뒤집는다.
+
+**다른 단언이 함께 깨지면 멈춰라.** 특히 `비크루 C는 챌린지 조회 불가`가 계속 통과해야 한다 — C는 참가자도 그룹멤버도 아니므로 확대된 정책에서도 막힌다. 이게 깨지면 정책을 잘못 쓴 것이다.
+
+- [ ] **Step 5: 고아 챌린지 감시 (0044만 적용된 상태의 유일한 실질 노출)**
+
+인덱스를 지우면 "그룹당 살아있는 챌린지 1개"를 강제하는 서버측 가드가 **0개**가 된다. Task 7의 목록 UI가 나가기 전까지는 화면이 `getCurrentChallenge()`로 한 건만 집으므로, 두 기기·두 탭에서 동시에 생성하면 **화면에 안 보여 취소도 못 하는 고아 챌린지**가 생길 수 있다.
+
+즉시 잘못되는 곳은 없다(현재 생성 버튼은 `!challenge` 또는 `ended`에서만 렌더된다). 그래도 적용 직후 한 번 확인하고, **0044만 적용된 상태를 오래 두지 마라.**
+
+```sql
+select group_id, count(*), array_agg(id)
+from public.challenges
+where status in ('setup','active')
+group by group_id having count(*) > 1;
+```
+
+기대: **0행.** 행이 나오면 여분을 `cancelled`로 정리한다(`update public.challenges set status='cancelled' where id = '<여분 id>';` — `status`는 클라이언트가 못 쓰지만 SQL Editor에서는 된다).
 
 ---
 
@@ -1655,12 +1684,20 @@ git commit -m "feat(0044): 챌린지 자동 시작·종료를 09:00 크론과 �
 
 ---
 
-## Task 11: 검증 스크립트 — `[21]` 뒤집기 + 다중 챌린지
+## Task 11: 검증 스크립트 — 단언 2개 뒤집기 + 다중 챌린지
 
 **Files:**
 - Modify: `scripts/challenge-room-check.mjs`
+- Modify: `scripts/rls-test.mjs`
 
-`[21]`은 지금 "두 번째 챌린지가 막힌다"를 정상으로 단언한다. 0044에서는 **정반대여야 한다** — 안 고치면 통과할 수 없는 게이트가 된다.
+0044가 거짓으로 만드는 단언이 **두 개**다. 둘 다 "두 번째 챌린지가 막힌다"를 정상으로 단언하므로 **정반대로 뒤집어야 한다** — 안 고치면 통과할 수 없는 게이트가 된다.
+
+| 스크립트 | 단언 | 왜 깨지는가 |
+|---|---|---|
+| `challenge-room-check.mjs:258-269` | `[21]` "두 번째 챌린지가 `challenges_one_live`로 막힌다" | RPC 경로 |
+| `rls-test.mjs:343-346` | "살아있는 챌린지 중복 생성 차단 (unique)" | 직접 insert 경로 |
+
+`rls-test.mjs` 쪽은 **DB 리뷰가 찾았고 이 계획서가 처음엔 빠뜨렸던 것**이다. `pnpm test`(vitest)에 안 들어가는 스크립트라 게이트는 초록으로 남고, 그래서 놓치기 쉽다.
 
 - [ ] **Step 1: `[21]`을 뒤집고 단언을 더한다**
 
@@ -1707,6 +1744,22 @@ git commit -m "feat(0044): 챌린지 자동 시작·종료를 09:00 크론과 �
 
 `chId`는 이 스크립트가 앞서 만든 첫 챌린지의 id다(`challenge-room-check.mjs:148`의 `const chId = r.json?.id`) — 변수명이 그대로 맞다.
 
+- [ ] **Step 1b: `rls-test.mjs`의 중복 생성 단언도 뒤집는다**
+
+`scripts/rls-test.mjs:343-346`의 블록을 교체한다. 지금은 `challenges_one_live`에 의존해 "막힌다"를 단언한다.
+
+```js
+// 0044가 challenges_one_live를 드롭했다. 같은 그룹에 살아있는 챌린지가 여러 개
+// 있을 수 있는 것이 이제 정상이다 — 여러 챌린지 동시 진행이 이 개편의 목적이다.
+// (직접 insert 경로다. RPC 경로는 challenge-room-check.mjs [21]이 본다.)
+const chDup = await api(B.token, "POST", "/rest/v1/challenges", {
+  group_id: group.id, name: "중복", start_date: "2026-07-01", end_date: "2026-07-14",
+});
+check("살아있는 챌린지 중복 생성 허용 (0044에서 개수 제한 해제)", chDup.status === 201, `${chDup.status} ${JSON.stringify(chDup.json)}`);
+```
+
+이 챌린지는 픽스처 그룹에 딸려 있어 `finally`의 그룹 삭제로 함께 사라진다 — 별도 정리가 필요 없다.
+
 - [ ] **Step 2: 돌린다**
 
 Run: `node scripts/challenge-room-check.mjs`
@@ -1729,12 +1782,14 @@ Expected: `auth 계정 4 개`. 더 많으면 떠돌이 테스트 계정이 남�
 - [ ] **Step 4: 1~2분 쉬고 나머지 회귀 기준선 3종을 돌린다 (§6.5)**
 
 ```bash
-node scripts/rls-test.mjs          # 113 통과 / 0 실패
+node scripts/rls-test.mjs          # 113 통과 / 0 실패 (Step 1b로 되돌아온다)
 # 1~2분 대기
 node scripts/challenge-consent-test.mjs   # 20 통과 / 0 실패
 # 1~2분 대기
 node scripts/poke-levelup-check.mjs       # 11/11
 ```
+
+`rls-test.mjs`는 Task 2 Step 4에서 112/1이었다가 Step 1b의 수정으로 **113/0으로 복귀**한다. 단언 개수는 그대로다(뒤집기만 했으므로).
 
 하나라도 실패하면 회귀다. 멈추고 원인을 찾아라.
 
