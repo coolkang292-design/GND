@@ -105,8 +105,7 @@ console.log(`  1차 종료: status=${f3a.status} awarded=${f3a.json?.awarded} xp
 const f3b = await finish(B, s3.id);
 console.log(`  2차 종료(replay): status=${f3b.status} ⚠️msg=${JSON.stringify(f3b.json)}`);
 
-// 정리
-const admin = { apikey: SERVICE, Authorization: `Bearer ${SERVICE}`, "Content-Type": "application/json" };
+// 정리 — 삭제는 가드가 헤더까지 들고 있으므로 admin 헤더를 따로 만들지 않는다.
 for (const u of [A, B]) {
   await _guard.deleteIfCreatedThisRun(u.id);
 }
