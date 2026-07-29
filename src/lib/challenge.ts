@@ -315,7 +315,13 @@ export function foldPeriodStats(
       bodyweightKinds: new Map<string, Set<string>>(),
     };
     entry.days.add(key);
-    if (row.tabataMinutes) entry.tabataCount += 1;
+    if (row.tabataMinutes) {
+      entry.tabataCount += 1;
+      // 타바타 세트는 reps=0·durationSeconds=null로 저장되고 분수는 여기에만
+      // 있다. 이 줄이 없으면 타바타를 아무리 해도 bodyweight_time 목표가
+      // 영구히 0이다 (2026-07-30 수정).
+      entry.bodyweightTimeMin += row.tabataMinutes;
+    }
 
     for (const ex of row.exercises) {
       let hasCompleted = false;

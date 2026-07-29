@@ -216,3 +216,64 @@ describe("foldPeriodStats — weight_days는 종목 수로 센다 (2026-07-30 �
     expect(s.weightKindsByDay["2026-07-28"] ?? 0).toBe(0);
   });
 });
+
+describe("foldPeriodStats — 타바타 분수가 맨몸 시간에 들어간다 (2026-07-30 수정)", () => {
+  // 실측 재현: 타바타 세트는 reps=0·durationSeconds=null이고 분수는
+  // 세션의 tabataMinutes에만 있다.
+  const tabataRow: PeriodSessionRow = {
+    userId: "u1",
+    completedAt: "2026-07-29T07:06:00Z",
+    tabataMinutes: 8,
+    exercises: ["점프 스쿼트", "마운틴 클라이머"].map((exerciseName) => ({
+      exerciseType: "bodyweight" as const,
+      exerciseName,
+      bodyPart: "하체",
+      sets: [
+        {
+          weightKg: null,
+          reps: 0,
+          distanceMeters: null,
+          durationSeconds: null,
+          isCompleted: true,
+        },
+      ],
+    })),
+  };
+
+  it("타바타 분수가 bodyweightTimeMin에 더해진다", () => {
+    const s = foldPeriodStats([tabataRow], "2026-07-27", "2026-09-30", "Asia/Seoul").get("u1")!;
+    expect(s.bodyweightTimeMin).toBe(8);
+  });
+
+  it("bodyweight_time 목표에 반영된다", () => {
+    const s = foldPeriodStats([tabataRow], "2026-07-27", "2026-09-30", "Asia/Seoul").get("u1")!;
+    expect(actualForGoal(s, "bodyweight_time")).toBe(8);
+  });
+
+  it("타바타 횟수는 그대로 1회 — 분수를 더해도 중복 집계되지 않는다", () => {
+    const s = foldPeriodStats([tabataRow], "2026-07-27", "2026-09-30", "Asia/Seoul").get("u1")!;
+    expect(s.tabataCount).toBe(1);
+  });
+
+  it("세트에 durationSeconds가 있으면 그것과 함께 더해진다", () => {
+    const mixed: PeriodSessionRow = {
+      ...tabataRow,
+      tabataMinutes: 4,
+      exercises: [
+        {
+          ...tabataRow.exercises[0],
+          sets: [{ ...tabataRow.exercises[0].sets[0], durationSeconds: 120 }],
+        },
+      ],
+    };
+    const s = foldPeriodStats([mixed], "2026-07-27", "2026-09-30", "Asia/Seoul").get("u1")!;
+    expect(s.bodyweightTimeMin).toBe(6); // 타바타 4분 + 세트 120초
+  });
+
+  it("타바타가 아닌 세션은 영향 없다", () => {
+    const plain: PeriodSessionRow = { ...tabataRow, tabataMinutes: null };
+    const s = foldPeriodStats([plain], "2026-07-27", "2026-09-30", "Asia/Seoul").get("u1")!;
+    expect(s.bodyweightTimeMin).toBe(0);
+    expect(s.tabataCount).toBe(0);
+  });
+});
