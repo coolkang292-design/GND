@@ -833,13 +833,20 @@ alter table point_transactions drop constraint tmp_fail;
 
 - [ ] **Step 5: 기존 회귀 스크립트 확인**
 
-**Task 6을 이미 끝냈으므로 `0 failed`가 나와야 한다.**
-
 ```bash
 node scripts/rls-test.mjs
 ```
 
-기대: `0 failed`. 하나라도 깨지면 0041이 뭔가를 망가뜨린 것이므로 멈추고 원인을 찾는다.
+**기대: 응원 7건 전부 ✅, 그리고 기존 실패 6건.** `0 failed`가 아니다 — 2026-07-29 실측 결과 `103 통과 / 6 실패`이고, 그 6건은 이 작업과 **무관한 기존 실패**다.
+
+| 실패 | 원인 | 확인 |
+|---|---|---|
+| 찌르기 3건 (`poke_requires_workout`) | `0028`이 "찌르려면 오늘 운동했어야" 게이트를 추가했는데 `rls-test.mjs:472`는 운동 안 한 B로 찌른다 | 전용 스크립트 `poke-levelup-check.mjs`가 따로 생겼고 `rls-test`는 안 고쳤다 |
+| 챌린지 3건 (`consent_incomplete`) | `0025`가 전원 동의 게이트를 추가했는데 `rls-test.mjs`는 `approve_challenge_goals`를 **0번** 부른다 | `challenge-consent-test.mjs` 20/0 통과 — 기능 자체는 멀쩡하다 |
+
+**판정 기준은 "0 failed"가 아니라 "응원 7건이 전부 ✅이고 실패가 위 6건 그대로인가"다.** 응원 항목이 하나라도 깨지거나 실패가 6건을 넘으면 0041이 뭔가를 망가뜨린 것이므로 멈추고 원인을 찾는다.
+
+`poke-levelup-check.mjs`도 돌리면 3/10인데, 7건 전부 `not_crew`다. 이 스크립트는 `create_group`/`join_group_with_code`로 크루를 만드는데 `0039`가 크루의 뜻을 상호 수락(`crew_links`)으로 바꿔서 그렇다. 역시 기존 문제다.
 
 ```bash
 node scripts/crew-link-check.mjs
