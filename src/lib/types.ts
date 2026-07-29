@@ -22,7 +22,7 @@ export type UserGoal = {
   target_value: number;
   unit: string | null;
   planned_days: number;
-  qualifier: number | null; // frequency: 하루 최소 웨이트 부위 수
+  qualifier: number | null; // *_days: 하루 최소 종목 수
   created_at: string;
   updated_at: string;
 };

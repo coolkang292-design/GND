@@ -25,7 +25,7 @@ const CATEGORY_TYPES: Record<GoalCategory, GoalType[]> = {
 /** 지표 짧은 라벨 (카테고리 우선 UI용) */
 const METRIC_LABEL: Record<GoalType, string> = {
   weight_reps: "횟수",
-  weight_days: "운동일(부위)",
+  weight_days: "운동일(종목)",
   cardio_distance: "거리",
   cardio_time: "시간",
   bodyweight_reps: "횟수",
@@ -62,7 +62,7 @@ type GoalRow = {
   daysPerWeek: number;
   perDay: number;
   directTarget: number;
-  qualifier: number; // 일수형: 하루 최소 부위/종목 수
+  qualifier: number; // 일수형: 하루 최소 종목 수
 };
 
 function periodDaysOf(startDate: string, endDate: string): number {
@@ -485,7 +485,7 @@ export function ChallengeSetupSheet({
                     <div className="mt-2 rounded-card-sm border border-line bg-surface-2 p-2">
                       <label className="text-[11px] font-bold text-muted">
                         {row.type === "weight_days"
-                          ? "하루 최소 부위 수 — 이만큼 웨이트를 완료한 날만 인정"
+                          ? "하루 최소 종목 수 — 이만큼 웨이트를 완료한 날만 인정"
                           : "하루 최소 종목 수 — 이만큼 맨몸을 완료한 날만 인정"}
                       </label>
                       <div className="mt-1 flex items-center justify-between">
@@ -505,7 +505,7 @@ export function ChallengeSetupSheet({
                           </button>
                           <span className="w-14 text-center font-mono text-sm font-extrabold">
                             {row.qualifier}
-                            {row.type === "weight_days" ? "부위+" : "종목+"}
+                            종목+
                           </span>
                           <button
                             onClick={() =>

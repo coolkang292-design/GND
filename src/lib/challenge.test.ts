@@ -24,13 +24,13 @@ const STATS: PeriodStats = {
   bodyweightReps: 180,
   bodyweightTimeMin: 24,
   tabataCount: 0,
-  weightPartsByDay: { "2026-07-01": 3, "2026-07-02": 1, "2026-07-03": 4 },
+  weightKindsByDay: { "2026-07-01": 3, "2026-07-02": 1, "2026-07-03": 4 },
   bodyweightKindsByDay: { "2026-07-01": 2, "2026-07-04": 3 },
 };
 
 describe("goalLabel", () => {
-  it("weight_days는 부위 조건을 붙인다", () => {
-    expect(goalLabel("weight_days", 3)).toBe("웨이트 운동일(하루 3부위+)");
+  it("weight_days는 종목 조건을 붙인다", () => {
+    expect(goalLabel("weight_days", 3)).toBe("웨이트 운동일(하루 3종목+)");
   });
   it("bodyweight_days는 종목 조건을 붙인다", () => {
     expect(goalLabel("bodyweight_days", 2)).toBe("맨몸 운동일(하루 2종목+)");
@@ -49,7 +49,7 @@ describe("actualForGoal", () => {
     expect(actualForGoal(STATS, "bodyweight_reps")).toBe(180));
   it("bodyweight_time", () =>
     expect(actualForGoal(STATS, "bodyweight_time")).toBe(24));
-  it("weight_days는 N부위+ 인 날만 센다", () => {
+  it("weight_days는 N종목+ 인 날만 센다", () => {
     expect(actualForGoal(STATS, "weight_days", 3)).toBe(2); // 3,4 부위인 날 2개
   });
   it("bodyweight_days는 N종목+ 인 날만 센다", () => {
@@ -114,7 +114,7 @@ describe("foldPeriodStats", () => {
     expect(s.bodyweightTimeMin).toBe(3); // 매달리기 180초=3분
     expect(s.cardioDistanceKm).toBe(5);
     expect(s.cardioTimeMin).toBe(30);
-    expect(s.weightPartsByDay["2026-07-01"]).toBe(1); // 가슴 1부위
+    expect(s.weightKindsByDay["2026-07-01"]).toBe(1); // 벤치프레스 1종목
     expect(s.bodyweightKindsByDay["2026-07-01"]).toBe(2); // 매달리기·푸시업
   });
 
@@ -160,5 +160,59 @@ describe("foldPeriodStats - workoutDayKeys (레벨 재료)", () => {
       "2026-07-03",
     ]);
     expect(stats.get("u1")!.workoutDays).toBe(2);
+  });
+});
+
+describe("foldPeriodStats — weight_days는 종목 수로 센다 (2026-07-30 수정)", () => {
+  // 실측 재현: 하체 3종목 + 팔 1종목 + 등 1종목 = 종목 5개, 부위 3개.
+  // 부위로 세면 3, 종목으로 세면 5다. qualifier=4를 만족해야 한다.
+  const row: PeriodSessionRow = {
+    userId: "u1",
+    completedAt: "2026-07-28T13:05:00Z",
+    exercises: (
+      [
+        ["힙 어브덕션", "하체"],
+        ["이너따이", "하체"],
+        ["스쿼트", "하체"],
+        ["덤벨", "팔"],
+        ["랫풀다운", "등"],
+      ] as const
+    ).map(([exerciseName, bodyPart]) => ({
+      exerciseType: "weight" as const,
+      exerciseName,
+      bodyPart,
+      sets: [
+        {
+          weightKg: 10,
+          reps: 25,
+          distanceMeters: null,
+          durationSeconds: null,
+          isCompleted: true,
+        },
+      ],
+    })),
+  };
+
+  it("같은 부위의 다른 종목을 각각 센다", () => {
+    const s = foldPeriodStats([row], "2026-07-27", "2026-09-30", "Asia/Seoul").get("u1")!;
+    expect(s.weightKindsByDay["2026-07-28"]).toBe(5);
+  });
+
+  it("qualifier 4를 만족한다 — 부위로 셌을 때 0이던 것이 1이 된다", () => {
+    const s = foldPeriodStats([row], "2026-07-27", "2026-09-30", "Asia/Seoul").get("u1")!;
+    expect(actualForGoal(s, "weight_days", 4)).toBe(1);
+    expect(actualForGoal(s, "weight_days", 6)).toBe(0);
+  });
+
+  it("완료되지 않은 세트만 있는 종목은 세지 않는다", () => {
+    const incomplete: PeriodSessionRow = {
+      ...row,
+      exercises: row.exercises.map((ex) => ({
+        ...ex,
+        sets: ex.sets.map((st) => ({ ...st, isCompleted: false })),
+      })),
+    };
+    const s = foldPeriodStats([incomplete], "2026-07-27", "2026-09-30", "Asia/Seoul").get("u1")!;
+    expect(s.weightKindsByDay["2026-07-28"] ?? 0).toBe(0);
   });
 });

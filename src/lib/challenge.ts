@@ -31,14 +31,14 @@ export const GOAL_TYPE_META: Record<
 export type GoalDraft = {
   type: GoalType;
   target: number;
-  /** *_days: 하루 최소 부위/종목 수 (기본 3) */
+  /** *_days: 하루 최소 종목 수 (기본 3) */
   qualifier?: number | null;
 };
 
 /** 목표 표시 라벨 (+조건) */
 export function goalLabel(type: GoalType, qualifier?: number | null): string {
   const base = GOAL_TYPE_META[type].label;
-  if (type === "weight_days") return `${base}(하루 ${qualifier ?? 1}부위+)`;
+  if (type === "weight_days") return `${base}(하루 ${qualifier ?? 1}종목+)`;
   if (type === "bodyweight_days") return `${base}(하루 ${qualifier ?? 1}종목+)`;
   return base;
 }
@@ -241,8 +241,15 @@ export type PeriodStats = {
   bodyweightTimeMin: number;
   /** 기간 내 타바타 표식 세션 수 — tabata_count 판정 (0019) */
   tabataCount: number;
-  /** 날짜별 웨이트 완료 부위 수 — weight_days 판정 */
-  weightPartsByDay: Record<string, number>;
+  /**
+   * 날짜별 웨이트 완료 **종목** 수 — weight_days 판정.
+   *
+   * 2026-07-30까지는 부위 수였다. 하체를 집중적으로 하는 사람이 종목을
+   * 아무리 늘려도 부위가 안 늘어나서, 5종목·13세트를 한 날이 qualifier=4에
+   * 걸려 0일로 집계됐다. bodyweight_days가 이미 종목 수로 세므로 두 유형의
+   * 규칙도 이제 일치한다.
+   */
+  weightKindsByDay: Record<string, number>;
   /** 날짜별 맨몸 완료 종목 수 — bodyweight_days 판정 */
   bodyweightKindsByDay: Record<string, number>;
 };
@@ -257,7 +264,7 @@ export const EMPTY_STATS: PeriodStats = {
   bodyweightReps: 0,
   bodyweightTimeMin: 0,
   tabataCount: 0,
-  weightPartsByDay: {},
+  weightKindsByDay: {},
   bodyweightKindsByDay: {},
 };
 
@@ -290,7 +297,7 @@ export function foldPeriodStats(
 ): Map<string, PeriodStats> {
   type Acc = PeriodStats & {
     days: Set<string>;
-    weightParts: Map<string, Set<string>>;
+    weightKinds: Map<string, Set<string>>;
     bodyweightKinds: Map<string, Set<string>>;
   };
   const byUser = new Map<string, Acc>();
@@ -301,10 +308,10 @@ export function foldPeriodStats(
 
     const entry: Acc = byUser.get(row.userId) ?? {
       ...EMPTY_STATS,
-      weightPartsByDay: {},
+      weightKindsByDay: {},
       bodyweightKindsByDay: {},
       days: new Set<string>(),
-      weightParts: new Map<string, Set<string>>(),
+      weightKinds: new Map<string, Set<string>>(),
       bodyweightKinds: new Map<string, Set<string>>(),
     };
     entry.days.add(key);
@@ -328,9 +335,11 @@ export function foldPeriodStats(
       }
       if (!hasCompleted) continue;
       if (ex.exerciseType === "weight") {
-        const parts = entry.weightParts.get(key) ?? new Set<string>();
-        parts.add(ex.bodyPart ?? ex.exerciseType);
-        entry.weightParts.set(key, parts);
+        // 부위(bodyPart)가 아니라 종목명으로 센다 — 2026-07-30 수정.
+        // 바로 아래 bodyweight 쪽과 같은 기준이다.
+        const kinds = entry.weightKinds.get(key) ?? new Set<string>();
+        kinds.add(ex.exerciseName);
+        entry.weightKinds.set(key, kinds);
       } else if (ex.exerciseType === "bodyweight") {
         const kinds = entry.bodyweightKinds.get(key) ?? new Set<string>();
         kinds.add(ex.exerciseName);
@@ -342,8 +351,8 @@ export function foldPeriodStats(
 
   const result = new Map<string, PeriodStats>();
   for (const [userId, e] of byUser) {
-    const weightPartsByDay: Record<string, number> = {};
-    for (const [day, parts] of e.weightParts) weightPartsByDay[day] = parts.size;
+    const weightKindsByDay: Record<string, number> = {};
+    for (const [day, kinds] of e.weightKinds) weightKindsByDay[day] = kinds.size;
     const bodyweightKindsByDay: Record<string, number> = {};
     for (const [day, kinds] of e.bodyweightKinds) bodyweightKindsByDay[day] = kinds.size;
     result.set(userId, {
@@ -356,14 +365,14 @@ export function foldPeriodStats(
       bodyweightReps: e.bodyweightReps,
       bodyweightTimeMin: e.bodyweightTimeMin,
       tabataCount: e.tabataCount,
-      weightPartsByDay,
+      weightKindsByDay,
       bodyweightKindsByDay,
     });
   }
   return result;
 }
 
-/** 목표 유형별 실적 값 (frequency는 qualifier=하루 최소 부위 수 조건) */
+/** 목표 유형별 실적 값 (*_days는 qualifier=하루 최소 종목 수 조건) */
 export function actualForGoal(
   stats: PeriodStats,
   type: GoalType,
@@ -377,7 +386,7 @@ export function actualForGoal(
     case "weight_reps":
       return stats.weightReps;
     case "weight_days":
-      return daysAtLeast(stats.weightPartsByDay);
+      return daysAtLeast(stats.weightKindsByDay);
     case "cardio_distance":
       return stats.cardioDistanceKm;
     case "cardio_time":
