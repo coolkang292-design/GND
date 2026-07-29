@@ -166,8 +166,8 @@ end;
 토스트는 **서버가 돌려준 `points_awarded`를 그대로 따른다.**
 
 ```
-points_awarded = 10  →  📣 응원 보냈어요 +10P
-points_awarded = 0   →  📣 응원 보냈어요
+points_awarded = 10  →  응원을 보냈어요! 📣 +10 P
+points_awarded = 0   →  응원을 보냈어요! 📣
 ```
 
 클라이언트가 지갑 잔액 차이로 지급 여부를 역산하지 않는다 — 왕복이 늘고 동시 지급과 경쟁한다.

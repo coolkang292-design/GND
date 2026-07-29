@@ -5,6 +5,7 @@ import {
   type SocialEvent,
   type WorkoutImageRelation,
 } from "@/lib/domain/social";
+import { pointsAwardedFrom } from "@/lib/domain/cheer-points";
 import { currentStreak, workoutDayKeys } from "@/lib/domain/streak";
 import { DEFAULT_TIMEZONE, dayKey, dayRange } from "@/lib/domain/time";
 import { weekWorkoutDays } from "@/lib/domain/viewing-pass";
@@ -497,8 +498,7 @@ export async function sendCheer(
     p_message: message ?? null,
   });
   if (error) throw toSocialError(error);
-  const row = data as { points_awarded?: number } | null;
-  return { pointsAwarded: row?.points_awarded ?? 0 };
+  return { pointsAwarded: pointsAwardedFrom(data) };
 }
 
 export async function pokeUser(targetId: string): Promise<void> {

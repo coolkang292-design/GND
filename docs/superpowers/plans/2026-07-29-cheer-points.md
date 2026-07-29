@@ -52,7 +52,7 @@ git checkout -b feat/cheer-points
 | `supabase/migrations/0041_cheer_points.sql` | reason CHECK 확장 + `send_cheer` 재정의 | 신규 |
 | `scripts/cheer-points-check.mjs` | 통합 검증 22건 | 신규 |
 | `src/lib/social.ts:483-495` | `sendCheer`가 지급 결과를 반환 | 수정 |
-| `src/components/feed/active-workout-cards.tsx:80-97` | 토스트에 `+10P` 표시 | 수정 |
+| `src/components/feed/active-workout-cards.tsx:80-97` | 토스트에 `+10 P` 표시 | 수정 |
 | `scripts/rls-test.mjs:413,429` | 반환 모양 변경에 맞춰 단언 수정 | 수정 |
 
 **순수 로직을 `domain/`으로 빼는 이유:** 이 저장소는 계산 가능한 것을 `src/lib/domain/*.ts`에 두고 vitest로 테스트한다(`goal-score.ts`, `xp.ts`, `level.ts` 등). 토스트 문구는 작지만 "0P인데 +10P라고 표시"가 이 기능의 대표적 버그라 테스트로 고정할 값이 있다.
@@ -71,11 +71,11 @@ git checkout -b feat/cheer-points
 
 ```ts
 import { describe, expect, it } from "vitest";
-import { cheerToastMessage, CHEER_POINT_AMOUNT } from "./cheer-points";
+import { cheerToastMessage, pointsAwardedFrom } from "./cheer-points";
 
 describe("cheerToastMessage", () => {
   it("지급됐으면 포인트를 함께 보여준다", () => {
-    expect(cheerToastMessage(10)).toBe("응원을 보냈어요! 📣 +10P");
+    expect(cheerToastMessage(10)).toBe("응원을 보냈어요! 📣 +10 P");
   });
 
   it("지급이 0이면 포인트 문구를 붙이지 않는다", () => {
@@ -83,15 +83,28 @@ describe("cheerToastMessage", () => {
   });
 
   it("지급액이 바뀌어도 문구가 그 값을 따라간다", () => {
-    expect(cheerToastMessage(25)).toBe("응원을 보냈어요! 📣 +25P");
+    expect(cheerToastMessage(25)).toBe("응원을 보냈어요! 📣 +25 P");
   });
 
   it("음수는 지급 없음으로 다룬다 (서버가 보내면 안 되는 값이지만 표시가 깨지면 안 된다)", () => {
     expect(cheerToastMessage(-5)).toBe("응원을 보냈어요! 📣");
   });
+});
 
-  it("지급액 상수는 10이다 — SQL의 award_points 호출과 같아야 한다", () => {
-    expect(CHEER_POINT_AMOUNT).toBe(10);
+describe("pointsAwardedFrom", () => {
+  it("0041 반환 모양에서 지급액을 꺼낸다", () => {
+    expect(pointsAwardedFrom({ cheer: { id: "c1" }, points_awarded: 10 })).toBe(10);
+  });
+
+  // 배포 순서 안전장치 — 0041 적용 전에는 cheers 행이 그대로 온다.
+  it("0041 이전 응답(cheers 행)은 0이다", () => {
+    expect(pointsAwardedFrom({ id: "c1", cheer_type: "fire" })).toBe(0);
+  });
+
+  it("null·undefined·비숫자는 0이다", () => {
+    expect(pointsAwardedFrom(null)).toBe(0);
+    expect(pointsAwardedFrom(undefined)).toBe(0);
+    expect(pointsAwardedFrom({ points_awarded: "10" })).toBe(0);
   });
 });
 ```
@@ -117,14 +130,20 @@ npx vitest run src/lib/domain/cheer-points.test.ts
  * 표시된다.
  */
 
-/** 응원 1회 지급액. SQL 0041의 award_points 호출과 같아야 한다. */
-export const CHEER_POINT_AMOUNT = 10;
-
 const BASE = "응원을 보냈어요! 📣";
 
-/** 지급액 → 토스트 문구. 0 이하면 포인트 문구를 붙이지 않는다. */
+/**
+ * send_cheer 응답 → 지급액. 0041 이전 응답(cheers 행)은 0으로 떨어진다 —
+ * 앱이 마이그레이션보다 먼저 배포돼도 화면이 깨지지 않게 하는 안전장치다.
+ */
+export function pointsAwardedFrom(data: unknown): number {
+  const n = (data as { points_awarded?: unknown } | null)?.points_awarded;
+  return typeof n === "number" && n > 0 ? n : 0;
+}
+
+/** 지급액 → 토스트 문구. 단위 앞 공백은 앱의 다른 포인트 표시와 맞춘 것이다. */
 export function cheerToastMessage(pointsAwarded: number): string {
-  return pointsAwarded > 0 ? `${BASE} +${pointsAwarded}P` : BASE;
+  return pointsAwarded > 0 ? `${BASE} +${pointsAwarded} P` : BASE;
 }
 ```
 
@@ -134,7 +153,7 @@ export function cheerToastMessage(pointsAwarded: number): string {
 npx vitest run src/lib/domain/cheer-points.test.ts
 ```
 
-기대: PASS (5 tests)
+기대: PASS (10 tests)
 
 - [ ] **Step 5: 커밋**
 
@@ -789,8 +808,12 @@ SQL Editor에서 지급을 강제로 실패시킨다.
 
 ```sql
 alter table point_transactions
-  add constraint tmp_fail check (reason <> 'cheer_sent');
+  add constraint tmp_fail check (reason <> 'cheer_sent') not valid;
 ```
+
+**`not valid`가 반드시 필요하다.** Step 1~3 사이에 실제 사용자가 응원을 한 번이라도 보냈으면 `cheer_sent` 행이 이미 있고, 그러면 `not valid` 없이는 *"check constraint is violated by some row"* 로 실패한다. 마이그레이션이 고장 난 줄 알고 헤매게 된다. `not valid`는 기존 행 검사를 건너뛰고 **새 INSERT에만** 적용되는데, [16]이 필요로 하는 게 정확히 그것이다. 덤으로 전체 스캔과 그 동안의 락도 없다.
+
+⚠ **이 제약이 걸려 있는 동안에는 모든 사용자의 응원이 0P가 된다.** 확인이 끝나면 즉시 지운다.
 
 앱 또는 스크립트로 응원을 한 번 보낸 뒤 확인한다.
 
@@ -1023,11 +1046,11 @@ Vercel 프리뷰 배포가 자동으로 생성된다.
 크루 두 명이 필요하다. 한 명이 운동을 시작하고, 다른 한 명이 응원한다.
 
 1. 크루가 운동을 시작하면 홈 피드에 "운동 중" 카드가 뜬다
-2. 응원 버튼을 누르면 토스트가 **`응원을 보냈어요! 📣 +10P`**
+2. 응원 버튼을 누르면 토스트가 **`응원을 보냈어요! 📣 +10 P`**
 3. 프로필 → 성장 허브의 **GND 포인트 잔액이 10 늘었다**
-4. **같은 사람에게 다시 응원**하면 토스트가 `응원을 보냈어요! 📣` (**+10P 없음**)
+4. **같은 사람에게 다시 응원**하면 토스트가 `응원을 보냈어요! 📣` (**+10 P 없음**)
 5. 그때 잔액이 **늘지 않았다**
-6. **다른 크루에게 응원**하면 다시 `+10P`
+6. **다른 크루에게 응원**하면 다시 `+10 P`
 7. 응원 알림이 받는 사람에게 도착한다
 
 - [ ] **Step 2: 사용자 확인 대기**
@@ -1071,5 +1094,6 @@ git push
 **타입 일관성**
 
 - `cheerToastMessage(pointsAwarded: number): string` — Task 1 정의, Task 5 Step 2 사용
-- `CHEER_POINT_AMOUNT = 10` — Task 1 정의. SQL의 `10`과 이름으로 연결되지 않으므로 Task 2 주석에 대응 관계를 남겼다
+- `pointsAwardedFrom(data: unknown): number` — Task 1 정의, Task 5에서 `sendCheer`가 사용. RPC 경계의 `snake_case`를 앱 안의 `camelCase`로 바꾸는 지점이자, 0041 적용 전 응답을 0으로 떨어뜨리는 배포 순서 안전장치다
+- 지급액 `10`은 SQL(`0041`)에만 둔다. TS 상수로 복제하지 않는다 — 클라이언트는 액수를 **결정하지 않고** 서버가 돌려준 값을 표시만 하므로, 복제하면 아무도 안 읽는 값이 어긋날 여지만 생긴다
 - `sendCheer(): Promise<{ pointsAwarded: number }>` — Task 5 Step 1 정의, Step 2 사용. snake_case(`points_awarded`)는 RPC 경계에서만 쓰고 앱 안에서는 camelCase로 바꾼다

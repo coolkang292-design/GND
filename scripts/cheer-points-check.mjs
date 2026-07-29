@@ -182,9 +182,13 @@ async function balanceOf(user) {
  * SQL의 (now() at time zone 'Asia/Seoul')::date와 같은 값을 돌려준다.
  * Asia/Seoul은 DST가 없어 항상 UTC+9로 고정이라 이렇게 계산해도 안전하다.
  */
-function kstToday() {
-  return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+function kstDay(offsetMs = 0) {
+  return new Date(Date.now() + 9 * 60 * 60 * 1000 + offsetMs)
+    .toISOString()
+    .slice(0, 10);
 }
+const kstToday = () => kstDay();
+const kstYesterday = () => kstDay(-86_400_000);
 
 let users = [];
 
@@ -200,9 +204,12 @@ try {
   users.push(c);
   const d = await anonUser("d"); // 비크루
   users.push(d);
+  const e = await anonUser("e"); // [17] 전용 — 아직 한 번도 응원받지 않은 상대
+  users.push(e);
 
   await linkCrew(b, a);
   await linkCrew(b, c);
+  await linkCrew(b, e);
 
   // ── 1회차 세션: 지급·쿨다운·재응원 ──
   const sA = await activeSession(a);
@@ -294,20 +301,29 @@ try {
   // 같은 사용자의 두 기기를 흉내 내려면 토큰이 둘이어야 하지만, 검증 대상은
   // 토큰이 아니라 원장의 유니크 인덱스다. 같은 토큰으로 병렬 호출해도 두 요청은
   // 서로 다른 트랜잭션이라 경쟁 조건은 동일하게 재현된다.
-  const sC2 = await activeSession(c);
-  await rewindCheers(b.id);
+  //
+  // ⚠ 상대는 반드시 **아직 한 번도 응원받지 않은** e여야 한다. 이미 지급된
+  //   상대(c)를 쓰면 두 호출 다 "이미 지급됨" 경로로 빠져서 경쟁 자체가
+  //   일어나지 않고, 합계 0이 보장돼 [14]·[19]와 같은 것만 또 본다. 더 나쁜 건
+  //   그 형태면 **RPC가 통째로 깨져 둘 다 4xx여도 합계가 0이라 PASS**한다는
+  //   점이다 — 마이그레이션 판정 게이트가 판정을 포기하는 셈이다.
+  //   합계를 10으로 기대해야 "정확히 한 번 지급"을 보고, 고장은 0 ≠ 10으로 잡힌다.
+  const sE = await activeSession(e);
   const beforeRace = await balanceOf(b);
   const [r1, r2] = await Promise.all([
-    rpc(b.token, "send_cheer", { p_session_id: sC2, p_cheer_type: "fire" }),
-    rpc(b.token, "send_cheer", { p_session_id: sC2, p_cheer_type: "clap" }),
+    rpc(b.token, "send_cheer", { p_session_id: sE, p_cheer_type: "fire" }),
+    rpc(b.token, "send_cheer", { p_session_id: sE, p_cheer_type: "clap" }),
   ]);
-  const awarded = [r1, r2].filter((x) => x.json?.points_awarded === 10).length;
+  // 느린 쪽이 유니크 인덱스가 아니라 10초 쿨다운에 걸려도 결과는 같다 — 어느
+  // 경로든 정확히 10P만 움직여야 한다.
+  const total =
+    (r1.json?.points_awarded ?? 0) + (r2.json?.points_awarded ?? 0);
   check(
-    "[17] 동시 호출해도 당일 중복 지급 없음 (c에게는 이미 지급됨)",
-    awarded === 0 && (await balanceOf(b)) === beforeRace,
-    `awarded=${awarded} ${JSON.stringify([r1.json, r2.json])}`,
+    "[17] 동시 호출해도 정확히 한 번만 지급",
+    total === 10 && (await balanceOf(b)) === beforeRace + 10,
+    `total=${total} ${JSON.stringify([r1.json, r2.json])}`,
   );
-  await finish(c, sC2);
+  await finish(e, sE);
 
   // ── 회귀: 세션당 3회 상한 ──
   const sA3 = await activeSession(a);
@@ -356,7 +372,10 @@ try {
   //   필터에 넣지 않으면 이 PATCH가 둘 다 건드려 c 앞 원장도 함께 어제
   //   날짜로 밀려난다 — 지금은 그 값을 아무도 다시 읽지 않아 무해하지만,
   //   순서가 바뀌면 조용히 깨진다. a 앞으로 만든 행 하나만 정확히 겨냥한다.
-  const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+  // 두 날짜 모두 KST 기준으로 뽑는다. 하나만 UTC로 뽑아도 33시간 차라 판정이
+  // 틀리진 않지만, 날짜 정확성이 주제인 검증에서 기준이 섞여 있으면 읽는 사람이
+  // 매번 다시 확인하게 된다.
+  const yesterday = kstYesterday();
   const todayForA = `${a.id}:${kstToday()}`;
   await api(
     SERVICE_KEY,

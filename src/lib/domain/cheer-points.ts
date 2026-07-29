@@ -6,12 +6,26 @@
  * 표시된다.
  */
 
-/** 응원 1회 지급액. SQL 0041의 award_points 호출과 같아야 한다. */
-export const CHEER_POINT_AMOUNT = 10;
-
 const BASE = "응원을 보냈어요! 📣";
 
-/** 지급액 → 토스트 문구. 0 이하면 포인트 문구를 붙이지 않는다. */
+/**
+ * send_cheer 응답 → 지급액.
+ *
+ * 0041부터 `{cheer, points_awarded}`를 돌려주지만, 그 전에는 cheers 행을 그대로
+ * 돌려줬다. 앱이 마이그레이션보다 먼저 배포돼도 화면이 깨지지 않아야 하므로
+ * 모양이 다르면 0으로 떨어뜨린다 — 포인트 문구만 안 나오고 응원은 정상이다.
+ */
+export function pointsAwardedFrom(data: unknown): number {
+  const n = (data as { points_awarded?: unknown } | null)?.points_awarded;
+  return typeof n === "number" && n > 0 ? n : 0;
+}
+
+/**
+ * 지급액 → 토스트 문구. 0 이하면 포인트 문구를 붙이지 않는다.
+ *
+ * 단위 앞 공백은 앱의 다른 포인트 표시와 맞춘 것이다
+ * (badge-earn-animation·badge-sheet·next-goal-card 전부 `+N P`).
+ */
 export function cheerToastMessage(pointsAwarded: number): string {
-  return pointsAwarded > 0 ? `${BASE} +${pointsAwarded}P` : BASE;
+  return pointsAwarded > 0 ? `${BASE} +${pointsAwarded} P` : BASE;
 }
