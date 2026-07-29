@@ -57,7 +57,7 @@ for (const ch of actives) {
   console.log(`── ${ch.name} (${ch.start_date} ~ ${ch.end_date}) ──`);
 
   const parts = await rest(
-    `challenge_participants?select=user_id,role,status&challenge_id=eq.${ch.id}`,
+    `challenge_participants?select=user_id,status&challenge_id=eq.${ch.id}`,
   );
   const joined = parts.filter((p) => p.status === "joined").map((p) => p.user_id);
   const members = (
@@ -125,9 +125,24 @@ for (const ch of actives) {
 }
 
 console.log(`\n${passed}/${passed + failed} passed`);
+if (passed + failed === 0) {
+  console.log(
+    "\n⚠ 검증한 단언이 0건이다 — 활성 챌린지가 없거나 최초 조회가 비어 있다." +
+      " 이 실행은 전환 안전성의 근거가 되지 못한다.",
+  );
+  // process.exit(1)이 아니라 exitCode만 세팅한다: 이 분기는 최초 fetch 한
+  // 건만 await한 직후라 이벤트 루프가 거의 비어 있는데, 그 시점에 강제
+  // process.exit()을 부르면 Node 24 + Windows 조합에서 fetch(undici)의
+  // 내부 핸들이 채 정리되기 전에 libuv가 죽는다
+  // ("Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)") — 실행 중
+  // 재현 확인함. exitCode만 설정하고 자연 종료시키면 같은 종료 코드를
+  // 크래시 없이 낸다.
+  process.exitCode = 1;
+}
 if (failed > 0) {
   console.log(
     "\n⚠ 하나라도 실패했으면 집계 전환을 0045로 미루고, 0044를 인덱스 드롭과 화면 변경만으로 좁혀라.",
   );
-  process.exit(1);
+  // 위와 같은 이유로 강제 exit 대신 exitCode만 세팅한다.
+  process.exitCode = 1;
 }
