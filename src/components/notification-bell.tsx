@@ -33,6 +33,9 @@ const TYPE_ICON: Record<NotificationRow["type"], string> = {
   crew_request: "🤝",
   crew_accepted: "🤝",
   challenge_invite: "🏆", // 0042 유형, 0044부터 실제로 발송된다
+  // 0052 — bug_reported는 관리자 1명(bug_report_watchers)에게만 간다.
+  bug_reported: "🐞",
+  bug_fixed: "🔧",
 };
 
 /** 🔔 + 미읽음 뱃지 + 알림함 바텀시트 (§9 알림함 — durable 저장 원천) */

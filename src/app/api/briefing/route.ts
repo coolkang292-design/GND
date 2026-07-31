@@ -1,7 +1,62 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
+import {
+  bugReminderDedupeKey,
+  bugReminderText,
+} from "@/lib/domain/bug-reminder";
 import { buildBriefings, type BriefingUser } from "@/lib/domain/briefing";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+/**
+ * 알림 2층 (0052) — 미처리 버그 신고가 남아 있으면 관리자에게 하루 한 번.
+ *
+ * 브리핑과 같은 09:00 KST 슬롯에 얹는다 — vercel.json의 크론이 하나뿐이다.
+ * `autostart_due_challenges`(0044)를 여기 얹은 것과 같은 자리·같은 규칙이다.
+ *
+ * **실패해도 브리핑을 죽이지 않는다.** 신고 알림이 안 나갔다고 전 사용자의 아침
+ * 알림을 통째로 잃으면 손해가 훨씬 크다.
+ */
+async function remindPendingBugReports(
+  admin: SupabaseClient,
+  now: Date,
+): Promise<Record<string, unknown>> {
+  try {
+    const { data: count, error: countError } = await admin.rpc(
+      "pending_bug_report_count",
+    );
+    if (countError) return { error: countError.message };
+    if (!count || (count as number) <= 0) return { pending: 0, sent: 0 };
+
+    const { data: watchers, error: watchersError } = await admin
+      .from("bug_report_watchers")
+      .select("user_id");
+    if (watchersError) return { error: watchersError.message };
+
+    const { title, body } = bugReminderText(count as number);
+    let sent = 0;
+    for (const w of watchers ?? []) {
+      const userId = w.user_id as string;
+      const { data } = await admin
+        .from("notifications")
+        .upsert(
+          {
+            user_id: userId,
+            type: "bug_reported",
+            title,
+            body,
+            dedupe_key: bugReminderDedupeKey(userId, now),
+          },
+          { onConflict: "dedupe_key", ignoreDuplicates: true },
+        )
+        .select("id");
+      if ((data ?? []).length > 0) sent += 1;
+    }
+    return { pending: count, sent };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) };
+  }
+}
 
 export const dynamic = "force-dynamic";
 
@@ -121,11 +176,14 @@ export async function GET(req: Request) {
     else alreadySent += 1;
   }
 
+  const bugReports = await remindPendingBugReports(admin, new Date());
+
   return NextResponse.json({
     sent,
     alreadySent,
     skipped,
     errors,
+    bugReports,
     challengeTransitions,
   });
 }

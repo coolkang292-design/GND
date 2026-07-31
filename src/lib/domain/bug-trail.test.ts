@@ -1,0 +1,111 @@
+import { beforeEach, describe, expect, it } from "vitest";
+import {
+  TRAIL_DETAIL_MAX,
+  TRAIL_MAX,
+  clearTrail,
+  noteTrail,
+  pathOnly,
+  readTrail,
+} from "./bug-trail";
+
+beforeEach(() => clearTrail());
+
+describe("링버퍼 — 최신이 앞", () => {
+  it("나중에 넣은 것이 index 0이다", () => {
+    // 순서가 뒤집히면 서버가 앞에서 30개를 남길 때 **직전 동작이 잘려 나간다.**
+    // 신고에서 가장 중요한 한 줄이 사라지는 것이므로 이 단언이 회귀를 잡는다.
+    noteTrail("nav", "먼저");
+    noteTrail("action", "나중");
+    expect(readTrail()[0]?.label).toBe("나중");
+    expect(readTrail()[1]?.label).toBe("먼저");
+  });
+
+  it(`${TRAIL_MAX}개를 넘으면 가장 오래된 것부터 버린다`, () => {
+    for (let i = 0; i < TRAIL_MAX + 12; i += 1) noteTrail("action", `a${i}`);
+    const trail = readTrail();
+    // "0이어야 한다"가 아니라 정확한 개수로 단언한다 — 버퍼가 통째로 망가져
+    // 비어 있어도 통과하는 단언은 아무것도 검사하지 않는다.
+    expect(trail).toHaveLength(TRAIL_MAX);
+    expect(trail[0]?.label).toBe(`a${TRAIL_MAX + 11}`);
+    expect(trail.at(-1)?.label).toBe("a12");
+  });
+
+  it("readTrail은 복사본이라 밖에서 고쳐도 버퍼가 안 변한다", () => {
+    noteTrail("nav", "/home");
+    const copy = readTrail();
+    copy[0]!.label = "덮어씀";
+    copy.push({ t: "x", kind: "nav", label: "끼워넣음" });
+    expect(readTrail()).toHaveLength(1);
+    expect(readTrail()[0]?.label).toBe("/home");
+  });
+});
+
+describe("길이 제한 — 신고 본문이 통째로 실려 오지 않게", () => {
+  it(`detail은 ${TRAIL_DETAIL_MAX}자로 자른다`, () => {
+    noteTrail("fail", "db", "가".repeat(500));
+    expect(readTrail()[0]?.detail).toHaveLength(TRAIL_DETAIL_MAX);
+  });
+
+  it("label도 자른다", () => {
+    noteTrail("action", "x".repeat(500));
+    expect(readTrail()[0]?.label).toHaveLength(TRAIL_DETAIL_MAX);
+  });
+
+  it("빈 label은 아예 안 담는다", () => {
+    noteTrail("action", "");
+    expect(readTrail()).toHaveLength(0);
+  });
+
+  it("detail이 없으면 키 자체가 없다", () => {
+    noteTrail("nav", "/home");
+    expect(readTrail()[0]).not.toHaveProperty("detail");
+  });
+});
+
+describe("계측은 앱을 죽이지 않는다", () => {
+  it("이상한 값을 넣어도 던지지 않는다", () => {
+    // 계측 코드가 던지면 그 자리의 기능이 통째로 죽는다. 신고 장치가 앱을
+    // 망가뜨리는 건 본말전도다.
+    expect(() =>
+      noteTrail("action", undefined as unknown as string),
+    ).not.toThrow();
+    expect(() =>
+      noteTrail("action", "ok", { toString: null } as unknown as string),
+    ).not.toThrow();
+  });
+});
+
+describe("pathOnly — 쿼리스트링을 통째로 버린다", () => {
+  it("닉네임이 든 필터가 흔적에 남지 않는다", () => {
+    // `?nickname=eq.스칼레또` 같은 값이 그대로 저장되면 개인정보가 샌다.
+    const out = pathOnly(
+      "https://x.supabase.co/rest/v1/profiles?select=id&nickname=eq.스칼레또",
+    );
+    expect(out).not.toContain("스칼레또");
+    expect(out).not.toContain("?");
+    expect(out).toBe("profiles");
+  });
+
+  it("uuid가 든 필터도 남지 않는다", () => {
+    const out = pathOnly(
+      "https://x.supabase.co/rest/v1/bug_reports?id=eq.4fa751c8-8ee6-4e74-bcac-68f963ff032f",
+    );
+    expect(out).toBe("bug_reports");
+  });
+
+  it("auth 경로는 접두어를 남겨 구분한다", () => {
+    expect(pathOnly("https://x.supabase.co/auth/v1/token?grant_type=refresh")).toBe(
+      "auth/token",
+    );
+  });
+
+  it("RPC 이름은 남는다 — 어느 호출이 실패했는지가 핵심이다", () => {
+    expect(pathOnly("https://x.supabase.co/rest/v1/rpc/accept_challenge_invite")).toBe(
+      "rpc/accept_challenge_invite",
+    );
+  });
+
+  it("깨진 URL에도 던지지 않는다", () => {
+    expect(() => pathOnly("!!! not a url")).not.toThrow();
+  });
+});
