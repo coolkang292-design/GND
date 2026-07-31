@@ -40,7 +40,8 @@ export type NotificationRow = {
     | "crew_accepted" // 0038 — 상대가 내 요청을 수락
     | "challenge_invite" // 0042 — 챌린지 방 초대 (0044부터 발송·라우팅)
     | "bug_reported" // 0052 — 관리자에게: 새 버그 신고 도착
-    | "bug_fixed"; // 0052 — 신고자에게: 신고한 게 고쳐졌다
+    | "bug_fixed" // 0052 — 신고자에게: 신고한 게 고쳐졌다
+    | "challenge_peek_unlocked"; // 0054 — 5일 연속으로 열린 2시간 열람창
   reference_id: string | null;
   title: string;
   body: string | null;

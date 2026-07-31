@@ -107,12 +107,29 @@ export type ChallengePassState =
 
 export type ChallengePassStatus = {
   state: ChallengePassState;
-  consecutiveDays: number; // 오늘부터 뒤로 이어진 연속 운동일 수
+  /**
+   * 열림 판정용 — 오늘을 **포함해** 뒤로 이어진 연속 운동일 수.
+   * 오늘 아직 안 했으면 0이다. 화면에 그대로 띄우지 마라(progressDays를 써라).
+   */
+  consecutiveDays: number;
+  /**
+   * 화면 표시용 진행도 — 오늘 했으면 오늘까지, 아직이면 **어제까지** 이어진
+   * 연속 일수. 오늘치를 하기 전에 진행도가 0으로 떨어지는 걸 막는다.
+   */
+  progressDays: number;
+  /** 오늘 완료한 운동이 있는가 — "오늘 하면 열려요" 안내의 판정 재료 */
+  todayDone: boolean;
   fifthAt: Date | null; // 5일 연속을 만든(=오늘 5일째) 첫 완료 시각
   expiresAt: Date | null; // fifthAt + 2h
 };
 
-/** 연속 5일 달성 시각부터 2시간 공개. completedAts=내 완료 시각 목록 */
+/**
+ * 연속 5일 달성 시각부터 2시간 공개. completedAts=내 완료 시각 목록.
+ *
+ * 열림 조건과 진행도 표시를 분리한다. 조건은 "오늘 포함 엄밀 5연속"이라
+ * 오늘치를 하기 전엔 0이 맞지만, 그 0을 그대로 화면에 띄우면 사흘 내리
+ * 운동한 사람에게도 "0/5일"이 보인다(2026-08-01 실사용자 신고).
+ */
 export function challengePassStatus(
   completedAts: Date[],
   now: Date,
@@ -121,16 +138,28 @@ export function challengePassStatus(
 ): ChallengePassStatus {
   const keys = new Set(completedAts.map((d) => dayKey(d, timeZone)));
   const todayKey = dayKey(now, timeZone);
-  // 오늘부터 뒤로 연속 일수
+  const todayDone = keys.has(todayKey);
+  // 오늘부터 뒤로 연속 일수 (열림 판정)
   let consecutive = 0;
   for (let i = 0; ; i++) {
     if (keys.has(dayKeyBack(todayKey, i))) consecutive++;
     else break;
   }
+  // 진행도 — 오늘을 했으면 위와 같고, 아직이면 어제부터 뒤로 센다.
+  let progress = consecutive;
+  if (!todayDone) {
+    progress = 0;
+    for (let i = 1; ; i++) {
+      if (keys.has(dayKeyBack(todayKey, i))) progress++;
+      else break;
+    }
+  }
   if (consecutive < requiredDays) {
     return {
       state: "locked_progress",
       consecutiveDays: consecutive,
+      progressDays: progress,
+      todayDone,
       fifthAt: null,
       expiresAt: null,
     };
@@ -146,7 +175,34 @@ export function challengePassStatus(
   return {
     state: now >= expiresAt ? "locked_expired" : "unlocked",
     consecutiveDays: consecutive,
+    progressDays: progress,
+    todayDone,
     fifthAt,
     expiresAt,
   };
+}
+
+/**
+ * 챌린지 성과 카드 부제 문구 — 순수 함수로 뺀 이유는 streak-messages.ts와 같다.
+ * 카드는 useEffect 안에서 비동기로 데이터를 받아 조립하느라 서버 렌더로는
+ * 문구를 검증할 수 없다. 화면에 **무슨 글자가 뜨는지**를 테스트로 잡으려면
+ * 조립을 여기로 내려야 한다.
+ */
+export function challengePassCopy(
+  pass: ChallengePassStatus,
+  minutesLeft: number,
+  requiredDays = KING_DAYS,
+): string {
+  if (pass.state === "unlocked") return `🎟️ 열람 중 · ${minutesLeft}분 남음`;
+  if (pass.state === "locked_expired") {
+    return `오늘 열람 시간이 끝났어요 (다시 ${requiredDays}일 연속 달성 시 열려요)`;
+  }
+  // 오늘 하루만 채우면 열리는 상태면 그걸 먼저 말해준다. 진행도가 4든 20이든
+  // 남은 건 "오늘"뿐이라 숫자보다 이 안내가 쓸모 있다.
+  if (!pass.todayDone && pass.progressDays >= requiredDays - 1) {
+    return `🔥 오늘 운동하면 바로 열려요! (어제까지 ${pass.progressDays}일 연속)`;
+  }
+  // 진행도는 progressDays다. consecutiveDays는 오늘치를 하기 전엔 0이라,
+  // 사흘 내리 운동한 사람에게도 "0/5일"이 보였다 (2026-08-01 신고).
+  return `${requiredDays}일 연속 운동하면 열려요 · 현재 ${pass.progressDays}/${requiredDays}일`;
 }

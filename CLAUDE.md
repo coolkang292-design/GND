@@ -130,10 +130,14 @@ node scripts/bug-reports.mjs --fix <id> --release <release-id> --send   # 신고
 
 | 스크립트 | 기준 |
 |---|---|
-| `rls-test.mjs` | 113 / 0 |
-| `poke-levelup-check.mjs` | 11 / 11 |
-| `challenge-consent-test.mjs` | 20 / 0 |
-| `challenge-room-check.mjs` | 32 / 0 |
+| `rls-test.mjs` | 115 / 0 |
+| `poke-levelup-check.mjs` | 14 / 14 |
+| `challenge-consent-test.mjs` | 22 / 0 |
+| `challenge-room-check.mjs` | 48 / 0 |
+
+기준선은 2026-08-01 실측으로 갱신했다. 이전 표(113·11·20·32)는 단언이 늘어난 뒤로도
+안 고쳐져 있어서, 통과인데도 "기준보다 많다"고 헷갈리게 만들었다. **숫자가 기준보다
+크면 단언이 늘어난 것이니 표를 갱신하라. 판정 기준은 언제나 `0 failed`다.**
 
 **실패가 하나라도 있으면 회귀다.** 예전엔 "원래 6건 실패"인 상태라 진짜 고장을 가렸다.
 

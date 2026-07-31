@@ -7,7 +7,7 @@
 -- 쓰는 법: 함수·정책의 '현행' 정의가 필요할 때 마이그레이션 51개를
 -- 뒤지지 말고 이 파일을 검색하라. 마이그레이션을 적용한 뒤에는 다시 뽑아라.
 --
--- 함수 67개 · 정책 66개 · 인덱스 73개
+-- 함수 68개 · 정책 66개 · 인덱스 73개
 
 -- ════════════════════════════════════════════════════════════
 -- 함수
@@ -684,6 +684,7 @@ declare
   v_total int := 0;
   v_prog jsonb; v_orig int;
   v_streak int; v_mult numeric; v_points int := 0; v_badges jsonb := '[]'::jsonb;
+  v_consec int; v_challenge uuid;
 begin
   if auth.uid() is null then raise exception 'not_authenticated'; end if;
   select * into s from workout_sessions
@@ -785,6 +786,46 @@ begin
 
   -- ⬇ 0032 추가: 배지 판정. 포인트 지급 뒤라 배지 보너스가 위에 쌓인다.
   v_badges := public.evaluate_badges(s.user_id);
+
+  -- ⬇ 0054 추가: 챌린지 성과 열람창이 열렸음을 알린다.
+  --   current_streak_days는 "간격 5일 미만이면 이어짐"이라 여기 쓸 수 없다.
+  --   열람 조건은 **엄밀 연속**(빈 날 없음)이고 오늘을 포함해야 한다 —
+  --   viewing-pass.ts의 challengePassStatus와 같은 판정이어야 한다.
+  --   generate_series로 오늘부터 뒤로 5일을 만들고 전부 운동일인지 본다.
+  select count(*) into v_consec
+  from generate_series(0, 4) g(i)
+  where exists (
+    select 1 from workout_sessions w
+    where w.user_id = s.user_id
+      and w.status = 'completed'
+      and w.deleted_at is null
+      and w.completed_at is not null
+      and (w.completed_at at time zone 'Asia/Seoul')::date
+          = ((now() at time zone 'Asia/Seoul')::date - g.i)
+  );
+
+  if v_consec = 5 then
+    -- 참가 중인 active 챌린지가 있을 때만 의미가 있다.
+    select c.id into v_challenge
+    from challenge_participants cp
+    join challenges c on c.id = cp.challenge_id
+    where cp.user_id = s.user_id and c.status = 'active'
+    order by c.created_at desc
+    limit 1;
+
+    if v_challenge is not null then
+      -- dedupe_key로 하루 1건만. 열람창 자체가 KST 하루에 하나뿐이다.
+      insert into notifications (user_id, type, reference_id, title, body, dedupe_key)
+      values (
+        s.user_id, 'challenge_peek_unlocked', v_challenge,
+        '🎟️ 챌린지 성과 열람 2시간 시작!',
+        '5일 연속 운동 달성! 지금부터 2시간 동안 홈에서 참가자 한 명의 성과를 볼 수 있어요.',
+        'peek_unlock:' || s.user_id::text || ':'
+          || ((now() at time zone 'Asia/Seoul')::date)::text
+      )
+      on conflict (dedupe_key) do nothing;
+    end if;
+  end if;
 
   return jsonb_build_object(
     'idempotentReplay', false,
@@ -1233,6 +1274,20 @@ AS $function$
   left join public.user_progress up on up.user_id = p.id
   where (select auth.uid()) in (l.user_a, l.user_b)
   order by p.nickname
+$function$;
+
+-- ── get_my_recent_pokes ──
+CREATE OR REPLACE FUNCTION public.get_my_recent_pokes()
+ RETURNS SETOF uuid
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select n.user_id
+  from public.notifications n
+  where n.type = 'poke'
+    and n.actor_id = (select auth.uid())
+    and n.created_at > now() - interval '24 hours'
 $function$;
 
 -- ── invite_to_challenge ──

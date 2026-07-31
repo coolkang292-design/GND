@@ -32,6 +32,9 @@ const PUSH_URL_BY_TYPE: Record<string, string> = {
   bug_reported: "/admin",
   // 고쳐졌다는 소식은 신고자에게 간다. 무엇이 바뀌었는지는 새 소식에 적혀 있다.
   bug_fixed: "/whats-new",
+  // 0054 — 5일 연속 달성으로 열린 2시간 열람창. 카드가 홈에 있다.
+  // 창이 짧아서(2h) 목적지를 틀리면 도착 전에 닫힌다.
+  challenge_peek_unlocked: "/home",
 };
 
 const DEFAULT_PUSH_URL = "/home";

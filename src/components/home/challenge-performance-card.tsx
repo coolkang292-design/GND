@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { DEFAULT_TIMEZONE, dayKey } from "@/lib/domain/time";
 import {
+  challengePassCopy,
   challengePassStatus,
   type ChallengePassStatus,
 } from "@/lib/domain/viewing-pass";
@@ -120,11 +121,7 @@ export function ChallengePerformanceCard({
         </span>
       </div>
       <p className="mt-0.5 text-[11px] text-muted">
-        {unlocked
-          ? `🎟️ 열람 중 · ${minsLeft}분 남음`
-          : pass.state === "locked_expired"
-            ? "오늘 열람 시간이 끝났어요 (다시 5일 연속 달성 시 열려요)"
-            : `5일 연속 운동하면 열려요 · 현재 ${pass.consecutiveDays}/5일`}
+        {challengePassCopy(pass, minsLeft)}
       </p>
 
       <div className="relative mt-3">

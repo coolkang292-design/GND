@@ -36,6 +36,7 @@ const TYPE_ICON: Record<NotificationRow["type"], string> = {
   // 0052 — bug_reported는 관리자 1명(bug_report_watchers)에게만 간다.
   bug_reported: "🐞",
   bug_fixed: "🔧",
+  challenge_peek_unlocked: "🎟️", // 0054 — 열람창 2시간 시작
 };
 
 /** 🔔 + 미읽음 뱃지 + 알림함 바텀시트 (§9 알림함 — durable 저장 원천) */
