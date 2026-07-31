@@ -188,62 +188,6 @@ function ChallengeScreen({ userId }: { userId: string }) {
         myChallenges.find((c) => c.id === selectedIdRef.current) ??
         pickPrimaryRow(myChallenges);
       setSelectedId(ch?.id ?? null);
-
-      // 0044: 참여자 명단은 그룹이 아니라 **이 챌린지의 참가자**다.
-      // 그룹 기준으로 두면 초대하지 않은 크루원까지 명단·시작 게이트에 끌려와,
-      // 그 사람이 목표를 세워야 시작되는 상태가 된다. 실제로 그렇게 배포됐다.
-      // invited는 뺀다(아직 수락 전) — dropped는 결과 화면에 남아야 하므로 넣는다.
-      if (ch) {
-        const parts = await getChallengeParticipants(ch.id);
-        if (cancelled) return;
-        setMembers(
-          await profilesByIds(
-            parts.filter((p) => p.status !== "invited").map((p) => p.user_id),
-          ),
-        );
-      } else {
-        setMembers([]);
-      }
-
-      // 직전 목표 프리필은 그룹 기준 조회라 그룹이 있을 때만 채운다.
-      // 없으면 프리필이 비는 것뿐이고 목표 설정 자체는 된다.
-      if (g) {
-        const prev = await getMyPreviousGoals(userId, g.id, ch?.id ?? null);
-        if (cancelled) return;
-        setPrevGoals(
-          prev.map((p) => ({
-            type: p.goal_type,
-            target: Number(p.target_value),
-            qualifier: p.qualifier,
-          })),
-        );
-      }
-
-      if (ch) {
-        const [chGoals, appr] = await Promise.all([
-          getChallengeGoals(ch.id),
-          getChallengeApprovals(ch.id),
-        ]);
-        if (cancelled) return;
-        setGoals(chGoals);
-        setApprovals(appr);
-        if (ch.status === "active" || ch.status === "ended") {
-          // 0044: 집계 대상이 그룹이 아니라 챌린지 참가자다.
-          // invited는 뺀다 — 아직 수락하지 않았으니 참가자가 아니다.
-          // dropped는 남긴다 — 목표 0개로 명단에서 빠졌어도 이미 한 운동은
-          // 결과 화면에 보여야 한다.
-          const parts = await getChallengeParticipants(ch.id);
-          setStats(
-            await getPeriodStatsByUser(
-              parts.filter((p) => p.status !== "invited").map((p) => p.user_id),
-              ch.start_date,
-              ch.end_date,
-              tz,
-              ch.photo_required,
-            ),
-          );
-        }
-      }
       } catch {
         if (!cancelled) showToast("데이터를 불러오지 못했어요");
       } finally {
@@ -254,6 +198,83 @@ function ChallengeScreen({ userId }: { userId: string }) {
       cancelled = true;
     };
   }, [userId, refreshKey, showToast]);
+
+  // 선택된 챌린지의 데이터. **selectedId에 반드시 반응해야 한다** — 위 effect에
+  // 같이 두면 chip으로 챌린지를 바꿔도 재조회가 안 돌아, 새 챌린지 화면에
+  // 이전 챌린지의 참여자·목표·순위가 그대로 남는다(2026-07-31 사용자 신고:
+  // "챌린지를 추가해도 기존 챌린지 멤버가 포함돼 구성된다").
+  //
+  // 두 effect가 서로를 다시 부르지 않는다: 위가 selectedId를 세우고, 아래는
+  // 읽기만 한다.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const ch = challenges.find((c) => c.id === selectedId) ?? null;
+      if (!ch) {
+        // 고른 챌린지가 없으면(전부 취소·거절 등) 이전 챌린지 데이터를 지운다.
+        // 안 지우면 다음에 고르는 챌린지에 남의 참여자·목표가 그대로 보인다.
+        if (!cancelled) {
+          setMembers([]);
+          setGoals([]);
+          setApprovals(new Set());
+          setStats(null);
+        }
+        return;
+      }
+      try {
+        // 참여자 명단은 그룹이 아니라 **이 챌린지의 참가자**다. 그룹 기준으로
+        // 두면 초대하지 않은 크루원까지 명단·시작 게이트에 끌려온다.
+        // invited는 뺀다(아직 수락 전) — dropped는 결과에 남아야 하므로 넣는다.
+        const parts = await getChallengeParticipants(ch.id);
+        if (cancelled) return;
+        const activeIds = parts
+          .filter((p) => p.status !== "invited")
+          .map((p) => p.user_id);
+
+        const [profiles, chGoals, appr] = await Promise.all([
+          profilesByIds(activeIds),
+          getChallengeGoals(ch.id),
+          getChallengeApprovals(ch.id),
+        ]);
+        if (cancelled) return;
+        setMembers(profiles);
+        setGoals(chGoals);
+        setApprovals(appr);
+
+        if (ch.status === "active" || ch.status === "ended") {
+          const s = await getPeriodStatsByUser(
+            activeIds,
+            ch.start_date,
+            ch.end_date,
+            timeZone,
+            ch.photo_required,
+          );
+          if (cancelled) return;
+          setStats(s);
+        } else {
+          setStats(null);
+        }
+
+        // 직전 목표 프리필은 그룹 기준 조회라 그룹이 있을 때만 채운다.
+        if (group) {
+          const prev = await getMyPreviousGoals(userId, group.id, ch.id);
+          if (cancelled) return;
+          setPrevGoals(
+            prev.map((p) => ({
+              type: p.goal_type,
+              target: Number(p.target_value),
+              qualifier: p.qualifier,
+            })),
+          );
+        }
+      } catch {
+        if (!cancelled) showToast("챌린지 정보를 불러오지 못했어요");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, selectedId, challenges, group, timeZone, refreshKey, showToast]);
 
   const myGoals = useMemo(
     () => goals.filter((g) => g.user_id === userId),
@@ -307,7 +328,10 @@ function ChallengeScreen({ userId }: { userId: string }) {
         plannedDays: v.plannedDays,
       });
       setSheet(null);
-      showToast("챌린지를 만들었어요 — 크루원들이 KPI를 설정하면 시작! 🎯");
+      // 만든 챌린지를 바로 보여준다. 안 하면 목록에는 생겼는데 화면은 이전
+      // 챌린지에 머물러, 방금 만든 것을 chip에서 찾아 눌러야 한다.
+      setSelectedId(ch.id);
+      showToast("챌린지를 만들었어요 — 크루원을 초대하고 목표를 세워 보세요 🎯");
       reload();
     } catch (e) {
       showToast(errorMessage(e));
