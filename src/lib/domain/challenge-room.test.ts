@@ -3,8 +3,10 @@ import {
   daysMeetingQualifier,
   goalFloor,
   pickPrimaryChallenge,
+  pickPrimaryRow,
   FLOOR_BASELINE_DAYS,
   type ChallengeLike,
+  type ChallengeRowLike,
 } from "./challenge-room";
 
 const ch = (
@@ -163,5 +165,55 @@ describe("daysMeetingQualifier", () => {
     const days4 = daysMeetingQualifier(countByDay, 4); // 0일
     expect(goalFloor("weight_days", days3, 28)).toBe(1);
     expect(goalFloor("weight_days", days4, 28)).toBe(0);
+  });
+});
+
+describe("pickPrimaryRow — DB 행(snake_case)에서 대표 챌린지 고르기", () => {
+  const row = (
+    id: string,
+    status: ChallengeRowLike["status"],
+    start: string,
+    end: string,
+    created: string,
+  ): ChallengeRowLike => ({
+    id,
+    status,
+    start_date: start,
+    end_date: end,
+    created_at: created,
+  });
+
+  it("종료일이 임박한 active를 고른다", () => {
+    const picked = pickPrimaryRow([
+      row("late", "active", "2026-08-01", "2026-12-31", "2026-07-01T00:00:00Z"),
+      row("soon", "active", "2026-08-01", "2026-09-30", "2026-07-02T00:00:00Z"),
+    ]);
+    expect(picked?.id).toBe("soon");
+  });
+
+  it("active가 없으면 시작일이 가까운 setup을 고른다", () => {
+    const picked = pickPrimaryRow([
+      row("far", "setup", "2026-12-01", "2026-12-31", "2026-07-01T00:00:00Z"),
+      row("near", "setup", "2026-08-01", "2026-08-31", "2026-07-02T00:00:00Z"),
+    ]);
+    expect(picked?.id).toBe("near");
+  });
+
+  it("원본 행을 그대로 돌려준다 (매핑용 필드가 새지 않는다)", () => {
+    const r = row("a", "active", "2026-08-01", "2026-09-30", "2026-07-01T00:00:00Z");
+    const picked = pickPrimaryRow([r]);
+    expect(picked).toBe(r);
+  });
+
+  it("빈 목록이면 null", () => {
+    expect(pickPrimaryRow([])).toBeNull();
+  });
+
+  it("ended·cancelled만 있으면 null (대표가 없다)", () => {
+    const picked = pickPrimaryRow([
+      row("x", "ended", "2026-06-01", "2026-06-30", "2026-05-01T00:00:00Z"),
+      row("y", "cancelled", "2026-06-01", "2026-06-30", "2026-05-01T00:00:00Z"),
+    ]);
+    expect(picked).toBeNull();
   });
 });

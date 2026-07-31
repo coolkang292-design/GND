@@ -63,6 +63,56 @@ export async function getCurrentChallenge(
   return data;
 }
 
+/** 내가 참가자로 들어가 있는 챌린지 + 내 역할·참가 상태 */
+export type MyChallenge = Challenge & {
+  myRole: "host" | "member";
+  myStatus: "invited" | "joined" | "dropped";
+};
+
+/**
+ * 내 챌린지 전부 (cancelled 제외).
+ *
+ * 0044부터 명단의 원천은 group_members가 아니라 challenge_participants다.
+ * 그룹이 아니라 참가 사실로 묶이므로, 여러 크루에 걸친 챌린지도 한 목록에 온다.
+ *
+ * invited(아직 수락 안 함)도 포함한다 — 화면이 "초대받았어요"를 보여줘야 한다.
+ * dropped는 목표 0개로 명단에서 빠진 사람이다. 결과를 볼 수는 있어야 하므로
+ * 역시 포함하고, 구분은 myStatus로 화면이 한다.
+ */
+export async function getMyChallenges(client?: SupabaseClient): Promise<MyChallenge[]> {
+  const supabase = client ?? getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("challenge_participants")
+    .select("role, status, challenges!inner(*)")
+    .neq("challenges.status", "cancelled");
+  if (error) throw error;
+
+  type Row = {
+    role: "host" | "member";
+    status: "invited" | "joined" | "dropped";
+    challenges: Challenge;
+  };
+  return ((data ?? []) as unknown as Row[]).map((r) => ({
+    ...r.challenges,
+    myRole: r.role,
+    myStatus: r.status,
+  }));
+}
+
+/** 챌린지의 참가자 명단 (0044부터 랭킹·집계의 원천) */
+export async function getChallengeParticipants(
+  challengeId: string,
+  client?: SupabaseClient,
+): Promise<{ user_id: string; role: "host" | "member"; status: string }[]> {
+  const supabase = client ?? getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("challenge_participants")
+    .select("user_id, role, status")
+    .eq("challenge_id", challengeId);
+  if (error) throw error;
+  return data ?? [];
+}
+
 export async function createChallenge(input: {
   groupId: string;
   name: string;
