@@ -130,6 +130,10 @@ async function listReports() {
 
   let query = "/rest/v1/bug_reports?select=*&order=created_at.desc";
   if (one) query += `&id=eq.${one}`;
+  // --brief는 **미해결 전부**(new + triaged)를 센다. 09시 브리핑과 같은 기준이다 —
+  // 원인만 적어 두고(triaged) 잊은 신고가 세션 시작 알림에서도 빠지면, 손대다 만
+  // 것이 영영 조용히 묻힌다. 기본 목록은 새로 온 것(new)만 보여 받은함을 깔끔히 둔다.
+  else if (brief) query += "&status=in.(new,triaged)";
   else if (!all) query += "&status=eq.new";
 
   const rows = await api(query);
@@ -140,10 +144,13 @@ async function listReports() {
     const nameOf = await loadNames();
     const summary = rows
       .slice(0, 5)
-      .map((r) => `${nameOf.get(r.user_id) ?? "?"} · ${r.route ?? "?"} · ${r.message.slice(0, 40)}`)
+      .map(
+        (r) =>
+          `${r.status === "triaged" ? "[원인파악됨] " : ""}${nameOf.get(r.user_id) ?? "?"} · ${r.route ?? "?"} · ${r.message.slice(0, 40)}`,
+      )
       .join(" / ");
     console.log(
-      `미처리 버그 신고 ${rows.length}건 — ${summary}${rows.length > 5 ? " …" : ""} (자세히: node scripts/bug-reports.mjs)`,
+      `미해결 버그 신고 ${rows.length}건 — ${summary}${rows.length > 5 ? " …" : ""} (자세히: node scripts/bug-reports.mjs --all)`,
     );
     return;
   }

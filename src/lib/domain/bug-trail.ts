@@ -74,6 +74,31 @@ export function clearTrail(): void {
 }
 
 /**
+ * 성공한 요청 중 **사용자가 한 일**로 볼 것을 고른다.
+ *
+ * 규칙은 하나다 — **쓰기(POST·PATCH·PUT·DELETE)만 동작으로 본다.** 읽기(GET)는
+ * 화면을 열 때마다 수십 건이 나가서 30칸짜리 버퍼를 즉시 덮어쓴다. 쓰기는
+ * 사용자가 무언가를 눌렀다는 뜻이고 그 수가 적다.
+ *
+ * **자동으로 잡는 이유.** 설계에는 호출부마다 손으로 `noteTrail("action", …)`을
+ * 넣기로 했는데, 실제로 구현할 때 **한 곳도 안 넣었다.** 배포 후 들어온 첫 신고의
+ * 흔적이 `nav` 한 줄뿐인 것으로 그게 드러났다. 이 저장소에는 같은 실패가 이미
+ * 있다 — `PUSH_URL_BY_TYPE`은 exhaustive가 아니라 "손으로 챙겨야 한다"고 주석까지
+ * 달아 뒀지만 그런 것은 결국 빠진다. 팩토리 한 곳에서 자동으로 잡으면 안 빠진다.
+ *
+ * auth는 뺀다 — 토큰 갱신이 사용자 동작이 아니고, 로그인 성패는 실패 쪽에서 잡힌다.
+ */
+export function isUserAction(method: string, url: string): boolean {
+  const m = method.toUpperCase();
+  if (m !== "POST" && m !== "PATCH" && m !== "PUT" && m !== "DELETE") return false;
+  try {
+    return !new URL(url, "http://x").pathname.startsWith("/auth/");
+  } catch {
+    return false;
+  }
+}
+
+/**
  * URL에서 **경로만** 뽑는다. 쿼리스트링은 통째로 버린다 —
  * 거기에 닉네임·uuid·초대코드가 들어간다(`?nickname=eq.스칼레또`).
  * 실패해도 던지지 않는다.

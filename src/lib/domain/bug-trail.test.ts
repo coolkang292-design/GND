@@ -3,6 +3,7 @@ import {
   TRAIL_DETAIL_MAX,
   TRAIL_MAX,
   clearTrail,
+  isUserAction,
   noteTrail,
   pathOnly,
   readTrail,
@@ -107,5 +108,48 @@ describe("pathOnly — 쿼리스트링을 통째로 버린다", () => {
 
   it("깨진 URL에도 던지지 않는다", () => {
     expect(() => pathOnly("!!! not a url")).not.toThrow();
+  });
+});
+
+describe("isUserAction — 쓰기만 동작으로 본다", () => {
+  const U = "https://x.supabase.co/rest/v1/rpc/send_cheer";
+
+  it("읽기(GET)는 동작이 아니다", () => {
+    // GET을 담으면 화면 한 번 열 때 수십 건이 나가 30칸 버퍼를 즉시 덮어쓴다.
+    // 그러면 정작 사용자가 누른 것이 밀려 나가 흔적이 쓸모없어진다.
+    expect(isUserAction("GET", "https://x.supabase.co/rest/v1/profiles?select=id")).toBe(false);
+    expect(isUserAction("HEAD", U)).toBe(false);
+    expect(isUserAction("OPTIONS", U)).toBe(false);
+  });
+
+  it("쓰기 4종은 동작이다", () => {
+    for (const m of ["POST", "PATCH", "PUT", "DELETE"]) {
+      expect(isUserAction(m, U)).toBe(true);
+    }
+  });
+
+  it("소문자 메서드도 인식한다", () => {
+    expect(isUserAction("post", U)).toBe(true);
+  });
+
+  it("auth는 동작이 아니다 — 토큰 갱신은 사용자가 한 일이 아니다", () => {
+    expect(isUserAction("POST", "https://x.supabase.co/auth/v1/token?grant_type=refresh_token")).toBe(false);
+    expect(isUserAction("POST", "https://x.supabase.co/auth/v1/signup")).toBe(false);
+  });
+
+  it("깨진 URL에도 던지지 않는다 — 계측이 던지면 그 자리 기능이 죽는다", () => {
+    // `new URL(x, base)`는 상대 경로로 해석하므로 사실상 던지지 않는다.
+    // 그래서 검사할 것은 반환값이 아니라 **던지지 않는다는 것**이다.
+    // (해석 불가한 주소로 나간 POST도 쓰기는 쓰기다 — 동작으로 남겨 둔다.)
+    expect(() => isUserAction("POST", "!!! not a url")).not.toThrow();
+    expect(() => isUserAction("GET", "")).not.toThrow();
+    expect(isUserAction("GET", "")).toBe(false);
+  });
+
+  it("실제로 담기는 이름이 어느 동작인지 알아볼 수 있다", () => {
+    // 흔적에 `rpc/accept_challenge_invite`가 남아야 "챌린지 수락을 눌렀다"를
+    // 읽어낼 수 있다. 경로가 뭉개지면 동작을 기록해도 해석이 안 된다.
+    expect(pathOnly("https://x.supabase.co/rest/v1/rpc/send_cheer")).toBe("rpc/send_cheer");
+    expect(pathOnly("https://x.supabase.co/rest/v1/workout_sessions?id=eq.abc")).toBe("workout_sessions");
   });
 });

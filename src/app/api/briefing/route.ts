@@ -22,18 +22,24 @@ async function remindPendingBugReports(
   now: Date,
 ): Promise<Record<string, unknown>> {
   try {
-    const { data: count, error: countError } = await admin.rpc(
-      "pending_bug_report_count",
-    );
+    // **`new`만 세지 않는다.** `triaged`는 "원인은 적어 뒀지만 아직 안 고친 것"이라
+    // 여전히 미처리다. new만 세면 원인을 적어 둔 순간 알림이 끊겨, 손대다 만
+    // 신고가 영영 조용히 묻힌다 — 2층의 존재 이유가 정확히 그걸 막는 것이다.
+    // (0052의 pending_bug_report_count RPC는 new만 센다. 여기서 직접 세는 이유가
+    //  그것이고, 마이그레이션을 한 번 더 돌리지 않으려는 이유이기도 하다.)
+    const { count, error: countError } = await admin
+      .from("bug_reports")
+      .select("id", { count: "exact", head: true })
+      .in("status", ["new", "triaged"]);
     if (countError) return { error: countError.message };
-    if (!count || (count as number) <= 0) return { pending: 0, sent: 0 };
+    if (!count || count <= 0) return { pending: 0, sent: 0 };
 
     const { data: watchers, error: watchersError } = await admin
       .from("bug_report_watchers")
       .select("user_id");
     if (watchersError) return { error: watchersError.message };
 
-    const { title, body } = bugReminderText(count as number);
+    const { title, body } = bugReminderText(count);
     let sent = 0;
     for (const w of watchers ?? []) {
       const userId = w.user_id as string;

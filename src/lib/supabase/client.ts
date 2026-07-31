@@ -1,6 +1,6 @@
 import { createBrowserClient } from "@supabase/ssr";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { noteTrail, pathOnly } from "@/lib/domain/bug-trail";
+import { isUserAction, noteTrail, pathOnly } from "@/lib/domain/bug-trail";
 
 export function isSupabaseConfigured(): boolean {
   return Boolean(
@@ -39,6 +39,8 @@ function instrumentedFetch(
     (res) => {
       if (!res.ok) {
         noteTrail("fail", "db", `${method} ${pathOnly(url)} ${res.status}`);
+      } else if (isUserAction(method, url)) {
+        noteTrail("action", pathOnly(url));
       }
       return res;
     },
