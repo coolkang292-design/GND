@@ -40,8 +40,22 @@ console.log(`릴리스: ${release.id}`);
 console.log(`제목: ${TITLE}`);
 console.log(`본문: ${BODY}`);
 
-const profiles = await get("/rest/v1/profiles?select=id,nickname&order=nickname");
+// 재현·테스트용 계정은 실사용자가 아니므로 공지를 보내지 않는다.
+// 닉네임으로 거르는 이유: id는 계정을 다시 만들면 바뀌지만 이 닉네임들은
+// 사람이 알아보려고 붙인 이름이라 그대로 남는다.
+const EXCLUDED_NICKNAMES = new Set(["repro-mry7tyx0", "test"]);
+
+const allProfiles = await get("/rest/v1/profiles?select=id,nickname&order=nickname");
+const profiles = allProfiles.filter((p) => !EXCLUDED_NICKNAMES.has(p.nickname));
+const skipped = allProfiles.filter((p) => EXCLUDED_NICKNAMES.has(p.nickname));
+
 console.log(`대상 ${profiles.length}명: ${profiles.map((p) => p.nickname).join(", ")}`);
+if (skipped.length > 0) {
+  console.log(`제외 ${skipped.length}명: ${skipped.map((p) => p.nickname).join(", ")} (테스트 계정)`);
+}
+if (profiles.length === 0) {
+  throw new Error("보낼 대상이 0명이다 — 제외 목록이 너무 넓은지 확인하라");
+}
 
 // 중복 발송 방어 — 같은 제목(=같은 릴리스)의 app_update가 이미 있으면 멈춘다.
 const existing = await get(
