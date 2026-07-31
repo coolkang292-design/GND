@@ -26,7 +26,7 @@
 
 ### 1.2 배포 상태
 
-현재 프로덕션은 이전 배포 `gnd-8uehs4fxd-gnd4.vercel.app` → `gnd-one.vercel.app`이다. **0051 앱 코드는 아직 배포하지 않았다.**
+0051 앱 코드를 로컬 `main` 기준으로 운영 배포했다. 배포 실물은 `gnd-o3daxhzqa-gnd4.vercel.app`이고 `gnd-one.vercel.app` 별칭이 연결됐다. Vercel 상태 `Ready`, `/challenge`·`/home` HTTP 200, 새 안내 문구, 관리자 앞문 `307 → /admin`을 확인했다.
 
 작업 기준 `main` HEAD는 `2ba5870`이고 origin보다 36커밋 앞서 있다(푸시 안 함). **GitHub로 배포하지 않는다.** 검증한 로컬 저장소를 깨끗한 `main`에 합친 뒤 로컬에서 `vercel --prod`로만 배포한다. 배포는 별도 사용자 승인 후 실행한다.
 
@@ -127,7 +127,8 @@ profiles_select_own_or_crew      랭킹판 닉네임
 - [x] `challenge-invite-link-check.mjs`를 **크루 연결이 생기지 않아야 통과**하도록 교체
 - [x] 0051 운영 적용 → 실 DB 검증 → 전체 정적 검증
 - [x] 로그인된 실제 계정으로 로컬 챌린지·홈 화면 확인
-- [ ] 별도 승인 후 로컬 `main` 기준 배포 → 폰 초대 링크 전 과정 확인
+- [x] 사용자 승인 후 로컬 `main` 기준 배포
+- [ ] 폰 초대 링크 전 과정 확인
 
 **실제로 지킨 순서:** 앱 코드 먼저 → 사용자 직접 0051 Run → 실 DB 검증. 배포만 남았다.
 
