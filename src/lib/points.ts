@@ -22,6 +22,12 @@ export async function getMyWallet(): Promise<Wallet> {
 export interface PointTransactionRow {
   id: string;
   amount: number;
+  /**
+   * earn · spend · admin_adjustment. 방향을 정하는 값이다.
+   * amount는 사용일 때도 양수로 저장되므로(0031) 부호를 amount에서 읽으면
+   * 아이템 구매가 +로 보인다.
+   */
+  transactionType: string;
   reason: string;
   multiplier: number | null;
   createdAt: string;
@@ -32,7 +38,7 @@ export async function getRecentPointTransactions(): Promise<PointTransactionRow[
   const supabase = getSupabaseBrowserClient();
   const { data, error } = await supabase
     .from("point_transactions")
-    .select("id, amount, reason, multiplier, created_at")
+    .select("id, amount, transaction_type, reason, multiplier, created_at")
     .neq("transaction_type", "refund")
     .order("created_at", { ascending: false })
     .limit(20);
@@ -40,6 +46,7 @@ export async function getRecentPointTransactions(): Promise<PointTransactionRow[
   return (data ?? []).map((r) => ({
     id: r.id,
     amount: r.amount,
+    transactionType: r.transaction_type,
     reason: r.reason,
     multiplier: r.multiplier === null ? null : Number(r.multiplier),
     createdAt: r.created_at,
