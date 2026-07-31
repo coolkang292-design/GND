@@ -11,6 +11,7 @@ import {
 } from "@/lib/crew";
 import { normalizeInviteCode } from "@/lib/domain/invite-code";
 import { getTodaysWorkoutUserIds, pokeUser, SocialError } from "@/lib/social";
+import { todaysWorkoutLookupIds } from "@/lib/domain/crew-poke";
 import type { Group, Profile } from "@/lib/types";
 
 /** 홈의 내 크루 카드 — 크루명·멤버·오늘 미운동 찌르기·초대 링크 복사.
@@ -43,7 +44,12 @@ export function CrewCard() {
         if (cancelled) return;
         setGroup(groups[0] ?? null);
         setMembers(crew);
-        const done = await getTodaysWorkoutUserIds(crew.map((c) => c.id));
+        // ⚠ 나도 넣어야 한다. getCrewProfiles는 0039부터 본인을 뺀 목록을
+        //   돌려주는데, 그걸 그대로 넘기면 내 운동 기록이 결과에 없어서
+        //   오늘 운동을 마쳐도 콕 버튼이 영원히 흐릿하다 (2026-07-31 실사고).
+        const done = await getTodaysWorkoutUserIds(
+          todaysWorkoutLookupIds(userId, crew.map((c) => c.id)),
+        );
         if (!cancelled) setWorkedOut(done);
       } finally {
         if (!cancelled) setReady(true);
