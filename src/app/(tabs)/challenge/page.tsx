@@ -41,6 +41,8 @@ import {
   getMyPreviousGoals,
   getPeriodStatsByUser,
   joinChallengeWithCode,
+  clearPendingChallengeInvite,
+  savePendingChallengeInvite,
   saveMyGoals,
   startChallenge,
   unapproveChallengeGoals,
@@ -164,6 +166,11 @@ function ChallengeScreen({ userId }: { userId: string }) {
     if (!code) return;
     joinAttempted.current = true;
 
+    // 프로필이 없는 첫 방문자는 OnboardingGate가 곧바로 온보딩으로 보낸다.
+    // 그 전에 코드를 보관해 둬야 닉네임을 정한 뒤 이어서 참가할 수 있다.
+    // (await보다 앞이라 리다이렉트와 경쟁하지 않는다.)
+    savePendingChallengeInvite(code);
+
     // 주소는 참가 결과와 무관하게 **먼저** 정리한다. 실패했을 때 코드가 남아
     // 있으면 새로고침마다 같은 실패를 반복한다.
     window.history.replaceState({}, "", window.location.pathname);
@@ -173,8 +180,12 @@ function ChallengeScreen({ userId }: { userId: string }) {
         const r = await joinChallengeWithCode(code);
         setSelectedId(r.challengeId);
         showToast(`${r.challengeName}에 참가했어요! 목표를 세워 주세요 🎯`);
+        clearPendingChallengeInvite();
       } catch (e) {
         showToast(errorMessage(e));
+        // 이미 참가했거나 코드가 잘못됐으면 보관해 둘 이유가 없다.
+        // 남겨두면 다음 온보딩에서 같은 실패를 반복한다.
+        clearPendingChallengeInvite();
       } finally {
         reload();
       }

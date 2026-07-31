@@ -6,6 +6,11 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 import { normalizeInviteCode } from "@/lib/domain/invite-code";
 import {
+  clearPendingChallengeInvite,
+  joinChallengeWithCode,
+  peekPendingChallengeInvite,
+} from "@/lib/challenge";
+import {
   clearPendingInvite,
   createGroup,
   joinGroupWithCode,
@@ -40,6 +45,12 @@ export default function OnboardingPage() {
   const [joinCode, setJoinCode] = useState<string>(() =>
     typeof window === "undefined" ? "" : (peekPendingInvite() ?? ""),
   );
+  // 챌린지 초대 링크(/challenge?join=CODE)로 들어온 경우. 이 사람은 크루가
+  // 아니라 **챌린지**에 초대받은 것이라 크루 선택 단계가 통째로 무의미하다.
+  // 닉네임만 받고 바로 챌린지로 보낸다.
+  const [challengeCode] = useState<string>(() =>
+    typeof window === "undefined" ? "" : (peekPendingChallengeInvite() ?? ""),
+  );
   const [doneInfo, setDoneInfo] = useState<{
     mode: "create" | "join";
     crewName: string;
@@ -68,7 +79,21 @@ export default function OnboardingPage() {
         avatar_url: avatar,
         weekly_goal: weeklyGoal,
       });
-      // 초대 링크로 진입했으면 크루 선택을 건너뛰고 바로 참여 단계로
+      // 챌린지 초대로 온 사람은 크루 단계를 통째로 건너뛴다. 챌린지 참가에
+      // 그룹은 필요 없고(0044~0050), 여기서 크루를 물으면 초대와 무관한 선택을
+      // 강요하게 된다. 바로 참가시키고 챌린지 화면으로 보낸다.
+      if (challengeCode) {
+        try {
+          await joinChallengeWithCode(challengeCode);
+        } catch {
+          // 이미 참가·시작됨·잘못된 코드 등. 챌린지 화면이 상황을 보여주므로
+          // 여기서 막지 않는다 — 닉네임은 이미 저장됐고 앱은 쓸 수 있다.
+        }
+        clearPendingChallengeInvite();
+        router.replace("/challenge");
+        return;
+      }
+      // 크루 초대 링크로 진입했으면 크루 선택을 건너뛰고 바로 참여 단계로
       setStep(joinCode ? "join" : "crew");
     } catch (e) {
       setError(e instanceof Error ? e.message : "저장 실패");
@@ -174,10 +199,13 @@ export default function OnboardingPage() {
             NO EXCUSES. JUST RESULTS.
           </p>
           <h1 className="mt-4 text-xl font-extrabold">
-            GND에 오신 걸 환영해요
+            {challengeCode ? "챌린지에 초대받았어요 🏆" : "GND에 오신 걸 환영해요"}
           </h1>
+          {/* 왜 닉네임만 묻고 끝나는지 알려준다. 안 그러면 "크루는 언제 정하지?"가 된다. */}
           <p className="mt-1 text-[13px] text-muted">
-            운동 안 하면 GND 확정. 친구들과 함께 탈출해요.
+            {challengeCode
+              ? "닉네임만 정하면 바로 챌린지에 들어가요. 크루는 나중에 만들어도 돼요."
+              : "운동 안 하면 GND 확정. 친구들과 함께 탈출해요."}
           </p>
 
           <Label>프로필 사진</Label>

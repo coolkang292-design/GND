@@ -347,6 +347,28 @@ export async function joinChallengeWithCode(
   return r;
 }
 
+// ── 초대 링크로 처음 온 사람을 위한 코드 보관 ────────────────────
+//
+// 링크(/challenge?join=CODE)로 처음 오면 프로필이 없어 OnboardingGate가
+// 온보딩으로 보내 버리고, 그 순간 주소의 코드가 사라진다. 그러면 닉네임을
+// 정하고 돌아와도 챌린지에 못 들어간다 — 링크가 **기존 사용자에게만** 동작한다.
+//
+// 그래서 챌린지 화면이 코드를 보는 즉시 보관하고, 온보딩이 닉네임을 받은 뒤
+// 그걸 꺼내 참가시킨다. 그룹 초대(savePendingInvite)와 같은 방식이고 키만 다르다.
+const PENDING_CHALLENGE_KEY = "gnd-pending-challenge-invite";
+
+export function savePendingChallengeInvite(code: string): void {
+  localStorage.setItem(PENDING_CHALLENGE_KEY, code);
+}
+
+export function peekPendingChallengeInvite(): string | null {
+  return localStorage.getItem(PENDING_CHALLENGE_KEY);
+}
+
+export function clearPendingChallengeInvite(): void {
+  localStorage.removeItem(PENDING_CHALLENGE_KEY);
+}
+
 /** 거절 — 참가 행을 지운다. 지우므로 읽기 권한도 함께 사라진다 */
 export async function declineChallengeInvite(challengeId: string): Promise<void> {
   const supabase = getSupabaseBrowserClient();
