@@ -190,7 +190,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
   } = useIdleGuard({
     active,
     guarded: shouldGuardIdle({
-      exerciseTypes: draft.exercises.map((ex) => ex.exerciseType),
+      exercises: draft.exercises,
       isTabata: draft.tabataMinutes !== null,
     }),
     lastRestEndsAtMs,

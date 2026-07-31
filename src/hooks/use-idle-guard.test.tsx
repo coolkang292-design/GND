@@ -135,6 +135,39 @@ describe("useIdleGuard", () => {
     expect(result.current.guard.paused).toBe(true);
   });
 
+  // 혼합 코스(웨이트 + 러닝머신). 유산소는 뛰고 **나서** 거리·시간을 타이핑하는
+  // 구조라 러닝 중에는 앱을 만질 일이 없다. 감지를 끄지 않으면 실제로 뛴 시간이
+  // 정지로 잡혀 45분 운동이 20분으로 기록된다 (사용자 지적 2026-08-01).
+  it("keeps the run intact while the guard is off, then re-arms on completion", () => {
+    const { result, rerender } = renderHook(
+      ({ guarded }) =>
+        useHarness({ active: true, guarded, lastRestEndsAtMs: null }),
+      { initialProps: { guarded: false } }, // 유산소 미완료 → 감지 꺼짐
+    );
+
+    sleepInBackground(30 * 60_000); // 러닝머신 30분, 폰은 주머니에
+
+    expect(result.current.guard.paused).toBe(false);
+    expect(result.current.guard.totalPausedSeconds()).toBe(0);
+
+    // 유산소 완료 체크 — 페이지는 toggleDone에서 markActivity를 부르고,
+    // 그 draft로 guarded가 다시 켜진다.
+    act(() => result.current.guard.markActivity());
+    rerender({ guarded: true });
+
+    // 켜지는 순간 바로 정지하면 안 된다. 무동작 시계는 완료 체크부터 다시 센다.
+    expect(result.current.guard.paused).toBe(false);
+
+    act(() => vi.advanceTimersByTime(LIMIT_MS - 1_000));
+    expect(result.current.guard.paused).toBe(false);
+
+    act(() => vi.advanceTimersByTime(1_000));
+    expect(result.current.guard.paused).toBe(true);
+    expect(result.current.snapshot.pausedAtMs).toBe(T0 + 30 * 60_000 + LIMIT_MS);
+    // 뛴 30분은 끝까지 운동 시간으로 남는다.
+    expect(result.current.guard.totalPausedSeconds()).toBe(0);
+  });
+
   it("does not count the rest countdown as idle time", () => {
     // 휴식 10분 — 휴식이 도는 동안에는 무동작으로 잡지 않는다.
     const { result } = setup({ lastRestEndsAtMs: T0 + 600_000 });

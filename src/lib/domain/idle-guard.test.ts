@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 
+import type { ExerciseType } from "@/lib/types";
+
 import {
   IDLE_LIMIT_SECONDS,
   accumulatedPausedSeconds,
   activeElapsedSeconds,
+  hasPendingCardio,
   idleClockStartMs,
   idlePauseStartMs,
   isIdleTimedOut,
@@ -13,17 +16,48 @@ import {
 const T0 = 1_754_000_000_000; // 고정 기준 시각 (Date.now를 쓰지 않는다)
 const LIMIT_MS = IDLE_LIMIT_SECONDS * 1_000;
 
+/** 세트 하나짜리 종목 — `done`으로 완료 여부만 표현한다 */
+function ex(exerciseType: ExerciseType, ...done: boolean[]) {
+  return { exerciseType, sets: done.map((d) => ({ done: d })) };
+}
+
+describe("hasPendingCardio", () => {
+  it("is false when there is no cardio at all", () => {
+    expect(hasPendingCardio([ex("weight", false)])).toBe(false);
+  });
+
+  it("is true while a cardio set is unchecked", () => {
+    expect(hasPendingCardio([ex("weight", true), ex("cardio", false)])).toBe(
+      true,
+    );
+  });
+
+  it("is false once every cardio set is checked", () => {
+    expect(hasPendingCardio([ex("weight", false), ex("cardio", true)])).toBe(
+      false,
+    );
+  });
+
+  it("is true when only some cardio sets are checked", () => {
+    expect(hasPendingCardio([ex("cardio", true, false)])).toBe(true);
+  });
+
+  it("treats a cardio exercise with no sets as pending", () => {
+    expect(hasPendingCardio([ex("cardio")])).toBe(true);
+  });
+
+  it("ignores unchecked weight sets", () => {
+    expect(hasPendingCardio([ex("weight", false), ex("bodyweight", false)])).toBe(
+      false,
+    );
+  });
+});
+
 describe("shouldGuardIdle", () => {
   it("guards a pure weight session", () => {
     expect(
-      shouldGuardIdle({ exerciseTypes: ["weight", "weight"], isTabata: false }),
-    ).toBe(true);
-  });
-
-  it("guards a mixed session with one weight exercise among cardio", () => {
-    expect(
       shouldGuardIdle({
-        exerciseTypes: ["cardio", "cardio", "weight"],
+        exercises: [ex("weight", false), ex("weight", false)],
         isTabata: false,
       }),
     ).toBe(true);
@@ -31,14 +65,33 @@ describe("shouldGuardIdle", () => {
 
   it("guards bodyweight sessions", () => {
     expect(
-      shouldGuardIdle({ exerciseTypes: ["bodyweight"], isTabata: false }),
+      shouldGuardIdle({ exercises: [ex("bodyweight", false)], isTabata: false }),
+    ).toBe(true);
+  });
+
+  // 러닝머신 30분을 폰 없이 뛰면 5분 만에 정지가 걸렸다 (사용자 지적 2026-08-01).
+  it("skips a mixed session while the cardio is still unfinished", () => {
+    expect(
+      shouldGuardIdle({
+        exercises: [ex("weight", true), ex("cardio", false)],
+        isTabata: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("guards a mixed session again once the cardio is checked off", () => {
+    expect(
+      shouldGuardIdle({
+        exercises: [ex("weight", true), ex("cardio", true)],
+        isTabata: false,
+      }),
     ).toBe(true);
   });
 
   it("skips a cardio-only session", () => {
     expect(
       shouldGuardIdle({
-        exerciseTypes: ["cardio", "cardio"],
+        exercises: [ex("cardio", true), ex("cardio", true)],
         isTabata: false,
       }),
     ).toBe(false);
@@ -46,12 +99,12 @@ describe("shouldGuardIdle", () => {
 
   it("skips tabata even when it is made of weight exercises", () => {
     expect(
-      shouldGuardIdle({ exerciseTypes: ["weight"], isTabata: true }),
+      shouldGuardIdle({ exercises: [ex("weight", false)], isTabata: true }),
     ).toBe(false);
   });
 
   it("skips an empty session", () => {
-    expect(shouldGuardIdle({ exerciseTypes: [], isTabata: false })).toBe(false);
+    expect(shouldGuardIdle({ exercises: [], isTabata: false })).toBe(false);
   });
 });
 

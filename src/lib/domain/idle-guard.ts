@@ -12,18 +12,49 @@ import type { ExerciseType } from "@/lib/types";
 export const IDLE_LIMIT_SECONDS = 300;
 
 /**
+ * 아직 안 끝낸 유산소가 남아 있는가.
+ *
+ * 유산소는 뛰고 **나서** 거리·시간을 타이핑하는 구조라, 러닝 중에는 앱을 만질
+ * 일이 없다. 세트가 하나도 없는 유산소 종목도 "아직 안 했다"로 본다.
+ */
+export function hasPendingCardio(
+  exercises: readonly {
+    exerciseType: ExerciseType;
+    sets: readonly { done: boolean }[];
+  }[],
+): boolean {
+  return exercises.some(
+    (ex) =>
+      ex.exerciseType === "cardio" &&
+      (ex.sets.length === 0 || ex.sets.some((s) => !s.done)),
+  );
+}
+
+/**
  * 이 세션에 무동작 감지를 적용할지.
  *
  * 유산소·타바타는 제외한다(사용자 요청). 웨이트나 맨몸이 **하나라도** 있으면
  * 적용한다 — 러닝머신 + 벤치프레스 같은 혼합 세션도 보호해야 한다.
+ *
+ * 단, **아직 안 끝낸 유산소가 있으면 끈다** (사용자 결정 2026-08-01). 러닝머신
+ * 30분을 폰 없이 뛰면 5분 만에 정지가 걸려 실제로 뛴 25분이 운동 시간에서
+ * 빠졌다. 유산소를 완료 체크하는 순간 다시 켜지므로, 유산소를 끝낸 뒤의
+ * 무동작은 그대로 잡힌다.
+ *
+ * ⚠️ 대가: 유산소 종목을 담아 두기만 하고 완료하지 않으면 그 운동 내내 감지가
+ * 꺼진다. 사용자가 이 절충을 알고 고른 것이다.
  */
 export function shouldGuardIdle(input: {
-  exerciseTypes: readonly ExerciseType[];
+  exercises: readonly {
+    exerciseType: ExerciseType;
+    sets: readonly { done: boolean }[];
+  }[];
   isTabata: boolean;
 }): boolean {
   if (input.isTabata) return false;
-  return input.exerciseTypes.some(
-    (type) => type === "weight" || type === "bodyweight",
+  if (hasPendingCardio(input.exercises)) return false;
+  return input.exercises.some(
+    (ex) => ex.exerciseType === "weight" || ex.exerciseType === "bodyweight",
   );
 }
 
