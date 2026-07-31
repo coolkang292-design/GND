@@ -256,17 +256,39 @@ try {
   check("[20] 직접 insert 차단", direct.status >= 400, `${direct.status}`);
 
   // ── 동시 챌린지 ──
-  // 0042는 challenges_one_live를 아직 안 지웠으므로 두 번째 setup 생성은
-  // 막히는 게 정상이다. 그 제약이 풀리는 건 0043이다.
+  // 0044가 challenges_one_live를 드롭했다. 이제 두 번째 챌린지가 만들어져야
+  // 한다 — 이 단언이 그 마이그레이션의 본체다. 0042·0043 시절엔 정반대였다.
   r = await rpc(a.token, "create_challenge_room", {
     p_name: `두번째-${RUN}`,
     p_start_date: start,
     p_end_date: end,
   });
   check(
-    "[21] 0042 단계에서는 두 번째 챌린지가 challenges_one_live로 막힌다 (0043에서 풀림)",
-    r.status >= 400,
+    "[21] 0044부터 두 번째 챌린지를 만들 수 있다 (challenges_one_live 드롭)",
+    r.status === 200 && Boolean(r.json?.id),
     `${r.status} ${JSON.stringify(r.json)}`,
+  );
+  const secondId = r.json?.id;
+
+  // 목록에 둘 다 오는가 — 화면의 "둘 다 보인다"에 대응하는 데이터 쪽 근거다.
+  const mine = await api(
+    a.token,
+    "GET",
+    "/rest/v1/challenge_participants?select=challenge_id,role,status",
+  );
+  const myRows = Array.isArray(mine.json) ? mine.json : [];
+  const myIds = myRows.map((p) => p.challenge_id);
+  check(
+    "[21b] 내 참가 목록에 두 챌린지가 모두 있다",
+    myIds.includes(chId) && myIds.includes(secondId),
+    `chId=${chId} second=${secondId} 목록=${JSON.stringify(myIds)}`,
+  );
+
+  const hostRow = myRows.find((p) => p.challenge_id === secondId);
+  check(
+    "[21c] 두 번째 챌린지에도 생성자가 host·joined로 들어간다",
+    hostRow?.role === "host" && hostRow?.status === "joined",
+    JSON.stringify(hostRow),
   );
 
   // ── 자동 시작 ──

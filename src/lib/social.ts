@@ -37,7 +37,8 @@ export type NotificationRow = {
     | "level_up" // 0029
     | "app_update" // 0034 — 배포·업데이트 소식
     | "crew_request" // 0038 — 크루 요청 도착
-    | "crew_accepted"; // 0038 — 상대가 내 요청을 수락
+    | "crew_accepted" // 0038 — 상대가 내 요청을 수락
+    | "challenge_invite"; // 0042 — 챌린지 방 초대 (0044부터 발송·라우팅)
   reference_id: string | null;
   title: string;
   body: string | null;
@@ -599,10 +600,16 @@ export type CrewPerformance = {
   challenge: { name: string; rate: number; rank: number; total: number } | null;
 };
 
-/** 열람 성공 후 대상 성과 계산 — 크루 공개 완료 세션 + 챌린지 랭킹 */
+/**
+ * 열람 성공 후 대상 성과 계산 — 크루 공개 완료 세션 + 챌린지 랭킹
+ *
+ * 0044: 두 번째 인자가 groupId가 아니라 challengeId다. 크루당 챌린지가 여러
+ * 개일 수 있어 그룹으로는 어느 랭킹인지 정해지지 않는다. 호출부가 대표 챌린지를
+ * 골라 넘긴다(`pickPrimaryRow`) — 화면과 같은 규칙이어야 숫자가 안 갈라진다.
+ */
 export async function getCrewPerformance(
   targetId: string,
-  groupId: string,
+  challengeId: string,
 ): Promise<CrewPerformance> {
   const supabase = getSupabaseBrowserClient();
   const { data, error } = await supabase
@@ -622,7 +629,7 @@ export async function getCrewPerformance(
     dayKey(now, DEFAULT_TIMEZONE),
   );
 
-  const ranking = await getActiveChallengeRanking(groupId);
+  const ranking = await getActiveChallengeRanking(challengeId);
   const mine = ranking?.list.find((r) => r.userId === targetId) ?? null;
   return {
     weekDays: days.length,

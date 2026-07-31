@@ -134,7 +134,10 @@ export async function fetchActiveChallenges(
       // RankedParticipant.achievement는 0~100 스케일이다.
       // challenge.ts는 기본이 브라우저 클라이언트라 서버에선 동작하지 않는다.
       // service_role 클라이언트를 주입해 **챌린지 화면과 같은 계산**을 그대로 쓴다.
-      const ranking = await getActiveChallengeRanking(c.group_id as string, db);
+      // 0044: 인자가 그룹이 아니라 챌린지다. 크루당 챌린지가 여러 개일 수 있어
+      // 그룹으로는 대상이 정해지지 않는다. 여기는 이미 챌린지 행을 순회 중이라
+      // 그 id를 그대로 넘기면 된다 — 각 챌린지가 자기 랭킹을 갖는다.
+      const ranking = await getActiveChallengeRanking(c.id as string, db);
       const list = ranking?.list ?? [];
       const pct =
         list.length === 0

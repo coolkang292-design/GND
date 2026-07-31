@@ -341,10 +341,14 @@ const chIns = await api(A.token, "POST", "/rest/v1/challenges", {
 const challenge = chIns.json?.[0];
 check("A가 챌린지 생성 (기본 setup)", chIns.status === 201 && challenge?.status === "setup", JSON.stringify(chIns.json));
 
+// 0044가 challenges_one_live를 드롭했다. 같은 그룹에 살아있는 챌린지가 여러 개
+// 있을 수 있는 것이 이제 정상이다 — 여러 챌린지 동시 진행이 이 개편의 목적이다.
+// (직접 insert 경로다. RPC 경로는 challenge-room-check.mjs [21]이 본다.)
+// 이 챌린지는 픽스처 그룹에 딸려 있어 finally의 그룹 삭제로 함께 사라진다.
 const chDup = await api(B.token, "POST", "/rest/v1/challenges", {
   group_id: group.id, name: "중복", start_date: "2026-07-01", end_date: "2026-07-14",
 });
-check("살아있는 챌린지 중복 생성 차단 (unique)", chDup.status >= 400);
+check("살아있는 챌린지 중복 생성 허용 (0044에서 개수 제한 해제)", chDup.status === 201, `${chDup.status} ${JSON.stringify(chDup.json)}`);
 
 const chStatusHack = await api(A.token, "PATCH", `/rest/v1/challenges?id=eq.${challenge.id}`, { status: "active" });
 check("status 직접 수정 불가 (컬럼 권한)", chStatusHack.status >= 400);

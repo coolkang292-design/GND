@@ -42,6 +42,18 @@
 - `workout_sessions.group_id` · `challenges.group_id` · `user_goals.group_id` 드롭, `groups` · `group_members` 드롭, `is_group_member` · `shares_group_with` 드롭
 - 혼자모드 유저의 챌린지 생성 (지금은 `create_challenge_room`이 `challenges.group_id`(not null)를 채워야 해서 `no_group_yet`으로 막힌다)
 
+**0045에 반드시 들고 갈 것 — DB 리뷰(opus)가 짚은 것들**
+
+- **정책을 좁힐 때는 `drop policy` + `create policy`가 아니라 `alter policy`를 써라.** 0044는 순수 확대(OR로 덧붙이기)라 정책 이름을 틀려도 옛 정책이 OR 합집합에 흡수되어 **결과 predicate가 같다** — 즉 무해하다. 0045는 그룹 arm을 **제거**하므로 정반대다: 이름을 틀리면 `drop`이 조용히 no-op 하고 0006의 옛 정책이 살아남아 **그룹 arm이 되살아난다.** `alter policy`는 이름이 틀리면 `42704`로 죽어 실패가 드러나고, `cmd`·`roles`도 보존한다. `0014:19`가 이미 이 관용구를 쓴 선례다.
+- **`0039_crew_link_switchover.sql:143-150`의 `select c.id into v_challenge_id ... status='active' ... limit 1`.** 살아있는 챌린지가 여러 개면 **임의의 한 건**이 `record_views.challenge_id`에 박힌다. 0044 시점에는 잘못되지 않지만(챌린지가 1개), 두 번째 active가 생기는 순간부터 열람 기록이 엉뚱한 챌린지에 붙을 수 있다. 0040의 `challenge_peek_picks`가 이 값을 쓰므로 **0045에서 결정적 선택으로 바꿔라** — 대표 챌린지 규칙(`pickPrimaryChallenge`)과 같은 기준이어야 화면과 서버가 안 갈라진다.
+- **`user_goals`의 대체 인덱스를 만들지 마라.** `challenges_one_live`는 `challenges(group_id)`를 커버하던 유일한 인덱스였고, 드롭 후 `group_id` 조회는 seq scan이 된다. **`challenges`가 1행이라 무의미하고, 0045가 그 컬럼을 지울 예정이라 지금 인덱스를 만드는 것은 낭비다.**
+
+**의도적으로 받아들인 것 (리뷰가 제기하고 판단해 남긴 것)**
+
+- **`invited` 상태도 그 방의 목표를 읽는다.** `is_challenge_participant`가 `status`를 안 보기 때문이다. 수락 전에 KPI 타깃·`planned_days`가 보이는 것은 필요보다 넓다. 다만 **새로운 주체 부류가 생기는 것은 아니다** — `0042:77`이 이미 초대받은 사람에게 참가자 명단을 열어 줬고 프로덕션에 적용돼 있다. 방 안에서는 원래 전원 공개 데이터이며 민감정보가 아니다. 좁히려면 `status in ('joined','dropped')` 서브쿼리로 바꿀 수 있으나(다른 테이블이라 `42P17` 재귀 위험 없음) 이번 범위에서는 하지 않는다.
+- **`dropped`는 영구 잔존이라 읽기 권한도 영구다.** `0042:288`이 `crew_links`의 근거를 보존하려고 행을 남긴다. 되돌릴 RPC가 없다. 리크는 아니지만(실제로 수락해 들어왔던 사람) **취소 불가한 영구 grant**라는 점은 기록해 둔다.
+- **`notify pgrst, 'reload schema'`는 이 마이그레이션에 불필요하다.** 테이블·컬럼·함수·관계를 하나도 바꾸지 않고, PostgREST는 정책·인덱스를 캐시하지 않는다. 무해하고 `0043:55-57`도 같은 논리로 남겼으므로 습관으로 유지한다.
+
 ### 지시서에 없었지만 0044에 넣는 것 — 근거
 
 **`challenges`·`user_goals`의 SELECT RLS를 참가자에게도 연다.** 현행은 그룹 기준 한 줄뿐이다.
@@ -185,7 +197,7 @@ for (const ch of actives) {
   console.log(`── ${ch.name} (${ch.start_date} ~ ${ch.end_date}) ──`);
 
   const parts = await rest(
-    `challenge_participants?select=user_id,role,status&challenge_id=eq.${ch.id}`,
+    `challenge_participants?select=user_id,status&challenge_id=eq.${ch.id}`,
   );
   const joined = parts.filter((p) => p.status === "joined").map((p) => p.user_id);
   const members = (
@@ -231,6 +243,21 @@ for (const ch of actives) {
     `A만 ${onlyA.length}건 ${JSON.stringify(onlyA)} · B만 ${onlyB.length}건 ${JSON.stringify(onlyB)}`,
   );
 
+  // 공허한 통과를 막는다. 두 집합이 모두 비어 있으면 차집합도 0이 되어 위
+  // 두 단언이 **아무것도 대조하지 않고** PASS로 찍힌다. 필터 문법이 틀려
+  // PostgREST가 200 + []를 주는 경우가 정확히 그렇다 — 에러가 아니라 정상
+  // 응답이므로 rest()의 throw에 걸리지 않는다.
+  //
+  // 갓 시작해 아직 운동이 없는 챌린지는 실제로 0건일 수 있다. 그때도 FAIL이
+  // 맞다 — 이 스크립트는 "전환해도 안전하다"를 증명하는 게이트이고, 0건이면
+  // 증명한 것이 없기 때문이다. 통과 여부가 아니라 근거 유무를 보는 단언이다.
+  check(
+    "대조가 공허하지 않다 (기간 내 세션 1건 이상)",
+    idsB.size > 0,
+    "기간 내 세션이 0건이라 위 집합 비교가 아무것도 검증하지 않았다. " +
+      "갓 시작한 챌린지라면 정상이지만, 그 경우 이 실행은 전환 안전성의 근거가 되지 못한다.",
+  );
+
   const goals = await rest(
     `user_goals?select=user_id,goal_type,target_value,qualifier&challenge_id=eq.${ch.id}`,
   );
@@ -238,19 +265,47 @@ for (const ch of actives) {
 }
 
 console.log(`\n${passed}/${passed + failed} passed`);
+
+// 단언이 0건이면 실패다. actives가 비면 루프 본문이 한 번도 돌지 않아
+// passed=failed=0이 되고, failed > 0이 거짓이라 exit 0으로 끝난다 — 아무것도
+// 검증하지 않았는데 게이트 통과로 읽힌다. 위 네 번째 단언과 같은 계열의
+// 구멍이 한 단계 위에 있는 것이다.
+//
+// rest()가 §6.6 방어로 배열 아닌 응답을 []로 바꾸므로, 최초 challenges 조회가
+// 필터 오류로 200 + []를 받으면 정확히 이 경로를 탄다.
+if (passed + failed === 0) {
+  console.log(
+    "\n⚠ 검증한 단언이 0건이다 — 활성 챌린지가 없거나 최초 조회가 비어 있다." +
+      " 이 실행은 전환 안전성의 근거가 되지 못한다.",
+  );
+  // ⚠ process.exit(1)이 아니라 exitCode만 세팅한다. 이 분기는 최초 fetch 한 건만
+  //   await한 직후라 이벤트 루프가 거의 비어 있는데, 그 시점에 강제 exit를 부르면
+  //   Node 24 + Windows에서 undici의 내부 핸들이 정리되기 전에 libuv가 죽는다
+  //   ("Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)"). 그러면 종료
+  //   코드가 1이 아니라 **127**이 된다 — 관례상 "command not found"라서 게이트
+  //   실패를 디버깅하는 사람을 엉뚱한 곳으로 보낸다.
+  //   2026-07-30에 실제 스크립트로 3/3 재현했다. 단발 fetch로는 재현되지 않고
+  //   Supabase 연결에서만 난다.
+  process.exitCode = 1;
+}
 if (failed > 0) {
   console.log(
     "\n⚠ 하나라도 실패했으면 집계 전환을 0045로 미루고, 0044를 인덱스 드롭과 화면 변경만으로 좁혀라.",
   );
-  process.exit(1);
+  // 위와 같은 이유로 강제 exit 대신 exitCode만 세팅한다.
+  process.exitCode = 1;
 }
 ```
+
+> **이 저장소의 다른 스크립트도 같은 잠재 결함을 갖고 있다.** 대부분 성공 경로에서는 `process.exit`을 아예 부르지 않아 드러나지 않지만, **실패 경로에서 종료 코드가 127로 뒤바뀔 수 있다** — 정확히 신뢰할 수 있는 종료 코드가 필요한 순간이다. 이번 계획의 범위 밖이라 고치지 않는다. 나중에 스크립트를 손볼 때 `process.exit(n)` → `process.exitCode = n`으로 함께 옮기면 좋다.
 
 - [ ] **Step 2: 돌려서 전부 통과하는지 본다**
 
 Run: `node scripts/challenge-aggregation-parity.mjs`
 
-Expected: `3/3 passed` (진행 중 챌린지 1건 × 단언 3개). 출력에 `기간 내 세션 집합 동일 (group_id 9건 · 참가자 9건)`처럼 양쪽 건수가 같게 찍힌다.
+Expected: `4/4 passed` (진행 중 챌린지 1건 × 단언 4개). 출력에 `기간 내 세션 집합 동일 (group_id 9건 · 참가자 9건)`처럼 양쪽 건수가 같게 찍힌다.
+
+**요약만 보지 마라.** `3/3`·`4/4` 같은 합계는 대조 대상이 0건이어도 찍힐 수 있었다 — 그래서 네 번째 단언("대조가 공허하지 않다")을 넣었다. 그래도 **건수가 0이 아닌지 눈으로 확인**하는 습관을 유지하라.
 
 **하나라도 FAIL이면 여기서 멈추고 사용자에게 보고하라.** 집계 전환을 0045로 미루고 Task 4·5를 이 계획에서 빼야 한다 — 그 경우 0044는 인덱스 드롭(Task 1·2) + 화면(Task 7·8·9) + 크론(Task 10)으로 좁아진다.
 
@@ -404,7 +459,24 @@ Expected: **`[21]`만 실패하고 나머지는 통과** (`31/32`). `[21]`은 "�
 
 Run: `node scripts/rls-test.mjs`
 
-Expected: **113 통과 / 0 실패**. 특히 `비크루 C는 챌린지 조회 불가`가 계속 통과해야 한다 — C는 참가자도 그룹멤버도 아니므로 확대된 정책에서도 막힌다. 이게 깨지면 정책을 잘못 쓴 것이다.
+Expected: **112 통과 / 1 실패**. 실패는 정확히 **`살아있는 챌린지 중복 생성 차단 (unique)`**(`rls-test.mjs:343-346`) 하나여야 한다. 이 단언은 `challenges_one_live`에 의존하는 직접 insert 테스트라, 인덱스를 지우면 201이 돌아와 실패한다 — `[21]`과 같이 **0044가 적용됐다는 증거**다. Task 11에서 뒤집는다.
+
+**다른 단언이 함께 깨지면 멈춰라.** 특히 `비크루 C는 챌린지 조회 불가`가 계속 통과해야 한다 — C는 참가자도 그룹멤버도 아니므로 확대된 정책에서도 막힌다. 이게 깨지면 정책을 잘못 쓴 것이다.
+
+- [ ] **Step 5: 고아 챌린지 감시 (0044만 적용된 상태의 유일한 실질 노출)**
+
+인덱스를 지우면 "그룹당 살아있는 챌린지 1개"를 강제하는 서버측 가드가 **0개**가 된다. Task 7의 목록 UI가 나가기 전까지는 화면이 `getCurrentChallenge()`로 한 건만 집으므로, 두 기기·두 탭에서 동시에 생성하면 **화면에 안 보여 취소도 못 하는 고아 챌린지**가 생길 수 있다.
+
+즉시 잘못되는 곳은 없다(현재 생성 버튼은 `!challenge` 또는 `ended`에서만 렌더된다). 그래도 적용 직후 한 번 확인하고, **0044만 적용된 상태를 오래 두지 마라.**
+
+```sql
+select group_id, count(*), array_agg(id)
+from public.challenges
+where status in ('setup','active')
+group by group_id having count(*) > 1;
+```
+
+기대: **0행.** 행이 나오면 여분을 `cancelled`로 정리한다(`update public.challenges set status='cancelled' where id = '<여분 id>';` — `status`는 클라이언트가 못 쓰지만 SQL Editor에서는 된다).
 
 ---
 
@@ -699,7 +771,7 @@ Run: `pnpm typecheck && pnpm test`
 Expected: typecheck 통과 · 655/655
 
 Run: `node scripts/challenge-aggregation-parity.mjs`
-Expected: `3/3 passed` — Step 1과 **같은 건수**
+Expected: `4/4 passed` — Step 1과 **같은 건수**(0건이 아닌 것까지 확인)
 
 그리고 실제 실적값을 대조한다. 임시 vitest로 실제 함수를 부른다 (재구현하면 재구현의 버그가 판정을 오염시킨다). `src/lib/__parity.tmp.test.ts`를 만들고:
 
@@ -1612,12 +1684,20 @@ git commit -m "feat(0044): 챌린지 자동 시작·종료를 09:00 크론과 �
 
 ---
 
-## Task 11: 검증 스크립트 — `[21]` 뒤집기 + 다중 챌린지
+## Task 11: 검증 스크립트 — 단언 2개 뒤집기 + 다중 챌린지
 
 **Files:**
 - Modify: `scripts/challenge-room-check.mjs`
+- Modify: `scripts/rls-test.mjs`
 
-`[21]`은 지금 "두 번째 챌린지가 막힌다"를 정상으로 단언한다. 0044에서는 **정반대여야 한다** — 안 고치면 통과할 수 없는 게이트가 된다.
+0044가 거짓으로 만드는 단언이 **두 개**다. 둘 다 "두 번째 챌린지가 막힌다"를 정상으로 단언하므로 **정반대로 뒤집어야 한다** — 안 고치면 통과할 수 없는 게이트가 된다.
+
+| 스크립트 | 단언 | 왜 깨지는가 |
+|---|---|---|
+| `challenge-room-check.mjs:258-269` | `[21]` "두 번째 챌린지가 `challenges_one_live`로 막힌다" | RPC 경로 |
+| `rls-test.mjs:343-346` | "살아있는 챌린지 중복 생성 차단 (unique)" | 직접 insert 경로 |
+
+`rls-test.mjs` 쪽은 **DB 리뷰가 찾았고 이 계획서가 처음엔 빠뜨렸던 것**이다. `pnpm test`(vitest)에 안 들어가는 스크립트라 게이트는 초록으로 남고, 그래서 놓치기 쉽다.
 
 - [ ] **Step 1: `[21]`을 뒤집고 단언을 더한다**
 
@@ -1664,6 +1744,22 @@ git commit -m "feat(0044): 챌린지 자동 시작·종료를 09:00 크론과 �
 
 `chId`는 이 스크립트가 앞서 만든 첫 챌린지의 id다(`challenge-room-check.mjs:148`의 `const chId = r.json?.id`) — 변수명이 그대로 맞다.
 
+- [ ] **Step 1b: `rls-test.mjs`의 중복 생성 단언도 뒤집는다**
+
+`scripts/rls-test.mjs:343-346`의 블록을 교체한다. 지금은 `challenges_one_live`에 의존해 "막힌다"를 단언한다.
+
+```js
+// 0044가 challenges_one_live를 드롭했다. 같은 그룹에 살아있는 챌린지가 여러 개
+// 있을 수 있는 것이 이제 정상이다 — 여러 챌린지 동시 진행이 이 개편의 목적이다.
+// (직접 insert 경로다. RPC 경로는 challenge-room-check.mjs [21]이 본다.)
+const chDup = await api(B.token, "POST", "/rest/v1/challenges", {
+  group_id: group.id, name: "중복", start_date: "2026-07-01", end_date: "2026-07-14",
+});
+check("살아있는 챌린지 중복 생성 허용 (0044에서 개수 제한 해제)", chDup.status === 201, `${chDup.status} ${JSON.stringify(chDup.json)}`);
+```
+
+이 챌린지는 픽스처 그룹에 딸려 있어 `finally`의 그룹 삭제로 함께 사라진다 — 별도 정리가 필요 없다.
+
 - [ ] **Step 2: 돌린다**
 
 Run: `node scripts/challenge-room-check.mjs`
@@ -1686,12 +1782,14 @@ Expected: `auth 계정 4 개`. 더 많으면 떠돌이 테스트 계정이 남�
 - [ ] **Step 4: 1~2분 쉬고 나머지 회귀 기준선 3종을 돌린다 (§6.5)**
 
 ```bash
-node scripts/rls-test.mjs          # 113 통과 / 0 실패
+node scripts/rls-test.mjs          # 113 통과 / 0 실패 (Step 1b로 되돌아온다)
 # 1~2분 대기
 node scripts/challenge-consent-test.mjs   # 20 통과 / 0 실패
 # 1~2분 대기
 node scripts/poke-levelup-check.mjs       # 11/11
 ```
+
+`rls-test.mjs`는 Task 2 Step 4에서 112/1이었다가 Step 1b의 수정으로 **113/0으로 복귀**한다. 단언 개수는 그대로다(뒤집기만 했으므로).
 
 하나라도 실패하면 회귀다. 멈추고 원인을 찾아라.
 
@@ -1718,15 +1816,19 @@ Expected: 전부 통과. 실제 숫자를 기록한다.
 
 - [ ] **Step 2: 배포**
 
-`.git` 없는 복사본에서 배포한다. Vercel이 커밋 이메일을 GitHub 계정에 매칭하지 못해 `Deployment Blocked`가 된다.
+**`git push`는 배포가 아니다.** 이 프로젝트는 GitHub 연동 배포를 쓰지 않는다 — Vercel이 로컬 저장소에 CLI로 링크돼 있어 사람이 `vercel --prod`를 직접 돌려야 한다. 2026-07-31에 이걸 몰라 이틀간 사용자 폰에 옛 코드가 돌았다. 상세는 저장소 루트 `CLAUDE.md`.
+
+`vercel --prod`는 git 브랜치가 아니라 **현재 폴더 내용**을 올린다. 작업 브랜치에서 그냥 돌리면 미완성 코드가 프로덕션에 나가므로 `main`을 worktree로 분리해서 배포한다.
 
 ```bash
-rm -rf /tmp/gnd-deploy && mkdir -p /tmp/gnd-deploy
-git archive HEAD | tar -x -C /tmp/gnd-deploy
-cd /tmp/gnd-deploy && vercel --prod
+git worktree add /tmp/deploy-main main
+cp .env.local .vercel -r /tmp/deploy-main/    # 둘 다 gitignore라 따로 복사
+cd /tmp/deploy-main && npx vercel@latest --prod --yes
 ```
 
-배포 후 `gnd-one.vercel.app` 별칭을 새 배포로 옮긴다.
+**순서를 지킨다: DB 적용(사용자 Run) → 검증 → 배포.** 앱 코드가 없는 DB 구조를 찾으면 더 크게 망가진다.
+
+배포 뒤에는 프로덕션에서 파일을 직접 받아 바뀐 코드가 들어갔는지 확인한다 — "명령이 성공했다"는 증거가 아니다.
 
 - [ ] **Step 3: 실기기 확인 — 이번 게이트는 "둘 다 보인다"다**
 

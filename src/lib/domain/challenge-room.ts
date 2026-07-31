@@ -103,3 +103,33 @@ export function daysMeetingQualifier(
   const min = qualifier ?? 1;
   return Object.values(countByDay).filter((n) => n >= min).length;
 }
+
+/** DB 행 모양 (snake_case). challenges 테이블의 부분집합. */
+export type ChallengeRowLike = {
+  id: string;
+  status: ChallengeStatus;
+  start_date: string;
+  end_date: string;
+  created_at: string;
+};
+
+/**
+ * DB 행 목록에서 대표 챌린지 하나 — pickPrimaryChallenge의 snake_case 어댑터.
+ *
+ * 매핑을 여기 한 곳에 둔다. 호출부마다 camelCase로 바꾸면 필드 하나를 빠뜨린
+ * 곳에서 대표가 조용히 달라지고, 그러면 열람권(challenge_peek_picks) 대상이
+ * 화면마다 어긋난다.
+ */
+export function pickPrimaryRow<T extends ChallengeRowLike>(rows: T[]): T | null {
+  const picked = pickPrimaryChallenge(
+    rows.map((r) => ({
+      id: r.id,
+      status: r.status,
+      startDate: r.start_date,
+      endDate: r.end_date,
+      createdAt: r.created_at,
+      row: r,
+    })),
+  );
+  return picked ? picked.row : null;
+}

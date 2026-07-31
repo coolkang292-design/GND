@@ -8,15 +8,16 @@ import {
   type ChallengePassStatus,
 } from "@/lib/domain/viewing-pass";
 import { challengeDaysLeft } from "@/lib/domain/challenge-time";
-import { getGroupMemberProfiles, getMyGroups } from "@/lib/crew";
+import { getGroupMemberProfiles } from "@/lib/crew";
 import {
   getActiveChallengeRanking,
-  getCurrentChallenge,
+  getMyChallenges,
   getTodaysPeekTarget,
   pickPeekTarget,
   type ChallengeRanking,
 } from "@/lib/challenge";
 import { peekRows } from "@/lib/domain/challenge-peek";
+import { pickPrimaryRow } from "@/lib/domain/challenge-room";
 
 /**
  * 홈 챌린지 크루 성과 카드 — 챌린지 active일 때만 노출.
@@ -44,12 +45,10 @@ export function ChallengePerformanceCard({
     let cancelled = false;
     (async () => {
       try {
-        const g = (await getMyGroups())[0];
-        if (!g) {
-          if (!cancelled) setReady(true);
-          return;
-        }
-        const ch = await getCurrentChallenge(g.id);
+        // 0044: 챌린지는 그룹이 아니라 참가 사실로 묶인다. 대표를 고르는 규칙은
+        // 화면끼리 같아야 한다(pickPrimaryRow) — 어긋나면 홈과 챌린지 탭이 서로
+        // 다른 챌린지를 보여준다.
+        const ch = pickPrimaryRow(await getMyChallenges());
         if (!ch || ch.status !== "active") {
           if (!cancelled) setReady(true);
           return;
@@ -58,9 +57,9 @@ export function ChallengePerformanceCard({
         // 보안: unlocked일 때만 순위를 조회한다. 잠금 상태에선 순위가 클라에 없다.
         if (p.state === "unlocked") {
           const [rank, crew, picked] = await Promise.all([
-            getActiveChallengeRanking(g.id),
+            getActiveChallengeRanking(ch.id),
             // 챌린지 순위표의 닉네임 맵이라 그룹 참가자가 맞다(0039 범위 밖).
-            getGroupMemberProfiles(g.id),
+            getGroupMemberProfiles(ch.group_id),
             getTodaysPeekTarget(ch.id),
           ]);
           if (cancelled) return;

@@ -21,6 +21,11 @@ const PUSH_URL_BY_TYPE: Record<string, string> = {
   // 수락 알림은 새 크루원을 목록에서 확인하게 된다.
   crew_request: "/crew",
   crew_accepted: "/crew",
+  // 챌린지 초대 → 챌린지 탭에서 수락·거절한다 (0044)
+  // ⚠ 이 Record는 Record<string, string>이라 exhaustive가 아니다. 유형을 늘려도
+  //   컴파일러가 안 잡아주고 DEFAULT_PUSH_URL(/home)로 조용히 떨어진다.
+  //   notification-bell.tsx의 TYPE_ICON과 달리 여기는 손으로 챙겨야 한다.
+  challenge_invite: "/challenge",
 };
 
 const DEFAULT_PUSH_URL = "/home";

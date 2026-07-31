@@ -63,27 +63,59 @@ export async function getCurrentChallenge(
   return data;
 }
 
-export async function createChallenge(input: {
-  groupId: string;
-  name: string;
-  startDate: string;
-  endDate: string;
-}): Promise<Challenge> {
-  const supabase = getSupabaseBrowserClient();
+/** 내가 참가자로 들어가 있는 챌린지 + 내 역할·참가 상태 */
+export type MyChallenge = Challenge & {
+  myRole: "host" | "member";
+  myStatus: "invited" | "joined" | "dropped";
+};
+
+/**
+ * 내 챌린지 전부 (cancelled 제외).
+ *
+ * 0044부터 명단의 원천은 group_members가 아니라 challenge_participants다.
+ * 그룹이 아니라 참가 사실로 묶이므로, 여러 크루에 걸친 챌린지도 한 목록에 온다.
+ *
+ * invited(아직 수락 안 함)도 포함한다 — 화면이 "초대받았어요"를 보여줘야 한다.
+ * dropped는 목표 0개로 명단에서 빠진 사람이다. 결과를 볼 수는 있어야 하므로
+ * 역시 포함하고, 구분은 myStatus로 화면이 한다.
+ */
+export async function getMyChallenges(client?: SupabaseClient): Promise<MyChallenge[]> {
+  const supabase = client ?? getSupabaseBrowserClient();
   const { data, error } = await supabase
-    .from("challenges")
-    .insert({
-      group_id: input.groupId,
-      name: input.name.trim(),
-      start_date: input.startDate,
-      end_date: input.endDate,
-      photo_required: true,
-    })
-    .select()
-    .single();
+    .from("challenge_participants")
+    .select("role, status, challenges!inner(*)")
+    .neq("challenges.status", "cancelled");
   if (error) throw error;
-  return data;
+
+  type Row = {
+    role: "host" | "member";
+    status: "invited" | "joined" | "dropped";
+    challenges: Challenge;
+  };
+  return ((data ?? []) as unknown as Row[]).map((r) => ({
+    ...r.challenges,
+    myRole: r.role,
+    myStatus: r.status,
+  }));
 }
+
+/** 챌린지의 참가자 명단 (0044부터 랭킹·집계의 원천) */
+export async function getChallengeParticipants(
+  challengeId: string,
+  client?: SupabaseClient,
+): Promise<{ user_id: string; role: "host" | "member"; status: string }[]> {
+  const supabase = client ?? getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("challenge_participants")
+    .select("user_id, role, status")
+    .eq("challenge_id", challengeId);
+  if (error) throw error;
+  return data ?? [];
+}
+
+// createChallenge(직접 insert)는 0044에서 지웠다. challenge_participants에 host
+// 행을 만들지 않아, 그 경로로 만든 챌린지는 getMyChallenges()에 안 잡히는
+// "안 보이는 챌린지"가 된다. 생성은 createChallengeRoom RPC 하나뿐이다.
 
 /** 챌린지의 전체 참가자 목표 (RLS: 크루원만) */
 export async function getChallengeGoals(
@@ -225,6 +257,63 @@ export async function finalizeChallenge(
   });
   if (error) throw error;
   return data as Challenge;
+}
+
+// ── 챌린지 방 RPC (0042) — 0044부터 화면이 실제로 부른다 ──────────
+
+/**
+ * 챌린지 방 생성. 방장이 host로 자동 참가한다.
+ *
+ * 직접 insert가 아니라 이 RPC를 써야 challenge_participants에 host 행이 생긴다.
+ * 직접 insert로 만들면 참가자 행이 없어 **본인이 만든 챌린지가
+ * getMyChallenges()에 안 나온다.**
+ */
+export async function createChallengeRoom(input: {
+  name: string;
+  startDate: string;
+  endDate: string;
+  photoRequired?: boolean;
+}): Promise<Challenge> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase.rpc("create_challenge_room", {
+    p_name: input.name.trim(),
+    p_start_date: input.startDate,
+    p_end_date: input.endDate,
+    p_photo_required: input.photoRequired ?? true,
+  });
+  if (error) throw error;
+  return data as Challenge;
+}
+
+/** 초대 — host만, setup 단계만 (서버가 강제한다) */
+export async function inviteToChallenge(
+  challengeId: string,
+  targetId: string,
+): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  const { error } = await supabase.rpc("invite_to_challenge", {
+    p_challenge_id: challengeId,
+    p_target_id: targetId,
+  });
+  if (error) throw error;
+}
+
+/** 수락 — joined 전환 + 기존 참가자 전원과 crew_links (설계 D5 완전 연결) */
+export async function acceptChallengeInvite(challengeId: string): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  const { error } = await supabase.rpc("accept_challenge_invite", {
+    p_challenge_id: challengeId,
+  });
+  if (error) throw error;
+}
+
+/** 거절 — 참가 행을 지운다. 지우므로 읽기 권한도 함께 사라진다 */
+export async function declineChallengeInvite(challengeId: string): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  const { error } = await supabase.rpc("decline_challenge_invite", {
+    p_challenge_id: challengeId,
+  });
+  if (error) throw error;
 }
 
 // ── 기간 실적 집계 (§7 실적 = 완료 세션에서 계산) ────────────────
@@ -411,12 +500,17 @@ export function actualForGoal(
 }
 
 /**
- * 크루원별 기간 실적 집계.
+ * 참가자별 기간 실적 집계.
+ *
  * RLS가 읽게 해주는 세션(내 전부 + 크루 공개 완료분)만 반영된다 —
  * private 세션은 본인 점수에만 잡힌다(진행 중엔 내 것만 쓰므로 문제 없음).
+ *
+ * 0044부터 명단이 group_members가 아니라 challenge_participants다. 참가자
+ * 전원과 crew_links가 맺어지는 것은 0042의 accept_challenge_invite가 보장한다
+ * (설계 D5의 완전 연결) — 그래서 크루 공개 세션을 서로 읽을 수 있다.
  */
 export async function getPeriodStatsByUser(
-  groupId: string,
+  userIds: string[],
   startDate: string,
   endDate: string,
   timeZone: string,
@@ -424,6 +518,10 @@ export async function getPeriodStatsByUser(
   client?: SupabaseClient,
 ): Promise<Map<string, PeriodStats>> {
   const supabase = client ?? getSupabaseBrowserClient();
+  // 참가자가 0명이면 조회할 것이 없다. .in("user_id", [])는 PostgREST에서
+  // 빈 IN 절이 되어 문법 오류를 낼 수 있으므로 여기서 끊는다.
+  if (userIds.length === 0) return new Map();
+
   const fromIso = new Date(`${startDate}T00:00:00Z`);
   fromIso.setUTCDate(fromIso.getUTCDate() - 1);
   const toIso = new Date(`${endDate}T00:00:00Z`);
@@ -437,7 +535,11 @@ export async function getPeriodStatsByUser(
   const { data, error } = await supabase
     .from("workout_sessions")
     .select(select)
-    .eq("group_id", groupId)
+    // 0044: group_id 필터 → 참가자 user_id 필터.
+    // 두 방식이 같은 세션 집합을 낸다는 것을 전환 전에 실측했다
+    // (scripts/challenge-aggregation-parity.mjs). 그래야 진행 중 챌린지의
+    // 점수가 안 흔들린다.
+    .in("user_id", userIds)
     .eq("status", "completed")
     .is("deleted_at", null)
     .gte("completed_at", fromIso.toISOString())
@@ -499,32 +601,51 @@ function periodDaysCount(startDate: string, endDate: string): number {
 }
 
 /**
- * 진행 중(active) 챌린지의 현재 순위 — 없으면 null
+ * 챌린지 하나의 현재 순위 — active가 아니면 null
+ *
+ * 0044부터 인자가 groupId가 아니라 challengeId다. 크루당 챌린지가 여러 개일 수
+ * 있으므로 "그 크루의 챌린지"로는 대상이 정해지지 않는다.
+ *
+ * 명단의 원천도 목표가 아니라 참가자다. user_goals INSERT는 같은 그룹이면
+ * 참가자가 아니어도 통과하므로(0006:81), 목표에서 명단을 뽑으면 참가하지 않은
+ * 사람이 랭킹에 올라온다.
  *
  * `client`는 서버(관리자 대시보드)에서 service_role 클라이언트를 넣기 위한 것이다.
- * 생략하면 지금까지처럼 브라우저 클라이언트를 쓴다 — 기존 호출부는 영향 없다.
+ * 생략하면 지금까지처럼 브라우저 클라이언트를 쓴다.
  * 달성률 계산을 서버용으로 복제하지 않으려고 주입 방식을 택했다(두 벌이 되면 갈라진다).
  */
 export async function getActiveChallengeRanking(
-  groupId: string,
+  challengeId: string,
   client?: SupabaseClient,
 ): Promise<ChallengeRanking | null> {
-  const ch = await getCurrentChallenge(groupId, client);
+  const supabase = client ?? getSupabaseBrowserClient();
+  const { data: ch, error } = await supabase
+    .from("challenges")
+    .select("*")
+    .eq("id", challengeId)
+    .maybeSingle();
+  if (error) throw error;
   if (!ch || ch.status !== "active") return null;
 
-  const [goals, stats] = await Promise.all([
+  const [goals, participants] = await Promise.all([
     getChallengeGoals(ch.id, client),
-    getPeriodStatsByUser(
-      groupId,
-      ch.start_date,
-      ch.end_date,
-      DEFAULT_TIMEZONE,
-      ch.photo_required,
-      client,
-    ),
+    getChallengeParticipants(ch.id, client),
   ]);
+  // invited는 아직 참가자가 아니다. dropped는 목표 0개로 빠진 사람이라 어차피
+  // 목표가 없어 점수가 0이지만, 명단에 남겨 결과 화면에서 사라지지 않게 한다.
+  const userIds = participants
+    .filter((p) => p.status !== "invited")
+    .map((p) => p.user_id);
+
+  const stats = await getPeriodStatsByUser(
+    userIds,
+    ch.start_date,
+    ch.end_date,
+    DEFAULT_TIMEZONE,
+    ch.photo_required,
+    client,
+  );
   const days = periodDaysCount(ch.start_date, ch.end_date);
-  const userIds = [...new Set(goals.map((g) => g.user_id))];
 
   const list = rankParticipants(
     userIds.map((uid) => {
