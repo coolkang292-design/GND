@@ -1816,15 +1816,19 @@ Expected: 전부 통과. 실제 숫자를 기록한다.
 
 - [ ] **Step 2: 배포**
 
-`.git` 없는 복사본에서 배포한다. Vercel이 커밋 이메일을 GitHub 계정에 매칭하지 못해 `Deployment Blocked`가 된다.
+**`git push`는 배포가 아니다.** 이 프로젝트는 GitHub 연동 배포를 쓰지 않는다 — Vercel이 로컬 저장소에 CLI로 링크돼 있어 사람이 `vercel --prod`를 직접 돌려야 한다. 2026-07-31에 이걸 몰라 이틀간 사용자 폰에 옛 코드가 돌았다. 상세는 저장소 루트 `CLAUDE.md`.
+
+`vercel --prod`는 git 브랜치가 아니라 **현재 폴더 내용**을 올린다. 작업 브랜치에서 그냥 돌리면 미완성 코드가 프로덕션에 나가므로 `main`을 worktree로 분리해서 배포한다.
 
 ```bash
-rm -rf /tmp/gnd-deploy && mkdir -p /tmp/gnd-deploy
-git archive HEAD | tar -x -C /tmp/gnd-deploy
-cd /tmp/gnd-deploy && vercel --prod
+git worktree add /tmp/deploy-main main
+cp .env.local .vercel -r /tmp/deploy-main/    # 둘 다 gitignore라 따로 복사
+cd /tmp/deploy-main && npx vercel@latest --prod --yes
 ```
 
-배포 후 `gnd-one.vercel.app` 별칭을 새 배포로 옮긴다.
+**순서를 지킨다: DB 적용(사용자 Run) → 검증 → 배포.** 앱 코드가 없는 DB 구조를 찾으면 더 크게 망가진다.
+
+배포 뒤에는 프로덕션에서 파일을 직접 받아 바뀐 코드가 들어갔는지 확인한다 — "명령이 성공했다"는 증거가 아니다.
 
 - [ ] **Step 3: 실기기 확인 — 이번 게이트는 "둘 다 보인다"다**
 
