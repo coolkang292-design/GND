@@ -17,8 +17,7 @@ export interface AdminDataset {
   totalXpByUser: Map<string, number>;
   /**
    * 크루 참여율의 원천은 **crew_links**다 — 0039부터 "크루" = 상호 수락 연결이고
-   * group_members는 챌린지 전용으로만 남았다(`src/lib/crew.ts` 주석 참고).
-   * 크루 지표에 group_members를 쓰면 틀린 값이 나온다.
+   * 크루 지표는 챌린지 참가자 수와 별개로 계산한다.
    */
   crewLinkUserIds: string[];
 }
@@ -43,7 +42,7 @@ export async function fetchAdminDataset(): Promise<AdminDataset> {
         .is("deleted_at", null),
       db.from("profiles").select("id,nickname,avatar_url,created_at"),
       db.from("user_progress").select("user_id,total_xp"),
-      // 0039부터 "크루" = crew_links(상호 수락). group_members는 챌린지 전용이다.
+      // 0039부터 "크루" = crew_links(상호 수락).
       db.from("crew_links").select("user_a,user_b"),
       db.auth.admin.listUsers({ page: 1, perPage: 1000 }),
     ]);
@@ -111,21 +110,25 @@ export async function fetchActiveChallenges(
 
   const { data, error } = await db
     .from("challenges")
-    .select("id,name,end_date,group_id")
+    .select("id,name,end_date")
     .eq("status", "active");
   if (error) throw new Error(`challenges 조회 실패: ${error.message}`);
 
-  // 챌린지 참여 인원은 group_members가 맞다 — 0039 이후에도 챌린지는 그룹 기반이다.
-  // (크루 참여율만 crew_links를 쓴다. 두 개념이 갈라졌으니 섞지 말 것.)
-  const { data: members, error: mErr } = await db
-    .from("group_members")
-    .select("group_id,user_id");
-  if (mErr) throw new Error(`group_members 조회 실패: ${mErr.message}`);
+  // 관리자 챌린지 인원은 실제 joined/dropped 참가자만 센다.
+  const { data: participants, error: participantError } = await db
+    .from("challenge_participants")
+    .select("challenge_id,status")
+    .in("status", ["joined", "dropped"]);
+  if (participantError) {
+    throw new Error(
+      `challenge_participants 조회 실패: ${participantError.message}`,
+    );
+  }
 
   const memberCount = new Map<string, number>();
-  for (const m of members ?? []) {
-    const g = m.group_id as string;
-    memberCount.set(g, (memberCount.get(g) ?? 0) + 1);
+  for (const participant of participants ?? []) {
+    const challengeId = participant.challenge_id as string;
+    memberCount.set(challengeId, (memberCount.get(challengeId) ?? 0) + 1);
   }
 
   return Promise.all(
@@ -153,7 +156,7 @@ export async function fetchActiveChallenges(
           0,
           Math.ceil((end.getTime() - now.getTime()) / 86_400_000),
         ),
-        memberCount: memberCount.get(c.group_id as string) ?? 0,
+        memberCount: memberCount.get(c.id as string) ?? 0,
         achievementPct: pct,
       };
     }),

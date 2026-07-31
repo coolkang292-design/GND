@@ -4,10 +4,10 @@
 -- 이 파일은 **읽기용 참조**다. 여기를 고쳐도 DB는 안 바뀐다 —
 -- 변경은 supabase/migrations/에 새 번호 파일을 만들어 사용자가 Run한다.
 --
--- 쓰는 법: 함수·정책의 '현행' 정의가 필요할 때 마이그레이션 47개를
+-- 쓰는 법: 함수·정책의 '현행' 정의가 필요할 때 마이그레이션 51개를
 -- 뒤지지 말고 이 파일을 검색하라. 마이그레이션을 적용한 뒤에는 다시 뽑아라.
 --
--- 함수 61개 · 정책 65개 · 인덱스 69개
+-- 함수 64개 · 정책 65개 · 인덱스 69개
 
 -- ════════════════════════════════════════════════════════════
 -- 함수
@@ -18,48 +18,40 @@ CREATE OR REPLACE FUNCTION public.accept_challenge_invite(p_challenge_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
- SET search_path TO 'public'
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
 declare
   v_me uuid := auth.uid();
-  c challenges;
-  v_row challenge_participants;
-  v_linked int := 0;
-  v_peer uuid;
+  c public.challenges;
+  v_row public.challenge_participants;
 begin
   if v_me is null then raise exception 'not_authenticated'; end if;
 
-  -- 챌린지 단위 직렬화. 두 사람이 동시에 수락하면 서로를 "기존 참가자"로
-  -- 못 보고 crew_links가 한쪽만 생기거나, 락 순서가 엇갈려 데드락이 난다.
+  -- 챌린지 단위 직렬화. crew_links는 더 이상 안 만들지만, 두 사람이 동시에
+  -- 수락할 때 상태 전이가 엇갈리지 않게 락은 유지한다.
   perform pg_advisory_xact_lock(hashtext(p_challenge_id::text));
 
-  select * into c from challenges where id = p_challenge_id;
+  select * into c from public.challenges where id = p_challenge_id;
   if not found then raise exception 'challenge_not_found'; end if;
   if c.status <> 'setup' then raise exception 'invalid_status:%', c.status; end if;
 
-  select * into v_row from challenge_participants
-  where challenge_id = p_challenge_id and user_id = v_me for update;
+  select * into v_row
+  from public.challenge_participants
+  where challenge_id = p_challenge_id
+    and user_id = v_me
+  for update;
+
   if not found then raise exception 'not_invited'; end if;
   if v_row.status = 'joined' then raise exception 'already_joined'; end if;
   if v_row.status = 'dropped' then raise exception 'dropped'; end if;
 
-  -- 크루 연결을 먼저 만든다. 내 status를 joined로 바꾼 뒤에 돌면 자기 자신이
-  -- 목록에 들어와 crew_links_not_self 위반이 된다.
-  for v_peer in
-    select user_id from challenge_participants
-    where challenge_id = p_challenge_id and status = 'joined' and user_id <> v_me
-  loop
-    insert into crew_links (user_a, user_b)
-    values (least(v_me, v_peer), greatest(v_me, v_peer))
-    on conflict do nothing;
-    v_linked := v_linked + 1;
-  end loop;
-
-  update challenge_participants
+  update public.challenge_participants
      set status = 'joined', joined_at = now()
-   where challenge_id = p_challenge_id and user_id = v_me;
+   where challenge_id = p_challenge_id
+     and user_id = v_me;
 
-  return jsonb_build_object('status', 'joined', 'crewLinked', v_linked);
+  -- 0051: crewLinked를 0으로 고정한다. 필드를 지우면 옛 클라이언트가 깨진다.
+  return jsonb_build_object('status', 'joined', 'crewLinked', 0);
 end $function$;
 
 -- ── accept_crew_request ──
@@ -1069,6 +1061,97 @@ begin
   return 'GND-' || code;
 end $function$;
 
+-- ── get_challenge_participant_profiles ──
+CREATE OR REPLACE FUNCTION public.get_challenge_participant_profiles(p_challenge_id uuid)
+ RETURNS TABLE(id uuid, nickname text, avatar_url text)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+  select p.id, p.nickname, p.avatar_url
+  from public.challenge_participants cp
+  join public.profiles p on p.id = cp.user_id
+  where cp.challenge_id = p_challenge_id
+    and cp.status in ('joined', 'dropped')
+    -- 정식 참가자만 같은 챌린지 명단을 읽는다. 관리자 서버는 같은 RPC를 쓴다.
+    and (
+      (select auth.role()) = 'service_role'
+      or public.shares_challenge_with(
+        p_challenge_id,
+        (select auth.uid())
+      )
+    )
+$function$;
+
+-- ── get_challenge_period_sessions ──
+CREATE OR REPLACE FUNCTION public.get_challenge_period_sessions(p_challenge_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+declare
+  c public.challenges;
+  v_rows jsonb;
+begin
+  select * into c from public.challenges where id = p_challenge_id;
+  if not found then raise exception 'challenge_not_found'; end if;
+  if coalesce((select auth.role()), '') <> 'service_role'
+     and not public.shares_challenge_with(
+       p_challenge_id,
+       (select auth.uid())
+     ) then
+    raise exception 'challenge_not_found';
+  end if;
+
+  select coalesce(jsonb_agg(row), '[]'::jsonb) into v_rows
+  from (
+    select jsonb_build_object(
+      'user_id', s.user_id,
+      'completed_at', s.completed_at,
+      'tabata_minutes', s.tabata_minutes,
+      'workout_exercises', coalesce((
+        select jsonb_agg(jsonb_build_object(
+          'exercise_type', we.exercise_type,
+          'exercise_name', we.exercise_name,
+          'body_part', we.body_part,
+          'workout_sets', coalesce((
+            select jsonb_agg(jsonb_build_object(
+              'weight_kg', ws.weight_kg,
+              'reps', ws.reps,
+              'distance_meters', ws.distance_meters,
+              'duration_seconds', ws.duration_seconds,
+              'is_completed', ws.is_completed
+            ))
+            from public.workout_sets ws where ws.workout_exercise_id = we.id
+          ), '[]'::jsonb)
+        ))
+        from public.workout_exercises we where we.session_id = s.id
+      ), '[]'::jsonb)
+    ) as row
+    from public.workout_sessions s
+    join public.challenge_participants cp
+      on cp.user_id = s.user_id
+     and cp.challenge_id = p_challenge_id
+     and cp.status in ('joined', 'dropped')
+    where s.status = 'completed'
+      and s.deleted_at is null
+      and s.completed_at >= (c.start_date - 1)::timestamptz
+      and s.completed_at <  (c.end_date + 2)::timestamptz
+      -- 사진 인증 필수 챌린지는 사진 있는 세션만 (앱의 workout_images!inner와 같다)
+      and (
+        not c.photo_required
+        or exists (
+          select 1
+          from public.workout_images wi
+          where wi.session_id = s.id
+        )
+      )
+  ) t;
+
+  return v_rows;
+end $function$;
+
 -- ── get_crew_member_profile ──
 CREATE OR REPLACE FUNCTION public.get_crew_member_profile(p_target_id uuid)
  RETURNS jsonb
@@ -1336,57 +1419,58 @@ CREATE OR REPLACE FUNCTION public.join_challenge_with_code(p_code text)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
- SET search_path TO 'public'
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
 declare
   v_me uuid := auth.uid();
-  c challenges;
-  v_row challenge_participants;
-  v_other uuid;
-  v_linked int := 0;
+  c public.challenges;
+  v_row public.challenge_participants;
 begin
   if v_me is null then raise exception 'not_authenticated'; end if;
 
-  select * into c from challenges where invite_code = upper(trim(p_code));
+  select * into c
+  from public.challenges
+  where invite_code = upper(trim(p_code));
+
   if not found then raise exception 'invalid_invite_code'; end if;
 
-  -- 참가자 목록을 읽고 쓰는 동안 다른 사람이 같은 링크로 들어오면 crew_links가
-  -- 한쪽만 생기거나 락 순서가 엇갈려 데드락이 난다. 0042 accept와 같은 방식으로
-  -- 챌린지 단위 락을 잡는다.
   perform pg_advisory_xact_lock(hashtext(c.id::text));
 
-  -- 락을 잡은 뒤 상태를 다시 읽는다. 그 사이 시작됐을 수 있다.
-  select * into c from challenges where id = c.id;
+  select * into c from public.challenges where id = c.id;
   if c.status <> 'setup' then raise exception 'invalid_status:%', c.status; end if;
 
-  select * into v_row from challenge_participants
-  where challenge_id = c.id and user_id = v_me for update;
+  select * into v_row
+  from public.challenge_participants
+  where challenge_id = c.id
+    and user_id = v_me
+  for update;
+
   if found and v_row.status = 'joined' then
     raise exception 'already_joined';
   end if;
 
-  -- 크루 연결을 먼저 만든다. 내 행을 joined로 바꾼 뒤에 돌면 자기 자신이
-  -- 목록에 들어와 crew_links_not_self 위반이 된다 (0042와 같은 이유).
-  for v_other in
-    select user_id from challenge_participants
-    where challenge_id = c.id and status = 'joined' and user_id <> v_me
-  loop
-    insert into crew_links (user_a, user_b)
-    values (least(v_me, v_other), greatest(v_me, v_other))
-    on conflict do nothing;
-    v_linked := v_linked + 1;
-  end loop;
-
-  -- 초대장이 이미 있으면(닉네임으로 초대해 뒀는데 링크로 들어온 경우) 그 행을
-  -- 살려 쓴다. 없으면 새로 만든다. 어느 쪽이든 결과는 joined다.
-  insert into challenge_participants (challenge_id, user_id, role, status, joined_at)
-  values (c.id, v_me, 'member', 'joined', now())
+  insert into public.challenge_participants (
+    challenge_id,
+    user_id,
+    role,
+    status,
+    joined_at
+  )
+  values (
+    c.id,
+    v_me,
+    'member',
+    'joined',
+    now()
+  )
   on conflict (challenge_id, user_id)
   do update set status = 'joined', joined_at = now();
 
   return jsonb_build_object(
-    'status', 'joined', 'challengeId', c.id, 'challengeName', c.name,
-    'crewLinked', v_linked
+    'status', 'joined',
+    'challengeId', c.id,
+    'challengeName', c.name,
+    'crewLinked', 0
   );
 end $function$;
 
@@ -2057,6 +2141,29 @@ begin
 
   return s;
 end $function$;
+
+-- ── shares_challenge_with ──
+CREATE OR REPLACE FUNCTION public.shares_challenge_with(p_challenge_id uuid, p_other uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+  select exists (
+    select 1
+    from public.challenge_participants mine
+    join public.challenge_participants theirs
+      on theirs.challenge_id = mine.challenge_id
+    join public.challenges c
+      on c.id = mine.challenge_id
+    where mine.challenge_id = p_challenge_id
+      and mine.user_id = (select auth.uid())
+      and theirs.user_id = p_other
+      and mine.status in ('joined', 'dropped')
+      and theirs.status in ('joined', 'dropped')
+      and c.status <> 'cancelled'
+  )
+$function$;
 
 -- ── shares_group_with ──
 CREATE OR REPLACE FUNCTION public.shares_group_with(uid uuid)

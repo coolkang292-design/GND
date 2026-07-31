@@ -1,17 +1,17 @@
-# 인수인계 — 챌린지 방 전환 완료 + 참가/친구 분리 착수 (2026-07-31)
+# 인수인계 — 챌린지 방 전환 + 참가/친구 분리 완료 (2026-07-31)
 
-> 이 문서 하나로 이어받을 수 있게 썼다. **§1(지금 상태) → §2(다음 할 일) → §6(함정)** 순서로 읽어라.
+> 이 문서 하나로 이어받을 수 있게 썼다. **§1(지금 상태) → §2(0051 완료 내용) → §6(함정)** 순서로 읽어라.
 >
 > 이전 문서 `HANDOFF-2026-07-30-challenge-rooms.md`는 0044 착수 시점 기록이다. **0044는 끝났으므로 이 문서가 최신이다.**
 
 **작업:** "그룹 멤버가 곧 챌린지 참가자"를 "챌린지가 직접 참가자를 갖는다"로 바꾸는 일.
-**전체 3단계 중 2단계 완료.** 추가(0042·0043) → **전환(0044~0050 완료)** → 정리(미착수).
+**전체 3단계 중 2단계와 후속 분리 작업 완료.** 추가(0042·0043) → **전환(0044~0050 완료)** → **참가/친구 분리(0051 적용 완료)** → 정리(진행 중 챌린지 종료 후).
 
 ---
 
 ## 1. 지금 상태
 
-### 1.1 마이그레이션 0044~0050 **전부 운영 적용·검증 완료**
+### 1.1 마이그레이션 0044~0051 **전부 운영 적용·검증 완료**
 
 | 번호 | 무엇 | 상태 |
 |---|---|---|
@@ -22,26 +22,30 @@
 | 0048 | 스키마 스냅샷 RPC (`pnpm db:snapshot`) | ✅ |
 | 0049 | 챌린지 초대 링크 (`invite_code` + 발급·참가 RPC) | ✅ |
 | 0050 | 목표 등록을 참가자에게 | ✅ |
-| **0051** | **참가 ≠ 친구 (D5 폐기)** | ❌ **파일만 있고 미적용** — §2 |
+| **0051** | **참가 ≠ 친구 (D5 폐기)** | ✅ **운영 적용·실 DB 검증 완료** |
 
-### 1.2 배포됨
+### 1.2 배포 상태
 
-`main` HEAD `3a7c787`, 프로덕션 `gnd-8uehs4fxd-gnd4.vercel.app` → `gnd-one.vercel.app`. 번들에서 실물 확인함.
+현재 프로덕션은 이전 배포 `gnd-8uehs4fxd-gnd4.vercel.app` → `gnd-one.vercel.app`이다. **0051 앱 코드는 아직 배포하지 않았다.**
 
-**`main`이 origin보다 33커밋 앞서 있다(푸시 안 함).** 이 프로젝트는 GitHub 연동 배포를 안 쓰므로 배포에는 지장 없다.
+작업 기준 `main` HEAD는 `2ba5870`이고 origin보다 36커밋 앞서 있다(푸시 안 함). **GitHub로 배포하지 않는다.** 검증한 로컬 저장소를 깨끗한 `main`에 합친 뒤 로컬에서 `vercel --prod`로만 배포한다. 배포는 별도 사용자 승인 후 실행한다.
 
-### 1.3 검증 실측 (전부 실 DB, 0050 적용 후)
+### 1.3 검증 실측 (전부 실 DB, 0051 적용 후)
 
 | 스크립트 | 결과 |
 |---|---|
 | `scripts/challenge-invite-link-check.mjs` | **13 / 13** (신규) |
 | `scripts/challenge-subset-start-check.mjs` | **8 / 8** (신규) |
 | `scripts/rls-test.mjs` | **115 / 0** |
-| `scripts/challenge-room-check.mjs` | **36 / 0** |
+| `scripts/challenge-room-check.mjs` | **48 / 0** |
 | `scripts/challenge-consent-test.mjs` | **22 / 0** |
 | `scripts/challenge-aggregation-parity.mjs` | **4 / 4** |
-| 단위 테스트 | **686 / 686** (63파일) |
-| lint · typecheck · build | 0 · 통과 · ✅ |
+| `scripts/challenge-photo-test.mjs` | **8 / 8** |
+| `scripts/challenge-peek-test.mjs` | **11 / 11** |
+| `scripts/challenge-poke-test.mjs` | **11 / 11** |
+| `scripts/admin-dashboard-check.mjs` | **15 / 0** |
+| 단위 테스트 | **705 / 705** (65파일) |
+| lint · typecheck · build | **전부 통과** |
 
 **회귀 기준선은 전부 0 failed다.** 하나라도 실패하면 회귀다.
 
@@ -52,21 +56,23 @@
 - 챌린지가 **그룹이 아니라 참가자**로 묶인다. 타 그룹·혼자모드 사용자도 초대 가능
 - **초대 링크** — `🔗 초대 링크 복사하기` → `/challenge?join=GND-XXXXX`
 - 링크로 처음 온 사람은 **닉네임만 정하면 바로 챌린지로** (크루 단계 건너뜀)
+- 링크로 참가해도 **서로 크루(친구)가 되지 않는다.** 랭킹·닉네임은 그 챌린지 안에서만 보인다
 - 자동 시작·종료가 09:00 KST 크론 + 화면 진입 시에 돈다
+- Next.js 16 규칙에 맞춰 관리자 앞문을 `middleware.ts`에서 `src/proxy.ts`로 옮겼다. 잘못된 테스트 키 요청은 `307 → /admin`으로 처리됨을 개발 서버에서 확인했다
 
 ### 1.5 ⚠ 미확인으로 남긴 것
 
-**폰에서 초대 링크 전 과정을 아직 안 봤다.** 마지막 배포(온보딩 우회) 직후 멈췄다.
+**로그인된 실제 계정으로 로컬 챌린지 화면과 폰 초대 링크 전 과정을 아직 안 봤다.** 자동 브라우저에는 쓸 수 있는 실제 로그인 상태가 없었다.
 
 > 방장이 `gnd-one.vercel.app`에서 링크 복사 → **새 시크릿 창**에서 열기 →
 > ① "챌린지에 초대받았어요 🏆"가 뜨는지 ② 닉네임만 정하고 **크루 화면 없이** 챌린지 탭으로 가는지
 > ③ 참가자로 들어가 목표를 세울 수 있는지 ④ 주소창에서 `?join=`이 사라지는지
 
-실 DB 스크립트로는 13/13 통과했으므로 **서버는 확인됐다.** 남은 위험은 화면 흐름뿐이다.
+실 DB 스크립트와 전체 빌드는 통과했으므로 **서버와 코드 묶음은 확인됐다.** 남은 위험은 실제 계정 화면 흐름뿐이다.
 
 ---
 
-## 2. 다음에 할 일 — 0051 (참가 ≠ 친구)
+## 2. 완료한 일 — 0051 (참가 ≠ 친구)
 
 ### 2.1 왜 하는가
 
@@ -100,26 +106,28 @@ profiles_select_own_or_crew      랭킹판 닉네임
 
 **점수 계산은 SQL로 복제하지 않는다.** RPC가 세션 원본을 `getPeriodStatsByUser`와 같은 모양으로 돌려주고, 클라가 지금처럼 `foldPeriodStats`로 접는다. 두 벌이 되면 갈라지고, 그게 `challenge-aggregation-parity.mjs`가 막아 온 사고다.
 
-### 2.3 남은 작업
+### 2.3 완료한 작업
 
-**SQL은 이미 써 뒀다** — `supabase/migrations/0051_challenge_scoped_visibility.sql` (**미커밋·미적용**). 담긴 것:
+`supabase/migrations/0051_challenge_scoped_visibility.sql`을 운영 DB에 적용하고 실측 검증했다. 담긴 것:
 
-1. `shares_challenge_with(uuid)` — 같은 챌린지(cancelled 제외, `joined`/`dropped`만)에 있는가
+1. `shares_challenge_with(challenge_id, other_user_id)` — 지정한 챌린지에서 상대와 함께 참가 중이거나 참가했던 사람인가(cancelled 제외, `joined`/`dropped`만)
 2. `get_challenge_participant_profiles(challenge_id)` — 랭킹판 닉네임용
 3. `get_challenge_period_sessions(challenge_id)` — 기간 세션을 앱과 같은 모양의 jsonb로
 4. `accept_challenge_invite`·`join_challenge_with_code`에서 **`crew_links` 생성 제거** ← D5 폐기 본체
 
-**아직 안 한 것 (앱 코드):**
+**앱 코드:**
 
-- [ ] `challenge.ts` — `getChallengeParticipantProfiles` / `getChallengePeriodSessions` 래퍼 추가
-- [ ] `getPeriodStatsByUser`를 RPC 경로로 교체. **`foldPeriodStats`는 그대로 쓴다**
-- [ ] `challenge/page.tsx`의 `profilesByIds` → 새 RPC (랭킹판 닉네임)
-- [ ] `challenge-performance-card.tsx`의 `getGroupMemberProfiles` → 새 RPC
-- [ ] **`invite-sheet.tsx`의 "링크로 참가하면 서로 크루가 돼요" 문구를 정반대로 교체** — 이제 크루가 안 된다. 테스트(`invite-sheet.test.tsx`)도 그 문구를 단언하므로 같이 고쳐야 한다
-- [ ] `challenge-invite-link-check.mjs`의 `crew_links` 단언을 **뒤집기** — 지금은 "연결이 생긴다"를 단언한다. 0051 후에는 **안 생겨야** 한다
-- [ ] 개발환경 확인 → 배포
+- [x] `challenge.ts` — `getChallengeParticipantProfiles` / `getChallengePeriodSessions` 래퍼 추가
+- [x] `getPeriodStatsByUser`를 RPC 경로로 교체. **`foldPeriodStats`는 그대로 유지**
+- [x] `challenge/page.tsx`의 `profilesByIds` → 새 RPC (랭킹판 닉네임)
+- [x] `challenge-performance-card.tsx`의 `getGroupMemberProfiles` → 새 RPC
+- [x] `invite-sheet.tsx` 문구를 “챌린지 참가와 크루 연결은 별개”로 교체하고 테스트 수정
+- [x] `challenge-invite-link-check.mjs`를 **크루 연결이 생기지 않아야 통과**하도록 교체
+- [x] 0051 운영 적용 → 실 DB 검증 → 전체 정적 검증
+- [ ] 로그인된 실제 계정으로 로컬 챌린지·홈 화면 확인
+- [ ] 별도 승인 후 로컬 `main` 기준 배포 → 폰 초대 링크 전 과정 확인
 
-**적용 순서:** 앱 코드를 먼저 고치고 → 0051 Run → 검증 → 배포. **거꾸로 하면 랭킹이 잠깐 0으로 보인다**(RPC가 없는데 크루 연결은 사라진 상태).
+**실제로 지킨 순서:** 앱 코드 먼저 → 사용자 직접 0051 Run → 실 DB 검증. 배포만 남았다.
 
 > ⚠ 진행 중인 `7월 GND 챌린지`는 참가자 3명이 이미 서로 크루라(2026-07-27 상호 수락) 어느 경로로든 점수가 같다. 이 작업이 그 챌린지를 흔들지 않는다.
 
@@ -158,10 +166,10 @@ profiles_select_own_or_crew      랭킹판 닉네임
 
 ## 4. 도구 — `docs/db-current-schema.sql`
 
-**"이 함수의 현행 정의가 뭐지?"를 파일 47개에서 찾지 마라.** 이 스냅샷을 보면 된다.
+**"이 함수의 현행 정의가 뭐지?"를 파일 51개에서 찾지 마라.** 이 스냅샷을 보면 된다.
 
 ```
-pnpm db:snapshot     # → docs/db-current-schema.sql (함수 61 · 정책 65 · 인덱스 69)
+pnpm db:snapshot     # → docs/db-current-schema.sql (함수 64 · 정책 65 · 인덱스 69)
 ```
 
 마이그레이션을 적용한 뒤에는 **다시 뽑아라.** 0048이 만든 `admin_schema_snapshot()` RPC를 쓰고 service_role 전용이다.
@@ -173,7 +181,9 @@ pnpm db:snapshot     # → docs/db-current-schema.sql (함수 61 · 정책 65 ·
 ## 5. DB·계정 현황 (2026-07-31, 정리 완료)
 
 ```
-계정 4개:  오뎅끼데스까 · 스칼레또 · 낭만송곳니 · repro-mry7tyx0
+인증 계정 5개 / 프로필 4개:
+  프로필 있음 — 오뎅끼데스까 · 스칼레또 · 낭만송곳니 · repro-mry7tyx0
+  프로필 없음 — 기존 인증 계정 1개 (이번 작업 전부터 있었으므로 보존)
 그룹 1개:  리얼GND (오뎅끼데스까 owner + 스칼레또 · 낭만송곳니)
 크루 연결 3쌍: 스칼레또↔오뎅끼 · 스칼레또↔낭만 · 오뎅끼↔낭만  (2026-07-27 상호 수락)
 챌린지 6건: 7월 GND 챌린지[active] + cancelled 5건
@@ -185,7 +195,7 @@ pnpm db:snapshot     # → docs/db-current-schema.sql (함수 61 · 정책 65 ·
 
 **남은 것:** 오뎅끼데스까 소유의 `cancelled` 챌린지 5건. 화면에 안 뜨므로 무해하다. 지우려면 실사용 `7월 GND 챌린지`(`0b0766cf-210c-4a54-a169-68ddbcd0eedb`)를 **절대 건드리지 마라.**
 
-**검증 스크립트를 돌린 뒤에는 계정 수를 확인하라.** 4개여야 한다.
+**검증 스크립트를 돌린 뒤에는 계정 수를 확인하라.** 인증 계정 5개, 프로필 4개여야 한다. 기존의 프로필 없는 인증 계정 1개는 테스트 찌꺼기로 단정하거나 삭제하지 마라.
 
 ---
 

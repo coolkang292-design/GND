@@ -76,7 +76,7 @@ export function viewingPassStatus(
   };
 }
 
-// ── 챌린지 크루 성과 열람권: 엄밀 연속 5일 + 2시간 (D1·D3) ──────
+// ── 챌린지 참가자 성과 열람권: 엄밀 연속 5일 + 2시간 (D1·D3) ──────
 
 export const CHALLENGE_PASS_HOURS = 2;
 

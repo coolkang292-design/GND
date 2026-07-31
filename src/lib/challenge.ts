@@ -7,7 +7,7 @@ import {
   type GoalType,
   type RankedParticipant,
 } from "@/lib/domain/goal-score";
-import type { Challenge, UserGoal, WorkoutSet } from "@/lib/types";
+import type { Challenge, Profile, UserGoal } from "@/lib/types";
 
 // ── 목표 유형 메타 (§5) ──────────────────────────────────────────
 
@@ -123,11 +123,66 @@ export async function getChallengeParticipants(
   return data ?? [];
 }
 
+export type ChallengeParticipantProfile = Pick<
+  Profile,
+  "id" | "nickname" | "avatar_url"
+>;
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function isNullableNumber(value: unknown): value is number | null {
+  return value === null || (typeof value === "number" && Number.isFinite(value));
+}
+
+/** 프로필 RPC 응답을 검사하고 화면에 필요한 세 필드만 남긴다. */
+export function normalizeChallengeParticipantProfiles(
+  data: unknown,
+): ChallengeParticipantProfile[] {
+  if (!Array.isArray(data)) {
+    throw new Error("invalid_challenge_participant_profiles");
+  }
+
+  return data.map((row: unknown) => {
+    if (
+      !isPlainObject(row) ||
+      typeof row.id !== "string" ||
+      typeof row.nickname !== "string" ||
+      (row.avatar_url !== null && typeof row.avatar_url !== "string")
+    ) {
+      throw new Error("invalid_challenge_participant_profiles");
+    }
+    return {
+      id: row.id,
+      nickname: row.nickname,
+      avatar_url: row.avatar_url,
+    };
+  });
+}
+
+/** 챌린지 안에서 랭킹에 필요한 최소 프로필만 가져온다. */
+export async function getChallengeParticipantProfiles(
+  challengeId: string,
+  client?: SupabaseClient,
+): Promise<ChallengeParticipantProfile[]> {
+  const supabase = client ?? getSupabaseBrowserClient();
+  const { data, error } = await supabase.rpc("get_challenge_participant_profiles", {
+    p_challenge_id: challengeId,
+  });
+  if (error) throw error;
+  return normalizeChallengeParticipantProfiles(data);
+}
+
 // createChallenge(직접 insert)는 0044에서 지웠다. challenge_participants에 host
 // 행을 만들지 않아, 그 경로로 만든 챌린지는 getMyChallenges()에 안 잡히는
 // "안 보이는 챌린지"가 된다. 생성은 createChallengeRoom RPC 하나뿐이다.
 
-/** 챌린지의 전체 참가자 목표 (RLS: 크루원만) */
+/** 챌린지의 전체 참가자 목표 (RLS: 참가자만) */
 export async function getChallengeGoals(
   challengeId: string,
   client?: SupabaseClient,
@@ -244,7 +299,7 @@ export async function unapproveChallengeGoals(
   if (error) throw error;
 }
 
-/** 이 챌린지에 동의한 크루원 id 집합 (setup 현황·시작 게이트용) */
+/** 이 챌린지에 동의한 참가자 id 집합 (setup 현황·시작 게이트용) */
 export async function getChallengeApprovals(
   challengeId: string,
 ): Promise<Set<string>> {
@@ -308,7 +363,7 @@ export async function inviteToChallenge(
   if (error) throw error;
 }
 
-/** 수락 — joined 전환 + 기존 참가자 전원과 crew_links (설계 D5 완전 연결) */
+/** 수락 — joined 전환. 다른 참가자와의 연결은 이 챌린지 안에서만 유지된다. */
 export async function acceptChallengeInvite(challengeId: string): Promise<void> {
   const supabase = getSupabaseBrowserClient();
   const { error } = await supabase.rpc("accept_challenge_invite", {
@@ -332,8 +387,8 @@ export async function issueChallengeInviteCode(challengeId: string): Promise<str
 }
 
 /**
- * 초대 링크로 참가. 방장 승인 없이 바로 joined가 되고, 기존 참가자 전원과
- * crew_links가 맺어진다(설계 D5) — 랭킹판에서 서로 닉네임이 보이려면 필요하다.
+ * 초대 링크로 참가. 방장 승인 없이 바로 joined가 된다.
+ * 참가자 닉네임과 운동 기록은 챌린지 전용 RPC로 필요한 범위만 읽는다.
  */
 export async function joinChallengeWithCode(
   code: string,
@@ -438,6 +493,108 @@ export type PeriodSessionRow = {
     }[];
   }[];
 };
+
+type ChallengePeriodSessionRpcRow = {
+  user_id: string;
+  completed_at: string;
+  tabata_minutes: number | null;
+  workout_exercises:
+    | {
+        exercise_type: "weight" | "bodyweight" | "cardio";
+        exercise_name: string;
+        body_part: string | null;
+        workout_sets:
+          | {
+              weight_kg: number | null;
+              reps: number | null;
+              distance_meters: number | null;
+              duration_seconds: number | null;
+              is_completed: boolean;
+            }[]
+          | null;
+      }[]
+    | null;
+};
+
+/** 챌린지 세션 RPC의 snake_case 응답을 점수 계산용 모양으로 바꾼다. */
+export function normalizeChallengePeriodSessions(
+  data: unknown,
+): PeriodSessionRow[] {
+  if (!Array.isArray(data)) {
+    throw new Error("invalid_challenge_period_sessions");
+  }
+
+  return data.map((row: unknown) => {
+    if (
+      !isPlainObject(row) ||
+      typeof row.user_id !== "string" ||
+      typeof row.completed_at !== "string" ||
+      !isNullableNumber(row.tabata_minutes) ||
+      (row.workout_exercises !== null && !Array.isArray(row.workout_exercises))
+    ) {
+      throw new Error("invalid_challenge_period_sessions");
+    }
+
+    for (const exercise of row.workout_exercises ?? []) {
+      if (
+        !isPlainObject(exercise) ||
+        (exercise.exercise_type !== "weight" &&
+          exercise.exercise_type !== "bodyweight" &&
+          exercise.exercise_type !== "cardio") ||
+        typeof exercise.exercise_name !== "string" ||
+        (exercise.body_part !== null && typeof exercise.body_part !== "string") ||
+        (exercise.workout_sets !== null && !Array.isArray(exercise.workout_sets))
+      ) {
+        throw new Error("invalid_challenge_period_sessions");
+      }
+
+      for (const set of exercise.workout_sets ?? []) {
+        if (
+          !isPlainObject(set) ||
+          !isNullableNumber(set.weight_kg) ||
+          !isNullableNumber(set.reps) ||
+          !isNullableNumber(set.distance_meters) ||
+          !isNullableNumber(set.duration_seconds) ||
+          typeof set.is_completed !== "boolean"
+        ) {
+          throw new Error("invalid_challenge_period_sessions");
+        }
+      }
+    }
+
+    const validRow = row as unknown as ChallengePeriodSessionRpcRow;
+    return {
+      userId: validRow.user_id,
+      completedAt: validRow.completed_at,
+      tabataMinutes: validRow.tabata_minutes,
+      exercises: (validRow.workout_exercises ?? []).map((exercise) => ({
+        exerciseType: exercise.exercise_type,
+        exerciseName: exercise.exercise_name,
+        bodyPart: exercise.body_part,
+        sets: (exercise.workout_sets ?? []).map((set) => ({
+          weightKg: set.weight_kg,
+          reps: set.reps,
+          distanceMeters: set.distance_meters,
+          durationSeconds: set.duration_seconds,
+          isCompleted: set.is_completed,
+        })),
+      })),
+    };
+  });
+}
+
+/** 챌린지 참가자들의 기간 내 완료 세션을 제한된 RPC로 가져온다. */
+export async function getChallengePeriodSessions(
+  challengeId: string,
+  client?: SupabaseClient,
+): Promise<PeriodSessionRow[]> {
+  const supabase = client ?? getSupabaseBrowserClient();
+  const { data, error } = await supabase.rpc("get_challenge_period_sessions", {
+    p_challenge_id: challengeId,
+  });
+  if (error) throw error;
+  return normalizeChallengePeriodSessions(data);
+}
 
 /** 정규화 행 → 유저별 기간 실적 (순수·TDD 대상) */
 export function foldPeriodStats(
@@ -564,89 +721,18 @@ export function actualForGoal(
 /**
  * 참가자별 기간 실적 집계.
  *
- * RLS가 읽게 해주는 세션(내 전부 + 크루 공개 완료분)만 반영된다 —
- * private 세션은 본인 점수에만 잡힌다(진행 중엔 내 것만 쓰므로 문제 없음).
- *
- * 0044부터 명단이 group_members가 아니라 challenge_participants다. 참가자
- * 전원과 crew_links가 맺어지는 것은 0042의 accept_challenge_invite가 보장한다
- * (설계 D5의 완전 연결) — 그래서 크루 공개 세션을 서로 읽을 수 있다.
+ * 전용 RPC가 이 챌린지의 joined/dropped 참가자 완료 세션만 돌려준다.
+ * 사진 인증 필수 여부와 넉넉한 UTC 기간창도 서버에서 챌린지 설정대로 적용한다.
+ * 실제 날짜 범위와 점수 계산은 아래 foldPeriodStats 한 곳에서 최종 판정한다.
  */
 export async function getPeriodStatsByUser(
-  userIds: string[],
+  challengeId: string,
   startDate: string,
   endDate: string,
   timeZone: string,
-  photoRequired = false,
   client?: SupabaseClient,
 ): Promise<Map<string, PeriodStats>> {
-  const supabase = client ?? getSupabaseBrowserClient();
-  // 참가자가 0명이면 조회할 것이 없다. .in("user_id", [])는 PostgREST에서
-  // 빈 IN 절이 되어 문법 오류를 낼 수 있으므로 여기서 끊는다.
-  if (userIds.length === 0) return new Map();
-
-  const fromIso = new Date(`${startDate}T00:00:00Z`);
-  fromIso.setUTCDate(fromIso.getUTCDate() - 1);
-  const toIso = new Date(`${endDate}T00:00:00Z`);
-  toIso.setUTCDate(toIso.getUTCDate() + 2);
-
-  // 세션당 사진은 1장이므로 inner join으로 집계 행이 중복되지 않는다.
-  const select =
-    "user_id, completed_at, tabata_minutes, workout_exercises(exercise_type, exercise_name, body_part, workout_sets(weight_kg, reps, distance_meters, duration_seconds, is_completed))" +
-    (photoRequired ? ", workout_images!inner(image_path)" : "");
-
-  const { data, error } = await supabase
-    .from("workout_sessions")
-    .select(select)
-    // 0044: group_id 필터 → 참가자 user_id 필터.
-    // 두 방식이 같은 세션 집합을 낸다는 것을 전환 전에 실측했다
-    // (scripts/challenge-aggregation-parity.mjs). 그래야 진행 중 챌린지의
-    // 점수가 안 흔들린다.
-    .in("user_id", userIds)
-    .eq("status", "completed")
-    .is("deleted_at", null)
-    .gte("completed_at", fromIso.toISOString())
-    .lt("completed_at", toIso.toISOString());
-  if (error) throw error;
-
-  type DbRow = {
-    user_id: string;
-    completed_at: string;
-    tabata_minutes: number | null;
-    workout_exercises:
-      | {
-          exercise_type: "weight" | "bodyweight" | "cardio";
-          exercise_name: string;
-          body_part: string | null;
-          workout_sets:
-            | Pick<
-                WorkoutSet,
-                "weight_kg" | "reps" | "distance_meters" | "duration_seconds" | "is_completed"
-              >[]
-            | null;
-        }[]
-      | null;
-  };
-
-  // 조건부 select 문자열은 Supabase의 정적 문자열 파서가 해석할 수 없어
-  // 런타임 응답을 위에서 정의한 실제 행 모양으로 명시한다.
-  const rows: PeriodSessionRow[] = ((data ?? []) as unknown as DbRow[]).map((r) => ({
-    userId: r.user_id,
-    completedAt: r.completed_at,
-    tabataMinutes: r.tabata_minutes,
-    exercises: (r.workout_exercises ?? []).map((ex) => ({
-      exerciseType: ex.exercise_type,
-      exerciseName: ex.exercise_name,
-      bodyPart: ex.body_part,
-      sets: (ex.workout_sets ?? []).map((s) => ({
-        weightKg: s.weight_kg,
-        reps: s.reps,
-        distanceMeters: s.distance_meters,
-        durationSeconds: s.duration_seconds,
-        isCompleted: s.is_completed,
-      })),
-    })),
-  }));
-
+  const rows = await getChallengePeriodSessions(challengeId, client);
   return foldPeriodStats(rows, startDate, endDate, timeZone);
 }
 
@@ -700,11 +786,10 @@ export async function getActiveChallengeRanking(
     .map((p) => p.user_id);
 
   const stats = await getPeriodStatsByUser(
-    userIds,
+    ch.id,
     ch.start_date,
     ch.end_date,
     DEFAULT_TIMEZONE,
-    ch.photo_required,
     client,
   );
   const days = periodDaysCount(ch.start_date, ch.end_date);

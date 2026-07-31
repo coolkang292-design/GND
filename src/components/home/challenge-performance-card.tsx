@@ -8,9 +8,9 @@ import {
   type ChallengePassStatus,
 } from "@/lib/domain/viewing-pass";
 import { challengeDaysLeft } from "@/lib/domain/challenge-time";
-import { getGroupMemberProfiles } from "@/lib/crew";
 import {
   getActiveChallengeRanking,
+  getChallengeParticipantProfiles,
   getMyChallenges,
   getTodaysPeekTarget,
   pickPeekTarget,
@@ -20,7 +20,7 @@ import { peekRows } from "@/lib/domain/challenge-peek";
 import { pickPrimaryRow } from "@/lib/domain/challenge-room";
 
 /**
- * 홈 챌린지 크루 성과 카드 — 챌린지 active일 때만 노출.
+ * 홈 챌린지 참가자 성과 카드 — 챌린지 active일 때만 노출.
  * 5일 연속 운동으로 열리는 2시간짜리 잠금 순위판(블러+자물쇠) + D-day.
  * 보안: 잠금 상태에선 순위 데이터를 아예 조회하지 않는다(블러는 시각 처리일 뿐).
  */
@@ -56,15 +56,17 @@ export function ChallengePerformanceCard({
         const p = challengePassStatus(completedAts, new Date(), DEFAULT_TIMEZONE);
         // 보안: unlocked일 때만 순위를 조회한다. 잠금 상태에선 순위가 클라에 없다.
         if (p.state === "unlocked") {
-          const [rank, crew, picked] = await Promise.all([
+          const [rank, profiles, picked] = await Promise.all([
             getActiveChallengeRanking(ch.id),
-            // 챌린지 순위표의 닉네임 맵이라 그룹 참가자가 맞다(0039 범위 밖).
-            getGroupMemberProfiles(ch.group_id),
+            // 챌린지 안에서만 공개되는 최소 참가자 프로필을 사용한다.
+            getChallengeParticipantProfiles(ch.id),
             getTodaysPeekTarget(ch.id),
           ]);
           if (cancelled) return;
           setRanking(rank);
-          setNames(new Map(crew.map((c) => [c.id, c.nickname])));
+          setNames(
+            new Map(profiles.map((profile) => [profile.id, profile.nickname])),
+          );
           setTarget(picked);
         }
         if (cancelled) return;
@@ -90,7 +92,7 @@ export function ChallengePerformanceCard({
       // 서버가 이미 고른 사람을 돌려줬다 = 다른 기기·창에서 먼저 골랐다는 뜻.
       if (res.locked) {
         setNotice(
-          `오늘은 ${names.get(res.targetId) ?? "크루원"}님만 볼 수 있어요`,
+          `오늘은 ${names.get(res.targetId) ?? "참가자"}님만 볼 수 있어요`,
         );
       }
     } catch {
@@ -112,7 +114,7 @@ export function ChallengePerformanceCard({
   return (
     <section className="rounded-card border border-line bg-surface p-4 shadow-card">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-extrabold">🏆 챌린지 크루 성과</h3>
+        <h3 className="text-sm font-extrabold">🏆 챌린지 참가자 성과</h3>
         <span className="text-xs font-bold text-accent">
           D-{Math.max(0, dLeft - 1)}
         </span>
@@ -128,11 +130,11 @@ export function ChallengePerformanceCard({
       <div className="relative mt-3">
         {unlocked && ranking ? (
           <>
-            {/* 아직 안 골랐으면 대상 선택 — 이 목록엔 순위·점수를 노출하지 않는다 */}
+            {/* 아직 안 골랐으면 참가자 선택 — 이 목록엔 순위·점수를 노출하지 않는다 */}
             {!target && (
               <div className="flex flex-col gap-1.5">
                 <p className="text-[11px] text-muted">
-                  성과를 볼 크루원 한 명을 고르세요. 오늘은 바꿀 수 없어요.
+                  성과를 볼 참가자 한 명을 고르세요. 오늘은 바꿀 수 없어요.
                 </p>
                 {ranking.list
                   .filter((r) => r.userId !== userId)
@@ -145,7 +147,7 @@ export function ChallengePerformanceCard({
                       className="flex items-center justify-between rounded-card-sm bg-surface-2 px-3 py-2 text-left text-[12.5px] disabled:opacity-50"
                     >
                       <span className="font-bold">
-                        {names.get(r.userId) ?? "크루원"}
+                        {names.get(r.userId) ?? "참가자"}
                       </span>
                       <span className="text-xs font-bold text-accent">
                         {picking === r.userId ? "여는 중…" : "성과 보기 ›"}
@@ -154,7 +156,7 @@ export function ChallengePerformanceCard({
                   ))}
                 {ranking.list.filter((r) => r.userId !== userId).length === 0 && (
                   <p className="rounded-card-sm bg-surface-2 px-3 py-2 text-[12.5px] text-muted">
-                    아직 함께 참가한 크루원이 없어요
+                    아직 함께 참가한 사람이 없어요
                   </p>
                 )}
               </div>
@@ -170,7 +172,7 @@ export function ChallengePerformanceCard({
                     }`}
                   >
                     <span className="font-bold">
-                      {r.rank}위 · {names.get(r.userId) ?? "크루원"}
+                      {r.rank}위 · {names.get(r.userId) ?? "참가자"}
                       {r.userId === userId && (
                         <span className="ml-0.5 text-faint">(나)</span>
                       )}

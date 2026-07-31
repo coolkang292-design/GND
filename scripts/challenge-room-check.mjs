@@ -68,6 +68,30 @@ const rpc = (token, name, args) =>
 const hasCode = (r, code) =>
   r.status >= 400 && JSON.stringify(r.json ?? {}).includes(code);
 
+/** 기간 운동 RPC가 앱 파서에 필요한 중첩 모양으로 픽스처를 돌려주는지 확인한다. */
+const hasFixtureWorkout = (rows, userId, completedAt) => {
+  const expectedCompletedAt = new Date(completedAt).getTime();
+  return Array.isArray(rows) && rows.some((row) =>
+    row?.user_id === userId &&
+    new Date(row.completed_at).getTime() === expectedCompletedAt &&
+    row.tabata_minutes === null &&
+    Array.isArray(row.workout_exercises) &&
+    row.workout_exercises.some((exercise) =>
+      exercise?.exercise_type === "weight" &&
+      exercise.exercise_name === "벤치프레스" &&
+      exercise.body_part === "가슴" &&
+      Array.isArray(exercise.workout_sets) &&
+      exercise.workout_sets.some((set) =>
+        set?.weight_kg === 60 &&
+        set.reps === 10 &&
+        set.distance_meters === null &&
+        set.duration_seconds === null &&
+        set.is_completed === true
+      )
+    )
+  );
+};
+
 async function anonUser(tag) {
   const res = await fetch(`${URL}/auth/v1/signup`, {
     method: "POST",
@@ -138,12 +162,14 @@ try {
   check("픽스처: 그룹 생성", Boolean(groupId), JSON.stringify(g.json));
 
   // ── 생성 ──
-  const start = kstDay(2 * 86_400_000);
+  // 자동 종료 뒤에도 아래 완료 운동이 챌린지 기간 안에 남도록 시작일을 어제로 둔다.
+  const start = kstDay(-86_400_000);
   const end = kstDay(29 * 86_400_000);
   let r = await rpc(a.token, "create_challenge_room", {
     p_name: `9월 챌린지-${RUN}`,
     p_start_date: start,
     p_end_date: end,
+    p_photo_required: false,
   });
   const chId = r.json?.id;
   check("[1] 생성 성공", r.status === 200 && Boolean(chId), JSON.stringify(r.json));
@@ -162,6 +188,7 @@ try {
     p_name: "역순기간",
     p_start_date: end,
     p_end_date: start,
+    p_photo_required: false,
   });
   check("[3] 시작일 > 종료일은 invalid_period", hasCode(r, "invalid_period"));
 
@@ -192,28 +219,145 @@ try {
   r = await rpc(b.token, "invite_to_challenge", { p_challenge_id: chId, p_target_id: d.id });
   check("[9] 방장 아닌 사람의 초대는 not_host", hasCode(r, "not_host"));
 
-  // ── 수락 · 완전 연결 ──
+  // ── 수락 · 챌린지 참가와 크루 관계 분리 ──
   r = await rpc(b.token, "accept_challenge_invite", { p_challenge_id: chId });
   check(
-    "[10] 수락 → joined, 기존 참가자 1명과 연결",
-    r.json?.status === "joined" && r.json?.crewLinked === 1,
+    "[10] 수락 → joined, crewLinked 0",
+    r.json?.status === "joined" && r.json?.crewLinked === 0,
     JSON.stringify(r.json),
   );
 
-  const linksB = await api(b.token, "GET", "/rest/v1/crew_links?select=user_a,user_b");
-  check("[11] a-b 크루 연결 생성", (linksB.json ?? []).length === 1, JSON.stringify(linksB.json));
+  const linksB = await api(
+    SERVICE_KEY,
+    "GET",
+    `/rest/v1/crew_links?select=user_a,user_b&or=(user_a.eq.${b.id},user_b.eq.${b.id})`,
+  );
+  check(
+    "[11] b가 포함된 crew_links는 0건",
+    linksB.status === 200 && Array.isArray(linksB.json) && linksB.json.length === 0,
+    JSON.stringify(linksB.json),
+  );
 
-  // c가 들어오면 a·b **둘 다**와 연결돼야 한다 (설계 D5 완전 연결)
   await rpc(a.token, "invite_to_challenge", { p_challenge_id: chId, p_target_id: c.id });
   r = await rpc(c.token, "accept_challenge_invite", { p_challenge_id: chId });
   check(
-    "[12] 두 번째 수락자는 기존 참가자 2명 전원과 연결",
-    r.json?.crewLinked === 2,
+    "[12] 두 번째 수락도 joined, crewLinked 0",
+    r.json?.status === "joined" && r.json?.crewLinked === 0,
     JSON.stringify(r.json),
   );
 
-  const linksC = await api(c.token, "GET", "/rest/v1/crew_links?select=user_a,user_b");
-  check("[13] c는 a·b 양쪽과 크루", (linksC.json ?? []).length === 2, JSON.stringify(linksC.json));
+  const linksC = await api(
+    SERVICE_KEY,
+    "GET",
+    `/rest/v1/crew_links?select=user_a,user_b&or=(user_a.eq.${c.id},user_b.eq.${c.id})`,
+  );
+  check(
+    "[13] c가 포함된 crew_links는 0건",
+    linksC.status === 200 && Array.isArray(linksC.json) && linksC.json.length === 0,
+    JSON.stringify(linksC.json),
+  );
+
+  // service_role로 기간 안의 완료 운동을 만든다. 각 단계의 id를 확인해 빈 픽스처가
+  // 아래 RPC 단언을 가짜로 통과시키지 못하게 한다.
+  const fixtureSession = await api(SERVICE_KEY, "POST", "/rest/v1/workout_sessions", {
+    user_id: a.id,
+    group_id: groupId,
+    status: "completed",
+    started_at: `${start}T02:00:00Z`,
+    completed_at: `${start}T03:00:00Z`,
+    visibility: "group",
+    timezone: "Asia/Seoul",
+  });
+  const fixtureSessionId = fixtureSession.json?.[0]?.id;
+  if (!fixtureSessionId) {
+    throw new Error(`완료 운동 픽스처 생성 실패: ${JSON.stringify(fixtureSession.json)}`);
+  }
+
+  const fixtureExercise = await api(SERVICE_KEY, "POST", "/rest/v1/workout_exercises", {
+    session_id: fixtureSessionId,
+    exercise_name: "벤치프레스",
+    exercise_type: "weight",
+    body_part: "가슴",
+    sort_order: 0,
+  });
+  const fixtureExerciseId = fixtureExercise.json?.[0]?.id;
+  if (!fixtureExerciseId) {
+    throw new Error(`운동 종목 픽스처 생성 실패: ${JSON.stringify(fixtureExercise.json)}`);
+  }
+
+  const fixtureSet = await api(SERVICE_KEY, "POST", "/rest/v1/workout_sets", {
+    workout_exercise_id: fixtureExerciseId,
+    set_number: 1,
+    weight_kg: 60,
+    reps: 10,
+    is_completed: true,
+  });
+  const fixtureSetId = fixtureSet.json?.[0]?.id;
+  if (!fixtureSetId) {
+    throw new Error(`운동 세트 픽스처 생성 실패: ${JSON.stringify(fixtureSet.json)}`);
+  }
+
+  const bProfiles = await rpc(b.token, "get_challenge_participant_profiles", {
+    p_challenge_id: chId,
+  });
+  check(
+    "[13a] 정식 참가자 b는 참가자 프로필 3명을 읽는다",
+    bProfiles.status === 200 && Array.isArray(bProfiles.json) && bProfiles.json.length === 3,
+    `${bProfiles.status} ${JSON.stringify(bProfiles.json)}`,
+  );
+
+  const bPeriodSessions = await rpc(b.token, "get_challenge_period_sessions", {
+    p_challenge_id: chId,
+  });
+  check(
+    "[13b] 정식 참가자 b는 RPC로 a의 기간 운동을 읽는다",
+    bPeriodSessions.status === 200 &&
+      hasFixtureWorkout(bPeriodSessions.json, a.id, `${start}T03:00:00Z`),
+    `${bPeriodSessions.status} ${JSON.stringify(bPeriodSessions.json)}`,
+  );
+
+  const bDirectSession = await api(
+    b.token,
+    "GET",
+    `/rest/v1/workout_sessions?id=eq.${fixtureSessionId}&select=id`,
+  );
+  check(
+    "[13c] 원본 workout_sessions는 b에게 계속 숨겨진다",
+    bDirectSession.status === 200 &&
+      Array.isArray(bDirectSession.json) &&
+      bDirectSession.json.length === 0,
+    `${bDirectSession.status} ${JSON.stringify(bDirectSession.json)}`,
+  );
+
+  const bReaction = await api(b.token, "POST", "/rest/v1/reactions", {
+    session_id: fixtureSessionId,
+    user_id: b.id,
+    reaction_type: "fire",
+  });
+  const bReactionRows = await api(
+    SERVICE_KEY,
+    "GET",
+    `/rest/v1/reactions?session_id=eq.${fixtureSessionId}&user_id=eq.${b.id}&select=id`,
+  );
+  check(
+    "[13d] 챌린지 관계만으로 원본 세션에 반응할 수 없다",
+    bReaction.status === 403 &&
+      bReaction.json?.code === "42501" &&
+      bReactionRows.status === 200 &&
+      Array.isArray(bReactionRows.json) &&
+      bReactionRows.json.length === 0,
+    `POST ${bReaction.status} ${JSON.stringify(bReaction.json)} / GET ${bReactionRows.status} ${JSON.stringify(bReactionRows.json)}`,
+  );
+
+  const servicePeriodSessions = await rpc(SERVICE_KEY, "get_challenge_period_sessions", {
+    p_challenge_id: chId,
+  });
+  check(
+    "[13e] service_role도 a의 기간 운동을 읽는다",
+    servicePeriodSessions.status === 200 &&
+      hasFixtureWorkout(servicePeriodSessions.json, a.id, `${start}T03:00:00Z`),
+    `${servicePeriodSessions.status} ${JSON.stringify(servicePeriodSessions.json)}`,
+  );
 
   r = await rpc(c.token, "accept_challenge_invite", { p_challenge_id: chId });
   check("[14] 재수락은 already_joined", hasCode(r, "already_joined"));
@@ -223,10 +367,41 @@ try {
 
   // ── 거절 ──
   await rpc(a.token, "invite_to_challenge", { p_challenge_id: chId, p_target_id: d.id });
+  const invitedProfiles = await rpc(d.token, "get_challenge_participant_profiles", {
+    p_challenge_id: chId,
+  });
+  check(
+    "[15a] invited 상태는 참가자 프로필을 읽지 못한다",
+    invitedProfiles.status === 200 &&
+      Array.isArray(invitedProfiles.json) &&
+      invitedProfiles.json.length === 0,
+    `${invitedProfiles.status} ${JSON.stringify(invitedProfiles.json)}`,
+  );
+
+  const invitedPeriodSessions = await rpc(d.token, "get_challenge_period_sessions", {
+    p_challenge_id: chId,
+  });
+  check(
+    "[15b] invited 상태는 기간 운동 RPC가 challenge_not_found",
+    hasCode(invitedPeriodSessions, "challenge_not_found"),
+    `${invitedPeriodSessions.status} ${JSON.stringify(invitedPeriodSessions.json)}`,
+  );
+
   r = await rpc(d.token, "decline_challenge_invite", { p_challenge_id: chId });
   check("[16] 거절 성공", r.json?.status === "declined", JSON.stringify(r.json));
   ps = await participants(chId);
   check("[17] 거절하면 행이 사라진다", !ps.some((p) => p.user_id === d.id), JSON.stringify(ps));
+
+  const outsiderProfiles = await rpc(d.token, "get_challenge_participant_profiles", {
+    p_challenge_id: chId,
+  });
+  check(
+    "[17a] 거절한 outsider는 참가자 프로필을 읽지 못한다",
+    outsiderProfiles.status === 200 &&
+      Array.isArray(outsiderProfiles.json) &&
+      outsiderProfiles.json.length === 0,
+    `${outsiderProfiles.status} ${JSON.stringify(outsiderProfiles.json)}`,
+  );
 
   // ── RLS ──
   const seen = await api(
@@ -313,6 +488,36 @@ try {
     JSON.stringify(hostRow),
   );
 
+  // 앱 목록 검증이 끝난 뒤 두 번째 챌린지를 취소하고, 취소된 방의 전용
+  // 조회가 닫히는지 확인한다. 취소를 먼저 하면 앱은 그 방을 목록에서 제외하므로
+  // 위 [21b]가 실제 화면 목록의 근거가 될 수 없다.
+  await api(
+    SERVICE_KEY,
+    "PATCH",
+    `/rest/v1/challenges?id=eq.${secondId}`,
+    { status: "cancelled" },
+    "return=minimal",
+  );
+  const cancelledProfiles = await rpc(a.token, "get_challenge_participant_profiles", {
+    p_challenge_id: secondId,
+  });
+  check(
+    "[21a] cancelled 챌린지는 방장도 참가자 프로필을 읽지 못한다",
+    cancelledProfiles.status === 200 &&
+      Array.isArray(cancelledProfiles.json) &&
+      cancelledProfiles.json.length === 0,
+    `${cancelledProfiles.status} ${JSON.stringify(cancelledProfiles.json)}`,
+  );
+
+  const cancelledPeriodSessions = await rpc(a.token, "get_challenge_period_sessions", {
+    p_challenge_id: secondId,
+  });
+  check(
+    "[21a-2] cancelled 챌린지는 기간 운동 RPC가 challenge_not_found",
+    hasCode(cancelledPeriodSessions, "challenge_not_found"),
+    `${cancelledPeriodSessions.status} ${JSON.stringify(cancelledPeriodSessions.json)}`,
+  );
+
   // ── 자동 시작 ──
   // 시작일을 어제로 당겨 도래분으로 만든다.
   await api(
@@ -344,6 +549,16 @@ try {
     JSON.stringify(ps),
   );
 
+  const droppedPeriodSessions = await rpc(c.token, "get_challenge_period_sessions", {
+    p_challenge_id: chId,
+  });
+  check(
+    "[25a] dropped 참가자 c는 기간 운동 RPC를 읽는다",
+    droppedPeriodSessions.status === 200 &&
+      hasFixtureWorkout(droppedPeriodSessions.json, a.id, `${start}T03:00:00Z`),
+    `${droppedPeriodSessions.status} ${JSON.stringify(droppedPeriodSessions.json)}`,
+  );
+
   r = await rpc(a.token, "autostart_due_challenges", {});
   check("[26] 두 번 호출해도 결과 같음 (멱등)", r.json?.started === 0, JSON.stringify(r.json));
 
@@ -363,6 +578,17 @@ try {
   );
   r = await rpc(a.token, "autofinalize_due_challenges", {});
   check("[29] 자동 종료 1건", r.json?.ended === 1, JSON.stringify(r.json));
+
+  const endedPeriodSessions = await rpc(b.token, "get_challenge_period_sessions", {
+    p_challenge_id: chId,
+  });
+  check(
+    "[29a] ended 챌린지에서도 b는 a의 기간 운동을 읽는다",
+    endedPeriodSessions.status === 200 &&
+      hasFixtureWorkout(endedPeriodSessions.json, a.id, `${start}T03:00:00Z`),
+    `${endedPeriodSessions.status} ${JSON.stringify(endedPeriodSessions.json)}`,
+  );
+
   r = await rpc(a.token, "autofinalize_due_challenges", {});
   check("[30] 두 번 호출해도 결과 같음 (멱등)", r.json?.ended === 0, JSON.stringify(r.json));
 

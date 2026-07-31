@@ -4,6 +4,8 @@ import {
   actualForGoal,
   foldPeriodStats,
   goalLabel,
+  normalizeChallengeParticipantProfiles,
+  normalizeChallengePeriodSessions,
   type PeriodSessionRow,
   type PeriodStats,
 } from "@/lib/challenge";
@@ -59,6 +61,156 @@ describe("actualForGoal", () => {
     expect(actualForGoal(STATS, "volume")).toBe(3000));
   it("tabata_count는 타바타 세션 수", () =>
     expect(actualForGoal({ ...STATS, tabataCount: 5 }, "tabata_count")).toBe(5));
+});
+
+describe("normalizeChallengePeriodSessions", () => {
+  const validRpcRow = {
+    user_id: "u1",
+    completed_at: "2026-07-31T03:00:00Z",
+    tabata_minutes: null,
+    workout_exercises: [
+      {
+        exercise_type: "weight",
+        exercise_name: "벤치프레스",
+        body_part: "가슴",
+        workout_sets: [
+          {
+            weight_kg: 60,
+            reps: 10,
+            distance_meters: null,
+            duration_seconds: null,
+            is_completed: true,
+          },
+        ],
+      },
+    ],
+  };
+
+  it("RPC의 snake_case 행을 PeriodSessionRow로 변환한다", () => {
+    const rows = normalizeChallengePeriodSessions([
+      {
+        user_id: "u1",
+        completed_at: "2026-07-31T03:00:00Z",
+        tabata_minutes: 12,
+        workout_exercises: [
+          {
+            exercise_type: "weight",
+            exercise_name: "벤치프레스",
+            body_part: "가슴",
+            workout_sets: [
+              {
+                weight_kg: 60,
+                reps: 10,
+                distance_meters: null,
+                duration_seconds: null,
+                is_completed: true,
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+
+    expect(rows).toEqual([
+      {
+        userId: "u1",
+        completedAt: "2026-07-31T03:00:00Z",
+        tabataMinutes: 12,
+        exercises: [
+          {
+            exerciseType: "weight",
+            exerciseName: "벤치프레스",
+            bodyPart: "가슴",
+            sets: [
+              {
+                weightKg: 60,
+                reps: 10,
+                distanceMeters: null,
+                durationSeconds: null,
+                isCompleted: true,
+              },
+            ],
+          },
+        ],
+      },
+    ] satisfies PeriodSessionRow[]);
+  });
+
+  it("RPC 결과가 배열이 아니면 명시적인 오류를 던진다", () => {
+    expect(() => normalizeChallengePeriodSessions({ error: "broken" })).toThrow(
+      "invalid_challenge_period_sessions",
+    );
+  });
+
+  it.each([
+    ["빈 행", [{}]],
+    ["null 행", [null]],
+    [
+      "배열이 아닌 운동 목록",
+      [{ ...validRpcRow, workout_exercises: { exercise_type: "weight" } }],
+    ],
+    [
+      "배열이 아닌 세트 목록",
+      [
+        {
+          ...validRpcRow,
+          workout_exercises: [
+            {
+              ...validRpcRow.workout_exercises[0],
+              workout_sets: { is_completed: true },
+            },
+          ],
+        },
+      ],
+    ],
+    [
+      "허용되지 않은 운동 유형",
+      [
+        {
+          ...validRpcRow,
+          workout_exercises: [
+            {
+              ...validRpcRow.workout_exercises[0],
+              exercise_type: "swimming",
+            },
+          ],
+        },
+      ],
+    ],
+    ["잘못된 필드 타입", [{ ...validRpcRow, completed_at: 123 }]],
+  ])("%s이면 같은 오류를 던진다", (_name, data) => {
+    expect(() => normalizeChallengePeriodSessions(data)).toThrow(
+      "invalid_challenge_period_sessions",
+    );
+  });
+});
+
+describe("normalizeChallengeParticipantProfiles", () => {
+  it("필요한 프로필 필드만 새 객체로 돌려준다", () => {
+    expect(
+      normalizeChallengeParticipantProfiles([
+        {
+          id: "u1",
+          nickname: "그린",
+          avatar_url: null,
+          weekly_goal: 5,
+        },
+      ]),
+    ).toEqual([{ id: "u1", nickname: "그린", avatar_url: null }]);
+  });
+
+  it.each([
+    ["배열이 아닌 응답", { id: "u1" }],
+    [
+      "잘못된 필드 타입",
+      [{ id: "u1", nickname: 123, avatar_url: null }],
+    ],
+    ["필수 필드 누락", [{ id: "u1", nickname: "그린" }]],
+  ])("%s이면 명시적인 오류를 던진다", (_name, data) => {
+    expect(() => normalizeChallengeParticipantProfiles(data)).toThrow(
+      "invalid_challenge_participant_profiles",
+    );
+  });
 });
 
 describe("foldPeriodStats", () => {

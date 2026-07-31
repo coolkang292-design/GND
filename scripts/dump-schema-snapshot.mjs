@@ -52,7 +52,7 @@ if (!res.ok) {
   lines.push("-- 이 파일은 **읽기용 참조**다. 여기를 고쳐도 DB는 안 바뀐다 —");
   lines.push("-- 변경은 supabase/migrations/에 새 번호 파일을 만들어 사용자가 Run한다.");
   lines.push("--");
-  lines.push("-- 쓰는 법: 함수·정책의 '현행' 정의가 필요할 때 마이그레이션 47개를");
+  lines.push("-- 쓰는 법: 함수·정책의 '현행' 정의가 필요할 때 마이그레이션 51개를");
   lines.push("-- 뒤지지 말고 이 파일을 검색하라. 마이그레이션을 적용한 뒤에는 다시 뽑아라.");
   lines.push(`--`);
   lines.push(`-- 함수 ${fns.length}개 · 정책 ${pols.length}개 · 인덱스 ${idxs.length}개`);

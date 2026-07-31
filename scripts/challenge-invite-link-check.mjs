@@ -1,4 +1,4 @@
-// 0049 초대 링크 검증 — 코드 발급·참가·크루 연결·경계.
+// 0049 초대 링크 검증 — 코드 발급·참가·경계.
 // 실행: node scripts/challenge-invite-link-check.mjs  (사전조건: 0049 적용)
 //
 // 지키는 것: 크루 밖 사람이 링크만으로 챌린지에 들어올 수 있는가, 그리고
@@ -145,7 +145,7 @@ try {
     JSON.stringify(rows),
   );
 
-  // ── D5: 크루 연결 ──
+  // ── 챌린지 참가와 크루 관계는 별개 ──
   const links = await api(
     SERVICE,
     "GET",
@@ -153,9 +153,8 @@ try {
   );
   const linkRows = Array.isArray(links.json) ? links.json : [];
   check(
-    "기존 참가자와 crew_links가 맺어진다 (설계 D5 — 랭킹판 닉네임)",
-    linkRows.length === 1 &&
-      [linkRows[0].user_a, linkRows[0].user_b].includes(host.id),
+    "링크 참가 후 crew_links가 생기지 않는다",
+    links.status === 200 && Array.isArray(links.json) && linkRows.length === 0,
     JSON.stringify(linkRows),
   );
 

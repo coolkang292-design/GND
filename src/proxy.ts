@@ -15,7 +15,7 @@ export const ADMIN_COOKIE = "gnd_admin";
  *
  * 여기서 권한을 판정하지 않는다 — 게이트는 requireAdmin() 한 곳이다.
  */
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   // ── ?key=… 로 들어오면 쿠키로 바꾸고 주소에서 지운다 ──────────────
   // 쿠키로 옮기는 이유: 암호가 주소창·방문기록·공유 링크에 계속 남지 않게.
   // 쿠키는 httpOnly라 JS로 못 읽고, path를 /admin으로 좁혀 다른 경로엔 안 실린다.

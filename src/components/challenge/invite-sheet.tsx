@@ -51,7 +51,7 @@ export function InviteSheet({
   if (status !== "setup") {
     return (
       <section className="rounded-card border border-line bg-surface p-4 shadow-card">
-        <h3 className="text-sm font-extrabold">🏆 크루 초대</h3>
+        <h3 className="text-sm font-extrabold">🏆 챌린지 초대</h3>
         <p className="mt-0.5 text-[11px] text-muted">
           {status === "active"
             ? "이미 시작해서 초대가 닫혔어요. 중간에 합류하면 점수가 공정하지 않아서예요."
@@ -108,7 +108,7 @@ export function InviteSheet({
 
   return (
     <section className="rounded-card border border-line bg-surface p-4 shadow-card">
-      <h3 className="text-sm font-extrabold">🏆 크루 초대</h3>
+      <h3 className="text-sm font-extrabold">🏆 챌린지 초대</h3>
       <p className="mt-0.5 text-[11px] text-muted">
         닉네임으로 찾아 초대해요. 시작 전에만 초대할 수 있어요.
       </p>
@@ -147,12 +147,11 @@ export function InviteSheet({
             <p className="mt-0.5 break-all text-[11px] text-muted">{link}</p>
           </div>
         )}
-        {/* 이 한 줄을 뺄 수 없다. 링크로 들어온 사람은 참가자 전원과 크루가 되고,
-            챌린지가 끝나도 그 관계가 남는다(crew_links에 challenge_id가 없다).
-            문서에만 적으면 아무도 안 읽으므로 공유하는 순간 보이게 한다. */}
+        {/* 링크 참가는 친구 관계를 만들지 않고, 공개 범위도 이 챌린지 안으로 제한된다. */}
         <p className="mt-1.5 text-[11px] text-muted">
-          링크로 참가하면 <b className="text-text">서로 크루가 돼요.</b> 챌린지가
-          끝나도 운동 소식이 오가니 아는 사람에게만 보내세요.
+          링크로 참가해도{" "}
+          <b className="text-text">서로 크루가 되지는 않아요.</b> 이름과 랭킹은 이
+          챌린지 안에서만 보여요.
         </p>
       </div>
 

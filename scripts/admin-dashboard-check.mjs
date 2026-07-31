@@ -72,9 +72,23 @@ const challenges = await db
 check("challenges(id,name,end_date,group_id) status=active",
   !challenges.error, challenges.error?.message ?? `${challenges.data.length}건`);
 
-const members = await db.from("group_members").select("group_id,user_id");
-check("group_members(group_id,user_id)",
-  !members.error, members.error?.message ?? `${members.data.length}행`);
+const participants = await db
+  .from("challenge_participants")
+  .select("challenge_id,status")
+  .in("status", ["joined", "dropped"]);
+check("challenge_participants(challenge_id,status) status in joined,dropped",
+  !participants.error, participants.error?.message ?? `${participants.data.length}행`);
+
+for (const challenge of challenges.data ?? []) {
+  const periodSessions = await db.rpc("get_challenge_period_sessions", {
+    p_challenge_id: challenge.id,
+  });
+  check(
+    `get_challenge_period_sessions(${challenge.id.slice(0, 8)}…)`,
+    !periodSessions.error && Array.isArray(periodSessions.data),
+    periodSessions.error?.message ?? `${periodSessions.data.length}행`,
+  );
+}
 
 // fetchGrowthDataset
 const xp = await db.from("xp_transactions").select("reason,amount");

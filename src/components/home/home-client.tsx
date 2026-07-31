@@ -101,7 +101,7 @@ export function HomeClient() {
 
       <CrewCard />
 
-      {/* 챌린지 크루 성과 — 챌린지 active일 때만, 5일 연속으로 2시간 열림 */}
+      {/* 챌린지 참가자 성과 — 챌린지 active일 때만, 5일 연속으로 2시간 열림 */}
       {completedAts && <ChallengePerformanceCard completedAts={completedAts} />}
 
       <AuthStatus />

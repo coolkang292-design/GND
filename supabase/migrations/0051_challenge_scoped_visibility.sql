@@ -41,40 +41,56 @@ begin;
 -- cancelled는 뺀다. 취소된 방으로 남의 정보를 계속 보면 안 된다.
 -- invited(수락 전)도 뺀다 — 초대만 받아 놓고 남의 실적을 들여다볼 수 있으면
 -- 초대가 열람 수단이 된다.
-create or replace function public.shares_challenge_with(p_other uuid)
+create or replace function public.shares_challenge_with(
+  p_challenge_id uuid,
+  p_other uuid
+)
 returns boolean
-language sql stable security definer set search_path = public as $$
+language sql stable security definer set search_path = public, pg_temp as $$
   select exists (
     select 1
-    from challenge_participants mine
-    join challenge_participants theirs on theirs.challenge_id = mine.challenge_id
-    join challenges c on c.id = mine.challenge_id
-    where mine.user_id = (select auth.uid())
+    from public.challenge_participants mine
+    join public.challenge_participants theirs
+      on theirs.challenge_id = mine.challenge_id
+    join public.challenges c
+      on c.id = mine.challenge_id
+    where mine.challenge_id = p_challenge_id
+      and mine.user_id = (select auth.uid())
       and theirs.user_id = p_other
       and mine.status in ('joined', 'dropped')
       and theirs.status in ('joined', 'dropped')
       and c.status <> 'cancelled'
   )
 $$;
--- ⚠ revoke하지 않는다. 아래 정의자 함수들이 내부에서 부르고, 앞으로 RLS가
---    쓰게 될 수도 있다 — 정책은 호출자 권한으로 평가되므로 revoke하면 anon
---    요청이 0행이 아니라 42501로 죽는다 (0038 is_crew_with와 같은 이유).
+-- 공개 RPC가 아니라 아래 두 정의자 함수의 챌린지 단위 문지기다.
+-- 직접 실행은 인증 사용자와 관리자 서버에만 허용한다.
+revoke all on function public.shares_challenge_with(uuid, uuid) from public, anon;
+grant execute on function public.shares_challenge_with(uuid, uuid)
+  to authenticated, service_role;
 
 -- ── 2. 챌린지 참가자 프로필 ──────────────────────────────────
 -- 랭킹판 닉네임용. profiles RLS를 넓히는 대신 필요한 컬럼만 돌려준다.
 create or replace function public.get_challenge_participant_profiles(p_challenge_id uuid)
 returns table (id uuid, nickname text, avatar_url text)
-language sql stable security definer set search_path = public as $$
+language sql stable security definer set search_path = public, pg_temp as $$
   select p.id, p.nickname, p.avatar_url
-  from challenge_participants cp
-  join profiles p on p.id = cp.user_id
+  from public.challenge_participants cp
+  join public.profiles p on p.id = cp.user_id
   where cp.challenge_id = p_challenge_id
     and cp.status in ('joined', 'dropped')
-    -- 부르는 사람이 그 챌린지 참가자여야 한다. 아니면 빈 결과다.
-    and public.is_challenge_participant(p_challenge_id, (select auth.uid()))
+    -- 정식 참가자만 같은 챌린지 명단을 읽는다. 관리자 서버는 같은 RPC를 쓴다.
+    and (
+      (select auth.role()) = 'service_role'
+      or public.shares_challenge_with(
+        p_challenge_id,
+        (select auth.uid())
+      )
+    )
 $$;
-revoke all on function public.get_challenge_participant_profiles(uuid) from public, anon;
-grant execute on function public.get_challenge_participant_profiles(uuid) to authenticated;
+revoke all on function public.get_challenge_participant_profiles(uuid)
+  from public, anon;
+grant execute on function public.get_challenge_participant_profiles(uuid)
+  to authenticated, service_role;
 
 -- ── 3. 챌린지 기간 세션 ──────────────────────────────────────
 -- getPeriodStatsByUser가 먹던 것과 **같은 모양**을 돌려준다. 클라가 지금처럼
@@ -84,14 +100,18 @@ grant execute on function public.get_challenge_participant_profiles(uuid) to aut
 -- foldPeriodStats가 KST 날짜로 다시 하므로 여기서는 넉넉히 담는다.
 create or replace function public.get_challenge_period_sessions(p_challenge_id uuid)
 returns jsonb
-language plpgsql stable security definer set search_path = public as $$
+language plpgsql stable security definer set search_path = public, pg_temp as $$
 declare
-  c challenges;
+  c public.challenges;
   v_rows jsonb;
 begin
-  select * into c from challenges where id = p_challenge_id;
+  select * into c from public.challenges where id = p_challenge_id;
   if not found then raise exception 'challenge_not_found'; end if;
-  if not public.is_challenge_participant(p_challenge_id, auth.uid()) then
+  if coalesce((select auth.role()), '') <> 'service_role'
+     and not public.shares_challenge_with(
+       p_challenge_id,
+       (select auth.uid())
+     ) then
     raise exception 'challenge_not_found';
   end if;
 
@@ -114,14 +134,14 @@ begin
               'duration_seconds', ws.duration_seconds,
               'is_completed', ws.is_completed
             ))
-            from workout_sets ws where ws.workout_exercise_id = we.id
+            from public.workout_sets ws where ws.workout_exercise_id = we.id
           ), '[]'::jsonb)
         ))
-        from workout_exercises we where we.session_id = s.id
+        from public.workout_exercises we where we.session_id = s.id
       ), '[]'::jsonb)
     ) as row
-    from workout_sessions s
-    join challenge_participants cp
+    from public.workout_sessions s
+    join public.challenge_participants cp
       on cp.user_id = s.user_id
      and cp.challenge_id = p_challenge_id
      and cp.status in ('joined', 'dropped')
@@ -132,24 +152,26 @@ begin
       -- 사진 인증 필수 챌린지는 사진 있는 세션만 (앱의 workout_images!inner와 같다)
       and (
         not c.photo_required
-        or exists (select 1 from workout_images wi where wi.session_id = s.id)
+        or exists (select 1 from public.workout_images wi where wi.session_id = s.id)
       )
   ) t;
 
   return v_rows;
 end $$;
-revoke all on function public.get_challenge_period_sessions(uuid) from public, anon;
-grant execute on function public.get_challenge_period_sessions(uuid) to authenticated;
+revoke all on function public.get_challenge_period_sessions(uuid)
+  from public, anon;
+grant execute on function public.get_challenge_period_sessions(uuid)
+  to authenticated, service_role;
 
 -- ── 4. D5 폐기 — 챌린지 참가가 친구를 만들지 않는다 ──────────
 -- accept_challenge_invite에서 crew_links 생성만 걷어낸다. 나머지는 현행 그대로.
 create or replace function public.accept_challenge_invite(p_challenge_id uuid)
 returns jsonb
-language plpgsql volatile security definer set search_path = public as $$
+language plpgsql volatile security definer set search_path = public, pg_temp as $$
 declare
   v_me uuid := auth.uid();
-  c challenges;
-  v_row challenge_participants;
+  c public.challenges;
+  v_row public.challenge_participants;
 begin
   if v_me is null then raise exception 'not_authenticated'; end if;
 
@@ -157,17 +179,17 @@ begin
   -- 수락할 때 상태 전이가 엇갈리지 않게 락은 유지한다.
   perform pg_advisory_xact_lock(hashtext(p_challenge_id::text));
 
-  select * into c from challenges where id = p_challenge_id;
+  select * into c from public.challenges where id = p_challenge_id;
   if not found then raise exception 'challenge_not_found'; end if;
   if c.status <> 'setup' then raise exception 'invalid_status:%', c.status; end if;
 
-  select * into v_row from challenge_participants
+  select * into v_row from public.challenge_participants
   where challenge_id = p_challenge_id and user_id = v_me for update;
   if not found then raise exception 'not_invited'; end if;
   if v_row.status = 'joined' then raise exception 'already_joined'; end if;
   if v_row.status = 'dropped' then raise exception 'dropped'; end if;
 
-  update challenge_participants
+  update public.challenge_participants
      set status = 'joined', joined_at = now()
    where challenge_id = p_challenge_id and user_id = v_me;
 
@@ -180,29 +202,29 @@ grant execute on function public.accept_challenge_invite(uuid) to authenticated;
 -- 링크 참가도 같다.
 create or replace function public.join_challenge_with_code(p_code text)
 returns jsonb
-language plpgsql volatile security definer set search_path = public as $$
+language plpgsql volatile security definer set search_path = public, pg_temp as $$
 declare
   v_me uuid := auth.uid();
-  c challenges;
-  v_row challenge_participants;
+  c public.challenges;
+  v_row public.challenge_participants;
 begin
   if v_me is null then raise exception 'not_authenticated'; end if;
 
-  select * into c from challenges where invite_code = upper(trim(p_code));
+  select * into c from public.challenges where invite_code = upper(trim(p_code));
   if not found then raise exception 'invalid_invite_code'; end if;
 
   perform pg_advisory_xact_lock(hashtext(c.id::text));
 
-  select * into c from challenges where id = c.id;
+  select * into c from public.challenges where id = c.id;
   if c.status <> 'setup' then raise exception 'invalid_status:%', c.status; end if;
 
-  select * into v_row from challenge_participants
+  select * into v_row from public.challenge_participants
   where challenge_id = c.id and user_id = v_me for update;
   if found and v_row.status = 'joined' then
     raise exception 'already_joined';
   end if;
 
-  insert into challenge_participants (challenge_id, user_id, role, status, joined_at)
+  insert into public.challenge_participants (challenge_id, user_id, role, status, joined_at)
   values (c.id, v_me, 'member', 'joined', now())
   on conflict (challenge_id, user_id)
   do update set status = 'joined', joined_at = now();
@@ -221,14 +243,100 @@ notify pgrst, 'reload schema';
 
 -- ── 적용 확인 (SQL Editor에서 따로 실행) ─────────────────────
 --
--- (1) 두 참가 RPC에 crew_links가 남아 있지 않아야 한다 — 둘 다 false
---   select proname, pg_get_functiondef(oid) ilike '%crew_links%' as still_links
---   from pg_proc where proname in ('accept_challenge_invite','join_challenge_with_code');
+-- (1) 0051이 정의·교체한 함수 5개의 정확한 서명·보안 속성·실행 권한
+--   with expected(proname, args) as (
+--     values
+--       ('shares_challenge_with', 'p_challenge_id uuid, p_other uuid'),
+--       ('get_challenge_participant_profiles', 'p_challenge_id uuid'),
+--       ('get_challenge_period_sessions', 'p_challenge_id uuid'),
+--       ('accept_challenge_invite', 'p_challenge_id uuid'),
+--       ('join_challenge_with_code', 'p_code text')
+--   )
+--   select
+--     p.proname,
+--     pg_catalog.pg_get_function_identity_arguments(p.oid) as args,
+--     p.prosecdef,
+--     p.proconfig,
+--     p.proacl
+--   from pg_catalog.pg_proc p
+--   join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+--   join expected e
+--     on e.proname = p.proname
+--    and e.args = pg_catalog.pg_get_function_identity_arguments(p.oid)
+--   where n.nspname = 'public'
+--   order by p.proname;
 --
--- (2) 새 함수 3개
---   select proname from pg_proc p join pg_namespace n on n.oid=p.pronamespace
---   where n.nspname='public' and proname in
---     ('shares_challenge_with','get_challenge_participant_profiles','get_challenge_period_sessions');
+-- (2) 예상한 함수만 정확히 5개이고, 모두 SECURITY DEFINER + 고정 search_path인가
+--     exact_function_set, no_legacy_shares_overload, all_security_definer,
+--     exact_search_path가 모두 true여야 한다.
+--   with expected(proname, args) as (
+--     values
+--       ('shares_challenge_with', 'p_challenge_id uuid, p_other uuid'),
+--       ('get_challenge_participant_profiles', 'p_challenge_id uuid'),
+--       ('get_challenge_period_sessions', 'p_challenge_id uuid'),
+--       ('accept_challenge_invite', 'p_challenge_id uuid'),
+--       ('join_challenge_with_code', 'p_code text')
+--   ),
+--   actual as (
+--     select
+--       p.proname,
+--       pg_catalog.pg_get_function_identity_arguments(p.oid) as args,
+--       p.prosecdef,
+--       p.proconfig
+--     from pg_catalog.pg_proc p
+--     join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+--     where n.nspname = 'public'
+--       and p.proname in (select e.proname from expected e)
+--   )
+--   select
+--     count(*) = 5
+--       and count(*) filter (
+--         where (a.proname, a.args) in (
+--           select e.proname, e.args from expected e
+--         )
+--       ) = 5 as exact_function_set,
+--     count(*) filter (
+--       where a.proname = 'shares_challenge_with'
+--         and a.args = 'p_other uuid'
+--     ) = 0 as no_legacy_shares_overload,
+--     pg_catalog.bool_and(a.prosecdef) as all_security_definer,
+--     pg_catalog.bool_and(
+--       a.proconfig = array['search_path=public, pg_temp']::text[]
+--     ) as exact_search_path
+--   from actual a;
 --
--- (3) 실사용 크루 연결 3쌍은 그대로 (챌린지가 만든 것이 아니라 상호 수락)
---   select count(*) from crew_links;   → 3
+-- (3) 두 참가 함수에 crew_links INSERT가 남아 있지 않아야 한다 — 둘 다 false
+--   with expected(proname, args) as (
+--     values
+--       ('accept_challenge_invite', 'p_challenge_id uuid'),
+--       ('join_challenge_with_code', 'p_code text')
+--   )
+--   select
+--     p.proname,
+--     pg_catalog.pg_get_functiondef(p.oid)
+--       ~* 'insert[[:space:]]+into[[:space:]]+(public[.])?crew_links'
+--       as still_links
+--   from pg_catalog.pg_proc p
+--   join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+--   join expected e
+--     on e.proname = p.proname
+--    and e.args = pg_catalog.pg_get_function_identity_arguments(p.oid)
+--   where n.nspname = 'public'
+--   order by p.proname;
+--
+-- (4) 기존 크루 연결 개수는 적용 전과 같아야 한다
+--   select count(*) as existing_crew_links
+--   from public.crew_links;
+--
+-- (5) API 역할이 public 스키마에 객체를 만들 수 없어야 한다 — 셋 다 false
+--   select
+--     role_name,
+--     pg_catalog.has_schema_privilege(
+--       role_name,
+--       'public',
+--       'CREATE'
+--     ) as can_create_in_public
+--   from (
+--     values ('anon'), ('authenticated'), ('service_role')
+--   ) roles(role_name)
+--   order by role_name;

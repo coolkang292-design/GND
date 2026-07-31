@@ -21,7 +21,7 @@ import {
 } from "@/lib/domain/goal-score";
 import { challengeLevel, levelLabel } from "@/lib/domain/level";
 import { dayKey } from "@/lib/domain/time";
-import { getMyGroups, getMyProfile, profilesByIds } from "@/lib/crew";
+import { getMyGroups, getMyProfile } from "@/lib/crew";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   EMPTY_STATS,
@@ -36,7 +36,7 @@ import {
   finalizeChallenge,
   getChallengeApprovals,
   getChallengeGoals,
-  getChallengeParticipants,
+  getChallengeParticipantProfiles,
   getMyChallenges,
   getMyPreviousGoals,
   getPeriodStatsByUser,
@@ -46,6 +46,7 @@ import {
   saveMyGoals,
   startChallenge,
   unapproveChallengeGoals,
+  type ChallengeParticipantProfile,
   type GoalDraft,
   type MyChallenge,
   type PeriodStats,
@@ -53,7 +54,11 @@ import {
 import { pickPrimaryRow } from "@/lib/domain/challenge-room";
 import { ChallengePicker } from "@/components/challenge/challenge-picker";
 import { InviteSheet } from "@/components/challenge/invite-sheet";
-import type { Group, Profile, UserGoal } from "@/lib/types";
+import type { Group, UserGoal } from "@/lib/types";
+
+const NO_CHALLENGE_MEMBERS: ChallengeParticipantProfile[] = [];
+const NO_CHALLENGE_GOALS: UserGoal[] = [];
+const NO_CHALLENGE_APPROVALS = new Set<string>();
 
 function periodDays(startDate: string, endDate: string): number {
   const toUtc = (d: string) => {
@@ -66,10 +71,10 @@ function periodDays(startDate: string, endDate: string): number {
 function errorMessage(e: unknown): string {
   const msg = e instanceof Error ? e.message : String(e);
   if (msg.includes("kpi_incomplete")) {
-    return `아직 KPI 미설정 크루원이 있어요 (${msg.split(":")[1] ?? ""}) 🔒`;
+    return `아직 KPI 미설정 참가자가 있어요 (${msg.split(":")[1] ?? ""}) 🔒`;
   }
   if (msg.includes("consent_incomplete")) {
-    return `아직 목표에 동의하지 않은 크루원이 있어요 (${msg.split(":")[1] ?? ""}) 🤝`;
+    return `아직 목표에 동의하지 않은 참가자가 있어요 (${msg.split(":")[1] ?? ""}) 🤝`;
   }
   if (msg.includes("not_ended_yet")) return "아직 종료일이 지나지 않았어요";
   // 0044: create_challenge_room이 challenges.group_id(not null)를 채워야 해서
@@ -114,16 +119,23 @@ export default function ChallengePage() {
 function ChallengeScreen({ userId }: { userId: string }) {
   const [loading, setLoading] = useState(true);
   const [group, setGroup] = useState<Group | null>(null);
-  const [members, setMembers] = useState<Profile[]>([]);
+  const [loadedMembers, setMembers] = useState<ChallengeParticipantProfile[]>(
+    [],
+  );
   // 0044: 챌린지가 여러 개일 수 있다. 목록 + 선택으로 두고, 아래 모든 분기
   // (setup·active·ended)는 선택된 하나(challenge)를 그대로 쓴다.
   const [challenges, setChallenges] = useState<MyChallenge[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [goals, setGoals] = useState<UserGoal[]>([]);
-  const [approvals, setApprovals] = useState<Set<string>>(new Set());
-  const [stats, setStats] = useState<Map<string, PeriodStats> | null>(null);
+  const [loadedGoals, setGoals] = useState<UserGoal[]>([]);
+  const [loadedApprovals, setApprovals] = useState<Set<string>>(new Set());
+  const [loadedStats, setStats] = useState<Map<string, PeriodStats> | null>(
+    null,
+  );
   const [timeZone, setTimeZone] = useState("Asia/Seoul");
-  const [prevGoals, setPrevGoals] = useState<GoalDraft[] | null>(null);
+  const [loadedPrevGoals, setPrevGoals] = useState<GoalDraft[] | null>(null);
+  const [loadedChallengeId, setLoadedChallengeId] = useState<string | null>(
+    null,
+  );
   const [sheet, setSheet] = useState<{
     mode: "create" | "goals";
     defaults: SetupSubmit;
@@ -142,6 +154,17 @@ function ChallengeScreen({ userId }: { userId: string }) {
   const reload = useCallback(() => setRefreshKey((k) => k + 1), []);
 
   const challenge = challenges.find((c) => c.id === selectedId) ?? null;
+  // 선택 번호와 상세 정보의 주인이 다르면 화면에 그리지 않는다. useEffect가 실행되기
+  // 전 한 프레임에도 이전 챌린지 정보가 새 제목 아래 보이지 않게 하는 안전장치다.
+  const detailsAreCurrent =
+    selectedId !== null && loadedChallengeId === selectedId;
+  const members = detailsAreCurrent ? loadedMembers : NO_CHALLENGE_MEMBERS;
+  const goals = detailsAreCurrent ? loadedGoals : NO_CHALLENGE_GOALS;
+  const approvals = detailsAreCurrent
+    ? loadedApprovals
+    : NO_CHALLENGE_APPROVALS;
+  const stats = detailsAreCurrent ? loadedStats : null;
+  const prevGoals = detailsAreCurrent ? loadedPrevGoals : null;
 
   // 선택을 아래 로딩 effect의 의존성에 넣으면 선택할 때마다 전체 재조회가 돌고,
   // 그 재조회가 다시 선택을 세팅해 루프가 된다. 읽기 전용 ref로만 참조한다.
@@ -265,21 +288,27 @@ function ChallengeScreen({ userId }: { userId: string }) {
           setGoals([]);
           setApprovals(new Set());
           setStats(null);
+          setPrevGoals(null);
+          setLoadedChallengeId(null);
         }
         return;
       }
+
+      // 제목은 선택 즉시 새 챌린지로 바뀐다. 상세 정보도 함께 비워야 새 응답을
+      // 기다리거나 조회가 실패했을 때 이전 챌린지의 정보가 새 제목 아래 남지 않는다.
+      setMembers([]);
+      setGoals([]);
+      setApprovals(new Set());
+      setStats(null);
+      setPrevGoals(null);
+      setLoadedChallengeId(null);
+
       try {
         // 참여자 명단은 그룹이 아니라 **이 챌린지의 참가자**다. 그룹 기준으로
-        // 두면 초대하지 않은 크루원까지 명단·시작 게이트에 끌려온다.
+        // 두면 초대하지 않은 그룹 멤버까지 명단·시작 게이트에 끌려온다.
         // invited는 뺀다(아직 수락 전) — dropped는 결과에 남아야 하므로 넣는다.
-        const parts = await getChallengeParticipants(ch.id);
-        if (cancelled) return;
-        const activeIds = parts
-          .filter((p) => p.status !== "invited")
-          .map((p) => p.user_id);
-
         const [profiles, chGoals, appr] = await Promise.all([
-          profilesByIds(activeIds),
+          getChallengeParticipantProfiles(ch.id),
           getChallengeGoals(ch.id),
           getChallengeApprovals(ch.id),
         ]);
@@ -289,17 +318,18 @@ function ChallengeScreen({ userId }: { userId: string }) {
         setApprovals(appr);
 
         if (ch.status === "active" || ch.status === "ended") {
-          const s = await getPeriodStatsByUser(
-            activeIds,
+          const statsByUser = await getPeriodStatsByUser(
+            ch.id,
             ch.start_date,
             ch.end_date,
             timeZone,
-            ch.photo_required,
           );
           if (cancelled) return;
-          setStats(s);
+          setStats(statsByUser);
+          setLoadedChallengeId(ch.id);
         } else {
           setStats(null);
+          setLoadedChallengeId(ch.id);
         }
 
         // 직전 목표 프리필은 그룹 기준 조회라 그룹이 있을 때만 채운다.
@@ -332,7 +362,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
     for (const g of goals) m.set(g.user_id, (m.get(g.user_id) ?? 0) + 1);
     return m;
   }, [goals]);
-  // 크루원별 실제 목표 목록 — setup에서 누가 무슨 목표를 세팅했는지 보여준다
+  // 참가자별 실제 목표 목록 — setup에서 누가 무슨 목표를 세팅했는지 보여준다
   const goalsByUser = useMemo(() => {
     const m = new Map<string, UserGoal[]>();
     for (const g of goals) {
@@ -378,7 +408,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
       // 만든 챌린지를 바로 보여준다. 안 하면 목록에는 생겼는데 화면은 이전
       // 챌린지에 머물러, 방금 만든 것을 chip에서 찾아 눌러야 한다.
       setSelectedId(ch.id);
-      showToast("챌린지를 만들었어요 — 크루원을 초대하고 목표를 세워 보세요 🎯");
+      showToast("챌린지를 만들었어요 — 참가자를 초대하고 목표를 세워 보세요 🎯");
       reload();
     } catch (e) {
       showToast(errorMessage(e));
@@ -414,7 +444,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
     }
   }
 
-  /** 0044: 초대 수락 — 서버가 기존 참가자 전원과 crew_links를 맺어 준다(D5) */
+  /** 초대 수락 — 챌린지 참가 상태만 joined로 바꾸며 크루 관계는 만들지 않는다. */
   async function handleAcceptInvite() {
     if (!challenge) return;
     setBusy(true);
@@ -639,7 +669,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
               아직 진행 중인 챌린지가 없어요
             </h2>
             <p className="mt-1 text-xs text-muted">
-              기간을 정하면 크루원 각자 자기 목표(KPI)를 세우고, 전원 설정 완료
+              기간을 정하면 참가자 각자 자기 목표(KPI)를 세우고, 전원 설정 완료
               시 시작돼요.
             </p>
           </section>
@@ -820,7 +850,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
             >
               {iApproved
                 ? "✓ 동의함 (누르면 철회)"
-                : "크루 전원의 목표에 동의하기 👍"}
+                : "참가자 전원의 목표에 동의하기 👍"}
             </button>
           )}
 
@@ -848,7 +878,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
       )}
 
       {/* ── active: 내 진행률만 공개 (§6 비공개) ─────── */}
-      {challenge?.status === "active" && (
+      {challenge?.status === "active" && detailsAreCurrent && (
         <>
           <section className="rounded-card bg-gradient-to-br from-accent to-[#0B6E66] p-5 text-accent-ink shadow-card">
             <div className="flex items-start justify-between gap-2">
@@ -980,7 +1010,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
       )}
 
       {/* ── ended: 시상대 + 상세 순위 (§6) ───────────── */}
-      {challenge?.status === "ended" && (
+      {challenge?.status === "ended" && detailsAreCurrent && (
         <>
           <ResultView
             participants={participantInputs}
@@ -1033,7 +1063,7 @@ function ResultView({
 }: {
   participants: ParticipantInput[];
   goals: UserGoal[];
-  profileOf: (id: string) => Profile | undefined;
+  profileOf: (id: string) => ChallengeParticipantProfile | undefined;
   myUserId: string;
   levelOf: (id: string) => number;
 }) {
