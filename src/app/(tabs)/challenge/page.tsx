@@ -34,16 +34,19 @@ import {
   getChallengeApprovals,
   getChallengeGoals,
   getChallengeParticipants,
-  getCurrentChallenge,
+  getMyChallenges,
   getMyPreviousGoals,
   getPeriodStatsByUser,
   saveMyGoals,
   startChallenge,
   unapproveChallengeGoals,
   type GoalDraft,
+  type MyChallenge,
   type PeriodStats,
 } from "@/lib/challenge";
-import type { Challenge, Group, Profile, UserGoal } from "@/lib/types";
+import { pickPrimaryRow } from "@/lib/domain/challenge-room";
+import { ChallengePicker } from "@/components/challenge/challenge-picker";
+import type { Group, Profile, UserGoal } from "@/lib/types";
 
 function periodDays(startDate: string, endDate: string): number {
   const toUtc = (d: string) => {
@@ -64,8 +67,8 @@ function errorMessage(e: unknown): string {
   if (msg.includes("not_ended_yet")) return "아직 종료일이 지나지 않았어요";
   if (msg.includes("invalid_status"))
     return "챌린지 상태가 맞지 않아요. 새로고침해 주세요";
-  if (msg.includes("challenges_one_live"))
-    return "이미 진행 중인 챌린지가 있어요";
+  // 0044가 challenges_one_live 인덱스를 지웠으므로 그 오류는 더 이상 안 나온다.
+  // 분기를 남겨두면 다음 사람이 개수 제한이 아직 있다고 오해한다.
   return `오류: ${msg}`;
 }
 
@@ -97,7 +100,10 @@ function ChallengeScreen({ userId }: { userId: string }) {
   const [loading, setLoading] = useState(true);
   const [group, setGroup] = useState<Group | null>(null);
   const [members, setMembers] = useState<Profile[]>([]);
-  const [challenge, setChallenge] = useState<Challenge | null>(null);
+  // 0044: 챌린지가 여러 개일 수 있다. 목록 + 선택으로 두고, 아래 모든 분기
+  // (setup·active·ended)는 선택된 하나(challenge)를 그대로 쓴다.
+  const [challenges, setChallenges] = useState<MyChallenge[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [goals, setGoals] = useState<UserGoal[]>([]);
   const [approvals, setApprovals] = useState<Set<string>>(new Set());
   const [stats, setStats] = useState<Map<string, PeriodStats> | null>(null);
@@ -120,13 +126,26 @@ function ChallengeScreen({ userId }: { userId: string }) {
 
   const reload = useCallback(() => setRefreshKey((k) => k + 1), []);
 
+  const challenge = challenges.find((c) => c.id === selectedId) ?? null;
+
+  // 선택을 아래 로딩 effect의 의존성에 넣으면 선택할 때마다 전체 재조회가 돌고,
+  // 그 재조회가 다시 선택을 세팅해 루프가 된다. 읽기 전용 ref로만 참조한다.
+  const selectedIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-      const [groups, profile] = await Promise.all([
+      // 0044: 챌린지 목록은 그룹과 무관하게 먼저 가져온다. 타 그룹에서 초대받은
+      // 사람(혼자모드 포함)은 그룹이 없을 수 있는데, 예전처럼 그룹이 없다고 여기서
+      // 멈추면 그 사람은 자기 챌린지를 영영 못 본다.
+      const [groups, profile, myChallenges] = await Promise.all([
         getMyGroups(),
         getMyProfile(userId),
+        getMyChallenges(),
       ]);
       if (cancelled) return;
       const g = groups[0] ?? null;
@@ -136,24 +155,28 @@ function ChallengeScreen({ userId }: { userId: string }) {
         Intl.DateTimeFormat().resolvedOptions().timeZone ||
         "Asia/Seoul";
       setTimeZone(tz);
-      if (!g) return;
 
-      const [crew, ch] = await Promise.all([
-        getGroupMemberProfiles(g.id),
-        getCurrentChallenge(g.id),
-      ]);
-      if (cancelled) return;
-      setMembers(crew);
-      setChallenge(ch);
+      setChallenges(myChallenges);
+      // 처음 진입엔 대표 챌린지를 고른다. 이미 고른 것이 목록에 남아 있으면
+      // 유지한다 — 목표 저장·동의 뒤 다시 불러올 때 선택이 튀면 사용자가
+      // 보던 화면을 잃는다.
+      const ch =
+        myChallenges.find((c) => c.id === selectedIdRef.current) ??
+        pickPrimaryRow(myChallenges);
+      setSelectedId(ch?.id ?? null);
 
-      if (ch) {
-        const [chGoals, prev, appr] = await Promise.all([
-          getChallengeGoals(ch.id),
-          getMyPreviousGoals(userId, g.id, ch.id),
-          getChallengeApprovals(ch.id),
-        ]);
-        setGoals(chGoals);
-        setApprovals(appr);
+      // 크루 닉네임 맵은 아직 그룹 기준이다(순위표 표시용).
+      if (g) {
+        const crew = await getGroupMemberProfiles(g.id);
+        if (cancelled) return;
+        setMembers(crew);
+      }
+
+      // 직전 목표 프리필은 그룹 기준 조회라 그룹이 있을 때만 채운다.
+      // 없으면 프리필이 비는 것뿐이고 목표 설정 자체는 된다.
+      if (g) {
+        const prev = await getMyPreviousGoals(userId, g.id, ch?.id ?? null);
+        if (cancelled) return;
         setPrevGoals(
           prev.map((p) => ({
             type: p.goal_type,
@@ -161,6 +184,16 @@ function ChallengeScreen({ userId }: { userId: string }) {
             qualifier: p.qualifier,
           })),
         );
+      }
+
+      if (ch) {
+        const [chGoals, appr] = await Promise.all([
+          getChallengeGoals(ch.id),
+          getChallengeApprovals(ch.id),
+        ]);
+        if (cancelled) return;
+        setGoals(chGoals);
+        setApprovals(appr);
         if (ch.status === "active" || ch.status === "ended") {
           // 0044: 집계 대상이 그룹이 아니라 챌린지 참가자다.
           // invited는 뺀다 — 아직 수락하지 않았으니 참가자가 아니다.
@@ -177,15 +210,6 @@ function ChallengeScreen({ userId }: { userId: string }) {
             ),
           );
         }
-      } else {
-        const prev = await getMyPreviousGoals(userId, g.id, null);
-        setPrevGoals(
-          prev.map((p) => ({
-            type: p.goal_type,
-            target: Number(p.target_value),
-            qualifier: p.qualifier,
-          })),
-        );
       }
       } catch {
         if (!cancelled) showToast("데이터를 불러오지 못했어요");
@@ -243,7 +267,9 @@ function ChallengeScreen({ userId }: { userId: string }) {
       await saveMyGoals({
         userId,
         challengeId: ch.id,
-        groupId: group.id,
+        // 0044: 내 그룹이 아니라 **챌린지의** 그룹이다. 여기서는 방금 만든
+        // 챌린지라 값이 같지만, 아래 handleSaveGoals와 규칙을 맞춰 둔다.
+        groupId: ch.group_id,
         goals: v.goals,
         plannedDays: v.plannedDays,
       });
@@ -258,13 +284,19 @@ function ChallengeScreen({ userId }: { userId: string }) {
   }
 
   async function handleSaveGoals(v: SetupSubmit) {
-    if (!group || !challenge) return;
+    // 0044: 내 그룹 유무는 상관없다. 타 그룹에서 초대받아 참가한 사람도
+    // 목표를 세울 수 있어야 한다.
+    if (!challenge) return;
     setBusy(true);
     try {
       await saveMyGoals({
         userId,
         challengeId: challenge.id,
-        groupId: group.id,
+        // 0044: 내 그룹이 아니라 **챌린지의** 그룹이다.
+        // goals_insert_own_setup이 challenges.group_id = user_goals.group_id를
+        // 요구하므로(0006:85), 타 그룹 참가자가 자기 그룹 id를 넣으면 정책에
+        // 막혀 목표를 못 세운다. 이 컬럼은 0045에서 드롭한다.
+        groupId: challenge.group_id,
         goals: v.goals,
         plannedDays: v.plannedDays,
       });
@@ -312,7 +344,10 @@ function ChallengeScreen({ userId }: { userId: string }) {
     setBusy(true);
     try {
       await cancelChallenge(challenge.id);
-      setChallenge(null);
+      // 0044: 취소한 것만 목록에서 뺀다. 선택은 아래 reload()가 대표 챌린지로
+      // 다시 잡아 준다 — 남은 챌린지가 있으면 그쪽으로 넘어간다.
+      setChallenges((list) => list.filter((c) => c.id !== challenge.id));
+      setSelectedId(null);
       setGoals([]);
       showToast("챌린지를 취소했어요");
       reload();
@@ -430,7 +465,14 @@ function ChallengeScreen({ userId }: { userId: string }) {
         )}
       </header>
 
-      {!group && (
+      {/* 0044: 챌린지가 2개 이상일 때만 뜬다. 1개면 렌더되지 않는다. */}
+      <ChallengePicker
+        challenges={challenges}
+        selectedId={selectedId}
+        onSelect={setSelectedId}
+      />
+
+      {!group && challenges.length === 0 && (
         <p className="pt-8 text-center text-sm text-muted">
           크루에 참여하면 챌린지를 만들 수 있어요.
         </p>
@@ -459,7 +501,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
       )}
 
       {/* ── setup: 전원 KPI 게이트 (§6) ─────────────── */}
-      {group && challenge?.status === "setup" && (
+      {challenge?.status === "setup" && (
         <>
           {myGoals.length === 0 ? (
             <button
@@ -613,7 +655,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
       )}
 
       {/* ── active: 내 진행률만 공개 (§6 비공개) ─────── */}
-      {group && challenge?.status === "active" && (
+      {challenge?.status === "active" && (
         <>
           <section className="rounded-card bg-gradient-to-br from-accent to-[#0B6E66] p-5 text-accent-ink shadow-card">
             <div className="flex items-start justify-between gap-2">
@@ -745,7 +787,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
       )}
 
       {/* ── ended: 시상대 + 상세 순위 (§6) ───────────── */}
-      {group && challenge?.status === "ended" && (
+      {challenge?.status === "ended" && (
         <>
           <ResultView
             participants={participantInputs}
