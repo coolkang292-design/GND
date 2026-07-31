@@ -3,7 +3,7 @@
 > 새 세션은 저장소 루트 `AGENTS.md` → `CLAUDE.md` → 이 파일 → 가장 최근의 관련 `docs/superpowers/HANDOFF-*.md` 순서로 읽는다.
 > 이 파일은 전체 흐름의 요약이고, 작업별 세부 사실과 남은 확인은 최신 인수인계서가 기준이다.
 
-## ✅ 2026-08-01 — 휴식 타이머 벽시계 전환 + 완료 세트만 불러오기 + 무동작 정지 0055 (DB 적용 ✅ · 개발 서버 확인 ✅ · 운영 배포 ⏳)
+## ✅ 2026-08-01 — 휴식 타이머 벽시계 전환 + 완료 세트만 불러오기 + 무동작 정지 0055 (DB 적용 ✅ · 개발 서버 확인 ✅ · 운영 배포 ✅ · 실기기 확인 ⏳)
 
 인수인계서: [`docs/superpowers/handoffs/2026-08-01-rest-timer-and-idle-guard-handoff.md`](docs/superpowers/handoffs/2026-08-01-rest-timer-and-idle-guard-handoff.md) · 설계: [`docs/superpowers/specs/2026-08-01-rest-timer-and-idle-guard-design.md`](docs/superpowers/specs/2026-08-01-rest-timer-and-idle-guard-design.md)
 
@@ -32,6 +32,12 @@
   - **종료 → 7분** 기록. 벽시계 795초, 정지 361초 → `floor(434/60) = 7`. DB 행 `duration_minutes: 7, paused_seconds: 361`
   - 3세트 중 2세트만 체크하고 완료 → 피커 '지난 기록'에서 **2세트만**(60×10, 65×8), 미체크 70×5는 빠짐. '↻ 불러오기'도 동일
 - **개발 서버가 잡은 실버그 (단위 테스트·빌드는 전부 초록이었다)** — **준비 중(운동 추가·세트 입력)의 동작이 무동작 시계를 미리 켜서, 운동 시작 6초 만에 정지 모달이 떴다.** `markActivity`가 `active`일 때만 동작하도록 고치고 `"ignores preparation activity so the clock starts with the workout"` 회귀 테스트를 넣었다
+- 코드 커밋: `afbb9d7 feat: 휴식 타이머 벽시계 전환 + 완료 세트만 불러오기 + 무동작 정지 (0055)` · `772ad20 fix: 혼합 코스에서 유산소를 뛰는 동안은 시간을 멈추지 않는다`
+- **운영 배포 완료** — 사용자 승인 후 `git archive HEAD`로 푼 **`.git` 없는 복사본**에서 `vercel --prod`. `gnd-fi50r29bl-gnd4.vercel.app` → `gnd-one.vercel.app`, READY. 마이그레이션은 이미 적용돼 있어 DB 단계는 건너뛰었다
+- **배포 실물 확인** — 프로덕션에서 직접 받아 확인했다
+  - `운동 시간을 멈췄어요`·`이어서 운동`·`정지됨` → `/_next/static/chunks/1hiv0gqqxgwh8.js`
+  - `/whats-new` 서버 HTML에 `러닝머신에서 30분`·`아직 완료 체크 안 한 유산소`·`남은 10초에 미리 한 번`·`비프음이 두 배로 커졌어요`·`실제로 완료 체크한 세트만` 전부 있음. **유산소 문구는 `772ad20`에서만 생긴 것이라, 이게 그 커밋이 나갔다는 증거다**
+- ⚠️ **유산소 유예는 브라우저로 클릭 확인하지 못했다** — 이 세션에 브라우저 자동화 도구가 없었다. `pnpm dev`로 `/record` 200·컴파일 오류 0까지만 봤고, 대신 훅 수준 회귀 테스트로 전이를 고정했다(`"keeps the run intact while the guard is off, then re-arms on completion"`: 감지 꺼진 30분은 정지 0초, 완료 체크 뒤 정확히 5분에 정지). **실기기 확인 항목에 넣었다**
 - ⚠️ **다음 사람이 밟기 쉬운 함정**
   - **`complete_workout_v2` 본문을 마이그레이션 파일에서 베끼지 마라.** 0022 → 0023 → 0027 → 0032 → 0054 → 0055로 여섯 번 덮어썼다. 현행 정의는 `docs/db-current-schema.sql`에 있다
   - **0055는 `drop function` 후 재생성이다**(인자가 늘어서). 0022가 걸어 둔 `revoke all from public, anon`이 drop으로 날아가므로 마이그레이션 안에서 다시 건다. 이 함수를 또 고칠 때도 같은 걸 챙겨야 한다
