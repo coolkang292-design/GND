@@ -68,8 +68,16 @@ function periodDays(startDate: string, endDate: string): number {
   return Math.round((toUtc(endDate) - toUtc(startDate)) / 86_400_000) + 1;
 }
 
-function errorMessage(e: unknown): string {
-  const msg = e instanceof Error ? e.message : String(e);
+export function errorMessage(e: unknown): string {
+  const msg =
+    e instanceof Error
+      ? e.message
+      : typeof e === "object" &&
+          e !== null &&
+          "message" in e &&
+          typeof e.message === "string"
+        ? e.message
+        : "알 수 없는 오류";
   if (msg.includes("kpi_incomplete")) {
     return `아직 KPI 미설정 참가자가 있어요 (${msg.split(":")[1] ?? ""}) 🔒`;
   }
@@ -557,7 +565,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
     setSheet({
       mode,
       defaults: {
-        name: `${now.getMonth() + 1}월 GND 챌린지`,
+        name: mode === "create" ? "" : challenge?.name ?? "",
         startDate: dayKey(now, timeZone),
         endDate: dayKey(new Date(now.getTime() + 27 * 86_400_000), timeZone),
         goals:
@@ -663,7 +671,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
           onClick={() => openSheet("create")}
           className="h-11 rounded-card border border-line bg-surface text-[13px] font-bold text-muted"
         >
-          ＋ 챌린지 하나 더 만들기
+          ＋ 챌린지 추가하기
         </button>
       )}
 

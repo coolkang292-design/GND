@@ -65,12 +65,35 @@ vi.mock("@/components/challenge/invite-sheet", () => ({
 }));
 
 vi.mock("@/components/challenge/setup-sheet", () => ({
-  ChallengeSetupSheet: ({ prevGoals }: { prevGoals: unknown }) => (
-    <output data-testid="previous-goals">{JSON.stringify(prevGoals)}</output>
+  ChallengeSetupSheet: ({
+    prevGoals,
+    defaults,
+  }: {
+    prevGoals: unknown;
+    defaults: { name: string };
+  }) => (
+    <>
+      <output data-testid="previous-goals">{JSON.stringify(prevGoals)}</output>
+      <output data-testid="setup-name">{defaults.name}</output>
+    </>
   ),
 }));
 
-import ChallengePage from "./page";
+import ChallengePage, { errorMessage } from "./page";
+
+describe("ChallengePage 오류 문구", () => {
+  it("일반 객체의 message를 읽어 알려진 오류를 한글로 바꾼다", () => {
+    expect(errorMessage({ message: "invalid_status:setup" })).toBe(
+      "챌린지 상태가 맞지 않아요. 새로고침해 주세요",
+    );
+  });
+
+  it("message가 없는 객체를 object Object로 표시하지 않는다", () => {
+    expect(errorMessage({ code: "unexpected" })).toBe(
+      "오류: 알 수 없는 오류",
+    );
+  });
+});
 
 const challenge = (id: string, name: string, createdAt: string) =>
   ({
@@ -282,6 +305,19 @@ describe("ChallengePage 신규 사용자 초대 링크", () => {
     await waitFor(() =>
       expect(mocks.clearPendingChallengeInvite).toHaveBeenCalled(),
     );
+  });
+});
+
+describe("ChallengePage 챌린지 추가", () => {
+  it("짧은 버튼 이름을 쓰고 새 챌린지 이름을 빈칸으로 연다", async () => {
+    render(<ChallengePage />);
+
+    await screen.findByText("예전 참가자");
+    fireEvent.click(
+      screen.getByRole("button", { name: "＋ 챌린지 추가하기" }),
+    );
+
+    expect(screen.getByTestId("setup-name").textContent).toBe("");
   });
 });
 

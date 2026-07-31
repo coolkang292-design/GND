@@ -274,6 +274,8 @@ export function ChallengeSetupSheet({
                 챌린지 이름
               </label>
               <input
+                autoFocus
+                placeholder="챌린지 이름을 입력하세요"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="mt-1 h-11 w-full rounded-card-sm border border-line bg-surface px-3 text-sm font-bold"
