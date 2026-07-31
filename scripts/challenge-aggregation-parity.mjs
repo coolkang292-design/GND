@@ -48,6 +48,9 @@ function windowIso(startDate, endDate) {
   return { from: from.toISOString(), to: to.toISOString() };
 }
 
+// 이번 실행이 실제로 대조한 챌린지가 하나라도 있었는가 (아래 루프에서 세운다).
+let comparedSomething = false;
+
 const actives = await rest(
   "challenges?select=id,group_id,name,start_date,end_date,photo_required&status=eq.active",
 );
@@ -103,26 +106,30 @@ for (const ch of actives) {
     `A만 ${onlyA.length}건 ${JSON.stringify(onlyA)} · B만 ${onlyB.length}건 ${JSON.stringify(onlyB)}`,
   );
 
-  // 공허한 통과를 막는다. 두 집합이 모두 비어 있으면 차집합도 0이 되어 위
-  // 두 단언이 **아무것도 대조하지 않고** PASS로 찍힌다. 필터 문법이 틀려
+  // 공허한 통과를 막기 위한 기록. 두 집합이 모두 비어 있으면 차집합도 0이 되어
+  // 위 두 단언이 **아무것도 대조하지 않고** PASS로 찍힌다. 필터 문법이 틀려
   // PostgREST가 200 + []를 주는 경우가 정확히 그렇다 — 에러가 아니라 정상
   // 응답이므로 rest()의 throw에 걸리지 않는다.
   //
-  // 갓 시작해 아직 운동이 없는 챌린지는 실제로 0건일 수 있다. 그때도 FAIL이
-  // 맞다 — 이 스크립트는 "전환해도 안전하다"를 증명하는 게이트이고, 0건이면
-  // 증명한 것이 없기 때문이다. 통과 여부가 아니라 근거 유무를 보는 단언이다.
-  check(
-    "대조가 공허하지 않다 (기간 내 세션 1건 이상)",
-    idsB.size > 0,
-    "기간 내 세션이 0건이라 위 집합 비교가 아무것도 검증하지 않았다. " +
-      "갓 시작한 챌린지라면 정상이지만, 그 경우 이 실행은 전환 안전성의 근거가 되지 못한다.",
-  );
+  // 판정은 챌린지마다가 아니라 **실행 끝에서 한 번** 한다. 처음엔 챌린지마다
+  // "0건이면 FAIL"로 뒀는데 과했다 — 갓 만든 챌린지는 기간 내 운동이 당연히
+  // 0건이라, 그걸 실패로 치면 새 챌린지가 생길 때마다 영원히 빨간불이 된다
+  // (2026-07-31에 실제로 그랬다). 막으려던 것은 "아무것도 대조하지 않았는데
+  // 통과로 읽히는 것"이므로 실행 단위로 보면 충분하다.
+  if (idsB.size > 0) comparedSomething = true;
 
   const goals = await rest(
     `user_goals?select=user_id,goal_type,target_value,qualifier&challenge_id=eq.${ch.id}`,
   );
   console.log(`  (목표 ${goals.length}개 — 실적 대조는 Task 4의 vitest가 실제 함수로 한다)`);
 }
+
+check(
+  "이번 실행이 무언가는 대조했다 (기간 내 세션 있는 진행 중 챌린지 1건 이상)",
+  comparedSomething,
+  "진행 중 챌린지가 없거나 전부 기간 내 세션 0건이다 — 집합 비교가 전부 공허해서" +
+    " 이 실행은 전환 안전성의 근거가 되지 못한다.",
+);
 
 console.log(`\n${passed}/${passed + failed} passed`);
 if (passed + failed === 0) {

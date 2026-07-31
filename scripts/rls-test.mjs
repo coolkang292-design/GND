@@ -335,11 +335,27 @@ check("B는 private 세션 사진 다운로드 불가", (await storageGet(B.toke
 console.log("\n── Phase 5: 챌린지 (KPI 게이트·비공개·기록 보존) ──");
 C = await anonUser(); // 비크루 외부인
 
-const chIns = await api(A.token, "POST", "/rest/v1/challenges", {
-  group_id: group.id, name: "RLS 챌린지", start_date: "2026-07-01", end_date: "2026-07-14",
+// 0044부터 챌린지 생성은 create_challenge_room RPC뿐이다. 직접 insert로 만들면
+// challenge_participants에 host 행이 안 생기고, 0046부터 시작·동의·확정이 전부
+// is_challenge_participant를 보므로 그 챌린지는 challenge_not_found로 아무것도
+// 못 한다. 앱도 이 RPC만 부른다(createChallenge는 0044에서 삭제).
+const chIns = await api(A.token, "POST", "/rest/v1/rpc/create_challenge_room", {
+  p_name: "RLS 챌린지", p_start_date: "2026-07-01", p_end_date: "2026-07-14",
 });
-const challenge = chIns.json?.[0];
-check("A가 챌린지 생성 (기본 setup)", chIns.status === 201 && challenge?.status === "setup", JSON.stringify(chIns.json));
+const challenge = chIns.json;
+check("A가 챌린지 생성 (기본 setup)", chIns.status === 200 && challenge?.status === "setup", JSON.stringify(chIns.json));
+
+// B를 참가자로 만든다. 0046부터 "전원"의 뜻이 그룹 멤버가 아니라 참가자다 —
+// 초대·수락이 없으면 B는 게이트 대상에 안 들어와 아래 2인 동의 시나리오가
+// 성립하지 않는다.
+const chInv = await api(A.token, "POST", "/rest/v1/rpc/invite_to_challenge", {
+  p_challenge_id: challenge.id, p_target_id: B.id,
+});
+check("A가 B를 챌린지에 초대", chInv.status === 200, JSON.stringify(chInv.json));
+const chAcc = await api(B.token, "POST", "/rest/v1/rpc/accept_challenge_invite", {
+  p_challenge_id: challenge.id,
+});
+check("B가 수락 → 참가자 2명", chAcc.status === 200, JSON.stringify(chAcc.json));
 
 // 0044가 challenges_one_live를 드롭했다. 같은 그룹에 살아있는 챌린지가 여러 개
 // 있을 수 있는 것이 이제 정상이다 — 여러 챌린지 동시 진행이 이 개편의 목적이다.
