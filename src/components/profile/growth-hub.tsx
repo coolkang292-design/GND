@@ -10,12 +10,17 @@ import { StageCarousel } from "@/components/profile/stage-carousel";
 import { StageGuideSheet } from "@/components/profile/stage-guide-sheet";
 import { XpGuideSheet } from "@/components/profile/xp-guide-sheet";
 import { XpHistory } from "@/components/profile/xp-history";
+import { PointHistory } from "@/components/profile/point-history";
 import { BadgeSheet } from "@/components/profile/badge-sheet";
 import { BadgeShowcase } from "@/components/profile/badge-showcase";
 import { NextGoalCard } from "@/components/profile/next-goal-card";
 import { PointSummary } from "@/components/profile/point-summary";
 import { getBadgeCatalog, getMyBadgeMetrics, getMyBadges } from "@/lib/badges";
-import { getMyWallet } from "@/lib/points";
+import {
+  getMyWallet,
+  getRecentPointTransactions,
+  type PointTransactionRow,
+} from "@/lib/points";
 import {
   buildAchievements,
   selectNextGoal,
@@ -40,6 +45,7 @@ interface HubData {
   rewards: LevelReward[];
   unlocks: Set<string>;
   transactions: XpTransactionRow[];
+  pointTransactions: PointTransactionRow[];
   balance: number;
   streakDays: number;
   shelf: BadgeShelfItem[];
@@ -62,13 +68,14 @@ export function GrowthHub() {
     (async () => {
       try {
         const supabase = getSupabaseBrowserClient();
-        const [summary, rewards, unlocks, transactions, wallet, catalog, earned, sessions, metrics] =
+        const [summary, rewards, unlocks, transactions, wallet, pointTransactions, catalog, earned, sessions, metrics] =
           await Promise.all([
             getProgressSummary(),
             getLevelRewards(),
             getMyUnlocks(),
             getRecentXpTransactions(),
             getMyWallet(),
+            getRecentPointTransactions(),
             getBadgeCatalog(),
             getMyBadges(),
             supabase
@@ -89,7 +96,7 @@ export function GrowthHub() {
         );
         if (!cancelled)
           setData({
-            summary, rewards, unlocks, transactions,
+            summary, rewards, unlocks, transactions, pointTransactions,
             balance: wallet.balance,
             streakDays,
             shelf: badgeShelf(catalog, earned),
@@ -138,7 +145,7 @@ export function GrowthHub() {
     );
   }
 
-  const { summary, rewards, unlocks, transactions, balance, streakDays, shelf, achievements } = data;
+  const { summary, rewards, unlocks, transactions, pointTransactions, balance, streakDays, shelf, achievements } = data;
 
   return (
     <>
@@ -176,6 +183,8 @@ export function GrowthHub() {
       />
 
       <XpHistory rows={transactions} />
+
+      <PointHistory rows={pointTransactions} />
 
       <button
         type="button"

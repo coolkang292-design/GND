@@ -11,6 +11,7 @@ import {
 } from "@/lib/social";
 import { minutesSince } from "@/lib/time-ago";
 import { cheerToastMessage } from "@/lib/domain/cheer-points";
+import { CheerPointModal } from "@/components/feed/cheer-point-modal";
 
 const CHEER_BUTTONS: { type: CheerType; emoji: string; label: string }[] = [
   { type: "fire", emoji: "🔥", label: "불태워" },
@@ -76,6 +77,8 @@ function ActiveWorkoutCard({
   const [notice, setNotice] = useState<string | null>(null);
   const [customOpen, setCustomOpen] = useState(false);
   const [sending, setSending] = useState(false);
+  /** 지급받은 포인트. 0이면 팝업 없이 토스트만 (하루 1회 상한). */
+  const [earned, setEarned] = useState<number | null>(null);
   const messageRef = useRef<HTMLInputElement>(null);
 
   async function cheer(type: CheerType, message?: string) {
@@ -85,11 +88,14 @@ function ActiveWorkoutCard({
       const { pointsAwarded } = await sendCheer(session.sessionId, type, message);
       setSent(true);
       setCustomOpen(false);
-      setNotice(cheerToastMessage(pointsAwarded));
-      setTimeout(() => {
-        setSent(false);
-        setNotice(null);
-      }, 3000);
+      if (pointsAwarded > 0) {
+        // 받았을 때만 팝업. 토스트는 3초 뒤 사라져서 "받았나?"가 남는다.
+        setEarned(pointsAwarded);
+      } else {
+        setNotice(cheerToastMessage(pointsAwarded));
+        setTimeout(() => setNotice(null), 3000);
+      }
+      setTimeout(() => setSent(false), 3000);
     } catch (e) {
       setNotice(cheerErrorMessage(e));
       setTimeout(() => setNotice(null), 3000);
@@ -165,7 +171,15 @@ function ActiveWorkoutCard({
             </div>
           )}
 
-          {notice && (
+          {earned !== null && (
+        <CheerPointModal
+          points={earned}
+          nickname={session.nickname}
+          onClose={() => setEarned(null)}
+        />
+      )}
+
+      {notice && (
             <p className="mt-2 text-xs font-bold text-accent">{notice}</p>
           )}
         </>
