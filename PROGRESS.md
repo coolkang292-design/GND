@@ -13,6 +13,25 @@
 
 **교훈:** "배포했다"는 푸시가 아니라 **프로덕션 파일을 받아 확인한 것**이어야 한다.
 
+## ✅ 2026-07-31 — 챌린지 방 전환 0044: 여러 챌린지 동시 진행 (운영 배포 ✅ · 폰 확인 대기)
+
+계획 `docs/superpowers/plans/2026-07-30-challenge-rooms-0044.md`(13 태스크). **마이그레이션 0044 운영 적용 ✅ · 배포 ✅**(`gnd-1qs5rxe3n-gnd4.vercel.app` → `gnd-one.vercel.app`). 전체 3단계 중 **2단계 완료**: 추가(0042·0043) → **전환(0044)** → 정리(0045).
+
+- **0044가 한 것은 두 가지뿐이다** — `challenges_one_live` 유니크 인덱스 드롭(여기서 개수 제한이 풀린다) + `challenges`·`user_goals`의 SELECT 정책을 참가자에게 **덧붙이기**(`is_challenge_participant(...) or is_group_member(...)`). **점수를 바꾸는 것은 하나도 넣지 않았다** — 진행 중인 7월 GND 챌린지 때문이다.
+- **⚠️ 지시서에 없었지만 넣은 정책 확대** — 0042의 `invite_to_challenge`는 대상에게 **프로필만 있으면** 초대한다(그룹 검사 없음). 서버는 이미 타 그룹 초대를 허용하는데 읽기 정책이 `is_group_member` 한 줄뿐이라, **초대받은 사람이 챌린지 행도 목표도 못 읽었다.** "한 사람이 여러 크루"라는 목적 자체가 그 한 줄에 막혀 있었다. OR로 덧붙이기만 하므로 기존 같은 그룹 사용자에게는 판정이 그대로다.
+- **집계 전환이 점수를 안 바꿨다 — 실측으로 증명** — `.eq("group_id")` → `.in("user_id", 참가자)`. 두 방식이 **같은 세션 집합**을 낸다는 것을 전후로 확인했다(기간 내 `group_id` 기준 13건 · 참가자 기준 13건, 차집합 양방향 0). 집합이 같으면 `foldPeriodStats` 입력이 같으므로 결과 동일은 추정이 아니라 증명이다. 목표 9개 실적도 실제 `foldPeriodStats`·`actualForGoal`로 전후 대조해 전부 동일. 신규 `scripts/challenge-aggregation-parity.mjs`가 이걸 상시 확인한다.
+- **🔴 타입이 못 잡는 시그니처 변경** — `getActiveChallengeRanking(groupId)` → `(challengeId)`는 **둘 다 `string`이라 typecheck가 그냥 통과한다.** 그대로 뒀으면 호출부 3곳(홈 성과 카드·관리자 대시보드·소셜 랭킹)이 그룹 id를 챌린지 id 자리에 넘겨 조용히 `null`을 받고 **빈 화면으로 배포**됐을 것이다. 전수로 손봤다. 관리자 대시보드는 덤으로 고쳐졌다 — 전에는 모든 챌린지에 같은(최신) 랭킹이 붙었다.
+- **🔴 혼자모드 사용자는 초대를 받아도 화면이 비었다** — 챌린지 화면이 그룹 없으면 통째로 early return 하고 렌더도 전부 `group &&`로 막혀 있었다. 챌린지 조회를 그룹과 분리하고 상태 분기에서 group 요구를 뺐다. 생성은 여전히 그룹이 필요하다(`create_challenge_room`이 `challenges.group_id` not null을 채워야 해서 — 0045에서 풀린다).
+- **명단의 원천을 목표에서 참가자로** — `goals_insert_own_setup`은 같은 그룹이면 참가자가 아니어도 목표를 넣게 하므로(`0006:81`), 목표에서 명단을 뽑으면 **참가하지 않은 사람이 랭킹에 뜬다.** `invited`는 빼고 `dropped`는 남긴다(이미 한 운동은 결과에 보여야 한다).
+- **화면** — 챌린지 탭에 선택기 chip(2개 이상일 때만 렌더), 초대 시트(host+setup에서만), 초대 수락·거절 카드. 947줄을 전면 재구성하지 않고 목록 상태 + 선택기를 얹었다 — 기존 setup·active·ended 분기를 그대로 쓴다.
+- **생성 경로를 RPC 하나로** — `createChallenge`(직접 insert)를 삭제했다. 그 경로로 만들면 `challenge_participants`에 host 행이 안 생겨 **본인이 만든 챌린지가 목록에 안 나오는** "안 보이는 챌린지"가 된다. `create_challenge_room` RPC뿐이다.
+- **자동 시작·종료** — 09:00 KST 브리핑 크론에 `autostart`·`autofinalize`를 얹고, 화면 진입 때도 한 번 민다(크론은 하루 한 번이라 시작일 당일 09시 전엔 아직 setup으로 보인다). 둘 다 멱등이고 `auth.uid()`를 안 써서 service_role로 돈다. 실패해도 브리핑은 계속 보낸다.
+- **`challenge_invite` 알림 배선** — 유형을 TS 유니온에 추가하니 `TYPE_ICON`(exhaustive Record)이 컴파일 타임에 깨졌다. 그게 의도한 게이트다. **반면 `PUSH_URL_BY_TYPE`은 `Record<string, string>`이라 exhaustive가 아니다** — 빠뜨려도 통과하고 `/home`으로 조용히 떨어지므로 손으로 챙겨야 한다(주석 남김).
+- **검증 실측(적용 후)**: `challenge-room-check` **34/0**(적용 전 31/3 — `[21]`·`[21b]`·`[21c]`가 인덱스 드롭을 확인) · `rls-test` **113/0**(비크루 챌린지 조회 차단 유지 = 확대가 과하지 않다) · `challenge-consent-test` **20/0** · `poke-levelup-check` **11/11** · parity **4/4** · unit **683/683**(63파일) · lint 0 · typecheck · build ✅ · 프로덕션 번들에서 새 문구 5개 확인 · `/home`·`/feed`·`/record`·`/profile`·`/challenge`·`/whats-new` 200, `/admin` 비로그인 404.
+- **회귀 기준선 갱신** — `challenge-room-check`가 32 → **34**(단언 2개 추가). `rls-test`의 "중복 생성 차단"과 `challenge-room-check [21]`은 **뒤집혔다** — 0044가 그 둘을 거짓으로 만들기 때문이다. `rls-test` 쪽은 DB 리뷰(opus)가 찾았고 계획서가 처음엔 빠뜨렸다.
+- **남은 것 — 폰 확인**: ① 챌린지를 **두 개 만들 수 있고 둘 다 보이는지** ② 7월 GND 챌린지 점수가 그대로인지 ③ 초대 → 상대 폰 알림 → 탭하면 `/challenge` ④ 인수인계서 §1.6의 스칼레또 웨이트 운동일 라벨·진행률.
+- **범위 밖(0045)**: 완료 보너스 `+3 → +9`, 랭킹 `get_challenge_ranking` RPC 이관, `profiles` RLS의 `shares_group_with` 제거, `sessions_insert_own_draft`의 group_id 조건, `challenge_goal_approvals` 드롭, group_id 컬럼·`groups`·`group_members` 드롭, 혼자모드 챌린지 생성. **정책을 좁힐 때는 `drop`+`create`가 아니라 `alter policy`를 써라** — 이름이 틀리면 `drop`이 no-op 하고 0006의 옛 정책이 살아나 그룹 arm이 되살아난다(`alter`는 42704로 죽는다).
+
 ## ✅ 2026-07-30 — 챌린지 방 개편 1단계(0041·0042·0043) + 낡은 검증 스크립트 정리
 
 **이 스트림의 상세는 `docs/superpowers/HANDOFF-2026-07-30-challenge-rooms.md`가 단일 원천이다** — 함정 8개·DB 현황·0044 착수 조건이 거기 있다. 설계 `specs/2026-07-29-challenge-rooms-design.md`(13개 결정) · 계획 `plans/2026-07-30-challenge-rooms-0042.md`. 전체 3단계 중 **1단계(추가만) 완료**: 추가(0042·0043) → **전환(0044, 미착수)** → 정리(0045).
