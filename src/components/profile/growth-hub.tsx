@@ -9,8 +9,9 @@ import { NextStagePreview } from "@/components/profile/next-stage-preview";
 import { StageCarousel } from "@/components/profile/stage-carousel";
 import { StageGuideSheet } from "@/components/profile/stage-guide-sheet";
 import { XpGuideSheet } from "@/components/profile/xp-guide-sheet";
-import { XpHistory } from "@/components/profile/xp-history";
-import { PointHistory } from "@/components/profile/point-history";
+import { XpHistory, XpHistoryList } from "@/components/profile/xp-history";
+import { PointHistory, PointHistoryList } from "@/components/profile/point-history";
+import { HistorySheet } from "@/components/profile/history-sheet";
 import { BadgeSheet } from "@/components/profile/badge-sheet";
 import { BadgeShowcase } from "@/components/profile/badge-showcase";
 import { NextGoalCard } from "@/components/profile/next-goal-card";
@@ -61,6 +62,8 @@ export function GrowthHub() {
   const [guideOpen, setGuideOpen] = useState(false);
   const [stageGuideOpen, setStageGuideOpen] = useState(false);
   const [badgeSheetOpen, setBadgeSheetOpen] = useState(false);
+  const [xpSheetOpen, setXpSheetOpen] = useState(false);
+  const [pointSheetOpen, setPointSheetOpen] = useState(false);
 
   useEffect(() => {
     if (!configured || loading || !userId) return;
@@ -182,9 +185,12 @@ export function GrowthHub() {
         totalXp={summary.totalXp}
       />
 
-      <XpHistory rows={transactions} />
+      <XpHistory rows={transactions} onOpenAll={() => setXpSheetOpen(true)} />
 
-      <PointHistory rows={pointTransactions} />
+      <PointHistory
+        rows={pointTransactions}
+        onOpenAll={() => setPointSheetOpen(true)}
+      />
 
       <button
         type="button"
@@ -202,6 +208,26 @@ export function GrowthHub() {
           totalXp={summary.totalXp}
           onClose={() => setStageGuideOpen(false)}
         />
+      )}
+
+      {xpSheetOpen && (
+        <HistorySheet
+          title="최근 XP 획득"
+          count={transactions.length}
+          onClose={() => setXpSheetOpen(false)}
+        >
+          <XpHistoryList rows={transactions} />
+        </HistorySheet>
+      )}
+
+      {pointSheetOpen && (
+        <HistorySheet
+          title="최근 포인트 획득"
+          count={pointTransactions.length}
+          onClose={() => setPointSheetOpen(false)}
+        >
+          <PointHistoryList rows={pointTransactions} />
+        </HistorySheet>
       )}
 
       {badgeSheetOpen && (
