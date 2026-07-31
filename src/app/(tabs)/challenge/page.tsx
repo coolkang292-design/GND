@@ -153,35 +153,33 @@ function ChallengeScreen({ userId }: { userId: string }) {
   //
   // 처리 후 주소에서 join을 지운다 — 안 지우면 새로고침·뒤로가기마다 다시 시도해
   // already_joined 토스트가 반복된다.
-  const [joinHandled, setJoinHandled] = useState(false);
+  // ⚠ 가드는 state가 아니라 ref다. state로 두면 개발 모드(StrictMode)에서 effect가
+  //   두 번 도는 동안 첫 실행이 취소되며 가드도 주소 정리도 건너뛰고, 두 번째가
+  //   같은 코드로 다시 참가를 시도해 "이미 참가한 챌린지예요"가 뜬다.
+  //   ref는 동기로 세워지므로 두 번째 실행이 바로 되돌아간다.
+  const joinAttempted = useRef(false);
   useEffect(() => {
-    if (joinHandled) return;
-    let cancelled = false;
+    if (joinAttempted.current) return;
+    const code = new URLSearchParams(window.location.search).get("join");
+    if (!code) return;
+    joinAttempted.current = true;
+
+    // 주소는 참가 결과와 무관하게 **먼저** 정리한다. 실패했을 때 코드가 남아
+    // 있으면 새로고침마다 같은 실패를 반복한다.
+    window.history.replaceState({}, "", window.location.pathname);
+
     (async () => {
-      const code = new URLSearchParams(window.location.search).get("join");
-      if (!code) {
-        if (!cancelled) setJoinHandled(true);
-        return;
-      }
       try {
         const r = await joinChallengeWithCode(code);
-        if (cancelled) return;
         setSelectedId(r.challengeId);
         showToast(`${r.challengeName}에 참가했어요! 목표를 세워 주세요 🎯`);
       } catch (e) {
-        if (!cancelled) showToast(errorMessage(e));
+        showToast(errorMessage(e));
       } finally {
-        if (!cancelled) {
-          window.history.replaceState({}, "", window.location.pathname);
-          setJoinHandled(true);
-          reload();
-        }
+        reload();
       }
     })();
-    return () => {
-      cancelled = true;
-    };
-  }, [joinHandled, showToast, reload]);
+  }, [showToast, reload]);
 
   useEffect(() => {
     let cancelled = false;
@@ -670,14 +668,23 @@ function ChallengeScreen({ userId }: { userId: string }) {
         </section>
       )}
 
+      {/*
+        초대 영역은 챌린지 상태와 무관하게 **같은 자리**에 둔다. setup 분기 안에만
+        두면 시작된 챌린지에서 통째로 사라져 "왜 초대가 없지?"가 된다.
+        시작 후에는 컴포넌트가 자리를 지키면서 닫힌 이유를 설명한다.
+        (수락 전 초대장 상태에서는 위의 수락·거절 카드가 먼저다.)
+      */}
+      {challenge && challenge.myStatus !== "invited" && (
+        <InviteSheet
+          challengeId={challenge.id}
+          myRole={challenge.myRole}
+          status={challenge.status}
+          onInvited={reload}
+        />
+      )}
+
       {challenge?.status === "setup" && challenge.myStatus !== "invited" && (
         <>
-          <InviteSheet
-            challengeId={challenge.id}
-            myRole={challenge.myRole}
-            status={challenge.status}
-            onInvited={reload}
-          />
           {myGoals.length === 0 ? (
             <button
               onClick={() => openSheet("goals")}

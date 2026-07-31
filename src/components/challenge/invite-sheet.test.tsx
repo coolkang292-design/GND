@@ -23,9 +23,19 @@ describe("InviteSheet — 노출 조건", () => {
     expect(html("member", "setup")).toBe("");
   });
 
-  it("시작한 뒤에는 렌더하지 않는다 (초대는 setup 단계만)", () => {
-    expect(html("host", "active")).toBe("");
-    expect(html("host", "ended")).toBe("");
+  it("시작한 뒤에는 초대 수단을 없애되 자리는 지키고 이유를 말한다", () => {
+    // 영역을 통째로 숨기면 "왜 초대가 없지?"가 된다. 규칙을 감추지 않는다.
+    const active = html("host", "active");
+    expect(active).toContain("크루 초대");
+    expect(active).toContain("이미 시작해서 초대가 닫혔어요");
+    expect(active).not.toContain("초대 링크 복사하기");
+    expect(active).not.toContain('placeholder="닉네임"');
+  });
+
+  it("끝난 챌린지는 새 챌린지를 만들라고 안내한다", () => {
+    const ended = html("host", "ended");
+    expect(ended).toContain("끝난 챌린지예요");
+    expect(ended).not.toContain("초대 링크 복사하기");
   });
 });
 

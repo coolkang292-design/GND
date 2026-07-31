@@ -40,7 +40,26 @@ export function InviteSheet({
   const [link, setLink] = useState<string | null>(null);
   const [linkBusy, setLinkBusy] = useState(false);
 
-  if (myRole !== "host" || status !== "setup") return null;
+  // 방장이 아니면 초대 권한이 없으므로 자리도 만들지 않는다(서버도 not_host로 막는다).
+  if (myRole !== "host") return null;
+
+  // 시작한 뒤에는 초대가 닫힌다 — 중도 합류는 점수가 불공정해지기 때문이고,
+  // 서버(invite_to_challenge·join_challenge_with_code)가 invalid_status로 막는다.
+  //
+  // 이때 영역을 통째로 숨기면 "왜 초대가 없지?"가 된다. 자리는 유지하고 이유를
+  // 적는다 — 규칙을 감추지 말고 알려준다.
+  if (status !== "setup") {
+    return (
+      <section className="rounded-card border border-line bg-surface p-4 shadow-card">
+        <h3 className="text-sm font-extrabold">🏆 크루 초대</h3>
+        <p className="mt-0.5 text-[11px] text-muted">
+          {status === "active"
+            ? "이미 시작해서 초대가 닫혔어요. 중간에 합류하면 점수가 공정하지 않아서예요."
+            : "끝난 챌린지예요. 새 챌린지를 만들어 초대해 보세요."}
+        </p>
+      </section>
+    );
+  }
 
   /** 링크 만들기 + 클립보드 복사. 코드 발급은 서버가 멱등이라 눌러도 안 바뀐다. */
   async function handleShareLink() {
@@ -121,9 +140,12 @@ export function InviteSheet({
           {linkBusy ? "링크 만드는 중…" : "🔗 초대 링크 복사하기"}
         </button>
         {link && (
-          <p className="mt-2 break-all rounded-card-sm bg-surface-2 px-2.5 py-2 text-[11px] text-muted">
-            {link}
-          </p>
+          // 라벨이 없으면 주소창처럼 보인다 — 실제로 "주소에 join이 남아 있다"는
+          // 오해를 샀다. 이건 상대에게 보낼 링크이고, 코드가 들어 있어야 한다.
+          <div className="mt-2 rounded-card-sm bg-surface-2 px-2.5 py-2">
+            <p className="text-[10px] font-bold text-faint">상대에게 보낼 링크</p>
+            <p className="mt-0.5 break-all text-[11px] text-muted">{link}</p>
+          </div>
         )}
         {/* 이 한 줄을 뺄 수 없다. 링크로 들어온 사람은 참가자 전원과 크루가 되고,
             챌린지가 끝나도 그 관계가 남는다(crew_links에 challenge_id가 없다).
