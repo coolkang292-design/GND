@@ -41,6 +41,18 @@ export async function GET(req: Request) {
   }
 
   const admin = getSupabaseAdminClient();
+
+  // 0044: 챌린지 자동 시작·종료. 브리핑과 같은 09:00 KST 슬롯에 얹는다 —
+  // vercel.json의 크론이 하나뿐이고, 하루 한 번 도래분을 넘기면 충분하다.
+  //
+  // 두 RPC는 멱등이다(이미 active면 건너뛴다). 실패해도 브리핑은 계속 보낸다 —
+  // 챌린지 전환이 안 됐다고 아침 알림을 통째로 죽이면 손해가 더 크다.
+  // 둘 다 auth.uid()를 쓰지 않으므로 service_role로 호출된다(0042 확인).
+  const challengeTransitions: Record<string, unknown> = {};
+  for (const fn of ["autostart_due_challenges", "autofinalize_due_challenges"]) {
+    const { data, error } = await admin.rpc(fn);
+    challengeTransitions[fn] = error ? { error: error.message } : data;
+  }
   const [profilesRes, sessionsRes, settingsRes] =
     await Promise.all([
       admin.from("profiles").select("id, timezone"),
@@ -109,5 +121,11 @@ export async function GET(req: Request) {
     else alreadySent += 1;
   }
 
-  return NextResponse.json({ sent, alreadySent, skipped, errors });
+  return NextResponse.json({
+    sent,
+    alreadySent,
+    skipped,
+    errors,
+    challengeTransitions,
+  });
 }

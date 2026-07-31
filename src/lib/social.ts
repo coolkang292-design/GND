@@ -37,7 +37,8 @@ export type NotificationRow = {
     | "level_up" // 0029
     | "app_update" // 0034 — 배포·업데이트 소식
     | "crew_request" // 0038 — 크루 요청 도착
-    | "crew_accepted"; // 0038 — 상대가 내 요청을 수락
+    | "crew_accepted" // 0038 — 상대가 내 요청을 수락
+    | "challenge_invite"; // 0042 — 챌린지 방 초대 (0044부터 발송·라우팅)
   reference_id: string | null;
   title: string;
   body: string | null;

@@ -32,6 +32,7 @@ const TYPE_ICON: Record<NotificationRow["type"], string> = {
   // 클릭 시 /crew로 보내는 라우팅은 크루 화면이 생기는 Task 7에서 붙인다.
   crew_request: "🤝",
   crew_accepted: "🤝",
+  challenge_invite: "🏆", // 0042 유형, 0044부터 실제로 발송된다
 };
 
 /** 🔔 + 미읽음 뱃지 + 알림함 바텀시트 (§9 알림함 — durable 저장 원천) */

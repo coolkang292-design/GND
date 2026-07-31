@@ -22,14 +22,17 @@ import {
 import { challengeLevel, levelLabel } from "@/lib/domain/level";
 import { dayKey } from "@/lib/domain/time";
 import { getGroupMemberProfiles, getMyGroups, getMyProfile } from "@/lib/crew";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   EMPTY_STATS,
   GOAL_TYPE_META,
   actualForGoal,
+  acceptChallengeInvite,
   approveChallengeGoals,
   goalLabel,
   cancelChallenge,
-  createChallenge,
+  createChallengeRoom,
+  declineChallengeInvite,
   finalizeChallenge,
   getChallengeApprovals,
   getChallengeGoals,
@@ -46,6 +49,7 @@ import {
 } from "@/lib/challenge";
 import { pickPrimaryRow } from "@/lib/domain/challenge-room";
 import { ChallengePicker } from "@/components/challenge/challenge-picker";
+import { InviteSheet } from "@/components/challenge/invite-sheet";
 import type { Group, Profile, UserGoal } from "@/lib/types";
 
 function periodDays(startDate: string, endDate: string): number {
@@ -65,6 +69,12 @@ function errorMessage(e: unknown): string {
     return `아직 목표에 동의하지 않은 크루원이 있어요 (${msg.split(":")[1] ?? ""}) 🤝`;
   }
   if (msg.includes("not_ended_yet")) return "아직 종료일이 지나지 않았어요";
+  // 0044: create_challenge_room이 challenges.group_id(not null)를 채워야 해서
+  // 그룹 없는 사람은 여기서 막힌다. 0045가 그 컬럼을 지우면 풀린다.
+  if (msg.includes("no_group_yet"))
+    return "아직 크루가 없어요. 홈에서 크루를 만들거나 참여해 주세요";
+  if (msg.includes("already_joined")) return "이미 참가한 챌린지예요";
+  if (msg.includes("not_invited")) return "초대받지 않은 챌린지예요";
   if (msg.includes("invalid_status"))
     return "챌린지 상태가 맞지 않아요. 새로고침해 주세요";
   // 0044가 challenges_one_live 인덱스를 지웠으므로 그 오류는 더 이상 안 나온다.
@@ -139,8 +149,22 @@ function ChallengeScreen({ userId }: { userId: string }) {
     let cancelled = false;
     (async () => {
       try {
-      // 0044: 챌린지 목록은 그룹과 무관하게 먼저 가져온다. 타 그룹에서 초대받은
-      // 사람(혼자모드 포함)은 그룹이 없을 수 있는데, 예전처럼 그룹이 없다고 여기서
+      // 0044: 크론(09:00 KST)을 기다리지 않고 화면 진입 시에도 도래분을 넘긴다.
+      // 시작일 당일 09시 전에 앱을 열면 아직 setup으로 보이기 때문이다.
+      // 멱등이라 여러 번 불려도 안전하다. 실패는 무시한다 — 전환이 안 됐다고
+      // 챌린지 화면을 못 열게 하면 안 된다. 다음 진입이나 크론이 처리한다.
+      try {
+        const sb = getSupabaseBrowserClient();
+        await Promise.all([
+          sb.rpc("autostart_due_challenges"),
+          sb.rpc("autofinalize_due_challenges"),
+        ]);
+      } catch {
+        /* 전환 실패는 조용히 넘긴다 */
+      }
+
+      // 챌린지 목록은 그룹과 무관하게 가져온다. 타 그룹에서 초대받은 사람
+      // (혼자모드 포함)은 그룹이 없을 수 있는데, 예전처럼 그룹이 없다고 여기서
       // 멈추면 그 사람은 자기 챌린지를 영영 못 본다.
       const [groups, profile, myChallenges] = await Promise.all([
         getMyGroups(),
@@ -255,11 +279,11 @@ function ChallengeScreen({ userId }: { userId: string }) {
   const dday = challenge ? periodDays(todayKey, challenge.end_date) - 1 : 0;
 
   async function handleCreate(v: SetupSubmit) {
-    if (!group) return;
     setBusy(true);
     try {
-      const ch = await createChallenge({
-        groupId: group.id,
+      // 0044: 직접 insert가 아니라 RPC로 만든다. 그래야 challenge_participants에
+      // host 행이 생긴다 — 없으면 본인이 만든 챌린지가 getMyChallenges()에 안 나온다.
+      const ch = await createChallengeRoom({
         name: v.name,
         startDate: v.startDate,
         endDate: v.endDate,
@@ -302,6 +326,39 @@ function ChallengeScreen({ userId }: { userId: string }) {
       });
       setSheet(null);
       showToast("내 KPI를 저장했어요 ✓");
+      reload();
+    } catch (e) {
+      showToast(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** 0044: 초대 수락 — 서버가 기존 참가자 전원과 crew_links를 맺어 준다(D5) */
+  async function handleAcceptInvite() {
+    if (!challenge) return;
+    setBusy(true);
+    try {
+      await acceptChallengeInvite(challenge.id);
+      showToast("참가했어요! 목표를 세워 주세요 🎯");
+      reload();
+    } catch (e) {
+      showToast(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDeclineInvite() {
+    if (!challenge) return;
+    setBusy(true);
+    try {
+      await declineChallengeInvite(challenge.id);
+      // 거절은 참가 행을 지운다 = 이 챌린지를 더 못 읽는다. 목록에서도 빼고
+      // 선택을 비워 다음 로딩이 대표 챌린지를 다시 잡게 한다.
+      setChallenges((list) => list.filter((c) => c.id !== challenge.id));
+      setSelectedId(null);
+      showToast("초대를 거절했어요");
       reload();
     } catch (e) {
       showToast(errorMessage(e));
@@ -501,8 +558,40 @@ function ChallengeScreen({ userId }: { userId: string }) {
       )}
 
       {/* ── setup: 전원 KPI 게이트 (§6) ─────────────── */}
-      {challenge?.status === "setup" && (
+      {/* 0044: 초대받았지만 아직 수락 안 함 — 수락 전에는 목표를 못 세운다 */}
+      {challenge && challenge.myStatus === "invited" && (
+        <section className="rounded-card border border-accent/40 bg-accent/10 p-4 shadow-card">
+          <p className="text-sm font-extrabold">🏆 챌린지에 초대받았어요</p>
+          <p className="mt-0.5 text-[12px] text-muted">
+            {challenge.name} · {challenge.start_date} ~ {challenge.end_date}
+          </p>
+          <div className="mt-3 flex gap-2">
+            <button
+              onClick={() => void handleAcceptInvite()}
+              disabled={busy}
+              className="flex-1 rounded-card-sm bg-accent py-2.5 text-sm font-extrabold text-accent-ink disabled:opacity-40"
+            >
+              참가하기
+            </button>
+            <button
+              onClick={() => void handleDeclineInvite()}
+              disabled={busy}
+              className="flex-1 rounded-card-sm border border-line py-2.5 text-sm font-bold disabled:opacity-40"
+            >
+              거절
+            </button>
+          </div>
+        </section>
+      )}
+
+      {challenge?.status === "setup" && challenge.myStatus !== "invited" && (
         <>
+          <InviteSheet
+            challengeId={challenge.id}
+            myRole={challenge.myRole}
+            status={challenge.status}
+            onInvited={reload}
+          />
           {myGoals.length === 0 ? (
             <button
               onClick={() => openSheet("goals")}

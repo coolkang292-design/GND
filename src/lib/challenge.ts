@@ -113,27 +113,9 @@ export async function getChallengeParticipants(
   return data ?? [];
 }
 
-export async function createChallenge(input: {
-  groupId: string;
-  name: string;
-  startDate: string;
-  endDate: string;
-}): Promise<Challenge> {
-  const supabase = getSupabaseBrowserClient();
-  const { data, error } = await supabase
-    .from("challenges")
-    .insert({
-      group_id: input.groupId,
-      name: input.name.trim(),
-      start_date: input.startDate,
-      end_date: input.endDate,
-      photo_required: true,
-    })
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
-}
+// createChallenge(직접 insert)는 0044에서 지웠다. challenge_participants에 host
+// 행을 만들지 않아, 그 경로로 만든 챌린지는 getMyChallenges()에 안 잡히는
+// "안 보이는 챌린지"가 된다. 생성은 createChallengeRoom RPC 하나뿐이다.
 
 /** 챌린지의 전체 참가자 목표 (RLS: 크루원만) */
 export async function getChallengeGoals(
@@ -275,6 +257,63 @@ export async function finalizeChallenge(
   });
   if (error) throw error;
   return data as Challenge;
+}
+
+// ── 챌린지 방 RPC (0042) — 0044부터 화면이 실제로 부른다 ──────────
+
+/**
+ * 챌린지 방 생성. 방장이 host로 자동 참가한다.
+ *
+ * 직접 insert가 아니라 이 RPC를 써야 challenge_participants에 host 행이 생긴다.
+ * 직접 insert로 만들면 참가자 행이 없어 **본인이 만든 챌린지가
+ * getMyChallenges()에 안 나온다.**
+ */
+export async function createChallengeRoom(input: {
+  name: string;
+  startDate: string;
+  endDate: string;
+  photoRequired?: boolean;
+}): Promise<Challenge> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase.rpc("create_challenge_room", {
+    p_name: input.name.trim(),
+    p_start_date: input.startDate,
+    p_end_date: input.endDate,
+    p_photo_required: input.photoRequired ?? true,
+  });
+  if (error) throw error;
+  return data as Challenge;
+}
+
+/** 초대 — host만, setup 단계만 (서버가 강제한다) */
+export async function inviteToChallenge(
+  challengeId: string,
+  targetId: string,
+): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  const { error } = await supabase.rpc("invite_to_challenge", {
+    p_challenge_id: challengeId,
+    p_target_id: targetId,
+  });
+  if (error) throw error;
+}
+
+/** 수락 — joined 전환 + 기존 참가자 전원과 crew_links (설계 D5 완전 연결) */
+export async function acceptChallengeInvite(challengeId: string): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  const { error } = await supabase.rpc("accept_challenge_invite", {
+    p_challenge_id: challengeId,
+  });
+  if (error) throw error;
+}
+
+/** 거절 — 참가 행을 지운다. 지우므로 읽기 권한도 함께 사라진다 */
+export async function declineChallengeInvite(challengeId: string): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  const { error } = await supabase.rpc("decline_challenge_invite", {
+    p_challenge_id: challengeId,
+  });
+  if (error) throw error;
 }
 
 // ── 기간 실적 집계 (§7 실적 = 완료 세션에서 계산) ────────────────
