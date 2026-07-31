@@ -111,13 +111,14 @@ describe("pathOnly — 쿼리스트링을 통째로 버린다", () => {
   });
 });
 
-describe("isUserAction — 쓰기만 동작으로 본다", () => {
-  const U = "https://x.supabase.co/rest/v1/rpc/send_cheer";
+describe("isUserAction — 사용자가 누른 것만 남긴다", () => {
+  const S = (p: string) => `https://x.supabase.co${p}`;
+  const U = S("/rest/v1/rpc/send_cheer");
 
   it("읽기(GET)는 동작이 아니다", () => {
     // GET을 담으면 화면 한 번 열 때 수십 건이 나가 30칸 버퍼를 즉시 덮어쓴다.
     // 그러면 정작 사용자가 누른 것이 밀려 나가 흔적이 쓸모없어진다.
-    expect(isUserAction("GET", "https://x.supabase.co/rest/v1/profiles?select=id")).toBe(false);
+    expect(isUserAction("GET", S("/rest/v1/profiles?select=id"))).toBe(false);
     expect(isUserAction("HEAD", U)).toBe(false);
     expect(isUserAction("OPTIONS", U)).toBe(false);
   });
@@ -133,8 +134,65 @@ describe("isUserAction — 쓰기만 동작으로 본다", () => {
   });
 
   it("auth는 동작이 아니다 — 토큰 갱신은 사용자가 한 일이 아니다", () => {
-    expect(isUserAction("POST", "https://x.supabase.co/auth/v1/token?grant_type=refresh_token")).toBe(false);
-    expect(isUserAction("POST", "https://x.supabase.co/auth/v1/signup")).toBe(false);
+    expect(isUserAction("POST", S("/auth/v1/token?grant_type=refresh_token"))).toBe(false);
+    expect(isUserAction("POST", S("/auth/v1/signup"))).toBe(false);
+  });
+
+  // ── 2026-07-31 실제 신고에서 드러난 것 ──────────────────────
+  // 첫 판 규칙은 "쓰기 메서드면 동작"이었다. PostgREST는 **읽기 전용 함수도 POST로**
+  // 부르기 때문에 흔적 30칸이 1분치 배경 잡음으로 꽉 찼다. 아래는 그 신고에 실제로
+  // 찍혔던 경로들이고, 전부 걸러져야 한다.
+  describe("실제 신고에서 잡음이던 것들 (회귀 방지)", () => {
+    const NOISE = [
+      "/rest/v1/rpc/get_my_badge_metrics",
+      "/rest/v1/rpc/get_incoming_crew_requests",
+      "/rest/v1/rpc/get_my_recent_pokes",
+      "/rest/v1/rpc/get_challenge_period_sessions",
+      "/rest/v1/rpc/get_challenge_participant_profiles",
+      "/rest/v1/rpc/autostart_due_challenges",
+      "/rest/v1/rpc/autofinalize_due_challenges",
+      "/storage/v1/object/sign/workout-images",
+    ];
+    for (const p of NOISE) {
+      it(`잡음이 아니다: ${p}`, () => {
+        expect(isUserAction("POST", S(p))).toBe(false);
+      });
+    }
+  });
+
+  describe("진짜 동작은 살아남는다", () => {
+    const REAL = [
+      "/rest/v1/rpc/send_cheer",
+      "/rest/v1/rpc/poke_user",
+      "/rest/v1/rpc/accept_challenge_invite",
+      "/rest/v1/rpc/join_challenge_with_code",
+      "/rest/v1/rpc/complete_workout",
+      "/rest/v1/rpc/submit_bug_report",
+      "/rest/v1/workout_sessions",
+      "/rest/v1/notifications",
+      // 업로드는 서명과 달리 진짜 동작이다 — 사진을 올린 것이다
+      "/storage/v1/object/workout-images/abc.jpg",
+    ];
+    for (const p of REAL) {
+      it(`동작이다: ${p}`, () => {
+        expect(isUserAction("POST", S(p))).toBe(true);
+      });
+    }
+  });
+
+  it("걸러내기가 통째로 망가지면 잡히도록 — 잡음 8건 중 통과가 0이어야 한다", () => {
+    // 위 개별 단언이 하나씩 무력화돼도 이 집계가 잡는다.
+    const noise = [
+      "/rest/v1/rpc/get_x",
+      "/rest/v1/rpc/list_x",
+      "/rest/v1/rpc/search_x",
+      "/rest/v1/rpc/autostart_x",
+      "/rest/v1/rpc/autofinalize_x",
+      "/rest/v1/rpc/admin_x",
+      "/rest/v1/rpc/pending_x",
+      "/rest/v1/rpc/schema_x",
+    ];
+    expect(noise.filter((p) => isUserAction("POST", S(p)))).toHaveLength(0);
   });
 
   it("깨진 URL에도 던지지 않는다 — 계측이 던지면 그 자리 기능이 죽는다", () => {

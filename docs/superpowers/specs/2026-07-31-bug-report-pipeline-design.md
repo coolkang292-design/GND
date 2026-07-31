@@ -164,7 +164,9 @@ bug_reports
 - 성공 + `isUserAction(method, url)` → `noteTrail('action', '<경로>')`
 - **쿼리스트링은 버린다** (닉네임·uuid가 들어간다). 인증 헤더·요청 본문은 절대 안 담는다
 
-**동작 계측은 자동이다 — 손으로 안 넣는다.** `isUserAction`의 규칙은 하나뿐이다: **쓰기(POST·PATCH·PUT·DELETE)만 동작으로 본다.** 읽기(GET)는 화면 한 번 열 때 수십 건이 나가 30칸 버퍼를 즉시 덮어써 정작 사용자가 누른 것을 밀어낸다. auth는 뺀다(토큰 갱신은 사용자가 한 일이 아니다).
+**동작 계측은 자동이다 — 손으로 안 넣는다.** `isUserAction`이 세 겹으로 거른다: ① 쓰기 메서드(POST·PATCH·PUT·DELETE)만 ② **이름이 `get_`·`list_`·`search_`·`autostart_`·`autofinalize_`·`admin_`·`pending_`·`schema_`로 시작하는 RPC 제외** ③ 서명 URL 발급(`/object/sign/`) 제외. auth도 뺀다.
+
+> **②가 왜 필요한지는 실물로 배웠다.** 첫 판 규칙은 "쓰기 메서드면 동작"이었는데, **PostgREST는 읽기 전용 함수도 `POST /rest/v1/rpc/…`로 부른다.** 배포 후 실제 신고의 흔적 30칸이 `get_my_badge_metrics`·`get_incoming_crew_requests`·`autostart_due_challenges`·서명 URL로 **1분 만에 꽉 찼고 사용자가 누른 것은 하나도 안 남았다.** 노이즈가 신호를 덮으면 흔적은 없느니만 못하다. 그 신고에 실제로 찍혔던 경로 8개가 지금은 회귀 테스트로 고정돼 있다.
 
 > **왜 설계를 바꿨나 — 실패해 봤기 때문이다.** 처음 설계는 "운동 시작/종료·사진 업로드·챌린지 참가·초대 수락·크루 요청·로그인에 손으로 `noteTrail('action', …)`을 넣는다"였다. **구현할 때 한 곳도 안 넣었고**, 배포 후 들어온 첫 신고의 흔적이 `nav` 한 줄뿐인 것으로 그게 드러났다. 이 저장소에는 같은 실패가 이미 있다 — `PUSH_URL_BY_TYPE`은 exhaustive가 아니라서 "손으로 챙겨야 한다"고 주석까지 달아 뒀지만 그런 것은 결국 빠진다. 팩토리 한 곳에서 자동으로 잡으면 빠질 자리가 없다.
 >

@@ -73,12 +73,22 @@ export function clearTrail(): void {
   entries = [];
 }
 
+const WRITE_METHODS = new Set(["POST", "PATCH", "PUT", "DELETE"]);
+
+/**
+ * **PostgREST에서 HTTP 메서드는 읽기/쓰기를 안 가른다.** Supabase는 읽기 전용
+ * 함수도 `POST /rest/v1/rpc/…`로 부른다. 그래서 이름으로 가린다.
+ *
+ * `get_`은 이 저장소의 조회 RPC 규약이다(`get_my_badge_metrics`,
+ * `get_incoming_crew_requests`, `get_challenge_period_sessions` …).
+ * `autostart_`·`autofinalize_`는 화면 진입 때 자동으로 미는 것이라 사용자가 한 일이
+ * 아니다. `admin_`·`pending_`·`schema_`는 도구·크론 전용이다.
+ */
+const NOT_A_USER_ACTION =
+  /^rpc\/(get_|list_|search_|autostart_|autofinalize_|admin_|pending_|schema_)/;
+
 /**
  * 성공한 요청 중 **사용자가 한 일**로 볼 것을 고른다.
- *
- * 규칙은 하나다 — **쓰기(POST·PATCH·PUT·DELETE)만 동작으로 본다.** 읽기(GET)는
- * 화면을 열 때마다 수십 건이 나가서 30칸짜리 버퍼를 즉시 덮어쓴다. 쓰기는
- * 사용자가 무언가를 눌렀다는 뜻이고 그 수가 적다.
  *
  * **자동으로 잡는 이유.** 설계에는 호출부마다 손으로 `noteTrail("action", …)`을
  * 넣기로 했는데, 실제로 구현할 때 **한 곳도 안 넣었다.** 배포 후 들어온 첫 신고의
@@ -86,16 +96,25 @@ export function clearTrail(): void {
  * 있다 — `PUSH_URL_BY_TYPE`은 exhaustive가 아니라 "손으로 챙겨야 한다"고 주석까지
  * 달아 뒀지만 그런 것은 결국 빠진다. 팩토리 한 곳에서 자동으로 잡으면 안 빠진다.
  *
- * auth는 뺀다 — 토큰 갱신이 사용자 동작이 아니고, 로그인 성패는 실패 쪽에서 잡힌다.
+ * **첫 판은 "쓰기 메서드면 동작"이었고 그건 틀렸다.** 실제 신고의 흔적이
+ * `get_my_badge_metrics`·`autostart_due_challenges`·서명 URL 발급으로 꽉 차서
+ * **30칸이 1분치 배경 잡음으로 덮였다.** 노이즈가 신호를 덮으면 흔적은 없느니만
+ * 못하다 — 사람이 무엇을 눌렀는지 못 읽는다. 아래 세 겹으로 거른다.
  */
 export function isUserAction(method: string, url: string): boolean {
-  const m = method.toUpperCase();
-  if (m !== "POST" && m !== "PATCH" && m !== "PUT" && m !== "DELETE") return false;
-  try {
-    return !new URL(url, "http://x").pathname.startsWith("/auth/");
-  } catch {
-    return false;
-  }
+  if (!WRITE_METHODS.has(method.toUpperCase())) return false;
+
+  const path = pathOnly(url);
+
+  // ① 인증 — 토큰 갱신은 사용자 동작이 아니다. 로그인 성패는 fail 쪽에서 잡힌다
+  if (path.startsWith("auth/")) return false;
+  // ② POST로 부르는 조회·자동 실행
+  if (NOT_A_USER_ACTION.test(path)) return false;
+  // ③ 사진을 보여주려고 URL에 서명하는 것 — 피드를 넘길 때마다 나간다.
+  //    같은 storage라도 **업로드**(`/object/<bucket>/…`)는 진짜 동작이라 남긴다
+  if (path.includes("/object/sign/")) return false;
+
+  return true;
 }
 
 /**
