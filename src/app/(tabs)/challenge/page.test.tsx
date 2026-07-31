@@ -20,6 +20,9 @@ const mocks = vi.hoisted(() => ({
   getChallengeApprovals: vi.fn(),
   getPeriodStatsByUser: vi.fn(),
   getMyPreviousGoals: vi.fn(),
+  joinChallengeWithCode: vi.fn(),
+  savePendingChallengeInvite: vi.fn(),
+  clearPendingChallengeInvite: vi.fn(),
   rpc: vi.fn(),
 }));
 
@@ -51,6 +54,9 @@ vi.mock("@/lib/challenge", async (importOriginal) => {
     getChallengeApprovals: mocks.getChallengeApprovals,
     getPeriodStatsByUser: mocks.getPeriodStatsByUser,
     getMyPreviousGoals: mocks.getMyPreviousGoals,
+    joinChallengeWithCode: mocks.joinChallengeWithCode,
+    savePendingChallengeInvite: mocks.savePendingChallengeInvite,
+    clearPendingChallengeInvite: mocks.clearPendingChallengeInvite,
   };
 });
 
@@ -216,6 +222,11 @@ beforeEach(() => {
     challengeId === oldChallenge.id ? new Set(["old-user"]) : new Set(),
   );
   mocks.getPeriodStatsByUser.mockResolvedValue(new Map());
+  mocks.joinChallengeWithCode.mockResolvedValue({
+    challengeId: "challenge-invite",
+    challengeName: "초대 챌린지",
+    status: "joined",
+  });
   mocks.getMyPreviousGoals.mockImplementation(async (_userId, _groupId, challengeId) =>
     challengeId === oldChallenge.id
       ? [
@@ -230,6 +241,49 @@ beforeEach(() => {
 });
 
 afterEach(() => cleanup());
+
+describe("ChallengePage 신규 사용자 초대 링크", () => {
+  it("프로필이 없으면 초대 코드를 보관만 하고 온보딩 전에 참가하거나 지우지 않는다", async () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/challenge?join=GND-ABCDE",
+    );
+    mocks.getMyProfile.mockResolvedValue(null);
+    mocks.getMyChallenges.mockResolvedValue([]);
+
+    render(<ChallengePage />);
+
+    await waitFor(() =>
+      expect(mocks.savePendingChallengeInvite).toHaveBeenCalledWith(
+        "GND-ABCDE",
+      ),
+    );
+    await waitFor(() => expect(mocks.getMyProfile).toHaveBeenCalled());
+
+    expect(mocks.joinChallengeWithCode).not.toHaveBeenCalled();
+    expect(mocks.clearPendingChallengeInvite).not.toHaveBeenCalled();
+  });
+
+  it("프로필이 있으면 기존처럼 초대 코드로 바로 참가하고 보관 코드를 지운다", async () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/challenge?join=GND-ABCDE",
+    );
+
+    render(<ChallengePage />);
+
+    await waitFor(() =>
+      expect(mocks.joinChallengeWithCode).toHaveBeenCalledWith(
+        "GND-ABCDE",
+      ),
+    );
+    await waitFor(() =>
+      expect(mocks.clearPendingChallengeInvite).toHaveBeenCalled(),
+    );
+  });
+});
 
 describe("ChallengePage 챌린지 전환", () => {
   it("새 챌린지를 고르면 새 조회가 끝나기 전에 이전 상세 정보를 즉시 비운다", async () => {

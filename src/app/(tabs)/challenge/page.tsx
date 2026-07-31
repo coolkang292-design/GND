@@ -194,11 +194,24 @@ function ChallengeScreen({ userId }: { userId: string }) {
     // (await보다 앞이라 리다이렉트와 경쟁하지 않는다.)
     savePendingChallengeInvite(code);
 
-    // 주소는 참가 결과와 무관하게 **먼저** 정리한다. 실패했을 때 코드가 남아
-    // 있으면 새로고침마다 같은 실패를 반복한다.
-    window.history.replaceState({}, "", window.location.pathname);
-
     (async () => {
+      // 새 사용자는 아직 프로필이 없다. 여기서 먼저 참가시키면 참가 성공 뒤
+      // 보관 코드를 지워 버려 온보딩이 일반 크루 화면으로 열린다. 닉네임을
+      // 저장한 뒤 OnboardingPage가 참가시킬 수 있도록 코드와 주소를 그대로 둔다.
+      let profile;
+      try {
+        profile = await getMyProfile(userId);
+      } catch {
+        // 일시적인 조회 실패면 코드를 보존한다. OnboardingGate의 재시도 또는
+        // 사용자의 새로고침이 다시 처리할 수 있어야 한다.
+        return;
+      }
+      if (!profile) return;
+
+      // 기존 사용자만 여기서 바로 참가한다. 처리 후 주소에서 join을 지워
+      // 새로고침·뒤로가기 때 같은 참가를 반복하지 않게 한다.
+      window.history.replaceState({}, "", window.location.pathname);
+
       try {
         const r = await joinChallengeWithCode(code);
         setSelectedId(r.challengeId);
@@ -213,7 +226,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
         reload();
       }
     })();
-  }, [showToast, reload]);
+  }, [userId, showToast, reload]);
 
   useEffect(() => {
     let cancelled = false;
