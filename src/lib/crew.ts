@@ -70,7 +70,8 @@ export async function getMyGroups(): Promise<Group[]> {
   return data ?? [];
 }
 
-async function profilesByIds(ids: string[]): Promise<Profile[]> {
+/** id 목록 → 프로필. RLS가 읽게 해주는 것만 온다(본인·크루·같은 그룹). */
+export async function profilesByIds(ids: string[]): Promise<Profile[]> {
   if (ids.length === 0) return [];
   const supabase = getSupabaseBrowserClient();
   const { data, error } = await supabase

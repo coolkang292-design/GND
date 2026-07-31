@@ -21,7 +21,7 @@ import {
 } from "@/lib/domain/goal-score";
 import { challengeLevel, levelLabel } from "@/lib/domain/level";
 import { dayKey } from "@/lib/domain/time";
-import { getGroupMemberProfiles, getMyGroups, getMyProfile } from "@/lib/crew";
+import { getMyGroups, getMyProfile, profilesByIds } from "@/lib/crew";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   EMPTY_STATS,
@@ -189,11 +189,20 @@ function ChallengeScreen({ userId }: { userId: string }) {
         pickPrimaryRow(myChallenges);
       setSelectedId(ch?.id ?? null);
 
-      // 크루 닉네임 맵은 아직 그룹 기준이다(순위표 표시용).
-      if (g) {
-        const crew = await getGroupMemberProfiles(g.id);
+      // 0044: 참여자 명단은 그룹이 아니라 **이 챌린지의 참가자**다.
+      // 그룹 기준으로 두면 초대하지 않은 크루원까지 명단·시작 게이트에 끌려와,
+      // 그 사람이 목표를 세워야 시작되는 상태가 된다. 실제로 그렇게 배포됐다.
+      // invited는 뺀다(아직 수락 전) — dropped는 결과 화면에 남아야 하므로 넣는다.
+      if (ch) {
+        const parts = await getChallengeParticipants(ch.id);
         if (cancelled) return;
-        setMembers(crew);
+        setMembers(
+          await profilesByIds(
+            parts.filter((p) => p.status !== "invited").map((p) => p.user_id),
+          ),
+        );
+      } else {
+        setMembers([]);
       }
 
       // 직전 목표 프리필은 그룹 기준 조회라 그룹이 있을 때만 채운다.
