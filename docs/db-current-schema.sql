@@ -2420,7 +2420,7 @@ $function$;
 -- goals_insert_own_setup  [INSERT]  roles=public
 --   check  : ((user_id = auth.uid()) AND challenge_in_setup(challenge_id) AND (EXISTS ( SELECT 1
    FROM challenges c
-  WHERE ((c.id = user_goals.challenge_id) AND (c.group_id = user_goals.group_id)))) AND is_group_member(group_id, auth.uid()))
+  WHERE ((c.id = user_goals.challenge_id) AND (c.group_id = user_goals.group_id)))) AND (is_challenge_participant(challenge_id, auth.uid()) OR is_group_member(group_id, auth.uid())))
 -- goals_select_member  [SELECT]  roles=public
 --   using  : (is_challenge_participant(challenge_id, auth.uid()) OR is_group_member(group_id, auth.uid()))
 -- goals_update_own_setup  [UPDATE]  roles=public
