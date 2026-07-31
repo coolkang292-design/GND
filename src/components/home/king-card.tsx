@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { DEFAULT_TIMEZONE } from "@/lib/domain/time";
 import { KING_DAYS, viewingPassStatus } from "@/lib/domain/viewing-pass";
-import { getCrewProfiles, getMyGroups } from "@/lib/crew";
-import { getCurrentChallenge } from "@/lib/challenge";
+import { getCrewProfiles } from "@/lib/crew";
+import { getMyChallenges } from "@/lib/challenge";
+import { pickPrimaryRow } from "@/lib/domain/challenge-room";
 import {
   getCrewPerformance,
   viewRecord,
@@ -34,7 +35,7 @@ export function KingCard({
 }) {
   const { userId } = useAuth();
   const [members, setMembers] = useState<Profile[]>([]);
-  const [groupId, setGroupId] = useState<string | null>(null);
+  const [challengeId, setChallengeId] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
   const [confirmTarget, setConfirmTarget] = useState<Profile | null>(null);
   const [viewing, setViewing] = useState(false);
@@ -54,23 +55,19 @@ export function KingCard({
     let cancelled = false;
     (async () => {
       try {
-        // 열람권이 0039로 크루 기준이 됐으므로 후보도 크루다. 챌린지 진행 여부는
-        // 아직 그룹 기반이라 그룹 조회는 남긴다 — 그룹이 없으면 챌린지도 없다.
-        const [groups, crew] = await Promise.all([
-          getMyGroups(),
+        // 열람권이 0039로 크루 기준이 됐으므로 후보도 크루다. 0044부터 챌린지는
+        // 그룹이 아니라 참가 사실로 묶이므로 그룹 조회가 필요 없다.
+        const [challenges, crew] = await Promise.all([
+          getMyChallenges(),
           getCrewProfiles(userId),
         ]);
         if (cancelled) return;
         setMembers(crew.filter((m) => m.id !== userId));
 
-        const g = groups[0];
-        if (!g) {
-          setChallengeActive(false);
-          return;
-        }
-        setGroupId(g.id);
-        const challenge = await getCurrentChallenge(g.id);
-        if (cancelled) return;
+        // 여러 챌린지가 있을 수 있다. 대표를 고르는 규칙은 화면끼리 같아야
+        // 열람 대상(challenge_peek_picks)이 어긋나지 않는다.
+        const challenge = pickPrimaryRow(challenges);
+        setChallengeId(challenge?.id ?? null);
         setChallengeActive(challenge?.status === "active");
       } catch {
         /* 크루/챌린지 조회 실패 — 카드 숨김 */
@@ -83,11 +80,11 @@ export function KingCard({
   }, [userId]);
 
   async function confirmView() {
-    if (!confirmTarget || !groupId) return;
+    if (!confirmTarget || !challengeId) return;
     setViewing(true);
     try {
       await viewRecord(confirmTarget.id);
-      const data = await getCrewPerformance(confirmTarget.id, groupId);
+      const data = await getCrewPerformance(confirmTarget.id, challengeId);
       setPerf({ who: confirmTarget, data });
       setConfirmTarget(null);
       setPicking(false);

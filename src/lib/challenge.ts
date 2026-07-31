@@ -461,12 +461,17 @@ export function actualForGoal(
 }
 
 /**
- * 크루원별 기간 실적 집계.
+ * 참가자별 기간 실적 집계.
+ *
  * RLS가 읽게 해주는 세션(내 전부 + 크루 공개 완료분)만 반영된다 —
  * private 세션은 본인 점수에만 잡힌다(진행 중엔 내 것만 쓰므로 문제 없음).
+ *
+ * 0044부터 명단이 group_members가 아니라 challenge_participants다. 참가자
+ * 전원과 crew_links가 맺어지는 것은 0042의 accept_challenge_invite가 보장한다
+ * (설계 D5의 완전 연결) — 그래서 크루 공개 세션을 서로 읽을 수 있다.
  */
 export async function getPeriodStatsByUser(
-  groupId: string,
+  userIds: string[],
   startDate: string,
   endDate: string,
   timeZone: string,
@@ -474,6 +479,10 @@ export async function getPeriodStatsByUser(
   client?: SupabaseClient,
 ): Promise<Map<string, PeriodStats>> {
   const supabase = client ?? getSupabaseBrowserClient();
+  // 참가자가 0명이면 조회할 것이 없다. .in("user_id", [])는 PostgREST에서
+  // 빈 IN 절이 되어 문법 오류를 낼 수 있으므로 여기서 끊는다.
+  if (userIds.length === 0) return new Map();
+
   const fromIso = new Date(`${startDate}T00:00:00Z`);
   fromIso.setUTCDate(fromIso.getUTCDate() - 1);
   const toIso = new Date(`${endDate}T00:00:00Z`);
@@ -487,7 +496,11 @@ export async function getPeriodStatsByUser(
   const { data, error } = await supabase
     .from("workout_sessions")
     .select(select)
-    .eq("group_id", groupId)
+    // 0044: group_id 필터 → 참가자 user_id 필터.
+    // 두 방식이 같은 세션 집합을 낸다는 것을 전환 전에 실측했다
+    // (scripts/challenge-aggregation-parity.mjs). 그래야 진행 중 챌린지의
+    // 점수가 안 흔들린다.
+    .in("user_id", userIds)
     .eq("status", "completed")
     .is("deleted_at", null)
     .gte("completed_at", fromIso.toISOString())
@@ -549,32 +562,51 @@ function periodDaysCount(startDate: string, endDate: string): number {
 }
 
 /**
- * 진행 중(active) 챌린지의 현재 순위 — 없으면 null
+ * 챌린지 하나의 현재 순위 — active가 아니면 null
+ *
+ * 0044부터 인자가 groupId가 아니라 challengeId다. 크루당 챌린지가 여러 개일 수
+ * 있으므로 "그 크루의 챌린지"로는 대상이 정해지지 않는다.
+ *
+ * 명단의 원천도 목표가 아니라 참가자다. user_goals INSERT는 같은 그룹이면
+ * 참가자가 아니어도 통과하므로(0006:81), 목표에서 명단을 뽑으면 참가하지 않은
+ * 사람이 랭킹에 올라온다.
  *
  * `client`는 서버(관리자 대시보드)에서 service_role 클라이언트를 넣기 위한 것이다.
- * 생략하면 지금까지처럼 브라우저 클라이언트를 쓴다 — 기존 호출부는 영향 없다.
+ * 생략하면 지금까지처럼 브라우저 클라이언트를 쓴다.
  * 달성률 계산을 서버용으로 복제하지 않으려고 주입 방식을 택했다(두 벌이 되면 갈라진다).
  */
 export async function getActiveChallengeRanking(
-  groupId: string,
+  challengeId: string,
   client?: SupabaseClient,
 ): Promise<ChallengeRanking | null> {
-  const ch = await getCurrentChallenge(groupId, client);
+  const supabase = client ?? getSupabaseBrowserClient();
+  const { data: ch, error } = await supabase
+    .from("challenges")
+    .select("*")
+    .eq("id", challengeId)
+    .maybeSingle();
+  if (error) throw error;
   if (!ch || ch.status !== "active") return null;
 
-  const [goals, stats] = await Promise.all([
+  const [goals, participants] = await Promise.all([
     getChallengeGoals(ch.id, client),
-    getPeriodStatsByUser(
-      groupId,
-      ch.start_date,
-      ch.end_date,
-      DEFAULT_TIMEZONE,
-      ch.photo_required,
-      client,
-    ),
+    getChallengeParticipants(ch.id, client),
   ]);
+  // invited는 아직 참가자가 아니다. dropped는 목표 0개로 빠진 사람이라 어차피
+  // 목표가 없어 점수가 0이지만, 명단에 남겨 결과 화면에서 사라지지 않게 한다.
+  const userIds = participants
+    .filter((p) => p.status !== "invited")
+    .map((p) => p.user_id);
+
+  const stats = await getPeriodStatsByUser(
+    userIds,
+    ch.start_date,
+    ch.end_date,
+    DEFAULT_TIMEZONE,
+    ch.photo_required,
+    client,
+  );
   const days = periodDaysCount(ch.start_date, ch.end_date);
-  const userIds = [...new Set(goals.map((g) => g.user_id))];
 
   const list = rankParticipants(
     userIds.map((uid) => {

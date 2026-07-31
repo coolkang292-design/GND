@@ -33,6 +33,7 @@ import {
   finalizeChallenge,
   getChallengeApprovals,
   getChallengeGoals,
+  getChallengeParticipants,
   getCurrentChallenge,
   getMyPreviousGoals,
   getPeriodStatsByUser,
@@ -161,9 +162,14 @@ function ChallengeScreen({ userId }: { userId: string }) {
           })),
         );
         if (ch.status === "active" || ch.status === "ended") {
+          // 0044: 집계 대상이 그룹이 아니라 챌린지 참가자다.
+          // invited는 뺀다 — 아직 수락하지 않았으니 참가자가 아니다.
+          // dropped는 남긴다 — 목표 0개로 명단에서 빠졌어도 이미 한 운동은
+          // 결과 화면에 보여야 한다.
+          const parts = await getChallengeParticipants(ch.id);
           setStats(
             await getPeriodStatsByUser(
-              g.id,
+              parts.filter((p) => p.status !== "invited").map((p) => p.user_id),
               ch.start_date,
               ch.end_date,
               tz,
