@@ -32,6 +32,8 @@
 
 **후속 수정 재배포 완료:** 폰 초대 링크에서 일반 크루 온보딩으로 빠지는 문제를 수정했다. 로컬 `main`을 Git 없는 임시 복사본으로 배포했고 `gnd-l0hmtp51p-gnd4.vercel.app` → `gnd-one.vercel.app` 별칭, Vercel `Ready`, 주요 경로 200, 운영 JS의 `챌린지 참가하기` 문구를 확인했다. GitHub는 사용하지 않았다.
 
+**챌린지 추가 화면 후속 재배포 완료:** 로컬 `main`의 `cddaf1e`를 Git 없는 임시 복사본으로 배포했다. `gnd-1si6fvwv2-gnd4.vercel.app` → `gnd-one.vercel.app`, Vercel `Ready`, `/`·`/home`·`/challenge`·`/onboarding` 200을 확인했다. 운영 JS에는 `챌린지 추가하기`·`챌린지 이름을 입력하세요`·`알 수 없는 오류`가 들어 있고 예전 `챌린지 하나 더 만들기`는 없다. GitHub는 사용하지 않았다.
+
 ### 1.3 검증 실측 (전부 실 DB, 0051 적용 후)
 
 | 스크립트 | 결과 |
@@ -299,10 +301,12 @@ cd /tmp/deploy-main && npx vercel@latest --prod --yes
 - 관련 테스트 **10/10**, 전체 단위 테스트 **717/717(68파일)**.
 - `pnpm lint`, `pnpm typecheck`, `pnpm build`, `git diff --check` 전부 성공.
 - 로컬 실제 계정의 `/challenge`에서 `＋ 챌린지 추가하기` 버튼을 눌러 이름값 `''`, 안내 문구, 이름칸 포커스를 확인했다. 최종 생성은 누르지 않아 운영 데이터는 바꾸지 않았다.
-- **DB 변경 없음. 이번 수정은 운영 배포하지 않았다.** 현재 작업 브랜치는 `codex/challenge-add-form-error`, 코드 커밋은 `3542973`이다.
+- **DB 변경 없음. 운영 배포 완료.** 코드 커밋 `3542973`과 규칙·기록 커밋 `cddaf1e`를 로컬 `main`에 합친 뒤 사용자 승인을 받아 배포했다.
+- 배포 실물 `gnd-1si6fvwv2-gnd4.vercel.app`, 사용자 주소 `gnd-one.vercel.app`, Vercel `Ready`.
+- `/`·`/home`·`/challenge`·`/onboarding` 200. 운영 JS에서 새 문구 3종을 확인했고 예전 버튼 문구는 0건이다.
 
 ### 8.4 다음 에이전트가 바로 할 일 1개
 
-검증한 브랜치를 로컬 `main`에 합친 뒤 사용자에게 **운영 배포 승인을 따로 받고**, GitHub 없이 로컬 Vercel CLI로 배포한다. 배포 후 `gnd-one.vercel.app/challenge` 실물의 새 버튼 문구와 이름 입력 흐름을 확인하고, 사용자 폰 확인을 요청한다.
+사용자 폰의 `gnd-one.vercel.app/challenge`에서 `＋ 챌린지 추가하기`를 눌러 **이름칸이 비어 있는지, `챌린지 이름을 입력하세요`가 보이는지** 확인한다. 실제 생성은 새 운영 데이터가 생기므로 사용자가 필요할 때만 누른다.
 
 별도로 남은 기존 미검증 1건은 §1.5의 **새 `setup` 초대 링크 → 새 사용자 닉네임 → 실제 참가 성공 전 과정**이다.
