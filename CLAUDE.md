@@ -73,7 +73,9 @@ curl -s https://gnd-one.vercel.app/challenge \
 ## DB 마이그레이션
 
 - **적용된 파일은 절대 수정하지 않는다.** 고쳐도 아무 일이 안 일어나고 다음 사람만 헷갈린다. 항상 새 번호 파일을 만든다.
-- **함수의 현행 정의는 "가장 나중에 덮어쓴 파일"에 있다.** 이 저장소는 `create or replace function`으로 같은 함수를 여러 번 덮어쓴다. 파일에서 베끼지 말고 DB에서 `pg_get_functiondef`로 뽑아라.
+- **함수의 현행 정의는 "가장 나중에 덮어쓴 파일"에 있다.** 이 저장소는 `create or replace function`으로 같은 함수를 여러 번 덮어쓴다. `start_challenge`는 0006 → 0025 → 0045 세 곳, `mark_record_beaten`은 다섯 번 덮어썼다. **파일에서 베끼지 마라.**
+  - 👉 **`docs/db-current-schema.sql`을 보라.** 운영 DB의 현행 함수·정책·인덱스 전량 스냅샷이다. `pnpm db:snapshot`으로 다시 뽑는다(마이그레이션 적용 후 갱신할 것). 이게 "현행 정의"의 단일 답이다.
+  - 고칠 함수가 있으면 **형제 함수도 같이 훑어라.** 2026-07-31에 `start_challenge`만 고치고 같은 전제를 공유하는 `approve_challenge_goals`를 놓쳐, 챌린지를 영영 시작할 수 없는 상태를 배포했다(0045 → 0046 → 0047로 세 번 고쳤다).
 - **컬럼명을 스키마에서 확인하고 써라.** `information_schema.columns`를 먼저 조회한다. 2026-07-30에 `gm.created_at`(실제는 `joined_at`)으로 검증 24건이 연쇄 실패했다.
 - **적용은 사용자가 한다.** 에이전트는 SQL을 실행할 수 없다. 파일을 만들고 "SQL Editor에 전체 붙여넣고 Run" 요청한다.
 
