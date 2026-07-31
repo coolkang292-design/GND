@@ -12,10 +12,17 @@ import { CalendarView } from "@/components/record/calendar-view";
 import { ExerciseCard } from "@/components/record/exercise-card";
 import { ExercisePicker } from "@/components/record/exercise-picker";
 import { ExerciseReorderSheet } from "@/components/record/exercise-reorder-sheet";
+import { IdlePauseModal } from "@/components/record/idle-pause-modal";
 import { TabataSheet } from "@/components/record/tabata-sheet";
 import { RestBar } from "@/components/record/rest-bar";
 import { VerificationPhoto } from "@/components/record/verification-photo";
+import { useIdleGuard, type IdleGuardSnapshot } from "@/hooks/use-idle-guard";
 import { useRestCountdown } from "@/hooks/use-rest-countdown";
+import {
+  accumulatedPausedSeconds,
+  activeElapsedSeconds,
+  shouldGuardIdle,
+} from "@/lib/domain/idle-guard";
 import { summarizeVolume, type VolumeSummary } from "@/lib/domain/volume";
 import { formatWorkoutLog } from "@/lib/domain/workout-log";
 import {
@@ -141,7 +148,6 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const [pastSessions, setPastSessions] = useState<CalendarSession[]>([]);
   const [pastLoading, setPastLoading] = useState(false);
   const [pastLoaded, setPastLoaded] = useState(false);
-  const [nowMs, setNowMs] = useState(() => Date.now());
   const [result, setResult] = useState<CompletedResult | null>(null);
   const [xpEvents, setXpEvents] = useState<XpEvent[]>([]);
   const [busy, setBusy] = useState(false);
@@ -159,12 +165,41 @@ function WorkoutScreen({ userId }: { userId: string }) {
   }, []);
   const {
     remainingSeconds: restRemaining,
+    lastRestEndsAtMs,
     startRest,
     extendRest,
     stopRest,
     cancelRestForSource,
   } = useRestCountdown(active, () => {
     showToast("휴식 끝! 다음 세트 시작 💪");
+  });
+
+  // ── 무동작 감지 (설계 2026-08-01) ────────────────────────────────
+  const handleIdleChange = useCallback(
+    (next: IdleGuardSnapshot) => {
+      setDraft((d) => ({ ...d, ...next }));
+    },
+    [setDraft],
+  );
+  const {
+    paused,
+    nowMs,
+    markActivity,
+    resumeFromPause,
+    totalPausedSeconds,
+  } = useIdleGuard({
+    active,
+    guarded: shouldGuardIdle({
+      exerciseTypes: draft.exercises.map((ex) => ex.exerciseType),
+      isTabata: draft.tabataMinutes !== null,
+    }),
+    lastRestEndsAtMs,
+    snapshot: {
+      pausedSeconds: draft.pausedSeconds,
+      pausedAtMs: draft.pausedAtMs,
+      lastActivityMs: draft.lastActivityMs,
+    },
+    onChange: handleIdleChange,
   });
 
   // 자동 임시저장 (§10)
@@ -225,21 +260,17 @@ function WorkoutScreen({ userId }: { userId: string }) {
     };
   }, [userId, showToast, setDraft]);
 
-  // 경과 시간 틱
-  useEffect(() => {
-    if (!active) return;
-    const t = setInterval(() => setNowMs(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, [active]);
+  // 경과 시간 틱은 useIdleGuard가 함께 돌린다 (nowMs) — 인터벌을 둘로 두지 않는다.
 
   const updateExercise = useCallback(
     (key: string, updater: (ex: LocalExercise) => LocalExercise) => {
+      markActivity();
       setDraft((d) => ({
         ...d,
         exercises: d.exercises.map((ex) => (ex.key === key ? updater(ex) : ex)),
       }));
     },
-    [setDraft],
+    [markActivity, setDraft],
   );
 
   /** 선택한 운동 여러 개를 한 번에 추가 (다중 선택 피커) */
@@ -254,6 +285,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
       isCustom: item.is_custom,
       sets: defaultSets(item.exercise_type, item.measure),
     }));
+    markActivity();
     setDraft((d) => ({ ...d, exercises: [...d.exercises, ...added] }));
     setPickerOpen(false);
     showToast(
@@ -426,6 +458,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
   }
 
   function removeExercise(exKey: string) {
+    markActivity();
     setDraft((d) => ({
       ...d,
       exercises: d.exercises.filter((ex) => ex.key !== exKey),
@@ -494,6 +527,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
     setDraft((d) => ({
       ...emptyDraft(d.restSeconds),
       exercises: tabataDraftExercises(picked, localId),
+      // 타바타는 무동작 감지 대상이 아니다 — 음원을 따라 하는 동안 앱을 만지지 않는다.
+      tabataMinutes: minutes,
     }));
     tabataMinutesRef.current = minutes;
     try {
@@ -617,7 +652,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
       // 조용한 성공으로 처리해, 종료 불가 상태에 갇히지 않게 한다.
       // v2는 XP 결과만 돌려주므로 완료 시각·소요 시간은 세션을 다시 읽는다.
       const sessionId = draft.sessionId;
-      const xp = await finishWorkout(sessionId);
+      // 무동작으로 멈춰 있던 시간은 서버 duration에서 뺀다 (0055).
+      const xp = await finishWorkout(sessionId, totalPausedSeconds());
       const s = await getSessionById(sessionId);
       const completedAtMs = s?.completed_at
         ? new Date(s.completed_at).getTime()
@@ -723,10 +759,21 @@ function WorkoutScreen({ userId }: { userId: string }) {
   }
 
   const summary = summarizeVolume(toVolumeSets(draft.exercises));
+  // 멈춰 있던 시간은 경과 시간에서 뺀다. 정지 중에는 정지 시작 시점에 멈춰 있다.
   const elapsedSec =
     active && draft.startedAtMs
-      ? Math.max(0, Math.floor((nowMs - draft.startedAtMs) / 1000))
+      ? activeElapsedSeconds({
+          startedAtMs: draft.startedAtMs,
+          nowMs,
+          pausedSeconds: draft.pausedSeconds,
+          pausedAtMs: draft.pausedAtMs,
+        })
       : 0;
+  const pausedForSec = accumulatedPausedSeconds({
+    pausedSeconds: 0,
+    pausedAtMs: draft.pausedAtMs,
+    nowMs,
+  });
   const hh = String(Math.floor(elapsedSec / 3600)).padStart(2, "0");
   const mm = String(Math.floor((elapsedSec % 3600) / 60)).padStart(2, "0");
   const ss = String(elapsedSec % 60).padStart(2, "0");
@@ -859,11 +906,17 @@ function WorkoutScreen({ userId }: { userId: string }) {
       <section className="rounded-card border border-line bg-surface p-4 shadow-card">
         <div className="flex items-start justify-between">
           <div>
-            <p className="text-xs font-bold text-accent">
-              {active ? "운동 중" : "준비"}
+            <p
+              className={`text-xs font-bold ${paused ? "text-warn" : "text-accent"}`}
+            >
+              {paused ? "⏸ 정지됨 — 무동작" : active ? "운동 중" : "준비"}
             </p>
             {active ? (
-              <p className="mt-1 font-mono text-2xl font-extrabold">
+              <p
+                className={`mt-1 font-mono text-2xl font-extrabold ${
+                  paused ? "text-muted" : ""
+                }`}
+              >
                 {hh}:{mm}:{ss}
               </p>
             ) : (
@@ -1020,8 +1073,14 @@ function WorkoutScreen({ userId }: { userId: string }) {
       {restRemaining !== null && (
         <RestBar
           remainingSeconds={restRemaining}
-          onExtend={extendRest}
-          onSkip={stopRest}
+          onExtend={() => {
+            markActivity();
+            extendRest();
+          }}
+          onSkip={() => {
+            markActivity();
+            stopRest();
+          }}
         />
       )}
 
@@ -1045,6 +1104,16 @@ function WorkoutScreen({ userId }: { userId: string }) {
         </div>
       )}
         </>
+      )}
+
+      {/* 무동작 정지 — 달력 탭을 보고 있어도 떠야 한다 (설계 2026-08-01) */}
+      {paused && (
+        <IdlePauseModal
+          pausedSeconds={pausedForSec}
+          busy={busy}
+          onResume={resumeFromPause}
+          onFinish={() => void handleFinish()}
+        />
       )}
     </div>
   );

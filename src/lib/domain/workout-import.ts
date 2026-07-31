@@ -6,6 +6,42 @@ export type ImportMergeResult = {
   skippedCount: number;
 };
 
+/** 지난 기록 조회 결과에서 완료 여부·순서 판정에 필요한 최소 형태 */
+export type RecordedSetRow = {
+  set_number: number;
+  is_completed: boolean;
+};
+
+/**
+ * 실제로 **완료 체크한 세트만** 세트 번호 순으로 (2026-08-01).
+ *
+ * 완료 세션이라도 체크하지 않은 세트가 남아 있다 — 계획만 하고 하지 않은 세트다.
+ * 예전에는 이것까지 복사해서 '이전 기록 불러오기'가 기록이 아니라 계획을
+ * 불러오는 것처럼 보였다.
+ */
+export function completedSetsInOrder<T extends RecordedSetRow>(
+  rows: readonly T[],
+): T[] {
+  return rows
+    .filter((row) => row.is_completed)
+    .sort((a, b) => a.set_number - b.set_number);
+}
+
+/**
+ * 완료 세트가 하나라도 있는 종목만. 완료 세트가 없는 종목은 그날 하지 않은
+ * 운동이므로 목록에서 통째로 뺀다.
+ */
+export function withCompletedSetsOnly<T extends RecordedSetRow, E>(
+  exercises: readonly { exercise: E; sets: readonly T[] }[],
+): { exercise: E; sets: T[] }[] {
+  return exercises
+    .map((item) => ({
+      exercise: item.exercise,
+      sets: completedSetsInOrder(item.sets),
+    }))
+    .filter((item) => item.sets.length > 0);
+}
+
 export function replaceWithLastRecordedSets(
   exercise: LocalExercise,
   recordedSets: LocalSet[],

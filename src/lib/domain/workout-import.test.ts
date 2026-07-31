@@ -3,9 +3,60 @@ import type { LocalExercise } from "@/lib/workout";
 import {
   applyLastRecordedSetsToExercises,
   buildEffortMessage,
+  completedSetsInOrder,
   mergeImportedExercises,
   replaceWithLastRecordedSets,
+  withCompletedSetsOnly,
 } from "./workout-import";
+
+function row(set_number: number, is_completed: boolean) {
+  return { set_number, is_completed };
+}
+
+describe("completedSetsInOrder", () => {
+  it("keeps only the sets that were actually checked off", () => {
+    const sets = completedSetsInOrder([
+      row(1, true),
+      row(2, false),
+      row(3, true),
+    ]);
+
+    expect(sets).toHaveLength(2);
+    expect(sets.map((s) => s.set_number)).toEqual([1, 3]);
+  });
+
+  it("orders by set number regardless of row order", () => {
+    const sets = completedSetsInOrder([row(3, true), row(1, true), row(2, true)]);
+
+    expect(sets.map((s) => s.set_number)).toEqual([1, 2, 3]);
+  });
+
+  it("returns nothing when every set was only planned", () => {
+    expect(completedSetsInOrder([row(1, false), row(2, false)])).toHaveLength(0);
+  });
+});
+
+describe("withCompletedSetsOnly", () => {
+  it("drops exercises that have no completed set", () => {
+    const result = withCompletedSetsOnly([
+      { exercise: "벤치 프레스", sets: [row(1, true), row(2, false)] },
+      { exercise: "랫풀다운", sets: [row(1, false), row(2, false)] },
+      { exercise: "스쿼트", sets: [row(1, true), row(2, true)] },
+    ]);
+
+    expect(result.map((item) => item.exercise)).toEqual(["벤치 프레스", "스쿼트"]);
+    expect(result[0].sets).toHaveLength(1);
+    expect(result[1].sets).toHaveLength(2);
+  });
+
+  it("returns an empty list when nothing was completed", () => {
+    expect(
+      withCompletedSetsOnly([
+        { exercise: "벤치 프레스", sets: [row(1, false)] },
+      ]),
+    ).toHaveLength(0);
+  });
+});
 
 function exercise(
   input: Partial<LocalExercise> & Pick<LocalExercise, "name" | "exerciseType">,

@@ -1,4 +1,8 @@
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import {
+  completedSetsInOrder,
+  withCompletedSetsOnly,
+} from "@/lib/domain/workout-import";
 import type { CompletedSession } from "@/lib/domain/calendar";
 import type { VolumeSet } from "@/lib/domain/volume";
 import type { LogExercise } from "@/lib/domain/workout-log";
@@ -45,7 +49,7 @@ export type LocalExercise = {
 };
 
 export type WorkoutDraft = {
-  version: 4;
+  version: 5;
   sessionId: string | null;
   startedAtMs: number | null; // 서버 started_at (RPC 응답 기준)
   scheduledPlanId: string | null; // 예정표에서 불러온 경우, 운동 시작 성공 후 정리
@@ -53,7 +57,20 @@ export type WorkoutDraft = {
   effortMessage: string | null; // 지난 기록 불러오기 뒤 보여주는 선택형 노력 제안
   restSeconds: number; // 세트 사이 휴식 사전설정 (§10, 기본 90초)
   exercises: LocalExercise[];
+  // ── 무동작 감지 (2026-08-01) — 새로고침·앱 재시작에도 유지돼야 한다 ──
+  pausedSeconds: number; // 누적 정지 시간(초). 종료 시 서버 duration에서 빠진다
+  pausedAtMs: number | null; // 지금 정지 중이면 그 시작 시각
+  lastActivityMs: number | null; // 마지막 동작 시각
+  tabataMinutes: number | null; // 타바타 세션이면 그 분수 — 무동작 감지 제외 판정용
 };
+
+/** 무동작 감지 필드의 초기값 — 새 세션·구버전 draft 승격에 함께 쓴다 */
+const IDLE_DEFAULTS = {
+  pausedSeconds: 0,
+  pausedAtMs: null,
+  lastActivityMs: null,
+  tabataMinutes: null,
+} as const;
 
 /** crypto.randomUUID는 보안 컨텍스트 전용 — http+LAN IP 테스트에서도 동작해야 함 */
 export function localId(): string {
@@ -67,7 +84,7 @@ export const DEFAULT_REST_SECONDS = 90;
 
 export function emptyDraft(restSeconds = DEFAULT_REST_SECONDS): WorkoutDraft {
   return {
-    version: 4,
+    version: 5,
     sessionId: null,
     startedAtMs: null,
     scheduledPlanId: null,
@@ -75,6 +92,7 @@ export function emptyDraft(restSeconds = DEFAULT_REST_SECONDS): WorkoutDraft {
     effortMessage: null,
     restSeconds,
     exercises: [],
+    ...IDLE_DEFAULTS,
   };
 }
 
@@ -84,40 +102,47 @@ export function loadDraft(userId: string): WorkoutDraft {
   try {
     const raw = localStorage.getItem(draftKey(userId));
     if (!raw) return emptyDraft();
+    type IdleFields = keyof typeof IDLE_DEFAULTS;
+    type LegacyDraft<V extends number, Missing extends keyof WorkoutDraft> = Omit<
+      WorkoutDraft,
+      "version" | Missing | IdleFields
+    > & { version: V };
+
     const parsed = JSON.parse(raw) as
       | WorkoutDraft
-      | (Omit<
-          WorkoutDraft,
-          "version" | "scheduledPlanId" | "sourceSessionId" | "effortMessage"
-        > & { version: 1 })
-      | (Omit<WorkoutDraft, "version" | "sourceSessionId" | "effortMessage"> & {
-          version: 2;
-        })
-      | (Omit<WorkoutDraft, "version" | "sourceSessionId"> & { version: 3 });
+      | LegacyDraft<1, "scheduledPlanId" | "sourceSessionId" | "effortMessage">
+      | LegacyDraft<2, "sourceSessionId" | "effortMessage">
+      | LegacyDraft<3, "sourceSessionId">
+      | LegacyDraft<4, never>;
     if (!parsed || !Array.isArray(parsed.exercises)) {
       return emptyDraft();
     }
     if (parsed.version === 1) {
       return {
         ...parsed,
-        version: 4,
+        version: 5,
         scheduledPlanId: null,
         sourceSessionId: null,
         effortMessage: null,
+        ...IDLE_DEFAULTS,
       };
     }
     if (parsed.version === 2) {
       return {
         ...parsed,
-        version: 4,
+        version: 5,
         sourceSessionId: null,
         effortMessage: null,
+        ...IDLE_DEFAULTS,
       };
     }
     if (parsed.version === 3) {
-      return { ...parsed, version: 4, sourceSessionId: null };
+      return { ...parsed, version: 5, sourceSessionId: null, ...IDLE_DEFAULTS };
     }
-    if (parsed.version !== 4) return emptyDraft();
+    if (parsed.version === 4) {
+      return { ...parsed, version: 5, ...IDLE_DEFAULTS };
+    }
+    if (parsed.version !== 5) return emptyDraft();
     return parsed;
   } catch {
     return emptyDraft();
@@ -311,13 +336,21 @@ export interface WorkoutXpResult {
   rejectionReason?: string;
 }
 
-/** 완료 + XP를 원자 처리하는 신규 경로. 세션 객체 대신 XP 결과를 반환한다. */
+/**
+ * 완료 + XP를 원자 처리하는 신규 경로. 세션 객체 대신 XP 결과를 반환한다.
+ *
+ * `pausedSeconds`는 무동작으로 멈춰 있던 시간이다(0055). 서버가 duration에서
+ * 빼되 `0 ~ 실제 경과초`로 클램프하므로, 클라이언트가 이상한 값을 보내도
+ * 음수 duration은 생기지 않는다.
+ */
 export async function completeWorkoutV2(
   sessionId: string,
+  pausedSeconds = 0,
 ): Promise<WorkoutXpResult> {
   const supabase = getSupabaseBrowserClient();
   const { data, error } = await supabase.rpc("complete_workout_v2", {
     p_session_id: sessionId,
+    p_paused_seconds: Math.max(0, Math.round(pausedSeconds)),
   });
   if (error) throw error;
   return data as WorkoutXpResult;
@@ -344,9 +377,12 @@ export function isAlreadyCompletedFinishError(message: string): boolean {
  * RPC가 완료 세션 재종료에서 던지면, 세션 상태를 확인해 실제로 completed면
  * 멱등 재생 결과(모달 없음)를 돌려주고, 아니면 원래 오류를 다시 던진다.
  */
-export async function finishWorkout(sessionId: string): Promise<WorkoutXpResult> {
+export async function finishWorkout(
+  sessionId: string,
+  pausedSeconds = 0,
+): Promise<WorkoutXpResult> {
   try {
-    return await completeWorkoutV2(sessionId);
+    return await completeWorkoutV2(sessionId, pausedSeconds);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (!isAlreadyCompletedFinishError(msg)) throw e;
@@ -557,7 +593,22 @@ export async function getLastCompletedWeightVolume(
   return volume;
 }
 
-/** 직전 기록 불러오기 — 같은 이름 운동의 가장 최근 완료 세트 구조 (§10) */
+/** DB 세트 행 → 로컬 draft 세트 (완료 여부는 복사하지 않는다) */
+function toLocalSet(s: WorkoutSet): LocalSet {
+  return newSet({
+    weightKg: Number(s.weight_kg ?? 0),
+    reps: s.reps ?? 0,
+    distanceKm: Number(s.distance_meters ?? 0) / 1000,
+    durationMin: Math.round((s.duration_seconds ?? 0) / 60),
+  });
+}
+
+/**
+ * 직전 기록 불러오기 — 같은 이름 운동의 가장 최근 **완료 세트** 구조 (§10).
+ *
+ * 완료 체크한 세트만 본다. 가장 최근 세션에 완료 세트가 없으면(계획만 하고
+ * 하지 않은 종목) 그다음 최근 세션으로 넘어간다 (2026-08-01).
+ */
 export async function getLastRecordedSets(
   userId: string,
   exerciseName: string,
@@ -588,18 +639,14 @@ export async function getLastRecordedSets(
   const byRecency = [...exercises].sort(
     (a, b) => sessionIds.indexOf(a.session_id) - sessionIds.indexOf(b.session_id),
   );
-  const latest = byRecency[0];
-  const sets = ((latest.workout_sets ?? []) as WorkoutSet[])
-    .sort((a, b) => a.set_number - b.set_number)
-    .map((s) =>
-      newSet({
-        weightKg: Number(s.weight_kg ?? 0),
-        reps: s.reps ?? 0,
-        distanceKm: Number(s.distance_meters ?? 0) / 1000,
-        durationMin: Math.round((s.duration_seconds ?? 0) / 60),
-      }),
+
+  for (const candidate of byRecency) {
+    const sets = completedSetsInOrder(
+      (candidate.workout_sets ?? []) as WorkoutSet[],
     );
-  return sets.length > 0 ? sets : null;
+    if (sets.length > 0) return sets.map(toLocalSet);
+  }
+  return null;
 }
 
 // ── 인증사진 (§11) ───────────────────────────────────────────────
@@ -684,6 +731,10 @@ export async function awardWorkoutPhotoXp(
 
 /**
  * 지난 세션의 종목·세트 구조를 로컬 draft 재료로 조회.
+ *
+ * **완료 체크한 세트만** 가져온다 (2026-08-01). 완료 세션에도 체크하지 않은
+ * 세트가 남아 있는데, 그건 계획만 하고 하지 않은 세트다. 완료 세트가 하나도
+ * 없는 종목은 그날 하지 않은 운동이므로 목록에서 뺀다.
  * 값(중량·횟수·거리·시간)은 복사하되 완료 여부는 복사하지 않는다.
  */
 export async function getSessionExerciseStructure(sessionId: string): Promise<
@@ -714,25 +765,18 @@ export async function getSessionExerciseStructure(sessionId: string): Promise<
     workout_sets: WorkoutSet[] | null;
   };
 
-  return ((data ?? []) as Row[]).map((row) => {
-    const sets = [...(row.workout_sets ?? [])]
-      .sort((a, b) => a.set_number - b.set_number)
-      .map((s) =>
-        newSet({
-          weightKg: Number(s.weight_kg ?? 0),
-          reps: s.reps ?? 0,
-          distanceKm: Number(s.distance_meters ?? 0) / 1000,
-          durationMin: Math.round((s.duration_seconds ?? 0) / 60),
-        }),
-      );
-    return {
-      name: row.exercise_name,
-      exerciseType: row.exercise_type,
-      measure: row.measure,
-      bodyPart: row.body_part,
-      sets: sets.length > 0 ? sets : defaultSets(row.exercise_type, row.measure),
-    };
-  });
+  return withCompletedSetsOnly(
+    ((data ?? []) as Row[]).map((row) => ({
+      exercise: row,
+      sets: row.workout_sets ?? [],
+    })),
+  ).map(({ exercise: row, sets }) => ({
+    name: row.exercise_name,
+    exerciseType: row.exercise_type,
+    measure: row.measure,
+    bodyPart: row.body_part,
+    sets: sets.map(toLocalSet),
+  }));
 }
 
 /**

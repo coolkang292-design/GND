@@ -58,7 +58,7 @@ describe("rest countdown audio", () => {
     expect(gain.gain.setValueAtTime).toHaveBeenCalledWith(0.0001, 10);
     expect(gain.gain.linearRampToValueAtTime).toHaveBeenNthCalledWith(
       1,
-      0.5,
+      1,
       10.01,
     );
     expect(gain.gain.linearRampToValueAtTime).toHaveBeenNthCalledWith(
@@ -95,8 +95,10 @@ describe("rest countdown audio", () => {
     },
   );
 
+  // 2026-08-01: 예전에는 이 비프를 버렸다. 다른 앱을 쓰다 GND로 돌아오면 iOS가
+  // 컨텍스트를 interrupted로 만들어 두기 때문에, 돌아온 뒤 비프가 통째로 사라졌다.
   it.each(["suspended", "interrupted"] as const)(
-    "resumes %s audio without scheduling the current beep",
+    "schedules the %s beep once the context has resumed",
     async (state) => {
       const oscillator = {
         type: "sine" as OscillatorType,
@@ -121,7 +123,11 @@ describe("rest countdown audio", () => {
         destination = {};
         createOscillator = vi.fn(() => oscillator);
         createGain = vi.fn(() => gain);
-        resume = vi.fn(() => Promise.resolve());
+        // 진짜 resume은 성공하면 state를 running으로 바꾼다.
+        resume = vi.fn(() => {
+          this.state = "running";
+          return Promise.resolve();
+        });
 
         constructor() {
           FakeAudioContext.instances.push(this);
@@ -133,18 +139,50 @@ describe("rest countdown audio", () => {
       const { playRestCountdownBeep } = await import("./rest-countdown-audio");
 
       playRestCountdownBeep({ durationSeconds: 0.12 });
-      await Promise.resolve();
 
       expect(FakeAudioContext.instances[0]?.resume).toHaveBeenCalledOnce();
       expect(oscillator.start).not.toHaveBeenCalled();
 
-      FakeAudioContext.instances[0]!.state = "running";
-      playRestCountdownBeep({ durationSeconds: 0.12 });
+      await Promise.resolve();
+      await Promise.resolve();
 
       expect(oscillator.start).toHaveBeenCalledOnce();
-      expect(oscillator.stop).toHaveBeenCalledOnce();
+      expect(oscillator.start).toHaveBeenCalledWith(10);
+      expect(oscillator.stop).toHaveBeenCalledWith(10.12);
     },
   );
+
+  it("drops the beep when the context never resumes", async () => {
+    const oscillator = {
+      type: "sine" as OscillatorType,
+      frequency: { setValueAtTime: vi.fn() },
+      connect: vi.fn(),
+      start: vi.fn(),
+      stop: vi.fn(),
+    };
+
+    class StuckAudioContext {
+      state: TestAudioContextState = "interrupted";
+      currentTime = 10;
+      destination = {};
+      createOscillator = vi.fn(() => oscillator);
+      createGain = vi.fn(() => ({
+        gain: { setValueAtTime: vi.fn(), linearRampToValueAtTime: vi.fn() },
+        connect: vi.fn(),
+      }));
+      resume = vi.fn(() => Promise.resolve());
+    }
+
+    vi.stubGlobal("window", { AudioContext: StuckAudioContext });
+
+    const { playRestCountdownBeep } = await import("./rest-countdown-audio");
+
+    playRestCountdownBeep({ durationSeconds: 0.12 });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(oscillator.start).not.toHaveBeenCalled();
+  });
 
   it("declares a transient audio session during preparation when supported", async () => {
     class FakeAudioContext {

@@ -3,6 +3,39 @@
 > 새 세션은 저장소 루트 `AGENTS.md` → `CLAUDE.md` → 이 파일 → 가장 최근의 관련 `docs/superpowers/HANDOFF-*.md` 순서로 읽는다.
 > 이 파일은 전체 흐름의 요약이고, 작업별 세부 사실과 남은 확인은 최신 인수인계서가 기준이다.
 
+## ✅ 2026-08-01 — 휴식 타이머 벽시계 전환 + 완료 세트만 불러오기 + 무동작 정지 0055 (DB 적용 ✅ · 개발 서버 확인 ✅ · 운영 배포 ⏳)
+
+인수인계서: [`docs/superpowers/handoffs/2026-08-01-rest-timer-and-idle-guard-handoff.md`](docs/superpowers/handoffs/2026-08-01-rest-timer-and-idle-guard-handoff.md) · 설계: [`docs/superpowers/specs/2026-08-01-rest-timer-and-idle-guard-design.md`](docs/superpowers/specs/2026-08-01-rest-timer-and-idle-guard-design.md)
+
+- **휴식 타이머가 멈춰 서던 원인은 둘이었다.** ① `use-rest-countdown.ts`가 `setTimeout(…, 1000)`을 이어 붙여 남은 초를 깎아서, 남은 시간의 근거가 "타이머가 몇 번 깨어났는가"였다 — 다른 앱을 쓰는 동안 브라우저가 백그라운드 타이머를 늦추면 90초 휴식이 몇 분이 됐다. ② `rest-countdown-audio.ts`의 `playRestCountdownBeep`이 컨텍스트가 `suspended`/`interrupted`면 `resume()`만 하고 **그 비프를 버렸다** — iOS는 앱 전환 시 컨텍스트를 interrupted로 만들므로 돌아온 뒤 비프가 통째로 사라졌다
+  - `RestState`에 `endsAtMs`를 넣고 남은 초를 `ceil((endsAtMs - Date.now()) / 1000)`으로 **계산**한다. 틱은 화면만 갱신한다
+  - `visibilitychange` → visible에서 오디오 컨텍스트 선복구 + 남은 시간 즉시 재계산. `resume()`이 resolve되면 그 비프를 재생한다
+  - 자리를 비운 사이 휴식이 끝났으면 복귀 시 **긴 비프 1회**로 알린다 (`getRestCompletionCatchUpBeep`)
+  - **10초 예고 비프 추가**(0.2초), `BEEP_GAIN` 0.5 → **1.0**(진폭 2배). 5·4·3·2초(0.12초)·1초(0.35초)는 그대로
+  - ⚠️ **한계(사용자에게 고지함)**: 화면이 꺼졌거나 앱이 완전히 종료된 상태에서는 브라우저가 코드를 실행하지 않는다. 휴식이 끝나는 **그 순간**에 소리를 내는 것은 웹앱에서 불가능하다. 보장 범위는 "돌아왔을 때 시간이 정확하고 즉시 알린다"까지 — 그 순간에 울리려면 서버 예약 푸시가 필요하고 이번 범위 밖이다
+- **'이전 기록 불러오기'가 계획만 하고 안 한 세트까지 가져왔다.** `getSessionExerciseStructure`(피커 '지난 기록' 탭·달력 예정표 복사)와 `getLastRecordedSets`('↻ 불러오기') 둘 다 `is_completed`를 안 봤다
+  - 필터는 `workout-import.ts`의 순수 함수 `completedSetsInOrder`·`withCompletedSetsOnly`. 완료 세트가 하나도 없는 종목은 목록에서 뺀다
+  - `getLastRecordedSets`는 최근 세션에 완료 세트가 없으면 그다음 최근 세션으로 넘어간다
+- **무동작 시 운동 시간 카운팅 정지 (사용자 확정 사항)** — 임계값 **5분**(`IDLE_LIMIT_SECONDS = 300`) · 웨이트·맨몸이 **하나라도** 있으면 적용(타바타·유산소 전용 제외) · 동작 인정은 세트 완료 체크/값 입력/세트·운동 추가·삭제/휴식바 조작 · 기록은 **duration에서 뺀다**(0055) · '그만하기'는 기존 종료 흐름 · 앱 안 모달만(푸시 없음)
+  - 휴식 카운트다운이 도는 동안은 무동작을 세지 않는다. 무동작 시계는 `max(마지막 동작, 휴식 종료)`부터 흐른다 — 휴식 10분 설정 시 오발동 방지
+  - 정지 시작 시각은 "감지한 순간"이 아니라 **임계값을 넘긴 그 순간**이다. 20분 자리를 비웠으면 앞의 5분은 정상 운동 시간으로 인정하고 15분만 정지로 잡는다
+  - 판정은 전부 벽시계 기준이라 다른 앱에 있다 돌아와도 그 자리에서 잡힌다. 상태는 draft(localStorage) **v4 → v5**에 저장돼 새로고침·PWA 재시작에도 유지된다
+- **검증 실측**: unit **830/830**(73파일) · typecheck ✅ · lint 0 · build ✅ · 회귀 4종 전부 기준선 충족(`rls-test` **115/0** · `poke-levelup-check` **14/14** · `challenge-consent-test` **22/0** · `challenge-room-check` **48/0**)
+  - `poke-levelup-check`는 `complete_workout_v2`를 **1-인자로** 부른다. 14/14 통과가 곧 "구버전 호출도 깨지지 않는다"는 증거다
+- **DB 적용 완료 (사용자, 2026-08-01)** — `complete_workout_v2`가 `(p_session_id, p_paused_seconds int default 0)`로 교체됐다. 기본값이 있어 **운영에 떠 있던 구버전 앱(1-인자 호출)도 정상 동작했다** — DB만 먼저 나가도 사용자에게 문제가 없었다
+- **개발 서버 화면 확인 완료 (localhost:3000, 실제 운영 Supabase)** — 익명 프로필 `dev0055`로 확인하고 삭제, 기준선 4개 프로필 복원
+  - 무동작 5분 → 모달 → [이어서 운동] → 재개. 헤더가 `⏸ 정지됨 — 무동작`으로 바뀌고 시간이 회색으로 멈춘다. 새로고침 뒤에도 정지 상태 유지
+  - **비프 6발이 실제 브라우저에서 발화**(AudioContext 계측): 10초 0.2s / 5·4·3·2초 0.12s ×4 / 1초 0.35s, 전부 gain 1
+  - **종료 → 7분** 기록. 벽시계 795초, 정지 361초 → `floor(434/60) = 7`. DB 행 `duration_minutes: 7, paused_seconds: 361`
+  - 3세트 중 2세트만 체크하고 완료 → 피커 '지난 기록'에서 **2세트만**(60×10, 65×8), 미체크 70×5는 빠짐. '↻ 불러오기'도 동일
+- **개발 서버가 잡은 실버그 (단위 테스트·빌드는 전부 초록이었다)** — **준비 중(운동 추가·세트 입력)의 동작이 무동작 시계를 미리 켜서, 운동 시작 6초 만에 정지 모달이 떴다.** `markActivity`가 `active`일 때만 동작하도록 고치고 `"ignores preparation activity so the clock starts with the workout"` 회귀 테스트를 넣었다
+- ⚠️ **다음 사람이 밟기 쉬운 함정**
+  - **`complete_workout_v2` 본문을 마이그레이션 파일에서 베끼지 마라.** 0022 → 0023 → 0027 → 0032 → 0054 → 0055로 여섯 번 덮어썼다. 현행 정의는 `docs/db-current-schema.sql`에 있다
+  - **0055는 `drop function` 후 재생성이다**(인자가 늘어서). 0022가 걸어 둔 `revoke all from public, anon`이 drop으로 날아가므로 마이그레이션 안에서 다시 건다. 이 함수를 또 고칠 때도 같은 걸 챙겨야 한다
+  - **`vitest` globals가 꺼져 있어 RTL 자동 정리가 안 돈다.** 훅 테스트에서 `afterEach(cleanup)`를 직접 부르지 않으면 이전 테스트의 훅이 살아남아 `visibilitychange` 리스너가 겹쳐 잡힌다
+  - **`IDLE_LIMIT_SECONDS`를 확인용으로 낮출 때 10초는 너무 짧다** — 브라우저 도구 왕복 사이에 계속 재정지돼 조작이 안 된다. 180초쯤이 적당하다
+  - **정지 시간은 클라이언트가 보내는 값이다.** 서버가 `0 ~ 실제 경과초`로 클램프하므로 과대 신고해도 자기 XP만 줄고 음수 duration은 안 생긴다. **이 클램프를 빼지 마라**
+
 ## ✅ 2026-08-01 — 맨몸운동 카운팅 + 챌린지 열람 연속일 0054 (DB 적용 ✅ · 개발 서버 확인 ✅ · 운영 배포 ✅)
 
 사용자 보고: "스칼렛또의 맨몸운동 카운팅이 안되는 사유" / "5일 연속 운동하면 오픈되는 게 카운팅이 안 되는 거 같음"

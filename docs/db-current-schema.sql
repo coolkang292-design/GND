@@ -670,7 +670,7 @@ begin
 end $function$;
 
 -- ── complete_workout_v2 ──
-CREATE OR REPLACE FUNCTION public.complete_workout_v2(p_session_id uuid)
+CREATE OR REPLACE FUNCTION public.complete_workout_v2(p_session_id uuid, p_paused_seconds integer DEFAULT 0)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -685,6 +685,7 @@ declare
   v_prog jsonb; v_orig int;
   v_streak int; v_mult numeric; v_points int := 0; v_badges jsonb := '[]'::jsonb;
   v_consec int; v_challenge uuid;
+  v_elapsed int; v_paused int;
 begin
   if auth.uid() is null then raise exception 'not_authenticated'; end if;
   select * into s from workout_sessions
@@ -710,9 +711,15 @@ begin
     raise exception 'invalid_status:%', s.status;
   end if;
 
+  -- ⬇ 0055: 정지 시간은 클라이언트가 보내는 값이므로 0 ~ 실제 경과초로 클램프한다.
+  --   과대 신고해도 자기 XP만 줄고, 음수 duration은 생기지 않는다.
+  v_elapsed := floor(extract(epoch from now() - s.started_at))::int;
+  v_paused := least(greatest(coalesce(p_paused_seconds, 0), 0), greatest(v_elapsed, 0));
+
   update workout_sessions
   set status = 'completed', completed_at = now(),
-      duration_minutes = floor(extract(epoch from now() - s.started_at) / 60)::int
+      paused_seconds = v_paused,
+      duration_minutes = greatest(0, floor((v_elapsed - v_paused) / 60.0))::int
   where id = p_session_id
   returning * into s;
 
@@ -763,7 +770,8 @@ begin
       'workout', p_session_id::text, v_eff,
       jsonb_build_object('base_xp', v_base, 'duration_xp', v_time, 'plan_xp', v_plan,
         'record_xp', v_rec, 'photo_xp', v_photo, 'duration_minutes', v_dur,
-        'duration_source', 'server_elapsed', 'is_tabata', v_tabata));
+        'duration_source', 'server_elapsed', 'is_tabata', v_tabata,
+        'paused_seconds', v_paused));
     if not (v_prog->>'inserted')::boolean then v_total := 0; end if;
   else
     insert into user_progress (user_id) values (s.user_id) on conflict (user_id) do nothing;
@@ -838,7 +846,8 @@ begin
     'levelUp', v_prog->'levelUp', 'stageUp', v_prog->'stageUp',
     'unlockedRewards', v_prog->'unlockedRewards',
     'pointsAwarded', v_points, 'pointMultiplier', v_mult, 'streakDays', v_streak,
-    'newBadges', v_badges
+    'newBadges', v_badges,
+    'pausedSeconds', v_paused
   );
 end $function$;
 
