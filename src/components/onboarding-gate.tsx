@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
+import { savePendingChallengeInvite } from "@/lib/challenge";
 import { getMyProfile } from "@/lib/crew";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -32,6 +33,15 @@ export function OnboardingGate() {
     if (!configured || loading || !userId || checked) return;
     let cancelled = false;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+    // 새 사용자는 아래 프로필 확인이 끝나면 곧바로 /onboarding으로 이동한다.
+    // 챌린지 화면의 effect를 기다리면 모바일에서 이동이 더 빨라 초대 코드가
+    // 사라질 수 있으므로, 비동기 작업을 시작하기 전에 여기서 먼저 보관한다.
+    const challengeCode =
+      pathname === "/challenge"
+        ? new URLSearchParams(window.location.search).get("join")
+        : null;
+    if (challengeCode) savePendingChallengeInvite(challengeCode);
 
     getMyProfile(userId)
       .then(async (profile) => {

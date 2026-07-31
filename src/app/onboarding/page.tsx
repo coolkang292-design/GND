@@ -86,8 +86,10 @@ export default function OnboardingPage() {
         try {
           await joinChallengeWithCode(challengeCode);
         } catch {
-          // 이미 참가·시작됨·잘못된 코드 등. 챌린지 화면이 상황을 보여주므로
-          // 여기서 막지 않는다 — 닉네임은 이미 저장됐고 앱은 쓸 수 있다.
+          setError(
+            "챌린지에 참가하지 못했어요. 초대 링크를 다시 확인해 주세요.",
+          );
+          return;
         }
         clearPendingChallengeInvite();
         router.replace("/challenge");
@@ -208,22 +210,26 @@ export default function OnboardingPage() {
               : "운동 안 하면 GND 확정. 친구들과 함께 탈출해요."}
           </p>
 
-          <Label>프로필 사진</Label>
-          <div className="flex flex-wrap justify-center gap-2">
-            {AVATARS.map((a) => (
-              <button
-                key={a}
-                onClick={() => setAvatar(a)}
-                className={`flex h-11 w-11 items-center justify-center rounded-full border text-2xl ${
-                  avatar === a
-                    ? "border-accent bg-accent-weak"
-                    : "border-line bg-surface"
-                }`}
-              >
-                {a}
-              </button>
-            ))}
-          </div>
+          {!challengeCode && (
+            <>
+              <Label>프로필 사진</Label>
+              <div className="flex flex-wrap justify-center gap-2">
+                {AVATARS.map((a) => (
+                  <button
+                    key={a}
+                    onClick={() => setAvatar(a)}
+                    className={`flex h-11 w-11 items-center justify-center rounded-full border text-2xl ${
+                      avatar === a
+                        ? "border-accent bg-accent-weak"
+                        : "border-line bg-surface"
+                    }`}
+                  >
+                    {a}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
 
           <Label>닉네임</Label>
           <input
@@ -234,32 +240,42 @@ export default function OnboardingPage() {
             className="w-full rounded-card-sm border border-line bg-surface px-4 py-3 text-center text-[15px] outline-none focus:border-accent focus:ring-2 focus:ring-accent"
           />
 
-          <Label>주간 운동 목표</Label>
-          <div className="flex items-center justify-center gap-4">
-            <Stepper onClick={() => setWeeklyGoal((g) => Math.max(1, g - 1))}>
-              –
-            </Stepper>
-            <span className="min-w-16 font-mono text-lg font-bold">
-              주 {weeklyGoal}회
-            </span>
-            <Stepper onClick={() => setWeeklyGoal((g) => Math.min(7, g + 1))}>
-              +
-            </Stepper>
-          </div>
+          {!challengeCode && (
+            <>
+              <Label>주간 운동 목표</Label>
+              <div className="flex items-center justify-center gap-4">
+                <Stepper
+                  onClick={() => setWeeklyGoal((g) => Math.max(1, g - 1))}
+                >
+                  –
+                </Stepper>
+                <span className="min-w-16 font-mono text-lg font-bold">
+                  주 {weeklyGoal}회
+                </span>
+                <Stepper
+                  onClick={() => setWeeklyGoal((g) => Math.min(7, g + 1))}
+                >
+                  +
+                </Stepper>
+              </div>
+            </>
+          )}
 
           <Primary onClick={submitProfile} busy={busy}>
-            다음
+            {challengeCode ? "챌린지 참가하기" : "다음"}
           </Primary>
 
           {/* 세션이 끊겨 온보딩으로 떨어진 기존 사용자의 탈출구.
               여기서 "다음"을 누르면 새 계정이 생겨 기존 기록과 분리되므로,
               돌아갈 문을 같은 화면에 둔다. */}
-          <Link
-            href="/login"
-            className="mt-4 block text-[13px] text-muted underline"
-          >
-            이미 계정이 있나요? 로그인
-          </Link>
+          {!challengeCode && (
+            <Link
+              href="/login"
+              className="mt-4 block text-[13px] text-muted underline"
+            >
+              이미 계정이 있나요? 로그인
+            </Link>
+          )}
         </>
       )}
 
