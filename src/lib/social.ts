@@ -38,7 +38,9 @@ export type NotificationRow = {
     | "app_update" // 0034 — 배포·업데이트 소식
     | "crew_request" // 0038 — 크루 요청 도착
     | "crew_accepted" // 0038 — 상대가 내 요청을 수락
-    | "challenge_invite"; // 0042 — 챌린지 방 초대 (0044부터 발송·라우팅)
+    | "challenge_invite" // 0042 — 챌린지 방 초대 (0044부터 발송·라우팅)
+    | "bug_reported" // 0052 — 관리자에게: 새 버그 신고 도착
+    | "bug_fixed"; // 0052 — 신고자에게: 신고한 게 고쳐졌다
   reference_id: string | null;
   title: string;
   body: string | null;
@@ -508,6 +510,24 @@ export async function pokeUser(targetId: string): Promise<void> {
     p_target_id: targetId,
   });
   if (error) throw toSocialError(error);
+}
+
+/**
+ * 내가 최근 24시간 안에 찌른 상대 id (0053).
+ *
+ * 화면이 "✅ 찌름"을 앱 재시작 뒤에도 유지하려면 서버에 물어봐야 한다.
+ * `notifications`는 받는 사람만 읽을 수 있어(0011:153) 직접 조회가 안 되므로
+ * 정의자 RPC를 쓴다.
+ *
+ * 실패해도 화면을 멈추지 않는다 — 빈 목록이면 버튼이 활성으로 보일 뿐이고,
+ * 눌러도 서버가 `poke_cooldown`으로 막는다. 크루 카드가 통째로 안 뜨는 것보다
+ * 그 편이 낫다.
+ */
+export async function getMyRecentPokeTargets(): Promise<Set<string>> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase.rpc("get_my_recent_pokes");
+  if (error) return new Set();
+  return new Set((data ?? []) as string[]);
 }
 
 // ── 알림함 (§9: durable 저장, 🔔 + 뱃지) ─────────────────────

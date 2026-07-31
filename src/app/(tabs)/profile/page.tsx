@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
+import { BugReportSheet } from "@/components/bug-report-sheet";
 import { GrowthHub } from "@/components/profile/growth-hub";
 import { PushSettings } from "@/components/push-settings";
 import { getIncomingCrewRequests } from "@/lib/crew-link";
@@ -27,6 +29,7 @@ const TOGGLES: {
 
 export default function ProfilePage() {
   const { userId, loading, configured } = useAuth();
+  const pathname = usePathname();
   const [showSettings, setShowSettings] = useState(false);
   const [settings, setSettings] = useState<NotificationSettings>(
     DEFAULT_NOTIFICATION_SETTINGS,
@@ -171,6 +174,11 @@ export default function ProfilePage() {
             꺼두면 해당 알림이 알림함에 쌓이지 않아요. (응원·찌르기는 상대에게
             안내돼요)
           </p>
+
+          {/* 신고는 알림 설정과 성격이 다르지만, 계정과 같은 이유로 여기에 둔다 —
+              톱니 안이 사용자가 "설정"을 찾는 유일한 곳이다. 앱이 죽은 화면에도
+              같은 시트가 있다(app/error.tsx). */}
+          <BugReportSheet route={pathname ?? null} />
         </>
       )}
 

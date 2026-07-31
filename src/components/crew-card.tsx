@@ -10,7 +10,12 @@ import {
   joinGroupWithCode,
 } from "@/lib/crew";
 import { normalizeInviteCode } from "@/lib/domain/invite-code";
-import { getTodaysWorkoutUserIds, pokeUser, SocialError } from "@/lib/social";
+import {
+  getMyRecentPokeTargets,
+  getTodaysWorkoutUserIds,
+  pokeUser,
+  SocialError,
+} from "@/lib/social";
 import { todaysWorkoutLookupIds } from "@/lib/domain/crew-poke";
 import type { Group, Profile } from "@/lib/types";
 
@@ -26,8 +31,12 @@ export function CrewCard() {
   const [ready, setReady] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [selected, setSelected] = useState<Profile | null>(null);
-  // 내가 이번에 찌른(또는 24시간 쿨다운에 걸린) 대상 — 버튼을 "✅ 찌름"으로 잠근다.
-  // 서버가 최종 판정(24h/대상별)하지만, 누른 즉시 시각적으로 잠가야 또 누르지 않는다.
+  // 24시간 쿨다운에 걸린 대상 — 버튼을 "✅ 찌름"으로 잠근다.
+  //
+  // ⚠ 초기값을 빈 Set으로 두면 안 된다. 앱을 껐다 켤 때마다 기억이 사라져
+  //   이미 찌른 사람도 다시 눌리는 것처럼 보이고, 눌러야 서버가 막는다
+  //   (2026-07-31 사용자 보고). 그래서 load()에서 서버 기록으로 채운다.
+  //   누른 직후 잠그는 건 그대로 유지한다 — 재조회를 기다리면 그 사이 또 누른다.
   const [poked, setPoked] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -47,10 +56,18 @@ export function CrewCard() {
         // ⚠ 나도 넣어야 한다. getCrewProfiles는 0039부터 본인을 뺀 목록을
         //   돌려주는데, 그걸 그대로 넘기면 내 운동 기록이 결과에 없어서
         //   오늘 운동을 마쳐도 콕 버튼이 영원히 흐릿하다 (2026-07-31 실사고).
-        const done = await getTodaysWorkoutUserIds(
-          todaysWorkoutLookupIds(userId, crew.map((c) => c.id)),
-        );
-        if (!cancelled) setWorkedOut(done);
+        const [done, recentPokes] = await Promise.all([
+          getTodaysWorkoutUserIds(
+            todaysWorkoutLookupIds(userId, crew.map((c) => c.id)),
+          ),
+          // 앱을 다시 켜도 "✅ 찌름"이 유지되게 서버 기록으로 채운다 (0053).
+          getMyRecentPokeTargets(),
+        ]);
+        if (cancelled) return;
+        setWorkedOut(done);
+        // 이 화면에서 방금 찌른 것을 덮어쓰지 않도록 합친다. 재조회가 늦게
+        // 끝나면 낙관적으로 잠근 버튼이 도로 열릴 수 있다.
+        setPoked((prev) => new Set([...prev, ...recentPokes]));
       } finally {
         if (!cancelled) setReady(true);
       }

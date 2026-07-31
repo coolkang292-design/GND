@@ -7,7 +7,7 @@
 -- 쓰는 법: 함수·정책의 '현행' 정의가 필요할 때 마이그레이션 51개를
 -- 뒤지지 말고 이 파일을 검색하라. 마이그레이션을 적용한 뒤에는 다시 뽑아라.
 --
--- 함수 64개 · 정책 65개 · 인덱스 69개
+-- 함수 67개 · 정책 66개 · 인덱스 73개
 
 -- ════════════════════════════════════════════════════════════
 -- 함수
@@ -1616,6 +1616,45 @@ AS $function$
   values (p_user_id, p_actor_id, p_type, p_reference_id, p_title, p_body)
 $function$;
 
+-- ── notify_bug_report_watchers ──
+CREATE OR REPLACE FUNCTION public.notify_bug_report_watchers()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  w           record;
+  v_nickname  text;
+  v_actor     uuid;
+  v_body      text;
+begin
+  -- 신고자에게 프로필이 없을 수 있다(온보딩에서 막힌 사람). notifications.actor_id는
+  -- profiles를 가리키므로 그대로 넣으면 FK 위반으로 **신고 자체가 실패한다.**
+  select nickname into v_nickname from profiles where id = new.user_id;
+  v_actor := case when v_nickname is null then null else new.user_id end;
+
+  v_body := left(new.message, 160)
+         || coalesce(' — ' || new.route, '');
+
+  for w in select user_id from bug_report_watchers loop
+    -- 자기가 신고한 것을 자기가 알림받는 건 소음이다. 관리자도 크루의 한 명이다.
+    continue when w.user_id = new.user_id;
+
+    insert into notifications (user_id, actor_id, type, reference_id, title, body)
+    values (
+      w.user_id,
+      v_actor,
+      'bug_reported',
+      new.id,
+      '🐞 새 신고 · ' || coalesce(v_nickname, '이름 없는 사용자'),
+      v_body
+    );
+  end loop;
+
+  return new;
+end $function$;
+
 -- ── notify_reaction ──
 CREATE OR REPLACE FUNCTION public.notify_reaction()
  RETURNS trigger
@@ -1665,6 +1704,16 @@ AS $function$
     select 1 from workout_sessions
     where id = sid and user_id = auth.uid()
   )
+$function$;
+
+-- ── pending_bug_report_count ──
+CREATE OR REPLACE FUNCTION public.pending_bug_report_count()
+ RETURNS integer
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select count(*)::int from bug_reports where status = 'new';
 $function$;
 
 -- ── pick_challenge_peek ──
@@ -2282,6 +2331,75 @@ begin
   return s;
 end $function$;
 
+-- ── submit_bug_report ──
+CREATE OR REPLACE FUNCTION public.submit_bug_report(p_message text, p_route text DEFAULT NULL::text, p_context jsonb DEFAULT '{}'::jsonb, p_trail jsonb DEFAULT '[]'::jsonb)
+ RETURNS uuid
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_me       uuid := auth.uid();
+  v_msg      text;
+  v_existing uuid;
+  v_recent   int;
+  v_context  jsonb;
+  v_trail    jsonb;
+  v_id       uuid;
+begin
+  if v_me is null then raise exception 'not_authenticated'; end if;
+
+  v_msg := btrim(coalesce(p_message, ''));
+  if char_length(v_msg) < 2    then raise exception 'message_too_short'; end if;
+  if char_length(v_msg) > 1000 then raise exception 'message_too_long';  end if;
+
+  -- 중복 흡수 — 2분 내 같은 사람·같은 문장이면 **기존 신고 id를 그대로 돌려준다.**
+  -- 버튼 연타나 네트워크 재시도가 신고를 늘리면 안 되고, 사용자에게 에러를 보여줄
+  -- 일도 아니다(그 사람 입장에선 접수된 게 맞다).
+  select id into v_existing
+  from bug_reports
+  where user_id = v_me
+    and message = v_msg
+    and created_at > now() - interval '2 minutes'
+  order by created_at desc
+  limit 1;
+  if found then return v_existing; end if;
+
+  -- 레이트 리밋 — 스팸보다 오작동(무한 재시도 루프) 방어가 목적이다.
+  select count(*) into v_recent
+  from bug_reports
+  where user_id = v_me and created_at > now() - interval '10 minutes';
+  if v_recent >= 3 then raise exception 'rate_limited'; end if;
+
+  -- context: 객체가 아니면 버린다. 8KB 넘으면 거부한다.
+  v_context := coalesce(p_context, '{}'::jsonb);
+  if jsonb_typeof(v_context) <> 'object' then v_context := '{}'::jsonb; end if;
+  if pg_column_size(v_context) > 8192 then raise exception 'context_too_large'; end if;
+
+  -- trail: 배열이 아니면 버린다. **앞에서부터 30개**만 남긴다(클라이언트가 최신순으로
+  -- 보낸다 — bug-trail.ts의 readTrail()이 그 순서를 보장한다).
+  v_trail := coalesce(p_trail, '[]'::jsonb);
+  if jsonb_typeof(v_trail) <> 'array' then v_trail := '[]'::jsonb; end if;
+  if jsonb_array_length(v_trail) > 30 then
+    select coalesce(jsonb_agg(e order by ord), '[]'::jsonb) into v_trail
+    from jsonb_array_elements(v_trail) with ordinality as t(e, ord)
+    where ord <= 30;
+  end if;
+  if pg_column_size(v_trail) > 32768 then raise exception 'trail_too_large'; end if;
+
+  insert into bug_reports (user_id, message, route, context, trail)
+  values (
+    v_me,
+    v_msg,
+    nullif(btrim(coalesce(p_route, '')), ''),
+    v_context,
+    v_trail
+  )
+  returning id into v_id;
+
+  return v_id;
+end $function$;
+
 -- ── unapprove_challenge_goals ──
 CREATE OR REPLACE FUNCTION public.unapprove_challenge_goals(p_challenge_id uuid)
  RETURNS void
@@ -2417,6 +2535,9 @@ $function$;
 -- ── badge_definitions ──
 -- badge_definitions_read  [SELECT]  roles=authenticated
 --   using  : true
+-- ── bug_reports ──
+-- bug_reports_select_own  [SELECT]  roles=authenticated
+--   using  : (user_id = auth.uid())
 -- ── challenge_goal_approvals ──
 -- approvals_select_crew  [SELECT]  roles=public
 --   using  : (is_challenge_participant(challenge_id, auth.uid()) OR (EXISTS ( SELECT 1
@@ -2607,6 +2728,10 @@ $function$;
 -- ════════════════════════════════════════════════════════════
 
 -- CREATE UNIQUE INDEX badge_definitions_pkey ON public.badge_definitions USING btree (badge_key);
+-- CREATE UNIQUE INDEX bug_report_watchers_pkey ON public.bug_report_watchers USING btree (user_id);
+-- CREATE UNIQUE INDEX bug_reports_pkey ON public.bug_reports USING btree (id);
+-- CREATE INDEX bug_reports_status_time_idx ON public.bug_reports USING btree (status, created_at DESC);
+-- CREATE INDEX bug_reports_user_time_idx ON public.bug_reports USING btree (user_id, created_at DESC);
 -- CREATE UNIQUE INDEX challenge_goal_approvals_pkey ON public.challenge_goal_approvals USING btree (challenge_id, approver_id);
 -- CREATE UNIQUE INDEX challenge_participants_one_host ON public.challenge_participants USING btree (challenge_id) WHERE (role = 'host'::text);
 -- CREATE UNIQUE INDEX challenge_participants_pkey ON public.challenge_participants USING btree (challenge_id, user_id);

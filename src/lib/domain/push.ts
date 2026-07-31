@@ -26,6 +26,12 @@ const PUSH_URL_BY_TYPE: Record<string, string> = {
   //   컴파일러가 안 잡아주고 DEFAULT_PUSH_URL(/home)로 조용히 떨어진다.
   //   notification-bell.tsx의 TYPE_ICON과 달리 여기는 손으로 챙겨야 한다.
   challenge_invite: "/challenge",
+  // 0052 — 새 신고는 관리자에게만 간다. 1단계에는 아직 /admin 신고 패널이 없어서
+  // 알림 **본문에 신고 내용을 통째로** 싣는다(notify_bug_report_watchers). 그래서
+  // 목적지가 어디든 읽는 데 지장이 없다. 2단계에서 /admin/reports로 바꾼다.
+  bug_reported: "/admin",
+  // 고쳐졌다는 소식은 신고자에게 간다. 무엇이 바뀌었는지는 새 소식에 적혀 있다.
+  bug_fixed: "/whats-new",
 };
 
 const DEFAULT_PUSH_URL = "/home";

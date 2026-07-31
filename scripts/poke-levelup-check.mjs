@@ -219,6 +219,34 @@ try {
     `${twice.status} ${JSON.stringify(twice.json)}`,
   );
 
+  // ── 0053: 내가 찌른 기록을 서버가 돌려주는가 ────────────────
+  //
+  // 화면의 "✅ 찌름"은 앱을 껐다 켜면 사라지는 로컬 상태였다. 이미 찌른
+  // 사람에게도 콕 버튼이 다시 눌리는 것처럼 보였다(2026-07-31 사용자 보고).
+  // notifications는 받는 사람만 읽을 수 있어(0011:153) 화면이 직접 조회할
+  // 방법이 없었고, 그래서 정의자 RPC를 뒀다.
+  const mine = await api(A.token, "POST", "/rest/v1/rpc/get_my_recent_pokes", {});
+  check(
+    "[0053] 내가 찌른 상대가 목록에 있다",
+    mine.status === 200 &&
+      Array.isArray(mine.json) &&
+      mine.json.includes(B.id),
+    `${mine.status} ${JSON.stringify(mine.json)}`,
+  );
+  check(
+    "[0053] 안 찌른 사람은 목록에 없다 — 전부 돌려주면 통과가 무의미하다",
+    Array.isArray(mine.json) && !mine.json.includes(C.id),
+    JSON.stringify(mine.json),
+  );
+
+  // 남의 콕 기록이 새지 않아야 한다. B는 아무도 찌르지 않았다.
+  const others = await api(B.token, "POST", "/rest/v1/rpc/get_my_recent_pokes", {});
+  check(
+    "[0053] 남이 찌른 기록은 안 보인다",
+    others.status === 200 && Array.isArray(others.json) && others.json.length === 0,
+    `${others.status} ${JSON.stringify(others.json)}`,
+  );
+
   // ── 0029: 레벨업 크루 알림 ────────────────────────────────
   // Lv.2 컷은 200 XP. 190에서 운동 1건(≥110)이면 반드시 넘는다.
   await seedProgress(C.id, 190, 1, 1);

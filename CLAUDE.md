@@ -115,6 +115,30 @@ curl -s https://gnd-one.vercel.app/challenge \
 
 ---
 
+## 버그 신고를 먼저 본다 (0052)
+
+사용자가 앱에서 신고하면 `bug_reports`에 쌓이고 **관리자 폰으로 즉시 푸시**가 간다.
+세션을 열면 `SessionStart` 훅이 미처리 건수를 알려준다(`.claude/settings.json`).
+
+```bash
+node scripts/bug-reports.mjs                    # 미처리(new) 전량 — 맥락·동작흔적 포함
+node scripts/bug-reports.mjs --id <uuid>        # 1건 상세 (trail 전량)
+node scripts/bug-reports.mjs --triage <id> --note "원인: ..."
+node scripts/bug-reports.mjs --fix <id> --release <release-id>          # DRY RUN
+node scripts/bug-reports.mjs --fix <id> --release <release-id> --send   # 신고자에게 알림
+```
+
+- **신고에 `build`(빌드 시각)가 찍힌다.** 며칠 묵은 번들이면 코드가 아니라 **배포가
+  안 된 것**이다 — 7/29~30 사고가 그거였다. 원인을 코드에서 찾기 전에 이걸 먼저 봐라
+- **`trail`이 "무엇을 하다가"를 말해준다.** 최신이 앞이다. `FAIL db POST rpc/x 400`
+  같은 줄이 있으면 거기서 시작하라
+- **`--send`는 사용자가 지시할 때만.** 기본은 DRY RUN이다(릴리스 공지와 같은 규약)
+- 고친 뒤 `--fix`로 닫으면 신고자 폰에 "고쳤어요"가 간다. **release-notes.data.json에
+  항목이 먼저 있어야 한다** — 없는 id를 넣으면 스크립트가 막는다
+- 설계·근거: `docs/superpowers/specs/2026-07-31-bug-report-pipeline-design.md`
+
+---
+
 ## 검증 스크립트 — 프로덕션에 직접 붙는다
 
 스테이징 DB가 **없다.** `scripts/*.mjs`는 실사용자 데이터베이스에 붙는다.
