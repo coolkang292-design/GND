@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { inviteToChallenge } from "@/lib/challenge";
+import { inviteToChallenge, issueChallengeInviteCode } from "@/lib/challenge";
 // 0038이 만든 닉네임 정확 일치 검색. 단일 결과 또는 null을 돌려준다(배열 아님).
 // isSearchable 게이트가 있어 빈 입력은 조회 없이 null이 된다.
 import { searchProfileByNickname } from "@/lib/crew-link";
@@ -37,8 +37,34 @@ export function InviteSheet({
   const [nickname, setNickname] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [link, setLink] = useState<string | null>(null);
+  const [linkBusy, setLinkBusy] = useState(false);
 
   if (myRole !== "host" || status !== "setup") return null;
+
+  /** 링크 만들기 + 클립보드 복사. 코드 발급은 서버가 멱등이라 눌러도 안 바뀐다. */
+  async function handleShareLink() {
+    if (linkBusy) return;
+    setLinkBusy(true);
+    setMessage(null);
+    try {
+      const code = await issueChallengeInviteCode(challengeId);
+      const url = `${window.location.origin}/challenge?join=${code}`;
+      setLink(url);
+      // 클립보드는 권한·컨텍스트에 따라 실패할 수 있다. 실패해도 링크는 화면에
+      // 띄워 두므로 손으로 복사하면 된다 — 조용히 사라지게 두지 않는다.
+      try {
+        await navigator.clipboard.writeText(url);
+        setMessage("링크를 복사했어요 — 붙여넣기로 공유하세요 🔗");
+      } catch {
+        setMessage("아래 링크를 길게 눌러 복사하세요");
+      }
+    } catch (e) {
+      setMessage(inviteError(e));
+    } finally {
+      setLinkBusy(false);
+    }
+  }
 
   async function handleInvite() {
     if (!nickname.trim() || busy) return;
@@ -83,6 +109,31 @@ export function InviteSheet({
           {busy ? "초대 중…" : "초대"}
         </button>
       </div>
+      {/* 크루 밖 사람을 부르려면 닉네임을 정확히 알아야 하는데, 그걸 알려면
+          어차피 밖에서 연락해야 한다. 링크가 그 자리를 대신한다. */}
+      <div className="mt-3 border-t border-line pt-3">
+        <button
+          type="button"
+          onClick={() => void handleShareLink()}
+          disabled={linkBusy}
+          className="h-10 w-full rounded-card-sm border border-line bg-surface-2 text-[13px] font-bold disabled:opacity-40"
+        >
+          {linkBusy ? "링크 만드는 중…" : "🔗 초대 링크 복사하기"}
+        </button>
+        {link && (
+          <p className="mt-2 break-all rounded-card-sm bg-surface-2 px-2.5 py-2 text-[11px] text-muted">
+            {link}
+          </p>
+        )}
+        {/* 이 한 줄을 뺄 수 없다. 링크로 들어온 사람은 참가자 전원과 크루가 되고,
+            챌린지가 끝나도 그 관계가 남는다(crew_links에 challenge_id가 없다).
+            문서에만 적으면 아무도 안 읽으므로 공유하는 순간 보이게 한다. */}
+        <p className="mt-1.5 text-[11px] text-muted">
+          링크로 참가하면 <b className="text-text">서로 크루가 돼요.</b> 챌린지가
+          끝나도 운동 소식이 오가니 아는 사람에게만 보내세요.
+        </p>
+      </div>
+
       {message && (
         <p className="mt-2 text-[11px] font-bold text-accent">{message}</p>
       )}

@@ -1,0 +1,2570 @@
+-- 운영 DB 현행 스키마 스냅샷 — 자동 생성물. 손으로 고치지 마라.
+-- 생성: node scripts/dump-schema-snapshot.mjs
+--
+-- 이 파일은 **읽기용 참조**다. 여기를 고쳐도 DB는 안 바뀐다 —
+-- 변경은 supabase/migrations/에 새 번호 파일을 만들어 사용자가 Run한다.
+--
+-- 쓰는 법: 함수·정책의 '현행' 정의가 필요할 때 마이그레이션 47개를
+-- 뒤지지 말고 이 파일을 검색하라. 마이그레이션을 적용한 뒤에는 다시 뽑아라.
+--
+-- 함수 61개 · 정책 65개 · 인덱스 69개
+
+-- ════════════════════════════════════════════════════════════
+-- 함수
+-- ════════════════════════════════════════════════════════════
+
+-- ── accept_challenge_invite ──
+CREATE OR REPLACE FUNCTION public.accept_challenge_invite(p_challenge_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_me uuid := auth.uid();
+  c challenges;
+  v_row challenge_participants;
+  v_linked int := 0;
+  v_peer uuid;
+begin
+  if v_me is null then raise exception 'not_authenticated'; end if;
+
+  -- 챌린지 단위 직렬화. 두 사람이 동시에 수락하면 서로를 "기존 참가자"로
+  -- 못 보고 crew_links가 한쪽만 생기거나, 락 순서가 엇갈려 데드락이 난다.
+  perform pg_advisory_xact_lock(hashtext(p_challenge_id::text));
+
+  select * into c from challenges where id = p_challenge_id;
+  if not found then raise exception 'challenge_not_found'; end if;
+  if c.status <> 'setup' then raise exception 'invalid_status:%', c.status; end if;
+
+  select * into v_row from challenge_participants
+  where challenge_id = p_challenge_id and user_id = v_me for update;
+  if not found then raise exception 'not_invited'; end if;
+  if v_row.status = 'joined' then raise exception 'already_joined'; end if;
+  if v_row.status = 'dropped' then raise exception 'dropped'; end if;
+
+  -- 크루 연결을 먼저 만든다. 내 status를 joined로 바꾼 뒤에 돌면 자기 자신이
+  -- 목록에 들어와 crew_links_not_self 위반이 된다.
+  for v_peer in
+    select user_id from challenge_participants
+    where challenge_id = p_challenge_id and status = 'joined' and user_id <> v_me
+  loop
+    insert into crew_links (user_a, user_b)
+    values (least(v_me, v_peer), greatest(v_me, v_peer))
+    on conflict do nothing;
+    v_linked := v_linked + 1;
+  end loop;
+
+  update challenge_participants
+     set status = 'joined', joined_at = now()
+   where challenge_id = p_challenge_id and user_id = v_me;
+
+  return jsonb_build_object('status', 'joined', 'crewLinked', v_linked);
+end $function$;
+
+-- ── accept_crew_request ──
+CREATE OR REPLACE FUNCTION public.accept_crew_request(p_request_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_me uuid := auth.uid();
+  v_req crew_requests%rowtype;
+  v_nick text;
+  v_other uuid;
+begin
+  if v_me is null then raise exception 'not_authenticated'; end if;
+
+  -- 잠금 키를 얻기 위한 사전 읽기(락 없음). 상대가 requester인지 addressee인지
+  -- 아직 모르므로 행을 한 번 읽어서만 판단하고, 실제 검증은 아래에서 다시 한다.
+  select * into v_req from crew_requests where id = p_request_id;
+  if not found then raise exception 'not_addressee'; end if;
+  v_other := case when v_req.requester_id = v_me then v_req.addressee_id else v_req.requester_id end;
+
+  -- 쌍 단위 직렬화. 이게 없으면 (a) 서로 동시에 수락할 때 락 순서가 엇갈려
+  -- 40P01 데드락, (b) 서로 동시에 요청할 때 역방향을 못 봐서 자동수락이 불발,
+  -- (c) 빠른 두 번 탭이 request_exists 대신 23505를 그대로 뱉는다.
+  perform pg_advisory_xact_lock(
+    hashtext(least(v_me, v_other)::text || greatest(v_me, v_other)::text)
+  );
+
+  select * into v_req from crew_requests where id = p_request_id for update;
+  if not found or v_req.addressee_id <> v_me then
+    raise exception 'not_addressee';
+  end if;
+  if v_req.status <> 'pending' then
+    raise exception 'not_pending';
+  end if;
+
+  insert into crew_links (user_a, user_b)
+  values (least(v_req.requester_id, v_req.addressee_id),
+          greatest(v_req.requester_id, v_req.addressee_id))
+  on conflict do nothing;
+
+  update crew_requests
+     set status = 'accepted', responded_at = now()
+   where id = p_request_id;
+
+  -- 반대 방향에 남아 있던 pending도 함께 닫는다. 안 닫으면 이미 크루가 된
+  -- 뒤에도 상대 받은함에 요청이 남아 "수락" 버튼이 계속 보인다.
+  update crew_requests
+     set status = 'accepted', responded_at = now()
+   where requester_id = v_req.addressee_id
+     and addressee_id = v_req.requester_id
+     and status = 'pending';
+
+  select nickname into v_nick from profiles where id = v_me;
+  -- 알림 실패가 연결까지 되돌리면 안 된다. 연결이 본체고 알림은 곁가지다.
+  -- (0029에서 알림 insert 하나가 운동 완료 트랜잭션을 통째로 롤백시킨 전례가 있다.)
+  begin
+    perform notify(
+      v_req.requester_id, v_me, 'crew_accepted', p_request_id,
+      coalesce(v_nick, '누군가') || '님과 크루가 됐어요 🤝',
+      '이제 서로의 운동 소식을 받아볼 수 있어요'
+    );
+  exception when others then null;
+  end;
+  return jsonb_build_object('status', 'accepted');
+end $function$;
+
+-- ── admin_schema_snapshot ──
+CREATE OR REPLACE FUNCTION public.admin_schema_snapshot()
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select jsonb_build_object(
+    'functions', coalesce((
+      select jsonb_agg(
+        jsonb_build_object('name', p.proname, 'definition', pg_get_functiondef(p.oid))
+        order by p.proname
+      )
+      from pg_proc p
+      join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'public'
+        and p.prokind = 'f'          -- 집계·윈도우 함수 제외, 일반 함수만
+    ), '[]'::jsonb),
+    'policies', coalesce((
+      select jsonb_agg(
+        jsonb_build_object(
+          'table', tablename, 'name', policyname, 'cmd', cmd,
+          'roles', roles, 'using', qual, 'check', with_check
+        )
+        order by tablename, policyname
+      )
+      from pg_policies where schemaname = 'public'
+    ), '[]'::jsonb),
+    'indexes', coalesce((
+      select jsonb_agg(
+        jsonb_build_object('table', tablename, 'name', indexname, 'def', indexdef)
+        order by tablename, indexname
+      )
+      from pg_indexes where schemaname = 'public'
+    ), '[]'::jsonb)
+  )
+$function$;
+
+-- ── apply_xp_and_progress ──
+CREATE OR REPLACE FUNCTION public.apply_xp_and_progress(p_user_id uuid, p_amount integer, p_reason text, p_reward_group text, p_source_type text, p_source_id text, p_effective_date date, p_metadata jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_inserted boolean := false;
+  v_prev_xp int; v_new_xp int;
+  v_prev_level int; v_new_level int;
+  v_prev_stage int; v_new_stage int;
+  v_reward record; v_unlocked jsonb := '[]'::jsonb;
+  v_new_unlock int; v_shield_ins int; v_shield_amt int;
+  v_nick text; v_stage_name text; v_title text; v_body text;
+begin
+  insert into user_progress (user_id) values (p_user_id) on conflict (user_id) do nothing;
+  select total_xp, current_level, current_stage
+    into v_prev_xp, v_prev_level, v_prev_stage
+  from user_progress where user_id = p_user_id for update;
+  v_new_xp := v_prev_xp;
+
+  -- 1) 원장 insert (중복 방지 인덱스가 병렬/재시도 방어)
+  begin
+    insert into xp_transactions
+      (user_id, amount, transaction_type, reason, reward_group,
+       source_type, source_id, effective_date, rule_version, metadata)
+    values (p_user_id, p_amount, 'earn', p_reason, p_reward_group,
+            p_source_type, p_source_id, p_effective_date, 'xp_v1', coalesce(p_metadata, '{}'::jsonb));
+    v_inserted := true;
+    v_new_xp := v_prev_xp + p_amount;
+  exception when unique_violation then
+    v_inserted := false; -- 이미 지급됨 → 진행 변경 없음
+  end;
+
+  if not v_inserted then
+    return jsonb_build_object('inserted', false, 'amount', 0,
+      'newTotalXp', v_prev_xp, 'previousLevel', v_prev_level, 'newLevel', v_prev_level,
+      'previousStage', v_prev_stage, 'newStage', v_prev_stage,
+      'levelUp', false, 'stageUp', false, 'unlockedRewards', '[]'::jsonb);
+  end if;
+
+  -- 2) 레벨/단계 재계산 (컷 = level_definitions)
+  select level, stage_index into v_new_level, v_new_stage
+  from level_definitions where required_total_xp <= v_new_xp
+  order by required_total_xp desc limit 1;
+
+  update user_progress set
+    total_xp = v_new_xp, current_level = v_new_level, current_stage = v_new_stage,
+    last_level_up_at = case when v_new_level > v_prev_level then now() else last_level_up_at end,
+    last_stage_up_at = case when v_new_stage > v_prev_stage then now() else last_stage_up_at end,
+    updated_at = now()
+  where user_id = p_user_id;
+
+  -- 3) 통과한 레벨 보상 (prev < lv <= new) — 한 번에 여러 레벨도 모두 지급
+  for v_reward in
+    select level, reward_key, reward_label from level_definitions
+    where level > v_prev_level and level <= v_new_level and reward_key is not null
+    order by level asc
+  loop
+    insert into user_unlocks (user_id, unlock_key, source_level)
+    values (p_user_id, v_reward.reward_key, v_reward.level)
+    on conflict (user_id, unlock_key) do nothing;
+    get diagnostics v_new_unlock = row_count;
+
+    if v_new_unlock > 0 then
+      v_unlocked := v_unlocked || jsonb_build_object('key', v_reward.reward_key, 'label', v_reward.reward_label);
+
+      if v_reward.reward_key like 'streak_shield%' or v_reward.reward_key = 'eternal_flame' then
+        v_shield_amt := case when v_reward.level >= 31 then 3 when v_reward.level >= 25 then 2 else 1 end;
+        insert into streak_shield_transactions (user_id, amount, reason, source_type, source_id)
+        values (p_user_id, v_shield_amt, 'level_reward', 'level', v_reward.level::text)
+        on conflict (user_id, reason, source_type, source_id) do nothing;
+        get diagnostics v_shield_ins = row_count;
+        if v_shield_ins > 0 then
+          update user_progress set streak_shield_count = streak_shield_count + v_shield_amt
+          where user_id = p_user_id;
+        end if;
+      end if;
+    end if;
+  end loop;
+
+  -- ⬇ 4) 0029: 레벨이 올랐으면 크루 전원에게 알린다.
+  --    크루가 없으면(혼자모드) select가 0행이라 아무 일도 일어나지 않는다.
+  if v_new_level > v_prev_level then
+    select nickname into v_nick from profiles where id = p_user_id;
+    select stage_name into v_stage_name
+    from level_definitions where level = v_new_level;
+
+    if v_new_stage > v_prev_stage then
+      v_title := '🎉 ' || coalesce(v_nick, '크루원') || '님이 진화했어요!';
+      -- 단계명 뒤에 '단계로'를 붙여 받침에 따른 조사 문제를 피한다
+      v_body := 'Lv.' || v_new_level || ' 달성 — '
+                || coalesce(v_stage_name, '다음') || ' 단계로 진화했어요 ✨';
+    else
+      v_title := '⬆️ ' || coalesce(v_nick, '크루원') || '님이 레벨업!';
+      v_body := 'Lv.' || v_prev_level || ' → Lv.' || v_new_level
+                || ' 달성했어요. 축하해주세요 👏';
+    end if;
+
+    -- reference_id는 uuid 컬럼이다. 타입 없는 null을 select 목록에 그대로 두면
+    -- Postgres가 text로 추론해 42804로 죽고, 완료 트랜잭션 전체가 롤백된다.
+    -- 0039로 팬아웃을 바꿔도 이 캐스트는 그대로 둔다.
+    insert into notifications (user_id, actor_id, type, reference_id, title, body)
+    select case when l.user_a = p_user_id then l.user_b else l.user_a end,
+           p_user_id, 'level_up', null::uuid, v_title, v_body
+    from crew_links l                                    -- 0039
+    where p_user_id in (l.user_a, l.user_b);
+  end if;
+
+  return jsonb_build_object('inserted', true, 'amount', p_amount,
+    'newTotalXp', v_new_xp, 'previousLevel', v_prev_level, 'newLevel', v_new_level,
+    'previousStage', v_prev_stage, 'newStage', v_new_stage,
+    'levelUp', v_new_level > v_prev_level, 'stageUp', v_new_stage > v_prev_stage,
+    'unlockedRewards', v_unlocked);
+end $function$;
+
+-- ── approve_challenge_goals ──
+CREATE OR REPLACE FUNCTION public.approve_challenge_goals(p_challenge_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare c challenges; v_missing int;
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  select * into c from challenges where id = p_challenge_id;
+  -- 0046: is_group_member → is_challenge_participant
+  if not found or not public.is_challenge_participant(p_challenge_id, auth.uid()) then
+    raise exception 'challenge_not_found';
+  end if;
+  if c.status <> 'setup' then raise exception 'invalid_status:%', c.status; end if;
+
+  -- 전원 목표 세팅 전에는 동의 불가 (목표가 확정돼야 동의가 의미 있음).
+  -- 0046: group_members → challenge_participants(joined). 참가하지 않은
+  -- 크루원의 목표를 기다리면 동의가 영영 불가능해진다.
+  select count(*) into v_missing from challenge_participants cp
+  where cp.challenge_id = p_challenge_id
+    and cp.status = 'joined'
+    and not exists (select 1 from user_goals ug
+                    where ug.challenge_id = p_challenge_id and ug.user_id = cp.user_id);
+  if v_missing > 0 then raise exception 'kpi_incomplete'; end if;
+
+  insert into challenge_goal_approvals (challenge_id, approver_id)
+  values (p_challenge_id, auth.uid())
+  on conflict (challenge_id, approver_id) do nothing;
+end $function$;
+
+-- ── autofinalize_due_challenges ──
+CREATE OR REPLACE FUNCTION public.autofinalize_due_challenges()
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_today date := (now() at time zone 'Asia/Seoul')::date;
+  v_ended int := 0;
+  c record;
+begin
+  for c in
+    select ch.id from challenges ch
+    where ch.status = 'active' and ch.end_date < v_today
+    order by ch.end_date
+    for update
+  loop
+    update challenges set status = 'ended' where id = c.id;
+    v_ended := v_ended + 1;
+    begin
+      perform notify(
+        cp.user_id, null, 'challenge_ended', c.id,
+        '🏆 결과가 나왔어요', '챌린지 탭에서 최종 순위를 확인하세요'
+      ) from challenge_participants cp
+      where cp.challenge_id = c.id and cp.status = 'joined';
+    exception when others then null;
+    end;
+  end loop;
+
+  return jsonb_build_object('ended', v_ended);
+end $function$;
+
+-- ── autostart_due_challenges ──
+CREATE OR REPLACE FUNCTION public.autostart_due_challenges()
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_today date := (now() at time zone 'Asia/Seoul')::date;
+  v_started int := 0;
+  v_dropped int := 0;
+  v_dropped_now int := 0;
+  c record;
+begin
+  for c in
+    select ch.id from challenges ch
+    where ch.status = 'setup' and ch.start_date <= v_today
+    order by ch.start_date
+    for update
+  loop
+    -- 목표 0개인 joined는 명단에서 뺀다 (설계 §4.2). 행은 남긴다 — 지우면
+    -- 수락 때 맺어진 crew_links의 근거가 사라진다.
+    update challenge_participants cp
+       set status = 'dropped'
+     where cp.challenge_id = c.id
+       and cp.status = 'joined'
+       and not exists (
+         select 1 from user_goals ug
+         where ug.challenge_id = c.id and ug.user_id = cp.user_id
+       );
+    -- ⚠ 이번 update가 바꾼 행 수만 더한다. select count(*)로 세면 이미
+    --    dropped였던 행까지 매 루프마다 다시 더해져 과다 집계된다.
+    --    ROW_COUNT는 직전 문장의 값이므로 update 바로 뒤에서 읽어야 한다.
+    get diagnostics v_dropped_now = row_count;
+    v_dropped := v_dropped + v_dropped_now;
+
+    -- 미응답 초대는 만료시킨다
+    delete from challenge_participants
+    where challenge_id = c.id and status = 'invited';
+
+    update challenges set status = 'active' where id = c.id;
+    v_started := v_started + 1;
+
+    -- 참가자 전원에게 시작 알림
+    begin
+      perform notify(
+        cp.user_id, null, 'challenge_started', c.id,
+        '🏁 챌린지가 시작됐어요', '오늘부터 기록이 반영돼요'
+      ) from challenge_participants cp
+      where cp.challenge_id = c.id and cp.status = 'joined';
+    exception when others then null;
+    end;
+  end loop;
+
+  return jsonb_build_object('started', v_started, 'dropped', v_dropped);
+end $function$;
+
+-- ── award_points ──
+CREATE OR REPLACE FUNCTION public.award_points(p_user_id uuid, p_amount integer, p_reason text, p_source_type text, p_source_id text, p_multiplier numeric, p_metadata jsonb)
+ RETURNS integer
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_balance int;
+begin
+  if p_amount <= 0 then return 0; end if;
+
+  insert into user_wallet (user_id) values (p_user_id) on conflict (user_id) do nothing;
+  select balance into v_balance from user_wallet where user_id = p_user_id for update;
+
+  begin
+    insert into point_transactions
+      (user_id, amount, transaction_type, reason, source_type, source_id,
+       multiplier, balance_after, metadata)
+    values (p_user_id, p_amount, 'earn', p_reason, p_source_type, p_source_id,
+            p_multiplier, v_balance + p_amount, coalesce(p_metadata, '{}'::jsonb));
+  exception when unique_violation then
+    return 0; -- 이미 지급됨
+  end;
+
+  update user_wallet
+  set balance = balance + p_amount,
+      lifetime_earned = lifetime_earned + p_amount,
+      updated_at = now()
+  where user_id = p_user_id;
+
+  return p_amount;
+end $function$;
+
+-- ── award_workout_photo_xp ──
+CREATE OR REPLACE FUNCTION public.award_workout_photo_xp(p_session_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  s workout_sessions;
+  v_eff date;
+  v_prog jsonb;
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  select * into s from workout_sessions
+  where id = p_session_id and user_id = auth.uid();
+  if not found then raise exception 'session_not_found'; end if;
+  if s.status <> 'completed' or s.deleted_at is not null then
+    raise exception 'invalid_status';
+  end if;
+
+  if not exists (
+    select 1 from workout_images wi
+    where wi.session_id = p_session_id and wi.user_id = s.user_id and wi.image_path is not null
+  ) then
+    return jsonb_build_object('awarded', false, 'reason', 'no_photo');
+  end if;
+
+  if s.completed_at < now() - interval '30 minutes' then
+    return jsonb_build_object('awarded', false, 'reason', 'too_late');
+  end if;
+
+  if not exists (
+    select 1 from xp_transactions
+    where user_id = s.user_id and source_type = 'workout'
+      and source_id = p_session_id::text and reason = 'workout_completed'
+  ) then
+    return jsonb_build_object('awarded', false, 'reason', 'not_daily_workout');
+  end if;
+
+  v_eff := (s.completed_at at time zone 'Asia/Seoul')::date;
+
+  v_prog := public.apply_xp_and_progress(
+    s.user_id, 10, 'workout_photo', null,
+    'workout', p_session_id::text, v_eff, jsonb_build_object('photo_xp', 10));
+
+  if not (v_prog->>'inserted')::boolean then
+    return jsonb_build_object('awarded', false, 'reason', 'already_awarded');
+  end if;
+
+  return jsonb_build_object('awarded', true, 'xpAwarded', 10,
+    'newTotalXp', v_prog->'newTotalXp',
+    'previousLevel', v_prog->'previousLevel', 'newLevel', v_prog->'newLevel',
+    'previousStage', v_prog->'previousStage', 'newStage', v_prog->'newStage',
+    'levelUp', v_prog->'levelUp', 'stageUp', v_prog->'stageUp',
+    'unlockedRewards', v_prog->'unlockedRewards');
+end $function$;
+
+-- ── badge_metrics ──
+CREATE OR REPLACE FUNCTION public.badge_metrics(p_user_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v jsonb;
+begin
+  select jsonb_build_object(
+    'workout_count', coalesce(count(*), 0),
+    'total_minutes', coalesce(sum(s.duration_minutes), 0),
+    'record_beaten', coalesce(count(*) filter (where s.record_note is not null), 0)
+  ) into v
+  from workout_sessions s
+  where s.user_id = p_user_id and s.status = 'completed' and s.deleted_at is null;
+
+  v := v
+    || jsonb_build_object('streak_days', public.current_streak_days(p_user_id))
+    || (
+      select jsonb_build_object(
+        'weight_volume_kg', coalesce(sum(
+          case when we.exercise_type = 'weight'
+               then coalesce(ws.weight_kg, 0) * coalesce(ws.reps, 0) else 0 end), 0),
+        'cardio_distance_m', coalesce(sum(
+          case when we.exercise_type = 'cardio'
+               then coalesce(ws.distance_meters, 0) else 0 end), 0))
+      from workout_sets ws
+      join workout_exercises we on we.id = ws.workout_exercise_id
+      join workout_sessions s on s.id = we.session_id
+      where s.user_id = p_user_id and s.status = 'completed'
+        and s.deleted_at is null and ws.is_completed
+    );
+  return v;
+end $function$;
+
+-- ── cancel_challenge ──
+CREATE OR REPLACE FUNCTION public.cancel_challenge(p_challenge_id uuid)
+ RETURNS challenges
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  c challenges;
+begin
+  if auth.uid() is null then
+    raise exception 'not_authenticated';
+  end if;
+
+  select * into c from challenges
+  where id = p_challenge_id and created_by = auth.uid()
+  for update;
+
+  if not found then
+    raise exception 'challenge_not_found';
+  end if;
+  if c.status not in ('setup', 'active') then
+    raise exception 'invalid_status:%', c.status;
+  end if;
+
+  update challenges set status = 'cancelled'
+  where id = p_challenge_id
+  returning * into c;
+
+  return c;
+end $function$;
+
+-- ── cancel_crew_request ──
+CREATE OR REPLACE FUNCTION public.cancel_crew_request(p_request_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare v_req crew_requests%rowtype;
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  select * into v_req from crew_requests where id = p_request_id for update;
+  if not found or v_req.requester_id <> auth.uid() then
+    raise exception 'not_requester';
+  end if;
+  if v_req.status <> 'pending' then raise exception 'not_pending'; end if;
+  update crew_requests set status = 'canceled', responded_at = now()
+   where id = p_request_id;
+  return jsonb_build_object('status', 'canceled');
+end $function$;
+
+-- ── cancel_workout ──
+CREATE OR REPLACE FUNCTION public.cancel_workout(p_session_id uuid)
+ RETURNS workout_sessions
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  s workout_sessions;
+begin
+  if auth.uid() is null then
+    raise exception 'not_authenticated';
+  end if;
+
+  select * into s from workout_sessions
+  where id = p_session_id and user_id = auth.uid()
+  for update;
+
+  if not found then
+    raise exception 'session_not_found';
+  end if;
+  if s.status not in ('draft', 'active') then
+    raise exception 'invalid_status:%', s.status;
+  end if;
+
+  update workout_sessions
+  set status = 'cancelled'
+  where id = p_session_id
+  returning * into s;
+
+  -- draft 취소는 시작 안 한 세션이라 이벤트 남기지 않음
+  if s.started_at is not null then
+    insert into workout_events (session_id, user_id, event_type)
+    values (s.id, s.user_id, 'workout_cancelled');
+  end if;
+
+  return s;
+end $function$;
+
+-- ── challenge_in_setup ──
+CREATE OR REPLACE FUNCTION public.challenge_in_setup(cid uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select exists (
+    select 1 from challenges where id = cid and status = 'setup'
+  )
+$function$;
+
+-- ── complete_workout ──
+CREATE OR REPLACE FUNCTION public.complete_workout(p_session_id uuid)
+ RETURNS workout_sessions
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  s workout_sessions;
+begin
+  if auth.uid() is null then
+    raise exception 'not_authenticated';
+  end if;
+
+  select * into s from workout_sessions
+  where id = p_session_id and user_id = auth.uid()
+  for update;
+
+  if not found then
+    raise exception 'session_not_found';
+  end if;
+  if s.status <> 'active' then
+    raise exception 'invalid_status:%', s.status;
+  end if;
+
+  update workout_sessions
+  set status = 'completed',
+      completed_at = now(),
+      duration_minutes = greatest(
+        1, round(extract(epoch from now() - s.started_at) / 60)::int
+      )
+  where id = p_session_id
+  returning * into s;
+
+  insert into workout_events (session_id, user_id, event_type)
+  values (s.id, s.user_id, 'workout_completed');
+
+  return s;
+end $function$;
+
+-- ── complete_workout_v2 ──
+CREATE OR REPLACE FUNCTION public.complete_workout_v2(p_session_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  s workout_sessions;
+  v_dur int; v_valid boolean; v_tabata boolean;
+  v_eff date; v_has_daily boolean;
+  v_base int := 0; v_time int := 0; v_plan int := 0; v_rec int := 0; v_photo int := 0;
+  v_total int := 0;
+  v_prog jsonb; v_orig int;
+  v_streak int; v_mult numeric; v_points int := 0; v_badges jsonb := '[]'::jsonb;
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  select * into s from workout_sessions
+  where id = p_session_id and user_id = auth.uid() for update;
+  if not found then raise exception 'session_not_found'; end if;
+
+  if s.status = 'cancelled' then
+    raise exception 'invalid_status:cancelled';
+  elsif s.status = 'completed' then
+    select amount into v_orig from xp_transactions
+    where user_id = s.user_id and reason = 'workout_completed'
+      and source_type = 'workout' and source_id = p_session_id::text
+    limit 1;
+    return (
+      select jsonb_build_object(
+        'idempotentReplay', true, 'awarded', false,
+        'originalXpAwarded', coalesce(v_orig, 0),
+        'currentTotalXp', up.total_xp, 'currentLevel', up.current_level,
+        'currentStage', up.current_stage, 'rejectionReason', 'XP_ALREADY_AWARDED')
+      from user_progress up where up.user_id = s.user_id
+    );
+  elsif s.status <> 'active' then
+    raise exception 'invalid_status:%', s.status;
+  end if;
+
+  update workout_sessions
+  set status = 'completed', completed_at = now(),
+      duration_minutes = floor(extract(epoch from now() - s.started_at) / 60)::int
+  where id = p_session_id
+  returning * into s;
+
+  insert into workout_events (session_id, user_id, event_type)
+  values (s.id, s.user_id, 'workout_completed');
+
+  v_dur := s.duration_minutes;
+  v_tabata := s.tabata_minutes is not null;
+  v_valid := public.is_valid_workout(p_session_id)
+             and s.started_at is not null and s.completed_at is not null
+             and v_dur >= 0 and v_dur < 360;
+
+  v_eff := (now() at time zone 'Asia/Seoul')::date;
+  select exists (
+    select 1 from xp_transactions
+    where user_id = s.user_id and transaction_type = 'earn'
+      and reward_group = 'daily_workout' and effective_date = v_eff
+  ) into v_has_daily;
+
+  if v_valid and not v_has_daily then
+    v_base := 100;
+    v_time := case when v_dur >= 90 then 40 when v_dur >= 60 then 30
+                   when v_dur >= 40 then 20 when v_dur >= 20 then 10 else 0 end;
+    if not v_tabata then
+      v_plan := 0;
+      -- 0027: 완료 세트는 실적(횟수·시간·거리)이 하나라도 있으면 충족
+      v_rec := case when exists (
+          select 1 from workout_sets ws join workout_exercises we on we.id = ws.workout_exercise_id
+          where we.session_id = p_session_id and ws.is_completed
+        ) and not exists (
+          select 1 from workout_sets ws join workout_exercises we on we.id = ws.workout_exercise_id
+          where we.session_id = p_session_id and ws.is_completed
+            and ws.reps is null
+            and coalesce(ws.duration_seconds, 0) <= 0
+            and coalesce(ws.distance_meters, 0) <= 0
+        ) then 10 else 0 end;
+    end if;
+    v_photo := case when exists (
+      select 1 from workout_images wi
+      where wi.session_id = p_session_id and wi.user_id = s.user_id and wi.image_path is not null
+    ) then 10 else 0 end;
+    v_total := v_base + v_time + v_plan + v_rec + v_photo;
+  end if;
+
+  if v_total > 0 then
+    v_prog := public.apply_xp_and_progress(
+      s.user_id, v_total, 'workout_completed', 'daily_workout',
+      'workout', p_session_id::text, v_eff,
+      jsonb_build_object('base_xp', v_base, 'duration_xp', v_time, 'plan_xp', v_plan,
+        'record_xp', v_rec, 'photo_xp', v_photo, 'duration_minutes', v_dur,
+        'duration_source', 'server_elapsed', 'is_tabata', v_tabata));
+    if not (v_prog->>'inserted')::boolean then v_total := 0; end if;
+  else
+    insert into user_progress (user_id) values (s.user_id) on conflict (user_id) do nothing;
+    select jsonb_build_object('newTotalXp', total_xp, 'previousLevel', current_level,
+      'newLevel', current_level, 'previousStage', current_stage, 'newStage', current_stage,
+      'levelUp', false, 'stageUp', false, 'unlockedRewards', '[]'::jsonb)
+    into v_prog from user_progress where user_id = s.user_id;
+  end if;
+
+  -- ⬇ 0032 추가: 운동 포인트. XP와 같은 조건(그날 첫 유효 운동)에서만 준다.
+  --   포인트만 무제한이면 하루에 짧게 여러 번 끊어 하는 악용이 생긴다.
+  v_streak := public.current_streak_days(s.user_id);
+  v_mult := public.point_multiplier(v_streak);
+  if v_total > 0 then
+    v_points := public.award_points(
+      s.user_id, floor(100 * v_mult)::int, 'workout_completed',
+      'workout', p_session_id::text, v_mult,
+      jsonb_build_object('base', 100, 'streak_days', v_streak));
+  end if;
+
+  -- ⬇ 0032 추가: 배지 판정. 포인트 지급 뒤라 배지 보너스가 위에 쌓인다.
+  v_badges := public.evaluate_badges(s.user_id);
+
+  return jsonb_build_object(
+    'idempotentReplay', false,
+    'awarded', v_total > 0, 'xpAwarded', v_total,
+    'breakdown', jsonb_build_object('baseXp', v_base, 'durationXp', v_time,
+      'planXp', v_plan, 'recordXp', v_rec, 'photoXp', v_photo),
+    'newTotalXp', v_prog->'newTotalXp',
+    'previousLevel', v_prog->'previousLevel', 'newLevel', v_prog->'newLevel',
+    'previousStage', v_prog->'previousStage', 'newStage', v_prog->'newStage',
+    'levelUp', v_prog->'levelUp', 'stageUp', v_prog->'stageUp',
+    'unlockedRewards', v_prog->'unlockedRewards',
+    'pointsAwarded', v_points, 'pointMultiplier', v_mult, 'streakDays', v_streak,
+    'newBadges', v_badges
+  );
+end $function$;
+
+-- ── create_challenge_room ──
+CREATE OR REPLACE FUNCTION public.create_challenge_room(p_name text, p_start_date date, p_end_date date, p_photo_required boolean DEFAULT true)
+ RETURNS challenges
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_me uuid := auth.uid();
+  v_group uuid;
+  c challenges;
+begin
+  if v_me is null then raise exception 'not_authenticated'; end if;
+  if p_start_date > p_end_date then raise exception 'invalid_period'; end if;
+
+  -- 0042는 challenges.group_id를 아직 못 지운다(not null). 0045에서 드롭할
+  -- 때까지는 방장의 그룹을 그대로 채워 둔다 — 혼자모드 유저는 그룹이 없으므로
+  -- 그때는 생성이 막힌다. 그 제약이 풀리는 건 0044·0045다.
+  --
+  -- ⚠ joined_at이다. created_at이 아니다 (0001:32). 0042가 여기서 틀렸다.
+  select gm.group_id into v_group
+  from group_members gm where gm.user_id = v_me
+  order by gm.joined_at limit 1;                        -- 0043: created_at → joined_at
+  if v_group is null then raise exception 'no_group_yet'; end if;
+
+  insert into challenges (group_id, name, start_date, end_date, photo_required, created_by)
+  values (v_group, p_name, p_start_date, p_end_date, p_photo_required, v_me)
+  returning * into c;
+
+  insert into challenge_participants (challenge_id, user_id, role, status, joined_at)
+  values (c.id, v_me, 'host', 'joined', now());
+
+  return c;
+end $function$;
+
+-- ── create_group ──
+CREATE OR REPLACE FUNCTION public.create_group(p_name text)
+ RETURNS groups
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+declare
+  g public.groups;
+  attempts int := 0;
+begin
+  loop
+    begin
+      insert into groups (name, invite_code, owner_id)
+      values (trim(p_name), generate_invite_code(), auth.uid())
+      returning * into g;
+      exit;
+    exception when unique_violation then
+      attempts := attempts + 1;
+      if attempts >= 5 then raise; end if;
+    end;
+  end loop;
+
+  insert into group_members (group_id, user_id, role)
+  values (g.id, auth.uid(), 'owner');
+
+  return g;
+end $function$;
+
+-- ── current_streak_days ──
+CREATE OR REPLACE FUNCTION public.current_streak_days(p_user_id uuid)
+ RETURNS integer
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_today date := (now() at time zone 'Asia/Seoul')::date;
+  v_last date;
+  v_count int := 0;
+  v_prev date := null;
+  r record;
+begin
+  select max((completed_at at time zone 'Asia/Seoul')::date) into v_last
+  from workout_sessions
+  where user_id = p_user_id and status = 'completed'
+    and deleted_at is null and completed_at is not null;
+
+  if v_last is null or (v_today - v_last) >= 5 then
+    return 0;
+  end if;
+
+  for r in
+    select distinct (completed_at at time zone 'Asia/Seoul')::date as d
+    from workout_sessions
+    where user_id = p_user_id and status = 'completed'
+      and deleted_at is null and completed_at is not null
+    order by d desc
+  loop
+    if v_prev is not null and (v_prev - r.d) >= 5 then
+      exit;
+    end if;
+    v_count := v_count + 1;
+    v_prev := r.d;
+  end loop;
+
+  return v_count;
+end $function$;
+
+-- ── decline_challenge_invite ──
+CREATE OR REPLACE FUNCTION public.decline_challenge_invite(p_challenge_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_me uuid := auth.uid();
+  v_row challenge_participants;
+begin
+  if v_me is null then raise exception 'not_authenticated'; end if;
+
+  select * into v_row from challenge_participants
+  where challenge_id = p_challenge_id and user_id = v_me for update;
+  if not found then raise exception 'not_invited'; end if;
+  if v_row.status <> 'invited' then raise exception 'not_invited'; end if;
+
+  delete from challenge_participants
+  where challenge_id = p_challenge_id and user_id = v_me;
+
+  return jsonb_build_object('status', 'declined');
+end $function$;
+
+-- ── dispatch_push_notification ──
+CREATE OR REPLACE FUNCTION public.dispatch_push_notification()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  begin
+    perform net.http_post(
+      url := 'https://gnd-one.vercel.app/api/push/notify',
+      body := jsonb_build_object('id', new.id),
+      headers := '{"Content-Type": "application/json"}'::jsonb
+    );
+  exception when others then
+    null; -- 푸시 실패는 알림 저장에 영향 없음
+  end;
+  return new;
+end;
+$function$;
+
+-- ── evaluate_badges ──
+CREATE OR REPLACE FUNCTION public.evaluate_badges(p_user_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_today text := to_char((now() at time zone 'Asia/Seoul')::date, 'YYYY-MM-DD');
+  v_metrics jsonb;
+  v_new jsonb := '[]'::jsonb;
+  v_value numeric;
+  v_period text;
+  v_inserted int;
+  d record;
+begin
+  v_metrics := public.badge_metrics(p_user_id);
+
+  for d in
+    select * from badge_definitions where status = 'active' order by sort_order
+  loop
+    v_value := (v_metrics ->> d.metric_key)::numeric;
+
+    if d.repeatable then
+      if v_value <= 0 or (v_value::bigint % d.repeat_step::bigint) <> 0 then
+        continue;
+      end if;
+      v_period := v_today;
+    else
+      if v_value < d.threshold then
+        continue;
+      end if;
+      v_period := 'lifetime';
+    end if;
+
+    insert into user_badges (user_id, badge_key, period_key)
+    values (p_user_id, d.badge_key, v_period)
+    on conflict (user_id, badge_key, period_key) do nothing;
+    get diagnostics v_inserted = row_count;
+    if v_inserted = 0 then continue; end if;
+
+    perform public.award_points(
+      p_user_id, d.point_reward, 'badge_earned',
+      'badge', d.badge_key || ':' || v_period, null,
+      jsonb_build_object('tier', d.tier, 'metric', d.metric_key));
+
+    v_new := v_new || jsonb_build_object(
+      'badgeKey', d.badge_key, 'emoji', d.emoji, 'name', d.name,
+      'tier', d.tier, 'points', d.point_reward);
+  end loop;
+
+  if jsonb_array_length(v_new) > 0 then
+    insert into notifications (user_id, actor_id, type, reference_id, title, body)
+    values (p_user_id, p_user_id, 'badge_earned', null,
+            '🏅 배지 획득!',
+            '새 배지 ' || jsonb_array_length(v_new) || '개를 얻었어요 — 내 정보에서 확인해 보세요');
+  end if;
+
+  return v_new;
+end $function$;
+
+-- ── finalize_challenge ──
+CREATE OR REPLACE FUNCTION public.finalize_challenge(p_challenge_id uuid)
+ RETURNS challenges
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  c challenges;
+begin
+  if auth.uid() is null then
+    raise exception 'not_authenticated';
+  end if;
+
+  select * into c from challenges
+  where id = p_challenge_id
+  for update;
+
+  -- 0046: is_group_member → is_challenge_participant
+  if not found or not public.is_challenge_participant(p_challenge_id, auth.uid()) then
+    raise exception 'challenge_not_found';
+  end if;
+  if c.status <> 'active' then
+    raise exception 'invalid_status:%', c.status;
+  end if;
+  if c.end_date >= (now() at time zone 'Asia/Seoul')::date then
+    raise exception 'not_ended_yet';
+  end if;
+
+  update challenges set status = 'ended'
+  where id = p_challenge_id
+  returning * into c;
+  return c;
+end $function$;
+
+-- ── generate_invite_code ──
+CREATE OR REPLACE FUNCTION public.generate_invite_code()
+ RETURNS text
+ LANGUAGE plpgsql
+AS $function$
+declare
+  alphabet constant text := '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+  code text := '';
+  i int;
+begin
+  for i in 1..5 loop
+    code := code || substr(alphabet, 1 + floor(random() * length(alphabet))::int, 1);
+  end loop;
+  return 'GND-' || code;
+end $function$;
+
+-- ── get_crew_member_profile ──
+CREATE OR REPLACE FUNCTION public.get_crew_member_profile(p_target_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_progress user_progress%rowtype;
+  v_badges jsonb;
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  -- 0039: 그룹 → 크루 연결
+  if p_target_id <> auth.uid() and not public.is_crew_with(p_target_id) then
+    raise exception 'not_crew';
+  end if;
+
+  select * into v_progress from user_progress where user_id = p_target_id;
+
+  select coalesce(
+           jsonb_agg(
+             jsonb_build_object(
+               'badgeKey', b.badge_key,
+               'periodKey', b.period_key,
+               'earnedAt', b.earned_at)
+             order by b.earned_at
+           ), '[]'::jsonb)
+    into v_badges
+  from user_badges b
+  where b.user_id = p_target_id;
+
+  return jsonb_build_object(
+    'totalXp',      coalesce(v_progress.total_xp, 0),
+    'currentLevel', coalesce(v_progress.current_level, 1),
+    'currentStage', coalesce(v_progress.current_stage, 1),
+    'badges',       v_badges
+  );
+end $function$;
+
+-- ── get_incoming_crew_requests ──
+CREATE OR REPLACE FUNCTION public.get_incoming_crew_requests()
+ RETURNS TABLE(request_id uuid, requester_id uuid, nickname text, avatar_url text, created_at timestamp with time zone)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select r.id, r.requester_id, p.nickname, p.avatar_url, r.created_at
+  from public.crew_requests r
+  join public.profiles p on p.id = r.requester_id
+  where r.addressee_id = (select auth.uid()) and r.status = 'pending'
+  order by r.created_at desc
+$function$;
+
+-- ── get_my_badge_metrics ──
+CREATE OR REPLACE FUNCTION public.get_my_badge_metrics()
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select public.badge_metrics(auth.uid());
+$function$;
+
+-- ── get_my_crew ──
+CREATE OR REPLACE FUNCTION public.get_my_crew()
+ RETURNS TABLE(id uuid, nickname text, avatar_url text, total_xp integer, current_level smallint, current_stage smallint, linked_at timestamp with time zone)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select p.id, p.nickname, p.avatar_url,
+         coalesce(up.total_xp, 0),
+         coalesce(up.current_level, 1::smallint),
+         coalesce(up.current_stage, 1::smallint),
+         l.created_at
+  from public.crew_links l
+  join public.profiles p
+    on p.id = case when l.user_a = (select auth.uid()) then l.user_b else l.user_a end
+  left join public.user_progress up on up.user_id = p.id
+  where (select auth.uid()) in (l.user_a, l.user_b)
+  order by p.nickname
+$function$;
+
+-- ── invite_to_challenge ──
+CREATE OR REPLACE FUNCTION public.invite_to_challenge(p_challenge_id uuid, p_target_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_me uuid := auth.uid();
+  c challenges;
+  v_nick text;
+begin
+  if v_me is null then raise exception 'not_authenticated'; end if;
+  if p_target_id = v_me then raise exception 'self_invite'; end if;
+
+  select * into c from challenges where id = p_challenge_id for update;
+  if not found then raise exception 'challenge_not_found'; end if;
+  if c.status <> 'setup' then raise exception 'invalid_status:%', c.status; end if;
+
+  if not exists (
+    select 1 from challenge_participants
+    where challenge_id = p_challenge_id and user_id = v_me and role = 'host'
+  ) then
+    raise exception 'not_host';
+  end if;
+
+  if not exists (select 1 from profiles where id = p_target_id) then
+    raise exception 'target_not_found';
+  end if;
+
+  -- 이미 초대했거나 참가 중이면 알린다. 조용히 넘기면 화면이 "보냈어요"를
+  -- 두 번 띄우고 사용자는 상대가 왜 안 들어오는지 모른다.
+  if exists (
+    select 1 from challenge_participants
+    where challenge_id = p_challenge_id and user_id = p_target_id
+  ) then
+    raise exception 'already_invited';
+  end if;
+
+  insert into challenge_participants (challenge_id, user_id, role, status, invited_by)
+  values (p_challenge_id, p_target_id, 'member', 'invited', v_me);
+
+  select nickname into v_nick from profiles where id = v_me;
+  -- 알림 실패가 초대를 되돌리면 안 된다. 초대가 본체고 알림은 곁가지다.
+  -- (0029에서 알림 insert 하나가 운동 완료 트랜잭션을 롤백시킨 전례가 있다.)
+  begin
+    perform notify(
+      p_target_id, v_me, 'challenge_invite', p_challenge_id,
+      coalesce(v_nick, '크루원') || '님이 챌린지에 초대했어요 🏆',
+      c.name || ' · ' || to_char(c.start_date, 'MM/DD') || '~' || to_char(c.end_date, 'MM/DD')
+    );
+  exception when others then null;
+  end;
+
+  return jsonb_build_object('status', 'invited');
+end $function$;
+
+-- ── is_challenge_participant ──
+CREATE OR REPLACE FUNCTION public.is_challenge_participant(cid uuid, uid uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select exists (
+    select 1 from public.challenge_participants
+    where challenge_id = cid and user_id = uid
+  )
+$function$;
+
+-- ── is_crew_with ──
+CREATE OR REPLACE FUNCTION public.is_crew_with(uid uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select exists (
+    select 1 from public.crew_links
+    where user_a = least((select auth.uid()), uid)
+      and user_b = greatest((select auth.uid()), uid)
+  )
+$function$;
+
+-- ── is_group_member ──
+CREATE OR REPLACE FUNCTION public.is_group_member(gid uuid, uid uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select exists (
+    select 1 from group_members
+    where group_id = gid and user_id = uid
+  )
+$function$;
+
+-- ── is_valid_workout ──
+CREATE OR REPLACE FUNCTION public.is_valid_workout(p_session_id uuid)
+ RETURNS boolean
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_tabata_minutes int; v_owner uuid;
+  v_completed_sets int; v_cardio_time int;
+begin
+  select tabata_minutes, user_id into v_tabata_minutes, v_owner
+  from workout_sessions where id = p_session_id;
+  if not found or v_owner <> auth.uid() then
+    raise exception 'not_owner';
+  end if;
+
+  -- 1) 타바타: 완료 자체로 유효
+  if v_tabata_minutes is not null then
+    return true;
+  end if;
+
+  -- 2) 완료 세트 3개 이상: 웨이트/근력 기존 기준
+  select count(*) into v_completed_sets
+  from workout_sets ws
+  join workout_exercises we on we.id = ws.workout_exercise_id
+  where we.session_id = p_session_id and ws.is_completed;
+  if v_completed_sets >= 3 then
+    return true;
+  end if;
+
+  -- 3) 유산소·시간 종목: 실제 거리 또는 시간이 기록된 완료 세트가 있으면 유효
+  select count(*) into v_cardio_time
+  from workout_sets ws
+  join workout_exercises we on we.id = ws.workout_exercise_id
+  where we.session_id = p_session_id and ws.is_completed
+    and (coalesce(ws.distance_meters, 0) > 0 or coalesce(ws.duration_seconds, 0) > 0);
+  return v_cardio_time >= 1;
+end $function$;
+
+-- ── issue_challenge_invite_code ──
+CREATE OR REPLACE FUNCTION public.issue_challenge_invite_code(p_challenge_id uuid)
+ RETURNS text
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  c challenges;
+  v_code text;
+  i int;
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+
+  select * into c from challenges where id = p_challenge_id for update;
+  if not found or not public.is_challenge_participant(p_challenge_id, auth.uid()) then
+    raise exception 'challenge_not_found';
+  end if;
+  if c.status <> 'setup' then raise exception 'invalid_status:%', c.status; end if;
+  if not exists (
+    select 1 from challenge_participants
+    where challenge_id = p_challenge_id and user_id = auth.uid() and role = 'host'
+  ) then
+    raise exception 'not_host';
+  end if;
+
+  if c.invite_code is not null then return c.invite_code; end if;
+
+  -- 유니크 충돌은 32^5 = 3355만 분의 1이지만, 났을 때 조용히 실패하면 안 되므로
+  -- 몇 번 다시 뽑고 그래도 안 되면 예외를 낸다.
+  for i in 1..10 loop
+    v_code := public.generate_invite_code();
+    begin
+      update challenges set invite_code = v_code where id = p_challenge_id;
+      return v_code;
+    exception when unique_violation then
+      -- 다음 루프에서 다시 뽑는다
+    end;
+  end loop;
+  raise exception 'code_generation_failed';
+end $function$;
+
+-- ── join_challenge_with_code ──
+CREATE OR REPLACE FUNCTION public.join_challenge_with_code(p_code text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_me uuid := auth.uid();
+  c challenges;
+  v_row challenge_participants;
+  v_other uuid;
+  v_linked int := 0;
+begin
+  if v_me is null then raise exception 'not_authenticated'; end if;
+
+  select * into c from challenges where invite_code = upper(trim(p_code));
+  if not found then raise exception 'invalid_invite_code'; end if;
+
+  -- 참가자 목록을 읽고 쓰는 동안 다른 사람이 같은 링크로 들어오면 crew_links가
+  -- 한쪽만 생기거나 락 순서가 엇갈려 데드락이 난다. 0042 accept와 같은 방식으로
+  -- 챌린지 단위 락을 잡는다.
+  perform pg_advisory_xact_lock(hashtext(c.id::text));
+
+  -- 락을 잡은 뒤 상태를 다시 읽는다. 그 사이 시작됐을 수 있다.
+  select * into c from challenges where id = c.id;
+  if c.status <> 'setup' then raise exception 'invalid_status:%', c.status; end if;
+
+  select * into v_row from challenge_participants
+  where challenge_id = c.id and user_id = v_me for update;
+  if found and v_row.status = 'joined' then
+    raise exception 'already_joined';
+  end if;
+
+  -- 크루 연결을 먼저 만든다. 내 행을 joined로 바꾼 뒤에 돌면 자기 자신이
+  -- 목록에 들어와 crew_links_not_self 위반이 된다 (0042와 같은 이유).
+  for v_other in
+    select user_id from challenge_participants
+    where challenge_id = c.id and status = 'joined' and user_id <> v_me
+  loop
+    insert into crew_links (user_a, user_b)
+    values (least(v_me, v_other), greatest(v_me, v_other))
+    on conflict do nothing;
+    v_linked := v_linked + 1;
+  end loop;
+
+  -- 초대장이 이미 있으면(닉네임으로 초대해 뒀는데 링크로 들어온 경우) 그 행을
+  -- 살려 쓴다. 없으면 새로 만든다. 어느 쪽이든 결과는 joined다.
+  insert into challenge_participants (challenge_id, user_id, role, status, joined_at)
+  values (c.id, v_me, 'member', 'joined', now())
+  on conflict (challenge_id, user_id)
+  do update set status = 'joined', joined_at = now();
+
+  return jsonb_build_object(
+    'status', 'joined', 'challengeId', c.id, 'challengeName', c.name,
+    'crewLinked', v_linked
+  );
+end $function$;
+
+-- ── join_group_with_code ──
+CREATE OR REPLACE FUNCTION public.join_group_with_code(p_code text)
+ RETURNS TABLE(group_id uuid, group_name text)
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+#variable_conflict use_column
+declare
+  g public.groups;
+begin
+  if auth.uid() is null then
+    raise exception 'not_authenticated';
+  end if;
+
+  select * into g from groups
+  where invite_code = upper(trim(p_code));
+
+  if not found then
+    raise exception 'invalid_invite_code';
+  end if;
+
+  insert into group_members (group_id, user_id, role)
+  values (g.id, auth.uid(), 'member')
+  on conflict (group_id, user_id) do nothing;
+
+  return query select g.id, g.name;
+end $function$;
+
+-- ── mark_record_beaten ──
+CREATE OR REPLACE FUNCTION public.mark_record_beaten(p_session_id uuid, p_note text)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_session workout_sessions%rowtype;
+  v_nickname text;
+begin
+  select * into v_session from workout_sessions where id = p_session_id;
+
+  if not found or v_session.user_id <> auth.uid() then
+    raise exception 'not_owner';
+  end if;
+  if v_session.status <> 'completed' or v_session.deleted_at is not null then
+    raise exception 'invalid_status';
+  end if;
+  if v_session.record_note is not null then
+    raise exception 'already_marked';
+  end if;
+  if p_note is null or length(trim(p_note)) = 0 or length(p_note) > 80 then
+    raise exception 'invalid_note';
+  end if;
+
+  update workout_sessions set record_note = p_note where id = p_session_id;
+
+  select nickname into v_nickname from profiles where id = v_session.user_id;
+
+  -- 0039: 크루 연결 기준. crew_links는 쌍당 1행이라 distinct가 필요 없다.
+  insert into notifications (user_id, actor_id, type, reference_id, title, body)
+  select case when l.user_a = v_session.user_id then l.user_b else l.user_a end,
+    v_session.user_id, 'record_beaten', p_session_id,
+    '🏅 기록 갱신! 칭찬해주세요',
+    coalesce(v_nickname, '크루원') || '님이 ' || p_note
+      || '. 칭찬 한마디 남겨주세요! 👏'
+  from crew_links l
+  where v_session.user_id in (l.user_a, l.user_b);
+
+  -- 배지는 evaluate_badges가 판정한다. 임계값은 badge_definitions가 단일 원천이다.
+  perform public.evaluate_badges(v_session.user_id);
+end $function$;
+
+-- ── move_workout_plan ──
+CREATE OR REPLACE FUNCTION public.move_workout_plan(p_plan_id uuid, p_target_date date, p_replace boolean DEFAULT false)
+ RETURNS workout_plans
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_plan public.workout_plans%rowtype;
+  v_existing_id uuid;
+  v_today date;
+begin
+  if auth.uid() is null then
+    raise exception 'not_authenticated';
+  end if;
+
+  select (now() at time zone coalesce(p.timezone, 'Asia/Seoul'))::date
+    into v_today
+  from public.profiles p
+  where p.id = auth.uid();
+  v_today := coalesce(v_today, (now() at time zone 'Asia/Seoul')::date);
+
+  if p_target_date < v_today then
+    raise exception 'past_plan_date';
+  end if;
+
+  select * into v_plan
+  from public.workout_plans
+  where id = p_plan_id and user_id = auth.uid()
+  for update;
+
+  if not found then
+    raise exception 'plan_not_found';
+  end if;
+
+  select id into v_existing_id
+  from public.workout_plans
+  where user_id = auth.uid()
+    and plan_date = p_target_date
+    and id <> p_plan_id
+  for update;
+
+  if v_existing_id is not null and not coalesce(p_replace, false) then
+    raise exception 'plan_date_taken';
+  end if;
+
+  if v_existing_id is not null then
+    delete from public.workout_plans where id = v_existing_id;
+  end if;
+
+  update public.workout_plans
+  set plan_date = p_target_date
+  where id = p_plan_id
+  returning * into v_plan;
+
+  return v_plan;
+end $function$;
+
+-- ── notify ──
+CREATE OR REPLACE FUNCTION public.notify(p_user_id uuid, p_actor_id uuid, p_type text, p_reference_id uuid, p_title text, p_body text)
+ RETURNS void
+ LANGUAGE sql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  insert into notifications (user_id, actor_id, type, reference_id, title, body)
+  values (p_user_id, p_actor_id, p_type, p_reference_id, p_title, p_body)
+$function$;
+
+-- ── notify_reaction ──
+CREATE OR REPLACE FUNCTION public.notify_reaction()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_owner uuid;
+  v_nick text;
+begin
+  select user_id into v_owner from workout_sessions where id = new.session_id;
+  if v_owner is not null and v_owner <> new.user_id then
+    select nickname into v_nick from profiles where id = new.user_id;
+    perform notify(
+      v_owner, new.user_id, 'reaction_received', new.session_id,
+      coalesce(v_nick, '크루원') || '님이 내 운동에 반응했어요',
+      new.reaction_type
+    );
+  end if;
+  return new;
+end $function$;
+
+-- ── owns_workout_exercise ──
+CREATE OR REPLACE FUNCTION public.owns_workout_exercise(eid uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select exists (
+    select 1
+    from workout_exercises e
+    join workout_sessions s on s.id = e.session_id
+    where e.id = eid and s.user_id = auth.uid()
+  )
+$function$;
+
+-- ── owns_workout_session ──
+CREATE OR REPLACE FUNCTION public.owns_workout_session(sid uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select exists (
+    select 1 from workout_sessions
+    where id = sid and user_id = auth.uid()
+  )
+$function$;
+
+-- ── pick_challenge_peek ──
+CREATE OR REPLACE FUNCTION public.pick_challenge_peek(p_challenge_id uuid, p_target_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_me uuid := auth.uid();
+  v_group uuid;
+  v_date date := (now() at time zone 'Asia/Seoul')::date;
+  v_target uuid;
+begin
+  if v_me is null then raise exception 'not_authenticated'; end if;
+  if p_target_id = v_me then raise exception 'self_pick'; end if;
+
+  select group_id into v_group from challenges
+  where id = p_challenge_id and status = 'active';
+  if not found then raise exception 'challenge_not_active'; end if;
+
+  -- 보는 사람도 대상도 그 챌린지의 실제 참가자여야 한다. 그룹 소속만으로는
+  -- 부족하다 — 목표를 세우지 않은 사람은 순위표에 아예 없어서 고르면 빈 카드가 된다.
+  if not exists (
+    select 1 from user_goals
+    where challenge_id = p_challenge_id and user_id = v_me
+  ) then
+    raise exception 'not_participant';
+  end if;
+  if not exists (
+    select 1 from user_goals
+    where challenge_id = p_challenge_id and user_id = p_target_id
+  ) then
+    raise exception 'target_not_participant';
+  end if;
+
+  insert into challenge_peek_picks (viewer_id, challenge_id, pick_date, target_id)
+  values (v_me, p_challenge_id, v_date, p_target_id)
+  on conflict (viewer_id, challenge_id, pick_date) do nothing;
+
+  select target_id into v_target from challenge_peek_picks
+  where viewer_id = v_me
+    and challenge_id = p_challenge_id
+    and pick_date = v_date;
+
+  -- locked = 이미 다른 사람을 골라 뒀다는 뜻. 화면은 이걸로 "오늘은 ○○님만
+  -- 볼 수 있어요"를 띄운다.
+  return jsonb_build_object(
+    'targetId', v_target,
+    'locked', v_target is distinct from p_target_id
+  );
+end $function$;
+
+-- ── point_multiplier ──
+CREATE OR REPLACE FUNCTION public.point_multiplier(p_streak integer)
+ RETURNS numeric
+ LANGUAGE sql
+ IMMUTABLE
+ SET search_path TO 'public'
+AS $function$
+  select case
+    when p_streak >= 25 then 4.0
+    when p_streak >= 15 then 3.0
+    when p_streak >= 10 then 2.0
+    when p_streak >= 5  then 1.5
+    else 1.0
+  end::numeric
+$function$;
+
+-- ── poke_user ──
+CREATE OR REPLACE FUNCTION public.poke_user(p_target_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_nick text;
+  v_wants boolean;
+begin
+  if auth.uid() is null then
+    raise exception 'not_authenticated';
+  end if;
+  if p_target_id = auth.uid() then
+    raise exception 'self_poke';
+  end if;
+  if not public.is_crew_with(p_target_id) then  -- 0039: 그룹 → 크루 연결
+    raise exception 'not_crew';
+  end if;
+
+  -- ⬇ 0028: 오늘 운동을 마친 사람만 찌를 수 있다
+  if not exists (
+    select 1 from workout_sessions
+    where user_id = auth.uid()
+      and status = 'completed'
+      and deleted_at is null
+      and completed_at is not null
+      and (completed_at at time zone 'Asia/Seoul')::date
+          = (now() at time zone 'Asia/Seoul')::date
+  ) then
+    raise exception 'poke_requires_workout';
+  end if;
+
+  if exists (
+    select 1 from notifications
+    where type = 'poke' and actor_id = auth.uid() and user_id = p_target_id
+      and created_at > now() - interval '24 hours'
+  ) then
+    raise exception 'poke_cooldown';
+  end if;
+
+  select coalesce(ns.pokes, true) into v_wants
+  from (select true) one
+  left join notification_settings ns on ns.user_id = p_target_id;
+  if not v_wants then
+    raise exception 'pokes_disabled';
+  end if;
+
+  select nickname into v_nick from profiles where id = auth.uid();
+  perform notify(
+    p_target_id, auth.uid(), 'poke', null,
+    coalesce(v_nick, '크루원') || '님이 콕 찔렀어요 👉',
+    '오늘 운동 어때요?'
+  );
+end $function$;
+
+-- ── reject_crew_request ──
+CREATE OR REPLACE FUNCTION public.reject_crew_request(p_request_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare v_req crew_requests%rowtype;
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  select * into v_req from crew_requests where id = p_request_id for update;
+  if not found or v_req.addressee_id <> auth.uid() then
+    raise exception 'not_addressee';
+  end if;
+  if v_req.status <> 'pending' then raise exception 'not_pending'; end if;
+  update crew_requests set status = 'rejected', responded_at = now()
+   where id = p_request_id;
+  return jsonb_build_object('status', 'rejected');
+end $function$;
+
+-- ── remove_crew ──
+CREATE OR REPLACE FUNCTION public.remove_crew(p_target_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare v_count int;
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  delete from crew_links
+   where user_a = least(auth.uid(), p_target_id)
+     and user_b = greatest(auth.uid(), p_target_id);
+  get diagnostics v_count = row_count;
+  if v_count = 0 then raise exception 'not_crew'; end if;
+  return jsonb_build_object('status', 'removed');
+end $function$;
+
+-- ── search_profile_by_nickname ──
+CREATE OR REPLACE FUNCTION public.search_profile_by_nickname(p_nickname text)
+ RETURNS TABLE(id uuid, nickname text, avatar_url text, relation text, request_id uuid)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select
+    p.id, p.nickname, p.avatar_url,
+    case
+      when p.id = (select auth.uid())         then 'self'
+      when public.is_crew_with(p.id)          then 'crew'
+      when r_out.id is not null               then 'request_sent'
+      when r_in.id is not null                then 'request_received'
+      else 'none'
+    end,
+    case
+      when p.id = (select auth.uid())    then null::uuid
+      when public.is_crew_with(p.id)     then null::uuid
+      else coalesce(r_out.id, r_in.id)
+    end
+  from public.profiles p
+  left join public.crew_requests r_out
+    on r_out.requester_id = (select auth.uid())
+   and r_out.addressee_id = p.id
+   and r_out.status = 'pending'
+  left join public.crew_requests r_in
+    on r_in.requester_id = p.id
+   and r_in.addressee_id = (select auth.uid())
+   and r_in.status = 'pending'
+  where (select auth.uid()) is not null
+    and btrim(p_nickname) <> ''
+    and lower(btrim(p.nickname)) = lower(btrim(p_nickname))
+  order by p.created_at
+  limit 1
+$function$;
+
+-- ── send_cheer ──
+CREATE OR REPLACE FUNCTION public.send_cheer(p_session_id uuid, p_cheer_type text, p_message text DEFAULT NULL::text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  s workout_sessions;
+  c cheers;
+  v_count int;
+  v_last timestamptz;
+  v_nick text;
+  v_wants boolean;
+  v_points int := 0;                                 -- 0041
+begin
+  if auth.uid() is null then
+    raise exception 'not_authenticated';
+  end if;
+
+  select * into s from workout_sessions where id = p_session_id;
+
+  -- 0039: 그룹 소속 → 크루 연결. group_id 조건도 함께 뺀다.
+  --
+  -- ⚠ 판정을 세 토막으로 나눈 이유. 옛 is_group_member(s.group_id, auth.uid())는
+  --   세션 주인 본인에게 true라 본인 응원 시도가 이 관문을 통과해 아래
+  --   own_session에 걸렸다. is_crew_with는 자기 자신에게 항상 false라, 한 덩어리로
+  --   두면 본인 시도가 own_session이 아니라 session_not_found로 나가고 own_session
+  --   블록이 도달 불가능한 죽은 코드가 된다.
+  --   scripts/rls-test.mjs:403 "본인 세션 응원 금지 (own_session)"이 이걸 잡는다.
+  if not found or s.visibility <> 'group' then
+    raise exception 'session_not_found';
+  end if;
+  if s.user_id = auth.uid() then
+    raise exception 'own_session';
+  end if;
+  if not public.is_crew_with(s.user_id) then
+    raise exception 'session_not_found';
+  end if;
+  if s.status <> 'active' then
+    raise exception 'not_active';
+  end if;
+
+  select count(*), max(created_at) into v_count, v_last
+  from cheers where session_id = p_session_id and sender_id = auth.uid();
+
+  if v_count >= 3 then
+    raise exception 'cheer_limit';
+  end if;
+  if v_last is not null and v_last > now() - interval '10 seconds' then
+    raise exception 'cheer_cooldown';
+  end if;
+
+  insert into cheers (session_id, sender_id, receiver_id, cheer_type, message)
+  values (p_session_id, auth.uid(), s.user_id, p_cheer_type, p_message)
+  returning * into c;
+
+  -- ⬇ 0041: 포인트 지급. 실패해도 응원을 취소하지 않는다.
+  --
+  -- 감싸는 이유: award_points가 예상 못 한 오류를 내면 전체 트랜잭션이
+  -- 롤백되어 위의 cheers insert까지 사라진다. 설계 D5는 "포인트가 안 나가도
+  -- 응원은 성공"이다.
+  --
+  -- 하루 1회 상한은 여기 코드가 아니라 원장의 유니크 인덱스가 만든다
+  -- (0031:77 — user_id, reason, source_type, source_id). source_id를
+  -- "받는사람:KST날짜"로 잡았으므로 그날 두 번째 호출은 유니크 충돌이 되고
+  -- award_points가 그걸 잡아 0을 반환한다(0032:96). 즉 아래 exception 블록에
+  -- 걸리는 것은 그 밖의 예외뿐이다.
+  --
+  -- ⚠ 격리 범위는 이 호출 하나뿐이다. 넓히면 위의 권한·상태 검사 실패까지
+  --    삼켜서 비크루가 응원에 성공하게 된다.
+  begin
+    -- to_char로 날짜를 굳이 문자열화하는 이유: date::text는 DateStyle GUC를
+    -- 거친다. 기본값(ISO, MDY)에서는 2026-07-29가 나오지만 세션의 DateStyle이
+    -- SQL이나 German이면 07/29/2026처럼 다르게 나와, 같은 KST 하루인데
+    -- source_id가 갈려 하루 상한이 조용히 2회로 늘어난다. to_char은 GUC와
+    -- 무관하게 고정 포맷을 낸다 — 0032:116(evaluate_badges)의 v_today와 동일한
+    -- 이유로 동일한 방식을 쓴다.
+    v_points := public.award_points(
+      auth.uid(), 10, 'cheer_sent',
+      'cheer',
+      s.user_id::text || ':' || to_char((now() at time zone 'Asia/Seoul')::date, 'YYYY-MM-DD'),
+      null::numeric,
+      jsonb_build_object('session_id', p_session_id, 'cheer_type', p_cheer_type));
+  exception when others then
+    v_points := 0;
+    -- warning은 트랜잭션을 중단시키지 않으면서 Postgres 로그에 남는다.
+    -- 조용히 삼키면 지급이 언제부터 멈췄는지 아무도 모른다.
+    raise warning 'cheer_points_failed: sender=% receiver=% sqlstate=% msg=%',
+      auth.uid(), s.user_id, sqlstate, sqlerrm;
+  end;
+
+  -- 수신자가 응원 알림을 꺼둔 경우: 응원 행은 남기고 알림만 생략
+  select coalesce(ns.cheers, true) into v_wants
+  from (select true) one
+  left join notification_settings ns on ns.user_id = s.user_id;
+
+  if v_wants then
+    select nickname into v_nick from profiles where id = auth.uid();
+    perform notify(
+      s.user_id, auth.uid(), 'cheer_received', c.id,
+      coalesce(v_nick, '크루원') || '님의 응원 📣',
+      coalesce(p_message, p_cheer_type)
+    );
+  end if;
+
+  -- 0041: 클라이언트가 지급 여부를 추측하지 않도록 실제 결과를 함께 돌려준다.
+  return jsonb_build_object('cheer', to_jsonb(c), 'points_awarded', v_points);
+end $function$;
+
+-- ── send_crew_request ──
+CREATE OR REPLACE FUNCTION public.send_crew_request(p_target_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_me uuid := auth.uid();
+  v_nick text;
+  v_reverse crew_requests%rowtype;
+  v_id uuid;
+begin
+  if v_me is null then raise exception 'not_authenticated'; end if;
+  if p_target_id = v_me then raise exception 'self_request'; end if;
+
+  -- 쌍 단위 직렬화. 이게 없으면 (a) 서로 동시에 수락할 때 락 순서가 엇갈려
+  -- 40P01 데드락, (b) 서로 동시에 요청할 때 역방향을 못 봐서 자동수락이 불발,
+  -- (c) 빠른 두 번 탭이 request_exists 대신 23505를 그대로 뱉는다.
+  perform pg_advisory_xact_lock(
+    hashtext(least(v_me, p_target_id)::text || greatest(v_me, p_target_id)::text)
+  );
+
+  if not exists (select 1 from profiles where id = p_target_id) then
+    raise exception 'target_not_found';
+  end if;
+  if public.is_crew_with(p_target_id) then raise exception 'already_crew'; end if;
+
+  -- 거절당한 뒤 7일은 같은 사람에게 다시 못 보낸다. 거절은 조용히 처리되고(D7)
+  -- 차단도 없어서(D11), 이 가드가 없으면 요청↔거절을 무한 반복하며 상대에게
+  -- 알림을 계속 꽂을 수 있다. 콕 찌르기의 24h 쿨다운(0011)과 같은 결의 장치다.
+  -- 에러 코드를 request_exists로 재사용하는 이유: 보내는 쪽에 "이미 요청을
+  -- 보냈어요"로만 보여야 거절당했다는 사실이 드러나지 않는다(D7 유지).
+  if exists (
+    select 1 from crew_requests
+    where requester_id = v_me
+      and addressee_id = p_target_id
+      and status = 'rejected'
+      and responded_at > now() - interval '7 days'
+  ) then
+    raise exception 'request_exists';
+  end if;
+
+  -- 역방향 pending이 있으면 양쪽이 서로를 원한 것이다 → 즉시 맺는다.
+  -- 이게 없으면 "둘 다 요청했는데 아무 일도 안 일어남"이 되고, 사용자는
+  -- 원인을 알 수 없다.
+  select * into v_reverse from crew_requests
+  where requester_id = p_target_id and addressee_id = v_me
+    and status = 'pending'
+  limit 1;
+  if found then
+    perform public.accept_crew_request(v_reverse.id);
+    return jsonb_build_object('status', 'accepted', 'requestId', v_reverse.id);
+  end if;
+
+  if exists (select 1 from crew_requests
+             where requester_id = v_me and addressee_id = p_target_id
+               and status = 'pending') then
+    raise exception 'request_exists';
+  end if;
+
+  insert into crew_requests (requester_id, addressee_id)
+  values (v_me, p_target_id)
+  returning id into v_id;
+
+  select nickname into v_nick from profiles where id = v_me;
+  perform notify(
+    p_target_id, v_me, 'crew_request', v_id,
+    coalesce(v_nick, '누군가') || '님이 크루 요청을 보냈어요 🤝',
+    '수락하면 서로의 운동 소식을 받아볼 수 있어요'
+  );
+  return jsonb_build_object('status', 'pending', 'requestId', v_id);
+end $function$;
+
+-- ── session_crew_shared ──
+CREATE OR REPLACE FUNCTION public.session_crew_shared(sid uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select exists (
+    select 1 from workout_sessions s
+    where s.id = sid
+      and s.visibility = 'group'
+      and (s.user_id = (select auth.uid())    -- 0039: 자기접근 복원
+           or public.is_crew_with(s.user_id)) -- 0039
+  )
+$function$;
+
+-- ── set_updated_at ──
+CREATE OR REPLACE FUNCTION public.set_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  new.updated_at := now();
+  return new;
+end $function$;
+
+-- ── set_workout_set_completed_at ──
+CREATE OR REPLACE FUNCTION public.set_workout_set_completed_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  if not new.is_completed then
+    new.completed_at := null;
+  elsif tg_op = 'INSERT' or not old.is_completed then
+    new.completed_at := now();
+  else
+    new.completed_at := old.completed_at;
+  end if;
+  return new;
+end $function$;
+
+-- ── set_workout_verification ──
+CREATE OR REPLACE FUNCTION public.set_workout_verification(p_session_id uuid, p_source text, p_client_captured_at timestamp with time zone DEFAULT NULL::timestamp with time zone)
+ RETURNS workout_sessions
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  s workout_sessions;
+begin
+  if auth.uid() is null then
+    raise exception 'not_authenticated';
+  end if;
+  if p_source not in ('camera', 'album') then
+    raise exception 'invalid_source:%', p_source;
+  end if;
+
+  select * into s from workout_sessions
+  where id = p_session_id and user_id = auth.uid()
+  for update;
+
+  if not found then
+    raise exception 'session_not_found';
+  end if;
+  if s.status <> 'completed' then
+    raise exception 'invalid_status:%', s.status;
+  end if;
+  -- 실제 업로드된 사진이 있어야 인증 인정
+  if not exists (
+    select 1 from workout_images
+    where session_id = p_session_id and user_id = auth.uid()
+  ) then
+    raise exception 'image_not_found';
+  end if;
+
+  update workout_sessions
+  set verification_status = case p_source
+        when 'camera' then 'camera_verified'
+        else 'photo_uploaded'
+      end,
+      verification_source = p_source,
+      server_uploaded_at = now(),
+      client_captured_at = p_client_captured_at
+  where id = p_session_id
+  returning * into s;
+
+  return s;
+end $function$;
+
+-- ── shares_group_with ──
+CREATE OR REPLACE FUNCTION public.shares_group_with(uid uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select exists (
+    select 1
+    from group_members mine
+    join group_members theirs on mine.group_id = theirs.group_id
+    where mine.user_id = auth.uid() and theirs.user_id = uid
+  )
+$function$;
+
+-- ── start_challenge ──
+CREATE OR REPLACE FUNCTION public.start_challenge(p_challenge_id uuid)
+ RETURNS challenges
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare c challenges; total int; missing int; approvals int;
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  select * into c from challenges where id = p_challenge_id for update;
+  -- 0045: is_group_member → is_challenge_participant
+  if not found or not public.is_challenge_participant(p_challenge_id, auth.uid()) then
+    raise exception 'challenge_not_found';
+  end if;
+  if c.status <> 'setup' then raise exception 'invalid_status:%', c.status; end if;
+
+  -- 0045: group_members → challenge_participants (joined만)
+  select count(*) into total from challenge_participants cp
+  where cp.challenge_id = p_challenge_id and cp.status = 'joined';
+
+  -- 참가자가 0명인 상태로 시작되면 랭킹도 집계도 빈 껍데기가 된다.
+  -- create_challenge_room이 방장을 host·joined로 넣으므로 정상 경로에선 1 이상이다.
+  if total = 0 then raise exception 'no_participants'; end if;
+
+  select count(*) into missing from challenge_participants cp
+  where cp.challenge_id = p_challenge_id
+    and cp.status = 'joined'
+    and not exists (select 1 from user_goals ug
+                    where ug.challenge_id = p_challenge_id and ug.user_id = cp.user_id);
+  if missing > 0 then raise exception 'kpi_incomplete:%/%', total - missing, total; end if;
+
+  -- 전원 동의 게이트 (0025). 대상만 참가자로 바뀐다.
+  select count(*) into approvals from challenge_goal_approvals a
+  where a.challenge_id = p_challenge_id
+    and exists (select 1 from challenge_participants cp
+                where cp.challenge_id = p_challenge_id
+                  and cp.user_id = a.approver_id
+                  and cp.status = 'joined');
+  if approvals < total then raise exception 'consent_incomplete:%/%', approvals, total; end if;
+
+  update challenges set status = 'active' where id = p_challenge_id returning * into c;
+  return c;
+end $function$;
+
+-- ── start_workout ──
+CREATE OR REPLACE FUNCTION public.start_workout(p_session_id uuid)
+ RETURNS workout_sessions
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  s workout_sessions;
+  v_nick text;
+begin
+  if auth.uid() is null then
+    raise exception 'not_authenticated';
+  end if;
+
+  select * into s from workout_sessions
+  where id = p_session_id and user_id = auth.uid()
+  for update;
+
+  if not found then
+    raise exception 'session_not_found';
+  end if;
+  if s.status <> 'draft' then
+    raise exception 'invalid_status:%', s.status;
+  end if;
+  if exists (
+    select 1 from workout_sessions
+    where user_id = auth.uid() and status = 'active'
+  ) then
+    raise exception 'active_session_exists';
+  end if;
+
+  update workout_sessions
+  set status = 'active', started_at = now()
+  where id = p_session_id
+  returning * into s;
+
+  insert into workout_events (session_id, user_id, event_type)
+  values (s.id, s.user_id, 'workout_started');
+
+  -- 0039: 크루 연결 기준. group_id 조건을 뺀 이유 — 혼자모드 유저는 group_id가
+  -- null이라 지금까지 시작 알림이 한 건도 나가지 않았다. "혼자 시작 → 나중에
+  -- 크루 추가" 흐름을 실제로 성립시키는 부분이다.
+  if s.visibility = 'group' then
+    select nickname into v_nick from profiles where id = s.user_id;
+    insert into notifications (user_id, actor_id, type, reference_id, title, body)
+    select case when l.user_a = s.user_id then l.user_b else l.user_a end,
+           s.user_id, 'workout_started', s.id,
+           coalesce(v_nick, '크루원') || '님이 운동을 시작했어요 💪',
+           '응원을 보내볼까요?'
+    from crew_links l
+    where s.user_id in (l.user_a, l.user_b);
+  end if;
+
+  return s;
+end $function$;
+
+-- ── unapprove_challenge_goals ──
+CREATE OR REPLACE FUNCTION public.unapprove_challenge_goals(p_challenge_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare c challenges;
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  select * into c from challenges where id = p_challenge_id;
+  -- 0046: is_group_member → is_challenge_participant
+  if not found or not public.is_challenge_participant(p_challenge_id, auth.uid()) then
+    raise exception 'challenge_not_found';
+  end if;
+  delete from challenge_goal_approvals
+  where challenge_id = p_challenge_id and approver_id = auth.uid();
+end $function$;
+
+-- ── view_record ──
+CREATE OR REPLACE FUNCTION public.view_record(p_target_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_fifth_at timestamptz;
+  v_nick text;
+  v_wants boolean;
+  v_challenge_id uuid;
+begin
+  if auth.uid() is null then
+    raise exception 'not_authenticated';
+  end if;
+  if p_target_id = auth.uid() then
+    raise exception 'self_view';
+  end if;
+  if not public.is_crew_with(p_target_id) then  -- 0039: 그룹 → 크루 연결
+    raise exception 'not_crew';
+  end if;
+
+  -- 이번 주(KST 월요일 00:00~) 내 완료 세션을 KST 날짜로 접어,
+  -- 5번째 고유 날짜를 만든 첫 완료 시각 = 열람권 풀린 시각
+  select day_first into v_fifth_at from (
+    select min(completed_at) as day_first,
+           row_number() over (order by min(completed_at)) as rn
+    from workout_sessions
+    where user_id = auth.uid()
+      and status = 'completed' and deleted_at is null
+      and completed_at >=
+        date_trunc('week', now() at time zone 'Asia/Seoul') at time zone 'Asia/Seoul'
+    group by (completed_at at time zone 'Asia/Seoul')::date
+  ) d where rn = 5;
+
+  if v_fifth_at is null then
+    raise exception 'not_eligible';
+  end if;
+  if now() >= v_fifth_at + interval '24 hours' then
+    raise exception 'pass_expired';
+  end if;
+  if exists (
+    select 1 from record_views
+    where viewer_id = auth.uid() and viewed_at >= v_fifth_at
+  ) then
+    raise exception 'pass_used';
+  end if;
+
+  -- 둘이 함께 속한 크루의 진행 중 챌린지 (없으면 null)
+  -- 챌린지는 아직 그룹 기반이므로 이 조회는 group_members 그대로 둔다.
+  select c.id into v_challenge_id
+  from challenges c
+  where c.status = 'active'
+    and exists (select 1 from group_members gm
+                where gm.group_id = c.group_id and gm.user_id = auth.uid())
+    and exists (select 1 from group_members gm
+                where gm.group_id = c.group_id and gm.user_id = p_target_id)
+  limit 1;
+
+  insert into record_views (viewer_id, target_id, challenge_id)
+  values (auth.uid(), p_target_id, v_challenge_id);
+
+  -- 행 없음 = 알림 on (0011 notification_settings 관례)
+  select coalesce(ns.record_views, true) into v_wants
+  from (select true) one
+  left join notification_settings ns on ns.user_id = p_target_id;
+
+  if v_wants then
+    select nickname into v_nick from profiles where id = auth.uid();
+    perform notify(
+      p_target_id, auth.uid(), 'record_viewed', null,
+      coalesce(v_nick, '크루원') || '님이 회원님의 기록을 확인했어요 👀',
+      null
+    );
+  end if;
+end $function$;
+
+-- ── workout_exercise_crew_visible ──
+CREATE OR REPLACE FUNCTION public.workout_exercise_crew_visible(eid uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select exists (
+    select 1 from workout_exercises e
+    where e.id = eid and public.workout_session_crew_visible(e.session_id)
+  )
+$function$;
+
+-- ── workout_session_crew_visible ──
+CREATE OR REPLACE FUNCTION public.workout_session_crew_visible(sid uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select exists (
+    select 1 from workout_sessions s
+    where s.id = sid
+      and s.visibility = 'group'
+      and s.status = 'completed'
+      and s.deleted_at is null
+      and (s.user_id = (select auth.uid())    -- 0039: 0004가 갖고 있던 자기접근 복원
+           or public.is_crew_with(s.user_id)) -- 0039
+  )
+$function$;
+
+-- ════════════════════════════════════════════════════════════
+-- RLS 정책
+-- ════════════════════════════════════════════════════════════
+
+-- ── badge_definitions ──
+-- badge_definitions_read  [SELECT]  roles=authenticated
+--   using  : true
+-- ── challenge_goal_approvals ──
+-- approvals_select_crew  [SELECT]  roles=public
+--   using  : (is_challenge_participant(challenge_id, auth.uid()) OR (EXISTS ( SELECT 1
+   FROM challenges c
+  WHERE ((c.id = challenge_goal_approvals.challenge_id) AND is_group_member(c.group_id, auth.uid())))))
+-- ── challenge_participants ──
+-- challenge_participants_select_member  [SELECT]  roles=authenticated
+--   using  : is_challenge_participant(challenge_id, auth.uid())
+-- ── challenge_peek_picks ──
+-- challenge_peek_picks_own_select  [SELECT]  roles=authenticated
+--   using  : (viewer_id = auth.uid())
+-- ── challenges ──
+-- challenges_delete_creator_setup  [DELETE]  roles=public
+--   using  : ((created_by = auth.uid()) AND (status = 'setup'::text))
+-- challenges_insert_member  [INSERT]  roles=public
+--   check  : ((created_by = auth.uid()) AND is_group_member(group_id, auth.uid()) AND (status = 'setup'::text) AND (photo_required = true))
+-- challenges_select_member  [SELECT]  roles=public
+--   using  : (is_challenge_participant(id, auth.uid()) OR is_group_member(group_id, auth.uid()))
+-- challenges_update_creator  [UPDATE]  roles=public
+--   using  : (created_by = auth.uid())
+--   check  : (created_by = auth.uid())
+-- ── cheers ──
+-- cheers_delete_own  [DELETE]  roles=authenticated
+--   using  : (sender_id = auth.uid())
+-- cheers_select_related  [SELECT]  roles=authenticated
+--   using  : ((sender_id = auth.uid()) OR (receiver_id = auth.uid()) OR session_crew_shared(session_id))
+-- ── crew_links ──
+-- crew_links_mine_select  [SELECT]  roles=authenticated
+--   using  : ((user_a = auth.uid()) OR (user_b = auth.uid()))
+-- ── crew_requests ──
+-- crew_requests_mine_select  [SELECT]  roles=authenticated
+--   using  : ((requester_id = auth.uid()) OR (addressee_id = auth.uid()))
+-- ── exercise_catalog ──
+-- catalog_delete_own_custom  [DELETE]  roles=public
+--   using  : (created_by = auth.uid())
+-- catalog_insert_own_custom  [INSERT]  roles=public
+--   check  : (is_custom AND (created_by = auth.uid()))
+-- catalog_select_seed_or_own  [SELECT]  roles=public
+--   using  : ((created_by IS NULL) OR (created_by = auth.uid()))
+-- ── group_members ──
+-- group_members_delete_self_or_owner  [DELETE]  roles=public
+--   using  : ((user_id = auth.uid()) OR (EXISTS ( SELECT 1
+   FROM groups g
+  WHERE ((g.id = group_members.group_id) AND (g.owner_id = auth.uid())))))
+-- group_members_insert_owner_self  [INSERT]  roles=public
+--   check  : ((user_id = auth.uid()) AND (EXISTS ( SELECT 1
+   FROM groups g
+  WHERE ((g.id = group_members.group_id) AND (g.owner_id = auth.uid())))))
+-- group_members_select_member  [SELECT]  roles=public
+--   using  : is_group_member(group_id, auth.uid())
+-- ── groups ──
+-- groups_delete_owner  [DELETE]  roles=public
+--   using  : (owner_id = auth.uid())
+-- groups_insert_owner  [INSERT]  roles=public
+--   check  : (owner_id = auth.uid())
+-- groups_select_member_or_owner  [SELECT]  roles=public
+--   using  : ((owner_id = auth.uid()) OR is_group_member(id, auth.uid()))
+-- groups_update_owner  [UPDATE]  roles=public
+--   using  : (owner_id = auth.uid())
+--   check  : (owner_id = auth.uid())
+-- ── level_definitions ──
+-- level_definitions_read  [SELECT]  roles=authenticated
+--   using  : true
+-- ── notification_settings ──
+-- notif_settings_own  [ALL]  roles=authenticated
+--   using  : (user_id = auth.uid())
+--   check  : (user_id = auth.uid())
+-- ── notifications ──
+-- notifications_select_own  [SELECT]  roles=authenticated
+--   using  : (user_id = auth.uid())
+-- notifications_update_own  [UPDATE]  roles=authenticated
+--   using  : (user_id = auth.uid())
+--   check  : (user_id = auth.uid())
+-- ── point_transactions ──
+-- point_transactions_own_select  [SELECT]  roles=authenticated
+--   using  : (user_id = auth.uid())
+-- ── profiles ──
+-- profiles_insert_own  [INSERT]  roles=public
+--   check  : (id = auth.uid())
+-- profiles_select_own_or_crew  [SELECT]  roles=public
+--   using  : ((id = auth.uid()) OR is_crew_with(id) OR shares_group_with(id))
+-- profiles_update_own  [UPDATE]  roles=public
+--   using  : (id = auth.uid())
+--   check  : (id = auth.uid())
+-- ── push_subscriptions ──
+-- push_subscriptions_own  [ALL]  roles=authenticated
+--   using  : (user_id = auth.uid())
+--   check  : (user_id = auth.uid())
+-- ── reactions ──
+-- reactions_delete_own  [DELETE]  roles=authenticated
+--   using  : (user_id = auth.uid())
+-- reactions_insert_crew  [INSERT]  roles=authenticated
+--   check  : ((user_id = auth.uid()) AND workout_session_crew_visible(session_id))
+-- reactions_select_visible  [SELECT]  roles=authenticated
+--   using  : ((user_id = auth.uid()) OR workout_session_crew_visible(session_id))
+-- ── record_views ──
+-- record_views_select_related  [SELECT]  roles=authenticated
+--   using  : ((viewer_id = auth.uid()) OR (target_id = auth.uid()))
+-- ── streak_shield_transactions ──
+-- streak_shield_own_select  [SELECT]  roles=authenticated
+--   using  : (user_id = auth.uid())
+-- ── user_badges ──
+-- user_badges_own_select  [SELECT]  roles=authenticated
+--   using  : (user_id = auth.uid())
+-- ── user_goals ──
+-- goals_delete_own_setup  [DELETE]  roles=public
+--   using  : ((user_id = auth.uid()) AND challenge_in_setup(challenge_id))
+-- goals_insert_own_setup  [INSERT]  roles=public
+--   check  : ((user_id = auth.uid()) AND challenge_in_setup(challenge_id) AND (EXISTS ( SELECT 1
+   FROM challenges c
+  WHERE ((c.id = user_goals.challenge_id) AND (c.group_id = user_goals.group_id)))) AND is_group_member(group_id, auth.uid()))
+-- goals_select_member  [SELECT]  roles=public
+--   using  : (is_challenge_participant(challenge_id, auth.uid()) OR is_group_member(group_id, auth.uid()))
+-- goals_update_own_setup  [UPDATE]  roles=public
+--   using  : ((user_id = auth.uid()) AND challenge_in_setup(challenge_id))
+--   check  : ((user_id = auth.uid()) AND challenge_in_setup(challenge_id))
+-- ── user_progress ──
+-- user_progress_own_select  [SELECT]  roles=authenticated
+--   using  : (user_id = auth.uid())
+-- ── user_unlocks ──
+-- user_unlocks_own_select  [SELECT]  roles=authenticated
+--   using  : (user_id = auth.uid())
+-- ── user_wallet ──
+-- user_wallet_own_select  [SELECT]  roles=authenticated
+--   using  : (user_id = auth.uid())
+-- ── workout_events ──
+-- events_select_own_or_crew  [SELECT]  roles=authenticated
+--   using  : ((user_id = auth.uid()) OR session_crew_shared(session_id))
+-- ── workout_exercises ──
+-- exercises_delete_own  [DELETE]  roles=public
+--   using  : owns_workout_session(session_id)
+-- exercises_insert_own  [INSERT]  roles=public
+--   check  : owns_workout_session(session_id)
+-- exercises_select_own_or_crew  [SELECT]  roles=public
+--   using  : (owns_workout_session(session_id) OR workout_session_crew_visible(session_id))
+-- exercises_update_own  [UPDATE]  roles=public
+--   using  : owns_workout_session(session_id)
+--   check  : owns_workout_session(session_id)
+-- ── workout_images ──
+-- images_delete_own  [DELETE]  roles=public
+--   using  : (user_id = auth.uid())
+-- images_insert_own  [INSERT]  roles=public
+--   check  : ((user_id = auth.uid()) AND owns_workout_session(session_id) AND ((storage.foldername(image_path))[1] = (auth.uid())::text) AND ((storage.foldername(image_path))[2] = (session_id)::text) AND (EXISTS ( SELECT 1
+   FROM storage.objects stored
+  WHERE ((stored.bucket_id = 'workout-images'::text) AND (stored.name = workout_images.image_path)))))
+-- images_select_own_or_crew  [SELECT]  roles=public
+--   using  : ((user_id = auth.uid()) OR workout_session_crew_visible(session_id))
+-- ── workout_plans ──
+-- workout_plans_delete_own  [DELETE]  roles=public
+--   using  : (user_id = auth.uid())
+-- workout_plans_insert_own  [INSERT]  roles=public
+--   check  : ((user_id = auth.uid()) AND ((source_session_id IS NULL) OR owns_workout_session(source_session_id)) AND (plan_date >= ((now() AT TIME ZONE COALESCE(( SELECT profiles.timezone
+   FROM profiles
+  WHERE (profiles.id = auth.uid())), 'Asia/Seoul'::text)))::date))
+-- workout_plans_select_own  [SELECT]  roles=public
+--   using  : (user_id = auth.uid())
+-- workout_plans_update_own  [UPDATE]  roles=public
+--   using  : (user_id = auth.uid())
+--   check  : ((user_id = auth.uid()) AND ((source_session_id IS NULL) OR owns_workout_session(source_session_id)) AND (plan_date >= ((now() AT TIME ZONE COALESCE(( SELECT profiles.timezone
+   FROM profiles
+  WHERE (profiles.id = auth.uid())), 'Asia/Seoul'::text)))::date))
+-- ── workout_sessions ──
+-- sessions_delete_own  [DELETE]  roles=public
+--   using  : (user_id = auth.uid())
+-- sessions_insert_own_draft  [INSERT]  roles=public
+--   check  : ((user_id = auth.uid()) AND (status = 'draft'::text) AND (started_at IS NULL) AND (completed_at IS NULL) AND ((group_id IS NULL) OR is_group_member(group_id, auth.uid())))
+-- sessions_select_own_or_crew  [SELECT]  roles=public
+--   using  : ((user_id = auth.uid()) OR ((visibility = 'group'::text) AND (status = 'completed'::text) AND (deleted_at IS NULL) AND is_crew_with(user_id)))
+-- sessions_update_own  [UPDATE]  roles=public
+--   using  : (user_id = auth.uid())
+--   check  : (user_id = auth.uid())
+-- ── workout_sets ──
+-- sets_delete_own  [DELETE]  roles=public
+--   using  : owns_workout_exercise(workout_exercise_id)
+-- sets_insert_own  [INSERT]  roles=public
+--   check  : owns_workout_exercise(workout_exercise_id)
+-- sets_select_own_or_crew  [SELECT]  roles=public
+--   using  : (owns_workout_exercise(workout_exercise_id) OR workout_exercise_crew_visible(workout_exercise_id))
+-- sets_update_own  [UPDATE]  roles=public
+--   using  : owns_workout_exercise(workout_exercise_id)
+--   check  : owns_workout_exercise(workout_exercise_id)
+-- ── xp_transactions ──
+-- xp_transactions_own_select  [SELECT]  roles=authenticated
+--   using  : (user_id = auth.uid())
+
+-- ════════════════════════════════════════════════════════════
+-- 인덱스
+-- ════════════════════════════════════════════════════════════
+
+-- CREATE UNIQUE INDEX badge_definitions_pkey ON public.badge_definitions USING btree (badge_key);
+-- CREATE UNIQUE INDEX challenge_goal_approvals_pkey ON public.challenge_goal_approvals USING btree (challenge_id, approver_id);
+-- CREATE UNIQUE INDEX challenge_participants_one_host ON public.challenge_participants USING btree (challenge_id) WHERE (role = 'host'::text);
+-- CREATE UNIQUE INDEX challenge_participants_pkey ON public.challenge_participants USING btree (challenge_id, user_id);
+-- CREATE INDEX challenge_participants_user_idx ON public.challenge_participants USING btree (user_id, status);
+-- CREATE UNIQUE INDEX challenge_peek_picks_pkey ON public.challenge_peek_picks USING btree (viewer_id, challenge_id, pick_date);
+-- CREATE UNIQUE INDEX challenges_invite_code_key ON public.challenges USING btree (invite_code) WHERE (invite_code IS NOT NULL);
+-- CREATE UNIQUE INDEX challenges_pkey ON public.challenges USING btree (id);
+-- CREATE UNIQUE INDEX cheers_pkey ON public.cheers USING btree (id);
+-- CREATE INDEX cheers_session_sender_idx ON public.cheers USING btree (session_id, sender_id, created_at DESC);
+-- CREATE UNIQUE INDEX crew_links_pkey ON public.crew_links USING btree (user_a, user_b);
+-- CREATE INDEX crew_links_user_b_idx ON public.crew_links USING btree (user_b);
+-- CREATE INDEX crew_requests_inbox_idx ON public.crew_requests USING btree (addressee_id, status);
+-- CREATE INDEX crew_requests_outbox_idx ON public.crew_requests USING btree (requester_id, status);
+-- CREATE UNIQUE INDEX crew_requests_pending_unique ON public.crew_requests USING btree (requester_id, addressee_id) WHERE (status = 'pending'::text);
+-- CREATE UNIQUE INDEX crew_requests_pkey ON public.crew_requests USING btree (id);
+-- CREATE UNIQUE INDEX exercise_catalog_custom_name ON public.exercise_catalog USING btree (created_by, name) WHERE (created_by IS NOT NULL);
+-- CREATE UNIQUE INDEX exercise_catalog_pkey ON public.exercise_catalog USING btree (id);
+-- CREATE UNIQUE INDEX exercise_catalog_seed_name ON public.exercise_catalog USING btree (name) WHERE (created_by IS NULL);
+-- CREATE UNIQUE INDEX group_members_group_id_user_id_key ON public.group_members USING btree (group_id, user_id);
+-- CREATE UNIQUE INDEX group_members_pkey ON public.group_members USING btree (id);
+-- CREATE UNIQUE INDEX groups_invite_code_key ON public.groups USING btree (invite_code);
+-- CREATE UNIQUE INDEX groups_pkey ON public.groups USING btree (id);
+-- CREATE UNIQUE INDEX level_definitions_pkey ON public.level_definitions USING btree (level);
+-- CREATE UNIQUE INDEX level_definitions_required_xp_unique ON public.level_definitions USING btree (required_total_xp);
+-- CREATE UNIQUE INDEX notification_settings_pkey ON public.notification_settings USING btree (user_id);
+-- CREATE UNIQUE INDEX notifications_dedupe_key_uidx ON public.notifications USING btree (dedupe_key);
+-- CREATE UNIQUE INDEX notifications_pkey ON public.notifications USING btree (id);
+-- CREATE INDEX notifications_unread_idx ON public.notifications USING btree (user_id) WHERE (read_at IS NULL);
+-- CREATE INDEX notifications_user_time_idx ON public.notifications USING btree (user_id, created_at DESC);
+-- CREATE UNIQUE INDEX point_transactions_pkey ON public.point_transactions USING btree (id);
+-- CREATE UNIQUE INDEX point_transactions_source_unique ON public.point_transactions USING btree (user_id, reason, source_type, source_id) WHERE (transaction_type = 'earn'::text);
+-- CREATE INDEX point_transactions_user_recent ON public.point_transactions USING btree (user_id, created_at DESC);
+-- CREATE UNIQUE INDEX profiles_nickname_unique ON public.profiles USING btree (lower(TRIM(BOTH FROM nickname)));
+-- CREATE UNIQUE INDEX profiles_pkey ON public.profiles USING btree (id);
+-- CREATE UNIQUE INDEX push_subscriptions_endpoint_key ON public.push_subscriptions USING btree (endpoint);
+-- CREATE UNIQUE INDEX push_subscriptions_pkey ON public.push_subscriptions USING btree (id);
+-- CREATE INDEX push_subscriptions_user_idx ON public.push_subscriptions USING btree (user_id);
+-- CREATE UNIQUE INDEX reactions_pkey ON public.reactions USING btree (id);
+-- CREATE UNIQUE INDEX reactions_session_id_user_id_reaction_type_key ON public.reactions USING btree (session_id, user_id, reaction_type);
+-- CREATE INDEX reactions_session_idx ON public.reactions USING btree (session_id);
+-- CREATE UNIQUE INDEX record_views_pkey ON public.record_views USING btree (id);
+-- CREATE UNIQUE INDEX streak_shield_source_unique ON public.streak_shield_transactions USING btree (user_id, reason, source_type, source_id);
+-- CREATE UNIQUE INDEX streak_shield_transactions_pkey ON public.streak_shield_transactions USING btree (id);
+-- CREATE UNIQUE INDEX user_badges_pkey ON public.user_badges USING btree (user_id, badge_key, period_key);
+-- CREATE UNIQUE INDEX user_goals_pkey ON public.user_goals USING btree (id);
+-- CREATE UNIQUE INDEX user_goals_user_id_challenge_id_goal_type_key ON public.user_goals USING btree (user_id, challenge_id, goal_type);
+-- CREATE UNIQUE INDEX user_progress_pkey ON public.user_progress USING btree (user_id);
+-- CREATE UNIQUE INDEX user_unlocks_pkey ON public.user_unlocks USING btree (user_id, unlock_key);
+-- CREATE UNIQUE INDEX user_wallet_pkey ON public.user_wallet USING btree (user_id);
+-- CREATE UNIQUE INDEX workout_events_pkey ON public.workout_events USING btree (id);
+-- CREATE INDEX workout_events_session_idx ON public.workout_events USING btree (session_id);
+-- CREATE INDEX workout_events_user_time_idx ON public.workout_events USING btree (user_id, created_at DESC);
+-- CREATE UNIQUE INDEX workout_exercises_pkey ON public.workout_exercises USING btree (id);
+-- CREATE INDEX workout_exercises_session ON public.workout_exercises USING btree (session_id, sort_order);
+-- CREATE UNIQUE INDEX workout_images_pkey ON public.workout_images USING btree (id);
+-- CREATE UNIQUE INDEX workout_images_session_id_key ON public.workout_images USING btree (session_id);
+-- CREATE UNIQUE INDEX workout_plans_pkey ON public.workout_plans USING btree (id);
+-- CREATE INDEX workout_plans_user_date ON public.workout_plans USING btree (user_id, plan_date);
+-- CREATE UNIQUE INDEX workout_plans_user_id_plan_date_key ON public.workout_plans USING btree (user_id, plan_date);
+-- CREATE UNIQUE INDEX workout_sessions_one_active ON public.workout_sessions USING btree (user_id) WHERE (status = 'active'::text);
+-- CREATE UNIQUE INDEX workout_sessions_pkey ON public.workout_sessions USING btree (id);
+-- CREATE INDEX workout_sessions_user_completed ON public.workout_sessions USING btree (user_id, completed_at DESC) WHERE (status = 'completed'::text);
+-- CREATE UNIQUE INDEX workout_sets_pkey ON public.workout_sets USING btree (id);
+-- CREATE UNIQUE INDEX workout_sets_workout_exercise_id_set_number_key ON public.workout_sets USING btree (workout_exercise_id, set_number);
+-- CREATE UNIQUE INDEX xp_daily_workout_reward_unique ON public.xp_transactions USING btree (user_id, effective_date, reward_group) WHERE ((transaction_type = 'earn'::text) AND (reward_group = 'daily_workout'::text));
+-- CREATE UNIQUE INDEX xp_transactions_pkey ON public.xp_transactions USING btree (id);
+-- CREATE UNIQUE INDEX xp_transactions_source_unique ON public.xp_transactions USING btree (user_id, reason, source_type, source_id) WHERE (transaction_type = 'earn'::text);
+-- CREATE INDEX xp_transactions_user_recent ON public.xp_transactions USING btree (user_id, created_at DESC);

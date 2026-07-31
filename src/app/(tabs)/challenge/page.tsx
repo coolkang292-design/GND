@@ -40,6 +40,7 @@ import {
   getMyChallenges,
   getMyPreviousGoals,
   getPeriodStatsByUser,
+  joinChallengeWithCode,
   saveMyGoals,
   startChallenge,
   unapproveChallengeGoals,
@@ -74,6 +75,8 @@ function errorMessage(e: unknown): string {
   if (msg.includes("no_group_yet"))
     return "아직 크루가 없어요. 홈에서 크루를 만들거나 참여해 주세요";
   if (msg.includes("already_joined")) return "이미 참가한 챌린지예요";
+  if (msg.includes("invalid_invite_code")) return "링크가 올바르지 않아요";
+  if (msg.includes("not_host")) return "방장만 초대 링크를 만들 수 있어요";
   if (msg.includes("not_invited")) return "초대받지 않은 챌린지예요";
   if (msg.includes("invalid_status"))
     return "챌린지 상태가 맞지 않아요. 새로고침해 주세요";
@@ -144,6 +147,41 @@ function ChallengeScreen({ userId }: { userId: string }) {
   useEffect(() => {
     selectedIdRef.current = selectedId;
   }, [selectedId]);
+
+  // 0049: 초대 링크(/challenge?join=GND-XXXXX)로 들어온 경우 먼저 참가시킨다.
+  // 아래 로딩보다 앞서야 목록에 그 챌린지가 담겨 바로 보인다.
+  //
+  // 처리 후 주소에서 join을 지운다 — 안 지우면 새로고침·뒤로가기마다 다시 시도해
+  // already_joined 토스트가 반복된다.
+  const [joinHandled, setJoinHandled] = useState(false);
+  useEffect(() => {
+    if (joinHandled) return;
+    let cancelled = false;
+    (async () => {
+      const code = new URLSearchParams(window.location.search).get("join");
+      if (!code) {
+        if (!cancelled) setJoinHandled(true);
+        return;
+      }
+      try {
+        const r = await joinChallengeWithCode(code);
+        if (cancelled) return;
+        setSelectedId(r.challengeId);
+        showToast(`${r.challengeName}에 참가했어요! 목표를 세워 주세요 🎯`);
+      } catch (e) {
+        if (!cancelled) showToast(errorMessage(e));
+      } finally {
+        if (!cancelled) {
+          window.history.replaceState({}, "", window.location.pathname);
+          setJoinHandled(true);
+          reload();
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [joinHandled, showToast, reload]);
 
   useEffect(() => {
     let cancelled = false;

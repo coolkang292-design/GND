@@ -29,6 +29,20 @@ describe("InviteSheet — 노출 조건", () => {
   });
 });
 
+describe("InviteSheet — 초대 링크", () => {
+  it("링크 복사 버튼이 있다 (크루 밖 사람을 부르는 경로)", () => {
+    expect(html("host", "setup")).toContain("초대 링크 복사하기");
+  });
+
+  it("링크로 참가하면 서로 크루가 된다는 것을 화면에 알린다", () => {
+    const out = html("host", "setup");
+    // 이 경고는 뺄 수 없다. crew_links에 challenge_id가 없어 챌린지가 끝나도
+    // 관계가 남는데(설계 D5), 문서에만 적으면 아무도 안 읽는다.
+    expect(out).toContain("서로 크루가 돼요");
+    expect(out).toContain("아는 사람에게만");
+  });
+});
+
 describe("inviteError — 서버 오류 코드를 사람 말로", () => {
   const cases: [string, string][] = [
     ["already_invited", "이미 초대했거나 참가 중이에요"],

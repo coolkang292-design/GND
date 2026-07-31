@@ -317,6 +317,36 @@ export async function acceptChallengeInvite(challengeId: string): Promise<void> 
   if (error) throw error;
 }
 
+/**
+ * 초대 링크용 코드 발급 (host · setup만). 멱등 — 이미 있으면 그대로 돌려준다.
+ *
+ * 다시 누를 때마다 코드가 바뀌면 먼저 보낸 링크가 죽으므로 서버가 멱등이다.
+ */
+export async function issueChallengeInviteCode(challengeId: string): Promise<string> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase.rpc("issue_challenge_invite_code", {
+    p_challenge_id: challengeId,
+  });
+  if (error) throw error;
+  return data as string;
+}
+
+/**
+ * 초대 링크로 참가. 방장 승인 없이 바로 joined가 되고, 기존 참가자 전원과
+ * crew_links가 맺어진다(설계 D5) — 랭킹판에서 서로 닉네임이 보이려면 필요하다.
+ */
+export async function joinChallengeWithCode(
+  code: string,
+): Promise<{ challengeId: string; challengeName: string; crewLinked: number }> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase.rpc("join_challenge_with_code", {
+    p_code: code,
+  });
+  if (error) throw error;
+  const r = data as { challengeId: string; challengeName: string; crewLinked: number };
+  return r;
+}
+
 /** 거절 — 참가 행을 지운다. 지우므로 읽기 권한도 함께 사라진다 */
 export async function declineChallengeInvite(challengeId: string): Promise<void> {
   const supabase = getSupabaseBrowserClient();
