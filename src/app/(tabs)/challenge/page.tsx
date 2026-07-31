@@ -169,7 +169,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
       const [groups, profile, myChallenges] = await Promise.all([
         getMyGroups(),
         getMyProfile(userId),
-        getMyChallenges(),
+        getMyChallenges(userId),
       ]);
       if (cancelled) return;
       const g = groups[0] ?? null;
@@ -528,6 +528,21 @@ function ChallengeScreen({ userId }: { userId: string }) {
         selectedId={selectedId}
         onSelect={setSelectedId}
       />
+
+      {/*
+        0044: 개수 제한이 풀렸으므로 이미 챌린지가 있어도 새로 만들 수 있어야 한다.
+        아래 "챌린지 없음" 자리의 생성 버튼은 !challenge일 때만 뜨는데, 그러면
+        하나라도 있는 순간 만들 길이 사라진다 — 이번 개편의 본체가 바로 그
+        제한을 푸는 것이라 여기 상시 진입점을 둔다. 개수 상한은 없다.
+      */}
+      {group && challenges.length > 0 && (
+        <button
+          onClick={() => openSheet("create")}
+          className="h-11 rounded-card border border-line bg-surface text-[13px] font-bold text-muted"
+        >
+          ＋ 챌린지 하나 더 만들기
+        </button>
+      )}
 
       {!group && challenges.length === 0 && (
         <p className="pt-8 text-center text-sm text-muted">

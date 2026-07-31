@@ -271,10 +271,14 @@ try {
   const secondId = r.json?.id;
 
   // 목록에 둘 다 오는가 — 화면의 "둘 다 보인다"에 대응하는 데이터 쪽 근거다.
+  // ⚠ getMyChallenges와 **같은 방식으로** user_id를 걸어 조회한다. RLS는 내가
+  //   낀 챌린지의 참가자 행을 전부 열어 주므로(명단 조회에 필요), 필터 없이
+  //   조회하면 참가자 N명짜리 챌린지 하나가 N개로 보인다. 2026-07-31에 실제로
+  //   그 상태로 배포됐고 화면에 같은 챌린지가 3개 떴다.
   const mine = await api(
     a.token,
     "GET",
-    "/rest/v1/challenge_participants?select=challenge_id,role,status",
+    `/rest/v1/challenge_participants?select=challenge_id,role,status&user_id=eq.${a.id}`,
   );
   const myRows = Array.isArray(mine.json) ? mine.json : [];
   const myIds = myRows.map((p) => p.challenge_id);
@@ -282,6 +286,24 @@ try {
     "[21b] 내 참가 목록에 두 챌린지가 모두 있다",
     myIds.includes(chId) && myIds.includes(secondId),
     `chId=${chId} second=${secondId} 목록=${JSON.stringify(myIds)}`,
+  );
+  check(
+    "[21b-2] 내 목록에 챌린지당 정확히 1행 (참가자 수만큼 중복되지 않는다)",
+    myIds.length === new Set(myIds).size && myIds.length === 2,
+    `${myIds.length}행 · 고유 ${new Set(myIds).size}개 — ${JSON.stringify(myRows)}`,
+  );
+
+  // 필터를 빼면 실제로 늘어나는지 확인해, 위 단언이 공허하지 않음을 보인다.
+  const unfiltered = await api(
+    a.token,
+    "GET",
+    "/rest/v1/challenge_participants?select=challenge_id",
+  );
+  const unfilteredRows = Array.isArray(unfiltered.json) ? unfiltered.json : [];
+  check(
+    "[21b-3] user_id 필터를 빼면 남의 참가자 행까지 온다 (필터가 필수인 이유)",
+    unfilteredRows.length > myRows.length,
+    `필터 없음 ${unfilteredRows.length}행 vs 내 것 ${myRows.length}행 — 같으면 RLS 전제가 바뀐 것이니 주석을 갱신하라`,
   );
 
   const hostRow = myRows.find((p) => p.challenge_id === secondId);

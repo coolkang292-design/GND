@@ -78,12 +78,22 @@ export type MyChallenge = Challenge & {
  * invited(아직 수락 안 함)도 포함한다 — 화면이 "초대받았어요"를 보여줘야 한다.
  * dropped는 목표 0개로 명단에서 빠진 사람이다. 결과를 볼 수는 있어야 하므로
  * 역시 포함하고, 구분은 myStatus로 화면이 한다.
+ *
+ * ⚠ `user_id` 필터가 반드시 있어야 한다. challenge_participants의 RLS
+ * (`0042:77`)는 `is_challenge_participant(challenge_id, auth.uid())`라, 내가 낀
+ * 챌린지의 **모든 참가자 행**을 읽게 해 준다(명단 조회에 필요해서 그렇다).
+ * 필터 없이 쓰면 참가자 3명짜리 챌린지 하나가 **같은 챌린지 3개**로 보이고,
+ * myRole·myStatus에 남의 값이 들어온다. 2026-07-31에 실제로 그렇게 배포됐다.
  */
-export async function getMyChallenges(client?: SupabaseClient): Promise<MyChallenge[]> {
+export async function getMyChallenges(
+  userId: string,
+  client?: SupabaseClient,
+): Promise<MyChallenge[]> {
   const supabase = client ?? getSupabaseBrowserClient();
   const { data, error } = await supabase
     .from("challenge_participants")
     .select("role, status, challenges!inner(*)")
+    .eq("user_id", userId)
     .neq("challenges.status", "cancelled");
   if (error) throw error;
 

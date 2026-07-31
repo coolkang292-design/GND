@@ -48,7 +48,7 @@ export function ChallengePerformanceCard({
         // 0044: 챌린지는 그룹이 아니라 참가 사실로 묶인다. 대표를 고르는 규칙은
         // 화면끼리 같아야 한다(pickPrimaryRow) — 어긋나면 홈과 챌린지 탭이 서로
         // 다른 챌린지를 보여준다.
-        const ch = pickPrimaryRow(await getMyChallenges());
+        const ch = pickPrimaryRow(await getMyChallenges(userId));
         if (!ch || ch.status !== "active") {
           if (!cancelled) setReady(true);
           return;

@@ -58,7 +58,7 @@ export function KingCard({
         // 열람권이 0039로 크루 기준이 됐으므로 후보도 크루다. 0044부터 챌린지는
         // 그룹이 아니라 참가 사실로 묶이므로 그룹 조회가 필요 없다.
         const [challenges, crew] = await Promise.all([
-          getMyChallenges(),
+          getMyChallenges(userId),
           getCrewProfiles(userId),
         ]);
         if (cancelled) return;
