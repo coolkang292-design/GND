@@ -80,12 +80,28 @@ check("A가 크루 생성", gA.status === 200 && group?.invite_code?.startsWith(
 const join = await api(B.token, "POST", "/rest/v1/rpc/join_group_with_code", { p_code: group.invite_code });
 check("B가 크루 참여", join.status === 200, JSON.stringify(join.json));
 
-const chIns = await api(A.token, "POST", "/rest/v1/challenges", {
-  group_id: group.id, name: "동의 챌린지", start_date: "2026-08-01", end_date: "2026-09-30",
+// 0044부터 챌린지 생성은 create_challenge_room RPC뿐이다. 직접 insert로 만들면
+// challenge_participants에 host 행이 안 생기고, 0046부터 동의·시작·확정이
+// 전부 is_challenge_participant를 보므로 그 챌린지는 challenge_not_found로
+// 아무것도 못 한다. 앱도 이 RPC만 부른다(createChallenge는 0044에서 삭제).
+const chIns = await api(A.token, "POST", "/rest/v1/rpc/create_challenge_room", {
+  p_name: "동의 챌린지", p_start_date: "2026-08-01", p_end_date: "2026-09-30",
 });
-const ch = chIns.json?.[0];
-check("A가 챌린지 생성(setup)", chIns.status === 201 && ch?.status === "setup", JSON.stringify(chIns.json));
+const ch = chIns.json;
+check("A가 챌린지 생성(setup)", chIns.status === 200 && ch?.status === "setup", JSON.stringify(chIns.json));
 const CID = ch.id;
+
+// B를 참가자로 만든다. 0046부터 "전원"의 뜻이 그룹 멤버가 아니라 참가자다 —
+// 초대·수락을 거치지 않으면 B는 동의 대상에 아예 들어오지 않아, 이 스크립트가
+// 검증하려는 2인 동의 게이트가 성립하지 않는다.
+const inv = await api(A.token, "POST", "/rest/v1/rpc/invite_to_challenge", {
+  p_challenge_id: CID, p_target_id: B.id,
+});
+check("A가 B를 챌린지에 초대", inv.status === 200, JSON.stringify(inv.json));
+const accept = await api(B.token, "POST", "/rest/v1/rpc/accept_challenge_invite", {
+  p_challenge_id: CID,
+});
+check("B가 수락 → 참가자 2명", accept.status === 200, JSON.stringify(accept.json));
 
 // ── S7: 목표 미세팅 상태에서 approve → kpi_incomplete ──────────
 console.log("\n── S7: 목표 세팅 전 동의 시도 ──");
