@@ -6,7 +6,7 @@
 ## 🚧 2026-08-02 — 나만의 루틴 + 자주 한 운동 + 달력 계획 (코드 ✅ · **DB 미적용** ⏳ · **화면 확인 대기** ⏳ · 미배포)
 
 설계: [`docs/superpowers/specs/2026-08-02-routines-frequent-exercises-calendar-planning-design.md`](docs/superpowers/specs/2026-08-02-routines-frequent-exercises-calendar-planning-design.md)
-커밋: `646e080`(②③) · `d2a8fcf`(① 0056)
+커밋: `646e080`(②③) · `0cb0853`(① 0056) · `2183dba`(루틴 미적용 시 노출 버그) · 0057 분리
 
 사용자 지시 3건. 착수 전 실측에서 **셋의 상태가 전혀 달랐다.**
 
@@ -29,11 +29,21 @@
 - **검증 실측**: unit **895/895**(78파일, 신규 50건) · typecheck ✅ · lint 0 · build ✅
   - 신규 단언은 **일부러 고장내서 실제로 실패하는 것까지 확인**했다: 90일 창을 `<=`로 바꾸면 1건, 세션 내 중복 제거를 빼면 1건, 달력을 옛 `disabled` 조건으로 되돌리면 **3건**이 실패한다
   - `.worktrees/**`를 eslint `globalIgnores`에 넣었다. `".next/**"`는 루트만 잡아서 다른 세션 워크트리의 빌드 산출물 때문에 `pnpm lint`가 **1191건**을 뱉고 있었다 — 게이트를 읽을 수 없는 상태였다
-- ⏳ **남은 일 (사용자)**
-  1. **0056을 SQL Editor에서 Run** — 에이전트는 DDL을 못 돌린다. 파일 끝에 확인용 select가 붙어 있다(기대: `routine_slot_1=(12,active)`, `routine_slot_2=(27,active)`)
-  2. 적용 후 `node scripts/rls-test.mjs` — 루틴 단언 10건이 새로 들어갔다. **`CLAUDE.md`의 기준선 표에 125를 ⏳(예상치)로 적어 뒀으니 실제 숫자로 고칠 것**
-  3. 적용 후 `pnpm db:snapshot`으로 `docs/db-current-schema.sql` 갱신
-  4. **개발 서버 화면 확인** — 이 세션에 브라우저 자동화 도구가 없어 에이전트가 눌러 볼 수 없다. 확인 항목표는 설계 문서 §완료 조건에 있다
+- **개발 서버 확인에서 사용자가 잡은 실버그 (`2183dba`)** — 0056 미적용 상태로 루틴을 저장하니 `Could not find the table 'public.workout_routines' in the schema cache`가 그대로 토스트에 떴다
+  - 원인은 메시지가 아니라 그 앞이다. 기록 페이지가 `routines`를 **`[]`로 초기화**해 둬서 조회가 실패해도 값이 `[]`(= "루틴 0개"라는 **정상 상태**)로 남았다. `routinesEnabled = Boolean(routines && onPickRoutine)`이 항상 true라 탭도 저장 버튼도 멀쩡히 떴다. "적용 전이면 루틴 탭만 비고 넘어간다"고 **주석까지 달아 뒀지만 실제로는 그렇게 동작하지 않았다**
+  - ⚠️ **피커 테스트가 못 잡은 이유**: 테스트는 `routines={undefined}`를 직접 넘겼는데 **기록 페이지에는 undefined를 넘기는 경로가 아예 없었다.** 컴포넌트는 맞았고 배선이 틀렸다 — 단위 테스트가 구조적으로 못 보는 자리다
+  - `WorkoutRoutine[] | null`로 바꿔 **null = 사용 불가**를 명시했다. 회귀 테스트는 `"빈 배열과 '사용 불가'를 구별한다"`
+- **마이그레이션을 0056/0057로 쪼갰다 (사용자 질문에서 드러남)** — "개발 서버 테스트에도 SQL을 실행해야 하냐"는 물음에 답하다 보니, 0056에 **Run 시점이 다른 두 가지**가 섞여 있었다
+  - 이 프로젝트는 **스테이징 DB가 없어** `pnpm dev`가 운영 Supabase에 그대로 붙는다. 개발 확인을 하려면 그 DB에 테이블이 실제로 있어야 하고, 그 DB가 곧 운영 DB다
+  - 그래서 `level_definitions`의 `routine_slot_1/2` → `active` 전환을 **0057로 분리**했다. 0056과 같이 돌리면 **아직 루틴이 없는 운영 앱의 '레벨 혜택'에 "해금됨"이 즉시 뜬다** — 0022가 `coming_soon`을 만든 이유가 정확히 그거다
+  - **0057을 안 돌려도 슬롯 한도는 정상이다.** `routineSlotLimit()`과 서버 트리거가 **둘 다 `reward_key`만 보고 `reward_status`는 보지 않는다.** 0057은 순수하게 화면 문구만 바꾼다
+- ⏳ **남은 일 (사용자) — 순서가 중요하다**
+  1. **0056을 SQL Editor에서 Run** (테이블. 언제 돌려도 안전하다). 파일 끝 확인 select 기대: 1행, `rls_enabled=true`, 트리거 2개, 정책 4개
+  2. **개발 서버 화면 확인** — 0056만으로 루틴이 전부 동작한다. 이 세션에 브라우저 자동화 도구가 없어 에이전트가 눌러 볼 수 없다. 항목표는 설계 문서 §완료 조건
+  3. `node scripts/rls-test.mjs` — 루틴 단언 10건이 새로 들어갔다. **`CLAUDE.md` 기준선 표의 125는 ⏳ 예상치이니 실제 숫자로 고칠 것**
+  4. 승인 → 앱 배포
+  5. **배포 뒤에** 0057 Run (레벨 혜택 문구)
+  6. `pnpm db:snapshot`으로 `docs/db-current-schema.sql` 갱신
 - `release-notes.data.json`에 `2026-08-02-routines-frequent-and-calendar-planning` 추가. **발송 안 함**(지시할 때만)
 
 ## ✅ 2026-08-01 — 로그아웃 (개발 서버 확인 ✅ · 운영 배포 ✅)

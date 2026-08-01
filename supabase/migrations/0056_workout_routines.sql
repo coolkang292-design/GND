@@ -117,29 +117,27 @@ create trigger workout_routines_slot_limit
   before insert on public.workout_routines
   for each row execute function public.enforce_routine_slot_limit();
 
--- ── 예약돼 있던 레벨 보상을 실제로 켠다 ──────────────────────
+-- ── 레벨 보상 전환은 여기 없다 → 0057 ────────────────────────
 --
--- 0022가 'coming_soon'(= UI에서 "준비 중", 실사용 기능처럼 노출 금지)으로
--- 박아 뒀다. 이제 동작하므로 'active'로 바꾸고 라벨에 총 개수를 적는다.
+-- routine_slot_1/2를 'coming_soon' → 'active'로 바꾸는 일은 **앱을 배포하는
+-- 시점**에 해야 한다. 이 파일에 같이 넣었다가 개발 확인용으로 먼저 Run하면,
+-- 아직 루틴 기능이 없는 **운영 앱에 즉시 "해금됨"이 뜬다.** 0022가
+-- 'coming_soon'을 만든 이유가 정확히 그것(미구현 보상을 실사용 기능처럼
+-- 노출하지 않는다)이므로 파일을 나눴다.
 --
--- components/profile/level-rewards.tsx:58이
---   reached = unlocks.has(key) || currentLevel >= r.level
--- 이므로, user_unlocks 행이 없는(= 이 보상이 걸린 레벨을 0029 이전에 이미
--- 지나온) 사용자도 "해금됨"으로 바르게 뜬다. 백필이 필요 없다.
-
-update public.level_definitions
-   set reward_status = 'active',
-       reward_label = '운동 루틴 저장 슬롯 +1 (총 4개)'
- where reward_key = 'routine_slot_1';
-
-update public.level_definitions
-   set reward_status = 'active',
-       reward_label = '운동 루틴 저장 슬롯 +1 (총 5개)'
- where reward_key = 'routine_slot_2';
+-- 이 파일(0056)은 언제 Run해도 안전하다. 새 테이블이라 운영에 떠 있는
+-- 앱은 참조하지 않는다.
 
 -- ── 적용 확인 (Run 후 결과를 눈으로 볼 것) ───────────────────
--- 기대: routine_slot_1 = (12, active), routine_slot_2 = (27, active)
-select reward_key, level, reward_status, reward_label
-  from public.level_definitions
- where reward_key in ('routine_slot_1', 'routine_slot_2')
- order by level;
+-- 기대: 1행, workout_routines / rls_enabled=true / 트리거 2개
+select
+  c.relname                                            as table_name,
+  c.relrowsecurity                                     as rls_enabled,
+  (select count(*) from pg_trigger t
+    where t.tgrelid = c.oid and not t.tgisinternal)     as trigger_count,
+  (select count(*) from pg_policies p
+    where p.schemaname = 'public'
+      and p.tablename = 'workout_routines')             as policy_count
+from pg_class c
+join pg_namespace n on n.oid = c.relnamespace
+where n.nspname = 'public' and c.relname = 'workout_routines';

@@ -68,7 +68,7 @@ disabled={!stamp && !plan}
 |---|---|---|---|
 | ③ | 없음 | 없음 | `record/calendar-view.tsx` |
 | ② | 없음 | `domain/exercise-frequency.ts` (+test) | `record/exercise-picker.tsx` |
-| ① | **0056** | `domain/routines.ts` (+test) · `lib/routines.ts` · `record/routine-save-sheet.tsx` | `record/exercise-picker.tsx` · `record/page.tsx` · `record/calendar-view.tsx` |
+| ① | **0056**(테이블) · **0057**(보상 문구) | `domain/routines.ts` (+test) · `lib/routines.ts` · `record/routine-save-sheet.tsx` · `record/routine-list.tsx` | `record/exercise-picker.tsx` · `record/page.tsx` · `record/calendar-view.tsx` |
 
 ---
 
@@ -228,9 +228,26 @@ end $$;
 `v_level`을 NULL로 둔다. 컬럼 NULL과 행 없음은 다른 경우이고 둘 다 막아야 한다.
 안 하면 `v_level`이 NULL이라 `level <= v_level`이 항상 false → 한도가 조용히 3으로 굳는다.
 
-### 보상 문구 되살리기
+### 보상 문구 되살리기 — **0057로 따로 뺀다**
 
-같은 0056에서 두 줄을 `coming_soon` → **`active`** 로 바꾸고 라벨을 정확히 고친다:
+⚠️ **테이블 생성과 보상 전환은 Run 시점이 다르다.** 한 파일에 묶으면, 개발 확인을 위해
+Run하는 순간 **아직 루틴 기능이 없는 운영 앱**의 '레벨 혜택'에 "해금됨"이 즉시 뜬다.
+0022가 `coming_soon`을 만든 이유가 정확히 그것("실사용 기능처럼 노출 금지")이다.
+
+이 프로젝트는 **스테이징 DB가 없어서** `pnpm dev`가 운영 Supabase에 그대로 붙는다.
+개발 확인을 하려면 DB에 테이블이 실제로 있어야 하고, 그 DB가 곧 운영 DB다.
+그래서 파일을 나눈다:
+
+| 파일 | 내용 | Run 시점 |
+|---|---|---|
+| **0056** | 테이블·RLS·슬롯 트리거 | **언제든.** 새 테이블이라 운영 앱이 참조하지 않는다. 개발 확인은 이것만으로 된다 |
+| **0057** | `routine_slot_1/2` → `active` | **앱 배포 뒤.** 화면 문구만 바꾼다 |
+
+**0057을 안 돌려도 슬롯 한도는 정상이다.** `routineSlotLimit()`과 서버 트리거가
+**둘 다 `reward_key`만 보고 `reward_status`는 보지 않는다.** 0057은 순수하게
+'레벨 혜택' 화면 표시만 바꾼다.
+
+0057이 하는 일:
 
 ```sql
 update level_definitions set reward_status = 'active',
@@ -330,10 +347,14 @@ CLAUDE.md §"테스트가 진짜 테스트인지 확인한다"에 맞춰, 각 �
 4. `PROGRESS.md` 최상단 갱신
 5. 사용자 승인 → `.git` 없는 복사본에서 `vercel --prod` → 프로덕션 실물 확인
 
-**① 배포:** 위에 더해
-- 사용자가 SQL Editor에서 **0056 Run** (에이전트는 DDL을 못 돌린다)
-- 적용 후 `pnpm db:snapshot`으로 **`docs/db-current-schema.sql` 갱신**
-- `rls-test.mjs` 새 단언 포함 `0 failed`
+**① 배포:** 위에 더해 — **순서가 중요하다**
+1. 사용자가 SQL Editor에서 **0056 Run** (테이블. 에이전트는 DDL을 못 돌린다)
+2. `pnpm dev`에서 루틴 화면 확인 — 0056만으로 전부 동작한다
+3. `rls-test.mjs` 새 단언 포함 `0 failed`
+4. 사용자 승인 → 앱 배포
+5. **배포 뒤에** 0057 Run (레벨 혜택 문구). 먼저 돌리면 아직 기능이 없는
+   운영 앱에 "해금됨"이 뜬다
+6. `pnpm db:snapshot`으로 **`docs/db-current-schema.sql` 갱신**
 
 ### 개발 서버에서 눈으로 볼 것
 
