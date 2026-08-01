@@ -4,6 +4,7 @@
 
 - Mode: built-in `image_gen` edit
 - Final generated source: `C:\Users\SAMSUNG\.codex\generated_images\019fbee0-d205-7342-9707-4d49753a5c0e\exec-69bf29ab-dc5d-47d2-9da4-1d84039434df.png`
+- Final generated source SHA256: `24ea7aa773b2cf66dd761159b8e5f49d4fff4a1ee949991f25fe216f6775ad3f`
 - Project output: `docs/design-sources/avatar-coordinate-v2/fitted-cap/gnd-cap-fitted-reference-v1.png`
 - Canvas: 1024 x 1536 RGBA
 - Alpha restoration: generated flat chroma-key background removed with the installed ImageGen helper (`--auto-key border --soft-matte --transparent-threshold 12 --opaque-threshold 96 --despill`)
@@ -12,8 +13,16 @@
 ## Input roles
 
 - Image 1 — edit target: `public/avatar-coordinate-v2/base/avatar-base-master.png`
-- Image 2 — geometry/style reference only: `C:\Users\SAMSUNG\.codex\codex-remote-attachments\019fbbfe-f0c7-7b53-aa25-4dc753ec7b79\E03241D7-10A5-4232-9D2B-DCE0A5662E10\1-사진-1.jpg`
+- Image 2 — geometry/style reference only: `docs/design-sources/avatar-coordinate-v2/fitted-cap/gnd-cap-natural-wear-reference.jpg`
 - Image 2 content other than the cap fit was explicitly excluded.
+
+## Provenance
+
+- Preserved geometry/style reference: `docs/design-sources/avatar-coordinate-v2/fitted-cap/gnd-cap-natural-wear-reference.jpg`
+- Preserved reference SHA256: `62ecc3105fd7f67d747a5c8156f5f00f3f95475d57fa5dbf1a5c157196a303d0`
+- Original external source: `C:\Users\SAMSUNG\.codex\codex-remote-attachments\019fbbfe-f0c7-7b53-aa25-4dc753ec7b79\E03241D7-10A5-4232-9D2B-DCE0A5662E10\1-사진-1.jpg`
+- Generated source PNG: `C:\Users\SAMSUNG\.codex\generated_images\019fbee0-d205-7342-9707-4d49753a5c0e\exec-69bf29ab-dc5d-47d2-9da4-1d84039434df.png`
+- Generated source PNG SHA256: `24ea7aa773b2cf66dd761159b8e5f49d4fff4a1ee949991f25fe216f6775ad3f`
 
 ## Exact final prompt
 
