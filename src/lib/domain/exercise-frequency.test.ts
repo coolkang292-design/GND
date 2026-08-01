@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   FREQUENT_LIMIT,
   FREQUENT_WINDOW_DAYS,
+  exerciseFrequencyMap,
   frequentCatalogPicks,
+  sortByFrequency,
   topExercisesByFrequency,
 } from "./exercise-frequency";
 
@@ -173,5 +175,76 @@ describe("frequentCatalogPicks — 카탈로그에 있는 종목만", () => {
   it("카탈로그가 비어 있으면 빈 배열", () => {
     const picks = frequentCatalogPicks([session(1, "벤치프레스")], NOW, [], name);
     expect(picks).toEqual([]);
+  });
+});
+
+describe("exerciseFrequencyMap — 이름 → 사용 횟수", () => {
+  it("창 안의 세션만 세고 세션 내 중복은 1회로 접는다", () => {
+    const map = exerciseFrequencyMap(
+      [
+        session(1, "스쿼트", "스쿼트"),
+        session(2, "스쿼트"),
+        session(100, "스쿼트"), // 창 밖
+      ],
+      NOW,
+    );
+    expect(map.get("스쿼트")).toBe(2);
+  });
+
+  it("한 번도 안 한 종목은 맵에 없다", () => {
+    const map = exerciseFrequencyMap([session(1, "스쿼트")], NOW);
+    expect(map.has("벤치프레스")).toBe(false);
+  });
+});
+
+describe("sortByFrequency — 목록을 사용 횟수순으로", () => {
+  // 카탈로그 원래 순서는 created_at(시드 입력 순) — 이름순이 아니다
+  const catalog = [
+    { name: "벤치프레스" },
+    { name: "인클라인 벤치프레스" },
+    { name: "덤벨 플라이" },
+    { name: "체스트프레스 머신" },
+  ];
+  const name = (item: { name: string }) => item.name;
+
+  it("많이 한 종목이 위로 온다", () => {
+    const freq = new Map([
+      ["덤벨 플라이", 5],
+      ["벤치프레스", 9],
+      ["체스트프레스 머신", 1],
+    ]);
+    expect(sortByFrequency(catalog, freq, name).map(name)).toEqual([
+      "벤치프레스",
+      "덤벨 플라이",
+      "체스트프레스 머신",
+      "인클라인 벤치프레스", // 0회는 뒤로
+    ]);
+  });
+
+  it("동수와 0회는 원래 순서를 유지한다 (안정 정렬)", () => {
+    // 이름순으로 다시 흩뜨리면 안 쓰던 종목을 찾기가 오히려 어려워진다.
+    // 카탈로그는 부위별로 묶인 시드 순서라 그 묶음을 지켜야 한다.
+    const freq = new Map([
+      ["벤치프레스", 3],
+      ["덤벨 플라이", 3],
+    ]);
+    expect(sortByFrequency(catalog, freq, name).map(name)).toEqual([
+      "벤치프레스",
+      "덤벨 플라이",
+      "인클라인 벤치프레스",
+      "체스트프레스 머신",
+    ]);
+  });
+
+  it("원본 배열을 건드리지 않는다", () => {
+    const original = [...catalog];
+    sortByFrequency(catalog, new Map([["체스트프레스 머신", 9]]), name);
+    expect(catalog).toEqual(original);
+  });
+
+  it("기록이 하나도 없으면 순서가 그대로다", () => {
+    expect(sortByFrequency(catalog, new Map(), name).map(name)).toEqual(
+      catalog.map(name),
+    );
   });
 });

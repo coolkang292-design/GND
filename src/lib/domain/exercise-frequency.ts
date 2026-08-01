@@ -37,8 +37,26 @@ export function topExercisesByFrequency(
   now: Date,
   options: { windowDays?: number; limit?: number } = {},
 ): ExerciseFrequency[] {
+  const counts = exerciseFrequencyMap(sessions, now, options);
+
+  return [...counts.entries()]
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+    .slice(0, options.limit ?? FREQUENT_LIMIT);
+}
+
+/**
+ * 종목 이름 → 최근 `windowDays`일간 등장한 완료 세션 수.
+ *
+ * 목록 정렬과 횟수 뱃지가 **같은 수를 쓰도록** 맵을 한 번만 만든다.
+ * 창 규칙은 `topExercisesByFrequency`와 동일하다(위 주석 참조).
+ */
+export function exerciseFrequencyMap(
+  sessions: readonly FrequencySession[],
+  now: Date,
+  options: { windowDays?: number } = {},
+): Map<string, number> {
   const windowDays = options.windowDays ?? FREQUENT_WINDOW_DAYS;
-  const limit = options.limit ?? FREQUENT_LIMIT;
   const since = now.getTime() - windowDays * DAY_MS;
 
   const counts = new Map<string, number>();
@@ -49,11 +67,28 @@ export function topExercisesByFrequency(
       counts.set(name, (counts.get(name) ?? 0) + 1);
     }
   }
+  return counts;
+}
 
-  return [...counts.entries()]
-    .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
-    .slice(0, limit);
+/**
+ * 사용 횟수 내림차순 정렬. **한 번도 안 한 종목은 0회로 뒤에 남는다.**
+ *
+ * 동수(0회 포함)는 **원래 순서를 그대로 유지한다** — `Array.prototype.sort`는
+ * ES2019부터 안정 정렬이 보장된다. 카탈로그가 `created_at` 순(= 부위별로
+ * 묶인 시드 순서)이라, 이름순으로 다시 흩뜨리면 안 쓰던 종목을 찾기가
+ * 오히려 어려워진다.
+ *
+ * 원본 배열은 건드리지 않는다.
+ */
+export function sortByFrequency<T>(
+  items: readonly T[],
+  frequency: ReadonlyMap<string, number>,
+  getName: (item: T) => string,
+): T[] {
+  return [...items].sort(
+    (a, b) =>
+      (frequency.get(getName(b)) ?? 0) - (frequency.get(getName(a)) ?? 0),
+  );
 }
 
 /**

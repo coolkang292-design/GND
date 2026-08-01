@@ -184,6 +184,79 @@ describe("ExercisePicker — ⭐ 자주 한 운동 (2026-08-02)", () => {
   });
 });
 
+describe("ExercisePicker — 목록 자체를 사용 횟수순으로 (사용자 요청 2026-08-02)", () => {
+  /**
+   * 목록 행의 운동명만 순서대로.
+   *
+   * ⚠️ ⭐칩도 aria-pressed 버튼이라 그냥 다 긁으면 칩이 먼저 잡힌다.
+   * 목록 행만 `<span><span>이름</span><span>부위·유형</span></span>` 구조
+   * (= span > span)를 가지므로 그걸로 갈라낸다.
+   */
+  function listedNames(container: HTMLElement): string[] {
+    return [...container.querySelectorAll("button[aria-pressed]")]
+      .map((row) => row.querySelector("span > span")?.textContent?.trim())
+      .filter((name): name is string => Boolean(name));
+  }
+
+  it("많이 한 종목이 위로 온다 (카탈로그 입력 순서가 아니라)", () => {
+    // CATALOG 순서는 벤치 → 랫풀 → 스쿼트 → 데드 → 러닝 → 플랭크.
+    // SESSIONS는 벤치 3 · 랫풀 2 · 스쿼트 2 · 데드 1 · 러닝 1 · 플랭크 1.
+    // 정렬이 빠지면 카탈로그 순서 그대로라 이 단언이 실패한다.
+    const { container } = setup({
+      pastSessions: [
+        session(1, "플랭크"),
+        session(2, "플랭크"),
+        session(3, "플랭크"),
+        session(1, "데드리프트"),
+        session(2, "데드리프트"),
+      ],
+    });
+    const names = listedNames(container);
+    expect(names[0]).toBe("플랭크");
+    expect(names[1]).toBe("데드리프트");
+  });
+
+  it("횟수를 함께 보여준다", () => {
+    const { getByText } = setup();
+    // 벤치프레스 3회 — 칩과 목록이 같은 수를 쓴다
+    expect(getByText(/가슴 · 웨이트/).textContent).toContain("3회");
+  });
+
+  it("한 번도 안 한 종목은 횟수 없이 뒤에 남는다", () => {
+    const { container, queryByText } = setup({
+      pastSessions: [session(1, "러닝")],
+    });
+    expect(listedNames(container)[0]).toBe("러닝");
+    // 플랭크는 기록이 없다 — '0회'라고 쓰지 않는다
+    expect(queryByText(/0회/)).toBeNull();
+  });
+
+  it("기록이 하나도 없으면 카탈로그 순서 그대로다", () => {
+    const { container } = setup({ pastSessions: [] });
+    expect(listedNames(container)).toEqual([
+      "벤치프레스",
+      "랫풀다운",
+      "스쿼트",
+      "데드리프트",
+      "러닝",
+      "플랭크",
+    ]);
+  });
+
+  it("부위 필터 안에서도 횟수순이다", () => {
+    // 등 = 랫풀다운(카탈로그 먼저) · 데드리프트. 데드를 더 많이 했으면 데드가 위로.
+    const { container, getByRole } = setup({
+      pastSessions: [
+        session(1, "데드리프트"),
+        session(2, "데드리프트"),
+        session(3, "랫풀다운"),
+      ],
+    });
+    fireEvent.click(getByRole("button", { name: "등" }));
+    expect(listedNames(container)).toEqual(["데드리프트", "랫풀다운"]);
+  });
+});
+
 describe("ExercisePicker — 내 루틴 탭 (0056)", () => {
   it("루틴을 넘기지 않으면 탭 자체가 없다", () => {
     // 0056 적용 전에는 조회가 실패해 routines가 undefined로 남는다.

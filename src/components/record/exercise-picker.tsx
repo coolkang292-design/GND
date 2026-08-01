@@ -1,7 +1,11 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { frequentCatalogPicks } from "@/lib/domain/exercise-frequency";
+import {
+  exerciseFrequencyMap,
+  frequentCatalogPicks,
+  sortByFrequency,
+} from "@/lib/domain/exercise-frequency";
 import type { WorkoutRoutine } from "@/lib/routines";
 import type { BodyPart, CatalogExercise, ExerciseType } from "@/lib/types";
 import type { CalendarSession } from "@/lib/workout";
@@ -93,6 +97,12 @@ function PickerSheet({
   // 시트는 닫힐 때 언마운트되므로 다음에 열면 새로 계산된다.
   const openedAt = useMemo(() => new Date(), []);
 
+  /** 이름 → 최근 90일 사용 횟수. 목록 정렬과 횟수 뱃지가 같은 수를 쓴다. */
+  const frequency = useMemo(
+    () => exerciseFrequencyMap(pastSessions, openedAt),
+    [pastSessions, openedAt],
+  );
+
   /**
    * ⭐ 자주 한 운동 — 최근 90일간 완료 세션 수 상위 (2026-08-02).
    * 검색·부위 필터 중에는 숨긴다(아래 렌더 조건). 필터링과 싸우지 않게.
@@ -109,13 +119,27 @@ function PickerSheet({
   );
 
   const q = query.trim().toLowerCase();
-  const list = catalog.filter(
-    (e) =>
-      (part === "전체" ||
-        (part === "맨몸"
-          ? e.exercise_type === "bodyweight"
-          : e.body_part === part)) &&
-      (!q || e.name.toLowerCase().includes(q)),
+  /**
+   * 목록도 **사용 횟수 내림차순**이다 (사용자 요청 2026-08-02).
+   *
+   * 전에는 `getExerciseCatalog()`가 준 `created_at` 순(시드 입력 순서)
+   * 그대로였다. 부위를 골라도 그 안에서 많이 한 종목이 위로 오지 않아,
+   * 늘 하는 운동을 매번 목록에서 눈으로 찾아야 했다.
+   *
+   * 동수·0회는 원래 순서를 유지한다 — 카탈로그가 부위별로 묶인 시드
+   * 순서라 이름순으로 흩뜨리면 안 쓰던 종목 찾기가 오히려 어려워진다.
+   */
+  const list = sortByFrequency(
+    catalog.filter(
+      (e) =>
+        (part === "전체" ||
+          (part === "맨몸"
+            ? e.exercise_type === "bodyweight"
+            : e.body_part === part)) &&
+        (!q || e.name.toLowerCase().includes(q)),
+    ),
+    frequency,
+    (item) => item.name,
   );
 
   function toggleSelect(item: CatalogExercise) {
@@ -311,6 +335,12 @@ function PickerSheet({
                     </span>
                     <span className="block text-xs text-muted">
                       {e.body_part} · {TYPE_LABEL[e.exercise_type]}
+                      {/* 횟수를 같이 보여야 왜 이 순서인지 알 수 있다 */}
+                      {(frequency.get(e.name) ?? 0) > 0 && (
+                        <span className="ml-1 font-bold text-accent">
+                          · {frequency.get(e.name)}회
+                        </span>
+                      )}
                     </span>
                   </span>
                   <span
