@@ -12,18 +12,276 @@
     "path": "gnd-cap-fitted-reference-v1.png",
     "sha256": "151f23eee6eb8252cea9ef8a29d507e817dcf663f9ef4129ca73ebf2f65aab26"
   },
+  "extraction": {
+    "method": "deterministic-explicit-hat-mask-v2",
+    "hatPixelCriteria": {
+      "blackMaterial": "maxRGB <= 165 and chroma(maxRGB-minRGB) <= 25",
+      "whiteLogo": "global x 412..473, y 148..205; minRGB >= 90 and chroma <= 65"
+    },
+    "approvedMaskPolygons": {
+      "crown": [
+        [
+          347,
+          239
+        ],
+        [
+          348,
+          210
+        ],
+        [
+          356,
+          182
+        ],
+        [
+          369,
+          158
+        ],
+        [
+          386,
+          142
+        ],
+        [
+          405,
+          131
+        ],
+        [
+          431,
+          125
+        ],
+        [
+          470,
+          122
+        ],
+        [
+          494,
+          125
+        ],
+        [
+          519,
+          132
+        ],
+        [
+          543,
+          144
+        ],
+        [
+          563,
+          162
+        ],
+        [
+          577,
+          184
+        ],
+        [
+          585,
+          203
+        ],
+        [
+          588,
+          216
+        ],
+        [
+          587,
+          233
+        ],
+        [
+          586,
+          249
+        ],
+        [
+          582,
+          263
+        ],
+        [
+          576,
+          268
+        ],
+        [
+          558,
+          254
+        ],
+        [
+          536,
+          245
+        ],
+        [
+          513,
+          235
+        ],
+        [
+          486,
+          224
+        ],
+        [
+          456,
+          216
+        ],
+        [
+          429,
+          215
+        ],
+        [
+          403,
+          218
+        ],
+        [
+          377,
+          225
+        ],
+        [
+          356,
+          235
+        ]
+      ],
+      "brim": [
+        [
+          304,
+          263
+        ],
+        [
+          309,
+          251
+        ],
+        [
+          321,
+          242
+        ],
+        [
+          334,
+          236
+        ],
+        [
+          351,
+          230
+        ],
+        [
+          379,
+          222
+        ],
+        [
+          408,
+          217
+        ],
+        [
+          439,
+          214
+        ],
+        [
+          468,
+          216
+        ],
+        [
+          496,
+          225
+        ],
+        [
+          522,
+          236
+        ],
+        [
+          548,
+          246
+        ],
+        [
+          575,
+          253
+        ],
+        [
+          584,
+          256
+        ],
+        [
+          587,
+          262
+        ],
+        [
+          586,
+          269
+        ],
+        [
+          580,
+          274
+        ],
+        [
+          572,
+          277
+        ],
+        [
+          554,
+          278
+        ],
+        [
+          533,
+          271
+        ],
+        [
+          511,
+          260
+        ],
+        [
+          486,
+          249
+        ],
+        [
+          461,
+          242
+        ],
+        [
+          437,
+          240
+        ],
+        [
+          414,
+          241
+        ],
+        [
+          391,
+          246
+        ],
+        [
+          367,
+          256
+        ],
+        [
+          347,
+          269
+        ],
+        [
+          331,
+          281
+        ],
+        [
+          319,
+          287
+        ],
+        [
+          309,
+          286
+        ],
+        [
+          304,
+          278
+        ]
+      ]
+    },
+    "validation": {
+      "alphaThreshold": "alpha > 0",
+      "crownOpaquePixelsOutsideApprovedMask": 0,
+      "brimOpaquePixelsOutsideApprovedMask": 0
+    }
+  },
   "layers": [
     {
       "id": "crown",
       "src": "/avatar-coordinate-v2/items/gnd-cap-v2/crown.png",
-      "assetWidth": 262,
-      "assetHeight": 152,
+      "assetWidth": 247,
+      "assetHeight": 147,
       "x": 344,
       "y": 123,
-      "width": 262,
-      "height": 152,
+      "width": 247,
+      "height": 147,
       "z": 40,
-      "sha256": "ab468b56e05b5d870981bec2209543939bd7e79c8827aba361c379b42c5853bc"
+      "sha256": "1704c68504c8697b03388fa5f1c32f4146752b00b695f2cd86cde54a318d47f6"
     },
     {
       "id": "ear-left-front",
@@ -52,14 +310,14 @@
     {
       "id": "brim",
       "src": "/avatar-coordinate-v2/items/gnd-cap-v2/brim.png",
-      "assetWidth": 304,
+      "assetWidth": 280,
       "assetHeight": 77,
-      "x": 302,
+      "x": 309,
       "y": 212,
-      "width": 304,
+      "width": 280,
       "height": 77,
       "z": 50,
-      "sha256": "fdcbb6f57fd82f6f6a8e240f3ee54cad089448aec2ab1f91746f54a94ae6d102"
+      "sha256": "77bc8613f9ce1bcc06260ad5b0858be0869c21b7b0a6c4e1fae74ba6e24416dd"
     },
     {
       "id": "contact-shadow",

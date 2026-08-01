@@ -2,10 +2,10 @@
   "gnd-cap-v2": {
     "slot": "head",
     "layers": [
-      { "id": "crown", "src": "/avatar-coordinate-v2/items/gnd-cap-v2/crown.png", "assetWidth": 262, "assetHeight": 152, "x": 344, "y": 123, "width": 262, "height": 152, "z": 40 },
+      { "id": "crown", "src": "/avatar-coordinate-v2/items/gnd-cap-v2/crown.png", "assetWidth": 247, "assetHeight": 147, "x": 344, "y": 123, "width": 247, "height": 147, "z": 40 },
       { "id": "ear-left-front", "src": "/avatar-coordinate-v2/items/gnd-cap-v2/ear-left-front.png", "assetWidth": 70, "assetHeight": 102, "x": 291, "y": 226, "width": 70, "height": 102, "z": 45 },
       { "id": "ear-right-front", "src": "/avatar-coordinate-v2/items/gnd-cap-v2/ear-right-front.png", "assetWidth": 106, "assetHeight": 109, "x": 549, "y": 213, "width": 106, "height": 109, "z": 45 },
-      { "id": "brim", "src": "/avatar-coordinate-v2/items/gnd-cap-v2/brim.png", "assetWidth": 304, "assetHeight": 77, "x": 302, "y": 212, "width": 304, "height": 77, "z": 50 },
+      { "id": "brim", "src": "/avatar-coordinate-v2/items/gnd-cap-v2/brim.png", "assetWidth": 280, "assetHeight": 77, "x": 309, "y": 212, "width": 280, "height": 77, "z": 50 },
       { "id": "contact-shadow", "src": "/avatar-coordinate-v2/items/gnd-cap-v2/contact-shadow.png", "assetWidth": 251, "assetHeight": 72, "x": 328, "y": 240, "width": 251, "height": 72, "z": 55 }
     ]
   },
