@@ -1,0 +1,8 @@
+{
+  "gnd-cap-v2": { "slot": "head", "assetWidth": 682, "assetHeight": 485, "x": 292, "y": 100, "width": 325, "height": 231, "z": 40 },
+  "gnd-sunglasses-v2": { "slot": "eyes", "assetWidth": 958, "assetHeight": 423, "x": 305, "y": 302, "width": 275, "height": 121, "z": 50 },
+  "gnd-hoodie-v2": { "slot": "top", "assetWidth": 890, "assetHeight": 906, "x": 212, "y": 382, "width": 555, "height": 565, "z": 30 },
+  "gnd-joggers-v2": { "slot": "bottom", "assetWidth": 755, "assetHeight": 1130, "x": 264, "y": 810, "width": 445, "height": 666, "z": 30 },
+  "gnd-sneakers-v2": { "slot": "shoes", "assetWidth": 926, "assetHeight": 539, "x": 185, "y": 1192, "width": 575, "height": 335, "z": 45 },
+  "gnd-watch-v2": { "slot": "wrist", "assetWidth": 802, "assetHeight": 989, "x": 665, "y": 825, "width": 145, "height": 179, "z": 60 }
+}

@@ -1,0 +1,38 @@
+{
+  "gnd-cap-v2": {
+    "sourceX": 147,
+    "sourceY": 178,
+    "sourceWidth": 682,
+    "sourceHeight": 485
+  },
+  "gnd-hoodie-v2": {
+    "sourceX": 62,
+    "sourceY": 266,
+    "sourceWidth": 890,
+    "sourceHeight": 906
+  },
+  "gnd-joggers-v2": {
+    "sourceX": 135,
+    "sourceY": 206,
+    "sourceWidth": 755,
+    "sourceHeight": 1130
+  },
+  "gnd-sneakers-v2": {
+    "sourceX": 41,
+    "sourceY": 529,
+    "sourceWidth": 926,
+    "sourceHeight": 539
+  },
+  "gnd-sunglasses-v2": {
+    "sourceX": 33,
+    "sourceY": 547,
+    "sourceWidth": 958,
+    "sourceHeight": 423
+  },
+  "gnd-watch-v2": {
+    "sourceX": 97,
+    "sourceY": 251,
+    "sourceWidth": 802,
+    "sourceHeight": 989
+  }
+}

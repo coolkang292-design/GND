@@ -9,6 +9,8 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:avatar-coordinate": "vitest run src/lib/domain/avatar-coordinate-items.test.ts src/components/profile/avatar-coordinate-preview.test.tsx src/components/profile/avatar-shop-mock.test.tsx src/components/profile/avatar-shop-entry.test.tsx src/components/profile/growth-hub-avatar-entry.test.ts \"src/app/(tabs)/profile/avatar-mock/page.test.tsx\" && pnpm validate:avatar-assets",
+    "validate:avatar-assets": "node scripts/validate-avatar-coordinate-assets.mjs",
     "typecheck": "tsc --noEmit",
     "release:notify": "node scripts/broadcast-release.mjs",
     "db:snapshot": "node scripts/dump-schema-snapshot.mjs"

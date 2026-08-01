@@ -1,0 +1,30 @@
+{
+  "canvas": { "width": 1024, "height": 1536 },
+  "points": {
+    "headTop": { "x": 479, "y": 207 },
+    "headCenter": { "x": 470, "y": 383 },
+    "leftEar": { "x": 302, "y": 278 },
+    "rightEar": { "x": 625, "y": 280 },
+    "leftEye": { "x": 364, "y": 343 },
+    "rightEye": { "x": 504, "y": 342 },
+    "nose": { "x": 432, "y": 368 },
+    "neck": { "x": 465, "y": 501 },
+    "leftShoulder": { "x": 267, "y": 505 },
+    "rightShoulder": { "x": 724, "y": 501 },
+    "waistLeft": { "x": 283, "y": 861 },
+    "waistRight": { "x": 699, "y": 853 },
+    "leftWrist": { "x": 217, "y": 917 },
+    "rightWrist": { "x": 724, "y": 920 },
+    "leftFoot": { "x": 326, "y": 1315 },
+    "rightFoot": { "x": 644, "y": 1350 }
+  },
+  "regions": {
+    "head": { "x": 270, "y": 195, "width": 405, "height": 340 },
+    "eyes": { "x": 315, "y": 305, "width": 255, "height": 112 },
+    "top": { "x": 230, "y": 390, "width": 520, "height": 495 },
+    "bottom": { "x": 265, "y": 820, "width": 445, "height": 400 },
+    "leftWrist": { "x": 165, "y": 815, "width": 165, "height": 185 },
+    "rightWrist": { "x": 655, "y": 815, "width": 175, "height": 190 },
+    "feet": { "x": 205, "y": 1190, "width": 535, "height": 225 }
+  }
+}

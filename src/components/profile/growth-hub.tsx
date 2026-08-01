@@ -16,6 +16,7 @@ import { BadgeSheet } from "@/components/profile/badge-sheet";
 import { BadgeShowcase } from "@/components/profile/badge-showcase";
 import { NextGoalCard } from "@/components/profile/next-goal-card";
 import { PointSummary } from "@/components/profile/point-summary";
+import { AvatarShopEntry } from "@/components/profile/avatar-shop-entry";
 import { getBadgeCatalog, getMyBadgeMetrics, getMyBadges } from "@/lib/badges";
 import {
   getMyWallet,
@@ -27,6 +28,7 @@ import {
   selectNextGoal,
   type Achievement,
 } from "@/lib/domain/achievements";
+import { isAvatarMockEnabled } from "@/lib/domain/avatar-coordinate-items";
 import { badgeShelf, type BadgeMetricKey, type BadgeShelfItem } from "@/lib/domain/badges";
 import { currentStreak, workoutDayKeys } from "@/lib/domain/streak";
 import { DEFAULT_TIMEZONE, dayKey } from "@/lib/domain/time";
@@ -163,6 +165,8 @@ export function GrowthHub() {
       />
 
       <PointSummary balance={balance} streakDays={streakDays} />
+
+      {isAvatarMockEnabled() && <AvatarShopEntry />}
 
       <NextGoalCard goal={selectNextGoal(achievements)} />
 
