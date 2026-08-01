@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { usePathname } from "next/navigation";
 import {
   getSupabaseBrowserClient,
   isSupabaseConfigured,
@@ -38,6 +39,11 @@ export function useAuth(): AuthState {
  */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const configured = isSupabaseConfigured();
+  // 로그인 화면에서는 익명 계정을 발급하지 않는다 (2026-08-01 로그아웃 도입).
+  // 이게 없으면 로그아웃 직후 이 provider가 곧바로 새 익명 계정을 만들어
+  // ① 사용자는 로그아웃된 게 아니라 **다른 사람**이 되고
+  // ② 로그아웃할 때마다 운영 DB에 프로필 없는 유령 계정이 쌓인다.
+  const isLoginRoute = usePathname() === "/login";
   const [state, setState] = useState<AuthState>({
     configured,
     loading: configured,
@@ -81,6 +87,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         await supabase.auth.signOut();
         if (cancelled) return;
+      }
+
+      // 로그인 화면은 "계정 없음"이 정상 상태다. 여기서 발급하면 로그아웃이
+      // 무의미해진다 — 로그인 폼만 그리고 끝낸다.
+      if (isLoginRoute) {
+        setState({
+          configured: true,
+          loading: false,
+          userId: null,
+          error: null,
+        });
+        return;
       }
 
       const { data, error } = await supabase.auth.signInAnonymously();
@@ -131,7 +149,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       subscription.unsubscribe();
     };
-  }, [configured]);
+    // isLoginRoute는 /login에 들어가고 나올 때만 뒤집힌다 — 매 이동마다
+    // 재실행되지 않는다.
+  }, [configured, isLoginRoute]);
 
   return <AuthContext.Provider value={state}>{children}</AuthContext.Provider>;
 }

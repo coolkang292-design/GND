@@ -13,6 +13,11 @@ vi.mock("@/lib/supabase/client", () => ({
   getSupabaseBrowserClient: vi.fn(),
 }));
 
+const nav = vi.hoisted(() => ({ pathname: "/home" }));
+vi.mock("next/navigation", () => ({
+  usePathname: () => nav.pathname,
+}));
+
 type AuthChangeHandler = (
   event: string,
   session: { user: { id: string } } | null,
@@ -57,6 +62,41 @@ function wrapper({ children }: { children: ReactNode }) {
 describe("AuthProvider", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    nav.pathname = "/home";
+  });
+
+  // 로그아웃의 핵심 보증. 이게 없으면 로그아웃 직후 provider가 곧바로 새 익명
+  // 계정을 만들어 ① 사용자는 로그아웃이 아니라 **다른 사람**이 되고
+  // ② 로그아웃할 때마다 운영 DB에 프로필 없는 유령 계정이 쌓인다.
+  it("never issues an anonymous account on the login screen", async () => {
+    nav.pathname = "/login";
+    const auth = stubSupabase();
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(auth.signInAnonymously).not.toHaveBeenCalled();
+    expect(result.current.userId).toBeNull();
+    expect(result.current.error).toBeNull();
+  });
+
+  it("still shows an existing session on the login screen", async () => {
+    nav.pathname = "/login";
+    const auth = stubSupabase({
+      getSession: vi.fn(async () => ({
+        data: { session: { user: { id: "existing-id" } } },
+      })),
+      getUser: vi.fn(async () => ({
+        data: { user: { id: "existing-id" } },
+        error: null,
+      })),
+    });
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.userId).toBe("existing-id");
+    expect(auth.signInAnonymously).not.toHaveBeenCalled();
   });
 
   it("signs in anonymously when there is no session", async () => {

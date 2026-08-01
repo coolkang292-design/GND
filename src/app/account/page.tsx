@@ -13,6 +13,10 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
  * 이메일이 아직 없는(익명) 계정에는 **연결 폼을 보여주지 않는다.** 조사 결과
  * Supabase가 확인 메일 발송 제한에 걸려 자체 연결이 실패하기 때문이다. 될지
  * 안 될지 모르는 버튼을 두는 대신, 무엇을 해야 하는지 문장으로 알려준다.
+ *
+ * 로그아웃도 **이메일이 붙은 계정에만** 보여준다. 익명 계정은 이 브라우저
+ * 저장소에만 존재해서, 로그아웃하면 기록·XP·배지로 돌아올 방법이 영영 없다
+ * (실제로 발생했던 사고다). 돌아올 문이 없는 사람에게 나가는 문만 주지 않는다.
  */
 const MIN_PASSWORD_LENGTH = 6;
 
@@ -26,6 +30,9 @@ export default function AccountPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+
+  const [confirmingSignOut, setConfirmingSignOut] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
@@ -71,6 +78,23 @@ export default function AccountPage() {
     setBusy(false);
   }
 
+  async function handleSignOut() {
+    if (signingOut) return;
+    setSigningOut(true);
+    const supabase = getSupabaseBrowserClient();
+    const { error: signOutError } = await supabase.auth.signOut();
+    if (signOutError) {
+      setError(`로그아웃하지 못했어요 (${signOutError.message})`);
+      setSigningOut(false);
+      setConfirmingSignOut(false);
+      return;
+    }
+    // 로그인과 같은 이유로 **전체 페이지 로드**를 쓴다. AuthProvider가 루트
+    // 레이아웃에 있어 클라이언트 이동으로는 세션 상태를 처음부터 다시 읽지
+    // 않는다. /login에서는 익명 계정을 발급하지 않으므로 로그아웃이 유지된다.
+    window.location.assign("/login");
+  }
+
   return (
     <main className="flex flex-1 flex-col overflow-y-auto">
       <header className="sticky top-0 z-10 flex items-center gap-2.5 border-b border-line bg-surface/95 px-4 py-3 backdrop-blur">
@@ -94,7 +118,9 @@ export default function AccountPage() {
             <p className="mt-2 text-xs leading-relaxed text-muted">
               이 계정은 이 브라우저에만 있습니다. 브라우저 데이터를 지우면
               기록·XP·배지에 다시 접근할 수 없어요.{" "}
-              <b className="text-fg">크루장에게 이메일 연결을 요청하세요.</b>
+              <b className="text-fg">크루장에게 이메일 연결을 요청하세요.</b>{" "}
+              이메일이 붙기 전에는 <b className="text-fg">로그아웃도 막아 뒀어요</b>
+              {" "}— 지금 나가면 돌아올 방법이 없어요.
             </p>
           )}
         </section>
@@ -172,6 +198,45 @@ export default function AccountPage() {
                 {busy ? "변경 중…" : "비밀번호 변경"}
               </button>
             </form>
+          </section>
+        )}
+
+        {ready && email && (
+          <section className="rounded-card border border-line bg-surface p-4 shadow-card">
+            <h2 className="text-sm font-bold">로그아웃</h2>
+            <p className="mt-1 text-xs leading-relaxed text-muted">
+              이 기기에서 나갑니다. 기록은 그대로 남고, 같은 이메일로 다시
+              로그인하면 돌아와요.
+            </p>
+
+            {confirmingSignOut ? (
+              <div className="mt-4 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmingSignOut(false)}
+                  disabled={signingOut}
+                  className="h-11 flex-1 rounded-full border border-line bg-surface-2 text-sm font-bold disabled:opacity-60"
+                >
+                  취소
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleSignOut()}
+                  disabled={signingOut}
+                  className="h-11 flex-1 rounded-full border border-red-500/60 bg-red-500/10 text-sm font-extrabold text-red-400 disabled:opacity-60"
+                >
+                  {signingOut ? "나가는 중…" : "로그아웃"}
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmingSignOut(true)}
+                className="mt-4 h-11 w-full rounded-full border border-line bg-surface-2 text-sm font-bold"
+              >
+                로그아웃
+              </button>
+            )}
           </section>
         )}
       </div>
