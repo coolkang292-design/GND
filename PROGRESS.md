@@ -3,7 +3,7 @@
 > 새 세션은 저장소 루트 `AGENTS.md` → `CLAUDE.md` → 이 파일 → 가장 최근의 관련 `docs/superpowers/HANDOFF-*.md` 순서로 읽는다.
 > 이 파일은 전체 흐름의 요약이고, 작업별 세부 사실과 남은 확인은 최신 인수인계서가 기준이다.
 
-## ✅ 2026-08-02 — 나만의 루틴 + 자주 한 운동 + 달력 계획 (DB 0056 ✅ · 개발 서버 확인 ✅ · 운영 배포 ✅ · 공지 발송 ✅ · **0057 미적용** ⏳)
+## ✅ 2026-08-02 — 나만의 루틴 + 자주 한 운동 + 달력 계획 (DB 0056·0057 ✅ · 개발 서버 확인 ✅ · 운영 배포 ✅ · 공지 발송 ✅ · 완료)
 
 설계: [`docs/superpowers/specs/2026-08-02-routines-frequent-exercises-calendar-planning-design.md`](docs/superpowers/specs/2026-08-02-routines-frequent-exercises-calendar-planning-design.md)
 커밋: `646e080`(②③) · `0cb0853`(① 0056) · `2183dba`(루틴 미적용 시 노출 버그) · 0057 분리
@@ -48,9 +48,10 @@
   - **`루틴 기능을 아직 쓸 수 없어요`도 있다 — 이 문구는 수정 커밋 `2183dba`에서만 생긴 것이라, 최신 커밋이 나갔다는 증거다**
   - `/whats-new` 서버 HTML에 `나만의 루틴`·`자주 한 운동`·`달력 아무 날짜나`·`Lv.12에서 하나`·`중복으로 붙지 않아요` 전부 있음
 - **공지 발송 완료 (사용자 지시)** — `broadcast-release.mjs --send`. **5건 insert 확인**(실사용자 3 + 픽스처 2). DB 실측으로 `app_update` 5행이 같은 시각에 들어간 것까지 확인했다
-- ⏳ **남은 일**
-  1. **0057 Run** — 레벨 혜택의 `routine_slot_1/2`를 `coming_soon` → `active`로. 앱이 배포됐으므로 **이제 돌려도 된다.** 안 돌리면 기능은 정상인데 '레벨 혜택' 화면에만 "준비 중"으로 잘못 남는다
-  2. 0057 적용 후 `pnpm db:snapshot` 한 번 더
+- **0057 적용 완료 (사용자, 2026-08-02, 배포 뒤)** — `routine_slot_1=(12,active)` · `routine_slot_2=(27,active)`, 라벨도 `운동 루틴 저장 슬롯 +1 (총 4개/5개)`로 교체
+  - **부정 확인까지 했다**: 남은 `coming_soon` 16건에 `routine_slot_*`이 **하나도 없다.** 새 상태만 보면 전환을 검증한 게 아니다
+  - ⚠️ **`pnpm db:snapshot`은 이때 안 돌려도 된다.** 0057은 `level_definitions`의 **행 데이터**만 바꾸는데 스냅샷은 함수·정책·인덱스만 담는다. 실제로 돌려 봤고 diff가 0이었다. 스키마 스냅샷은 0056 때 이미 갱신됐다
+  - 코드 배포가 필요 없다 — `getLevelRewards()`가 런타임에 `level_definitions`를 읽으므로 사용자가 '내 정보'를 다시 열면 바로 반영된다
 - `release-notes.data.json`에 `2026-08-02-routines-frequent-and-calendar-planning` 추가. **발송 안 함**(지시할 때만)
 
 ## ✅ 2026-08-01 — 로그아웃 (개발 서버 확인 ✅ · 운영 배포 ✅)
