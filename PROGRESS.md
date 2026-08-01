@@ -3,6 +3,39 @@
 > 새 세션은 저장소 루트 `AGENTS.md` → `CLAUDE.md` → 이 파일 → 가장 최근의 관련 `docs/superpowers/HANDOFF-*.md` 순서로 읽는다.
 > 이 파일은 전체 흐름의 요약이고, 작업별 세부 사실과 남은 확인은 최신 인수인계서가 기준이다.
 
+## 🚧 2026-08-02 — 나만의 루틴 + 자주 한 운동 + 달력 계획 (코드 ✅ · **DB 미적용** ⏳ · **화면 확인 대기** ⏳ · 미배포)
+
+설계: [`docs/superpowers/specs/2026-08-02-routines-frequent-exercises-calendar-planning-design.md`](docs/superpowers/specs/2026-08-02-routines-frequent-exercises-calendar-planning-design.md)
+커밋: `646e080`(②③) · `d2a8fcf`(① 0056)
+
+사용자 지시 3건. 착수 전 실측에서 **셋의 상태가 전혀 달랐다.**
+
+- **③ 달력 계획은 기능이 없던 게 아니라 문이 잠겨 있었다.** `workout_plans`(0015)·`move_workout_plan` RPC·"➕ 새 운동 계획 만들기" 버튼·피커 재사용까지 전부 이미 있었는데, 셀이 `disabled={!stamp && !plan}`이었다. 계획은 0015 RLS상 `plan_date >= 오늘`만 허용되고 미래 날짜에는 기록도 계획도 없으니 **모든 미래 셀이 잠긴** 상태였다 — "새 운동 계획 만들기"는 **오늘 이미 운동을 완료한 경우에만** 도달할 수 있었다
+  - `openable = stamp || plan || dateKey >= todayKey`로 바꾸고 빈 미래 셀에 점선 테두리를 줬다. **과거의 빈 날짜는 계속 잠근다** — 눌리는데 아무 일도 안 일어나는 편이 더 나쁘다
+  - 날짜 셀에 `aria-label`을 붙였다(스크린리더가 숫자만 읽던 것도 같이 고쳐졌다)
+- **② 자주 한 운동은 DB 작업이 0이었다.** `getCompletedSessions`가 이미 완료 세션 전부를 `exerciseNames`+`completedAt`과 함께 돌려주고, 기록 탭은 피커를 열 때 이미 그걸 부른다. 새 질의 없이 계산한다
+  - 기준은 **최근 90일간 그 종목이 등장한 완료 세션 수**(사용자 확정). 세트 수로 세면 세트를 잘게 나누는 맨몸·유산소가 과대평가된다. 한 세션 안의 중복은 1회로 접는다
+  - 창 계산은 `now - 90×24h` **단순 뺄셈**이다 — 롤링 90일에 타임존이 필요 없고, `dayKey`를 쓰면 그 경계 버그를 새로 들여올 뿐이다
+  - ⚠️ **카탈로그 매칭은 자르기 전에 한다.** 상위 5개를 먼저 자른 뒤 매칭하면 지운 커스텀 종목이 자리만 차지해 4개만 뜬다
+  - 표시는 세로 목록이 아니라 **가로 칩 한 줄**이다. 시트가 `max-h-[82dvh]`라 5행짜리 섹션은 카탈로그 목록을 화면 밖으로 밀어낸다. 검색어·부위 필터가 걸리면 칩 줄은 숨는다
+  - ⚠️ **알고 받는 절충**: 완료 세션에 담기만 하고 체크 안 한 종목도 1회로 센다. 거르려면 모든 세션의 `workout_sets`를 같이 받아야 해서 `getCompletedSessions`(달력도 쓴다)를 건드려야 한다. 0055의 "완료 세트만 불러오기"와 방향이 다른데, 거기는 **세트 값을 복원**하는 일이라 틀린 수치가 보였고 여기는 **순위**일 뿐이다
+- **① 루틴은 0022가 이미 예약해 둔 자리가 있었다.** `routine_slot_1`(Lv.12)·`routine_slot_2`(Lv.27)이 `coming_soon`으로 박혀 있어 무제한으로 열면 그 두 줄이 거짓말이 된다 → **기본 3개 + 보상으로 각 +1**(사용자 확정), 두 보상을 `active`로 켰다
+  - **직렬화를 새로 만들지 않았다.** `LocalSet`이 `{key,weightKg,reps,distanceKm,durationMin,done}`이고 `DraftPlanSet`이 `PlanSet & {key,done}`이라 같은 모양이다(`handleLoadPlan`이 이미 그렇게 쓰고 컴파일된다). `parsePlanExercises`·`toPlanExercises`·`toDraftExercises`를 그대로 쓴다
+  - **레벨 12·27을 코드에 박지 않는다.** `level_definitions`가 단일 진실이고 클라이언트 `routineSlotLimit()`과 서버 트리거가 같은 표를 읽는다
+  - **실측으로 해소한 우려**: `level-rewards.tsx:58`이 `unlocks.has(key) || currentLevel >= r.level`이라, `user_unlocks` 행은 레벨업 순간에만 삽입되지만 **이미 레벨을 지난 사용자도 "해금됨"으로 바르게 뜬다.** 백필이 필요 없다
+  - ⚠️ **트리거의 `coalesce`가 두 겹인 이유**: `user_progress` 행이 아예 없는 신규 사용자는 `select ... into`가 `v_level`을 NULL로 남긴다. 그대로 두면 `level <= v_level`이 항상 false라 **한도가 조용히 3으로 굳어** 레벨을 올려도 슬롯이 안 는다
+  - **불러오기는 교체가 아니라 병합이다** — '운동 추가' 시트 안의 일이므로 '지난 기록'과 같아야 한다. `mergeImportedExercises`를 그대로 재사용한다. (예정표의 `handleLoadPlan`은 "지우고 바꿀까요?"를 묻지만 그건 별개 흐름이다)
+  - 달력 피커에도 같은 탭이 뜬다(같은 컴포넌트) — 루틴을 그 날짜의 예정표로 바로 저장한다
+- **검증 실측**: unit **895/895**(78파일, 신규 50건) · typecheck ✅ · lint 0 · build ✅
+  - 신규 단언은 **일부러 고장내서 실제로 실패하는 것까지 확인**했다: 90일 창을 `<=`로 바꾸면 1건, 세션 내 중복 제거를 빼면 1건, 달력을 옛 `disabled` 조건으로 되돌리면 **3건**이 실패한다
+  - `.worktrees/**`를 eslint `globalIgnores`에 넣었다. `".next/**"`는 루트만 잡아서 다른 세션 워크트리의 빌드 산출물 때문에 `pnpm lint`가 **1191건**을 뱉고 있었다 — 게이트를 읽을 수 없는 상태였다
+- ⏳ **남은 일 (사용자)**
+  1. **0056을 SQL Editor에서 Run** — 에이전트는 DDL을 못 돌린다. 파일 끝에 확인용 select가 붙어 있다(기대: `routine_slot_1=(12,active)`, `routine_slot_2=(27,active)`)
+  2. 적용 후 `node scripts/rls-test.mjs` — 루틴 단언 10건이 새로 들어갔다. **`CLAUDE.md`의 기준선 표에 125를 ⏳(예상치)로 적어 뒀으니 실제 숫자로 고칠 것**
+  3. 적용 후 `pnpm db:snapshot`으로 `docs/db-current-schema.sql` 갱신
+  4. **개발 서버 화면 확인** — 이 세션에 브라우저 자동화 도구가 없어 에이전트가 눌러 볼 수 없다. 확인 항목표는 설계 문서 §완료 조건에 있다
+- `release-notes.data.json`에 `2026-08-02-routines-frequent-and-calendar-planning` 추가. **발송 안 함**(지시할 때만)
+
 ## ✅ 2026-08-01 — 로그아웃 (개발 서버 확인 ✅ · 운영 배포 ✅)
 
 사용자 지적: "보니까 로그아웃 기능이 없네". 실제로 없었다 — `signOut`은 `auth-provider`가 **유령 세션을 정리할 때만** 불렀고, 사용자가 누를 수 있는 곳은 한 군데도 없었다.
