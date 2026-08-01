@@ -12,9 +12,10 @@
  * 두 창에 각각 들어갈 수 있다.
  *
  * 사용법:
- *   node scripts/dev-fixture.mjs status    # 현재 상태 (기본값)
- *   node scripts/dev-fixture.mjs create    # 없으면 만들고, 크루로 상호 연결
- *   node scripts/dev-fixture.mjs destroy   # 픽스처 2개만 삭제
+ *   node scripts/dev-fixture.mjs status     # 현재 상태 (기본값)
+ *   node scripts/dev-fixture.mjs create     # 없으면 만들고, 크루로 상호 연결
+ *   node scripts/dev-fixture.mjs challenge  # 둘이 함께하는 **active 챌린지** 세팅
+ *   node scripts/dev-fixture.mjs destroy    # 픽스처 2개만 삭제
  *
  * 비밀번호는 `.env.local`의 `DEV_FIXTURE_PASSWORD`에서 읽는다(gitignore 대상).
  * 코드에 박지 않는다.
@@ -214,6 +215,121 @@ async function create() {
   console.log("\n일반 창 = A, 시크릿 창(또는 다른 크롬 프로필) = B 로 두면 동시에 볼 수 있습니다.");
 }
 
+// ── challenge ─────────────────────────────────────────────────────
+/**
+ * 둘이 함께하는 **active** 챌린지를 만든다.
+ *
+ * `start_challenge`가 요구하는 게이트가 셋이다(스키마 확인):
+ *   ① joined 참가자 전원에게 `user_goals` 행이 있을 것 (`kpi_incomplete`)
+ *   ② joined 참가자 **전원**이 동의했을 것 (`consent_incomplete`) — 방장만으론 안 된다
+ *   ③ 상태가 `setup`일 것
+ * 하나라도 빠지면 setup에 머물러서 챌린지 화면 대부분이 안 그려진다.
+ */
+async function challenge() {
+  const users = [];
+  for (const f of FIXTURES) {
+    const authUser = await findAuthUserByEmail(f.email);
+    if (!authUser) throw new Error(`${f.email} 없음 — 먼저 create를 실행하세요`);
+    users.push({ ...f, ...(await signIn(f.email)) });
+  }
+  const [a, b] = users;
+
+  // 이미 진행 중인 게 있으면 그걸 쓴다 — 매번 새로 만들면 방이 쌓인다.
+  const { json: mine } = await api(
+    a.token,
+    "GET",
+    "/rest/v1/challenges?select=id,name,status,start_date,end_date&status=in.(setup,active)",
+  );
+  let ch = Array.isArray(mine) ? mine[0] : null;
+
+  if (!ch) {
+    // `create_challenge_room`은 방장이 그룹에 속해 있어야 한다(`no_group_yet`).
+    // 크루 연결(crew_links)과 그룹(groups)은 별개다 — 둘 다 있어야 한다.
+    const groups = await api(a.token, "GET", "/rest/v1/groups?select=id,name");
+    if (!Array.isArray(groups.json) || groups.json.length === 0) {
+      const g = await rpc(a.token, "create_group", { p_name: "개발 확인용 크루" });
+      if (!g.json?.id) throw new Error(`그룹 생성 실패: ${JSON.stringify(g.json)}`);
+      console.log(`✅ 그룹 생성 "${g.json.name}"`);
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+    const end = new Date(Date.now() + 27 * 86400_000).toISOString().slice(0, 10);
+    const r = await rpc(a.token, "create_challenge_room", {
+      p_name: "개발 확인용 챌린지",
+      p_start_date: today,
+      p_end_date: end,
+      p_photo_required: false,
+    });
+    ch = r.json;
+    if (!ch?.id) throw new Error(`방 생성 실패: ${JSON.stringify(r.json)}`);
+    console.log(`✅ 챌린지 생성 "${ch.name}" (${ch.start_date} ~ ${ch.end_date})`);
+  } else {
+    console.log(`… 기존 챌린지 사용 "${ch.name}" [${ch.status}]`);
+  }
+
+  if (ch.status === "active") {
+    console.log("✅ 이미 active — 그대로 씁니다");
+    return;
+  }
+
+  // 초대 · 수락
+  const inv = await rpc(a.token, "invite_to_challenge", {
+    p_challenge_id: ch.id,
+    p_target_id: b.id,
+  });
+  if (inv.status >= 400 && inv.json?.message !== "already_invited") {
+    console.log(`… 초대 결과: ${JSON.stringify(inv.json)}`);
+  }
+  const acc = await rpc(b.token, "accept_challenge_invite", {
+    p_challenge_id: ch.id,
+  });
+  if (acc.status >= 400) console.log(`… 수락 결과: ${JSON.stringify(acc.json)}`);
+
+  // 목표 — setup 단계 RLS를 우회해 service_role로 심는다 (회귀 스크립트와 같은 방식)
+  for (const u of users) {
+    const exists = await api(
+      SERVICE_KEY,
+      "GET",
+      `/rest/v1/user_goals?select=id&challenge_id=eq.${ch.id}&user_id=eq.${u.id}`,
+    );
+    if (Array.isArray(exists.json) && exists.json.length > 0) continue;
+    const g = await api(SERVICE_KEY, "POST", "/rest/v1/user_goals", {
+      user_id: u.id,
+      challenge_id: ch.id,
+      group_id: ch.group_id,
+      goal_type: "weight_days",
+      target_value: 12,
+      unit: "일",
+      planned_days: 5,
+      qualifier: 3,
+    });
+    if (g.status >= 400) console.log(`… 목표 심기(${u.key}): ${JSON.stringify(g.json)}`);
+  }
+
+  // 동의 — **전원**이 해야 한다. 방장만 하면 consent_incomplete로 막힌다.
+  for (const u of users) {
+    const ap = await rpc(u.token, "approve_challenge_goals", {
+      p_challenge_id: ch.id,
+    });
+    if (ap.status >= 400) console.log(`… 동의(${u.key}): ${JSON.stringify(ap.json)}`);
+  }
+
+  const started = await rpc(a.token, "start_challenge", { p_challenge_id: ch.id });
+  if (started.json?.status === "active") {
+    console.log(`✅ 챌린지 시작 — active (${started.json.start_date} ~ ${started.json.end_date})`);
+  } else {
+    console.log(`❌ 시작 실패: ${JSON.stringify(started.json)}`);
+    return;
+  }
+
+  const parts = await rpc(a.token, "get_challenge_participant_profiles", {
+    p_challenge_id: ch.id,
+  });
+  console.log(
+    `참가자 ${(parts.json ?? []).length}명: ${(parts.json ?? []).map((p) => p.nickname).join(", ")}`,
+  );
+}
+
 // ── destroy ───────────────────────────────────────────────────────
 async function destroy() {
   const before = await allProfiles();
@@ -264,8 +380,9 @@ async function destroy() {
 const cmd = process.argv[2] ?? "status";
 if (cmd === "status") await status();
 else if (cmd === "create") await create();
+else if (cmd === "challenge") await challenge();
 else if (cmd === "destroy") await destroy();
 else {
-  console.error("사용법: node scripts/dev-fixture.mjs [status|create|destroy]");
+  console.error("사용법: node scripts/dev-fixture.mjs [status|create|challenge|destroy]");
   process.exit(1);
 }

@@ -41,9 +41,10 @@ pnpm dev          # → http://localhost:3000
 회귀 스크립트(`rls-test`·`poke-levelup-check`·`crew-link-check`·`challenge-room-check`)는 실행마다 익명 계정을 4~5개 만들어 상호작용을 검사하지만 **전부 HTTP/RPC 계층**이다. `notifications`에 행이 생긴 것까지만 본다. 받는 사람의 **알림 벨 배지·목록 문구·아이콘**, 보낸 사람의 **찌르기 버튼이 쿨다운으로 잠기는지**, 챌린지 **참가자 전용 카드가 렌더되는지**는 화면을 봐야 잡힌다.
 
 ```bash
-node scripts/dev-fixture.mjs status    # 현재 상태 (읽기 전용, 기본값)
-node scripts/dev-fixture.mjs create    # 없으면 만들고 크루로 상호 연결 (멱등)
-node scripts/dev-fixture.mjs destroy   # 픽스처 2개만 삭제
+node scripts/dev-fixture.mjs status     # 현재 상태 (읽기 전용, 기본값)
+node scripts/dev-fixture.mjs create     # 없으면 만들고 크루로 상호 연결 (멱등)
+node scripts/dev-fixture.mjs challenge  # 둘이 함께하는 active 챌린지 세팅 (멱등)
+node scripts/dev-fixture.mjs destroy    # 픽스처 2개만 삭제
 ```
 
 - 계정: `dev-테스터A`(`dev-fixture-a@gnd.local`) · `dev-테스터B`(`dev-fixture-b@gnd.local`), 크루로 연결돼 있다
@@ -53,6 +54,12 @@ node scripts/dev-fixture.mjs destroy   # 픽스처 2개만 삭제
 - ⚠️ 이 둘은 **운영 Supabase에 상주한다.** 크루 밖 사람에게는 닉네임 검색에만 보인다. `destroy`는 이메일과 닉네임을 **둘 다** 대조하고, 지운 뒤 나머지 프로필이 전부 남았는지 확인한다
 
 확인 예: A가 B를 찌르기 → **B 화면 알림 벨에 뜨는가**, A의 버튼이 잠기는가 → B가 운동 완료 → **A에게 알림이 가는가**.
+
+⚠️ `challenge` 서브커맨드가 넘는 관문들 (하나라도 빠지면 `setup`에 머물러 챌린지 화면이 대부분 안 그려진다):
+- **그룹이 먼저 있어야 한다** — `create_challenge_room`이 `no_group_yet`으로 막는다. **크루 연결(`crew_links`)과 그룹(`groups`)은 별개다**
+- `start_challenge`는 joined 참가자 **전원**에게 `user_goals`를 요구한다 (`kpi_incomplete`)
+- 동의도 **전원**이 해야 한다 (`consent_incomplete`) — 방장만 하면 안 된다
+- `user_goals`는 setup 단계 RLS에 막혀서 `service_role`로 심는다 (회귀 스크립트와 같은 방식)
 
 ---
 
