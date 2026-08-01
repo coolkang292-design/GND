@@ -208,11 +208,46 @@ async function create() {
     console.log(`… 크루 요청 결과: ${JSON.stringify(req.json)}`);
   }
 
+  // 링크만으로는 홈 크루 카드가 안 채워진다 — 그룹까지 넣어야 한 쌍이 완성된다.
+  await ensureGroup(a, b);
+
   console.log("\n두 창에서 각각 로그인하세요 — http://localhost:3000/login");
   for (const u of users) {
     console.log(`  ${u.key}: ${u.email} / (DEV_FIXTURE_PASSWORD)  → ${u.nickname}`);
   }
   console.log("\n일반 창 = A, 시크릿 창(또는 다른 크롬 프로필) = B 로 두면 동시에 볼 수 있습니다.");
+}
+
+/**
+ * 둘을 같은 **그룹(크루)** 에 넣는다.
+ *
+ * ⚠️ `crew_links`(상호 수락 그래프)와 `groups`(크루 그룹)는 **별개**다.
+ * 홈 화면의 크루 카드와 `create_challenge_room`은 **그룹**을 본다. 링크만 맺고
+ * 그룹에 안 넣으면 한쪽 홈에 "크루와 함께하면 더 강해져요" 빈 카드가 뜬다
+ * (2026-08-01에 실제로 이렇게 새어서 사용자가 잡았다).
+ */
+async function ensureGroup(a, b) {
+  let { json: groups } = await api(a.token, "GET", "/rest/v1/groups?select=id,name,invite_code");
+  let group = Array.isArray(groups) ? groups[0] : null;
+
+  if (!group) {
+    const g = await rpc(a.token, "create_group", { p_name: "개발 확인용 크루" });
+    if (!g.json?.id) throw new Error(`그룹 생성 실패: ${JSON.stringify(g.json)}`);
+    group = g.json;
+    console.log(`✅ 그룹 생성 "${group.name}"`);
+  }
+
+  const { json: bGroups } = await api(b.token, "GET", "/rest/v1/groups?select=id");
+  if (Array.isArray(bGroups) && bGroups.some((g) => g.id === group.id)) {
+    console.log("… B는 이미 그룹 소속");
+    return group;
+  }
+
+  const j = await rpc(b.token, "join_group_with_code", { p_code: group.invite_code });
+  const row = Array.isArray(j.json) ? j.json[0] : j.json;
+  if (!row?.group_id) throw new Error(`B 그룹 참여 실패: ${JSON.stringify(j.json)}`);
+  console.log(`✅ B가 그룹 "${row.group_name}"에 참여`);
+  return group;
 }
 
 // ── challenge ─────────────────────────────────────────────────────
@@ -234,6 +269,10 @@ async function challenge() {
   }
   const [a, b] = users;
 
+  // 챌린지가 이미 active여도 그룹은 따로 확인한다 — 링크만 맺고 그룹에서 빠진
+  // 상태로 굳어 있을 수 있다.
+  await ensureGroup(a, b);
+
   // 이미 진행 중인 게 있으면 그걸 쓴다 — 매번 새로 만들면 방이 쌓인다.
   const { json: mine } = await api(
     a.token,
@@ -243,14 +282,7 @@ async function challenge() {
   let ch = Array.isArray(mine) ? mine[0] : null;
 
   if (!ch) {
-    // `create_challenge_room`은 방장이 그룹에 속해 있어야 한다(`no_group_yet`).
-    // 크루 연결(crew_links)과 그룹(groups)은 별개다 — 둘 다 있어야 한다.
-    const groups = await api(a.token, "GET", "/rest/v1/groups?select=id,name");
-    if (!Array.isArray(groups.json) || groups.json.length === 0) {
-      const g = await rpc(a.token, "create_group", { p_name: "개발 확인용 크루" });
-      if (!g.json?.id) throw new Error(`그룹 생성 실패: ${JSON.stringify(g.json)}`);
-      console.log(`✅ 그룹 생성 "${g.json.name}"`);
-    }
+    await ensureGroup(a, b);
 
     const today = new Date().toISOString().slice(0, 10);
     const end = new Date(Date.now() + 27 * 86400_000).toISOString().slice(0, 10);
