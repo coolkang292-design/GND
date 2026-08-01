@@ -7,7 +7,7 @@
 -- 쓰는 법: 함수·정책의 '현행' 정의가 필요할 때 마이그레이션 51개를
 -- 뒤지지 말고 이 파일을 검색하라. 마이그레이션을 적용한 뒤에는 다시 뽑아라.
 --
--- 함수 68개 · 정책 66개 · 인덱스 73개
+-- 함수 69개 · 정책 70개 · 인덱스 76개
 
 -- ════════════════════════════════════════════════════════════
 -- 함수
@@ -995,6 +995,43 @@ begin
   exception when others then
     null; -- 푸시 실패는 알림 저장에 영향 없음
   end;
+  return new;
+end;
+$function$;
+
+-- ── enforce_routine_slot_limit ──
+CREATE OR REPLACE FUNCTION public.enforce_routine_slot_limit()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_level int;
+  v_limit int;
+  v_count int;
+begin
+  -- ⚠️ coalesce가 두 겹인 이유: 컬럼 NULL과 '행 자체가 없음'은 다른 경우다.
+  -- user_progress 행이 없는 신규 사용자는 select ... into가 v_level을 NULL로
+  -- 남기는데, 그러면 level <= v_level이 항상 false라 한도가 조용히 3으로
+  -- 굳어 레벨을 올려도 슬롯이 안 늘어난다.
+  select coalesce(current_level, 1) into v_level
+    from user_progress where user_id = new.user_id;
+  v_level := coalesce(v_level, 1);
+
+  select 3 + count(*) into v_limit
+    from level_definitions
+    where reward_key in ('routine_slot_1', 'routine_slot_2')
+      and level <= v_level;
+
+  select count(*) into v_count
+    from workout_routines where user_id = new.user_id;
+
+  if v_count >= v_limit then
+    raise exception 'routine_slot_limit:%', v_limit
+      using errcode = 'check_violation';
+  end if;
+
   return new;
 end;
 $function$;
@@ -2763,6 +2800,16 @@ $function$;
 --   check  : ((user_id = auth.uid()) AND ((source_session_id IS NULL) OR owns_workout_session(source_session_id)) AND (plan_date >= ((now() AT TIME ZONE COALESCE(( SELECT profiles.timezone
    FROM profiles
   WHERE (profiles.id = auth.uid())), 'Asia/Seoul'::text)))::date))
+-- ── workout_routines ──
+-- workout_routines_delete_own  [DELETE]  roles=public
+--   using  : (user_id = auth.uid())
+-- workout_routines_insert_own  [INSERT]  roles=public
+--   check  : (user_id = auth.uid())
+-- workout_routines_select_own  [SELECT]  roles=public
+--   using  : (user_id = auth.uid())
+-- workout_routines_update_own  [UPDATE]  roles=public
+--   using  : (user_id = auth.uid())
+--   check  : (user_id = auth.uid())
 -- ── workout_sessions ──
 -- sessions_delete_own  [DELETE]  roles=public
 --   using  : (user_id = auth.uid())
@@ -2855,6 +2902,9 @@ $function$;
 -- CREATE UNIQUE INDEX workout_plans_pkey ON public.workout_plans USING btree (id);
 -- CREATE INDEX workout_plans_user_date ON public.workout_plans USING btree (user_id, plan_date);
 -- CREATE UNIQUE INDEX workout_plans_user_id_plan_date_key ON public.workout_plans USING btree (user_id, plan_date);
+-- CREATE UNIQUE INDEX workout_routines_pkey ON public.workout_routines USING btree (id);
+-- CREATE UNIQUE INDEX workout_routines_user_name ON public.workout_routines USING btree (user_id, name);
+-- CREATE INDEX workout_routines_user_updated ON public.workout_routines USING btree (user_id, updated_at DESC);
 -- CREATE UNIQUE INDEX workout_sessions_one_active ON public.workout_sessions USING btree (user_id) WHERE (status = 'active'::text);
 -- CREATE UNIQUE INDEX workout_sessions_pkey ON public.workout_sessions USING btree (id);
 -- CREATE INDEX workout_sessions_user_completed ON public.workout_sessions USING btree (user_id, completed_at DESC) WHERE (status = 'completed'::text);

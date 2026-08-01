@@ -593,11 +593,22 @@ const routineBody = (name) => ({
 });
 
 const routineIds = [];
-for (let i = 1; i <= 3; i++) {
+for (let i = 1; i <= 2; i++) {
   const res = await api(A.token, "POST", "/rest/v1/workout_routines", routineBody(`루틴${i}`));
   check(`A가 루틴 ${i}/3 저장 (레벨1 기본 슬롯)`, res.status === 201, `status=${res.status} ${JSON.stringify(res.json)}`);
   if (res.json?.[0]?.id) routineIds.push(res.json[0].id);
 }
+
+// ⚠ 이름 중복은 **한도에 걸리기 전에** 확인해야 한다. 슬롯 트리거가
+//   before insert라 한도에 도달한 상태에서는 유니크 인덱스에 닿기도 전에
+//   routine_slot_limit(400)으로 막혀, 유니크 제약을 전혀 검증하지 못한다.
+//   (2026-08-02 첫 실행에서 실제로 409 대신 400이 와서 드러났다.)
+const dupName = await api(A.token, "POST", "/rest/v1/workout_routines", routineBody("루틴1"));
+check("같은 이름의 루틴은 거부(유니크)", dupName.status === 409, `status=${dupName.status} ${JSON.stringify(dupName.json)}`);
+
+const third = await api(A.token, "POST", "/rest/v1/workout_routines", routineBody("루틴3"));
+check("A가 루틴 3/3 저장 (레벨1 기본 슬롯)", third.status === 201, `status=${third.status} ${JSON.stringify(third.json)}`);
+if (third.json?.[0]?.id) routineIds.push(third.json[0].id);
 
 // ⚠ "3개까지 된다"만 보면 한도가 무한이어도 통과한다. 4번째가 **막히는지**가
 //   이 단언의 핵심이다 (CLAUDE.md §테스트가 진짜 테스트인지 확인한다).
@@ -607,9 +618,6 @@ check(
   overLimit.status >= 400 && JSON.stringify(overLimit.json).includes("routine_slot_limit"),
   `status=${overLimit.status} ${JSON.stringify(overLimit.json)}`,
 );
-
-const dupName = await api(A.token, "POST", "/rest/v1/workout_routines", routineBody("루틴1"));
-check("같은 이름의 루틴은 거부(유니크)", dupName.status === 409, `status=${dupName.status}`);
 
 const routineSelfSel = await api(A.token, "GET", "/rest/v1/workout_routines?select=id,name");
 check("A는 본인 루틴 3개 조회", routineSelfSel.status === 200 && routineSelfSel.json.length === 3, JSON.stringify(routineSelfSel.json));
