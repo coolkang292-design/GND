@@ -1,8 +1,42 @@
 {
-  "gnd-cap-v2": { "slot": "head", "assetWidth": 682, "assetHeight": 485, "x": 292, "y": 100, "width": 325, "height": 231, "z": 40 },
-  "gnd-sunglasses-v2": { "slot": "eyes", "assetWidth": 958, "assetHeight": 423, "x": 305, "y": 302, "width": 275, "height": 121, "z": 50 },
-  "gnd-hoodie-v2": { "slot": "top", "assetWidth": 890, "assetHeight": 906, "x": 212, "y": 382, "width": 555, "height": 565, "z": 30 },
-  "gnd-joggers-v2": { "slot": "bottom", "assetWidth": 755, "assetHeight": 1130, "x": 264, "y": 810, "width": 445, "height": 666, "z": 30 },
-  "gnd-sneakers-v2": { "slot": "shoes", "assetWidth": 926, "assetHeight": 539, "x": 185, "y": 1192, "width": 575, "height": 335, "z": 45 },
-  "gnd-watch-v2": { "slot": "wrist", "assetWidth": 802, "assetHeight": 989, "x": 665, "y": 825, "width": 145, "height": 179, "z": 60 }
+  "gnd-cap-v2": {
+    "slot": "head",
+    "layers": [
+      { "id": "crown", "src": "/avatar-coordinate-v2/items/gnd-cap-v2/crown.png", "assetWidth": 360, "assetHeight": 220, "x": 320, "y": 110, "width": 360, "height": 220, "z": 40 },
+      { "id": "ear-left-front", "src": "/avatar-coordinate-v2/items/gnd-cap-v2/ear-left-front.png", "assetWidth": 92, "assetHeight": 116, "x": 292, "y": 214, "width": 92, "height": 116, "z": 45 },
+      { "id": "ear-right-front", "src": "/avatar-coordinate-v2/items/gnd-cap-v2/ear-right-front.png", "assetWidth": 90, "assetHeight": 110, "x": 594, "y": 210, "width": 90, "height": 110, "z": 45 },
+      { "id": "brim", "src": "/avatar-coordinate-v2/items/gnd-cap-v2/brim.png", "assetWidth": 302, "assetHeight": 82, "x": 304, "y": 205, "width": 302, "height": 82, "z": 50 },
+      { "id": "contact-shadow", "src": "/avatar-coordinate-v2/items/gnd-cap-v2/contact-shadow.png", "assetWidth": 268, "assetHeight": 62, "x": 324, "y": 235, "width": 268, "height": 62, "z": 55 }
+    ]
+  },
+  "gnd-sunglasses-v2": {
+    "slot": "eyes",
+    "layers": [
+      { "id": "main", "src": "/avatar-coordinate-v2/items/gnd-sunglasses-v2.png", "assetWidth": 958, "assetHeight": 423, "x": 305, "y": 302, "width": 275, "height": 121, "z": 50 }
+    ]
+  },
+  "gnd-hoodie-v2": {
+    "slot": "top",
+    "layers": [
+      { "id": "main", "src": "/avatar-coordinate-v2/items/gnd-hoodie-v2.png", "assetWidth": 890, "assetHeight": 906, "x": 212, "y": 382, "width": 555, "height": 565, "z": 30 }
+    ]
+  },
+  "gnd-joggers-v2": {
+    "slot": "bottom",
+    "layers": [
+      { "id": "main", "src": "/avatar-coordinate-v2/items/gnd-joggers-v2.png", "assetWidth": 755, "assetHeight": 1130, "x": 264, "y": 810, "width": 445, "height": 666, "z": 30 }
+    ]
+  },
+  "gnd-sneakers-v2": {
+    "slot": "shoes",
+    "layers": [
+      { "id": "main", "src": "/avatar-coordinate-v2/items/gnd-sneakers-v2.png", "assetWidth": 926, "assetHeight": 539, "x": 185, "y": 1192, "width": 575, "height": 335, "z": 45 }
+    ]
+  },
+  "gnd-watch-v2": {
+    "slot": "wrist",
+    "layers": [
+      { "id": "main", "src": "/avatar-coordinate-v2/items/gnd-watch-v2.png", "assetWidth": 802, "assetHeight": 989, "x": 665, "y": 825, "width": 145, "height": 179, "z": 60 }
+    ]
+  }
 }

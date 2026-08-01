@@ -14,7 +14,7 @@ import {
 describe("avatar coordinate layers", () => {
   it("1024x1536 좌표를 캔버스 백분율로 변환한다", () => {
     expect(
-      layerStyle({ x: 256, y: 384, width: 512, height: 384, z: 20 }),
+      layerStyle({ id: "test-layer", x: 256, y: 384, width: 512, height: 384, z: 20 }),
     ).toMatchObject({
       left: "25%",
       top: "25%",
@@ -26,7 +26,7 @@ describe("avatar coordinate layers", () => {
 
   it("레이어가 마스터 캔버스를 벗어나면 거부한다", () => {
     expect(
-      validateAvatarLayer({ x: 900, y: 0, width: 200, height: 100, z: 1 }),
+      validateAvatarLayer({ id: "test-layer", x: 900, y: 0, width: 200, height: 100, z: 1 }),
     ).toContain("canvas");
   });
 
@@ -39,6 +39,18 @@ describe("avatar coordinate layers", () => {
     expect(AVATAR_ITEM_CATALOG.find((item) => item.id === "gnd-cap-v2"))
       .toMatchObject({ price: 500, comingSoon: false });
     expect(AVATAR_ITEM_CATALOG.filter((item) => item.comingSoon)).toHaveLength(5);
+  });
+
+  it("한 상품의 여러 착용 레이어를 매니페스트 순서와 좌표대로 반환한다", () => {
+    const cap = AVATAR_ITEM_CATALOG.find((item) => item.id === "gnd-cap-v2");
+    expect(cap?.layers.map((layer) => layer.id)).toEqual([
+      "crown",
+      "ear-left-front",
+      "ear-right-front",
+      "brim",
+      "contact-shadow",
+    ]);
+    expect(cap?.layers.map((layer) => layer.z)).toEqual([40, 45, 45, 50, 55]);
   });
 
   it("구매 전에는 장착할 수 없고 구매하면 500P가 차감된다", () => {

@@ -11,6 +11,7 @@ export type AvatarSlot =
   | "shoes";
 
 export interface AvatarLayer {
+  id: string;
   src?: string;
   x: number;
   y: number;
@@ -50,14 +51,18 @@ export interface AvatarMockState {
   equippedBySlot: Partial<Record<AvatarSlot, string>>;
 }
 
-interface AvatarAssetPlacement extends AvatarLayer {
-  slot: AvatarSlot;
+interface AvatarAssetLayer extends AvatarLayer {
   assetWidth: number;
   assetHeight: number;
 }
 
+interface AvatarItemPlacement {
+  slot: AvatarSlot;
+  layers: AvatarAssetLayer[];
+}
+
 type AvatarItemId = keyof typeof placementManifest;
-const placements = placementManifest as Record<AvatarItemId, AvatarAssetPlacement>;
+const placements = placementManifest as Record<AvatarItemId, AvatarItemPlacement>;
 
 const item = (
   id: AvatarItemId,
@@ -65,7 +70,7 @@ const item = (
   price: number,
   comingSoon: boolean,
 ): AvatarItem => {
-  const { slot, x, y, width, height, z } = placements[id];
+  const { slot, layers } = placements[id];
   return {
     id,
     name,
@@ -73,16 +78,15 @@ const item = (
     price,
     comingSoon,
     thumbnailSrc: `/avatar-coordinate-v2/thumbnails/${id}.webp`,
-    layers: [
-      {
-        src: `/avatar-coordinate-v2/items/${id}.png`,
-        x,
-        y,
-        width,
-        height,
-        z,
-      },
-    ],
+    layers: layers.map(({ id, src, x, y, width, height, z }) => ({
+      id,
+      src,
+      x,
+      y,
+      width,
+      height,
+      z,
+    })),
   };
 };
 
