@@ -1,0 +1,77 @@
+{
+  "canvas": {
+    "width": 1024,
+    "height": 1536
+  },
+  "canonicalBase": {
+    "path": "/avatar-coordinate-v2/base/avatar-base-master.png",
+    "sha256Before": "0ef297593c8ac3ee6968db1b70ec59e4e301bd2e3e42d30e1b4399cf8d8aa365",
+    "sha256After": "0ef297593c8ac3ee6968db1b70ec59e4e301bd2e3e42d30e1b4399cf8d8aa365"
+  },
+  "geometrySource": {
+    "path": "gnd-cap-fitted-reference-v1.png",
+    "sha256": "151f23eee6eb8252cea9ef8a29d507e817dcf663f9ef4129ca73ebf2f65aab26"
+  },
+  "layers": [
+    {
+      "id": "crown",
+      "src": "/avatar-coordinate-v2/items/gnd-cap-v2/crown.png",
+      "assetWidth": 262,
+      "assetHeight": 152,
+      "x": 344,
+      "y": 123,
+      "width": 262,
+      "height": 152,
+      "z": 40,
+      "sha256": "ab468b56e05b5d870981bec2209543939bd7e79c8827aba361c379b42c5853bc"
+    },
+    {
+      "id": "ear-left-front",
+      "src": "/avatar-coordinate-v2/items/gnd-cap-v2/ear-left-front.png",
+      "assetWidth": 70,
+      "assetHeight": 102,
+      "x": 291,
+      "y": 226,
+      "width": 70,
+      "height": 102,
+      "z": 45,
+      "sha256": "8e4397ef78b4524d4c397361f6b65a3368bc12e2e16f440664ed6ba24faf067b"
+    },
+    {
+      "id": "ear-right-front",
+      "src": "/avatar-coordinate-v2/items/gnd-cap-v2/ear-right-front.png",
+      "assetWidth": 106,
+      "assetHeight": 109,
+      "x": 549,
+      "y": 213,
+      "width": 106,
+      "height": 109,
+      "z": 45,
+      "sha256": "e1e821d77d631358bf901bdbb453aa8e56bcab79e6b6e10e4c81481c00a4cbab"
+    },
+    {
+      "id": "brim",
+      "src": "/avatar-coordinate-v2/items/gnd-cap-v2/brim.png",
+      "assetWidth": 304,
+      "assetHeight": 77,
+      "x": 302,
+      "y": 212,
+      "width": 304,
+      "height": 77,
+      "z": 50,
+      "sha256": "fdcbb6f57fd82f6f6a8e240f3ee54cad089448aec2ab1f91746f54a94ae6d102"
+    },
+    {
+      "id": "contact-shadow",
+      "src": "/avatar-coordinate-v2/items/gnd-cap-v2/contact-shadow.png",
+      "assetWidth": 251,
+      "assetHeight": 72,
+      "x": 328,
+      "y": 240,
+      "width": 251,
+      "height": 72,
+      "z": 55,
+      "sha256": "128453406cf46237320929717d441339c6627b0831d8362e54df56bbe2f88a77"
+    }
+  ]
+}
