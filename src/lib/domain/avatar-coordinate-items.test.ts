@@ -6,6 +6,7 @@ import {
   equipAvatarItem,
   isAvatarMockEnabled,
   layerStyle,
+  parseAvatarManifest,
   purchaseAvatarItem,
   unequipAvatarItem,
   validateAvatarLayer,
@@ -14,7 +15,7 @@ import {
 describe("avatar coordinate layers", () => {
   it("1024x1536 좌표를 캔버스 백분율로 변환한다", () => {
     expect(
-      layerStyle({ id: "test-layer", x: 256, y: 384, width: 512, height: 384, z: 20 }),
+      layerStyle({ x: 256, y: 384, width: 512, height: 384, z: 20 }),
     ).toMatchObject({
       left: "25%",
       top: "25%",
@@ -26,7 +27,7 @@ describe("avatar coordinate layers", () => {
 
   it("레이어가 마스터 캔버스를 벗어나면 거부한다", () => {
     expect(
-      validateAvatarLayer({ id: "test-layer", x: 900, y: 0, width: 200, height: 100, z: 1 }),
+      validateAvatarLayer({ x: 900, y: 0, width: 200, height: 100, z: 1 }),
     ).toContain("canvas");
   });
 
@@ -51,6 +52,72 @@ describe("avatar coordinate layers", () => {
       "contact-shadow",
     ]);
     expect(cap?.layers.map((layer) => layer.z)).toEqual([40, 45, 45, 50, 55]);
+  });
+
+  it("레이어가 없거나 src가 없는 매니페스트를 거부한다", () => {
+    expect(() =>
+      parseAvatarManifest({
+        cap: { slot: "head" },
+      }),
+    ).toThrow(/layers/);
+    expect(() =>
+      parseAvatarManifest({
+        cap: {
+          slot: "head",
+          layers: [
+            {
+              id: "crown",
+              assetWidth: 10,
+              assetHeight: 10,
+              x: 0,
+              y: 0,
+              width: 10,
+              height: 10,
+              z: 1,
+            },
+          ],
+        },
+      }),
+    ).toThrow(/src/);
+  });
+
+  it("같은 상품 안의 중복 레이어 ID를 거부한다", () => {
+    const layer = {
+      id: "crown",
+      src: "/crown.png",
+      assetWidth: 10,
+      assetHeight: 10,
+      x: 0,
+      y: 0,
+      width: 10,
+      height: 10,
+      z: 1,
+    };
+    expect(() =>
+      parseAvatarManifest({
+        cap: { slot: "head", layers: [layer, layer] },
+      }),
+    ).toThrow(/duplicate layer id/);
+  });
+
+  it("모자 crown 좌표와 모든 카탈로그 레이어의 렌더링 정보를 검증한다", () => {
+    const cap = AVATAR_ITEM_CATALOG.find((item) => item.id === "gnd-cap-v2");
+    expect(cap?.layers.find((layer) => layer.id === "crown")).toEqual({
+      id: "crown",
+      src: "/avatar-coordinate-v2/items/gnd-cap-v2/crown.png",
+      x: 320,
+      y: 110,
+      width: 360,
+      height: 220,
+      z: 40,
+    });
+    expect(
+      AVATAR_ITEM_CATALOG.every((item) =>
+        item.layers.every(
+          (layer) => layer.src.length > 0 && validateAvatarLayer(layer) === null,
+        ),
+      ),
+    ).toBe(true);
   });
 
   it("구매 전에는 장착할 수 없고 구매하면 500P가 차감된다", () => {

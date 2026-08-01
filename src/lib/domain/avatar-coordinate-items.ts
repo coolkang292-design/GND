@@ -10,14 +10,17 @@ export type AvatarSlot =
   | "wrist"
   | "shoes";
 
-export interface AvatarLayer {
-  id: string;
-  src?: string;
+export interface AvatarLayerPlacement {
   x: number;
   y: number;
   width: number;
   height: number;
   z: number;
+}
+
+export interface AvatarLayer extends AvatarLayerPlacement {
+  id: string;
+  src: string;
 }
 
 export interface AvatarItem {
@@ -61,8 +64,100 @@ interface AvatarItemPlacement {
   layers: AvatarAssetLayer[];
 }
 
+type AvatarManifest = Record<string, AvatarItemPlacement>;
+
+const AVATAR_SLOTS: AvatarSlot[] = [
+  "head",
+  "eyes",
+  "top",
+  "bottom",
+  "wrist",
+  "shoes",
+];
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function manifestError(itemId: string, message: string): Error {
+  return new Error(`avatar manifest item '${itemId}' ${message}`);
+}
+
+function readNonEmptyString(value: unknown, itemId: string, field: string): string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw manifestError(itemId, `${field} must be a non-empty string`);
+  }
+  return value;
+}
+
+function readFiniteNumber(value: unknown, itemId: string, field: string): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw manifestError(itemId, `${field} must be a finite number`);
+  }
+  return value;
+}
+
+function readPositiveNumber(value: unknown, itemId: string, field: string): number {
+  const number = readFiniteNumber(value, itemId, field);
+  if (number <= 0) throw manifestError(itemId, `${field} must be positive`);
+  return number;
+}
+
+function readAvatarSlot(value: unknown, itemId: string): AvatarSlot {
+  if (typeof value !== "string" || !AVATAR_SLOTS.includes(value as AvatarSlot)) {
+    throw manifestError(itemId, "slot must be valid");
+  }
+  return value as AvatarSlot;
+}
+
+export function parseAvatarManifest(raw: unknown): AvatarManifest {
+  if (!isRecord(raw)) throw new Error("avatar manifest must be an object");
+
+  const manifest: AvatarManifest = {};
+  for (const [itemId, rawItem] of Object.entries(raw)) {
+    if (itemId.trim().length === 0) throw new Error("avatar manifest item id must be non-empty");
+    if (!isRecord(rawItem)) throw manifestError(itemId, "must be an object");
+
+    const slot = readAvatarSlot(rawItem.slot, itemId);
+    if (!Array.isArray(rawItem.layers) || rawItem.layers.length === 0) {
+      throw manifestError(itemId, "layers must be a non-empty array");
+    }
+
+    const layerIds = new Set<string>();
+    const layers = rawItem.layers.map((rawLayer, index) => {
+      const prefix = `layers[${index}]`;
+      if (!isRecord(rawLayer)) throw manifestError(itemId, `${prefix} must be an object`);
+
+      const id = readNonEmptyString(rawLayer.id, itemId, `${prefix}.id`);
+      if (layerIds.has(id)) throw manifestError(itemId, `has duplicate layer id '${id}'`);
+      layerIds.add(id);
+
+      const placement: AvatarLayerPlacement = {
+        x: readFiniteNumber(rawLayer.x, itemId, `${prefix}.x`),
+        y: readFiniteNumber(rawLayer.y, itemId, `${prefix}.y`),
+        width: readFiniteNumber(rawLayer.width, itemId, `${prefix}.width`),
+        height: readFiniteNumber(rawLayer.height, itemId, `${prefix}.height`),
+        z: readFiniteNumber(rawLayer.z, itemId, `${prefix}.z`),
+      };
+      const placementError = validateAvatarLayer(placement);
+      if (placementError) throw manifestError(itemId, `${prefix} ${placementError}`);
+
+      return {
+        id,
+        src: readNonEmptyString(rawLayer.src, itemId, `${prefix}.src`),
+        assetWidth: readPositiveNumber(rawLayer.assetWidth, itemId, `${prefix}.assetWidth`),
+        assetHeight: readPositiveNumber(rawLayer.assetHeight, itemId, `${prefix}.assetHeight`),
+        ...placement,
+      };
+    });
+
+    manifest[itemId] = { slot, layers };
+  }
+  return manifest;
+}
+
 type AvatarItemId = keyof typeof placementManifest;
-const placements = placementManifest as Record<AvatarItemId, AvatarItemPlacement>;
+const placements = parseAvatarManifest(placementManifest);
 
 const item = (
   id: AvatarItemId,
@@ -153,7 +248,7 @@ export function unequipAvatarItem(
   return { ...state, equippedBySlot };
 }
 
-export function layerStyle(layer: AvatarLayer) {
+export function layerStyle(layer: AvatarLayerPlacement) {
   return {
     position: "absolute" as const,
     left: `${(layer.x / MASTER_CANVAS.width) * 100}%`,
@@ -164,7 +259,7 @@ export function layerStyle(layer: AvatarLayer) {
   };
 }
 
-export function validateAvatarLayer(layer: AvatarLayer): string | null {
+export function validateAvatarLayer(layer: AvatarLayerPlacement): string | null {
   const values = [layer.x, layer.y, layer.width, layer.height, layer.z];
   if (!values.every(Number.isFinite)) return "layer values must be finite";
   if (layer.x < 0 || layer.y < 0 || layer.width <= 0 || layer.height <= 0) {
