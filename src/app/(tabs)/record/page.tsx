@@ -803,7 +803,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
             </p>
           )}
         </section>
-        {/* 인증사진 (§11) — 촬영/앨범/사진 없이 */}
+        {/* 인증사진 (§11) — 지금 촬영만 (앨범 선택은 2026-08-01에 제거) */}
         <VerificationPhoto
           userId={userId}
           sessionId={result.sessionId}

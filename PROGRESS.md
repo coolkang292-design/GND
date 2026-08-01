@@ -3,6 +3,17 @@
 > 새 세션은 저장소 루트 `AGENTS.md` → `CLAUDE.md` → 이 파일 → 가장 최근의 관련 `docs/superpowers/HANDOFF-*.md` 순서로 읽는다.
 > 이 파일은 전체 흐름의 요약이고, 작업별 세부 사실과 남은 확인은 최신 인수인계서가 기준이다.
 
+## ✅ 2026-08-01 — 인증 사진 앨범 선택 제거 + 톱니 설정 화면 분리 (개발 서버 확인 ✅ · 운영 배포 ✅)
+
+사용자 지시 두 건. DB 변경 없음.
+
+- **인증 사진에서 '🖼 앨범 선택'을 없앴다.** 완료 화면에 `📷 지금 촬영` 하나만 남는다. 앨범 버튼·숨은 input·`source === "album"` 분기(`clientCapturedAt`를 파일 `lastModified`로 잡던 것)를 전부 걷어냈다
+  - ⚠️ **`VerificationSource`의 `"album"` 타입은 지우지 않았다.** 과거에 앨범으로 올라간 행이 `verification_status = 'photo_uploaded'`로 DB에 남아 있다. 타입을 좁히면 그 기록을 읽는 코드가 깨진다. `uploadWorkoutImage`는 이제 항상 `source: "camera"`로 부른다
+- **톱니(⚙️)는 설정을 얹는 게 아니라 갈아 끼운다.** 전에는 `showSettings`가 성장 허브 **위에** 설정 블록을 끼워 넣어서, 아래에 성장 허브·크루가 그대로 남았다 — 사용자 눈에는 "내 정보에 계정·문의하기가 새로 생긴" 것으로 보였다
+  - 이제 `showSettings ? 설정 : 성장허브+크루`로 갈린다. 제목도 `내 정보 / 나의 캐릭터 성장` ↔ `설정 / 알림 · 계정 · 문의`로 바뀌고, 톱니 아이콘은 열렸을 때 `✕`가 된다
+- **검증**: unit **838/838** · typecheck ✅ · lint 0 · build ✅. `release-notes.data.json`에 `2026-08-01-camera-only-verification` 추가
+- **개발 서버 확인 완료 (사용자 직접, localhost:3000)** — 톱니를 누르면 설정만 보이고 성장 허브·크루가 사라지는 것, ✕로 복귀, 완료 화면에 촬영 버튼만 있는 것을 눈으로 확인했다
+
 ## ✅ 2026-08-01 — 휴식 타이머 벽시계 전환 + 완료 세트만 불러오기 + 무동작 정지 0055 (DB 적용 ✅ · 개발 서버 확인 ✅ · 운영 배포 ✅ · 실기기 확인 ⏳)
 
 인수인계서: [`docs/superpowers/handoffs/2026-08-01-rest-timer-and-idle-guard-handoff.md`](docs/superpowers/handoffs/2026-08-01-rest-timer-and-idle-guard-handoff.md) · 설계: [`docs/superpowers/specs/2026-08-01-rest-timer-and-idle-guard-design.md`](docs/superpowers/specs/2026-08-01-rest-timer-and-idle-guard-design.md)

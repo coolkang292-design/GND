@@ -2,14 +2,16 @@
 
 import { useEffect, useRef, useState } from "react";
 import { compressImage } from "@/lib/image";
-import {
-  awardWorkoutPhotoXp,
-  uploadWorkoutImage,
-  type VerificationSource,
-} from "@/lib/workout";
+import { awardWorkoutPhotoXp, uploadWorkoutImage } from "@/lib/workout";
 import { PhotoStamp } from "@/components/photo-stamp";
 
-/** 완료 화면 인증사진 (§11) — 촬영/앨범 → 압축 → 비공개 업로드 → 화면 오버레이 */
+/**
+ * 완료 화면 인증사진 (§11) — 촬영 → 압축 → 비공개 업로드 → 화면 오버레이
+ *
+ * **앨범 선택은 제거됐다 (사용자 지시 2026-08-01).** 지금 찍은 사진만 인증으로
+ * 받는다. `VerificationSource`의 `"album"`은 지우지 않는다 — 이미 그렇게 올라간
+ * 과거 기록(`verification_status = 'photo_uploaded'`)이 남아 있다.
+ */
 export function VerificationPhoto({
   userId,
   sessionId,
@@ -26,10 +28,8 @@ export function VerificationPhoto({
   onToast: (msg: string) => void;
 }) {
   const cameraInput = useRef<HTMLInputElement>(null);
-  const albumInput = useRef<HTMLInputElement>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [state, setState] = useState<"idle" | "uploading" | "done">("idle");
-  const [verified, setVerified] = useState<VerificationSource | null>(null);
 
   // objectURL 정리
   useEffect(() => {
@@ -40,7 +40,7 @@ export function VerificationPhoto({
 
   const completedAt = new Date(completedAtMs);
 
-  async function handleFile(file: File, source: VerificationSource) {
+  async function handleFile(file: File) {
     setState("uploading");
     try {
       const blob = await compressImage(file);
@@ -53,16 +53,11 @@ export function VerificationPhoto({
         userId,
         sessionId,
         blob,
-        source,
-        clientCapturedAt:
-          source === "album" && file.lastModified
-            ? new Date(file.lastModified)
-            : new Date(),
+        source: "camera",
+        clientCapturedAt: new Date(),
       });
-      setVerified(source);
       setState("done");
-      const label =
-        source === "camera" ? "카메라 인증 완료 🔥" : "사진 업로드 완료 ●";
+      const label = "카메라 인증 완료 🔥";
       // 사진 XP는 완료 RPC가 줄 수 없다(사진이 늘 완료 뒤에 올라온다) — 여기서
       // 따로 청구한다. 실패해도 사진은 이미 저장됐으므로 인증은 성공으로 둔다.
       try {
@@ -84,13 +79,10 @@ export function VerificationPhoto({
     }
   }
 
-  function onPick(
-    e: React.ChangeEvent<HTMLInputElement>,
-    source: VerificationSource,
-  ) {
+  function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = ""; // 같은 파일 재선택 허용
-    if (file) void handleFile(file, source);
+    if (file) void handleFile(file);
   }
 
   return (
@@ -120,29 +112,20 @@ export function VerificationPhoto({
 
       {state === "done" ? (
         <p className="mt-3 text-center text-sm font-bold text-good">
-          {verified === "camera" ? "🔥 카메라 인증 완료" : "● 사진 업로드 완료"}
+          🔥 카메라 인증 완료
         </p>
       ) : (
         <>
-          <div className="mt-3 flex gap-2">
-            <button
-              onClick={() => cameraInput.current?.click()}
-              disabled={state === "uploading"}
-              className="h-11 flex-1 rounded-card bg-accent text-sm font-extrabold text-accent-ink disabled:opacity-60"
-            >
-              {state === "uploading" ? "올리는 중…" : "📷 지금 촬영"}
-            </button>
-            <button
-              onClick={() => albumInput.current?.click()}
-              disabled={state === "uploading"}
-              className="h-11 flex-1 rounded-card border border-line bg-surface-2 text-sm font-bold disabled:opacity-60"
-            >
-              🖼 앨범 선택
-            </button>
-          </div>
+          <button
+            onClick={() => cameraInput.current?.click()}
+            disabled={state === "uploading"}
+            className="mt-3 h-11 w-full rounded-card bg-accent text-sm font-extrabold text-accent-ink disabled:opacity-60"
+          >
+            {state === "uploading" ? "올리는 중…" : "📷 지금 촬영"}
+          </button>
           <p className="mt-2 text-center text-[11px] text-muted">
-            브라우저에서 압축(≤1280px) 후 비공개 저장 · 날짜·시간은 화면에만
-            표시돼요
+            지금 촬영한 사진만 인증돼요 · 브라우저에서 압축(≤1280px) 후 비공개
+            저장 · 날짜·시간은 화면에만 표시돼요
           </p>
         </>
       )}
@@ -153,14 +136,7 @@ export function VerificationPhoto({
         accept="image/*"
         capture="environment"
         className="hidden"
-        onChange={(e) => onPick(e, "camera")}
-      />
-      <input
-        ref={albumInput}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => onPick(e, "album")}
+        onChange={onPick}
       />
     </section>
   );

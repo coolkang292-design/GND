@@ -96,25 +96,32 @@ export default function ProfilePage() {
     <div className="flex flex-col gap-3">
       <header className="flex items-start justify-between gap-2 pt-2 pb-1">
         <div>
-          <h1 className="text-[19px] font-extrabold tracking-tight">내 정보</h1>
-          <p className="mt-0.5 text-[12.5px] text-muted">나의 캐릭터 성장</p>
+          <h1 className="text-[19px] font-extrabold tracking-tight">
+            {showSettings ? "설정" : "내 정보"}
+          </h1>
+          <p className="mt-0.5 text-[12.5px] text-muted">
+            {showSettings ? "알림 · 계정 · 문의" : "나의 캐릭터 성장"}
+          </p>
         </div>
         <button
           type="button"
           onClick={() => setShowSettings((v) => !v)}
           aria-expanded={showSettings}
-          aria-label="알림 설정"
+          aria-label={showSettings ? "설정 닫기" : "설정"}
           className={`flex h-10 w-10 flex-none items-center justify-center rounded-card-sm border text-base ${
             showSettings
               ? "border-accent bg-accent-weak"
               : "border-line bg-surface"
           }`}
         >
-          ⚙️
+          {showSettings ? "✕" : "⚙️"}
         </button>
       </header>
 
-      {showSettings && (
+      {/* 톱니는 성장 화면 위에 설정을 얹는 게 아니라 **갈아 끼운다** (사용자 지시
+          2026-08-01). 섞어 두면 계정·신고 같은 설정 항목이 "내 정보에 새로 생긴
+          기능"으로 읽힌다. */}
+      {showSettings ? (
         <>
           {/* 계정(이메일·비밀번호)은 알림 설정과 성격이 다르지만, 톱니 안이
               사용자가 "설정"을 찾는 유일한 곳이라 여기에 둔다. */}
@@ -180,24 +187,26 @@ export default function ProfilePage() {
               같은 시트가 있다(app/error.tsx). */}
           <BugReportSheet route={pathname ?? null} />
         </>
-      )}
+      ) : (
+        <>
+          <GrowthHub />
 
-      <GrowthHub />
-
-      <Link
-        href="/crew"
-        className="flex items-center justify-between rounded-card border border-line bg-surface px-3.5 py-3.5 shadow-card"
-      >
-        <span className="flex items-center gap-2 text-[14px] font-extrabold">
-          🤝 크루
-          {requestCount > 0 && (
-            <span className="rounded-full bg-accent px-2 py-0.5 text-[11px] font-extrabold text-accent-ink">
-              {requestCount}
+          <Link
+            href="/crew"
+            className="flex items-center justify-between rounded-card border border-line bg-surface px-3.5 py-3.5 shadow-card"
+          >
+            <span className="flex items-center gap-2 text-[14px] font-extrabold">
+              🤝 크루
+              {requestCount > 0 && (
+                <span className="rounded-full bg-accent px-2 py-0.5 text-[11px] font-extrabold text-accent-ink">
+                  {requestCount}
+                </span>
+              )}
             </span>
-          )}
-        </span>
-        <span className="text-[13px] text-muted">닉네임으로 찾기 ›</span>
-      </Link>
+            <span className="text-[13px] text-muted">닉네임으로 찾기 ›</span>
+          </Link>
+        </>
+      )}
     </div>
   );
 }
