@@ -446,19 +446,35 @@ export function CalendarView({
             const plan = planByDate.get(dateKey);
             const meta = stamp ? VERIFICATION_META[stamp.verification] : null;
             const isToday = dateKey === todayKey;
+            /**
+             * 빈 날짜도 **오늘 이후면 열린다** (2026-08-02).
+             *
+             * 전에는 `disabled={!stamp && !plan}`이라 빈 셀이 전부 잠겨 있었다.
+             * 계획은 0015 RLS상 `plan_date >= 오늘`만 허용되고 미래에는 기록도
+             * 계획도 없으니 **모든 미래 셀이 잠긴 상태**였고, "새 운동 계획
+             * 만들기"는 오늘 이미 운동을 완료한 경우에만 도달할 수 있었다.
+             *
+             * 과거의 빈 날짜는 계속 잠근다 — 보여줄 기록도 없고 계획도 못 세운다.
+             * 눌리는데 아무 일도 안 일어나는 편이 더 나쁘다.
+             */
+            const canPlan = isPlanDateAllowed(dateKey, todayKey);
+            const openable = Boolean(stamp) || Boolean(plan) || canPlan;
             return (
               <button
                 key={dateKey}
-                onClick={() => (stamp || plan) && openDate(dateKey)}
-                disabled={!stamp && !plan}
+                aria-label={`${view.month}월 ${day}일`}
+                onClick={() => openable && openDate(dateKey)}
+                disabled={!openable}
                 className={`relative flex aspect-square flex-col items-center justify-center gap-0.5 rounded-[11px] border text-xs ${
                   meta?.camera
                     ? "border-accent/35 bg-accent-weak"
                     : plan
                       ? "border-good/40 bg-good-weak"
-                    : "border-line bg-surface"
+                      : openable
+                        ? "border-dashed border-line bg-surface"
+                        : "border-line bg-surface"
                 } ${isToday ? "outline outline-2 outline-accent outline-offset-1" : ""} ${
-                  stamp || plan ? "cursor-pointer" : "cursor-default"
+                  openable ? "cursor-pointer" : "cursor-default"
                 }`}
               >
                 <span
@@ -531,6 +547,12 @@ export function CalendarView({
               </button>
             </div>
             <div className="flex flex-col gap-2">
+              {!selectedPlan && selectedSessions.length === 0 && (
+                <p className="text-[12.5px] text-muted">
+                  아직 이 날의 계획이 없어요. 종목을 담아 두면 그날 바로 시작할 수
+                  있어요.
+                </p>
+              )}
               {!selectedPlan && isPlanDateAllowed(selectedDate, todayKey) && (
                 <button
                   onClick={() => {

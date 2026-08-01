@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { frequentCatalogPicks } from "@/lib/domain/exercise-frequency";
 import type { BodyPart, CatalogExercise, ExerciseType } from "@/lib/types";
 import type { CalendarSession } from "@/lib/workout";
 
@@ -71,6 +72,25 @@ function PickerSheet({
   const [saving, setSaving] = useState(false);
   const [pastBusyId, setPastBusyId] = useState<string | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
+
+  // 시트가 열려 있는 동안 고정 — 매 렌더마다 now가 바뀌면 90일 창이 미세하게 흔들린다.
+  // 시트는 닫힐 때 언마운트되므로 다음에 열면 새로 계산된다.
+  const openedAt = useMemo(() => new Date(), []);
+
+  /**
+   * ⭐ 자주 한 운동 — 최근 90일간 완료 세션 수 상위 (2026-08-02).
+   * 검색·부위 필터 중에는 숨긴다(아래 렌더 조건). 필터링과 싸우지 않게.
+   */
+  const frequent = useMemo(
+    () =>
+      frequentCatalogPicks(
+        pastSessions,
+        openedAt,
+        catalog,
+        (item) => item.name,
+      ),
+    [pastSessions, openedAt, catalog],
+  );
 
   const q = query.trim().toLowerCase();
   const list = catalog.filter(
@@ -164,6 +184,44 @@ function PickerSheet({
               placeholder="🔍 운동 검색 (예: 스쿼트, 벤치)"
               className="h-16 w-full flex-none rounded-card border-2 border-line bg-bg px-4 text-base outline-none focus:border-accent"
             />
+
+            {/* ⭐ 자주 한 운동 — 검색·부위 필터 중에는 숨긴다 (설계 2026-08-02).
+                세로 목록이 아니라 가로 칩 한 줄이다: 시트가 max-h-[82dvh]라
+                5행짜리 섹션은 카탈로그 목록을 화면 밖으로 밀어낸다. */}
+            {frequent.length > 0 && !q && part === "전체" && (
+              <div className="mt-3 flex-none">
+                <p className="mb-1.5 text-[11px] font-bold text-muted">
+                  ⭐ 자주 한 운동
+                </p>
+                <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+                  {frequent.map(({ item, count }) => {
+                    const isSelected = selected.has(item.id);
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => toggleSelect(item)}
+                        aria-pressed={isSelected}
+                        className={`flex flex-none items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold ${
+                          isSelected
+                            ? "border-accent bg-accent text-accent-ink"
+                            : "border-accent/40 bg-accent-weak text-accent"
+                        }`}
+                      >
+                        <span>{item.name}</span>
+                        <span
+                          className={`font-mono text-[10px] ${
+                            isSelected ? "text-accent-ink/80" : "text-accent/70"
+                          }`}
+                        >
+                          {isSelected ? "✓" : `${count}회`}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             <div className="my-3 flex flex-none gap-1.5 overflow-x-auto">
           {FILTERS.map((p) => (
