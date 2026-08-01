@@ -3,6 +3,22 @@
 > 새 세션은 저장소 루트 `AGENTS.md` → `CLAUDE.md` → 이 파일 → 가장 최근의 관련 `docs/superpowers/HANDOFF-*.md` 순서로 읽는다.
 > 이 파일은 전체 흐름의 요약이고, 작업별 세부 사실과 남은 확인은 최신 인수인계서가 기준이다.
 
+## 🔧 2026-08-01 — 다계정 화면 확인용 상설 픽스처 + 배포 가드 (코드 변경 없음)
+
+사용자 지적: "직접 테스트를 하려면 서로 다른 멤버가 되어서 해봐야 하는 거 아님? 알람이 제대로 작동하는지"
+
+- **맞는 지적이었고 실제 구멍이었다.** 회귀 스크립트들은 실행마다 익명 계정을 4~5개 만들어 상호작용을 검사한다(`poke-levelup-check`의 `anonUser()`가 pkA~pkD 4개). 하지만 **전부 HTTP/RPC 계층**이다 — `notifications`에 행이 생긴 것까지만 본다
+  - 안 보고 있던 것: 받는 사람의 **알림 벨 배지·목록 문구·아이콘**(0054에서 `TYPE_ICON`을 건드렸다), 보낸 사람의 **찌르기 버튼 쿨다운 잠김**(0053이 딱 "화면이 서버보다 기억을 못 하던" 버그였다), **챌린지 성과 카드**(PROGRESS에 `[미확인]`으로 남아 있던 항목 — "active 챌린지 참가자로 로그인해야 렌더된다")
+- **`scripts/dev-fixture.mjs` 추가** — `status`(기본, 읽기 전용) · `create`(멱등) · `destroy`
+  - `dev-테스터A`·`dev-테스터B`를 **이메일+비밀번호** 계정으로 만들고 크루로 상호 연결한다. 익명 계정은 브라우저 컨텍스트를 지우면 다시 못 들어가서 반복 확인이 안 된다
+  - 비밀번호는 `.env.local`의 `DEV_FIXTURE_PASSWORD`(gitignore). 코드에 박지 않는다
+  - **일반 창 = A, 시크릿 창 = B.** 세션이 컨텍스트별 쿠키라 두 계정을 동시에 띄울 수 있다
+  - ⚠️ 함정 둘: `send_crew_request`는 **camelCase(`requestId`)** 로 돌려준다(snake_case로만 읽으면 조용히 놓친다). 이미 연결이면 `already_crew`, pending이 남아 있으면 `request_exists`가 온다 — 후자는 받은함에서 찾아 마저 수락한다
+  - `destroy`는 **이메일과 닉네임을 둘 다 대조**하고, 지운 뒤 나머지 프로필이 전부 남았는지 확인한다. create → destroy → create를 실제로 돌려 기준선 4개 보존을 확인했다 (한 번도 안 돌려 본 삭제 경로는 지뢰다)
+- **전역 배포 가드 설치 (사용자 지시)** — 문서만으로는 또 샌다는 게 이날 증명됐다
+  - `~/.claude/hooks/deploy-guard.mjs` — PreToolUse 훅(matcher `Bash|PowerShell`). `vercel --prod`·`firebase deploy`·`wrangler deploy`·`supabase db push` 등을 감지해 `permissionDecision: "ask"`로 승인 프롬프트를 강제하고 확인 항목 5개를 띄운다. `vercel ls`·`inspect` 같은 조회는 통과(조회까지 막으면 성가셔서 결국 꺼진다). 13개 명령으로 오탐·미탐 0 확인, 센티널로 실제 발화까지 확인
+  - `~/.claude/CLAUDE.md`(신규) · `~/.codex/AGENTS.md` §0(신설) — 다른 에이전트가 작업해도 같은 기준을 밟도록
+
 ## ✅ 2026-08-01 — 인증 사진 앨범 선택 제거 + 톱니 설정 화면 분리 (개발 서버 확인 ✅ · 운영 배포 ✅)
 
 사용자 지시 두 건. DB 변경 없음.
