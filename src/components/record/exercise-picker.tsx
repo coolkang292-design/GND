@@ -2,8 +2,10 @@
 
 import { useMemo, useRef, useState } from "react";
 import { frequentCatalogPicks } from "@/lib/domain/exercise-frequency";
+import type { WorkoutRoutine } from "@/lib/routines";
 import type { BodyPart, CatalogExercise, ExerciseType } from "@/lib/types";
 import type { CalendarSession } from "@/lib/workout";
+import { RoutineList } from "./routine-list";
 
 const PARTS: readonly (BodyPart | "전체")[] = [
   "전체",
@@ -34,6 +36,13 @@ type PickerProps = {
   onPickMany: (items: CatalogExercise[]) => void;
   /** 지난 완료 기록 하나를 현재 준비 목록 뒤에 중복 없이 추가 */
   onPickPast: (sessionId: string) => Promise<boolean>;
+  /** 내 루틴 (0056). 넘기지 않으면 '내 루틴' 탭 자체가 안 나온다 */
+  routines?: WorkoutRoutine[];
+  routinesLoading?: boolean;
+  /** 루틴 하나를 불러온다 — true면 시트를 닫는다 */
+  onPickRoutine?: (routine: WorkoutRoutine) => Promise<boolean>;
+  onRenameRoutine?: (routineId: string, name: string) => Promise<boolean>;
+  onDeleteRoutine?: (routine: WorkoutRoutine) => Promise<void>;
   /** 커스텀 운동 생성 — 생성된 항목을 반환하면 선택 목록에 담긴다 */
   onCreateCustom: (input: {
     name: string;
@@ -58,8 +67,15 @@ function PickerSheet({
   onPickMany,
   onPickPast,
   onCreateCustom,
+  routines,
+  routinesLoading = false,
+  onPickRoutine,
+  onRenameRoutine,
+  onDeleteRoutine,
 }: PickerProps) {
-  const [tab, setTab] = useState<"catalog" | "past">("catalog");
+  const routinesEnabled = Boolean(routines && onPickRoutine);
+  const [tab, setTab] = useState<"catalog" | "past" | "routine">("catalog");
+  const [routineBusyId, setRoutineBusyId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [part, setPart] = useState<(typeof FILTERS)[number]>("전체");
   const [selected, setSelected] = useState<Map<string, CatalogExercise>>(
@@ -143,6 +159,37 @@ function PickerSheet({
     }
   }
 
+  async function pickRoutine(routine: WorkoutRoutine) {
+    if (!onPickRoutine) return;
+    setRoutineBusyId(routine.id);
+    try {
+      if (await onPickRoutine(routine)) onClose();
+    } finally {
+      setRoutineBusyId(null);
+    }
+  }
+
+  async function removeRoutine(routine: WorkoutRoutine) {
+    if (!onDeleteRoutine) return;
+    if (!window.confirm(`'${routine.name}' 루틴을 삭제할까요?`)) return;
+    setRoutineBusyId(routine.id);
+    try {
+      await onDeleteRoutine(routine);
+    } finally {
+      setRoutineBusyId(null);
+    }
+  }
+
+  async function renameRoutine(routineId: string, name: string) {
+    if (!onRenameRoutine) return false;
+    setRoutineBusyId(routineId);
+    try {
+      return await onRenameRoutine(routineId, name);
+    } finally {
+      setRoutineBusyId(null);
+    }
+  }
+
   return (
     <>
       <div
@@ -159,6 +206,7 @@ function PickerSheet({
             [
               ["catalog", "운동 찾기"],
               ["past", "지난 기록"],
+              ...(routinesEnabled ? ([["routine", "내 루틴"]] as const) : []),
             ] as const
           ).map(([value, label]) => (
             <button
@@ -368,6 +416,17 @@ function PickerSheet({
                 : "운동을 선택하세요"}
             </button>
           </>
+        ) : tab === "routine" ? (
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <RoutineList
+              routines={routines ?? []}
+              loading={routinesLoading}
+              busyId={routineBusyId}
+              onPick={(routine) => void pickRoutine(routine)}
+              onRename={renameRoutine}
+              onDelete={(routine) => void removeRoutine(routine)}
+            />
+          </div>
         ) : (
           <div className="min-h-0 flex-1 overflow-y-auto">
             {pastLoading ? (

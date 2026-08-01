@@ -34,6 +34,7 @@ import {
   saveWorkoutPlan,
   type WorkoutPlan,
 } from "@/lib/workout-plan";
+import type { WorkoutRoutine } from "@/lib/routines";
 import { ExercisePicker } from "./exercise-picker";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
@@ -88,9 +89,14 @@ export function CalendarView({
   onScheduleSession,
   onLoadPlan,
   onCreateCustom,
+  routines,
+  routinesLoading,
 }: {
   userId: string;
   catalog: CatalogExercise[];
+  /** 내 루틴 (0056) — 그 날짜의 예정표로 바로 저장할 수 있다 */
+  routines?: WorkoutRoutine[];
+  routinesLoading?: boolean;
   onScheduleSession: (
     sessionId: string,
     planDate: string,
@@ -326,6 +332,30 @@ export function CalendarView({
       );
     } catch {
       showPlanToast("운동 계획을 저장하지 못했어요");
+    } finally {
+      setPlanBusy(false);
+    }
+  }
+
+  /** 내 루틴을 그 날짜의 예정표로 저장 (0056). 원본 세션이 없으므로 sourceSessionId는 null. */
+  async function handleNewPlanFromRoutine(
+    routine: WorkoutRoutine,
+  ): Promise<boolean> {
+    if (!planPickerDate || planBusy) return false;
+    setPlanBusy(true);
+    try {
+      applySavedPlan(
+        await saveWorkoutPlan({
+          userId,
+          planDate: planPickerDate,
+          sourceSessionId: null,
+          exercises: routine.exercises,
+        }),
+      );
+      return true;
+    } catch {
+      showPlanToast("운동 계획을 저장하지 못했어요");
+      return false;
     } finally {
       setPlanBusy(false);
     }
@@ -743,6 +773,9 @@ export function CalendarView({
         onPickMany={(items) => void handleNewPlanPick(items)}
         onPickPast={handleNewPlanFromPast}
         onCreateCustom={onCreateCustom}
+        routines={routines}
+        routinesLoading={routinesLoading}
+        onPickRoutine={routines ? handleNewPlanFromRoutine : undefined}
       />
 
       {planToast && (

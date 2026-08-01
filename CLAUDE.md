@@ -176,10 +176,14 @@ node scripts/bug-reports.mjs --fix <id> --release <release-id> --send   # 신고
 
 | 스크립트 | 기준 |
 |---|---|
-| `rls-test.mjs` | 115 / 0 |
+| `rls-test.mjs` | 115 / 0 → **0056 적용 후 125 / 0** ⏳ |
 | `poke-levelup-check.mjs` | 14 / 14 |
 | `challenge-consent-test.mjs` | 22 / 0 |
 | `challenge-room-check.mjs` | 48 / 0 |
+
+⏳ **`rls-test.mjs`의 125는 아직 실측하지 않은 예상치다.** 2026-08-02에 루틴(0056)
+단언 10건을 추가했는데 `workout_routines` 테이블이 없으면 전부 실패한다. **0056을
+적용한 뒤 한 번 돌려 실제 숫자로 이 표를 고쳐라.**
 
 기준선은 2026-08-01 실측으로 갱신했다. 이전 표(113·11·20·32)는 단언이 늘어난 뒤로도
 안 고쳐져 있어서, 통과인데도 "기준보다 많다"고 헷갈리게 만들었다. **숫자가 기준보다

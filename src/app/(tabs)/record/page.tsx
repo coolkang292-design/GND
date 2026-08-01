@@ -13,6 +13,7 @@ import { ExerciseCard } from "@/components/record/exercise-card";
 import { ExercisePicker } from "@/components/record/exercise-picker";
 import { ExerciseReorderSheet } from "@/components/record/exercise-reorder-sheet";
 import { IdlePauseModal } from "@/components/record/idle-pause-modal";
+import { RoutineSaveSheet } from "@/components/record/routine-save-sheet";
 import { TabataSheet } from "@/components/record/tabata-sheet";
 import { RestBar } from "@/components/record/rest-bar";
 import { VerificationPhoto } from "@/components/record/verification-photo";
@@ -40,6 +41,20 @@ import {
   recordBeatenSummary,
   type ExerciseImprovement,
 } from "@/lib/domain/record-beaten";
+import {
+  nextRoutineSlotLevel,
+  routineSlotLimit,
+} from "@/lib/domain/routines";
+import {
+  deleteRoutine,
+  getMyRoutines,
+  renameRoutine,
+  saveRoutine,
+  ROUTINE_DUPLICATE_NAME,
+  ROUTINE_SLOT_LIMIT,
+  type WorkoutRoutine,
+} from "@/lib/routines";
+import { getLevelRewards, getProgressSummary } from "@/lib/progression";
 import { tabataDraftExercises } from "@/lib/domain/tabata";
 import { moveItem } from "@/lib/domain/reorder";
 import { getRestCountdownTogglePlan } from "@/lib/domain/rest-countdown";
@@ -148,6 +163,12 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const [pastSessions, setPastSessions] = useState<CalendarSession[]>([]);
   const [pastLoading, setPastLoading] = useState(false);
   const [pastLoaded, setPastLoaded] = useState(false);
+  // ── 나만의 루틴 (0056) ────────────────────────────────────────────
+  const [routines, setRoutines] = useState<WorkoutRoutine[]>([]);
+  const [routinesLoading, setRoutinesLoading] = useState(true);
+  const [routineSaveOpen, setRoutineSaveOpen] = useState(false);
+  const [slotLimit, setSlotLimit] = useState(routineSlotLimit(1, []));
+  const [nextSlotLevel, setNextSlotLevel] = useState<number | null>(null);
   const [result, setResult] = useState<CompletedResult | null>(null);
   const [xpEvents, setXpEvents] = useState<XpEvent[]>([]);
   const [busy, setBusy] = useState(false);
@@ -229,6 +250,38 @@ function WorkoutScreen({ userId }: { userId: string }) {
       cancelled = true;
     };
   }, [userId, showToast]);
+
+  /**
+   * 내 루틴 + 슬롯 한도 (0056).
+   *
+   * 한도는 `level_definitions`(보상 표)와 현재 레벨로 계산한다 — 레벨 12·27을
+   * 코드에 박지 않는다. 서버 트리거도 같은 표를 읽으므로 화면과 서버가
+   * 갈라지지 않는다. 조회에 실패해도 루틴 기능만 조용히 비고 기록은 막지 않는다.
+   */
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [mine, rewards, progress] = await Promise.all([
+          getMyRoutines(userId),
+          getLevelRewards(),
+          getProgressSummary(),
+        ]);
+        if (cancelled) return;
+        const level = progress.currentLevel;
+        setRoutines(mine);
+        setSlotLimit(routineSlotLimit(level, rewards));
+        setNextSlotLevel(nextRoutineSlotLevel(level, rewards));
+      } catch {
+        // 0056 적용 전이면 테이블이 없어 실패한다 — 루틴 탭만 비고 넘어간다
+      } finally {
+        if (!cancelled) setRoutinesLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
 
   // 세션 상태 대사(對査): 로컬 draft ↔ 서버 상태 (§10 복구)
   useEffect(() => {
@@ -381,6 +434,91 @@ function WorkoutScreen({ userId }: { userId: string }) {
     } catch (error) {
       showToast(errorMessage(error));
       return false;
+    }
+  }
+
+  // ── 나만의 루틴 (0056) ────────────────────────────────────────────
+
+  /**
+   * 루틴 불러오기는 **교체가 아니라 병합**이다.
+   *
+   * '운동 추가' 시트 안에서 일어나는 일이므로 '지난 기록' 탭과 같아야 한다.
+   * (예정표의 `handleLoadPlan`은 "지우고 바꿀까요?"를 묻지만 그건 그날의 계획을
+   * 통째로 여는 별개 흐름이다.)
+   */
+  async function addRoutine(routine: WorkoutRoutine): Promise<boolean> {
+    const imported = toDraftExercises(routine.exercises, localId);
+    const merged = mergeImportedExercises(draft.exercises, imported);
+
+    if (merged.added.length === 0) {
+      showToast("이 루틴의 운동은 이미 모두 추가되어 있어요");
+      return false;
+    }
+
+    setDraft((current) => ({
+      ...current,
+      exercises: mergeImportedExercises(current.exercises, imported).exercises,
+      effortMessage: buildEffortMessage(merged.added),
+    }));
+    const skipped =
+      merged.skippedCount > 0 ? ` · 중복 ${merged.skippedCount}개 제외` : "";
+    showToast(`'${routine.name}'에서 ${merged.added.length}개 추가했어요${skipped}`);
+    return true;
+  }
+
+  function routineErrorMessage(error: unknown): string {
+    const message = error instanceof Error ? error.message : "";
+    if (message === ROUTINE_DUPLICATE_NAME) {
+      return "같은 이름의 루틴이 이미 있어요";
+    }
+    if (message === ROUTINE_SLOT_LIMIT) {
+      return `루틴 슬롯 ${slotLimit}개를 모두 썼어요`;
+    }
+    return errorMessage(error);
+  }
+
+  async function handleSaveRoutine(name: string): Promise<boolean> {
+    const exercises = toPlanExercises(draft.exercises);
+    if (exercises.length === 0) {
+      showToast("저장할 운동이 없어요");
+      return false;
+    }
+    try {
+      const saved = await saveRoutine({ userId, name, exercises });
+      setRoutines((current) => [saved, ...current]);
+      showToast(`'${saved.name}' 루틴을 저장했어요`);
+      return true;
+    } catch (error) {
+      showToast(routineErrorMessage(error));
+      return false;
+    }
+  }
+
+  async function handleRenameRoutine(
+    routineId: string,
+    name: string,
+  ): Promise<boolean> {
+    try {
+      const renamed = await renameRoutine(routineId, name);
+      setRoutines((current) =>
+        current.map((item) => (item.id === renamed.id ? renamed : item)),
+      );
+      return true;
+    } catch (error) {
+      showToast(routineErrorMessage(error));
+      return false;
+    }
+  }
+
+  async function handleDeleteRoutine(routine: WorkoutRoutine): Promise<void> {
+    try {
+      await deleteRoutine(routine.id);
+      setRoutines((current) =>
+        current.filter((item) => item.id !== routine.id),
+      );
+      showToast(`'${routine.name}' 루틴을 삭제했어요`);
+    } catch (error) {
+      showToast(errorMessage(error));
     }
   }
 
@@ -887,6 +1025,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
           <CalendarView
             userId={userId}
             catalog={catalog}
+            routines={routines}
+            routinesLoading={routinesLoading}
             onScheduleSession={handleScheduleFromPast}
             onLoadPlan={handleLoadPlan}
             onCreateCustom={handleCreateCustom}
@@ -1047,6 +1187,15 @@ function WorkoutScreen({ userId }: { userId: string }) {
           {busy ? "처리 중…" : active ? "운동 종료" : "운동 시작"}
         </button>
       </div>
+      {!active && draft.exercises.length > 0 && (
+        <button
+          onClick={() => setRoutineSaveOpen(true)}
+          disabled={busy}
+          className="h-12 rounded-card border border-line bg-surface text-sm font-bold text-accent disabled:opacity-60"
+        >
+          💾 이 목록을 루틴으로 저장 ({routines.length}/{slotLimit})
+        </button>
+      )}
       {!active && (
         <button
           onClick={() => setTabataOpen(true)}
@@ -1093,6 +1242,21 @@ function WorkoutScreen({ userId }: { userId: string }) {
         onPickMany={addExercises}
         onPickPast={addPastSession}
         onCreateCustom={handleCreateCustom}
+        routines={routines}
+        routinesLoading={routinesLoading}
+        onPickRoutine={addRoutine}
+        onRenameRoutine={handleRenameRoutine}
+        onDeleteRoutine={handleDeleteRoutine}
+      />
+
+      <RoutineSaveSheet
+        open={routineSaveOpen}
+        exerciseNames={draft.exercises.map((exercise) => exercise.name)}
+        savedCount={routines.length}
+        slotLimit={slotLimit}
+        nextSlotLevel={nextSlotLevel}
+        onClose={() => setRoutineSaveOpen(false)}
+        onSave={handleSaveRoutine}
       />
 
       {toast && (

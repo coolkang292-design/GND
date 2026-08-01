@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CalendarSession } from "@/lib/workout";
+import type { WorkoutRoutine } from "@/lib/routines";
 import type { CatalogExercise } from "@/lib/types";
 import { ExercisePicker } from "./exercise-picker";
 
@@ -58,7 +59,31 @@ const SESSIONS = [
   session(5, "플랭크"),
 ];
 
-function setup(over: { pastSessions?: CalendarSession[] } = {}) {
+function routine(name: string, ...exerciseNames: string[]): WorkoutRoutine {
+  return {
+    id: `r-${name}`,
+    userId: "user-1",
+    name,
+    exercises: exerciseNames.map((exerciseName) => ({
+      name: exerciseName,
+      bodyPart: "가슴",
+      exerciseType: "weight",
+      measure: null,
+      isCustom: false,
+      sets: [{ weightKg: 60, reps: 10, distanceKm: 0, durationMin: 0 }],
+    })),
+    createdAt: "2026-08-01T00:00:00Z",
+    updatedAt: "2026-08-01T00:00:00Z",
+  };
+}
+
+function setup(
+  over: {
+    pastSessions?: CalendarSession[];
+    routines?: WorkoutRoutine[];
+    onPickRoutine?: (routine: WorkoutRoutine) => Promise<boolean>;
+  } = {},
+) {
   return render(
     <ExercisePicker
       open
@@ -69,6 +94,15 @@ function setup(over: { pastSessions?: CalendarSession[] } = {}) {
       onPickMany={vi.fn()}
       onPickPast={vi.fn()}
       onCreateCustom={vi.fn()}
+      routines={over.routines}
+      routinesLoading={false}
+      onPickRoutine={
+        over.routines
+          ? (over.onPickRoutine ?? vi.fn().mockResolvedValue(true))
+          : undefined
+      }
+      onRenameRoutine={vi.fn().mockResolvedValue(true)}
+      onDeleteRoutine={vi.fn().mockResolvedValue(undefined)}
     />,
   );
 }
@@ -147,5 +181,63 @@ describe("ExercisePicker — ⭐ 자주 한 운동 (2026-08-02)", () => {
       pastSessions: [session(120, "벤치프레스"), session(200, "스쿼트")],
     });
     expect(queryByText("⭐ 자주 한 운동")).toBeNull();
+  });
+});
+
+describe("ExercisePicker — 내 루틴 탭 (0056)", () => {
+  it("루틴을 넘기지 않으면 탭 자체가 없다", () => {
+    // 0056 적용 전에는 조회가 실패해 routines가 undefined로 남는다.
+    // 그때 빈 탭이 뜨면 "기능이 고장난 것"처럼 보인다.
+    const { queryByText } = setup();
+    expect(queryByText("내 루틴")).toBeNull();
+  });
+
+  it("루틴을 넘기면 세 번째 탭이 생긴다", () => {
+    const { getByText } = setup({ routines: [] });
+    expect(getByText("운동 찾기")).toBeTruthy();
+    expect(getByText("지난 기록")).toBeTruthy();
+    expect(getByText("내 루틴")).toBeTruthy();
+  });
+
+  it("저장한 루틴이 없으면 저장 방법을 알려준다", () => {
+    const { getByText } = setup({ routines: [] });
+    fireEvent.click(getByText("내 루틴"));
+    expect(getByText("아직 저장한 루틴이 없어요")).toBeTruthy();
+  });
+
+  it("루틴 이름·종목 수·구성을 보여준다", () => {
+    const { getByText } = setup({
+      routines: [routine("가슴날", "벤치프레스", "덤벨 플라이")],
+    });
+    fireEvent.click(getByText("내 루틴"));
+
+    expect(getByText("2종목")).toBeTruthy();
+    expect(getByText("벤치프레스 · 덤벨 플라이")).toBeTruthy();
+  });
+
+  it("불러오기를 누르면 그 루틴이 핸들러로 간다", () => {
+    const onPickRoutine = vi.fn().mockResolvedValue(true);
+    const { getByText } = setup({
+      routines: [routine("가슴날", "벤치프레스")],
+      onPickRoutine,
+    });
+    fireEvent.click(getByText("내 루틴"));
+    fireEvent.click(getByText("불러오기"));
+
+    expect(onPickRoutine).toHaveBeenCalledTimes(1);
+    expect(onPickRoutine.mock.calls[0][0].name).toBe("가슴날");
+  });
+
+  it("이름 변경을 누르면 그 자리에서 편집할 수 있다", () => {
+    const { getByText, getByLabelText, queryByLabelText } = setup({
+      routines: [routine("가슴날", "벤치프레스")],
+    });
+    fireEvent.click(getByText("내 루틴"));
+
+    expect(queryByLabelText("루틴 이름")).toBeNull();
+    fireEvent.click(getByLabelText("가슴날 이름 변경"));
+    expect((getByLabelText("루틴 이름") as HTMLInputElement).value).toBe(
+      "가슴날",
+    );
   });
 });

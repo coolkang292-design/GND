@@ -576,6 +576,62 @@ check("본인 열람 self_view 거절", vr2.status >= 400 && JSON.stringify(vr2.
 const vr3 = await api(C.token, "POST", "/rest/v1/rpc/view_record", { p_target_id: A.id });
 check("크루 밖 not_crew 거절", vr3.status >= 400 && JSON.stringify(vr3.json).includes("not_crew"));
 
+// ── 나만의 루틴 (0056) ────────────────────────────────────────────
+// 신규 계정은 레벨 1이므로 한도는 기본 3개다. 4번째가 트리거에 막혀야 한다.
+const routineBody = (name) => ({
+  name,
+  exercises: [
+    {
+      name: "벤치프레스",
+      bodyPart: "가슴",
+      exerciseType: "weight",
+      measure: null,
+      isCustom: false,
+      sets: [{ weightKg: 60, reps: 10, distanceKm: 0, durationMin: 0 }],
+    },
+  ],
+});
+
+const routineIds = [];
+for (let i = 1; i <= 3; i++) {
+  const res = await api(A.token, "POST", "/rest/v1/workout_routines", routineBody(`루틴${i}`));
+  check(`A가 루틴 ${i}/3 저장 (레벨1 기본 슬롯)`, res.status === 201, `status=${res.status} ${JSON.stringify(res.json)}`);
+  if (res.json?.[0]?.id) routineIds.push(res.json[0].id);
+}
+
+// ⚠ "3개까지 된다"만 보면 한도가 무한이어도 통과한다. 4번째가 **막히는지**가
+//   이 단언의 핵심이다 (CLAUDE.md §테스트가 진짜 테스트인지 확인한다).
+const overLimit = await api(A.token, "POST", "/rest/v1/workout_routines", routineBody("루틴4"));
+check(
+  "레벨1에서 4번째 루틴은 슬롯 한도로 거부",
+  overLimit.status >= 400 && JSON.stringify(overLimit.json).includes("routine_slot_limit"),
+  `status=${overLimit.status} ${JSON.stringify(overLimit.json)}`,
+);
+
+const dupName = await api(A.token, "POST", "/rest/v1/workout_routines", routineBody("루틴1"));
+check("같은 이름의 루틴은 거부(유니크)", dupName.status === 409, `status=${dupName.status}`);
+
+const routineSelfSel = await api(A.token, "GET", "/rest/v1/workout_routines?select=id,name");
+check("A는 본인 루틴 3개 조회", routineSelfSel.status === 200 && routineSelfSel.json.length === 3, JSON.stringify(routineSelfSel.json));
+
+// B는 A와 같은 크루다 — 크루여도 루틴은 본인 전용이어야 한다
+const routineCrewSel = await api(B.token, "GET", "/rest/v1/workout_routines?select=id,name");
+check("크루원 B에게 A의 루틴은 보이지 않음", routineCrewSel.status === 200 && routineCrewSel.json.length === 0, JSON.stringify(routineCrewSel.json));
+
+if (routineIds[0]) {
+  const routineCrewUpd = await api(B.token, "PATCH", `/rest/v1/workout_routines?id=eq.${routineIds[0]}`, { name: "탈취루틴" });
+  check("B는 A의 루틴 수정 불가", routineCrewUpd.status < 300 && (routineCrewUpd.json ?? []).length === 0, JSON.stringify(routineCrewUpd.json));
+
+  const routineCrewDel = await api(B.token, "DELETE", `/rest/v1/workout_routines?id=eq.${routineIds[0]}`);
+  const stillThere = await api(A.token, "GET", `/rest/v1/workout_routines?id=eq.${routineIds[0]}`);
+  check("B는 A의 루틴 삭제 불가", stillThere.status === 200 && stillThere.json.length === 1, `del=${routineCrewDel.status}`);
+
+  // 지운 자리에는 다시 저장할 수 있어야 한다 — 한도는 '누적'이 아니라 '현재 개수'다
+  await api(A.token, "DELETE", `/rest/v1/workout_routines?id=eq.${routineIds[0]}`);
+  const afterDelete = await api(A.token, "POST", "/rest/v1/workout_routines", routineBody("루틴4"));
+  check("루틴을 지우면 슬롯이 다시 비어 저장된다", afterDelete.status === 201, `status=${afterDelete.status} ${JSON.stringify(afterDelete.json)}`);
+}
+
 } catch (e) {
   console.error("\n실행 중단:", e.message);
   failed++;
