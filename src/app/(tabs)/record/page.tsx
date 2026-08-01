@@ -164,7 +164,14 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const [pastLoading, setPastLoading] = useState(false);
   const [pastLoaded, setPastLoaded] = useState(false);
   // ── 나만의 루틴 (0056) ────────────────────────────────────────────
-  const [routines, setRoutines] = useState<WorkoutRoutine[]>([]);
+  /**
+   * null = 루틴 기능을 쓸 수 없다 (0056 미적용이거나 조회 실패).
+   *
+   * ⚠️ 빈 배열로 두면 안 된다. `[]`는 "루틴이 0개"라는 정상 상태라서 탭과
+   * 저장 버튼이 멀쩡히 뜨고, 누르면 Postgres 오류 문구가 그대로 보인다
+   * (2026-08-02 개발 서버 확인에서 사용자가 잡았다).
+   */
+  const [routines, setRoutines] = useState<WorkoutRoutine[] | null>(null);
   const [routinesLoading, setRoutinesLoading] = useState(true);
   const [routineSaveOpen, setRoutineSaveOpen] = useState(false);
   const [slotLimit, setSlotLimit] = useState(routineSlotLimit(1, []));
@@ -273,7 +280,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
         setSlotLimit(routineSlotLimit(level, rewards));
         setNextSlotLevel(nextRoutineSlotLevel(level, rewards));
       } catch {
-        // 0056 적용 전이면 테이블이 없어 실패한다 — 루틴 탭만 비고 넘어간다
+        // 0056 적용 전이면 테이블이 없어 실패한다. routines를 null로 남겨
+        // 루틴 탭·저장 버튼을 아예 감춘다 — 기록 자체는 막지 않는다.
+        if (!cancelled) setRoutines(null);
       } finally {
         if (!cancelled) setRoutinesLoading(false);
       }
@@ -474,6 +483,11 @@ function WorkoutScreen({ userId }: { userId: string }) {
     if (message === ROUTINE_SLOT_LIMIT) {
       return `루틴 슬롯 ${slotLimit}개를 모두 썼어요`;
     }
+    // 0056 미적용 등으로 테이블이 없을 때 PostgREST가 내는 문구를 그대로
+    // 흘리면 사용자에게 "schema cache" 같은 말이 보인다.
+    if (message.includes("workout_routines")) {
+      return "루틴 기능을 아직 쓸 수 없어요. 잠시 후 다시 시도해 주세요";
+    }
     return errorMessage(error);
   }
 
@@ -485,7 +499,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
     }
     try {
       const saved = await saveRoutine({ userId, name, exercises });
-      setRoutines((current) => [saved, ...current]);
+      setRoutines((current) => [saved, ...(current ?? [])]);
       showToast(`'${saved.name}' 루틴을 저장했어요`);
       return true;
     } catch (error) {
@@ -501,7 +515,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
     try {
       const renamed = await renameRoutine(routineId, name);
       setRoutines((current) =>
-        current.map((item) => (item.id === renamed.id ? renamed : item)),
+        (current ?? []).map((item) => (item.id === renamed.id ? renamed : item)),
       );
       return true;
     } catch (error) {
@@ -514,7 +528,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
     try {
       await deleteRoutine(routine.id);
       setRoutines((current) =>
-        current.filter((item) => item.id !== routine.id),
+        (current ?? []).filter((item) => item.id !== routine.id),
       );
       showToast(`'${routine.name}' 루틴을 삭제했어요`);
     } catch (error) {
@@ -1025,7 +1039,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
           <CalendarView
             userId={userId}
             catalog={catalog}
-            routines={routines}
+            routines={routines ?? undefined}
             routinesLoading={routinesLoading}
             onScheduleSession={handleScheduleFromPast}
             onLoadPlan={handleLoadPlan}
@@ -1187,7 +1201,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
           {busy ? "처리 중…" : active ? "운동 종료" : "운동 시작"}
         </button>
       </div>
-      {!active && draft.exercises.length > 0 && (
+      {!active && draft.exercises.length > 0 && routines !== null && (
         <button
           onClick={() => setRoutineSaveOpen(true)}
           disabled={busy}
@@ -1242,7 +1256,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
         onPickMany={addExercises}
         onPickPast={addPastSession}
         onCreateCustom={handleCreateCustom}
-        routines={routines}
+        routines={routines ?? undefined}
         routinesLoading={routinesLoading}
         onPickRoutine={addRoutine}
         onRenameRoutine={handleRenameRoutine}
@@ -1252,7 +1266,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
       <RoutineSaveSheet
         open={routineSaveOpen}
         exerciseNames={draft.exercises.map((exercise) => exercise.name)}
-        savedCount={routines.length}
+        savedCount={routines?.length ?? 0}
         slotLimit={slotLimit}
         nextSlotLevel={nextSlotLevel}
         onClose={() => setRoutineSaveOpen(false)}

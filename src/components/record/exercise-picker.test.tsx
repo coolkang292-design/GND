@@ -192,6 +192,16 @@ describe("ExercisePicker — 내 루틴 탭 (0056)", () => {
     expect(queryByText("내 루틴")).toBeNull();
   });
 
+  it("빈 배열과 '사용 불가'를 구별한다", () => {
+    // 2026-08-02 개발 서버 확인에서 사용자가 잡은 것: 기록 페이지가 routines를
+    // []로 초기화해 두는 바람에 0056 미적용 상태에서도 탭과 저장 버튼이
+    // 멀쩡히 떴고, 누르면 Postgres 문구가 그대로 보였다.
+    // []는 "루틴 0개"라는 정상 상태이고, 사용 불가는 undefined다.
+    expect(setup({ routines: [] }).queryByText("내 루틴")).toBeTruthy();
+    cleanup();
+    expect(setup({ routines: undefined }).queryByText("내 루틴")).toBeNull();
+  });
+
   it("루틴을 넘기면 세 번째 탭이 생긴다", () => {
     const { getByText } = setup({ routines: [] });
     expect(getByText("운동 찾기")).toBeTruthy();
