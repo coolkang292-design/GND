@@ -6,6 +6,11 @@ import {
   frequentCatalogPicks,
   sortByFrequency,
 } from "@/lib/domain/exercise-frequency";
+import {
+  categoriesLabel,
+  countsTowardChallenge,
+  type GoalCategory,
+} from "@/lib/challenge";
 import type { WorkoutRoutine } from "@/lib/routines";
 import type { BodyPart, CatalogExercise, ExerciseType } from "@/lib/types";
 import type { CalendarSession } from "@/lib/workout";
@@ -47,6 +52,12 @@ type PickerProps = {
   onPickRoutine?: (routine: WorkoutRoutine) => Promise<boolean>;
   onRenameRoutine?: (routineId: string, name: string) => Promise<boolean>;
   onDeleteRoutine?: (routine: WorkoutRoutine) => Promise<void>;
+  /**
+   * 진행 중인 챌린지에서 내 목표가 덮는 분류 (2026-08-04).
+   *
+   * null이면 챌린지가 없거나 아직 못 불러온 것 — 그때는 아무 경고도 하지 않는다.
+   */
+  challengeCategories?: ReadonlySet<GoalCategory> | null;
   /** 커스텀 운동 생성 — 생성된 항목을 반환하면 선택 목록에 담긴다 */
   onCreateCustom: (input: {
     name: string;
@@ -71,6 +82,7 @@ function PickerSheet({
   onPickMany,
   onPickPast,
   onCreateCustom,
+  challengeCategories = null,
   routines,
   routinesLoading = false,
   onPickRoutine,
@@ -140,6 +152,27 @@ function PickerSheet({
     ),
     frequency,
     (item) => item.name,
+  );
+
+  /**
+   * 웨이트/맨몸이 섞여 나오는 검색이면 안내를 띄운다 (신고 0783ca35, 2026-08-03).
+   *
+   * '스쿼트'(웨이트)와 '맨몸 스쿼트'(맨몸)는 이름이 겹쳐서, 맨몸 스쿼트를 하고도
+   * 웨이트판을 골라 챌린지 맨몸 실적이 100회 내내 0이었다. 늘 띄우면 아무도 안
+   * 읽으므로 **실제로 두 유형이 같이 잡힐 때만** 띄운다.
+   */
+  const mixedTypes =
+    q.length > 0 &&
+    list.some((e) => e.exercise_type === "weight") &&
+    list.some((e) => e.exercise_type === "bodyweight");
+
+  /** 이 종목을 해도 챌린지 실적이 안 오르는가 (목표를 모르면 항상 false) */
+  const missesChallenge = (type: ExerciseType) =>
+    !countsTowardChallenge(type, challengeCategories);
+
+  /** 지금 담은 것 중 챌린지에 안 잡히는 게 있으면 배너로 알린다 */
+  const pickedMisses = [...selected.values()].some((e) =>
+    missesChallenge(e.exercise_type),
   );
 
   function toggleSelect(item: CatalogExercise) {
@@ -281,6 +314,17 @@ function PickerSheet({
                         }`}
                       >
                         <span>{item.name}</span>
+                        {/* 유형을 칩에도 붙인다 — 목록 행에만 있어서, 칩으로
+                            담으면 웨이트/맨몸을 볼 기회가 없었다 (신고 0783ca35) */}
+                        <span
+                          className={`rounded px-1 text-[10px] font-bold ${
+                            isSelected
+                              ? "bg-accent-ink/15 text-accent-ink"
+                              : "bg-accent/15 text-accent"
+                          }`}
+                        >
+                          {TYPE_LABEL[item.exercise_type]}
+                        </span>
                         <span
                           className={`font-mono text-[10px] ${
                             isSelected ? "text-accent-ink/80" : "text-accent/70"
@@ -311,6 +355,22 @@ function PickerSheet({
           ))}
             </div>
 
+            {/* 챌린지 목표를 아는 경우가 더 구체적이므로 먼저 보여준다.
+                둘을 같이 띄우면 배너가 두 줄이 되어 목록을 밀어낸다. */}
+            {pickedMisses && challengeCategories !== null ? (
+              <p className="mb-2 flex-none rounded-card-sm border border-warn/40 bg-surface-2 px-3 py-2 text-[11px] font-bold text-warn">
+                고른 운동 중에 <b>챌린지 성과에는 안 잡혀요</b>가 있어요. 지금
+                챌린지 목표는 <b>{categoriesLabel(challengeCategories)}</b>{" "}
+                뿐이에요 — 운동 기록·XP는 그대로 쌓이지만 챌린지 달성률은 안
+                올라가요.
+              </p>
+            ) : mixedTypes ? (
+              <p className="mb-2 flex-none rounded-card-sm border border-accent/40 bg-accent-weak px-3 py-2 text-[11px] font-bold text-accent">
+                맨몸으로 한 운동은 <b>맨몸</b> 유형을 골라야 챌린지 맨몸 실적에
+                들어가요. 기구·무게를 썼다면 <b>웨이트</b>예요.
+              </p>
+            ) : null}
+
             <div className="min-h-0 flex-1 overflow-y-auto">
           {list.length > 0 ? (
             list.map((e) => {
@@ -334,7 +394,25 @@ function PickerSheet({
                       )}
                     </span>
                     <span className="block text-xs text-muted">
-                      {e.body_part} · {TYPE_LABEL[e.exercise_type]}
+                      {e.body_part} ·{" "}
+                      {/* 유형은 회색 본문에 묻히면 안 된다 — 웨이트/맨몸을
+                          잘못 고르면 챌린지 실적이 통째로 다른 칸에 쌓인다 */}
+                      <span
+                        className={`rounded px-1 py-0.5 text-[10px] font-bold ${
+                          e.exercise_type === "bodyweight"
+                            ? "bg-good/15 text-good"
+                            : "bg-surface-2 text-muted"
+                        }`}
+                      >
+                        {TYPE_LABEL[e.exercise_type]}
+                      </span>
+                      {/* 고르는 자리에서 말해 준다 — 신고 0783ca35는 100회를
+                          기록하고 나서야 안 잡힌다는 걸 알았다 */}
+                      {missesChallenge(e.exercise_type) && (
+                        <span className="ml-1 rounded bg-warn/15 px-1 py-0.5 text-[10px] font-bold text-warn">
+                          챌린지 미반영
+                        </span>
+                      )}
                       {/* 횟수를 같이 보여야 왜 이 순서인지 알 수 있다 */}
                       {(frequency.get(e.name) ?? 0) > 0 && (
                         <span className="ml-1 font-bold text-accent">

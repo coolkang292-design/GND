@@ -619,6 +619,55 @@ check(
   `status=${overLimit.status} ${JSON.stringify(overLimit.json)}`,
 );
 
+// ── 루틴 종목 교체 (2026-08-04) ───────────────────────────────────
+// 신고 6d6bffac: 잘못된 종목이 든 루틴 3개로 한도를 채운 사용자가 새로 만들
+// 수도, 종목을 고칠 수도 없이 갇혔다. 덮어쓰기는 UPDATE라 슬롯 트리거
+// (`before insert`, 0056:116)를 안 타는 것이 요점이다.
+//
+// ⚠ 이 단언은 **한도가 꽉 찬 지금(3/3)** 돌려야 의미가 있다. 슬롯이 남은
+//   상태에서 통과하는 것은 트리거를 전혀 검증하지 못한다. 트리거를 일부러
+//   `before insert or update`로 바꾸면 여기서 routine_slot_limit(400)이 나야 한다.
+const SWAPPED = [
+  {
+    name: "맨몸 스쿼트",
+    bodyPart: "하체",
+    exerciseType: "bodyweight",
+    measure: "reps",
+    isCustom: false,
+    sets: [{ weightKg: 0, reps: 15, distanceKm: 0, durationMin: 0 }],
+  },
+];
+if (routineIds[0]) {
+  const swap = await api(
+    A.token,
+    "PATCH",
+    `/rest/v1/workout_routines?id=eq.${routineIds[0]}&select=id,name,exercises`,
+    { exercises: SWAPPED },
+  );
+  check(
+    "슬롯이 꽉 차도 본인 루틴의 종목은 교체된다 (UPDATE는 슬롯 트리거를 안 탄다)",
+    swap.status === 200 &&
+      swap.json?.[0]?.exercises?.[0]?.name === "맨몸 스쿼트" &&
+      swap.json?.[0]?.exercises?.[0]?.exerciseType === "bodyweight",
+    `status=${swap.status} ${JSON.stringify(swap.json)}`,
+  );
+
+  const swapKeepsName = swap.json?.[0]?.name === "루틴1";
+  check("종목만 바뀌고 루틴 이름은 그대로다", swapKeepsName, JSON.stringify(swap.json));
+
+  const crewSwap = await api(
+    B.token,
+    "PATCH",
+    `/rest/v1/workout_routines?id=eq.${routineIds[0]}&select=id`,
+    { exercises: SWAPPED },
+  );
+  check(
+    "B는 A의 루틴 종목을 교체할 수 없다",
+    crewSwap.status < 300 && (crewSwap.json ?? []).length === 0,
+    `status=${crewSwap.status} ${JSON.stringify(crewSwap.json)}`,
+  );
+}
+
 const routineSelfSel = await api(A.token, "GET", "/rest/v1/workout_routines?select=id,name");
 check("A는 본인 루틴 3개 조회", routineSelfSel.status === 200 && routineSelfSel.json.length === 3, JSON.stringify(routineSelfSel.json));
 

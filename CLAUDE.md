@@ -179,12 +179,13 @@ node scripts/bug-reports.mjs --fix <id> --release <release-id> --send   # 신고
 
 | 스크립트 | 기준 |
 |---|---|
-| `rls-test.mjs` | 125 / 0 |
+| `rls-test.mjs` | 128 / 0 |
 | `poke-levelup-check.mjs` | 14 / 14 |
 | `challenge-consent-test.mjs` | 22 / 0 |
 | `challenge-room-check.mjs` | 48 / 0 |
 
-`rls-test.mjs`는 2026-08-02에 루틴(0056) 단언 10건이 늘어 115 → **125**가 됐다(실측).
+`rls-test.mjs`는 2026-08-02에 루틴(0056) 단언 10건이 늘어 115 → **125**가 됐고,
+2026-08-04에 루틴 종목 교체(덮어쓰기) 단언 3건이 늘어 → **128**이 됐다(실측).
 
 ⚠️ **루틴 단언의 순서를 바꾸지 마라.** 이름 중복(409)은 **슬롯 한도에 걸리기 전에**
 확인해야 한다. 슬롯 트리거가 `before insert`라, 한도에 도달한 상태에서는 유니크

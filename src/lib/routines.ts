@@ -90,6 +90,30 @@ export async function saveRoutine(input: {
   return fromRow(data as WorkoutRoutineRow);
 }
 
+/**
+ * 루틴의 종목 구성을 통째로 갈아 끼운다 (2026-08-04).
+ *
+ * 이름은 건드리지 않는다 — 이름 변경은 `renameRoutine`이 따로 한다.
+ *
+ * ⚠️ INSERT가 아니라 UPDATE다. 0056의 슬롯 트리거는 `before insert`라
+ * **한도가 꽉 찬 상태에서도 통과한다.** 그게 요점이다 — 잘못된 루틴으로
+ * 한도를 채운 사용자에게 이게 유일한 탈출구다 (신고 6d6bffac).
+ */
+export async function updateRoutineExercises(
+  routineId: string,
+  exercises: PlanExercise[],
+): Promise<WorkoutRoutine> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("workout_routines")
+    .update({ exercises, updated_at: new Date().toISOString() })
+    .eq("id", routineId)
+    .select()
+    .single();
+  if (error) throw translateError(error);
+  return fromRow(data as WorkoutRoutineRow);
+}
+
 export async function renameRoutine(
   routineId: string,
   name: string,

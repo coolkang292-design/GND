@@ -217,9 +217,14 @@ describe("ExercisePicker — 목록 자체를 사용 횟수순으로 (사용자 
   });
 
   it("횟수를 함께 보여준다", () => {
-    const { getByText } = setup();
-    // 벤치프레스 3회 — 칩과 목록이 같은 수를 쓴다
-    expect(getByText(/가슴 · 웨이트/).textContent).toContain("3회");
+    const { container } = setup();
+    // 벤치프레스 3회 — 칩과 목록이 같은 수를 쓴다.
+    // 유형이 별도 뱃지로 빠져서(2026-08-04) 텍스트가 여러 요소로 쪼개졌다.
+    // 부위·유형·횟수를 한 줄로 이어 붙여서 본다.
+    const meta = [...container.querySelectorAll("li, button span span")]
+      .map((node) => node.textContent ?? "")
+      .find((text) => text.includes("가슴") && text.includes("웨이트"));
+    expect(meta).toContain("3회");
   });
 
   it("한 번도 안 한 종목은 횟수 없이 뒤에 남는다", () => {
@@ -322,5 +327,133 @@ describe("ExercisePicker — 내 루틴 탭 (0056)", () => {
     expect((getByLabelText("루틴 이름") as HTMLInputElement).value).toBe(
       "가슴날",
     );
+  });
+});
+
+describe("ExercisePicker — 종목 유형이 보인다 (2026-08-04)", () => {
+  // 신고 0783ca35: '스쿼트'(웨이트)를 맨몸 스쿼트로 알고 기록해서 챌린지
+  // 맨몸 실적이 100회 내내 0이었다. 유형이 안 보이면 같은 이름의 웨이트판과
+  // 맨몸판을 구별할 방법이 없다.
+  const AMBIGUOUS = [
+    catalogItem("스쿼트", { body_part: "하체" }),
+    catalogItem("맨몸 스쿼트", {
+      body_part: "하체",
+      exercise_type: "bodyweight",
+      measure: "reps",
+    }),
+  ];
+
+  it("⭐ 자주 한 운동 칩에 유형이 붙는다", () => {
+    // 칩은 이름만 보여 줬다 — 목록 행에는 '하체 · 웨이트'가 있는데 칩에는
+    // 없어서, 칩으로 담으면 유형을 볼 기회가 아예 없었다.
+    const { getByText } = setup();
+
+    const chipRow = getByText("⭐ 자주 한 운동").parentElement
+      ?.lastElementChild as HTMLElement;
+    expect(chipRow.textContent).toContain("웨이트");
+  });
+
+  it("같은 이름의 맨몸판이 있으면 검색 결과에 안내가 뜬다", () => {
+    const { getByPlaceholderText, getByText } = render(
+      <ExercisePicker
+        open
+        catalog={AMBIGUOUS}
+        pastSessions={[]}
+        pastLoading={false}
+        onClose={vi.fn()}
+        onPickMany={vi.fn()}
+        onPickPast={vi.fn()}
+        onCreateCustom={vi.fn()}
+        routinesLoading={false}
+        onRenameRoutine={vi.fn()}
+        onDeleteRoutine={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(getByPlaceholderText("🔍 운동 검색 (예: 스쿼트, 벤치)"), {
+      target: { value: "스쿼트" },
+    });
+    expect(getByText(/맨몸으로 한 운동은/)).toBeTruthy();
+  });
+
+  it("웨이트만 나오는 검색에는 안내를 띄우지 않는다", () => {
+    // 늘 뜨면 아무도 안 읽는다. 실제로 헷갈릴 때만 뜬다.
+    const { getByPlaceholderText, queryByText } = setup();
+
+    fireEvent.change(getByPlaceholderText("🔍 운동 검색 (예: 스쿼트, 벤치)"), {
+      target: { value: "벤치" },
+    });
+    expect(queryByText(/맨몸으로 한 운동은/)).toBeNull();
+  });
+});
+
+describe("ExercisePicker — 챌린지에 안 잡히는 종목 안내 (2026-08-04)", () => {
+  // 신고 0783ca35: 목표가 맨몸·유산소뿐인데 웨이트 스쿼트를 100회 기록했고,
+  // 앱은 아무 말도 하지 않았다. 고르는 자리에서 말해 준다.
+  const BODYWEIGHT_ONLY = new Set<"weight" | "cardio" | "bodyweight">([
+    "bodyweight",
+    "cardio",
+  ]);
+
+  function withChallenge(
+    categories: ReadonlySet<"weight" | "cardio" | "bodyweight"> | null,
+  ) {
+    return render(
+      <ExercisePicker
+        open
+        catalog={CATALOG}
+        pastSessions={SESSIONS}
+        pastLoading={false}
+        onClose={vi.fn()}
+        onPickMany={vi.fn()}
+        onPickPast={vi.fn()}
+        onCreateCustom={vi.fn()}
+        routinesLoading={false}
+        onRenameRoutine={vi.fn()}
+        onDeleteRoutine={vi.fn()}
+        challengeCategories={categories}
+      />,
+    );
+  }
+
+  it("목표에 없는 분류의 종목에 '챌린지 미반영'을 붙인다", () => {
+    const { getAllByText } = withChallenge(BODYWEIGHT_ONLY);
+    // 카탈로그의 웨이트 4종(벤치·랫풀·스쿼트·데드) — 맨몸/유산소는 안 붙는다
+    expect(getAllByText("챌린지 미반영")).toHaveLength(4);
+  });
+
+  it("목표에 있는 분류에는 아무 표시도 안 붙는다", () => {
+    const { queryByText } = withChallenge(
+      new Set<"weight" | "cardio" | "bodyweight">([
+        "weight",
+        "bodyweight",
+        "cardio",
+      ]),
+    );
+    expect(queryByText("챌린지 미반영")).toBeNull();
+  });
+
+  it("챌린지를 모르면 경고하지 않는다", () => {
+    // 확실할 때만 경고한다 — 멀쩡한 운동을 말리면 안 된다
+    const { queryByText } = withChallenge(null);
+    expect(queryByText("챌린지 미반영")).toBeNull();
+  });
+
+  it("안 잡히는 종목을 고르면 목표 분류를 알려주는 배너가 뜬다", () => {
+    const { getAllByText, getByText, queryByText } =
+      withChallenge(BODYWEIGHT_ONLY);
+
+    expect(queryByText(/챌린지 성과에는 안 잡혀요/)).toBeNull();
+    // 벤치프레스는 ⭐칩과 목록 행 양쪽에 있다 — 칩을 누른다
+    fireEvent.click(getAllByText("벤치프레스")[0]);
+
+    expect(getByText(/챌린지 성과에는 안 잡혀요/)).toBeTruthy();
+    expect(getByText(/맨몸 · 유산소/)).toBeTruthy();
+  });
+
+  it("잡히는 종목만 고르면 배너가 안 뜬다", () => {
+    const { getByText, queryByText } = withChallenge(BODYWEIGHT_ONLY);
+    fireEvent.click(getByText("플랭크"));
+    expect(queryByText(/챌린지 성과에는 안 잡혀요/)).toBeNull();
   });
 });

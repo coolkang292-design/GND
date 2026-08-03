@@ -43,6 +43,53 @@ export function goalLabel(type: GoalType, qualifier?: number | null): string {
   return base;
 }
 
+/**
+ * 내 목표들이 덮는 운동 분류 (2026-08-04).
+ *
+ * 신고 0783ca35: 목표가 맨몸·유산소뿐인 사용자가 웨이트 스쿼트를 100회 기록했다.
+ * 앱은 아무 말도 하지 않았고, 챌린지 맨몸 %는 내내 0이었다. 고르는 순간에
+ * "이건 안 잡힌다"고 말해 주려면 먼저 무엇이 잡히는지를 알아야 한다.
+ */
+export function goalCategories(
+  goals: readonly { goal_type: GoalType }[],
+): Set<GoalCategory> {
+  return new Set(goals.map((g) => GOAL_TYPE_META[g.goal_type].category));
+}
+
+/**
+ * 이 종목을 해서 챌린지 실적이 오르는가.
+ *
+ * `GoalCategory`와 `ExerciseType`은 같은 세 값("weight"·"cardio"·"bodyweight")이라
+ * 그대로 맞춰 본다 — `foldPeriodStats`가 실제로 `exerciseType`으로 갈라 담는다.
+ *
+ * **목표를 모를 때는 true.** 챌린지가 없거나 아직 못 불러온 상태에서 "도움이
+ * 안 된다"고 하면 멀쩡한 운동을 말리는 셈이다. 확실할 때만 경고한다.
+ */
+export function countsTowardChallenge(
+  exerciseType: GoalCategory,
+  categories: ReadonlySet<GoalCategory> | null,
+): boolean {
+  if (categories === null || categories.size === 0) return true;
+  return categories.has(exerciseType);
+}
+
+/** 안내 문구에 쓸 분류 이름 — "맨몸 · 유산소" */
+export const CATEGORY_LABEL: Record<GoalCategory, string> = {
+  weight: "웨이트",
+  cardio: "유산소",
+  bodyweight: "맨몸",
+};
+
+export function categoriesLabel(
+  categories: ReadonlySet<GoalCategory>,
+): string {
+  // 표시 순서를 고정한다 — Set 순회 순서(삽입 순)에 맡기면 사람마다 다르게 보인다
+  return (["weight", "bodyweight", "cardio"] as const)
+    .filter((c) => categories.has(c))
+    .map((c) => CATEGORY_LABEL[c])
+    .join(" · ");
+}
+
 // ── challenges CRUD ──────────────────────────────────────────────
 
 /** 크루의 살아있는(취소 아닌) 최신 챌린지 */

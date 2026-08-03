@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   GOAL_TYPE_META,
+  categoriesLabel,
+  countsTowardChallenge,
+  goalCategories,
   actualForGoal,
   foldPeriodStats,
   goalLabel,
@@ -427,5 +430,51 @@ describe("foldPeriodStats — 타바타 분수가 맨몸 시간에 들어간다 
     const s = foldPeriodStats([plain], "2026-07-27", "2026-09-30", "Asia/Seoul").get("u1")!;
     expect(s.bodyweightTimeMin).toBe(0);
     expect(s.tabataCount).toBe(0);
+  });
+});
+
+describe("goalCategories · countsTowardChallenge (신고 0783ca35, 2026-08-04)", () => {
+  it("목표 유형을 분류로 접는다", () => {
+    const cats = goalCategories([
+      { goal_type: "bodyweight_reps" },
+      { goal_type: "bodyweight_time" },
+      { goal_type: "cardio_distance" },
+    ]);
+    expect([...cats].sort()).toEqual(["bodyweight", "cardio"]);
+  });
+
+  it("타바타는 맨몸으로, 볼륨은 웨이트로 접힌다", () => {
+    expect([...goalCategories([{ goal_type: "tabata_count" }])]).toEqual([
+      "bodyweight",
+    ]);
+    expect([...goalCategories([{ goal_type: "volume" }])]).toEqual(["weight"]);
+  });
+
+  it("맨몸·유산소 목표만 있으면 웨이트는 실적에 안 잡힌다", () => {
+    // 낭만송곳니의 실제 상황 — 스쿼트를 '웨이트'로 100회 했는데 맨몸 %가 0이었다
+    const cats = goalCategories([
+      { goal_type: "bodyweight_reps" },
+      { goal_type: "cardio_distance" },
+    ]);
+    expect(countsTowardChallenge("weight", cats)).toBe(false);
+    expect(countsTowardChallenge("bodyweight", cats)).toBe(true);
+    expect(countsTowardChallenge("cardio", cats)).toBe(true);
+  });
+
+  it("목표를 모르면 경고하지 않는다", () => {
+    // 챌린지가 없거나 아직 못 불러온 상태에서 "도움 안 된다"고 하면
+    // 멀쩡한 운동을 말리는 셈이다. 확실할 때만 경고한다.
+    expect(countsTowardChallenge("weight", null)).toBe(true);
+    expect(countsTowardChallenge("weight", new Set())).toBe(true);
+  });
+
+  it("분류 이름은 웨이트·맨몸·유산소 순으로 고정한다", () => {
+    // Set 삽입 순서에 맡기면 사람마다 다른 순서로 보인다
+    const cats = goalCategories([
+      { goal_type: "cardio_time" },
+      { goal_type: "bodyweight_reps" },
+      { goal_type: "weight_reps" },
+    ]);
+    expect(categoriesLabel(cats)).toBe("웨이트 · 맨몸 · 유산소");
   });
 });

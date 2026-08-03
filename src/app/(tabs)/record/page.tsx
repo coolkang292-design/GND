@@ -50,10 +50,17 @@ import {
   getMyRoutines,
   renameRoutine,
   saveRoutine,
+  updateRoutineExercises,
   ROUTINE_DUPLICATE_NAME,
   ROUTINE_SLOT_LIMIT,
   type WorkoutRoutine,
 } from "@/lib/routines";
+import {
+  getChallengeGoals,
+  getMyChallenges,
+  goalCategories,
+  type GoalCategory,
+} from "@/lib/challenge";
 import { getLevelRewards, getProgressSummary } from "@/lib/progression";
 import { tabataDraftExercises } from "@/lib/domain/tabata";
 import { moveItem } from "@/lib/domain/reorder";
@@ -174,6 +181,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const [routines, setRoutines] = useState<WorkoutRoutine[] | null>(null);
   const [routinesLoading, setRoutinesLoading] = useState(true);
   const [routineSaveOpen, setRoutineSaveOpen] = useState(false);
+  const [challengeCategories, setChallengeCategories] =
+    useState<ReadonlySet<GoalCategory> | null>(null);
   const [slotLimit, setSlotLimit] = useState(routineSlotLimit(1, []));
   const [nextSlotLevel, setNextSlotLevel] = useState<number | null>(null);
   const [result, setResult] = useState<CompletedResult | null>(null);
@@ -285,6 +294,36 @@ function WorkoutScreen({ userId }: { userId: string }) {
         if (!cancelled) setRoutines(null);
       } finally {
         if (!cancelled) setRoutinesLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  /**
+   * 진행 중인 챌린지에서 내 목표가 덮는 분류 (2026-08-04, 사용자 요청).
+   *
+   * 신고 0783ca35는 목표가 맨몸·유산소뿐인데 웨이트 스쿼트를 100회 기록하고서야
+   * 챌린지 %가 안 오른다는 걸 알았다. 피커가 고르는 자리에서 말해 주려면
+   * 여기서 미리 목표를 읽어 둬야 한다.
+   *
+   * 실패하면 null로 남긴다 — 모를 때 경고하면 멀쩡한 운동을 말리게 된다.
+   */
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const active = (await getMyChallenges(userId)).find(
+          (c) => c.status === "active" && c.myStatus !== "invited",
+        );
+        if (!active) return;
+        const goals = await getChallengeGoals(active.id);
+        if (cancelled) return;
+        const mine = goals.filter((g) => g.user_id === userId);
+        if (mine.length > 0) setChallengeCategories(goalCategories(mine));
+      } catch {
+        // 챌린지가 없거나 못 읽어도 기록은 그대로 돼야 한다
       }
     })();
     return () => {
@@ -501,6 +540,28 @@ function WorkoutScreen({ userId }: { userId: string }) {
       const saved = await saveRoutine({ userId, name, exercises });
       setRoutines((current) => [saved, ...(current ?? [])]);
       showToast(`'${saved.name}' 루틴을 저장했어요`);
+      return true;
+    } catch (error) {
+      showToast(routineErrorMessage(error));
+      return false;
+    }
+  }
+
+  /** 기존 루틴의 종목을 지금 담은 목록으로 갈아 끼운다 (2026-08-04) */
+  async function handleOverwriteRoutine(routineId: string): Promise<boolean> {
+    const exercises = toPlanExercises(draft.exercises);
+    if (exercises.length === 0) {
+      showToast("저장할 운동이 없어요");
+      return false;
+    }
+    try {
+      const updated = await updateRoutineExercises(routineId, exercises);
+      setRoutines((current) =>
+        (current ?? []).map((item) =>
+          item.id === updated.id ? updated : item,
+        ),
+      );
+      showToast(`'${updated.name}' 루틴의 운동을 바꿨어요`);
       return true;
     } catch (error) {
       showToast(routineErrorMessage(error));
@@ -1207,7 +1268,11 @@ function WorkoutScreen({ userId }: { userId: string }) {
           disabled={busy}
           className="h-12 rounded-card border border-line bg-surface text-sm font-bold text-accent disabled:opacity-60"
         >
-          💾 이 목록을 루틴으로 저장 ({routines.length}/{slotLimit})
+          💾 이 목록을{" "}
+          {routines.length >= slotLimit && routines.length > 0
+            ? "기존 루틴에 덮어쓰기"
+            : "루틴으로 저장"}{" "}
+          ({routines.length}/{slotLimit})
         </button>
       )}
       {!active && (
@@ -1256,6 +1321,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
         onPickMany={addExercises}
         onPickPast={addPastSession}
         onCreateCustom={handleCreateCustom}
+        challengeCategories={challengeCategories}
         routines={routines ?? undefined}
         routinesLoading={routinesLoading}
         onPickRoutine={addRoutine}
@@ -1269,8 +1335,14 @@ function WorkoutScreen({ userId }: { userId: string }) {
         savedCount={routines?.length ?? 0}
         slotLimit={slotLimit}
         nextSlotLevel={nextSlotLevel}
+        routines={(routines ?? []).map((routine) => ({
+          id: routine.id,
+          name: routine.name,
+          exerciseNames: routine.exercises.map((exercise) => exercise.name),
+        }))}
         onClose={() => setRoutineSaveOpen(false)}
         onSave={handleSaveRoutine}
+        onOverwrite={handleOverwriteRoutine}
       />
 
       {toast && (
