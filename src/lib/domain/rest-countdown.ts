@@ -9,6 +9,42 @@ export type RestCountdownTogglePlan = {
   timerAction: "start" | "cancel" | "keep";
 };
 
+// ── 휴식시간 수정 (2026-08-04) ──────────────────────────────────
+//
+// 운동 중에도 바꿀 수 있게 열면서, 설정값과 **이미 돌고 있는 휴식**이 함께
+// 움직여야 한다 (사용자 결정). 둘이 따로 놀면 "10초 줄였다"가 두 가지 뜻이 된다.
+
+/** 휴식 사전설정의 하한·상한과 증감 단위 */
+export const MIN_REST_SECONDS = 10;
+export const MAX_REST_SECONDS = 600;
+export const REST_STEP_SECONDS = 10;
+
+/** 설정값 증감 — 하한·상한에서 멈춘다 */
+export function nextRestSeconds(current: number, delta: number): number {
+  return Math.min(
+    MAX_REST_SECONDS,
+    Math.max(MIN_REST_SECONDS, current + delta),
+  );
+}
+
+/**
+ * 진행 중인 휴식의 종료 시각을 옮긴다.
+ *
+ * 줄일 때는 **최소 1초를 남긴다.** 0으로 만들면 버튼을 눌렀는데 휴식이 그냥
+ * 끝나 버려서, 사용자에겐 "줄이기"가 아니라 "건너뛰기"로 보인다.
+ * 늘리는 쪽은 상한을 두지 않는다 — 기존 `+30초`와 규칙을 맞춘다.
+ */
+export function adjustedRestEndsAtMs(input: {
+  endsAtMs: number;
+  deltaSeconds: number;
+  nowMs: number;
+}): number {
+  return Math.max(
+    input.nowMs + 1_000,
+    input.endsAtMs + input.deltaSeconds * 1_000,
+  );
+}
+
 export function shouldStartRestCountdown(
   exerciseType: ExerciseType,
 ): boolean {

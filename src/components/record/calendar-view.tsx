@@ -10,11 +10,19 @@ import {
 } from "@/lib/domain/calendar";
 import { dayKey } from "@/lib/domain/time";
 import {
+  canAttachPhotoLater,
+  missingRequiredPhoto,
+} from "@/lib/domain/photo-window";
+import { LatePhotoButton } from "@/components/record/late-photo-button";
+import {
   addDaysToDateKey,
   isPlanDateAllowed,
   newPlanExercises,
 } from "@/lib/domain/workout-plan";
-import { formatWorkoutLog } from "@/lib/domain/workout-log";
+import {
+  formatWorkoutLog,
+  type LogExercise,
+} from "@/lib/domain/workout-log";
 import { getMyProfile } from "@/lib/crew";
 import { shareOrCopyText, shareResultToast } from "@/lib/share";
 import type {
@@ -35,6 +43,7 @@ import {
   type WorkoutPlan,
 } from "@/lib/workout-plan";
 import type { WorkoutRoutine } from "@/lib/routines";
+import { SetBreakdown } from "@/components/workout/set-breakdown";
 import { ExercisePicker } from "./exercise-picker";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
@@ -89,11 +98,19 @@ export function CalendarView({
   onScheduleSession,
   onLoadPlan,
   onCreateCustom,
+  photoRequired = false,
   routines,
   routinesLoading,
 }: {
   userId: string;
   catalog: CatalogExercise[];
+  /**
+   * 참가 중인 챌린지가 인증 사진을 요구하는가 (2026-08-04).
+   *
+   * 사진 없는 세션이 집계에서 통째로 빠지는 것을 그 자리에서 알리는 데 쓴다.
+   * 챌린지가 없거나 아직 못 불러왔으면 false — 모르면서 겁주지 않는다.
+   */
+  photoRequired?: boolean;
   /** 내 루틴 (0056) — 그 날짜의 예정표로 바로 저장할 수 있다 */
   routines?: WorkoutRoutine[];
   routinesLoading?: boolean;
@@ -193,10 +210,20 @@ export function CalendarView({
 
   // 공유용 일지 텍스트 프리페치 — iOS는 navigator.share를 사용자 제스처 안에서
   // 불러야 하므로, 시트가 열릴 때 미리 만들어 두고 클릭 시 즉시 공유한다.
-  const [dayLog, setDayLog] = useState<{ date: string; text: string } | null>(
+  //
+  // 같은 조회 결과를 **세션별로도 보관한다** (2026-08-04). 상세보기가 쓰는 데이터가
+  // 공유 텍스트의 재료와 같은 것이라 새 질의가 필요 없다. flat()으로 접어 버리면
+  // 어느 세션의 세트인지가 사라져서 상세를 그릴 수 없다.
+  const [dayLog, setDayLog] = useState<{
+    date: string;
+    text: string;
+    bySession: Record<string, LogExercise[]>;
+  } | null>(null);
+  const [shareToast, setShareToast] = useState<string | null>(null);
+  /** 상세를 펼친 세션. 하루에 여러 세션이 있어도 한 번에 하나만 펼친다 */
+  const [expandedSessionId, setExpandedSessionId] = useState<string | null>(
     null,
   );
-  const [shareToast, setShareToast] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -207,9 +234,14 @@ export function CalendarView({
           selectedSessions.map((s) => getSessionLogExercises(s.id)),
         );
         if (!cancelled) {
+          const bySession: Record<string, LogExercise[]> = {};
+          selectedSessions.forEach((session, index) => {
+            bySession[session.id] = lists[index] ?? [];
+          });
           setDayLog({
             date: selectedDate,
             text: formatWorkoutLog(selectedDate, lists.flat()),
+            bySession,
           });
         }
       } catch {
@@ -222,8 +254,8 @@ export function CalendarView({
     };
   }, [selectedDate, selectedSessions]);
 
-  const readyLogText =
-    dayLog && dayLog.date === selectedDate ? dayLog.text : null;
+  const dayLogIsCurrent = dayLog !== null && dayLog.date === selectedDate;
+  const readyLogText = dayLogIsCurrent ? dayLog.text : null;
 
   async function handleShareDay() {
     if (!readyLogText) return;
@@ -242,6 +274,8 @@ export function CalendarView({
   function openDate(date: string) {
     setSelectedDate(date);
     setMoveDate(date);
+    // 다른 날을 열면 접어 둔다 — 안 그러면 새 날짜의 시트가 펼쳐진 채로 뜬다
+    setExpandedSessionId(null);
   }
 
   async function handleSaveCopy() {
@@ -614,6 +648,14 @@ export function CalendarView({
                       삭제
                     </button>
                   </div>
+                  {/*
+                    계획 상세 (2026-08-04) — 세트·수량은 `workout_plans.exercises`
+                    jsonb에 이미 있다. 새 조회 없이 편다. 계획에는 완료 여부가
+                    없으므로 SetBreakdown이 완료 표시를 그리지 않는다.
+                  */}
+                  <div className="mt-2.5">
+                    <SetBreakdown exercises={selectedPlan.exercises} />
+                  </div>
                   {selectedDate === todayKey && (
                     <button
                       onClick={() => {
@@ -649,46 +691,114 @@ export function CalendarView({
               )}
               {selectedSessions.map((s) => {
                 const meta = VERIFICATION_META[s.verification];
+                const time = timeLabel(s.completedAt, timeZone);
+                const expanded = expandedSessionId === s.id;
+                const detail = dayLogIsCurrent
+                  ? dayLog.bySession[s.id]
+                  : undefined;
                 return (
                   <div
                     key={s.id}
-                    className="flex items-start gap-3 rounded-card border border-line bg-surface-2 p-3"
+                    className="rounded-card border border-line bg-surface-2 p-3"
                   >
-                    <span className="font-mono text-xs text-muted">
-                      {timeLabel(s.completedAt, timeZone)}
-                    </span>
-                    <div className="flex-1">
-                      <p className="text-sm font-bold">
-                        {s.exerciseNames.length > 0
-                          ? s.exerciseNames.join(" · ")
-                          : "운동 기록"}
-                      </p>
-                      <p className="mt-0.5 text-[11.5px] text-muted">
-                        {durationLabel(s.durationSeconds)} · {meta.glyph}{" "}
-                        {meta.label}
-                        {s.tabataMinutes && (
-                          <span className="ml-1 font-bold text-accent">
-                            · 🔥 타바타 {s.tabataMinutes}분
-                          </span>
-                        )}
-                        {s.recordNote && (
-                          <span className="ml-1 font-bold text-accent">
-                            · 🏅 {s.recordNote}
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                    {s.exerciseNames.length > 0 && (
+                    <div className="flex items-start gap-3">
+                      <span className="font-mono text-xs text-muted">
+                        {time}
+                      </span>
+                      {/*
+                        요약 줄 자체가 상세 토글이다 (2026-08-04). 복사 버튼과
+                        같은 자리에 두면 버튼 안에 버튼이 되므로 형제로 나눈다.
+                      */}
                       <button
-                        onClick={() => {
-                          setSelectedDate(null);
-                          setCopySource(s);
-                          setCopyDate(addDaysToDateKey(todayKey, 1));
-                        }}
-                        className="shrink-0 rounded-full border border-line bg-surface px-3 py-1.5 text-[11px] font-bold text-accent"
+                        type="button"
+                        aria-label={`${time} 운동 상세`}
+                        aria-expanded={expanded}
+                        onClick={() =>
+                          setExpandedSessionId(expanded ? null : s.id)
+                        }
+                        className="min-w-0 flex-1 text-left"
                       >
-                        📋 복사
+                        <span className="block text-sm font-bold">
+                          {s.exerciseNames.length > 0
+                            ? s.exerciseNames.join(" · ")
+                            : "운동 기록"}
+                        </span>
+                        <span className="mt-0.5 block text-[11.5px] text-muted">
+                          {durationLabel(s.durationSeconds)} · {meta.glyph}{" "}
+                          {meta.label}
+                          {s.tabataMinutes && (
+                            <span className="ml-1 font-bold text-accent">
+                              · 🔥 타바타 {s.tabataMinutes}분
+                            </span>
+                          )}
+                          {s.recordNote && (
+                            <span className="ml-1 font-bold text-accent">
+                              · 🏅 {s.recordNote}
+                            </span>
+                          )}
+                          <span className="ml-1 font-bold text-accent">
+                            {expanded ? "· 접기 ▲" : "· 상세 ▼"}
+                          </span>
+                        </span>
                       </button>
+                      {s.exerciseNames.length > 0 && (
+                        <button
+                          onClick={() => {
+                            setSelectedDate(null);
+                            setCopySource(s);
+                            setCopyDate(addDaysToDateKey(todayKey, 1));
+                          }}
+                          className="shrink-0 rounded-full border border-line bg-surface px-3 py-1.5 text-[11px] font-bold text-accent"
+                        >
+                          📋 복사
+                        </button>
+                      )}
+                    </div>
+                    {/*
+                      왜 이 운동이 챌린지에 안 잡히는지 그 자리에서 말한다
+                      (2026-08-04). 재기록 동기를 없애는 것이 목적이다 —
+                      신고 4805090f는 사진을 붙이려 같은 운동을 다시 기록했다.
+                    */}
+                    {missingRequiredPhoto({
+                      hasPhoto: s.verification !== "none",
+                      photoRequired,
+                    }) && (
+                      <p className="mt-2 rounded-card-sm border border-warn/40 bg-surface px-2.5 py-1.5 text-[11px] font-bold text-warn">
+                        ⚠️ 사진이 없어 <b>챌린지 성과에 안 잡혀요.</b> 이 챌린지는
+                        인증 사진이 필수예요.
+                      </p>
+                    )}
+                    {canAttachPhotoLater({
+                      completedAt: s.completedAt,
+                      now: new Date(),
+                      timeZone,
+                      hasPhoto: s.verification !== "none",
+                    }) && (
+                      <LatePhotoButton
+                        userId={userId}
+                        sessionId={s.id}
+                        onDone={(verification) =>
+                          setSessions((current) =>
+                            current.map((item) =>
+                              item.id === s.id
+                                ? { ...item, verification }
+                                : item,
+                            ),
+                          )
+                        }
+                        onToast={setShareToast}
+                      />
+                    )}
+                    {expanded && (
+                      <div className="mt-2.5">
+                        {detail ? (
+                          <SetBreakdown exercises={detail} />
+                        ) : (
+                          <p className="text-[12.5px] text-muted">
+                            세트 기록을 불러오는 중…
+                          </p>
+                        )}
+                      </div>
                     )}
                   </div>
                 );

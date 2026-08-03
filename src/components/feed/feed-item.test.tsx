@@ -1,10 +1,42 @@
+// @vitest-environment jsdom
+
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import type { BreakdownExercise } from "@/components/workout/set-breakdown";
 import type { FeedItem } from "@/lib/social";
 import { FeedItemCard } from "./feed-item";
 
-function feedItem(photoUrl: string | null): FeedItem {
+// vitest globals가 꺼져 있어 RTL 자동 정리가 안 돈다 (CLAUDE.md §함정)
+afterEach(cleanup);
+
+/** 세트 상세 — getCrewFeed가 이미 받아 오던 것을 버리지 않고 남긴 값 (2026-08-04) */
+const BREAKDOWN: BreakdownExercise[] = [
+  {
+    name: "벤치프레스",
+    exerciseType: "weight",
+    measure: null,
+    sets: [
+      { weightKg: 60, reps: 8, distanceKm: 0, durationMin: 0, done: true },
+      { weightKg: 60, reps: 4, distanceKm: 0, durationMin: 0, done: false },
+    ],
+  },
+  {
+    name: "랫풀다운",
+    exerciseType: "weight",
+    measure: null,
+    sets: [
+      { weightKg: 45, reps: 12, distanceKm: 0, durationMin: 0, done: true },
+    ],
+  },
+];
+
+function feedItem(
+  photoUrl: string | null,
+  breakdown: BreakdownExercise[] = BREAKDOWN,
+): FeedItem {
   return {
+    breakdown,
     sessionId: "session-1",
     userId: "friend-1",
     nickname: "오빙크",
@@ -61,5 +93,81 @@ describe("FeedItemCard", () => {
       <FeedItemCard item={feedItem(null)} userId="me" onProfileClick={() => {}} />,
     );
     expect(html).toContain('aria-label="오빙크 프로필 보기"');
+  });
+});
+
+/**
+ * ④ 지난 운동 기록 상세보기 — 피드 경로 (2026-08-04).
+ *
+ * 세트는 이미 손에 있다. 카드를 눌러 펼치기만 하면 되고 새 질의가 없다.
+ */
+describe("FeedItemCard — 기록 상세 펼치기", () => {
+  const renderCard = (photoUrl: string | null = null, breakdown?: BreakdownExercise[]) =>
+    render(
+      <FeedItemCard
+        item={feedItem(photoUrl, breakdown)}
+        userId="me"
+        onProfileClick={() => {}}
+      />,
+    );
+
+  const toggle = () => screen.getByRole("button", { name: /운동 상세/ });
+
+  it("펼치기 전에는 세트가 보이지 않는다", () => {
+    renderCard();
+
+    expect(screen.queryByText("60kg 8회")).toBeNull();
+  });
+
+  it("요약을 누르면 종목별 세트가 펼쳐진다", () => {
+    renderCard();
+
+    fireEvent.click(toggle());
+
+    expect(screen.getByText("60kg 8회")).toBeTruthy();
+    expect(screen.getByText("45kg 12회")).toBeTruthy();
+  });
+
+  it("완료·미완료를 구분해 보여준다 — done이 실제로 전달돼야 한다", () => {
+    renderCard();
+
+    fireEvent.click(toggle());
+
+    // 종목 2개가 각각 1세트를 완료했고, 벤치프레스만 2세트를 남겼다.
+    expect(screen.getAllByLabelText("1세트 완료")).toHaveLength(2);
+    expect(screen.getAllByLabelText("2세트 미완료")).toHaveLength(1);
+    expect(screen.queryByLabelText("2세트 완료")).toBeNull();
+  });
+
+  it("다시 누르면 접힌다", () => {
+    renderCard();
+
+    fireEvent.click(toggle());
+    expect(screen.getByText("60kg 8회")).toBeTruthy();
+
+    fireEvent.click(toggle());
+    expect(screen.queryByText("60kg 8회")).toBeNull();
+  });
+
+  it("사진 카드에서도 펼칠 수 있다 — 두 변형이 같은 요약 블록을 쓴다", () => {
+    renderCard("https://example.com/workout.jpg");
+
+    fireEvent.click(toggle());
+
+    expect(screen.getByText("60kg 8회")).toBeTruthy();
+  });
+
+  it("저장된 세트가 없으면 없다고 알린다 — 빈 칸을 남기지 않는다", () => {
+    renderCard(null, []);
+
+    fireEvent.click(toggle());
+
+    expect(screen.getByText(/세트 기록이 없어요/)).toBeTruthy();
+  });
+
+  it("기존 종목 요약 줄은 그대로 남는다", () => {
+    renderCard();
+
+    expect(screen.getByText("벤치프레스 · 랫풀다운")).toBeTruthy();
   });
 });

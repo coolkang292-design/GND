@@ -11,6 +11,7 @@ import { DEFAULT_TIMEZONE, dayKey, dayRange } from "@/lib/domain/time";
 import { weekWorkoutDays } from "@/lib/domain/viewing-pass";
 import { getActiveChallengeRanking } from "@/lib/challenge";
 import { summarizeVolume, type VolumeSummary } from "@/lib/domain/volume";
+import type { BreakdownExercise } from "@/components/workout/set-breakdown";
 import type { ExerciseType } from "@/lib/types";
 
 // ── 공통 타입 ────────────────────────────────────────────────
@@ -131,6 +132,8 @@ export type FeedItem = {
   streak: number;
   recordNote: string | null; // 🏅 기록 갱신 문구 (0018)
   tabataMinutes: number | null; // 🔥 타바타 코스 분수 (0019)
+  /** 종목·세트 상세 (2026-08-04) — 이미 받아 오던 행을 버리지 않고 남긴 것 */
+  breakdown: BreakdownExercise[];
   reactions: Record<ReactionType, number>;
   myReactions: Set<ReactionType>;
 };
@@ -146,24 +149,60 @@ type FeedSessionRow = {
   record_note?: string | null; // 0018 적용 전에는 컬럼이 없을 수 있음
   tabata_minutes?: number | null; // 0019
 
-  workout_exercises:
-    | {
-        exercise_name: string;
-        exercise_type: ExerciseType;
-        sort_order: number;
-        workout_sets:
-          | {
-              weight_kg: number | null;
-              reps: number | null;
-              duration_seconds: number | null;
-              distance_meters: number | null;
-              is_completed: boolean;
-            }[]
-          | null;
-      }[]
-    | null;
+  workout_exercises: FeedExerciseRow[] | null;
   workout_images: WorkoutImageRelation;
 };
+
+/**
+ * 피드가 이미 받아 오는 종목·세트 행 (2026-08-04에 `measure`·`set_number` 추가).
+ *
+ * ⚠️ 둘 다 없으면 상세가 틀리게 그려진다. `measure`가 없으면 맨몸 **시간형**이
+ * `0회`로 나오고, `set_number`가 없으면 세트 순서가 DB 결과 순서에 좌우된다.
+ * 같은 질의에 컬럼만 더한 것이라 왕복은 늘지 않는다.
+ */
+export type FeedExerciseRow = {
+  exercise_name: string;
+  exercise_type: ExerciseType;
+  measure?: "reps" | "time" | null;
+  sort_order: number;
+  workout_sets:
+    | {
+        set_number?: number;
+        weight_kg: number | null;
+        reps: number | null;
+        duration_seconds: number | null;
+        distance_meters: number | null;
+        is_completed: boolean;
+      }[]
+    | null;
+};
+
+/**
+ * 피드 행 → 상세 표시 모양. 순수 함수라 조회 없이 접기만 한다.
+ *
+ * 전에는 이 세트들을 `summarizeVolume` 재료로만 쓰고 **버렸다.** 피드 상세는
+ * 새 질의가 아니라 이미 손에 있던 것을 그리는 일이다.
+ */
+export function toFeedBreakdown(
+  rows: FeedExerciseRow[] | null,
+): BreakdownExercise[] {
+  return [...(rows ?? [])]
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((exercise) => ({
+      name: exercise.exercise_name,
+      exerciseType: exercise.exercise_type,
+      measure: exercise.measure ?? null,
+      sets: [...(exercise.workout_sets ?? [])]
+        .sort((a, b) => (a.set_number ?? 0) - (b.set_number ?? 0))
+        .map((set) => ({
+          weightKg: Number(set.weight_kg ?? 0),
+          reps: set.reps ?? 0,
+          distanceKm: Number(set.distance_meters ?? 0) / 1000,
+          durationMin: Math.round((set.duration_seconds ?? 0) / 60),
+          done: set.is_completed,
+        })),
+    }));
+}
 
 /**
  * 크루 공개 완료 세션 피드 한 페이지.
@@ -208,7 +247,7 @@ export async function getCrewFeed(
   let query = supabase
     .from("workout_sessions")
     .select(
-      `id, user_id, title, completed_at, duration_minutes, record_note, tabata_minutes, workout_exercises(exercise_name, exercise_type, sort_order, workout_sets(weight_kg, reps, duration_seconds, distance_meters, is_completed)), ${imagesEmbed}`,
+      `id, user_id, title, completed_at, duration_minutes, record_note, tabata_minutes, workout_exercises(exercise_name, exercise_type, measure, sort_order, workout_sets(set_number, weight_kg, reps, duration_seconds, distance_meters, is_completed)), ${imagesEmbed}`,
     )
     .in("user_id", visibleIds)
     .eq("status", "completed")
@@ -263,6 +302,7 @@ export async function getCrewFeed(
       streak: streaks.get(r.user_id) ?? 0,
       recordNote: r.record_note ?? null,
       tabataMinutes: r.tabata_minutes ?? null,
+      breakdown: toFeedBreakdown(r.workout_exercises),
       reactions: reaction?.counts ?? { fire: 0, clap: 0, like: 0 },
       myReactions: reaction?.mine.get(myUserId) ?? new Set<ReactionType>(),
     };

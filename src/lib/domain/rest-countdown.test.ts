@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  adjustedRestEndsAtMs,
+  nextRestSeconds,
   getRestCompletionCatchUpBeep,
   getRestCountdownBeep,
   getRestCountdownTogglePlan,
@@ -88,4 +90,62 @@ describe("getRestCountdownTogglePlan", () => {
       });
     },
   );
+});
+
+/**
+ * ① 운동 중 휴식시간 수정 (2026-08-04).
+ *
+ * 기능은 원래 있었고 `disabled={active}`로 잠겨 있었다. 잠금을 풀면서 두 가지가
+ * 필요해졌다 — 설정값의 증감 규칙과, **이미 돌고 있는 휴식**을 옮기는 규칙.
+ */
+describe("nextRestSeconds — 설정값 10초 증감", () => {
+  it("10초 단위로 늘리고 줄인다", () => {
+    expect(nextRestSeconds(90, 10)).toBe(100);
+    expect(nextRestSeconds(90, -10)).toBe(80);
+  });
+
+  it("하한 10초 아래로는 안 내려간다", () => {
+    expect(nextRestSeconds(10, -10)).toBe(10);
+    expect(nextRestSeconds(15, -10)).toBe(10);
+  });
+
+  it("상한 600초 위로는 안 올라간다", () => {
+    expect(nextRestSeconds(600, 10)).toBe(600);
+    expect(nextRestSeconds(595, 10)).toBe(600);
+  });
+});
+
+describe("adjustedRestEndsAtMs — 진행 중인 휴식 옮기기", () => {
+  const now = 1_000_000;
+
+  it("남은 시간을 delta만큼 늘린다", () => {
+    // 60초 남은 휴식에 +10 → 70초 남음
+    expect(
+      adjustedRestEndsAtMs({ endsAtMs: now + 60_000, deltaSeconds: 10, nowMs: now }),
+    ).toBe(now + 70_000);
+  });
+
+  it("남은 시간을 delta만큼 줄인다", () => {
+    expect(
+      adjustedRestEndsAtMs({ endsAtMs: now + 60_000, deltaSeconds: -10, nowMs: now }),
+    ).toBe(now + 50_000);
+  });
+
+  it("줄여도 최소 1초는 남긴다 — 0으로 만들면 '줄였더니 갑자기 끝났다'가 된다", () => {
+    expect(
+      adjustedRestEndsAtMs({ endsAtMs: now + 5_000, deltaSeconds: -10, nowMs: now }),
+    ).toBe(now + 1_000);
+  });
+
+  it("이미 1초 미만이어도 과거로 밀지 않는다", () => {
+    expect(
+      adjustedRestEndsAtMs({ endsAtMs: now + 500, deltaSeconds: -10, nowMs: now }),
+    ).toBe(now + 1_000);
+  });
+
+  it("늘리는 쪽에는 상한을 두지 않는다 — 기존 +30초와 규칙을 맞춘다", () => {
+    expect(
+      adjustedRestEndsAtMs({ endsAtMs: now + 600_000, deltaSeconds: 10, nowMs: now }),
+    ).toBe(now + 610_000);
+  });
 });

@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { ReactionBar } from "@/components/feed/reaction-bar";
 import { PhotoStamp } from "@/components/photo-stamp";
+import { SetBreakdown } from "@/components/workout/set-breakdown";
 import type { FeedItem } from "@/lib/social";
 import { timeAgo } from "@/lib/time-ago";
 
@@ -19,15 +21,34 @@ type Props = {
   onProfileClick: () => void;
 };
 
+/**
+ * 요약 블록 자체가 상세 토글이다 (2026-08-04).
+ *
+ * 사진 카드와 일반 카드가 **같은 블록을 쓰므로** 여기 한 번만 붙이면 두 변형
+ * 모두에서 펼칠 수 있다. 세트는 `getCrewFeed`가 이미 받아 온 것이라 새 질의가 없다.
+ */
 function WorkoutSummary({ item, stats }: { item: FeedItem; stats: string[] }) {
+  const [expanded, setExpanded] = useState(false);
+
   return (
     <div className="px-4 pt-3 pb-2">
-      <p className="text-sm font-bold">{exerciseSummary(item.exerciseNames)}</p>
-      {stats.length > 0 && (
-        <p className="mt-0.5 text-xs font-bold text-muted">
-          {stats.join(" · ")}
-        </p>
-      )}
+      <button
+        type="button"
+        aria-label={`${item.nickname} 운동 상세`}
+        aria-expanded={expanded}
+        onClick={() => setExpanded((open) => !open)}
+        className="w-full text-left"
+      >
+        <span className="block text-sm font-bold">
+          {exerciseSummary(item.exerciseNames)}
+        </span>
+        <span className="mt-0.5 block text-xs font-bold text-muted">
+          {stats.length > 0 && <>{stats.join(" · ")} · </>}
+          <span className="text-accent">
+            {expanded ? "접기 ▲" : "상세 ▼"}
+          </span>
+        </span>
+      </button>
       {item.tabataMinutes && (
         <p className="mt-1.5 mr-1 inline-block rounded-full bg-accent-weak px-2.5 py-1 text-[11px] font-extrabold text-accent">
           🔥 타바타 {item.tabataMinutes}분
@@ -37,6 +58,11 @@ function WorkoutSummary({ item, stats }: { item: FeedItem; stats: string[] }) {
         <p className="mt-1.5 inline-block rounded-full bg-accent-weak px-2.5 py-1 text-[11px] font-extrabold text-accent">
           🏅 기록 갱신 · {item.recordNote}
         </p>
+      )}
+      {expanded && (
+        <div className="mt-2.5">
+          <SetBreakdown exercises={item.breakdown} />
+        </div>
       )}
     </div>
   );

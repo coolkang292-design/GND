@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type SetStateAction,
@@ -14,6 +15,8 @@ import { ExercisePicker } from "@/components/record/exercise-picker";
 import { ExerciseReorderSheet } from "@/components/record/exercise-reorder-sheet";
 import { IdlePauseModal } from "@/components/record/idle-pause-modal";
 import { RoutineSaveSheet } from "@/components/record/routine-save-sheet";
+import { ZeroWeightSheet } from "@/components/record/zero-weight-sheet";
+import { shouldAskBodyweight } from "@/lib/domain/zero-weight";
 import { TabataSheet } from "@/components/record/tabata-sheet";
 import { RestBar } from "@/components/record/rest-bar";
 import { VerificationPhoto } from "@/components/record/verification-photo";
@@ -59,7 +62,9 @@ import {
   getChallengeGoals,
   getMyChallenges,
   goalCategories,
-  type GoalCategory,
+  sessionGoalContribution,
+  type GoalContribution,
+  type PeriodSessionRow,
 } from "@/lib/challenge";
 import { getLevelRewards, getProgressSummary } from "@/lib/progression";
 import { tabataDraftExercises } from "@/lib/domain/tabata";
@@ -71,7 +76,12 @@ import { buildXpEvents, type XpEvent } from "@/lib/domain/xp-events";
 import { shareOrCopyText, shareResultToast } from "@/lib/share";
 import { prepareRestCountdownAudio } from "@/lib/rest-countdown-audio";
 import { getMyGroups } from "@/lib/crew";
-import type { BodyPart, CatalogExercise, ExerciseType } from "@/lib/types";
+import type {
+  BodyPart,
+  CatalogExercise,
+  ExerciseType,
+  UserGoal,
+} from "@/lib/types";
 import {
   deleteWorkoutPlan,
   saveWorkoutPlan,
@@ -138,7 +148,34 @@ type CompletedResult = {
   summary: VolumeSummary;
   logText: string; // 완료 시점에 미리 생성 — draft가 비워진 뒤에도 공유 가능
   recordNote: string | null; // 기록 갱신 문구 (원본 세션 초과 시)
+  /** 이번 운동이 챌린지 목표에 보탠 양 (2026-08-04) — draft가 비워지기 전에 계산한다 */
+  challengeGains: GoalContribution[];
 };
+
+/** draft 종목 → 집계용 정규화 행. 집계 규칙 자체는 challenge.ts가 갖는다. */
+function toPeriodSessionRow(
+  userId: string,
+  completedAtMs: number,
+  exercises: LocalExercise[],
+): PeriodSessionRow {
+  return {
+    userId,
+    completedAt: new Date(completedAtMs).toISOString(),
+    tabataMinutes: null,
+    exercises: exercises.map((ex) => ({
+      exerciseType: ex.exerciseType,
+      exerciseName: ex.name,
+      bodyPart: ex.bodyPart,
+      sets: ex.sets.map((s) => ({
+        weightKg: s.weightKg,
+        reps: s.reps,
+        distanceMeters: s.distanceKm * 1000,
+        durationSeconds: s.durationMin * 60,
+        isCompleted: s.done,
+      })),
+    })),
+  };
+}
 
 function errorMessage(e: unknown): string {
   const msg = e instanceof Error ? e.message : String(e);
@@ -181,8 +218,29 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const [routines, setRoutines] = useState<WorkoutRoutine[] | null>(null);
   const [routinesLoading, setRoutinesLoading] = useState(true);
   const [routineSaveOpen, setRoutineSaveOpen] = useState(false);
-  const [challengeCategories, setChallengeCategories] =
-    useState<ReadonlySet<GoalCategory> | null>(null);
+  /**
+   * 내 챌린지 목표 원본 (2026-08-04). 피커의 '챌린지 미반영' 판정과 완료 화면의
+   * 기여 표시가 **같은 목표 묶음**을 쓴다 — 두 번 조회하면 갈라진다.
+   */
+  const [challengeGoals, setChallengeGoals] = useState<UserGoal[] | null>(null);
+  const challengeCategories = useMemo(
+    () =>
+      challengeGoals && challengeGoals.length > 0
+        ? goalCategories(challengeGoals)
+        : null,
+    [challengeGoals],
+  );
+  const [challengePhotoRequired, setChallengePhotoRequired] = useState(false);
+  /** 완료 화면에서 인증사진을 올렸는가 — 기여 문구가 "쌓여요"→"쌓였어요"로 바뀐다 */
+  const [resultPhotoDone, setResultPhotoDone] = useState(false);
+  /** 0kg 되묻기 — 열려 있는 질문과, 종목별로 이미 물어봤는지 */
+  const [zeroWeightAsk, setZeroWeightAsk] = useState<{
+    exKey: string;
+    name: string;
+  } | null>(null);
+  const [zeroWeightAsked, setZeroWeightAsked] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const [slotLimit, setSlotLimit] = useState(routineSlotLimit(1, []));
   const [nextSlotLevel, setNextSlotLevel] = useState<number | null>(null);
   const [result, setResult] = useState<CompletedResult | null>(null);
@@ -320,8 +378,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
         if (!active) return;
         const goals = await getChallengeGoals(active.id);
         if (cancelled) return;
-        const mine = goals.filter((g) => g.user_id === userId);
-        if (mine.length > 0) setChallengeCategories(goalCategories(mine));
+        // 사진 필수 여부는 달력이 "사진이 없어 안 잡혀요"를 말하는 데 쓴다
+        setChallengePhotoRequired(Boolean(active.photo_required));
+        setChallengeGoals(goals.filter((g) => g.user_id === userId));
       } catch {
         // 챌린지가 없거나 못 읽어도 기록은 그대로 돼야 한다
       }
@@ -634,11 +693,45 @@ function WorkoutScreen({ userId }: { userId: string }) {
     const restPlan = getRestCountdownTogglePlan(ex.exerciseType, willDone);
     if (restPlan.prepareAudio) prepareRestCountdownAudio();
     updateSet(exKey, si, { done: willDone });
+
+    // 0kg 웨이트 세트면 그 자리에서 되묻는다 (2026-08-04) — 데이터로 추측해
+    // 자동으로 옮기지 않는 이유는 domain/zero-weight.ts 주석에 있다.
+    if (
+      shouldAskBodyweight({
+        exerciseType: ex.exerciseType,
+        weightKg: set.weightKg,
+        reps: set.reps,
+        willDone,
+        alreadyAsked: zeroWeightAsked.has(exKey),
+      })
+    ) {
+      setZeroWeightAsked((current) => new Set(current).add(exKey));
+      setZeroWeightAsk({ exKey, name: ex.name });
+    }
     if (restPlan.timerAction === "start") {
       startRest(sourceKey, draft.restSeconds);
     } else if (restPlan.timerAction === "cancel") {
       cancelRestForSource(sourceKey);
     }
+  }
+
+  /**
+   * 되묻기에 "맨몸으로 바꾸기"로 답했을 때 — 담아 둔 종목의 유형을 바꾼다.
+   *
+   * 이름은 그대로 둔다. `workout_exercises`는 카탈로그 FK가 아니라 이름·유형을
+   * 각각 text로 저장하므로 맨몸인 '스쿼트'가 그대로 표현된다. 카탈로그의
+   * '맨몸 스쿼트'로 갈아 끼우는 방법도 있지만 이름 매칭이라 부서지기 쉽다.
+   */
+  function switchToBodyweight(exKey: string) {
+    updateExercise(exKey, (ex) => ({
+      ...ex,
+      exerciseType: "bodyweight",
+      measure: "reps",
+      // 맨몸은 무게 칸을 안 그린다 — 남겨 두면 다음에 다시 되묻게 된다
+      sets: ex.sets.map((s) => ({ ...s, weightKg: 0 })),
+    }));
+    setZeroWeightAsk(null);
+    showToast("맨몸 운동으로 바꿨어요 — 챌린지 맨몸 실적에 들어가요");
   }
 
   function addSet(exKey: string) {
@@ -936,6 +1029,19 @@ function WorkoutScreen({ userId }: { userId: string }) {
           draft.exercises,
         ),
         recordNote,
+        // draft를 비우기 전에 계산한다 — 아래 setDraft(emptyDraft())가 지운다
+        challengeGains:
+          challengeGoals && challengeGoals.length > 0
+            ? sessionGoalContribution({
+                session: toPeriodSessionRow(
+                  userId,
+                  completedAtMs,
+                  draft.exercises,
+                ),
+                goals: challengeGoals,
+                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+              })
+            : [],
       });
       setXpEvents(buildXpEvents(xp)); // 멱등 재생·XP 0이면 빈 배열 → 모달 없음
       clearDraft(userId);
@@ -1016,6 +1122,75 @@ function WorkoutScreen({ userId }: { userId: string }) {
             </p>
           )}
         </section>
+        {/*
+          이번 운동이 챌린지 목표에 얼마나 보탰는지 (2026-08-04, 사용자 요청).
+          사진 필수 챌린지인데 아직 사진이 없으면 "쌓여요"(미래형)로 말하고,
+          바로 아래 촬영 버튼으로 이어 준다 — 경고보다 이쪽이 동기가 된다.
+        */}
+        {result.challengeGains.length > 0 &&
+          (() => {
+            const gained = result.challengeGains.filter((g) => g.delta > 0);
+            // 하나도 못 보탰으면 **그 사실과 이유**를 말한다. 카드를 감추면
+            // "왜 안 오르지?"에 침묵하게 된다 (2026-08-04 사용자 지적).
+            if (gained.length === 0) {
+              return (
+                <section className="rounded-card border border-warn/40 bg-surface p-4">
+                  <p className="text-xs font-extrabold text-warn">
+                    🎯 이번 운동은 챌린지 성과에 안 잡혔어요
+                  </p>
+                  <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">
+                    운동 기록과 XP는 그대로 쌓였어요. 다만 지금 내 챌린지 목표와
+                    맞는 게 없어요.
+                  </p>
+                  <ul className="mt-2 flex flex-col gap-1">
+                    {result.challengeGains.map((gain) => (
+                      <li key={gain.type} className="text-[12.5px] font-bold">
+                        · {gain.label}{" "}
+                        <span className="font-normal text-muted">
+                          (목표 {gain.target}
+                          {gain.unit})
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              );
+            }
+            return (
+              <section className="rounded-card border border-accent/40 bg-accent-weak p-4">
+                <p className="text-xs font-extrabold text-accent">
+                  🎯 챌린지 목표에{" "}
+                  {challengePhotoRequired && !resultPhotoDone
+                    ? "쌓일 몫"
+                    : "쌓였어요"}
+                </p>
+                <ul className="mt-2 flex flex-col gap-1.5">
+                  {gained.map((gain) => (
+                    <li
+                      key={gain.type}
+                      className="flex items-baseline justify-between gap-2 text-sm"
+                    >
+                      <span className="font-bold">{gain.label}</span>
+                      <span className="font-mono font-extrabold text-accent">
+                        +{gain.delta}
+                        {gain.unit}
+                        <span className="ml-1 font-sans text-[11px] font-bold text-muted">
+                          / 목표 {gain.target}
+                          {gain.unit}
+                        </span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                {challengePhotoRequired && !resultPhotoDone && (
+                  <p className="mt-2.5 text-[11.5px] font-bold text-warn">
+                    📷 아래에서 인증 사진을 올려야 챌린지 성과에 반영돼요.
+                  </p>
+                )}
+              </section>
+            );
+          })()}
+
         {/* 인증사진 (§11) — 지금 촬영만 (앨범 선택은 2026-08-01에 제거) */}
         <VerificationPhoto
           userId={userId}
@@ -1023,6 +1198,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
           durationMinutes={result.durationMinutes}
           completedAtMs={result.completedAtMs}
           onToast={showToast}
+          onUploaded={() => setResultPhotoDone(true)}
         />
         <p className="text-center text-xs text-muted">
           &lsquo;달력&rsquo; 탭에서 오늘 스탬프를 확인할 수 있어요. 카메라
@@ -1100,6 +1276,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
           <CalendarView
             userId={userId}
             catalog={catalog}
+            photoRequired={challengePhotoRequired}
             routines={routines ?? undefined}
             routinesLoading={routinesLoading}
             onScheduleSession={handleScheduleFromPast}
@@ -1327,6 +1504,14 @@ function WorkoutScreen({ userId }: { userId: string }) {
         onPickRoutine={addRoutine}
         onRenameRoutine={handleRenameRoutine}
         onDeleteRoutine={handleDeleteRoutine}
+      />
+
+      <ZeroWeightSheet
+        exerciseName={zeroWeightAsk?.name ?? null}
+        onKeepWeight={() => setZeroWeightAsk(null)}
+        onSwitchToBodyweight={() => {
+          if (zeroWeightAsk) switchToBodyweight(zeroWeightAsk.exKey);
+        }}
       />
 
       <RoutineSaveSheet

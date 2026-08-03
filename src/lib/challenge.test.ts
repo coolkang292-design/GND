@@ -4,6 +4,7 @@ import {
   categoriesLabel,
   countsTowardChallenge,
   goalCategories,
+  sessionGoalContribution,
   actualForGoal,
   foldPeriodStats,
   goalLabel,
@@ -476,5 +477,159 @@ describe("goalCategories · countsTowardChallenge (신고 0783ca35, 2026-08-04)"
       { goal_type: "weight_reps" },
     ]);
     expect(categoriesLabel(cats)).toBe("웨이트 · 맨몸 · 유산소");
+  });
+});
+
+describe("sessionGoalContribution — 완료 화면의 챌린지 기여 (2026-08-04)", () => {
+  const KST = "Asia/Seoul";
+
+  function session(
+    exercises: PeriodSessionRow["exercises"],
+    tabataMinutes: number | null = null,
+  ): PeriodSessionRow {
+    return {
+      userId: "u1",
+      completedAt: "2026-08-04T03:00:00Z", // KST 12:00
+      tabataMinutes,
+      exercises,
+    };
+  }
+
+  const bodyweightSquat = {
+    exerciseType: "bodyweight" as const,
+    exerciseName: "맨몸 스쿼트",
+    bodyPart: "하체",
+    sets: [
+      { weightKg: null, reps: 20, distanceMeters: null, durationSeconds: null, isCompleted: true },
+      { weightKg: null, reps: 20, distanceMeters: null, durationSeconds: null, isCompleted: true },
+    ],
+  };
+
+  it("맨몸 횟수 목표에 이번 운동분을 더해 보여준다", () => {
+    const out = sessionGoalContribution({
+      session: session([bodyweightSquat]),
+      goals: [{ goal_type: "bodyweight_reps", target_value: 565.7 }],
+      timeZone: KST,
+    });
+    expect(out).toEqual([
+      { type: "bodyweight_reps", label: "맨몸 횟수", delta: 40, unit: "회", target: 565.7 },
+    ]);
+  });
+
+  it("보탠 게 없는 목표도 0으로 그대로 돌려준다", () => {
+    // ⚠️ 걸러 내면 안 된다. 기여가 하나도 없는 운동에서 카드가 통째로 사라져
+    //    "왜 내 숫자가 안 오르지?"에 침묵하게 된다 — 원래 버그와 같은 실패다.
+    //    무엇을 보여줄지는 화면이 정한다.
+    const out = sessionGoalContribution({
+      session: session([bodyweightSquat]),
+      goals: [
+        { goal_type: "bodyweight_reps", target_value: 565.7 },
+        { goal_type: "weight_reps", target_value: 300 },
+        { goal_type: "cardio_distance", target_value: 113.1 },
+      ],
+      timeZone: KST,
+    });
+    expect(out.map((c) => [c.type, c.delta])).toEqual([
+      ["bodyweight_reps", 40],
+      ["weight_reps", 0],
+      ["cardio_distance", 0],
+    ]);
+  });
+
+  it("웨이트 2종목은 하루 3종목 목표에 0일이다 (2026-08-04 실측)", () => {
+    // 사용자가 개발 서버에서 실제로 만난 경우다. 규칙상 0이 맞지만,
+    // 0을 돌려주지 않으면 화면이 이유를 설명할 수 없다.
+    const weightEx = (name: string) => ({
+      exerciseType: "weight" as const,
+      exerciseName: name,
+      bodyPart: "가슴",
+      sets: [
+        { weightKg: 40, reps: 10, distanceMeters: null, durationSeconds: null, isCompleted: true },
+      ],
+    });
+    const out = sessionGoalContribution({
+      session: session([weightEx("벤치프레스"), weightEx("인클라인 벤치프레스")]),
+      goals: [{ goal_type: "weight_days", target_value: 12, qualifier: 3 }],
+      timeZone: KST,
+    });
+    expect(out).toEqual([
+      {
+        type: "weight_days",
+        label: "웨이트 운동일(하루 3종목+)",
+        delta: 0,
+        unit: "일",
+        target: 12,
+      },
+    ]);
+  });
+
+  it("완료하지 않은 세트는 안 센다", () => {
+    const out = sessionGoalContribution({
+      session: session([
+        {
+          ...bodyweightSquat,
+          sets: [
+            { weightKg: null, reps: 20, distanceMeters: null, durationSeconds: null, isCompleted: true },
+            { weightKg: null, reps: 99, distanceMeters: null, durationSeconds: null, isCompleted: false },
+          ],
+        },
+      ]),
+      goals: [{ goal_type: "bodyweight_reps", target_value: 100 }],
+      timeZone: KST,
+    });
+    expect(out[0].delta).toBe(20);
+  });
+
+  it("타바타 분수가 맨몸 시간에 들어간다 (집계 규칙을 그대로 쓴다)", () => {
+    // 이 단언이 이 함수를 foldPeriodStats에 얹어 둔 이유다. 규칙을 따로 쓰면
+    // 타바타 세트가 reps=0·duration=null이라 여기서만 0분이 된다.
+    const out = sessionGoalContribution({
+      session: session([], 4),
+      goals: [{ goal_type: "bodyweight_time", target_value: 100 }],
+      timeZone: KST,
+    });
+    expect(out[0].delta).toBe(4);
+  });
+
+  it("맨몸 운동일은 하루 최소 종목 수를 채워야 +1일이 된다", () => {
+    const goals = [
+      { goal_type: "bodyweight_days" as const, target_value: 12, qualifier: 2 },
+    ];
+    // 1종목 — 조건 미달이라 0일 (행은 남는다: 화면이 이유를 말해야 한다)
+    expect(
+      sessionGoalContribution({ session: session([bodyweightSquat]), goals, timeZone: KST })[0],
+    ).toMatchObject({ delta: 0, unit: "일" });
+    // 2종목 — +1일
+    const out = sessionGoalContribution({
+      session: session([
+        bodyweightSquat,
+        { ...bodyweightSquat, exerciseName: "푸시업", bodyPart: "가슴" },
+      ]),
+      goals,
+      timeZone: KST,
+    });
+    expect(out[0]).toMatchObject({ delta: 1, unit: "일", label: "맨몸 운동일(하루 2종목+)" });
+  });
+
+  it("유산소 거리는 m를 km로 바꿔 소수 첫째 자리까지", () => {
+    const out = sessionGoalContribution({
+      session: session([
+        {
+          exerciseType: "cardio",
+          exerciseName: "걷기",
+          bodyPart: "유산소",
+          sets: [{ weightKg: null, reps: null, distanceMeters: 3200, durationSeconds: 2520, isCompleted: true }],
+        },
+      ]),
+      goals: [{ goal_type: "cardio_distance", target_value: 113.1 }],
+      timeZone: KST,
+    });
+    expect(out[0].delta).toBe(3.2);
+  });
+
+  it("목표가 없으면 빈 배열", () => {
+    expect(
+      sessionGoalContribution({ session: session([bodyweightSquat]), goals: [], timeZone: KST }),
+    ).toEqual([]);
   });
 });

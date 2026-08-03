@@ -765,6 +765,66 @@ export function actualForGoal(
   }
 }
 
+/** 이번 운동이 목표 하나에 얼마나 보탰는지 */
+export type GoalContribution = {
+  type: GoalType;
+  /** "맨몸 횟수" 같은 표시 이름 (+조건) */
+  label: string;
+  /** 이번 세션이 더한 양 */
+  delta: number;
+  unit: string;
+  target: number;
+};
+
+/** 소수 첫째 자리까지, .0은 떼고 */
+function trimNumber(value: number): number {
+  return Math.round(value * 10) / 10;
+}
+
+/**
+ * 방금 끝낸 운동이 내 챌린지 목표에 얼마나 보탰는지 (2026-08-04, 사용자 요청).
+ *
+ * "맨몸 목표에 +40회 쌓였어요"를 완료 화면에서 보여주기 위한 것이다. 운동이
+ * 끝난 그 자리에서 챌린지와 연결해 주면, 무엇이 잡히고 무엇이 안 잡히는지가
+ * 숫자로 보인다 — 신고 0783ca35는 100회를 쌓고 나서야 안 잡힌 걸 알았다.
+ *
+ * ⚠️ 집계 규칙을 새로 쓰지 않는다. `foldPeriodStats`에 **이 세션 하나만** 넣고
+ *    같은 함수로 접는다. 두 벌로 만들면 반드시 갈라진다 — 타바타 분수가
+ *    맨몸 시간에 들어가는 것 같은 예외가 여기에만 빠지는 식이다.
+ *
+ * **0인 목표도 빼지 않고 그대로 돌려준다.** 화면이 "쌓였어요"와 "안 잡혔어요"를
+ * 갈라 쓰려면 둘 다 알아야 한다. 처음에는 여기서 걸렀는데, 그러면 기여가 없는
+ * 운동에서 카드가 통째로 사라져 **아무 말도 안 하게 된다** — 원래 버그(왜 내
+ * 숫자가 안 오르는지 알 수 없다)와 같은 실패다. 2026-08-04 개발 서버 확인에서
+ * 사용자가 잡았다(맨몸 3종목·웨이트 2종목 둘 다 카드가 안 떴다).
+ *
+ * `*_days`는 하루 최소 종목 수를 채웠을 때만 1일로 잡힌다 — 웨이트 2종목을 한
+ * 날은 qualifier가 3이면 0일이다.
+ */
+export function sessionGoalContribution(input: {
+  session: PeriodSessionRow;
+  goals: readonly {
+    goal_type: GoalType;
+    target_value: number | string;
+    qualifier?: number | null;
+  }[];
+  timeZone: string;
+}): GoalContribution[] {
+  const day = dayKey(new Date(input.session.completedAt), input.timeZone);
+  const stats =
+    foldPeriodStats([input.session], day, day, input.timeZone).get(
+      input.session.userId,
+    ) ?? EMPTY_STATS;
+
+  return input.goals.map((g) => ({
+    type: g.goal_type,
+    label: goalLabel(g.goal_type, g.qualifier),
+    delta: trimNumber(actualForGoal(stats, g.goal_type, g.qualifier)),
+    unit: GOAL_TYPE_META[g.goal_type].unit,
+    target: Number(g.target_value),
+  }));
+}
+
 /**
  * 참가자별 기간 실적 집계.
  *

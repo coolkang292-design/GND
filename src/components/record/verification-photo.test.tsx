@@ -106,3 +106,96 @@ describe("VerificationPhoto — 사진 XP 후등록", () => {
     expect(mocks.awardWorkoutPhotoXp).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * ③ 사진첩에서 고르기 (2026-08-04, 사용자 결정 = 대안 B).
+ *
+ * 2026-08-01에 지운 앨범 버튼을 되살린다. **촬영일 검사는 하지 않는다** —
+ * EXIF도 파일시각도 조작 가능해서 "당일 촬영"을 보장할 수 없다는 검토 결론이다.
+ * 대신 등급으로만 나눈다: 촬영 = camera(🔥), 앨범 = album(●).
+ */
+describe("VerificationPhoto — 앨범에서 고르기", () => {
+  function setupBoth() {
+    const onToast = vi.fn();
+    const { container, getByRole } = render(
+      <VerificationPhoto
+        userId="user-1"
+        sessionId="session-1"
+        durationMinutes={65}
+        completedAtMs={Date.parse("2026-07-26T12:00:00+09:00")}
+        onToast={onToast}
+      />,
+    );
+    const inputs = Array.from(
+      container.querySelectorAll("input[type=file]"),
+    ) as HTMLInputElement[];
+    return {
+      onToast,
+      getByRole,
+      cameraInput: inputs.find((i) => i.hasAttribute("capture"))!,
+      albumInput: inputs.find((i) => !i.hasAttribute("capture"))!,
+    };
+  }
+
+  it("촬영 버튼과 앨범 버튼을 둘 다 보여준다", () => {
+    const { getByRole } = setupBoth();
+
+    expect(getByRole("button", { name: /지금 촬영/ })).toBeTruthy();
+    expect(getByRole("button", { name: /앨범/ })).toBeTruthy();
+  });
+
+  it("앨범 입력에는 capture를 걸지 않는다 — 걸면 카메라가 열려 앨범을 못 고른다", () => {
+    const { albumInput } = setupBoth();
+
+    expect(albumInput).toBeTruthy();
+    expect(albumInput.hasAttribute("capture")).toBe(false);
+  });
+
+  it("앨범으로 고르면 source를 album으로 올린다", async () => {
+    const { albumInput } = setupBoth();
+    pickPhoto(albumInput);
+
+    await waitFor(() =>
+      expect(mocks.uploadWorkoutImage).toHaveBeenCalledWith(
+        expect.objectContaining({ source: "album" }),
+      ),
+    );
+  });
+
+  it("앨범 사진의 clientCapturedAt은 null이다 — 파일 시각은 촬영일이 아니다", async () => {
+    // 제거 전 코드는 여기에 file.lastModified를 넣었다. 그 값은 메신저 저장·
+    // 다운로드에서 '지금'으로 갱신되므로 촬영일이 아니다. 틀린 값을 넣느니 없앤다.
+    const { albumInput } = setupBoth();
+    pickPhoto(albumInput);
+
+    await waitFor(() =>
+      expect(mocks.uploadWorkoutImage).toHaveBeenCalledWith(
+        expect.objectContaining({ clientCapturedAt: null }),
+      ),
+    );
+  });
+
+  it("촬영은 여전히 camera로 올리고 촬영 시각을 담는다", async () => {
+    const { cameraInput } = setupBoth();
+    pickPhoto(cameraInput);
+
+    await waitFor(() =>
+      expect(mocks.uploadWorkoutImage).toHaveBeenCalledWith(
+        expect.objectContaining({ source: "camera" }),
+      ),
+    );
+    const call = mocks.uploadWorkoutImage.mock.calls[0][0];
+    expect(call.clientCapturedAt).toBeInstanceOf(Date);
+  });
+
+  it("앨범 업로드 완료 문구는 카메라 인증과 구분된다", async () => {
+    const { onToast } = setupBoth();
+    const { albumInput } = setupBoth();
+    pickPhoto(albumInput);
+
+    await waitFor(() => expect(mocks.uploadWorkoutImage).toHaveBeenCalled());
+    expect(onToast).not.toHaveBeenCalledWith(
+      expect.stringContaining("카메라 인증"),
+    );
+  });
+});

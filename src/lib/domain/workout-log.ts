@@ -3,6 +3,8 @@
  * 완료(done) 세트만 포함한다 — 볼륨 집계 원칙(§10)과 동일.
  */
 
+import { formatSetAmount } from "./set-display";
+
 export type LogSet = {
   weightKg: number;
   reps: number;
@@ -18,21 +20,22 @@ export type LogExercise = {
   sets: LogSet[];
 };
 
+/**
+ * 수량 표기는 `formatSetAmount` 하나만 쓴다 (2026-08-04).
+ *
+ * 전에는 이 함수가 유형별 형식을 직접 갖고 있었다. 지난 기록 상세·계획 상세가
+ * 같은 표기를 화면에 그려야 하는데, 규칙이 두 벌이 되면 공유 텍스트의 수치와
+ * 화면의 수치가 갈라진다.
+ */
 function setLine(ex: LogExercise, s: LogSet, n: number): string {
-  if (ex.exerciseType === "weight") {
-    return `${n}세트: ${s.weightKg}kg ${s.reps}회`;
-  }
-  if (ex.exerciseType === "bodyweight") {
-    return ex.measure === "time"
-      ? `${n}세트: ${s.durationMin}분`
-      : `${n}세트: ${s.reps}회`;
-  }
-  // cardio: 0인 항목은 생략, 둘 다 0이면 0분
-  const parts: string[] = [];
-  if (s.distanceKm > 0) parts.push(`${s.distanceKm}km`);
-  if (s.durationMin > 0) parts.push(`${s.durationMin}분`);
-  if (parts.length === 0) parts.push("0분");
-  return `${n}세트: ${parts.join(" ")}`;
+  return `${n}세트: ${formatSetAmount({
+    exerciseType: ex.exerciseType,
+    measure: ex.measure,
+    weightKg: s.weightKg,
+    reps: s.reps,
+    distanceKm: s.distanceKm,
+    durationMin: s.durationMin,
+  })}`;
 }
 
 /** dayKey(YYYY-MM-DD) 기준 하루치 일지. 완료 세트 없는 종목은 생략. */

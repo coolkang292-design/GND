@@ -101,3 +101,153 @@ describe("CalendarView — 날짜를 눌러 계획하기 (2026-08-02)", () => {
     ).toBeTruthy();
   });
 });
+
+/**
+ * ⑥ 계획한 운동의 상세보기 (2026-08-04).
+ *
+ * 계획의 세트·수량은 `workout_plans.exercises` jsonb에 **이미 들어 있고**
+ * 시트가 그걸 이미 손에 쥐고 있다. 전에는 종목명만 join해 그렸다.
+ */
+const PLAN = {
+  id: "plan-1",
+  userId: "user-1",
+  planDate: "2026-08-16",
+  sourceSessionId: null,
+  createdAt: "2026-08-15T00:00:00Z",
+  updatedAt: "2026-08-15T00:00:00Z",
+  exercises: [
+    {
+      name: "스쿼트",
+      bodyPart: "하체" as const,
+      exerciseType: "weight" as const,
+      measure: null,
+      isCustom: false,
+      sets: [
+        { weightKg: 80, reps: 5, distanceKm: 0, durationMin: 0 },
+        { weightKg: 80, reps: 3, distanceKm: 0, durationMin: 0 },
+      ],
+    },
+    {
+      name: "러닝",
+      bodyPart: "유산소" as const,
+      exerciseType: "cardio" as const,
+      measure: null,
+      isCustom: false,
+      sets: [{ weightKg: 0, reps: 0, distanceKm: 3, durationMin: 25 }],
+    },
+  ],
+};
+
+/**
+ * ④ 지난 운동 기록 상세보기 — 달력 경로 (2026-08-04).
+ *
+ * 시트는 공유 텍스트용으로 `getSessionLogExercises`를 **이미 호출한다**.
+ * 세션별로 나눠 보관해 그리기만 하면 된다 — 새 조회가 없다.
+ */
+const SESSION = {
+  id: "session-1",
+  completedAt: new Date("2026-08-10T19:00:00+09:00"),
+  verification: "camera_verified" as const,
+  durationSeconds: 3600,
+  exerciseNames: ["벤치 프레스"],
+  recordNote: null,
+  tabataMinutes: null,
+};
+
+const SESSION_LOG = [
+  {
+    name: "벤치 프레스",
+    exerciseType: "weight" as const,
+    measure: null,
+    sets: [
+      { weightKg: 60, reps: 8, distanceKm: 0, durationMin: 0, done: true },
+      { weightKg: 60, reps: 4, distanceKm: 0, durationMin: 0, done: false },
+    ],
+  },
+];
+
+describe("CalendarView — 지난 기록 상세 (2026-08-04)", () => {
+  beforeEach(() => {
+    mocks.getCompletedSessions.mockResolvedValue([SESSION]);
+    mocks.getSessionLogExercises.mockResolvedValue(SESSION_LOG);
+  });
+
+  async function openDay() {
+    await setup();
+    fireEvent.click(screen.getByRole("button", { name: "8월 10일" }));
+  }
+
+  it("펼치기 전에는 세트가 보이지 않는다", async () => {
+    await openDay();
+
+    expect(screen.queryByText("60kg 8회")).toBeNull();
+  });
+
+  it("세션 줄을 누르면 그 운동의 세트가 펼쳐진다", async () => {
+    await openDay();
+
+    fireEvent.click(await screen.findByRole("button", { name: /운동 상세/ }));
+
+    expect(screen.getByText("60kg 8회")).toBeTruthy();
+    expect(screen.getByText("60kg 4회")).toBeTruthy();
+  });
+
+  it("완료 세트와 미완료 세트를 구분해 보여준다 — done이 실제로 전달돼야 한다", async () => {
+    await openDay();
+
+    fireEvent.click(await screen.findByRole("button", { name: /운동 상세/ }));
+
+    expect(screen.getByLabelText("1세트 완료")).toBeTruthy();
+    expect(screen.getByLabelText("2세트 미완료")).toBeTruthy();
+  });
+
+  it("다시 누르면 접힌다", async () => {
+    await openDay();
+
+    const row = await screen.findByRole("button", { name: /운동 상세/ });
+    fireEvent.click(row);
+    expect(screen.getByText("60kg 8회")).toBeTruthy();
+
+    fireEvent.click(row);
+    expect(screen.queryByText("60kg 8회")).toBeNull();
+  });
+
+  it("복사 버튼은 그대로 남는다 — 상세는 더하는 것이지 뺏는 게 아니다", async () => {
+    await openDay();
+
+    expect(screen.getByText("📋 복사")).toBeTruthy();
+  });
+});
+
+describe("CalendarView — 계획 상세 (2026-08-04)", () => {
+  it("계획을 누르면 종목별 세트 수량까지 보여준다", async () => {
+    mocks.getWorkoutPlans.mockResolvedValue([PLAN]);
+    await setup();
+
+    fireEvent.click(screen.getByRole("button", { name: "8월 16일" }));
+
+    expect(screen.getByText("80kg 5회")).toBeTruthy();
+    expect(screen.getByText("80kg 3회")).toBeTruthy();
+    expect(screen.getByText("3km 25분")).toBeTruthy();
+  });
+
+  it("계획에는 완료·미완료 표시를 그리지 않는다", async () => {
+    mocks.getWorkoutPlans.mockResolvedValue([PLAN]);
+    await setup();
+
+    fireEvent.click(screen.getByRole("button", { name: "8월 16일" }));
+
+    expect(screen.queryByLabelText(/세트 완료$/)).toBeNull();
+    expect(screen.queryByLabelText(/세트 미완료$/)).toBeNull();
+  });
+
+  it("종목 요약 줄은 그대로 남는다 — 상세는 더하는 것이지 바꾸는 게 아니다", async () => {
+    mocks.getWorkoutPlans.mockResolvedValue([PLAN]);
+    await setup();
+
+    fireEvent.click(screen.getByRole("button", { name: "8월 16일" }));
+
+    expect(screen.getByText("스쿼트 · 러닝")).toBeTruthy();
+    expect(screen.getByText(/2종목/)).toBeTruthy();
+  });
+});
