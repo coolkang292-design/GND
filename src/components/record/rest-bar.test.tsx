@@ -66,3 +66,57 @@ describe("RestBar — 휴식 중 10초 증감", () => {
     expect(screen.getByRole("timer", { name: "세트 사이 휴식" })).toBeTruthy();
   });
 });
+
+/**
+ * ② 휴식 화면에서 다음 진행 항목 미리 보기 (2026-08-04).
+ *
+ * 요구: "휴식 타이머 화면에서 다음 운동 또는 다음 진행 항목을 미리 확인할 수
+ * 있어야 함". 무엇이 다음인지는 `nextUpSet`이 정하고 여기서는 그리기만 한다.
+ */
+describe("RestBar — 다음 진행 항목", () => {
+  function renderWithNext(nextUp: {
+    exerciseName: string;
+    setNumber: number;
+    amount: string;
+  } | null) {
+    render(
+      <RestBar
+        remainingSeconds={60}
+        nextUp={nextUp}
+        onAdjust={vi.fn()}
+        onExtend={vi.fn()}
+        onSkip={vi.fn()}
+      />,
+    );
+  }
+
+  it("다음 종목·세트·수량을 보여준다", () => {
+    renderWithNext({
+      exerciseName: "벤치 프레스",
+      setNumber: 2,
+      amount: "60kg 8회",
+    });
+
+    expect(screen.getByText(/벤치 프레스/)).toBeTruthy();
+    expect(screen.getByText(/2세트/)).toBeTruthy();
+    expect(screen.getByText(/60kg 8회/)).toBeTruthy();
+  });
+
+  it("남은 세트가 없으면 다 했다고 알린다 — 빈 칸을 남기지 않는다", () => {
+    renderWithNext(null);
+
+    expect(screen.getByText(/마지막 세트|다 했어요/)).toBeTruthy();
+  });
+
+  it("다음 항목이 있어도 남은 시간과 조절 버튼은 그대로다", () => {
+    renderWithNext({
+      exerciseName: "스쿼트",
+      setNumber: 1,
+      amount: "80kg 5회",
+    });
+
+    expect(screen.getByText("01:00")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "휴식 10초 줄이기" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /건너뛰기/ })).toBeTruthy();
+  });
+});
