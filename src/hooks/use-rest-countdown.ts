@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
+  adjustedRestEndsAtMs,
   getRestCompletionCatchUpBeep,
   getRestCountdownBeep,
 } from "@/lib/domain/rest-countdown";
@@ -102,6 +103,37 @@ export function useRestCountdown(
     setLastRestEndsAtMs(rest.endsAtMs);
   }, []);
 
+  /**
+   * 돌고 있는 휴식을 ±초만큼 옮긴다 (2026-08-04).
+   *
+   * `extendRest`(+30초)와 같은 구조다 — 종료 시각을 옮기고 `generation`을 올려
+   * 이미 낸 비프가 다시 울리지 않게 한다. 줄일 때 0으로 만들지 않는 규칙은
+   * `adjustedRestEndsAtMs`가 갖는다(하한 1초). 돌고 있는 휴식이 없으면 아무
+   * 일도 하지 않는다 — 운동 중이지만 휴식이 아닐 때 눌러도 안전해야 한다.
+   */
+  const adjustRest = useCallback((deltaSeconds: number) => {
+    const current = restRef.current;
+    if (!current) return;
+
+    const now = Date.now();
+    const rest: RestState = {
+      ...current,
+      generation: generationRef.current + 1,
+      endsAtMs: adjustedRestEndsAtMs({
+        endsAtMs: current.endsAtMs,
+        deltaSeconds,
+        nowMs: now,
+      }),
+    };
+    generationRef.current = rest.generation;
+    restRef.current = rest;
+    playedBeepRef.current = null;
+    playedFinalBeepRef.current = false;
+    setRestGeneration(rest.generation);
+    setRemainingSeconds(remainingFrom(rest, now));
+    setLastRestEndsAtMs(rest.endsAtMs);
+  }, []);
+
   const cancelRestForSource = useCallback(
     (sourceKey: string) => {
       if (restRef.current?.sourceKey === sourceKey) stopRest();
@@ -179,6 +211,7 @@ export function useRestCountdown(
     lastRestEndsAtMs: active ? lastRestEndsAtMs : null,
     startRest,
     extendRest,
+    adjustRest,
     stopRest,
     cancelRestForSource,
   };

@@ -69,7 +69,10 @@ import {
 import { getLevelRewards, getProgressSummary } from "@/lib/progression";
 import { tabataDraftExercises } from "@/lib/domain/tabata";
 import { moveItem } from "@/lib/domain/reorder";
-import { getRestCountdownTogglePlan } from "@/lib/domain/rest-countdown";
+import {
+  getRestCountdownTogglePlan,
+  nextRestSeconds,
+} from "@/lib/domain/rest-countdown";
 import { dayKey } from "@/lib/domain/time";
 import { XpResultModal } from "@/components/record/xp-result-modal";
 import { buildXpEvents, type XpEvent } from "@/lib/domain/xp-events";
@@ -263,6 +266,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
     lastRestEndsAtMs,
     startRest,
     extendRest,
+    adjustRest,
     stopRest,
     cancelRestForSource,
   } = useRestCountdown(active, () => {
@@ -771,11 +775,17 @@ function WorkoutScreen({ userId }: { userId: string }) {
     }));
   }
 
+  /**
+   * 휴식 사전설정 증감 — **운동 중에도 열려 있다** (2026-08-04, 사용자 결정).
+   *
+   * 돌고 있는 휴식이 있으면 같이 옮긴다. 설정값만 바꾸고 진행 중인 휴식을 두면
+   * "10초 줄였다"가 두 가지 뜻이 되어, 사용자는 눌러도 아무 일이 없다고 느낀다.
+   * 클램프 규칙은 `nextRestSeconds`가, 하한 1초는 `adjustRest`가 갖는다.
+   */
   function stepRest(delta: number) {
-    setDraft((d) => ({
-      ...d,
-      restSeconds: Math.min(600, Math.max(10, d.restSeconds + delta)),
-    }));
+    markActivity();
+    setDraft((d) => ({ ...d, restSeconds: nextRestSeconds(d.restSeconds, delta) }));
+    adjustRest(delta);
   }
 
   async function handleScheduleFromPast(
@@ -1341,13 +1351,14 @@ function WorkoutScreen({ userId }: { userId: string }) {
         <div>
           <p className="text-sm font-bold">세트 사이 휴식</p>
           <p className="text-[11.5px] text-muted">
-            {active ? "운동 중에는 변경할 수 없어요" : "완료 체크하면 이 시간으로 시작해요"}
+            {active
+              ? "지금 쉬는 중이면 남은 시간도 같이 바뀌어요"
+              : "완료 체크하면 이 시간으로 시작해요"}
           </p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => stepRest(-10)}
-            disabled={active}
             aria-label="10초 줄이기"
             className="h-9 w-9 rounded-full border border-line bg-surface-2 text-lg font-bold disabled:opacity-40"
           >
@@ -1358,7 +1369,6 @@ function WorkoutScreen({ userId }: { userId: string }) {
           </span>
           <button
             onClick={() => stepRest(10)}
-            disabled={active}
             aria-label="10초 늘리기"
             className="h-9 w-9 rounded-full border border-line bg-surface-2 text-lg font-bold disabled:opacity-40"
           >
@@ -1478,6 +1488,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
       {restRemaining !== null && (
         <RestBar
           remainingSeconds={restRemaining}
+          onAdjust={(delta) => stepRest(delta)}
           onExtend={() => {
             markActivity();
             extendRest();
