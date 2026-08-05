@@ -3,6 +3,32 @@
 > 새 세션은 저장소 루트 `AGENTS.md` → `CLAUDE.md` → 이 파일 → 가장 최근의 관련 `docs/superpowers/HANDOFF-*.md` 순서로 읽는다.
 > 이 파일은 전체 흐름의 요약이고, 작업별 세부 사실과 남은 확인은 최신 인수인계서가 기준이다.
 
+## 🔜 2026-08-05 — 타바타 횟수 기록 + 타바타를 계획·복사와 잇기 (DB 0059 ✅ · 0060 배포 뒤 · 개발 서버 확인 ✅ · 배포 대기)
+
+설계: [`docs/superpowers/specs/2026-08-05-tabata-reps-and-planning-design.md`](docs/superpowers/specs/2026-08-05-tabata-reps-and-planning-design.md)
+
+사용자 지시 2건. **둘 다 "타바타만 다른 기능들과 끊겨 있다"는 한 뿌리였다.**
+
+- **① 횟수가 언제나 0이었다.** `tabataDraftExercises`가 `reps: 0` 세트를 만들고 그대로 저장했다 — 운영 DB의 타바타 6세션(7/20~8/3) **전부** `reps: 0`이었다. 2026-08-04에 달력 상세(세트 표시)가 생기면서 "0회"가 눈에 보이게 됐다
+  - `tabataRepsForMinutes(minutes)` = 종목당 라운드 수. 4분→2 · 8분→4 · 16분→8
+  - **2를 박아두지 않았다.** `(minutes*60 / TABATA_ROUND_SECONDS) / TABATA_EXERCISE_COUNT`로 쓰고, 상수와의 관계를 테스트가 고정한다. 구성 운동 수가 4에서 바뀌면 값도 따라 바뀌어야 한다
+  - ⚠️ **알고 받는 대가**: 타바타 종목은 `bodyweight`이라 `foldPeriodStats`가 `bodyweightReps += s.reps`로 센다. **4분 타바타 1건당 맨몸 횟수 실적이 8회 오른다.** 사용자 승인 사항
+  - XP에는 영향이 없다 — `complete_workout_v2`가 `v_tabata`면 `v_rec`(기록 채움 10 XP) 판정을 통째로 건너뛴다
+- **② 타바타 시트의 '지난 기록' 탭은 늘 비어 있었다.** `tabata-sheet.tsx`가 `pastSessions={[]}`를 하드코딩하고 `onPickPast`가 항상 `false`를 돌려줬다. '내 루틴' 탭은 아예 없었다 — 타바타를 할 때마다 카탈로그에서 4개를 새로 찾아야 했다
+  - **새 DB 질의가 0이다.** `CalendarSession.exerciseNames`와 `WorkoutRoutine.exercises`에 이름이 이미 있다. `tabataPickFromNames(names, catalog)` 하나로 둘 다 처리한다
+  - ⚠️ **덧붙이지 않고 교체한다.** 지난 타바타를 부르는 건 "그날 그 구성으로 다시"라는 뜻이고, 4개 한도에 이미 걸려 있으면 덧붙이기는 아무 일도 안 한 것처럼 보인다. (같은 이유로 '운동 추가' 시트의 병합 규칙과 **일부러 다르다**)
+  - 지난 **타바타**를 고르면 코스 분수까지 그때 것으로 되돌린다
+  - ⚠️ `loadPastSessions()`를 `openExercisePicker`에서 빼내 타바타 버튼에서도 부른다. 안 부르면 탭이 열려도 "아직 완료한 운동이 없어요"로 남는다
+- **③ 예정표에 타바타가 없었다 (0059).** 지난 타바타를 📋복사하면 일반 종목 4개로만 저장돼, 그날 "운동 준비하기"를 눌러도 음원도 코스도 없는 맨몸 운동 4개가 떴다
+  - `workout_plans.tabata_minutes smallint check (null or in (4,8,16))` 한 컬럼. `move_workout_plan`은 `RETURNS workout_plans` **행타입**이라 함수를 안 고쳐도 새 컬럼이 따라온다 (회귀 단언으로 고정했다)
+  - `handleLoadPlan`이 타바타 계획이면 draft에 붓지 않고 **타바타 시트를 채워서 연다**
+  - ⚠️ **`scheduledPlanId`를 이어받아야 한다.** `beginTabata`가 `emptyDraft`로 갈아엎으면서 버리면 타바타를 완료해도 **예정표가 그대로 남는다.** 개발 서버에서 localStorage draft로 실제로 물고 들어가는 것까지 확인했다
+  - ⚠️ `saveWorkoutPlan`이 일반 계획일 때 `tabata_minutes: null`을 **명시**한다. upsert라 생략하면 같은 날짜의 옛 타바타 표식이 남는다
+  - **범위 밖(사용자 결정)**: 달력 빈 날짜에서 타바타를 *새로* 짜는 경로는 만들지 않았다. 한 번도 안 해봤으면 계획할 것도 없다
+- **④ 과거 6건 백필은 0060으로 분리했다.** 기존 행을 바꾸는 UPDATE라 **앱 배포 뒤** Run한다. `coalesce(ws.reps,0)=0` 조건이라 멱등하다
+- **검증 실측**: unit **1062/1062**(88파일) · typecheck ✅ · lint 0 · `workout-plan-test` **20/20**(신규 타바타 5건) · `rls-test` 128/0 · `challenge-consent-test` 22/0 · `poke-levelup-check` 14/14 · `challenge-room-check` 48/0
+- **개발 서버 확인** (`localhost:3000`, 새 익명 계정 `타바타검증0805`): 4분 타바타를 **끝까지 돌려** 달력 상세에 4종목 전부 **2회** · 16분으로 둔 시트에 지난 4분 타바타를 부르니 종목 4개+**코스 4분**까지 복원 · 내 루틴 탭도 4종목 복원 · 📋복사 → `🔥 타바타 4분 예정` 배지 · `🔥 타바타 준비하기` → 시트가 채워진 채 열림
+
 ## ✅ 2026-08-02 — 나만의 루틴 + 자주 한 운동 + 달력 계획 (DB 0056·0057 ✅ · 개발 서버 확인 ✅ · 운영 배포 ✅ · 공지 발송 ✅ · 완료)
 
 설계: [`docs/superpowers/specs/2026-08-02-routines-frequent-exercises-calendar-planning-design.md`](docs/superpowers/specs/2026-08-02-routines-frequent-exercises-calendar-planning-design.md)

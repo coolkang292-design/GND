@@ -2,6 +2,7 @@ import {
   parsePlanExercises,
   type PlanExercise,
 } from "@/lib/domain/workout-plan";
+import { asTabataMinutes, type TabataMinutes } from "@/lib/domain/tabata";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export type WorkoutPlan = {
@@ -10,6 +11,8 @@ export type WorkoutPlan = {
   planDate: string;
   sourceSessionId: string | null;
   exercises: PlanExercise[];
+  /** 🔥 타바타 코스 분수 (4|8|16). null이면 일반 운동 계획 (0059) */
+  tabataMinutes: TabataMinutes | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -20,6 +23,7 @@ type WorkoutPlanRow = {
   plan_date: string;
   source_session_id: string | null;
   exercises: unknown;
+  tabata_minutes?: number | null; // 0059 적용 전에는 컬럼이 없을 수 있다
   created_at: string;
   updated_at: string;
 };
@@ -33,6 +37,7 @@ function fromRow(row: WorkoutPlanRow): WorkoutPlan {
     planDate: row.plan_date,
     sourceSessionId: row.source_session_id,
     exercises,
+    tabataMinutes: asTabataMinutes(row.tabata_minutes),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -55,6 +60,8 @@ export async function saveWorkoutPlan(input: {
   /** 지난 세션 복사면 세션 id, 새로 짠 계획이면 null (0015 RLS가 둘 다 허용) */
   sourceSessionId: string | null;
   exercises: PlanExercise[];
+  /** 🔥 타바타 계획이면 코스 분수 (0059). 일반 계획은 생략 */
+  tabataMinutes?: TabataMinutes | null;
 }): Promise<WorkoutPlan> {
   const supabase = getSupabaseBrowserClient();
   const { data, error } = await supabase
@@ -65,6 +72,9 @@ export async function saveWorkoutPlan(input: {
         plan_date: input.planDate,
         source_session_id: input.sourceSessionId,
         exercises: input.exercises,
+        // 덮어쓰기(upsert)이므로 일반 계획일 때 null을 **명시해야** 한다.
+        // 생략하면 같은 날짜의 옛 타바타 표식이 그대로 남는다.
+        tabata_minutes: input.tabataMinutes ?? null,
       },
       { onConflict: "user_id,plan_date" },
     )

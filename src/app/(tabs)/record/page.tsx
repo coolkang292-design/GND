@@ -19,6 +19,7 @@ import { ZeroWeightSheet } from "@/components/record/zero-weight-sheet";
 import { shouldAskBodyweight } from "@/lib/domain/zero-weight";
 import { TabataSheet } from "@/components/record/tabata-sheet";
 import { RestBar } from "@/components/record/rest-bar";
+import { ActiveSessionOverlay } from "@/components/record/active-session-overlay";
 import { VerificationPhoto } from "@/components/record/verification-photo";
 import { useIdleGuard, type IdleGuardSnapshot } from "@/hooks/use-idle-guard";
 import { useRestCountdown } from "@/hooks/use-rest-countdown";
@@ -67,12 +68,24 @@ import {
   type PeriodSessionRow,
 } from "@/lib/challenge";
 import { getLevelRewards, getProgressSummary } from "@/lib/progression";
-import { tabataDraftExercises } from "@/lib/domain/tabata";
+import {
+  asTabataMinutes,
+  tabataDraftExercises,
+  tabataPickFromNames,
+  type TabataMinutes,
+} from "@/lib/domain/tabata";
 import { moveItem } from "@/lib/domain/reorder";
 import {
   getRestCountdownTogglePlan,
   nextRestSeconds,
 } from "@/lib/domain/rest-countdown";
+import { nextUpSet } from "@/lib/domain/next-up";
+import {
+  advanceSetFocus,
+  clampSetFocus,
+} from "@/lib/domain/focus-exercise";
+import { amountFields } from "@/lib/domain/set-input";
+import { workoutCompletionMessage } from "@/lib/domain/workout-complete-message";
 import { dayKey } from "@/lib/domain/time";
 import { XpResultModal } from "@/components/record/xp-result-modal";
 import { buildXpEvents, type XpEvent } from "@/lib/domain/xp-events";
@@ -155,6 +168,14 @@ type CompletedResult = {
   challengeGains: GoalContribution[];
 };
 
+/** 예정표에서 연 타바타의 미리 채움 (0059) */
+type TabataPrefill = {
+  picked: CatalogExercise[];
+  minutes: TabataMinutes;
+  /** 완료하면 지울 예정표 id */
+  planId: string;
+};
+
 /** draft 종목 → 집계용 정규화 행. 집계 규칙 자체는 challenge.ts가 갖는다. */
 function toPeriodSessionRow(
   userId: string,
@@ -205,7 +226,26 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const [prevVolume, setPrevVolume] = useState<number | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [reorderOpen, setReorderOpen] = useState(false);
+  /**
+   * 큰 팝업을 접어 뒀는가 (2026-08-04, 설계 ②).
+   *
+   * **저장하지 않는다.** 열림 여부의 진실은 `active`이고 이건 잠깐 접어 둔
+   * 상태일 뿐이다. localStorage에 넣으면 draft 버전을 올려야 하고 승격 코드가
+   * 또 는다. 새로고침하면 다시 펴지는데, 운동 중이라는 사실이 더 중요하다.
+   */
+  const [minimized, setMinimized] = useState(false);
+  /**
+   * 팝업이 보여줄 **한 종목**의 위치 (2026-08-04, 사용자 지적으로 추가).
+   *
+   * 파생하지 않고 상태로 든다 — "미완료 첫 세트가 있는 종목"으로 매번 계산하면
+   * 뒤 종목으로 옮겨 기록하는 순간 앞 종목에 미완료가 남아 화면이 튕겨 돌아간다.
+   */
+  const [focusIndex, setFocusIndex] = useState(0);
+  /** 팝업이 보여줄 세트 번호 — 목업의 `현재 세트 1 / 5` */
+  const [focusSetIndex, setFocusSetIndex] = useState(0);
   const [tabataOpen, setTabataOpen] = useState(false);
+  /** 예정표에서 연 타바타 — 종목·코스를 채운 채 열고, 완료하면 그 계획을 지운다 */
+  const [tabataPrefill, setTabataPrefill] = useState<TabataPrefill | null>(null);
   const tabataMinutesRef = useRef<number | null>(null);
   const [pastSessions, setPastSessions] = useState<CalendarSession[]>([]);
   const [pastLoading, setPastLoading] = useState(false);
@@ -493,8 +533,13 @@ function WorkoutScreen({ userId }: { userId: string }) {
     }
   }
 
-  async function openExercisePicker() {
-    setPickerOpen(true);
+  /**
+   * 지난 기록 목록을 한 번만 가져온다 — 운동 추가 시트와 타바타 시트가 같이 쓴다.
+   *
+   * 타바타 시트에서도 불러야 한다 (2026-08-05). 안 부르면 그쪽 '지난 기록' 탭이
+   * "아직 완료한 운동이 없어요"로 남는다.
+   */
+  async function loadPastSessions() {
     if (pastLoaded || pastLoading) return;
     setPastLoading(true);
     try {
@@ -505,6 +550,17 @@ function WorkoutScreen({ userId }: { userId: string }) {
     } finally {
       setPastLoading(false);
     }
+  }
+
+  async function openExercisePicker() {
+    setPickerOpen(true);
+    await loadPastSessions();
+  }
+
+  async function openTabataSheet(prefill: TabataPrefill | null = null) {
+    setTabataPrefill(prefill);
+    setTabataOpen(true);
+    await loadPastSessions();
   }
 
   async function addPastSession(sessionId: string): Promise<boolean> {
@@ -697,6 +753,26 @@ function WorkoutScreen({ userId }: { userId: string }) {
     const restPlan = getRestCountdownTogglePlan(ex.exerciseType, willDone);
     if (restPlan.prepareAudio) prepareRestCountdownAudio();
     updateSet(exKey, si, { done: willDone });
+    // 그 종목을 다 끝냈으면 다음 종목으로 옮겨 준다 (설계 ②).
+    // 해제(willDone=false)에는 움직이지 않는다 — 되돌리는 중에 화면이 튀면 안 된다.
+    if (willDone) {
+      const after = draftRef.current.exercises.map((exercise) =>
+        exercise.key === exKey
+          ? {
+              ...exercise,
+              sets: exercise.sets.map((set, index) =>
+                index === si ? { ...set, done: true } : set,
+              ),
+            }
+          : exercise,
+      );
+      const moved = advanceSetFocus(after, {
+        exerciseIndex: focusIndex,
+        setIndex: focusSetIndex,
+      });
+      setFocusIndex(moved.exerciseIndex);
+      setFocusSetIndex(moved.setIndex);
+    }
 
     // 0kg 웨이트 세트면 그 자리에서 되묻는다 (2026-08-04) — 데이터로 추측해
     // 자동으로 옮기지 않는 이유는 domain/zero-weight.ts 주석에 있다.
@@ -782,6 +858,17 @@ function WorkoutScreen({ userId }: { userId: string }) {
    * "10초 줄였다"가 두 가지 뜻이 되어, 사용자는 눌러도 아무 일이 없다고 느낀다.
    * 클램프 규칙은 `nextRestSeconds`가, 하한 1초는 `adjustRest`가 갖는다.
    */
+  /**
+   * 휴식 프리셋 — 누르면 기본값이 바뀌고 **돌고 있는 휴식도 그 값으로 다시
+   * 맞춰진다** (사용자 결정 2026-08-04). ±10초와 같은 규약이다.
+   */
+  function setRestSeconds(seconds: number) {
+    markActivity();
+    const current = draftRef.current.restSeconds;
+    setDraft((d) => ({ ...d, restSeconds: seconds }));
+    adjustRest(seconds - current);
+  }
+
   function stepRest(delta: number) {
     markActivity();
     setDraft((d) => ({ ...d, restSeconds: nextRestSeconds(d.restSeconds, delta) }));
@@ -791,6 +878,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
   async function handleScheduleFromPast(
     sessionId: string,
     planDate: string,
+    /** 그 세션이 타바타였으면 코스 분수 — 예정표도 타바타로 남는다 (0059) */
+    tabataMinutes?: number | null,
   ): Promise<WorkoutPlan> {
     setBusy(true);
     try {
@@ -808,13 +897,18 @@ function WorkoutScreen({ userId }: { userId: string }) {
         isCustom: byName.get(it.name)?.is_custom ?? false,
         sets: it.sets,
       }));
+      const course = asTabataMinutes(tabataMinutes);
       const plan = await saveWorkoutPlan({
         userId,
         planDate,
         sourceSessionId: sessionId,
         exercises: toPlanExercises(exercises),
+        tabataMinutes: course,
       });
-      showToast(`${Number(planDate.slice(5, 7))}월 ${Number(planDate.slice(8))}일 예정표로 저장했어요`);
+      const what = course ? `🔥 타바타 ${course}분을` : "운동을";
+      showToast(
+        `${what} ${Number(planDate.slice(5, 7))}월 ${Number(planDate.slice(8))}일 예정표로 저장했어요`,
+      );
       return plan;
     } catch (e) {
       showToast(errorMessage(e));
@@ -828,7 +922,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
 
   async function beginTabata(
     picked: CatalogExercise[],
-    minutes: number,
+    minutes: TabataMinutes,
   ): Promise<boolean> {
     if (active) {
       showToast("이미 운동 중이에요");
@@ -840,9 +934,13 @@ function WorkoutScreen({ userId }: { userId: string }) {
     ) {
       return false;
     }
+    // 예정표에서 연 타바타면 그 계획 id를 이어받는다 (2026-08-05). emptyDraft로
+    // 갈아엎으면서 버리면 타바타를 완료해도 예정표가 그대로 남는다.
+    const scheduledPlanId = tabataPrefill?.planId ?? null;
     setDraft((d) => ({
       ...emptyDraft(d.restSeconds),
-      exercises: tabataDraftExercises(picked, localId),
+      exercises: tabataDraftExercises(picked, localId, minutes),
+      scheduledPlanId,
       // 타바타는 무동작 감지 대상이 아니다 — 음원을 따라 하는 동안 앱을 만지지 않는다.
       tabataMinutes: minutes,
     }));
@@ -886,6 +984,27 @@ function WorkoutScreen({ userId }: { userId: string }) {
       !window.confirm("준비 중인 운동 목록을 지우고 예정표로 바꿀까요?")
     ) {
       return false;
+    }
+    /*
+      타바타 계획은 운동 목록이 아니라 **타바타 시트**로 연다 (2026-08-05).
+      draft에 종목만 부어 넣으면 음원도 코스도 없는 맨몸 운동 4개가 될 뿐이다.
+    */
+    if (plan.tabataMinutes) {
+      const picked = tabataPickFromNames(
+        plan.exercises.map((exercise) => exercise.name),
+        catalog,
+      );
+      if (picked.length === 0) {
+        showToast("예정표의 타바타 종목을 운동 목록에서 찾지 못했어요");
+        return false;
+      }
+      setSubTab("workout");
+      void openTabataSheet({
+        picked,
+        minutes: plan.tabataMinutes,
+        planId: plan.id,
+      });
+      return true;
     }
     const exercises = toDraftExercises(plan.exercises, localId);
     setDraft((current) => ({
@@ -932,6 +1051,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
         sessionId,
         startedAtMs,
       }));
+      setMinimized(false); // 시작하면 큰 팝업으로 전환한다 (설계 ②)
+      setFocusIndex(0);
+      setFocusSetIndex(0);
       showToast("운동 시작! 💪");
     } catch (e) {
       showToast(errorMessage(e));
@@ -1088,6 +1210,53 @@ function WorkoutScreen({ userId }: { userId: string }) {
   }
 
   const summary = summarizeVolume(toVolumeSets(draft.exercises));
+  // 팝업 열림은 `active`에서 파생한다 — 별도 저장 없음 (설계 ②)
+  const overlayOpen = active && !minimized;
+  const nextUp = nextUpSet(draft.exercises);
+  /** 아직 완료하지 않은 세트 수 — 1이면 지금 보는 것이 오늘의 마지막이다 */
+  const pendingSetCount = draft.exercises.reduce(
+    (count, exercise) =>
+      count + exercise.sets.filter((set) => !set.done).length,
+    0,
+  );
+  // 문구는 날짜 기준 로테이션이다 — 렌더 중 랜덤은 재렌더마다 문구가 바뀐다
+  const completionMessage = workoutCompletionMessage({
+    todayKey: dayKey(
+      new Date(),
+      Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Seoul",
+    ),
+  });
+  /**
+   * 입력 카드는 한 벌만 만든다 (설계 ②).
+   *
+   * 팝업이 열려 있으면 팝업 안에, 아니면 기존 자리에 그린다. 새 입력
+   * 컴포넌트를 만들지 않는 이유는 프리필·볼륨 계산·완료 토글이 두 벌이 되면
+   * 갈라지기 때문이다.
+   */
+  const setFocus = clampSetFocus(draft.exercises, {
+    exerciseIndex: focusIndex,
+    setIndex: focusSetIndex,
+  });
+  const focus = setFocus.exerciseIndex;
+  const focusedExercise = draft.exercises[focus] ?? null;
+  const focusedSet = focusedExercise?.sets[setFocus.setIndex] ?? null;
+  const exerciseCards = draft.exercises.map((ex, i) => (
+    <ExerciseCard
+      key={ex.key}
+      exercise={ex}
+      index={i}
+      active={active}
+      loadingLast={loadingExerciseKey === ex.key}
+      loadLastDisabled={loadingExerciseKey !== null}
+      onLoadLast={() => void loadLastExercise(ex)}
+      onUpdateSet={(si, patch) => updateSet(ex.key, si, patch)}
+      onToggleDone={(si) => toggleDone(ex.key, si)}
+      onAddSet={() => addSet(ex.key)}
+      onRemoveSet={() => removeSet(ex.key)}
+      onRemoveExercise={() => removeExercise(ex.key)}
+      onLongPress={() => setReorderOpen(true)}
+    />
+  ));
   // 멈춰 있던 시간은 경과 시간에서 뺀다. 정지 중에는 정지 시작 시점에 멈춰 있다.
   const elapsedSec =
     active && draft.startedAtMs
@@ -1400,23 +1569,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
         </section>
       )}
 
-      {draft.exercises.map((ex, i) => (
-        <ExerciseCard
-          key={ex.key}
-          exercise={ex}
-          index={i}
-          active={active}
-          loadingLast={loadingExerciseKey === ex.key}
-          loadLastDisabled={loadingExerciseKey !== null}
-          onLoadLast={() => void loadLastExercise(ex)}
-          onUpdateSet={(si, patch) => updateSet(ex.key, si, patch)}
-          onToggleDone={(si) => toggleDone(ex.key, si)}
-          onAddSet={() => addSet(ex.key)}
-          onRemoveSet={() => removeSet(ex.key)}
-          onRemoveExercise={() => removeExercise(ex.key)}
-          onLongPress={() => setReorderOpen(true)}
-        />
-      ))}
+      {/* 팝업이 열려 있으면 카드는 그 안에만 그린다 — 같은 카드를 두 곳에 두지 않는다 */}
+      {!overlayOpen && exerciseCards}
 
       {reorderOpen && (
         <ExerciseReorderSheet
@@ -1464,7 +1618,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
       )}
       {!active && (
         <button
-          onClick={() => setTabataOpen(true)}
+          onClick={() => void openTabataSheet()}
           disabled={busy}
           className="h-12 rounded-card border border-accent bg-surface text-sm font-extrabold text-accent disabled:opacity-60"
         >
@@ -1478,16 +1632,26 @@ function WorkoutScreen({ userId }: { userId: string }) {
       <TabataSheet
         open={tabataOpen}
         catalog={catalog}
-        onClose={() => setTabataOpen(false)}
+        onClose={() => {
+          setTabataOpen(false);
+          setTabataPrefill(null);
+        }}
         onCreateCustom={handleCreateCustom}
         onBegin={beginTabata}
         onComplete={completeTabata}
         onCancelWorkout={cancelTabata}
+        pastSessions={pastSessions}
+        pastLoading={pastLoading}
+        routines={routines ?? undefined}
+        routinesLoading={routinesLoading}
+        initialPicked={tabataPrefill?.picked}
+        initialMinutes={tabataPrefill?.minutes}
       />
 
       {restRemaining !== null && (
         <RestBar
           remainingSeconds={restRemaining}
+          nextUp={nextUp}
           onAdjust={(delta) => stepRest(delta)}
           onExtend={() => {
             markActivity();
@@ -1550,6 +1714,83 @@ function WorkoutScreen({ userId }: { userId: string }) {
         </div>
       )}
         </>
+      )}
+
+      {/*
+        운동 중 큰 팝업 (설계 ② 2026-08-04, 사용자 목업 기준 재구성).
+
+        `input`(세트 하나 입력) ↔ `rest`(휴식·다음 운동)가 번갈아 뜬다.
+        z-20이라 운동 추가 시트(z-40/50)·무동작 정지 모달(z-50)이 이 위에 뜬다.
+        탭바는 덮지 않는다 — 달력·피드로 바로 갈 수 있어야 한다(사용자 결정).
+      */}
+      <ActiveSessionOverlay
+        open={overlayOpen}
+        mode={restRemaining !== null ? "rest" : "input"}
+        elapsedLabel={`${hh}:${mm}:${ss}`}
+        exerciseName={focusedExercise?.name ?? null}
+        setPosition={{
+          index: setFocus.setIndex,
+          total: focusedExercise?.sets.length ?? 0,
+        }}
+        fields={
+          focusedExercise
+            ? amountFields(focusedExercise.exerciseType, focusedExercise.measure)
+            : []
+        }
+        values={{
+          weightKg: focusedSet?.weightKg ?? 0,
+          reps: focusedSet?.reps ?? 0,
+          distanceKm: focusedSet?.distanceKm ?? 0,
+          durationMin: focusedSet?.durationMin ?? 0,
+        }}
+        restSeconds={restRemaining ?? draft.restSeconds}
+        restPresetSeconds={draft.restSeconds}
+        nextUp={
+          nextUp
+            ? { exerciseName: nextUp.exerciseName, amount: nextUp.amount }
+            : null
+        }
+        isLastPendingSet={pendingSetCount === 1 && !focusedSet?.done}
+        completionMessage={completionMessage}
+        paused={paused}
+        busy={busy}
+        onChangeAmount={(key, value) => {
+          if (!focusedExercise) return;
+          updateSet(focusedExercise.key, setFocus.setIndex, { [key]: value });
+        }}
+        onCompleteSet={() => {
+          if (!focusedExercise || !focusedSet || focusedSet.done) return;
+          toggleDone(focusedExercise.key, setFocus.setIndex);
+        }}
+        onLoadLast={() => {
+          if (focusedExercise) void loadLastExercise(focusedExercise);
+        }}
+        onAdjustRest={(delta) => stepRest(delta)}
+        onPickRestPreset={(seconds) => setRestSeconds(seconds)}
+        onStartNext={() => {
+          markActivity();
+          stopRest();
+        }}
+        onMinimize={() => setMinimized(true)}
+        onFinish={() => void handleFinish()}
+        onCancel={() => void handleCancel()}
+      />
+
+      {/* 접어 뒀을 때 돌아갈 문 — 없으면 팝업을 다시 못 연다 */}
+      {active && minimized && (
+        <button
+          onClick={() => setMinimized(false)}
+          className="fixed inset-x-3 z-20 flex items-center justify-between rounded-card border border-accent bg-surface px-4 py-3 shadow-card"
+          style={{ bottom: "calc(env(safe-area-inset-bottom) + 72px)" }}
+        >
+          <span className="text-xs font-extrabold text-accent">
+            {paused ? "⏸ 정지됨 — 무동작" : "운동 중"}
+          </span>
+          <span className="font-mono text-sm font-extrabold">
+            {hh}:{mm}:{ss}
+          </span>
+          <span className="text-xs font-bold text-muted">다시 열기 ▴</span>
+        </button>
       )}
 
       {/* 무동작 정지 — 달력 탭을 보고 있어도 떠야 한다 (설계 2026-08-01) */}

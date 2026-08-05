@@ -4,10 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import {
   TABATA_EXERCISE_COUNT,
   TABATA_TRACKS,
+  tabataPickFromNames,
+  tabataRepsForMinutes,
   tabataTrackForMinutes,
   type TabataMinutes,
   type TabataTrack,
 } from "@/lib/domain/tabata";
+import type { WorkoutRoutine } from "@/lib/routines";
 import type {
   BodyPart,
   CatalogExercise,
@@ -50,6 +53,16 @@ type TabataProps = {
   onComplete: () => Promise<void>;
   /** 재생 중단 — 세션 취소 */
   onCancelWorkout: () => Promise<void>;
+  // ── 지난 기록·내 루틴으로 구성 운동 채우기 (2026-08-05) ──────────
+  /** 기록 탭이 이미 갖고 있는 완료 세션 — 새 질의 없이 이름만 쓴다 */
+  pastSessions: CalendarSession[];
+  pastLoading: boolean;
+  /** null이면 루틴 기능을 쓸 수 없다 (0056 미적용) */
+  routines?: WorkoutRoutine[];
+  routinesLoading?: boolean;
+  /** 예정표에서 연 타바타 — 종목·코스를 미리 채운 채 연다 (0059) */
+  initialPicked?: CatalogExercise[];
+  initialMinutes?: TabataMinutes;
 };
 
 function TabataSheetBody({
@@ -59,9 +72,18 @@ function TabataSheetBody({
   onBegin,
   onComplete,
   onCancelWorkout,
+  pastSessions,
+  pastLoading,
+  routines,
+  routinesLoading,
+  initialPicked,
+  initialMinutes,
 }: TabataProps) {
-  const [picked, setPicked] = useState<CatalogExercise[]>([]);
-  const [minutes, setMinutes] = useState<TabataMinutes>(4);
+  // 시트는 닫으면 언마운트된다 — 예약된 값은 초기값으로 넣으면 되고,
+  // effect 안에서 setState 할 필요가 없다 (교훈 4).
+  const [picked, setPicked] = useState<CatalogExercise[]>(initialPicked ?? []);
+  const [minutes, setMinutes] = useState<TabataMinutes>(initialMinutes ?? 4);
+  const [pickError, setPickError] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [phase, setPhase] = useState<"setup" | "playing" | "finishing">("setup");
   const [remaining, setRemaining] = useState<number | null>(null);
@@ -123,6 +145,40 @@ function TabataSheetBody({
     }
   }
 
+  /**
+   * 이름 목록으로 구성 운동을 통째로 갈아 끼운다 (2026-08-05).
+   *
+   * **덧붙이지 않고 교체한다.** 지난 타바타를 부르는 건 "그날 그 구성으로 다시"
+   * 라는 뜻이고, 4개 한도에 이미 걸려 있으면 덧붙이기는 아무 일도 안 한 것처럼
+   * 보인다. 하나도 못 찾으면 시트를 닫지 않고 이유를 말한다.
+   */
+  function fillFromNames(names: readonly string[], label: string): boolean {
+    const found = tabataPickFromNames(names, catalog);
+    if (found.length === 0) {
+      setPickError(`${label}의 종목을 운동 목록에서 찾지 못했어요.`);
+      return false;
+    }
+    setPicked(found);
+    setPickError(
+      found.length < TABATA_EXERCISE_COUNT
+        ? `${found.length}개만 채웠어요 — ${TABATA_EXERCISE_COUNT - found.length}개를 더 골라주세요.`
+        : null,
+    );
+    return true;
+  }
+
+  function pickPastSession(sessionId: string): boolean {
+    const session = pastSessions.find((s) => s.id === sessionId);
+    if (!session) return false;
+    const filled = fillFromNames(session.exerciseNames, "그 기록");
+    // 지난 타바타면 코스까지 그때 것으로 되돌린다 — 8분을 했으면 8분으로.
+    if (filled && session.tabataMinutes) {
+      const track = tabataTrackForMinutes(session.tabataMinutes);
+      if (track) setMinutes(track.minutes);
+    }
+    return filled;
+  }
+
   async function handleEnded() {
     if (phase !== "playing") return;
     setPhase("finishing");
@@ -179,6 +235,10 @@ function TabataSheetBody({
             <p className="mt-1 text-xs text-muted">
               코스와 구성 운동 {TABATA_EXERCISE_COUNT}개를 고르고 시작하세요.
               음원이 끝나면 자동으로 기록되고, 인증샷만 찍으면 돼요.
+              <b className="text-accent">
+                {" "}
+                종목마다 {tabataRepsForMinutes(minutes)}회로 기록돼요.
+              </b>
             </p>
 
             <div className="mt-3 flex gap-1.5">
@@ -209,9 +269,10 @@ function TabataSheetBody({
                     {item.name}
                   </p>
                   <button
-                    onClick={() =>
-                      setPicked((cur) => cur.filter((p) => p.id !== item.id))
-                    }
+                    onClick={() => {
+                      setPicked((cur) => cur.filter((p) => p.id !== item.id));
+                      setPickError(null); // "N개만 채웠어요"가 남아 어긋나지 않게
+                    }}
                     aria-label={`${item.name} 빼기`}
                     className="text-sm text-faint"
                   >
@@ -227,7 +288,15 @@ function TabataSheetBody({
             >
               + 운동 고르기 ({picked.length}/{TABATA_EXERCISE_COUNT})
             </button>
+            <p className="mt-1.5 text-center text-[11px] text-muted">
+              지난 기록·내 루틴에서 지난번 구성을 그대로 불러올 수 있어요
+            </p>
 
+            {pickError && (
+              <p className="mt-2 rounded-card-sm border border-line bg-surface-2 px-3 py-2 text-xs text-warn">
+                {pickError}
+              </p>
+            )}
             {playError && (
               <p className="mt-2 rounded-card-sm border border-line bg-surface-2 px-3 py-2 text-xs text-warn">
                 {playError}
@@ -274,11 +343,19 @@ function TabataSheetBody({
         )}
       </div>
 
+      {/*
+        지난 기록·내 루틴으로도 구성 운동을 채운다 (2026-08-05).
+        예전에는 pastSessions={[]}를 넘겨 '지난 기록' 탭이 늘 비어 있었다 —
+        타바타를 할 때마다 카탈로그에서 4개를 새로 찾아야 했다.
+        기록 탭이 이미 들고 있는 목록을 넘길 뿐이라 새 질의는 없다.
+      */}
       <ExercisePicker
         open={pickerOpen}
         catalog={catalog}
-        pastSessions={[] as CalendarSession[]}
-        pastLoading={false}
+        pastSessions={pastSessions}
+        pastLoading={pastLoading}
+        routines={routines}
+        routinesLoading={routinesLoading}
         onClose={() => setPickerOpen(false)}
         onPickMany={(items) => {
           setPicked((cur) => {
@@ -288,9 +365,21 @@ function TabataSheetBody({
             }
             return merged.slice(0, TABATA_EXERCISE_COUNT);
           });
+          setPickError(null);
           setPickerOpen(false);
         }}
-        onPickPast={() => Promise.resolve(false)}
+        onPickPast={(sessionId) => Promise.resolve(pickPastSession(sessionId))}
+        onPickRoutine={
+          routines
+            ? (routine) =>
+                Promise.resolve(
+                  fillFromNames(
+                    routine.exercises.map((e) => e.name),
+                    `'${routine.name}'`,
+                  ),
+                )
+            : undefined
+        }
         onCreateCustom={onCreateCustom}
       />
     </>

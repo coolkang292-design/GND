@@ -221,6 +221,77 @@ try {
     JSON.stringify(replacedMove),
   );
 
+  // ── 0059: 타바타 코스를 담은 예정표 ────────────────────────────
+  // 지난 타바타를 복사하면 코스 분수가 계획에 같이 남아야 한다. 안 남으면
+  // 그날 예정표를 열었을 때 음원도 코스도 없는 맨몸 운동 4개가 된다.
+  const tabataDate = "2099-01-20";
+  const tabataMoved = "2099-01-21";
+  const tabataPlan = await api(userA.token, "POST", "/rest/v1/workout_plans", {
+    user_id: userA.id,
+    plan_date: tabataDate,
+    exercises,
+    tabata_minutes: 8,
+  });
+  const tabataPlanId = tabataPlan.json?.[0]?.id;
+  check(
+    "타바타 예정표 생성 — 코스 분수가 저장된다",
+    tabataPlan.status === 201 && tabataPlan.json?.[0]?.tabata_minutes === 8,
+    JSON.stringify(tabataPlan),
+  );
+
+  const tabataRead = await api(
+    userA.token,
+    "GET",
+    `/rest/v1/workout_plans?id=eq.${tabataPlanId}&select=tabata_minutes`,
+  );
+  check(
+    "타바타 예정표 조회 — 8분이 그대로 돌아온다",
+    tabataRead.status === 200 && tabataRead.json?.[0]?.tabata_minutes === 8,
+    JSON.stringify(tabataRead),
+  );
+
+  // 음원이 없는 분수는 DB가 막는다 — 앱이 못 여는 계획이 생기면 안 된다.
+  const badCourse = await api(userA.token, "POST", "/rest/v1/workout_plans", {
+    user_id: userA.id,
+    plan_date: "2099-01-22",
+    exercises,
+    tabata_minutes: 5,
+  });
+  check(
+    "없는 코스 분수(5분) 저장 차단",
+    badCourse.status >= 400,
+    JSON.stringify(badCourse),
+  );
+
+  // move_workout_plan은 `RETURNS workout_plans` 행타입이라 새 컬럼이 따라와야
+  // 한다. 안 따라오면 날짜를 옮긴 순간 타바타 표식이 사라진다.
+  const tabataMove = await api(
+    userA.token,
+    "POST",
+    "/rest/v1/rpc/move_workout_plan",
+    { p_plan_id: tabataPlanId, p_target_date: tabataMoved, p_replace: false },
+  );
+  check(
+    "날짜를 옮겨도 타바타 표식이 유지된다",
+    tabataMove.status === 200 &&
+      tabataMove.json?.plan_date === tabataMoved &&
+      tabataMove.json?.tabata_minutes === 8,
+    JSON.stringify(tabataMove),
+  );
+
+  // 일반 계획으로 덮어쓰면 표식이 지워져야 한다 (upsert가 null을 명시한다).
+  const overwritten = await api(
+    userA.token,
+    "PATCH",
+    `/rest/v1/workout_plans?id=eq.${tabataPlanId}`,
+    { tabata_minutes: null },
+  );
+  check(
+    "일반 계획으로 덮어쓰면 타바타 표식이 지워진다",
+    overwritten.status === 200 && overwritten.json?.[0]?.tabata_minutes === null,
+    JSON.stringify(overwritten),
+  );
+
   const otherDelete = await api(
     userB.token,
     "DELETE",

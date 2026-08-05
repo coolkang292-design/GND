@@ -117,6 +117,8 @@ export function CalendarView({
   onScheduleSession: (
     sessionId: string,
     planDate: string,
+    /** 타바타 세션이면 코스 분수 — 예정표도 타바타로 남는다 (0059) */
+    tabataMinutes?: number | null,
   ) => Promise<WorkoutPlan>;
   onLoadPlan: (plan: WorkoutPlan) => boolean;
   onCreateCustom: (input: {
@@ -289,7 +291,11 @@ export function CalendarView({
     }
     setPlanBusy(true);
     try {
-      const saved = await onScheduleSession(copySource.id, copyDate);
+      const saved = await onScheduleSession(
+        copySource.id,
+        copyDate,
+        copySource.tabataMinutes,
+      );
       setPlans((current) => [
         ...current.filter((plan) => plan.planDate !== saved.planDate),
         saved,
@@ -399,7 +405,14 @@ export function CalendarView({
     if (!planPickerDate || planBusy) return false;
     setPlanBusy(true);
     try {
-      applySavedPlan(await onScheduleSession(sessionId, planPickerDate));
+      const source = sessions.find((s) => s.id === sessionId);
+      applySavedPlan(
+        await onScheduleSession(
+          sessionId,
+          planPickerDate,
+          source?.tabataMinutes,
+        ),
+      );
       return true;
     } catch {
       showPlanToast("운동 계획을 저장하지 못했어요");
@@ -632,7 +645,11 @@ export function CalendarView({
                 <div className="rounded-card border border-good/40 bg-good-weak p-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="text-[11px] font-extrabold text-good">운동 예정</p>
+                      <p className="text-[11px] font-extrabold text-good">
+                        {selectedPlan.tabataMinutes
+                          ? `🔥 타바타 ${selectedPlan.tabataMinutes}분 예정`
+                          : "운동 예정"}
+                      </p>
                       <p className="mt-0.5 break-words text-sm font-bold">
                         {selectedPlan.exercises.map((exercise) => exercise.name).join(" · ")}
                       </p>
@@ -664,7 +681,9 @@ export function CalendarView({
                       disabled={planBusy}
                       className="mt-3 h-10 w-full rounded-card-sm bg-good text-sm font-extrabold text-white disabled:opacity-50"
                     >
-                      운동 준비하기
+                      {selectedPlan.tabataMinutes
+                        ? "🔥 타바타 준비하기"
+                        : "운동 준비하기"}
                     </button>
                   )}
                   <div className="mt-2 flex items-center gap-2">
