@@ -64,8 +64,8 @@ import {
   getMyChallenges,
   goalCategories,
   sessionGoalContribution,
+  toPeriodSessionRow,
   type GoalContribution,
-  type PeriodSessionRow,
 } from "@/lib/challenge";
 import { getLevelRewards, getProgressSummary } from "@/lib/progression";
 import {
@@ -175,31 +175,6 @@ type TabataPrefill = {
   /** 완료하면 지울 예정표 id */
   planId: string;
 };
-
-/** draft 종목 → 집계용 정규화 행. 집계 규칙 자체는 challenge.ts가 갖는다. */
-function toPeriodSessionRow(
-  userId: string,
-  completedAtMs: number,
-  exercises: LocalExercise[],
-): PeriodSessionRow {
-  return {
-    userId,
-    completedAt: new Date(completedAtMs).toISOString(),
-    tabataMinutes: null,
-    exercises: exercises.map((ex) => ({
-      exerciseType: ex.exerciseType,
-      exerciseName: ex.name,
-      bodyPart: ex.bodyPart,
-      sets: ex.sets.map((s) => ({
-        weightKg: s.weightKg,
-        reps: s.reps,
-        distanceMeters: s.distanceKm * 1000,
-        durationSeconds: s.durationMin * 60,
-        isCompleted: s.done,
-      })),
-    })),
-  };
-}
 
 function errorMessage(e: unknown): string {
   const msg = e instanceof Error ? e.message : String(e);
@@ -1165,11 +1140,14 @@ function WorkoutScreen({ userId }: { userId: string }) {
         challengeGains:
           challengeGoals && challengeGoals.length > 0
             ? sessionGoalContribution({
-                session: toPeriodSessionRow(
+                session: toPeriodSessionRow({
                   userId,
                   completedAtMs,
-                  draft.exercises,
-                ),
+                  exercises: draft.exercises,
+                  // 타바타를 빠뜨리면 tabata_count 목표가 늘 0으로 보인다
+                  // (신고 a2ffb44a) — draft가 비워지기 전에 읽는다
+                  tabataMinutes: draft.tabataMinutes,
+                }),
                 goals: challengeGoals,
                 timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
               })

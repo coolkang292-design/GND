@@ -10,6 +10,7 @@ import {
   goalLabel,
   normalizeChallengeParticipantProfiles,
   normalizeChallengePeriodSessions,
+  toPeriodSessionRow,
   type PeriodSessionRow,
   type PeriodStats,
 } from "@/lib/challenge";
@@ -477,6 +478,97 @@ describe("goalCategories · countsTowardChallenge (신고 0783ca35, 2026-08-04)"
       { goal_type: "weight_reps" },
     ]);
     expect(categoriesLabel(cats)).toBe("웨이트 · 맨몸 · 유산소");
+  });
+});
+
+describe("toPeriodSessionRow — 방금 끝낸 draft를 집계 입력으로 (2026-08-06)", () => {
+  const KST = "Asia/Seoul";
+  const COMPLETED_MS = Date.parse("2026-08-04T03:00:00Z"); // KST 12:00
+
+  const jumpSquat = {
+    name: "점프 스쿼트",
+    bodyPart: "하체",
+    exerciseType: "bodyweight" as const,
+    sets: [
+      { weightKg: 0, reps: 2, distanceKm: 0, durationMin: 0, done: true },
+    ],
+  };
+
+  it("타바타 세션이면 코스 분수를 실어 보낸다 — 신고 a2ffb44a", () => {
+    /*
+      원래 버그: 화면이 `tabataMinutes: null`을 박아 넣어, 타바타를 하고도
+      완료 화면이 "🎯 이번 운동은 챌린지 성과에 안 잡혔어요"라고 말했다.
+      서버 집계(challenge_period_sessions)는 tabata_minutes를 제대로 넘겨서
+      챌린지 화면에는 잡혔다 — 그래서 두 화면이 서로 다른 말을 했다.
+    */
+    const out = sessionGoalContribution({
+      session: toPeriodSessionRow({
+        userId: "u1",
+        completedAtMs: COMPLETED_MS,
+        exercises: [jumpSquat, jumpSquat, jumpSquat, jumpSquat],
+        tabataMinutes: 4,
+      }),
+      goals: [{ goal_type: "tabata_count", target_value: 28.3 }],
+      timeZone: KST,
+    });
+    expect(out).toEqual([
+      { type: "tabata_count", label: "타바타 횟수", delta: 1, unit: "회", target: 28.3 },
+    ]);
+  });
+
+  it("타바타 분수는 맨몸 시간 목표에도 들어간다", () => {
+    const out = sessionGoalContribution({
+      session: toPeriodSessionRow({
+        userId: "u1",
+        completedAtMs: COMPLETED_MS,
+        exercises: [jumpSquat],
+        tabataMinutes: 8,
+      }),
+      goals: [{ goal_type: "bodyweight_time", target_value: 100 }],
+      timeZone: KST,
+    });
+    expect(out[0].delta).toBe(8);
+  });
+
+  it("일반 운동은 타바타로 세지 않는다", () => {
+    const out = sessionGoalContribution({
+      session: toPeriodSessionRow({
+        userId: "u1",
+        completedAtMs: COMPLETED_MS,
+        exercises: [jumpSquat],
+        tabataMinutes: null,
+      }),
+      goals: [{ goal_type: "tabata_count", target_value: 28.3 }],
+      timeZone: KST,
+    });
+    expect(out[0].delta).toBe(0);
+  });
+
+  it("draft 단위(km·분)를 집계 단위(m·초)로 바꾼다", () => {
+    const row = toPeriodSessionRow({
+      userId: "u1",
+      completedAtMs: COMPLETED_MS,
+      exercises: [
+        {
+          name: "러닝",
+          bodyPart: "유산소",
+          exerciseType: "cardio",
+          sets: [
+            { weightKg: 0, reps: 0, distanceKm: 5.2, durationMin: 30, done: true },
+          ],
+        },
+      ],
+      tabataMinutes: null,
+    });
+    expect(row.exercises[0].sets[0]).toEqual({
+      weightKg: 0,
+      reps: 0,
+      distanceMeters: 5200,
+      durationSeconds: 1800,
+      isCompleted: true,
+    });
+    expect(row.completedAt).toBe(new Date(COMPLETED_MS).toISOString());
+    expect(row.exercises[0].exerciseName).toBe("러닝");
   });
 });
 

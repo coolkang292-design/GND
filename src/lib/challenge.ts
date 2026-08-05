@@ -541,6 +541,64 @@ export type PeriodSessionRow = {
   }[];
 };
 
+/**
+ * 방금 끝낸 로컬 draft → 집계 입력 (2026-08-06).
+ *
+ * `lib/workout.ts`의 `LocalExercise`를 그대로 받으면 challenge.ts가 화면 쪽
+ * 모듈에 의존하게 되므로, **필요한 모양만** 구조적으로 받는다.
+ */
+export type FinishedDraftExercise = {
+  name: string;
+  bodyPart: string | null;
+  exerciseType: "weight" | "bodyweight" | "cardio";
+  sets: readonly {
+    weightKg: number;
+    reps: number;
+    /** draft는 km·분으로 들고 있다 — 여기서 m·초로 바꾼다 */
+    distanceKm: number;
+    durationMin: number;
+    done: boolean;
+  }[];
+};
+
+/**
+ * 완료 화면의 "이번 운동이 챌린지에 얼마나 쌓였나"를 계산하기 위한 변환.
+ *
+ * ⚠️ **`tabataMinutes`를 반드시 실어야 한다.** 신고 a2ffb44a(2026-08-05):
+ * 화면이 `tabataMinutes: null`을 박아 넣는 바람에, `tabata_count` 목표를 둔
+ * 사람이 타바타를 하고도 완료 화면에서 "이번 운동은 챌린지 성과에 안
+ * 잡혔어요"를 봤다. 서버 집계(`challenge_period_sessions`)는 분수를 제대로
+ * 넘기므로 챌린지 화면에는 잡혔고, **두 화면이 서로 다른 말을 했다.**
+ *
+ * 화면 안에 있던 변환을 여기로 옮긴 이유가 그거다 — 집계 규칙 옆에 두어야
+ * 단위 테스트가 잡는다.
+ */
+export function toPeriodSessionRow(input: {
+  userId: string;
+  completedAtMs: number;
+  exercises: readonly FinishedDraftExercise[];
+  /** 타바타 세션이면 코스 분수 (4|8|16), 일반 운동이면 null */
+  tabataMinutes: number | null;
+}): PeriodSessionRow {
+  return {
+    userId: input.userId,
+    completedAt: new Date(input.completedAtMs).toISOString(),
+    tabataMinutes: input.tabataMinutes,
+    exercises: input.exercises.map((ex) => ({
+      exerciseType: ex.exerciseType,
+      exerciseName: ex.name,
+      bodyPart: ex.bodyPart,
+      sets: ex.sets.map((s) => ({
+        weightKg: s.weightKg,
+        reps: s.reps,
+        distanceMeters: s.distanceKm * 1000,
+        durationSeconds: s.durationMin * 60,
+        isCompleted: s.done,
+      })),
+    })),
+  };
+}
+
 type ChallengePeriodSessionRpcRow = {
   user_id: string;
   completed_at: string;
