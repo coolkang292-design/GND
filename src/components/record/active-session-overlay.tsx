@@ -1,95 +1,114 @@
 "use client";
 
-import type { ReactNode } from "react";
+import {
+  REST_PRESET_SECONDS,
+  adjustAmount,
+  type AmountField,
+  type AmountFieldKey,
+} from "@/lib/domain/set-input";
 
 /**
- * 운동 중 큰 팝업 (2026-08-04, 설계 ② · 사용자 승인).
+ * 운동 중 큰 팝업 (2026-08-04, 설계 ② · 사용자 목업).
  *
- * 운동을 시작하면 풀스크린으로 전환해 **지금 하는 세션에만 집중**하게 한다.
+ * 두 상태가 **번갈아** 뜬다:
+ * - `input` — `● 지금 운동 중`. **세트 하나**를 큰 숫자와 스테퍼로 입력한다
+ * - `rest`  — `● 휴식 중`. 남은 시간·프리셋·다음 운동을 보여준다
  *
- * ⚠️ **닫기는 종료가 아니라 최소화다.** 달력을 보거나 종목을 추가하려면 나갈 수
- * 있어야 하는데, 닫기를 종료로 만들면 오조작 한 번이 세션을 날린다. 종료는
- * 별도 버튼이고 기존 `handleFinish`(미완료 세트 확인 포함)를 그대로 탄다.
+ * ⚠️ **탭바는 덮지 않는다** (사용자 결정). `inset-0`이 아니라 `inset-x-0`+`bottom`
+ * 이라 달력·피드로 바로 갈 수 있다.
  *
- * ⚠️ **z-20에 머문다.** 휴식 바(z-30)·운동 추가 시트(z-40/50)·무동작 정지
- * 모달(z-50)이 이 위에 떠야 한다. 값을 올리면 카운트다운이 팝업 뒤로 숨는다.
+ * ⚠️ **z-20에 머문다.** 운동 추가 시트(z-40/50)·무동작 정지 모달(z-50)이 이 위에
+ * 떠야 한다. 값을 올리면 시트가 팝업 뒤로 숨는다.
  *
- * ⚠️ **열림 여부는 부모가 `active`에서 파생한다.** 여기에 상태를 두거나
- * localStorage에 저장하지 않는다 — draft 버전을 올리지 않고도 새로고침 복구가
- * 지금 그대로 동작해야 한다.
+ * ⚠️ 어떤 칸을 그릴지는 `amountFields`가 정한다 — 여기서 유형을 분기하면 저장
+ * 구조(`LocalSet`)와 어긋난다. 지시서: "입력 항목을 임의로 추가·삭제하지 마라".
  */
+export type SetValues = Record<AmountFieldKey, number>;
+
+function presetLabel(seconds: number): string {
+  if (seconds < 60) return `${seconds}초`;
+  const min = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return rest === 0 ? `${min}분` : `${min}분 ${rest}초`;
+}
+
+function clock(seconds: number): string {
+  const mm = String(Math.floor(Math.max(0, seconds) / 60)).padStart(2, "0");
+  const ss = String(Math.max(0, seconds) % 60).padStart(2, "0");
+  return `${mm}:${ss}`;
+}
+
 export function ActiveSessionOverlay({
   open,
+  mode,
   elapsedLabel,
-  volumeKg,
-  completedSetCount,
+  exerciseName,
+  setPosition,
+  fields,
+  values,
+  restSeconds,
+  restPresetSeconds,
+  nextUp,
+  isLastPendingSet,
+  completionMessage,
   paused,
   busy,
-  position,
-  currentName,
-  onPrev,
-  onNext,
+  onChangeAmount,
+  onCompleteSet,
+  onLoadLast,
+  onAdjustRest,
+  onPickRestPreset,
+  onStartNext,
   onMinimize,
-  onFinish,
   onCancel,
-  children,
+  onFinish,
 }: {
   open: boolean;
+  mode: "input" | "rest";
   elapsedLabel: string;
-  volumeKg: number;
-  completedSetCount: number;
+  exerciseName: string | null;
+  setPosition: { index: number; total: number };
+  fields: AmountField[];
+  values: SetValues;
+  /** 휴식 남은 초 (rest 모드) */
+  restSeconds: number;
+  /** 지금 설정된 휴식 기본값 — 프리셋 칩 표시용 */
+  restPresetSeconds: number;
+  nextUp: { exerciseName: string; amount: string } | null;
+  /** 지금 보여주는 세트가 오늘 남은 마지막 세트인가 — 입력 화면 안내용 */
+  isLastPendingSet: boolean;
+  /** 다 끝냈을 때 보여줄 안내 + 응원 (`workoutCompletionMessage`) */
+  completionMessage: { headline: string; cheer: string };
   paused: boolean;
   busy: boolean;
-  /** 지금 몇 번째 종목인가 — 한 종목만 보이므로 위치를 알려 줘야 한다 */
-  position: { index: number; total: number };
-  currentName: string | null;
-  onPrev: () => void;
-  onNext: () => void;
+  onChangeAmount: (key: AmountFieldKey, value: number) => void;
+  onCompleteSet: () => void;
+  onLoadLast: () => void;
+  onAdjustRest: (deltaSeconds: number) => void;
+  onPickRestPreset: (seconds: number) => void;
+  onStartNext: () => void;
   onMinimize: () => void;
-  onFinish: () => void;
   onCancel: () => void;
-  /** **지금 종목의 입력 카드 하나** — `ExerciseCard`를 그대로 재사용한다 */
-  children: ReactNode;
+  onFinish: () => void;
 }) {
   if (!open) return null;
 
-  const showNav = position.total > 1;
+  const resting = mode === "rest";
+  /** 쉬는 중인데 다음이 없다 = 담은 세트를 전부 끝냈다 */
+  const allDone = resting && nextUp === null;
 
   return (
-    <div className="fixed inset-0 z-20 flex flex-col bg-bg">
-      <header className="mx-auto w-full max-w-[520px] flex-none border-b border-line bg-surface px-4 pt-3 pb-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p
-              className={`text-[11px] font-extrabold ${
-                paused ? "text-warn" : "text-accent"
-              }`}
-            >
-              {paused ? "⏸ 정지됨 — 무동작" : "운동 중"}
-            </p>
-            <p
-              className={`mt-0.5 font-mono text-3xl leading-none font-extrabold ${
-                paused ? "text-muted" : ""
-              }`}
-            >
-              {elapsedLabel}
-            </p>
-          </div>
-          <div className="flex-none text-right">
-            <p className="text-[11px] text-muted">완료 볼륨</p>
-            <p className="font-mono text-2xl leading-tight font-extrabold">
-              {volumeKg.toLocaleString()}
-              <span className="text-[13px]">kg</span>
-            </p>
-            <p className="text-[11px] text-muted">완료 {completedSetCount}세트</p>
-          </div>
-        </div>
-        <div className="mt-2.5 flex items-center gap-2">
+    <div
+      className="fixed inset-x-0 top-0 z-20 flex flex-col overflow-y-auto bg-bg/95 px-3 pt-3 backdrop-blur"
+      style={{ bottom: 0 }}
+    >
+      <div className="mx-auto w-full max-w-[460px] pb-6">
+        {/* 최소화·취소는 카드 밖 — 목업의 흐릿한 윗줄 자리 */}
+        <div className="mb-2 flex items-center gap-2">
           <button
             type="button"
             onClick={onMinimize}
-            aria-label="운동 화면 최소화"
-            className="h-9 flex-1 rounded-card-sm border border-line bg-surface-2 text-xs font-bold text-muted"
+            className="h-8 flex-1 rounded-full border border-line bg-surface-2 text-[11px] font-bold text-muted"
           >
             ▾ 최소화
           </button>
@@ -97,68 +116,241 @@ export function ActiveSessionOverlay({
             type="button"
             onClick={onCancel}
             disabled={busy}
-            className="h-9 flex-none rounded-card-sm px-3 text-xs font-bold text-faint disabled:opacity-50"
+            className="h-8 flex-none rounded-full px-3 text-[11px] font-bold text-faint disabled:opacity-50"
           >
             취소
           </button>
         </div>
-      </header>
 
-      {/*
-        한 종목만 보여주므로 **나머지로 갈 길**이 반드시 있어야 한다
-        (2026-08-04 사용자 지적). 없으면 담아 둔 2·3번 종목에 영영 못 간다.
-      */}
-      {currentName !== null && (
-        <div className="mx-auto flex w-full max-w-[520px] flex-none items-center gap-2 border-b border-line bg-surface px-4 py-2">
-          {showNav && (
-            <button
-              type="button"
-              onClick={onPrev}
-              disabled={position.index === 0}
-              aria-label="이전 종목"
-              className="grid h-9 w-9 flex-none place-items-center rounded-full border border-line bg-surface-2 text-sm font-bold disabled:opacity-30"
-            >
-              ‹
-            </button>
-          )}
-          <div className="min-w-0 flex-1 text-center">
-            <p className="truncate text-sm font-extrabold">{currentName}</p>
-            {showNav && (
-              <p className="font-mono text-[11px] text-muted">
-                {position.index + 1} / {position.total}
+        <section className="rounded-[20px] border border-line bg-surface p-5 text-center shadow-card">
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11.5px] font-extrabold ${
+              paused
+                ? "bg-warn/15 text-warn"
+                : resting
+                  ? "bg-accent-weak text-accent"
+                  : "bg-accent-weak text-accent"
+            }`}
+          >
+            ● {paused ? "정지됨 — 무동작" : resting ? "휴식 중" : "지금 운동 중"}
+          </span>
+
+          <h2 className="mt-3 text-[26px] leading-tight font-extrabold">
+            {exerciseName ?? "운동"}
+            {resting && " 완료"}
+          </h2>
+
+          <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-3 py-1 text-[11.5px] font-bold text-muted">
+            🕐 운동 시간 <span className="font-mono text-text">{elapsedLabel}</span>
+          </p>
+
+          <div className="my-4 border-t border-line" />
+
+          {resting ? (
+            <>
+              <p className="text-[12.5px] font-bold text-accent">휴식 시간</p>
+              <div className="mt-2 flex items-center justify-center gap-4 rounded-card border border-line bg-surface-2 py-3">
+                <button
+                  type="button"
+                  onClick={() => onAdjustRest(-10)}
+                  aria-label="휴식 10초 줄이기"
+                  className="grid h-10 w-10 place-items-center rounded-full border border-line bg-surface text-xl font-bold"
+                >
+                  –
+                </button>
+                <span className="font-mono text-[34px] leading-none font-extrabold">
+                  {clock(restSeconds)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onAdjustRest(10)}
+                  aria-label="휴식 10초 늘리기"
+                  className="grid h-10 w-10 place-items-center rounded-full border border-line bg-surface text-xl font-bold"
+                >
+                  +
+                </button>
+              </div>
+
+              <div className="mt-2.5 flex flex-wrap justify-center gap-1.5">
+                {REST_PRESET_SECONDS.map((seconds) => {
+                  const active = restPresetSeconds === seconds;
+                  return (
+                    <button
+                      key={seconds}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => onPickRestPreset(seconds)}
+                      className={`h-8 rounded-card-sm border px-2.5 text-[11.5px] font-bold ${
+                        active
+                          ? "border-accent bg-accent-weak text-accent"
+                          : "border-line bg-surface-2 text-muted"
+                      }`}
+                    >
+                      {presetLabel(seconds)}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {nextUp ? (
+                <>
+                  <p className="mt-5 text-[12.5px] font-bold text-muted">
+                    다음 운동
+                  </p>
+                  <p className="mt-1 text-[22px] leading-tight font-extrabold">
+                    {nextUp.exerciseName}
+                  </p>
+                  <p className="mt-2 inline-block rounded-card border border-line bg-surface-2 px-4 py-2 font-mono text-base font-extrabold">
+                    {nextUp.amount}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={onStartNext}
+                    className="mt-5 h-13 w-full rounded-card bg-accent py-3.5 text-sm font-extrabold text-accent-ink"
+                  >
+                    ▶ 다음 운동 시작
+                  </button>
+                </>
+              ) : (
+                <>
+                  {/*
+                    담은 세트를 전부 끝냈다 (2026-08-04, 사용자 요청).
+                    자동으로 종료하지는 않는다 — 종료는 XP·기록을 확정하는
+                    되돌리기 어려운 동작이라 **주 버튼만 종료로 바꿔** 자연스럽게
+                    흐르게 하고, 누르는 건 사용자가 한다.
+                  */}
+                  <div className="mt-5 rounded-card border border-good/40 bg-good-weak px-4 py-4">
+                    <p className="text-[15px] font-extrabold text-good">
+                      {completionMessage.headline}
+                    </p>
+                    <p className="mt-1.5 text-[12.5px] leading-5 font-bold text-muted">
+                      {completionMessage.cheer}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={onFinish}
+                    disabled={busy}
+                    className="mt-4 h-13 w-full rounded-card bg-good py-3.5 text-sm font-extrabold text-white disabled:opacity-60"
+                  >
+                    {busy ? "처리 중…" : "운동 종료하고 결과 보기 →"}
+                  </button>
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              <p className="text-[12.5px] font-bold text-muted">
+                현재 세트{" "}
+                <span className="font-mono text-accent">
+                  {setPosition.index + 1} / {Math.max(1, setPosition.total)}
+                </span>
               </p>
-            )}
-          </div>
-          {showNav && (
-            <button
-              type="button"
-              onClick={onNext}
-              disabled={position.index >= position.total - 1}
-              aria-label="다음 종목"
-              className="grid h-9 w-9 flex-none place-items-center rounded-full border border-line bg-surface-2 text-sm font-bold disabled:opacity-30"
-            >
-              ›
-            </button>
+              {isLastPendingSet && (
+                <p className="mt-2 inline-block rounded-full bg-good-weak px-3 py-1 text-[11.5px] font-extrabold text-good">
+                  🏁 마지막 세트예요 — 이것만 하면 오늘 몫 끝!
+                </p>
+              )}
+
+              <div className="mt-3 flex gap-2.5">
+                {fields.map((field) => (
+                  <div
+                    key={field.key}
+                    className="flex-1 rounded-card border border-line bg-surface-2 p-3"
+                  >
+                    <p className="text-[11.5px] font-bold text-muted">
+                      {field.label}
+                    </p>
+                    <p className="mt-1 font-mono text-[30px] leading-none font-extrabold">
+                      {values[field.key]}
+                      <span className="ml-1 text-[12px] font-bold text-muted">
+                        {field.unit}
+                      </span>
+                    </p>
+                    <div className="mt-2 flex gap-1.5">
+                      <button
+                        type="button"
+                        aria-label={`${field.label} 줄이기`}
+                        onClick={() =>
+                          onChangeAmount(
+                            field.key,
+                            adjustAmount(values[field.key], -field.step),
+                          )
+                        }
+                        className="h-9 flex-1 rounded-card-sm border border-line bg-surface text-lg font-bold"
+                      >
+                        –
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`${field.label} 늘리기`}
+                        onClick={() =>
+                          onChangeAmount(
+                            field.key,
+                            adjustAmount(values[field.key], field.step),
+                          )
+                        }
+                        className="h-9 flex-1 rounded-card-sm border border-line bg-surface text-lg font-bold"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-2.5 flex flex-wrap justify-center gap-1.5">
+                {fields.flatMap((field) =>
+                  field.quickSteps.map((delta) => (
+                    <button
+                      key={`${field.key}:${delta}`}
+                      type="button"
+                      aria-label={`${field.label} ${delta > 0 ? "+" : ""}${delta}`}
+                      onClick={() =>
+                        onChangeAmount(
+                          field.key,
+                          adjustAmount(values[field.key], delta),
+                        )
+                      }
+                      className="h-8 rounded-card-sm border border-line bg-surface-2 px-2.5 font-mono text-[11.5px] font-bold text-muted"
+                    >
+                      {delta > 0 ? `+${delta}` : delta}
+                    </button>
+                  )),
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={onCompleteSet}
+                disabled={busy}
+                className="mt-5 h-13 w-full rounded-card border-2 border-accent bg-transparent py-3.5 text-sm font-extrabold text-accent disabled:opacity-60"
+              >
+                ✓ 운동 완료
+              </button>
+
+              <button
+                type="button"
+                onClick={onLoadLast}
+                className="mt-3 text-[12px] font-bold text-muted underline underline-offset-4"
+              >
+                이전 기록 불러오기
+              </button>
+            </>
           )}
-        </div>
-      )}
+        </section>
 
-      <div className="mx-auto min-h-0 w-full max-w-[520px] flex-1 overflow-y-auto px-4 py-3">
-        <div className="flex flex-col gap-3 pb-40">{children}</div>
-      </div>
-
-      <div
-        className="mx-auto w-full max-w-[520px] flex-none border-t border-line bg-surface px-4 pt-3"
-        style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 12px)" }}
-      >
-        <button
-          type="button"
-          onClick={onFinish}
-          disabled={busy}
-          className="h-12 w-full rounded-card bg-good text-sm font-extrabold text-white disabled:opacity-60"
-        >
-          {busy ? "처리 중…" : "운동 종료"}
-        </button>
+        {/* 다 끝냈을 때는 카드 안의 주 버튼이 종료라 여기 두면 같은 게 둘이 된다 */}
+        {!allDone && (
+          <button
+            type="button"
+            onClick={onFinish}
+            disabled={busy}
+            className="mt-3 h-11 w-full rounded-card border border-line bg-surface text-[13px] font-bold text-muted disabled:opacity-60"
+          >
+            {busy ? "처리 중…" : "운동 종료"}
+          </button>
+        )}
       </div>
     </div>
   );

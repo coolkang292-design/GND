@@ -46,3 +46,67 @@ export function advanceFocusAfterComplete(
   }
   return current;
 }
+
+// ── 세트 단위 초점 (2026-08-04, 사용자 목업) ──────────────────────
+//
+// 목업은 `현재 세트 1 / 5`처럼 세트 하나를 보여준다. 종목만이 아니라 세트까지
+// 가리켜야 하므로 좌표가 둘이다.
+
+export type SetFocus = { exerciseIndex: number; setIndex: number };
+
+const ORIGIN: SetFocus = { exerciseIndex: 0, setIndex: 0 };
+
+/** 종목·세트를 지워 좌표가 범위를 벗어나도 화면이 깨지지 않게 당긴다 */
+export function clampSetFocus(
+  exercises: FocusExercise[],
+  focus: SetFocus,
+): SetFocus {
+  if (exercises.length === 0) return ORIGIN;
+
+  const exerciseIndex = clampFocusIndex(focus.exerciseIndex, exercises.length);
+  const sets = exercises[exerciseIndex].sets.length;
+  return {
+    exerciseIndex,
+    setIndex: sets === 0 ? 0 : clampFocusIndex(focus.setIndex, sets),
+  };
+}
+
+/**
+ * 세트를 완료한 뒤 어느 세트를 보여줄지.
+ *
+ * 지금 위치 **뒤에서 먼저** 찾고, 뒤가 없으면 앞으로 돌아간다. 순서대로
+ * 진행하는 중이므로 건너뛴 앞 세트보다 다음 세트가 먼저다. 전부 끝났으면
+ * 그 자리에 머문다 — 임의로 튀면 방금 한 기록을 놓친다.
+ */
+export function advanceSetFocus(
+  exercises: FocusExercise[],
+  focus: SetFocus,
+): SetFocus {
+  if (exercises.length === 0) return ORIGIN;
+
+  const current = clampSetFocus(exercises, focus);
+
+  // 1) 같은 종목의 뒤쪽 세트
+  const sets = exercises[current.exerciseIndex].sets;
+  for (let i = current.setIndex + 1; i < sets.length; i++) {
+    if (!sets[i].done) return { exerciseIndex: current.exerciseIndex, setIndex: i };
+  }
+
+  // 2) 뒤 종목 → 앞 종목 순으로 첫 미완료 세트
+  const order = [
+    ...exercises.keys(),
+  ].filter((i) => i !== current.exerciseIndex);
+  const after = order.filter((i) => i > current.exerciseIndex);
+  const before = order.filter((i) => i < current.exerciseIndex);
+  for (const exerciseIndex of [...after, ...before]) {
+    const index = exercises[exerciseIndex].sets.findIndex((set) => !set.done);
+    if (index !== -1) return { exerciseIndex, setIndex: index };
+  }
+
+  // 3) 같은 종목의 앞쪽 세트 (건너뛰고 진행한 경우)
+  for (let i = 0; i < current.setIndex; i++) {
+    if (!sets[i].done) return { exerciseIndex: current.exerciseIndex, setIndex: i };
+  }
+
+  return current;
+}

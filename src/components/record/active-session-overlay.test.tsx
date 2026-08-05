@@ -2,178 +2,349 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { amountFields } from "@/lib/domain/set-input";
 import { ActiveSessionOverlay } from "./active-session-overlay";
 
 afterEach(cleanup);
 
 /**
- * ② 운동 중 큰 팝업 (2026-08-04, 사용자 승인).
+ * ② 운동 중 큰 팝업 — 사용자 목업 기준 재구성 (2026-08-04).
  *
- * 풀스크린 · 운동 시작 시 자동 표시 · **닫기는 종료가 아니라 최소화**다.
- * 닫기=종료로 만들면 오조작 한 번이 세션을 날린다.
+ * 두 상태가 **번갈아** 뜬다: `● 지금 운동 중`(세트 하나 입력) ↔ `● 휴식 중`
+ * (남은 시간 + 다음 운동). 처음엔 종목 카드를 크게 띄웠는데 목업은 **세트 하나**를
+ * 보여주고 휴식도 별도 화면이다.
  *
- * 입력 카드는 `children`으로 받는다 — `ExerciseCard`를 그대로 재사용해야
- * 프리필·볼륨 계산·완료 토글이 두 벌이 되지 않는다.
+ * ⚠️ 탭바는 덮지 않는다(사용자 결정) — 달력·피드로 바로 갈 수 있어야 한다.
  */
-function setup(
-  override: Partial<Parameters<typeof ActiveSessionOverlay>[0]> = {},
-) {
-  const props = {
-    open: true,
-    elapsedLabel: "00:12:34",
-    volumeKg: 480,
-    completedSetCount: 3,
-    paused: false,
-    busy: false,
-    onMinimize: vi.fn(),
-    onFinish: vi.fn(),
-    onCancel: vi.fn(),
-    position: { index: 0, total: 3 },
-    currentName: "벤치 프레스",
-    onPrev: vi.fn(),
-    onNext: vi.fn(),
-    children: <div>운동 카드 자리</div>,
-    ...override,
-  };
-  render(<ActiveSessionOverlay {...props} />);
-  return props;
-}
+const base = {
+  open: true,
+  elapsedLabel: "24:18",
+  paused: false,
+  busy: false,
+  onMinimize: vi.fn(),
+  onCancel: vi.fn(),
+  onFinish: vi.fn(),
+  onChangeAmount: vi.fn(),
+  onCompleteSet: vi.fn(),
+  onLoadLast: vi.fn(),
+  onAdjustRest: vi.fn(),
+  onPickRestPreset: vi.fn(),
+  onStartNext: vi.fn(),
+  isLastPendingSet: false,
+  completionMessage: { headline: "다 했어요", cheer: "응원" },
+};
 
-describe("ActiveSessionOverlay", () => {
-  it("open이 false면 아무것도 그리지 않는다", () => {
-    setup({ open: false });
+const inputProps = {
+  ...base,
+  mode: "input" as const,
+  exerciseName: "데드리프트",
+  setPosition: { index: 0, total: 5 },
+  fields: amountFields("weight", null),
+  values: { weightKg: 40, reps: 11, distanceKm: 0, durationMin: 0 },
+  restSeconds: 60,
+  restPresetSeconds: 60,
+  nextUp: null,
+};
 
-    expect(screen.queryByText("운동 카드 자리")).toBeNull();
+const restProps = {
+  ...base,
+  mode: "rest" as const,
+  exerciseName: "데드리프트",
+  setPosition: { index: 0, total: 5 },
+  fields: amountFields("weight", null),
+  values: { weightKg: 40, reps: 11, distanceKm: 0, durationMin: 0 },
+  restSeconds: 50,
+  restPresetSeconds: 60,
+  nextUp: { exerciseName: "레그프레스", amount: "260kg 15회" } as {
+    exerciseName: string;
+    amount: string;
+  } | null,
+};
+
+const renderInput = (o: Partial<typeof inputProps> = {}) =>
+  render(<ActiveSessionOverlay {...inputProps} {...o} />);
+const renderRest = (o: Partial<typeof restProps> = {}) =>
+  render(<ActiveSessionOverlay {...restProps} {...o} />);
+
+describe("ActiveSessionOverlay — 운동 중(입력) 화면", () => {
+  it("열려 있지 않으면 아무것도 그리지 않는다", () => {
+    renderInput({ open: false });
+    expect(screen.queryByText("데드리프트")).toBeNull();
   });
 
-  it("경과 시간과 완료 볼륨을 크게 보여준다", () => {
-    setup();
+  it("상태 배지·종목명·운동 시간을 보여준다", () => {
+    renderInput();
 
-    expect(screen.getByText("00:12:34")).toBeTruthy();
-    expect(screen.getByText(/480/)).toBeTruthy();
+    expect(screen.getByText(/지금 운동 중/)).toBeTruthy();
+    expect(screen.getByText("데드리프트")).toBeTruthy();
+    expect(screen.getByText(/24:18/)).toBeTruthy();
   });
 
-  it("입력 카드를 children으로 그대로 그린다", () => {
-    setup();
+  it("현재 세트 위치를 보여준다", () => {
+    renderInput({ setPosition: { index: 2, total: 5 } });
 
-    expect(screen.getByText("운동 카드 자리")).toBeTruthy();
+    expect(screen.getByText(/3\s*\/\s*5/)).toBeTruthy();
   });
 
-  it("최소화 버튼은 종료가 아니라 접기다", () => {
-    const { onMinimize, onFinish } = setup();
+  it("웨이트는 무게와 횟수 칸을 그린다", () => {
+    renderInput();
+
+    expect(screen.getByText("무게")).toBeTruthy();
+    expect(screen.getByText("40")).toBeTruthy();
+    expect(screen.getByText("횟수")).toBeTruthy();
+    expect(screen.getByText("11")).toBeTruthy();
+  });
+
+  it("유산소는 같은 틀에 거리·시간 칸으로 바뀐다", () => {
+    renderInput({
+      fields: amountFields("cardio", null),
+      values: { weightKg: 0, reps: 0, distanceKm: 3.5, durationMin: 25 },
+    });
+
+    expect(screen.getByText("거리")).toBeTruthy();
+    expect(screen.getByText("3.5")).toBeTruthy();
+    expect(screen.getByText("시간")).toBeTruthy();
+    expect(screen.queryByText("무게")).toBeNull();
+  });
+
+  it("맨몸 시간형은 시간 한 칸만 그린다", () => {
+    renderInput({
+      fields: amountFields("bodyweight", "time"),
+      values: { weightKg: 0, reps: 0, distanceKm: 0, durationMin: 2 },
+    });
+
+    expect(screen.getByText("시간")).toBeTruthy();
+    expect(screen.queryByText("횟수")).toBeNull();
+  });
+
+  it("– / + 는 그 칸의 기본 증감만큼 바꾼다", () => {
+    const onChangeAmount = vi.fn();
+    renderInput({ onChangeAmount });
+
+    fireEvent.click(screen.getByRole("button", { name: "무게 늘리기" }));
+    expect(onChangeAmount).toHaveBeenCalledWith("weightKg", 42.5);
+
+    fireEvent.click(screen.getByRole("button", { name: "무게 줄이기" }));
+    expect(onChangeAmount).toHaveBeenCalledWith("weightKg", 37.5);
+  });
+
+  it("빠른 조절 칩은 그 값만큼 바꾼다", () => {
+    const onChangeAmount = vi.fn();
+    renderInput({ onChangeAmount });
+
+    fireEvent.click(screen.getByRole("button", { name: "무게 +1" }));
+    expect(onChangeAmount).toHaveBeenCalledWith("weightKg", 41);
+  });
+
+  it("0 아래로는 내려가지 않는다", () => {
+    const onChangeAmount = vi.fn();
+    renderInput({
+      onChangeAmount,
+      values: { weightKg: 1, reps: 0, distanceKm: 0, durationMin: 0 },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "무게 줄이기" }));
+    expect(onChangeAmount).toHaveBeenCalledWith("weightKg", 0);
+  });
+
+  it("운동 완료 버튼이 세트를 기록한다", () => {
+    const onCompleteSet = vi.fn();
+    renderInput({ onCompleteSet });
+
+    fireEvent.click(screen.getByRole("button", { name: /운동 완료/ }));
+    expect(onCompleteSet).toHaveBeenCalled();
+  });
+
+  it("이전 기록 불러오기가 있다", () => {
+    const onLoadLast = vi.fn();
+    renderInput({ onLoadLast });
+
+    fireEvent.click(screen.getByRole("button", { name: /이전 기록 불러오기/ }));
+    expect(onLoadLast).toHaveBeenCalled();
+  });
+
+  it("휴식 화면의 것들은 그리지 않는다", () => {
+    renderInput();
+
+    expect(screen.queryByText(/휴식 중/)).toBeNull();
+    expect(screen.queryByText(/다음 운동 시작/)).toBeNull();
+  });
+});
+
+describe("ActiveSessionOverlay — 휴식 중 화면", () => {
+  it("휴식 배지와 '무엇을 끝냈는지'를 보여준다", () => {
+    renderRest();
+
+    expect(screen.getByText(/휴식 중/)).toBeTruthy();
+    expect(screen.getByText(/데드리프트 완료/)).toBeTruthy();
+  });
+
+  it("남은 시간을 분:초로 크게 보여준다", () => {
+    renderRest({ restSeconds: 50 });
+
+    expect(screen.getByText("00:50")).toBeTruthy();
+  });
+
+  it("– / + 로 10초씩 조절한다", () => {
+    const onAdjustRest = vi.fn();
+    renderRest({ onAdjustRest });
+
+    fireEvent.click(screen.getByRole("button", { name: "휴식 10초 줄이기" }));
+    expect(onAdjustRest).toHaveBeenCalledWith(-10);
+
+    fireEvent.click(screen.getByRole("button", { name: "휴식 10초 늘리기" }));
+    expect(onAdjustRest).toHaveBeenCalledWith(10);
+  });
+
+  it("프리셋 칩 다섯 개를 보여주고 지금 값을 표시한다", () => {
+    renderRest({ restPresetSeconds: 60 });
+
+    for (const label of ["30초", "45초", "1분", "1분 30초", "2분"]) {
+      expect(screen.getByRole("button", { name: label })).toBeTruthy();
+    }
+    expect(
+      screen.getByRole("button", { name: "1분" }).getAttribute("aria-pressed"),
+    ).toBe("true");
+  });
+
+  it("프리셋을 누르면 그 초를 올려 보낸다", () => {
+    const onPickRestPreset = vi.fn();
+    renderRest({ onPickRestPreset });
+
+    fireEvent.click(screen.getByRole("button", { name: "1분 30초" }));
+    expect(onPickRestPreset).toHaveBeenCalledWith(90);
+  });
+
+  it("다음 운동과 그 수량을 보여준다", () => {
+    renderRest();
+
+    // "다음 운동 시작" 버튼과 겹치므로 라벨은 정확히 일치로 잡는다
+    expect(screen.getByText("다음 운동")).toBeTruthy();
+    expect(screen.getByText("레그프레스")).toBeTruthy();
+    expect(screen.getByText(/260kg 15회/)).toBeTruthy();
+  });
+
+  it("다음 운동 시작 버튼이 휴식을 끝낸다", () => {
+    const onStartNext = vi.fn();
+    renderRest({ onStartNext });
+
+    fireEvent.click(screen.getByRole("button", { name: /다음 운동 시작/ }));
+    expect(onStartNext).toHaveBeenCalled();
+  });
+
+  it("남은 세트가 없으면 마무리를 안내한다 — 빈 칸을 남기지 않는다", () => {
+    renderRest({ nextUp: null });
+
+    expect(screen.getByText(/마지막 세트|다 했어요/)).toBeTruthy();
+  });
+
+  it("입력 화면의 것들은 그리지 않는다", () => {
+    renderRest();
+
+    expect(screen.queryByText(/지금 운동 중/)).toBeNull();
+    expect(screen.queryByRole("button", { name: /운동 완료/ })).toBeNull();
+  });
+});
+
+describe("ActiveSessionOverlay — 공통", () => {
+  it("최소화는 종료가 아니다", () => {
+    const onMinimize = vi.fn();
+    const onFinish = vi.fn();
+    renderInput({ onMinimize, onFinish });
 
     fireEvent.click(screen.getByRole("button", { name: /최소화/ }));
-
     expect(onMinimize).toHaveBeenCalled();
     expect(onFinish).not.toHaveBeenCalled();
   });
 
-  it("운동 종료 버튼은 onFinish를 부른다", () => {
-    const { onFinish } = setup();
-
-    fireEvent.click(screen.getByRole("button", { name: /운동 종료/ }));
-
-    expect(onFinish).toHaveBeenCalled();
-  });
-
-  it("취소는 종료와 다른 버튼이다 — 나란히 두지 않는다", () => {
-    const { onCancel, onFinish } = setup();
+  it("취소는 최소화와 다른 버튼이다", () => {
+    const onCancel = vi.fn();
+    renderInput({ onCancel });
 
     fireEvent.click(screen.getByRole("button", { name: /^취소$/ }));
-
     expect(onCancel).toHaveBeenCalled();
-    expect(onFinish).not.toHaveBeenCalled();
   });
 
-  it("처리 중이면 종료 버튼을 잠근다 — 두 번 종료를 막는다", () => {
-    setup({ busy: true });
-
-    const finish = screen.getByRole("button", {
-      name: /운동 종료|처리 중/,
-    }) as HTMLButtonElement;
-    expect(finish.disabled).toBe(true);
-  });
-
-  it("무동작으로 정지 중이면 그 사실을 알린다", () => {
-    setup({ paused: true });
+  it("무동작 정지 중이면 알린다", () => {
+    renderInput({ paused: true });
 
     expect(screen.getByText(/정지/)).toBeTruthy();
   });
 
-  it("휴식 바·피커·정지 모달이 위에 뜰 수 있도록 z-20에 머문다", () => {
-    // RestBar z-30 · 피커 z-40/50 · 정지 모달 z-50보다 아래여야 한다.
-    // 이 값을 올리면 휴식 바가 팝업 뒤로 숨어 카운트다운이 안 보인다.
-    const { container } = render(
-      <ActiveSessionOverlay
-        open
-        elapsedLabel="00:00:01"
-        volumeKg={0}
-        completedSetCount={0}
-        paused={false}
-        busy={false}
-        position={{ index: 0, total: 1 }}
-        currentName="벤치 프레스"
-        onPrev={vi.fn()}
-        onNext={vi.fn()}
-        onMinimize={vi.fn()}
-        onFinish={vi.fn()}
-        onCancel={vi.fn()}
-      >
-        <div />
-      </ActiveSessionOverlay>,
-    );
+  it("탭바를 덮지 않는다 — 화면 전체가 아니라 탭바 위까지만 (사용자 결정)", () => {
+    const { container } = renderInput();
+    const overlay = container.firstElementChild as HTMLElement;
 
-    expect(container.querySelector(".fixed.inset-0.z-20")).toBeTruthy();
+    expect(overlay.className).toContain("inset-x-0");
+    expect(overlay.className).not.toContain("inset-0");
+  });
+
+  it("휴식 바·피커·정지 모달이 위에 뜨도록 z-20에 머문다", () => {
+    const { container } = renderInput();
+
+    expect(container.querySelector(".z-20")).toBeTruthy();
   });
 });
 
 /**
- * 한 종목만 보여준다 (2026-08-04, 사용자 지적으로 수정).
+ * 마지막 세트 안내 + 완료 축하 (2026-08-04, 사용자 요청).
  *
- * 처음엔 전체 목록을 그대로 옮겨 놨는데 "지금 하는 운동에 집중"이 성립하지
- * 않았다. 한 종목만 보이므로 **나머지로 갈 길**이 반드시 있어야 한다 —
- * 없으면 담아 둔 2·3번 종목에 영영 못 간다.
+ * "마지막 세트를 할 때 오늘 계획한 운동을 완료했다는 안내와 응원 메시지를
+ * 보여주고, 마지막 운동을 완료하면 자연스럽게 다음 화면으로 넘어가게."
+ *
+ * ⚠️ 자동으로 종료하지는 않는다 — 운동 종료는 XP·기록을 확정하는 되돌리기 어려운
+ * 동작이라, **주 버튼을 종료로 바꿔** 자연스럽게 흐르게 하되 누르는 건 사용자다.
  */
-describe("ActiveSessionOverlay — 한 종목만 보여주기", () => {
-  it("지금 종목의 이름과 위치를 보여준다", () => {
-    setup({ position: { index: 1, total: 3 }, currentName: "스쿼트" });
+describe("ActiveSessionOverlay — 마지막 세트와 마무리", () => {
+  it("입력 화면에서 마지막 남은 세트면 그 사실을 알린다", () => {
+    renderInput({ isLastPendingSet: true });
 
-    expect(screen.getByText("스쿼트")).toBeTruthy();
-    expect(screen.getByText("2 / 3")).toBeTruthy();
+    expect(screen.getByText(/마지막 세트/)).toBeTruthy();
   });
 
-  it("이전·다음 종목으로 갈 수 있다", () => {
-    const { onPrev, onNext } = setup({ position: { index: 1, total: 3 } });
+  it("마지막이 아니면 그 표시가 없다", () => {
+    renderInput({ isLastPendingSet: false });
 
-    fireEvent.click(screen.getByRole("button", { name: "이전 종목" }));
-    expect(onPrev).toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole("button", { name: "다음 종목" }));
-    expect(onNext).toHaveBeenCalled();
+    expect(screen.queryByText(/마지막 세트/)).toBeNull();
   });
 
-  it("첫 종목에서는 이전이 잠긴다", () => {
-    setup({ position: { index: 0, total: 3 } });
+  it("마지막 세트를 끝내면 완료 안내와 응원을 보여준다", () => {
+    renderRest({
+      nextUp: null,
+      completionMessage: {
+        headline: "오늘 계획한 운동을 다 했어요 🎉",
+        cheer: "담은 거 하나도 안 남기셨네요. 오늘의 승자십니다 🏆",
+      },
+    });
 
-    expect(
-      (screen.getByRole("button", { name: "이전 종목" }) as HTMLButtonElement)
-        .disabled,
-    ).toBe(true);
+    expect(screen.getByText(/오늘 계획한 운동을 다 했어요/)).toBeTruthy();
+    expect(screen.getByText(/오늘의 승자십니다/)).toBeTruthy();
   });
 
-  it("마지막 종목에서는 다음이 잠긴다", () => {
-    setup({ position: { index: 2, total: 3 } });
+  it("다 끝냈으면 주 버튼이 '운동 종료하고 결과 보기'가 된다", () => {
+    const onFinish = vi.fn();
+    renderRest({
+      nextUp: null,
+      completionMessage: {
+        headline: "오늘 계획한 운동을 다 했어요 🎉",
+        cheer: "응원",
+      },
+      onFinish,
+    });
 
-    expect(
-      (screen.getByRole("button", { name: "다음 종목" }) as HTMLButtonElement)
-        .disabled,
-    ).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: /운동 종료하고 결과 보기/ }));
+    expect(onFinish).toHaveBeenCalled();
   });
 
-  it("종목이 하나뿐이면 이동 버튼을 아예 그리지 않는다", () => {
-    setup({ position: { index: 0, total: 1 } });
+  it("아직 남은 운동이 있으면 완료 안내를 띄우지 않는다", () => {
+    renderRest({
+      completionMessage: {
+        headline: "오늘 계획한 운동을 다 했어요 🎉",
+        cheer: "응원",
+      },
+    });
 
-    expect(screen.queryByRole("button", { name: "이전 종목" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "다음 종목" })).toBeNull();
+    expect(screen.queryByText(/다 했어요/)).toBeNull();
+    expect(screen.getByRole("button", { name: /다음 운동 시작/ })).toBeTruthy();
   });
 });

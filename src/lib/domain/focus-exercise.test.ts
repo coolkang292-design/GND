@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   advanceFocusAfterComplete,
+  advanceSetFocus,
   clampFocusIndex,
+  clampSetFocus,
   type FocusExercise,
 } from "./focus-exercise";
 
@@ -73,5 +75,94 @@ describe("advanceFocusAfterComplete — 세트를 완료한 뒤 어디로 가는
 
   it("종목이 없으면 0", () => {
     expect(advanceFocusAfterComplete([], 0)).toBe(0);
+  });
+});
+
+/**
+ * 세트 단위 이동 (2026-08-04, 사용자 목업).
+ *
+ * 목업은 `현재 세트 1 / 5`처럼 **세트 하나**를 보여준다. 세트를 완료하면
+ * 다음 미완료 세트로 옮겨 가야 한다 — 종목 안에서 먼저, 없으면 다음 종목으로.
+ */
+describe("advanceSetFocus — 세트를 완료한 뒤 어느 세트로", () => {
+  it("같은 종목의 다음 미완료 세트로 간다", () => {
+    const list = [ex("벤치", [true, false, false])];
+
+    expect(advanceSetFocus(list, { exerciseIndex: 0, setIndex: 0 })).toEqual({
+      exerciseIndex: 0,
+      setIndex: 1,
+    });
+  });
+
+  it("앞쪽에 건너뛴 미완료가 있어도 뒤부터 찾는다 — 순서대로 진행 중이다", () => {
+    const list = [ex("벤치", [false, true, false])];
+
+    expect(advanceSetFocus(list, { exerciseIndex: 0, setIndex: 1 })).toEqual({
+      exerciseIndex: 0,
+      setIndex: 2,
+    });
+  });
+
+  it("종목을 다 끝내면 다음 종목의 첫 미완료 세트로 간다", () => {
+    const list = [ex("벤치", [true, true]), ex("스쿼트", [false, false])];
+
+    expect(advanceSetFocus(list, { exerciseIndex: 0, setIndex: 1 })).toEqual({
+      exerciseIndex: 1,
+      setIndex: 0,
+    });
+  });
+
+  it("뒤가 다 끝났으면 앞쪽에 남은 것으로 돌아간다", () => {
+    const list = [ex("벤치", [false]), ex("스쿼트", [true])];
+
+    expect(advanceSetFocus(list, { exerciseIndex: 1, setIndex: 0 })).toEqual({
+      exerciseIndex: 0,
+      setIndex: 0,
+    });
+  });
+
+  it("전부 끝났으면 그 자리에 머문다 — 임의로 튀지 않는다", () => {
+    const list = [ex("벤치", [true]), ex("스쿼트", [true])];
+
+    expect(advanceSetFocus(list, { exerciseIndex: 1, setIndex: 0 })).toEqual({
+      exerciseIndex: 1,
+      setIndex: 0,
+    });
+  });
+
+  it("종목이 없으면 0,0", () => {
+    expect(advanceSetFocus([], { exerciseIndex: 3, setIndex: 2 })).toEqual({
+      exerciseIndex: 0,
+      setIndex: 0,
+    });
+  });
+});
+
+describe("clampSetFocus — 종목·세트를 지워도 범위를 벗어나지 않는다", () => {
+  it("세트를 줄이면 마지막 세트로 당긴다", () => {
+    const list = [ex("벤치", [false, false])];
+
+    expect(clampSetFocus(list, { exerciseIndex: 0, setIndex: 5 })).toEqual({
+      exerciseIndex: 0,
+      setIndex: 1,
+    });
+  });
+
+  it("종목을 지우면 마지막 종목으로 당긴다", () => {
+    const list = [ex("벤치", [false])];
+
+    expect(clampSetFocus(list, { exerciseIndex: 4, setIndex: 0 })).toEqual({
+      exerciseIndex: 0,
+      setIndex: 0,
+    });
+  });
+
+  it("세트가 없는 종목이면 0", () => {
+    const list = [ex("빈 종목", [])];
+
+    expect(clampSetFocus(list, { exerciseIndex: 0, setIndex: 3 })).toEqual({
+      exerciseIndex: 0,
+      setIndex: 0,
+    });
   });
 });
