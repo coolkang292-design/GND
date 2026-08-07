@@ -7,6 +7,7 @@ import {
   TABATA_TRACKS,
   asTabataMinutes,
   tabataDraftExercises,
+  tabataResumeFromSession,
   tabataPickFromNames,
   tabataRepsForMinutes,
   tabataTrackForMinutes,
@@ -161,6 +162,67 @@ describe("tabataPickFromNames", () => {
   it("하나도 못 찾으면 빈 배열 — 부르는 쪽이 시트를 닫지 않고 안내한다", () => {
     expect(tabataPickFromNames(["없는운동"], catalog)).toEqual([]);
     expect(tabataPickFromNames([], catalog)).toEqual([]);
+  });
+});
+
+describe("tabataResumeFromSession — 지난 기록을 타바타로 되살린다 (2026-08-07)", () => {
+  const catalog = [
+    catalogItem("점프 스쿼트"),
+    catalogItem("마운틴 클라이머"),
+    catalogItem("타이슨 푸시업"),
+    catalogItem("벤드 레터럴 레이즈"),
+    catalogItem("벤치프레스"),
+  ];
+  const names = [
+    "점프 스쿼트",
+    "마운틴 클라이머",
+    "타이슨 푸시업",
+    "벤드 레터럴 레이즈",
+  ];
+
+  it("타바타 세션이면 코스와 구성 운동을 돌려준다", () => {
+    /*
+      원래 버그: 기록 탭의 '지난 운동 불러오기'로 지난 타바타를 고르면 음원도
+      코스도 없는 **맨몸 운동 4개**가 목록에 담겼다. 타바타를 다시 하려면
+      타바타 시트를 따로 열어 4개를 새로 골라야 했다.
+    */
+    const out = tabataResumeFromSession({
+      session: { tabataMinutes: 8, exerciseNames: names },
+      catalog,
+    });
+    expect(out?.minutes).toBe(8);
+    expect(out?.picked.map((p) => p.name)).toEqual(names);
+  });
+
+  it("일반 운동 세션이면 null — 부르는 쪽이 평소대로 목록에 담는다", () => {
+    expect(
+      tabataResumeFromSession({
+        session: { tabataMinutes: null, exerciseNames: ["벤치프레스"] },
+        catalog,
+      }),
+    ).toBeNull();
+  });
+
+  it("아는 코스가 아니면 null", () => {
+    expect(
+      tabataResumeFromSession({
+        session: { tabataMinutes: 5, exerciseNames: names },
+        catalog,
+      }),
+    ).toBeNull();
+  });
+
+  it("종목을 하나도 못 찾으면 null — 빈 타바타 시트를 열지 않는다", () => {
+    expect(
+      tabataResumeFromSession({
+        session: { tabataMinutes: 4, exerciseNames: ["지워진운동"] },
+        catalog,
+      }),
+    ).toBeNull();
+  });
+
+  it("목록에 없는 세션이면 null", () => {
+    expect(tabataResumeFromSession({ session: undefined, catalog })).toBeNull();
   });
 });
 

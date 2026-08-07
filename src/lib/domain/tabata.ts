@@ -46,6 +46,30 @@ export function tabataTrackForMinutes(minutes: number): TabataTrack | null {
 }
 
 /**
+ * 지난 기록을 **타바타로 되살릴지** 판정한다 (2026-08-07).
+ *
+ * 원래 버그: 기록 탭의 '지난 운동 불러오기'로 지난 타바타를 고르면 음원도
+ * 코스도 없는 **맨몸 운동 4개**가 목록에 담겼다. 예정표는 코스를 싣고 다니는데
+ * (0059) 이 경로만 안 실어서, 같은 기록을 어디서 부르느냐에 따라 결과가
+ * 달랐다.
+ *
+ * **null이면 타바타가 아니다** — 부르는 쪽은 평소대로 목록에 담으면 된다.
+ * 종목을 하나도 못 찾을 때도 null이다: 빈 타바타 시트를 열어 놓고 4개를 다시
+ * 고르게 하느니, 이름만이라도 목록에 담기는 편이 낫다.
+ */
+export function tabataResumeFromSession(input: {
+  session:
+    | { tabataMinutes: number | null; exerciseNames: readonly string[] }
+    | undefined;
+  catalog: CatalogExercise[];
+}): { minutes: TabataMinutes; picked: CatalogExercise[] } | null {
+  const minutes = asTabataMinutes(input.session?.tabataMinutes);
+  if (!minutes || !input.session) return null;
+  const picked = tabataPickFromNames(input.session.exerciseNames, input.catalog);
+  return picked.length > 0 ? { minutes, picked } : null;
+}
+
+/**
  * DB·localStorage에서 온 값을 코스 분수로 받아들일지 판정한다 (2026-08-05).
  *
  * 음원이 없는 분수를 통과시키면 타바타 시트가 코스를 못 고른 채 열린다.

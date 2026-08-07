@@ -76,6 +76,7 @@ import {
   asTabataMinutes,
   tabataDraftExercises,
   tabataPickFromNames,
+  tabataResumeFromSession,
   type TabataMinutes,
 } from "@/lib/domain/tabata";
 import { moveItem } from "@/lib/domain/reorder";
@@ -183,8 +184,11 @@ type CompletedResult = {
 type TabataPrefill = {
   picked: CatalogExercise[];
   minutes: TabataMinutes;
-  /** 완료하면 지울 예정표 id */
-  planId: string;
+  /**
+   * 완료하면 지울 예정표 id — **예정표에서 연 경우에만** 있다 (0059).
+   * 지난 기록에서 되살린 타바타는 지울 계획이 없으므로 생략한다.
+   */
+  planId?: string;
 };
 
 function errorMessage(e: unknown): string {
@@ -643,6 +647,26 @@ function WorkoutScreen({ userId }: { userId: string }) {
   }
 
   async function addPastSession(sessionId: string): Promise<boolean> {
+    /*
+      지난 **타바타**는 타바타로 되살린다 (2026-08-07, 사용자 지시).
+
+      예전에는 여기서도 종목만 뽑아 담아서, 지난 타바타를 부르면 음원도 코스도
+      없는 맨몸 운동 4개가 됐다. 예정표(0059)는 코스를 싣고 다니는데 이 경로만
+      안 실어서 **같은 기록을 어디서 부르느냐에 따라 결과가 달랐다.**
+
+      타바타가 아니거나 종목을 못 찾으면 `null`이라 아래 평소 경로로 흘러간다.
+    */
+    const resume = tabataResumeFromSession({
+      session: pastSessions.find((s) => s.id === sessionId),
+      catalog,
+    });
+    if (resume) {
+      setPickerOpen(false);
+      setSubTab("workout");
+      void openTabataSheet({ picked: resume.picked, minutes: resume.minutes });
+      return true;
+    }
+
     try {
       const items = await getSessionExerciseStructure(sessionId);
       if (items.length === 0) {
