@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useState } from "react";
 import {
   GoldLineIcon,
   type GoldIconName,
@@ -209,14 +210,7 @@ export function RecommendedPicker({
                     부위 공통 이미지를 채우면 카드끼리 구별이 안 돼서
                     세로 공간만 먹는다 */}
                 {thumb && (
-                  <Image
-                    src={`/exercise-thumbs/${thumb}.png`}
-                    alt=""
-                    width={64}
-                    height={64}
-                    sizes="64px"
-                    className="h-16 w-16 flex-none rounded-card-sm object-cover"
-                  />
+                  <ExerciseThumbnail file={thumb} exerciseName={item.name} />
                 )}
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-extrabold">
@@ -284,5 +278,30 @@ export function RecommendedPicker({
         </button>
       </div>
     </div>
+  );
+}
+
+function ExerciseThumbnail({
+  file,
+  exerciseName,
+}: {
+  file: string;
+  exerciseName: string;
+}) {
+  const [failed, setFailed] = useState(false);
+
+  if (failed) return null;
+
+  return (
+    <Image
+      src={`/exercise-thumbs/${file}`}
+      alt=""
+      width={64}
+      height={64}
+      sizes="64px"
+      data-exercise-thumbnail={exerciseName}
+      onError={() => setFailed(true)}
+      className="h-16 w-16 flex-none rounded-card-sm object-cover"
+    />
   );
 }

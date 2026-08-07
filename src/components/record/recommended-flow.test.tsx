@@ -257,6 +257,51 @@ describe("상황별 추천 (2026-08-06)", () => {
     expect(getByText("기구가 움직임을 잡아줘서 처음 시작하기 쉬워요")).toBeTruthy();
   });
 
+  it("'처음 운동해요' 추천 4개에 서로 다른 썸네일이 나온다", () => {
+    const { container } = situation(null);
+    const thumbnails = Array.from(
+      container.querySelectorAll<HTMLImageElement>("[data-exercise-thumbnail]"),
+    );
+
+    expect(thumbnails).toHaveLength(4);
+    expect(
+      thumbnails.map((image) => image.dataset.exerciseThumbnail),
+    ).toEqual([
+      "체스트프레스 머신",
+      "랫풀다운",
+      "레그프레스",
+      "숄더프레스",
+    ]);
+
+    const expectedPaths = [
+      "/exercise-thumbs/chest-press-machine.webp",
+      "/exercise-thumbs/lat-pulldown.webp",
+      "/exercise-thumbs/leg-press.webp",
+      "/exercise-thumbs/shoulder-press.webp",
+    ];
+    thumbnails.forEach((image, index) => {
+      const src = decodeURIComponent(image.getAttribute("src") ?? "");
+      expect(src).toContain(expectedPaths[index]);
+      expect(src).not.toContain(".webp.png");
+    });
+  });
+
+  it("썸네일 하나가 실패해도 그 운동의 텍스트와 추가 버튼은 남는다", () => {
+    const { container, getAllByText, getByText } = situation(null);
+    const chestThumbnail = container.querySelector<HTMLImageElement>(
+      '[data-exercise-thumbnail="체스트프레스 머신"]',
+    );
+
+    expect(chestThumbnail).toBeTruthy();
+    fireEvent.error(chestThumbnail!);
+
+    expect(
+      container.querySelector('[data-exercise-thumbnail="체스트프레스 머신"]'),
+    ).toBeNull();
+    expect(getByText("체스트프레스 머신")).toBeTruthy();
+    expect(getAllByText("＋ 추가")).toHaveLength(4);
+  });
+
   it("상황을 바꾸면 목록이 갈린다", () => {
     const { getByText, queryByText } = situation(null);
     fireEvent.click(getByText("유산소만 할래요"));

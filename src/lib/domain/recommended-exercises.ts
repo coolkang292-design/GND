@@ -217,8 +217,8 @@ export type ResolvedRecommendation = {
  *
  * **선택 사항이다.** 없는 이름은 카드가 텍스트만으로 성립한다 — 이미지
  * 제작이 코드 일정을 막지 않게 하려는 것이다. 파일을 넣고 여기 한 줄씩
- * 채우면 그때부터 그려진다. 자산 규약은 `public/badges/`와 같다(png,
- * 정사각형, 개당 50KB 이하).
+ * 채우면 그때부터 그려진다. 자산 규약은 `.webp`, 최대 384x384,
+ * 개당 70KB 이하다.
  */
 export const EXERCISE_THUMBS: Record<string, string> = {
   "체스트프레스 머신": "chest-press-machine.webp",
