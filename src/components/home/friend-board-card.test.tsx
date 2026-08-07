@@ -194,7 +194,7 @@ describe("FriendBoardBody — 네 숫자와 상태", () => {
     expect(screen.getByText("0일")).toBeTruthy();
   });
 
-  it("지표 줄은 줄바꿈 없이 3칸으로 고정한다", () => {
+  it("지표 줄은 줄바꿈 없이 4칸으로 고정한다 — 상태·운동·시간·연속", () => {
     const { container } = render(
       <FriendBoardBody
         myRow={null}
@@ -212,9 +212,9 @@ describe("FriendBoardBody — 네 숫자와 상태", () => {
         onToggleExpand={vi.fn()}
       />,
     );
-    const grids = container.querySelectorAll(".grid-cols-3");
+    const grids = container.querySelectorAll("div.grid");
     expect(grids).toHaveLength(2); // 친구 수만큼, 닉네임 길이와 무관
-    grids.forEach((g) => expect(g.children).toHaveLength(3));
+    grids.forEach((g) => expect(g.children).toHaveLength(4));
     expect(container.innerHTML).not.toContain("flex-wrap");
   });
 
@@ -262,7 +262,140 @@ describe("FriendBoardBody — 네 숫자와 상태", () => {
 
   it("레벨을 total_xp로 계산해 표시한다", () => {
     renderBody(rowsOf([{ id: "u1", nickname: "친구하나", totalXp: 0 }]));
-    expect(screen.getByText("Lv.1")).toBeTruthy();
+    expect(screen.getByText("개노답 Lv.1")).toBeTruthy();
+  });
+
+  /**
+   * 2026-08-08 사용자 지시 — "친구 리스트에 지금 단계 즉 개노답 단계인지
+   * 눈떴개 단계인지도 표시해줘". 설계 §6.
+   *
+   * ⚠️ 단계명을 **문자열 그대로** 단언한다. `getLevelProgress(...).stageName`으로
+   * 기대값을 만들면 그 함수가 빈 문자열을 돌려줘도 통과한다 — 화면에서 단계가
+   * 사라진 것을 잡지 못한다.
+   *
+   * ⚠️ 순서는 **단계명 → 레벨**이다 (사용자 지시 "개노답 LV2 이 순으로").
+   */
+  it("단계명을 앞, 레벨을 뒤에 한 알약으로 적는다 — 단계는 레벨과 따로 움직인다", () => {
+    // 1000 XP = Lv.6 → 6~10레벨은 2단계 '눈떴개'. Lv.5까지가 '개노답'이다.
+    renderBody(rowsOf([{ id: "u1", nickname: "친구하나", totalXp: 1000 }]));
+    expect(screen.getByText("눈떴개 Lv.6")).toBeTruthy();
+    // 레벨만 있던 옛 표기가 남아 있으면 실패한다
+    expect(screen.queryByText("Lv.6")).toBeNull();
+  });
+
+  /**
+   * 2026-08-08 실측으로 확정한 **레이아웃 불변식**.
+   *
+   * 이름 줄은 `flex`이고 닉네임만 `flex-1`이라, 같은 줄에 무엇을 더 놓든 닉네임이
+   * 그만큼 양보한다. 375px 실측(닉네임이 온전하려면 내 행 82px, 친구 행 81px):
+   *
+   * | 이름 줄 구성 | 내 행 | 친구 행 |
+   * |---|---|---|
+   * | 닉네임+단계+상태+콕 | 46 | **0** ← 닉네임이 사라진다 |
+   * | 닉네임+단계+상태    | 50 | 68 |
+   * | 닉네임+단계+콕+`›`  | 82 | 75 |
+   * | 닉네임+단계+콕      | 82 | **81** ← 지금 |
+   *
+   * jsdom에는 레이아웃이 없어 폭을 직접 잴 수 없다. 대신 **원인이 되는 구조**를
+   * 고정한다 — 상태가 이름 줄로 돌아오거나 `›`가 되살아나면 실패한다.
+   */
+  it("이름 줄에는 닉네임·나·단계·콕만 둔다 — 상태와 › 를 넣지 않는다", () => {
+    renderBody(rowsOf([{ id: "u1", nickname: "아주아주긴닉네임입니다" }]));
+    const nameRow = screen.getByLabelText("아주아주긴닉네임입니다 성과 보기")
+      .parentElement!;
+    // 상태는 지표 줄로 갔다
+    expect(nameRow.contains(screen.getByText("운동 전"))).toBe(false);
+    // 콕은 이름 줄에 **있다** (2026-08-08 사용자 지시 "찌름은 상단으로")
+    expect(
+      nameRow.contains(screen.getByLabelText("아주아주긴닉네임입니다 찌르기")),
+    ).toBe(true);
+    // 단계 알약도 이름 줄에 있다
+    expect(nameRow.contains(screen.getByText("개노답 Lv.1"))).toBe(true);
+    // 장식용 `›`는 없다 — 그 8px이 닉네임 마지막 글자 몫이다
+    expect(nameRow.textContent).not.toContain("›");
+  });
+
+  /**
+   * 콕은 **버튼의 형제**여야 한다. 이름 줄 안(`<button>` 내부)에 넣으면 버튼이
+   * 중첩되고, 콕을 눌러도 성과 시트가 함께 열린다.
+   */
+  it("콕 버튼을 성과 보기 버튼 안에 넣지 않는다 — 버튼 중첩 금지", () => {
+    renderBody(rowsOf([{ id: "u1", nickname: "친구하나" }]));
+    const selectBtn = screen.getByLabelText("친구하나 성과 보기");
+    expect(selectBtn.contains(screen.getByLabelText("친구하나 찌르기"))).toBe(
+      false,
+    );
+  });
+
+  /**
+   * 상태는 **지표 줄의 첫 칸**이다 (2026-08-08 사용자 지시 "운동 상태는 위로 올리고").
+   *
+   * ⚠️ 문구가 `완료`다. `오늘 완료`는 이 칸에서 18px 잘렸고 사용자가 화면을 보고
+   * 줄이라고 지시했다. 되살리면 다시 잘린다.
+   */
+  it("상태를 지표 줄 첫 칸에 넣는다 — 4칸 고정, 문구는 '완료'", () => {
+    const { container } = render(
+      <FriendBoardBody
+        myRow={null}
+        rows={rowsOf([{ id: "u1", nickname: "친구하나" }], {
+          sessions: [
+            {
+              userId: "u1",
+              completedAt: "2026-08-07T02:00:00Z",
+              durationMinutes: 30,
+            },
+          ],
+        })}
+        poked={new Set()}
+        iWorkedOut
+        expanded
+        truncated={false}
+        pokingId={null}
+        onSelect={vi.fn()}
+        onPoke={vi.fn()}
+        onToggleExpand={vi.fn()}
+      />,
+    );
+    const grid = container.querySelector("div.grid")!;
+    expect(grid.children).toHaveLength(4);
+    // 첫 칸이 상태다 — 순서가 바뀌면 실패한다
+    expect(grid.children[0].textContent).toBe("상태완료");
+    // 잘리던 옛 문구가 남아 있으면 실패
+    expect(container.textContent).not.toContain("오늘 완료");
+  });
+
+  /**
+   * 콕은 **친구 행에만** 있고, 내 행에는 어떤 모양으로도 없다.
+   * 별도 줄을 두지 않으므로(2026-08-08) 내 행과 친구 행의 높이가 서로 같다 —
+   * 실측 152px / 152px.
+   */
+  it("내 행에는 콕이 아무 모양으로도 없다 — 자기 자신은 찌를 수 없다", () => {
+    const { container } = render(
+      <FriendBoardBody
+        myRow={myRowOf({ nickname: "나야" })}
+        rows={rowsOf([
+          { id: "u1", nickname: "찔렀음" },
+          { id: "u2", nickname: "아직" },
+        ])}
+        poked={new Set(["u1"])}
+        iWorkedOut
+        expanded
+        truncated={false}
+        pokingId={null}
+        onSelect={vi.fn()}
+        onPoke={vi.fn()}
+        onToggleExpand={vi.fn()}
+      />,
+    );
+    expect(screen.getByLabelText("찔렀음 찌름 완료")).toBeTruthy();
+    expect(screen.getByLabelText("아직 찌르기")).toBeTruthy();
+    expect(screen.queryByLabelText("나야 찌르기")).toBeNull();
+    expect(screen.queryByLabelText("나야 찌름 완료")).toBeNull();
+    // 행은 3개(나 + 친구 2), 콕 요소는 **2개**
+    expect(screen.getAllByRole("listitem")).toHaveLength(3);
+    expect(
+      container.querySelectorAll('[aria-label$="찌르기"], [aria-label$="찌름 완료"]'),
+    ).toHaveLength(2);
   });
 
   /** 2026-08-07 사용자 요청 — 프로필 이모지가 아니라 현재 레벨의 캐릭터 */
@@ -309,13 +442,20 @@ describe("FriendBoardBody — 네 숫자와 상태", () => {
       ),
       { expanded: true },
     );
-    expect(screen.getByText("오늘 완료")).toBeTruthy();
+    expect(screen.getByText("완료")).toBeTruthy();
     expect(screen.getByText("운동 중")).toBeTruthy();
     expect(screen.getByText("운동 전")).toBeTruthy();
   });
 
-  /** 색만으로 구별하면 색을 못 보는 사람에게 상태가 사라진다 */
-  it("상태를 색 점만이 아니라 글자로도 적는다", () => {
+  /**
+   * 색만으로 구별하면 색을 못 보는 사람에게 상태가 사라진다.
+   *
+   * ⚠️ 2026-08-08에 **색 점을 없앴다.** 상태가 지표 줄로 옮겨 가면서 `상태` 라벨 +
+   * 값이라는 다른 세 칸과 같은 모양이 됐고, 좁은 칸에 점까지 넣으면 값이 잘린다.
+   * 접근성 요구(색 말고 글자로도 말한다)는 **`상태` 라벨과 값 글자**가 충족한다 —
+   * 점은 그 요구를 만족시키는 유일한 수단이 아니었다.
+   */
+  it("상태를 색만이 아니라 라벨+글자로 적는다", () => {
     const { container } = render(
       <FriendBoardBody
         myRow={null}
@@ -330,8 +470,9 @@ describe("FriendBoardBody — 네 숫자와 상태", () => {
         onToggleExpand={vi.fn()}
       />,
     );
-    // 점은 장식이라 스크린리더에서 빠진다
-    expect(container.querySelector("[aria-hidden]")).toBeTruthy();
+    const statusCell = container.querySelector("div.grid")!.children[0];
+    // 무엇에 대한 값인지(`상태`)와 값 자체(`운동 전`)가 **둘 다 글자**로 있다
+    expect(statusCell.textContent).toBe("상태운동 전");
     expect(screen.getByText("운동 전")).toBeTruthy();
   });
 });
@@ -484,11 +625,11 @@ describe("내 행 — 맨 위에 고정, 콕은 없다", () => {
         badges: [6, ["streak_3"]],
       }),
     });
-    expect(screen.getByText("Lv.4")).toBeTruthy();
+    expect(screen.getByText("개노답 Lv.4")).toBeTruthy();
     expect(screen.getByText("1회")).toBeTruthy();
     expect(screen.getByText("30분")).toBeTruthy();
     expect(screen.getByText("배지 6개")).toBeTruthy();
-    expect(screen.getByText("오늘 완료")).toBeTruthy();
+    expect(screen.getByText("완료")).toBeTruthy();
   });
 
   it("내 행을 누르면 성과 시트가 열린다 — 친구 행과 같다", () => {

@@ -42,15 +42,24 @@ export function pokeErrorMessage(e: unknown): string {
 }
 
 /**
- * 상태 배지 — 목업의 "● 오늘 완료 / ● 운동 전"을 색 점 + 글자로 옮긴 것.
+ * 상태 배지 — 목업의 "● 오늘 완료 / ● 운동 전"을 색 + 글자로 옮긴 것.
  * 색은 테마 토큰을 그대로 쓴다(good=초록, warn=주황, accent=골드).
- * ⚠️ 색만으로 구별하지 않는다 — 점 옆에 항상 **글자**가 있다.
+ * ⚠️ 색만으로 구별하지 않는다 — 색 옆에 항상 **글자**가 있다.
+ *
+ * ⚠️ 2026-08-08에 이 알약이 **지표 줄의 첫 칸**으로 들어갔다(사용자 지시 "운동 상태는
+ * 위로 올리고"). 이름 줄로 올리는 것도 검토했는데 실측에서 닉네임이 82px 중 50px로
+ * 잘려 못 썼다 — 그 수치는 `FriendRowItem` 주석에 있다.
+ *
+ * ⚠️ `done`이 **`완료`**다. `오늘 완료`는 지표 칸에서 18px 잘렸다(실측) — 사용자가
+ * 화면을 보고 줄이라고 지시했다(2026-08-08). 앞에 `상태` 라벨이 붙어 `상태 완료`로
+ * 읽히므로 "오늘"이 없어도 오늘 상태임이 흐려지지 않는다. 되살리면 다시 잘린다.
+ * `운동 전`·`운동 중`은 첫 칸을 1.25fr로 넓혀서 그대로 들어간다.
  */
 const STATUS_STYLE: Record<
   FriendRow["status"],
   { label: string; className: string }
 > = {
-  done: { label: "오늘 완료", className: "bg-good-weak text-good" },
+  done: { label: "완료", className: "bg-good-weak text-good" },
   active: { label: "운동 중", className: "bg-warn/15 text-warn" },
   idle: { label: "운동 전", className: "bg-surface text-muted" },
 };
@@ -58,12 +67,32 @@ const STATUS_STYLE: Record<
 /**
  * 지표 칩 — `28회 · 21분 · 🏅6 · 🔥5`처럼 이어 붙이면 **각 숫자가 뭔지 알 수 없다**
  * (2026-08-07 사용자 지적). 값마다 무엇을 센 것인지 글자로 적는다.
+ *
+ * `tone`은 상태 칸만 쓴다 — 나머지 세 칸은 색을 입히지 않는다. 다 색칠하면
+ * 상태의 색이 정보를 잃는다.
  */
-function StatChip({ label, value }: { label: string; value: string }) {
+function StatChip({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  /** 칩 배경·글자색을 덮어쓴다. 없으면 기본(회색 바탕 + 본문색) */
+  tone?: string;
+}) {
   return (
-    <span className="flex min-w-0 items-baseline justify-center gap-1 rounded-full bg-surface px-1.5 py-1">
-      <span className="flex-none text-[10px] font-bold text-faint">{label}</span>
-      <span className="truncate text-[11.5px] font-extrabold text-text">
+    <span
+      className={`flex min-w-0 items-baseline justify-center gap-1 rounded-full px-1.5 py-1 ${
+        tone ?? "bg-surface"
+      }`}
+    >
+      <span className="flex-none text-[10px] font-bold text-faint">
+        {label}
+      </span>
+      <span
+        className={`truncate text-[11.5px] font-extrabold ${tone ? "" : "text-text"}`}
+      >
         {value}
       </span>
     </span>
@@ -94,9 +123,26 @@ function FriendRowItem({
 }) {
   return (
     <li className="rounded-card border border-line bg-surface-2 p-3">
+      {/* ⚠️ **상태 알약은 이 줄에 없다** — 지표 줄 첫 칸으로 갔다 (2026-08-08 사용자
+          지시 "운동 상태는 위로 올리고 찌름은 프로필 밑으로", 설계 §6).
+
+          375px 실측이 이 배치의 근거다. 닉네임이 온전히 보이려면 내 행 82px,
+          친구 행 81px가 필요한데 `flex-1`인 닉네임이 남는 폭 전부를 양보한다:
+
+          | 이름 줄 구성 | 내 행 | 친구 행 |
+          |---|---|---|
+          | 닉네임+단계+상태+콕 | 46/82 | **0/81** ← 닉네임이 사라진다 |
+          | 닉네임+단계+상태    | 50/82 | 68/81 |
+          | 닉네임+단계+콕+`›`  | 82/82 | 75/81 |
+          | 닉네임+단계+콕      | 82/82 | **81/81** ← 지금 |
+
+          그래서 상태는 지표 줄로 내리고, 장식용 `›` 화살표는 **뺐다**. 화살표 8px가
+          정확히 마지막 글자 몫이었다. 되돌리려면 먼저 재 보라 —
+          `friend-board-card.test.tsx`가 상태·`›`의 부재를 단언한다.
+
+          ⚠️ 콕 버튼은 이 버튼의 **형제**다. 이름 줄 안(`<button>` 내부)에 넣으면
+          버튼이 중첩된다(크루 카드가 같은 이유로 이렇게 돼 있다). */}
       <div className="flex items-center gap-2.5">
-        {/* ⚠️ 콕 버튼과 형제로 둔다 — 행 전체를 버튼으로 감싸면 버튼이 중첩된다
-            (크루 카드가 같은 이유로 이렇게 돼 있다) */}
         <button
           type="button"
           onClick={() => onSelect(row)}
@@ -125,62 +171,68 @@ function FriendRowItem({
                 나
               </span>
             )}
-            {/* 목업의 골드 알약 — accent(#e8b84b)가 그 색이다 */}
+            {/* 목업의 골드 알약 — accent(#e8b84b)가 그 색이다.
+                ⚠️ **단계명이 앞, 레벨이 뒤**다 (2026-08-08 사용자 지시 —
+                "개노답 LV2 이 순으로"). 순서를 뒤집지 마라.
+                ⚠️ 레벨과 단계를 **한 알약**에 담는다. 둘로 쪼개면 요소가 하나 늘어
+                좁은 폰에서 닉네임이 더 잘린다.
+                단계명은 `row.stageName`(= `getLevelProgress`)이라 성장 카드·프로필
+                시트와 같은 원천이다. 조회가 추가로 나가지 않는다. */}
             <span className="flex-none rounded-full border border-accent/40 bg-accent-weak px-1.5 py-[1px] text-[10.5px] font-extrabold text-accent">
-              Lv.{row.level}
-            </span>
-            <span aria-hidden className="flex-none text-[11px] text-faint">
-              ›
+              {row.stageName} Lv.{row.level}
             </span>
           </span>
         </button>
 
-        <span className="flex flex-none items-center gap-1.5">
-          <span
-            className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-extrabold ${STATUS_STYLE[row.status].className}`}
-          >
-            <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-current" />
-            {STATUS_STYLE[row.status].label}
-          </span>
-          {/* ⚠️ 내 행에는 콕이 **아무 모양으로도** 없다 — 버튼도, "✅ 찌름"도.
-              자기 자신은 찌를 수 없다(2026-08-07 사용자 지시). 서버 `poke_user`도
-              막지만, 누를 수 없는 버튼을 그려 놓고 에러 토스트로 알리는 것은
-              화면이 거짓말을 하는 것이다.
+        {/* ⚠️ 내 행에는 콕이 **아무 모양으로도** 없다 — 버튼도, "✅ 찌름"도.
+            자기 자신은 찌를 수 없다(2026-08-07 사용자 지시). 서버 `poke_user`도
+            막지만, 누를 수 없는 버튼을 그려 놓고 에러 토스트로 알리는 것은
+            화면이 거짓말을 하는 것이다.
+            `flex-none`이 아니라 자리 자체가 없으므로, 내 행에서는 닉네임이 그만큼
+            더 넓어진다(82/82).
 
-              ⚠️ 상대의 오늘 운동 여부로는 버튼을 숨기지 않는다 (2026-08-07 사용자 지시).
-              서버 `poke_user`에 그런 규칙이 없다 — 0028이 건 조건은 *내가* 오늘
-              했는가 하나뿐이다. 옛 크루 카드의 화면 규칙을 그대로 옮겼던 탓에
-              **오늘 운동을 마친 친구는 영영 못 찌르는** 상태였다. */}
-          {row.isMe ? null : poked.has(row.userId) ? (
-            <span
-              aria-label={`${row.nickname} 찌름 완료`}
-              className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-bold text-faint opacity-70"
-            >
-              ✅ 찌름
-            </span>
-          ) : (
-            <button
-              type="button"
-              onClick={() => onPoke(row)}
-              disabled={!iWorkedOut || pokingId === row.userId}
-              aria-label={`${row.nickname} 찌르기`}
-              className={`rounded-full px-2.5 py-1 text-[11px] font-extrabold ${
-                iWorkedOut
-                  ? "bg-accent text-accent-ink"
-                  : "bg-surface text-faint opacity-60"
-              }`}
-            >
-              👉 콕
-            </button>
-          )}
-        </span>
+            ⚠️ 상대의 오늘 운동 여부로는 버튼을 숨기지 않는다 (2026-08-07 사용자 지시).
+            서버 `poke_user`에 그런 규칙이 없다 — 0028이 건 조건은 *내가* 오늘
+            했는가 하나뿐이다. 옛 크루 카드의 화면 규칙을 그대로 옮겼던 탓에
+            **오늘 운동을 마친 친구는 영영 못 찌르는** 상태였다. */}
+        {row.isMe ? null : poked.has(row.userId) ? (
+          <span
+            aria-label={`${row.nickname} 찌름 완료`}
+            className="flex-none rounded-full bg-surface px-2.5 py-1 text-[11px] font-bold text-faint opacity-70"
+          >
+            ✅ 찌름
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onPoke(row)}
+            disabled={!iWorkedOut || pokingId === row.userId}
+            aria-label={`${row.nickname} 찌르기`}
+            className={`flex-none rounded-full px-2.5 py-1 text-[11px] font-extrabold ${
+              iWorkedOut
+                ? "bg-accent text-accent-ink"
+                : "bg-surface text-faint opacity-60"
+            }`}
+          >
+            👉 콕
+          </button>
+        )}
       </div>
 
-      {/* 지표 줄 — **3칸 고정 그리드**다 (2026-08-07 사용자 요청 "일자로 고정").
+      {/* 지표 줄 — **4칸 고정 그리드**다 (2026-08-07 사용자 요청 "일자로 고정",
+          2026-08-08에 상태가 첫 칸으로 들어와 3칸 → 4칸).
           flex-wrap이면 닉네임 길이·값 자릿수에 따라 줄이 밀려 친구마다 행
           높이가 달라진다. 그리드라 같은 칸이 친구끼리도 세로로 맞는다.
-          ⚠️ 연속 0일에도 칩을 **그린다** — 빼면 그 행만 칸이 밀린다. */}
-      <div className="mt-2.5 grid grid-cols-3 gap-1">
+          ⚠️ 연속 0일에도 칩을 **그린다** — 빼면 그 행만 칸이 밀린다.
+          ⚠️ 상태 칸만 색을 입힌다 — 네 칸을 다 색칠하면 상태의 색이 정보를 잃는다.
+          ⚠️ **첫 칸만 1.25배 넓다.** 4등분(68px)이면 `운동 전`이 7px 잘린다(실측).
+             1.25fr로 80px가 되면 세 문구가 모두 들어간다. */}
+      <div className="mt-2.5 grid grid-cols-[1.25fr_1fr_1fr_1fr] gap-1">
+        <StatChip
+          label="상태"
+          value={STATUS_STYLE[row.status].label}
+          tone={STATUS_STYLE[row.status].className}
+        />
         <StatChip label="운동" value={`${row.workoutCount}회`} />
         <StatChip label="시간" value={formatTotalMinutes(row.totalMinutes)} />
         <StatChip label="연속" value={`${row.streak}일`} />
