@@ -1,5 +1,6 @@
 "use client";
 
+import { getLevelProgress } from "@/lib/domain/progression";
 import type { CrewMember, CrewRequest } from "@/lib/domain/crew-link";
 
 /** 받은 요청 + 내 크루 — 표시 전용. 조회·상태는 /crew 페이지가 맡는다. */
@@ -91,8 +92,11 @@ export function CrewList({
                   <span className="block truncate text-[14px] font-extrabold">
                     {m.nickname}
                   </span>
+                  {/* ⚠️ DB 캐시값 currentLevel이 아니라 total_xp로 다시 계산한다.
+                      홈 친구 목록·프로필 시트가 그렇게 하고 있어서(progression.ts:157),
+                      여기만 캐시값을 쓰면 같은 사람이 화면마다 다른 레벨로 보인다. */}
                   <span className="block text-[12px] text-muted">
-                    Lv.{m.currentLevel}
+                    Lv.{getLevelProgress(m.totalXp).currentLevel}
                   </span>
                 </span>
               </button>

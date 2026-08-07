@@ -2,101 +2,49 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
-import { MemberProfileSheet } from "@/components/crew/member-profile-sheet";
-import {
-  createGroup,
-  getCrewProfiles,
-  getMyGroups,
-  joinGroupWithCode,
-} from "@/lib/crew";
+import { createGroup, getMyGroups, joinGroupWithCode } from "@/lib/crew";
 import { normalizeInviteCode } from "@/lib/domain/invite-code";
-import {
-  getMyRecentPokeTargets,
-  getTodaysWorkoutUserIds,
-  pokeUser,
-  SocialError,
-} from "@/lib/social";
-import { todaysWorkoutLookupIds } from "@/lib/domain/crew-poke";
-import type { Group, Profile } from "@/lib/types";
+import type { Group } from "@/lib/types";
 
-/** 홈의 내 크루 카드 — 크루명·멤버·오늘 미운동 찌르기·초대 링크 복사.
- * 크루가 없으면(혼자모드) 만들기/참여 CTA를 대신 보여준다. */
+/**
+ * 홈의 내 크루 카드 — 크루명·초대 링크 복사.
+ * 크루가 없으면(혼자모드) 만들기/참여 CTA를 대신 보여준다.
+ *
+ * ⚠️ **찌르기와 멤버 칩은 2026-08-07에 친구 목록 카드로 옮겼다.**
+ * 설계: `docs/superpowers/specs/2026-08-07-home-friend-board-and-challenge-consolidation-design.md` §6.6
+ *
+ * 되돌리지 마라 — 두 곳에 두면 `poked` 상태가 컴포넌트마다 따로라서, 한쪽에서
+ * 찔러 "✅ 찌름"으로 잠가도 **다른 쪽 버튼은 열린 채로 남는다.** 두 번째로 누르면
+ * 서버가 `poke_cooldown`으로 막아 사용자는 에러 토스트로 그 사실을 알게 된다.
+ * 남기려면 상태를 HomeClient로 끌어올려 두 곳에 같은 값을 내려야 한다.
+ *
+ * 멤버 명단(`getCrewProfiles`)·오늘 운동 여부(`getTodaysWorkoutUserIds`)·
+ * 찌르기 기록(`getMyRecentPokeTargets`) 조회도 같이 사라졌다. 친구 목록 카드가
+ * 같은 값을 이미 갖고 있어서, 홈 전체로 보면 조회가 **줄었다**.
+ */
 export function CrewCard() {
   const { userId, loading, configured } = useAuth();
   const [group, setGroup] = useState<Group | null>(null);
-  const [members, setMembers] = useState<Profile[]>([]);
-  const [workedOut, setWorkedOut] = useState<Set<string>>(new Set());
-  const [notice, setNotice] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [ready, setReady] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [selected, setSelected] = useState<Profile | null>(null);
-  // 24시간 쿨다운에 걸린 대상 — 버튼을 "✅ 찌름"으로 잠근다.
-  //
-  // ⚠ 초기값을 빈 Set으로 두면 안 된다. 앱을 껐다 켤 때마다 기억이 사라져
-  //   이미 찌른 사람도 다시 눌리는 것처럼 보이고, 눌러야 서버가 막는다
-  //   (2026-07-31 사용자 보고). 그래서 load()에서 서버 기록으로 채운다.
-  //   누른 직후 잠그는 건 그대로 유지한다 — 재조회를 기다리면 그 사이 또 누른다.
-  const [poked, setPoked] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!configured || loading || !userId) return;
     let cancelled = false;
 
-    async function load() {
+    void (async () => {
       try {
-        // 그룹은 챌린지·초대 링크 CTA용으로만 남는다. 멤버 목록은 0039부터 크루 연결 기준.
-        const [groups, crew] = await Promise.all([
-          getMyGroups(),
-          getCrewProfiles(userId!),
-        ]);
-        if (cancelled) return;
-        setGroup(groups[0] ?? null);
-        setMembers(crew);
-        // ⚠ 나도 넣어야 한다. getCrewProfiles는 0039부터 본인을 뺀 목록을
-        //   돌려주는데, 그걸 그대로 넘기면 내 운동 기록이 결과에 없어서
-        //   오늘 운동을 마쳐도 콕 버튼이 영원히 흐릿하다 (2026-07-31 실사고).
-        const [done, recentPokes] = await Promise.all([
-          getTodaysWorkoutUserIds(
-            todaysWorkoutLookupIds(userId, crew.map((c) => c.id)),
-          ),
-          // 앱을 다시 켜도 "✅ 찌름"이 유지되게 서버 기록으로 채운다 (0053).
-          getMyRecentPokeTargets(),
-        ]);
-        if (cancelled) return;
-        setWorkedOut(done);
-        // 이 화면에서 방금 찌른 것을 덮어쓰지 않도록 합친다. 재조회가 늦게
-        // 끝나면 낙관적으로 잠근 버튼이 도로 열릴 수 있다.
-        setPoked((prev) => new Set([...prev, ...recentPokes]));
+        const groups = await getMyGroups();
+        if (!cancelled) setGroup(groups[0] ?? null);
       } finally {
         if (!cancelled) setReady(true);
       }
-    }
-    void load();
+    })();
     return () => {
       cancelled = true;
     };
   }, [configured, loading, userId, refreshKey]);
-
-  async function poke(target: Profile) {
-    try {
-      await pokeUser(target.id);
-      setPoked((s) => new Set(s).add(target.id));
-      setNotice(`${target.nickname}님을 콕 찔렀어요 👉`);
-    } catch (e) {
-      const code = e instanceof SocialError ? e.code : null;
-      if (code === "poke_cooldown") {
-        // 이미 24시간 안에 찔렀다 — 버튼을 잠가 다시 못 누르게 한다.
-        setPoked((s) => new Set(s).add(target.id));
-        setNotice("24시간 안엔 한 번만 찌를 수 있어요");
-      } else if (code === "poke_requires_workout") {
-        setNotice("오늘 운동을 마쳐야 콕 할 수 있어요 💪");
-      } else {
-        setNotice("찌르기를 보내지 못했어요");
-      }
-    }
-    setTimeout(() => setNotice(null), 3000);
-  }
 
   if (!configured || !ready) return null;
 
@@ -110,80 +58,20 @@ export function CrewCard() {
     setTimeout(() => setCopied(false), 2000);
   }
 
-  // 콕은 오늘 운동을 마친 사람만 보낼 수 있다(0028). 서버가 최종 판정하지만,
-  // 누를 수 없는 버튼을 살아 있는 것처럼 보여주지 않는다.
-  const iWorkedOut = !!userId && workedOut.has(userId);
-  const pokeTargets = members.filter(
-    (m) => m.id !== userId && !workedOut.has(m.id),
-  );
-
   return (
     <section className="rounded-card border border-line bg-surface p-4 shadow-card">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-extrabold">👥 {group.name}</h3>
-        <span className="text-xs text-muted">{members.length}명</span>
-      </div>
-
-      <div className="mt-3 flex flex-wrap gap-2">
-        {members.map((m) => (
-          <div
-            key={m.id}
-            className="flex items-center gap-1.5 rounded-full border border-line bg-surface-2 py-1 pr-2.5 pl-1"
-          >
-            {/* 콕 버튼과 형제로 둔다 — 칩 전체를 버튼으로 감싸면 버튼이 중첩된다 */}
-            <button
-              type="button"
-              onClick={() => setSelected(m)}
-              aria-label={`${m.nickname} 프로필 보기`}
-              className="flex items-center gap-1.5"
-            >
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-surface text-sm">
-                {m.avatar_url ?? "👤"}
-              </span>
-              <span className="text-xs font-bold">
-                {m.nickname}
-                {m.id === userId && (
-                  <span className="ml-0.5 text-faint">(나)</span>
-                )}
-                {workedOut.has(m.id) && <span className="ml-0.5">✅</span>}
-              </span>
-            </button>
-            {m.id !== userId &&
-              !workedOut.has(m.id) &&
-              (poked.has(m.id) ? (
-                <span
-                  aria-label={`${m.nickname} 찌름 완료`}
-                  className="ml-0.5 rounded-full bg-surface px-1.5 py-0.5 text-[11px] font-bold text-faint opacity-70"
-                >
-                  ✅ 찌름
-                </span>
-              ) : (
-                <button
-                  onClick={() => void poke(m)}
-                  disabled={!iWorkedOut}
-                  aria-label={`${m.nickname} 찌르기`}
-                  className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-bold ${
-                    iWorkedOut
-                      ? "bg-accent-weak text-accent"
-                      : "bg-surface text-faint opacity-60"
-                  }`}
-                >
-                  👉 콕
-                </button>
-              ))}
-          </div>
-        ))}
-      </div>
-
-      {!iWorkedOut && pokeTargets.length > 0 && (
-        <p className="mt-2 text-[11px] text-muted">
-          오늘 운동을 마치면 크루를 콕 찌를 수 있어요 👉
-        </p>
-      )}
-
-      {notice && (
-        <p className="mt-2 text-xs font-bold text-accent">{notice}</p>
-      )}
+      <h3 className="text-sm font-extrabold">👥 {group.name}</h3>
+      {/* 문구가 "무엇에 대한 초대인지"를 말하지 않아 챌린지 초대와 헷갈렸다
+          (2026-08-07 사용자 질문). 실제 동작을 그대로 적는다:
+            · auth-provider가 첫 방문자에게 `signInAnonymously()`로 계정을 바로 발급한다
+            · 온보딩 화면은 **닉네임만** 받는다 (이메일·비밀번호 입력칸이 없다)
+            · invite/[code]는 프로필이 없으면 온보딩으로 보내고, 끝나면 크루에 넣는다
+          "이메일 가입 없이"를 명시하는 이유는 사용자가 실제로 그걸 물었기 때문이다. */}
+      <p className="mt-1 text-xs leading-relaxed text-muted">
+        <b className="text-text">GND 앱에 친구를 부르는 링크</b>예요. 친구가 링크를
+        열면 GND가 켜지고 이 크루에 바로 들어와요. 앱이 처음이어도{" "}
+        <b className="text-text">이메일 가입 없이</b> 닉네임만 정하면 끝이에요.
+      </p>
 
       <button
         onClick={copyInvite}
@@ -197,15 +85,11 @@ export function CrewCard() {
         </span>
       </button>
 
-      {/* 크루 카드는 스트릭 값을 갖고 있지 않아 streak을 넘기지 않는다 */}
-      {selected && (
-        <MemberProfileSheet
-          userId={selected.id}
-          nickname={selected.nickname}
-          avatarUrl={selected.avatar_url}
-          onClose={() => setSelected(null)}
-        />
-      )}
+      <p className="mt-2 text-[11px] text-faint">
+        {copied
+          ? "카카오톡·문자에 붙여넣어 보내세요 📨"
+          : "챌린지 초대와는 달라요 — 챌린지는 챌린지 탭에서 따로 불러요."}
+      </p>
     </section>
   );
 }

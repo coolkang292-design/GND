@@ -54,9 +54,13 @@ import {
 import { pickPrimaryRow } from "@/lib/domain/challenge-room";
 import { ChallengePicker } from "@/components/challenge/challenge-picker";
 import { InviteSheet } from "@/components/challenge/invite-sheet";
+import { ParticipantPerformanceCard } from "@/components/challenge/participant-performance-card";
+import { getCompletedSessions } from "@/lib/workout";
 import type { Group, UserGoal } from "@/lib/types";
 
 const NO_CHALLENGE_MEMBERS: ChallengeParticipantProfile[] = [];
+/** 참조 동일성 유지 — 성과 카드의 effect가 매 렌더마다 다시 돌지 않게 한다 */
+const NO_COMPLETED_ATS: Date[] = [];
 const NO_CHALLENGE_GOALS: UserGoal[] = [];
 const NO_CHALLENGE_APPROVALS = new Set<string>();
 
@@ -140,6 +144,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
     null,
   );
   const [timeZone, setTimeZone] = useState("Asia/Seoul");
+  const [completedAts, setCompletedAts] = useState<Date[]>(NO_COMPLETED_ATS);
   const [loadedPrevGoals, setPrevGoals] = useState<GoalDraft[] | null>(null);
   const [loadedChallengeId, setLoadedChallengeId] = useState<string | null>(
     null,
@@ -257,12 +262,16 @@ function ChallengeScreen({ userId }: { userId: string }) {
       // 챌린지 목록은 그룹과 무관하게 가져온다. 타 그룹에서 초대받은 사람
       // (혼자모드 포함)은 그룹이 없을 수 있는데, 예전처럼 그룹이 없다고 여기서
       // 멈추면 그 사람은 자기 챌린지를 영영 못 본다.
-      const [groups, profile, myChallenges] = await Promise.all([
+      // completedAts는 참가자 성과 카드(열람권)의 판정 재료다 — 2026-08-07에
+      // 홈에서 이 탭으로 옮겨 오면서 같이 필요해졌다.
+      const [groups, profile, myChallenges, sessions] = await Promise.all([
         getMyGroups(),
         getMyProfile(userId),
         getMyChallenges(userId),
+        getCompletedSessions(userId),
       ]);
       if (cancelled) return;
+      setCompletedAts(sessions.map((s) => s.completedAt));
       const g = groups[0] ?? null;
       setGroup(g);
       const tz =
@@ -983,6 +992,19 @@ function ChallengeScreen({ userId }: { userId: string }) {
           <div className="rounded-card border border-line bg-surface-2 p-3 text-center text-[12px] font-bold text-muted">
             🔒 공정성을 위해 <b>기간 중에는 내 진행률만</b> 볼 수 있어요
           </div>
+
+          {/* 자물쇠를 푸는 장치는 자물쇠 옆에 둔다 — 2026-08-07에 홈에서 옮겨 왔다.
+              보고 있는 챌린지(selectedId)를 그대로 넘긴다: 카드가 스스로 대표를
+              고르면 탭과 카드가 서로 다른 챌린지를 보여준다(설계 §6.7). */}
+          {/* key: 챌린지를 바꾸면 리마운트시켜 이전 챌린지의 순위·열람 대상이
+              남지 않게 한다. 카드 내부에서 비우려면 effect 본문 setState가 되어
+              렌더가 연쇄된다(react-hooks/set-state-in-effect). */}
+          <ParticipantPerformanceCard
+            key={challenge.id}
+            challengeId={challenge.id}
+            endDate={challenge.end_date}
+            completedAts={completedAts}
+          />
 
           <section className="rounded-card border border-line bg-surface p-4 shadow-card">
             <div className="mb-1 flex items-center justify-between">

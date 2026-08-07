@@ -29,12 +29,25 @@ function cheerErrorMessage(e: unknown): string {
   return "응원을 보내지 못했어요";
 }
 
-/** 진행 중 크루 세션 카드 목록 — 홈·피드 공용, 스스로 데이터를 불러온다 */
-export function ActiveWorkoutCards() {
+/**
+ * 진행 중 크루 세션 카드 목록 — 홈·피드 공용.
+ *
+ * `sessions`를 받으면 그리기만 한다. 홈은 같은 값을 친구 목록의 "🔥 운동 중"
+ * 판정에도 쓰기 때문에 **한 번만 조회해 내려준다** — 여기서 또 부르면 같은 질의가
+ * 홈에서 두 번 나가고 폴링도 두 벌이 된다. 피드처럼 안 넘기면 지금까지처럼
+ * 스스로 불러온다.
+ */
+export function ActiveWorkoutCards({
+  sessions: provided,
+}: {
+  sessions?: ActiveCrewSession[];
+} = {}) {
   const { userId, loading, configured } = useAuth();
-  const [sessions, setSessions] = useState<ActiveCrewSession[]>([]);
+  const [ownSessions, setSessions] = useState<ActiveCrewSession[]>([]);
+  const sessions = provided ?? ownSessions;
 
   useEffect(() => {
+    if (provided) return; // 부모가 관리한다 — 중복 조회·중복 폴링 방지
     if (!configured || loading || !userId) return;
     let cancelled = false;
 
@@ -53,7 +66,7 @@ export function ActiveWorkoutCards() {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [configured, loading, userId]);
+  }, [configured, loading, userId, provided]);
 
   if (sessions.length === 0) return null;
 

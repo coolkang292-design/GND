@@ -12,31 +12,39 @@ import { challengeDaysLeft } from "@/lib/domain/challenge-time";
 import {
   getActiveChallengeRanking,
   getChallengeParticipantProfiles,
-  getMyChallenges,
   getTodaysPeekTarget,
   pickPeekTarget,
   type ChallengeRanking,
 } from "@/lib/challenge";
 import { peekRows } from "@/lib/domain/challenge-peek";
-import { pickPrimaryRow } from "@/lib/domain/challenge-room";
 
 /**
- * 홈 챌린지 참가자 성과 카드 — 챌린지 active일 때만 노출.
- * 5일 연속 운동으로 열리는 2시간짜리 잠금 순위판(블러+자물쇠) + D-day.
- * 보안: 잠금 상태에선 순위 데이터를 아예 조회하지 않는다(블러는 시각 처리일 뿐).
+ * 챌린지 참가자 성과 카드 — 5일 연속 운동으로 열리는 2시간짜리 잠금 순위판.
+ *
+ * 2026-08-07에 **홈에서 챌린지 탭으로 옮겼다**(설계 §6.7). 이 카드는 챌린지 탭의
+ * "🔒 종료일 공개" 목록의 **자물쇠를 푸는 장치**라 그 옆이 제자리다.
+ *
+ * ⚠️ **볼 챌린지를 스스로 고르지 않는다.** 옛 홈 버전은 `getMyChallenges` →
+ * `pickPrimaryRow`로 대표를 직접 골랐는데, 챌린지 탭에는 **사용자가 고른 챌린지**가
+ * 따로 있다. 그대로 두면 탭에서 B 챌린지를 보는데 카드만 A 챌린지를 그린다
+ * (0044에서 같은 종류의 사고가 있었다). 부모가 `challengeId`를 준다.
+ *
+ * 보안: 잠금 상태에선 순위 데이터를 **아예 조회하지 않는다**(블러는 시각 처리일 뿐).
  */
-export function ChallengePerformanceCard({
+export function ParticipantPerformanceCard({
+  challengeId,
+  endDate,
   completedAts,
 }: {
+  challengeId: string;
+  endDate: string;
   completedAts: Date[];
 }) {
   const { userId } = useAuth();
   const [ready, setReady] = useState(false);
-  const [endDate, setEndDate] = useState<string | null>(null);
   const [pass, setPass] = useState<ChallengePassStatus | null>(null);
   const [ranking, setRanking] = useState<ChallengeRanking | null>(null);
   const [names, setNames] = useState<Map<string, string>>(new Map());
-  const [challengeId, setChallengeId] = useState<string | null>(null);
   const [target, setTarget] = useState<string | null>(null);
   const [picking, setPicking] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -44,24 +52,19 @@ export function ChallengePerformanceCard({
   useEffect(() => {
     if (!userId) return;
     let cancelled = false;
-    (async () => {
+    // ⚠️ 챌린지가 바뀔 때 이전 순위·대상을 여기서 비우지 않는다. effect 본문의
+    //    동기 setState는 렌더를 연쇄시킨다(eslint react-hooks/set-state-in-effect).
+    //    부모가 `key={challenge.id}`로 리마운트시켜 상태를 통째로 새로 만든다.
+    void (async () => {
       try {
-        // 0044: 챌린지는 그룹이 아니라 참가 사실로 묶인다. 대표를 고르는 규칙은
-        // 화면끼리 같아야 한다(pickPrimaryRow) — 어긋나면 홈과 챌린지 탭이 서로
-        // 다른 챌린지를 보여준다.
-        const ch = pickPrimaryRow(await getMyChallenges(userId));
-        if (!ch || ch.status !== "active") {
-          if (!cancelled) setReady(true);
-          return;
-        }
         const p = challengePassStatus(completedAts, new Date(), DEFAULT_TIMEZONE);
         // 보안: unlocked일 때만 순위를 조회한다. 잠금 상태에선 순위가 클라에 없다.
         if (p.state === "unlocked") {
           const [rank, profiles, picked] = await Promise.all([
-            getActiveChallengeRanking(ch.id),
+            getActiveChallengeRanking(challengeId),
             // 챌린지 안에서만 공개되는 최소 참가자 프로필을 사용한다.
-            getChallengeParticipantProfiles(ch.id),
-            getTodaysPeekTarget(ch.id),
+            getChallengeParticipantProfiles(challengeId),
+            getTodaysPeekTarget(challengeId),
           ]);
           if (cancelled) return;
           setRanking(rank);
@@ -71,8 +74,6 @@ export function ChallengePerformanceCard({
           setTarget(picked);
         }
         if (cancelled) return;
-        setChallengeId(ch.id);
-        setEndDate(ch.end_date);
         setPass(p);
         setReady(true);
       } catch {
@@ -82,10 +83,9 @@ export function ChallengePerformanceCard({
     return () => {
       cancelled = true;
     };
-  }, [userId, completedAts]);
+  }, [userId, challengeId, completedAts]);
 
   async function pick(targetId: string) {
-    if (!challengeId) return;
     setPicking(targetId);
     try {
       const res = await pickPeekTarget(challengeId, targetId);
@@ -103,7 +103,7 @@ export function ChallengePerformanceCard({
     }
   }
 
-  if (!ready || !pass || !endDate) return null; // 챌린지 active 아니면 숨김
+  if (!ready || !pass) return null;
 
   const now = new Date();
   const dLeft = challengeDaysLeft(dayKey(now, DEFAULT_TIMEZONE), endDate);

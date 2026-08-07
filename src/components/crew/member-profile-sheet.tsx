@@ -10,15 +10,40 @@ import {
 } from "@/lib/progression";
 
 /**
+ * 성과 요약 (2026-08-07) — 홈 친구 목록이 **이미 계산해 둔 값**을 넘겨준다.
+ *
+ * ⚠️ 여기서 조회하지 않는다. 친구 목록이 세션을 한 번에 받아 접은 결과라,
+ * 시트를 열 때 새 질의가 나가지 않는다.
+ *
+ * ⚠️ `domain/friend-board`의 타입을 import하지 않고 **필요한 모양만 구조적으로**
+ * 받는다. 크루 시트가 홈 모듈에 묶이면 안 된다(challenge.ts의 PeriodSessionRow와 같은 수법).
+ */
+export type MemberPerformance = {
+  workoutCount: number;
+  totalMinutes: number;
+  weekDays: number;
+};
+
+function formatMinutes(minutes: number): string {
+  const safe = Math.max(0, Math.round(minutes));
+  return safe < 60 ? `${safe}분` : `${Math.floor(safe / 60)}시간`;
+}
+
+/**
  * 시트 본문 — 조회가 끝난 뒤의 표시만 담당한다.
  * 셸에서 분리해 둬야 표시 로직을 SSR 테스트로 덮을 수 있다.
  */
 export function MemberProfileBody({
   profile,
   catalog,
+  stats,
+  streak,
 }: {
   profile: CrewMemberProfile;
   catalog: BadgeMeta[];
+  /** 없으면 성과 블록을 안 그린다 — 크루 카드·피드에서 열 때는 값이 없다 */
+  stats?: MemberPerformance;
+  streak?: number;
 }) {
   const pct = Math.min(100, Math.round(profile.levelProgressPercent));
   const maxed = profile.nextLevelRequiredXp === null;
@@ -65,6 +90,18 @@ export function MemberProfileBody({
           </p>
         </div>
       </div>
+
+      {stats && (
+        <div className="mt-4 border-t border-line pt-3.5">
+          <h4 className="text-sm font-extrabold">성과</h4>
+          <p className="mt-1.5 text-[12.5px] text-muted">
+            누적 <b className="text-text">{stats.workoutCount}회</b> ·{" "}
+            <b className="text-text">{formatMinutes(stats.totalMinutes)}</b>
+            {streak !== undefined && streak > 0 && <> · 🔥 {streak}일</>} · 이번
+            주 <b className="text-text">{stats.weekDays}일</b>
+          </p>
+        </div>
+      )}
 
       <div className="mt-4 border-t border-line pt-3.5">
         <div className="flex items-baseline justify-between">
@@ -123,12 +160,15 @@ export function MemberProfileSheet({
   nickname,
   avatarUrl,
   streak,
+  stats,
   onClose,
 }: {
   userId: string;
   nickname: string;
   avatarUrl: string | null;
   streak?: number;
+  /** 홈 친구 목록만 넘긴다 — 크루 카드·피드에서는 없어서 성과 블록이 안 뜬다 */
+  stats?: MemberPerformance;
   onClose: () => void;
 }) {
   const [profile, setProfile] = useState<CrewMemberProfile | null>(null);
@@ -214,7 +254,12 @@ export function MemberProfileSheet({
         )}
 
         {!failure && profile && catalog && (
-          <MemberProfileBody profile={profile} catalog={catalog} />
+          <MemberProfileBody
+            profile={profile}
+            catalog={catalog}
+            stats={stats}
+            streak={streak}
+          />
         )}
 
         <button

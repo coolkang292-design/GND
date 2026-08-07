@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   joinChallengeWithCode: vi.fn(),
   savePendingChallengeInvite: vi.fn(),
   clearPendingChallengeInvite: vi.fn(),
+  getCompletedSessions: vi.fn(),
   rpc: vi.fn(),
 }));
 
@@ -62,6 +63,12 @@ vi.mock("@/lib/challenge", async (importOriginal) => {
 
 vi.mock("@/components/challenge/invite-sheet", () => ({
   InviteSheet: () => null,
+}));
+
+// 2026-08-07: 참가자 성과 카드(옛 홈 카드)가 이 탭으로 옮겨 오면서 완료 세션이
+// 필요해졌다. 안 막으면 조회가 던져 화면 전체가 "데이터를 불러오지 못했어요"가 된다.
+vi.mock("@/lib/workout", () => ({
+  getCompletedSessions: mocks.getCompletedSessions,
 }));
 
 vi.mock("@/components/challenge/setup-sheet", () => ({
@@ -189,6 +196,8 @@ beforeEach(() => {
   window.history.replaceState({}, "", "/challenge");
 
   mocks.rpc.mockResolvedValue({ data: null, error: null });
+  // 열람권은 이번 주 5일을 채워야 열린다 — 기본값은 잠금 상태다.
+  mocks.getCompletedSessions.mockResolvedValue([]);
   mocks.getMyGroups.mockResolvedValue([
     {
       id: "group-1",

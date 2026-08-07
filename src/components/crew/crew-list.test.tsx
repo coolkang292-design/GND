@@ -36,6 +36,22 @@ function render(members: CrewMember[], requests: CrewRequest[]) {
   );
 }
 
+describe("CrewList 레벨 표기", () => {
+  /**
+   * ⚠️ 홈 친구 목록·프로필 시트가 `total_xp`로 레벨을 다시 계산한다
+   * (`progression.ts:157`). 여기만 DB 캐시값 `currentLevel`을 쓰면 같은 사람이
+   * 화면마다 다른 레벨로 보인다.
+   */
+  it("DB 캐시값이 아니라 total_xp로 계산한다", () => {
+    const html = render(
+      [{ ...member, totalXp: 0, currentLevel: 9 }],
+      [],
+    );
+    expect(html).toContain("Lv.1");
+    expect(html).not.toContain("Lv.9");
+  });
+});
+
 describe("CrewList", () => {
   it("크루가 없고 요청도 없으면 빈 상태 안내를 낸다", () => {
     expect(render([], [])).toContain("아직 크루가 없어요");
@@ -51,7 +67,10 @@ describe("CrewList", () => {
   it("크루원은 닉네임과 레벨을 보여준다", () => {
     const html = render([member], []);
     expect(html).toContain("낭만송곳니");
-    expect(html).toContain("Lv.3");
+    // 640 XP는 level_definitions 기준 Lv.4다. 이 픽스처의 currentLevel(3)은
+    // 그와 어긋나 있는데, **두 원천이 갈릴 수 있다는 게 바로 이 픽스처가
+    // 보여주는 것**이다. 화면은 total_xp 쪽을 따른다(2026-08-07).
+    expect(html).toContain("Lv.4");
   });
 
   it("크루가 있으면 빈 상태 문구는 사라진다", () => {

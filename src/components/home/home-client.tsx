@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { AuthStatus } from "@/components/auth-status";
 import { CrewCard } from "@/components/crew-card";
@@ -10,11 +10,16 @@ import { NotificationBell } from "@/components/notification-bell";
 import { PushEnableCard } from "@/components/push-enable-card";
 import { StreakCard } from "@/components/home/streak-card";
 import { WeeklyStats } from "@/components/home/weekly-stats";
-import { ChallengePerformanceCard } from "@/components/home/challenge-performance-card";
+import { FriendBoardCard } from "@/components/home/friend-board-card";
 import { CharacterCard } from "@/components/home/character-card";
 import { getMyProfile } from "@/lib/crew";
 import { getCompletedSessions } from "@/lib/workout";
+import { getActiveCrewSessions, type ActiveCrewSession } from "@/lib/social";
 import { getProgressSummary, type ProgressSummary } from "@/lib/progression";
+import { workedOutToday } from "@/lib/domain/friend-board";
+import { DEFAULT_TIMEZONE } from "@/lib/domain/time";
+
+const NO_ACTIVE_IDS: Set<string> = new Set();
 
 /** 홈 전체 — 내 완료 세션을 한 번만 조회해 위젯들이 공유한다 */
 export function HomeClient() {
@@ -23,6 +28,8 @@ export function HomeClient() {
   const [weeklyGoal, setWeeklyGoal] = useState(3);
   const [summary, setSummary] = useState<ProgressSummary | null>(null);
   const [summaryError, setSummaryError] = useState(false);
+  // 진행 중 세션은 진행 중 카드와 친구 목록이 같이 쓴다 — 한 번만 조회한다.
+  const [activeSessions, setActiveSessions] = useState<ActiveCrewSession[]>([]);
 
   useEffect(() => {
     if (!configured || loading || !userId) return;
@@ -56,6 +63,44 @@ export function HomeClient() {
       cancelled = true;
     };
   }, [configured, loading, userId]);
+
+  // 진행 중 세션 — 60초 폴링은 여기 한 곳에만 둔다(옛날엔 진행 중 카드가 했다).
+  useEffect(() => {
+    if (!configured || loading || !userId) return;
+    let cancelled = false;
+    async function load() {
+      try {
+        const active = await getActiveCrewSessions(userId!);
+        if (!cancelled) setActiveSessions(active);
+      } catch {
+        /* 부가 정보 — 실패해도 화면을 막지 않는다 */
+      }
+    }
+    void load();
+    const interval = setInterval(() => void load(), 60_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [configured, loading, userId]);
+
+  const activeUserIds = useMemo(
+    () =>
+      activeSessions.length === 0
+        ? NO_ACTIVE_IDS
+        : new Set(activeSessions.map((s) => s.userId)),
+    [activeSessions],
+  );
+
+  // 콕 활성 조건. `completedAts`는 필터가 없는 내 전체 기록이라 서버 규칙과 같다
+  // — 판정 이유는 `workedOutToday` 주석 참조.
+  const iWorkedOutToday = useMemo(
+    () =>
+      completedAts
+        ? workedOutToday(completedAts, new Date(), DEFAULT_TIMEZONE)
+        : false,
+    [completedAts],
+  );
 
   return (
     <div className="flex flex-col gap-3">
@@ -97,12 +142,16 @@ export function HomeClient() {
         </>
       )}
 
-      <ActiveWorkoutCards />
+      <ActiveWorkoutCards sessions={activeSessions} />
+
+      {/* 친구 목록은 진행 중 카드 바로 아래 — "운동 중"이 위에서 아래로 이어 읽힌다.
+          챌린지 성과 카드는 2026-08-07에 챌린지 탭으로 옮겼다(설계 §6.7). */}
+      <FriendBoardCard
+        activeUserIds={activeUserIds}
+        iWorkedOut={iWorkedOutToday}
+      />
 
       <CrewCard />
-
-      {/* 챌린지 참가자 성과 — 챌린지 active일 때만, 5일 연속으로 2시간 열림 */}
-      {completedAts && <ChallengePerformanceCard completedAts={completedAts} />}
 
       <AuthStatus />
     </div>
