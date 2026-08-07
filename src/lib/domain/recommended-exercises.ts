@@ -208,12 +208,12 @@ export type ResolvedRecommendation = {
   /** 카탈로그 실물 — 부위·유형·measure는 **여기서** 읽는다 (상수에 안 적는다) */
   item: CatalogExercise;
   note: string;
-  /** `public/exercise-thumbs/{thumb}.png` (선택). 없으면 텍스트 카드다 */
+  /** `public/exercise-thumbs/{slug}.webp` (선택). 없으면 텍스트 카드다 */
   thumb?: string;
 };
 
 /**
- * `public/exercise-thumbs/{slug}.png` (2026-08-06).
+ * `public/exercise-thumbs/{slug}.webp` (2026-08-06).
  *
  * **선택 사항이다.** 없는 이름은 카드가 텍스트만으로 성립한다 — 이미지
  * 제작이 코드 일정을 막지 않게 하려는 것이다. 파일을 넣고 여기 한 줄씩

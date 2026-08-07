@@ -298,6 +298,13 @@ describe("상황별 추천 (2026-08-06)", () => {
     expect(
       container.querySelector('[data-exercise-thumbnail="체스트프레스 머신"]'),
     ).toBeNull();
+    const remainingThumbnails = Array.from(
+      container.querySelectorAll<HTMLImageElement>("[data-exercise-thumbnail]"),
+    );
+    expect(remainingThumbnails).toHaveLength(3);
+    expect(
+      remainingThumbnails.map((image) => image.dataset.exerciseThumbnail),
+    ).toEqual(["랫풀다운", "레그프레스", "숄더프레스"]);
     expect(getByText("체스트프레스 머신")).toBeTruthy();
     expect(getAllByText("＋ 추가")).toHaveLength(4);
   });
