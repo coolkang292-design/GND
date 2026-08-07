@@ -44,7 +44,7 @@ import {
 } from "@/lib/workout-plan";
 import type { WorkoutRoutine } from "@/lib/routines";
 import { SetBreakdown } from "@/components/workout/set-breakdown";
-import { ExercisePicker } from "./exercise-picker";
+import { ExercisePicker, type ConfiguredPick } from "./exercise-picker";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -368,6 +368,44 @@ export function CalendarView({
           planDate: planPickerDate,
           sourceSessionId: null,
           exercises: newPlanExercises(items),
+        }),
+      );
+    } catch {
+      showPlanToast("운동 계획을 저장하지 못했어요");
+    } finally {
+      setPlanBusy(false);
+    }
+  }
+
+  /**
+   * 추천 경로로 고른 것을 그 날짜의 예정표로 저장 (2026-08-06).
+   *
+   * `handleNewPlanPick`과 갈라 두는 이유는 세트다. 저쪽은 `newPlanExercises`가
+   * 0값 세트 1개를 만들지만, 여기는 사용자가 **설정 화면에서 정한 세트**를
+   * 그대로 예정표에 넣는다 — 정해 놓고 사라지면 그 화면이 무의미해진다.
+   */
+  async function handleNewPlanConfigured(picks: ConfiguredPick[]) {
+    if (!planPickerDate || picks.length === 0 || planBusy) return;
+    setPlanBusy(true);
+    try {
+      applySavedPlan(
+        await saveWorkoutPlan({
+          userId,
+          planDate: planPickerDate,
+          sourceSessionId: null,
+          exercises: picks.map(({ item, sets }) => ({
+            name: item.name,
+            bodyPart: item.body_part,
+            exerciseType: item.exercise_type,
+            measure: item.measure,
+            isCustom: item.is_custom,
+            sets: sets.map((set) => ({
+              weightKg: set.weightKg,
+              reps: set.reps,
+              distanceKm: set.distanceKm,
+              durationMin: set.durationMin,
+            })),
+          })),
         }),
       );
     } catch {
@@ -900,6 +938,7 @@ export function CalendarView({
         pastLoading={false}
         onClose={() => setPlanPickerDate(null)}
         onPickMany={(items) => void handleNewPlanPick(items)}
+        onPickConfigured={(picks) => void handleNewPlanConfigured(picks)}
         onPickPast={handleNewPlanFromPast}
         onCreateCustom={onCreateCustom}
         routines={routines}

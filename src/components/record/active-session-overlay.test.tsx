@@ -321,7 +321,9 @@ describe("ActiveSessionOverlay — 마지막 세트와 마무리", () => {
     expect(screen.getByText(/오늘의 승자십니다/)).toBeTruthy();
   });
 
-  it("다 끝냈으면 주 버튼이 '운동 종료하고 결과 보기'가 된다", () => {
+  it("다 끝냈으면 결과 화면으로 넘어갈 길을 준다", () => {
+    // B안(2026-08-04)에서 주 버튼이 사라지고 3초 자동 전환 + 보조 링크가 됐다.
+    // 그래도 **기다림이 강제가 아니어야** 한다는 요구는 그대로다.
     const onFinish = vi.fn();
     renderRest({
       nextUp: null,
@@ -332,7 +334,7 @@ describe("ActiveSessionOverlay — 마지막 세트와 마무리", () => {
       onFinish,
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /운동 종료하고 결과 보기/ }));
+    fireEvent.click(screen.getByRole("button", { name: /지금 바로 보기/ }));
     expect(onFinish).toHaveBeenCalled();
   });
 
@@ -346,5 +348,56 @@ describe("ActiveSessionOverlay — 마지막 세트와 마무리", () => {
 
     expect(screen.queryByText(/다 했어요/)).toBeNull();
     expect(screen.getByRole("button", { name: /다음 운동 시작/ })).toBeTruthy();
+  });
+});
+
+/**
+ * B안 화면 (2026-08-04, 사용자 결정).
+ *
+ * 마지막 세트에는 휴식을 걸지 않으므로, 완료 화면에 **휴식 타이머와 프리셋을
+ * 그리면 거짓말이 된다** — 돌지도 않는 시간이 떠 있게 된다.
+ */
+describe("ActiveSessionOverlay — 완료 화면 (B안)", () => {
+  const done = {
+    nextUp: null,
+    completionMessage: {
+      headline: "오늘 계획한 운동을 다 했어요 🎉",
+      cheer: "오늘의 승자십니다 🏆",
+    },
+  };
+
+  it("휴식 타이머를 그리지 않는다 — 돌지 않는 시간을 보여주면 안 된다", () => {
+    renderRest(done);
+
+    expect(screen.queryByText("휴식 시간")).toBeNull();
+    expect(screen.queryByRole("button", { name: "휴식 10초 줄이기" })).toBeNull();
+  });
+
+  it("휴식 프리셋 칩도 그리지 않는다", () => {
+    renderRest(done);
+
+    expect(screen.queryByRole("button", { name: "1분" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "2분" })).toBeNull();
+  });
+
+  it("곧 결과 화면으로 넘어간다고 알린다", () => {
+    renderRest(done);
+
+    expect(screen.getByText(/잠시 후|곧/)).toBeTruthy();
+  });
+
+  it("바로 가고 싶으면 누를 수 있다 — 기다림이 강제가 아니다", () => {
+    const onFinish = vi.fn();
+    renderRest({ ...done, onFinish });
+
+    fireEvent.click(screen.getByRole("button", { name: /지금 바로 보기/ }));
+    expect(onFinish).toHaveBeenCalled();
+  });
+
+  it("아직 남은 세트가 있으면 휴식 타이머는 그대로 나온다", () => {
+    renderRest();
+
+    expect(screen.getByText("휴식 시간")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "1분" })).toBeTruthy();
   });
 });

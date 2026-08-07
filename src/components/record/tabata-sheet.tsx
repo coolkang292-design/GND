@@ -167,6 +167,19 @@ function TabataSheetBody({
     return true;
   }
 
+  /** 고른 운동을 중복 없이 뒤에 붙인다 (4개 한도). 검색·추천이 같이 쓴다 */
+  function addPickedItems(items: readonly CatalogExercise[]) {
+    setPicked((cur) => {
+      const merged = [...cur];
+      for (const item of items) {
+        if (!merged.some((p) => p.id === item.id)) merged.push(item);
+      }
+      return merged.slice(0, TABATA_EXERCISE_COUNT);
+    });
+    setPickError(null);
+    setPickerOpen(false);
+  }
+
   function pickPastSession(sessionId: string): boolean {
     const session = pastSessions.find((s) => s.id === sessionId);
     if (!session) return false;
@@ -357,17 +370,19 @@ function TabataSheetBody({
         routines={routines}
         routinesLoading={routinesLoading}
         onClose={() => setPickerOpen(false)}
-        onPickMany={(items) => {
-          setPicked((cur) => {
-            const merged = [...cur];
-            for (const item of items) {
-              if (!merged.some((p) => p.id === item.id)) merged.push(item);
-            }
-            return merged.slice(0, TABATA_EXERCISE_COUNT);
-          });
-          setPickError(null);
-          setPickerOpen(false);
-        }}
+        onPickMany={addPickedItems}
+        /*
+          추천 경로도 같은 자리로 받는다 (2026-08-06).
+
+          ⚠️ 이 prop을 안 넘기면 피커의 `confirmSetup`이 `if (!onPickConfigured)
+          ... return`으로 **조용히 죽는다.** 추천으로 4개를 고르고 '추가하기'를
+          눌러도 아무 일도 안 일어나고 오류도 없었다 — 옵셔널 prop이라 타입
+          검사도 통과한다. 개발 서버에서 눌러 보고 잡았다.
+
+          세트·목표는 버린다. 타바타는 코스 분수로 횟수를 스스로 정한다
+          (`tabataRepsForMinutes`) — 여기서 받은 3세트·10회를 쓰면 안 된다.
+        */
+        onPickConfigured={(picks) => addPickedItems(picks.map((p) => p.item))}
         onPickPast={(sessionId) => Promise.resolve(pickPastSession(sessionId))}
         onPickRoutine={
           routines

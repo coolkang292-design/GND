@@ -11,7 +11,11 @@ import {
 import { useAuth } from "@/components/auth-provider";
 import { CalendarView } from "@/components/record/calendar-view";
 import { ExerciseCard } from "@/components/record/exercise-card";
-import { ExercisePicker } from "@/components/record/exercise-picker";
+import {
+  ExercisePicker,
+  type ConfiguredPick,
+} from "@/components/record/exercise-picker";
+import { RecordEmptyState } from "@/components/record/record-empty-state";
 import { ExerciseReorderSheet } from "@/components/record/exercise-reorder-sheet";
 import { IdlePauseModal } from "@/components/record/idle-pause-modal";
 import { RoutineSaveSheet } from "@/components/record/routine-save-sheet";
@@ -86,6 +90,12 @@ import {
 } from "@/lib/domain/focus-exercise";
 import { amountFields } from "@/lib/domain/set-input";
 import { workoutCompletionMessage } from "@/lib/domain/workout-complete-message";
+import {
+  COMPLETION_AUTO_FINISH_MS,
+  overlayMode,
+  shouldAutoFinishAfterRest,
+  shouldRestAfterCompletion,
+} from "@/lib/domain/session-flow";
 import { dayKey } from "@/lib/domain/time";
 import { XpResultModal } from "@/components/record/xp-result-modal";
 import { buildXpEvents, type XpEvent } from "@/lib/domain/xp-events";
@@ -119,6 +129,7 @@ import {
   getPreviousExerciseRecords,
   getSessionById,
   getSessionExerciseStructure,
+  hasCompletedHistory,
   loadDraft,
   localId,
   markRecordBeaten,
@@ -225,6 +236,17 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const [pastSessions, setPastSessions] = useState<CalendarSession[]>([]);
   const [pastLoading, setPastLoading] = useState(false);
   const [pastLoaded, setPastLoaded] = useState(false);
+  /**
+   * 완료한 운동이 하나라도 있나 — 빈 화면의 '최근 운동 불러오기' 노출 판정.
+   *
+   * ⚠️ `pastSessions.length > 0`으로 대신할 수 없다. 그건 **피커를 연 뒤에만**
+   * 채워지므로(`loadPastSessions`의 `pastLoaded` 가드), 빈 화면에서는 항상
+   * `[]`라 버튼이 영영 안 뜬다. 그렇다고 마운트에서 목록을 통째로 받으면
+   * 이력이 쌓일수록 커지는 무한 질의가 된다 — 필요한 건 1비트다.
+   */
+  const [hasHistory, setHasHistory] = useState(false);
+  /** 피커를 어느 화면으로 열지 — 기본은 진입 허브 */
+  const [pickerMode, setPickerMode] = useState<"hub" | "past">("hub");
   // ── 나만의 루틴 (0056) ────────────────────────────────────────────
   /**
    * null = 루틴 기능을 쓸 수 없다 (0056 미적용이거나 조회 실패).
@@ -268,8 +290,17 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const [loadingExerciseKey, setLoadingExerciseKey] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** 축하 화면 → 결과 화면 자동 전환 타이머 (B안). 언마운트·취소 시 반드시 끈다 */
+  const autoFinishTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const active = draft.sessionId !== null && draft.startedAtMs !== null;
+
+  const clearAutoFinish = useCallback(() => {
+    if (autoFinishTimer.current) {
+      clearTimeout(autoFinishTimer.current);
+      autoFinishTimer.current = null;
+    }
+  }, []);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -285,6 +316,27 @@ function WorkoutScreen({ userId }: { userId: string }) {
     stopRest,
     cancelRestForSource,
   } = useRestCountdown(active, () => {
+    /**
+     * 휴식이 끝난 순간 (2026-08-04, 사용자 신고로 추가).
+     *
+     * 담은 세트를 전부 끝냈으면 **인증 사진 화면으로 자연스럽게 넘어간다.**
+     * 전에는 여기서 토스트만 띄웠고, 모드가 입력으로 되돌아가 이미 완료한
+     * 세트가 `현재 세트 1 / 1`로 다시 떴다.
+     *
+     * ⚠️ 남은 세트가 있으면 절대 자동으로 끝내지 않는다. 미완료 0건일 때만이라
+     * `handleFinish`의 확인창도 뜨지 않는다.
+     */
+    const pending = draftRef.current.exercises.reduce(
+      (count, exercise) =>
+        count + exercise.sets.filter((set) => !set.done).length,
+      0,
+    );
+    if (shouldAutoFinishAfterRest({ pendingSetCount: pending })) {
+      // `handleFinish`는 함수 선언이라 호이스팅되고, 훅이 최신 클로저를
+      // ref로 잡으므로 여기서 바로 불러도 옛 상태를 보지 않는다.
+      void handleFinish();
+      return;
+    }
     showToast("휴식 끝! 다음 세트 시작 💪");
   });
 
@@ -316,6 +368,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
     onChange: handleIdleChange,
   });
 
+  // 화면을 떠나면 자동 전환 타이머를 끈다 — 남아 있으면 다른 탭에서 운동이 끝난다
+  useEffect(() => clearAutoFinish, [clearAutoFinish]);
+
   // 자동 임시저장 (§10)
   useEffect(() => {
     saveDraft(userId, draft);
@@ -343,6 +398,27 @@ function WorkoutScreen({ userId }: { userId: string }) {
       cancelled = true;
     };
   }, [userId, showToast]);
+
+  /**
+   * 이력이 있는 사용자인가 (2026-08-06) — 빈 화면의 보조 CTA 노출 판정.
+   *
+   * `head: true` 개수 질의라 행을 하나도 안 받는다. 실패하면 `false`로 남긴다 —
+   * 못 읽었을 때 버튼을 띄우면 눌러도 빈 목록이 나온다.
+   */
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const has = await hasCompletedHistory(userId);
+        if (!cancelled) setHasHistory(has);
+      } catch {
+        // 기록 자체는 막지 않는다
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
 
   /**
    * 내 루틴 + 슬롯 한도 (0056).
@@ -474,6 +550,33 @@ function WorkoutScreen({ userId }: { userId: string }) {
     );
   }
 
+  /**
+   * 추천 경로 — 세트·목표·무게까지 정해서 담는다 (2026-08-06).
+   *
+   * `addExercises`와 다른 점은 세트를 `defaultSets`가 아니라 **설정 화면이 준
+   * 것**으로 쓴다는 것뿐이다. 그래서 두 함수를 합치지 않고 세트만 갈아 끼운다.
+   */
+  function addConfiguredExercises(picks: ConfiguredPick[]) {
+    if (picks.length === 0) return;
+    const added: LocalExercise[] = picks.map(({ item, sets }) => ({
+      key: localId(),
+      name: item.name,
+      bodyPart: item.body_part,
+      exerciseType: item.exercise_type,
+      measure: item.measure,
+      isCustom: item.is_custom,
+      sets,
+    }));
+    markActivity();
+    setDraft((d) => ({ ...d, exercises: [...d.exercises, ...added] }));
+    setPickerOpen(false);
+    showToast(
+      picks.length === 1
+        ? `'${picks[0].item.name}' 추가됨`
+        : `운동 ${picks.length}개 추가됨`,
+    );
+  }
+
   async function loadLastExercise(exercise: LocalExercise) {
     if (active || loadingExerciseKey !== null) return;
 
@@ -527,7 +630,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
     }
   }
 
-  async function openExercisePicker() {
+  async function openExercisePicker(mode: "hub" | "past" = "hub") {
+    setPickerMode(mode);
     setPickerOpen(true);
     await loadPastSessions();
   }
@@ -763,10 +867,38 @@ function WorkoutScreen({ userId }: { userId: string }) {
       setZeroWeightAsked((current) => new Set(current).add(exKey));
       setZeroWeightAsk({ exKey, name: ex.name });
     }
-    if (restPlan.timerAction === "start") {
+    /**
+     * 마지막 세트에는 휴식을 걸지 않는다 (2026-08-04, 사용자 결정 = B안).
+     *
+     * 더 할 세트가 없는데 타이머를 돌릴 이유가 없다. 무엇보다 유산소는 애초에
+     * 휴식이 안 걸려서(`shouldStartRestCountdown`), "휴식이 끝나면 넘어간다"에
+     * 기대면 **유산소로 끝낸 날은 자동 전환이 영영 안 온다.**
+     * 대신 축하 화면을 3초 보여주고 결과·인증 사진 화면으로 넘어간다.
+     */
+    const pendingAfter = draftRef.current.exercises.reduce(
+      (count, exercise) =>
+        count +
+        exercise.sets.filter((set, index) => {
+          const isToggled = exercise.key === exKey && index === si;
+          return isToggled ? !willDone : !set.done;
+        }).length,
+      0,
+    );
+    const restAllowed = shouldRestAfterCompletion({
+      pendingSetCountAfter: pendingAfter,
+    });
+
+    if (restPlan.timerAction === "start" && restAllowed) {
       startRest(sourceKey, draft.restSeconds);
     } else if (restPlan.timerAction === "cancel") {
       cancelRestForSource(sourceKey);
+    }
+
+    if (willDone && pendingAfter === 0) {
+      stopRest(); // 앞 세트의 휴식이 돌고 있으면 축하 화면을 가린다
+      scheduleAutoFinish();
+    } else {
+      clearAutoFinish();
     }
   }
 
@@ -1037,6 +1169,20 @@ function WorkoutScreen({ userId }: { userId: string }) {
     }
   }
 
+  /**
+   * 축하 화면을 잠깐 보여준 뒤 결과·인증 사진 화면으로 넘긴다 (B안).
+   *
+   * `handleFinish`는 재진입 가드(`finishingRef`)가 있어 사용자가 '지금 바로 보기'를
+   * 먼저 눌러도 두 번 종료되지 않는다.
+   */
+  function scheduleAutoFinish() {
+    clearAutoFinish();
+    autoFinishTimer.current = setTimeout(() => {
+      autoFinishTimer.current = null;
+      void handleFinish();
+    }, COMPLETION_AUTO_FINISH_MS);
+  }
+
   async function handleFinish() {
     // 타바타 자동 완료가 setDraft 직후 호출해도 최신 상태를 보도록 ref 사용
     const draft = draftRef.current;
@@ -1174,6 +1320,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
     if (!window.confirm("운동을 취소할까요? 이번 기록은 저장되지 않아요.")) {
       return;
     }
+    clearAutoFinish();
     stopRest();
     setBusy(true);
     try {
@@ -1188,6 +1335,14 @@ function WorkoutScreen({ userId }: { userId: string }) {
   }
 
   const summary = summarizeVolume(toVolumeSets(draft.exercises));
+  /**
+   * 화면 분기의 단일 진실 (사용자 지시 2026-08-06).
+   *
+   * 운동을 하나도 안 담았고 세션도 안 시작했으면, 볼륨·휴식·시작·타바타·복구
+   * 안내는 전부 지금 할 일과 무관하다 — 아예 안 그린다. 새 상태를 만들지
+   * 않는다: `draft.exercises.length`가 이미 그 정보를 갖고 있다.
+   */
+  const isEmpty = !active && draft.exercises.length === 0;
   // 팝업 열림은 `active`에서 파생한다 — 별도 저장 없음 (설계 ②)
   const overlayOpen = active && !minimized;
   const nextUp = nextUpSet(draft.exercises);
@@ -1391,13 +1546,20 @@ function WorkoutScreen({ userId }: { userId: string }) {
     );
   }
 
+  // 하단 고정 '운동 시작'이 뜨면 마지막 카드가 그 뒤로 숨는다 — 여백을 늘린다.
+  // RestBar와는 공존하지 않는다(RestBar는 운동 중에만) — 겹칠 일이 없다.
+  const showFixedStart =
+    subTab === "workout" && !active && draft.exercises.length > 0;
+
   return (
-    <div className="flex flex-col gap-3 pb-24">
+    <div
+      className={`flex flex-col gap-3 ${showFixedStart ? "pb-40" : "pb-24"}`}
+    >
       <header className="flex items-center justify-between pt-2 pb-1">
         <div>
           <h1 className="text-[19px] font-extrabold tracking-tight">운동 기록</h1>
           <p className="mt-0.5 text-[12.5px] text-muted">
-            {active ? "운동 중" : "준비"}
+            {active ? "운동 중" : isEmpty ? "처음이라면 운동부터 추가해보세요" : "준비"}
           </p>
         </div>
         {active && subTab === "workout" && (
@@ -1451,7 +1613,21 @@ function WorkoutScreen({ userId }: { userId: string }) {
         </>
       ) : (
         <>
+      {/*
+        등록된 운동이 0개면 볼륨·휴식·시작·타바타·복구 안내를 **하나도** 안
+        그린다 (사용자 지시 2026-08-06). 여기서 중요한 건 무엇을 더 그리느냐가
+        아니라 무엇을 **안 그리느냐**다 — 지금 할 일은 하나다.
+      */}
+      {isEmpty && (
+        <RecordEmptyState
+          hasHistory={hasHistory}
+          onAdd={() => void openExercisePicker("hub")}
+          onLoadRecent={() => void openExercisePicker("past")}
+        />
+      )}
+
       {/* 세션 헤더 (§10) */}
+      {!isEmpty && (
       <section className="rounded-card border border-line bg-surface p-4 shadow-card">
         <div className="flex items-start justify-between">
           <div>
@@ -1492,37 +1668,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
           </div>
         </div>
       </section>
-
-      {/* 휴식 사전설정 — 운동 시작 전 10초 단위 (§10) */}
-      <section className="flex items-center justify-between rounded-card border border-line bg-surface px-4 py-3 shadow-card">
-        <div>
-          <p className="text-sm font-bold">세트 사이 휴식</p>
-          <p className="text-[11.5px] text-muted">
-            {active
-              ? "지금 쉬는 중이면 남은 시간도 같이 바뀌어요"
-              : "완료 체크하면 이 시간으로 시작해요"}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => stepRest(-10)}
-            aria-label="10초 줄이기"
-            className="h-9 w-9 rounded-full border border-line bg-surface-2 text-lg font-bold disabled:opacity-40"
-          >
-            –
-          </button>
-          <span className="w-12 text-center font-mono text-sm font-extrabold">
-            {restMm}:{restSs}
-          </span>
-          <button
-            onClick={() => stepRest(10)}
-            aria-label="10초 늘리기"
-            className="h-9 w-9 rounded-full border border-line bg-surface-2 text-lg font-bold disabled:opacity-40"
-          >
-            +
-          </button>
-        </div>
-      </section>
+      )}
 
       {/* 운동 카드 목록 */}
       {draft.effortMessage && (
@@ -1564,23 +1710,69 @@ function WorkoutScreen({ userId }: { userId: string }) {
         />
       )}
 
-      <div className="flex gap-2">
-        <button
-          onClick={() => void openExercisePicker()}
-          className="h-12 flex-1 rounded-card border border-line bg-surface text-sm font-bold text-accent"
-        >
-          + 운동 추가
-        </button>
-        <button
-          onClick={active ? handleFinish : handleStart}
-          disabled={busy || loadingExerciseKey !== null}
-          className={`h-12 flex-1 rounded-card text-sm font-extrabold disabled:opacity-60 ${
-            active ? "bg-good text-white" : "bg-accent text-accent-ink"
-          }`}
-        >
-          {busy ? "처리 중…" : active ? "운동 종료" : "운동 시작"}
-        </button>
-      </div>
+      {/*
+        운동 추가는 **보조 버튼**이다 (사용자 지시 2026-08-06) — 목록이 있으면
+        핵심 행동은 '시작'이지 '더 담기'가 아니다.
+        운동 중에는 '운동 종료'가 여기 그대로 남는다: 진행 중 흐름(오버레이·
+        RestBar·자동완료)을 건드리면 위험만 늘고 요구에도 없다.
+      */}
+      {/* ⚠️ 빈 상태에는 안 낸다 — `첫 운동 추가하기`와 같은 일을 하는 버튼이
+          두 개가 된다 (사용자 지적 2026-08-06) */}
+      {!isEmpty && (
+        <div className="flex gap-2">
+          <button
+            onClick={() => void openExercisePicker()}
+            className="h-12 flex-1 rounded-card border border-line bg-surface text-sm font-bold text-accent"
+          >
+            + 운동 추가
+          </button>
+          {active && (
+            <button
+              onClick={handleFinish}
+              disabled={busy || loadingExerciseKey !== null}
+              className="h-12 flex-1 rounded-card bg-good text-sm font-extrabold text-white disabled:opacity-60"
+            >
+              {busy ? "처리 중…" : "운동 종료"}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/*
+        세트 사이 휴식은 **운동 목록 아래 부가 설정**으로 내렸다 (사용자 지시).
+        시작 전 화면의 최상단은 오늘 담은 운동이어야 한다.
+      */}
+      {!isEmpty && (
+        <section className="flex items-center justify-between rounded-card border border-line bg-surface px-4 py-3 shadow-card">
+          <div>
+            <p className="text-sm font-bold">세트 사이 휴식</p>
+            <p className="text-[11.5px] text-muted">
+              {active
+                ? "지금 쉬는 중이면 남은 시간도 같이 바뀌어요"
+                : "완료 체크하면 이 시간으로 시작해요"}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => stepRest(-10)}
+              aria-label="10초 줄이기"
+              className="h-9 w-9 rounded-full border border-line bg-surface-2 text-lg font-bold disabled:opacity-40"
+            >
+              –
+            </button>
+            <span className="w-12 text-center font-mono text-sm font-extrabold">
+              {restMm}:{restSs}
+            </span>
+            <button
+              onClick={() => stepRest(10)}
+              aria-label="10초 늘리기"
+              className="h-9 w-9 rounded-full border border-line bg-surface-2 text-lg font-bold disabled:opacity-40"
+            >
+              +
+            </button>
+          </div>
+        </section>
+      )}
       {!active && draft.exercises.length > 0 && routines !== null && (
         <button
           onClick={() => setRoutineSaveOpen(true)}
@@ -1594,18 +1786,44 @@ function WorkoutScreen({ userId }: { userId: string }) {
           ({routines.length}/{slotLimit})
         </button>
       )}
-      {!active && (
-        <button
-          onClick={() => void openTabataSheet()}
-          disabled={busy}
-          className="h-12 rounded-card border border-accent bg-surface text-sm font-extrabold text-accent disabled:opacity-60"
-        >
-          🔥 타바타 — 음원 따라 4분, 기록은 자동
-        </button>
+      {/*
+        🔥 타바타 버튼은 여기 없다 — '운동 추가' 진입 허브로 옮겼다
+        (사용자 지적 2026-08-06). 타바타도 "오늘 운동을 어떻게 할까"의 한
+        가지인데 혼자만 기록 화면에 상설 버튼으로 붙어 있었다.
+
+        ⚠️ 옮기면서 **거꾸로였던 조건도 같이 고쳐졌다.** 직전 구현은
+        `!isEmpty`라, 잃을 목록이 없어 타바타에 가장 좋은 순간(0개)에는
+        숨기고, 타바타가 목록을 지워 버리는 순간(1개 이상)에만 보였다.
+        이제 어느 쪽이든 허브를 거치고, 목록이 있으면 `beginTabata`가
+        "지우고 시작할까요?"를 한 번 더 묻는다.
+      */}
+      {!isEmpty && (
+        <p className="text-center text-xs text-muted">
+          완료 체크한 세트만 볼륨에 반영돼요. 새로고침해도 진행 중 기록은 복구됩니다.
+        </p>
       )}
-      <p className="text-center text-xs text-muted">
-        완료 체크한 세트만 볼륨에 반영돼요. 새로고침해도 진행 중 기록은 복구됩니다.
-      </p>
+
+      {/*
+        운동 시작은 **하단 고정 CTA**다 (사용자 지시 2026-08-06).
+        0개일 때는 렌더 자체를 안 한다 — 전에는 눌리기는 하고 "운동을 먼저
+        추가하세요" 토스트만 뜨는 막다른 길이었다. 비활성으로 남기지도 않는다.
+        위치 규약은 RestBar와 같다(safe-area + 72px = 탭 바 높이). 둘은
+        공존하지 않는다 — RestBar는 운동 중에만 뜬다.
+      */}
+      {showFixedStart && (
+        <div
+          className="fixed inset-x-3 z-30"
+          style={{ bottom: "calc(env(safe-area-inset-bottom) + 72px)" }}
+        >
+          <button
+            onClick={handleStart}
+            disabled={busy || loadingExerciseKey !== null}
+            className="h-14 w-full rounded-card bg-accent text-[15px] font-extrabold text-accent-ink shadow-card disabled:opacity-60"
+          >
+            {busy ? "처리 중…" : "운동 시작"}
+          </button>
+        </div>
+      )}
 
       <TabataSheet
         open={tabataOpen}
@@ -1644,12 +1862,18 @@ function WorkoutScreen({ userId }: { userId: string }) {
 
       <ExercisePicker
         open={pickerOpen}
+        initialMode={pickerMode}
         catalog={catalog}
         pastSessions={pastSessions}
         pastLoading={pastLoading}
         onClose={() => setPickerOpen(false)}
         onPickMany={addExercises}
+        onPickConfigured={addConfiguredExercises}
         onPickPast={addPastSession}
+        onOpenTabata={() => {
+          setPickerOpen(false);
+          void openTabataSheet();
+        }}
         onCreateCustom={handleCreateCustom}
         challengeCategories={challengeCategories}
         routines={routines ?? undefined}
@@ -1703,7 +1927,10 @@ function WorkoutScreen({ userId }: { userId: string }) {
       */}
       <ActiveSessionOverlay
         open={overlayOpen}
-        mode={restRemaining !== null ? "rest" : "input"}
+        mode={overlayMode({
+          resting: restRemaining !== null,
+          pendingSetCount,
+        })}
         elapsedLabel={`${hh}:${mm}:${ss}`}
         exerciseName={focusedExercise?.name ?? null}
         setPosition={{

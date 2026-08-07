@@ -77,16 +77,22 @@ function routine(name: string, ...exerciseNames: string[]): WorkoutRoutine {
   };
 }
 
+/**
+ * 기본은 `search` — 2026-08-06 개편 전의 "열면 카탈로그 목록" 상태와 같다.
+ * 진입 허브 자체를 보는 테스트만 `initialMode: "hub"`로 연다.
+ */
 function setup(
   over: {
     pastSessions?: CalendarSession[];
     routines?: WorkoutRoutine[];
     onPickRoutine?: (routine: WorkoutRoutine) => Promise<boolean>;
+    initialMode?: "hub" | "search" | "past" | "routine";
   } = {},
 ) {
   return render(
     <ExercisePicker
       open
+      initialMode={over.initialMode ?? "search"}
       catalog={CATALOG}
       pastSessions={over.pastSessions ?? SESSIONS}
       pastLoading={false}
@@ -107,12 +113,14 @@ function setup(
   );
 }
 
-describe("ExercisePicker", () => {
-  it("운동 찾기와 지난 기록 탭을 함께 보여준다", () => {
+describe("ExercisePicker — 진입 허브 (2026-08-06)", () => {
+  it("열면 검색 목록이 아니라 진입 방식 4가지를 보여준다", () => {
+    // 카탈로그 목록은 **찾는 종목의 이름을 이미 아는 사람**의 도구다.
+    // 처음 온 사람은 그 이름을 모르므로 기본 진입로가 될 수 없다.
     const html = renderToStaticMarkup(
       <ExercisePicker
         open
-        catalog={[]}
+        catalog={CATALOG}
         pastSessions={[session(1, "벤치프레스", "랫풀다운")]}
         pastLoading={false}
         onClose={vi.fn()}
@@ -122,8 +130,76 @@ describe("ExercisePicker", () => {
       />,
     );
 
-    expect(html).toContain("운동 찾기");
-    expect(html).toContain("지난 기록");
+    expect(html).toContain("상황별 추천");
+    expect(html).toContain("부위별 추천");
+    expect(html).toContain("운동 이름 검색");
+    expect(html).toContain("지난 운동 불러오기");
+    // 검색창이 바로 뜨면 안 된다 (부정 확인)
+    expect(html).not.toContain("🔍 운동 검색 (예: 스쿼트, 벤치)");
+  });
+
+  it("'상황별 추천'이 강조된 첫 카드다", () => {
+    // 이름을 모르는 사람에게 가장 먼저 권하는 길이다.
+    const { getByText } = setup({ initialMode: "hub" });
+    const card = getByText("상황별 추천").closest("button");
+    expect(card?.className).toContain("bg-accent");
+  });
+
+  it("'상황별 추천'을 누르면 상황 그리드가 나온다", () => {
+    const { getByText, getAllByText } = setup({ initialMode: "hub" });
+    fireEvent.click(getByText("상황별 추천"));
+
+    expect(getByText("오늘 어떤 상황인가요?")).toBeTruthy();
+    expect(getAllByText("처음 운동해요").length).toBeGreaterThan(0);
+  });
+
+  it("'운동 이름 검색'을 누르면 그때 카탈로그 목록이 나온다", () => {
+    const { getByText, getByPlaceholderText } = setup({ initialMode: "hub" });
+    fireEvent.click(getByText("운동 이름 검색"));
+
+    expect(getByPlaceholderText("🔍 운동 검색 (예: 스쿼트, 벤치)")).toBeTruthy();
+  });
+
+  it("타바타를 안 넘기면 그 카드가 없다 (달력 예정표 피커가 그렇다)", () => {
+    const { queryByText } = setup({ initialMode: "hub" });
+    expect(queryByText("타바타로 바로 시작")).toBeNull();
+  });
+
+  it("타바타를 넘기면 허브의 한 항목으로 나온다", () => {
+    // 기록 화면의 상설 버튼이 아니라 여기 있어야 한다 — 타바타도
+    // "오늘 운동을 어떻게 할까"의 한 가지다 (사용자 지적 2026-08-06).
+    const onOpenTabata = vi.fn();
+    const { getByText } = render(
+      <ExercisePicker
+        open
+        catalog={CATALOG}
+        pastSessions={[]}
+        pastLoading={false}
+        onClose={vi.fn()}
+        onPickMany={vi.fn()}
+        onPickPast={vi.fn()}
+        onCreateCustom={vi.fn()}
+        onOpenTabata={onOpenTabata}
+      />,
+    );
+
+    // 담는 게 아니라 갈아엎고 시작한다는 걸 문구가 말한다
+    expect(getByText("음원 따라 4분, 기록은 자동 — 목록은 새로 시작해요")).toBeTruthy();
+    fireEvent.click(getByText("타바타로 바로 시작"));
+    expect(onOpenTabata).toHaveBeenCalledTimes(1);
+  });
+
+  it("'부위별 추천'은 부위 그리드부터 보여준다", () => {
+    const { getByText, getAllByText } = setup({ initialMode: "hub" });
+    fireEvent.click(getByText("부위별 추천"));
+
+    expect(getByText("오늘 어디를 운동할까요?")).toBeTruthy();
+    // 부위 6종이 전부 버튼으로 있다 — 가로 스크롤이면 오른쪽이 잘려 보이지
+    // 않는다. 그리드라 6개가 다 그려진다.
+    // (카드 안의 부위 태그와 글자가 겹치므로 getAllBy로 센다)
+    for (const part of ["가슴", "등", "하체", "어깨", "팔", "코어"]) {
+      expect(getAllByText(part).length).toBeGreaterThan(0);
+    }
   });
 });
 
@@ -262,39 +338,42 @@ describe("ExercisePicker — 목록 자체를 사용 횟수순으로 (사용자 
   });
 });
 
-describe("ExercisePicker — 내 루틴 탭 (0056)", () => {
-  it("루틴을 넘기지 않으면 탭 자체가 없다", () => {
+describe("ExercisePicker — 내 루틴 (0056 · 2026-08-06 개편)", () => {
+  it("루틴을 넘기지 않으면 진입 카드가 없다", () => {
     // 0056 적용 전에는 조회가 실패해 routines가 undefined로 남는다.
-    // 그때 빈 탭이 뜨면 "기능이 고장난 것"처럼 보인다.
-    const { queryByText } = setup();
+    // 그때 빈 진입로가 뜨면 "기능이 고장난 것"처럼 보인다.
+    const { queryByText } = setup({ initialMode: "hub" });
     expect(queryByText("내 루틴")).toBeNull();
   });
 
-  it("빈 배열과 '사용 불가'를 구별한다", () => {
-    // 2026-08-02 개발 서버 확인에서 사용자가 잡은 것: 기록 페이지가 routines를
-    // []로 초기화해 두는 바람에 0056 미적용 상태에서도 탭과 저장 버튼이
-    // 멀쩡히 떴고, 누르면 Postgres 문구가 그대로 보였다.
-    // []는 "루틴 0개"라는 정상 상태이고, 사용 불가는 undefined다.
-    expect(setup({ routines: [] }).queryByText("내 루틴")).toBeTruthy();
+  it("저장된 루틴이 0개면 진입 카드를 안 낸다", () => {
+    // ⚠️ 2026-08-02의 반대다. 그때는 `[]`("루틴 0개")와 `undefined`("0056
+    // 미적용이라 사용 불가")를 구별하려고 `[]`에도 탭을 띄웠다. 그 구별의
+    // 목적 — 기능이 멀쩡한 척하지 않는 것 — 은 **기록 페이지의 루틴 저장
+    // 버튼**(`routines !== null`)이 그대로 지킨다. 고를 것이 하나도 없는
+    // 진입 카드는 처음 온 사람에게 막다른 길일 뿐이다 (사용자 지시).
+    expect(setup({ initialMode: "hub", routines: [] }).queryByText("내 루틴")).toBeNull();
     cleanup();
-    expect(setup({ routines: undefined }).queryByText("내 루틴")).toBeNull();
+    expect(
+      setup({ initialMode: "hub", routines: undefined }).queryByText("내 루틴"),
+    ).toBeNull();
   });
 
-  it("루틴을 넘기면 세 번째 탭이 생긴다", () => {
-    const { getByText } = setup({ routines: [] });
-    expect(getByText("운동 찾기")).toBeTruthy();
-    expect(getByText("지난 기록")).toBeTruthy();
+  it("저장된 루틴이 있으면 진입 카드가 하나 더 생긴다", () => {
+    const { getByText } = setup({
+      initialMode: "hub",
+      routines: [routine("가슴날", "벤치프레스")],
+    });
+    expect(getByText("상황별 추천")).toBeTruthy();
+    expect(getByText("부위별 추천")).toBeTruthy();
+    expect(getByText("운동 이름 검색")).toBeTruthy();
+    expect(getByText("지난 운동 불러오기")).toBeTruthy();
     expect(getByText("내 루틴")).toBeTruthy();
-  });
-
-  it("저장한 루틴이 없으면 저장 방법을 알려준다", () => {
-    const { getByText } = setup({ routines: [] });
-    fireEvent.click(getByText("내 루틴"));
-    expect(getByText("아직 저장한 루틴이 없어요")).toBeTruthy();
   });
 
   it("루틴 이름·종목 수·구성을 보여준다", () => {
     const { getByText } = setup({
+      initialMode: "hub",
       routines: [routine("가슴날", "벤치프레스", "덤벨 플라이")],
     });
     fireEvent.click(getByText("내 루틴"));
@@ -306,6 +385,7 @@ describe("ExercisePicker — 내 루틴 탭 (0056)", () => {
   it("불러오기를 누르면 그 루틴이 핸들러로 간다", () => {
     const onPickRoutine = vi.fn().mockResolvedValue(true);
     const { getByText } = setup({
+      initialMode: "hub",
       routines: [routine("가슴날", "벤치프레스")],
       onPickRoutine,
     });
@@ -318,6 +398,7 @@ describe("ExercisePicker — 내 루틴 탭 (0056)", () => {
 
   it("이름 변경을 누르면 그 자리에서 편집할 수 있다", () => {
     const { getByText, getByLabelText, queryByLabelText } = setup({
+      initialMode: "hub",
       routines: [routine("가슴날", "벤치프레스")],
     });
     fireEvent.click(getByText("내 루틴"));
@@ -357,6 +438,7 @@ describe("ExercisePicker — 종목 유형이 보인다 (2026-08-04)", () => {
     const { getByPlaceholderText, getByText } = render(
       <ExercisePicker
         open
+        initialMode="search"
         catalog={AMBIGUOUS}
         pastSessions={[]}
         pastLoading={false}
@@ -401,6 +483,7 @@ describe("ExercisePicker — 챌린지에 안 잡히는 종목 안내 (2026-08-0
     return render(
       <ExercisePicker
         open
+        initialMode="search"
         catalog={CATALOG}
         pastSessions={SESSIONS}
         pastLoading={false}

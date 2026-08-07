@@ -146,7 +146,34 @@ export function ActiveSessionOverlay({
 
           <div className="my-4 border-t border-line" />
 
-          {resting ? (
+          {allDone ? (
+            <>
+              {/*
+                B안 (2026-08-04, 사용자 결정) — 마지막 세트에는 휴식을 걸지 않는다.
+                돌지도 않는 타이머와 프리셋을 그리면 거짓말이 된다.
+                3초 뒤 결과 화면으로 넘어가고, 기다리기 싫으면 바로 누를 수 있다.
+              */}
+              <div className="rounded-card border border-good/40 bg-good-weak px-4 py-4">
+                <p className="text-[15px] font-extrabold text-good">
+                  {completionMessage.headline}
+                </p>
+                <p className="mt-1.5 text-[12.5px] leading-5 font-bold text-muted">
+                  {completionMessage.cheer}
+                </p>
+              </div>
+              <p className="mt-4 text-[12px] font-bold text-muted">
+                잠시 후 결과 화면으로 넘어가요…
+              </p>
+              <button
+                type="button"
+                onClick={onFinish}
+                disabled={busy}
+                className="mt-2 text-[12px] font-bold text-accent underline underline-offset-4 disabled:opacity-60"
+              >
+                {busy ? "처리 중…" : "지금 바로 보기"}
+              </button>
+            </>
+          ) : resting ? (
             <>
               <p className="text-[12.5px] font-bold text-accent">휴식 시간</p>
               <div className="mt-2 flex items-center justify-center gap-4 rounded-card border border-line bg-surface-2 py-3">
@@ -211,32 +238,7 @@ export function ActiveSessionOverlay({
                     ▶ 다음 운동 시작
                   </button>
                 </>
-              ) : (
-                <>
-                  {/*
-                    담은 세트를 전부 끝냈다 (2026-08-04, 사용자 요청).
-                    자동으로 종료하지는 않는다 — 종료는 XP·기록을 확정하는
-                    되돌리기 어려운 동작이라 **주 버튼만 종료로 바꿔** 자연스럽게
-                    흐르게 하고, 누르는 건 사용자가 한다.
-                  */}
-                  <div className="mt-5 rounded-card border border-good/40 bg-good-weak px-4 py-4">
-                    <p className="text-[15px] font-extrabold text-good">
-                      {completionMessage.headline}
-                    </p>
-                    <p className="mt-1.5 text-[12.5px] leading-5 font-bold text-muted">
-                      {completionMessage.cheer}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={onFinish}
-                    disabled={busy}
-                    className="mt-4 h-13 w-full rounded-card bg-good py-3.5 text-sm font-extrabold text-white disabled:opacity-60"
-                  >
-                    {busy ? "처리 중…" : "운동 종료하고 결과 보기 →"}
-                  </button>
-                </>
-              )}
+              ) : null}
             </>
           ) : (
             <>

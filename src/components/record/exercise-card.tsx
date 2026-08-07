@@ -1,6 +1,7 @@
 "use client";
 
 import { useLongPress } from "@/hooks/use-long-press";
+import { planFromSets, summarizePlan } from "@/lib/domain/recommended-sets";
 import { setVolumeKg } from "@/lib/domain/volume";
 import type { LocalExercise, LocalSet } from "@/lib/workout";
 import { TYPE_LABEL } from "./exercise-picker";
@@ -89,6 +90,22 @@ export function ExerciseCard({
           ✕
         </button>
       </div>
+
+      {/*
+        시작 전에는 "무엇을 얼마나 할 예정인가"를 한 줄로 보여준다
+        (사용자 지시 2026-08-06 — 세트 수·목표 횟수·무게 설정 상태).
+        운동 중에는 안 띄운다: 그때는 아래 입력 행의 실제 값이 진실이고,
+        예정값을 같이 두면 어느 쪽을 보는지 헷갈린다.
+      */}
+      {!active && (
+        <p className="mt-1.5 text-xs font-bold text-accent">
+          {summarizePlan(
+            exercise.exerciseType,
+            exercise.measure,
+            planFromSets(exercise.sets, isTimeBodyweight),
+          )}
+        </p>
+      )}
 
       <div className="mt-2 flex items-center justify-between gap-3">
         <p className="min-w-0 text-xs text-muted">

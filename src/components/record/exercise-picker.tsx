@@ -11,10 +11,21 @@ import {
   countsTowardChallenge,
   type GoalCategory,
 } from "@/lib/challenge";
+import { planToSets } from "@/lib/domain/recommended-sets";
+import type {
+  RecommendPart,
+  SituationKey,
+} from "@/lib/domain/recommended-exercises";
 import type { WorkoutRoutine } from "@/lib/routines";
 import type { BodyPart, CatalogExercise, ExerciseType } from "@/lib/types";
-import type { CalendarSession } from "@/lib/workout";
+import type { CalendarSession, LocalSet } from "@/lib/workout";
 import { RoutineList } from "./routine-list";
+import { RecommendedPicker } from "./recommended-picker";
+import {
+  ExerciseSetupSheet,
+  initialSetupEntries,
+  type SetupEntry,
+} from "./exercise-setup-sheet";
 
 const PARTS: readonly (BodyPart | "전체")[] = [
   "전체",
@@ -36,16 +47,50 @@ export const TYPE_LABEL: Record<ExerciseType, string> = {
   cardio: "유산소",
 };
 
+/**
+ * 시트 안의 화면 (2026-08-06).
+ *
+ * `hub`가 기본이다 — 열자마자 카탈로그 목록을 들이밀지 않는다. 그 목록은
+ * **찾는 종목의 이름을 이미 아는 사람**의 도구이고, 처음 온 사람은 그 이름을
+ * 모른다.
+ */
+type PickerMode =
+  | "hub"
+  | "situation"
+  | "part"
+  | "setup"
+  | "search"
+  | "past"
+  | "routine";
+
+/** 고른 종목 + 정해진 세트 — 기록 draft로도, 예정표로도 갈 수 있는 모양 */
+export type ConfiguredPick = { item: CatalogExercise; sets: LocalSet[] };
+
 type PickerProps = {
   catalog: CatalogExercise[];
   pastSessions: CalendarSession[];
   pastLoading: boolean;
   onClose: () => void;
-  /** 선택한 운동 여러 개를 한 번에 추가 */
+  /** 선택한 운동 여러 개를 한 번에 추가 (검색 경로 — 기본 세트) */
   onPickMany: (items: CatalogExercise[]) => void;
+  /** 추천 경로 — 세트·목표·무게까지 정해서 추가 (2026-08-06) */
+  onPickConfigured?: (picks: ConfiguredPick[]) => void;
   /** 지난 완료 기록 하나를 현재 준비 목록 뒤에 중복 없이 추가 */
   onPickPast: (sessionId: string) => Promise<boolean>;
-  /** 내 루틴 (0056). 넘기지 않으면 '내 루틴' 탭 자체가 안 나온다 */
+  /** 열자마자 보여줄 화면. 빈 기록 화면의 '최근 운동 불러오기'가 `past`로 연다 */
+  initialMode?: PickerMode;
+  /**
+   * 🔥 타바타 진입 (2026-08-06) — 넘기지 않으면 카드 자체가 안 나온다.
+   *
+   * 타바타도 "오늘 운동을 어떻게 할까"의 한 가지라 여기 있는 게 맞다. 다만
+   * 다른 넷과 달리 **담는 게 아니라 목록을 갈아엎고 바로 시작한다** — 그래서
+   * 문구로 그렇게 말하고, 목록이 있으면 `beginTabata`가 확인을 한 번 더 받는다.
+   *
+   * 달력의 예정표 피커는 안 넘긴다: 빈 날짜에 타바타를 *새로* 짜는 경로는
+   * 2026-08-05에 범위 밖으로 정했다.
+   */
+  onOpenTabata?: () => void;
+  /** 내 루틴 (0056). **저장된 루틴이 있을 때만** 진입 카드가 나온다 */
   routines?: WorkoutRoutine[];
   routinesLoading?: boolean;
   /** 루틴 하나를 불러온다 — true면 시트를 닫는다 */
@@ -67,7 +112,7 @@ type PickerProps = {
   }) => Promise<CatalogExercise | null>;
 };
 
-/** 운동 추가 바텀시트 — 검색 + 부위 필터 + 다중 선택 + 직접 만들기 (§10) */
+/** 운동 추가 바텀시트 — 진입 허브 + 추천/검색/지난 기록/내 루틴 (§10) */
 export function ExercisePicker({ open, ...props }: PickerProps & { open: boolean }) {
   // 열 때마다 언마운트→마운트로 검색·필터 상태를 초기화 (effect 내 setState 금지)
   if (!open) return null;
@@ -80,8 +125,11 @@ function PickerSheet({
   pastLoading,
   onClose,
   onPickMany,
+  onPickConfigured,
   onPickPast,
   onCreateCustom,
+  initialMode = "hub",
+  onOpenTabata,
   challengeCategories = null,
   routines,
   routinesLoading = false,
@@ -89,14 +137,34 @@ function PickerSheet({
   onRenameRoutine,
   onDeleteRoutine,
 }: PickerProps) {
-  const routinesEnabled = Boolean(routines && onPickRoutine);
-  const [tab, setTab] = useState<"catalog" | "past" | "routine">("catalog");
+  /**
+   * ⚠️ **저장된 루틴이 하나라도 있어야 진입 카드를 낸다** (사용자 지시 2026-08-06).
+   *
+   * 2026-08-02에는 `[]`("루틴 0개")와 `undefined`("0056 미적용이라 사용 불가")를
+   * 구별하려고 `[]`에도 탭을 띄웠다. 그 구별의 목적 — 기능이 멀쩡한 척하지
+   * 않는 것 — 은 기록 페이지의 루틴 저장 버튼(`routines !== null`)이 그대로
+   * 지킨다. **고를 것이 없는 진입 카드**는 처음 온 사람에게 막다른 길일 뿐이다.
+   */
+  const routinesEnabled = Boolean(routines?.length && onPickRoutine);
+  const [mode, setMode] = useState<PickerMode>(initialMode);
   const [routineBusyId, setRoutineBusyId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [part, setPart] = useState<(typeof FILTERS)[number]>("전체");
   const [selected, setSelected] = useState<Map<string, CatalogExercise>>(
     () => new Map(),
   );
+  // 추천 경로는 검색 경로와 선택 목록을 공유하지 않는다 — 확정 버튼이 서로
+  // 다른 일(기본 세트 / 정한 세트)을 하므로 섞이면 어느 쪽으로 갈지 모호해진다
+  const [recommendPart, setRecommendPart] = useState<RecommendPart>("가슴");
+  const [situation, setSituation] = useState<SituationKey>("beginner");
+  /** 설정 화면의 ←가 상황별/부위별 중 **왔던 쪽**으로 돌아가게 한다 */
+  const [lastRecommendMode, setLastRecommendMode] = useState<
+    "situation" | "part"
+  >("situation");
+  const [recommendSelected, setRecommendSelected] = useState<
+    Map<string, CatalogExercise>
+  >(() => new Map());
+  const [setupEntries, setSetupEntries] = useState<SetupEntry[]>([]);
   const [customOpen, setCustomOpen] = useState(false);
   const [customPart, setCustomPart] = useState<BodyPart>("가슴");
   const [customType, setCustomType] = useState<ExerciseType>("weight");
@@ -184,6 +252,34 @@ function PickerSheet({
     });
   }
 
+  function toggleRecommend(item: CatalogExercise) {
+    setRecommendSelected((prev) => {
+      const next = new Map(prev);
+      if (next.has(item.id)) next.delete(item.id);
+      else next.set(item.id, item);
+      return next;
+    });
+  }
+
+  /** 추천에서 고른 것들을 설정 화면으로 넘긴다 (기본 3세트·10회·운동 중 입력) */
+  function goToSetup() {
+    const picked = [...recommendSelected.values()];
+    if (picked.length === 0) return;
+    if (mode === "situation" || mode === "part") setLastRecommendMode(mode);
+    setSetupEntries(initialSetupEntries(picked));
+    setMode("setup");
+  }
+
+  function confirmSetup() {
+    if (!onPickConfigured || setupEntries.length === 0) return;
+    onPickConfigured(
+      setupEntries.map(({ item, plan }) => ({
+        item,
+        sets: planToSets(item.exercise_type, item.measure, plan),
+      })),
+    );
+  }
+
   async function createCustom() {
     const name = (nameRef.current?.value ?? "").trim();
     if (!name) return;
@@ -247,6 +343,21 @@ function PickerSheet({
     }
   }
 
+  /** 허브로 돌아가는 머리글 — 허브에서 온 화면에만 붙인다 */
+  const backHeader = (title: string) => (
+    <div className="mb-2 flex flex-none items-center gap-2">
+      <button
+        type="button"
+        onClick={() => setMode("hub")}
+        aria-label="진입 화면으로 돌아가기"
+        className="flex h-8 w-8 items-center justify-center rounded-full text-lg text-muted"
+      >
+        ←
+      </button>
+      <p className="text-sm font-extrabold">{title}</p>
+    </div>
+  );
+
   return (
     <>
       <div
@@ -256,33 +367,87 @@ function PickerSheet({
       />
       <div className="fixed inset-x-0 bottom-0 z-50 flex max-h-[82dvh] flex-col rounded-t-[22px] border-t border-line bg-surface p-4 shadow-card">
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
-        <h3 className="mb-2.5 text-base font-extrabold">운동 추가</h3>
 
-        <div className="mb-3 flex flex-none gap-1 rounded-card-sm border border-line bg-surface-2 p-1">
-          {(
-            [
-              ["catalog", "운동 찾기"],
-              ["past", "지난 기록"],
-              ...(routinesEnabled ? ([["routine", "내 루틴"]] as const) : []),
-            ] as const
-          ).map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => setTab(value)}
-              className={`h-9 flex-1 rounded-[7px] text-sm font-bold ${
-                tab === value
-                  ? "bg-surface text-accent shadow-card"
-                  : "text-muted"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {tab === "catalog" ? (
+        {mode === "hub" ? (
           <>
+            <h3 className="text-base font-extrabold">운동 추가</h3>
+            <p className="mt-0.5 mb-3 text-[12.5px] text-muted">
+              처음이라면 추천 운동으로 시작해보세요
+            </p>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <HubCard
+                primary
+                icon="🎯"
+                title="상황별 추천"
+                sub="처음 운동해요, 집에서, 30분만 등 상황에 맞게"
+                onClick={() => setMode("situation")}
+              />
+              <HubCard
+                icon="🫁"
+                title="부위별 추천"
+                sub="가슴, 등, 하체 등 운동할 부위로 고르기"
+                onClick={() => setMode("part")}
+              />
+              <HubCard
+                icon="🔍"
+                title="운동 이름 검색"
+                sub="알고 있는 운동을 직접 찾아요"
+                onClick={() => setMode("search")}
+              />
+              <HubCard
+                icon="🕘"
+                title="지난 운동 불러오기"
+                sub="예전에 했던 운동을 그대로 추가해요"
+                onClick={() => setMode("past")}
+              />
+              {routinesEnabled && (
+                <HubCard
+                  icon="💾"
+                  title="내 루틴"
+                  sub={`저장해 둔 루틴 ${routines?.length ?? 0}개에서 불러와요`}
+                  onClick={() => setMode("routine")}
+                />
+              )}
+              {/* 다른 넷과 달리 담는 게 아니라 바로 시작한다 — 문구로 말한다 */}
+              {onOpenTabata && (
+                <HubCard
+                  icon="🔥"
+                  title="타바타로 바로 시작"
+                  sub="음원 따라 4분, 기록은 자동 — 목록은 새로 시작해요"
+                  onClick={onOpenTabata}
+                />
+              )}
+            </div>
+          </>
+        ) : mode === "situation" || mode === "part" ? (
+          <RecommendedPicker
+            mode={mode}
+            catalog={catalog}
+            challengeCategories={challengeCategories}
+            part={recommendPart}
+            onPart={setRecommendPart}
+            situation={situation}
+            onSituation={setSituation}
+            selected={new Set(recommendSelected.keys())}
+            onToggle={toggleRecommend}
+            onBack={() => setMode("hub")}
+            onSearch={() => setMode("search")}
+            onNext={goToSetup}
+          />
+        ) : mode === "setup" ? (
+          <ExerciseSetupSheet
+            entries={setupEntries}
+            onChange={(index, plan) =>
+              setSetupEntries((prev) =>
+                prev.map((entry, i) => (i === index ? { ...entry, plan } : entry)),
+              )
+            }
+            onBack={() => setMode(lastRecommendMode)}
+            onConfirm={confirmSetup}
+          />
+        ) : mode === "search" ? (
+          <>
+            {backHeader("운동 이름 검색")}
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -442,7 +607,13 @@ function PickerSheet({
           )}
             </div>
 
-            {customOpen ? (
+            {/*
+              '직접 만들기'는 **검색 결과가 없을 때만** 낸다 (사용자 지시 2026-08-06).
+              늘 띄우면 초보자에게는 고를 것이 하나 더 늘어난 것으로 보인다 —
+              카탈로그에 이미 있는 종목을 직접 만들게 유도할 이유가 없다.
+            */}
+            {list.length === 0 &&
+              (customOpen ? (
           <div className="mt-3 flex-none rounded-card-sm border border-line bg-surface-2 p-3">
             <label className="text-xs font-bold text-muted">운동명</label>
             <input
@@ -505,14 +676,14 @@ function PickerSheet({
               {saving ? "만드는 중…" : "만들고 추가"}
             </button>
           </div>
-            ) : (
+              ) : (
           <button
             onClick={() => setCustomOpen(true)}
             className="mt-3 h-11 w-full flex-none rounded-card-sm border border-line text-sm font-bold text-accent"
           >
             ＋ {query.trim() ? `'${query.trim()}' ` : ""}직접 만들기
           </button>
-            )}
+              ))}
 
             <button
               onClick={() => onPickMany([...selected.values()])}
@@ -524,19 +695,24 @@ function PickerSheet({
                 : "운동을 선택하세요"}
             </button>
           </>
-        ) : tab === "routine" ? (
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <RoutineList
-              routines={routines ?? []}
-              loading={routinesLoading}
-              busyId={routineBusyId}
-              onPick={(routine) => void pickRoutine(routine)}
-              onRename={renameRoutine}
-              onDelete={(routine) => void removeRoutine(routine)}
-            />
-          </div>
+        ) : mode === "routine" ? (
+          <>
+            {backHeader("내 루틴")}
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <RoutineList
+                routines={routines ?? []}
+                loading={routinesLoading}
+                busyId={routineBusyId}
+                onPick={(routine) => void pickRoutine(routine)}
+                onRename={renameRoutine}
+                onDelete={(routine) => void removeRoutine(routine)}
+              />
+            </div>
+          </>
         ) : (
-          <div className="min-h-0 flex-1 overflow-y-auto">
+          <>
+            {backHeader("지난 운동 불러오기")}
+            <div className="min-h-0 flex-1 overflow-y-auto">
             {pastLoading ? (
               <p className="py-8 text-center text-sm text-muted">
                 지난 기록을 불러오는 중…
@@ -586,9 +762,49 @@ function PickerSheet({
                 );
               })
             )}
-          </div>
+            </div>
+          </>
         )}
       </div>
     </>
+  );
+}
+
+function HubCard({
+  icon,
+  title,
+  sub,
+  onClick,
+  primary = false,
+}: {
+  icon: string;
+  title: string;
+  sub: string;
+  onClick: () => void;
+  primary?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`mb-2 flex w-full items-center gap-3 rounded-card border p-4 text-left ${
+        primary
+          ? "border-accent bg-accent text-accent-ink"
+          : "border-line bg-surface-2"
+      }`}
+    >
+      <span className="text-xl">{icon}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-extrabold">{title}</span>
+        <span
+          className={`mt-0.5 block text-xs ${
+            primary ? "text-accent-ink/75" : "text-muted"
+          }`}
+        >
+          {sub}
+        </span>
+      </span>
+      <span className={primary ? "text-accent-ink/60" : "text-faint"}>›</span>
+    </button>
   );
 }

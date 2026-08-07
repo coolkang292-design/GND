@@ -829,6 +829,29 @@ export type CalendarSession = CompletedSession & {
 };
 
 /** 내 completed 세션 전체 (달력 스탬프·월간요약·상세시트·복사용) */
+/**
+ * 완료한 운동이 하나라도 있나 (2026-08-06).
+ *
+ * 빈 기록 화면이 '최근 운동 불러오기'를 띄울지 정하는 데 필요한 것은 **1비트**다.
+ * `getCompletedSessions`를 부르면 완료 세션 **전량**을 `workout_exercises` join까지
+ * 걸어 받는다 — 상한이 없어 이력이 쌓일수록 커지고, 그걸 화면 진입마다 하게 된다.
+ *
+ * `head: true`라 **행을 하나도 안 받는다.** 목록은 사용자가 실제로 '지난 기록'을
+ * 열 때 기존 `loadPastSessions()`가 평소대로 가져온다.
+ */
+export async function hasCompletedHistory(userId: string): Promise<boolean> {
+  const supabase = getSupabaseBrowserClient();
+  const { count, error } = await supabase
+    .from("workout_sessions")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("status", "completed")
+    .is("deleted_at", null)
+    .not("completed_at", "is", null);
+  if (error) throw error;
+  return (count ?? 0) > 0;
+}
+
 export async function getCompletedSessions(
   userId: string,
 ): Promise<CalendarSession[]> {
