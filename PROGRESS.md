@@ -3,7 +3,15 @@
 > 새 세션은 저장소 루트 `AGENTS.md` → `CLAUDE.md` → 이 파일 → 가장 최근의 관련 `docs/superpowers/HANDOFF-*.md` 순서로 읽는다.
 > 이 파일은 전체 흐름의 요약이고, 작업별 세부 사실과 남은 확인은 최신 인수인계서가 기준이다.
 
-## 🟡 2026-08-07 — 홈 재편: 친구 목록(상태·콕) + 챌린지 탭 통합 (마이그레이션 **0건** · 게이트 ✅ · **개발 서버 화면 확인 대기** · 배포 전)
+## ✅ 2026-08-07 — 홈 재편: 친구 목록(상태·콕) + 챌린지 탭 통합 (마이그레이션 **0건** · 게이트 ✅ · 개발 서버 화면 확인 ✅ · 운영 배포 ✅)
+
+커밋 `dc66945` · 배포 `gnd-g4my3dvpp-gnd4.vercel.app` → `gnd-one.vercel.app` Ready
+
+**배포 실물 확인 (프로덕션에서 파일을 직접 받아 확인)**
+- `/home` 청크 15개에 `GND 앱에 친구를 부르는 링크` · `이메일 가입 없이` · `챌린지 초대와는 달라요` · `전체 보기` · `아직 배지가 없어요` · `성과 보기` **전부 있음**
+- **부정 확인 4건 전부 통과** — `/home` 번들에 `챌린지 참가자 성과` · `초대 링크를 보내면 친구가 크루로 들어와요`(옛 문구) · `오늘 운동을 마치면 크루를 콕 찌를 수 있어요`(옛 크루 카드 콕) · `성과를 볼 참가자 한 명을 고르세요`가 **하나도 없다**
+- `/challenge` 청크에는 `챌린지 참가자 성과` · `성과를 볼 참가자 한 명을 고르세요` · `공정성을 위해` **있음** — 옮긴 곳에 실제로 도착했다
+- 정적 자산 `/badges/streak_5.png` · `/characters/char-1.png` **HTTP 200**
 
 설계: [`docs/superpowers/specs/2026-08-07-home-friend-board-and-challenge-consolidation-design.md`](docs/superpowers/specs/2026-08-07-home-friend-board-and-challenge-consolidation-design.md)
 
