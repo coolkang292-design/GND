@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   EXERCISE_NOTES,
+  EXERCISE_THUMBS,
   PART_META,
   RECOMMENDED_BY_PART,
   RECOMMEND_PARTS,
@@ -177,6 +178,18 @@ describe("'챌린지 목표에 맞게' — 내 목표에서 계산한다", () =>
   it("목표를 알면 그 카드가 6개 목록에 들어온다", () => {
     const goals = new Set<GoalCategory>(["weight"]);
     expect(visibleSituations(goals)).toHaveLength(6);
+  });
+});
+
+describe("추천 운동 썸네일", () => {
+  it("처음 운동해요 4종은 각자 다른 WebP를 가진다", () => {
+    expect(EXERCISE_THUMBS).toEqual({
+      "체스트프레스 머신": "chest-press-machine.webp",
+      랫풀다운: "lat-pulldown.webp",
+      레그프레스: "leg-press.webp",
+      숄더프레스: "shoulder-press.webp",
+    });
+    expect(new Set(Object.values(EXERCISE_THUMBS)).size).toBe(4);
   });
 });
 
