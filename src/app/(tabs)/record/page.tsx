@@ -86,6 +86,10 @@ import {
 } from "@/lib/domain/rest-countdown";
 import { nextUpSet } from "@/lib/domain/next-up";
 import {
+  exerciseSetProgress,
+  workoutProgress,
+} from "@/lib/domain/workout-progress";
+import {
   advanceSetFocus,
   clampSetFocus,
 } from "@/lib/domain/focus-exercise";
@@ -1868,7 +1872,14 @@ function WorkoutScreen({ userId }: { userId: string }) {
         initialMinutes={tabataPrefill?.minutes}
       />
 
-      {restRemaining !== null && (
+      {/*
+        ⚠️ **큰 팝업이 열려 있으면 안 그린다** (2026-08-07, 사용자 지시 ①).
+
+        팝업의 휴식 화면이 이미 남은 시간·±10초·프리셋을 다 갖고 있어서, 둘이
+        같이 뜨면 같은 타이머가 화면에 두 번 보인다. RestBar가 있어야 하는 건
+        `▾ 최소화`로 접었을 때뿐이다 — 그때는 남은 시간을 볼 수단이 이것뿐이다.
+      */}
+      {restRemaining !== null && !overlayOpen && (
         <RestBar
           remainingSeconds={restRemaining}
           nextUp={nextUp}
@@ -1957,6 +1968,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
         })}
         elapsedLabel={`${hh}:${mm}:${ss}`}
         exerciseName={focusedExercise?.name ?? null}
+        progress={workoutProgress(draft.exercises)}
+        setProgress={exerciseSetProgress(focusedExercise)}
         setPosition={{
           index: setFocus.setIndex,
           total: focusedExercise?.sets.length ?? 0,

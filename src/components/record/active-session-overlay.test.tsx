@@ -32,6 +32,9 @@ const base = {
   onStartNext: vi.fn(),
   isLastPendingSet: false,
   completionMessage: { headline: "다 했어요", cheer: "응원" },
+  // 3 / 8 완료 = 37% — 사용자 목업의 숫자를 그대로 쓴다 (2026-08-07)
+  progress: { completed: 3, total: 8, percent: 37 },
+  setProgress: { done: 3, total: 4, remaining: 1 },
 };
 
 const inputProps = {
@@ -172,11 +175,17 @@ describe("ActiveSessionOverlay — 운동 중(입력) 화면", () => {
 });
 
 describe("ActiveSessionOverlay — 휴식 중 화면", () => {
-  it("휴식 배지와 '무엇을 끝냈는지'를 보여준다", () => {
+  it("휴식 배지와 '무엇을 하던 중인지'를 보여준다", () => {
+    /*
+      2026-08-07에 바뀐 요구다. 예전에는 `데드리프트 완료` 헤드라인이 상단을
+      차지했는데, 사용자가 **그 자리를 진행률에 내주라고** 지시했다. 종목명은
+      세트 진행 카드로 옮겼다 — 없어진 게 아니라 자리를 바꾼 것이다.
+    */
     renderRest();
 
     expect(screen.getByText(/휴식 중/)).toBeTruthy();
-    expect(screen.getByText(/데드리프트 완료/)).toBeTruthy();
+    expect(screen.getByText("데드리프트")).toBeTruthy();
+    expect(screen.queryByText("데드리프트 완료")).toBeNull();
   });
 
   it("남은 시간을 분:초로 크게 보여준다", () => {
@@ -399,5 +408,62 @@ describe("ActiveSessionOverlay — 완료 화면 (B안)", () => {
 
     expect(screen.getByText("휴식 시간")).toBeTruthy();
     expect(screen.getByRole("button", { name: "1분" })).toBeTruthy();
+  });
+});
+
+describe("진행률·세트 남음 표시 (2026-08-07, 사용자 목업)", () => {
+  it("두 화면 모두 전체 진행률을 그린다", () => {
+    // 사용자 결정: 휴식 화면만이 아니라 세트 입력 중에도 보여준다
+    for (const render of [renderInput, renderRest]) {
+      cleanup();
+      render();
+      const bar = screen.getByRole("progressbar", { name: "전체 운동 진행률" });
+      expect(bar.getAttribute("aria-valuenow")).toBe("37");
+      expect(screen.getByText("3 / 8 완료")).toBeTruthy();
+      expect(screen.getByText("37%")).toBeTruthy();
+    }
+  });
+
+  it("휴식 화면에서는 '{종목명} 완료' 헤드라인이 사라졌다", () => {
+    // 부정 확인 — 그 자리를 진행률에 내줬다 (사용자 지시 ②)
+    renderRest();
+
+    expect(screen.queryByText("데드리프트 완료")).toBeNull();
+    expect(
+      screen.getByRole("progressbar", { name: "전체 운동 진행률" }),
+    ).toBeTruthy();
+  });
+
+  it("입력 화면은 종목명 헤드라인을 그대로 둔다 — 지금 뭘 하는지가 먼저다", () => {
+    renderInput();
+
+    expect(screen.getByRole("heading", { name: "데드리프트" })).toBeTruthy();
+  });
+
+  it("휴식 중에 이 종목이 몇 세트 남았는지 말한다 (지시 ③)", () => {
+    renderRest();
+
+    expect(screen.getByText("3세트 / 4세트")).toBeTruthy();
+    expect(screen.getByText("1세트 남음")).toBeTruthy();
+  });
+
+  it("다 끝낸 화면에는 세트 남음 카드를 그리지 않는다", () => {
+    renderRest({ nextUp: null });
+
+    expect(screen.queryByText("1세트 남음")).toBeNull();
+  });
+
+  it("운동 시간은 휴식 타이머보다 작게 그린다 (사용자 지시 2026-08-07)", () => {
+    // 휴식 화면에서 제일 큰 숫자는 지금 세고 있는 휴식 시간이어야 한다.
+    renderRest();
+
+    const elapsed = screen.getByText("24:18");
+    const rest = screen.getByText("00:50");
+    const px = (el: HTMLElement) =>
+      Number(/text-\[(\d+)px\]/.exec(el.className)?.[1] ?? 0);
+
+    expect(px(elapsed)).toBeGreaterThan(0);
+    expect(px(rest)).toBeGreaterThan(0);
+    expect(px(elapsed)).toBeLessThan(px(rest));
   });
 });

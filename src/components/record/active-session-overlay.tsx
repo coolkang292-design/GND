@@ -6,6 +6,10 @@ import {
   type AmountField,
   type AmountFieldKey,
 } from "@/lib/domain/set-input";
+import type {
+  ExerciseSetProgress,
+  WorkoutProgress,
+} from "@/lib/domain/workout-progress";
 
 /**
  * 운동 중 큰 팝업 (2026-08-04, 설계 ② · 사용자 목업).
@@ -43,6 +47,8 @@ export function ActiveSessionOverlay({
   mode,
   elapsedLabel,
   exerciseName,
+  progress,
+  setProgress,
   setPosition,
   fields,
   values,
@@ -67,6 +73,10 @@ export function ActiveSessionOverlay({
   mode: "input" | "rest";
   elapsedLabel: string;
   exerciseName: string | null;
+  /** 오늘 담은 세트 기준 전체 진행률 (`workoutProgress`) */
+  progress: WorkoutProgress;
+  /** 지금 종목의 세트 진행 — 휴식 화면의 `3세트 / 4세트` (`exerciseSetProgress`) */
+  setProgress: ExerciseSetProgress;
   setPosition: { index: number; total: number };
   fields: AmountField[];
   values: SetValues;
@@ -135,14 +145,87 @@ export function ActiveSessionOverlay({
             ● {paused ? "정지됨 — 무동작" : resting ? "휴식 중" : "지금 운동 중"}
           </span>
 
-          <h2 className="mt-3 text-[26px] leading-tight font-extrabold">
-            {exerciseName ?? "운동"}
-            {resting && " 완료"}
-          </h2>
+          {/*
+            전체 진행률 (2026-08-07, 사용자 목업).
 
-          <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-3 py-1 text-[11.5px] font-bold text-muted">
-            🕐 운동 시간 <span className="font-mono text-text">{elapsedLabel}</span>
+            휴식 화면에서는 여기가 예전에 `{종목명} 완료` 헤드라인이던 자리다.
+            방금 끝낸 것만 말할 뿐 **오늘 얼마나 남았는지**는 어디에도 없었다 —
+            사용자가 그 자리에 진행률을 넣으라고 지시했다.
+
+            입력 화면에서는 종목명을 지우지 않는다. 지금 뭘 하는지가 제일
+            중요하고, 진행률은 그 위에 얇게 얹는다.
+          */}
+          <div className="mt-3">
+            <div className="flex items-end justify-between gap-2">
+              <span className="text-[11.5px] font-bold text-muted">
+                전체 운동 진행률
+              </span>
+              <span className="text-[11.5px] font-extrabold text-muted">
+                {progress.completed} / {progress.total} 완료
+              </span>
+            </div>
+            <div
+              role="progressbar"
+              aria-valuenow={progress.percent}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="전체 운동 진행률"
+              className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-surface-2"
+            >
+              {/*
+                ⚠️ **`transition-[width]`를 붙이지 마라.** 붙이면 인라인
+                `width: 16%`가 있는데도 계산 폭이 **0px에 머물러 막대가 아예
+                안 보인다**(2026-08-07 개발 서버에서 확인 — 클래스를 떼는
+                순간 49.4px로 정상 렌더). 단위 테스트는 `aria-valuenow`만
+                보므로 이건 화면을 봐야 잡힌다. 진행률 막대에 애니메이션이
+                꼭 필요하지도 않다.
+              */}
+              <div
+                className="h-full rounded-full bg-accent"
+                style={{ width: `${progress.percent}%` }}
+              />
+            </div>
+            <p className="mt-1 text-right text-[11px] font-bold text-accent">
+              {progress.percent}%
+            </p>
+          </div>
+
+          {!resting && (
+            <h2 className="mt-3 text-[26px] leading-tight font-extrabold">
+              {exerciseName ?? "운동"}
+            </h2>
+          )}
+
+          {/*
+            운동 시간 — 예전 11.5px 알약보다 크게 (사용자 지시 ②).
+
+            ⚠️ **휴식 타이머(34px)보다는 작게 유지한다** (사용자 지시 2026-08-07).
+            휴식 화면에서 제일 큰 숫자는 지금 세고 있는 휴식 시간이어야 하고,
+            경과 시간이 그보다 크면 시선을 뺏는다. 휴식 쪽 크기를 바꾸면 이쪽도
+            같이 봐야 한다.
+          */}
+          <p className="mt-3 text-[11.5px] font-bold text-muted">⏱ 운동 시간</p>
+          <p className="font-mono text-[26px] leading-none font-extrabold tracking-tight">
+            {elapsedLabel}
           </p>
+
+          {/*
+            휴식 중에도 이 종목이 몇 세트 남았는지 말한다 (사용자 지시 ③).
+            휴식 화면에서 종목명이 헤드라인에서 빠졌으므로 여기가 그 자리다.
+          */}
+          {resting && !allDone && exerciseName && (
+            <div className="mt-3 rounded-card border border-line bg-surface-2 px-4 py-3 text-left">
+              <p className="text-[13px] font-extrabold">{exerciseName}</p>
+              <p className="mt-0.5 text-[12.5px] font-extrabold text-accent">
+                {setProgress.done}세트 / {setProgress.total}세트
+              </p>
+              <p className="mt-0.5 text-[11.5px] font-bold text-muted">
+                {setProgress.remaining > 0
+                  ? `${setProgress.remaining}세트 남음`
+                  : "이 종목은 다 했어요"}
+              </p>
+            </div>
+          )}
 
           <div className="my-4 border-t border-line" />
 
