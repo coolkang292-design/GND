@@ -1,5 +1,6 @@
 "use client";
 
+import { UiIcon } from "@/components/ui-icon";
 import {
   REST_PRESET_SECONDS,
   adjustAmount,
@@ -332,8 +333,10 @@ export function ActiveSessionOverlay({
                 </span>
               </p>
               {isLastPendingSet && (
-                <p className="mt-2 inline-block rounded-full bg-good-weak px-3 py-1 text-[11.5px] font-extrabold text-good">
-                  🏁 마지막 세트예요 — 이것만 하면 오늘 몫 끝!
+                <p className="mt-2 inline-flex items-center gap-1 rounded-full bg-good-weak px-3 py-1 text-[11.5px] font-extrabold text-good">
+                  {/* 옛 표기는 `🏁`였다 (2026-08-07 2차 시안으로 교체) */}
+                  <UiIcon name="finish" size={14} />
+                  마지막 세트예요 — 이것만 하면 오늘 몫 끝!
                 </p>
               )}
 

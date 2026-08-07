@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { UiIcon } from "@/components/ui-icon";
 import { getStageGroups } from "@/lib/domain/progression";
 
 /**
@@ -66,9 +67,10 @@ export function StageCarousel({
                   {locked && (
                     <span
                       aria-hidden
-                      className="absolute inset-0 flex items-center justify-center text-lg"
+                      className="absolute inset-0 flex items-center justify-center"
                     >
-                      🔒
+                      {/* 옛 표기는 `🔒`였다 (2026-08-07 2차 시안으로 교체) */}
+                      <UiIcon name="lock" size={20} />
                     </span>
                   )}
                 </div>

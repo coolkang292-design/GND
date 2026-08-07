@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { UiIcon } from "@/components/ui-icon";
 import { useAuth } from "@/components/auth-provider";
 import { DEFAULT_TIMEZONE, dayKey } from "@/lib/domain/time";
 import {
@@ -115,7 +116,9 @@ export function ParticipantPerformanceCard({
   return (
     <section className="rounded-card border border-line bg-surface p-4 shadow-card">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-extrabold">🏆 챌린지 참가자 성과</h3>
+        <h3 className="text-sm font-extrabold">
+          <UiIcon name="trophy" /> 챌린지 참가자 성과
+        </h3>
         <span className="text-xs font-bold text-accent">
           D-{Math.max(0, dLeft - 1)}
         </span>
@@ -208,8 +211,8 @@ export function ParticipantPerformanceCard({
               ))}
             </ul>
             <div className="absolute inset-0 grid place-items-center">
-              <span className="rounded-full bg-black/50 px-3 py-1.5 text-lg">
-                🔒
+              <span className="rounded-full bg-black/50 px-3 py-1.5">
+                <UiIcon name="lock" size={22} alt="아직 볼 수 없어요" />
               </span>
             </div>
           </>

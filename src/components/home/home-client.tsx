@@ -26,6 +26,11 @@ export function HomeClient() {
   const { userId, loading, configured } = useAuth();
   const [completedAts, setCompletedAts] = useState<Date[] | null>(null);
   const [weeklyGoal, setWeeklyGoal] = useState(3);
+  // 친구 목록의 내 행에 쓴다 — 이미 부르는 `getMyProfile` 응답에서 꺼낸다.
+  const [myName, setMyName] = useState<{
+    nickname: string;
+    avatarUrl: string | null;
+  } | null>(null);
   const [summary, setSummary] = useState<ProgressSummary | null>(null);
   const [summaryError, setSummaryError] = useState(false);
   // 진행 중 세션은 진행 중 카드와 친구 목록이 같이 쓴다 — 한 번만 조회한다.
@@ -42,7 +47,13 @@ export function HomeClient() {
         ]);
         if (cancelled) return;
         setCompletedAts(sessions.map((s) => s.completedAt));
-        if (profile) setWeeklyGoal(profile.weekly_goal);
+        if (profile) {
+          setWeeklyGoal(profile.weekly_goal);
+          setMyName({
+            nickname: profile.nickname,
+            avatarUrl: profile.avatar_url,
+          });
+        }
       } catch {
         if (!cancelled) setCompletedAts([]);
       }
@@ -102,6 +113,30 @@ export function HomeClient() {
     [completedAts],
   );
 
+  /**
+   * 친구 목록 맨 위에 그릴 내 행의 재료 (2026-08-07 사용자 지시).
+   *
+   * ⚠️ **홈이 이미 부른 두 조회에서 꺼낸다** — 닉네임·아바타는 `getMyProfile`,
+   * `totalXp`는 성장 카드가 쓰는 `getProgressSummary`. 친구 목록 카드 안에서 다시
+   * 부르면 홈에서 같은 질의가 두 번 나간다.
+   *
+   * ⚠️ `totalXp`를 넘기는 것이지 레벨을 넘기는 게 아니다. 레벨은 받는 쪽이
+   * `getLevelProgress`로 다시 계산한다 — 친구와 **같은 함수**를 지나야 같은 사람이
+   * 화면마다 다른 레벨로 보이지 않는다(인수인계서 §5.4).
+   */
+  const me = useMemo(
+    () =>
+      userId && myName && summary
+        ? {
+            id: userId,
+            nickname: myName.nickname,
+            avatarUrl: myName.avatarUrl,
+            totalXp: summary.totalXp,
+          }
+        : null,
+    [userId, myName, summary],
+  );
+
   return (
     <div className="flex flex-col gap-3">
       <header className="flex items-center justify-between pt-2 pb-1">
@@ -149,6 +184,7 @@ export function HomeClient() {
       <FriendBoardCard
         activeUserIds={activeUserIds}
         iWorkedOut={iWorkedOutToday}
+        me={me}
       />
 
       <CrewCard />

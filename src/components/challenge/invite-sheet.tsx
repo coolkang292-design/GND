@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { UiIcon } from "@/components/ui-icon";
 import { inviteToChallenge, issueChallengeInviteCode } from "@/lib/challenge";
 // 0038이 만든 닉네임 정확 일치 검색. 단일 결과 또는 null을 돌려준다(배열 아님).
 // isSearchable 게이트가 있어 빈 입력은 조회 없이 null이 된다.
@@ -51,7 +52,10 @@ export function InviteSheet({
   if (status !== "setup") {
     return (
       <section className="rounded-card border border-line bg-surface p-4 shadow-card">
-        <h3 className="text-sm font-extrabold">🏆 챌린지 초대</h3>
+        <h3 className="flex items-center gap-1.5 text-sm font-extrabold">
+          <UiIcon name="trophy" size={20} />
+          챌린지 초대
+        </h3>
         <p className="mt-0.5 text-[11px] text-muted">
           {status === "active"
             ? "이미 시작해서 초대가 닫혔어요. 중간에 합류하면 점수가 공정하지 않아서예요."
@@ -108,7 +112,10 @@ export function InviteSheet({
 
   return (
     <section className="rounded-card border border-line bg-surface p-4 shadow-card">
-      <h3 className="text-sm font-extrabold">🏆 챌린지 초대</h3>
+      <h3 className="flex items-center gap-1.5 text-sm font-extrabold">
+        <UiIcon name="trophy" size={20} />
+        챌린지 초대
+      </h3>
       <p className="mt-0.5 text-[11px] text-muted">
         닉네임으로 찾아 초대해요. 시작 전에만 초대할 수 있어요.
       </p>

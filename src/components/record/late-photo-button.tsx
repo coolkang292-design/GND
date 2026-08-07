@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { UiIcon } from "@/components/ui-icon";
 import { compressImage } from "@/lib/image";
 import {
   awardWorkoutPhotoXp,
@@ -85,9 +86,17 @@ export function LatePhotoButton({
         type="button"
         disabled={busy}
         onClick={() => cameraInputRef.current?.click()}
-        className="mt-2 h-10 w-full rounded-card-sm border border-accent bg-surface text-xs font-extrabold text-accent disabled:opacity-60"
+        className="mt-2 flex h-10 w-full items-center justify-center gap-1.5 rounded-card-sm border border-accent bg-surface text-xs font-extrabold text-accent disabled:opacity-60"
       >
-        {busy ? "올리는 중…" : "📷 지금 촬영해서 인증하기"}
+        {busy ? (
+          "올리는 중…"
+        ) : (
+          <>
+            {/* 옛 표기는 `📷`였다 (2026-08-07 2차 시안으로 교체) */}
+            <UiIcon name="camera" size={15} />
+            지금 촬영해서 인증하기
+          </>
+        )}
       </button>
       <button
         type="button"

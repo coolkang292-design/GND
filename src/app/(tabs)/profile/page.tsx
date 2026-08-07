@@ -7,6 +7,7 @@ import { useAuth } from "@/components/auth-provider";
 import { BugReportSheet } from "@/components/bug-report-sheet";
 import { GrowthHub } from "@/components/profile/growth-hub";
 import { PushSettings } from "@/components/push-settings";
+import { UiIcon } from "@/components/ui-icon";
 import { getIncomingCrewRequests } from "@/lib/crew-link";
 import {
   DEFAULT_NOTIFICATION_SETTINGS,
@@ -196,7 +197,9 @@ export default function ProfilePage() {
             className="flex items-center justify-between rounded-card border border-line bg-surface px-3.5 py-3.5 shadow-card"
           >
             <span className="flex items-center gap-2 text-[14px] font-extrabold">
-              🤝 크루
+              {/* 옛 표기는 `🤝`였다 (2026-08-07 2차 시안으로 교체) */}
+              <UiIcon name="handshake" size={19} />
+              크루
               {requestCount > 0 && (
                 <span className="rounded-full bg-accent px-2 py-0.5 text-[11px] font-extrabold text-accent-ink">
                   {requestCount}

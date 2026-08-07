@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { UiIcon } from "@/components/ui-icon";
 import { useAuth } from "@/components/auth-provider";
 import {
   ChallengeSetupSheet,
@@ -655,7 +656,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
             </p>
             {challenge.photo_required && (
               <span className="mt-1.5 inline-block rounded-full border border-accent/40 bg-accent/10 px-2.5 py-1 text-[11px] font-bold text-accent">
-                📷 사진 인증 필수 · 사진 없는 운동은 집계되지 않아요
+                <UiIcon name="camera" /> 사진 인증 필수 · 사진 없는 운동은 집계되지 않아요
               </span>
             )}
           </>
@@ -694,7 +695,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
       {group && !challenge && (
         <>
           <section className="rounded-card border border-line bg-surface p-5 text-center shadow-card">
-            <div className="text-3xl">🏆</div>
+            <UiIcon name="trophy" size={40} />
             <h2 className="mt-1 text-base font-extrabold">
               아직 진행 중인 챌린지가 없어요
             </h2>
@@ -716,7 +717,9 @@ function ChallengeScreen({ userId }: { userId: string }) {
       {/* 0044: 초대받았지만 아직 수락 안 함 — 수락 전에는 목표를 못 세운다 */}
       {challenge && challenge.myStatus === "invited" && (
         <section className="rounded-card border border-accent/40 bg-accent/10 p-4 shadow-card">
-          <p className="text-sm font-extrabold">🏆 챌린지에 초대받았어요</p>
+          <p className="text-sm font-extrabold">
+              <UiIcon name="trophy" /> 챌린지에 초대받았어요
+            </p>
           <p className="mt-0.5 text-[12px] text-muted">
             {challenge.name} · {challenge.start_date} ~ {challenge.end_date}
           </p>
@@ -761,14 +764,14 @@ function ChallengeScreen({ userId }: { userId: string }) {
               onClick={() => openSheet("goals")}
               className="rounded-card border border-warn/40 bg-surface p-3.5 text-left text-[13px] font-bold text-warn shadow-card"
             >
-              🎯 새 챌린지에 초대됐어요! <b>내 KPI를 설정</b>해야 시작돼요 ·
+              <UiIcon name="goal" /> 새 챌린지에 초대됐어요! <b>내 KPI를 설정</b>해야 시작돼요 ·
               설정하기 →
             </button>
           ) : (
             <section className="rounded-card border border-line bg-surface p-4 shadow-card">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-extrabold">
-                  🎯 내 목표 {myGoals.length}개
+                  <UiIcon name="goal" /> 내 목표 {myGoals.length}개
                 </p>
                 <button
                   onClick={() => openSheet("goals")}
@@ -832,7 +835,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
                       )}
                       {approvals.has(m.id) ? (
                         <span className="rounded-full bg-accent-weak px-2.5 py-1 text-[11px] font-bold text-accent">
-                          동의 👍
+                          동의 <UiIcon name="thumbsup" size={14} />
                         </span>
                       ) : count > 0 ? (
                         <span className="rounded-full bg-surface-2 px-2.5 py-1 text-[11px] font-bold text-muted">
@@ -863,7 +866,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
               );
             })}
             <p className="mt-2 text-[11px] text-muted">
-              🔒 <b>전원 KPI 설정 + 전원 동의</b> 시 챌린지가 시작돼요.
+              <UiIcon name="lock" /> <b>전원 KPI 설정 + 전원 동의</b> 시 챌린지가 시작돼요.
             </p>
           </section>
 
@@ -878,9 +881,13 @@ function ChallengeScreen({ userId }: { userId: string }) {
                   : "border-accent bg-accent-weak text-accent"
               }`}
             >
-              {iApproved
-                ? "✓ 동의함 (누르면 철회)"
-                : "참가자 전원의 목표에 동의하기 👍"}
+              {iApproved ? (
+                "✓ 동의함 (누르면 철회)"
+              ) : (
+                <>
+                  참가자 전원의 목표에 동의하기 <UiIcon name="thumbsup" />
+                </>
+              )}
             </button>
           )}
 
@@ -893,7 +900,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
               ? "전원 목표 세팅 대기 중…"
               : !allApproved
                 ? `전원 동의 대기 중… (${approvedCount}/${members.length})`
-                : "챌린지 시작 🏁"}
+                : <>챌린지 시작 <UiIcon name="finish" /></>}
           </button>
           {challenge.created_by === userId && (
             <button
@@ -901,7 +908,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
               disabled={busy}
               className="h-11 rounded-card border border-line bg-surface text-[13px] font-bold text-muted disabled:opacity-50"
             >
-              🗑 챌린지 취소하고 새로 만들기
+              <UiIcon name="trash" /> 챌린지 취소하고 새로 만들기
             </button>
           )}
         </>
@@ -990,7 +997,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
           )}
 
           <div className="rounded-card border border-line bg-surface-2 p-3 text-center text-[12px] font-bold text-muted">
-            🔒 공정성을 위해 <b>기간 중에는 내 진행률만</b> 볼 수 있어요
+            <UiIcon name="lock" /> 공정성을 위해 <b>기간 중에는 내 진행률만</b> 볼 수 있어요
           </div>
 
           {/* 자물쇠를 푸는 장치는 자물쇠 옆에 둔다 — 2026-08-07에 홈에서 옮겨 왔다.
@@ -1011,7 +1018,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
               <h3 className="text-sm font-extrabold">
                 참여자 ({members.length}명)
               </h3>
-              <span className="text-xs text-muted">🔒 종료일 공개</span>
+              <span className="text-xs text-muted"><UiIcon name="lock" size={13} /> 종료일 공개</span>
             </div>
             {members.map((m) => (
               <div key={m.id} className="flex items-center gap-2.5 py-1.5">
@@ -1025,7 +1032,11 @@ function ChallengeScreen({ userId }: { userId: string }) {
                   )}
                 </span>
                 <span className="font-mono text-sm font-extrabold text-faint">
-                  {m.id === userId ? `${Math.round(myAchievement)}%` : "🔒"}
+                  {m.id === userId ? (
+                        `${Math.round(myAchievement)}%`
+                      ) : (
+                        <UiIcon name="lock" size={15} alt="비공개" />
+                      )}
                 </span>
               </div>
             ))}
@@ -1037,7 +1048,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
               disabled={busy}
               className="h-12 rounded-card bg-good text-sm font-extrabold text-white disabled:opacity-60"
             >
-              🏆 결과 발표하기
+              <UiIcon name="trophy" /> 결과 발표하기
             </button>
           )}
           {challenge.created_by === userId && !endedByDate && (
@@ -1046,7 +1057,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
               disabled={busy}
               className="h-11 rounded-card border border-line bg-surface text-[13px] font-bold text-muted disabled:opacity-50"
             >
-              🗑 챌린지 취소
+              <UiIcon name="trash" /> 챌린지 취소
             </button>
           )}
         </>
@@ -1121,7 +1132,7 @@ function ResultView({
     <>
       <section className="rounded-card border border-line bg-surface p-4 shadow-card">
         <h3 className="text-center text-base font-extrabold">
-          🏆 최종 순위 발표
+          <UiIcon name="trophy" /> 최종 순위 발표
         </h3>
         <div className="mt-4 flex items-end justify-center gap-2">
           {podiumOrder.map((r) => {
@@ -1129,7 +1140,7 @@ function ResultView({
             const h = heights[Math.min(r.rank, 3)];
             return (
               <div key={r.userId} className="flex w-20 flex-col items-center">
-                {r.rank === 1 && <span className="text-lg">👑</span>}
+                {r.rank === 1 && <UiIcon name="crown" size={20} />}
                 <span className="grid h-10 w-10 place-items-center rounded-full bg-surface-2 text-xl">
                   {p?.avatar_url ?? "👤"}
                 </span>

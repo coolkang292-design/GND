@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useMemo, useRef, useState } from "react";
 import {
   exerciseFrequencyMap,
@@ -350,7 +351,11 @@ function PickerSheet({
         type="button"
         onClick={() => setMode("hub")}
         aria-label="진입 화면으로 돌아가기"
-        className="flex h-8 w-8 items-center justify-center rounded-full text-lg text-muted"
+        /* ⚠️ 테두리 있는 원으로 그린다 (2026-08-07 사용자 지적 "뒤로가기도 잘보이게").
+           옛 모양은 배경도 테두리도 없는 `text-muted` 글리프 하나여서, 어두운
+           배경에서 **눌 수 있는 것으로 보이지 않았다.** 44px 손가락 표적도
+           확보한다(옛 32px). */
+        className="flex h-11 w-11 flex-none items-center justify-center rounded-full border border-line bg-surface-2 text-lg text-text"
       >
         ←
       </button>
@@ -377,32 +382,32 @@ function PickerSheet({
             <div className="min-h-0 flex-1 overflow-y-auto">
               <HubCard
                 primary
-                icon="🎯"
+                iconSrc="/ui-icons/hub-situation.webp"
                 title="상황별 추천"
                 sub="처음 운동해요, 집에서, 30분만 등 상황에 맞게"
                 onClick={() => setMode("situation")}
               />
               <HubCard
-                icon="🫁"
+                iconSrc="/ui-icons/hub-part.webp"
                 title="부위별 추천"
                 sub="가슴, 등, 하체 등 운동할 부위로 고르기"
                 onClick={() => setMode("part")}
               />
               <HubCard
-                icon="🔍"
+                iconSrc="/ui-icons/hub-search.webp"
                 title="운동 이름 검색"
                 sub="알고 있는 운동을 직접 찾아요"
                 onClick={() => setMode("search")}
               />
               <HubCard
-                icon="🕘"
+                iconSrc="/ui-icons/hub-past.webp"
                 title="지난 운동 불러오기"
                 sub="예전에 했던 운동을 그대로 추가해요"
                 onClick={() => setMode("past")}
               />
               {routinesEnabled && (
                 <HubCard
-                  icon="💾"
+                  iconSrc="/ui-icons/hub-routine.webp"
                   title="내 루틴"
                   sub={`저장해 둔 루틴 ${routines?.length ?? 0}개에서 불러와요`}
                   onClick={() => setMode("routine")}
@@ -411,7 +416,7 @@ function PickerSheet({
               {/* 다른 넷과 달리 담는 게 아니라 바로 시작한다 — 문구로 말한다 */}
               {onOpenTabata && (
                 <HubCard
-                  icon="🔥"
+                  iconSrc="/ui-icons/hub-tabata.webp"
                   title="타바타로 바로 시작"
                   sub="음원 따라 4분, 기록은 자동 — 목록은 새로 시작해요"
                   onClick={onOpenTabata}
@@ -771,13 +776,18 @@ function PickerSheet({
 }
 
 function HubCard({
-  icon,
+  iconSrc,
   title,
   sub,
   onClick,
   primary = false,
 }: {
-  icon: string;
+  /**
+   * ⚠️ 이모지가 아니라 **이미지 경로**다 (2026-08-07 사용자 제공 시안).
+   * 이름을 `icon`에서 바꾼 것은 의도적이다 — 그냥 두면 남은 호출부가
+   * 경로 **문자열을 글자 그대로 렌더**해도 타입이 통과한다.
+   */
+  iconSrc: string;
   title: string;
   sub: string;
   onClick: () => void;
@@ -793,7 +803,23 @@ function HubCard({
           : "border-line bg-surface-2"
       }`}
     >
-      <span className="text-xl">{icon}</span>
+      {/* ⚠️ `alt=""` — 바로 옆 `title`이 같은 뜻을 글자로 말한다. alt를 채우면
+          스크린리더가 같은 말을 두 번 읽는다. 이미지가 안 떠도 제목·설명·이동은
+          그대로 성립한다(설계 §5).
+
+          ⚠️ **primary 카드에서는 아이콘을 검게 칠한다** (2026-08-07 사용자 지적).
+          그 카드만 `bg-accent`(골드 채움)라, 골드 아이콘을 그대로 얹으면
+          배경과 같은 색이라 **아예 안 보인다.** 글자가 `text-accent-ink`로
+          어두워지는 것과 같은 이유다.
+          별도 검정 자산을 만들지 않고 `brightness-0`로 눕힌다 — 자산이 두 벌이
+          되면 시안을 다시 자를 때 한쪽만 갱신되어 갈라진다. */}
+      <Image
+        src={iconSrc}
+        alt=""
+        width={40}
+        height={40}
+        className={`h-10 w-10 flex-none ${primary ? "brightness-0" : ""}`}
+      />
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-extrabold">{title}</span>
         <span

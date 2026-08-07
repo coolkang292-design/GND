@@ -1,14 +1,17 @@
 "use client";
 
+import { UiIcon } from "@/components/ui-icon";
 import { currentStreak, workoutDayKeys } from "@/lib/domain/streak";
 import { DEFAULT_TIMEZONE, dayKey } from "@/lib/domain/time";
 import { weekWorkoutDays } from "@/lib/domain/viewing-pass";
 
-function Stat({ v, k }: { v: React.ReactNode; k: string }) {
+function Stat({ v, k }: { v: React.ReactNode; k: React.ReactNode }) {
   return (
     <div className="rounded-card-sm border border-line bg-surface px-2 py-3 text-center">
       <p className="text-lg font-extrabold">{v}</p>
-      <p className="mt-0.5 text-[11px] text-muted">{k}</p>
+      <p className="mt-0.5 flex items-center justify-center gap-1 text-[11px] text-muted">
+        {k}
+      </p>
     </div>
   );
 }
@@ -45,7 +48,15 @@ export function WeeklyStats({
         k="이번 주 운동"
       />
       <Stat v={`${rate}%`} k="목표 달성률" />
-      <Stat v={`${streak}일`} k="🔥 스트릭" />
+      {/* 옛 표기는 `🔥`였다 (2026-08-07 2차 시안으로 교체) */}
+      <Stat
+        v={`${streak}일`}
+        k={
+          <>
+            <UiIcon name="streak-on" size={13} /> 스트릭
+          </>
+        }
+      />
     </div>
   );
 }

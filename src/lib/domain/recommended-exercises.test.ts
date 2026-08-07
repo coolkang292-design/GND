@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   EXERCISE_NOTES,
@@ -39,6 +41,9 @@ const ALL_NAMES = [
   ]),
 ];
 const FULL_CATALOG: CatalogExercise[] = ALL_NAMES.map((name) => item(name));
+
+/** `/ui-icons/x.webp` → 저장소의 실제 파일 경로 */
+const publicPath = (src: string) => join(process.cwd(), "public", src);
 
 describe("resolveNames — 카탈로그 교집합", () => {
   it("카탈로그에 없는 이름은 조용히 뺀다", () => {
@@ -91,9 +96,11 @@ describe("부위별 추천", () => {
     }
   });
 
-  it("모든 부위에 아이콘과 한 줄 설명이 있다", () => {
+  it("모든 부위에 아이콘 파일과 한 줄 설명이 있다", () => {
     for (const part of RECOMMEND_PARTS) {
-      expect(PART_META[part].icon).toBeTruthy();
+      // ⚠️ 경로가 있다는 것만 보면 오타를 못 잡는다 — 깨진 이미지는 유닛
+      //    테스트에 안 잡히고 화면에서만 드러난다. 파일 존재까지 본다.
+      expect(existsSync(publicPath(PART_META[part].iconSrc))).toBe(true);
       expect(PART_META[part].sub.length).toBeGreaterThan(3);
     }
   });
@@ -126,9 +133,9 @@ describe("상황별 추천", () => {
     }
   });
 
-  it("모든 상황에 아이콘·라벨·한 줄 설명이 있다", () => {
+  it("모든 상황에 아이콘 파일·라벨·한 줄 설명이 있다", () => {
     for (const s of SITUATIONS) {
-      expect(s.icon).toBeTruthy();
+      expect(existsSync(publicPath(s.iconSrc))).toBe(true);
       expect(s.label.length).toBeGreaterThan(1);
       expect(s.sub.length).toBeGreaterThan(3);
     }

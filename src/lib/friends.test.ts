@@ -73,12 +73,16 @@ describe("getFriendBoardBase — 친구 세션 질의", () => {
   /**
    * ⚠️ 이 단언이 이 파일의 핵심이다. RLS가 친구 세션을 공개분으로 좁히는데
    * **내 세션은 전부** 보인다. 필터를 빼면 나만 다른 자로 재게 된다.
+   *
+   * 2026-08-07에 내 행이 목록에 들어오면서 이 단언의 무게가 더 커졌다 — 이제
+   * 나도 질의 대상이라 필터가 빠지면 **내 비공개 세션이 내 행만 부풀린다.**
+   * 예전엔 나를 아예 안 넣어서 드러나지 않았을 실수다.
    */
   it("공개(group) 완료 세션만 센다 — 친구와 같은 자로 재기 위해서다", async () => {
     const { builder, calls } = queryBuilder([sessionRow("f1", "2026-08-06T02:00:00Z")]);
     mocks.from.mockReturnValue(builder);
 
-    await getFriendBoardBase();
+    await getFriendBoardBase("me");
 
     const eqArgs = calls.filter((c) => c.method === "eq").map((c) => c.args);
     expect(eqArgs).toContainEqual(["visibility", "group"]);
@@ -89,11 +93,31 @@ describe("getFriendBoardBase — 친구 세션 질의", () => {
     ]);
   });
 
+  /**
+   * ⚠️ 2026-08-07 사용자 지시로 내 행이 목록 맨 위에 생겼다. 내 활동도 **같은
+   * 질의 한 번**으로 받는다 — 따로 부르면 질의가 하나 늘고, 더 나쁘게는 필터가
+   * 갈려 내 숫자만 다른 자로 재게 된다.
+   */
+  it("내 id와 친구 id를 한 질의로 함께 받는다", async () => {
+    const { builder, calls } = queryBuilder([]);
+    mocks.from.mockReturnValue(builder);
+
+    await getFriendBoardBase("me");
+
+    const inArgs = calls.find((c) => c.method === "in")?.args as [
+      string,
+      string[],
+    ];
+    expect(inArgs[0]).toBe("user_id");
+    expect(inArgs[1]).toContain("me");
+    expect(inArgs[1]).toContain("f1");
+  });
+
   it("행 상한을 명시한다 — 잘렸는지 알아야 숫자가 조용히 틀리지 않는다", async () => {
     const { builder, calls } = queryBuilder([]);
     mocks.from.mockReturnValue(builder);
 
-    await getFriendBoardBase();
+    await getFriendBoardBase("me");
 
     expect(calls.find((c) => c.method === "limit")?.args).toEqual([
       FRIEND_SESSION_ROW_LIMIT,
@@ -104,7 +128,7 @@ describe("getFriendBoardBase — 친구 세션 질의", () => {
     const { builder } = queryBuilder([sessionRow("f1", "2026-08-06T02:00:00Z")]);
     mocks.from.mockReturnValue(builder);
 
-    const base = await getFriendBoardBase();
+    const base = await getFriendBoardBase("me");
     expect(base.truncated).toBe(false);
     expect(base.activity.get("f1")?.workoutCount).toBe(1);
   });
@@ -116,19 +140,19 @@ describe("getFriendBoardBase — 친구 세션 질의", () => {
     const { builder } = queryBuilder(rows);
     mocks.from.mockReturnValue(builder);
 
-    expect((await getFriendBoardBase()).truncated).toBe(true);
+    expect((await getFriendBoardBase("me")).truncated).toBe(true);
   });
 
   it("찌른 기록을 그대로 실어 보낸다 — 앱을 다시 켜도 잠금이 유지된다", async () => {
     const { builder } = queryBuilder([]);
     mocks.from.mockReturnValue(builder);
 
-    expect((await getFriendBoardBase()).poked.has("f1")).toBe(true);
+    expect((await getFriendBoardBase("me")).poked.has("f1")).toBe(true);
   });
 
   it("친구가 없으면 질의를 아예 하지 않는다", async () => {
     mocks.getMyCrew.mockResolvedValue([]);
-    const base = await getFriendBoardBase();
+    const base = await getFriendBoardBase("me");
 
     expect(mocks.from).not.toHaveBeenCalled();
     expect(base.crew).toEqual([]);

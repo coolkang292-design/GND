@@ -1,5 +1,6 @@
 "use client";
 
+import { UiIcon } from "@/components/ui-icon";
 import {
   currentStreak,
   daysSinceLastWorkout,
@@ -57,7 +58,16 @@ export function StreakCard({ completedAts }: { completedAts: Date[] }) {
   return (
     <>
       <section className="flex items-center gap-3 rounded-card border border-line bg-surface p-4 shadow-card">
-        <span className="text-3xl">{streak > 0 ? "🔥" : "🪵"}</span>
+        {/* ⚠️ 2026-08-07에 이모지(`🔥`/`🪵`) → 시안 → 이모지 → **시안**으로 두 번
+            오갔다. 1차 시안이 44px에서 뭉개져 되돌렸고, 획을 굵게 다시 받은
+            2차가 검사를 통과해서 다시 넣었다(`docs/ui-icon-asset-guide.md`).
+            되돌릴 일이 있으면 `🔥`/`🪵`가 옛 표기다.
+
+            ⚠️ 꺼진 쪽이 **장작이 아니라 같은 불꽃의 빈 판**이다. 장작은 "아직
+            불이 안 붙었다"는 뜻을 화면에서 스스로 설명하지 못했다.
+            옆 `스트릭 N일 유지 중` / `스트릭 없음`이 같은 말을 글자로 하므로
+            `alt=""`가 맞다. */}
+        <UiIcon name={streak > 0 ? "streak-on" : "streak-off"} size={44} />
         <div className="flex-1">
           <p className="text-[15px] font-extrabold">
             {streak > 0 ? `스트릭 ${streak}일 유지 중` : "스트릭 없음"}

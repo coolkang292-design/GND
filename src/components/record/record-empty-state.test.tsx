@@ -20,14 +20,14 @@ describe("RecordEmptyState — 등록 0개 화면 (사용자 지시 2026-08-06)"
     const { queryByText } = render(
       <RecordEmptyState hasHistory={false} onAdd={vi.fn()} onLoadRecent={vi.fn()} />,
     );
-    expect(queryByText("🕘 최근 운동 불러오기")).toBeNull();
+    expect(queryByText("최근 운동 불러오기")).toBeNull();
   });
 
   it("이력이 있으면 보조 CTA로 나온다", () => {
     const { getByText } = render(
       <RecordEmptyState hasHistory onAdd={vi.fn()} onLoadRecent={vi.fn()} />,
     );
-    expect(getByText("🕘 최근 운동 불러오기")).toBeTruthy();
+    expect(getByText("최근 운동 불러오기")).toBeTruthy();
   });
 
   it("두 버튼이 서로 다른 핸들러로 간다", () => {
@@ -41,7 +41,7 @@ describe("RecordEmptyState — 등록 0개 화면 (사용자 지시 2026-08-06)"
     expect(onAdd).toHaveBeenCalledTimes(1);
     expect(onLoadRecent).not.toHaveBeenCalled();
 
-    fireEvent.click(getByText("🕘 최근 운동 불러오기"));
+    fireEvent.click(getByText("최근 운동 불러오기"));
     expect(onLoadRecent).toHaveBeenCalledTimes(1);
   });
 

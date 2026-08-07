@@ -110,10 +110,10 @@ describe("ParticipantPerformanceCard — 잠금", () => {
       />,
     );
     await waitFor(() =>
-      expect(screen.getByText("🏆 챌린지 참가자 성과")).toBeTruthy(),
+      expect(screen.getByText("챌린지 참가자 성과")).toBeTruthy(),
     );
     expect(mocks.getActiveChallengeRanking).not.toHaveBeenCalled();
-    expect(screen.getByText("🔒")).toBeTruthy();
+    expect(screen.getByAltText("아직 볼 수 없어요")).toBeTruthy();
   });
 
   it("열리면 참가자 고르기가 뜨고 자물쇠가 사라진다", async () => {
@@ -125,7 +125,7 @@ describe("ParticipantPerformanceCard — 잠금", () => {
       />,
     );
     await waitFor(() => expect(screen.getByText("낭만송곳니")).toBeTruthy());
-    expect(screen.queryByText("🔒")).toBeNull();
+    expect(screen.queryByAltText("아직 볼 수 없어요")).toBeNull();
     // 고르기 목록엔 순위·점수를 노출하지 않는다
     expect(screen.queryByText(/2위/)).toBeNull();
     expect(screen.queryByText(/60점/)).toBeNull();

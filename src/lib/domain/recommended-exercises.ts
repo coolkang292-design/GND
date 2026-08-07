@@ -81,14 +81,27 @@ export const RECOMMEND_PARTS = [
 
 export type RecommendPart = (typeof RECOMMEND_PARTS)[number];
 
-export const PART_META: Record<RecommendPart, { icon: string; sub: string }> = {
-  가슴: { icon: "🫁", sub: "가슴을 탄탄하게" },
-  등: { icon: "🔙", sub: "등을 넓고 강하게" },
-  하체: { icon: "🦵", sub: "하체를 튼튼하게" },
-  어깨: { icon: "🙆", sub: "어깨를 안정적으로" },
-  팔: { icon: "💪", sub: "팔 힘을 기르기" },
-  코어: { icon: "🎯", sub: "중심을 단단하게" },
-};
+/**
+ * 부위 아이콘·설명.
+ *
+ * ⚠️ `iconSrc`는 **이모지가 아니라 이미지 경로**다 (2026-08-07 사용자 제공 시안).
+ * 옛 이모지(🫁 🔙 🦵 🙆 💪 🎯)는 부위를 제대로 가리키지도 못했다 — `🔙`은 'BACK'
+ * 글자 그림이라 등 근육이 아니고, `🎯`는 코어와 아무 상관이 없다. 시안의 골드
+ * 선화는 실제 그 부위의 근육을 그린다.
+ *
+ * ⚠️ **필드 이름을 `icon`에서 바꾼 것은 의도적이다.** 그냥 두면 남은 호출부가
+ * `{choice.icon}`으로 경로 **문자열을 글자 그대로 렌더**해도 타입이 통과한다.
+ * 자산은 `scripts/slice-ui-icons.py`가 만든다.
+ */
+export const PART_META: Record<RecommendPart, { iconSrc: string; sub: string }> =
+  {
+    가슴: { iconSrc: "/ui-icons/part-chest.webp", sub: "가슴을 탄탄하게" },
+    등: { iconSrc: "/ui-icons/part-back.webp", sub: "등을 넓고 강하게" },
+    하체: { iconSrc: "/ui-icons/part-legs.webp", sub: "하체를 튼튼하게" },
+    어깨: { iconSrc: "/ui-icons/part-shoulders.webp", sub: "어깨를 안정적으로" },
+    팔: { iconSrc: "/ui-icons/part-arms.webp", sub: "팔 힘을 기르기" },
+    코어: { iconSrc: "/ui-icons/part-core.webp", sub: "중심을 단단하게" },
+  };
 
 /** 순서가 곧 추천 순위다 — 위에 있을수록 먼저 권한다 */
 export const RECOMMENDED_BY_PART: Record<RecommendPart, readonly string[]> = {
@@ -114,7 +127,8 @@ export type Situation = {
   key: SituationKey;
   label: string;
   sub: string;
-  icon: string;
+  /** ⚠️ 이모지가 아니라 **이미지 경로**다 — 이유는 `PART_META` 주석 참조 */
+  iconSrc: string;
   /**
    * 이 상황의 종목. `challenge`만 비어 있다 — 그건 고정 목록이 아니라
    * **내 챌린지 목표에서 계산한다**(`resolveSituation`).
@@ -134,42 +148,42 @@ export const SITUATIONS: readonly Situation[] = [
     key: "beginner",
     label: "처음 운동해요",
     sub: "기본부터 천천히",
-    icon: "🌱",
+    iconSrc: "/ui-icons/situ-beginner.webp",
     names: ["체스트프레스 머신", "랫풀다운", "레그프레스", "숄더프레스"],
   },
   {
     key: "challenge",
     label: "챌린지 목표에 맞게",
     sub: "목표 달성 우선으로",
-    icon: "🎯",
+    iconSrc: "/ui-icons/situ-challenge.webp",
     names: [],
   },
   {
     key: "no-machines",
     label: "기구를 잘 몰라요",
     sub: "기구 사용이 낯설어요",
-    icon: "❓",
+    iconSrc: "/ui-icons/situ-no-machines.webp",
     names: ["맨몸 스쿼트", "푸시업", "덤벨 컬", "플랭크"],
   },
   {
     key: "home",
     label: "집에서 할래요",
     sub: "집에서 간편하게",
-    icon: "🏠",
+    iconSrc: "/ui-icons/situ-home.webp",
     names: ["푸시업", "맨몸 스쿼트", "플랭크", "런지", "힙 브릿지"],
   },
   {
     key: "short",
     label: "30분만 운동할래요",
     sub: "짧고 효과적으로",
-    icon: "🕐",
+    iconSrc: "/ui-icons/situ-short.webp",
     names: ["레그프레스", "랫풀다운", "체스트프레스 머신"],
   },
   {
     key: "cardio",
     label: "유산소만 할래요",
     sub: "걷기·러닝 위주로",
-    icon: "❤️",
+    iconSrc: "/ui-icons/situ-cardio.webp",
     names: ["걷기", "트레드밀", "사이클", "로잉"],
   },
 ];

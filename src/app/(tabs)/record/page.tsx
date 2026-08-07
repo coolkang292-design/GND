@@ -9,6 +9,7 @@ import {
   type SetStateAction,
 } from "react";
 import { useAuth } from "@/components/auth-provider";
+import { UiIcon } from "@/components/ui-icon";
 import { CalendarView } from "@/components/record/calendar-view";
 import { ExerciseCard } from "@/components/record/exercise-card";
 import {
@@ -1475,8 +1476,10 @@ function WorkoutScreen({ userId }: { userId: string }) {
             if (gained.length === 0) {
               return (
                 <section className="rounded-card border border-warn/40 bg-surface p-4">
-                  <p className="text-xs font-extrabold text-warn">
-                    🎯 이번 운동은 챌린지 성과에 안 잡혔어요
+                  <p className="flex items-center gap-1.5 text-xs font-extrabold text-warn">
+                    {/* 옛 표기는 `🎯`였다 (2026-08-07 2차 시안으로 교체) */}
+                    <UiIcon name="goal" size={15} />
+                    이번 운동은 챌린지 성과에 안 잡혔어요
                   </p>
                   <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">
                     운동 기록과 XP는 그대로 쌓였어요. 다만 지금 내 챌린지 목표와
@@ -1498,8 +1501,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
             }
             return (
               <section className="rounded-card border border-accent/40 bg-accent-weak p-4">
-                <p className="text-xs font-extrabold text-accent">
-                  🎯 챌린지 목표에{" "}
+                <p className="flex items-center gap-1.5 text-xs font-extrabold text-accent">
+                  <UiIcon name="goal" size={15} />
+                  챌린지 목표에{" "}
                   {challengePhotoRequired && !resultPhotoDone
                     ? "쌓일 몫"
                     : "쌓였어요"}
@@ -1523,8 +1527,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
                   ))}
                 </ul>
                 {challengePhotoRequired && !resultPhotoDone && (
-                  <p className="mt-2.5 text-[11.5px] font-bold text-warn">
-                    📷 아래에서 인증 사진을 올려야 챌린지 성과에 반영돼요.
+                  <p className="mt-2.5 flex items-center gap-1.5 text-[11.5px] font-bold text-warn">
+                    <UiIcon name="camera" size={14} />
+                    아래에서 인증 사진을 올려야 챌린지 성과에 반영돼요.
                   </p>
                 )}
               </section>

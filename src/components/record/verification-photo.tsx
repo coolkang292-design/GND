@@ -8,6 +8,7 @@ import {
   type VerificationSource,
 } from "@/lib/workout";
 import { PhotoStamp } from "@/components/photo-stamp";
+import { UiIcon } from "@/components/ui-icon";
 
 /**
  * 완료 화면 인증사진 (§11) — 촬영·앨범 → 압축 → 비공개 업로드 → 화면 오버레이
@@ -127,8 +128,10 @@ export function VerificationPhoto({
             className="h-full w-full object-cover"
           />
         ) : (
-          <div className="grid h-full w-full place-items-center text-sm text-faint">
-            📷 사진을 올리면 여기에 표시돼요
+          <div className="flex h-full w-full items-center justify-center gap-1.5 text-sm text-faint">
+            {/* 옛 표기는 `📷`였다 (2026-08-07 2차 시안으로 교체) */}
+            <UiIcon name="camera" size={17} />
+            사진을 올리면 여기에 표시돼요
           </div>
         )}
         <PhotoStamp
@@ -149,9 +152,18 @@ export function VerificationPhoto({
           <button
             onClick={() => cameraInput.current?.click()}
             disabled={state === "uploading"}
-            className="mt-3 h-11 w-full rounded-card bg-accent text-sm font-extrabold text-accent-ink disabled:opacity-60"
+            className="mt-3 flex h-11 w-full items-center justify-center gap-1.5 rounded-card bg-accent text-sm font-extrabold text-accent-ink disabled:opacity-60"
           >
-            {state === "uploading" ? "올리는 중…" : "📷 지금 촬영"}
+            {state === "uploading" ? (
+              "올리는 중…"
+            ) : (
+              <>
+                {/* 골드 버튼 위라 아이콘을 검게 눕힌다 — `HubCard`의 primary와 같은
+                    이유다. 안 그러면 배경과 같은 골드라 안 보인다. */}
+                <UiIcon name="camera" size={17} className="brightness-0" />
+                지금 촬영
+              </>
+            )}
           </button>
           <button
             onClick={() => albumInput.current?.click()}

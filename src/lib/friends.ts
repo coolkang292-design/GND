@@ -37,7 +37,14 @@ export type FriendBoardBase = {
   truncated: boolean;
 };
 
-export async function getFriendBoardBase(): Promise<FriendBoardBase> {
+/**
+ * @param meId 내 사용자 id. **내 활동도 같은 질의로 받는다** — 2026-08-07 사용자
+ *   지시로 목록 맨 위에 내 행이 생겼다. 따로 부르면 질의가 하나 늘고, 더 나쁘게는
+ *   필터가 갈려 내 숫자만 다른 자로 재게 된다.
+ */
+export async function getFriendBoardBase(
+  meId: string,
+): Promise<FriendBoardBase> {
   const crewMembers = await getMyCrew();
   const crew: FriendCrewInput[] = crewMembers.map((m) => ({
     id: m.id,
@@ -46,11 +53,13 @@ export async function getFriendBoardBase(): Promise<FriendBoardBase> {
     totalXp: m.totalXp,
   }));
   if (crew.length === 0) {
+    // 친구가 없으면 화면이 목록 대신 `NoFriendsCard`를 그린다 — 내 행 한 줄만
+    // 있는 "친구 목록"은 목록이 아니다. 그릴 게 없으니 질의도 하지 않는다.
     return { crew, activity: new Map(), poked: new Set(), truncated: false };
   }
 
   const [sessions, poked] = await Promise.all([
-    fetchFriendSessions(crew.map((m) => m.id)),
+    fetchFriendSessions([meId, ...crew.map((m) => m.id)]),
     getMyRecentPokeTargets(),
   ]);
 
@@ -63,11 +72,13 @@ export async function getFriendBoardBase(): Promise<FriendBoardBase> {
 }
 
 /**
- * 친구들의 완료 세션.
+ * 나와 친구들의 완료 세션.
  *
  * ⚠️ `visibility='group'`을 **명시**한다. RLS가 어차피 친구 세션을 그렇게 좁히지만,
- * 명시하지 않으면 "왜 이 숫자가 이런가"가 코드에 안 남는다. 나를 이 목록에 넣지
- * 않는 이유도 같다 — 나는 내 비공개 세션까지 보이므로 **같은 자로 잰 값이 아니다**.
+ * **내 세션은 RLS가 비공개까지 통과시킨다.** 그래서 이 필터가 빠지면 목록에서
+ * 내 행만 비공개 세션까지 세어 부풀고, 나와 친구를 같은 자로 잰 값이 아니게 된다.
+ * 2026-08-06까지는 나를 아예 안 넣어서 이 실수가 드러나지 않았다 — 이제 드러난다.
+ * `friends.test.ts`가 `eq(visibility, group)`을 단언으로 고정한다.
  *
  * ⚠️ `limit`은 자르려는 게 아니라 **잘렸는지 알려고** 건다. 서버 응답 상한에
  * 걸리면 오류 없이 숫자만 조용히 틀린다 — 가장 나쁜 실패 모양이다.

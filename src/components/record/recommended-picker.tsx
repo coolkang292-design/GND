@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { UiIcon } from "@/components/ui-icon";
 import { type GoalCategory } from "@/lib/challenge";
 import {
   PART_META,
@@ -15,7 +16,8 @@ import {
 import type { CatalogExercise } from "@/lib/types";
 
 /** 그리드 한 칸 — 부위와 상황이 같은 모양을 쓴다 */
-type Choice = { key: string; label: string; sub: string; icon: string };
+/** ⚠️ `iconSrc`는 이모지가 아니라 이미지 경로다 (`PART_META` 주석 참조) */
+type Choice = { key: string; label: string; sub: string; iconSrc: string };
 
 /**
  * 추천 운동 — 부위별·상황별 (사용자 디자인 2026-08-06).
@@ -70,13 +72,13 @@ export function RecommendedPicker({
         key: p,
         label: p,
         sub: PART_META[p].sub,
-        icon: PART_META[p].icon,
+        iconSrc: PART_META[p].iconSrc,
       }))
     : situations.map((s) => ({
         key: s.key,
         label: s.label,
         sub: s.sub,
-        icon: s.icon,
+        iconSrc: s.iconSrc,
       }));
 
   const activeKey = byPart ? part : (activeSituation?.key ?? "beginner");
@@ -98,7 +100,11 @@ export function RecommendedPicker({
         type="button"
         onClick={onBack}
         aria-label="진입 화면으로 돌아가기"
-        className="mb-1 flex h-8 w-8 flex-none items-center justify-center self-start rounded-full text-lg text-muted"
+        /* ⚠️ 테두리 있는 원으로 그린다 (2026-08-07 사용자 지적 "뒤로가기도 잘보이게").
+           옛 모양은 배경도 테두리도 없는 `text-muted` 글리프 하나여서, 어두운
+           배경에서 **눌 수 있는 것으로 보이지 않았다.** 44px 손가락 표적도
+           확보한다(옛 32px). `exercise-picker.tsx`의 `backHeader`와 같은 모양이다. */
+        className="mb-1 flex h-11 w-11 flex-none items-center justify-center self-start rounded-full border border-line bg-surface-2 text-lg text-text"
       >
         ←
       </button>
@@ -138,7 +144,16 @@ export function RecommendedPicker({
                     : "border-line bg-surface-2"
                 }`}
               >
-                <span className="text-xl leading-none">{choice.icon}</span>
+                {/* ⚠️ `alt=""`가 맞다 — 바로 옆에 같은 뜻의 글자(`choice.label`)가
+                    있어서, alt를 채우면 스크린리더가 부위 이름을 두 번 읽는다.
+                    이미지가 안 떠도 글자·선택 상태·다음 이동은 그대로다(설계 §5). */}
+                <Image
+                  src={choice.iconSrc}
+                  alt=""
+                  width={40}
+                  height={40}
+                  className="h-10 w-10 flex-none"
+                />
                 <span className="min-w-0 flex-1">
                   <span
                     className={`block text-[13px] font-extrabold ${
@@ -235,7 +250,9 @@ export function RecommendedPicker({
           onClick={onSearch}
           className="flex w-full items-center gap-2 rounded-card border border-line bg-surface-2 px-3 py-3 text-left"
         >
-          <span className="text-base">🔍</span>
+          {/* 옛 표기는 `🔍`였다 (2026-08-07 2차 시안으로 교체) — 허브의
+              `운동 이름 검색` 카드와 같은 그림이다 */}
+          <UiIcon name="hub-search" size={22} />
           <span className="min-w-0 flex-1">
             <span className="block text-[13px] font-bold">운동 이름 검색</span>
             <span className="mt-0.5 block text-[10.5px] text-muted">

@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { UiIcon } from "@/components/ui-icon";
 import {
   categoryCompletion,
   overallCompletion,
@@ -56,8 +57,10 @@ function AchievementRow({ a }: { a: Achievement }) {
           {a.unlocked ? (
             <span className="text-[11px] font-extrabold text-accent">+{a.rewardPoint} P</span>
           ) : (
-            <span className="text-[11px] text-muted">
-              🔒 앞으로 {rem.amount}{rem.unit} · +{a.rewardPoint} P
+            <span className="inline-flex items-center gap-1 text-[11px] text-muted">
+              {/* 옛 표기는 `🔒`였다 (2026-08-07 2차 시안으로 교체) */}
+              <UiIcon name="lock" size={13} />앞으로 {rem.amount}
+              {rem.unit} · +{a.rewardPoint} P
             </span>
           )}
         </div>

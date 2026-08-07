@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { UiIcon } from "@/components/ui-icon";
 import { getStageGroups } from "@/lib/domain/progression";
 
 /** 다음 단계 미리보기 — 실루엣 캐릭터 + 해금 조건. 최고 단계면 렌더하지 않는다. */
@@ -31,9 +32,10 @@ export function NextStagePreview({
           />
           <span
             aria-hidden
-            className="absolute inset-0 flex items-center justify-center text-xl"
+            className="absolute inset-0 flex items-center justify-center"
           >
-            🔒
+            {/* 옛 표기는 `🔒`였다 (2026-08-07 2차 시안으로 교체) */}
+            <UiIcon name="lock" size={22} />
           </span>
         </div>
         <div className="min-w-0 flex-1">

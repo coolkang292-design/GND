@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { UiIcon } from "@/components/ui-icon";
 import {
   TABATA_EXERCISE_COUNT,
   TABATA_TRACKS,
@@ -227,7 +228,13 @@ function TabataSheetBody({
       />
       <div className="fixed inset-x-0 bottom-0 z-50 flex max-h-[88dvh] flex-col overflow-y-auto rounded-t-[22px] border-t border-line bg-surface p-5">
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
-        <h3 className="text-base font-extrabold">🔥 타바타 — {track.title}</h3>
+        {/* 옛 표기는 `🔥`였다 (2026-08-07 2차 시안으로 교체) — 운동 추가 허브의
+            `타바타로 바로 시작` 카드와 **같은 그림**(불붙은 스톱워치)이라야
+            같은 기능으로 읽힌다 */}
+        <h3 className="flex items-center gap-1.5 text-base font-extrabold">
+          <UiIcon name="hub-tabata" size={22} />
+          타바타 — {track.title}
+        </h3>
 
         <audio
           key={track.src}

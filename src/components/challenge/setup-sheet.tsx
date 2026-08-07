@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { UiIcon } from "@/components/ui-icon";
 import type { GoalType } from "@/lib/domain/goal-score";
 import {
   GOAL_TYPE_META,
@@ -259,8 +260,15 @@ export function ChallengeSetupSheet({
         style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 16px)" }}
       >
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
-        <h3 className="text-base font-extrabold">
-          {mode === "create" ? "새 챌린지 만들기" : "🎯 내 목표 (KPI) 설정"}
+        {/* 옛 표기는 `🎯`였다 (2026-08-07 2차 시안으로 교체) */}
+        <h3 className="flex items-center gap-1.5 text-base font-extrabold">
+          {mode === "create" ? (
+            "새 챌린지 만들기"
+          ) : (
+            <>
+              <UiIcon name="goal" size={20} />내 목표 (KPI) 설정
+            </>
+          )}
         </h3>
         <p className="mt-0.5 text-[11.5px] text-muted">
           카테고리(웨이트·유산소·맨몸)를 고르고 지표를 정하면, 종류가 달라도
@@ -307,15 +315,18 @@ export function ChallengeSetupSheet({
               <p className="mt-1.5 text-right text-[11px] text-muted">
                 기간 {periodDays}일 ({weeks.toFixed(1)}주)
               </p>
-              <p className="mt-2 rounded-card-sm bg-accent/10 px-3 py-2 text-[11.5px] font-bold text-accent">
-                📷 이 챌린지는 사진 인증한 운동만 집계돼요
+              <p className="mt-2 flex items-center gap-1.5 rounded-card-sm bg-accent/10 px-3 py-2 text-[11.5px] font-bold text-accent">
+                <UiIcon name="camera" size={15} />이 챌린지는 사진 인증한 운동만
+                집계돼요
               </p>
             </div>
           )}
 
           <div className="mt-3 rounded-card border border-line bg-surface-2 p-3">
             <div className="flex items-center justify-between">
-              <p className="text-[13px] font-extrabold">🎯 내 목표 (KPI)</p>
+              <p className="flex items-center gap-1.5 text-[13px] font-extrabold">
+                <UiIcon name="goal" size={17} />내 목표 (KPI)
+              </p>
               <div className="flex gap-1.5">
                 {prevGoals && prevGoals.length > 0 && (
                   <button

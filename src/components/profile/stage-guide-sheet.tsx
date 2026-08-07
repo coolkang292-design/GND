@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { UiIcon } from "@/components/ui-icon";
 import { useEffect, useRef } from "react";
 import { getStageGroups } from "@/lib/domain/progression";
 
@@ -80,9 +81,10 @@ export function StageGuideSheet({
                   {locked && (
                     <span
                       aria-hidden
-                      className="absolute inset-0 flex items-center justify-center text-base"
+                      className="absolute inset-0 flex items-center justify-center"
                     >
-                      🔒
+                      {/* 옛 표기는 `🔒`였다 (2026-08-07 2차 시안으로 교체) */}
+                      <UiIcon name="lock" size={18} />
                     </span>
                   )}
                 </div>

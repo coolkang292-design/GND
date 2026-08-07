@@ -12,14 +12,17 @@ import {
 } from "@/lib/friends";
 import {
   buildFriendRows,
+  buildMyRow,
   canExpandFriendRows,
   formatTotalMinutes,
   pokeableFriendCount,
   visibleFriendRows,
   type FriendBadges,
+  type FriendCrewInput,
   type FriendRow,
 } from "@/lib/domain/friend-board";
 import { pokeUser, SocialError } from "@/lib/social";
+import { UiIcon } from "@/components/ui-icon";
 
 /**
  * 찌르기 실패 문구.
@@ -68,13 +71,169 @@ function StatChip({ label, value }: { label: string; value: string }) {
 }
 
 /**
+ * 한 사람의 행 — **나와 친구가 같은 컴포넌트를 쓴다.**
+ *
+ * ⚠️ 따로 만들지 마라. 같은 화면에서 내 숫자와 친구 숫자를 비교하는 것이 이 카드의
+ * 목적인데, 행을 두 벌로 두면 지표 라벨·배지 규칙·상태 알약이 시간이 지나며 갈린다.
+ * 다른 것은 **콕 버튼 하나뿐**이라 그것만 `row.isMe`로 가른다.
+ */
+function FriendRowItem({
+  row,
+  poked,
+  iWorkedOut,
+  pokingId,
+  onSelect,
+  onPoke,
+}: {
+  row: FriendRow;
+  poked: Set<string>;
+  iWorkedOut: boolean;
+  pokingId: string | null;
+  onSelect: (row: FriendRow) => void;
+  onPoke: (row: FriendRow) => void;
+}) {
+  return (
+    <li className="rounded-card border border-line bg-surface-2 p-3">
+      <div className="flex items-center gap-2.5">
+        {/* ⚠️ 콕 버튼과 형제로 둔다 — 행 전체를 버튼으로 감싸면 버튼이 중첩된다
+            (크루 카드가 같은 이유로 이렇게 돼 있다) */}
+        <button
+          type="button"
+          onClick={() => onSelect(row)}
+          aria-label={`${row.nickname} 성과 보기`}
+          className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+        >
+          {/* 프로필 이모지가 아니라 **현재 레벨의 캐릭터**를 쓴다(2026-08-07
+              사용자 요청). 성장 카드·프로필 시트와 같은 원천이라 셋이 안 갈린다.
+              object-top이 없으면 원형으로 깎을 때 얼굴이 잘린다. */}
+          <Image
+            src={row.characterPath}
+            alt={`${row.stageName} 캐릭터`}
+            width={44}
+            height={58}
+            sizes="44px"
+            className="h-11 w-11 flex-none rounded-full border border-line bg-surface object-cover object-top"
+          />
+          <span className="flex min-w-0 flex-1 items-center gap-1.5">
+            <span className="truncate text-[14px] font-extrabold">
+              {row.nickname}
+            </span>
+            {/* ⚠️ 내 행이라는 것을 **글자로** 말한다. 아바타는 내 캐릭터지만
+                친구도 같은 그림일 수 있어 그것만으로는 구별이 안 된다. */}
+            {row.isMe && (
+              <span className="flex-none rounded-full bg-accent px-1.5 py-[1px] text-[10.5px] font-extrabold text-accent-ink">
+                나
+              </span>
+            )}
+            {/* 목업의 골드 알약 — accent(#e8b84b)가 그 색이다 */}
+            <span className="flex-none rounded-full border border-accent/40 bg-accent-weak px-1.5 py-[1px] text-[10.5px] font-extrabold text-accent">
+              Lv.{row.level}
+            </span>
+            <span aria-hidden className="flex-none text-[11px] text-faint">
+              ›
+            </span>
+          </span>
+        </button>
+
+        <span className="flex flex-none items-center gap-1.5">
+          <span
+            className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-extrabold ${STATUS_STYLE[row.status].className}`}
+          >
+            <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-current" />
+            {STATUS_STYLE[row.status].label}
+          </span>
+          {/* ⚠️ 내 행에는 콕이 **아무 모양으로도** 없다 — 버튼도, "✅ 찌름"도.
+              자기 자신은 찌를 수 없다(2026-08-07 사용자 지시). 서버 `poke_user`도
+              막지만, 누를 수 없는 버튼을 그려 놓고 에러 토스트로 알리는 것은
+              화면이 거짓말을 하는 것이다.
+
+              ⚠️ 상대의 오늘 운동 여부로는 버튼을 숨기지 않는다 (2026-08-07 사용자 지시).
+              서버 `poke_user`에 그런 규칙이 없다 — 0028이 건 조건은 *내가* 오늘
+              했는가 하나뿐이다. 옛 크루 카드의 화면 규칙을 그대로 옮겼던 탓에
+              **오늘 운동을 마친 친구는 영영 못 찌르는** 상태였다. */}
+          {row.isMe ? null : poked.has(row.userId) ? (
+            <span
+              aria-label={`${row.nickname} 찌름 완료`}
+              className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-bold text-faint opacity-70"
+            >
+              ✅ 찌름
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => onPoke(row)}
+              disabled={!iWorkedOut || pokingId === row.userId}
+              aria-label={`${row.nickname} 찌르기`}
+              className={`rounded-full px-2.5 py-1 text-[11px] font-extrabold ${
+                iWorkedOut
+                  ? "bg-accent text-accent-ink"
+                  : "bg-surface text-faint opacity-60"
+              }`}
+            >
+              👉 콕
+            </button>
+          )}
+        </span>
+      </div>
+
+      {/* 지표 줄 — **3칸 고정 그리드**다 (2026-08-07 사용자 요청 "일자로 고정").
+          flex-wrap이면 닉네임 길이·값 자릿수에 따라 줄이 밀려 친구마다 행
+          높이가 달라진다. 그리드라 같은 칸이 친구끼리도 세로로 맞는다.
+          ⚠️ 연속 0일에도 칩을 **그린다** — 빼면 그 행만 칸이 밀린다. */}
+      <div className="mt-2.5 grid grid-cols-3 gap-1">
+        <StatChip label="운동" value={`${row.workoutCount}회`} />
+        <StatChip label="시간" value={formatTotalMinutes(row.totalMinutes)} />
+        <StatChip label="연속" value={`${row.streak}일`} />
+      </div>
+
+      {/* 배지 줄 — 🏅 이모지 하나에 숫자를 붙이는 대신 **실제 배지 그림**을
+          쓴다(2026-08-07 사용자 지적). 키는 이미 받아 온 것이라 조회가 없다. */}
+      <div className="mt-2.5 flex items-center gap-1.5 border-t border-line/60 pt-2.5">
+        {row.badgeCount === null ? (
+          <span className="text-[10.5px] text-faint">배지 불러오는 중…</span>
+        ) : row.badgeCount === 0 ? (
+          <span className="text-[10.5px] text-faint">아직 배지가 없어요</span>
+        ) : (
+          <>
+            {row.badgeKeys.map((key) => (
+              <Image
+                key={key}
+                src={`/badges/${key}.png`}
+                alt=""
+                width={26}
+                height={26}
+                sizes="26px"
+                className="h-[26px] w-[26px] flex-none"
+              />
+            ))}
+            {row.badgeCount > row.badgeKeys.length && (
+              <span className="text-[10.5px] font-bold text-faint">
+                +{row.badgeCount - row.badgeKeys.length}
+              </span>
+            )}
+            <span className="ml-auto text-[10.5px] font-bold text-muted">
+              배지 {row.badgeCount}개
+            </span>
+          </>
+        )}
+      </div>
+    </li>
+  );
+}
+
+/**
  * 표시 전용 본문 — 조회가 끝난 뒤의 그리기만 담당한다.
  * 셸에서 분리해 둬야 표시 규칙을 테스트로 덮을 수 있다(MemberProfileBody와 같은 이유).
  *
  * ⚠️ 순위·등수를 그리지 않는다 (사용자 확정 2026-08-07).
+ *
+ * ⚠️ `myRow`는 `rows` **밖**에 있다 (2026-08-07 사용자 지시). 섞으면 세 가지가
+ * 한꺼번에 틀어진다 — 헤딩의 `친구 N명`이 나를 세고, 접힌 3행 중 한 자리를 내가
+ * 차지해 친구 하나가 밀려나며, `pokeableFriendCount`가 찌를 수 없는 나를 센다.
  */
 export function FriendBoardBody({
   rows,
+  myRow,
   poked,
   iWorkedOut,
   expanded,
@@ -85,6 +244,8 @@ export function FriendBoardBody({
   onToggleExpand,
 }: {
   rows: FriendRow[];
+  /** 내 행. 조회 전이면 `null` — 그동안 친구 목록만 그린다. */
+  myRow: FriendRow | null;
   poked: Set<string>;
   iWorkedOut: boolean;
   expanded: boolean;
@@ -101,7 +262,12 @@ export function FriendBoardBody({
   return (
     <section className="rounded-card border border-line bg-surface p-4 shadow-card">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-extrabold">👥 친구 {rows.length}명</h3>
+        {/* 옛 표기는 `👥`였다 (2026-08-07 2차 시안으로 교체). 옆 글자가 같은 뜻을
+            말하므로 `alt=""`다. */}
+        <h3 className="flex items-center gap-1.5 text-sm font-extrabold">
+          <UiIcon name="friends" size={22} />
+          친구 {rows.length}명
+        </h3>
         {/* 누를 게 없는데 링크만 있는 상태를 만들지 않는다 */}
         {canExpand && (
           <button
@@ -122,129 +288,28 @@ export function FriendBoardBody({
       )}
 
       <ul className="mt-3 flex flex-col gap-1.5">
+        {/* ⚠️ 내 행이 **맨 위**다 (2026-08-07 사용자 지시). 정렬 대상이 아니라
+            고정이다 — 내 최근 운동일에 따라 자리가 오르내리면 매번 눈으로 찾아야 한다. */}
+        {myRow && (
+          <FriendRowItem
+            row={myRow}
+            poked={poked}
+            iWorkedOut={iWorkedOut}
+            pokingId={pokingId}
+            onSelect={onSelect}
+            onPoke={onPoke}
+          />
+        )}
         {visible.map((row) => (
-          <li
+          <FriendRowItem
             key={row.userId}
-            className="rounded-card border border-line bg-surface-2 p-3"
-          >
-            <div className="flex items-center gap-2.5">
-              {/* ⚠️ 콕 버튼과 형제로 둔다 — 행 전체를 버튼으로 감싸면 버튼이 중첩된다
-                  (크루 카드가 같은 이유로 이렇게 돼 있다) */}
-              <button
-                type="button"
-                onClick={() => onSelect(row)}
-                aria-label={`${row.nickname} 성과 보기`}
-                className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
-              >
-                {/* 프로필 이모지가 아니라 **현재 레벨의 캐릭터**를 쓴다(2026-08-07
-                    사용자 요청). 성장 카드·프로필 시트와 같은 원천이라 셋이 안 갈린다.
-                    object-top이 없으면 원형으로 깎을 때 얼굴이 잘린다. */}
-                <Image
-                  src={row.characterPath}
-                  alt={`${row.stageName} 캐릭터`}
-                  width={44}
-                  height={58}
-                  sizes="44px"
-                  className="h-11 w-11 flex-none rounded-full border border-line bg-surface object-cover object-top"
-                />
-                <span className="flex min-w-0 flex-1 items-center gap-1.5">
-                  <span className="truncate text-[14px] font-extrabold">
-                    {row.nickname}
-                  </span>
-                  {/* 목업의 골드 알약 — accent(#e8b84b)가 그 색이다 */}
-                  <span className="flex-none rounded-full border border-accent/40 bg-accent-weak px-1.5 py-[1px] text-[10.5px] font-extrabold text-accent">
-                    Lv.{row.level}
-                  </span>
-                  <span aria-hidden className="flex-none text-[11px] text-faint">
-                    ›
-                  </span>
-                </span>
-              </button>
-
-              <span className="flex flex-none items-center gap-1.5">
-                <span
-                  className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-extrabold ${STATUS_STYLE[row.status].className}`}
-                >
-                  <span
-                    aria-hidden
-                    className="h-1.5 w-1.5 rounded-full bg-current"
-                  />
-                  {STATUS_STYLE[row.status].label}
-                </span>
-                {/* ⚠️ 상대의 오늘 운동 여부로 버튼을 숨기지 않는다 (2026-08-07 사용자 지시).
-                    서버 `poke_user`에도 그런 규칙이 없다 — 0028이 건 조건은 *내가*
-                    오늘 했는가 하나뿐이다. 옛 크루 카드의 화면 규칙을 그대로 옮겼던
-                    탓에 **오늘 운동을 마친 친구는 영영 못 찌르는** 상태였다. */}
-                {poked.has(row.userId) ? (
-                  <span
-                    aria-label={`${row.nickname} 찌름 완료`}
-                    className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-bold text-faint opacity-70"
-                  >
-                    ✅ 찌름
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => onPoke(row)}
-                    disabled={!iWorkedOut || pokingId === row.userId}
-                    aria-label={`${row.nickname} 찌르기`}
-                    className={`rounded-full px-2.5 py-1 text-[11px] font-extrabold ${
-                      iWorkedOut
-                        ? "bg-accent text-accent-ink"
-                        : "bg-surface text-faint opacity-60"
-                    }`}
-                  >
-                    👉 콕
-                  </button>
-                )}
-              </span>
-            </div>
-
-            {/* 지표 줄 — **3칸 고정 그리드**다 (2026-08-07 사용자 요청 "일자로 고정").
-                flex-wrap이면 닉네임 길이·값 자릿수에 따라 줄이 밀려 친구마다 행
-                높이가 달라진다. 그리드라 같은 칸이 친구끼리도 세로로 맞는다.
-                ⚠️ 연속 0일에도 칩을 **그린다** — 빼면 그 행만 칸이 밀린다. */}
-            <div className="mt-2.5 grid grid-cols-3 gap-1">
-              <StatChip label="운동" value={`${row.workoutCount}회`} />
-              <StatChip
-                label="시간"
-                value={formatTotalMinutes(row.totalMinutes)}
-              />
-              <StatChip label="연속" value={`${row.streak}일`} />
-            </div>
-
-            {/* 배지 줄 — 🏅 이모지 하나에 숫자를 붙이는 대신 **실제 배지 그림**을
-                쓴다(2026-08-07 사용자 지적). 키는 이미 받아 온 것이라 조회가 없다. */}
-            <div className="mt-2.5 flex items-center gap-1.5 border-t border-line/60 pt-2.5">
-              {row.badgeCount === null ? (
-                <span className="text-[10.5px] text-faint">배지 불러오는 중…</span>
-              ) : row.badgeCount === 0 ? (
-                <span className="text-[10.5px] text-faint">아직 배지가 없어요</span>
-              ) : (
-                <>
-                  {row.badgeKeys.map((key) => (
-                    <Image
-                      key={key}
-                      src={`/badges/${key}.png`}
-                      alt=""
-                      width={26}
-                      height={26}
-                      sizes="26px"
-                      className="h-[26px] w-[26px] flex-none"
-                    />
-                  ))}
-                  {row.badgeCount > row.badgeKeys.length && (
-                    <span className="text-[10.5px] font-bold text-faint">
-                      +{row.badgeCount - row.badgeKeys.length}
-                    </span>
-                  )}
-                  <span className="ml-auto text-[10.5px] font-bold text-muted">
-                    배지 {row.badgeCount}개
-                  </span>
-                </>
-              )}
-            </div>
-          </li>
+            row={row}
+            poked={poked}
+            iWorkedOut={iWorkedOut}
+            pokingId={pokingId}
+            onSelect={onSelect}
+            onPoke={onPoke}
+          />
         ))}
       </ul>
 
@@ -261,7 +326,10 @@ export function FriendBoardBody({
 export function NoFriendsCard() {
   return (
     <section className="rounded-card border border-line bg-surface p-4 shadow-card">
-      <h3 className="text-sm font-extrabold">👥 친구와 함께하면 더 강해져요</h3>
+      <h3 className="flex items-center gap-1.5 text-sm font-extrabold">
+        <UiIcon name="friends-add" size={22} />
+        친구와 함께하면 더 강해져요
+      </h3>
       <p className="mt-1 text-xs text-muted">
         아직 친구가 없어요. 닉네임으로 친구를 찾아 서로의 기록을 확인해 보세요.
       </p>
@@ -290,9 +358,19 @@ export function NoFriendsCard() {
 export function FriendBoardCard({
   activeUserIds,
   iWorkedOut,
+  me,
 }: {
   activeUserIds: Set<string>;
   iWorkedOut: boolean;
+  /**
+   * 내 행의 재료 (2026-08-07 사용자 지시). 조회 전이면 `null` — 그동안 친구 목록만
+   * 그린다.
+   *
+   * ⚠️ **홈이 이미 가진 값을 내려받는다.** 여기서 `getMyProfile`·`getProgressSummary`를
+   * 다시 부르면 홈에서 같은 질의가 두 번 나간다 — `activeUserIds`·`iWorkedOut`이
+   * 같은 이유로 prop이다.
+   */
+  me: FriendCrewInput | null;
 }) {
   const { userId, loading, configured } = useAuth();
   const [base, setBase] = useState<FriendBoardBase | null>(null);
@@ -313,7 +391,7 @@ export function FriendBoardCard({
 
     void (async () => {
       try {
-        const loaded = await getFriendBoardBase();
+        const loaded = await getFriendBoardBase(userId);
         if (cancelled) return;
         setBase(loaded);
         // 이 화면에서 방금 찌른 것을 덮어쓰지 않도록 합친다 — 재조회가 늦게
@@ -323,7 +401,14 @@ export function FriendBoardCard({
 
         // 배지는 1인 1콜이라 늦다. 목록을 먼저 그리고 나중에 채운다 —
         // 그동안 자리는 "—"가 차지하므로 행 높이가 안 변한다.
-        const counts = await getFriendBadges(loaded.crew.map((m) => m.id));
+        //
+        // ⚠️ 내 id도 같이 넣는다. `get_crew_member_profile`은 **자기 자신을 허용**한다
+        //    (`db-current-schema.sql:1255` — `p_target_id <> auth.uid()`일 때만 크루를
+        //    따진다). 안 넣으면 내 행만 "배지 불러오는 중…"에서 영영 안 바뀐다.
+        const counts = await getFriendBadges([
+          userId,
+          ...loaded.crew.map((m) => m.id),
+        ]);
         if (!cancelled) setBadges(counts);
       } catch {
         if (!cancelled) setFailed(true);
@@ -348,6 +433,16 @@ export function FriendBoardCard({
           })
         : [],
     [base, badges, activeUserIds],
+  );
+
+  // 내 행 — 친구와 **같은** activity·badges 맵에서 나온다. 다른 경로로 만들면
+  // 같은 화면에서 나와 친구를 비교할 수 없다.
+  const myRow = useMemo(
+    () =>
+      base && me
+        ? buildMyRow({ me, activity: base.activity, badges, activeUserIds })
+        : null,
+    [base, me, badges, activeUserIds],
   );
 
   const poke = useCallback(async (row: FriendRow) => {
@@ -385,6 +480,7 @@ export function FriendBoardCard({
     <>
       <FriendBoardBody
         rows={rows}
+        myRow={myRow}
         poked={poked}
         iWorkedOut={iWorkedOut}
         expanded={expanded}

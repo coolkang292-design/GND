@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
+import { UiIcon } from "@/components/ui-icon";
 import { DEFAULT_TIMEZONE } from "@/lib/domain/time";
 import { KING_DAYS, viewingPassStatus } from "@/lib/domain/viewing-pass";
 import { getCrewProfiles } from "@/lib/crew";
@@ -111,7 +112,11 @@ export function KingCard({
   return (
     <section className="rounded-card border border-line bg-surface p-4 shadow-card">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-extrabold">🏅 꾸준왕 열람권</h3>
+        {/* 옛 표기는 `🏅`였다 (2026-08-07 2차 시안으로 교체) */}
+        <h3 className="flex items-center gap-1.5 text-sm font-extrabold">
+          <UiIcon name="crown" size={20} />
+          꾸준왕 열람권
+        </h3>
         <span className="text-xs text-muted">주 {KING_DAYS}일 달성 보상</span>
       </div>
 
@@ -223,7 +228,9 @@ export function KingCard({
               </div>
               <div className="rounded-card-sm border border-line bg-surface-2 px-2 py-3 text-center">
                 <p className="text-lg font-extrabold">{perf.data.streak}일</p>
-                <p className="mt-0.5 text-[11px] text-muted">🔥 스트릭</p>
+                <p className="mt-0.5 flex items-center justify-center gap-1 text-[11px] text-muted">
+                  <UiIcon name="streak-on" size={13} /> 스트릭
+                </p>
               </div>
             </div>
             {perf.data.challenge && (
