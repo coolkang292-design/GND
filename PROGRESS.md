@@ -14,6 +14,7 @@
 - 정적 자산 `/badges/streak_5.png` · `/characters/char-1.png` **HTTP 200**
 
 설계: [`docs/superpowers/specs/2026-08-07-home-friend-board-and-challenge-consolidation-design.md`](docs/superpowers/specs/2026-08-07-home-friend-board-and-challenge-consolidation-design.md)
+**인수인계: [`docs/superpowers/HANDOFF-2026-08-07-home-friend-board.md`](docs/superpowers/HANDOFF-2026-08-07-home-friend-board.md)** ← 이어받는 세션은 이걸 먼저 읽어라
 
 사용자 지시 5건(친구 목록 + 네 숫자 · 클릭 시 성과 · 기본 3명/전체 보기 · 챌린지는 챌린지 탭 · 상태+콕). 확정 4건: **누적 전체** · 카드 **이동**(기능 유지) · **인라인 펼치기** · **순위 미표시**.
 
