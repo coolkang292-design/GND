@@ -88,10 +88,7 @@ export function GoldLineIcon({
   className?: string;
 }) {
   return (
-    <span
-      className={`inline-flex text-accent ${className}`}
-      aria-hidden="true"
-    >
+    <span className={`inline-flex ${className}`} aria-hidden="true">
       <svg
         viewBox="0 0 24 24"
         className="h-full w-full"

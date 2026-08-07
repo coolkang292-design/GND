@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useMemo, useRef, useState } from "react";
 import {
   exerciseFrequencyMap,
@@ -19,6 +20,7 @@ import type {
 import type { WorkoutRoutine } from "@/lib/routines";
 import type { BodyPart, CatalogExercise, ExerciseType } from "@/lib/types";
 import type { CalendarSession, LocalSet } from "@/lib/workout";
+import { GoldLineIcon, type GoldIconName } from "./gold-line-icon";
 import { RoutineList } from "./routine-list";
 import { RecommendedPicker } from "./recommended-picker";
 import {
@@ -375,34 +377,35 @@ function PickerSheet({
               처음이라면 추천 운동으로 시작해보세요
             </p>
             <div className="min-h-0 flex-1 overflow-y-auto">
+              <PickerHero />
               <HubCard
                 primary
-                icon="🎯"
+                icon="target"
                 title="상황별 추천"
                 sub="처음 운동해요, 집에서, 30분만 등 상황에 맞게"
                 onClick={() => setMode("situation")}
               />
               <HubCard
-                icon="🫁"
+                icon="body"
                 title="부위별 추천"
                 sub="가슴, 등, 하체 등 운동할 부위로 고르기"
                 onClick={() => setMode("part")}
               />
               <HubCard
-                icon="🔍"
+                icon="search"
                 title="운동 이름 검색"
                 sub="알고 있는 운동을 직접 찾아요"
                 onClick={() => setMode("search")}
               />
               <HubCard
-                icon="🕘"
+                icon="history"
                 title="지난 운동 불러오기"
                 sub="예전에 했던 운동을 그대로 추가해요"
                 onClick={() => setMode("past")}
               />
               {routinesEnabled && (
                 <HubCard
-                  icon="💾"
+                  icon="routine"
                   title="내 루틴"
                   sub={`저장해 둔 루틴 ${routines?.length ?? 0}개에서 불러와요`}
                   onClick={() => setMode("routine")}
@@ -411,7 +414,7 @@ function PickerSheet({
               {/* 다른 넷과 달리 담는 게 아니라 바로 시작한다 — 문구로 말한다 */}
               {onOpenTabata && (
                 <HubCard
-                  icon="🔥"
+                  icon="flame"
                   title="타바타로 바로 시작"
                   sub="음원 따라 4분, 기록은 자동 — 목록은 새로 시작해요"
                   onClick={onOpenTabata}
@@ -770,6 +773,38 @@ function PickerSheet({
   );
 }
 
+function PickerHero() {
+  const [failed, setFailed] = useState(false);
+
+  return (
+    <section className="relative mb-3 min-h-[124px] overflow-hidden rounded-card border border-accent/35 bg-surface-2 p-4">
+      {!failed && (
+        <Image
+          src="/record-assets/exercise-picker-hero.webp"
+          alt=""
+          fill
+          sizes="(max-width: 480px) 92vw, 440px"
+          data-testid="exercise-picker-hero"
+          onError={() => setFailed(true)}
+          className="object-cover object-right"
+          priority
+        />
+      )}
+      <div className="absolute inset-0 bg-gradient-to-r from-surface-2 via-surface-2/90 to-transparent" />
+      <div className="relative z-10 max-w-[54%]">
+        <p className="text-base leading-6 font-extrabold">
+          어떤 방식으로{" "}
+          <br />
+          시작할까요?
+        </p>
+        <p className="mt-2 text-[11px] leading-4 text-muted">
+          초보자도 쉽게 고를 수 있게 준비했어요
+        </p>
+      </div>
+    </section>
+  );
+}
+
 function HubCard({
   icon,
   title,
@@ -777,7 +812,7 @@ function HubCard({
   onClick,
   primary = false,
 }: {
-  icon: string;
+  icon: GoldIconName;
   title: string;
   sub: string;
   onClick: () => void;
@@ -793,7 +828,9 @@ function HubCard({
           : "border-line bg-surface-2"
       }`}
     >
-      <span className="text-xl">{icon}</span>
+      <span className={primary ? "text-accent-ink" : "text-accent"}>
+        <GoldLineIcon name={icon} className="h-6 w-6" />
+      </span>
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-extrabold">{title}</span>
         <span

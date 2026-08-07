@@ -114,6 +114,27 @@ function setup(
 }
 
 describe("ExercisePicker — 진입 허브 (2026-08-06)", () => {
+  it("허브에 실제 문구와 상단 이미지가 함께 나온다", () => {
+    const { getByText, getByTestId } = setup({ initialMode: "hub" });
+
+    expect(getByText("어떤 방식으로 시작할까요?")).toBeTruthy();
+    expect(getByText("초보자도 쉽게 고를 수 있게 준비했어요")).toBeTruthy();
+    expect(getByTestId("exercise-picker-hero")).toBeTruthy();
+  });
+
+  it("상단 이미지가 실패해도 문구와 허브 버튼은 남는다", () => {
+    const { getByText, getByTestId, queryByTestId } = setup({
+      initialMode: "hub",
+    });
+    const image = getByTestId("exercise-picker-hero");
+
+    fireEvent.error(image);
+
+    expect(queryByTestId("exercise-picker-hero")).toBeNull();
+    expect(getByText("어떤 방식으로 시작할까요?")).toBeTruthy();
+    expect(getByText("상황별 추천")).toBeTruthy();
+  });
+
   it("열면 검색 목록이 아니라 진입 방식 4가지를 보여준다", () => {
     // 카탈로그 목록은 **찾는 종목의 이름을 이미 아는 사람**의 도구다.
     // 처음 온 사람은 그 이름을 모르므로 기본 진입로가 될 수 없다.
