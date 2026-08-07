@@ -212,7 +212,12 @@ export type ResolvedRecommendation = {
  * 채우면 그때부터 그려진다. 자산 규약은 `public/badges/`와 같다(png,
  * 정사각형, 개당 50KB 이하).
  */
-export const EXERCISE_THUMBS: Record<string, string> = {};
+export const EXERCISE_THUMBS: Record<string, string> = {
+  "체스트프레스 머신": "chest-press-machine.webp",
+  랫풀다운: "lat-pulldown.webp",
+  레그프레스: "leg-press.webp",
+  숄더프레스: "shoulder-press.webp",
+};
 
 /**
  * 이름 목록을 카탈로그와 **교집합**으로 해석한다.
