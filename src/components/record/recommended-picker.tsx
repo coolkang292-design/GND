@@ -1,6 +1,10 @@
 "use client";
 
 import Image from "next/image";
+import {
+  GoldLineIcon,
+  type GoldIconName,
+} from "@/components/record/gold-line-icon";
 import { type GoalCategory } from "@/lib/challenge";
 import {
   PART_META,
@@ -15,7 +19,10 @@ import {
 import type { CatalogExercise } from "@/lib/types";
 
 /** 그리드 한 칸 — 부위와 상황이 같은 모양을 쓴다 */
-type Choice = { key: string; label: string; sub: string; icon: string };
+type Choice = { key: string; label: string; sub: string } & (
+  | { iconKind: "emoji"; icon: string }
+  | { iconKind: "gold"; icon: GoldIconName }
+);
 
 /**
  * 추천 운동 — 부위별·상황별 (사용자 디자인 2026-08-06).
@@ -70,12 +77,14 @@ export function RecommendedPicker({
         key: p,
         label: p,
         sub: PART_META[p].sub,
+        iconKind: "emoji",
         icon: PART_META[p].icon,
       }))
     : situations.map((s) => ({
         key: s.key,
         label: s.label,
         sub: s.sub,
+        iconKind: "gold",
         icon: s.icon,
       }));
 
@@ -138,7 +147,14 @@ export function RecommendedPicker({
                     : "border-line bg-surface-2"
                 }`}
               >
-                <span className="text-xl leading-none">{choice.icon}</span>
+                {choice.iconKind === "gold" ? (
+                  <GoldLineIcon
+                    name={choice.icon}
+                    className="h-6 w-6 text-accent"
+                  />
+                ) : (
+                  <span className="text-xl leading-none">{choice.icon}</span>
+                )}
                 <span className="min-w-0 flex-1">
                   <span
                     className={`block text-[13px] font-extrabold ${
@@ -235,7 +251,10 @@ export function RecommendedPicker({
           onClick={onSearch}
           className="flex w-full items-center gap-2 rounded-card border border-line bg-surface-2 px-3 py-3 text-left"
         >
-          <span className="text-base">🔍</span>
+          <GoldLineIcon
+            name="search"
+            className="h-5 w-5 text-accent"
+          />
           <span className="min-w-0 flex-1">
             <span className="block text-[13px] font-bold">운동 이름 검색</span>
             <span className="mt-0.5 block text-[10.5px] text-muted">

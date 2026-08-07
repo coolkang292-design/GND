@@ -110,11 +110,19 @@ export type SituationKey =
   | "short"
   | "cardio";
 
+export type SituationIconKey =
+  | "beginner"
+  | "target"
+  | "help"
+  | "home"
+  | "clock"
+  | "heart";
+
 export type Situation = {
   key: SituationKey;
   label: string;
   sub: string;
-  icon: string;
+  icon: SituationIconKey;
   /**
    * 이 상황의 종목. `challenge`만 비어 있다 — 그건 고정 목록이 아니라
    * **내 챌린지 목표에서 계산한다**(`resolveSituation`).
@@ -134,42 +142,42 @@ export const SITUATIONS: readonly Situation[] = [
     key: "beginner",
     label: "처음 운동해요",
     sub: "기본부터 천천히",
-    icon: "🌱",
+    icon: "beginner",
     names: ["체스트프레스 머신", "랫풀다운", "레그프레스", "숄더프레스"],
   },
   {
     key: "challenge",
     label: "챌린지 목표에 맞게",
     sub: "목표 달성 우선으로",
-    icon: "🎯",
+    icon: "target",
     names: [],
   },
   {
     key: "no-machines",
     label: "기구를 잘 몰라요",
     sub: "기구 사용이 낯설어요",
-    icon: "❓",
+    icon: "help",
     names: ["맨몸 스쿼트", "푸시업", "덤벨 컬", "플랭크"],
   },
   {
     key: "home",
     label: "집에서 할래요",
     sub: "집에서 간편하게",
-    icon: "🏠",
+    icon: "home",
     names: ["푸시업", "맨몸 스쿼트", "플랭크", "런지", "힙 브릿지"],
   },
   {
     key: "short",
     label: "30분만 운동할래요",
     sub: "짧고 효과적으로",
-    icon: "🕐",
+    icon: "clock",
     names: ["레그프레스", "랫풀다운", "체스트프레스 머신"],
   },
   {
     key: "cardio",
     label: "유산소만 할래요",
     sub: "걷기·러닝 위주로",
-    icon: "❤️",
+    icon: "heart",
     names: ["걷기", "트레드밀", "사이클", "로잉"],
   },
 ];

@@ -127,9 +127,16 @@ describe("상황별 추천", () => {
     }
   });
 
-  it("모든 상황에 아이콘·라벨·한 줄 설명이 있다", () => {
+  it("모든 상황에 골드 아이콘 키·라벨·한 줄 설명이 있다", () => {
+    expect(SITUATIONS.map((s) => s.icon)).toEqual([
+      "beginner",
+      "target",
+      "help",
+      "home",
+      "clock",
+      "heart",
+    ]);
     for (const s of SITUATIONS) {
-      expect(s.icon).toBeTruthy();
       expect(s.label.length).toBeGreaterThan(1);
       expect(s.sub.length).toBeGreaterThan(3);
     }
