@@ -322,11 +322,10 @@ export default function OnboardingPage() {
                   (`기록·배지가 안전하게 지켜져요`). 그림이 이미 할 말을 다 하고
                   있어서, 글자를 얹을수록 포털을 가리기만 한다. 태그라인 한 줄이면
                   충분하다. */}
-              <Tagline big>
-                운동 안 하면 GND 확정.
-                <br />
-                친구들과 함께 탈출해요.
-              </Tagline>
+              {/* 옛 문구는 `운동 안 하면 GND 확정. / 친구들과 함께 탈출해요.`였다
+                  (2026-08-08 사용자 지시로 교체). 첫 화면에서 하는 일은 "들어올지
+                  고르는 것"이라 초대하는 말이 맞다. */}
+              <Tagline big>게임에 참가하시겠습니까?</Tagline>
 
               <div className="mt-5 flex flex-col gap-2.5">
                 {providers.map((p, i) => (
