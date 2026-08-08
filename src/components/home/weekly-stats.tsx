@@ -6,14 +6,36 @@ import { currentStreak, workoutDayKeys } from "@/lib/domain/streak";
 import { DEFAULT_TIMEZONE, dayKey } from "@/lib/domain/time";
 import { weekWorkoutDays } from "@/lib/domain/viewing-pass";
 
+const TILE =
+  "rounded-card-sm border border-line bg-surface px-2 py-3 text-center";
+
 function Stat({ v, k }: { v: React.ReactNode; k: React.ReactNode }) {
   return (
-    <div className="rounded-card-sm border border-line bg-surface px-2 py-3 text-center">
+    <div className={TILE}>
       <p className="text-lg font-extrabold">{v}</p>
       <p className="mt-0.5 flex items-center justify-center gap-1 text-[11px] text-muted">
         {k}
       </p>
     </div>
+  );
+}
+
+/**
+ * 눌러서 목표를 정하러 가는 칸 (사용자 지시 2026-08-08 —
+ * *"이번주 목표 칸에 목표가 없으면 눌러서 목표세팅하게 해줘"*).
+ *
+ * ⚠️ 같은 자리에 그냥 글자만 두면 **누를 수 있다는 걸 알 수 없다.** 그래서 라벨을
+ * 강조색으로 두고 `›`를 붙인다 — 칸 크기(375px에서 폭 ~111px)는 그대로다.
+ * 여기에 `목표 정하기` 같은 말을 라벨에 더 붙이면 두 줄로 접힌다. 실측이다.
+ */
+function StatLink({ v, k }: { v: React.ReactNode; k: React.ReactNode }) {
+  return (
+    <Link href="/challenge" className={`${TILE} block`}>
+      <p className="text-lg font-extrabold">{v}</p>
+      <p className="mt-0.5 flex items-center justify-center gap-1 text-[11px] text-accent">
+        {k}
+      </p>
+    </Link>
   );
 }
 
@@ -52,35 +74,31 @@ export function WeeklyStats({
 
   return (
     <div className="grid grid-cols-3 gap-2">
-      <Stat
-        v={
-          hasGoal ? (
+      {/* ⚠️ 목표가 없을 때 **이 칸이 눌린다** — 사용자 지시 2026-08-08:
+          *"이번주 목표 칸에 목표가 없으면 눌러서 목표세팅하게 해줘"*.
+          평소(`5 / 5`)에 목표가 보이는 자리가 여기라, 없을 때 정하러 가는 문도
+          같은 자리에 있어야 찾는다. 옆 칸으로 미루지 마라. */}
+      {hasGoal ? (
+        <Stat
+          v={
             <>
               {days.length}
               <span className="text-sm text-muted"> / {weeklyGoal}</span>
             </>
-          ) : (
-            // 분모가 없으면 붙이지 않는다. `3일`이 그 자체로 읽힌다.
-            `${days.length}일`
-          )
-        }
-        k="이번 주 운동"
-      />
-      {hasGoal ? (
-        <Stat v={`${rate}%`} k="목표 달성률" />
+          }
+          k="이번 주 운동"
+        />
       ) : (
-        // 빈 칸으로 두면 "왜 여긴 아무것도 없지"가 된다. 목표를 정하는 자리로
-        // 데려간다 — 이제 그 자리는 챌린지 하나뿐이다.
-        <Link
-          href="/challenge"
-          className="rounded-card-sm border border-line bg-surface px-2 py-3 text-center"
-        >
-          <p className="text-lg font-extrabold text-muted">—</p>
-          <p className="mt-0.5 flex items-center justify-center gap-1 text-[11px] text-accent">
-            목표 정하기 ›
-          </p>
-        </Link>
+        // 분모가 없으면 붙이지 않는다. `3일`이 그 자체로 읽힌다.
+        <StatLink v={`${days.length}일`} k="목표 정하기 ›" />
       )}
+      {/* ⚠️ 여기는 링크가 아니다. 누를 곳이 나란히 둘이면 어느 쪽을 눌러야
+          하는지가 흐려진다 — 유도는 왼쪽 칸 하나로 충분하다. `0%`로 채우지도
+          않는다. 목표를 안 정했을 뿐인데 실패한 것처럼 읽힌다. */}
+      <Stat
+        v={hasGoal ? `${rate}%` : <span className="text-muted">—</span>}
+        k="목표 달성률"
+      />
       {/* 옛 표기는 `🔥`였다 (2026-08-07 2차 시안으로 교체) */}
       <Stat
         v={`${streak}일`}

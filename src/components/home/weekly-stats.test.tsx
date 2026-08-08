@@ -42,24 +42,39 @@ describe("WeeklyStats — 주간 기준은 챌린지에서 온다 (2026-08-08)",
     );
     // ⚠️ `getByText("2일")`로 찾지 마라 — 스트릭 칸도 같은 글자를 그려서
     //    둘이 잡힌다. 칸을 특정해서 본다.
-    const weekTile = screen.getByText("이번 주 운동").closest("div");
+    const weekTile = screen.getByText("목표 정하기 ›").closest("a");
     expect(weekTile?.textContent).toContain("2일");
     expect(container.textContent).not.toMatch(/\/\s*\d/);
-    expect(screen.queryByText("목표 달성률")).toBeNull();
     expect(container.textContent).not.toMatch(/\d+%/);
   });
 
-  it("챌린지가 없으면 목표를 정하러 갈 문을 준다", () => {
+  /**
+   * ⚠️ 사용자 지시 2026-08-08 — *"이번주 목표 칸에 목표가 없으면 눌러서
+   * 목표세팅하게 해줘"*. **`이번 주 운동` 칸 자체가 눌려야 한다.** 옆 칸만
+   * 링크로 두면 지시를 안 지킨 것이다.
+   */
+  it("목표가 없으면 이번 주 운동 칸 자체가 눌린다", () => {
     render(<WeeklyStats completedAts={thisWeek(1)} weeklyGoal={null} />);
-    const link = screen.getByText("목표 정하기 ›").closest("a");
-    expect(link?.getAttribute("href")).toBe("/challenge");
+    const tile = screen.getByText("목표 정하기 ›").closest("a");
+    expect(tile?.getAttribute("href")).toBe("/challenge");
+    // 운동일 수와 같은 칸 안에 있어야 한다 — 별도 칸이면 지시와 다르다.
+    expect(tile?.textContent).toContain("1일");
   });
 
-  it("이번 주 운동일과 스트릭 칸은 목표와 무관하게 늘 있다", () => {
+  it("목표가 있으면 그 칸은 링크가 아니다", () => {
+    const { container } = render(
+      <WeeklyStats completedAts={thisWeek(1)} weeklyGoal={4} />,
+    );
+    expect(container.querySelectorAll("a").length).toBe(0);
+  });
+
+  it("칸은 늘 3개고 스트릭은 목표와 무관하다", () => {
     for (const goal of [3, null] as const) {
       cleanup();
-      render(<WeeklyStats completedAts={thisWeek(1)} weeklyGoal={goal} />);
-      expect(screen.getByText("이번 주 운동")).toBeTruthy();
+      const { container } = render(
+        <WeeklyStats completedAts={thisWeek(1)} weeklyGoal={goal} />,
+      );
+      expect(container.querySelector(".grid")?.children.length).toBe(3);
       expect(screen.getByText("스트릭")).toBeTruthy();
     }
   });

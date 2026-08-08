@@ -694,7 +694,14 @@ function ChallengeScreen({ userId }: { userId: string }) {
         하나라도 있는 순간 만들 길이 사라진다 — 이번 개편의 본체가 바로 그
         제한을 푸는 것이라 여기 상시 진입점을 둔다. 개수 상한은 없다.
       */}
-      {group && challenges.length > 0 && (
+      {/* ⚠️ **`group` 조건을 다시 붙이지 마라** (2026-08-08). 0062부터
+          `create_challenge_room`이 그룹 없는 사람에게 개인 그룹을 스스로 만들어
+          준다 — 서버는 이미 되는데 화면만 막고 있었다. 그래서 크루 없이 들어온
+          사람에게 챌린지 탭이 `크루에 참여하면 챌린지를 만들 수 있어요`라는
+          **막다른 길**이었다(옛 문구는 지웠다). 0061 이후 홈에는 크루를 만드는
+          자리도 없으므로 그 안내는 갈 곳 없는 말이기도 했다.
+          `handleCreate`는 `group`을 안 쓴다 — RPC가 준 `ch.group_id`를 쓴다. */}
+      {challenges.length > 0 && (
         <button
           onClick={() => openSheet("create")}
           className="h-11 rounded-card border border-line bg-surface text-[13px] font-bold text-muted"
@@ -703,14 +710,8 @@ function ChallengeScreen({ userId }: { userId: string }) {
         </button>
       )}
 
-      {!group && challenges.length === 0 && (
-        <p className="pt-8 text-center text-sm text-muted">
-          크루에 참여하면 챌린지를 만들 수 있어요.
-        </p>
-      )}
-
       {/* ── 챌린지 없음 ─────────────────────────────── */}
-      {group && !challenge && (
+      {!challenge && (
         <>
           <section className="rounded-card border border-line bg-surface p-5 text-center shadow-card">
             <UiIcon name="trophy" size={40} />
@@ -1101,7 +1102,9 @@ function ChallengeScreen({ userId }: { userId: string }) {
         </>
       )}
 
-      {sheet && group && (
+      {/* ⚠️ 여기에도 `group`을 붙이지 마라 — 붙이면 위에서 버튼만 보이고
+          눌러도 시트가 안 열린다(같은 0062 이유). */}
+      {sheet && (
         <ChallengeSetupSheet
           mode={sheet.mode}
           defaults={sheet.defaults}
