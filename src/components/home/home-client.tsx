@@ -13,6 +13,7 @@ import { WeeklyStats } from "@/components/home/weekly-stats";
 import { FriendBoardCard } from "@/components/home/friend-board-card";
 import { CharacterCard } from "@/components/home/character-card";
 import { getMyProfile } from "@/lib/crew";
+import { getMyWeeklyGoalDays } from "@/lib/challenge";
 import { getCompletedSessions } from "@/lib/workout";
 import { getActiveCrewSessions, type ActiveCrewSession } from "@/lib/social";
 import { getProgressSummary, type ProgressSummary } from "@/lib/progression";
@@ -25,7 +26,9 @@ const NO_ACTIVE_IDS: Set<string> = new Set();
 export function HomeClient() {
   const { userId, loading, configured } = useAuth();
   const [completedAts, setCompletedAts] = useState<Date[] | null>(null);
-  const [weeklyGoal, setWeeklyGoal] = useState(3);
+  // ⚠️ 기본 숫자를 넣지 마라. `null` = "챌린지에서 아직 안 정했다"이고, 화면은
+  //    그때 분모를 안 그린다 (2026-08-08 사용자 결정 — weekly-stats.tsx 주석).
+  const [weeklyGoal, setWeeklyGoal] = useState<number | null>(null);
   // 친구 목록의 내 행에 쓴다 — 이미 부르는 `getMyProfile` 응답에서 꺼낸다.
   const [myName, setMyName] = useState<{
     nickname: string;
@@ -41,14 +44,17 @@ export function HomeClient() {
     let cancelled = false;
     (async () => {
       try {
-        const [sessions, profile] = await Promise.all([
+        const [sessions, profile, goalDays] = await Promise.all([
           getCompletedSessions(userId),
           getMyProfile(userId),
+          // ⚠️ `profile.weekly_goal`이 아니다. 그 값은 아무도 못 바꾼다 —
+          //    주간 기준은 진행 중 챌린지에서 온다(설계: 2026-08-08 결정).
+          getMyWeeklyGoalDays(userId).catch(() => null),
         ]);
         if (cancelled) return;
         setCompletedAts(sessions.map((s) => s.completedAt));
+        setWeeklyGoal(goalDays);
         if (profile) {
-          setWeeklyGoal(profile.weekly_goal);
           setMyName({
             nickname: profile.nickname,
             avatarUrl: profile.avatar_url,

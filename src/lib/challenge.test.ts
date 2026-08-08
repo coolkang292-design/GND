@@ -7,6 +7,7 @@ import {
   sessionGoalContribution,
   actualForGoal,
   foldPeriodStats,
+  getMyWeeklyGoalDays,
   goalLabel,
   normalizeChallengeParticipantProfiles,
   normalizeChallengePeriodSessions,
@@ -723,5 +724,75 @@ describe("sessionGoalContribution — 완료 화면의 챌린지 기여 (2026-08
     expect(
       sessionGoalContribution({ session: session([bodyweightSquat]), goals: [], timeZone: KST }),
     ).toEqual([]);
+  });
+});
+
+/**
+ * 주간 기준의 원천 (2026-08-08).
+ *
+ * 사용자 결정 — *"주간 운동표는 챌린지에서 세팅하는 걸로 하자."* 그래서 홈·캘린더의
+ * 분모는 `profiles.weekly_goal`이 아니라 진행 중 챌린지의 `planned_days`다.
+ *
+ * ⚠️ **`null`을 숫자로 뭉개지 않는 것**이 이 함수의 핵심이다. 기본값을 붙이면
+ * "아무도 못 바꾸는 숫자로 달성률을 매긴다"는 원래 문제가 그대로 돌아온다.
+ */
+describe("getMyWeeklyGoalDays", () => {
+  function fakeClient(result: { data: unknown; error: unknown }) {
+    const calls: { table?: string; eq: [string, unknown][] } = { eq: [] };
+    const builder = {
+      select: () => builder,
+      eq: (col: string, val: unknown) => {
+        calls.eq.push([col, val]);
+        return builder;
+      },
+      then: (resolve: (v: unknown) => void) => resolve(result),
+    };
+    const client = {
+      from: (table: string) => {
+        calls.table = table;
+        return builder;
+      },
+    } as unknown as Parameters<typeof getMyWeeklyGoalDays>[1];
+    return { client, calls };
+  }
+
+  it("진행 중 챌린지의 planned_days를 준다", async () => {
+    const { client, calls } = fakeClient({
+      data: [{ planned_days: 4 }],
+      error: null,
+    });
+    await expect(getMyWeeklyGoalDays("u1", client)).resolves.toBe(4);
+    // active만 본다 — setup·ended는 이번 주를 재는 잣대가 아니다.
+    expect(calls.table).toBe("user_goals");
+    expect(calls.eq).toEqual([
+      ["user_id", "u1"],
+      ["challenges.status", "active"],
+    ]);
+  });
+
+  it("챌린지가 없으면 null이다 (기본값으로 뭉개지 않는다)", async () => {
+    const { client } = fakeClient({ data: [], error: null });
+    await expect(getMyWeeklyGoalDays("u1", client)).resolves.toBeNull();
+  });
+
+  it("진행 중 챌린지가 여럿이면 가장 큰 값을 쓴다", async () => {
+    const { client } = fakeClient({
+      data: [{ planned_days: 3 }, { planned_days: 6 }, { planned_days: 5 }],
+      error: null,
+    });
+    await expect(getMyWeeklyGoalDays("u1", client)).resolves.toBe(6);
+  });
+
+  it("0이나 이상한 값은 목표로 치지 않는다", async () => {
+    const { client } = fakeClient({
+      data: [{ planned_days: 0 }, { planned_days: null }],
+      error: null,
+    });
+    await expect(getMyWeeklyGoalDays("u1", client)).resolves.toBeNull();
+  });
+
+  it("조회가 실패하면 삼키지 않고 던진다", async () => {
+    const { client } = fakeClient({ data: null, error: new Error("boom") });
+    await expect(getMyWeeklyGoalDays("u1", client)).rejects.toThrow("boom");
   });
 });

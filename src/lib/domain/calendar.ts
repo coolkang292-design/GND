@@ -26,7 +26,8 @@ export type MonthlySummary = {
   sessionCount: number;
   totalDurationSeconds: number;
   daysInMonth: number;
-  achievementRate: number; // 0~1
+  /** 0~1. `null` = 주간 기준이 없다 (진행 중 챌린지가 없다) */
+  achievementRate: number | null;
 };
 
 const VERIFICATION_RANK: Record<Verification, number> = {
@@ -93,13 +94,20 @@ function daysInGregorianMonth(year: number, month: number): number {
   return new Date(Date.UTC(year, month, 0)).getUTCDate();
 }
 
-/** 월간 요약 — 달성률은 주간목표를 그 달 일수로 환산한 기대 운동일 대비 (1.0 상한) */
+/**
+ * 월간 요약 — 달성률은 주간목표를 그 달 일수로 환산한 기대 운동일 대비 (1.0 상한)
+ *
+ * ⚠️ `weeklyGoal`이 `null`이면 `achievementRate`도 `null`이다 — **0이 아니다.**
+ * 2026-08-08부터 주간 기준은 진행 중 챌린지에서 오고, 챌린지가 없으면 기준 자체가
+ * 없다. 0으로 만들면 화면에 `0%`가 떠서 "다 못 했다"로 읽힌다. 아무도 목표를
+ * 안 정했을 뿐인데 실패한 것처럼 보이는 것이 이 작업이 없애려던 상태다.
+ */
 export function summarizeMonth(
   sessions: CompletedSession[],
   timeZone: string,
   year: number,
   month: number,
-  weeklyGoal: number,
+  weeklyGoal: number | null,
 ): MonthlySummary {
   const inMonth = sessionsInMonth(sessions, timeZone, year, month);
   const stamps = computeDayStamps(inMonth, timeZone);
@@ -111,9 +119,13 @@ export function summarizeMonth(
     0,
   );
 
-  const expectedDays = (weeklyGoal / 7) * daysInMonth;
+  const expectedDays = weeklyGoal === null ? 0 : (weeklyGoal / 7) * daysInMonth;
   const achievementRate =
-    expectedDays > 0 ? Math.min(1, workoutDayCount / expectedDays) : 0;
+    weeklyGoal === null
+      ? null
+      : expectedDays > 0
+        ? Math.min(1, workoutDayCount / expectedDays)
+        : 0;
 
   return {
     workoutDayCount,

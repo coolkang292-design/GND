@@ -24,6 +24,7 @@ import {
   type LogExercise,
 } from "@/lib/domain/workout-log";
 import { getMyProfile } from "@/lib/crew";
+import { getMyWeeklyGoalDays } from "@/lib/challenge";
 import { shareOrCopyText, shareResultToast } from "@/lib/share";
 import type {
   BodyPart,
@@ -133,7 +134,8 @@ export function CalendarView({
   const [timeZone, setTimeZone] = useState(
     () => Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Seoul",
   );
-  const [weeklyGoal, setWeeklyGoal] = useState(3);
+  // ⚠️ 기본 숫자를 넣지 마라 — 주간 기준은 진행 중 챌린지에서 온다(2026-08-08).
+  const [weeklyGoal, setWeeklyGoal] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
 
@@ -154,16 +156,19 @@ export function CalendarView({
     let cancelled = false;
     (async () => {
       try {
-        const [profile, list, savedPlans] = await Promise.all([
+        const [profile, list, savedPlans, goalDays] = await Promise.all([
           getMyProfile(userId),
           getCompletedSessions(userId),
           getWorkoutPlans(userId),
+          // ⚠️ `profile.weekly_goal`이 아니다 — 홈과 같은 원천을 써야 두 화면의
+          //    달성률이 갈라지지 않는다(2026-08-08).
+          getMyWeeklyGoalDays(userId).catch(() => null),
         ]);
         if (cancelled) return;
         if (profile) {
           setTimeZone(profile.timezone || timeZone);
-          setWeeklyGoal(profile.weekly_goal);
         }
+        setWeeklyGoal(goalDays);
         setSessions(list);
         setPlans(savedPlans);
       } catch {
@@ -534,11 +539,17 @@ export function CalendarView({
             </p>
             <p className="text-[11px] text-muted">총 운동시간</p>
           </div>
+          {/* ⚠️ `achievementRate ?? 0`으로 뭉개지 마라. 목표를 안 정한 사람에게
+              `0%`를 보여주면 실패한 것처럼 읽힌다 (2026-08-08). */}
           <div className="rounded-card bg-surface-2 py-2.5">
             <p className="font-mono text-lg font-extrabold">
-              {Math.round(summary.achievementRate * 100)}%
+              {summary.achievementRate === null
+                ? "—"
+                : `${Math.round(summary.achievementRate * 100)}%`}
             </p>
-            <p className="text-[11px] text-muted">달성률</p>
+            <p className="text-[11px] text-muted">
+              {summary.achievementRate === null ? "목표 미설정" : "달성률"}
+            </p>
           </div>
         </div>
       </section>

@@ -244,6 +244,41 @@ export async function getChallengeGoals(
   return data ?? [];
 }
 
+/**
+ * 지금 **진행 중인** 챌린지에서 내가 정한 주 운동일 수. 없으면 `null`.
+ *
+ * 2026-08-08 사용자 결정 — *"주간 운동표는 챌린지에서 세팅하는 걸로 하자."*
+ * 그래서 홈·캘린더의 주간 기준은 `profiles.weekly_goal`이 아니라 여기서 온다.
+ *
+ * ⚠️ **`null`을 숫자로 뭉개지 마라.** `?? 3`이나 `?? 5`를 붙이는 순간
+ * 문제가 그대로 돌아온다 — 챌린지가 없는 사람에게 **아무도 정하지 않은 분모**로
+ * 달성률을 매기게 된다. 그게 이 작업의 원인이다. 화면이 `null`을 받아
+ * "목표 없음"을 그리게 둬라.
+ *
+ * ⚠️ `active`만 본다. `setup`은 아직 시작 안 한 것이고(목표를 고치는 중일 수
+ * 있다), `ended`는 지난 기준이다. 둘 다 이번 주를 재는 잣대가 아니다.
+ *
+ * 진행 중 챌린지가 여럿이면 **가장 큰 값**을 쓴다. 여러 챌린지에 걸쳐 있는
+ * 사람에게 낮은 쪽을 들이대면 이미 넘긴 목표가 100%로 굳어 화면이 심심해진다.
+ */
+export async function getMyWeeklyGoalDays(
+  userId: string,
+  client?: SupabaseClient,
+): Promise<number | null> {
+  const supabase = client ?? getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("user_goals")
+    .select("planned_days, challenges!inner(status)")
+    .eq("user_id", userId)
+    .eq("challenges.status", "active");
+  if (error) throw error;
+
+  const days = (data ?? [])
+    .map((r) => (r as { planned_days: number }).planned_days)
+    .filter((d) => Number.isFinite(d) && d > 0);
+  return days.length > 0 ? Math.max(...days) : null;
+}
+
 /** 내 KPI 저장 — setup 단계에서만 (RLS 강제). 기존 행 교체. */
 export async function saveMyGoals(input: {
   userId: string;

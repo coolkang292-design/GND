@@ -158,6 +158,19 @@ describe("summarizeMonth — 월간 요약 (횟수·총시간·달성률)", () =
     expect(summarizeMonth(july, TZ, 2026, 7, 0).achievementRate).toBe(0);
   });
 
+  /**
+   * ⚠️ 2026-08-08부터 주간 기준은 진행 중 챌린지에서 온다. 챌린지가 없으면
+   * 기준이 **없는 것**이지 0이 아니다. `?? 0`을 붙이면 화면에 `0%`가 떠서
+   * 목표를 안 정했을 뿐인 사람이 실패한 것처럼 보인다.
+   */
+  it("주간목표가 null이면 달성률도 null이다 (0이 아니다)", () => {
+    const s = summarizeMonth(july, TZ, 2026, 7, null);
+    expect(s.achievementRate).toBeNull();
+    // 나머지 숫자는 그대로 나와야 한다 — 목표가 없다고 기록까지 사라지지 않는다.
+    expect(s.workoutDayCount).toBe(2);
+    expect(s.daysInMonth).toBe(31);
+  });
+
   it("세션 없는 달은 전부 0", () => {
     const s = summarizeMonth([], TZ, 2026, 7, 3);
     expect(s.workoutDayCount).toBe(0);

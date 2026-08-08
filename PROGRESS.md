@@ -3,6 +3,24 @@
 > 새 세션은 저장소 루트 `AGENTS.md` → `CLAUDE.md` → 이 파일 → 가장 최근의 관련 `docs/superpowers/HANDOFF-*.md` 순서로 읽는다.
 > 이 파일은 전체 흐름의 요약이고, 작업별 세부 사실과 남은 확인은 최신 인수인계서가 기준이다.
 
+## ✅ 2026-08-08 (저녁 2차) — 카카오·구글 계정 연결 + 온보딩 개편 배포 · 주간 목표를 챌린지로 (마이그레이션 **0건** · 게이트 ✅ · 화면 확인 ✅ · 운영 배포 ✅)
+
+커밋 `b63b315`(배치 3) · `5fd520e`(배치 4) · `aa5e801`(릴리스 공지 + `/whats-new`) · 배포 `gnd-77093jtnx-gnd4.vercel.app` → `gnd-one.vercel.app` Ready
+
+**인수인계: [`docs/superpowers/HANDOFF-2026-08-08b-onboarding-identity.md`](docs/superpowers/HANDOFF-2026-08-08b-onboarding-identity.md)**
+
+- **배치 3·4를 배포했다.** 앞 세션이 커밋만 해 두고 넘긴 것이다. `NEXT_PUBLIC_OAUTH_PROVIDERS=kakao,google`를 Vercel Production에 **배포 전에** 넣었다 — 설계가 fail-closed라 이걸 빼면 버튼이 조용히 사라진다. 번들에서 `let e="kakao,google".split(",")`를 직접 확인했다
+  - ⚠️ **번들에서 `카카오로 시작하기`를 찾으면 0이 나온다.** `` `${short}로 시작하기` ``로 조립되는 문구다. 진짜 확인은 `grep -c 'kakao,google'`
+  - ⚠️ **`/whats-new`는 서버 렌더다.** 릴리스 노트 문구는 JS 번들이 아니라 HTML에 있다
+  - **[미검증]** 운영에서 카카오·구글로 실제 로그인되는지. Supabase Redirect URL 허용목록은 밖에서 확인할 방법이 없다 — `/auth/v1/authorize`는 허용목록과 무관하게 302를 준다(실측). 제공자 자체는 켜져 있다(`/auth/v1/settings`에 `kakao`·`google` 둘 다 true)
+- **`/whats-new`가 별표를 그대로 그리고 있었다** — 전부터 있던 버그. 릴리스 노트 데이터는 처음부터 `**굵게**`·백틱을 쓰는데 화면이 문자열을 그대로 렌더해서, **배포된 18개 항목 전부**가 사용자에게 별표가 낀 채로 보이고 있었다. `parseHighlight()`로 `<strong>`·`<code>`를 그린다. 확인: 남은 `**` 0개 · `<strong>` 98개
+- **주간 목표를 챌린지로 옮겼다** (사용자 결정 — *"주간 운동표는 챌린지에서 세팅하는 걸로 하자"*). 프로필 편집에서 스테퍼를 뺀 뒤로 홈이 **아무도 못 바꾸는 `weekly_goal`(항상 3)** 을 분모로 쓰고 있었다. 이제 진행 중 챌린지의 `user_goals.planned_days`에서 온다(`getMyWeeklyGoalDays`)
+  - **⚠️⚠️ `null`에 기본값을 붙이지 마라.** `?? 3`이나 `?? 5`를 넣는 순간 원래 문제가 그대로 돌아온다. 챌린지가 없으면 홈은 `3일`만 그리고 달성률 자리에 `— 목표 정하기 ›`(→ `/challenge`), 캘린더는 `— 목표 미설정`을 그린다. 이 부정 단언들을 지우지 마라 — 일부러 `?? 3`을 넣어 **실제로 2건이 실패하는 것을 확인했다**
+  - `active`만 본다. `setup`은 아직 고치는 중이고 `ended`는 지난 기준이다. 운영 DB 실측 — 임베드 `challenges!inner(status)`가 풀리고, 목표 23행 중 cancelled 11행이 걸러져 12행만 남았다. 실사용자 5명의 주 운동일은 3·4·5일
+  - `profiles.weekly_goal` 컬럼은 not null이라 프로필 편집이 계속 쓰기만 한다. **읽는 곳은 이제 없다**
+- **검사** — lint 0 · typecheck 0 · **test 1420/1420**(109파일, 1401 → 1420) · build ✅
+- **화면 확인** — 이 세션은 Browser pane이 안 떠서 스크린샷을 못 찍었다. 대신 **DOM·네트워크·DB를 찍어서** 확인했다(인수인계서 §8의 방식). 확인용 임시 프로필 2개는 만들고 지웠다 — 프로필 수는 확인 전과 같은 7개
+
 ## ✅ 2026-08-08 — 초대 링크가 친구를 맺는다 + 챌린지 신입 자동 친구 + 친구 목록 단계 (마이그레이션 **0061·0062·0063** · 게이트 ✅ · 화면 확인 ✅ · 운영 배포 ✅)
 
 커밋 `35faa13`(배치 1) · `5b17576`(배치 2) · 배포 `gnd-fcw9e99nq-gnd4.vercel.app` → `gnd-one.vercel.app` Ready
