@@ -161,7 +161,41 @@ Redirect URL 허용목록에 `https://gnd-one.vercel.app/auth/callback`이 있�
 | 부정 확인 | 번들에 `주간 운동 목표` 0 · `닉네임만 정하면 바로 시작해요` 0 · `크루 만들기` 0 |
 | `/whats-new` | HTML에 `<strong>` 98개 · 남은 `**` **0개** |
 
-⚠️ **여전히 [미검증]:** 운영에서 카카오·구글로 **실제로 로그인이 되는지**.
+### 4.0 🔴 카카오가 운영에서 **KOE205로 실패한다** (2026-08-08 사용자 실기기 신고)
+
+> 잘못된 요청 (KOE205) · GND 서비스 설정에 오류가 있어, 이용할 수 없습니다.
+
+**앱 코드 문제가 아니다. 카카오 개발자 콘솔의 동의항목 설정이다.**
+
+Supabase가 카카오로 보내는 요청 (실측):
+
+| | |
+|---|---|
+| `client_id` | `e12dc8b44a618625faf8d1997ce7d462` |
+| `redirect_uri` | `https://cjdskubyxlnojwzhwbfx.supabase.co/auth/v1/callback` |
+| `scope` | **`account_email profile_image profile_nickname`** |
+
+**밖에서 좁혀낸 것 (실측):**
+- `client_id`·`redirect_uri`는 **정상**이다. 익명으로 authorize를 치면 카카오
+  **로그인 페이지까지 간다** — 등록 안 된 redirect_uri면 로그인 전에 `KOE006`으로 막힌다
+- KOE205는 **로그인 뒤 동의 단계**에서 난다. 그래서 로그인 없는 probe로는 재현이 안 된다.
+  남은 원인은 **동의항목**이다
+- ⚠️ **`account_email`을 앱에서 뺄 수 없다.** Supabase는 `options.scopes`를 기본값에
+  **덧붙인다**(치환이 아니다). `scopes=profile_nickname`을 넘겨 보면
+  `account_email profile_image profile_nickname profile_nickname`이 나간다(실측).
+  GoTrue의 카카오 기본 scope에 박혀 있다
+- **구글은 멀쩡하다** — 같은 방식으로 확인했다. `email profile`로 구글 동의 흐름까지 간다.
+  즉 **신규 가입이 막힌 것은 아니다.** `구글로 시작하기`로 들어올 수 있다
+
+**사람이 할 일** (카카오 개발자 콘솔 → 내 애플리케이션 → GND. 에이전트는 로그인하지 않는다):
+1. 카카오 로그인 → **동의항목**에서 `닉네임`·`프로필 사진`·**`카카오계정(이메일)`** 세 개가
+   전부 사용 설정인지 본다. 요청하는 scope 중 하나라도 꺼져 있으면 KOE205다
+2. `카카오계정(이메일)`은 보통 **비즈앱 전환**(사업자등록번호)이 있어야 켤 수 있다
+3. 전환이 어려우면 **카카오를 잠시 내린다** — Vercel 환경변수를
+   `NEXT_PUBLIC_OAUTH_PROVIDERS=google`로 바꾸고 재배포하면 카카오 버튼이 사라진다
+   (fail-closed 설계가 여기서 쓰인다). 앱 코드는 손댈 것이 없다
+
+⚠️ **여전히 [미검증]:** 운영에서 구글로 **실제로 로그인이 되는지**(카카오는 위에서 실패 확인).
 Supabase Redirect URL 허용목록에 `https://gnd-one.vercel.app/auth/callback`이 있어야 한다.
 `/auth/v1/authorize`는 허용목록과 무관하게 302를 주므로 **밖에서는 확인할 수 없다**(실측).
 Supabase Dashboard → Authentication → URL Configuration → Redirect URLs에서 봐야 한다.
