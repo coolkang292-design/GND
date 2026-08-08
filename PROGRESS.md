@@ -5,7 +5,10 @@
 
 ## ✅ 2026-08-08 (저녁 2차) — 카카오·구글 계정 연결 + 온보딩 개편 배포 · 주간 목표를 챌린지로 (마이그레이션 **0건** · 게이트 ✅ · 화면 확인 ✅ · 운영 배포 ✅)
 
-커밋 `b63b315`(배치 3) · `5fd520e`(배치 4) · `aa5e801`(릴리스 공지 + `/whats-new`) · 배포 `gnd-77093jtnx-gnd4.vercel.app` → `gnd-one.vercel.app` Ready
+커밋 `b63b315`(배치 3) · `5fd520e`(배치 4) · `aa5e801`(릴리스 공지 + `/whats-new`) · 배포 ① `gnd-77093jtnx-gnd4.vercel.app`
+커밋 `8122ac8`·`5d95add`·`bf6ebf8`(주간 목표) · 배포 ② `gnd-mmcs2n7gg-gnd4.vercel.app` → `gnd-one.vercel.app` Ready
+
+**🔴 카카오가 운영에서 KOE205로 실패한다** (사용자 실기기 신고). 앱 코드가 아니라 **카카오 개발자 콘솔의 동의항목** 설정이다 — 인수인계서 §4.0에 진단 전량. 요지: `client_id`·`redirect_uri`는 정상(익명 authorize가 카카오 로그인 페이지까지 간다 — 미등록이면 그 전에 KOE006), KOE205는 로그인 뒤 동의 단계에서 난다. **`account_email`을 앱에서 뺄 수 없다** — Supabase는 `options.scopes`를 기본값에 덧붙인다(치환 아님, 실측). **구글은 멀쩡하므로 신규 가입이 막힌 것은 아니다.**
 
 **인수인계: [`docs/superpowers/HANDOFF-2026-08-08b-onboarding-identity.md`](docs/superpowers/HANDOFF-2026-08-08b-onboarding-identity.md)**
 
