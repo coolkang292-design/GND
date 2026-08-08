@@ -11,9 +11,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CrewCard } from "./crew-card";
 
 const mocks = vi.hoisted(() => ({
+  issueMyInviteCode: vi.fn(),
   getMyGroups: vi.fn(),
-  createGroup: vi.fn(),
-  joinGroupWithCode: vi.fn(),
 }));
 
 vi.mock("@/components/auth-provider", () => ({
@@ -26,23 +25,14 @@ vi.mock("@/components/auth-provider", () => ({
 }));
 
 vi.mock("@/lib/crew", () => ({
+  issueMyInviteCode: mocks.issueMyInviteCode,
   getMyGroups: mocks.getMyGroups,
-  createGroup: mocks.createGroup,
-  joinGroupWithCode: mocks.joinGroupWithCode,
 }));
-
-const GROUP = {
-  id: "g1",
-  name: "리얼GND",
-  invite_code: "GND-U2X6G",
-  owner_id: "me",
-  created_at: "2026-07-01T00:00:00Z",
-};
 
 afterEach(cleanup);
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.getMyGroups.mockResolvedValue([GROUP]);
+  mocks.issueMyInviteCode.mockResolvedValue("GND-U2X6G");
 });
 
 describe("CrewCard — 크루 정체성과 초대만 남는다", () => {
@@ -58,19 +48,21 @@ describe("CrewCard — 크루 정체성과 초대만 남는다", () => {
   /**
    * ⚠️ 2026-08-07 사용자 지적 — 운영에서 이 헤딩이 `👥 리얼GND`로 떴다.
    * `groups.name`을 그대로 헤딩에 쓰고 있었는데, 그 이름은 사용자가 오래전에
-   * 지은 것이라 **카드가 무엇을 하는 곳인지 말해 주지 않는다**. 이 카드의 역할은
-   * 2026-08-07 개편으로 '크루 정보'에서 '친구 부르기'로 바뀌었다(멤버 칩·찌르기가
-   * 친구 목록 카드로 옮겨 갔다) — 헤딩만 옛 역할에 남아 있었다.
+   * 지은 것이라 **카드가 무엇을 하는 곳인지 말해 주지 않는다**.
    *
-   * **부정 확인이 이 변경의 증거다.** 새 문구가 있는 것만 보면 그룹명이 다른 데서
-   * 계속 새고 있어도 통과한다.
+   * ⚠️ 2026-08-08(0061)에 이 카드가 `groups`를 **아예 조회하지 않게** 됐다.
+   * 그래서 그룹명이 새어 나올 경로 자체가 없어졌지만, 단언은 남긴다 —
+   * 다음 사람이 그룹 조회를 되살릴 때 이 테스트가 먼저 막는다.
    */
-  it("그룹 이름을 헤딩에 쓰지 않는다 — 카드가 하는 일을 말한다", async () => {
+  it("그룹을 조회하지도, 그룹 이름을 쓰지도 않는다", async () => {
     const { container } = render(<CrewCard />);
     await waitFor(() =>
       expect(screen.getByText("친구 초대하기")).toBeTruthy(),
     );
     expect(container.innerHTML).not.toContain("리얼GND");
+    // 0061: 코드 주인이 사람이라 그룹 조회가 필요 없다
+    expect(mocks.getMyGroups).not.toHaveBeenCalled();
+    expect(mocks.issueMyInviteCode).toHaveBeenCalled();
   });
 
   /**
@@ -188,17 +180,41 @@ describe("CrewCard — 크루 정체성과 초대만 남는다", () => {
     expect(screen.queryByText(/명$/)).toBeNull();
   });
 
-  it("크루가 없으면 만들기·참여 CTA로 바뀐다", async () => {
-    mocks.getMyGroups.mockResolvedValue([]);
-    render(<CrewCard />);
+  /**
+   * ⚠️ 부정 확인 — 2026-08-08(0061)에 `NoCrewCard`("＋ 크루 만들기 / 초대 코드로
+   * 참여")를 **지웠다.**
+   *
+   * 옛 카드는 그룹이 없으면 그 CTA로 갈아탔는데, 그 탓에 **그룹이 없는 사람은
+   * 친구 초대를 아예 할 수 없었다.** 그룹은 이제 `create_challenge_room`(0062)이
+   * 챌린지를 만들 때 자동으로 만들므로 사용자에게 물을 이유가 없고, 친구가 0명일
+   * 때의 안내는 친구 목록 카드의 `NoFriendsCard`가 이미 한다 — 둘을 같이 두면 홈에
+   * "크루와 함께하면 더 강해져요"와 "친구와 함께하면 더 강해져요"가 나란히 뜬다.
+   *
+   * 되살리려면 그 두 카드가 같은 화면에서 어떻게 보이는지 먼저 확인하라.
+   */
+  it("크루 만들기·참여 CTA가 없다 — 그룹은 챌린지 만들 때 자동 생성된다", async () => {
+    const { container } = render(<CrewCard />);
     await waitFor(() =>
-      expect(screen.getByText("＋ 크루 만들기")).toBeTruthy(),
+      expect(screen.getByText("친구 초대하기")).toBeTruthy(),
     );
-    expect(screen.getByText("초대 코드로 참여")).toBeTruthy();
+    expect(container.innerHTML).not.toContain("크루 만들기");
+    expect(container.innerHTML).not.toContain("초대 코드로 참여");
+    expect(container.innerHTML).not.toContain("크루와 함께하면");
+  });
+
+  /**
+   * 프로필이 아직 없으면(온보딩 직전) 서버가 `no_profile`을 던진다.
+   * 카드를 그리지 않고 조용히 넘긴다 — 홈은 곧 온보딩으로 이동한다.
+   */
+  it("코드를 못 받으면 카드를 그리지 않는다", async () => {
+    mocks.issueMyInviteCode.mockRejectedValue(new Error("no_profile"));
+    const { container } = render(<CrewCard />);
+    await waitFor(() => expect(mocks.issueMyInviteCode).toHaveBeenCalled());
+    expect(container.innerHTML).toBe("");
   });
 
   it("판정 전에는 아무것도 그리지 않는다 — 깜빡임 방지", () => {
-    mocks.getMyGroups.mockReturnValue(new Promise(() => {})); // 영원히 미해결
+    mocks.issueMyInviteCode.mockReturnValue(new Promise(() => {})); // 영원히 미해결
     const { container } = render(<CrewCard />);
     expect(container.innerHTML).toBe("");
   });

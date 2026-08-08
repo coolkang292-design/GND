@@ -449,6 +449,67 @@ export async function joinChallengeWithCode(
   return r;
 }
 
+export type NewcomerJoinResult = {
+  challengeId: string;
+  challengeName: string;
+  /** 1이면 방장과 친구가 됐다. 0이면 챌린지 참가만 됐다(방장을 못 찾은 예외 경로). */
+  crewLinked: number;
+  hostNickname?: string;
+};
+
+/**
+ * **신규 가입자**가 챌린지 링크로 참가 — 참가 + 방장과 친구 연결 (0063).
+ *
+ * 사용자 질문 (2026-08-08): "GND 처음 조인하는 사람이라면 챌린지 초대한 사람과
+ * 친구도 되고 챌린지도 추가 되게 설계해야 하는 거 아닌가."
+ *
+ * ⚠️⚠️ **이 함수는 신입 전용이다.** 서버가 `crew_links` 0건 + `challenge_participants`
+ * 0건을 검사하고, 아니면 `not_newcomer`를 던진다. 호출부는 그때 반드시
+ * `joinChallengeWithCode`로 폴백해야 한다 — 폴백을 빼면 기존 사용자가 링크로
+ * 참가할 수 없게 된다.
+ *
+ * ⚠️ 가드를 우회하려 하지 마라. 링크 참가자 **전원**을 친구로 묶는 것이 `D5`였고,
+ * 2026-07-31에 사용자가 신고해서(다른 챌린지 멤버가 크루 목록에 섞였다) `0051`이
+ * 지웠다. 신입만·방장만이라는 조건이 그 사고를 막는 유일한 장치다.
+ * 설계 §3.6 / `supabase/migrations/0063_newcomer_challenge_crew_link.sql` 헤더.
+ */
+export async function joinChallengeAsNewcomer(
+  code: string,
+): Promise<NewcomerJoinResult> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase.rpc("join_challenge_as_newcomer", {
+    p_code: code,
+  });
+  if (error) throw error;
+  return data as NewcomerJoinResult;
+}
+
+/** 서버가 "신입이 아니다"라고 답했는가 — `joinChallengeWithCode` 폴백 조건 */
+export function isNotNewcomer(e: unknown): boolean {
+  const msg = e instanceof Error ? e.message : String(e);
+  return msg.includes("not_newcomer");
+}
+
+// ── 온보딩 → 챌린지 화면으로 넘기는 일회성 안내 ──────────────────
+//
+// 온보딩이 참가·친구 연결을 **둘 다** 끝낸 뒤 /challenge로 보내므로, 그 화면에는
+// 아무 말도 남지 않는다(옛 흐름은 조용히 이동했다). 두 가지가 동시에 일어났으니
+// 둘 다 말해야 한다.
+//
+// ⚠️ 쿼리스트링에 닉네임을 담지 않는다. 주소창·기록에 남고 새로고침마다 다시 뜬다.
+const ONBOARDING_NOTICE_KEY = "gnd-onboarding-notice";
+
+export function saveOnboardingNotice(message: string): void {
+  sessionStorage.setItem(ONBOARDING_NOTICE_KEY, message);
+}
+
+/** 한 번만 꺼내진다 — 읽는 즉시 지운다 */
+export function takeOnboardingNotice(): string | null {
+  const v = sessionStorage.getItem(ONBOARDING_NOTICE_KEY);
+  if (v !== null) sessionStorage.removeItem(ONBOARDING_NOTICE_KEY);
+  return v;
+}
+
 // ── 초대 링크로 처음 온 사람을 위한 코드 보관 ────────────────────
 //
 // 링크(/challenge?join=CODE)로 처음 오면 프로필이 없어 OnboardingGate가

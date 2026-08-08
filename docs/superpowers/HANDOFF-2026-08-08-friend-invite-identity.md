@@ -1,23 +1,35 @@
 # 인수인계 — 친구 초대 링크 · 온보딩 · 계정 지키기 · 단계 표시
 
-작성 2026-08-08 · 이어받는 사람이 **처음부터 읽어야 하는 문서**
+작성 2026-08-08 · **2026-08-08 갱신(2차)** · 이어받는 사람이 **처음부터 읽어야 하는 문서**
 
 ---
 
 ## 0. 30초 요약
 
-사용자 지시 4건에서 시작해 결정이 쌓였다. **설계는 확정·커밋됐고, 배치 1은 배포 대기,
-배치 2는 DB 적용 완료 + 클라이언트 코드 작성 중(테스트 2건 실패 상태)** 이다.
+사용자 지시 4건에서 시작해 결정이 쌓였다. **배치 1·2는 코드·검증·화면 확인까지 끝났고
+배포만 남았다.**
 
 | 배치 | 내용 | 상태 |
 |---|---|---|
-| **1** | 친구 목록 단계 알약 | ✅ **완료 · 커밋 `35faa13`** (미배포) |
-| **2** | 친구 초대 링크 + 챌린지 신입 자동 친구 | 🟡 **진행 중** — DB 적용 ✅ / 코드 작성 ✅ / **테스트 2건 실패** / 화면 확인 ❌ |
+| **1** | 친구 목록 단계 알약 | ✅ 완료 · 커밋 `35faa13` · **미배포** |
+| **2** | 친구 초대 링크 + 챌린지 신입 자동 친구 | ✅ DB · 코드 · 게이트 4종 · 회귀 25/25 · **화면 확인** 전부 완료 · **미배포** |
 | **3** | 카카오·구글 계정 연결 | ⬜ 미착수 — 사용자 대시보드 설정 선행 필요 |
 | **4** | 온보딩 개편 (시안 + 프로필 편집 시트) | ⬜ 미착수 — 배치 3 의존 |
 
-**지금 당장 할 일:** §4의 실패 테스트 2건을 고치고 → 개발 서버에서 픽스처 A·B 두 계정으로
-화면 확인 → 커밋. 자세한 절차는 §4.
+**지금 당장 할 일:** 사용자 승인 → `vercel --prod` (배치 1·2가 같이 나간다).
+그다음 프로덕션 실물 확인. 코드 쪽에 남은 일은 없다.
+
+### 2차 갱신에서 끝낸 것 (2026-08-08)
+
+| 항목 | 결과 |
+|---|---|
+| 실패 테스트 2건(§4.2) | ✅ 고침 |
+| 미작성 테스트(§4.3) | ✅ `src/lib/crew.test.ts`·`src/app/invite/[code]/page.test.tsx` 신규, 온보딩 friend 모드 4건 추가 |
+| 0051 회귀 등 서버 단언 | ✅ `challenge-invite-link-check.mjs` **21 → 25 / 0 failed** (rls-test.mjs가 아니다 — §4.3 참조) |
+| `lint` · `typecheck` · `test` · `build` | ✅ 전부 초록 (테스트 **1358건**) |
+| `pnpm db:snapshot` | ✅ 0063 시점으로 갱신 |
+| 0062 `[미검증]` | ✅ **해소** — §7 |
+| §4.4 화면 확인 | ✅ **사용자가 직접 확인**(2026-08-08). 에이전트 세션에 브라우저 조작 수단이 없어 표를 넘겨 사람이 눌렀다 |
 
 ---
 
@@ -136,9 +148,9 @@ GND-23YWV  오뎅끼데스까
 
 ---
 
-## 4. 🟡 지금 진행 중 — 배치 2 클라이언트 (여기서 이어받아라)
+## 4. 🟡 배치 2 — 코드는 끝났고 **화면 확인만 남았다**
 
-### 4.1 작성 완료한 파일 (커밋 안 됨, 워킹 트리에 있음)
+### 4.1 워킹 트리에 있는 파일 (아직 커밋 안 됨)
 
 ```
 M src/lib/crew.ts                        issueMyInviteCode · acceptFriendInvite ·
@@ -151,53 +163,72 @@ M src/components/crew-card.test.tsx      위에 맞춰 갱신 (12건 통과)
 M src/app/onboarding/page.tsx            챌린지 신입 경로 · 친구 코드 경로 · done 화면 friend 모드
 M src/app/(tabs)/challenge/page.tsx      takeOnboardingNotice → showToast
 M src/components/challenge/invite-sheet.tsx  "서로 크루가 되지 않아요"에 조건절 추가
-?? supabase/migrations/0061~0063         (적용 완료, 커밋 안 됨)
+M src/lib/crew.test.ts                    🆕 redeemInviteCode 2단계 폴백 (6건)
+M src/app/invite/[code]/page.test.tsx     🆕 링크 진입 4갈래 (4건)
+M scripts/challenge-invite-link-check.mjs 0061~0063 회귀 단언 (21 → 25)
+M docs/db-current-schema.sql              0063 시점으로 갱신
+M CLAUDE.md                               회귀 기준선 표에 25/0 추가
 ```
 
-typecheck ✅ / lint 미실행 / **테스트 2건 실패**
+마이그레이션 `0061`~`0063`은 **이미 커밋돼 있다**(`87f184f`) — 워킹 트리에 없다.
 
-### 4.2 ❌ 실패하는 테스트 2건 — 첫 번째 할 일
+`lint` ✅ / `typecheck` ✅ / `test` **1358건 통과** ✅ / `build` ✅
 
-```bash
-npx vitest run src/app/onboarding/page.test.tsx src/components/challenge/invite-sheet.test.tsx
-```
+### 4.2 ✅ 실패 테스트 2건 — 해결됨
 
-**① `src/app/onboarding/page.test.tsx` → "닉네임을 저장하고 챌린지에 참가한 뒤 챌린지 화면으로 이동한다"**
+**① `src/app/onboarding/page.test.tsx`** — `joinChallengeAsNewcomer`·`isNotNewcomer`·
+`saveOnboardingNotice` 목을 넣고 **두 갈래를 각각 단언**으로 나눴다.
 
-온보딩이 이제 `joinChallengeAsNewcomer`를 **먼저** 부르고 `not_newcomer`면
-`joinChallengeWithCode`로 폴백한다. 테스트의 `vi.mock("@/lib/challenge")`에
-`joinChallengeAsNewcomer` · `isNotNewcomer` · `saveOnboardingNotice` 목이 없다.
+- `신입은 방장과 친구까지 맺고 챌린지 화면으로 이동한다` — `saveOnboardingNotice`에
+  **방장 닉네임이 들어가는지**까지 본다. 폴백은 안 불려야 한다(두 번 참가 금지)
+- `신입이 아니면 joinChallengeWithCode로 폴백해 참가는 시킨다` — 이게 없으면
+  기존 사용자가 챌린지 링크로 아예 못 들어온다(§8-4)
+- `참가 실패 시…` — `invalid_code`는 **폴백하지 않는다**고 단언한다. `isNotNewcomer`
+  목을 `true` 고정이 아니라 **실제 구현과 같은 판정**으로 뒀기 때문에 잡힌다
 
-고칠 때 **두 갈래를 다 단언하라** (하나만 하면 폴백이 죽어도 통과한다):
-- 신입 → `joinChallengeAsNewcomer`가 불리고, `saveOnboardingNotice`에 **방장 닉네임이 들어간다**
-- `not_newcomer` → `joinChallengeWithCode`로 폴백하고 참가가 성공한다
+**② `src/components/challenge/invite-sheet.test.tsx`** — 태그를 걷어낸 뒤
+`/이미 GND를 쓰는 사람[^.]*서로 크루가 되지 않아요/`와
+`/GND가 처음인 사람[^.]*나와 친구가 돼요/`로 **조건 → 결과 순서**를 잰다.
+조건절을 빼고 옛 단정문으로 되돌리면 두 정규식이 모두 깨진다.
 
-**② `src/components/challenge/invite-sheet.test.tsx` → "링크 참가자는 챌린지 안에서만 연결된다고 알린다"**
+### 4.3 ✅ 새로 쓴 테스트
 
-문구가 바뀌었다. 옛 단정문 → 조건절:
+**클라이언트 (vitest):**
 
-```
-이미 GND를 쓰는 사람은 링크로 참가해도 서로 크루가 되지 않아요.
-이름과 랭킹은 이 챌린지 안에서만 보여요. GND가 처음인 사람은 나와 친구가 돼요.
-```
-
-단언을 **조건절의 존재**로 바꿔라 — 조건 없는 단정문이 되살아나면 실패해야 한다.
-
-### 4.3 아직 안 쓴 테스트 (설계 §7에서 가져올 것)
-
-| 대상 | 단언 |
+| 파일 | 단언 |
 |---|---|
-| `redeemInviteCode` | 친구 코드 성공 · `invalid_friend_code`면 그룹으로 폴백 · **`self_invite`는 폴백하지 않는다** |
-| `crew-card` | 이미 갱신됨 ✅ |
-| `/invite/[code]` | 프로필 없으면 코드 보관 후 온보딩 · 있으면 redeem → `/home` |
-| 온보딩 friend 모드 | done 화면이 `친구가 됐어요!` + 닉네임을 말하고, **크루 이름을 말하지 않는다** |
-| `alreadyFriends` | `이미 친구예요`로 뜬다 |
-| **0051 회귀 (핵심)** | `rls-test.mjs`에 추가: 기존 사용자가 챌린지 링크로 참가하면 `not_newcomer`이고 **방장 크루 수가 그대로다** |
-| 신입 경로 | 참가 0·크루 0 계정이 링크로 참가하면 방장의 `get_my_crew()`에 **1명** (0이 아니라 1) |
-| 실패 원자성 | 종료된 챌린지 코드로 신입 RPC → `invalid_status`이고 **`crew_links` 0행** |
-| `create_challenge_room` | 그룹 없는 계정이 챌린지를 만들면 성공하고 `group_members`에 1행 |
+| `src/lib/crew.test.ts` 🆕 | 친구 코드 성공 · `alreadyFriends` 전달 · `invalid_friend_code`면 그룹 폴백 · **`self_invite`는 폴백하지 않는다** · 둘 다 실패하면 그룹 오류 |
+| `src/app/invite/[code]/page.test.tsx` 🆕 | 프로필 없으면 보관 후 온보딩(redeem 안 부름) · 있으면 정규화해 redeem → `/home` · `self_invite` 문구 · 없는 코드 문구 |
+| `src/app/onboarding/page.test.tsx` | friend done 화면이 닉네임을 말하고 **크루 이름을 말하지 않는다** · `이미 친구예요` · 옛 그룹 코드는 `크루 참여 완료!` · 죽은 코드는 `join` 화면으로 |
 
-### 4.4 화면 확인 (커밋 전 필수) — **픽스처 A·B 두 계정**
+⚠️ `/invite/[code]`는 Next 16이 `params`를 Promise로 준다. 테스트는 **이미 이행된
+thenable**(`status: "fulfilled"`)을 넘겨 서스펜스 재시도 타이밍을 안 탄다. 그냥
+`Promise.resolve(...)`를 넘기면 서스펜스 fallback에서 멈춰 4건이 전부 실패한다.
+
+**서버 (실 DB) — `scripts/challenge-invite-link-check.mjs`, `25/25 passed`:**
+
+⚠️ **`rls-test.mjs`가 아니다.** 초대 링크 계약이 이미 이 파일에 있고(코드 발급·참가·
+경계), D5 단언("링크 참가 후 `crew_links`가 생기지 않는다")도 여기 있다. 갈라 놓으면
+다음 사람이 한쪽만 본다. `rls-test.mjs` 기준선 128은 안 건드렸다.
+
+| 단언 | 잡는 것 |
+|---|---|
+| 🎯 신입이 링크로 참가하면 방장과 친구가 된다 (`crewLinked=1`·`hostId` 일치) | 신입 경로 |
+| 방장의 `get_my_crew()`에 그 신입이 **1명**으로 보인다 | 0이 아니라 1 |
+| 🎯 이미 친구가 있는 사람은 `not_newcomer` | **crew_links 가드** (참가 0건 계정으로 격리) |
+| 🎯 이미 챌린지에 있는 계정은 `not_newcomer` | **participants 가드** (crew 0건 계정으로 격리) |
+| 🎯 **0051 회귀**: 위 둘이 눌러도 방장 크루가 **1 그대로** | D5 재발 |
+| 🎯 참가가 `invalid_status`면 `crew_links`도 안 남는다 | **원자성** — 방장 크루 1을 같이 재서 "0이라 통과"를 막았다 |
+| 🎯 그룹 없는 계정이 챌린지를 만든다 + `group_members` 1행 | 0062 |
+
+픽스처가 3계정 늘어 `start_challenge`의 `kpi_incomplete`를 피하려면 신입에게도
+목표·동의를 넣어야 한다 — 그 줄을 지우면 시작 단언이 통째로 죽는다(주석 있음).
+
+### 4.4 ✅ 화면 확인 — **픽스처 A·B 두 계정** (2026-08-08 사용자가 직접 확인)
+
+⚠️ **이 표를 지우지 마라.** 배치 3·4에서 온보딩과 초대 경로를 또 건드리므로 같은 표를
+다시 쓰게 된다. 에이전트 세션에 브라우저 자동화가 없으면 이 표를 그대로 사용자에게
+넘기고 **답을 기다린다** — 배포한 뒤 폰에서 확인하는 것으로 미루지 않는다(`CLAUDE.md` 최상단).
 
 사회적 기능이므로 한 계정으로는 절반만 본 것이다 (`CLAUDE.md` §사회적 기능).
 
@@ -207,6 +238,10 @@ node scripts/dev-fixture.mjs status
 
 - **크롬 = A**(`dev-fixture-a@gnd.local`) · **엣지 = B**(`dev-fixture-b@gnd.local`)
 - 비밀번호는 `.env.local`의 `DEV_FIXTURE_PASSWORD`
+- 실측 코드 (2026-08-08): **A `GND-7FDVC`** · **B `GND-K2H5M`** ·
+  옛 그룹 코드 `GND-3Y7J5`(개발 확인용 크루 — A·B 둘 다 멤버) · `GND-U2X6G`(리얼GND)
+- A와 B는 **이미 서로 친구다**(`crew_links` 1행). 그래서 A 링크를 B가 열면
+  `이미 친구예요`가 맞다 — 새로 친구가 되는 것을 보려면 **시크릿 창의 새 계정**으로 연다
 - ⚠️ **같은 브라우저의 새 탭·창으로는 안 된다** — `@supabase/ssr`이 세션을 쿠키에 넣어
   프로필 단위로 공유된다. 나중에 로그인한 계정으로 양쪽이 덮인다
 - 두 창이 갈렸는지는 **⚙️ → 계정의 로그인 이메일**로 확인한다
@@ -228,10 +263,13 @@ node scripts/dev-fixture.mjs status
 
 ### 4.5 커밋 뒤에 할 것
 
-1. `pnpm db:snapshot` — `docs/db-current-schema.sql`을 0063 시점으로 갱신
-2. `rls-test.mjs` 기준선 갱신 (`CLAUDE.md`의 표. 지금 128 → 단언이 늘면 그 수로)
-3. `docs/superpowers/specs/...-design.md`의 §8 배치 표에 진행 상황 반영
-4. 배포는 **사용자 승인 후** `vercel --prod` (배치 1 커밋도 아직 미배포다 — 같이 나간다)
+1. ~~`pnpm db:snapshot`~~ ✅ 했다 — 함수 72개·정책 70개·인덱스 77개, 0061~0063 전부 들어갔다
+2. ~~회귀 기준선 갱신~~ ✅ 했다 — `CLAUDE.md`에 `challenge-invite-link-check.mjs` **25 / 0** 추가.
+   `rls-test.mjs`는 128 그대로(안 건드렸다)
+3. ~~설계 §8 배치 표~~ ✅ 반영했다
+4. 배포는 **사용자 승인 후** `vercel --prod` (배치 1 커밋도 아직 미배포다 — 같이 나간다).
+   ⚠️ Vercel이 커밋 이메일을 매칭 못 해 Blocked가 나므로 **`git archive HEAD`로 푼
+   `.git` 없는 폴더**에서 배포한다
 
 ---
 
@@ -291,23 +329,24 @@ Supabase 내장 메일 발송기의 한도다. 그래서 메일을 한 통도 �
 
 ## 7. 남은 확인 · 미검증 항목
 
-| 항목 | 상태 | 확인 방법 |
+| 항목 | 상태 | 근거 |
 |---|---|---|
-| 0062 함수 본문 | 🟡 `[미검증]` | 아래 SQL |
-| `docs/db-current-schema.sql` | ❌ 0060 시점 | `pnpm db:snapshot` |
-| 배치 2 화면 | ❌ 미확인 | §4.4 |
+| 0062 함수 본문 | ✅ **해소** | 아래 두 가지 |
+| `docs/db-current-schema.sql` | ✅ 0063 시점 | `pnpm db:snapshot` |
+| 배치 2 화면 | ❌ **미확인** | §4.4 — 사람이 눌러야 한다 |
 | 배치 1·2 배포 | ❌ 미배포 | 사용자 승인 후 `vercel --prod` |
 
-```sql
--- 0062 적용 확인 (SQL Editor)
-select count(*) as no_group_yet_남음 from pg_proc
-where proname = 'create_challenge_room'
-  and pg_get_functiondef(oid) like '%no_group_yet%';           -- 0이어야 한다
+**0062가 해소된 근거 (SQL Editor를 안 거쳤다):**
 
-select count(*) as 내크루_들어감 from pg_proc
-where proname = 'create_challenge_room'
-  and pg_get_functiondef(oid) like '%내 크루%';                 -- 1이어야 한다
-```
+1. **동작으로** — `challenge-invite-link-check.mjs`의 새 단언 2건. 그룹이 하나도 없는
+   계정이 `create_challenge_room`을 불러 **성공**했고 `group_members`에 정확히 1행이
+   생겼다. 옛 동작이었으면 `no_group_yet`으로 400이 났다
+2. **본문으로** — `pnpm db:snapshot`이 받아 온 `docs/db-current-schema.sql`
+   [944행](../db-current-schema.sql)에 `-- 0062: 옛 동작은 여기서 raise exception
+   'no_group_yet'이었다`가 있고, 그 아래가 `insert into groups … '내 크루'`다.
+   **`raise exception 'no_group_yet'`은 파일에 한 줄도 없다**(주석 안의 인용뿐)
+
+REST로 함수 본문을 못 본다던 제약은 스냅샷 스크립트가 이미 뚫어 놓은 길이었다.
 
 ---
 

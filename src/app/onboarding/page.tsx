@@ -7,14 +7,19 @@ import { useAuth } from "@/components/auth-provider";
 import { normalizeInviteCode } from "@/lib/domain/invite-code";
 import {
   clearPendingChallengeInvite,
+  isNotNewcomer,
+  joinChallengeAsNewcomer,
   joinChallengeWithCode,
   peekPendingChallengeInvite,
+  saveOnboardingNotice,
 } from "@/lib/challenge";
+// ⚠️ `joinGroupWithCode`를 직접 부르지 않는다. 코드가 친구 것인지 그룹 것인지
+//    가리는 2단계는 `redeemInviteCode` 한 곳에만 있어야 한다(설계 §3.3).
 import {
   clearPendingInvite,
   createGroup,
-  joinGroupWithCode,
   peekPendingInvite,
+  redeemInviteCode,
   upsertMyProfile,
 } from "@/lib/crew";
 
@@ -51,11 +56,19 @@ export default function OnboardingPage() {
   const [challengeCode] = useState<string>(() =>
     typeof window === "undefined" ? "" : (peekPendingChallengeInvite() ?? ""),
   );
-  const [doneInfo, setDoneInfo] = useState<{
-    mode: "create" | "join";
-    crewName: string;
-    inviteCode?: string;
-  } | null>(null);
+  /**
+   * 마지막 화면에 무엇을 말할지.
+   *
+   * `friend`는 2026-08-08에 생겼다(0061) — 초대 링크가 그룹이 아니라 **친구**를
+   * 맺으므로 "크루 참여 완료"라고 말하면 거짓이 된다. `/home`에는 토스트 장치가
+   * 없어서 이 화면에서 말하고 보낸다(챌린지 경로만 sessionStorage를 쓴다).
+   */
+  const [doneInfo, setDoneInfo] = useState<
+    | { mode: "create"; crewName: string; inviteCode?: string }
+    | { mode: "join"; crewName: string }
+    | { mode: "friend"; nickname: string; alreadyFriends: boolean }
+    | null
+  >(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -84,7 +97,29 @@ export default function OnboardingPage() {
       // 강요하게 된다. 바로 참가시키고 챌린지 화면으로 보낸다.
       if (challengeCode) {
         try {
-          await joinChallengeWithCode(challengeCode);
+          // 0063: 방금 프로필을 만든 사람은 **신입**이라 방장과 친구까지 맺는다
+          // (2026-08-08 사용자 질문 — "챌린지 초대한 사람과 친구도 되게").
+          //
+          // ⚠️ 폴백을 빼지 마라. 서버가 `crew_links` 0건 + 참가 0건을 검사하므로,
+          //    이 흐름에도 신입이 아닌 사람이 올 수 있다(세션이 끊겨 온보딩으로
+          //    떨어진 기존 사용자, 온보딩 도중 닉네임 검색으로 초대받은 사람).
+          //    폴백이 없으면 그 사람은 챌린지에 아예 못 들어간다.
+          let joined;
+          try {
+            joined = await joinChallengeAsNewcomer(challengeCode);
+          } catch (e) {
+            if (!isNotNewcomer(e)) throw e;
+            joined = await joinChallengeWithCode(challengeCode);
+          }
+          // 두 가지가 동시에 일어났으므로 둘 다 말한다. 옛 흐름은 조용히
+          // 이동해서 참가했는지조차 알 수 없었다.
+          const hostNick =
+            "hostNickname" in joined ? joined.hostNickname : undefined;
+          saveOnboardingNotice(
+            joined.crewLinked > 0 && hostNick
+              ? `${joined.challengeName}에 참가하고 ${hostNick}님과 친구가 됐어요 🤝`
+              : `${joined.challengeName}에 참가했어요! 목표를 세워 주세요 🎯`,
+          );
         } catch {
           setError(
             "챌린지에 참가하지 못했어요. 초대 링크를 다시 확인해 주세요.",
@@ -95,8 +130,35 @@ export default function OnboardingPage() {
         router.replace("/challenge");
         return;
       }
-      // 크루 초대 링크로 진입했으면 크루 선택을 건너뛰고 바로 참여 단계로
-      setStep(joinCode ? "join" : "crew");
+
+      // 친구 초대 링크로 진입했으면 그 자리에서 친구를 맺는다. 크루 단계를 지나게
+      // 하면 초대와 무관한 선택을 강요하게 된다.
+      //
+      // ⚠️ 옛 그룹 코드는 `redeemInviteCode`가 하위 호환으로 받는다(설계 §3.3).
+      //    둘 다 실패하면 `step="join"`으로 보내 사용자가 코드를 고칠 수 있게 한다 —
+      //    여기서 막아 버리면 링크가 깨진 사람이 앱에 들어올 방법이 없다.
+      if (joinCode) {
+        try {
+          const redeemed = await redeemInviteCode(joinCode);
+          setDoneInfo(
+            redeemed.kind === "friend"
+              ? {
+                  mode: "friend",
+                  nickname: redeemed.nickname,
+                  alreadyFriends: redeemed.alreadyFriends,
+                }
+              : { mode: "join", crewName: redeemed.groupName },
+          );
+          setStep("done");
+          return;
+        } catch {
+          setStep("join");
+          setError("초대 코드를 확인해 주세요");
+          return;
+        }
+      }
+
+      setStep("crew");
     } catch (e) {
       setError(e instanceof Error ? e.message : "저장 실패");
     } finally {
@@ -136,8 +198,18 @@ export default function OnboardingPage() {
     setBusy(true);
     setError(null);
     try {
-      const joined = await joinGroupWithCode(code);
-      setDoneInfo({ mode: "join", crewName: joined.group_name });
+      // ⚠️ 손으로 입력한 코드도 **친구 코드일 수 있다**(0061). `joinGroupWithCode`만
+      //    부르면 친구가 자기 코드를 문자로 보내 준 경우 "존재하지 않는 코드"가 된다.
+      const redeemed = await redeemInviteCode(code);
+      setDoneInfo(
+        redeemed.kind === "friend"
+          ? {
+              mode: "friend",
+              nickname: redeemed.nickname,
+              alreadyFriends: redeemed.alreadyFriends,
+            }
+          : { mode: "join", crewName: redeemed.groupName },
+      );
       setStep("done");
     } catch {
       setError("코드를 확인해주세요 — 존재하지 않는 초대 코드예요");
@@ -157,11 +229,16 @@ export default function OnboardingPage() {
 
   async function shareInvite(code: string) {
     const url = inviteLink(code);
+    // 이 버튼은 `mode === "create"`(크루 만들기)에서만 뜬다. friend 모드에는
+    // 크루 이름이 없으므로 좁혀서 읽는다 — `doneInfo?.crewName`으로 두면
+    // 유니온이 넓어진 뒤 타입 오류가 난다.
+    const crewName =
+      doneInfo && doneInfo.mode !== "friend" ? doneInfo.crewName : "";
     if (navigator.share) {
       try {
         await navigator.share({
           title: "GND 크루 초대",
-          text: `GND 크루 "${doneInfo?.crewName}"에 초대해요! 링크를 탭하면 바로 참여돼요.`,
+          text: `GND 크루 "${crewName}"에 초대해요! 링크를 탭하면 바로 참여돼요.`,
           url,
         });
       } catch {
@@ -350,14 +427,27 @@ export default function OnboardingPage() {
 
       {step === "done" && doneInfo && (
         <>
-          <div className="text-5xl">🎉</div>
+          <div className="text-5xl">
+            {doneInfo.mode === "friend" ? "🤝" : "🎉"}
+          </div>
+          {/* ⚠️ `friend`를 "크루 참여 완료"로 뭉개지 마라 (0061). 초대 링크는 이제
+              그룹이 아니라 **친구**를 맺으므로, 그렇게 쓰면 화면이 거짓말을 한다.
+              같은 이유로 크루 이름을 말하지 않는다 — 그룹에 들어간 게 아니다. */}
           <h1 className="mt-3 text-xl font-extrabold">
-            {doneInfo.mode === "create" ? "크루 완성!" : "크루 참여 완료!"}
+            {doneInfo.mode === "create"
+              ? "크루 완성!"
+              : doneInfo.mode === "friend"
+                ? doneInfo.alreadyFriends
+                  ? "이미 친구예요"
+                  : "친구가 됐어요!"
+                : "크루 참여 완료!"}
           </h1>
           <p className="mt-1 text-[13px] text-muted">
             {doneInfo.mode === "create"
               ? "아래 초대 코드/링크를 친구에게 보내면 크루에 참여해요."
-              : `이제 "${doneInfo.crewName}"의 GND 챌린지에 함께해요. 각자 목표를 세우면 시작!`}
+              : doneInfo.mode === "friend"
+                ? `${doneInfo.nickname}님과 서로의 기록을 보고 콕 찌를 수 있어요.`
+                : `이제 "${doneInfo.crewName}"의 GND 챌린지에 함께해요. 각자 목표를 세우면 시작!`}
           </p>
 
           {doneInfo.mode === "create" && doneInfo.inviteCode && (

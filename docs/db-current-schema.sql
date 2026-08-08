@@ -7,7 +7,7 @@
 -- 쓰는 법: 함수·정책의 '현행' 정의가 필요할 때 마이그레이션 51개를
 -- 뒤지지 말고 이 파일을 검색하라. 마이그레이션을 적용한 뒤에는 다시 뽑아라.
 --
--- 함수 69개 · 정책 70개 · 인덱스 76개
+-- 함수 72개 · 정책 70개 · 인덱스 77개
 
 -- ════════════════════════════════════════════════════════════
 -- 함수
@@ -119,6 +119,76 @@ begin
   exception when others then null;
   end;
   return jsonb_build_object('status', 'accepted');
+end $function$;
+
+-- ── accept_friend_invite ──
+CREATE OR REPLACE FUNCTION public.accept_friend_invite(p_code text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+declare
+  v_me         uuid := (select auth.uid());
+  v_owner      uuid;
+  v_owner_nick text;
+  v_my_nick    text;
+  v_existed    boolean;
+begin
+  if v_me is null then raise exception 'not_authenticated'; end if;
+
+  select id, nickname into v_owner, v_owner_nick
+  from public.profiles
+  where invite_code = upper(trim(p_code));
+
+  -- ⚠️ 이 예외 이름을 바꾸지 마라. `/invite/[code]`가 이 코드를 보고 **옛 그룹
+  --    코드로 재시도**한다(하위 호환). 이름이 바뀌면 카카오톡에 뿌려진 옛 링크가
+  --    전부 "잘못된 초대"가 된다.
+  if not found then raise exception 'invalid_friend_code'; end if;
+  if v_owner = v_me then raise exception 'self_invite'; end if;
+
+  perform pg_advisory_xact_lock(
+    hashtext(least(v_me, v_owner)::text || greatest(v_me, v_owner)::text)
+  );
+
+  -- 이미 친구였는지 **먼저** 본다. insert 뒤에 보면 항상 true다 —
+  -- 알림을 두 번 보내지 않으려면 이 순서여야 한다.
+  select exists (
+    select 1 from public.crew_links
+    where user_a = least(v_me, v_owner) and user_b = greatest(v_me, v_owner)
+  ) into v_existed;
+
+  insert into public.crew_links (user_a, user_b)
+  values (least(v_me, v_owner), greatest(v_me, v_owner))
+  on conflict do nothing;
+
+  -- 반대 방향에 남아 있던 pending 요청도 닫는다. 안 닫으면 이미 친구가 된 뒤에도
+  -- 받은함에 "수락" 버튼이 남는다 (accept_crew_request와 같은 규약).
+  update public.crew_requests
+     set status = 'accepted', responded_at = now()
+   where status = 'pending'
+     and ((requester_id = v_me and addressee_id = v_owner)
+       or (requester_id = v_owner and addressee_id = v_me));
+
+  if not v_existed then
+    select nickname into v_my_nick from public.profiles where id = v_me;
+    -- 알림 실패가 연결까지 되돌리면 안 된다. 연결이 본체고 알림은 곁가지다.
+    -- (0029에서 알림 insert 하나가 운동 완료 트랜잭션을 통째로 롤백시킨 전례가 있다.)
+    begin
+      perform public.notify(
+        v_owner, v_me, 'crew_accepted', null,
+        coalesce(v_my_nick, '누군가') || '님과 크루가 됐어요 🤝',
+        '초대 링크로 들어왔어요. 이제 서로의 운동 소식을 받아볼 수 있어요'
+      );
+    exception when others then null;
+    end;
+  end if;
+
+  return jsonb_build_object(
+    'ownerId', v_owner,
+    'nickname', v_owner_nick,
+    'alreadyFriends', v_existed
+  );
 end $function$;
 
 -- ── admin_schema_snapshot ──
@@ -859,22 +929,44 @@ CREATE OR REPLACE FUNCTION public.create_challenge_room(p_name text, p_start_dat
  SET search_path TO 'public'
 AS $function$
 declare
-  v_me uuid := auth.uid();
+  v_me    uuid := auth.uid();
   v_group uuid;
-  c challenges;
+  c       challenges;
 begin
   if v_me is null then raise exception 'not_authenticated'; end if;
   if p_start_date > p_end_date then raise exception 'invalid_period'; end if;
 
-  -- 0042는 challenges.group_id를 아직 못 지운다(not null). 0045에서 드롭할
-  -- 때까지는 방장의 그룹을 그대로 채워 둔다 — 혼자모드 유저는 그룹이 없으므로
-  -- 그때는 생성이 막힌다. 그 제약이 풀리는 건 0044·0045다.
-  --
   -- ⚠ joined_at이다. created_at이 아니다 (0001:32). 0042가 여기서 틀렸다.
   select gm.group_id into v_group
   from group_members gm where gm.user_id = v_me
-  order by gm.joined_at limit 1;                        -- 0043: created_at → joined_at
-  if v_group is null then raise exception 'no_group_yet'; end if;
+  order by gm.joined_at limit 1;
+
+  -- 0062: 옛 동작은 여기서 `raise exception 'no_group_yet'`이었다.
+  -- 이제는 본인용 그룹을 만들어 준다.
+  --
+  -- ⚠️ `create_group()`을 호출하지 않는다. 그 함수는 security definer가 아니고
+  --    자체 재시도 루프를 갖고 있어, 정의자 함수 안에서 부르면 권한 맥락이
+  --    섞인다. 여기서 직접 insert하고 코드 충돌만 재시도한다.
+  --
+  -- ⚠️ 이름을 사용자에게 묻지 않는다. 홈 카드가 그룹 이름을 **쓰지 않기로**
+  --    이미 정했으므로(2026-08-07) 화면에 드러나지 않는다. 물으면 챌린지를
+  --    만들려던 사람에게 무관한 질문을 강요하게 된다.
+  if v_group is null then
+    for i in 1..10 loop
+      begin
+        insert into groups (name, invite_code, owner_id)
+        values ('내 크루', generate_invite_code(), v_me)
+        returning id into v_group;
+        exit;
+      exception when unique_violation then
+        if i >= 10 then raise; end if;
+      end;
+    end loop;
+
+    insert into group_members (group_id, user_id, role)
+    values (v_group, v_me, 'owner')
+    on conflict (group_id, user_id) do nothing;
+  end if;
 
   insert into challenges (group_id, name, start_date, end_date, photo_required, created_by)
   values (v_group, p_name, p_start_date, p_end_date, p_photo_required, v_me)
@@ -1513,6 +1605,140 @@ begin
     end;
   end loop;
   raise exception 'code_generation_failed';
+end $function$;
+
+-- ── issue_my_invite_code ──
+CREATE OR REPLACE FUNCTION public.issue_my_invite_code()
+ RETURNS text
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+declare
+  v_me   uuid := (select auth.uid());
+  v_code text;
+  i      int;
+begin
+  if v_me is null then raise exception 'not_authenticated'; end if;
+
+  select invite_code into v_code from public.profiles where id = v_me;
+  if v_code is not null then return v_code; end if;
+
+  -- 프로필이 없으면 코드를 붙일 곳이 없다. 온보딩을 먼저 마쳐야 한다.
+  if not exists (select 1 from public.profiles where id = v_me) then
+    raise exception 'no_profile';
+  end if;
+
+  for i in 1..10 loop
+    v_code := public.generate_invite_code();
+
+    -- ⚠️ 그룹 코드와 겹치면 버린다. 겹친 채로 두면 `/invite/[code]`가 친구 코드를
+    --    먼저 찾으므로 그 그룹의 초대 링크가 **조용히 친구 초대로 바뀐다.**
+    if exists (select 1 from public.groups where invite_code = v_code) then
+      continue;
+    end if;
+
+    begin
+      update public.profiles set invite_code = v_code where id = v_me;
+      return v_code;
+    exception when unique_violation then
+      -- 같은 코드를 다른 사람이 먼저 가져갔다(31^5 공간이라 드물다). 다시 뽑는다.
+      null;
+    end;
+  end loop;
+
+  raise exception 'code_generation_failed';
+end $function$;
+
+-- ── join_challenge_as_newcomer ──
+CREATE OR REPLACE FUNCTION public.join_challenge_as_newcomer(p_code text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+declare
+  v_me        uuid := (select auth.uid());
+  v_result    jsonb;
+  v_challenge uuid;
+  v_host      uuid;
+  v_host_nick text;
+  v_my_nick   text;
+begin
+  if v_me is null then raise exception 'not_authenticated'; end if;
+
+  -- ── 신입 가드 ────────────────────────────────────────────
+  --
+  -- ⚠️ **참가 전에 센다.** 참가 뒤에 세면 challenge_participants가 1행이 되어
+  --    조건이 뒤집히고, 그러면 누구든 이 함수로 친구가 될 수 있다 = D5다.
+  --
+  -- ⚠️ 두 조건 중 하나라도 빼지 마라.
+  --    crew_links 0건  : 이미 친구가 있는 사람 = 기존 사용자
+  --    participants 0건: 다른 챌린지에 있는 사람 = 0051이 신고한 바로 그 경우
+  if exists (
+    select 1 from public.crew_links
+    where user_a = v_me or user_b = v_me
+  ) then
+    raise exception 'not_newcomer';
+  end if;
+
+  if exists (
+    select 1 from public.challenge_participants where user_id = v_me
+  ) then
+    raise exception 'not_newcomer';
+  end if;
+
+  -- ── 참가 ─────────────────────────────────────────────────
+  --
+  -- ⚠️ 참가 절차를 **베끼지 않는다.** advisory lock · status='setup' 검사 ·
+  --    upsert가 한 벌만 존재해야 한다. 이 저장소는 start_challenge를 세 곳에
+  --    복사해 두고 0045~0047로 세 번 고친 전례가 있다.
+  --
+  -- 여기서 예외가 나면(invalid_invite_code · invalid_status · already_joined)
+  -- 트랜잭션 전체가 롤백된다 — **챌린지에 못 들어갔는데 친구만 된 상태가 없다.**
+  v_result := public.join_challenge_with_code(p_code);
+  v_challenge := (v_result ->> 'challengeId')::uuid;
+
+  -- ── 방장과 연결 ──────────────────────────────────────────
+  select cp.user_id into v_host
+  from public.challenge_participants cp
+  where cp.challenge_id = v_challenge and cp.role = 'host'
+  order by cp.joined_at nulls last
+  limit 1;
+
+  -- 방장이 없는 방은 있을 수 없지만(create_challenge_room이 같은 트랜잭션에서
+  -- 넣는다), 없으면 챌린지 참가만 하고 조용히 끝낸다. 친구 연결이 없다고 참가를
+  -- 되돌릴 이유는 없다.
+  if v_host is null or v_host = v_me then
+    return v_result || jsonb_build_object('crewLinked', 0);
+  end if;
+
+  perform pg_advisory_xact_lock(
+    hashtext(least(v_me, v_host)::text || greatest(v_me, v_host)::text)
+  );
+
+  insert into public.crew_links (user_a, user_b)
+  values (least(v_me, v_host), greatest(v_me, v_host))
+  on conflict do nothing;
+
+  select nickname into v_host_nick from public.profiles where id = v_host;
+  select nickname into v_my_nick   from public.profiles where id = v_me;
+
+  -- 알림 실패가 연결·참가까지 되돌리면 안 된다.
+  begin
+    perform public.notify(
+      v_host, v_me, 'crew_accepted', v_challenge,
+      coalesce(v_my_nick, '누군가') || '님이 챌린지에 들어오고 친구가 됐어요 🤝',
+      '초대 링크로 GND를 처음 시작했어요'
+    );
+  exception when others then null;
+  end;
+
+  return v_result || jsonb_build_object(
+    'crewLinked', 1,
+    'hostId', v_host,
+    'hostNickname', v_host_nick
+  );
 end $function$;
 
 -- ── join_challenge_with_code ──
@@ -2875,6 +3101,7 @@ $function$;
 -- CREATE UNIQUE INDEX point_transactions_pkey ON public.point_transactions USING btree (id);
 -- CREATE UNIQUE INDEX point_transactions_source_unique ON public.point_transactions USING btree (user_id, reason, source_type, source_id) WHERE (transaction_type = 'earn'::text);
 -- CREATE INDEX point_transactions_user_recent ON public.point_transactions USING btree (user_id, created_at DESC);
+-- CREATE UNIQUE INDEX profiles_invite_code_unique ON public.profiles USING btree (invite_code) WHERE (invite_code IS NOT NULL);
 -- CREATE UNIQUE INDEX profiles_nickname_unique ON public.profiles USING btree (lower(TRIM(BOTH FROM nickname)));
 -- CREATE UNIQUE INDEX profiles_pkey ON public.profiles USING btree (id);
 -- CREATE UNIQUE INDEX push_subscriptions_endpoint_key ON public.push_subscriptions USING btree (endpoint);

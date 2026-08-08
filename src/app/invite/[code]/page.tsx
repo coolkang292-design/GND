@@ -4,11 +4,15 @@ import { use, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 import { normalizeInviteCode } from "@/lib/domain/invite-code";
-import { getMyProfile, joinGroupWithCode, savePendingInvite } from "@/lib/crew";
+import { getMyProfile, redeemInviteCode, savePendingInvite } from "@/lib/crew";
 
 /**
- * 초대 링크 탭 → 자동 크루 합류 (§4).
+ * 초대 링크 탭 → 자동 합류.
  * 프로필이 없으면(신규) 코드를 저장해두고 온보딩으로 보낸다.
+ *
+ * ⚠️ 2026-08-08부터 이 링크는 **친구 연결**이 먼저다(0061). 옛 그룹 코드는
+ * `redeemInviteCode`가 하위 호환으로 받는다 — 카카오톡에 이미 뿌려진 링크가
+ * 죽지 않게 하는 장치다. 그 2단계 로직을 여기 복사하지 마라(설계 §3.3).
  */
 export default function InvitePage({
   params,
@@ -42,10 +46,17 @@ export default function InvitePage({
         return;
       }
       try {
-        await joinGroupWithCode(code);
+        await redeemInviteCode(code);
         router.replace("/home");
-      } catch {
-        setError("존재하지 않는 초대 코드예요");
+      } catch (e) {
+        // 자기 자신의 링크를 누른 경우는 따로 말해 준다. "존재하지 않는 코드"로
+        // 뭉개면 사용자가 링크가 깨진 줄 알고 다시 만든다.
+        const msg = e instanceof Error ? e.message : String(e);
+        setError(
+          msg.includes("self_invite")
+            ? "내 초대 링크예요. 친구에게 보내 주세요 🙂"
+            : "존재하지 않는 초대 링크예요",
+        );
       }
     }
     void run();
@@ -57,7 +68,7 @@ export default function InvitePage({
       {error ? (
         <p className="text-sm font-semibold text-warn">{error}</p>
       ) : (
-        <p className="text-sm text-muted">크루에 합류하는 중…</p>
+        <p className="text-sm text-muted">친구를 맺는 중…</p>
       )}
     </main>
   );

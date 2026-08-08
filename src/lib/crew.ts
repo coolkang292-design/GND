@@ -121,6 +121,105 @@ export async function getCrewProfiles(myUserId: string): Promise<Profile[]> {
   );
 }
 
+/**
+ * 내 친구 초대 코드 — 없으면 발급, 있으면 그대로 (0061, 멱등).
+ *
+ * ⚠️ **그룹 코드가 아니다.** 2026-08-08까지 홈의 "친구 초대하기" 카드는
+ * `groups.invite_code`를 보여줬고, 그 링크는 `join_group_with_code`를 타서
+ * `group_members`에만 넣었다 — `crew_links`는 한 줄도 안 건드렸다. 그래서 링크로
+ * 들어온 사람이 **친구 목록에 안 나타났다**(사용자 지적).
+ * 설계: `docs/superpowers/specs/2026-08-08-friend-invite-identity-onboarding-design.md` §3
+ *
+ * 코드는 한 번 발급되면 바뀌지 않는다. 바뀌면 사용자가 어제 보낸 링크가 죽는다.
+ */
+export async function issueMyInviteCode(): Promise<string> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase.rpc("issue_my_invite_code");
+  if (error) throw error;
+  return data as string;
+}
+
+export type FriendInviteResult = {
+  ownerId: string;
+  nickname: string;
+  /** 이미 친구였다 — 화면은 "이미 친구예요"로 말해야 한다 */
+  alreadyFriends: boolean;
+};
+
+/**
+ * 친구 초대 코드 수락 — `crew_links`에 즉시 1행 (0061).
+ *
+ * 요청/수락을 다시 묻지 않는다. **링크를 보낸 것이 초대 의사이고 링크를 연 것이
+ * 수락이다.** `sendCrewRequest`를 거치게 하면 초대한 사람이 자기가 부른 사람의
+ * 요청을 또 수락해야 한다.
+ *
+ * ⚠️ 코드가 친구 코드가 아니면 서버가 **`invalid_friend_code`** 를 던진다.
+ * 호출부는 그때 **옛 그룹 코드로 재시도**해야 한다 — 카카오톡에 이미 뿌려진
+ * 링크가 죽지 않게 하는 유일한 장치다(`/invite/[code]`, 온보딩 둘 다).
+ */
+export async function acceptFriendInvite(
+  code: string,
+): Promise<FriendInviteResult> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase.rpc("accept_friend_invite", {
+    p_code: code,
+  });
+  if (error) throw error;
+  const row = data as {
+    ownerId: string;
+    nickname: string;
+    alreadyFriends: boolean;
+  };
+  return {
+    ownerId: row.ownerId,
+    nickname: row.nickname,
+    alreadyFriends: row.alreadyFriends,
+  };
+}
+
+/** 서버가 "이 코드는 친구 코드가 아니다"라고 답했는가 — 그룹 코드 재시도 조건 */
+export function isNotFriendCode(e: unknown): boolean {
+  const msg = e instanceof Error ? e.message : String(e);
+  return msg.includes("invalid_friend_code");
+}
+
+export type InviteRedeemResult =
+  | { kind: "friend"; nickname: string; alreadyFriends: boolean }
+  | { kind: "group"; groupName: string };
+
+/**
+ * 초대 코드 하나로 **친구 먼저, 옛 그룹 코드는 하위 호환**으로 처리한다.
+ *
+ * ⚠️ **이 함수가 유일한 진입점이다.** `/invite/[code]`와 온보딩이 같은 2단계를
+ * 밟아야 하는데, 두 곳에 복사하면 한쪽만 고쳐져 갈라진다. 실제로 이 저장소는
+ * 같은 실수로 `start_challenge`를 세 번 고쳤다.
+ *
+ * 순서를 뒤집지 마라. 그룹을 먼저 시도하면, 0061이 코드 공간을 공유하므로
+ * **친구 코드가 그룹 코드로 오인될 수 있다**(둘 다 `GND-XXXXX`).
+ *
+ * @throws 둘 다 실패하면 마지막 오류를 그대로 던진다 — 호출부가 "존재하지 않는
+ *   초대 링크"로 옮긴다.
+ */
+export async function redeemInviteCode(
+  code: string,
+): Promise<InviteRedeemResult> {
+  try {
+    const friend = await acceptFriendInvite(code);
+    return {
+      kind: "friend",
+      nickname: friend.nickname,
+      alreadyFriends: friend.alreadyFriends,
+    };
+  } catch (e) {
+    // 친구 코드가 아닐 때만 그룹으로 넘어간다. `self_invite`처럼 **친구 코드가
+    // 맞는데 거절된** 경우까지 그룹으로 재시도하면, 자기 링크를 눌렀을 때
+    // "존재하지 않는 초대 링크"라는 엉뚱한 문구가 뜬다.
+    if (!isNotFriendCode(e)) throw e;
+    const joined = await joinGroupWithCode(code);
+    return { kind: "group", groupName: joined.group_name };
+  }
+}
+
 const PENDING_INVITE_KEY = "gnd-pending-invite";
 
 export function savePendingInvite(code: string): void {

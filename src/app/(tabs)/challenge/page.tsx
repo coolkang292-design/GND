@@ -44,6 +44,7 @@ import {
   joinChallengeWithCode,
   clearPendingChallengeInvite,
   savePendingChallengeInvite,
+  takeOnboardingNotice,
   saveMyGoals,
   startChallenge,
   unapproveChallengeGoals,
@@ -166,6 +167,23 @@ function ChallengeScreen({ userId }: { userId: string }) {
   }, []);
 
   const reload = useCallback(() => setRefreshKey((k) => k + 1), []);
+
+  /**
+   * 온보딩이 참가·친구 연결을 이미 끝냈을 때 남겨 둔 한 줄 (0063, 설계 §3.6).
+   *
+   * ⚠️ 옛 흐름은 온보딩에서 참가시킨 뒤 **아무 말 없이** 이 화면으로 보냈다.
+   * 신입은 챌린지 참가와 친구 연결이 동시에 일어나므로 둘 다 말해야 한다.
+   * `takeOnboardingNotice`가 한 번만 꺼내므로 새로고침해도 다시 뜨지 않는다.
+   */
+  useEffect(() => {
+    const notice = takeOnboardingNotice();
+    if (!notice) return;
+    // ⚠️ effect 본문에서 바로 부르면 렌더가 연쇄된다
+    //    (eslint react-hooks/set-state-in-effect). 이 파일의 다른 effect들도
+    //    같은 이유로 콜백 안에서 showToast를 부른다. 꺼내기(=소비)는 여기서
+    //    동기로 끝내야 StrictMode의 두 번째 실행에서 두 번 뜨지 않는다.
+    queueMicrotask(() => showToast(notice));
+  }, [showToast]);
 
   const challenge = challenges.find((c) => c.id === selectedId) ?? null;
   // 선택 번호와 상세 정보의 주인이 다르면 화면에 그리지 않는다. useEffect가 실행되기
