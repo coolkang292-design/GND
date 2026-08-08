@@ -8,6 +8,10 @@
 커밋 `b63b315`(배치 3) · `5fd520e`(배치 4) · `aa5e801`(릴리스 공지 + `/whats-new`) · 배포 ① `gnd-77093jtnx-gnd4.vercel.app`
 커밋 `8122ac8`·`5d95add`·`bf6ebf8`(주간 목표) · 배포 ② `gnd-mmcs2n7gg-gnd4.vercel.app` → `gnd-one.vercel.app` Ready
 
+**🔴 테스트 계정 `test11`이 사용자의 구글을 물고 있어서 지웠다** (사용자 지시). 운동 0·XP 0·챌린지 0·크루 0에 구글 `coolkang292@gmail.com`만 붙어 있었다. 신원만 뗄 수 없었다 — 지원 경로가 본인 세션뿐인데(admin 경로는 404) 구글로만 만들어져 비밀번호가 없다. 그룹 `불꽃 크루`(멤버 1명) → auth 계정 순서로 삭제, **프로필 7 → 6개**(오뎅끼데스까·dev-테스터A·dev-테스터B·스칼레또·낭만송곳니·test), 소셜 신원이 붙은 계정 **0개** 확인.
+  - ⚠️ **`listUsers()`는 `identities`를 안 채워 준다**(실측). 전부 빈 배열로 나와 "아무 데도 안 붙어 있다"고 한 번 잘못 읽었다 — **uid마다 `getUserById`를 불러야 한다**
+  - ⚠️ **픽스처·테스트 계정에 본인 소셜을 붙이지 마라.** 그 계정을 지우기 전에는 진짜 계정에 못 붙인다
+
 **🔴 카카오가 운영에서 KOE205로 실패한다** (사용자 실기기 신고). 앱 코드가 아니라 **카카오 개발자 콘솔의 동의항목** 설정이다 — 인수인계서 §4.0에 진단 전량. 요지: `client_id`·`redirect_uri`는 정상(익명 authorize가 카카오 로그인 페이지까지 간다 — 미등록이면 그 전에 KOE006), KOE205는 로그인 뒤 동의 단계에서 난다. **`account_email`을 앱에서 뺄 수 없다** — Supabase는 `options.scopes`를 기본값에 덧붙인다(치환 아님, 실측). **구글은 멀쩡하므로 신규 가입이 막힌 것은 아니다.**
 
 **인수인계: [`docs/superpowers/HANDOFF-2026-08-08b-onboarding-identity.md`](docs/superpowers/HANDOFF-2026-08-08b-onboarding-identity.md)**
