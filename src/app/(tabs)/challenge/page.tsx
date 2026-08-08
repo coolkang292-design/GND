@@ -185,6 +185,32 @@ function ChallengeScreen({ userId }: { userId: string }) {
     queueMicrotask(() => showToast(notice));
   }, [showToast]);
 
+  /**
+   * `?open=<id>` — 온보딩이 참가를 마치고 **그 챌린지**로 보낼 때 쓴다 (2026-08-08).
+   *
+   * ⚠️ `?join=`과 헷갈리지 마라. `join`은 "이 코드로 참가시켜라"이고 `open`은
+   * "참가는 이미 끝났으니 이 방을 열어라"다. 온보딩이 `join`을 다시 넘기면
+   * 이 화면이 참가를 한 번 더 시도해 `already_joined`가 뜬다.
+   *
+   * ⚠️ 챌린지를 여러 개 만들 수 있게 된 뒤로 `/challenge`만 열면 `pickPrimaryRow`가
+   * 대표 챌린지를 고른다 — 초대받아 들어온 사람이 **엉뚱한 방**을 볼 수 있다.
+   *
+   * 주소에서 지우는 것까지가 한 벌이다. 안 지우면 뒤로가기·새로고침이 이 선택을
+   * 계속 되살려 사용자가 다른 챌린지를 못 고른다.
+   */
+  const openApplied = useRef(false);
+  useEffect(() => {
+    if (openApplied.current) return;
+    const open = new URLSearchParams(window.location.search).get("open");
+    if (!open) return;
+    openApplied.current = true;
+    // ⚠️ effect 본문에서 바로 setState하면 렌더가 연쇄된다
+    //    (eslint react-hooks/set-state-in-effect). 이 파일의 다른 effect들과
+    //    같은 방식으로 콜백 안에서 부른다.
+    queueMicrotask(() => setSelectedId(open));
+    window.history.replaceState({}, "", window.location.pathname);
+  }, []);
+
   const challenge = challenges.find((c) => c.id === selectedId) ?? null;
   // 선택 번호와 상세 정보의 주인이 다르면 화면에 그리지 않는다. useEffect가 실행되기
   // 전 한 프레임에도 이전 챌린지 정보가 새 제목 아래 보이지 않게 하는 안전장치다.

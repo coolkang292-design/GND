@@ -46,11 +46,14 @@ vi.mock("@/components/auth-provider", () => ({
   }),
 }));
 
-vi.mock("@/lib/challenge", () => ({
+// ⚠️ `isNotNewcomer`·`challengeJoinError`는 **실물을 쓴다.** 둘 다 순수 함수이고,
+//    목으로 덮으면 "어떤 오류에 폴백하는가 / 어떤 오류에 사용자를 붙잡아 두는가"가
+//    검사 대상에서 사라진다. Supabase를 타는 것만 목으로 막는다.
+vi.mock("@/lib/challenge", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/challenge")>()),
   clearPendingChallengeInvite: mocks.clearPendingChallengeInvite,
   joinChallengeWithCode: mocks.joinChallengeWithCode,
   joinChallengeAsNewcomer: mocks.joinChallengeAsNewcomer,
-  isNotNewcomer: mocks.isNotNewcomer,
   saveOnboardingNotice: mocks.saveOnboardingNotice,
   peekPendingChallengeInvite: mocks.peekPendingChallengeInvite,
 }));
@@ -219,45 +222,59 @@ describe("OnboardingPage 챌린지 초대 모드", () => {
       challengeName: "테스트 챌린지",
       crewLinked: 0,
     });
-    // 실제 구현과 같은 판정을 쓴다. `true` 고정으로 두면 폴백이 모든 오류를
-    // 삼키는 회귀를 테스트가 못 잡는다.
-    mocks.isNotNewcomer.mockImplementation(
-      (e: unknown) => e instanceof Error && e.message.includes("not_newcomer"),
-    );
   });
 
   afterEach(() => cleanup());
 
-  it("닉네임과 챌린지 참가 버튼만 보여준다", () => {
+  /**
+   * ⚠️⚠️ **초대로 와도 카카오·구글이 먼저다** (사용자 지시 2026-08-08 —
+   * *"모든 유저는 카카오/구글 회원 가입 > 닉네임 세팅하기 > 홈 or 챌린지"*).
+   *
+   * 옛 동작은 초대면 이 단계를 건너뛰고 닉네임만 물었다. 그러면 초대로 들어온
+   * 사람이 **소셜 신원 0개짜리 브라우저 전용 계정**을 쥐게 된다 — 브라우저를
+   * 지우면 기록이 사라지는, 배치 3이 없애려던 그 상태다. 되살리지 마라.
+   */
+  it("신원이 없으면 초대로 와도 카카오·구글을 먼저 보여준다", async () => {
     render(<OnboardingPage />);
 
     expect(
-      screen.getByRole("heading", { name: /챌린지에 초대받았어요/ }),
+      await screen.findByRole("button", { name: "카카오로 시작하기" }),
     ).not.toBeNull();
     expect(
-      screen.getByPlaceholderText("예: 스칼레또"),
+      screen.getByRole("button", { name: "구글로 시작하기" }),
     ).not.toBeNull();
+    // 아직 닉네임을 묻지 않는다 — 제공자로 떠나면 입력값이 사라진다.
+    expect(screen.queryByPlaceholderText("예: 스칼레또")).toBeNull();
+    // ⚠️ 로그인 문을 숨기지 마라. 기존 사용자가 새 기기에서 챌린지 링크를 타면
+    //    카카오를 눌러도 `identity_already_exists`로 막히므로 여기가 유일한 길이다.
+    expect(screen.getByText("이미 계정이 있나요? 로그인")).not.toBeNull();
+  });
+
+  it("제공자에서 돌아오면 닉네임과 챌린지 참가 버튼을 보여준다", async () => {
+    linkedIdentity();
+    render(<OnboardingPage />);
+
+    expect(
+      await screen.findByRole("heading", { name: /챌린지에 초대받았어요/ }),
+    ).not.toBeNull();
+    expect(screen.getByPlaceholderText("예: 스칼레또")).not.toBeNull();
     expect(
       screen.getByRole("button", { name: "챌린지 참가하기" }),
     ).not.toBeNull();
     expect(screen.queryByText("프로필 사진")).toBeNull();
     expect(screen.queryByText("주간 운동 목표")).toBeNull();
-    // ⚠️ 초대로 온 사람에게 가입 선택지를 다시 묻지 않는다. 신원 조회를 기다리지도
-    //    않는다 — 기다리면 링크를 탭한 사람이 "확인 중…"을 한 번 보고 넘어간다.
+    // 이미 신원을 붙였으니 주 버튼을 다시 보여주지 않는다.
     expect(
       screen.queryByRole("button", { name: "카카오로 시작하기" }),
     ).toBeNull();
-    expect(screen.queryByText("확인 중…")).toBeNull();
     expect(screen.queryByText("크루에 들어가요")).toBeNull();
-    expect(
-      screen.queryByText("이미 계정이 있나요? 로그인"),
-    ).toBeNull();
   });
 
   async function submitNickname(nick = "새참가자") {
+    linkedIdentity();
     render(<OnboardingPage />);
     fireEvent.change(
-      screen.getByPlaceholderText("예: 스칼레또"),
+      await screen.findByPlaceholderText("예: 스칼레또"),
       { target: { value: nick } },
     );
     fireEvent.click(
@@ -287,7 +304,10 @@ describe("OnboardingPage 챌린지 초대 모드", () => {
     expect(notice).toContain("방장형");
     expect(notice).toContain("테스트 챌린지");
     expect(mocks.clearPendingChallengeInvite).toHaveBeenCalledOnce();
-    expect(mocks.replace).toHaveBeenCalledWith("/challenge");
+    // ⚠️ 링크를 만든 **그 챌린지**로 보낸다. `/challenge`만 열면 대표 챌린지가
+    //    잡혀 초대받은 사람이 엉뚱한 방을 본다(챌린지를 여러 개 만들 수 있다).
+    //    ⚠️ `?join=`으로 넘기지 마라 — 챌린지 화면이 참가를 한 번 더 시도한다.
+    expect(mocks.replace).toHaveBeenCalledWith("/challenge?open=challenge-1");
     expect(
       mocks.upsertMyProfile.mock.invocationCallOrder[0],
     ).toBeLessThan(
@@ -308,35 +328,48 @@ describe("OnboardingPage 챌린지 초대 모드", () => {
         "GND-ABCDE",
       ),
     );
-    expect(mocks.replace).toHaveBeenCalledWith("/challenge");
+    expect(mocks.replace).toHaveBeenCalledWith("/challenge?open=challenge-1");
     // 친구를 안 맺었으므로 방장 이름을 말하면 거짓말이 된다.
     const notice = mocks.saveOnboardingNotice.mock.calls[0]?.[0] as string;
     expect(notice).toContain("테스트 챌린지");
     expect(notice).not.toContain("친구가 됐어요");
   });
 
-  it("참가 실패 시 코드를 남기고 같은 화면에서 다시 시도하게 한다", async () => {
-    // 신입 판정과 무관한 오류(코드 자체가 틀림)는 폴백하지 않고 그대로 실패한다.
-    mocks.joinChallengeAsNewcomer.mockRejectedValue(
-      new Error("invalid_code"),
-    );
-    render(<OnboardingPage />);
+  /**
+   * ⚠️⚠️ 2026-08-08까지 이 화면은 서버 오류를 `catch {}`로 버리고
+   * `초대 링크를 다시 확인해 주세요` 한 줄만 보여줬다. 실측한 실패는 셋이었다 —
+   * `invalid_invite_code` · `invalid_status:cancelled` · `invalid_status:active`.
+   * **링크가 멀쩡한데 링크를 의심하게 만들어** 사용자가 실제로 시간을 썼다.
+   * 원인별 문구를 지우고 한 줄로 되돌리지 마라.
+   */
+  it.each([
+    ["invalid_invite_code", /초대 링크가 만료됐거나 잘못됐어요/],
+    ["invalid_status:active", /이미 시작해서 참가가 닫혔어요/],
+    ["invalid_status:cancelled", /취소된 챌린지예요/],
+    ["already_joined", /이미 참가한 챌린지예요/],
+  ])("%s면 이유를 말하고 홈으로 보낸다 (갇히지 않는다)", async (code, text) => {
+    mocks.joinChallengeAsNewcomer.mockRejectedValue(new Error(code));
+    await submitNickname();
 
-    fireEvent.change(
-      screen.getByPlaceholderText("예: 스칼레또"),
-      { target: { value: "새참가자" } },
-    );
-    fireEvent.click(
-      screen.getByRole("button", { name: "챌린지 참가하기" }),
-    );
-
-    await screen.findByText(
-      "챌린지에 참가하지 못했어요. 초대 링크를 다시 확인해 주세요.",
-    );
-    expect(mocks.clearPendingChallengeInvite).not.toHaveBeenCalled();
-    expect(mocks.replace).not.toHaveBeenCalled();
+    // ⚠️ 되돌릴 수 없는 실패다. 가입은 이미 끝났으므로 화면에 붙잡아 두면
+    //    사용자가 갇힌다 — `/onboarding`은 `(tabs)` 밖이라 OnboardingGate가
+    //    없어서 새로고침해도 못 나간다.
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/home"));
+    expect(mocks.saveOnboardingNotice.mock.calls[0]?.[0]).toMatch(text);
+    // ⚠️ 코드도 지운다. 남기면 이 브라우저의 **다음 가입**까지 오염된다.
+    expect(mocks.clearPendingChallengeInvite).toHaveBeenCalledOnce();
     // 폴백이 모든 오류를 삼키면 틀린 코드로도 참가를 시도하게 된다.
     expect(mocks.joinChallengeWithCode).not.toHaveBeenCalled();
+  });
+
+  it("원인을 모르는 실패는 코드를 남기고 다시 시도하게 한다", async () => {
+    // 네트워크 등 일시적 실패까지 코드를 지우면 되살릴 수 없는 링크가 된다.
+    mocks.joinChallengeAsNewcomer.mockRejectedValue(new Error("network down"));
+    await submitNickname();
+
+    await screen.findByText(/챌린지에 참가하지 못했어요 \(network down\)/);
+    expect(mocks.clearPendingChallengeInvite).not.toHaveBeenCalled();
+    expect(mocks.replace).not.toHaveBeenCalled();
     expect(
       screen.getByRole("button", { name: "챌린지 참가하기" }),
     ).not.toBeNull();
@@ -362,13 +395,35 @@ describe("OnboardingPage 친구 초대 링크 모드", () => {
   afterEach(() => cleanup());
 
   async function finishProfile() {
+    linkedIdentity();
     render(<OnboardingPage />);
     fireEvent.change(
-      screen.getByPlaceholderText("예: 스칼레또"),
+      await screen.findByPlaceholderText("예: 스칼레또"),
       { target: { value: "새친구" } },
     );
     fireEvent.click(screen.getByRole("button", { name: "GND 시작하기" }));
   }
+
+  it("신원이 없으면 친구 초대로 와도 카카오·구글이 먼저다", async () => {
+    render(<OnboardingPage />);
+    expect(
+      await screen.findByRole("button", { name: "카카오로 시작하기" }),
+    ).not.toBeNull();
+    expect(screen.queryByPlaceholderText("예: 스칼레또")).toBeNull();
+  });
+
+  /**
+   * ⚠️⚠️ **마운트에서 `clearPendingInvite()`를 부르지 마라.** 2026-08-08까지
+   * 그랬는데, 초대로 온 사람도 카카오·구글을 거치게 되면서 치명적이 됐다 —
+   * 제공자로 떠났다 돌아오면 화면이 다시 마운트되고, 그때는 코드가 이미 지워져
+   * 있어 **친구 초대 링크가 통째로 증발한다.** 다 쓴 뒤에만 지운다.
+   */
+  it("코드를 다 쓰기 전에는 지우지 않는다 (제공자 왕복에서 살아남아야 한다)", async () => {
+    linkedIdentity();
+    render(<OnboardingPage />);
+    await screen.findByPlaceholderText("예: 스칼레또");
+    expect(mocks.clearPendingInvite).not.toHaveBeenCalled();
+  });
 
   /**
    * ⚠️ 0061 전에는 이 링크가 그룹 합류였고 마지막 화면이 "크루 참여 완료!"였다.
@@ -383,6 +438,8 @@ describe("OnboardingPage 친구 초대 링크 모드", () => {
     expect(screen.getByText(/낭만송곳니/)).not.toBeNull();
     expect(screen.queryByText(/크루 참여 완료/)).toBeNull();
     expect(screen.queryByText(/의 GND 챌린지에 함께해요/)).toBeNull();
+    // 다 썼으므로 이제 지운다 — 안 지우면 다음 가입이 같은 코드를 또 쓴다.
+    expect(mocks.clearPendingInvite).toHaveBeenCalledOnce();
   });
 
   it("이미 친구였으면 그렇게 말한다", async () => {

@@ -17,6 +17,7 @@ import {
   type OAuthProvider,
 } from "@/lib/identity";
 import {
+  challengeJoinError,
   clearPendingChallengeInvite,
   isNotNewcomer,
   joinChallengeAsNewcomer,
@@ -104,9 +105,11 @@ export default function OnboardingPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    clearPendingInvite();
-  }, []);
+  // ⚠️⚠️ **여기서 `clearPendingInvite()`를 부르지 마라.** 2026-08-08까지 마운트에서
+  //    지웠는데, 초대로 온 사람도 카카오·구글을 먼저 거치도록 바뀌면서 그게
+  //    치명적이 됐다 — 제공자로 떠났다가 돌아오면 화면이 **다시 마운트**되고,
+  //    그때는 코드가 이미 지워져 있어 **친구 초대 링크가 통째로 증발한다.**
+  //    챌린지 코드가 성공한 뒤에만 지워지는 것과 규칙을 맞춘다(아래 submitProfile).
 
   useEffect(() => {
     if (!configured || loading || !userId) return;
@@ -160,6 +163,7 @@ export default function OnboardingPage() {
 
       // 챌린지 초대로 온 사람은 크루 단계를 통째로 건너뛴다.
       if (challengeCode) {
+        let challengeId: string;
         try {
           // 0063: 방금 프로필을 만든 사람은 **신입**이라 방장과 친구까지 맺는다.
           // ⚠️ 폴백을 빼지 마라 — 신입이 아닌 사람이 이 흐름에 올 수 있고,
@@ -171,6 +175,7 @@ export default function OnboardingPage() {
             if (!isNotNewcomer(e)) throw e;
             joined = await joinChallengeWithCode(challengeCode);
           }
+          challengeId = joined.challengeId;
           const hostNick =
             "hostNickname" in joined ? joined.hostNickname : undefined;
           saveOnboardingNotice(
@@ -178,14 +183,31 @@ export default function OnboardingPage() {
               ? `${joined.challengeName}에 참가하고 ${hostNick}님과 친구가 됐어요 🤝`
               : `${joined.challengeName}에 참가했어요! 목표를 세워 주세요 🎯`,
           );
-        } catch {
-          setError(
-            "챌린지에 참가하지 못했어요. 초대 링크를 다시 확인해 주세요.",
-          );
+        } catch (e) {
+          // ⚠️⚠️ **`catch {}`로 되돌리지 마라.** 원인을 버리면 화면이 거짓말을 한다
+          //    — `초대 링크를 다시 확인해 주세요`가 코드·상태·중복참가를 전부
+          //    뭉개서, 링크가 멀쩡한데 링크를 의심하게 만들었다(2026-08-08 실측).
+          const { message, recoverable } = challengeJoinError(e);
+          if (recoverable) {
+            // 다시 눌러 볼 값어치가 있는 실패(네트워크 등)만 화면에 붙잡아 둔다.
+            setError(message);
+            return;
+          }
+          // ⚠️ 되돌릴 수 없는 실패면 **가입은 이미 끝났다.** 여기서 붙잡아 두면
+          //    사용자가 온보딩에 갇힌다 — 이 화면은 `(tabs)` 밖이라
+          //    `OnboardingGate`가 없어서 새로고침해도 못 나간다(2026-08-08 실측).
+          //    친구 초대 경로가 이미 같은 이유로 홈에 보내고 있었다.
+          // ⚠️ 코드도 지운다. 남겨두면 이 브라우저의 **다음 가입**까지
+          //    "챌린지에 초대받았어요"로 열려 같은 실패를 반복한다.
+          clearPendingChallengeInvite();
+          saveOnboardingNotice(message);
+          router.replace("/home");
           return;
         }
         clearPendingChallengeInvite();
-        router.replace("/challenge");
+        // 링크를 만든 **그 챌린지**로 데려간다. 여러 개를 만들 수 있게 된 뒤로
+        // `/challenge`만 열면 대표 챌린지가 잡혀 엉뚱한 방이 보일 수 있다.
+        router.replace(`/challenge?open=${challengeId}`);
         return;
       }
 
@@ -194,6 +216,9 @@ export default function OnboardingPage() {
       if (joinCode) {
         try {
           const redeemed = await redeemInviteCode(joinCode);
+          // 다 쓴 코드는 여기서 지운다. ⚠️ 마운트에서 지우면 카카오·구글 왕복 뒤
+          //    다시 마운트될 때 이미 없어서 **링크가 증발한다**(위 주석 참조).
+          clearPendingInvite();
           setDoneInfo(
             redeemed.kind === "friend"
               ? {
@@ -209,6 +234,7 @@ export default function OnboardingPage() {
           // 링크가 깨졌어도 **가입은 끝났다.** 여기서 붙잡아 두지 않고 홈으로
           // 보낸다 — 프로필이 생긴 뒤에는 같은 링크를 다시 눌렀을 때
           // `/invite/[code]`가 바로 친구를 맺어 주므로 되돌릴 수 있다.
+          // ⚠️ 그래서 코드는 **지우지 않는다.** 다시 누르면 살아난다.
           router.replace("/home");
           return;
         }
@@ -240,12 +266,21 @@ export default function OnboardingPage() {
     );
   }
 
-  // 챌린지·친구 링크로 온 사람은 이미 "왜 왔는지"가 정해져 있다. 그 사람에게
-  // 가입 선택지를 다시 보여주면 초대와 무관한 화면이 된다.
-  const invited = Boolean(challengeCode || joinCode);
-  // 초대로 왔거나 제공자가 없으면 신원 조회를 **기다릴 이유가 없다.** 기다리면
-  // 초대 링크를 탭한 사람이 "확인 중…"을 한 번 보고 넘어간다.
-  const mustAskNickname = invited || providers.length === 0;
+  /**
+   * ⚠️⚠️ **초대로 온 사람도 카카오·구글을 먼저 거친다** (사용자 지시 2026-08-08 —
+   * *"모든 유저는 카카오/구글 회원 가입 > 닉네임 세팅하기 > 홈 or 챌린지"*).
+   *
+   * 옛 동작은 `invited || providers.length === 0`이었다. 초대 링크로 온 사람에게는
+   * 가입 선택지를 건너뛰고 닉네임만 물었는데, 그러면 그 사람은 **소셜 신원이 하나도
+   * 없는 브라우저 전용 계정**으로 GND를 시작한다 — 브라우저를 지우면 기록·XP·배지가
+   * 사라지는, 배치 3이 통째로 없애려던 그 상태다. 초대로 들어온 사람이야말로
+   * 친구가 부른 사람이라 오래 남는데, 가장 약한 계정을 쥐여주고 있었다.
+   *
+   * ⚠️ `providers.length === 0`은 **남겨 둔다.** 카카오·구글이 동시에 죽거나
+   * 플래그를 꺼야 할 때 이게 없으면 **신규 가입이 0이 된다.** 2026-08-08에 카카오가
+   * KOE205로 실제로 죽었다 — 가정이 아니다.
+   */
+  const mustAskNickname = providers.length === 0;
   const showNicknameStep = mustAskNickname || linked === true;
   const waiting = !mustAskNickname && linked === null;
 
@@ -314,15 +349,20 @@ export default function OnboardingPage() {
           )}
 
           {/* 세션이 끊겨 온보딩으로 떨어진 기존 사용자의 탈출구. 여기서 새로
-              시작하면 새 계정이 생겨 기존 기록과 분리된다. */}
-          {!challengeCode && (
-            <Link
-              href="/login"
-              className="mt-5 block text-[13px] text-muted underline"
-            >
-              이미 계정이 있나요? 로그인
-            </Link>
-          )}
+              시작하면 새 계정이 생겨 기존 기록과 분리된다.
+
+              ⚠️ **챌린지 초대일 때 숨기지 마라** (2026-08-08에 되살렸다).
+              옛 코드는 `!challengeCode`로 가렸는데, 초대로 온 사람도 카카오·구글을
+              거치게 된 뒤로 그게 막다른 길이 됐다 — 기존 사용자가 새 기기에서
+              챌린지 링크를 타면 카카오를 눌러도 `identity_already_exists`로
+              막히고(그 카카오는 본인 계정에 이미 붙어 있다) 나갈 문이 없다.
+              로그인하면 `/login`이 보관된 코드를 보고 챌린지로 데려간다. */}
+          <Link
+            href="/login"
+            className="mt-5 block text-[13px] text-muted underline"
+          >
+            이미 계정이 있나요? 로그인
+          </Link>
         </>
       )}
 

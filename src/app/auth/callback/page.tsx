@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { getMyProfile } from "@/lib/crew";
+import { peekPendingChallengeInvite } from "@/lib/challenge";
 import { identityError } from "@/lib/identity";
 
 /**
@@ -99,7 +100,19 @@ export default function AuthCallbackPage() {
       // ⚠️ router.replace가 아니라 **전체 페이지 로드**다. `AuthProvider`가 루트
       // 레이아웃에 있어 클라이언트 이동으로는 세션을 다시 읽지 않고, **연결 전의
       // userId를 그대로 들고** 조회한다(`/login`이 같은 이유로 이렇게 한다).
-      window.location.assign(hasProfile ? "/account" : "/onboarding");
+      //
+      // ⚠️ 프로필이 있어도 **챌린지 초대가 기다리고 있으면 그쪽이 먼저다**
+      //    (2026-08-08). 초대 링크를 탭한 사람을 `/account`로 보내면, 계정
+      //    화면에서 "내가 왜 여기 있지"가 되고 초대는 조용히 사라진다.
+      //    `/challenge`가 보관된 코드로 참가까지 마무리한다.
+      const pendingChallenge = peekPendingChallengeInvite();
+      window.location.assign(
+        hasProfile
+          ? pendingChallenge
+            ? `/challenge?join=${encodeURIComponent(pendingChallenge)}`
+            : "/account"
+          : "/onboarding",
+      );
     }
 
     void run();

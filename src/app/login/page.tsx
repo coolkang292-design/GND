@@ -5,6 +5,7 @@ import Link from "next/link";
 import { HeroArt } from "@/components/brand/hero-art";
 import { GoldCta, GoldLine } from "@/components/brand/gold";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { peekPendingChallengeInvite } from "@/lib/challenge";
 import {
   PROVIDER_META,
   enabledProviders,
@@ -82,7 +83,17 @@ export default function LoginPage() {
     // 클라이언트 이동으로는 다시 초기화되지 않고, **이전 익명 userId를 그대로
     // 들고** 조회한다 → 프로필이 없다고 판단해 온보딩("닉네임부터")으로 보내고
     // 데이터가 안 보인다. 전체 페이지 로드로 세션을 처음부터 다시 읽게 한다.
-    window.location.assign("/home");
+    //
+    // ⚠️ 챌린지 초대가 기다리고 있으면 홈이 아니라 그쪽으로 보낸다 (2026-08-08).
+    //    초대 링크를 탭했다가 "이미 계정이 있나요? 로그인"으로 넘어온 사람인데,
+    //    홈에 떨어뜨리면 **초대가 조용히 사라진다.** `/auth/callback`이 소셜
+    //    로그인에서 하는 것과 같은 처리다.
+    const pendingChallenge = peekPendingChallengeInvite();
+    window.location.assign(
+      pendingChallenge
+        ? `/challenge?join=${encodeURIComponent(pendingChallenge)}`
+        : "/home",
+    );
   }
 
   return (

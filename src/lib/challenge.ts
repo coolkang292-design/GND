@@ -525,6 +525,58 @@ export function isNotNewcomer(e: unknown): boolean {
   return msg.includes("not_newcomer");
 }
 
+/**
+ * 챌린지 참가 실패 → 사람 말 + 되돌릴 수 있는가 (2026-08-08).
+ *
+ * ⚠️⚠️ **오류를 `catch {}`로 버리지 마라.** 온보딩이 서버 오류 셋을
+ * `초대 링크를 다시 확인해 주세요` 한 줄로 뭉개고 있었다. 실측한 실패는 이랬다:
+ *
+ *   취소된 챌린지의 코드 → invalid_status:cancelled
+ *   없는 코드           → invalid_invite_code
+ *   시작한 챌린지       → invalid_status:active
+ *
+ * 셋 다 "링크를 다시 확인해 주세요"로 나오니, **링크가 멀쩡한데 링크를 의심하게**
+ * 된다. 사용자가 실제로 그렇게 시간을 썼다(2026-08-08). `/auth/callback`이 오류를
+ * 삼켰던 것과 같은 부류다 — 같은 날 그걸 고쳐 놓고 옆 파일에서 반복하고 있었다.
+ *
+ * `recoverable`은 **보관해 둔 코드를 살려둘 가치가 있는가**다. 코드가 없거나
+ * 챌린지가 이미 시작·취소됐으면 다시 시도해도 영원히 같은 결과라, 남겨두면
+ * 그 브라우저의 **다음 가입까지** 오염된다(실제로 그렇게 반복 실패했다).
+ */
+export function challengeJoinError(e: unknown): {
+  message: string;
+  recoverable: boolean;
+} {
+  const msg = e instanceof Error ? e.message : String(e);
+
+  if (msg.includes("invalid_invite_code")) {
+    return {
+      message: "초대 링크가 만료됐거나 잘못됐어요. 초대한 분께 다시 받아 주세요.",
+      recoverable: false,
+    };
+  }
+  if (msg.includes("invalid_status:active")) {
+    return {
+      message:
+        "이 챌린지는 이미 시작해서 참가가 닫혔어요. 중간에 합류하면 점수가 공정하지 않아서예요.",
+      recoverable: false,
+    };
+  }
+  if (msg.includes("invalid_status:ended")) {
+    return { message: "이미 끝난 챌린지예요.", recoverable: false };
+  }
+  if (msg.includes("invalid_status:cancelled")) {
+    return { message: "취소된 챌린지예요.", recoverable: false };
+  }
+  if (msg.includes("already_joined")) {
+    // 되돌릴 수 있는 게 아니라 **이미 된 것**이다. 코드를 남길 이유가 없다.
+    return { message: "이미 참가한 챌린지예요.", recoverable: false };
+  }
+  // 여기까지 오면 원인을 모른다 — 네트워크·RLS·미지의 서버 오류.
+  // 그때는 코드를 살려둔다. 다시 시도하면 될 수도 있다.
+  return { message: `챌린지에 참가하지 못했어요 (${msg})`, recoverable: true };
+}
+
 // ── 온보딩 → 챌린지 화면으로 넘기는 일회성 안내 ──────────────────
 //
 // 온보딩이 참가·친구 연결을 **둘 다** 끝낸 뒤 /challenge로 보내므로, 그 화면에는
