@@ -19,6 +19,7 @@ const env = Object.fromEntries(
     .map((l) => [l.slice(0, l.indexOf("=")).trim(), l.slice(l.indexOf("=") + 1).trim()]),
 );
 const URL_ = env.NEXT_PUBLIC_SUPABASE_URL;
+const KEY = env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const SERVICE = env.SUPABASE_SERVICE_ROLE_KEY;
 if (!URL_ || !SERVICE) throw new Error(".env.local에 Supabase 설정이 없습니다");
 
@@ -29,7 +30,6 @@ const [targetNick, targetProvider] = process.argv.slice(2);
 const profiles = await (
   await fetch(`${URL_}/rest/v1/profiles?select=id,nickname`, { headers: H })
 ).json();
-const byId = Object.fromEntries(profiles.map((p) => [p.id, p.nickname]));
 
 // ⚠️⚠️ **목록 API(`/admin/users`)를 쓰지 마라 — `identities`를 안 준다.**
 //    2026-08-08에 이걸로 헛짚었다: 목록이 전부 빈 배열을 줘서 "운영 계정에 신원이
@@ -84,10 +84,38 @@ if (target.identities.length === 1) {
   );
 }
 
-const res = await fetch(
-  `${URL_}/auth/v1/admin/users/${target.id}/identities/${identity.id}`,
-  { method: "DELETE", headers: H },
-);
+// ⚠️ **관리자 API로는 못 뗀다.** 2026-08-08 실측:
+//    `DELETE /auth/v1/admin/users/{id}/identities/{identity_id}` → **404**.
+//    GoTrue에 그 경로가 없다. 지원되는 길은 **본인 세션**으로 부르는
+//    `DELETE /auth/v1/user/identities/{identity_id}`(= `supabase.auth.unlinkIdentity`)뿐이라,
+//    그 계정으로 로그인한 뒤 떼야 한다. 그래서 이메일+비밀번호가 필요하다.
+if (!target.email) {
+  throw new Error(
+    `${targetNick}에 이메일이 없어 로그인할 수 없습니다. 본인 기기의 앱에서 떼야 합니다.`,
+  );
+}
+const PASSWORD = env.DEV_FIXTURE_PASSWORD;
+if (!PASSWORD) {
+  throw new Error(".env.local에 DEV_FIXTURE_PASSWORD가 없습니다");
+}
+
+const signIn = await fetch(`${URL_}/auth/v1/token?grant_type=password`, {
+  method: "POST",
+  headers: { apikey: KEY, "Content-Type": "application/json" },
+  body: JSON.stringify({ email: target.email, password: PASSWORD }),
+});
+const session = await signIn.json();
+if (!session.access_token) {
+  throw new Error(
+    `${targetNick}(${target.email}) 로그인 실패: ${JSON.stringify(session).slice(0, 200)}\n` +
+      `픽스처가 아닌 계정은 비밀번호가 달라 이 스크립트로 못 뗍니다.`,
+  );
+}
+
+const res = await fetch(`${URL_}/auth/v1/user/identities/${identity.id}`, {
+  method: "DELETE",
+  headers: { apikey: KEY, Authorization: `Bearer ${session.access_token}` },
+});
 const body = await res.text();
 console.log(
   res.ok

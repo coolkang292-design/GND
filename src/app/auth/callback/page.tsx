@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { getMyProfile } from "@/lib/crew";
+import { identityError } from "@/lib/identity";
 
 /**
  * 카카오·구글에서 돌아오는 착지점 (설계 §5.4).
@@ -28,10 +30,29 @@ export default function AuthCallbackPage() {
       // 때문에 빌드가 깨진다. 착지 직후 한 번만 읽으면 되는 값이다.
       const params = new URLSearchParams(window.location.search);
 
-      // 사용자가 동의 화면을 닫은 경우. 되돌릴 것이 없으므로 **조용히** 원래
-      // 흐름으로 보낸다(설계 §5.5). 오류를 띄우면 취소한 사람을 탓하는 화면이 된다.
-      if (params.get("error")) {
-        await leave();
+      // ⚠️⚠️ **`error`가 오면 전부 "취소"로 뭉개지 마라.** 2026-08-08에 그렇게 했다가
+      //    실제로 이런 응답을 조용히 삼켰다(개발 서버 로그에서 발견):
+      //
+      //      ?error=server_error&error_code=identity_already_exists
+      //       &error_description=Identity+is+already+linked+to+another+user
+      //
+      //    사용자는 계정을 지키려고 눌렀는데 **아무 말 없이** 제자리로 돌아왔다.
+      //    그러면 지켜진 줄 알고 브라우저를 지운다 — 그 순간 기록이 사라진다.
+      //
+      //    취소는 `access_denied`다. 그것만 조용히 보내고 나머지는 이유를 말한다.
+      const err = params.get("error");
+      if (err) {
+        const code = params.get("error_code") ?? err;
+        const cancelled = /access_denied/i.test(code);
+        if (cancelled) {
+          await leave();
+          return;
+        }
+        setError(
+          identityError(
+            new Error(params.get("error_description") ?? code),
+          ),
+        );
         return;
       }
 
@@ -88,7 +109,18 @@ export default function AuthCallbackPage() {
     <main className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
       <div className="text-4xl">🔐</div>
       {error ? (
-        <p className="text-sm font-semibold text-warn">{error}</p>
+        <>
+          <p className="text-sm leading-relaxed font-semibold text-warn">
+            {error}
+          </p>
+          {/* 오류만 띄우고 끝내면 사용자가 이 화면에 갇힌다. 돌아갈 문을 준다. */}
+          <Link
+            href="/account"
+            className="mt-2 text-[13px] text-muted underline"
+          >
+            계정 화면으로 돌아가기
+          </Link>
+        </>
       ) : (
         <p className="text-sm text-muted">계정을 연결하는 중…</p>
       )}

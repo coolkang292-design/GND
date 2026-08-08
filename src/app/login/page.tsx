@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { HeroArt } from "@/components/brand/hero-art";
+import { GoldCta, GoldLine } from "@/components/brand/gold";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   PROVIDER_META,
@@ -84,40 +86,38 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-      <p className="text-4xl font-black italic tracking-tight text-accent">
-        🏋️ GND
-      </p>
-      <p className="mt-1 text-[10px] font-bold tracking-[0.3em] text-accent/80">
-        NO EXCUSES. JUST RESULTS.
-      </p>
-      <h1 className="mt-4 text-xl font-extrabold">로그인</h1>
-      <p className="mt-1 text-[13px] text-muted">
-        계정을 연결해 둔 방법으로 돌아옵니다.
-      </p>
+    /* ⚠️ 온보딩과 **같은 히어로·같은 금색**을 쓴다 (사용자 지시 2026-08-08 —
+       "이 화면도 온보딩 히어로 화면으로 적용해줘"). 옛 화면은 텍스트 로고
+       `🏋️ GND`라 두 화면이 딴 앱처럼 보였다. 조각은 `components/brand/`에
+       한 벌만 두므로, 한쪽만 고쳐 다시 갈라지게 하지 마라. */
+    <main className="flex flex-1 flex-col overflow-y-auto pb-8 text-center">
+      <HeroArt />
 
-      {providers.length > 0 && (
-        <div className="mt-6 flex w-full max-w-[320px] flex-col gap-2">
-          {providers.map((p) => (
-            <button
-              key={p}
-              type="button"
-              onClick={() => void handleOAuth(p)}
-              disabled={oauthBusy !== null}
-              className="h-12 w-full rounded-full border border-line bg-surface text-[15px] font-extrabold disabled:opacity-60"
-            >
-              {oauthBusy === p
-                ? "이동 중…"
-                : `${PROVIDER_META[p].short}로 로그인`}
-            </button>
-          ))}
-          {/* 이메일 폼을 없애지 않는다. 카카오·구글이 둘 다 없는 사용자의
-              탈출구이고, 이미 이메일로 붙은 계정이 있다(설계 §5.6). */}
-          <p className="mt-3 text-[11px] text-faint">또는 이메일로</p>
-        </div>
-      )}
+      <div className="mx-auto w-full max-w-sm px-6">
+        <GoldLine big>계정을 연결해 둔 방법으로 돌아옵니다.</GoldLine>
 
-      <form onSubmit={handleSubmit} className="mt-2 w-full max-w-[320px]">
+        {providers.length > 0 && (
+          <div className="mt-5 flex flex-col gap-2.5">
+            {providers.map((p, i) => (
+              <GoldCta
+                key={p}
+                onClick={() => void handleOAuth(p)}
+                busy={oauthBusy !== null}
+                variant={i === 0 ? "solid" : "outline"}
+                flush
+              >
+                {oauthBusy === p
+                  ? "이동 중…"
+                  : `${PROVIDER_META[p].short}로 로그인`}
+              </GoldCta>
+            ))}
+            {/* 이메일 폼을 없애지 않는다. 카카오·구글이 둘 다 없는 사용자의
+                탈출구이고, 이미 이메일로 붙은 계정이 있다(설계 §5.6). */}
+            <p className="mt-3 text-[11px] text-faint">또는 이메일로</p>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="mt-2 w-full">
         <label className="mt-3 block text-left text-[11px] font-bold text-muted">
           이메일
         </label>
@@ -169,18 +169,18 @@ export default function LoginPage() {
           </p>
         )}
 
-        <button
-          type="submit"
-          disabled={busy}
-          className="mt-6 w-full rounded-full bg-accent py-3.5 text-[15px] font-extrabold text-black disabled:opacity-60"
-        >
-          {busy ? "로그인 중…" : "로그인"}
-        </button>
-      </form>
+          <GoldCta type="submit" busy={busy}>
+            {busy ? "로그인 중…" : "로그인"}
+          </GoldCta>
+        </form>
 
-      <Link href="/onboarding" className="mt-5 text-[13px] text-muted underline">
-        처음이신가요? 시작하기
-      </Link>
+        <Link
+          href="/onboarding"
+          className="mt-5 block text-[13px] text-muted underline"
+        >
+          처음이신가요? 시작하기
+        </Link>
+      </div>
     </main>
   );
 }

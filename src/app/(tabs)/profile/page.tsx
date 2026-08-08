@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { BugReportSheet } from "@/components/bug-report-sheet";
 import { GrowthHub } from "@/components/profile/growth-hub";
+import { ProfileEditSheet } from "@/components/profile/profile-edit-sheet";
 import { PushSettings } from "@/components/push-settings";
 import { UiIcon } from "@/components/ui-icon";
 import { getIncomingCrewRequests } from "@/lib/crew-link";
@@ -32,6 +33,8 @@ export default function ProfilePage() {
   const { userId, loading, configured } = useAuth();
   const pathname = usePathname();
   const [showSettings, setShowSettings] = useState(false);
+  /** 프로필을 저장하면 올린다 — GrowthHub가 이 값으로 리마운트돼 새 이모지를 읽는다 */
+  const [profileKey, setProfileKey] = useState(0);
   const [settings, setSettings] = useState<NotificationSettings>(
     DEFAULT_NOTIFICATION_SETTINGS,
   );
@@ -190,7 +193,13 @@ export default function ProfilePage() {
         </>
       ) : (
         <>
-          <GrowthHub />
+          <GrowthHub key={profileKey} />
+
+          {/* ⚠️ 온보딩에서 뺀 이모지·주간목표를 바꾸는 **유일한 자리**다 (설계 §4.3).
+              지우면 `avatar_url`이 전원 `🧔`, `weekly_goal`이 주3회로 영구 고정된다.
+              저장하면 GrowthHub를 리마운트시킨다 — 마운트 때 프로필을 읽으므로
+              안 그러면 방금 바꾼 이모지가 바로 위에서 옛 값으로 남는다. */}
+          <ProfileEditSheet onSaved={() => setProfileKey((k) => k + 1)} />
 
           <Link
             href="/crew"
