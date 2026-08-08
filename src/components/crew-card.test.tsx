@@ -81,7 +81,7 @@ describe("CrewCard — 크루 정체성과 초대만 남는다", () => {
     expect(container.innerHTML).toContain("GND 앱에 친구를 부르는 링크");
     // 상세는 접혀 있다
     expect(container.innerHTML).not.toContain("닉네임만 정하면");
-    expect(container.innerHTML).not.toContain("크루장이 대신 붙여");
+    expect(container.innerHTML).not.toContain("카카오나 구글을 연결");
     expect(container.innerHTML).not.toContain("챌린지 초대와는 달라요");
   });
 
@@ -134,26 +134,28 @@ describe("CrewCard — 크루 정체성과 초대만 남는다", () => {
 
     fireEvent.click(screen.getByText("자세히"));
     expect(container.innerHTML).not.toContain("이메일 가입 없이");
-    // 계정 화면과 같은 사실을 말해야 한다 — 이메일이 기록을 지킨다.
-    expect(container.innerHTML).toContain("이메일을 연결");
+    // 계정 화면과 같은 사실을 말해야 한다 — 연결해야 기록이 지켜진다.
+    expect(container.innerHTML).toContain("데이터를 지우면 기록");
   });
 
   /**
    * ⚠️ 2026-08-07 사용자 질문 — "이메일을 연결은 조인 하고 내정보에서 할수 있나?"
-   * 답은 **아니다.** `/account`는 이메일이 없는 계정에 연결 폼을 보여주지 않는다
-   * (Supabase 확인 메일 발송 제한 — `account/page.tsx:13`). 그 화면도 "크루장에게
-   * 이메일 연결을 요청하세요"라고만 말한다.
+   * 그때 답은 **아니다**였고(이메일 발송 한도 429), 문구가 "크루장이 대신 붙여
+   * 줘요"였다.
    *
-   * 그래서 "이메일을 연결하세요"까지만 쓰면 **초대받은 친구는 할 수 없는 일을
-   * 하라고 들은 셈**이 된다. 누가 해 주는지가 문구에 있어야 참이다.
+   * 2026-08-08에 답이 바뀌었다 — `/account`에서 카카오·구글을 **본인이** 연결한다.
+   * 그래서 이 단언도 뒤집혔다. 할 수 있는 일이 생겼는데 크루장을 찾으라고 두면
+   * 헛걸음을 시킨다. 옛 문구가 되살아나면 실패해야 한다.
    */
-  it("이메일을 누가 붙여 주는지까지 말한다 — 본인은 못 한다", async () => {
+  it("계정을 어디서 지키는지 말한다 — 이제 본인이 한다", async () => {
     const { container } = render(<CrewCard />);
     await waitFor(() =>
       expect(screen.getByText("친구 초대하기")).toBeTruthy(),
     );
     fireEvent.click(screen.getByText("자세히"));
-    expect(container.innerHTML).toContain("크루장이 대신 붙여");
+    expect(container.innerHTML).toContain("내 정보 → 계정");
+    expect(container.innerHTML).toContain("카카오나 구글을 연결");
+    expect(container.innerHTML).not.toContain("크루장이 대신 붙여");
   });
 
   /**

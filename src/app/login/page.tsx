@@ -3,16 +3,29 @@
 import { useState } from "react";
 import Link from "next/link";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import {
+  PROVIDER_META,
+  enabledProviders,
+  identityError,
+  signInWithProvider,
+  type OAuthProvider,
+} from "@/lib/identity";
 
 /**
- * 이메일 로그인 — 익명 계정을 이메일로 승격한 사용자가 다시 들어오는 문
+ * 로그인 — 계정을 지켜 둔 사용자가 다시 들어오는 문
  *
  * 왜 필요한가: 익명 인증만 쓰면 계정이 브라우저 저장소에만 있어서, 저장소가
- * 비워지면 기록·XP·배지에 영영 접근할 수 없다(실제로 발생했다). 이메일이
- * 붙어 있으면 어떤 기기·브라우저에서든 같은 계정으로 돌아올 수 있다.
+ * 비워지면 기록·XP·배지에 영영 접근할 수 없다(실제로 발생했다). 이메일이나
+ * 카카오·구글이 붙어 있으면 어떤 기기·브라우저에서든 같은 계정으로 돌아온다.
  *
  * `(tabs)` 밖에 둔다 — OnboardingGate가 돌면 로그인하러 온 사람을 온보딩으로
  * 밀어내 버린다.
+ *
+ * ⚠️⚠️ **이 화면만 `signInWithOAuth`다.** 다른 화면(온보딩·`/account`)은
+ * `linkIdentity`를 쓴다. 여기서만 맞는 이유는 `AuthProvider`가 `/login`에서는
+ * 익명 세션을 발급하지 않기 때문이다(`auth-provider.tsx:94`) — 붙일 세션이 없다.
+ * 반대로 다른 화면에서 이걸 쓰면 방금까지 쓰던 익명 계정을 버리고 새 계정으로
+ * 갈아타 **기록이 분리된다.**
  */
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -20,6 +33,21 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [oauthBusy, setOauthBusy] = useState<OAuthProvider | null>(null);
+  const providers = enabledProviders();
+
+  async function handleOAuth(provider: OAuthProvider) {
+    if (oauthBusy) return;
+    setOauthBusy(provider);
+    setError(null);
+    try {
+      // 성공하면 브라우저가 제공자 화면으로 떠난다 — 여기로 돌아오지 않는다.
+      await signInWithProvider(provider);
+    } catch (e) {
+      setError(identityError(e));
+      setOauthBusy(null);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -65,10 +93,31 @@ export default function LoginPage() {
       </p>
       <h1 className="mt-4 text-xl font-extrabold">로그인</h1>
       <p className="mt-1 text-[13px] text-muted">
-        이메일을 연결한 계정으로 돌아옵니다.
+        계정을 연결해 둔 방법으로 돌아옵니다.
       </p>
 
-      <form onSubmit={handleSubmit} className="mt-6 w-full max-w-[320px]">
+      {providers.length > 0 && (
+        <div className="mt-6 flex w-full max-w-[320px] flex-col gap-2">
+          {providers.map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => void handleOAuth(p)}
+              disabled={oauthBusy !== null}
+              className="h-12 w-full rounded-full border border-line bg-surface text-[15px] font-extrabold disabled:opacity-60"
+            >
+              {oauthBusy === p
+                ? "이동 중…"
+                : `${PROVIDER_META[p].short}로 로그인`}
+            </button>
+          ))}
+          {/* 이메일 폼을 없애지 않는다. 카카오·구글이 둘 다 없는 사용자의
+              탈출구이고, 이미 이메일로 붙은 계정이 있다(설계 §5.6). */}
+          <p className="mt-3 text-[11px] text-faint">또는 이메일로</p>
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="mt-2 w-full max-w-[320px]">
         <label className="mt-3 block text-left text-[11px] font-bold text-muted">
           이메일
         </label>
