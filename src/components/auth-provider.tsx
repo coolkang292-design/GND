@@ -34,16 +34,32 @@ export function useAuth(): AuthState {
 }
 
 /**
+ * 익명 계정을 **발급하지 않는** 경로 — "계정이 없는 것이 정상"인 화면들이다.
+ *
+ * ⚠️ `/login` (2026-08-01 로그아웃 도입): 여기서 발급하면 로그아웃 직후 곧바로
+ *    새 익명 계정이 생겨 ① 사용자는 로그아웃이 아니라 **다른 사람**이 되고
+ *    ② 로그아웃할 때마다 운영 DB에 프로필 없는 유령 계정이 쌓인다.
+ *
+ * ⚠️⚠️ `/auth/callback` (2026-08-09): 제공자에서 돌아오는 중이라 세션이 **아직
+ *    없는 것이 정상**이다. 여기서 발급하면 코드 교환이 실패한 순간
+ *    (만료·재사용·PKCE verifier 없음) 사용자가 조용히 새 익명 계정이 되고,
+ *    더 나쁘게는 콜백 화면의 `if (!session && code)` 가드가 **그 익명 세션을 보고
+ *    교환을 통째로 건너뛴다.** 결과: 구글로 로그인했는데 빈 계정으로 온보딩에
+ *    떨어지고 원래 기록과 갈린다. `signInWithOAuth`/`linkIdentity`를 뒤바꿨을 때와
+ *    같은 종류의 사고다 — 조용해서 더 위험하다.
+ *
+ * ⚠️ 여기에 경로를 더할 때는 그 화면이 **스스로 세션을 만들거나 되찾는지** 확인해라.
+ *    아무도 세션을 안 만드는 화면을 넣으면 그 화면은 영원히 `userId=null`이다.
+ */
+const NO_ANON_ROUTES = ["/login", "/auth/callback"];
+
+/**
  * 앱 첫 진입 시 자동 익명 신원 발급 (§3).
  * 세션이 이미 있으면 재사용, 없으면 signInAnonymously().
  */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const configured = isSupabaseConfigured();
-  // 로그인 화면에서는 익명 계정을 발급하지 않는다 (2026-08-01 로그아웃 도입).
-  // 이게 없으면 로그아웃 직후 이 provider가 곧바로 새 익명 계정을 만들어
-  // ① 사용자는 로그아웃된 게 아니라 **다른 사람**이 되고
-  // ② 로그아웃할 때마다 운영 DB에 프로필 없는 유령 계정이 쌓인다.
-  const isLoginRoute = usePathname() === "/login";
+  const isNoAnonRoute = NO_ANON_ROUTES.includes(usePathname());
   const [state, setState] = useState<AuthState>({
     configured,
     loading: configured,
@@ -89,9 +105,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (cancelled) return;
       }
 
-      // 로그인 화면은 "계정 없음"이 정상 상태다. 여기서 발급하면 로그아웃이
-      // 무의미해진다 — 로그인 폼만 그리고 끝낸다.
-      if (isLoginRoute) {
+      // "계정 없음"이 정상 상태인 화면들(NO_ANON_ROUTES)에서는 발급하지 않는다.
+      // 화면만 그리고 끝낸다 — 세션은 그 화면이 스스로 만들거나 되찾는다.
+      if (isNoAnonRoute) {
         setState({
           configured: true,
           loading: false,
@@ -149,9 +165,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       subscription.unsubscribe();
     };
-    // isLoginRoute는 /login에 들어가고 나올 때만 뒤집힌다 — 매 이동마다
-    // 재실행되지 않는다.
-  }, [configured, isLoginRoute]);
+    // isNoAnonRoute는 /login·/auth/callback에 들어가고 나올 때만 뒤집힌다 —
+    // 매 이동마다 재실행되지 않는다.
+  }, [configured, isNoAnonRoute]);
 
   return <AuthContext.Provider value={state}>{children}</AuthContext.Provider>;
 }

@@ -20,6 +20,17 @@ import { identityError } from "@/lib/identity";
  */
 export default function AuthCallbackPage() {
   const [error, setError] = useState<string | null>(null);
+  /**
+   * 오류 화면의 탈출구 — **프로필 유무로 갈린다** (2026-08-09).
+   *
+   * ⚠️⚠️ 옛 코드는 `/account` 한 곳이었다. 그러면 **초대 링크로 처음 온 사람**이
+   * 구글에서 `identity_already_exists`를 맞았을 때 갈 곳이 계정 화면뿐인데,
+   * 그 사람은 프로필이 없다 — `/account`는 `(tabs)` 밖이라 `OnboardingGate`가
+   * 없어서 온보딩으로 안 보내주고, 신원이 0개라 로그아웃 버튼도 안 그려진다
+   * (`account/page.tsx:83`의 fail-closed). **나갈 문이 없는 화면에 앉는다.**
+   * 온보딩에서 고친 D2와 같은 함정이 바로 옆 파일에 남아 있었다.
+   */
+  const [exitHref, setExitHref] = useState<string | null>(null);
   const started = useRef(false);
 
   useEffect(() => {
@@ -54,6 +65,9 @@ export default function AuthCallbackPage() {
             new Error(params.get("error_description") ?? code),
           ),
         );
+        // 문구를 먼저 띄우고 탈출구를 이어서 정한다 — 조회를 기다리느라
+        // 사용자가 빈 화면을 보지 않게.
+        setExitHref(await destination());
         return;
       }
 
@@ -73,6 +87,7 @@ export default function AuthCallbackPage() {
           setError(
             "연결을 마치지 못했어요. 잠시 뒤 다시 시도해 주세요.",
           );
+          setExitHref(await destination());
           return;
         }
       }
@@ -80,39 +95,43 @@ export default function AuthCallbackPage() {
       await leave();
     }
 
-    /** 프로필 유무로 갈라 보낸다. 조회가 실패해도 갇히지 않게 온보딩으로 보낸다. */
-    async function leave() {
+    /**
+     * 프로필 유무로 갈 곳을 정한다. 조회가 실패해도 갇히지 않게 온보딩으로 보낸다.
+     *
+     * ⚠️ 성공한 이동(`leave`)과 실패했을 때의 탈출구(`exitHref`)가 **같은 함수**를
+     * 쓴다. 갈라 두면 한쪽만 고쳐져 어긋난다 — 실제로 그래서 오류 화면이
+     * `/account` 한 곳에 굳어 있었다.
+     */
+    async function destination(): Promise<string> {
       const supabase = getSupabaseBrowserClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
       let hasProfile = false;
-      if (user) {
-        try {
-          hasProfile = (await getMyProfile(user.id)) !== null;
-        } catch {
-          // 일시적인 조회 실패. 온보딩은 프로필이 있으면 알아서 넘어가므로
-          // 여기서 잘못 보내도 사용자가 갇히지 않는다.
-        }
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (user) hasProfile = (await getMyProfile(user.id)) !== null;
+      } catch {
+        // 일시적인 조회 실패. 온보딩은 프로필이 있으면 알아서 넘어가므로
+        // 여기서 잘못 보내도 사용자가 갇히지 않는다. 반대로 `/account`로
+        // 잘못 보내면 프로필 없는 사람이 나갈 문 없는 화면에 앉는다.
       }
+      if (!hasProfile) return "/onboarding";
 
-      // ⚠️ router.replace가 아니라 **전체 페이지 로드**다. `AuthProvider`가 루트
-      // 레이아웃에 있어 클라이언트 이동으로는 세션을 다시 읽지 않고, **연결 전의
-      // userId를 그대로 들고** 조회한다(`/login`이 같은 이유로 이렇게 한다).
-      //
       // ⚠️ 프로필이 있어도 **챌린지 초대가 기다리고 있으면 그쪽이 먼저다**
       //    (2026-08-08). 초대 링크를 탭한 사람을 `/account`로 보내면, 계정
       //    화면에서 "내가 왜 여기 있지"가 되고 초대는 조용히 사라진다.
       //    `/challenge`가 보관된 코드로 참가까지 마무리한다.
       const pendingChallenge = peekPendingChallengeInvite();
-      window.location.assign(
-        hasProfile
-          ? pendingChallenge
-            ? `/challenge?join=${encodeURIComponent(pendingChallenge)}`
-            : "/account"
-          : "/onboarding",
-      );
+      return pendingChallenge
+        ? `/challenge?join=${encodeURIComponent(pendingChallenge)}`
+        : "/account";
+    }
+
+    async function leave() {
+      // ⚠️ router.replace가 아니라 **전체 페이지 로드**다. `AuthProvider`가 루트
+      // 레이아웃에 있어 클라이언트 이동으로는 세션을 다시 읽지 않고, **연결 전의
+      // userId를 그대로 들고** 조회한다(`/login`이 같은 이유로 이렇게 한다).
+      window.location.assign(await destination());
     }
 
     void run();
@@ -126,13 +145,19 @@ export default function AuthCallbackPage() {
           <p className="text-sm leading-relaxed font-semibold text-warn">
             {error}
           </p>
-          {/* 오류만 띄우고 끝내면 사용자가 이 화면에 갇힌다. 돌아갈 문을 준다. */}
-          <Link
-            href="/account"
-            className="mt-2 text-[13px] text-muted underline"
-          >
-            계정 화면으로 돌아가기
-          </Link>
+          {/* 오류만 띄우고 끝내면 사용자가 이 화면에 갇힌다. 돌아갈 문을 준다.
+              ⚠️ 문의 **행선지가 사람마다 다르다** — 프로필이 없는 신규 가입자를
+              `/account`로 보내면 나갈 문이 또 없다(위 exitHref 주석). */}
+          {exitHref && (
+            <Link
+              href={exitHref}
+              className="mt-2 text-[13px] text-muted underline"
+            >
+              {exitHref === "/onboarding"
+                ? "가입 화면으로 돌아가기"
+                : "계정 화면으로 돌아가기"}
+            </Link>
+          )}
         </>
       ) : (
         <p className="text-sm text-muted">계정을 연결하는 중…</p>

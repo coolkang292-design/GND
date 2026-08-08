@@ -80,6 +80,26 @@ describe("AuthProvider", () => {
     expect(result.current.error).toBeNull();
   });
 
+  /**
+   * ⚠️⚠️ 제공자에서 돌아오는 중에는 세션이 **아직 없는 것이 정상**이다.
+   * 여기서 익명 계정을 발급하면 코드 교환이 실패한 순간(만료·재사용·PKCE
+   * verifier 없음) 사용자가 조용히 새 익명 계정이 되고, 더 나쁘게는
+   * `/auth/callback`의 `if (!session && code)` 가드가 **그 익명 세션을 보고
+   * 교환을 통째로 건너뛴다** — 구글로 로그인했는데 빈 계정으로 온보딩에 떨어져
+   * 원래 기록과 갈린다. `signInWithOAuth`/`linkIdentity`를 뒤바꿨을 때와 같은
+   * 종류의 사고인데 조용해서 더 위험하다.
+   */
+  it("never issues an anonymous account on the auth callback", async () => {
+    nav.pathname = "/auth/callback";
+    const auth = stubSupabase();
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(auth.signInAnonymously).not.toHaveBeenCalled();
+    expect(result.current.userId).toBeNull();
+  });
+
   it("still shows an existing session on the login screen", async () => {
     nav.pathname = "/login";
     const auth = stubSupabase({
