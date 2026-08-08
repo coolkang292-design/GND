@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { RELEASE_NOTES } from "@/lib/domain/release-notes";
+import { RELEASE_NOTES, parseHighlight } from "@/lib/domain/release-notes";
 
 export const metadata = { title: "새 소식 · GND" };
 
@@ -33,7 +33,27 @@ export default function WhatsNewPage() {
                   <span aria-hidden className="flex-none font-extrabold text-accent">
                     ·
                   </span>
-                  <span>{h}</span>
+                  {/* ⚠️ `{h}`를 그대로 그리지 마라. 데이터에 `**굵게**`·`` `코드` ``가
+                      들어 있어서, 그러면 화면에 별표와 백틱이 그대로 보인다
+                      (2026-08-08까지 실제로 그렇게 보이고 있었다). */}
+                  <span>
+                    {parseHighlight(h).map((t, j) =>
+                      t.kind === "strong" ? (
+                        <strong key={j} className="font-extrabold">
+                          {t.text}
+                        </strong>
+                      ) : t.kind === "code" ? (
+                        <code
+                          key={j}
+                          className="rounded bg-surface-2 px-1 py-0.5 text-[12px]"
+                        >
+                          {t.text}
+                        </code>
+                      ) : (
+                        <span key={j}>{t.text}</span>
+                      ),
+                    )}
+                  </span>
                 </li>
               ))}
             </ul>

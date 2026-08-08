@@ -87,8 +87,12 @@ export function ProfileEditSheet({ onSaved }: { onSaved?: () => void }) {
         weekly_goal: weeklyGoal,
       });
       setDone(true);
-      // 홈·캘린더는 마운트 때 weekly_goal을 읽는다. 저장만 하고 끝내면 이 화면을
-      // 나갔다 와야 새 기준이 반영돼 "안 바뀐 것"처럼 보인다.
+      // 저장 뒤 부모에게 알린다. `/profile`은 이걸 받아 GrowthHub를 리마운트한다.
+      //
+      // ⚠️ **바꾼 이모지가 이 화면에 반영되는 건 아니다.** GrowthHub는 `profiles`를
+      // 읽지 않는다 — 이 화면 어디에도 `avatar_url`이 안 그려진다(2026-08-08 실측).
+      // 이모지가 보이는 곳은 홈 크루 카드·챌린지 참가자 목록이고, 둘 다 마운트 때
+      // 프로필을 읽으므로 탭을 옮기면 새 값이 나온다.
       onSaved?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : "저장하지 못했어요");

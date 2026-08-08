@@ -197,8 +197,15 @@ export default function ProfilePage() {
 
           {/* ⚠️ 온보딩에서 뺀 이모지·주간목표를 바꾸는 **유일한 자리**다 (설계 §4.3).
               지우면 `avatar_url`이 전원 `🧔`, `weekly_goal`이 주3회로 영구 고정된다.
-              저장하면 GrowthHub를 리마운트시킨다 — 마운트 때 프로필을 읽으므로
-              안 그러면 방금 바꾼 이모지가 바로 위에서 옛 값으로 남는다. */}
+
+              ⚠️ 저장하면 GrowthHub를 리마운트시키지만 **이모지 때문이 아니다.**
+              GrowthHub는 `profiles`를 아예 읽지 않는다(2026-08-08 화면 확인에서
+              실측 — 이 화면 어디에도 `avatar_url`이 안 그려진다). 바꾼 이모지가
+              보이는 곳은 **홈 크루 카드·챌린지 참가자 목록**이다
+              (`home-client.tsx:54` · `king-card.tsx:157` · `challenge/page.tsx:836`).
+              리마운트는 저장 뒤 XP·배지를 다시 읽어 주는 것뿐이라 지워도 화면은
+              안 깨진다 — 다만 "이모지가 위에서 옛 값으로 남는다"는 이유로 지키지 마라.
+              그건 사실이 아니다. */}
           <ProfileEditSheet onSaved={() => setProfileKey((k) => k + 1)} />
 
           <Link

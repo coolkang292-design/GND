@@ -34,3 +34,40 @@ export function latestRelease(): ReleaseNote | null {
 export function releaseById(id: string): ReleaseNote | null {
   return RELEASE_NOTES.find((r) => r.id === id) ?? null;
 }
+
+export type InlineToken = { kind: "text" | "strong" | "code"; text: string };
+
+/**
+ * 하이라이트 한 줄의 인라인 표기를 조각으로 나눈다 — `**굵게**` · `` `코드` ``.
+ *
+ * ⚠️ 2026-08-08까지 `/whats-new`는 이 문자열을 **그대로** 그렸다. 데이터에는
+ * 처음부터 `**...**`가 들어 있었으므로 사용자 화면에는 별표가 그대로 보였다
+ * (2026-08-08 화면 확인에서 발견). 강조가 안 먹는 정도가 아니라 **문장마다
+ * 별표 네 개가 끼어 있는** 상태였다.
+ *
+ * 마크다운 라이브러리를 넣지 않는다 — 이 두 표기 말고는 쓰지 않고, 릴리스 노트
+ * 문자열은 우리가 쓰는 것이라 임의 HTML이 들어올 자리가 없다. 대신
+ * `release-notes.test.ts`가 **데이터의 표기 짝이 맞는지** 검사한다. 짝이 안 맞으면
+ * 조용히 별표가 새어 나가므로 그 단언을 지우지 마라.
+ */
+export function parseHighlight(source: string): InlineToken[] {
+  const tokens: InlineToken[] = [];
+  const pattern = /\*\*([^*]+)\*\*|`([^`]+)`/g;
+  let last = 0;
+
+  for (let m = pattern.exec(source); m; m = pattern.exec(source)) {
+    if (m.index > last) {
+      tokens.push({ kind: "text", text: source.slice(last, m.index) });
+    }
+    tokens.push(
+      m[1] !== undefined
+        ? { kind: "strong", text: m[1] }
+        : { kind: "code", text: m[2] },
+    );
+    last = m.index + m[0].length;
+  }
+  if (last < source.length) {
+    tokens.push({ kind: "text", text: source.slice(last) });
+  }
+  return tokens;
+}
