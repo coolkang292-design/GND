@@ -14,12 +14,12 @@
 |---|---|---|---|
 | 1 | 친구 목록 단계 알약 | `35faa13` | ✅ |
 | 2 | 초대 링크가 친구를 맺는다 + 챌린지 신입 자동 친구 | `5b17576` | ✅ |
-| 3 | 카카오·구글 계정 연결 (`linkIdentity`) | `b63b315` | ❌ **미배포** |
-| 4 | 온보딩 개편 + 프로필 편집 시트 | `5fd520e` | ❌ **미배포** |
+| 3 | 카카오·구글 계정 연결 (`linkIdentity`) | `b63b315` | ✅ 2026-08-08 16:07 |
+| 4 | 온보딩 개편 + 프로필 편집 시트 | `5fd520e` | ✅ 2026-08-08 16:07 |
+| — | 릴리스 공지 배치 3·4 + `/whats-new` 강조 표기 | `aa5e801` | ✅ 2026-08-08 16:07 |
 
-**지금 당장 할 일:** §3.1의 카카오·구글 왕복(사람) → §4의 Vercel 환경변수 →
-사용자 승인 → 배포.
-⚠️ **환경변수를 빼면 배포해도 카카오·구글 버튼이 안 뜬다.** 설계상 fail-closed다.
+**지금 당장 할 일:** ① §3.1의 카카오·구글 왕복을 **운영에서** 한 번 해 본다(사람)
+② 릴리스 공지 발송(§5) ③ 주간 목표를 챌린지로 옮긴다(§6, 사용자 결정).
 
 ### 0.1 2026-08-08 저녁 두 번째 세션에서 한 것
 
@@ -148,7 +148,26 @@ Redirect URL 허용목록에 `https://gnd-one.vercel.app/auth/callback`이 있�
 
 ---
 
-## 4. ❌ 남은 일 ② — 배포
+## 4. ✅ 배포 완료 (2026-08-08 16:07 KST)
+
+배치 3·4가 운영에 나갔다. 커밋 `aa5e801` 기준.
+
+| | |
+|---|---|
+| 배포 | `gnd-77093jtnx-gnd4.vercel.app` · `gnd-one.vercel.app` 별칭이 여기를 가리킨다 |
+| 환경변수 | `NEXT_PUBLIC_OAUTH_PROVIDERS = kakao,google` (Production) — 배포 **전**에 넣었다 |
+| 번들 실물 | `let e="kakao,google".split(",")` — **환경변수가 실제로 박혔다.** fail-closed를 안 탔다 |
+| 운영 화면 | `/onboarding` 히어로 + 카카오·구글 2버튼 · 닉네임 칸 0개 / `/login` 카카오·구글 + 이메일 폼 |
+| 부정 확인 | 번들에 `주간 운동 목표` 0 · `닉네임만 정하면 바로 시작해요` 0 · `크루 만들기` 0 |
+| `/whats-new` | HTML에 `<strong>` 98개 · 남은 `**` **0개** |
+
+⚠️ **여전히 [미검증]:** 운영에서 카카오·구글로 **실제로 로그인이 되는지**.
+Supabase Redirect URL 허용목록에 `https://gnd-one.vercel.app/auth/callback`이 있어야 한다.
+`/auth/v1/authorize`는 허용목록과 무관하게 302를 주므로 **밖에서는 확인할 수 없다**(실측).
+Supabase Dashboard → Authentication → URL Configuration → Redirect URLs에서 봐야 한다.
+없으면 로그인은 되지만 `/auth/callback`이 아니라 SITE_URL로 떨어진다.
+
+제공자 자체는 켜져 있다 — `/auth/v1/settings`에서 `google`·`kakao` 둘 다 `true` 확인(실측).
 
 ### 4.1 ⚠️ Vercel 환경변수를 **먼저** 넣는다
 
@@ -185,10 +204,19 @@ npx vercel@latest --prod --yes --scope gnd4
 curl -s https://gnd-one.vercel.app/onboarding \
   | grep -oE '/_next/static/[a-zA-Z0-9._/-]+\.js' | sort -u \
   | while read c; do curl -s "https://gnd-one.vercel.app$c"; done > /tmp/b.js
-grep -c "카카오로 시작하기" /tmp/b.js     # 1 이상
+grep -c 'kakao,google' /tmp/b.js          # 1 이상 ← ⚠️ 이게 진짜 확인이다
 grep -c "주간 운동 목표" /tmp/b.js        # 0 (부정 확인)
 curl -s -o /dev/null -w "%{http_code}\n" https://gnd-one.vercel.app/onboarding/hero.webp
 ```
+
+⚠️ **`grep -c "카카오로 시작하기"`는 0이 나온다. 그래도 정상이다.**
+이 문구는 `` `${PROVIDER_META[p].short}로 시작하기` ``로 **조립**되므로 번들에
+통째로 들어 있지 않다. 2026-08-08에 이걸 모르고 "안 나갔나" 하고 한 번 멈췄다.
+버튼이 뜨는지 보려면 **환경변수가 박혔는지**(`kakao,google`)를 봐라 —
+fail-closed라 그 문자열이 없으면 버튼이 하나도 안 그려진다.
+
+⚠️ `/whats-new`는 **서버 렌더**다. 릴리스 노트 문구를 JS 번들에서 찾으면 0이다.
+HTML을 받아서 봐라: `curl -s https://gnd-one.vercel.app/whats-new | grep -c '<strong'`
 
 ---
 
@@ -227,7 +255,7 @@ id는 그대로 뒀다 — `bug-reports.mjs --fix --release <id>`가 이 id를 �
 
 | 항목 | 내용 |
 |---|---|
-| **홈 주간 목표** | 사용자 결정 — *"주간 운동표는 챌린지에서 세팅하는 걸로 하자."* 프로필 편집에서 스테퍼를 뺐는데 홈 `WeeklyStats`([weekly-stats.tsx:45](../../src/components/home/weekly-stats.tsx#L45))가 아직 `N / 3`을 그린다. **아무도 못 바꾸는 숫자를 기준으로 재고 있다.** 챌린지로 옮기거나 홈에서 분모를 빼야 한다 |
+| **홈 주간 목표** | ▶ **다음 배치.** 사용자 재확인 2026-08-08 — *"챌린지에서 세팅하게 한다."* 프로필 편집에서 스테퍼를 뺐는데 홈 `WeeklyStats`([weekly-stats.tsx:45](../../src/components/home/weekly-stats.tsx#L45))가 아직 `N / 3`을 그린다. **아무도 못 바꾸는 숫자를 기준으로 재고 있다.** 챌린지의 `user_goals`를 홈이 읽게 배관하고, **챌린지가 없는 사람을 어떻게 할지**를 같이 정해야 한다 |
 | **`pnpm db:snapshot`** | 배치 3·4는 DB를 안 건드렸으므로 0063 시점 그대로 유효 |
 | **히어로 레이어 3장** | 포털을 따로 움직이게 하려면. 프롬프트는 문서에 있으나 **지금은 안 쓰기로 했다** |
 
