@@ -931,6 +931,7 @@ AS $function$
 declare
   v_me    uuid := auth.uid();
   v_group uuid;
+  v_code  text;
   c       challenges;
 begin
   if v_me is null then raise exception 'not_authenticated'; end if;
@@ -968,9 +969,34 @@ begin
     on conflict (group_id, user_id) do nothing;
   end if;
 
-  insert into challenges (group_id, name, start_date, end_date, photo_required, created_by)
-  values (v_group, p_name, p_start_date, p_end_date, p_photo_required, v_me)
-  returning * into c;
+  -- 0064: 방을 만들 때 초대 코드를 같이 넣는다.
+  --
+  -- ⚠️ 유니크 충돌은 32^5분의 1이지만 조용히 넘기면 안 된다. 몇 번 다시 뽑고
+  --    그래도 안 되면 예외를 낸다 — `issue_challenge_invite_code`와 같은 규칙이다.
+  --    ⚠️ **코드를 못 뽑았다고 챌린지 생성을 통째로 실패시키지는 않는다.**
+  --    코드는 나중에 초대 시트에서 다시 발급할 수 있지만(setup이면), 방이
+  --    안 만들어지면 사용자는 아무것도 못 한다. 우선순위가 다르다.
+  for i in 1..10 loop
+    begin
+      v_code := public.generate_invite_code();
+      insert into challenges (
+        group_id, name, start_date, end_date, photo_required, created_by, invite_code
+      )
+      values (v_group, p_name, p_start_date, p_end_date, p_photo_required, v_me, v_code)
+      returning * into c;
+      exit;
+    exception when unique_violation then
+      if i >= 10 then
+        -- 코드 없이라도 방은 만든다. 초대 시트가 나중에 다시 시도한다.
+        insert into challenges (
+          group_id, name, start_date, end_date, photo_required, created_by
+        )
+        values (v_group, p_name, p_start_date, p_end_date, p_photo_required, v_me)
+        returning * into c;
+        exit;
+      end if;
+    end;
+  end loop;
 
   insert into challenge_participants (challenge_id, user_id, role, status, joined_at)
   values (c.id, v_me, 'host', 'joined', now());

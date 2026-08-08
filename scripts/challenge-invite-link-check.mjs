@@ -95,6 +95,22 @@ try {
   const chId = ch.json?.id;
   check("픽스처: 챌린지 생성", ch.status === 200 && Boolean(chId), JSON.stringify(ch.json));
 
+  // ── 0064: 만들 때 코드가 같이 붙는가 ──
+  //
+  // 이게 없으면 방장이 `링크 만들기`를 누르기 전에 챌린지를 시작한 순간
+  // 코드를 **영영** 만들 수 없다(`issue_challenge_invite_code`가 setup에서만
+  // 발급한다). 2026-08-08에 실제로 그래서 참가 가능한 링크가 DB에 하나도
+  // 없었고, 사용자는 멀쩡한 링크를 의심하며 시간을 썼다.
+  //
+  // ⚠️ 아래 "방장이 코드를 발급한다"로 대신할 수 없다. 그건 버튼을 누른 뒤를
+  //    재는 것이라, 0064가 통째로 되돌아가도 그대로 통과한다.
+  const codeAtCreation = ch.json?.invite_code;
+  check(
+    "🎯 0064: 만들자마자 invite_code가 붙는다 (링크 만들기를 안 눌러도)",
+    typeof codeAtCreation === "string" && codeAtCreation.startsWith("GND-"),
+    `invite_code=${JSON.stringify(codeAtCreation)}`,
+  );
+
   // ── 발급 ──
   const issued = await rpc(host.token, "issue_challenge_invite_code", {
     p_challenge_id: chId,
@@ -104,6 +120,15 @@ try {
     "방장이 코드를 발급한다 (GND- 형식)",
     issued.status === 200 && typeof code === "string" && code.startsWith("GND-"),
     `${issued.status} ${JSON.stringify(issued.json)}`,
+  );
+
+  // 0064가 발급 규칙을 두 곳으로 가르지 않았는지. `issue_challenge_invite_code`가
+  // 멱등이라(`if c.invite_code is not null then return c.invite_code`) 만들 때
+  // 넣은 코드를 그대로 돌려줘야 한다. 다른 코드가 나오면 **먼저 보낸 링크가 죽는다.**
+  check(
+    "🎯 0064: 발급 버튼은 만들 때 넣은 그 코드를 돌려준다 (규칙이 갈리지 않는다)",
+    code === codeAtCreation,
+    `발급=${JSON.stringify(code)} vs 생성=${JSON.stringify(codeAtCreation)}`,
   );
 
   const again = await rpc(host.token, "issue_challenge_invite_code", {
