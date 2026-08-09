@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import { ScreenError } from "@/components/screen-error";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { getMyProfile } from "@/lib/crew";
 import { peekPendingChallengeInvite } from "@/lib/challenge";
@@ -137,31 +137,28 @@ export default function AuthCallbackPage() {
     void run();
   }, []);
 
+  // ⚠️ 오류만 띄우고 끝내면 사용자가 이 화면에 갇힌다. `ScreenError`가 나갈 문을
+  //    같이 그린다. **문의 행선지가 사람마다 다르다** — 프로필이 없는 신규
+  //    가입자를 `/account`로 보내면 나갈 문이 또 없다(위 exitHref 주석).
+  if (error) {
+    return (
+      <ScreenError
+        icon="🔐"
+        message={error}
+        exitHref={exitHref}
+        exitLabel={
+          exitHref === "/onboarding"
+            ? "가입 화면으로 돌아가기"
+            : "계정 화면으로 돌아가기"
+        }
+      />
+    );
+  }
+
   return (
     <main className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
       <div className="text-4xl">🔐</div>
-      {error ? (
-        <>
-          <p className="text-sm leading-relaxed font-semibold text-warn">
-            {error}
-          </p>
-          {/* 오류만 띄우고 끝내면 사용자가 이 화면에 갇힌다. 돌아갈 문을 준다.
-              ⚠️ 문의 **행선지가 사람마다 다르다** — 프로필이 없는 신규 가입자를
-              `/account`로 보내면 나갈 문이 또 없다(위 exitHref 주석). */}
-          {exitHref && (
-            <Link
-              href={exitHref}
-              className="mt-2 text-[13px] text-muted underline"
-            >
-              {exitHref === "/onboarding"
-                ? "가입 화면으로 돌아가기"
-                : "계정 화면으로 돌아가기"}
-            </Link>
-          )}
-        </>
-      ) : (
-        <p className="text-sm text-muted">계정을 연결하는 중…</p>
-      )}
+      <p className="text-sm text-muted">계정을 연결하는 중…</p>
     </main>
   );
 }

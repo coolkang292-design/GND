@@ -111,4 +111,39 @@ describe("/invite/[code]", () => {
     await screen.findByText("존재하지 않는 초대 링크예요");
     expect(mocks.replace).not.toHaveBeenCalled();
   });
+
+  /**
+   * ⚠️⚠️ D6 (2026-08-09). `getMyProfile`은 오류를 던지는데(`crew.ts:12`) 옛 코드는
+   * 그 호출을 `try` **밖**에 뒀다. 그러면 네트워크가 한 번 흔들렸을 때
+   * `void run()`이 rejection을 삼키고 화면이 **`친구를 맺는 중…`에서 영원히
+   * 멈춘다** — 오류도, 재시도도, 나갈 문도 없다.
+   *
+   * 이 단언이 재는 것은 "오류 문구가 뜨는가"가 아니라 **"멈추지 않는가"** 다.
+   * 그래서 `친구를 맺는 중…`이 사라졌는지까지 본다.
+   */
+  it("프로필 조회가 실패해도 멈추지 않고 이유와 나갈 문을 준다", async () => {
+    mocks.getMyProfile.mockRejectedValue(new Error("network down"));
+    renderInvite("GND-7FDVC");
+
+    await screen.findByText(/연결이 불안정해요/);
+    expect(screen.queryByText("친구를 맺는 중…")).toBeNull();
+    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(mocks.redeemInviteCode).not.toHaveBeenCalled();
+  });
+
+  /**
+   * ⚠️⚠️ D7 (2026-08-09). 이 화면은 오류를 네 가지나 그리면서 **링크가 0개**였다.
+   * PWA로 홈 화면에서 열면 주소창이 없어 나갈 수단이 아예 사라진다.
+   * `ScreenError`를 쓰는 이유가 이것이다 — 문구를 그리면 문이 딸려 온다.
+   */
+  it.each([
+    ["self_invite", "self_invite"],
+    ["없는 코드", "invalid_invite_code"],
+  ])("오류 화면(%s)에는 나갈 문이 있다", async (_label, reason) => {
+    mocks.redeemInviteCode.mockRejectedValue(new Error(reason));
+    renderInvite("GND-7FDVC");
+
+    const link = await screen.findByRole("link", { name: "홈으로 가기" });
+    expect(link.getAttribute("href")).toBe("/home");
+  });
 });

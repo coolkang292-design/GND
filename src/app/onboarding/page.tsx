@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
@@ -29,6 +29,7 @@ import {
 //    가리는 2단계는 `redeemInviteCode` 한 곳에만 있어야 한다(설계 §3.3).
 import {
   clearPendingInvite,
+  getMyProfile,
   peekPendingInvite,
   redeemInviteCode,
   upsertMyProfile,
@@ -127,6 +128,49 @@ export default function OnboardingPage() {
       cancelled = true;
     };
   }, [configured, loading, userId]);
+
+  /**
+   * ⚠️⚠️ **이미 가입한 사람은 이 화면에 머물지 않는다** (D8, 2026-08-09).
+   *
+   * 이 화면은 `(tabs)` 밖이라 `OnboardingGate`가 없다. 그래서 프로필이 있는
+   * 사람이 주소를 치거나 링크를 타고 들어오면 그냥 열리는데, 신원이 이미 붙어
+   * 있으므로 **닉네임 칸**이 뜬다. 거기서 저장하면 `upsertMyProfile`이
+   * (`crew.ts:23`) `nickname`뿐 아니라 **`avatar_url`·`weekly_goal`·`timezone`까지
+   * 기본값으로 덮어쓴다** — 이모지와 주간 목표가 조용히 초기화된다.
+   * 공지에 온보딩 링크를 넣지 못한 이유가 이것이었다.
+   *
+   * ⚠️ 마운트에서 **한 번만** 본다(`profileChecked`). 매번 보면 아래
+   * `submitProfile`이 프로필을 만든 직후 이 검사가 다시 돌아 친구 초대의
+   * `done` 화면(`친구가 됐어요!`)에서 사용자를 쫓아낸다.
+   *
+   * ⚠️ 조회에 실패하면 **보내지 않는다.** 기존 사용자를 잘못 튕기는 쪽이,
+   * 신규 사용자가 온보딩을 한 번 늦게 보는 것보다 훨씬 나쁘다 —
+   * `OnboardingGate`가 같은 이유로 같은 선택을 한다(`onboarding-gate.tsx:57`).
+   */
+  const profileChecked = useRef(false);
+  useEffect(() => {
+    if (!configured || loading || !userId || profileChecked.current) return;
+    profileChecked.current = true;
+    let cancelled = false;
+    void (async () => {
+      let existing;
+      try {
+        existing = await getMyProfile(userId);
+      } catch {
+        return; // 못 읽었으면 그대로 둔다
+      }
+      if (cancelled || !existing) return;
+      // 챌린지 초대를 들고 온 기존 사용자는 그 챌린지로 이어 보낸다.
+      // 홈으로 떨어뜨리면 초대가 조용히 사라진다(`/auth/callback`과 같은 규칙).
+      const pending = peekPendingChallengeInvite();
+      router.replace(
+        pending ? `/challenge?join=${encodeURIComponent(pending)}` : "/home",
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [configured, loading, userId, router]);
 
   async function startWithProvider(provider: OAuthProvider) {
     if (linking) return;

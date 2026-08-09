@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   peekPendingInvite: vi.fn(),
   redeemInviteCode: vi.fn(),
   upsertMyProfile: vi.fn(),
+  getMyProfile: vi.fn(),
   getUserIdentities: vi.fn(),
   linkIdentity: vi.fn(),
   signInWithOAuth: vi.fn(),
@@ -60,6 +61,7 @@ vi.mock("@/lib/challenge", async (importOriginal) => ({
 
 vi.mock("@/lib/crew", () => ({
   clearPendingInvite: mocks.clearPendingInvite,
+  getMyProfile: mocks.getMyProfile,
   createGroup: mocks.createGroup,
   peekPendingInvite: mocks.peekPendingInvite,
   redeemInviteCode: mocks.redeemInviteCode,
@@ -88,6 +90,8 @@ function linkedIdentity() {
 beforeEach(() => {
   process.env.NEXT_PUBLIC_OAUTH_PROVIDERS = "kakao,google";
   mocks.linkIdentity.mockResolvedValue({ data: {}, error: null });
+  // 기본은 **신규**(프로필 없음)다. 이 화면의 정상 손님이 그쪽이다.
+  mocks.getMyProfile.mockResolvedValue(null);
   noIdentities();
 });
 
@@ -477,5 +481,73 @@ describe("OnboardingPage 친구 초대 링크 모드", () => {
     await finishProfile();
 
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/home"));
+  });
+});
+
+/**
+ * ⚠️⚠️ D8 (2026-08-09). 이 화면은 `(tabs)` 밖이라 `OnboardingGate`가 없다.
+ * 그래서 프로필이 있는 사람이 주소를 치거나 링크를 타고 들어와도 그냥 열렸고,
+ * 신원이 이미 붙어 있으니 **닉네임 칸**이 떴다. 거기서 저장하면
+ * `upsertMyProfile`이 `nickname`뿐 아니라 **`avatar_url`·`weekly_goal`·`timezone`
+ * 까지 기본값으로 덮어쓴다**(`crew.ts:23`) — 이모지와 주간 목표가 조용히
+ * 초기화된다. 공지에 온보딩 링크를 넣지 못한 이유가 이것이었다.
+ */
+describe("온보딩 — 이미 가입한 사람은 머물지 않는다 (D8)", () => {
+  // ⚠️ `cleanup()`을 빼지 마라. 이 파일의 다른 describe들과 같다 — 없으면 앞
+  //    테스트가 그린 닉네임 칸이 DOM에 남아, 뒤 테스트의 조회가 여러 개를 만나
+  //    엉뚱하게 실패한다(실제로 그렇게 한 번 깨졌다).
+  afterEach(() => cleanup());
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.NEXT_PUBLIC_OAUTH_PROVIDERS = "kakao,google";
+    mocks.peekPendingInvite.mockReturnValue(null);
+    mocks.peekPendingChallengeInvite.mockReturnValue(null);
+    linkedIdentity();
+  });
+
+  it("프로필이 이미 있으면 홈으로 보낸다", async () => {
+    mocks.getMyProfile.mockResolvedValue({ id: "u1", nickname: "오뎅끼데스까" });
+    render(<OnboardingPage />);
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/home"));
+  });
+
+  /**
+   * ⚠️ 프로필을 덮어쓸 기회 자체를 주면 안 된다. "저장을 눌러도 안 바뀐다"가
+   * 아니라 **저장 버튼에 닿지 못한다**가 이 수정의 계약이다.
+   */
+  it("프로필이 이미 있으면 upsert가 한 번도 불리지 않는다", async () => {
+    mocks.getMyProfile.mockResolvedValue({ id: "u1", nickname: "오뎅끼데스까" });
+    render(<OnboardingPage />);
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalled());
+    expect(mocks.upsertMyProfile).not.toHaveBeenCalled();
+  });
+
+  /**
+   * ⚠️ 챌린지 초대를 들고 온 기존 사용자를 홈에 떨어뜨리면 초대가 조용히
+   * 사라진다. `/auth/callback`과 같은 규칙으로 그 챌린지까지 데려간다.
+   */
+  it("챌린지 초대를 들고 있으면 그 챌린지로 이어 보낸다", async () => {
+    mocks.getMyProfile.mockResolvedValue({ id: "u1", nickname: "오뎅끼데스까" });
+    mocks.peekPendingChallengeInvite.mockReturnValue("GND-ABCDE");
+    render(<OnboardingPage />);
+
+    await waitFor(() =>
+      expect(mocks.replace).toHaveBeenCalledWith("/challenge?join=GND-ABCDE"),
+    );
+  });
+
+  /**
+   * ⚠️ 조회 실패로 기존 사용자를 잘못 튕기는 쪽이, 신규 사용자가 온보딩을 한 번
+   * 늦게 보는 것보다 훨씬 나쁘다 — `OnboardingGate`가 같은 선택을 한다.
+   */
+  it("프로필 조회가 실패하면 보내지 않는다 (신규 가입을 막지 않는다)", async () => {
+    mocks.getMyProfile.mockRejectedValue(new Error("network"));
+    render(<OnboardingPage />);
+
+    await screen.findByPlaceholderText("예: 스칼레또");
+    expect(mocks.replace).not.toHaveBeenCalled();
   });
 });
