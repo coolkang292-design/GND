@@ -7,7 +7,7 @@
 -- 쓰는 법: 함수·정책의 '현행' 정의가 필요할 때 마이그레이션 51개를
 -- 뒤지지 말고 이 파일을 검색하라. 마이그레이션을 적용한 뒤에는 다시 뽑아라.
 --
--- 함수 72개 · 정책 70개 · 인덱스 77개
+-- 함수 73개 · 정책 70개 · 인덱스 77개
 
 -- ════════════════════════════════════════════════════════════
 -- 함수
@@ -754,7 +754,6 @@ declare
   v_total int := 0;
   v_prog jsonb; v_orig int;
   v_streak int; v_mult numeric; v_points int := 0; v_badges jsonb := '[]'::jsonb;
-  v_consec int; v_challenge uuid;
   v_elapsed int; v_paused int;
 begin
   if auth.uid() is null then raise exception 'not_authenticated'; end if;
@@ -865,45 +864,11 @@ begin
   -- ⬇ 0032 추가: 배지 판정. 포인트 지급 뒤라 배지 보너스가 위에 쌓인다.
   v_badges := public.evaluate_badges(s.user_id);
 
-  -- ⬇ 0054 추가: 챌린지 성과 열람창이 열렸음을 알린다.
-  --   current_streak_days는 "간격 5일 미만이면 이어짐"이라 여기 쓸 수 없다.
-  --   열람 조건은 **엄밀 연속**(빈 날 없음)이고 오늘을 포함해야 한다 —
-  --   viewing-pass.ts의 challengePassStatus와 같은 판정이어야 한다.
-  --   generate_series로 오늘부터 뒤로 5일을 만들고 전부 운동일인지 본다.
-  select count(*) into v_consec
-  from generate_series(0, 4) g(i)
-  where exists (
-    select 1 from workout_sessions w
-    where w.user_id = s.user_id
-      and w.status = 'completed'
-      and w.deleted_at is null
-      and w.completed_at is not null
-      and (w.completed_at at time zone 'Asia/Seoul')::date
-          = ((now() at time zone 'Asia/Seoul')::date - g.i)
-  );
-
-  if v_consec = 5 then
-    -- 참가 중인 active 챌린지가 있을 때만 의미가 있다.
-    select c.id into v_challenge
-    from challenge_participants cp
-    join challenges c on c.id = cp.challenge_id
-    where cp.user_id = s.user_id and c.status = 'active'
-    order by c.created_at desc
-    limit 1;
-
-    if v_challenge is not null then
-      -- dedupe_key로 하루 1건만. 열람창 자체가 KST 하루에 하나뿐이다.
-      insert into notifications (user_id, type, reference_id, title, body, dedupe_key)
-      values (
-        s.user_id, 'challenge_peek_unlocked', v_challenge,
-        '🎟️ 챌린지 성과 열람 2시간 시작!',
-        '5일 연속 운동 달성! 지금부터 2시간 동안 홈에서 참가자 한 명의 성과를 볼 수 있어요.',
-        'peek_unlock:' || s.user_id::text || ':'
-          || ((now() at time zone 'Asia/Seoul')::date)::text
-      )
-      on conflict (dedupe_key) do nothing;
-    end if;
-  end if;
+  -- ⬇ 0065: 열람창 알림. 판정 규칙은 `notify_challenge_peek_unlock`이 갖는다.
+  --   예전에는 이 자리에 조건이 통째로 박혀 있었고 "오늘 포함 5연속"만 봤다 —
+  --   그래서 5일을 채운 뒤로는 연속이 끊길 때까지 **매일** 알림이 갔다.
+  --   viewing-pass.ts의 challengePassStatus와 **같은 판정**이어야 한다.
+  perform public.notify_challenge_peek_unlock(s.user_id);
 
   return jsonb_build_object(
     'idempotentReplay', false,
@@ -2006,6 +1971,72 @@ begin
   end loop;
 
   return new;
+end $function$;
+
+-- ── notify_challenge_peek_unlock ──
+CREATE OR REPLACE FUNCTION public.notify_challenge_peek_unlock(p_user_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_today     date := (now() at time zone 'Asia/Seoul')::date;
+  v_challenge uuid;
+  v_last_use  date;
+  v_consec    int := 0;
+  v_day       date;
+begin
+  -- 참가 중인 active 챌린지가 있을 때만 의미가 있다.
+  select c.id into v_challenge
+  from challenge_participants cp
+  join challenges c on c.id = cp.challenge_id
+  where cp.user_id = p_user_id and c.status = 'active'
+  order by c.created_at desc
+  limit 1;
+
+  if v_challenge is null then return; end if;
+
+  -- 이 챌린지에서 마지막으로 **쓴** 날. 없으면 null.
+  select max(pick_date) into v_last_use
+  from challenge_peek_picks
+  where viewer_id = p_user_id and challenge_id = v_challenge;
+
+  -- 오늘 쓴 것은 카운터를 끊지 않는다 (오늘 창은 유지된다).
+  if v_last_use = v_today then
+    v_last_use := null;
+  end if;
+
+  -- 오늘부터 뒤로 연속 운동일을 센다. 마지막으로 쓴 날에 닿으면 멈춘다 —
+  -- 그날과 그 이전은 이미 보상으로 바뀐 날들이라 이번 블록에 안 쳐 준다.
+  --
+  -- ⚠️ current_streak_days를 쓰지 마라. 그건 "간격 5일 미만이면 이어짐"이라
+  --    빈 날이 있어도 이어진 것으로 센다. 열람 조건은 **엄밀 연속**이다.
+  for i in 0..364 loop
+    v_day := v_today - i;
+    exit when v_last_use is not null and v_day <= v_last_use;
+    exit when not exists (
+      select 1 from workout_sessions w
+      where w.user_id = p_user_id
+        and w.status = 'completed'
+        and w.deleted_at is null
+        and w.completed_at is not null
+        and (w.completed_at at time zone 'Asia/Seoul')::date = v_day
+    );
+    v_consec := v_consec + 1;
+  end loop;
+
+  if v_consec < 5 then return; end if;
+
+  -- dedupe_key로 하루 1건만. 열람창 자체가 KST 하루에 하나뿐이다.
+  insert into notifications (user_id, type, reference_id, title, body, dedupe_key)
+  values (
+    p_user_id, 'challenge_peek_unlocked', v_challenge,
+    '🎟️ 챌린지 성과 열람 2시간 시작!',
+    '5일 연속 운동 달성! 지금부터 2시간 동안 챌린지 탭에서 참가자 한 명의 성과를 볼 수 있어요.',
+    'peek_unlock:' || p_user_id::text || ':' || v_today::text
+  )
+  on conflict (dedupe_key) do nothing;
 end $function$;
 
 -- ── notify_reaction ──
