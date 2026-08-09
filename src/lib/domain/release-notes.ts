@@ -35,10 +35,19 @@ export function releaseById(id: string): ReleaseNote | null {
   return RELEASE_NOTES.find((r) => r.id === id) ?? null;
 }
 
-export type InlineToken = { kind: "text" | "strong" | "code"; text: string };
+export type InlineToken =
+  | { kind: "text" | "strong" | "code"; text: string }
+  | { kind: "link"; text: string; href: string };
 
 /**
- * 하이라이트 한 줄의 인라인 표기를 조각으로 나눈다 — `**굵게**` · `` `코드` ``.
+ * 하이라이트 한 줄의 인라인 표기를 조각으로 나눈다 —
+ * `**굵게**` · `` `코드` `` · `[텍스트](/경로)`.
+ *
+ * ⚠️⚠️ **링크는 `/`로 시작하는 앱 안 경로만 받는다.** `https://…`나 `//…`를 쓰면
+ * 링크로 안 만들고 **글자 그대로** 남긴다(그래서 화면에서 눈에 띄고 바로 고쳐진다).
+ * 이 화면은 푸시 알림을 누르면 도달하는 곳이라, 여기서 바깥으로 나가는 링크를
+ * 허용하면 공지 문구 한 줄이 그대로 외부 유도 통로가 된다. 지금은 우리가 쓰는
+ * 문자열뿐이지만, **"지금은 안전하다"는 나중에 안 지켜진다.** 파서가 막는 게 맞다.
  *
  * ⚠️ 2026-08-08까지 `/whats-new`는 이 문자열을 **그대로** 그렸다. 데이터에는
  * 처음부터 `**...**`가 들어 있었으므로 사용자 화면에는 별표가 그대로 보였다
@@ -52,18 +61,27 @@ export type InlineToken = { kind: "text" | "strong" | "code"; text: string };
  */
 export function parseHighlight(source: string): InlineToken[] {
   const tokens: InlineToken[] = [];
-  const pattern = /\*\*([^*]+)\*\*|`([^`]+)`/g;
+  // ⚠️ 링크의 주소부는 `/`로 시작해야만 매치된다. 바깥 주소는 아예 안 걸려서
+  //    글자로 남는다 — 위 주석의 "앱 안 경로만" 규칙이 여기 한 곳에 있다.
+  //
+  // ⚠️⚠️ `(?!\/)`를 지우지 마라. `//evil.example.com`은 슬래시로 시작하지만
+  //    **프로토콜 상대 URL**이라 브라우저가 바깥 호스트로 나간다. 처음 쓴
+  //    정규식이 이걸 통과시켰고 테스트가 잡았다(2026-08-09).
+  const pattern =
+    /\*\*([^*]+)\*\*|`([^`]+)`|\[([^\]]+)\]\((\/(?!\/)[^)\s]*)\)/g;
   let last = 0;
 
   for (let m = pattern.exec(source); m; m = pattern.exec(source)) {
     if (m.index > last) {
       tokens.push({ kind: "text", text: source.slice(last, m.index) });
     }
-    tokens.push(
-      m[1] !== undefined
-        ? { kind: "strong", text: m[1] }
-        : { kind: "code", text: m[2] },
-    );
+    if (m[1] !== undefined) {
+      tokens.push({ kind: "strong", text: m[1] });
+    } else if (m[2] !== undefined) {
+      tokens.push({ kind: "code", text: m[2] });
+    } else {
+      tokens.push({ kind: "link", text: m[3], href: m[4] });
+    }
     last = m.index + m[0].length;
   }
   if (last < source.length) {

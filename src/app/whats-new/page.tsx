@@ -49,6 +49,17 @@ export default function WhatsNewPage() {
                         >
                           {t.text}
                         </code>
+                      ) : t.kind === "link" ? (
+                        /* 공지에서 바로 그 화면으로 보낸다. 경로가 앱 안이라는
+                           보증은 파서가 한다(release-notes.ts) — 여기서 다시
+                           검사하지 않는 대신, 그 규칙을 무르지 마라. */
+                        <Link
+                          key={j}
+                          href={t.href}
+                          className="font-extrabold text-accent underline underline-offset-2"
+                        >
+                          {t.text}
+                        </Link>
                       ) : (
                         <span key={j}>{t.text}</span>
                       ),
