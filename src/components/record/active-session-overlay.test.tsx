@@ -27,10 +27,16 @@ const base = {
   onChangeAmount: vi.fn(),
   onCompleteSet: vi.fn(),
   onLoadLast: vi.fn(),
+  canReplaceExercise: true,
+  onReplaceExercise: vi.fn(),
+  onSkipExercise: vi.fn(),
   onAdjustRest: vi.fn(),
   onPickRestPreset: vi.fn(),
   onStartNext: vi.fn(),
   isLastPendingSet: false,
+  // ⚠️ `completionMessage.cheer`와 **다른 문자열**이어야 한다. 둘이 같으면
+  //    "완료 응원과 마지막 세트 응원은 다르다" 단언이 통과해도 의미가 없다.
+  lastSetMessage: "지금 그만둬도 아무도 모릅니다. 근데 본인이 알죠.",
   completionMessage: { headline: "다 했어요", cheer: "응원" },
   // 3 / 8 완료 = 37% — 사용자 목업의 숫자를 그대로 쓴다 (2026-08-07)
   progress: { completed: 3, total: 8, percent: 37 },
@@ -296,6 +302,98 @@ describe("ActiveSessionOverlay — 공통", () => {
 });
 
 /**
+ * 운동 중 종목 손보기 (2026-08-09 사용자 지시 "운동 중 운동 교체 혹은 취소 하기").
+ *
+ * ⚠️ **여기가 유일한 경로다.** 오버레이가 열려 있으면 `ExerciseCard`가 렌더되지
+ * 않아(`record/page.tsx`의 `{!overlayOpen && exerciseCards}`) 종목 삭제·순서
+ * 변경이 전부 닫힌다. 이 버튼들을 지우면 운동 중에는 아무것도 못 바꾸는
+ * 상태로 되돌아간다.
+ */
+describe("ActiveSessionOverlay — 운동 중 종목 바꾸기·건너뛰기", () => {
+  it("입력 화면에 두 버튼이 있다", () => {
+    renderInput();
+
+    expect(screen.getByRole("button", { name: /운동 바꾸기/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /이 종목 빼기/ })).toBeTruthy();
+  });
+
+  it("바꾸기를 누르면 부모에게 알린다 — 부모가 피커를 연다", () => {
+    const onReplaceExercise = vi.fn();
+    renderInput({ onReplaceExercise });
+
+    fireEvent.click(screen.getByRole("button", { name: /운동 바꾸기/ }));
+
+    expect(onReplaceExercise).toHaveBeenCalled();
+  });
+
+  it("건너뛰기를 누르면 부모에게 알린다", () => {
+    const onSkipExercise = vi.fn();
+    renderInput({ onSkipExercise });
+
+    fireEvent.click(screen.getByRole("button", { name: /이 종목 빼기/ }));
+
+    expect(onSkipExercise).toHaveBeenCalled();
+  });
+
+  /**
+   * 완료한 세트가 있는 종목을 바꾸면 그 기록이 **다른 운동 것으로 둔갑한다.**
+   * 누를 수 없는 버튼을 그려 놓고 토스트로 알리는 것은 화면이 거짓말을 하는 것이라
+   * (이 저장소 규약) 아예 안 그린다.
+   */
+  it("완료한 세트가 있으면 바꾸기 버튼이 없다 — 건너뛰기는 남는다", () => {
+    renderInput({ canReplaceExercise: false });
+
+    expect(screen.queryByRole("button", { name: /운동 바꾸기/ })).toBeNull();
+    expect(screen.getByRole("button", { name: /이 종목 빼기/ })).toBeTruthy();
+  });
+
+  it("휴식 화면에는 두 버튼이 없다 — 지금 하는 종목이 없다", () => {
+    renderRest();
+
+    expect(screen.queryByRole("button", { name: /운동 바꾸기/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /이 종목 빼기/ })).toBeNull();
+  });
+});
+
+/**
+ * 설치형 앱의 안전 영역 (2026-08-09, 사용자 신고 "실 서버에 접어 두기 기능 작동 안함").
+ *
+ * `layout.tsx`가 `viewportFit: "cover"`이고 매니페스트가 `display: standalone`이라
+ * **폰에 설치하면 페이지가 상태바 밑까지 그려진다.** 오버레이는 `top-0`에 붙고
+ * 첫 줄이 `▾ 최소화`·`취소`인데, 예전 여백은 `pt-3`(12px)뿐이라 32px짜리 두 버튼이
+ * 통째로 상태바 아래(iOS 44~59px)에 깔려 **탭이 시스템 UI로 갔다.**
+ *
+ * ⚠️ jsdom은 실제 inset 값을 모른다 — 그래서 **`env()`를 쓰고 있는지**를 문자열로
+ * 단언한다. 이 단언이 약해 보여도, `pt-3`으로 되돌리는 순간 실패한다. 그게 목적이다.
+ */
+describe("ActiveSessionOverlay — 설치형 앱 안전 영역", () => {
+  it("위쪽 여백이 상태바를 피한다 (env(safe-area-inset-top))", () => {
+    const { container } = renderInput();
+    const overlay = container.firstElementChild as HTMLElement;
+
+    expect(overlay.style.paddingTop).toContain("env(safe-area-inset-top)");
+  });
+
+  it("고정 여백만으로 위쪽을 띄우지 않는다 — Tailwind pt-*로 되돌리면 실패한다", () => {
+    const { container } = renderInput();
+    const overlay = container.firstElementChild as HTMLElement;
+
+    expect(overlay.className).not.toMatch(/\bpt-\d/);
+  });
+
+  it("빠져나가는 두 문은 터치 타깃 44px(h-11)을 지킨다", () => {
+    renderInput();
+
+    // 오버레이를 벗어나는 길은 이 둘뿐이다. 화면 맨 위라 상태바에 가장 가깝다.
+    const minimize = screen.getByRole("button", { name: /최소화/ });
+    const cancel = screen.getByRole("button", { name: "취소" });
+
+    expect(minimize.className).toContain("h-11");
+    expect(cancel.className).toContain("h-11");
+  });
+});
+
+/**
  * 마지막 세트 안내 + 완료 축하 (2026-08-04, 사용자 요청).
  *
  * "마지막 세트를 할 때 오늘 계획한 운동을 완료했다는 안내와 응원 메시지를
@@ -315,6 +413,43 @@ describe("ActiveSessionOverlay — 마지막 세트와 마무리", () => {
     renderInput({ isLastPendingSet: false });
 
     expect(screen.queryByText(/마지막 세트/)).toBeNull();
+  });
+
+  /**
+   * 2026-08-09 사용자 지시 "치얼업 메시지 운동중 세션 마지막 세트에 나타나게".
+   *
+   * 2026-08-04 요구도 원래 "마지막 세트를 **할 때** 안내와 응원"이었는데, 구현이
+   * 응원을 완료 화면에만 뒀다. 아래 두 단언이 그 회귀를 막는다.
+   */
+  it("마지막 세트에서는 응원 문구도 함께 보인다", () => {
+    renderInput({
+      isLastPendingSet: true,
+      lastSetMessage: "포기하기 딱 좋은 타이밍인 거 압니다.",
+    });
+
+    expect(screen.getByText(/포기하기 딱 좋은 타이밍/)).toBeTruthy();
+  });
+
+  it("마지막이 아니면 응원 문구도 없다", () => {
+    renderInput({
+      isLastPendingSet: false,
+      lastSetMessage: "포기하기 딱 좋은 타이밍인 거 압니다.",
+    });
+
+    expect(screen.queryByText(/포기하기 딱 좋은 타이밍/)).toBeNull();
+  });
+
+  it("마지막 세트 응원은 완료 응원과 다른 자리에 뜬다 — 완료 문구가 미리 새지 않는다", () => {
+    renderInput({
+      isLastPendingSet: true,
+      lastSetMessage: "여기가 승부처예요.",
+      completionMessage: { headline: "오늘 다 했어요", cheer: "오늘의 승자" },
+    });
+
+    expect(screen.getByText(/여기가 승부처/)).toBeTruthy();
+    // 아직 마지막 세트를 **하기 전**이다. 완료 문구가 여기서 보이면 거짓말이다.
+    expect(screen.queryByText(/오늘의 승자/)).toBeNull();
+    expect(screen.queryByText(/오늘 다 했어요/)).toBeNull();
   });
 
   it("마지막 세트를 끝내면 완료 안내와 응원을 보여준다", () => {

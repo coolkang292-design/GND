@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   getActiveChallengeRanking: vi.fn(),
   getChallengeParticipantProfiles: vi.fn(),
   getTodaysPeekTarget: vi.fn(),
+  getLastPeekUseDay: vi.fn(),
   pickPeekTarget: vi.fn(),
   getMyChallenges: vi.fn(),
 }));
@@ -23,6 +24,7 @@ vi.mock("@/lib/challenge", async (importOriginal) => {
     getActiveChallengeRanking: mocks.getActiveChallengeRanking,
     getChallengeParticipantProfiles: mocks.getChallengeParticipantProfiles,
     getTodaysPeekTarget: mocks.getTodaysPeekTarget,
+    getLastPeekUseDay: mocks.getLastPeekUseDay,
     pickPeekTarget: mocks.pickPeekTarget,
     getMyChallenges: mocks.getMyChallenges,
   };
@@ -62,6 +64,7 @@ beforeEach(() => {
     { id: "friend", nickname: "낭만송곳니" },
   ]);
   mocks.getTodaysPeekTarget.mockResolvedValue(null);
+  mocks.getLastPeekUseDay.mockResolvedValue(null);
 });
 
 describe("ParticipantPerformanceCard — 볼 챌린지를 스스로 고르지 않는다", () => {
@@ -141,5 +144,67 @@ describe("ParticipantPerformanceCard — 잠금", () => {
     );
     // 8/7 → 8/10 은 4일치 구간, 표시는 D-3
     await waitFor(() => expect(screen.getByText("D-3")).toBeTruthy());
+  });
+});
+
+/**
+ * 한 번 쓰면 리셋 (2026-08-09 사용자 신고 "어제 확인 했는데 오늘도 같은 보상이
+ * 지급이 됨").
+ *
+ * ⚠️ 카드가 `getLastPeekUseDay`를 **부르지 않으면** `challengePassStatus`의
+ * `lastUsedDayKey` 기본값이 `null`이라 조용히 옛 동작(매일 열림)으로 되돌아간다.
+ * 그래서 "불렀는가"와 "그 값이 판정에 쓰였는가"를 둘 다 단언한다.
+ */
+describe("ParticipantPerformanceCard — 사용하면 리셋된다", () => {
+  it("잠금 여부와 무관하게 사용 기록을 조회한다", async () => {
+    render(
+      <ParticipantPerformanceCard
+        challengeId="ch-9"
+        endDate="2026-08-29"
+        completedAts={[]}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(mocks.getLastPeekUseDay).toHaveBeenCalledWith("ch-9"),
+    );
+    // 잠금 상태에선 순위를 아예 조회하지 않는다(기존 보안 규약 유지)
+    expect(mocks.getActiveChallengeRanking).not.toHaveBeenCalled();
+  });
+
+  it("어제 썼으면 5일 연속이어도 잠겨 있다", async () => {
+    // 오늘은 2026-08-07(KST). 어제 = 08-06에 대상을 골랐다.
+    mocks.getLastPeekUseDay.mockResolvedValue("2026-08-06");
+
+    render(
+      <ParticipantPerformanceCard
+        challengeId="ch-1"
+        endDate="2026-08-29"
+        completedAts={fiveConsecutiveDays()}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByAltText("아직 볼 수 없어요")).toBeTruthy(),
+    );
+    // 잠겼으니 순위·참가자 조회가 나가면 안 된다
+    expect(mocks.getActiveChallengeRanking).not.toHaveBeenCalled();
+    expect(screen.queryByText("낭만송곳니")).toBeNull();
+  });
+
+  it("오늘 썼으면 오늘 창은 유지된다 — 고른 직후 도로 잠기면 안 된다", async () => {
+    mocks.getLastPeekUseDay.mockResolvedValue("2026-08-07");
+    mocks.getTodaysPeekTarget.mockResolvedValue("friend");
+
+    render(
+      <ParticipantPerformanceCard
+        challengeId="ch-1"
+        endDate="2026-08-29"
+        completedAts={fiveConsecutiveDays()}
+      />,
+    );
+
+    await waitFor(() => expect(screen.getByText(/낭만송곳니/)).toBeTruthy());
+    expect(screen.queryByAltText("아직 볼 수 없어요")).toBeNull();
   });
 });

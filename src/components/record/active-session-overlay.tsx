@@ -25,6 +25,13 @@ import type {
  * ⚠️ **z-20에 머문다.** 운동 추가 시트(z-40/50)·무동작 정지 모달(z-50)이 이 위에
  * 떠야 한다. 값을 올리면 시트가 팝업 뒤로 숨는다.
  *
+ * ⚠️ **위쪽 여백은 `env(safe-area-inset-top)`이다** (2026-08-09 사용자 신고
+ * "실 서버에 접어 두기 기능 작동 안함"). `layout.tsx`가 `viewportFit: "cover"`,
+ * 매니페스트가 `display: standalone`이라 **설치형 앱에서는 페이지가 상태바 밑까지
+ * 그려진다.** 예전엔 `pt-3`(12px)뿐이라 첫 줄인 `▾ 최소화`·`취소`(h-8=32px)가
+ * 통째로 상태바 아래 깔려 **탭이 시스템 UI로 갔다.** PC 개발 서버는 inset이 0이라
+ * 멀쩡히 눌린다 — 폰에서만 나는 증상이었다. 되돌리면 오버레이가 다시 감옥이 된다.
+ *
  * ⚠️ 어떤 칸을 그릴지는 `amountFields`가 정한다 — 여기서 유형을 분기하면 저장
  * 구조(`LocalSet`)와 어긋난다. 지시서: "입력 항목을 임의로 추가·삭제하지 마라".
  */
@@ -57,12 +64,16 @@ export function ActiveSessionOverlay({
   restPresetSeconds,
   nextUp,
   isLastPendingSet,
+  lastSetMessage,
   completionMessage,
   paused,
   busy,
+  canReplaceExercise,
   onChangeAmount,
   onCompleteSet,
   onLoadLast,
+  onReplaceExercise,
+  onSkipExercise,
   onAdjustRest,
   onPickRestPreset,
   onStartNext,
@@ -88,13 +99,32 @@ export function ActiveSessionOverlay({
   nextUp: { exerciseName: string; amount: string } | null;
   /** 지금 보여주는 세트가 오늘 남은 마지막 세트인가 — 입력 화면 안내용 */
   isLastPendingSet: boolean;
+  /**
+   * 마지막 세트를 **하기 직전**에 띄울 응원 (`lastSetCheer`).
+   *
+   * ⚠️ `completionMessage.cheer`와 **다른 것**이다. 저건 다 끝낸 뒤의 과거형이고,
+   * 이건 아직 안 한 세트 앞에 두는 현재형이다. 하나로 합치지 마라.
+   */
+  lastSetMessage: string;
   /** 다 끝냈을 때 보여줄 안내 + 응원 (`workoutCompletionMessage`) */
   completionMessage: { headline: string; cheer: string };
   paused: boolean;
   busy: boolean;
+  /**
+   * 지금 종목을 **다른 종목으로** 바꿀 수 있는가 (`canReplaceExercise`).
+   *
+   * 완료한 세트가 하나라도 있으면 `false`다 — 기록이 다른 운동 것으로 둔갑한다.
+   * 그때는 `바꾸기`를 그리지 않고 `건너뛰기`만 남긴다. 누를 수 없는 버튼을
+   * 그려 놓고 토스트로 알리는 것은 화면이 거짓말을 하는 것이다(이 저장소 규약).
+   */
+  canReplaceExercise: boolean;
   onChangeAmount: (key: AmountFieldKey, value: number) => void;
   onCompleteSet: () => void;
   onLoadLast: () => void;
+  /** 종목 바꾸기 — 부모가 운동 피커를 연다 */
+  onReplaceExercise: () => void;
+  /** 종목 건너뛰기 — 남은 세트만 지운다(완료분은 남는다) */
+  onSkipExercise: () => void;
   onAdjustRest: (deltaSeconds: number) => void;
   onPickRestPreset: (seconds: number) => void;
   onStartNext: () => void;
@@ -110,16 +140,26 @@ export function ActiveSessionOverlay({
 
   return (
     <div
-      className="fixed inset-x-0 top-0 z-20 flex flex-col overflow-y-auto bg-bg/95 px-3 pt-3 backdrop-blur"
-      style={{ bottom: 0 }}
+      className="fixed inset-x-0 top-0 z-20 flex flex-col overflow-y-auto bg-bg/95 px-3 backdrop-blur"
+      style={{
+        bottom: 0,
+        // ⚠️ Tailwind `pt-3`으로 되돌리지 마라 — 설치형 앱에서 첫 줄이 상태바
+        //    밑에 깔린다(컴포넌트 주석 참조). 12px는 옛 `pt-3`과 같은 값이다.
+        paddingTop: "calc(env(safe-area-inset-top) + 12px)",
+      }}
     >
       <div className="mx-auto w-full max-w-[460px] pb-6">
-        {/* 최소화·취소는 카드 밖 — 목업의 흐릿한 윗줄 자리 */}
+        {/* 최소화·취소는 카드 밖 — 목업의 흐릿한 윗줄 자리.
+
+            ⚠️ **높이 44px(`h-11`)를 줄이지 마라.** 이 둘이 운동 중 오버레이를
+            빠져나가는 **유일한 두 문**이고, 화면 맨 위라 상태바에 가장 가깝다.
+            32px(`h-8`)이던 것을 2026-08-09에 iOS HIG 최소 터치 타깃인 44px로
+            키웠다 — 안전 영역 여백과 같은 신고에서 나왔다. */}
         <div className="mb-2 flex items-center gap-2">
           <button
             type="button"
             onClick={onMinimize}
-            className="h-8 flex-1 rounded-full border border-line bg-surface-2 text-[11px] font-bold text-muted"
+            className="h-11 flex-1 rounded-full border border-line bg-surface-2 text-[11px] font-bold text-muted"
           >
             ▾ 최소화
           </button>
@@ -127,7 +167,7 @@ export function ActiveSessionOverlay({
             type="button"
             onClick={onCancel}
             disabled={busy}
-            className="h-8 flex-none rounded-full px-3 text-[11px] font-bold text-faint disabled:opacity-50"
+            className="h-11 flex-none rounded-full px-4 text-[11px] font-bold text-faint disabled:opacity-50"
           >
             취소
           </button>
@@ -332,12 +372,26 @@ export function ActiveSessionOverlay({
                   {setPosition.index + 1} / {Math.max(1, setPosition.total)}
                 </span>
               </p>
+              {/*
+                마지막 세트 안내 + 응원 (2026-08-09 사용자 지시
+                "치얼업 메시지 운동중 세션 마지막 세트에 나타나게").
+
+                ⚠️ **알약과 응원은 둘 다 필요하다.** 알약은 사실("마지막이다"),
+                응원은 감정이다. 응원이 알약을 대체하면 몇 세트 남았는지가 사라지고,
+                알약만 두면 정작 제일 힘든 순간에 응원이 없다 — 2026-08-04부터
+                2026-08-09까지 그 상태였다(응원이 완료 화면에만 있었다).
+              */}
               {isLastPendingSet && (
-                <p className="mt-2 inline-flex items-center gap-1 rounded-full bg-good-weak px-3 py-1 text-[11.5px] font-extrabold text-good">
-                  {/* 옛 표기는 `🏁`였다 (2026-08-07 2차 시안으로 교체) */}
-                  <UiIcon name="finish" size={14} />
-                  마지막 세트예요 — 이것만 하면 오늘 몫 끝!
-                </p>
+                <div className="mt-2">
+                  <p className="inline-flex items-center gap-1 rounded-full bg-good-weak px-3 py-1 text-[11.5px] font-extrabold text-good">
+                    {/* 옛 표기는 `🏁`였다 (2026-08-07 2차 시안으로 교체) */}
+                    <UiIcon name="finish" size={14} />
+                    마지막 세트예요 — 이것만 하면 오늘 몫 끝!
+                  </p>
+                  <p className="mt-2 text-[12.5px] leading-5 font-bold text-muted">
+                    {lastSetMessage}
+                  </p>
+                </div>
               )}
 
               <div className="mt-3 flex gap-2.5">
@@ -424,6 +478,44 @@ export function ActiveSessionOverlay({
               >
                 이전 기록 불러오기
               </button>
+
+              {/*
+                운동 중 종목 손보기 (2026-08-09 사용자 지시 "운동 중 운동 교체 혹은
+                취소 하기").
+
+                ⚠️ **이 줄을 빼지 마라.** 오버레이가 열려 있으면 `ExerciseCard`가
+                렌더되지 않아(`record/page.tsx`의 `{!overlayOpen && exerciseCards}`)
+                종목을 손댈 다른 경로가 **하나도 없다.** 접기까지 상태바에 가려
+                안 눌리던 탓에 운동 중에는 아무것도 못 바꾸는 상태였다.
+
+                ⚠️ `바꾸기`는 완료한 세트가 없을 때만 그린다(`canReplaceExercise`).
+                기록이 있는 종목을 바꾸면 그 기록이 다른 운동 것으로 둔갑한다 —
+                그 경우엔 `건너뛰기`가 답이다(완료분을 보존한다).
+              */}
+              <div className="mt-4 flex gap-2 border-t border-line pt-3">
+                {canReplaceExercise && (
+                  <button
+                    type="button"
+                    onClick={onReplaceExercise}
+                    disabled={busy}
+                    className="h-11 flex-1 rounded-card-sm border border-line bg-surface-2 text-[12px] font-bold text-muted disabled:opacity-50"
+                  >
+                    ⇄ 운동 바꾸기
+                  </button>
+                )}
+                {/* ⚠️ 문구를 '건너뛰기'로만 줄이지 마라. 이 버튼은 종목을 **오늘
+                    기록에서 통째로 뺀다**(사용자 결정 2026-08-09) — 완료한 세트도
+                    같이 사라진다. 무엇이 없어지는지 버튼이 말해야 한다.
+                    완료분이 있으면 `handleSkipExercise`가 한 번 더 묻는다. */}
+                <button
+                  type="button"
+                  onClick={onSkipExercise}
+                  disabled={busy}
+                  className="h-11 flex-1 rounded-card-sm border border-line bg-surface-2 text-[12px] font-bold text-muted disabled:opacity-50"
+                >
+                  ↷ 이 종목 빼기
+                </button>
+              </div>
             </>
           )}
         </section>

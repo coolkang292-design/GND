@@ -73,7 +73,10 @@ export type FriendRow = FriendActivity & {
   /** null = 아직 안 왔거나 조회 실패. **0개와 구별한다** — 화면은 "—"로 그린다. */
   badgeCount: number | null;
   /**
-   * 최근에 딴 배지 키 (최대 `FRIEND_BADGE_PREVIEW`개, 최신순).
+   * 행에 그릴 배지 키 (최대 `FRIEND_BADGE_PREVIEW`개).
+   *
+   * ⚠️ **최신순이 아니라 등급순이다** (2026-08-09 사용자 지시 "배지 퀄리티 좋은거
+   * 먼저"). 희귀도 → 티어 → 최신 — `compareBadgeShowcase`가 정한다.
    *
    * 이미지 경로는 `/badges/<key>.png`다. **카탈로그에 있는 키만** 담긴다 —
    * 없는 키가 섞이면 화면에 깨진 이미지가 뜬다.
@@ -142,8 +145,14 @@ export type FriendCrewInput = {
   totalXp: number;
 };
 
-/** 배지 조회 결과. `total`은 종류 수, `recentKeys`는 썸네일로 그릴 최신 몇 개. */
-export type FriendBadges = { total: number; recentKeys: string[] };
+/**
+ * 배지 조회 결과. `total`은 종류 수, `showcaseKeys`는 썸네일로 그릴 몇 개.
+ *
+ * ⚠️ 옛 이름은 `recentKeys`(최신순)였다. 2026-08-09에 **등급순**으로 바뀌면서
+ * 이름도 같이 바꿨다 — `recentKeys`인 채로 두면 다음 사람이 최신순이라 믿는다.
+ * 순서는 `compareBadgeShowcase`(희귀도 → 티어 → 최신)가 정한다.
+ */
+export type FriendBadges = { total: number; showcaseKeys: string[] };
 
 /**
  * 친구 행 조립 + 정렬.
@@ -212,7 +221,7 @@ function assembleRow(
     characterPath: progress.characterPath,
     stageName: progress.stageName,
     badgeCount: badge === undefined ? null : badge.total,
-    badgeKeys: badge?.recentKeys ?? [],
+    badgeKeys: badge?.showcaseKeys ?? [],
     status: friendStatus(
       activity.workedOutToday,
       source.activeUserIds.has(member.id),

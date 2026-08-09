@@ -4,6 +4,7 @@ import {
   advanceSetFocus,
   clampFocusIndex,
   clampSetFocus,
+  ensurePendingFocus,
   type FocusExercise,
 } from "./focus-exercise";
 
@@ -161,6 +162,77 @@ describe("clampSetFocus — 종목·세트를 지워도 범위를 벗어나지 �
     const list = [ex("빈 종목", [])];
 
     expect(clampSetFocus(list, { exerciseIndex: 0, setIndex: 3 })).toEqual({
+      exerciseIndex: 0,
+      setIndex: 0,
+    });
+  });
+});
+
+/**
+ * 목록이 바뀐 뒤 초점 복구 (2026-08-09, 사용자 신고 **"A 계정에서 운동완료
+ * 버튼이 안눌림"**).
+ *
+ * 실제로 일어난 일: `↷ 이 종목 건너뛰기`로 종목이 배열에서 빠졌는데 초점 인덱스는
+ * 그대로였다. 같은 인덱스가 **다음 종목**을 가리키게 됐고, 그 종목의 0번 세트가
+ * 이미 완료라 세 가지가 한꺼번에 조용히 망가졌다:
+ *   ① `onCompleteSet`이 `focusedSet.done`에서 return → **버튼이 안 눌린다**
+ *   ② `canReplaceExercise`가 false → `⇄ 운동 바꾸기`가 사라진다
+ *   ③ `isLastPendingSet`가 false → 마지막 세트 안내가 안 뜬다
+ *
+ * ⚠️ `advanceSetFocus`로 대신하지 마라. 저건 "방금 이 세트를 끝냈다"는 전제라
+ *    `setIndex + 1`부터 찾는다 — 지금 자리가 **미완료인데도** 건너뛴다.
+ */
+describe("ensurePendingFocus — 목록이 바뀐 뒤 성한 자리로", () => {
+  it("지금 자리가 미완료면 그대로 둔다 — 임의로 튀지 않는다", () => {
+    const list = [ex("벤치", [false, false, false])];
+
+    expect(ensurePendingFocus(list, { exerciseIndex: 0, setIndex: 0 })).toEqual({
+      exerciseIndex: 0,
+      setIndex: 0,
+    });
+  });
+
+  it("지금 자리가 이미 완료면 다음 미완료로 옮긴다", () => {
+    const list = [ex("벤치", [true, true, false])];
+
+    expect(ensurePendingFocus(list, { exerciseIndex: 0, setIndex: 0 })).toEqual({
+      exerciseIndex: 0,
+      setIndex: 2,
+    });
+  });
+
+  /** 신고된 그 상황 — 앞 종목을 건너뛰어 배열이 줄었고, 그 자리에 완료된 종목이 왔다 */
+  it("종목이 빠져 인덱스가 밀린 뒤에도 미완료 세트를 찾아간다", () => {
+    // 건너뛰기 전: [건너뛸종목, 다한종목, 남은종목], 초점 = 0
+    // 건너뛴 뒤:   [다한종목, 남은종목] — 인덱스 0이 이제 '다한종목'이다
+    const after = [ex("다한종목", [true, true]), ex("남은종목", [false])];
+
+    expect(ensurePendingFocus(after, { exerciseIndex: 0, setIndex: 0 })).toEqual({
+      exerciseIndex: 1,
+      setIndex: 0,
+    });
+  });
+
+  it("좌표가 범위를 벗어나도 당겨 온다", () => {
+    const list = [ex("벤치", [false, false])];
+
+    expect(ensurePendingFocus(list, { exerciseIndex: 9, setIndex: 9 })).toEqual({
+      exerciseIndex: 0,
+      setIndex: 1,
+    });
+  });
+
+  it("전부 완료면 그 자리에 머문다 — 완료 화면이 뜰 차례다", () => {
+    const list = [ex("벤치", [true, true])];
+
+    expect(ensurePendingFocus(list, { exerciseIndex: 0, setIndex: 1 })).toEqual({
+      exerciseIndex: 0,
+      setIndex: 1,
+    });
+  });
+
+  it("목록이 비면 원점", () => {
+    expect(ensurePendingFocus([], { exerciseIndex: 3, setIndex: 2 })).toEqual({
       exerciseIndex: 0,
       setIndex: 0,
     });

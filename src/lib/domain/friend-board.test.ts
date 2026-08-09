@@ -163,7 +163,7 @@ describe("buildFriendRows — 행 조립", () => {
     const rows = buildFriendRows({
       crew,
       activity: new Map(),
-      badges: new Map([["b", { total: 0, recentKeys: [] }]]),
+      badges: new Map([["b", { total: 0, showcaseKeys: [] }]]),
       activeUserIds: new Set(),
     });
     expect(rows.find((r) => r.userId === "a")!.badgeCount).toBeNull();
@@ -175,7 +175,7 @@ describe("buildFriendRows — 행 조립", () => {
       crew,
       activity: new Map(),
       badges: new Map([
-        ["a", { total: 6, recentKeys: ["streak_5", "volume_1t"] }],
+        ["a", { total: 6, showcaseKeys: ["streak_5", "volume_1t"] }],
       ]),
       activeUserIds: new Set(),
     });
@@ -457,7 +457,7 @@ describe("buildMyRow — 내 행은 친구와 같은 자로 재되, 섞이지 �
       me: ME,
       activity: foldFriendSessions(sessions, NOW, KST),
       badges: new Map(
-        badges ? [["me", { total: badges[0], recentKeys: badges[1] }]] : [],
+        badges ? [["me", { total: badges[0], showcaseKeys: badges[1] }]] : [],
       ),
       activeUserIds: new Set(active ? ["me"] : []),
     });

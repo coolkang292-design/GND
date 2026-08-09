@@ -110,3 +110,36 @@ export function advanceSetFocus(
 
   return current;
 }
+
+/**
+ * **목록이 바뀐 뒤** 초점을 성한 자리로 데려온다 (2026-08-09, 사용자 신고
+ * "A 계정에서 운동완료 버튼이 안눌림").
+ *
+ * `advanceSetFocus`와 다르다. 저건 "방금 이 세트를 끝냈다"는 전제라 **지금
+ * 좌표 다음**부터 찾는다. 종목을 건너뛰거나 바꿔서 배열이 줄어든 경우엔 전제가
+ * 다르다 — 같은 인덱스가 **다른 종목**을 가리키게 되고, 그 자리가 이미 완료된
+ * 세트일 수 있다.
+ *
+ * 그러면 이런 일이 벌어졌다:
+ * - `onCompleteSet`이 `focusedSet.done`에서 그냥 return → **`✓ 운동 완료`가
+ *   눌러도 아무 일이 없다**
+ * - `canReplaceExercise`가 false → `⇄ 운동 바꾸기`가 사라진다
+ * - `isLastPendingSet`가 false → 마지막 세트 안내도 안 뜬다
+ *
+ * 규칙: **지금 자리가 미완료면 그대로 둔다**(임의로 튀지 않는다). 완료된
+ * 자리면 다음 미완료로 옮긴다. 아무 데도 미완료가 없으면 그대로 둔다 —
+ * 그때는 완료 화면이 뜰 차례다.
+ */
+export function ensurePendingFocus(
+  exercises: FocusExercise[],
+  focus: SetFocus,
+): SetFocus {
+  if (exercises.length === 0) return ORIGIN;
+
+  const current = clampSetFocus(exercises, focus);
+  const set = exercises[current.exerciseIndex]?.sets[current.setIndex];
+  // ⚠️ 미완료면 **그대로 둔다.** `advanceSetFocus`를 무조건 부르면 지금 자리를
+  //    건너뛰고 다음 세트로 가 버린다(저건 setIndex + 1부터 찾는다).
+  if (set && !set.done) return current;
+  return advanceSetFocus(exercises, current);
+}

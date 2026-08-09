@@ -13,6 +13,7 @@ import { challengeDaysLeft } from "@/lib/domain/challenge-time";
 import {
   getActiveChallengeRanking,
   getChallengeParticipantProfiles,
+  getLastPeekUseDay,
   getTodaysPeekTarget,
   pickPeekTarget,
   type ChallengeRanking,
@@ -58,7 +59,26 @@ export function ParticipantPerformanceCard({
     //    부모가 `key={challenge.id}`로 리마운트시켜 상태를 통째로 새로 만든다.
     void (async () => {
       try {
-        const p = challengePassStatus(completedAts, new Date(), DEFAULT_TIMEZONE);
+        /*
+          **사용 기록을 먼저 읽는다** (2026-08-09 사용자 신고 "한번 열어 보면
+          리셋이 되어야 할듯 — 어제 확인 했는데 오늘도 같은 보상이 지급이 됨").
+
+          예전에는 `challengePassStatus`에 완료 시각만 넘겨서, 5일 연속을 만든
+          뒤로는 연속이 끊길 때까지 **매일** 새 2시간 창이 열렸다.
+
+          ⚠️ 잠금 상태에서도 부른다 — 이 값이 있어야 잠금인지 아닌지를 판정한다.
+             `challenge_peek_picks`는 RLS상 본인 행만 보이므로 노출이 아니다.
+        */
+        const lastUsedDayKey = await getLastPeekUseDay(challengeId);
+        if (cancelled) return;
+
+        const p = challengePassStatus(
+          completedAts,
+          new Date(),
+          DEFAULT_TIMEZONE,
+          undefined,
+          lastUsedDayKey,
+        );
         // 보안: unlocked일 때만 순위를 조회한다. 잠금 상태에선 순위가 클라에 없다.
         if (p.state === "unlocked") {
           const [rank, profiles, picked] = await Promise.all([

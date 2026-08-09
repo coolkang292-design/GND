@@ -40,7 +40,7 @@ function rowsOf(
     badges: new Map(
       (options.badges ?? []).map(([id, total, keys]) => [
         id,
-        { total, recentKeys: keys },
+        { total, showcaseKeys: keys },
       ]),
     ),
     activeUserIds: new Set(options.active ?? []),
@@ -67,7 +67,7 @@ function myRowOf(
     activity: foldFriendSessions(options.sessions ?? [], NOW, KST),
     badges: new Map(
       options.badges
-        ? [["me", { total: options.badges[0], recentKeys: options.badges[1] }]]
+        ? [["me", { total: options.badges[0], showcaseKeys: options.badges[1] }]]
         : [],
     ),
     activeUserIds: new Set(options.active ? ["me"] : []),

@@ -1154,6 +1154,31 @@ export async function getTodaysPeekTarget(
   return row.pick_date === todayKst ? row.target_id : null;
 }
 
+/**
+ * 이 챌린지에서 열람권을 **마지막으로 쓴 날** (KST `YYYY-MM-DD`). 없으면 `null`.
+ *
+ * "쓴 날" = 대상을 고른 날이다. 카드를 열어 잠금 화면을 본 것은 사용이 아니다 —
+ * 아무것도 못 봤으니까. 소비 지점은 `pick_challenge_peek` 하나뿐이고, 그 결과가
+ * `challenge_peek_picks`에 그대로 남아 있다 (2026-08-09).
+ *
+ * ⚠️ 잠금 상태에서도 부른다. `challenge_peek_picks`는 RLS상 **본인 행만** 보이므로
+ * (`0040`의 `challenge_peek_picks_own_select`) 남의 정보가 새지 않는다.
+ */
+export async function getLastPeekUseDay(
+  challengeId: string,
+): Promise<string | null> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("challenge_peek_picks")
+    .select("pick_date")
+    .eq("challenge_id", challengeId)
+    .order("pick_date", { ascending: false })
+    .limit(1);
+  if (error) throw error;
+  const row = (data ?? [])[0] as { pick_date: string } | undefined;
+  return row?.pick_date ?? null;
+}
+
 /** 열람 대상 지정 — 이미 고른 사람이 있으면 그 사람이 그대로 돌아온다 */
 export async function pickPeekTarget(
   challengeId: string,

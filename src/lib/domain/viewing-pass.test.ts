@@ -356,3 +356,116 @@ describe("challengePassCopy — 카드에 실제로 뜨는 문구", () => {
     );
   });
 });
+
+/**
+ * 한 번 쓰면 카운터가 다시 0부터 (2026-08-09 사용자 신고).
+ *
+ * > "챌린지에서 5일 운동하면 크루 성과 확인하게 하는 기능이 한번 열어 보면
+ * >  리셋이 되어야 할듯. 어제 확인 했는데 오늘도 같은 보상이 지급이 됨"
+ *
+ * 예전에는 사용 기록이 판정에 전혀 안 들어가서, 5일 연속을 만든 뒤로는 연속이
+ * 끊길 때까지 **매일** 새 2시간 창이 열렸다 — 잠금이 장식이었다.
+ *
+ * ⚠️ 서버(`complete_workout`, 0065)의 열람 알림도 **같은 규칙**이어야 한다.
+ *    한쪽만 고치면 푸시를 받고 들어갔더니 잠겨 있는 막다른 길이 된다.
+ */
+describe("challengePassStatus — 사용하면 리셋된다", () => {
+  const FIVE = [
+    at("2026-08-05"),
+    at("2026-08-06"),
+    at("2026-08-07"),
+    at("2026-08-08"),
+    at("2026-08-09"),
+  ];
+  const today = at("2026-08-09");
+
+  it("한 번도 안 썼으면 열린다 — 옛 동작 그대로", () => {
+    expect(challengePassStatus(FIVE, today, TZ, 5, null).state).toBe("unlocked");
+  });
+
+  it("**어제** 썼으면 오늘은 잠겨 있다 — 같은 보상이 또 나오지 않는다", () => {
+    const s = challengePassStatus(FIVE, today, TZ, 5, "2026-08-08");
+
+    expect(s.state).toBe("locked_progress");
+    // 08-08에 썼으므로 이번 블록은 08-09 하루뿐이다
+    expect(s.consecutiveDays).toBe(1);
+    expect(s.progressDays).toBe(1);
+  });
+
+  /**
+   * ⚠️ 이 함수에서 가장 헷갈리는 지점이다. 대상을 고르고 나서도 **그날 남은
+   * 2시간 동안은** 고른 사람의 성과를 봐야 한다. 오늘 날짜에서 바로 끊으면
+   * 대상을 고르는 순간 카드가 도로 잠긴다.
+   */
+  it("**오늘** 썼으면 오늘 창은 그대로 유지된다", () => {
+    const s = challengePassStatus(FIVE, today, TZ, 5, "2026-08-09");
+
+    expect(s.state).toBe("unlocked");
+    expect(s.consecutiveDays).toBe(5);
+  });
+
+  it("쓴 다음 날부터 5일을 더 채우면 다시 열린다", () => {
+    // 08-04에 쓰고, 08-05~08-09 닷새를 새로 채웠다
+    const s = challengePassStatus(FIVE, today, TZ, 5, "2026-08-04");
+
+    expect(s.state).toBe("unlocked");
+    expect(s.consecutiveDays).toBe(5);
+  });
+
+  it("쓴 다음 날부터 넉 달이면 아직 잠겨 있다", () => {
+    const four = [
+      at("2026-08-06"),
+      at("2026-08-07"),
+      at("2026-08-08"),
+      at("2026-08-09"),
+    ];
+    const s = challengePassStatus(four, today, TZ, 5, "2026-08-05");
+
+    expect(s.state).toBe("locked_progress");
+    expect(s.progressDays).toBe(4);
+  });
+
+  it("쓴 날 이전의 연속은 세지 않는다 — 옛 기록으로 창을 다시 열 수 없다", () => {
+    const long = [
+      at("2026-08-01"),
+      at("2026-08-02"),
+      at("2026-08-03"),
+      at("2026-08-04"),
+      at("2026-08-05"),
+      at("2026-08-06"),
+      at("2026-08-07"),
+      at("2026-08-08"),
+      at("2026-08-09"),
+    ];
+    const s = challengePassStatus(long, today, TZ, 5, "2026-08-07");
+
+    // 08-08·08-09 이틀만 이번 블록이다. 아흐레 연속이어도 2/5다.
+    expect(s.state).toBe("locked_progress");
+    expect(s.consecutiveDays).toBe(2);
+  });
+
+  it("연속이 끊기면 사용 여부와 무관하게 잠긴다", () => {
+    const broken = [
+      at("2026-08-05"),
+      at("2026-08-06"),
+      // 08-07 빠짐
+      at("2026-08-08"),
+      at("2026-08-09"),
+    ];
+
+    expect(challengePassStatus(broken, today, TZ, 5, null).state).toBe(
+      "locked_progress",
+    );
+    expect(challengePassStatus(broken, today, TZ, 5, "2026-08-01").state).toBe(
+      "locked_progress",
+    );
+  });
+
+  it("쓴 뒤 잠긴 상태의 문구는 다시 채우라고 말한다", () => {
+    const s = challengePassStatus(FIVE, today, TZ, 5, "2026-08-08");
+
+    expect(challengePassCopy(s, 0)).toBe(
+      "5일 연속 운동하면 열려요 · 현재 1/5일",
+    );
+  });
+});

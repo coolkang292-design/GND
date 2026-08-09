@@ -48,3 +48,94 @@ export function shouldRestAfterCompletion(input: {
 
 /** 축하 화면을 보여주는 시간 — 이 뒤에 결과·인증 사진 화면으로 넘어간다 */
 export const COMPLETION_AUTO_FINISH_MS = 3000;
+
+// ── 운동 중 종목 바꾸기·건너뛰기 (2026-08-09) ──────────────────
+//
+// 사용자 신고: "운동 중 운동 교체 혹은 취소 하기 (…) 기능 작동 안함".
+// 실제로는 **경로가 없었다.** 오버레이가 열려 있으면 `ExerciseCard`가 아예
+// 렌더되지 않아(`record/page.tsx`의 `{!overlayOpen && exerciseCards}`), 종목
+// 삭제·순서 변경이 전부 닫혀 있었다. 접기마저 상태바에 가려 안 눌렸으므로
+// (`active-session-overlay.tsx` 주석) 운동 중에는 손쓸 방법이 없었다.
+
+type FlowSet = { done: boolean };
+type FlowExercise = { key: string; sets: FlowSet[] };
+
+/**
+ * 이 종목을 **다른 종목으로 바꿔도 되는가.**
+ *
+ * 완료한 세트가 하나라도 있으면 안 된다 — 그건 오늘의 **기록**이고, 종목을 바꾸면
+ * 그 기록이 다른 운동의 것으로 둔갑한다. 그 경우엔 `건너뛰기`만 남긴다
+ * (건너뛰기는 완료분을 보존한다).
+ */
+export function canReplaceExercise(exercise: FlowExercise | null): boolean {
+  if (!exercise) return false;
+  return !exercise.sets.some((set) => set.done);
+}
+
+/**
+ * 종목 바꾸기 — 세트 **수**는 유지하고 값은 새로 시작한다.
+ *
+ * `build(previousSetCount)`로 새 종목을 만들게 해서 이 파일이 `LocalExercise`·
+ * `localId`에 의존하지 않게 했다(도메인 계층은 데이터 계층을 모른다). 세트 수를
+ * 넘겨주는 이유: 4세트 하려고 담아 뒀는데 바꿨더니 1세트가 되면 계획이 사라진다.
+ *
+ * 완료한 세트가 있으면 **아무것도 하지 않는다**(`replaced: false`). 화면이 버튼을
+ * 숨기지만, 화면 규칙만 믿지 않는다 — 여기서도 막는다.
+ */
+export function replaceExercise<E extends FlowExercise>(
+  exercises: E[],
+  exKey: string,
+  build: (previousSetCount: number) => E,
+): { exercises: E[]; replaced: boolean } {
+  const target = exercises.find((ex) => ex.key === exKey) ?? null;
+  if (!target || !canReplaceExercise(target)) {
+    return { exercises, replaced: false };
+  }
+  const next = build(target.sets.length);
+  return {
+    exercises: exercises.map((ex) => (ex.key === exKey ? next : ex)),
+    replaced: true,
+  };
+}
+
+/**
+ * 종목 건너뛰기 — **종목을 통째로 오늘 기록에서 뺀다** (사용자 결정 2026-08-09:
+ * *"건너뛰면 그 종목은 통째로 오늘 기록에서 빼줘"*).
+ *
+ * 기구에 사람이 많거나 몸이 안 따라줄 때 쓴다.
+ *
+ * ⚠️ **완료한 세트도 같이 사라진다.** 처음엔 완료분을 남기게 만들었는데(3세트 중
+ * 2세트를 했으면 "2세트 한 것"으로), 사용자가 통째로 빼라고 정했다. 그래서 이건
+ * **되돌릴 수 없는 삭제**다 — 화면은 완료한 세트가 있을 때 반드시 한 번 묻는다
+ * (`handleSkipExercise`). 그 확인창을 지우지 마라.
+ *
+ * `discardedDoneSets`가 그 경고의 재료다. 0이면 잃을 것이 없으니 묻지 않는다.
+ */
+export function skipExercise<E extends FlowExercise>(
+  exercises: E[],
+  exKey: string,
+): {
+  exercises: E[];
+  /** 사라진 세트 총수 (완료분 포함) */
+  skippedSets: number;
+  /** 그중 **완료돼 있던** 세트 수 — 확인창을 띄울지의 판단 재료 */
+  discardedDoneSets: number;
+  removedExercise: boolean;
+} {
+  const target = exercises.find((ex) => ex.key === exKey);
+  if (!target) {
+    return {
+      exercises,
+      skippedSets: 0,
+      discardedDoneSets: 0,
+      removedExercise: false,
+    };
+  }
+
+  return {
+    exercises: exercises.filter((ex) => ex.key !== exKey),
+    skippedSets: target.sets.length,
+    discardedDoneSets: target.sets.filter((set) => set.done).length,
+    removedExercise: true,
+  };
+}

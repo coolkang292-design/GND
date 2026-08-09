@@ -92,17 +92,30 @@ import {
 } from "@/lib/domain/workout-progress";
 import {
   advanceSetFocus,
+  ensurePendingFocus,
   clampSetFocus,
 } from "@/lib/domain/focus-exercise";
-import { amountFields } from "@/lib/domain/set-input";
-import { workoutCompletionMessage } from "@/lib/domain/workout-complete-message";
 import {
+  amountFields,
+  propagateAmount,
+  type AmountFieldKey,
+} from "@/lib/domain/set-input";
+import { bottomOffset, MINIMIZED_BAR } from "@/lib/domain/floating-bars";
+import {
+  lastSetCheer,
+  workoutCompletionMessage,
+} from "@/lib/domain/workout-complete-message";
+import {
+  canReplaceExercise,
   COMPLETION_AUTO_FINISH_MS,
   overlayMode,
+  replaceExercise,
   shouldAutoFinishAfterRest,
   shouldRestAfterCompletion,
+  skipExercise,
 } from "@/lib/domain/session-flow";
 import { dayKey } from "@/lib/domain/time";
+import { errorText } from "@/lib/domain/error-text";
 import { XpResultModal } from "@/components/record/xp-result-modal";
 import { buildXpEvents, type XpEvent } from "@/lib/domain/xp-events";
 import { shareOrCopyText, shareResultToast } from "@/lib/share";
@@ -197,7 +210,10 @@ type TabataPrefill = {
 };
 
 function errorMessage(e: unknown): string {
-  const msg = e instanceof Error ? e.message : String(e);
+  // ⚠️ `String(e)`로 되돌리지 마라 (2026-08-09 실측). Supabase가 던지는
+  //    `PostgrestError`는 `Error`가 아니라 평범한 객체라 `오류: [object Object]`가
+  //    떴다 — 화면에도, **버그 신고에도** 그대로 실린다. `error-text.ts` 주석 참조.
+  const msg = errorText(e);
   if (msg.includes("active_session_exists")) return "이미 진행 중인 운동이 있어요";
   if (msg.includes("invalid_status")) return "세션 상태가 맞지 않아요. 새로고침해 주세요";
   if (msg.includes("session_not_found")) return "세션을 찾을 수 없어요";
@@ -220,6 +236,11 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const [groupId, setGroupId] = useState<string | null>(null);
   const [prevVolume, setPrevVolume] = useState<number | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  /**
+   * 운동 중 '바꾸기'로 피커를 연 경우의 대상 종목 키 (2026-08-09).
+   * `null`이면 평소의 '운동 추가'다. 반드시 `closePicker`로 비운다.
+   */
+  const [replaceTargetKey, setReplaceTargetKey] = useState<string | null>(null);
   const [reorderOpen, setReorderOpen] = useState(false);
   /**
    * 큰 팝업을 접어 뒀는가 (2026-08-04, 설계 ②).
@@ -537,9 +558,114 @@ function WorkoutScreen({ userId }: { userId: string }) {
     [markActivity, setDraft],
   );
 
+  /**
+   * 운동 중 **종목 바꾸기** — 피커에서 고른 첫 종목으로 갈아 끼운다 (2026-08-09).
+   *
+   * `replaceTargetKey`가 있으면 `addExercises`가 추가 대신 교체로 흐른다. 피커를
+   * 한 벌만 쓰기 위한 장치다 — 교체 전용 피커를 따로 만들면 검색·필터·커스텀
+   * 종목 만들기가 두 벌이 되어 시간이 지나며 갈린다.
+   *
+   * ⚠️ 여러 개를 골라도 **첫 번째만** 쓴다. 한 종목을 다른 한 종목으로 바꾸는
+   * 것이 요구다 — 나머지를 뒤에 덧붙이면 "바꾸기"가 "바꾸고 추가하기"가 된다.
+   */
+  function replaceFocusedExercise(item: CatalogExercise): boolean {
+    const targetKey = replaceTargetKey;
+    if (!targetKey) return false;
+
+    let replaced = false;
+    let previousName = "";
+    let nextExercises: LocalExercise[] = draftRef.current.exercises;
+    setDraft((d) => {
+      previousName =
+        d.exercises.find((ex) => ex.key === targetKey)?.name ?? "";
+      const out = replaceExercise(d.exercises, targetKey, (previousSetCount) => ({
+        key: localId(),
+        name: item.name,
+        bodyPart: item.body_part,
+        exerciseType: item.exercise_type,
+        measure: item.measure,
+        isCustom: item.is_custom,
+        // 세트 **수**는 유지하고 값은 새로 시작한다 — 4세트 하려고 담아 뒀는데
+        // 바꿨더니 1세트가 되면 계획이 사라진다.
+        sets: Array.from({ length: Math.max(1, previousSetCount) }, () =>
+          newSet(),
+        ),
+      }));
+      replaced = out.replaced;
+      nextExercises = out.exercises;
+      return { ...d, exercises: out.exercises };
+    });
+
+    markActivity();
+    // 바꾼 종목의 세트는 전부 미완료라 보통 제자리에 머문다. 그래도 부른다 —
+    // 세트 수가 줄어 좌표가 범위를 벗어날 수 있다.
+    refocusPending(nextExercises);
+    setReplaceTargetKey(null);
+    closePicker();
+    if (replaced) {
+      showToast(
+        previousName
+          ? `'${previousName}' → '${item.name}'으로 바꿨어요`
+          : `'${item.name}'으로 바꿨어요`,
+      );
+    } else {
+      // 완료한 세트가 있으면 도메인이 막는다. 화면도 버튼을 숨기지만 둘 다 건다.
+      showToast("이미 완료한 세트가 있어 바꿀 수 없어요");
+    }
+    return true;
+  }
+
+  /**
+   * 종목 건너뛰기 — 남은 세트만 지운다. 완료분은 기록이라 남긴다 (2026-08-09).
+   */
+  function handleSkipExercise(exKey: string) {
+    const target = draftRef.current.exercises.find((ex) => ex.key === exKey);
+    if (!target) return;
+    const name = target.name;
+    const doneCount = target.sets.filter((set) => set.done).length;
+
+    /*
+      ⚠️ **완료한 세트가 있으면 반드시 묻는다.** 건너뛰기는 종목을 통째로 빼므로
+      (사용자 결정 2026-08-09) 이미 한 세트도 같이 사라진다 — 되돌릴 수 없다.
+      잃을 것이 없을 때(doneCount === 0)는 묻지 않는다. 흔한 경우까지 확인창을
+      띄우면 사람들이 읽지 않고 누르는 버릇이 든다.
+    */
+    if (
+      doneCount > 0 &&
+      !window.confirm(
+        `'${name}'을 오늘 기록에서 뺄까요?\n완료한 ${doneCount}세트도 함께 사라져요.`,
+      )
+    ) {
+      return;
+    }
+
+    let skipped = 0;
+    let nextExercises: LocalExercise[] = draftRef.current.exercises;
+    setDraft((d) => {
+      const out = skipExercise(d.exercises, exKey);
+      skipped = out.skippedSets;
+      nextExercises = out.exercises;
+      return { ...d, exercises: out.exercises };
+    });
+    markActivity();
+    // ⚠️ **초점을 반드시 다시 잡는다** (2026-08-09 사용자 신고 "운동완료 버튼이
+    //    안눌림"). 종목이 빠지면 같은 인덱스가 **다른 종목**을 가리키고, 그 자리가
+    //    완료된 세트면 `✓ 운동 완료`가 눌러도 아무 일이 없다. `ensurePendingFocus`
+    //    주석에 증상 셋이 적혀 있다.
+    refocusPending(nextExercises);
+    if (skipped === 0) return;
+    showToast(
+      doneCount > 0
+        ? `'${name}'을 뺐어요 (완료한 ${doneCount}세트도 함께)`
+        : `'${name}'을 건너뛰었어요`,
+    );
+  }
+
   /** 선택한 운동 여러 개를 한 번에 추가 (다중 선택 피커) */
   function addExercises(items: CatalogExercise[]) {
     if (items.length === 0) return;
+    // 운동 중 '바꾸기'로 연 피커면 추가가 아니라 교체다 (2026-08-09)
+    if (replaceFocusedExercise(items[0])) return;
     const added: LocalExercise[] = items.map((item) => ({
       key: localId(),
       name: item.name,
@@ -551,7 +677,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
     }));
     markActivity();
     setDraft((d) => ({ ...d, exercises: [...d.exercises, ...added] }));
-    setPickerOpen(false);
+    closePicker();
     showToast(
       items.length === 1
         ? `'${items[0].name}' 추가됨`
@@ -578,7 +704,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
     }));
     markActivity();
     setDraft((d) => ({ ...d, exercises: [...d.exercises, ...added] }));
-    setPickerOpen(false);
+    closePicker();
     showToast(
       picks.length === 1
         ? `'${picks[0].item.name}' 추가됨`
@@ -639,8 +765,26 @@ function WorkoutScreen({ userId }: { userId: string }) {
     }
   }
 
-  async function openExercisePicker(mode: "hub" | "past" = "hub") {
+  /**
+   * ⚠️ **피커를 닫는 길은 이것 하나다.** `setPickerOpen(false)`를 직접 부르지 마라 —
+   * 운동 중 '바꾸기'로 연 경우 `replaceTargetKey`가 남아, **다음번에 그냥 운동을
+   * 추가하려던 것이 교체로 바뀐다** (2026-08-09).
+   */
+  function closePicker() {
+    setPickerOpen(false);
+    setReplaceTargetKey(null);
+  }
+
+  /**
+   * @param replaceKey 운동 중 '바꾸기'로 여는 경우 대상 종목 키. 그 밖에는 `null`.
+   *   **항상 명시적으로 덮어쓴다** — 기본값 `null`이라 옛 값이 남을 수 없다.
+   */
+  async function openExercisePicker(
+    mode: "hub" | "past" = "hub",
+    replaceKey: string | null = null,
+  ) {
     setPickerMode(mode);
+    setReplaceTargetKey(replaceKey);
     setPickerOpen(true);
     await loadPastSessions();
   }
@@ -666,7 +810,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
       catalog,
     });
     if (resume) {
-      setPickerOpen(false);
+      closePicker();
       setSubTab("workout");
       void openTabataSheet({ picked: resume.picked, minutes: resume.minutes });
       return true;
@@ -847,6 +991,45 @@ function WorkoutScreen({ userId }: { userId: string }) {
     }));
   }
 
+  /**
+   * 오버레이 스테퍼로 값을 바꿨다 — **지금 세트와 뒤에 남은 세트에 함께** 쓴다
+   * (2026-08-09 사용자 지시 "운동중 무게 수정하면 다음 세트부터 일괄 적용하게").
+   *
+   * ⚠️ **`ExerciseCard`의 입력창에는 붙이지 않는다.** 거기는 담기 단계에서
+   * 세트별로 다르게 설계하는 자리다(피라미드·드롭세트). 사용자의 요구도
+   * "운동 시작하고 운동중"이라 **오버레이 경로 한정**이다.
+   *
+   * 조용히 바꾸지 않는다 — 뒤 세트 셋이 말없이 바뀌면 사용자는 모른다.
+   * 실제로 바뀐 개수(`propagateAmount`의 `changed`)로만 토스트를 띄운다.
+   */
+  function applyAmountFromHere(
+    exKey: string,
+    si: number,
+    key: AmountFieldKey,
+    value: number,
+  ) {
+    const exercise = draftRef.current.exercises.find((ex) => ex.key === exKey);
+    const field = exercise
+      ? amountFields(exercise.exerciseType, exercise.measure).find(
+          (f) => f.key === key,
+        )
+      : undefined;
+
+    let changed = 0;
+    updateExercise(exKey, (ex) => {
+      const withCurrent = ex.sets.map((s, i) =>
+        i === si ? { ...s, [key]: value } : s,
+      );
+      const spread = propagateAmount(withCurrent, si, key, value);
+      changed = spread.changed;
+      return { ...ex, sets: spread.sets };
+    });
+
+    if (changed > 0 && field) {
+      showToast(`다음 ${changed}세트에도 ${value}${field.unit} 적용했어요`);
+    }
+  }
+
   function toggleDone(exKey: string, si: number) {
     if (!active) {
       showToast("운동을 먼저 시작하세요 💪");
@@ -979,12 +1162,34 @@ function WorkoutScreen({ userId }: { userId: string }) {
     );
   }
 
+  /**
+   * 초점을 성한 자리로 다시 잡는다 (2026-08-09 사용자 신고 "운동완료 버튼이 안눌림").
+   *
+   * ⚠️ **종목 배열을 줄이는 모든 경로가 이걸 불러야 한다.** 안 부르면 같은
+   * 인덱스가 **다른 종목**을 가리키게 되고, 그 자리가 이미 완료된 세트면
+   * `✓ 운동 완료`가 눌러도 아무 일이 없다(증상 셋은 `ensurePendingFocus` 주석).
+   * 지금 부르는 곳: `handleSkipExercise` · `replaceFocusedExercise` ·
+   * `removeExercise` · `ExerciseReorderSheet`의 삭제.
+   */
+  function refocusPending(exercises: LocalExercise[]) {
+    // `toggleDone`과 같은 규약 — 이벤트 핸들러에서만 부르므로 클로저 값이 최신이다.
+    const moved = ensurePendingFocus(exercises, {
+      exerciseIndex: focusIndex,
+      setIndex: focusSetIndex,
+    });
+    setFocusIndex(moved.exerciseIndex);
+    setFocusSetIndex(moved.setIndex);
+  }
+
   function removeExercise(exKey: string) {
     markActivity();
+    const next = draftRef.current.exercises.filter((ex) => ex.key !== exKey);
     setDraft((d) => ({
       ...d,
       exercises: d.exercises.filter((ex) => ex.key !== exKey),
     }));
+    // 접어 두고 카드에서 지운 뒤 다시 펴는 경로가 여기다 (사용자 질문 2026-08-09).
+    refocusPending(next);
   }
 
   /**
@@ -1382,12 +1587,15 @@ function WorkoutScreen({ userId }: { userId: string }) {
     0,
   );
   // 문구는 날짜 기준 로테이션이다 — 렌더 중 랜덤은 재렌더마다 문구가 바뀐다
+  const messageDayKey = dayKey(
+    new Date(),
+    Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Seoul",
+  );
   const completionMessage = workoutCompletionMessage({
-    todayKey: dayKey(
-      new Date(),
-      Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Seoul",
-    ),
+    todayKey: messageDayKey,
   });
+  /** 마지막 세트를 **하기 직전**의 응원 — 완료 응원과 다른 문구다 (2026-08-09) */
+  const lastSetMessage = lastSetCheer({ todayKey: messageDayKey });
   /**
    * 입력 카드는 한 벌만 만든다 (설계 ②).
    *
@@ -1906,12 +2114,12 @@ function WorkoutScreen({ userId }: { userId: string }) {
         catalog={catalog}
         pastSessions={pastSessions}
         pastLoading={pastLoading}
-        onClose={() => setPickerOpen(false)}
+        onClose={() => closePicker()}
         onPickMany={addExercises}
         onPickConfigured={addConfiguredExercises}
         onPickPast={addPastSession}
         onOpenTabata={() => {
-          setPickerOpen(false);
+          closePicker();
           void openTabataSheet();
         }}
         onCreateCustom={handleCreateCustom}
@@ -1998,12 +2206,13 @@ function WorkoutScreen({ userId }: { userId: string }) {
             : null
         }
         isLastPendingSet={pendingSetCount === 1 && !focusedSet?.done}
+        lastSetMessage={lastSetMessage}
         completionMessage={completionMessage}
         paused={paused}
         busy={busy}
         onChangeAmount={(key, value) => {
           if (!focusedExercise) return;
-          updateSet(focusedExercise.key, setFocus.setIndex, { [key]: value });
+          applyAmountFromHere(focusedExercise.key, setFocus.setIndex, key, value);
         }}
         onCompleteSet={() => {
           if (!focusedExercise || !focusedSet || focusedSet.done) return;
@@ -2011,6 +2220,14 @@ function WorkoutScreen({ userId }: { userId: string }) {
         }}
         onLoadLast={() => {
           if (focusedExercise) void loadLastExercise(focusedExercise);
+        }}
+        canReplaceExercise={canReplaceExercise(focusedExercise)}
+        onReplaceExercise={() => {
+          if (!focusedExercise) return;
+          void openExercisePicker("hub", focusedExercise.key);
+        }}
+        onSkipExercise={() => {
+          if (focusedExercise) handleSkipExercise(focusedExercise.key);
         }}
         onAdjustRest={(delta) => stepRest(delta)}
         onPickRestPreset={(seconds) => setRestSeconds(seconds)}
@@ -2023,12 +2240,22 @@ function WorkoutScreen({ userId }: { userId: string }) {
         onCancel={() => void handleCancel()}
       />
 
-      {/* 접어 뒀을 때 돌아갈 문 — 없으면 팝업을 다시 못 연다 */}
+      {/* 접어 뒀을 때 돌아갈 문 — 없으면 팝업을 다시 못 연다.
+
+          ⚠️ **자리와 z는 `floating-bars.ts`가 정한다. 여기에 숫자를 적지 마라.**
+          예전엔 `z-20`에 `+72px`이었는데 그건 `RestBar`(`z-30`, 같은 `+72px`)와
+          **완전히 같은 자리**였다. RestBar는 `restRemaining !== null &&
+          !overlayOpen`, 즉 **접었을 때만** 뜨므로 — 휴식 중에 접으면 이 버튼이
+          통째로 가려져 오버레이로 영영 못 돌아왔다 (2026-08-09 사용자 신고).
+          `floating-bars.test.ts`가 둘이 안 겹침을 단언한다. */}
       {active && minimized && (
         <button
           onClick={() => setMinimized(false)}
-          className="fixed inset-x-3 z-20 flex items-center justify-between rounded-card border border-accent bg-surface px-4 py-3 shadow-card"
-          style={{ bottom: "calc(env(safe-area-inset-bottom) + 72px)" }}
+          className="fixed inset-x-3 flex items-center justify-between rounded-card border border-accent bg-surface px-4 py-3 shadow-card"
+          style={{
+            bottom: bottomOffset(MINIMIZED_BAR.bottomPx),
+            zIndex: MINIMIZED_BAR.z,
+          }}
         >
           <span className="text-xs font-extrabold text-accent">
             {paused ? "⏸ 정지됨 — 무동작" : "운동 중"}

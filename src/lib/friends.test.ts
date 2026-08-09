@@ -56,6 +56,20 @@ const CATALOG: BadgeMeta[] = [
     tier: "silver", rarity: "rare", metricKey: "streak_days", threshold: 7,
     pointReward: 200, repeatable: false, repeatStep: null, sortOrder: 2,
   },
+  // 등급 정렬을 가르려면 **희귀한 옛 배지**가 필요하다 (2026-08-09).
+  // 최신순이면 밀려나고, 등급순이면 맨 앞에 온다 — 두 규칙이 갈리는 지점이다.
+  {
+    key: "volume_1t", emoji: "🏔️", name: "1톤", description: "",
+    tier: "legend", rarity: "legend", metricKey: "weight_volume_kg",
+    threshold: 1_000_000,
+    pointReward: 2000, repeatable: false, repeatStep: null, sortOrder: 3,
+  },
+  // 같은 희귀도인데 티어가 다른 짝 — 2단 정렬을 가른다
+  {
+    key: "minutes_1000", emoji: "⏱️", name: "1000분", description: "",
+    tier: "gold", rarity: "rare", metricKey: "total_minutes", threshold: 1000,
+    pointReward: 300, repeatable: false, repeatStep: null, sortOrder: 4,
+  },
 ];
 
 afterEach(() => vi.clearAllMocks());
@@ -170,27 +184,79 @@ describe("getFriendBadges — 1인 1콜, 실패는 그 사람만", () => {
     expect(counts.get("f1")?.total).toBe(1);
   });
 
-  /** 썸네일은 최근에 딴 것부터 — 화면이 `/badges/<key>.png`로 그린다 */
-  it("최근에 딴 배지 키를 최신순으로 준다", async () => {
+  /**
+   * 썸네일은 **등급 좋은 것부터** — 화면이 `/badges/<key>.png`로 그린다.
+   *
+   * 2026-08-09 사용자 지시로 최신순 → 등급순이 됐다. 옛 규칙에서는 방금 딴
+   * `first_workout`이 오래전에 딴 `legend`를 밀어냈다 — 자랑하라고 만든 자리인데
+   * 자랑할 것이 안 보였다.
+   *
+   * ⚠️ 이 테스트는 **옛 배지를 더 희귀하게** 만들어 두 규칙을 가른다. 최신순으로
+   * 되돌리면 실패한다. 날짜를 뒤집지 마라 — 뒤집는 순간 아무것도 검증 못 한다.
+   */
+  it("등급이 좋은 배지를 먼저 준다 — 오래됐어도 앞에 온다", async () => {
     mocks.getCrewMemberProfile.mockResolvedValue({
       badges: [
         {
-          badgeKey: "streak_3",
+          badgeKey: "volume_1t", // legend, 반년 전
           periodKey: "",
           earnedAt: new Date("2026-01-01T00:00:00Z"),
         },
         {
-          badgeKey: "streak_7",
+          badgeKey: "streak_3", // common, 오늘
           periodKey: "",
-          earnedAt: new Date("2026-08-01T00:00:00Z"),
+          earnedAt: new Date("2026-08-09T00:00:00Z"),
         },
       ],
     });
 
-    expect((await getFriendBadges(["f1"])).get("f1")?.recentKeys).toEqual([
-      "streak_7",
+    expect((await getFriendBadges(["f1"])).get("f1")?.showcaseKeys).toEqual([
+      "volume_1t",
       "streak_3",
     ]);
+  });
+
+  it("희귀도가 같으면 티어로 가른다", async () => {
+    mocks.getCrewMemberProfile.mockResolvedValue({
+      badges: [
+        // 둘 다 rare. silver < gold라 minutes_1000이 앞이다.
+        { badgeKey: "streak_7", periodKey: "", earnedAt: new Date("2026-08-09") },
+        {
+          badgeKey: "minutes_1000",
+          periodKey: "",
+          earnedAt: new Date("2026-01-01"),
+        },
+      ],
+    });
+
+    expect((await getFriendBadges(["f1"])).get("f1")?.showcaseKeys).toEqual([
+      "minutes_1000",
+      "streak_7",
+    ]);
+  });
+
+  it("세 장까지만 준다 — 등급 낮은 것이 잘린다", async () => {
+    mocks.getCrewMemberProfile.mockResolvedValue({
+      badges: [
+        { badgeKey: "streak_3", periodKey: "", earnedAt: new Date("2026-08-09") },
+        { badgeKey: "volume_1t", periodKey: "", earnedAt: new Date("2026-01-01") },
+        {
+          badgeKey: "minutes_1000",
+          periodKey: "",
+          earnedAt: new Date("2026-02-01"),
+        },
+        { badgeKey: "streak_7", periodKey: "", earnedAt: new Date("2026-03-01") },
+      ],
+    });
+
+    const result = (await getFriendBadges(["f1"])).get("f1");
+    // legend → rare/gold → rare/silver 순. common인 streak_3가 잘린다.
+    expect(result?.showcaseKeys).toEqual([
+      "volume_1t",
+      "minutes_1000",
+      "streak_7",
+    ]);
+    expect(result?.total).toBe(4);
   });
 
   /**
@@ -205,7 +271,7 @@ describe("getFriendBadges — 1인 1콜, 실패는 그 사람만", () => {
       ],
     });
 
-    expect((await getFriendBadges(["f1"])).get("f1")?.recentKeys).toEqual([
+    expect((await getFriendBadges(["f1"])).get("f1")?.showcaseKeys).toEqual([
       "streak_3",
     ]);
   });
@@ -219,7 +285,7 @@ describe("getFriendBadges — 1인 1콜, 실패는 그 사람만", () => {
     });
 
     const result = (await getFriendBadges(["f1"])).get("f1");
-    expect(result?.recentKeys).toEqual(["streak_3"]);
+    expect(result?.showcaseKeys).toEqual(["streak_3"]);
     expect(result?.total).toBe(1);
   });
 

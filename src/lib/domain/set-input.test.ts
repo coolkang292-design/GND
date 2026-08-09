@@ -3,6 +3,7 @@ import {
   REST_PRESET_SECONDS,
   adjustAmount,
   amountFields,
+  propagateAmount,
 } from "./set-input";
 
 /**
@@ -53,11 +54,22 @@ describe("amountFields — 유형별 입력 칸", () => {
     expect(amountFields("weight", null)[1].quickSteps).toEqual([-2, -1, 1, 2]);
   });
 
-  it("거리는 0.5km, 시간은 1분 단위로 조절한다", () => {
+  /**
+   * 2026-08-09 사용자 지시로 0.5 → 0.1이 됐다. "유산소 거리는 보통 0.1 단위
+   * 수정을 해야 하므로." 0.5로 되돌리면 3.2km를 스테퍼로 만들 수 없다.
+   */
+  it("거리는 0.1km, 시간은 1분 단위로 조절한다", () => {
     const cardio = amountFields("cardio", null);
 
-    expect(cardio[0].step).toBe(0.5);
+    expect(cardio[0].step).toBe(0.1);
     expect(cardio[1].step).toBe(1);
+  });
+
+  it("거리의 빠른 칩에는 굵은 조절(±1)이 남아 있다", () => {
+    // 0.1만 있으면 5km를 넣는 데 50번 눌러야 한다.
+    expect(amountFields("cardio", null)[0].quickSteps).toEqual([
+      -1, -0.1, 0.1, 1,
+    ]);
   });
 
   it("저장 구조에 없는 필드를 만들지 않는다", () => {
@@ -88,10 +100,98 @@ describe("adjustAmount — 스테퍼·빠른 칩 공용", () => {
     expect(adjustAmount(0.1, 0.2)).toBe(0.3);
     expect(adjustAmount(2.5, 0.5)).toBe(3);
   });
+
+  it("0.1 단위 거리 조절이 오차를 남기지 않는다", () => {
+    // 거리 step이 0.1이 되면서(2026-08-09) 이쪽이 실사용 경로가 됐다.
+    // 3.2 + 0.1 = 3.3000000000000003이 화면에 뜨면 안 된다.
+    expect(adjustAmount(3.2, 0.1)).toBe(3.3);
+    expect(adjustAmount(0.3, -0.1)).toBe(0.2);
+    // 0.1을 열 번 누르면 정확히 1.0이다
+    let v = 0;
+    for (let i = 0; i < 10; i++) v = adjustAmount(v, 0.1);
+    expect(v).toBe(1);
+  });
 });
 
 describe("REST_PRESET_SECONDS", () => {
   it("목업의 다섯 가지 — 30초·45초·1분·1분 30초·2분", () => {
     expect(REST_PRESET_SECONDS).toEqual([30, 45, 60, 90, 120]);
+  });
+});
+
+/**
+ * 운동 중 값 수정의 뒤 세트 전파 (2026-08-09 사용자 지시).
+ * "운동 시작하고 운동중 무게 수정하면 다음 세트부터 일괄 적용하게"
+ */
+describe("propagateAmount — 다음 세트부터 일괄 적용", () => {
+  const set = (weightKg: number, done = false) => ({ weightKg, reps: 10, done });
+
+  it("뒤에 남은 세트에 같은 값을 쓴다", () => {
+    const sets = [set(60), set(60), set(60), set(60)];
+
+    const out = propagateAmount(sets, 0, "weightKg", 50);
+
+    // ⚠️ "0이 아니다"가 아니라 **정확히 3**이어야 한다. 서버·로직이 통째로
+    //    망가져도 0은 통과하지만 3은 통과하지 않는다.
+    expect(out.changed).toBe(3);
+    expect(out.sets.map((s) => s.weightKg)).toEqual([60, 50, 50, 50]);
+  });
+
+  it("이미 완료한 뒤 세트는 건드리지 않는다 — 그건 예상치가 아니라 기록이다", () => {
+    const sets = [set(60), set(60, true), set(60)];
+
+    const out = propagateAmount(sets, 0, "weightKg", 50);
+
+    expect(out.changed).toBe(1);
+    expect(out.sets.map((s) => s.weightKg)).toEqual([60, 60, 50]);
+    expect(out.sets[1].done).toBe(true);
+  });
+
+  it("앞 세트는 건드리지 않는다 — '다음 세트부터'다", () => {
+    const sets = [set(60), set(60), set(60)];
+
+    const out = propagateAmount(sets, 2, "weightKg", 50);
+
+    expect(out.changed).toBe(0);
+    expect(out.sets.map((s) => s.weightKg)).toEqual([60, 60, 60]);
+  });
+
+  it("마지막 세트에서 바꾸면 전파할 곳이 없다", () => {
+    const sets = [set(60), set(60)];
+
+    expect(propagateAmount(sets, 1, "weightKg", 50).changed).toBe(0);
+  });
+
+  it("무게만이 아니라 네 칸 전부에 적용된다 (사용자 결정 2026-08-09)", () => {
+    const sets = [
+      { weightKg: 0, reps: 12, distanceKm: 0, durationMin: 0, done: false },
+      { weightKg: 0, reps: 12, distanceKm: 0, durationMin: 0, done: false },
+    ];
+
+    expect(propagateAmount(sets, 0, "reps", 10).sets[1].reps).toBe(10);
+    expect(
+      propagateAmount(sets, 0, "distanceKm", 3.3).sets[1].distanceKm,
+    ).toBe(3.3);
+    expect(
+      propagateAmount(sets, 0, "durationMin", 25).sets[1].durationMin,
+    ).toBe(25);
+  });
+
+  it("바뀐 게 없으면 같은 배열을 그대로 돌려준다 — 불필요한 렌더를 만들지 않는다", () => {
+    const sets = [set(50), set(50), set(50)];
+
+    const out = propagateAmount(sets, 0, "weightKg", 50);
+
+    expect(out.changed).toBe(0);
+    expect(out.sets).toBe(sets); // 참조 동일성
+  });
+
+  it("바꾼 세트만 새 객체다 — 나머지는 참조가 유지된다", () => {
+    const sets = [set(60), set(60)];
+
+    const out = propagateAmount(sets, 0, "weightKg", 50);
+
+    expect(out.sets[0]).toBe(sets[0]);
+    expect(out.sets[1]).not.toBe(sets[1]);
   });
 });

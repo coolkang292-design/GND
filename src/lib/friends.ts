@@ -2,7 +2,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { getBadgeCatalog } from "@/lib/badges";
 import { getMyCrew } from "@/lib/crew-link";
 import { getCrewMemberProfile } from "@/lib/progression";
-import { earnedBadgeCount } from "@/lib/domain/badges";
+import { compareBadgeShowcase, earnedBadgeCount } from "@/lib/domain/badges";
 import { getMyRecentPokeTargets } from "@/lib/social";
 import { DEFAULT_TIMEZONE } from "@/lib/domain/time";
 import {
@@ -138,28 +138,52 @@ export async function getFriendBadges(
   if (userIds.length === 0) return result;
 
   const catalog = await getBadgeCatalog();
-  const known = new Set(catalog.map((m) => m.key));
   const settled = await Promise.allSettled(
     userIds.map((id) => getCrewMemberProfile(id)),
   );
 
+  const metaByKey = new Map(catalog.map((m) => [m.key, m]));
+
   settled.forEach((entry, i) => {
     if (entry.status !== "fulfilled") return;
     const badges = entry.value.badges;
-    // 최신순 — 같은 배지를 반복해 따도 썸네일은 한 번만 쓴다(개수 정의와 같다).
-    const recentKeys: string[] = [];
-    const seen = new Set<string>();
-    for (const badge of [...badges].sort(
-      (a, b) => b.earnedAt.getTime() - a.earnedAt.getTime(),
-    )) {
-      if (!known.has(badge.badgeKey) || seen.has(badge.badgeKey)) continue;
-      seen.add(badge.badgeKey);
-      recentKeys.push(badge.badgeKey);
-      if (recentKeys.length === FRIEND_BADGE_PREVIEW) break;
+    /*
+      **등급순**이다 — 최신순이 아니다 (2026-08-09 사용자 지시 "배지 퀄리티 좋은거
+      먼저 보여주기"). 예전에는 방금 딴 `first_workout`이 오래전에 딴 `legend`를
+      밀어냈다. 자랑하라고 만든 자리인데 자랑할 것이 안 보였다.
+
+      정렬 규칙은 `compareBadgeShowcase`(희귀도 → 티어 → 최신)가 갖는다. 여기서
+      비교식을 다시 쓰지 마라 — 규칙이 두 곳에 있으면 갈린다.
+
+      같은 배지를 반복해 따도 썸네일은 한 번만 쓴다(개수 정의 `earnedBadgeCount`와
+      같은 규약). 반복 배지는 **가장 최근 획득**을 대표로 삼는다.
+    */
+    const best = new Map<string, { key: string; earnedAt: Date }>();
+    for (const badge of badges) {
+      // 카탈로그에 없는 키는 버린다 — `/badges/<key>.png`가 깨진 이미지로 뜬다.
+      if (!metaByKey.has(badge.badgeKey)) continue;
+      const prev = best.get(badge.badgeKey);
+      if (!prev || badge.earnedAt > prev.earnedAt) {
+        best.set(badge.badgeKey, {
+          key: badge.badgeKey,
+          earnedAt: badge.earnedAt,
+        });
+      }
     }
+
+    const showcaseKeys = [...best.values()]
+      .sort((a, b) =>
+        compareBadgeShowcase(
+          { ...metaByKey.get(a.key)!, earnedAt: a.earnedAt },
+          { ...metaByKey.get(b.key)!, earnedAt: b.earnedAt },
+        ),
+      )
+      .slice(0, FRIEND_BADGE_PREVIEW)
+      .map((b) => b.key);
+
     result.set(userIds[i], {
       total: earnedBadgeCount(catalog, badges),
-      recentKeys,
+      showcaseKeys,
     });
   });
   return result;

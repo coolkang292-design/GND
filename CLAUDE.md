@@ -183,14 +183,22 @@ node scripts/bug-reports.mjs --fix <id> --release <release-id> --send   # 신고
 | `poke-levelup-check.mjs` | 14 / 14 |
 | `challenge-consent-test.mjs` | 22 / 0 |
 | `challenge-room-check.mjs` | 48 / 0 |
-| `challenge-invite-link-check.mjs` | 25 / 0 |
+| `challenge-invite-link-check.mjs` | 27 / 0 |
+| `peek-reset-check.mjs` | 8 / 0 (**0065 필요**) |
 
 `rls-test.mjs`는 2026-08-02에 루틴(0056) 단언 10건이 늘어 115 → **125**가 됐고,
 2026-08-04에 루틴 종목 교체(덮어쓰기) 단언 3건이 늘어 → **128**이 됐다(실측).
 
 `challenge-invite-link-check.mjs`는 2026-08-08에 0061~0063 단언 4건이 늘어
-21 → **25**가 됐다(실측). ⚠️ **`🎯 0051 회귀` 단언을 지우지 마라** — "기존 사용자가
+21 → **25**, 같은 날 0064 단언 2건이 더 늘어 → **27**이 됐다(2026-08-09 실측).
+⚠️ **`🎯 0051 회귀` 단언을 지우지 마라** — "기존 사용자가
 챌린지 링크를 눌러도 방장 크루가 늘지 않는다"가 2026-07-31 사고(D5)의 재발 방지선이다.
+
+`peek-reset-check.mjs`는 2026-08-09에 생겼다. 챌린지 열람권의 **화면 규칙
+(`viewing-pass.ts`)과 서버 규칙(`notify_challenge_peek_unlock`)이 같은 답을 내는지**
+같은 입력으로 대조한다. 둘이 갈리면 "🎟️ 2시간 시작!" 푸시를 받고 들어갔더니 자물쇠가
+걸린 막다른 길이 된다(0045→0046→0047과 같은 종류). 픽스처 A에 **과거 날짜 세션을
+심었다가 지우므로** `dev-fixture.mjs create` + `challenge`가 먼저 필요하다.
 
 ⚠️ **루틴 단언의 순서를 바꾸지 마라.** 이름 중복(409)은 **슬롯 한도에 걸리기 전에**
 확인해야 한다. 슬롯 트리거가 `before insert`라, 한도에 도달한 상태에서는 유니크

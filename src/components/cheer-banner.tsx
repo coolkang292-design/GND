@@ -43,7 +43,14 @@ export function CheerBanner() {
   const emoji = CHEER_EMOJI[banner.body ?? ""] ?? null;
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-3 z-[60] flex justify-center px-4">
+    // ⚠️ `top-3`으로 되돌리지 마라 (2026-08-09). 설치형 앱은 `viewportFit:
+    //    "cover"` + `display: standalone`이라 페이지가 상태바 밑까지 그려진다 —
+    //    12px에 띄우면 배너가 상태바에 가려 **보이지 않는다.** 오버레이 상단
+    //    여백과 같은 원인이다(`active-session-overlay.tsx` 주석).
+    <div
+      className="pointer-events-none fixed inset-x-0 z-[60] flex justify-center px-4"
+      style={{ top: "calc(env(safe-area-inset-top) + 12px)" }}
+    >
       <div className="pointer-events-auto flex w-full max-w-md items-center gap-2.5 rounded-card border border-accent/50 bg-surface px-4 py-3 shadow-card">
         <span className="text-xl">📣</span>
         <div className="min-w-0">

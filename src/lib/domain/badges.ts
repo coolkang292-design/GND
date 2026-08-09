@@ -81,6 +81,58 @@ export function earnedBadgeCount(
   return new Set(earned.map((b) => b.badgeKey).filter((k) => keys.has(k))).size;
 }
 
+// ── 자랑할 순서 (2026-08-09) ──────────────────────────────────
+
+/**
+ * 희귀도·티어의 **서열**. `BadgeRarity`·`BadgeTier`는 문자열이라 그대로는 못 비교한다.
+ *
+ * ⚠️ 타입에 값을 추가하면 여기도 추가해야 한다. `Record<...>`라 빠뜨리면
+ * 타입 검사에서 걸린다 — 일부러 `Partial`로 두지 않았다.
+ */
+export const RARITY_RANK: Record<BadgeRarity, number> = {
+  mythic: 5,
+  legend: 4,
+  epic: 3,
+  rare: 2,
+  common: 1,
+};
+
+export const TIER_RANK: Record<BadgeTier, number> = {
+  legend: 4,
+  gold: 3,
+  silver: 2,
+  bronze: 1,
+};
+
+export type BadgeShowcaseInput = {
+  rarity: BadgeRarity;
+  tier: BadgeTier;
+  /** 이 배지를 딴 시각 — 등급이 같을 때의 마지막 기준 */
+  earnedAt: Date;
+};
+
+/**
+ * 홈 친구 목록에 **몇 장만 보여줄 때 무엇을 앞에 둘지** (2026-08-09 사용자 지시
+ * "홈의 친구 항목에서 배지 퀄리티 좋은거 먼저 보여주기").
+ *
+ * 예전에는 `earnedAt` 최신순으로 앞 3장을 잘랐다. 그래서 방금 딴 `first_workout`
+ * 같은 흔한 배지가 오래전에 딴 `legend`를 밀어냈다 — 자랑하려고 만든 자리인데
+ * 자랑할 것이 안 보였다.
+ *
+ * 희귀도 → 티어 → 최신. **3단이라 완전 순서**다. 앞 둘만 쓰면 동급끼리 순서가
+ * 안 정해져 재조회마다 다른 3장이 뜬다.
+ */
+export function compareBadgeShowcase(
+  a: BadgeShowcaseInput,
+  b: BadgeShowcaseInput,
+): number {
+  const rarity = RARITY_RANK[b.rarity] - RARITY_RANK[a.rarity];
+  if (rarity !== 0) return rarity;
+  const tier = TIER_RANK[b.tier] - TIER_RANK[a.tier];
+  if (tier !== 0) return tier;
+  return b.earnedAt.getTime() - a.earnedAt.getTime();
+}
+
 export type BadgeGroup = {
   metricKey: BadgeMetricKey;
   items: BadgeShelfItem[];

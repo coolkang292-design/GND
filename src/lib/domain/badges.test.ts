@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   badgeShelf,
+  compareBadgeShowcase,
   earnedBadgeCount,
   groupByMetric,
+  RARITY_RANK,
+  TIER_RANK,
   type BadgeMeta,
   type EarnedBadge,
 } from "./badges";
@@ -93,5 +96,80 @@ describe("groupByMetric", () => {
 
   it("빈 진열대는 빈 배열", () => {
     expect(groupByMetric([])).toEqual([]);
+  });
+});
+
+/**
+ * 자랑할 순서 (2026-08-09 사용자 지시 "홈의 친구 항목에서 배지 퀄리티 좋은거
+ * 먼저 보여주기").
+ *
+ * 홈 친구 행은 배지를 3장만 그린다. 예전에는 최신순으로 잘라서, 방금 딴
+ * `first_workout` 같은 흔한 배지가 오래전에 딴 `legend`를 밀어냈다.
+ */
+describe("compareBadgeShowcase — 희귀도 → 티어 → 최신", () => {
+  const old = new Date("2026-01-01T00:00:00Z");
+  const recent = new Date("2026-08-09T00:00:00Z");
+
+  const sortKeys = <T extends { key: string }>(
+    items: (T & { rarity: BadgeMeta["rarity"]; tier: BadgeMeta["tier"]; earnedAt: Date })[],
+  ) => [...items].sort(compareBadgeShowcase).map((i) => i.key);
+
+  it("희귀도가 최신보다 우선한다 — 오래된 legend가 오늘 딴 common을 이긴다", () => {
+    expect(
+      sortKeys([
+        { key: "흔한오늘", rarity: "common", tier: "legend", earnedAt: recent },
+        { key: "희귀한옛날", rarity: "legend", tier: "bronze", earnedAt: old },
+      ]),
+    ).toEqual(["희귀한옛날", "흔한오늘"]);
+  });
+
+  it("희귀도가 같으면 티어로 가른다", () => {
+    expect(
+      sortKeys([
+        { key: "은", rarity: "rare", tier: "silver", earnedAt: recent },
+        { key: "금", rarity: "rare", tier: "gold", earnedAt: old },
+      ]),
+    ).toEqual(["금", "은"]);
+  });
+
+  it("등급이 완전히 같으면 최신이 앞", () => {
+    expect(
+      sortKeys([
+        { key: "옛날", rarity: "rare", tier: "gold", earnedAt: old },
+        { key: "최근", rarity: "rare", tier: "gold", earnedAt: recent },
+      ]),
+    ).toEqual(["최근", "옛날"]);
+  });
+
+  it("mythic이 가장 높고 common이 가장 낮다", () => {
+    expect(
+      sortKeys([
+        { key: "common", rarity: "common", tier: "gold", earnedAt: recent },
+        { key: "mythic", rarity: "mythic", tier: "bronze", earnedAt: old },
+        { key: "epic", rarity: "epic", tier: "bronze", earnedAt: old },
+        { key: "legend", rarity: "legend", tier: "bronze", earnedAt: old },
+        { key: "rare", rarity: "rare", tier: "bronze", earnedAt: old },
+      ]),
+    ).toEqual(["mythic", "legend", "epic", "rare", "common"]);
+  });
+
+  /**
+   * ⚠️ 3단이라 **완전 순서**여야 한다. 앞 둘만 쓰면 동급끼리 순서가 안 정해져
+   * 재조회마다 다른 3장이 뜬다 — 화면이 이유 없이 덜컹거린다.
+   */
+  it("같은 입력은 언제나 같은 순서를 낸다", () => {
+    const items = [
+      { key: "a", rarity: "rare" as const, tier: "gold" as const, earnedAt: old },
+      { key: "b", rarity: "rare" as const, tier: "gold" as const, earnedAt: recent },
+      { key: "c", rarity: "epic" as const, tier: "bronze" as const, earnedAt: old },
+    ];
+
+    expect(sortKeys(items)).toEqual(sortKeys([...items].reverse()));
+  });
+
+  it("서열표가 타입의 값을 빠짐없이 덮는다", () => {
+    // Record<...>라 빠뜨리면 타입 검사에서 걸리지만, 개수도 못 박아 둔다.
+    expect(Object.keys(RARITY_RANK)).toHaveLength(5);
+    expect(Object.keys(TIER_RANK)).toHaveLength(4);
   });
 });

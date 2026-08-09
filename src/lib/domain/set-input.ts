@@ -42,12 +42,20 @@ const REPS: AmountField = {
   quickSteps: [-2, -1, 1, 2],
 };
 
+/**
+ * ⚠️ **`step`은 0.1이다** (2026-08-09 사용자 지시 "유산소 거리는 보통 0.1 단위
+ * 수정을 해야 하므로"). 0.5였을 때는 3.2km를 스테퍼로 만들 수 없어 카드의
+ * 입력창까지 내려가야 했다.
+ *
+ * ⚠️ **빠른 칩의 ±1은 남긴다.** 0.1만 있으면 5km를 넣는 데 50번 눌러야 한다.
+ * `±` 버튼이 미세 조절, 칩이 굵은 조절이라는 역할 분담이다.
+ */
 const DISTANCE: AmountField = {
   key: "distanceKm",
   label: "거리",
   unit: "km",
-  step: 0.5,
-  quickSteps: [-1, -0.5, 0.5, 1],
+  step: 0.1,
+  quickSteps: [-1, -0.1, 0.1, 1],
 };
 
 const DURATION: AmountField = {
@@ -77,6 +85,46 @@ export function amountFields(
  */
 export function adjustAmount(value: number, delta: number): number {
   return Math.max(0, Math.round((value + delta) * 1000) / 1000);
+}
+
+/**
+ * 운동 중 값을 바꾸면 **뒤에 남은 세트에도 같이 적용한다** (2026-08-09 사용자 지시
+ * "운동 시작하고 운동중 무게 수정하면 다음 세트부터 일괄 적용하게").
+ *
+ * 담을 때 정한 무게는 예상치다. 실제 무게는 첫 세트를 들어 봐야 안다 — 60kg으로
+ * 4세트를 담고 시작했다가 1세트에서 50kg으로 내리면, 예전에는 2·3·4세트가 60kg인
+ * 채로 남아 세 번을 더 고쳐야 했다.
+ *
+ * 세 가지를 지킨다:
+ * - **이미 `done`인 세트는 건드리지 않는다.** 그건 예상치가 아니라 **기록**이다.
+ *   소급해 바꾸면 볼륨·기록 갱신이 거짓이 된다.
+ * - **앞 세트도 건드리지 않는다.** "다음 세트부터"가 요구다.
+ * - 무게만이 아니라 **네 칸 전부**에 적용한다 (사용자 결정 2026-08-09). 첫 세트를
+ *   해 보고 12회 → 10회로 낮추는 상황이 무게와 똑같이 흔하다. `AmountFieldKey`
+ *   하나로 일반화돼 있어 분기도 없다.
+ *
+ * `changed`를 함께 돌려주는 이유: 조용히 세 세트를 바꾸면 사용자가 모른다.
+ * 화면이 이 숫자로 "다음 3세트에도 적용했어요"를 띄운다.
+ *
+ * ⚠️ `LocalSet`을 직접 import하지 않는다 — 그 타입은 `lib/workout.ts`에 있고
+ * 그 파일은 Supabase 클라이언트를 끌어온다. 도메인 계층은 순수하게 둔다.
+ */
+export function propagateAmount<T extends { done: boolean }>(
+  sets: T[],
+  fromIndex: number,
+  key: AmountFieldKey,
+  value: number,
+): { sets: T[]; changed: number } {
+  let changed = 0;
+  const next = sets.map((set, index) => {
+    if (index <= fromIndex || set.done) return set;
+    // 이미 같은 값이면 바꾼 것으로 세지 않는다 — 안 바뀐 세트를 세면 토스트가
+    // 거짓말을 한다("3세트에 적용했어요"인데 실제로는 하나도 안 바뀜).
+    if ((set as Record<string, unknown>)[key] === value) return set;
+    changed++;
+    return { ...set, [key]: value };
+  });
+  return { sets: changed > 0 ? next : sets, changed };
 }
 
 /** 목업의 휴식 프리셋 — 30초·45초·1분·1분 30초·2분 */

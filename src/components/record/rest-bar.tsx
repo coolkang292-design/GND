@@ -1,11 +1,18 @@
 "use client";
 
+import { bottomOffset, REST_BAR } from "@/lib/domain/floating-bars";
+
 /**
  * 세트 완료 시 뜨는 휴식 카운트다운 바 (§10).
  *
  * **±10초는 돌고 있는 휴식을 그 자리에서 옮긴다** (2026-08-04, 사용자 결정).
  * 설정값만 바꾸고 진행 중인 휴식을 그대로 두면 "10초 줄였다"가 두 가지 뜻이 된다.
  * 기존 `+30초`·`건너뛰기`는 그대로 둔다 — 쓰던 기능을 요구 없이 빼지 않는다.
+ *
+ * ⚠️ **자리와 z는 `floating-bars.ts`가 정한다.** 여기에 숫자를 다시 적지 마라 —
+ * 이 바는 오버레이를 **접었을 때만** 뜨고, 그때 복귀 버튼("다시 열기")과 같이
+ * 떠 있어야 한다. 둘이 같은 값을 각자 들고 있던 탓에 겹쳐서 복귀 버튼이
+ * 가려졌다 (2026-08-09 신고).
  */
 export function RestBar({
   remainingSeconds,
@@ -30,8 +37,8 @@ export function RestBar({
 
   return (
     <div
-      className="fixed inset-x-3 z-30 rounded-card border border-accent bg-surface p-3 shadow-card"
-      style={{ bottom: "calc(env(safe-area-inset-bottom) + 72px)" }}
+      className="fixed inset-x-3 rounded-card border border-accent bg-surface p-3 shadow-card"
+      style={{ bottom: bottomOffset(REST_BAR.bottomPx), zIndex: REST_BAR.z }}
       role="timer"
       aria-label="세트 사이 휴식"
     >
