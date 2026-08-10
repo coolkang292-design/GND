@@ -23,7 +23,21 @@ import {
   identityError,
   linkProvider,
   signInWithProvider,
+  takeAuthIntent,
 } from "./identity";
+
+/** Map으로 받친 가짜 저장소 — 이 파일은 jsdom이 아니라 localStorage가 없다 */
+function fakeStorage() {
+  const m = new Map<string, string>();
+  return {
+    getItem: (k: string) => m.get(k) ?? null,
+    setItem: (k: string, v: string) => void m.set(k, v),
+    removeItem: (k: string) => void m.delete(k),
+    get size() {
+      return m.size;
+    },
+  };
+}
 
 const ORIGINAL_FLAG = process.env.NEXT_PUBLIC_OAUTH_PROVIDERS;
 
@@ -119,6 +133,72 @@ describe("linkProvider vs signInWithProvider — 뒤바꾸면 기록이 갈린�
     await expect(linkProvider("kakao")).rejects.toThrow(
       "manual_linking_disabled",
     );
+  });
+});
+
+/**
+ * ⚠️ 돌아온 사람을 어디로 보낼지는 **떠나기 전에** 정해진다. `/auth/callback`은
+ * 도착 주소만 봐서는 "연결하러 갔던 사람"과 "로그인하러 갔던 사람"을 구분할 수
+ * 없어서, 2026-08-10까지 둘 다 `/account`(설정)로 보냈다 — 로그아웃했다 돌아온
+ * 사람이 설정 화면에 떨어졌다(사용자 지적).
+ */
+describe("auth intent — 돌아왔을 때 갈 곳", () => {
+  let store: ReturnType<typeof fakeStorage>;
+  beforeEach(() => {
+    store = fakeStorage();
+    vi.stubGlobal("localStorage", store);
+  });
+
+  it("signInWithProvider는 signin으로 남긴다", async () => {
+    await signInWithProvider("kakao");
+    expect(store.getItem("gnd-auth-intent")).toBe("signin");
+  });
+
+  it("linkProvider는 link로 남긴다", async () => {
+    await linkProvider("kakao");
+    expect(store.getItem("gnd-auth-intent")).toBe("link");
+  });
+
+  it("한 번 꺼내면 지워진다 — 다음 왕복까지 오염되지 않는다", async () => {
+    await signInWithProvider("kakao");
+    expect(takeAuthIntent()).toBe("signin");
+    expect(takeAuthIntent()).toBeNull();
+    expect(store.size).toBe(0);
+  });
+
+  /**
+   * ⚠️ 못 떠났는데 의도가 남으면 **다음 왕복이 그걸 주워 읽는다.** 예: `/account`
+   * 에서 카카오 연결이 실패한 뒤 `/login`으로 가서 구글로 들어오면, 저장된 것은
+   * "link"라 홈이 아니라 설정으로 간다.
+   */
+  it("떠나지 못하면(오류) 의도를 남기지 않는다", async () => {
+    mocks.signInWithOAuth.mockResolvedValue({
+      data: null,
+      error: new Error("provider is not enabled"),
+    });
+    await expect(signInWithProvider("kakao")).rejects.toThrow();
+    expect(store.getItem("gnd-auth-intent")).toBeNull();
+  });
+
+  it("아무것도 안 남겼으면 null이다 (호출하는 쪽이 기본값을 정한다)", () => {
+    expect(takeAuthIntent()).toBeNull();
+  });
+
+  /** 저장소가 막힌 브라우저(프라이빗 모드)에서도 로그인 자체는 되어야 한다 */
+  it("저장소가 막혀도 로그인을 막지 않는다", async () => {
+    vi.stubGlobal("localStorage", {
+      getItem: () => {
+        throw new Error("blocked");
+      },
+      setItem: () => {
+        throw new Error("blocked");
+      },
+      removeItem: () => {
+        throw new Error("blocked");
+      },
+    });
+    await expect(signInWithProvider("kakao")).resolves.toBeUndefined();
+    expect(takeAuthIntent()).toBeNull();
   });
 });
 

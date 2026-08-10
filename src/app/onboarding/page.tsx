@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 import { UiIcon } from "@/components/ui-icon";
-import { HeroArt } from "@/components/brand/hero-art";
+import { ScreenArt, type ScreenArtKey } from "@/components/brand/hero-art";
 import { GOLD_TEXT, GoldCta } from "@/components/brand/gold";
 import { DEFAULT_AVATAR, DEFAULT_WEEKLY_GOAL } from "@/lib/domain/avatars";
 import {
@@ -329,7 +329,11 @@ export default function OnboardingPage() {
   const waiting = !mustAskNickname && linked === null;
 
   return (
-    <Shell hero={step === "profile"}>
+    <Shell
+      hero={step === "profile"}
+      // 판정 전(`waiting`)에는 넣지 않는다 — 위 Shell 주석 참조
+      screen={waiting ? undefined : showNicknameStep ? "nickname" : "onboarding"}
+    >
       {step === "profile" && (
         <>
           {waiting ? (
@@ -337,10 +341,20 @@ export default function OnboardingPage() {
           ) : showNicknameStep ? (
             <>
               <Tagline>운동 안 하면 GND 확정. 친구들과 함께 탈출해요.</Tagline>
+              {/* ⚠️ 옛 문구는 `반가워요!` / `이름만 정하면 시작해요`였다
+                  (2026-08-10 사용자 지시로 교체 — "게임에서 사용할 닉네임
+                  정하세요라는 의미의 마케팅 요소를 가미해서"). 첫 화면이
+                  `게임에 참가하시겠습니까?`로 묻고 끝나서, 돌아온 사람에게는
+                  **그 게임이 시작됐다는 답**이 먼저 와야 한다.
+
+                  ⚠️ 두 줄 모두 **26px에서 한 줄에 들어가는 길이**로 유지하라.
+                  넘치면 제목이 3줄이 되면서 아래 블록이 통째로 밀리고, 히어로가
+                  flex-shrink로 더 눌려 그림이 더 잘린다
+                  (`docs/design-sources/onboarding-canvas-spec.md` §2). */}
               <Title
-                white={challengeCode ? "챌린지에 초대받았어요 🏆" : "반가워요!"}
+                white={challengeCode ? "챌린지에 초대받았어요 🏆" : "GND 탈출 게임 시작!"}
                 gold={
-                  challengeCode ? "닉네임만 정하면 참가해요" : "이름만 정하면 시작해요"
+                  challengeCode ? "닉네임만 정하면 참가해요" : "닉네임부터 정하세요"
                 }
               />
               <ShieldLine>
@@ -618,21 +632,40 @@ function NicknameField({
 }
 
 
+/**
+ * ⚠️ 이 화면은 **그림이 두 장**이다. 모드 1(제공자 버튼)과 닉네임 단계는 글자 양이
+ * 달라서(텍스트 블록 220px vs 374px) 아트에 남는 세로가 1.52u와 1.09u로 다르다.
+ * 한 장을 둘 다에 쓰면 짧은 쪽에서 글자가 그림을 덮는다
+ * (`docs/design-sources/onboarding-canvas-spec.md` §5-2).
+ *
+ * ⚠️ `screen`과 `hero`가 따로인 이유: 신원을 조회하는 동안(`waiting`)에는 **어느
+ * 쪽인지 아직 모른다.** 그때 아무 그림이나 깔면 곧바로 다른 그림으로 바뀌어
+ * 번쩍인다 — 레이아웃만 잡고 그림은 판정된 뒤에 넣는다.
+ *
+ * ⚠️ 글자 쪽 `relative`를 빼지 마라. 음수 z-index로 그림을 내리면 조상의 `bg-bg`
+ * 뒤로 들어가 **그림이 통째로 사라진다**(`hero-art.tsx` 주석).
+ */
 function Shell({
   children,
   hero,
+  screen,
 }: {
   children: React.ReactNode;
   hero?: boolean;
+  screen?: ScreenArtKey;
 }) {
   return (
     <main
-      className={`flex flex-1 flex-col overflow-y-auto text-center ${
+      className={`relative flex flex-1 flex-col overflow-y-auto text-center ${
         hero ? "pb-8" : "justify-center pb-10"
       }`}
     >
-      {hero && <HeroArt />}
-      <div className="mx-auto w-full max-w-sm px-6">{children}</div>
+      {hero && screen && <ScreenArt screen={screen} />}
+      <div
+        className={`relative mx-auto w-full max-w-sm px-6 ${hero ? "mt-auto" : ""}`}
+      >
+        {children}
+      </div>
     </main>
   );
 }

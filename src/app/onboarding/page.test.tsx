@@ -180,7 +180,12 @@ describe("OnboardingPage 모드 2 — 제공자에서 돌아옴 (신원 있음)"
     render(<OnboardingPage />);
 
     await screen.findByPlaceholderText("예: 스칼레또");
-    expect(screen.getByRole("heading", { name: /반가워요!/ })).not.toBeNull();
+    // 2026-08-10 사용자 지시로 교체된 문구. 옛 `반가워요!`가 다시 들어오면
+    // 여기서 잡힌다 — 두 문구가 섞여 화면마다 갈리는 것을 막는 선이다.
+    expect(
+      screen.getByRole("heading", { name: /GND 탈출 게임 시작!/ }),
+    ).not.toBeNull();
+    expect(screen.getByRole("heading", { name: /닉네임부터 정하세요/ })).not.toBeNull();
     expect(
       screen.queryByRole("button", { name: "카카오로 시작하기" }),
     ).toBeNull();

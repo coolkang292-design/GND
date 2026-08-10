@@ -5,7 +5,7 @@ import { ScreenError } from "@/components/screen-error";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { getMyProfile } from "@/lib/crew";
 import { peekPendingChallengeInvite } from "@/lib/challenge";
-import { identityError } from "@/lib/identity";
+import { identityError, takeAuthIntent } from "@/lib/identity";
 
 /**
  * 카카오·구글에서 돌아오는 착지점 (설계 §5.4).
@@ -13,10 +13,12 @@ import { identityError } from "@/lib/identity";
  * ⚠️ `(tabs)` 밖에 둔다. 안에 두면 `OnboardingGate`가 돌면서 **방금 신원을 붙인
  * 사람을 온보딩으로 밀어낸다** — `/login`·`/account`를 밖에 둔 것과 같은 이유다.
  *
- * 갈라 보내는 기준은 **프로필 유무**다. 쿼리스트링에 "어디서 왔는지"를 싣지
- * 않는다 — 주소창·기록에 남고, 사용자가 링크를 저장하면 엉뚱한 곳으로 간다.
+ * 갈라 보내는 기준은 **프로필 유무 + 무엇을 하러 갔었나**다. 쿼리스트링에
+ * 싣지 않는다 — 주소창·기록에 남고, 사용자가 링크를 저장하면 엉뚱한 곳으로 간다.
+ * 대신 떠나기 직전에 `identity.ts`가 의도를 보관한다(`takeAuthIntent`).
  *   · 프로필 없음 = 온보딩 도중에 붙였다 → `/onboarding`으로 돌려보내 닉네임을 마저 받는다
- *   · 프로필 있음 = 기존 사용자가 계정을 지켰다 → `/account`에서 결과를 보여준다
+ *   · 프로필 있음 + 로그인(signin) = 로그아웃했다 돌아왔다 → **`/home`**
+ *   · 프로필 있음 + 연결(link) = 기존 사용자가 계정을 지켰다 → `/account`에서 결과를 보여준다
  */
 export default function AuthCallbackPage() {
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +38,13 @@ export default function AuthCallbackPage() {
   useEffect(() => {
     if (started.current) return;
     started.current = true;
+
+    /**
+     * ⚠️ **여기서 딱 한 번 꺼낸다.** `destination()` 안에서 꺼내면 오류 경로가
+     * 이걸 두 번 부르는데(탈출구 계산 + 이동), 두 번째는 이미 비어 있어서
+     * 화면의 "돌아가기" 링크와 실제 착지점이 **서로 다른 곳**을 가리킨다.
+     */
+    const intent = takeAuthIntent();
 
     async function run() {
       // useSearchParams를 쓰지 않는다 — Suspense 경계를 요구해서 이 화면 하나
@@ -122,9 +131,16 @@ export default function AuthCallbackPage() {
       //    화면에서 "내가 왜 여기 있지"가 되고 초대는 조용히 사라진다.
       //    `/challenge`가 보관된 코드로 참가까지 마무리한다.
       const pendingChallenge = peekPendingChallengeInvite();
-      return pendingChallenge
-        ? `/challenge?join=${encodeURIComponent(pendingChallenge)}`
-        : "/account";
+      if (pendingChallenge)
+        return `/challenge?join=${encodeURIComponent(pendingChallenge)}`;
+
+      // ⚠️ 로그아웃했다가 `/login`으로 다시 들어온 사람을 `/account`(설정)에
+      //    떨어뜨리지 마라 — 사용자 지적 2026-08-10. 그 사람이 하려던 일은
+      //    "돌아오기"지 "설정 보기"가 아니다.
+      // ⚠️ 의도를 모를 때(저장소가 막혔거나 주소를 직접 친 경우)는 `/account`에
+      //    남긴다. 연결하러 간 사람을 홈으로 보내면 **연결됐다는 말을 어디서도
+      //    못 본다** — 그 침묵이 2026-08-08 사고의 원인이었다(위 주석).
+      return intent === "signin" ? "/home" : "/account";
     }
 
     async function leave() {
@@ -146,10 +162,14 @@ export default function AuthCallbackPage() {
         icon="🔐"
         message={error}
         exitHref={exitHref}
+        // ⚠️ 문구가 행선지를 따라와야 한다. `/home`이 붙은 뒤에도 "계정 화면으로
+        //    돌아가기"라고 쓰면 링크가 거짓말을 한다.
         exitLabel={
           exitHref === "/onboarding"
             ? "가입 화면으로 돌아가기"
-            : "계정 화면으로 돌아가기"
+            : exitHref === "/home"
+              ? "홈으로 돌아가기"
+              : "계정 화면으로 돌아가기"
         }
       />
     );

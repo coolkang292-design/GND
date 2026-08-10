@@ -53,6 +53,53 @@ function callbackUrl(): string {
   return `${window.location.origin}/auth/callback`;
 }
 
+// ── 돌아왔을 때 어디로 보낼지 (2026-08-10) ────────────────────────
+//
+// `/auth/callback`은 **두 흐름이 같이 지나간다.** 도착한 주소만 봐서는 구분할 수
+// 없어서 오래도록 둘 다 `/account`로 보냈다:
+//
+//   · 연결(link)  — `/account`·온보딩에서 "카카오로 계정 지키기" → 결과를
+//                   보여줘야 하므로 `/account`가 맞다
+//   · 로그인(signin) — 로그아웃했다가 `/login`에서 다시 들어옴 → **홈이 맞다.**
+//                   설정 화면에 떨어뜨리면 "내가 왜 여기 있지"가 된다
+//                   (사용자 지적 2026-08-10)
+//
+// ⚠️ 쿼리스트링에 담지 않는다 — 주소창·기록에 남고, 사용자가 그 주소를 저장하면
+//    다음번에 엉뚱한 곳으로 간다(`/auth/callback`이 같은 이유로 쿼리를 안 쓴다).
+// ⚠️ `sessionStorage`가 아니라 `localStorage`다. 카카오 인앱 브라우저가 동의
+//    화면을 **새 탭**에서 열고 돌아오는 일이 있는데, 그러면 세션 저장소는 비어
+//    있다. 보관된 초대 코드가 같은 이유로 localStorage를 쓴다(`crew.ts:223`).
+const AUTH_INTENT_KEY = "gnd-auth-intent";
+
+export type AuthIntent = "signin" | "link";
+
+function saveAuthIntent(intent: AuthIntent): void {
+  // 저장이 막혀도(프라이빗 모드 등) 로그인 자체는 되어야 한다. 그때는 의도를
+  // 모르는 채로 돌아오고, 아래 `takeAuthIntent`가 null을 준다.
+  try {
+    localStorage.setItem(AUTH_INTENT_KEY, intent);
+  } catch {
+    // 무시 — 갈 곳의 기본값은 호출하는 쪽이 정한다
+  }
+}
+
+/**
+ * 한 번만 꺼내진다 — 읽는 즉시 지운다.
+ *
+ * ⚠️ 남겨 두면 **다음 왕복까지 오염된다.** 로그인으로 한 번 들어온 뒤
+ * `/account`에서 구글을 붙이면 그때도 "signin"으로 읽혀 홈으로 튕기고,
+ * 연결됐다는 말을 아무 데서도 못 본다.
+ */
+export function takeAuthIntent(): AuthIntent | null {
+  try {
+    const v = localStorage.getItem(AUTH_INTENT_KEY);
+    if (v !== null) localStorage.removeItem(AUTH_INTENT_KEY);
+    return v === "signin" || v === "link" ? v : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * **지금 계정에** 신원을 붙인다 — 기록이 그대로 남는다.
  *
@@ -61,11 +108,17 @@ function callbackUrl(): string {
  */
 export async function linkProvider(provider: OAuthProvider): Promise<void> {
   const supabase = getSupabaseBrowserClient();
+  // ⚠️ 떠나기 **전에** 남긴다. 성공하면 이 줄 아래는 실행되지 않는다.
+  saveAuthIntent("link");
   const { error } = await supabase.auth.linkIdentity({
     provider,
     options: { redirectTo: callbackUrl() },
   });
-  if (error) throw error;
+  // 못 떠났으면 의도를 치운다 — 남기면 **다음 왕복**이 이걸 주워 읽는다.
+  if (error) {
+    takeAuthIntent();
+    throw error;
+  }
 }
 
 /**
@@ -78,11 +131,16 @@ export async function signInWithProvider(
   provider: OAuthProvider,
 ): Promise<void> {
   const supabase = getSupabaseBrowserClient();
+  // 이 경로로 온 사람은 **돌아온 것**이다 — 착지점은 설정이 아니라 홈이다.
+  saveAuthIntent("signin");
   const { error } = await supabase.auth.signInWithOAuth({
     provider,
     options: { redirectTo: callbackUrl() },
   });
-  if (error) throw error;
+  if (error) {
+    takeAuthIntent();
+    throw error;
+  }
 }
 
 /**

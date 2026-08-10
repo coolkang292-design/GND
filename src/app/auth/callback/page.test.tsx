@@ -52,6 +52,8 @@ function setUrl(search: string) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // 의도가 테스트 사이에 새면 앞 케이스가 뒤 케이스를 통과시킨다
+  localStorage.clear();
   mocks.getSession.mockResolvedValue({ data: { session: null } });
   mocks.getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
   mocks.exchangeCodeForSession.mockResolvedValue({ error: null });
@@ -69,7 +71,43 @@ describe("/auth/callback — 갈라 보내기", () => {
     await waitFor(() => expect(assign).toHaveBeenCalledWith("/onboarding"));
   });
 
-  it("프로필이 있으면 계정 화면으로 보낸다", async () => {
+  it("프로필이 있고 연결(link)하러 갔었으면 계정 화면으로 보낸다", async () => {
+    mocks.getMyProfile.mockResolvedValue({ id: "u1", nickname: "나" });
+    localStorage.setItem("gnd-auth-intent", "link");
+    render(<AuthCallbackPage />);
+    await waitFor(() => expect(assign).toHaveBeenCalledWith("/account"));
+  });
+
+  /**
+   * ⚠️ 이 화면의 회귀선이다 (사용자 지적 2026-08-10). 로그아웃했다가 카카오로
+   * 다시 들어온 사람을 `/account`(설정)에 떨어뜨리고 있었다 — 그 사람이 하려던
+   * 일은 "돌아오기"지 "설정 보기"가 아니다.
+   */
+  it("프로필이 있고 로그인(signin)하러 갔었으면 홈으로 보낸다", async () => {
+    mocks.getMyProfile.mockResolvedValue({ id: "u1", nickname: "나" });
+    localStorage.setItem("gnd-auth-intent", "signin");
+    render(<AuthCallbackPage />);
+    await waitFor(() => expect(assign).toHaveBeenCalledWith("/home"));
+  });
+
+  /**
+   * ⚠️ 의도를 **한 번만** 꺼내야 한다. 남겨 두면 다음 왕복까지 오염된다 —
+   * 로그인으로 들어온 뒤 `/account`에서 구글을 붙이면 그때도 홈으로 튕겨
+   * "연결됐다"는 말을 어디서도 못 보게 된다.
+   */
+  it("의도는 한 번 쓰고 지워진다", async () => {
+    mocks.getMyProfile.mockResolvedValue({ id: "u1", nickname: "나" });
+    localStorage.setItem("gnd-auth-intent", "signin");
+    render(<AuthCallbackPage />);
+    await waitFor(() => expect(assign).toHaveBeenCalledWith("/home"));
+    expect(localStorage.getItem("gnd-auth-intent")).toBeNull();
+  });
+
+  /**
+   * 저장소가 막혔거나 주소를 직접 친 경우. 연결하러 간 사람을 홈으로 보내면
+   * 연결 결과를 아무 데서도 못 보므로, 모를 때는 `/account`에 남긴다.
+   */
+  it("의도를 모르면 계정 화면으로 보낸다 (옛 동작 유지)", async () => {
     mocks.getMyProfile.mockResolvedValue({ id: "u1", nickname: "나" });
     render(<AuthCallbackPage />);
     await waitFor(() => expect(assign).toHaveBeenCalledWith("/account"));
@@ -187,5 +225,19 @@ describe("/auth/callback — 오류 화면에 가두지 않는다", () => {
       name: "계정 화면으로 돌아가기",
     });
     expect(link.getAttribute("href")).toBe("/account");
+  });
+
+  /**
+   * ⚠️ 문구가 행선지를 따라와야 한다. `/home`을 붙이고 라벨을 그대로 두면
+   * 링크에 "계정 화면으로 돌아가기"라고 쓰여 있고 누르면 홈으로 간다.
+   */
+  it("로그인하러 갔던 사람의 탈출구는 홈이고, 문구도 홈이라고 말한다", async () => {
+    mocks.getMyProfile.mockResolvedValue({ id: "u1", nickname: "나" });
+    localStorage.setItem("gnd-auth-intent", "signin");
+    setUrl("?error=server_error&error_code=identity_already_exists");
+    render(<AuthCallbackPage />);
+
+    const link = await screen.findByRole("link", { name: "홈으로 돌아가기" });
+    expect(link.getAttribute("href")).toBe("/home");
   });
 });

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { HeroArt } from "@/components/brand/hero-art";
+import { ScreenArt } from "@/components/brand/hero-art";
 import { GoldCta, GoldLine } from "@/components/brand/gold";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { peekPendingChallengeInvite } from "@/lib/challenge";
@@ -101,11 +101,27 @@ export default function LoginPage() {
        "이 화면도 온보딩 히어로 화면으로 적용해줘"). 옛 화면은 텍스트 로고
        `🏋️ GND`라 두 화면이 딴 앱처럼 보였다. 조각은 `components/brand/`에
        한 벌만 두므로, 한쪽만 고쳐 다시 갈라지게 하지 마라. */
-    <main className="flex flex-1 flex-col overflow-y-auto pb-8 text-center">
-      <HeroArt />
+    /* ⚠️ 그림은 흐름 밖(`fill`), 글자는 **아래에 붙인다**(`mt-auto`).
+       옛 구조는 그림을 블록으로 두고 글자를 그 뒤에 이어 붙였는데, 그러면 글자
+       위치를 *그림 높이*가 정하고 그 높이는 flex-shrink로 흔들린다 — 이 화면이
+       제일 심해서 아트의 45%가 잘리고 있었다(`hero-art.tsx` 주석).
+       `relative`가 둘 다에 필요하다: main은 `fill`의 기준, 글자 쪽은 그림 위로
+       올리기 위해서다(음수 z-index는 조상 배경 뒤로 내려간다). */
+    <main className="relative flex flex-1 flex-col overflow-y-auto pb-8 text-center">
+      <ScreenArt screen="login" />
 
-      <div className="mx-auto w-full max-w-sm px-6">
-        <GoldLine big>계정을 연결해 둔 방법으로 돌아옵니다.</GoldLine>
+      <div className="relative mx-auto mt-auto w-full max-w-sm px-6">
+        {/* ⚠️ 옛 문구는 `계정을 연결해 둔 방법으로 돌아옵니다.`였다 (2026-08-10
+            사용자 지시로 교체 — "직관적인 마케팅 문구로"). 그 문장은 **수단**을
+            설명했다("어떤 방법으로 연결했었는지 떠올려라") — 돌아온 사람이 알고
+            싶은 건 방법이 아니라 **내 기록이 무사한가**다. 이 화면이 존재하는
+            이유가 정확히 그거다(익명 계정은 저장소를 비우면 기록이 사라진다,
+            `page.tsx` 상단 주석).
+
+            ⚠️ 19px에서 **한 줄에 들어가는 길이**로 유지하라. 넘치면 텍스트 블록이
+            27.5px 자라 그림의 아트 존 계산이 틀어진다
+            (`docs/design-sources/onboarding-canvas-spec.md` §4-3). */}
+        <GoldLine big>돌아오셨군요! 기록은 그대로예요</GoldLine>
 
         {providers.length > 0 && (
           <div className="mt-5 flex flex-col gap-2.5">
