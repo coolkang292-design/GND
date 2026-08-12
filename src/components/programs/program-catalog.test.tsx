@@ -59,6 +59,43 @@ describe("ProgramCatalog", () => {
     fireEvent.click(shoulderButton);
     expect(onPick).toHaveBeenCalledWith("shoulder-frame-6w");
   });
+
+  /**
+   * 사용자 지시 2026-08-12 — 전신 인터벌은 '프로그램으로 시작하기' **안**에 있다.
+   * 기록 화면의 운동 추가 시트에는 없다(`exercise-entry-hub.test.tsx`가 본다).
+   */
+  it("전신 인터벌을 6주 프로그램 격자 밖, 아래에 따로 세운다", () => {
+    const onInterval = vi.fn();
+    render(
+      <ProgramCatalog
+        programs={OFFICIAL_PROGRAMS}
+        onPick={vi.fn()}
+        onInterval={onInterval}
+      />,
+    );
+
+    const card = screen.getByTestId("interval-entry-card");
+    expect(card.textContent).toContain("4분부터 시작하는 전신 인터벌");
+    expect(card.textContent).toContain("음악에 맞춰 20초 운동 · 10초 휴식");
+
+    // 6주 프로그램이 아니다 — 격자 카드(compact)로 세면 안 된다
+    expect(screen.getAllByTestId("program-cover-compact")).toHaveLength(4);
+    const image = card.querySelector("img");
+    expect(decodeURIComponent(image?.getAttribute("src") ?? "")).toContain(
+      "/program-assets/interval.webp",
+    );
+    expect(image?.getAttribute("alt")).toBe("");
+
+    fireEvent.click(card);
+    expect(onInterval).toHaveBeenCalledTimes(1);
+  });
+
+  it("인터벌 진입을 안 넘기면 그 카드가 없다", () => {
+    render(<ProgramCatalog programs={OFFICIAL_PROGRAMS} onPick={vi.fn()} />);
+
+    expect(screen.queryByTestId("interval-entry-card")).toBeNull();
+    expect(screen.getAllByRole("button")).toHaveLength(5);
+  });
 });
 
 describe("ProgramDetail", () => {

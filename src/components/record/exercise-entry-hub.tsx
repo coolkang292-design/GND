@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import { UiIcon } from "@/components/ui-icon";
-import { INTERVAL_COPY } from "@/lib/domain/tabata";
 
 export type ExerciseEntryHubProps = {
   hasPast: boolean;
@@ -11,7 +10,6 @@ export type ExerciseEntryHubProps = {
   onSearch: () => void;
   onPast: () => void;
   onRoutine: () => void;
-  onInterval?: () => void;
 };
 
 export function ExerciseEntryHub({
@@ -21,11 +19,15 @@ export function ExerciseEntryHub({
   onSearch,
   onPast,
   onRoutine,
-  onInterval,
 }: ExerciseEntryHubProps) {
-  // 전신 인터벌은 '운동 직접 고르기' 밑으로 올라갔다 (사용자 지시 2026-08-12).
-  // 그래서 '빠른 시작'은 **지난 운동·내 루틴만** 남는다 — 여기에 인터벌을 다시
-  // 세면 둘 다 없을 때 머리글만 뜨고 아래가 비어 보인다.
+  /*
+    이 화면은 **네 개만** 둔다 (사용자 지시 2026-08-12):
+    프로그램으로 시작하기 · 운동 직접 고르기 · 지난 운동 · 내 루틴.
+
+    ⚠️ 전신 인터벌을 여기 다시 세우지 마라. 같은 날 '운동 직접 고르기' 밑으로
+       내렸다가, 다시 **'프로그램으로 시작하기' 안**으로 들어갔다
+       (`ProgramCatalog`). 두 군데에 있으면 어느 쪽이 정본인지 알 수 없다.
+  */
   const hasQuickStart = hasPast || routineCount > 0;
 
   return (
@@ -95,35 +97,6 @@ export function ExerciseEntryHub({
           </span>
         </button>
 
-        {onInterval && (
-          <button
-            type="button"
-            data-priority="secondary"
-            onClick={onInterval}
-            className="flex min-h-24 w-full items-center gap-3 rounded-[20px] border border-line bg-surface-2 p-4 text-left transition-colors hover:border-accent/45 motion-reduce:transition-none"
-          >
-            <span className="flex h-12 w-12 flex-none items-center justify-center rounded-full border border-accent/35 bg-bg">
-              <Image
-                src="/ui-icons/hub-tabata.webp"
-                alt=""
-                width={36}
-                height={36}
-                className="h-9 w-9 object-contain"
-              />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-extrabold text-text">
-                {INTERVAL_COPY.title}
-              </span>
-              <span className="mt-1 block text-xs leading-5 text-muted">
-                {INTERVAL_COPY.description}
-              </span>
-            </span>
-            <span aria-hidden className="flex-none text-lg text-accent">
-              ›
-            </span>
-          </button>
-        )}
       </div>
 
       {hasQuickStart && (

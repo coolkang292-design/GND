@@ -94,6 +94,7 @@ import {
   tabataResumeFromSession,
   type TabataMinutes,
 } from "@/lib/domain/tabata";
+import { takeIntervalStart } from "@/lib/interval-entry";
 import { moveItem } from "@/lib/domain/reorder";
 import {
   getRestCountdownTogglePlan,
@@ -522,6 +523,26 @@ function WorkoutScreen({ userId }: { userId: string }) {
     // handleLoadPlan은 렌더마다 새로 만들어진다. 한 번만 시도하도록 ref로 막는다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, catalog.length]);
+
+  /*
+    '프로그램으로 시작하기' 안의 전신 인터벌로 들어온 경우 (사용자 지시 2026-08-12).
+
+    인터벌 시트는 이 화면이 들고 있고 카탈로그는 `/record/programs`라는 다른
+    라우트라, 거기서는 열 수 없다. `sessionStorage`에 남긴 요청을 여기서 꺼낸다.
+
+    ⚠️ 꺼내는 즉시 지워진다(`takeIntervalStart`). 안 지우면 새로고침마다 시트가
+       다시 뜬다. ref로도 한 번만 시도하게 막는다 — 개발 모드의 이중 마운트.
+  */
+  const intervalEntryTriedRef = useRef(false);
+  useEffect(() => {
+    if (intervalEntryTriedRef.current) return;
+    intervalEntryTriedRef.current = true;
+    if (!takeIntervalStart()) return;
+    // `subTab`은 초기값이 이미 "workout"이다 — 여기서 또 세우지 않는다.
+    void openTabataSheet();
+    // openTabataSheet은 렌더마다 새로 만들어진다. 위 ref가 한 번만 돌게 막는다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /**
    * 이력이 있는 사용자인가 (2026-08-06) — 빈 화면의 보조 CTA 노출 판정.
@@ -2445,10 +2466,6 @@ function WorkoutScreen({ userId }: { userId: string }) {
         onOpenPrograms={() => {
           closePicker();
           router.push("/record/programs");
-        }}
-        onOpenTabata={() => {
-          closePicker();
-          void openTabataSheet();
         }}
         onCreateCustom={handleCreateCustom}
         challengeCategories={challengeCategories}

@@ -33,6 +33,8 @@ type ProgramFlowProps = {
   occupiedPlans: readonly WorkoutPlan[];
   activeEnrollments?: readonly ProgramEnrollment[];
   onCreate: (input: CreateProgramEnrollmentInput) => Promise<CreateResult>;
+  /** 전신 인터벌 진입 (2026-08-12 사용자 지시로 이 화면 안으로 들어왔다) */
+  onInterval?: () => void;
 };
 
 function dateLabel(dateKey: string): string {
@@ -55,6 +57,7 @@ export function ProgramFlow({
   occupiedPlans,
   activeEnrollments = [],
   onCreate,
+  onInterval,
 }: ProgramFlowProps) {
   const [step, setStep] = useState<ProgramFlowStep>("catalog");
   const [selectedKey, setSelectedKey] = useState<OfficialProgramKey | null>(null);
@@ -94,7 +97,13 @@ export function ProgramFlow({
   }
 
   if (step === "catalog") {
-    return <ProgramCatalog programs={programs} onPick={pickProgram} />;
+    return (
+      <ProgramCatalog
+        programs={programs}
+        onPick={pickProgram}
+        onInterval={onInterval}
+      />
+    );
   }
 
   if (step === "done" && created) {
@@ -127,7 +136,13 @@ export function ProgramFlow({
   }
 
   if (!selected) {
-    return <ProgramCatalog programs={programs} onPick={pickProgram} />;
+    return (
+      <ProgramCatalog
+        programs={programs}
+        onPick={pickProgram}
+        onInterval={onInterval}
+      />
+    );
   }
 
   if (step === "detail") {

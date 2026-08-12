@@ -6,11 +6,13 @@ import type {
   OfficialProgram,
   OfficialProgramKey,
 } from "@/lib/domain/official-programs";
+import { INTERVAL_COPY } from "@/lib/domain/tabata";
 import { EXERCISE_PREVIEW_NOTES } from "./exercise-preview-notes";
 
 type ProgramCatalogProps = {
   programs: readonly OfficialProgram[];
   onPick: (key: OfficialProgramKey) => void;
+  onInterval?: () => void;
 };
 
 type ProgramDetailProps = {
@@ -136,7 +138,57 @@ function ProgramCard({
   );
 }
 
-export function ProgramCatalog({ programs, onPick }: ProgramCatalogProps) {
+/**
+ * 전신 인터벌 진입 (사용자 지시 2026-08-12 — '프로그램으로 시작하기' 안으로).
+ *
+ * ⚠️ 6주 프로그램이 **아니다.** 그래서 위 격자에 6번째 칸으로 끼우지 않고
+ *    아래에 따로 세운다 — 주 3회·18회라는 약속이 여기에는 해당되지 않는다.
+ */
+function IntervalEntryCard({ onInterval }: { onInterval: () => void }) {
+  return (
+    <section className="mt-6" aria-labelledby="interval-entry-title">
+      <p
+        id="interval-entry-title"
+        className="text-[11px] font-extrabold tracking-[0.08em] text-accent"
+      >
+        시간이 없을 때
+      </p>
+      <button
+        type="button"
+        data-testid="interval-entry-card"
+        onClick={onInterval}
+        className="group mt-2 flex w-full overflow-hidden rounded-[22px] border border-line bg-surface text-left shadow-card transition-colors hover:border-accent/55 motion-reduce:transition-none"
+      >
+        <span className="relative aspect-[4/3] w-28 flex-none overflow-hidden bg-bg sm:w-32">
+          <Image
+            src="/program-assets/interval.webp"
+            alt=""
+            fill
+            sizes="(max-width: 480px) 30vw, 128px"
+            className="object-cover object-[center_35%]"
+          />
+        </span>
+        <span className="flex min-w-0 flex-1 flex-col p-3.5">
+          <span className="block text-sm font-black leading-5 text-text">
+            {INTERVAL_COPY.title}
+          </span>
+          <span className="mt-1 block text-[11px] leading-[1.125rem] text-muted sm:text-xs">
+            {INTERVAL_COPY.description}
+          </span>
+          <span className="mt-auto block pt-3 text-[10px] font-extrabold leading-4 text-accent sm:text-[11px]">
+            4 · 8 · 16분 · 준비물 없이 맨몸
+          </span>
+        </span>
+      </button>
+    </section>
+  );
+}
+
+export function ProgramCatalog({
+  programs,
+  onPick,
+  onInterval,
+}: ProgramCatalogProps) {
   const [featured, ...rest] = programs;
 
   if (!featured) return null;
@@ -164,6 +216,8 @@ export function ProgramCatalog({ programs, onPick }: ProgramCatalogProps) {
           <ProgramCard key={program.key} program={program} onPick={onPick} />
         ))}
       </div>
+
+      {onInterval && <IntervalEntryCard onInterval={onInterval} />}
     </section>
   );
 }

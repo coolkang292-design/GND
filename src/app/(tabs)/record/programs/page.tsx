@@ -1,8 +1,10 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { ProgramFlow } from "@/components/programs/program-flow";
+import { requestIntervalStart } from "@/lib/interval-entry";
 import { OFFICIAL_PROGRAMS } from "@/lib/domain/official-programs";
 import {
   createProgramEnrollment,
@@ -54,6 +56,7 @@ function firstPlanSummary(input: CreateProgramEnrollmentInput) {
 }
 
 export default function ProgramsPage() {
+  const router = useRouter();
   const { userId, loading, configured, error } = useAuth();
   const [pageRef] = useState<PageReference>(() => {
     const timeZone =
@@ -118,6 +121,11 @@ export default function ProgramsPage() {
       catalog={catalog}
       occupiedPlans={plans}
       activeEnrollments={enrollments}
+      onInterval={() => {
+        // 인터벌 시트는 기록 화면이 들고 있다 — "열어라"만 남기고 그리로 보낸다
+        requestIntervalStart();
+        router.push("/record");
+      }}
       onCreate={async (input) => {
         const enrollmentId = await createProgramEnrollment(input);
         return {

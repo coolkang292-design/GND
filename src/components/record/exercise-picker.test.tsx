@@ -295,32 +295,12 @@ describe("ExercisePicker — 진입 허브 (2026-08-06)", () => {
     expect(getByText("오늘 운동을 어떻게 시작할까요?")).toBeTruthy();
   });
 
-  it("타바타를 안 넘기면 그 카드가 없다 (달력 예정표 피커가 그렇다)", () => {
+  it("허브에 전신 인터벌 카드가 없다", () => {
+    // 사용자 지시 2026-08-12 — 인터벌은 '프로그램으로 시작하기' 안으로 갔다.
+    // 여기 되살리면 진입점이 둘이 된다 (`ProgramCatalog`가 정본).
     const { queryByText } = setup({ initialMode: "hub" });
     expect(queryByText("4분부터 시작하는 전신 인터벌")).toBeNull();
-  });
-
-  it("타바타를 넘기면 허브의 한 항목으로 나온다", () => {
-    // 기록 화면의 상설 버튼이 아니라 여기 있어야 한다 — 타바타도
-    // "오늘 운동을 어떻게 할까"의 한 가지다 (사용자 지적 2026-08-06).
-    const onOpenTabata = vi.fn();
-    const { getByText } = render(
-      <ExercisePicker
-        open
-        catalog={CATALOG}
-        pastSessions={[]}
-        pastLoading={false}
-        onClose={vi.fn()}
-        onPickMany={vi.fn()}
-        onPickPast={vi.fn()}
-        onCreateCustom={vi.fn()}
-        onOpenTabata={onOpenTabata}
-      />,
-    );
-
-    expect(getByText("음악에 맞춰 20초 운동 · 10초 휴식")).toBeTruthy();
-    fireEvent.click(getByText("4분부터 시작하는 전신 인터벌"));
-    expect(onOpenTabata).toHaveBeenCalledTimes(1);
+    expect(queryByText("음악에 맞춰 20초 운동 · 10초 휴식")).toBeNull();
   });
 
   it("기존 부위별 추천 화면을 직접 열 수 있다", () => {

@@ -90,7 +90,6 @@ type PickerProps = {
    * 달력의 예정표 피커는 안 넘긴다: 빈 날짜에 타바타를 *새로* 짜는 경로는
    * 2026-08-05에 범위 밖으로 정했다.
    */
-  onOpenTabata?: () => void;
   /** 공식 프로그램 카탈로그 진입 — 기록 화면에서만 넘긴다 */
   onOpenPrograms?: () => void;
   /** 내 루틴 (0056). **저장된 루틴이 있을 때만** 진입 카드가 나온다 */
@@ -132,7 +131,6 @@ function PickerSheet({
   onPickPast,
   onCreateCustom,
   initialMode = "hub",
-  onOpenTabata,
   onOpenPrograms,
   challengeCategories = null,
   routines,
@@ -399,7 +397,6 @@ function PickerSheet({
               onSearch={() => setMode("search")}
               onPast={() => setMode("past")}
               onRoutine={() => setMode("routine")}
-              onInterval={onOpenTabata}
             />
           </>
         ) : mode === "situation" || mode === "part" ? (
