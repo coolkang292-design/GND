@@ -24,6 +24,9 @@ const base = {
   onMinimize: vi.fn(),
   onCancel: vi.fn(),
   onFinish: vi.fn(),
+  // 기본은 없음 — 넘기지 않으면 자세 안내 버튼이 안 나오는 것이 기본 동작이다.
+  // (`Partial<typeof inputProps>` 헬퍼가 이 키를 알아야 테스트에서 덮어쓸 수 있다)
+  onOpenGuide: undefined as ((name: string) => void) | undefined,
   onChangeAmount: vi.fn(),
   onCompleteSet: vi.fn(),
   onLoadLast: vi.fn(),
@@ -600,5 +603,62 @@ describe("진행률·세트 남음 표시 (2026-08-07, 사용자 목업)", () =>
     expect(px(elapsed)).toBeGreaterThan(0);
     expect(px(rest)).toBeGreaterThan(0);
     expect(px(elapsed)).toBeLessThan(px(rest));
+  });
+});
+
+/**
+ * 운동 중 자세 안내 (계획 2026-08-12 Task 3).
+ *
+ * 준비 화면과 **같은 안내**를 쓴다. 자세가 헷갈리는 순간은 운동 직전이 아니라
+ * 세트 사이라서, 여기서 못 열면 안내가 있으나 마나다.
+ *
+ * ⚠️ 기본 픽스처 '데드리프트'에는 안내가 없다(등록된 것은 '루마니안 데드리프트').
+ *    그래서 없는 경우 검증이 저절로 따라온다.
+ */
+describe("ActiveSessionOverlay — 자세 안내", () => {
+  it("운동 중 화면에서 안내를 열 수 있다", () => {
+    const onOpenGuide = vi.fn();
+    renderInput({ exerciseName: "숄더프레스", onOpenGuide });
+
+    fireEvent.click(screen.getByRole("button", { name: "숄더프레스 자세 안내" }));
+
+    expect(onOpenGuide).toHaveBeenCalledWith("숄더프레스");
+  });
+
+  it("휴식 중에도 안내를 열 수 있다", () => {
+    const onOpenGuide = vi.fn();
+    renderRest({ exerciseName: "숄더프레스", onOpenGuide });
+
+    fireEvent.click(screen.getByRole("button", { name: "숄더프레스 자세 안내" }));
+
+    expect(onOpenGuide).toHaveBeenCalledWith("숄더프레스");
+  });
+
+  it("안내가 없는 종목에는 버튼을 숨긴다", () => {
+    renderInput({ onOpenGuide: vi.fn() });
+
+    expect(screen.queryByRole("button", { name: /자세 안내/ })).toBeNull();
+  });
+
+  it("onOpenGuide를 안 넘기면 버튼이 없다", () => {
+    renderInput({ exerciseName: "숄더프레스" });
+
+    expect(screen.queryByRole("button", { name: /자세 안내/ })).toBeNull();
+  });
+
+  it("안내를 열어도 세트 완료·운동 종료가 함께 일어나지 않는다", () => {
+    const onCompleteSet = vi.fn();
+    const onFinish = vi.fn();
+    renderInput({
+      exerciseName: "숄더프레스",
+      onOpenGuide: vi.fn(),
+      onCompleteSet,
+      onFinish,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "숄더프레스 자세 안내" }));
+
+    expect(onCompleteSet).not.toHaveBeenCalled();
+    expect(onFinish).not.toHaveBeenCalled();
   });
 });

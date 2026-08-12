@@ -1,6 +1,7 @@
 "use client";
 
 import { UiIcon } from "@/components/ui-icon";
+import { guideForExercise } from "@/lib/domain/exercise-guides";
 import {
   REST_PRESET_SECONDS,
   adjustAmount,
@@ -80,6 +81,7 @@ export function ActiveSessionOverlay({
   onMinimize,
   onCancel,
   onFinish,
+  onOpenGuide,
 }: {
   open: boolean;
   mode: "input" | "rest";
@@ -131,10 +133,20 @@ export function ActiveSessionOverlay({
   onMinimize: () => void;
   onCancel: () => void;
   onFinish: () => void;
+  /**
+   * 자세 안내 열기 (계획 2026-08-12). 넘기지 않으면 버튼이 안 나온다.
+   * 자세가 헷갈리는 순간은 세트 사이라, 준비 화면과 **같은 안내**를 여기서도 연다.
+   */
+  onOpenGuide?: (name: string) => void;
 }) {
   if (!open) return null;
 
   const resting = mode === "rest";
+  // 안내가 있는 종목에만 낸다 — 없는데 내면 눌러도 아무 일 없는 죽은 버튼이다
+  const guideName =
+    onOpenGuide && exerciseName && guideForExercise(exerciseName) !== null
+      ? exerciseName
+      : null;
   /** 쉬는 중인데 다음이 없다 = 담은 세트를 전부 끝냈다 */
   const allDone = resting && nextUp === null;
 
@@ -236,6 +248,16 @@ export function ActiveSessionOverlay({
               {exerciseName ?? "운동"}
             </h2>
           )}
+          {!resting && guideName && (
+            <button
+              type="button"
+              onClick={() => onOpenGuide?.(guideName)}
+              aria-label={`${guideName} 자세 안내`}
+              className="mt-1 text-[11.5px] font-bold text-accent"
+            >
+              📖 자세 안내
+            </button>
+          )}
 
           {/*
             운동 시간 — 예전 11.5px 알약보다 크게 (사용자 지시 ②).
@@ -265,6 +287,16 @@ export function ActiveSessionOverlay({
                   ? `${setProgress.remaining}세트 남음`
                   : "이 종목은 다 했어요"}
               </p>
+              {guideName && (
+                <button
+                  type="button"
+                  onClick={() => onOpenGuide?.(guideName)}
+                  aria-label={`${guideName} 자세 안내`}
+                  className="mt-1.5 text-[11.5px] font-bold text-accent"
+                >
+                  📖 자세 안내
+                </button>
+              )}
             </div>
           )}
 

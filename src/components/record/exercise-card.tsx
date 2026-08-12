@@ -1,6 +1,7 @@
 "use client";
 
 import { useLongPress } from "@/hooks/use-long-press";
+import { guideForExercise } from "@/lib/domain/exercise-guides";
 import { planFromSets, summarizePlan } from "@/lib/domain/recommended-sets";
 import { setVolumeKg } from "@/lib/domain/volume";
 import type { LocalExercise, LocalSet } from "@/lib/workout";
@@ -20,6 +21,7 @@ export function ExerciseCard({
   onRemoveSet,
   onRemoveExercise,
   onLongPress,
+  onOpenGuide,
 }: {
   exercise: LocalExercise;
   index: number;
@@ -33,9 +35,18 @@ export function ExerciseCard({
   onRemoveSet: () => void;
   onRemoveExercise: () => void;
   onLongPress: () => void;
+  /**
+   * 자세 안내 열기 (계획 2026-08-12). 넘기지 않으면 버튼 자체가 안 나온다 —
+   * 안내 시트를 띄울 수 없는 화면(달력 예정표 미리보기 등)에서 죽은 버튼을
+   * 만들지 않기 위해서다.
+   */
+  onOpenGuide?: (name: string) => void;
 }) {
   // 제목 줄을 약 0.5초 길게 누르면 순서 이동 시트 (설계 2026-07-19)
   const longPressHandlers = useLongPress(onLongPress);
+  // 안내가 **있는 종목에만** 버튼을 낸다. 없는데 내면 눌러도 아무 일 없는
+  // 죽은 버튼이 된다 (커스텀 종목이 대부분 여기 해당).
+  const hasGuide = onOpenGuide ? guideForExercise(exercise.name) !== null : false;
   const isWeight = exercise.exerciseType === "weight";
   const isCardio = exercise.exerciseType === "cardio";
   const isTimeBodyweight =
@@ -90,6 +101,21 @@ export function ExerciseCard({
           ✕
         </button>
       </div>
+
+      {/*
+        길게 누르기(순서 이동) 영역 **밖**에 둔다. 제목 줄 안에 넣으면
+        pointerdown이 롱프레스 타이머를 같이 깨운다.
+      */}
+      {hasGuide && (
+        <button
+          type="button"
+          onClick={() => onOpenGuide?.(exercise.name)}
+          aria-label={`${exercise.name} 자세 안내`}
+          className="mt-1.5 text-[11.5px] font-bold text-accent"
+        >
+          📖 자세 안내
+        </button>
+      )}
 
       {/*
         시작 전에는 "무엇을 얼마나 할 예정인가"를 한 줄로 보여준다

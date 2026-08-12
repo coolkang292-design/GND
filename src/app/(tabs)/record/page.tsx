@@ -24,6 +24,8 @@ import { RoutineSaveSheet } from "@/components/record/routine-save-sheet";
 import { ZeroWeightSheet } from "@/components/record/zero-weight-sheet";
 import { shouldAskBodyweight } from "@/lib/domain/zero-weight";
 import { TabataSheet } from "@/components/record/tabata-sheet";
+import { ExerciseGuideSheet } from "@/components/record/exercise-guide-sheet";
+import { guideForExercise } from "@/lib/domain/exercise-guides";
 import { RestBar } from "@/components/record/rest-bar";
 import { ActiveSessionOverlay } from "@/components/record/active-session-overlay";
 import { VerificationPhoto } from "@/components/record/verification-photo";
@@ -245,6 +247,14 @@ function WorkoutScreen({ userId }: { userId: string }) {
    */
   const [replaceTargetKey, setReplaceTargetKey] = useState<string | null>(null);
   const [reorderOpen, setReorderOpen] = useState(false);
+  /**
+   * 자세 안내를 연 종목 이름 (계획 2026-08-12).
+   *
+   * 이름만 들고 있다가 렌더에서 한 번 조회한다 — 안내 객체를 상태에 담으면
+   * 카드와 오버레이 양쪽에서 조회가 중복되고, 데이터를 고쳐도 열려 있는 시트가
+   * 옛 내용을 붙들고 있게 된다.
+   */
+  const [guideExerciseName, setGuideExerciseName] = useState<string | null>(null);
   /**
    * 큰 팝업을 접어 뒀는가 (2026-08-04, 설계 ②).
    *
@@ -1610,6 +1620,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
     exerciseIndex: focusIndex,
     setIndex: focusSetIndex,
   });
+  const activeGuide = guideExerciseName
+    ? guideForExercise(guideExerciseName)
+    : null;
   const focus = setFocus.exerciseIndex;
   const focusedExercise = draft.exercises[focus] ?? null;
   const focusedSet = focusedExercise?.sets[setFocus.setIndex] ?? null;
@@ -1628,6 +1641,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
       onRemoveSet={() => removeSet(ex.key)}
       onRemoveExercise={() => removeExercise(ex.key)}
       onLongPress={() => setReorderOpen(true)}
+      onOpenGuide={setGuideExerciseName}
     />
   ));
   // 멈춰 있던 시간은 경과 시간에서 뺀다. 정지 중에는 정지 시작 시점에 멈춰 있다.
@@ -2245,6 +2259,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
         onMinimize={() => setMinimized(true)}
         onFinish={() => void handleFinish()}
         onCancel={() => void handleCancel()}
+        onOpenGuide={setGuideExerciseName}
       />
 
       {/* 접어 뒀을 때 돌아갈 문 — 없으면 팝업을 다시 못 연다.
@@ -2272,6 +2287,18 @@ function WorkoutScreen({ userId }: { userId: string }) {
           </span>
           <span className="text-xs font-bold text-muted">다시 열기 ▴</span>
         </button>
+      )}
+
+      {/*
+        자세 안내 (계획 2026-08-12) — **시트는 여기 하나뿐이다.** 준비 카드와
+        운동 중 오버레이는 이름만 올려 보내고, 안내 조회는 이 한 곳에서 한다.
+        시트를 닫아도 draft·휴식 타이머는 그대로다 (상태를 건드리지 않는다).
+      */}
+      {activeGuide && (
+        <ExerciseGuideSheet
+          guide={activeGuide}
+          onClose={() => setGuideExerciseName(null)}
+        />
       )}
 
       {/* 무동작 정지 — 달력 탭을 보고 있어도 떠야 한다 (설계 2026-08-01) */}
