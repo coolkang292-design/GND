@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { OfficialProgram } from "@/lib/domain/official-programs";
+import type { StrengthProgram } from "@/lib/domain/official-programs";
 import { programSaveErrorText } from "@/lib/domain/program-error-text";
 import {
   buildProgramSchedule,
@@ -20,7 +20,8 @@ type TimeMode = "same" | "per-day";
 type ProgramScheduleSetupProps = {
   today: string;
   timeZone: string;
-  program: OfficialProgram;
+  /** 아직 근력 전용 — 인터벌 등록은 2단계(0070)에서 붙인다 */
+  program: StrengthProgram;
   resolvedSessions: readonly ResolvedProgramSession[];
   occupiedPlans: readonly WorkoutPlan[];
   onConfirm: (input: CreateProgramEnrollmentInput) => Promise<void>;

@@ -1,7 +1,10 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import type { CatalogExercise } from "../types";
 import {
+  INTERVAL_PROGRAM,
   OFFICIAL_PROGRAMS,
+  PROGRAM_LEVELS,
+  intervalExerciseName,
   resolveProgram,
   type OfficialProgramRestSeconds,
 } from "./official-programs";
@@ -153,13 +156,21 @@ describe("GND 공식 프로그램 카탈로그", () => {
     ).href;
     const { requiredNames } = await import(/* @vite-ignore */ moduleUrl);
     const programNames = [
-      ...new Set(
-        OFFICIAL_PROGRAMS.flatMap((program) =>
+      ...new Set([
+        ...OFFICIAL_PROGRAMS.flatMap((program) =>
           program.sessions.flatMap((session) =>
             session.exercises.map((exercise) => exercise.exerciseName),
           ),
         ),
-      ),
+        // 인터벌 9조합 36칸도 같은 스크립트가 지킨다 (2026-08-12). 아직
+        // OFFICIAL_PROGRAMS에는 없지만 종목명 오타는 지금부터 막아야 한다 —
+        // 2단계에서 목록에 세우는 순간 등록이 통째로 실패하기 때문이다.
+        ...INTERVAL_PROGRAM.sessions.flatMap((session) =>
+          session.exercises.flatMap((exercise) =>
+            PROGRAM_LEVELS.map((level) => intervalExerciseName(exercise, level)),
+          ),
+        ),
+      ]),
     ];
 
     expect(requiredNames).toEqual(programNames);

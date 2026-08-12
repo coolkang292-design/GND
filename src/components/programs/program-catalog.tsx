@@ -5,6 +5,7 @@ import { useState } from "react";
 import type {
   OfficialProgram,
   OfficialProgramKey,
+  StrengthProgram,
 } from "@/lib/domain/official-programs";
 import { INTERVAL_COPY } from "@/lib/domain/tabata";
 import { EXERCISE_PREVIEW_NOTES } from "./exercise-preview-notes";
@@ -16,7 +17,11 @@ type ProgramCatalogProps = {
 };
 
 type ProgramDetailProps = {
-  program: OfficialProgram;
+  /**
+   * 근력 전용이다 — 반복·휴식 표가 근력 처방을 전제한다.
+   * 인터벌 상세는 2단계에서 따로 만든다 (설계 §6).
+   */
+  program: StrengthProgram;
   onBack: () => void;
   onSchedule: () => void;
   scheduleAvailable?: boolean;
@@ -48,6 +53,11 @@ const AUDIENCE: Record<OfficialProgramKey, readonly [string, string, string]> = 
     "근력 운동과 전신 활동을 함께 이어가고 싶은 사람",
     "짧은 성과보다 반복 가능한 6주 계획이 필요한 사람",
   ],
+  "interval-burn-6w": [
+    "시간이 없어 짧게 끝내고 싶은 사람",
+    "기구 없이 집에서 전신을 쓰고 싶은 사람",
+    "숨이 차는 강도를 단계적으로 올리고 싶은 사람",
+  ],
 };
 
 const COVER_POSITION: Record<OfficialProgramKey, string> = {
@@ -56,6 +66,7 @@ const COVER_POSITION: Record<OfficialProgramKey, string> = {
   "arm-outline-6w": "object-[center_40%]",
   "lower-balance-6w": "object-[center_44%]",
   "lean-body-6w": "object-[center_42%]",
+  "interval-burn-6w": "object-[center_35%]",
 };
 
 function ProgramStat({ label, value }: { label: string; value: string }) {

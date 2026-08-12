@@ -1,6 +1,6 @@
 import type {
-  OfficialProgram,
   ResolvedProgramExercise,
+  StrengthProgram,
 } from "@/lib/domain/official-programs";
 import type {
   PreferredSlot,
@@ -29,7 +29,11 @@ export type ResolvedProgramSession = {
 };
 
 export type CreateProgramEnrollmentInput = {
-  program: OfficialProgram;
+  /**
+   * 아직 근력 전용이다. 인터벌 회차는 종목 4개·처방 없음·`tabata_minutes`라
+   * 모양이 달라서, RPC(0070)와 payload 조립을 함께 고쳐야 받을 수 있다 (설계 §5).
+   */
+  program: StrengthProgram;
   sessions: readonly ResolvedProgramSession[];
   schedule: readonly ProgramScheduleItem[];
   levelAtStart: "beginner" | "experienced";

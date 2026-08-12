@@ -5,8 +5,8 @@ import { useState } from "react";
 import { UiIcon } from "@/components/ui-icon";
 import {
   resolveProgram,
-  type OfficialProgram,
   type OfficialProgramKey,
+  type StrengthProgram,
 } from "@/lib/domain/official-programs";
 import type {
   CreateProgramEnrollmentInput,
@@ -28,7 +28,8 @@ type CreateResult = {
 type ProgramFlowProps = {
   today: string;
   timeZone: string;
-  programs: readonly OfficialProgram[];
+  /** 아직 근력 5종뿐이다 — 인터벌은 2단계(0070)가 끝난 뒤 여기 선다 */
+  programs: readonly StrengthProgram[];
   catalog: readonly CatalogExercise[];
   occupiedPlans: readonly WorkoutPlan[];
   activeEnrollments?: readonly ProgramEnrollment[];
