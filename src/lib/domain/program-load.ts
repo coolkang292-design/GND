@@ -11,6 +11,11 @@ export type PreviousCompletedSet = {
   weightKg: number;
   reps: number;
   isCompleted: boolean;
+  /**
+   * 그 세트를 마치고 받은 체감 (0067). 마지막 세트에만 붙어 있다.
+   * 없으면 안 물어봤거나 사용자가 시트를 닫은 것이다.
+   */
+  effortFeedback?: EffortFeedback | null;
 };
 
 export type InitialProgramLoad = {
@@ -149,7 +154,28 @@ export function initialProgramLoad(
   const heaviest = evidence.reduce((best, set) =>
     set.weightKg >= best.weightKg ? set : best,
   );
-  return { weightKg: roundKg(heaviest.weightKg), source: "history", guide };
+
+  /*
+    지난 회차의 **마지막 체감**을 반영한다 (2026-08-12).
+
+    예전에는 `effort_feedback`을 저장만 하고 아무도 읽지 않았다 — 시트는
+    "다음 회차 권장 무게에 반영돼요"라고 말하는데 반영되는 곳이 없었다.
+
+    ⚠️ 체감은 **완료한 세트의 것만** 본다. 들다 만 세트의 "너무 가벼움"으로
+       올리면 실패가 증량이 된다.
+  */
+  const answered = [...evidence]
+    .reverse()
+    .find((set) => set.effortFeedback != null);
+  const weightKg = answered?.effortFeedback
+    ? nextProgramLoad(
+        prescription,
+        heaviest.weightKg,
+        evidence.map((set) => set.reps),
+        answered.effortFeedback,
+      )
+    : roundKg(heaviest.weightKg);
+  return { weightKg, source: "history", guide };
 }
 
 /**

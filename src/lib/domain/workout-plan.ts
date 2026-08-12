@@ -238,6 +238,22 @@ export function toDraftExercises(
       key: makeKey(),
       done: false,
       effortFeedback: null,
+      /*
+        프로그램 운동은 반복을 처방 **하한**으로 미리 채운다 (2026-08-12).
+
+        계획의 세트는 전부 `reps: 0`이라, 목표가 `8~10회`라고 적혀 있어도
+        세트마다 숫자를 새로 넣어야 했다.
+
+        ⚠️ 상한이 아니라 하한이다. 상한으로 채우면 못 채운 사람이 숫자를
+           **내려야** 하고, 안 고치면 안 한 횟수가 기록된다. 하한은
+           "최소한 이만큼"이라 더 한 사람만 올리면 된다.
+        ⚠️ 계획에 이미 값이 있으면 덮지 않는다. 무게는 여기서 채우지 않는다 —
+           그건 지난 기록이 정한다(`initialProgramLoad`).
+      */
+      reps:
+        exercise.prescription && set.reps === 0
+          ? exercise.prescription.repsMin
+          : set.reps,
     })),
   }));
 }

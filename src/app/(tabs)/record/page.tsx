@@ -159,6 +159,7 @@ import {
   getExerciseCatalog,
   getLastCompletedWeightVolume,
   getLastRecordedSets,
+  getProgramLoadEvidence,
   getMyActiveSession,
   getPreviousExerciseRecords,
   getSessionById,
@@ -1579,8 +1580,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
    * ⚠️ **기록이 없으면 아무것도 넣지 않는다.** 0kg을 확정하면 사용자는 "앱이 정한
    *    무게"로 읽고 그 값이 기록에 남는다. 그 경우 화면이 반복 범위 안내를 띄운다.
    *
-   * 새 질의를 만들지 않았다 — `getLastRecordedSets()`가 이미 완료 세트만
-   * 최신 세션 기준으로 돌려준다.
+   * 근거는 `getProgramLoadEvidence()`가 준다 — 최신 세션의 완료 세트에
+   * **지난 체감까지** 실어 오므로, 상한을 채우고 `적당함`이었으면 다음 회차가
+   * 한 단위 올라간다.
    */
   async function fillProgramLoads(exercises: LocalExercise[]) {
     const initialWeightsByExercise = new Map(
@@ -1593,20 +1595,12 @@ function WorkoutScreen({ userId }: { userId: string }) {
     if (prescribed.length === 0) return;
     const results = await Promise.all(
       prescribed.map(async (ex) => {
-        const previous = await getLastRecordedSets(userId, ex.name).catch(
-          () => null,
+        // ⚠️ `getLastRecordedSets`가 아니다. 저건 '직전 기록 불러오기'가 draft에
+        //    그대로 담는 값이라 지난 체감을 실으면 피드백 시트가 안 뜬다.
+        const previous = await getProgramLoadEvidence(userId, ex.name).catch(
+          () => [],
         );
-        return {
-          key: ex.key,
-          load: initialProgramLoad(
-            ex.prescription!,
-            (previous ?? []).map((s) => ({
-              weightKg: s.weightKg,
-              reps: s.reps,
-              isCompleted: true, // getLastRecordedSets는 완료 세트만 돌려준다
-            })),
-          ),
-        };
+        return { key: ex.key, load: initialProgramLoad(ex.prescription!, previous) };
       }),
     );
     const weightByKey = new Map(

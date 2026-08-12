@@ -329,3 +329,66 @@ describe("shouldAutoLoadTodayPlan — 오늘 계획 미리 담기", () => {
     ).toBe(false);
   });
 });
+
+/**
+ * C: 프로그램 운동은 반복 횟수를 처방 하한으로 미리 채운다 (사용자 지시 2026-08-12).
+ *
+ * 예전에는 계획의 세트가 전부 `reps: 0`이라, 목표가 `8~10회`라고 적혀 있어도
+ * 사용자가 세트마다 숫자를 새로 넣어야 했다.
+ *
+ * **하한(`repsMin`)으로 채우는 이유**: 상한으로 채우면 못 채운 사람이 숫자를
+ * 내려야 하고, 안 고치면 안 한 횟수가 기록된다. 하한은 "최소한 이만큼"이라
+ * 더 한 사람만 올리면 된다 — 과대 기록 쪽으로 기울지 않는다.
+ */
+describe("toDraftExercises — 프로그램 반복 횟수 미리 채움", () => {
+  const prescription: ExercisePrescription = {
+    repsMin: 8,
+    repsMax: 10,
+    targetRir: 2,
+    restSeconds: 120,
+    loadStepKg: 2.5,
+  };
+  const zeroSet = { weightKg: 0, reps: 0, distanceKm: 0, durationMin: 0 };
+  const base = {
+    name: "숄더프레스",
+    bodyPart: "어깨" as const,
+    exerciseType: "weight" as const,
+    measure: null,
+    isCustom: false,
+  };
+  let n = 0;
+  const key = () => `k${(n += 1)}`;
+
+  it("처방이 있으면 모든 세트 반복을 하한으로 채운다", () => {
+    n = 0;
+    const [ex] = toDraftExercises(
+      [{ ...base, prescription, sets: [zeroSet, zeroSet, zeroSet] }],
+      key,
+    );
+    expect(ex.sets.map((s) => s.reps)).toEqual([8, 8, 8]);
+  });
+
+  it("무게는 채우지 않는다 — 그건 지난 기록이 정한다", () => {
+    n = 0;
+    const [ex] = toDraftExercises(
+      [{ ...base, prescription, sets: [zeroSet] }],
+      key,
+    );
+    expect(ex.sets[0].weightKg).toBe(0);
+  });
+
+  it("계획에 이미 횟수가 있으면 그 값을 지키지 않고 덮지 않는다", () => {
+    n = 0;
+    const [ex] = toDraftExercises(
+      [{ ...base, prescription, sets: [{ ...zeroSet, reps: 12 }] }],
+      key,
+    );
+    expect(ex.sets[0].reps).toBe(12);
+  });
+
+  it("처방 없는 일반 계획은 예전 그대로 0이다", () => {
+    n = 0;
+    const [ex] = toDraftExercises([{ ...base, sets: [zeroSet] }], key);
+    expect(ex.sets[0].reps).toBe(0);
+  });
+});

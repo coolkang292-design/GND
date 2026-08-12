@@ -7,7 +7,10 @@ import type { CompletedSession } from "@/lib/domain/calendar";
 import type { VolumeSet } from "@/lib/domain/volume";
 import type { LogExercise } from "@/lib/domain/workout-log";
 import type { ComparableExercise } from "@/lib/domain/record-beaten";
-import type { EffortFeedback } from "@/lib/domain/program-load";
+import type {
+  EffortFeedback,
+  PreviousCompletedSet,
+} from "@/lib/domain/program-load";
 import type { ExercisePrescription } from "@/lib/domain/workout-plan";
 import type {
   BodyPart,
@@ -676,6 +679,62 @@ function toLocalSet(s: WorkoutSet): LocalSet {
  * 완료 체크한 세트만 본다. 가장 최근 세션에 완료 세트가 없으면(계획만 하고
  * 하지 않은 종목) 그다음 최근 세션으로 넘어간다 (2026-08-01).
  */
+/**
+ * 프로그램 무게 추천의 **근거 세트** — 무게·횟수·완료 여부·체감을 같이 준다.
+ *
+ * ⚠️ `getLastRecordedSets()`와 굳이 나눈 이유: 그쪽 결과는 '직전 기록 불러오기'가
+ *    **draft에 그대로 담는다.** 거기에 지난 체감을 실으면 새 세트가 이미
+ *    답한 것으로 보여(`alreadyAnswered`) 피드백 시트가 영영 안 뜬다.
+ *    근거는 여기서만 읽고 draft에는 넣지 않는다.
+ */
+export async function getProgramLoadEvidence(
+  userId: string,
+  exerciseName: string,
+): Promise<PreviousCompletedSet[]> {
+  const supabase = getSupabaseBrowserClient();
+
+  const { data: sessions, error: sErr } = await supabase
+    .from("workout_sessions")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("status", "completed")
+    .is("deleted_at", null)
+    .order("completed_at", { ascending: false })
+    .limit(20);
+  if (sErr) throw sErr;
+  const sessionIds = (sessions ?? []).map((s) => s.id);
+  if (sessionIds.length === 0) return [];
+
+  const { data: exercises, error: eErr } = await supabase
+    .from("workout_exercises")
+    .select("id, session_id, workout_sets(*)")
+    .in("session_id", sessionIds)
+    .eq("exercise_name", exerciseName);
+  if (eErr) throw eErr;
+  if (!exercises || exercises.length === 0) return [];
+
+  // 가장 최근 세션 우선 — 완료 세트가 있는 첫 세션 하나만 근거로 쓴다
+  const byRecency = [...exercises].sort(
+    (a, b) => sessionIds.indexOf(a.session_id) - sessionIds.indexOf(b.session_id),
+  );
+  for (const candidate of byRecency) {
+    const rows = ((candidate.workout_sets ?? []) as WorkoutSet[])
+      .slice()
+      .sort((a, b) => (a.set_number ?? 0) - (b.set_number ?? 0));
+    const completed = rows.filter((row) => row.is_completed);
+    if (completed.length === 0) continue;
+    return completed.map((row) => ({
+      weightKg: Number(row.weight_kg ?? 0),
+      reps: row.reps ?? 0,
+      isCompleted: true,
+      effortFeedback:
+        (row as { effort_feedback?: EffortFeedback | null }).effort_feedback ??
+        null,
+    }));
+  }
+  return [];
+}
+
 export async function getLastRecordedSets(
   userId: string,
   exerciseName: string,

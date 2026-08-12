@@ -325,3 +325,67 @@ describe("shouldDeferAutoFinishForEffort — 마지막 답변을 기다린다", 
     }
   });
 });
+
+/**
+ * A: 마지막 세트 체감을 다음 회차 시작 무게에 **실제로 반영한다** (2026-08-12).
+ *
+ * 그 전에는 `effort_feedback`을 저장만 하고 아무도 읽지 않았다. 시트는
+ * "다음 회차 권장 무게에 반영돼요"라고 말하는데 반영되는 곳이 없었다 —
+ * 문구가 기능보다 앞서 있었다.
+ */
+describe("initialProgramLoad — 지난 체감을 반영한다", () => {
+  it("상한을 채우고 적당함이었으면 한 단위 올려서 시작한다", () => {
+    expect(
+      initialProgramLoad(rx, [
+        { weightKg: 40, reps: 10, isCompleted: true },
+        { weightKg: 40, reps: 10, isCompleted: true },
+        { weightKg: 40, reps: 10, isCompleted: true, effortFeedback: "on_target" },
+      ]),
+    ).toMatchObject({ weightKg: 42.5, source: "history" });
+  });
+
+  it("너무 무거움이었으면 내려서 시작한다", () => {
+    expect(
+      initialProgramLoad(rx, [
+        { weightKg: 40, reps: 9, isCompleted: true },
+        { weightKg: 40, reps: 8, isCompleted: true, effortFeedback: "too_heavy" },
+      ]),
+    ).toMatchObject({ weightKg: 37.5, source: "history" });
+  });
+
+  it("상한을 못 채웠으면 적당함이어도 그대로 시작한다", () => {
+    expect(
+      initialProgramLoad(rx, [
+        { weightKg: 40, reps: 9, isCompleted: true },
+        { weightKg: 40, reps: 8, isCompleted: true, effortFeedback: "on_target" },
+      ]),
+    ).toMatchObject({ weightKg: 40, source: "history" });
+  });
+
+  it("체감이 없으면 예전처럼 가장 무거운 성공 무게 그대로다", () => {
+    expect(
+      initialProgramLoad(rx, [
+        { weightKg: 40, reps: 10, isCompleted: true },
+        { weightKg: 45, reps: 10, isCompleted: true },
+      ]),
+    ).toMatchObject({ weightKg: 45, source: "history" });
+  });
+
+  it("체감이 있어도 0kg 아래로는 내려가지 않는다", () => {
+    expect(
+      initialProgramLoad(rx, [
+        { weightKg: 1, reps: 8, isCompleted: true, effortFeedback: "too_heavy" },
+      ]),
+    ).toMatchObject({ weightKg: 0, source: "history" });
+  });
+
+  it("미완료 세트의 체감은 근거로 쓰지 않는다", () => {
+    // 들다 만 세트의 체감으로 다음 회차를 올리면 실패가 증량이 된다.
+    expect(
+      initialProgramLoad(rx, [
+        { weightKg: 40, reps: 10, isCompleted: true },
+        { weightKg: 60, reps: 2, isCompleted: false, effortFeedback: "too_light" },
+      ]),
+    ).toMatchObject({ weightKg: 40, source: "history" });
+  });
+});
