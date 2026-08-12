@@ -14,6 +14,7 @@ export const INTERVAL_COPY = {
   short: "4분 인터벌",
   description: "음악에 맞춰 20초 운동 · 10초 휴식",
   start: "전신 인터벌 시작",
+  stopConfirm: "전신 인터벌을 중단할까요? 운동은 기록되지 않아요.",
   session: (minutes: TabataMinutes) => `전신 인터벌 ${minutes}분`,
 } as const;
 

@@ -20,6 +20,9 @@ describe("전신 인터벌 사용자 안내", () => {
     expect(INTERVAL_COPY.short).toBe("4분 인터벌");
     expect(INTERVAL_COPY.description).toBe("음악에 맞춰 20초 운동 · 10초 휴식");
     expect(INTERVAL_COPY.session(8)).toBe("전신 인터벌 8분");
+    expect(INTERVAL_COPY.stopConfirm).toBe(
+      "전신 인터벌을 중단할까요? 운동은 기록되지 않아요.",
+    );
   });
 });
 

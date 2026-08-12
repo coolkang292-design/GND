@@ -4,9 +4,13 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CatalogExercise } from "@/lib/types";
 import type { CalendarSession } from "@/lib/workout";
+import type { TabataMinutes } from "@/lib/domain/tabata";
 import { TabataSheet } from "./tabata-sheet";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 function item(
   name: string,
@@ -37,6 +41,10 @@ function setup(
   over: {
     pastSessions?: CalendarSession[];
     initialPicked?: CatalogExercise[];
+    onBegin?: (
+      picked: CatalogExercise[],
+      minutes: TabataMinutes,
+    ) => Promise<boolean>;
   } = {},
 ) {
   return render(
@@ -48,7 +56,7 @@ function setup(
       initialPicked={over.initialPicked}
       onClose={vi.fn()}
       onCreateCustom={vi.fn()}
-      onBegin={vi.fn()}
+      onBegin={over.onBegin ?? vi.fn()}
       onComplete={vi.fn()}
       onCancelWorkout={vi.fn()}
     />,
@@ -71,6 +79,22 @@ describe("TabataSheet — 운동 고르기 배선 (2026-08-06)", () => {
         .hasAttribute("disabled"),
     ).toBe(false);
     expect(screen.queryByText(/타바타 —/)).toBeNull();
+  });
+
+  it("진행 중단 확인도 전신 인터벌 명칭으로 안내한다", async () => {
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    setup({
+      initialPicked: CATALOG,
+      onBegin: vi.fn().mockResolvedValue(true),
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "전신 인터벌 시작" }));
+    fireEvent.click(await screen.findByRole("button", { name: "중단하기" }));
+
+    expect(confirm).toHaveBeenCalledWith(
+      "전신 인터벌을 중단할까요? 운동은 기록되지 않아요.",
+    );
   });
 
   /*

@@ -204,7 +204,7 @@ function TabataSheetBody({
 
   async function stop() {
     if (busy) return;
-    if (!window.confirm("타바타를 중단할까요? 운동은 기록되지 않아요.")) return;
+    if (!window.confirm(INTERVAL_COPY.stopConfirm)) return;
     setBusy(true);
     try {
       const audio = audioRef.current;
