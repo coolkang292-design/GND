@@ -1,7 +1,7 @@
-// 0070·0071 검증: 인터벌 회차를 실제로 등록하고, 그만두기까지 해 본다.
+// 0070·0072·0073 검증: 인터벌 등록 · 그만두기 · 주당 횟수 2~5회를 실제로 해 본다.
 // 실행(PowerShell): $env:GND_ALLOW_DB_TESTS='program-interval';
 //   node scripts/program-interval-enrollment-test.mjs; Remove-Item Env:GND_ALLOW_DB_TESTS
-// 사전조건: 0070_program_interval_sessions.sql · 0071_cancel_program_enrollment.sql 적용 완료.
+// 사전조건: 0070~0073 적용 완료.
 // 주의: 운영 Supabase에 연결된다. 만든 계정·행은 끝에서 스스로 지운다.
 //
 // 왜 필요한가. 단위 테스트는 payload 모양까지만 본다. **서버가 그 모양을
@@ -412,6 +412,80 @@ try {
       })),
     }),
   );
+
+  // ── 0073 주당 횟수 2~5회 ───────────────────────────────────
+  // 총 18회는 그대로다. 주당 횟수는 며칠에 나눠 담을지만 정한다.
+  const WEEKLY = [
+    { label: "주 2회", weekdays: [1, 4], offsets: [0, 3] },
+    { label: "주 5회", weekdays: [1, 2, 3, 4, 5], offsets: [0, 1, 2, 3, 4] },
+  ];
+  for (const shape of WEEKLY) {
+    const user = await anonUser();
+    const monday = nextMonday(7);
+    const slots = shape.weekdays.map((weekday) => ({ weekday, time: "19:00" }));
+    const plans = Array.from({ length: 18 }, (_, index) => {
+      const cycle = shape.offsets.length;
+      const offset =
+        Math.floor(index / cycle) * 7 + shape.offsets[index % cycle];
+      const planDate = dateKey(addDays(monday, offset));
+      const week = Math.floor(index / 3) + 1;
+      const session = (index % 3) + 1;
+      return {
+        plan_date: planDate,
+        scheduled_at: planDate + "T10:00:00.000Z",
+        week,
+        session,
+        template_key: ["A", "B", "C"][session - 1],
+        title: "claude/dev " + shape.label,
+        tabata_minutes: MODERATE_MINUTES_BY_WEEK[week - 1],
+        exercises: INTERVAL_EXERCISES,
+      };
+    });
+    const created = await api(
+      user.token,
+      "POST",
+      "/rest/v1/rpc/create_program_enrollment",
+      {
+        p_program_key: "interval-burn-6w",
+        p_program_version: 1,
+        p_title_snapshot: "claude/dev " + shape.label,
+        p_level_at_start: "moderate",
+        p_start_date: plans[0].plan_date,
+        p_timezone: "Asia/Seoul",
+        p_preferred_slots: slots,
+        p_plans: plans,
+      },
+    );
+    const stored = await ownCounts(user);
+    check(
+      shape.label + "로 18회가 등록된다",
+      created.status === 200 && stored.plans === 18,
+      JSON.stringify({ message: created.json?.message, stored }),
+    );
+  }
+
+  // 1회와 6회는 거부한다 — 6회 이상이면 한 주에 같은 회차를 세 번 한다
+  const badShapes = await anonUser();
+  for (const [label, weekdays] of [
+    ["주 1회", [1]],
+    ["주 6회", [0, 1, 2, 3, 4, 5]],
+  ]) {
+    const response = await api(
+      badShapes.token,
+      "POST",
+      "/rest/v1/rpc/create_program_enrollment",
+      {
+        ...payload({ key: "interval-burn-6w", plans: buildIntervalPlans(nextMonday(280)) }),
+        p_preferred_slots: weekdays.map((weekday) => ({ weekday, time: "19:00" })),
+      },
+    );
+    check(
+      label + "는 거부한다",
+      response.status >= 400 &&
+        String(response.json?.message).includes("program_slots_count"),
+      JSON.stringify(response.json?.message),
+    );
+  }
 } finally {
   for (const user of users) {
     await api(SERVICE_KEY, "DELETE", `/rest/v1/workout_plans?user_id=eq.${user.id}`);

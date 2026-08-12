@@ -1119,7 +1119,7 @@ begin
 
   if p_preferred_slots is null
     or jsonb_typeof(p_preferred_slots) <> 'array'
-    or jsonb_array_length(p_preferred_slots) <> 3
+    or jsonb_array_length(p_preferred_slots) not between 2 and 5
     or octet_length(p_preferred_slots::text) > 2000 then
     raise exception 'program_slots_count';
   end if;
@@ -1138,7 +1138,7 @@ begin
   select count(distinct (slot->>'weekday')::int)
     into v_bad_count
   from jsonb_array_elements(p_preferred_slots) slot;
-  if v_bad_count <> 3 then
+  if v_bad_count <> jsonb_array_length(p_preferred_slots) then
     raise exception 'program_slot_weekday_duplicate';
   end if;
   -- 0069: 요일 간격 제한 제거 (사용자 확정 2026-08-12).
