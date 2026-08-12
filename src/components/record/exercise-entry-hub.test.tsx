@@ -7,7 +7,7 @@ import { ExerciseEntryHub } from "./exercise-entry-hub";
 afterEach(cleanup);
 
 describe("ExerciseEntryHub", () => {
-  it("프로그램과 직접 고르기를 먼저, 빠른 시작을 그 아래에 보여준다", () => {
+  it("프로그램·직접 고르기·전신 인터벌을 먼저, 빠른 시작을 그 아래에 보여준다", () => {
     render(
       <ExerciseEntryHub
         hasPast
@@ -22,12 +22,14 @@ describe("ExerciseEntryHub", () => {
 
     const buttons = screen.getAllByRole("button");
     expect(buttons).toHaveLength(5);
+    // 전신 인터벌은 '운동 직접 고르기' 바로 밑이다 (사용자 지시 2026-08-12).
+    // 지난 운동·내 루틴만 '빠른 시작' 보조 영역에 남는다.
     expect(buttons.map((button) => button.textContent)).toEqual([
       expect.stringContaining("프로그램으로 시작하기"),
       expect.stringContaining("운동 직접 고르기"),
+      expect.stringContaining("4분부터 시작하는 전신 인터벌"),
       expect.stringContaining("지난 운동"),
       expect.stringContaining("내 루틴"),
-      expect.stringContaining("4분부터 시작하는 전신 인터벌"),
     ]);
     expect(screen.getByText("GND 추천")).toBeTruthy();
     expect(
@@ -72,9 +74,9 @@ describe("ExerciseEntryHub", () => {
     const cases: Array<[RegExp, keyof typeof handlers]> = [
       [/프로그램으로 시작하기/, "onPrograms"],
       [/운동 직접 고르기/, "onSearch"],
+      [/4분부터 시작하는 전신 인터벌/, "onInterval"],
       [/지난 운동/, "onPast"],
       [/내 루틴/, "onRoutine"],
-      [/4분부터 시작하는 전신 인터벌/, "onInterval"],
     ];
     for (const [name, expectedHandler] of cases) {
       for (const handler of Object.values(handlers)) handler.mockClear();
@@ -157,6 +159,25 @@ describe("ExerciseEntryHub", () => {
     ).toBeNull();
     expect(
       screen.getByRole("button", { name: /운동 직접 고르기/ }),
+    ).toBeTruthy();
+  });
+
+  it("인터벌만 있고 지난 운동·루틴이 없으면 빠른 시작 머리글을 그리지 않는다", () => {
+    // 인터벌이 이 영역을 떠났으므로, 머리글만 남고 아래가 비는 일이 없어야 한다.
+    render(
+      <ExerciseEntryHub
+        hasPast={false}
+        routineCount={0}
+        onSearch={vi.fn()}
+        onPast={vi.fn()}
+        onRoutine={vi.fn()}
+        onInterval={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText("빠른 시작")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: /4분부터 시작하는 전신 인터벌/ }),
     ).toBeTruthy();
   });
 

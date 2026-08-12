@@ -23,7 +23,10 @@ export function ExerciseEntryHub({
   onRoutine,
   onInterval,
 }: ExerciseEntryHubProps) {
-  const hasQuickStart = hasPast || routineCount > 0 || Boolean(onInterval);
+  // 전신 인터벌은 '운동 직접 고르기' 밑으로 올라갔다 (사용자 지시 2026-08-12).
+  // 그래서 '빠른 시작'은 **지난 운동·내 루틴만** 남는다 — 여기에 인터벌을 다시
+  // 세면 둘 다 없을 때 머리글만 뜨고 아래가 비어 보인다.
+  const hasQuickStart = hasPast || routineCount > 0;
 
   return (
     <div className="mx-auto min-h-0 w-full max-w-3xl flex-1 overflow-y-auto pb-1">
@@ -91,6 +94,36 @@ export function ExerciseEntryHub({
             ›
           </span>
         </button>
+
+        {onInterval && (
+          <button
+            type="button"
+            data-priority="secondary"
+            onClick={onInterval}
+            className="flex min-h-24 w-full items-center gap-3 rounded-[20px] border border-line bg-surface-2 p-4 text-left transition-colors hover:border-accent/45 motion-reduce:transition-none"
+          >
+            <span className="flex h-12 w-12 flex-none items-center justify-center rounded-full border border-accent/35 bg-bg">
+              <Image
+                src="/ui-icons/hub-tabata.webp"
+                alt=""
+                width={36}
+                height={36}
+                className="h-9 w-9 object-contain"
+              />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-extrabold text-text">
+                {INTERVAL_COPY.title}
+              </span>
+              <span className="mt-1 block text-xs leading-5 text-muted">
+                {INTERVAL_COPY.description}
+              </span>
+            </span>
+            <span aria-hidden className="flex-none text-lg text-accent">
+              ›
+            </span>
+          </button>
+        )}
       </div>
 
       {hasQuickStart && (
@@ -131,32 +164,6 @@ export function ExerciseEntryHub({
             </div>
           )}
 
-          {onInterval && (
-            <button
-              type="button"
-              onClick={onInterval}
-              className="mt-2 flex min-h-16 w-full items-center gap-3 rounded-card-sm border border-line bg-surface-2 p-3 text-left"
-            >
-              <Image
-                src="/ui-icons/hub-tabata.webp"
-                alt=""
-                width={40}
-                height={40}
-                className="h-10 w-10 flex-none object-contain"
-              />
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-extrabold text-text">
-                  {INTERVAL_COPY.title}
-                </span>
-                <span className="mt-0.5 block text-xs text-muted">
-                  {INTERVAL_COPY.description}
-                </span>
-              </span>
-              <span aria-hidden className="flex-none text-lg text-accent">
-                ›
-              </span>
-            </button>
-          )}
         </section>
       )}
     </div>
