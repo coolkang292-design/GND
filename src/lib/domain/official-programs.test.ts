@@ -31,4 +31,20 @@ describe("GND 공식 프로그램 카탈로그", () => {
       ]);
     }
   });
+
+  it("모든 프로그램의 메타데이터 버전은 1이다", () => {
+    expect(OFFICIAL_PROGRAMS.map((program) => program.version)).toEqual([
+      1, 1, 1, 1, 1,
+    ]);
+  });
+
+  it("프로그램 순서에 맞는 표지 이미지 경로를 제공한다", () => {
+    expect(OFFICIAL_PROGRAMS.map((program) => program.coverImage)).toEqual([
+      "/program-assets/shoulder.webp",
+      "/program-assets/chest.webp",
+      "/program-assets/arms.webp",
+      "/program-assets/lower.webp",
+      "/program-assets/lean.webp",
+    ]);
+  });
 });
