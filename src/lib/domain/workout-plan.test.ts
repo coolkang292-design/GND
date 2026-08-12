@@ -4,6 +4,7 @@ import {
   isPlanDateAllowed,
   newPlanExercises,
   parsePlanExercises,
+  shouldAutoLoadTodayPlan,
   toDraftExercises,
   toPlanExercises,
   type ExercisePrescription,
@@ -263,5 +264,68 @@ describe("운동 예정표 종목·세트 변환", () => {
       [],
     );
     expect(parsePlanExercises([{ ...plan[0], sets: [] }])).toEqual([]);
+  });
+});
+
+/**
+ * 오늘 계획을 기록 첫 화면에 미리 담는다 (사용자 지시 2026-08-12).
+ *
+ * 달력까지 들어가야 오늘 할 운동이 보이는 것은 한 단계가 더 있는 것이다.
+ * 계획을 짜 뒀으면 기록 화면을 열자마자 그 목록이 있어야 한다.
+ *
+ * ⚠️ **사용자가 만든 것을 절대 덮지 않는다.** 담아 둔 종목이 있거나, 이미 다른
+ *    예정표를 불러왔거나, 운동 중이면 손대지 않는다.
+ */
+describe("shouldAutoLoadTodayPlan — 오늘 계획 미리 담기", () => {
+  const base = {
+    plan: { planDate: "2026-08-12", tabataMinutes: null },
+    todayKey: "2026-08-12",
+    draftExerciseCount: 0,
+    draftScheduledPlanId: null,
+    active: false,
+  };
+
+  it("빈 화면에 오늘 계획이 있으면 담는다", () => {
+    expect(shouldAutoLoadTodayPlan(base)).toBe(true);
+  });
+
+  it("계획이 없으면 아무것도 안 한다", () => {
+    expect(shouldAutoLoadTodayPlan({ ...base, plan: undefined })).toBe(false);
+  });
+
+  it("다른 날 계획은 담지 않는다", () => {
+    expect(
+      shouldAutoLoadTodayPlan({
+        ...base,
+        plan: { planDate: "2026-08-13", tabataMinutes: null },
+      }),
+    ).toBe(false);
+  });
+
+  it("이미 담아 둔 종목이 있으면 덮지 않는다", () => {
+    expect(shouldAutoLoadTodayPlan({ ...base, draftExerciseCount: 2 })).toBe(
+      false,
+    );
+  });
+
+  it("이미 예정표를 불러온 뒤라면 다시 담지 않는다", () => {
+    // 사용자가 불러온 뒤 종목을 전부 지웠을 수 있다. 다시 채우면 지운 행동을
+    // 되돌리는 셈이라, 화면을 열 때마다 싸우게 된다.
+    expect(
+      shouldAutoLoadTodayPlan({ ...base, draftScheduledPlanId: "plan-1" }),
+    ).toBe(false);
+  });
+
+  it("운동 중에는 담지 않는다", () => {
+    expect(shouldAutoLoadTodayPlan({ ...base, active: true })).toBe(false);
+  });
+
+  it("전신 인터벌 계획은 담지 않는다 — 시트로 열어야 음원·코스가 붙는다", () => {
+    expect(
+      shouldAutoLoadTodayPlan({
+        ...base,
+        plan: { planDate: "2026-08-12", tabataMinutes: 8 },
+      }),
+    ).toBe(false);
   });
 });

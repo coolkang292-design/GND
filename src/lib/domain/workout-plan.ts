@@ -241,3 +241,31 @@ export function toDraftExercises(
     })),
   }));
 }
+
+/**
+ * 기록 화면을 열 때 오늘 계획을 **미리 담을지** 판정한다 (사용자 지시 2026-08-12).
+ *
+ * 왜 필요한가: 계획을 짜 두고도 달력까지 들어가야 오늘 할 운동이 보였다.
+ * 이미 정해 둔 것을 다시 찾아가게 하는 단계다.
+ *
+ * ⚠️ **사용자가 만든 상태를 절대 덮지 않는다.**
+ * - 담아 둔 종목이 있으면 그대로 둔다
+ * - 이미 예정표를 불러온 적이 있으면(`scheduledPlanId`) 다시 담지 않는다.
+ *   불러온 뒤 종목을 지운 사람에게 화면을 열 때마다 되살려 주면 싸우게 된다
+ * - 운동 중에는 손대지 않는다
+ * - 전신 인터벌 계획은 시트로 열어야 음원·코스가 붙으므로 여기서 담지 않는다
+ */
+export function shouldAutoLoadTodayPlan(input: {
+  plan: { planDate: string; tabataMinutes: number | null } | undefined;
+  todayKey: string;
+  draftExerciseCount: number;
+  draftScheduledPlanId: string | null;
+  active: boolean;
+}): boolean {
+  const { plan, todayKey, draftExerciseCount, draftScheduledPlanId, active } =
+    input;
+  if (!plan || plan.planDate !== todayKey) return false;
+  if (plan.tabataMinutes) return false;
+  if (active) return false;
+  return draftExerciseCount === 0 && draftScheduledPlanId === null;
+}

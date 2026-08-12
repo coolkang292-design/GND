@@ -55,6 +55,7 @@ import {
 import {
   toDraftExercises,
   toPlanExercises,
+  shouldAutoLoadTodayPlan,
 } from "@/lib/domain/workout-plan";
 import {
   exerciseImprovementNote,
@@ -142,6 +143,7 @@ import type {
 } from "@/lib/types";
 import {
   deleteWorkoutPlan,
+  getWorkoutPlans,
   saveWorkoutPlan,
   type WorkoutPlan,
 } from "@/lib/workout-plan";
@@ -470,6 +472,55 @@ function WorkoutScreen({ userId }: { userId: string }) {
       cancelled = true;
     };
   }, [userId, showToast]);
+
+  /**
+   * 오늘 계획을 기록 화면에 미리 담는다 (사용자 지시 2026-08-12).
+   *
+   * 예전에는 계획을 짜 두고도 **달력까지 들어가야** 오늘 할 운동이 보였다.
+   * 이미 정해 둔 것을 다시 찾아가게 하는 단계라 없앴다. 화면을 열면 목록이
+   * 이미 차 있고 `운동 시작`만 누르면 된다.
+   *
+   * ⚠️ 담는 조건은 `shouldAutoLoadTodayPlan`이 정한다 — 사용자가 만든 상태를
+   *    덮지 않는 것이 핵심이라, 판정을 여기 인라인으로 쓰면 규칙이 갈라진다.
+   * ⚠️ 실패해도 조용히 지나간다. 계획을 못 불러온 것이 기록 자체를 막으면 안 된다.
+   */
+  const autoLoadTriedRef = useRef(false);
+  useEffect(() => {
+    if (autoLoadTriedRef.current || catalog.length === 0) return;
+    autoLoadTriedRef.current = true;
+    let cancelled = false;
+    (async () => {
+      try {
+        const plans = await getWorkoutPlans(userId);
+        if (cancelled) return;
+        const current = draftRef.current;
+        const todayKey = dayKey(
+          new Date(),
+          Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Seoul",
+        );
+        const todayPlan = plans.find((plan) => plan.planDate === todayKey);
+        if (
+          !shouldAutoLoadTodayPlan({
+            plan: todayPlan,
+            todayKey,
+            draftExerciseCount: current.exercises.length,
+            draftScheduledPlanId: current.scheduledPlanId,
+            active: current.startedAtMs !== null,
+          })
+        ) {
+          return;
+        }
+        await handleLoadPlan(todayPlan!);
+      } catch {
+        // 계획을 못 불러와도 빈 화면에서 평소대로 담으면 된다
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // handleLoadPlan은 렌더마다 새로 만들어진다. 한 번만 시도하도록 ref로 막는다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, catalog.length]);
 
   /**
    * 이력이 있는 사용자인가 (2026-08-06) — 빈 화면의 보조 CTA 노출 판정.
