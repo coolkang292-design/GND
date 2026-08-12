@@ -86,6 +86,7 @@ function setup(
     pastSessions?: CalendarSession[];
     routines?: WorkoutRoutine[];
     onPickRoutine?: (routine: WorkoutRoutine) => Promise<boolean>;
+    onOpenPrograms?: () => void;
     initialMode?: "hub" | "search" | "past" | "routine";
   } = {},
 ) {
@@ -109,12 +110,41 @@ function setup(
       }
       onRenameRoutine={vi.fn().mockResolvedValue(true)}
       onDeleteRoutine={vi.fn().mockResolvedValue(undefined)}
+      onOpenPrograms={over.onOpenPrograms}
     />,
   );
 }
 
 describe("ExercisePicker — 진입 허브 (2026-08-06)", () => {
-  it("열면 검색 목록이 아니라 진입 방식 4가지를 보여준다", () => {
+  it("프로그램 콜백이 있으면 프로그램과 직접 고르기를 핵심 경로로 보여준다", () => {
+    const onOpenPrograms = vi.fn();
+    const { getByRole, queryByRole } = setup({
+      initialMode: "hub",
+      onOpenPrograms,
+    });
+
+    fireEvent.click(
+      getByRole("button", { name: /프로그램으로 시작하기/ }),
+    );
+    expect(onOpenPrograms).toHaveBeenCalledTimes(1);
+    expect(getByRole("button", { name: /운동 직접 고르기/ })).toBeTruthy();
+    expect(queryByRole("button", { name: /^상황별 추천/ })).toBeNull();
+    expect(queryByRole("button", { name: /^부위별 추천/ })).toBeNull();
+  });
+
+  it("프로그램 콜백이 없으면 프로그램 카드를 만들지 않고 직접 고르기만 연결한다", () => {
+    const { getByRole, getByPlaceholderText, queryByRole } = setup({
+      initialMode: "hub",
+    });
+
+    expect(
+      queryByRole("button", { name: /프로그램으로 시작하기/ }),
+    ).toBeNull();
+    fireEvent.click(getByRole("button", { name: /운동 직접 고르기/ }));
+    expect(getByPlaceholderText("🔍 운동 검색 (예: 스쿼트, 벤치)")).toBeTruthy();
+  });
+
+  it("열면 직접 고르기와 사용할 수 있는 빠른 시작만 보여준다", () => {
     // 카탈로그 목록은 **찾는 종목의 이름을 이미 아는 사람**의 도구다.
     // 처음 온 사람은 그 이름을 모르므로 기본 진입로가 될 수 없다.
     const html = renderToStaticMarkup(
@@ -130,39 +160,53 @@ describe("ExercisePicker — 진입 허브 (2026-08-06)", () => {
       />,
     );
 
-    expect(html).toContain("상황별 추천");
-    expect(html).toContain("부위별 추천");
-    expect(html).toContain("운동 이름 검색");
-    expect(html).toContain("지난 운동 불러오기");
+    expect(html).toContain("운동 직접 고르기");
+    expect(html).toContain("지난 운동");
+    expect(html).not.toContain("상황별 추천");
+    expect(html).not.toContain("부위별 추천");
     // 검색창이 바로 뜨면 안 된다 (부정 확인)
     expect(html).not.toContain("🔍 운동 검색 (예: 스쿼트, 벤치)");
   });
 
-  it("'상황별 추천'이 강조된 첫 카드다", () => {
-    // 이름을 모르는 사람에게 가장 먼저 권하는 길이다.
-    const { getByText } = setup({ initialMode: "hub" });
-    const card = getByText("상황별 추천").closest("button");
-    expect(card?.className).toContain("bg-accent");
+  it("프로그램 카드가 기존 상단 장식 이미지를 흡수한다", () => {
+    const { container } = setup({
+      initialMode: "hub",
+      onOpenPrograms: vi.fn(),
+    });
+    const heroImages = [
+      ...container.querySelectorAll('img[src*="exercise-picker-hero"]'),
+    ];
+    expect(heroImages).toHaveLength(1);
   });
 
-  it("'상황별 추천'을 누르면 상황 그리드가 나온다", () => {
-    const { getByText, getAllByText } = setup({ initialMode: "hub" });
-    fireEvent.click(getByText("상황별 추천"));
-
+  it("기존 상황별 추천 화면을 직접 열 수 있다", () => {
+    const { getByText, getAllByText } = render(
+      <ExercisePicker
+        open
+        initialMode="situation"
+        catalog={CATALOG}
+        pastSessions={SESSIONS}
+        pastLoading={false}
+        onClose={vi.fn()}
+        onPickMany={vi.fn()}
+        onPickPast={vi.fn()}
+        onCreateCustom={vi.fn()}
+      />,
+    );
     expect(getByText("오늘 어떤 상황인가요?")).toBeTruthy();
     expect(getAllByText("처음 운동해요").length).toBeGreaterThan(0);
   });
 
-  it("'운동 이름 검색'을 누르면 그때 카탈로그 목록이 나온다", () => {
+  it("'운동 직접 고르기'를 누르면 그때 카탈로그 목록이 나온다", () => {
     const { getByText, getByPlaceholderText } = setup({ initialMode: "hub" });
-    fireEvent.click(getByText("운동 이름 검색"));
+    fireEvent.click(getByText("운동 직접 고르기"));
 
     expect(getByPlaceholderText("🔍 운동 검색 (예: 스쿼트, 벤치)")).toBeTruthy();
   });
 
   it("타바타를 안 넘기면 그 카드가 없다 (달력 예정표 피커가 그렇다)", () => {
     const { queryByText } = setup({ initialMode: "hub" });
-    expect(queryByText("타바타로 바로 시작")).toBeNull();
+    expect(queryByText("4분부터 시작하는 전신 인터벌")).toBeNull();
   });
 
   it("타바타를 넘기면 허브의 한 항목으로 나온다", () => {
@@ -183,16 +227,25 @@ describe("ExercisePicker — 진입 허브 (2026-08-06)", () => {
       />,
     );
 
-    // 담는 게 아니라 갈아엎고 시작한다는 걸 문구가 말한다
-    expect(getByText("음원 따라 4분, 기록은 자동 — 목록은 새로 시작해요")).toBeTruthy();
-    fireEvent.click(getByText("타바타로 바로 시작"));
+    expect(getByText("음악에 맞춰 20초 운동 · 10초 휴식")).toBeTruthy();
+    fireEvent.click(getByText("4분부터 시작하는 전신 인터벌"));
     expect(onOpenTabata).toHaveBeenCalledTimes(1);
   });
 
-  it("'부위별 추천'은 부위 그리드부터 보여준다", () => {
-    const { getByText, getAllByText } = setup({ initialMode: "hub" });
-    fireEvent.click(getByText("부위별 추천"));
-
+  it("기존 부위별 추천 화면을 직접 열 수 있다", () => {
+    const { getByText, getAllByText } = render(
+      <ExercisePicker
+        open
+        initialMode="part"
+        catalog={CATALOG}
+        pastSessions={SESSIONS}
+        pastLoading={false}
+        onClose={vi.fn()}
+        onPickMany={vi.fn()}
+        onPickPast={vi.fn()}
+        onCreateCustom={vi.fn()}
+      />,
+    );
     expect(getByText("오늘 어디를 운동할까요?")).toBeTruthy();
     // 부위 6종이 전부 버튼으로 있다 — 가로 스크롤이면 오른쪽이 잘려 보이지
     // 않는다. 그리드라 6개가 다 그려진다.
@@ -364,10 +417,8 @@ describe("ExercisePicker — 내 루틴 (0056 · 2026-08-06 개편)", () => {
       initialMode: "hub",
       routines: [routine("가슴날", "벤치프레스")],
     });
-    expect(getByText("상황별 추천")).toBeTruthy();
-    expect(getByText("부위별 추천")).toBeTruthy();
-    expect(getByText("운동 이름 검색")).toBeTruthy();
-    expect(getByText("지난 운동 불러오기")).toBeTruthy();
+    expect(getByText("운동 직접 고르기")).toBeTruthy();
+    expect(getByText("지난 운동")).toBeTruthy();
     expect(getByText("내 루틴")).toBeTruthy();
   });
 

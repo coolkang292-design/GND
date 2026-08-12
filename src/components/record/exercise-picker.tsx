@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useMemo, useRef, useState } from "react";
 import {
   exerciseFrequencyMap,
@@ -27,6 +26,7 @@ import {
   initialSetupEntries,
   type SetupEntry,
 } from "./exercise-setup-sheet";
+import { ExerciseEntryHub } from "./exercise-entry-hub";
 
 const PARTS: readonly (BodyPart | "전체")[] = [
   "전체",
@@ -91,6 +91,8 @@ type PickerProps = {
    * 2026-08-05에 범위 밖으로 정했다.
    */
   onOpenTabata?: () => void;
+  /** 공식 프로그램 카탈로그 진입 — 기록 화면에서만 넘긴다 */
+  onOpenPrograms?: () => void;
   /** 내 루틴 (0056). **저장된 루틴이 있을 때만** 진입 카드가 나온다 */
   routines?: WorkoutRoutine[];
   routinesLoading?: boolean;
@@ -131,6 +133,7 @@ function PickerSheet({
   onCreateCustom,
   initialMode = "hub",
   onOpenTabata,
+  onOpenPrograms,
   challengeCategories = null,
   routines,
   routinesLoading = false,
@@ -377,52 +380,17 @@ function PickerSheet({
           <>
             <h3 className="text-base font-extrabold">운동 추가</h3>
             <p className="mt-0.5 mb-3 text-[12.5px] text-muted">
-              처음이라면 추천 운동으로 시작해보세요
+              오늘 운동을 어떻게 시작할까요?
             </p>
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              <HubCard
-                primary
-                iconSrc="/ui-icons/hub-situation.webp"
-                title="상황별 추천"
-                sub="처음 운동해요, 집에서, 30분만 등 상황에 맞게"
-                onClick={() => setMode("situation")}
-              />
-              <HubCard
-                iconSrc="/ui-icons/hub-part.webp"
-                title="부위별 추천"
-                sub="가슴, 등, 하체 등 운동할 부위로 고르기"
-                onClick={() => setMode("part")}
-              />
-              <HubCard
-                iconSrc="/ui-icons/hub-search.webp"
-                title="운동 이름 검색"
-                sub="알고 있는 운동을 직접 찾아요"
-                onClick={() => setMode("search")}
-              />
-              <HubCard
-                iconSrc="/ui-icons/hub-past.webp"
-                title="지난 운동 불러오기"
-                sub="예전에 했던 운동을 그대로 추가해요"
-                onClick={() => setMode("past")}
-              />
-              {routinesEnabled && (
-                <HubCard
-                  iconSrc="/ui-icons/hub-routine.webp"
-                  title="내 루틴"
-                  sub={`저장해 둔 루틴 ${routines?.length ?? 0}개에서 불러와요`}
-                  onClick={() => setMode("routine")}
-                />
-              )}
-              {/* 다른 넷과 달리 담는 게 아니라 바로 시작한다 — 문구로 말한다 */}
-              {onOpenTabata && (
-                <HubCard
-                  iconSrc="/ui-icons/hub-tabata.webp"
-                  title="타바타로 바로 시작"
-                  sub="음원 따라 4분, 기록은 자동 — 목록은 새로 시작해요"
-                  onClick={onOpenTabata}
-                />
-              )}
-            </div>
+            <ExerciseEntryHub
+              hasPast={pastSessions.length > 0}
+              routineCount={routinesEnabled ? (routines?.length ?? 0) : 0}
+              onPrograms={onOpenPrograms}
+              onSearch={() => setMode("search")}
+              onPast={() => setMode("past")}
+              onRoutine={() => setMode("routine")}
+              onInterval={onOpenTabata}
+            />
           </>
         ) : mode === "situation" || mode === "part" ? (
           <RecommendedPicker
@@ -772,65 +740,5 @@ function PickerSheet({
         )}
       </div>
     </>
-  );
-}
-
-function HubCard({
-  iconSrc,
-  title,
-  sub,
-  onClick,
-  primary = false,
-}: {
-  /**
-   * ⚠️ 이모지가 아니라 **이미지 경로**다 (2026-08-07 사용자 제공 시안).
-   * 이름을 `icon`에서 바꾼 것은 의도적이다 — 그냥 두면 남은 호출부가
-   * 경로 **문자열을 글자 그대로 렌더**해도 타입이 통과한다.
-   */
-  iconSrc: string;
-  title: string;
-  sub: string;
-  onClick: () => void;
-  primary?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`mb-2 flex w-full items-center gap-3 rounded-card border p-4 text-left ${
-        primary
-          ? "border-accent bg-accent text-accent-ink"
-          : "border-line bg-surface-2"
-      }`}
-    >
-      {/* ⚠️ `alt=""` — 바로 옆 `title`이 같은 뜻을 글자로 말한다. alt를 채우면
-          스크린리더가 같은 말을 두 번 읽는다. 이미지가 안 떠도 제목·설명·이동은
-          그대로 성립한다(설계 §5).
-
-          ⚠️ **primary 카드에서는 아이콘을 검게 칠한다** (2026-08-07 사용자 지적).
-          그 카드만 `bg-accent`(골드 채움)라, 골드 아이콘을 그대로 얹으면
-          배경과 같은 색이라 **아예 안 보인다.** 글자가 `text-accent-ink`로
-          어두워지는 것과 같은 이유다.
-          별도 검정 자산을 만들지 않고 `brightness-0`로 눕힌다 — 자산이 두 벌이
-          되면 시안을 다시 자를 때 한쪽만 갱신되어 갈라진다. */}
-      <Image
-        src={iconSrc}
-        alt=""
-        width={40}
-        height={40}
-        className={`h-10 w-10 flex-none ${primary ? "brightness-0" : ""}`}
-      />
-      <span className="min-w-0 flex-1">
-        <span className="block text-sm font-extrabold">{title}</span>
-        <span
-          className={`mt-0.5 block text-xs ${
-            primary ? "text-accent-ink/75" : "text-muted"
-          }`}
-        >
-          {sub}
-        </span>
-      </span>
-      <span className={primary ? "text-accent-ink/60" : "text-faint"}>›</span>
-    </button>
   );
 }
