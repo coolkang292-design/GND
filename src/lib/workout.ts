@@ -7,6 +7,8 @@ import type { CompletedSession } from "@/lib/domain/calendar";
 import type { VolumeSet } from "@/lib/domain/volume";
 import type { LogExercise } from "@/lib/domain/workout-log";
 import type { ComparableExercise } from "@/lib/domain/record-beaten";
+import type { EffortFeedback } from "@/lib/domain/program-load";
+import type { ExercisePrescription } from "@/lib/domain/workout-plan";
 import type {
   BodyPart,
   CatalogExercise,
@@ -24,6 +26,17 @@ export type LocalSet = {
   distanceKm: number;
   durationMin: number;
   done: boolean;
+  /**
+   * 첫·마지막 세트에서 받은 체감 (0067).
+   *
+   * **없음과 "적당함"은 다르다.** 다음 회차 추천의 입력이라 임의로 채우면 무게가
+   * 혼자 올라간다. 안 물어본 세트·사용자가 시트를 닫은 세트는 비어 있다.
+   *
+   * 선택 필드인 이유: 프로그램이 아닌 세트가 압도적으로 많고, v5 이전 draft와
+   * 일반 운동 경로가 이 값을 만들 일이 없다. 없음(`undefined`)과 명시적 null을
+   * 코드가 구분하지 않으므로(둘 다 "안 받음") 저장할 때 `?? null`로 좁힌다.
+   */
+  effortFeedback?: EffortFeedback | null;
 };
 
 export function newSet(partial: Partial<Omit<LocalSet, "key">> = {}): LocalSet {
@@ -34,6 +47,7 @@ export function newSet(partial: Partial<Omit<LocalSet, "key">> = {}): LocalSet {
     distanceKm: 0,
     durationMin: 0,
     done: false,
+    effortFeedback: null,
     ...partial,
   };
 }
@@ -46,10 +60,23 @@ export type LocalExercise = {
   measure: "reps" | "time" | null;
   isCustom: boolean;
   sets: LocalSet[];
+  /**
+   * 공식 프로그램 처방 (0066에서 `workout_plans.exercises`에 실려 온다).
+   * 있으면 반복 범위·휴식·증량 단위를 이 값으로 안내한다. 일반 운동은 없다.
+   */
+  prescription?: ExercisePrescription;
+};
+
+/** 이 운동이 속한 공식 프로그램 회차 (0067) — 완료 세션에 그대로 저장된다 */
+export type ProgramDraftMeta = {
+  enrollmentId: string;
+  week: number;
+  session: number;
+  templateVersion: number;
 };
 
 export type WorkoutDraft = {
-  version: 5;
+  version: 6;
   sessionId: string | null;
   startedAtMs: number | null; // 서버 started_at (RPC 응답 기준)
   scheduledPlanId: string | null; // 예정표에서 불러온 경우, 운동 시작 성공 후 정리
@@ -62,6 +89,8 @@ export type WorkoutDraft = {
   pausedAtMs: number | null; // 지금 정지 중이면 그 시작 시각
   lastActivityMs: number | null; // 마지막 동작 시각
   tabataMinutes: number | null; // 타바타 세션이면 그 분수 — 무동작 감지 제외 판정용
+  /** 공식 프로그램 회차면 그 메타 (0067). 일반 운동은 null */
+  program: ProgramDraftMeta | null;
 };
 
 /** 무동작 감지 필드의 초기값 — 새 세션·구버전 draft 승격에 함께 쓴다 */
@@ -71,6 +100,9 @@ const IDLE_DEFAULTS = {
   lastActivityMs: null,
   tabataMinutes: null,
 } as const;
+
+/** 프로그램 필드의 초기값 — v5 이하 승격과 새 세션이 같이 쓴다 (0067) */
+const PROGRAM_DEFAULTS = { program: null } as const;
 
 /** crypto.randomUUID는 보안 컨텍스트 전용 — http+LAN IP 테스트에서도 동작해야 함 */
 export function localId(): string {
@@ -84,7 +116,7 @@ export const DEFAULT_REST_SECONDS = 90;
 
 export function emptyDraft(restSeconds = DEFAULT_REST_SECONDS): WorkoutDraft {
   return {
-    version: 5,
+    version: 6,
     sessionId: null,
     startedAtMs: null,
     scheduledPlanId: null,
@@ -93,6 +125,7 @@ export function emptyDraft(restSeconds = DEFAULT_REST_SECONDS): WorkoutDraft {
     restSeconds,
     exercises: [],
     ...IDLE_DEFAULTS,
+    ...PROGRAM_DEFAULTS,
   };
 }
 
@@ -103,9 +136,10 @@ export function loadDraft(userId: string): WorkoutDraft {
     const raw = localStorage.getItem(draftKey(userId));
     if (!raw) return emptyDraft();
     type IdleFields = keyof typeof IDLE_DEFAULTS;
+    type ProgramFields = keyof typeof PROGRAM_DEFAULTS;
     type LegacyDraft<V extends number, Missing extends keyof WorkoutDraft> = Omit<
       WorkoutDraft,
-      "version" | Missing | IdleFields
+      "version" | Missing | IdleFields | ProgramFields
     > & { version: V };
 
     const parsed = JSON.parse(raw) as
@@ -113,36 +147,50 @@ export function loadDraft(userId: string): WorkoutDraft {
       | LegacyDraft<1, "scheduledPlanId" | "sourceSessionId" | "effortMessage">
       | LegacyDraft<2, "sourceSessionId" | "effortMessage">
       | LegacyDraft<3, "sourceSessionId">
-      | LegacyDraft<4, never>;
+      | LegacyDraft<4, never>
+      | (Omit<WorkoutDraft, "version" | ProgramFields> & { version: 5 });
     if (!parsed || !Array.isArray(parsed.exercises)) {
       return emptyDraft();
     }
+    // ⚠️ 승격 경로는 **전부 v6에서 끝난다.** 하나라도 옛 번호로 끝내면 그 draft는
+    //    `parsed.version !== 6`에 걸려 통째로 버려진다 — 진행 중이던 운동이 날아간다.
     if (parsed.version === 1) {
       return {
         ...parsed,
-        version: 5,
+        version: 6,
         scheduledPlanId: null,
         sourceSessionId: null,
         effortMessage: null,
         ...IDLE_DEFAULTS,
+        ...PROGRAM_DEFAULTS,
       };
     }
     if (parsed.version === 2) {
       return {
         ...parsed,
-        version: 5,
+        version: 6,
         sourceSessionId: null,
         effortMessage: null,
         ...IDLE_DEFAULTS,
+        ...PROGRAM_DEFAULTS,
       };
     }
     if (parsed.version === 3) {
-      return { ...parsed, version: 5, sourceSessionId: null, ...IDLE_DEFAULTS };
+      return {
+        ...parsed,
+        version: 6,
+        sourceSessionId: null,
+        ...IDLE_DEFAULTS,
+        ...PROGRAM_DEFAULTS,
+      };
     }
     if (parsed.version === 4) {
-      return { ...parsed, version: 5, ...IDLE_DEFAULTS };
+      return { ...parsed, version: 6, ...IDLE_DEFAULTS, ...PROGRAM_DEFAULTS };
     }
-    if (parsed.version !== 5) return emptyDraft();
+    if (parsed.version === 5) {
+      return { ...parsed, version: 6, ...PROGRAM_DEFAULTS };
+    }
+    if (parsed.version !== 6) return emptyDraft();
     return parsed;
   } catch {
     return emptyDraft();
@@ -235,6 +283,14 @@ export async function createDraftSession(input: {
   timezone: string;
   /** 타바타 코스 분수 (4|8|16) — 일반 운동은 생략 (0019) */
   tabataMinutes?: number;
+  /**
+   * 공식 프로그램 회차면 그 메타 (0067).
+   *
+   * **여기서 안 넣으면 나중에 못 넣는다** — 0067은 이 네 컬럼에 insert 권한만
+   * 주고 update는 주지 않는다. 완료 뒤 예정표 행이 지워져도 진행률이 남게
+   * 하려면 시작 시점에 세션으로 복사해 둬야 한다.
+   */
+  program?: ProgramDraftMeta | null;
 }): Promise<WorkoutSession> {
   const supabase = getSupabaseBrowserClient();
   const { data, error } = await supabase
@@ -243,6 +299,14 @@ export async function createDraftSession(input: {
       group_id: input.groupId,
       timezone: input.timezone,
       ...(input.tabataMinutes ? { tabata_minutes: input.tabataMinutes } : {}),
+      ...(input.program
+        ? {
+            program_enrollment_id: input.program.enrollmentId,
+            program_week: input.program.week,
+            program_session: input.program.session,
+            program_template_version: input.program.templateVersion,
+          }
+        : {}),
     })
     .select()
     .single();
@@ -549,6 +613,9 @@ export async function saveSessionExercises(
       duration_seconds:
         isCardio || isTime ? Math.round(s.durationMin * 60) : null,
       is_completed: s.done,
+      // 0067. 안 물어본 세트는 undefined라 `?? null`로 좁힌다 — undefined를 그대로
+      // 보내면 PostgREST가 키를 빼서 열마다 행 모양이 달라진다.
+      effort_feedback: s.effortFeedback ?? null,
     }));
   });
   if (setRows.length === 0) return;

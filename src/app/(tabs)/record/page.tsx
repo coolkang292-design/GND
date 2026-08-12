@@ -26,6 +26,7 @@ import { shouldAskBodyweight } from "@/lib/domain/zero-weight";
 import { TabataSheet } from "@/components/record/tabata-sheet";
 import { ExerciseGuideSheet } from "@/components/record/exercise-guide-sheet";
 import { guideForExercise } from "@/lib/domain/exercise-guides";
+import { initialProgramLoad } from "@/lib/domain/program-load";
 import { RestBar } from "@/components/record/rest-bar";
 import { ActiveSessionOverlay } from "@/components/record/active-session-overlay";
 import { VerificationPhoto } from "@/components/record/verification-photo";
@@ -1361,16 +1362,89 @@ function WorkoutScreen({ userId }: { userId: string }) {
       return true;
     }
     const exercises = toDraftExercises(plan.exercises, localId);
+    /*
+      공식 프로그램 계획이면 회차 메타를 draft에 싣는다 (0067).
+
+      ⚠️ **시작할 때 세션에 복사해야 한다.** 0067은 이 네 컬럼에 insert 권한만
+      주고 update는 안 준다. 여기서 놓치면 나중에 붙일 방법이 없고, 운동을
+      마치면 예정표 행이 지워지므로 18회 진행률이 통째로 사라진다.
+    */
+    const program =
+      plan.programEnrollmentId !== null &&
+      plan.programWeek !== null &&
+      plan.programSession !== null &&
+      plan.programTemplateVersion !== null
+        ? {
+            enrollmentId: plan.programEnrollmentId,
+            week: plan.programWeek,
+            session: plan.programSession,
+            templateVersion: plan.programTemplateVersion,
+          }
+        : null;
     setDraft((current) => ({
       ...current,
       scheduledPlanId: plan.id,
       sourceSessionId: plan.sourceSessionId,
       effortMessage: null,
       exercises,
+      program,
     }));
     setSubTab("workout");
+    // 무게는 **비동기로 뒤따라 채운다.** 지난 기록 조회를 기다리느라 화면 전환이
+    // 늦어지면, 사용자는 버튼이 안 먹은 줄 안다.
+    if (program) void fillProgramLoads(exercises);
     showToast("예정표를 불러왔어요 — 준비되면 운동을 시작하세요");
     return true;
+  }
+
+  /**
+   * 프로그램 운동의 시작 무게를 최근 성공 기록에서 채운다 (계획 2026-08-12).
+   *
+   * ⚠️ **기록이 없으면 아무것도 넣지 않는다.** 0kg을 확정하면 사용자는 "앱이 정한
+   *    무게"로 읽고 그 값이 기록에 남는다. 그 경우 화면이 반복 범위 안내를 띄운다.
+   *
+   * 새 질의를 만들지 않았다 — `getLastRecordedSets()`가 이미 완료 세트만
+   * 최신 세션 기준으로 돌려준다.
+   */
+  async function fillProgramLoads(exercises: LocalExercise[]) {
+    const prescribed = exercises.filter((ex) => ex.prescription);
+    if (prescribed.length === 0) return;
+    const results = await Promise.all(
+      prescribed.map(async (ex) => {
+        const previous = await getLastRecordedSets(userId, ex.name).catch(
+          () => null,
+        );
+        return {
+          key: ex.key,
+          load: initialProgramLoad(
+            ex.prescription!,
+            (previous ?? []).map((s) => ({
+              weightKg: s.weightKg,
+              reps: s.reps,
+              isCompleted: true, // getLastRecordedSets는 완료 세트만 돌려준다
+            })),
+          ),
+        };
+      }),
+    );
+    const weightByKey = new Map(
+      results
+        .filter((r) => r.load.weightKg !== null)
+        .map((r) => [r.key, r.load.weightKg as number] as const),
+    );
+    if (weightByKey.size === 0) return;
+    setDraft((d) => ({
+      ...d,
+      exercises: d.exercises.map((ex) => {
+        const weightKg = weightByKey.get(ex.key);
+        if (weightKg === undefined) return ex;
+        // 이미 완료한 세트는 건드리지 않는다 — 기록을 덮어쓰면 안 된다.
+        return {
+          ...ex,
+          sets: ex.sets.map((s) => (s.done ? s : { ...s, weightKg })),
+        };
+      }),
+    }));
   }
 
   async function handleStart() {
@@ -1394,6 +1468,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
           groupId,
           timezone: tz,
           tabataMinutes: tabataMinutesRef.current ?? undefined,
+          // 0067 — insert 시점이 이 값을 넣을 수 있는 유일한 순간이다
+          program: draft.program,
         });
         sessionId = s.id;
         setDraft((d) => ({ ...d, sessionId }));

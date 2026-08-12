@@ -24,6 +24,7 @@ const exercise: LocalExercise = {
       distanceKm: 0,
       durationMin: 0,
       done: false,
+      effortFeedback: null,
     },
   ],
 };

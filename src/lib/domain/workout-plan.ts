@@ -25,7 +25,17 @@ export type PlanExercise = {
   prescription?: ExercisePrescription;
 };
 
-export type DraftPlanSet = PlanSet & { key: string; done: boolean };
+/**
+ * 예정표 세트를 기록용 임시 세트로 바꾼 모양.
+ *
+ * `effortFeedback`은 계획에는 없고 **하는 동안 생긴다**(0067). 여기서 null을
+ * 명시하지 않으면 `LocalSet`과 모양이 갈려 예정표를 불러올 수 없다.
+ */
+export type DraftPlanSet = PlanSet & {
+  key: string;
+  done: boolean;
+  effortFeedback: null;
+};
 export type DraftPlanExercise = Omit<PlanExercise, "sets"> & {
   key: string;
   sets: DraftPlanSet[];
@@ -227,6 +237,7 @@ export function toDraftExercises(
       ...set,
       key: makeKey(),
       done: false,
+      effortFeedback: null,
     })),
   }));
 }
