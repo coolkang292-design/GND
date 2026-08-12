@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CatalogExercise } from "@/lib/types";
 import type { CalendarSession } from "@/lib/workout";
@@ -33,13 +33,19 @@ const CATALOG = [
   item("푸시업", { exercise_type: "bodyweight", measure: "reps" }),
 ];
 
-function setup(over: { pastSessions?: CalendarSession[] } = {}) {
+function setup(
+  over: {
+    pastSessions?: CalendarSession[];
+    initialPicked?: CatalogExercise[];
+  } = {},
+) {
   return render(
     <TabataSheet
       open
       catalog={CATALOG}
       pastSessions={over.pastSessions ?? []}
       pastLoading={false}
+      initialPicked={over.initialPicked}
       onClose={vi.fn()}
       onCreateCustom={vi.fn()}
       onBegin={vi.fn()}
@@ -50,6 +56,23 @@ function setup(over: { pastSessions?: CalendarSession[] } = {}) {
 }
 
 describe("TabataSheet — 운동 고르기 배선 (2026-08-06)", () => {
+  it("전신 인터벌의 시간·리듬·시작 행동을 한 언어로 안내한다", () => {
+    setup({ initialPicked: CATALOG });
+
+    expect(
+      screen.getByRole("heading", { name: /4분부터 시작하는 전신 인터벌/ }),
+    ).toBeTruthy();
+    expect(
+      screen.getByText("음악에 맞춰 20초 운동 · 10초 휴식"),
+    ).toBeTruthy();
+    expect(
+      screen
+        .getByRole("button", { name: "전신 인터벌 시작" })
+        .hasAttribute("disabled"),
+    ).toBe(false);
+    expect(screen.queryByText(/타바타 —/)).toBeNull();
+  });
+
   /*
     회귀: 피커의 추천 경로는 `onPickConfigured`로 결과를 돌려주는데, 그게
     **옵셔널 prop**이라 안 넘겨도 타입 검사가 통과한다. 안 넘기면 피커의

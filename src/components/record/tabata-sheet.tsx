@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { UiIcon } from "@/components/ui-icon";
 import {
+  INTERVAL_COPY,
   TABATA_EXERCISE_COUNT,
   TABATA_TRACKS,
   tabataPickFromNames,
@@ -233,7 +234,7 @@ function TabataSheetBody({
             같은 기능으로 읽힌다 */}
         <h3 className="flex items-center gap-1.5 text-base font-extrabold">
           <UiIcon name="hub-tabata" size={22} />
-          타바타 — {track.title}
+          {INTERVAL_COPY.title}
         </h3>
 
         <audio
@@ -252,6 +253,9 @@ function TabataSheetBody({
 
         {phase === "setup" && (
           <>
+            <p className="mt-1 text-xs font-bold text-muted">
+              {INTERVAL_COPY.description}
+            </p>
             <p className="mt-1 text-xs text-muted">
               코스와 구성 운동 {TABATA_EXERCISE_COUNT}개를 고르고 시작하세요.
               음원이 끝나면 자동으로 기록되고, 인증샷만 찍으면 돼요.
@@ -327,7 +331,7 @@ function TabataSheetBody({
               disabled={busy || picked.length !== TABATA_EXERCISE_COUNT}
               className="mt-3 h-12 rounded-card bg-accent text-sm font-extrabold text-accent-ink disabled:opacity-50"
             >
-              {busy ? "시작 중…" : "▶ 타바타 시작"}
+              {busy ? "시작 중…" : INTERVAL_COPY.start}
             </button>
           </>
         )}

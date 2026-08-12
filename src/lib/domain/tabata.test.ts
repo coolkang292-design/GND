@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { CatalogExercise } from "@/lib/types";
 
 import {
+  INTERVAL_COPY,
   TABATA_EXERCISE_COUNT,
   TABATA_ROUND_SECONDS,
   TABATA_TRACKS,
@@ -12,6 +13,15 @@ import {
   tabataRepsForMinutes,
   tabataTrackForMinutes,
 } from "./tabata";
+
+describe("전신 인터벌 사용자 안내", () => {
+  it("사용자에게 방식보다 시간을 먼저 말한다", () => {
+    expect(INTERVAL_COPY.title).toBe("4분부터 시작하는 전신 인터벌");
+    expect(INTERVAL_COPY.short).toBe("4분 인터벌");
+    expect(INTERVAL_COPY.description).toBe("음악에 맞춰 20초 운동 · 10초 휴식");
+    expect(INTERVAL_COPY.session(8)).toBe("전신 인터벌 8분");
+  });
+});
 
 const catalogItem = (name: string): CatalogExercise => ({
   id: `cat-${name}`,

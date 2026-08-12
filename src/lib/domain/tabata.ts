@@ -9,6 +9,14 @@ export const TABATA_ROUND_SECONDS = 30;
 
 export type TabataMinutes = 4 | 8 | 16;
 
+export const INTERVAL_COPY = {
+  title: "4분부터 시작하는 전신 인터벌",
+  short: "4분 인터벌",
+  description: "음악에 맞춰 20초 운동 · 10초 휴식",
+  start: "전신 인터벌 시작",
+  session: (minutes: TabataMinutes) => `전신 인터벌 ${minutes}분`,
+} as const;
+
 export type TabataTrack = {
   id: string;
   title: string;
