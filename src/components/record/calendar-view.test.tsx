@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -23,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   getWorkoutPlans: vi.fn(),
   getActiveProgramEnrollments: vi.fn(),
   rescheduleProgramPlans: vi.fn(),
+  cancelProgramEnrollment: vi.fn(),
 }));
 
 vi.mock("@/lib/crew", () => ({ getMyProfile: mocks.getMyProfile }));
@@ -39,6 +41,7 @@ vi.mock("@/lib/workout-plan", () => ({
 vi.mock("@/lib/programs", () => ({
   getActiveProgramEnrollments: mocks.getActiveProgramEnrollments,
   rescheduleProgramPlans: mocks.rescheduleProgramPlans,
+  cancelProgramEnrollment: mocks.cancelProgramEnrollment,
 }));
 
 /** 월 경계에서 흔들리지 않게 달 한가운데로 고정한다 (KST 2026-08-15) */
@@ -431,6 +434,65 @@ describe("CalendarView — 프로그램 진행 표시 (2026-08-12)", () => {
 
     expect(screen.queryByText("운동 예정")).toBeNull();
     expect(screen.getByText(/프로그램 예정/)).toBeTruthy();
+  });
+
+  /**
+   * 사용자 지적 2026-08-12 — 달력에서 프로그램을 끝낼 수 있어야 한다.
+   * `삭제` 하나만 있으면 그만두려는 사람이 18번 눌러야 한다.
+   */
+  it("달력에서 프로그램을 통째로 그만둘 수 있다", async () => {
+    const plans = [
+      programPlan({
+        id: "22222222-2222-4222-8222-222222222222",
+        planDate: "2026-08-24",
+        programWeek: 2,
+        programSession: 1,
+      }),
+      programPlan({
+        id: "22222222-2222-4222-8222-222222222224",
+        planDate: "2026-08-26",
+        programWeek: 2,
+        programSession: 2,
+      }),
+    ];
+    mocks.getWorkoutPlans.mockResolvedValue(plans);
+    mocks.cancelProgramEnrollment.mockResolvedValue(2);
+    const confirmSpy = vi
+      .spyOn(window, "confirm")
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(true);
+    await setup();
+
+    fireEvent.click(screen.getByRole("button", { name: "8월 24일" }));
+    // 두 삭제의 범위가 라벨로 갈린다
+    expect(screen.getByRole("button", { name: "이 회차만 삭제" })).toBeTruthy();
+    const quit = screen.getByRole("button", { name: "프로그램 그만두기" });
+
+    // ① 확인창에서 아니오 → 아무것도 안 지운다
+    await act(async () => fireEvent.click(quit));
+    expect(mocks.cancelProgramEnrollment).not.toHaveBeenCalled();
+
+    // ② 예 → 그 등록의 계획이 달력에서 모두 사라진다
+    await act(async () => fireEvent.click(quit));
+    expect(mocks.cancelProgramEnrollment).toHaveBeenCalledWith(ENROLLMENT.id);
+    await waitFor(() => {
+      expect(screen.queryByText(/프로그램 예정/)).toBeNull();
+    });
+
+    confirmSpy.mockRestore();
+  });
+
+  it("일반 계획에는 그만두기가 없다", async () => {
+    // 프로그램이 아닌 계획에 프로그램 그만두기가 뜨면 안 된다
+    mocks.getWorkoutPlans.mockResolvedValue([PLAN]);
+    await setup();
+
+    fireEvent.click(screen.getByRole("button", { name: "8월 16일" }));
+
+    expect(screen.getByRole("button", { name: "삭제" })).toBeTruthy();
+    expect(
+      screen.queryByRole("button", { name: "프로그램 그만두기" }),
+    ).toBeNull();
   });
 
   it("일반 계획은 예전 그대로 운동 예정이다 — 회귀", async () => {

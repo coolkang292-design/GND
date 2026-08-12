@@ -29,6 +29,7 @@ import {
   type ProgramPlanMove,
 } from "@/lib/domain/program-schedule";
 import {
+  cancelProgramEnrollment,
   getActiveProgramEnrollments,
   rescheduleProgramPlans,
   type ProgramEnrollment,
@@ -523,6 +524,48 @@ export function CalendarView({
     }
   }
 
+  /**
+   * 프로그램을 통째로 그만둔다 (사용자 지적 2026-08-12).
+   *
+   * `삭제`는 **이 회차 하나만** 지운다. 그만두려는 사람에게 그 버튼만 있으면
+   * 18번 눌러야 한다 — 프로그램을 보는 곳에서 프로그램을 끝낼 수 있어야 한다.
+   *
+   * ⚠️ 지우는 것은 **달력에 남은 회차**뿐이다. 완료한 운동은 마칠 때 계획 행이
+   *    이미 지워져서 여기 없고, 기록은 `workout_sessions`에 그대로 남는다.
+   */
+  async function handleQuitProgram() {
+    const enrollmentId = selectedPlan?.programEnrollmentId;
+    if (!enrollmentId || planBusy) return;
+    const title = selectedEnrollment?.title ?? "이 프로그램";
+    const remaining = plans.filter(
+      (plan) => plan.programEnrollmentId === enrollmentId,
+    ).length;
+    if (
+      !window.confirm(
+        `${title}을(를) 그만둘까요?\n달력에 남은 ${remaining}회가 사라져요. 이미 완료한 운동 기록은 그대로 남습니다.`,
+      )
+    ) {
+      return;
+    }
+    setPlanBusy(true);
+    try {
+      const removed = await cancelProgramEnrollment(enrollmentId);
+      setPlans((current) =>
+        current.filter((plan) => plan.programEnrollmentId !== enrollmentId),
+      );
+      setEnrollments((current) =>
+        current.filter((item) => item.id !== enrollmentId),
+      );
+      setSelectedDate(null);
+      showPlanToast(`프로그램을 그만뒀어요 · ${removed}회 삭제`);
+    } catch (error) {
+      console.error("[program] 그만두기 실패", error);
+      showPlanToast("그만두지 못했어요");
+    } finally {
+      setPlanBusy(false);
+    }
+  }
+
   async function handleDeletePlan() {
     if (!selectedPlan || !window.confirm("이 운동 예정표를 삭제할까요?")) return;
     setPlanBusy(true);
@@ -913,13 +956,29 @@ export function CalendarView({
                         {selectedPlan.exercises.length}종목 · 완료 전에는 통계에 포함되지 않아요
                       </p>
                     </div>
-                    <button
-                      onClick={handleDeletePlan}
-                      disabled={planBusy}
-                      className="shrink-0 text-xs font-bold text-warn disabled:opacity-50"
-                    >
-                      삭제
-                    </button>
+                    {/*
+                      두 삭제의 범위를 라벨로 가른다 — `이 회차만`과
+                      `프로그램 그만두기`. 그냥 `삭제` 하나만 두면 프로그램을
+                      끝내려는 사람이 18번 눌러야 한다 (사용자 지적 2026-08-12).
+                    */}
+                    <div className="flex shrink-0 flex-col items-end gap-1.5">
+                      <button
+                        onClick={handleDeletePlan}
+                        disabled={planBusy}
+                        className="text-xs font-bold text-warn disabled:opacity-50"
+                      >
+                        {selectedPlan.programEnrollmentId ? "이 회차만 삭제" : "삭제"}
+                      </button>
+                      {selectedPlan.programEnrollmentId && (
+                        <button
+                          onClick={handleQuitProgram}
+                          disabled={planBusy}
+                          className="text-[11px] font-bold text-muted underline decoration-line underline-offset-4 disabled:opacity-50"
+                        >
+                          프로그램 그만두기
+                        </button>
+                      )}
+                    </div>
                   </div>
                   {/*
                     계획 상세 (2026-08-04) — 세트·수량은 `workout_plans.exercises`

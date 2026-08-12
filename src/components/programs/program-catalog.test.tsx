@@ -64,6 +64,15 @@ describe("ProgramCatalog", () => {
     expect(onPick).toHaveBeenCalledWith("shoulder-frame-6w");
   });
 
+  it("목록에서 운동 추가로 돌아갈 수 있다", () => {
+    // 사용자 지적 2026-08-12 — 상세에는 뒤로 가기가 있는데 목록에는 없어서
+    // 여기까지 들어오면 탭바로만 빠져나갈 수 있었다
+    render(<ProgramCatalog programs={OFFICIAL_PROGRAMS} onPick={vi.fn()} />);
+
+    const back = screen.getByRole("link", { name: /운동 추가로/ });
+    expect(back.getAttribute("href")).toBe("/record");
+  });
+
   it("인터벌을 6번째 카드로 세운다", () => {
     // 사용자 지시 2026-08-12 — 인터벌은 '프로그램으로 시작하기' 안의 **프로그램**이다
     const onPick = vi.fn();

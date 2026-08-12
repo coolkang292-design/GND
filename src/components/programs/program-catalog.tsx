@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useState } from "react";
 import {
   intervalExerciseName,
@@ -161,6 +162,18 @@ export function ProgramCatalog({ programs, onPick }: ProgramCatalogProps) {
       aria-labelledby="program-catalog-title"
       className="mx-auto w-full max-w-3xl pb-4"
     >
+      {/*
+        나갈 길 (사용자 지적 2026-08-12). 상세 화면에는 `← 프로그램 목록으로`가
+        있는데 **목록에는 없었다** — 여기까지 들어오면 탭바로만 빠져나갈 수 있었다.
+        상세의 뒤로 가기와 같은 모양으로 둔다.
+      */}
+      <Link
+        href="/record"
+        className="mb-3 inline-flex min-h-11 items-center rounded-full pr-3 text-sm font-bold text-muted"
+      >
+        ← 운동 추가로
+      </Link>
+
       <p className="text-[11px] font-extrabold tracking-[0.08em] text-accent">
         GND 공식 프로그램
       </p>
