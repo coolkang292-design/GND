@@ -2390,11 +2390,13 @@ CREATE OR REPLACE FUNCTION public.owns_program_enrollment(eid uuid)
  RETURNS boolean
  LANGUAGE sql
  STABLE SECURITY DEFINER
- SET search_path TO 'public'
+ SET search_path TO ''
 AS $function$
   select exists (
-    select 1 from program_enrollments
-    where id = eid and user_id = auth.uid()
+    select 1
+      from public.program_enrollments
+     where id = eid
+       and user_id = auth.uid()
   )
 $function$;
 
