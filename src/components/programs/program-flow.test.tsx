@@ -1,0 +1,154 @@
+// @vitest-environment jsdom
+
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { OFFICIAL_PROGRAMS } from "@/lib/domain/official-programs";
+import type { CatalogExercise } from "@/lib/types";
+import type { ProgramEnrollment } from "@/lib/programs";
+import { ProgramFlow } from "./program-flow";
+
+afterEach(cleanup);
+
+const catalog: CatalogExercise[] = [
+  ...new Set(
+    OFFICIAL_PROGRAMS.flatMap((program) =>
+      program.sessions.flatMap((session) =>
+        session.exercises.map((exercise) => exercise.exerciseName),
+      ),
+    ),
+  ),
+].map((name, index) => ({
+  id: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+  name,
+  body_part: "어깨",
+  exercise_type: "weight",
+  measure: null,
+  is_custom: false,
+  created_by: null,
+  created_at: "2026-08-12T00:00:00.000Z",
+}));
+
+function openSchedule() {
+  fireEvent.click(screen.getByRole("button", { name: /시선이 머무는 어깨/ }));
+  fireEvent.click(screen.getByRole("button", { name: "요일과 시간 정하기" }));
+}
+
+function finishSchedule() {
+  openSchedule();
+  fireEvent.click(screen.getByRole("button", { name: "다음 주 시작" }));
+  fireEvent.click(screen.getByRole("button", { name: "월 · 수 · 금" }));
+  fireEvent.change(screen.getByLabelText("세 요일 모두 같은 시간"), {
+    target: { value: "19:00" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "일정 미리보기" }));
+}
+
+describe("ProgramFlow", () => {
+  it("프로그램 선택부터 18회 등록 완료까지 한 흐름으로 이어진다", async () => {
+    const onCreate = vi.fn().mockResolvedValue({
+      enrollmentId: "enrollment-1",
+      nextPlan: { date: "2026-08-17", time: "19:00", title: "밀고 세우기" },
+    });
+    render(
+      <ProgramFlow
+        today="2026-08-12"
+        timeZone="Asia/Seoul"
+        programs={OFFICIAL_PROGRAMS}
+        catalog={catalog}
+        occupiedPlans={[]}
+        onCreate={onCreate}
+      />,
+    );
+
+    finishSchedule();
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: "18회 계획을 달력에 담기" }),
+      );
+    });
+
+    expect(onCreate).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText("6주 계획이 준비됐어요")).toBeTruthy();
+    expect(screen.getByText(/8월 17일.*오후 7:00/)).toBeTruthy();
+  });
+
+  it("같은 프로그램이 진행 중이면 새 등록 대신 진행 화면으로 안내한다", () => {
+    const activeEnrollment: ProgramEnrollment = {
+      id: "00000000-0000-4000-8000-000000000999",
+      programKey: "shoulder-frame-6w",
+      programVersion: 1,
+      title: "상체의 틀을 넓히는 6주",
+      levelAtStart: "beginner",
+      startDate: "2026-08-17",
+      timeZone: "Asia/Seoul",
+      preferredSlots: [
+        { weekday: 1, time: "19:00" },
+        { weekday: 3, time: "19:00" },
+        { weekday: 5, time: "19:00" },
+      ],
+      status: "active",
+    };
+    render(
+      <ProgramFlow
+        today="2026-08-12"
+        timeZone="Asia/Seoul"
+        programs={OFFICIAL_PROGRAMS}
+        catalog={catalog}
+        occupiedPlans={[]}
+        activeEnrollments={[activeEnrollment]}
+        onCreate={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /시선이 머무는 어깨/ }));
+    expect(
+      screen.getByRole("link", { name: "진행 중인 프로그램 보기" }),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("button", { name: "요일과 시간 정하기" }),
+    ).toBeNull();
+  });
+
+  it("등록 실패 뒤에는 완료 화면으로 가지 않고 일정과 오류를 유지한다", async () => {
+    render(
+      <ProgramFlow
+        today="2026-08-12"
+        timeZone="Asia/Seoul"
+        programs={OFFICIAL_PROGRAMS}
+        catalog={catalog}
+        occupiedPlans={[]}
+        onCreate={vi.fn().mockRejectedValue(new Error("rpc failed"))}
+      />,
+    );
+
+    finishSchedule();
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: "18회 계획을 달력에 담기" }),
+      );
+    });
+
+    expect(
+      screen.getByText("저장하지 못했어요. 일정은 그대로 두었어요."),
+    ).toBeTruthy();
+    expect(screen.getByText("3/3 · 18회 미리보기")).toBeTruthy();
+    expect(screen.queryByText("6주 계획이 준비됐어요")).toBeNull();
+  });
+
+  it("운동 카탈로그가 불완전하면 등록 단계에 진입하지 않는다", () => {
+    render(
+      <ProgramFlow
+        today="2026-08-12"
+        timeZone="Asia/Seoul"
+        programs={OFFICIAL_PROGRAMS}
+        catalog={[]}
+        occupiedPlans={[]}
+        onCreate={vi.fn()}
+      />,
+    );
+
+    openSchedule();
+    expect(screen.getByText(/프로그램 운동 정보를 불러오지 못했어요/)).toBeTruthy();
+    expect(screen.queryByText("1/3 · 시작일")).toBeNull();
+  });
+});

@@ -8,6 +8,7 @@ import {
   useState,
   type SetStateAction,
 } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 import { UiIcon } from "@/components/ui-icon";
 import { CalendarView } from "@/components/record/calendar-view";
@@ -222,6 +223,7 @@ function errorMessage(e: unknown): string {
 }
 
 function WorkoutScreen({ userId }: { userId: string }) {
+  const router = useRouter();
   // 임시저장 복구: 렌더 전 lazy 초기화 (§10 새로고침 복구)
   const [draft, setDraftState] = useState(() => loadDraft(userId));
   const draftRef = useRef(draft);
@@ -2118,6 +2120,10 @@ function WorkoutScreen({ userId }: { userId: string }) {
         onPickMany={addExercises}
         onPickConfigured={addConfiguredExercises}
         onPickPast={addPastSession}
+        onOpenPrograms={() => {
+          closePicker();
+          router.push("/record/programs");
+        }}
         onOpenTabata={() => {
           closePicker();
           void openTabataSheet();

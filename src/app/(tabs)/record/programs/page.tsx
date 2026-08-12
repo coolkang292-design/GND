@@ -1,0 +1,130 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useAuth } from "@/components/auth-provider";
+import { ProgramFlow } from "@/components/programs/program-flow";
+import { OFFICIAL_PROGRAMS } from "@/lib/domain/official-programs";
+import {
+  createProgramEnrollment,
+  getActiveProgramEnrollments,
+  type CreateProgramEnrollmentInput,
+  type ProgramEnrollment,
+} from "@/lib/programs";
+import type { CatalogExercise } from "@/lib/types";
+import { getExerciseCatalog } from "@/lib/workout";
+import { getWorkoutPlans, type WorkoutPlan } from "@/lib/workout-plan";
+
+type PageReference = {
+  today: string;
+  timeZone: string;
+};
+
+function localDateKey(date: Date, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+function localTime(iso: string, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(iso));
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  return `${get("hour")}:${get("minute")}`;
+}
+
+function firstPlanSummary(input: CreateProgramEnrollmentInput) {
+  const first = input.schedule[0];
+  const session = input.sessions.find((item) => item.key === first.templateKey);
+  return {
+    date: first.date,
+    time: localTime(first.scheduledAt, input.timeZone),
+    title: session?.title ?? input.program.title,
+  };
+}
+
+export default function ProgramsPage() {
+  const { userId, loading, configured, error } = useAuth();
+  const [pageRef] = useState<PageReference>(() => {
+    const timeZone =
+      Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Seoul";
+    return { today: localDateKey(new Date(), timeZone), timeZone };
+  });
+  const [catalog, setCatalog] = useState<CatalogExercise[]>([]);
+  const [plans, setPlans] = useState<WorkoutPlan[]>([]);
+  const [enrollments, setEnrollments] = useState<ProgramEnrollment[]>([]);
+  const [ready, setReady] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!configured || loading || !userId) return;
+    let cancelled = false;
+    Promise.all([
+      getExerciseCatalog(),
+      getWorkoutPlans(userId),
+      getActiveProgramEnrollments(userId),
+    ])
+      .then(([nextCatalog, nextPlans, nextEnrollments]) => {
+        if (cancelled) return;
+        setCatalog(nextCatalog);
+        setPlans(nextPlans);
+        setEnrollments(nextEnrollments);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLoadError("프로그램 정보를 불러오지 못했어요. 잠시 후 다시 열어 주세요.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [configured, loading, userId]);
+
+  if (!configured) {
+    return <p className="pt-10 text-center text-sm text-muted">Supabase 설정(.env.local)이 필요해요.</p>;
+  }
+  if (loading || !ready) {
+    return <p className="pt-10 text-center text-sm text-muted">프로그램을 불러오는 중…</p>;
+  }
+  if (!userId) {
+    return (
+      <p className="pt-10 text-center text-sm text-warn">
+        익명 인증에 실패했어요{error ? ` — ${error}` : ""}.
+      </p>
+    );
+  }
+  if (loadError) {
+    return <p role="alert" className="rounded-card border border-line bg-surface p-4 text-sm text-warn">{loadError}</p>;
+  }
+
+  return (
+    <ProgramFlow
+      today={pageRef.today}
+      timeZone={pageRef.timeZone}
+      programs={OFFICIAL_PROGRAMS}
+      catalog={catalog}
+      occupiedPlans={plans}
+      activeEnrollments={enrollments}
+      onCreate={async (input) => {
+        const enrollmentId = await createProgramEnrollment(input);
+        return {
+          enrollmentId,
+          nextPlan: firstPlanSummary(input),
+        };
+      }}
+    />
+  );
+}

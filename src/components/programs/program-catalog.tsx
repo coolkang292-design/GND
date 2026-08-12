@@ -16,6 +16,7 @@ type ProgramDetailProps = {
   program: OfficialProgram;
   onBack: () => void;
   onSchedule: () => void;
+  scheduleAvailable?: boolean;
 };
 
 const AUDIENCE: Record<OfficialProgramKey, readonly [string, string, string]> = {
@@ -137,6 +138,7 @@ export function ProgramDetail({
   program,
   onBack,
   onSchedule,
+  scheduleAvailable = true,
 }: ProgramDetailProps) {
   const firstSession = program.sessions[0];
 
@@ -205,18 +207,20 @@ export function ProgramDetail({
         통증이 느껴지면 운동을 중단하고, 기존 질환이나 부상이 있다면 전문가의 안내를 먼저 받으세요.
       </p>
 
-      <div
-        className="fixed inset-x-0 z-30 px-4"
-        style={{ bottom: "calc(env(safe-area-inset-bottom) + 72px)" }}
-      >
-        <button
-          type="button"
-          onClick={onSchedule}
-          className="mx-auto block min-h-12 w-full max-w-md rounded-card bg-accent px-4 text-sm font-black text-accent-ink shadow-card"
+      {scheduleAvailable && (
+        <div
+          className="fixed inset-x-0 z-30 px-4"
+          style={{ bottom: "calc(env(safe-area-inset-bottom) + 72px)" }}
         >
-          요일과 시간 정하기
-        </button>
-      </div>
+          <button
+            type="button"
+            onClick={onSchedule}
+            className="mx-auto block min-h-12 w-full max-w-md rounded-card bg-accent px-4 text-sm font-black text-accent-ink shadow-card"
+          >
+            요일과 시간 정하기
+          </button>
+        </div>
+      )}
     </article>
   );
 }
