@@ -43,6 +43,36 @@ const mainRepoRoot =
     ? undefined
     : repoRoot.slice(0, worktreeMarkerIndex);
 
+export function parseEnvText(text) {
+  const env = {};
+
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+
+    const assignment = line.replace(/^export\s+/, "");
+    const equalsIndex = assignment.indexOf("=");
+    if (equalsIndex === -1) continue;
+
+    const key = assignment.slice(0, equalsIndex).trim();
+    let value = assignment.slice(equalsIndex + 1).trim();
+    if (!key) continue;
+
+    const quote = value[0];
+    if (
+      value.length >= 2 &&
+      (quote === '"' || quote === "'") &&
+      value.at(-1) === quote
+    ) {
+      value = value.slice(1, -1);
+    }
+
+    env[key] = value;
+  }
+
+  return env;
+}
+
 export function loadEnv() {
   const candidates = [
     resolve(process.cwd(), ".env.local"),
@@ -55,15 +85,7 @@ export function loadEnv() {
     throw new Error(".env.local을 찾을 수 없습니다");
   }
 
-  return Object.fromEntries(
-    readFileSync(envPath, "utf8")
-      .split(/\r?\n/)
-      .filter((line) => line.includes("="))
-      .map((line) => [
-        line.slice(0, line.indexOf("=")).trim(),
-        line.slice(line.indexOf("=") + 1).trim(),
-      ]),
-  );
+  return parseEnvText(readFileSync(envPath, "utf8"));
 }
 
 export async function fetchCatalogNames({ url, key, fetchImpl = fetch }) {

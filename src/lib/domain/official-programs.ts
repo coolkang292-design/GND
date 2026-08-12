@@ -73,7 +73,11 @@ export function resolveProgram(
   title: string;
   exercises: readonly ResolvedProgramExercise[];
 }[] {
-  const catalogByName = new Map(catalog.map((item) => [item.name, item]));
+  const catalogByName = new Map(
+    catalog
+      .filter((item) => item.created_by === null)
+      .map((item) => [item.name, item]),
+  );
   const requiredNames = [
     ...new Set(
       program.sessions.flatMap((session) =>

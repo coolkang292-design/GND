@@ -14,6 +14,23 @@ const EXPECTED = [
   ["lean-body-6w", "몸은 가볍게, 인상은 선명하게", "근육을 지키는 체지방 관리 6주"],
 ];
 
+const catalogForFirstProgram = (): CatalogExercise[] => [
+  ...new Set(
+    OFFICIAL_PROGRAMS[0].sessions.flatMap((session) =>
+      session.exercises.map((exercise) => exercise.exerciseName),
+    ),
+  ),
+].map((name, index) => ({
+  id: `catalog-${index}`,
+  name,
+  body_part: "가슴",
+  exercise_type: "weight",
+  measure: null,
+  is_custom: false,
+  created_by: null,
+  created_at: "2026-08-12T00:00:00.000Z",
+}));
+
 describe("GND 공식 프로그램 카탈로그", () => {
   it("카탈로그에 없는 종목을 중복 없이 프로그램 최초 등장 순서로 모두 알린다", () => {
     expect(() => resolveProgram(OFFICIAL_PROGRAMS[0], [])).toThrowError(
@@ -84,6 +101,89 @@ describe("GND 공식 프로그램 카탈로그", () => {
 
     expect(program).toEqual(programBefore);
     expect(catalog).toEqual(catalogBefore);
+  });
+
+  it("동명 커스텀 종목의 순서와 무관하게 공식 시드 종목을 선택한다", () => {
+    const seedCatalog = catalogForFirstProgram();
+    const seed = seedCatalog.find((item) => item.name === "벤치프레스")!;
+    const custom = {
+      ...seed,
+      id: "custom-bench-press",
+      is_custom: true,
+      created_by: "user-1",
+    } satisfies CatalogExercise;
+    const others = seedCatalog.filter((item) => item !== seed);
+
+    for (const catalog of [
+      [seed, custom, ...others],
+      [custom, seed, ...others],
+    ]) {
+      const resolved = resolveProgram(OFFICIAL_PROGRAMS[0], catalog);
+      const benchPress = resolved[0].exercises.find(
+        (exercise) => exercise.exerciseName === "벤치프레스",
+      );
+
+      expect(benchPress?.item).toBe(seed);
+    }
+  });
+
+  it("공식 시드 없이 동명 커스텀 종목만 있으면 누락으로 처리한다", () => {
+    const seedCatalog = catalogForFirstProgram();
+    const seed = seedCatalog.find((item) => item.name === "벤치프레스")!;
+    const custom = {
+      ...seed,
+      id: "custom-bench-press",
+      is_custom: true,
+      created_by: "user-1",
+    } satisfies CatalogExercise;
+    const catalog = [
+      custom,
+      ...seedCatalog.filter((item) => item !== seed),
+    ];
+
+    expect(() => resolveProgram(OFFICIAL_PROGRAMS[0], catalog)).toThrowError(
+      "program_exercise_missing:벤치프레스",
+    );
+  });
+
+  it("실카탈로그 검사의 필수 이름이 공식 프로그램 고유 이름과 정확히 같다", async () => {
+    const moduleUrl = new URL(
+      "../../../scripts/official-program-catalog-check.mjs",
+      import.meta.url,
+    ).href;
+    const { requiredNames } = await import(/* @vite-ignore */ moduleUrl);
+    const programNames = [
+      ...new Set(
+        OFFICIAL_PROGRAMS.flatMap((program) =>
+          program.sessions.flatMap((session) =>
+            session.exercises.map((exercise) => exercise.exerciseName),
+          ),
+        ),
+      ),
+    ];
+
+    expect(requiredNames).toEqual(programNames);
+  });
+
+  it("환경 텍스트에서 주석과 빈 줄을 건너뛰고 export와 따옴표를 처리한다", async () => {
+    const moduleUrl = new URL(
+      "../../../scripts/official-program-catalog-check.mjs",
+      import.meta.url,
+    ).href;
+    const { parseEnvText } = await import(/* @vite-ignore */ moduleUrl);
+    const envText = `
+# comment
+
+export NEXT_PUBLIC_SUPABASE_URL="https://example.supabase.co"
+  export SUPABASE_SERVICE_ROLE_KEY = 'test-key=value'
+PLAIN_VALUE=plain
+`;
+
+    expect(parseEnvText(envText)).toEqual({
+      NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
+      SUPABASE_SERVICE_ROLE_KEY: "test-key=value",
+      PLAIN_VALUE: "plain",
+    });
   });
 
   it("승인된 5종을 정해진 순서와 문구로 제공한다", () => {
