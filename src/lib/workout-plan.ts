@@ -13,6 +13,12 @@ export type WorkoutPlan = {
   exercises: PlanExercise[];
   /** 🔥 타바타 코스 분수 (4|8|16). null이면 일반 운동 계획 (0059) */
   tabataMinutes: TabataMinutes | null;
+  title: string | null;
+  scheduledAt: string | null;
+  programEnrollmentId: string | null;
+  programWeek: number | null;
+  programSession: number | null;
+  programTemplateVersion: number | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -24,9 +30,45 @@ type WorkoutPlanRow = {
   source_session_id: string | null;
   exercises: unknown;
   tabata_minutes?: number | null; // 0059 적용 전에는 컬럼이 없을 수 있다
+  title?: string | null;
+  scheduled_at?: string | null;
+  program_enrollment_id?: string | null;
+  program_week?: number | null;
+  program_session?: number | null;
+  program_template_version?: number | null;
   created_at: string;
   updated_at: string;
 };
+
+const UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function boundedInteger(
+  value: unknown,
+  minimum: number,
+  maximum: number,
+): number | null {
+  return typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= minimum &&
+    value <= maximum
+    ? value
+    : null;
+}
+
+function optionalTitle(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const title = value.trim();
+  return title.length >= 1 && title.length <= 80 ? title : null;
+}
+
+function optionalIsoDate(value: unknown): string | null {
+  return typeof value === "string" &&
+    value.length > 0 &&
+    Number.isFinite(Date.parse(value))
+    ? value
+    : null;
+}
 
 function fromRow(row: WorkoutPlanRow): WorkoutPlan {
   const exercises = parsePlanExercises(row.exercises);
@@ -38,6 +80,20 @@ function fromRow(row: WorkoutPlanRow): WorkoutPlan {
     sourceSessionId: row.source_session_id,
     exercises,
     tabataMinutes: asTabataMinutes(row.tabata_minutes),
+    title: optionalTitle(row.title),
+    scheduledAt: optionalIsoDate(row.scheduled_at),
+    programEnrollmentId:
+      typeof row.program_enrollment_id === "string" &&
+      UUID.test(row.program_enrollment_id)
+        ? row.program_enrollment_id
+        : null,
+    programWeek: boundedInteger(row.program_week, 1, 6),
+    programSession: boundedInteger(row.program_session, 1, 3),
+    programTemplateVersion: boundedInteger(
+      row.program_template_version,
+      1,
+      10_000,
+    ),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
