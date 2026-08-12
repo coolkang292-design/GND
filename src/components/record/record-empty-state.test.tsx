@@ -67,4 +67,27 @@ describe("RecordEmptyState — 등록 0개 화면 (사용자 지시 2026-08-06)"
     );
     expect(adders).toHaveLength(1);
   });
+
+  it("이미지와 두 행동을 하나의 시작 카드 안에 묶는다", () => {
+    const { container, getByRole, getByTestId } = render(
+      <RecordEmptyState hasHistory onAdd={vi.fn()} onLoadRecent={vi.fn()} />,
+    );
+
+    const startCard = getByTestId("record-start-card");
+    const addButton = getByRole("button", { name: "＋ 첫 운동 추가하기" });
+    const recentButton = getByRole("button", { name: "최근 운동 불러오기" });
+    const image = Array.from(startCard.querySelectorAll("img")).find((candidate) =>
+      decodeURIComponent(candidate.getAttribute("src") ?? "").includes(
+        "/record-assets/exercise-picker-hero.webp",
+      ),
+    );
+
+    expect(container.querySelector("section")?.children).toHaveLength(1);
+    expect(image).toBeDefined();
+    expect(startCard.contains(addButton)).toBe(true);
+    expect(startCard.contains(recentButton)).toBe(true);
+    expect(startCard.textContent).toContain("초보자도 쉽게 시작");
+    expect(addButton.getAttribute("data-priority")).toBe("primary");
+    expect(recentButton.getAttribute("data-priority")).toBe("secondary");
+  });
 });

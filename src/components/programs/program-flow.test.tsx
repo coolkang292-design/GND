@@ -70,6 +70,9 @@ describe("ProgramFlow", () => {
     expect(onCreate).toHaveBeenCalledTimes(1);
     expect(await screen.findByText("6주 계획이 준비됐어요")).toBeTruthy();
     expect(screen.getByText(/8월 17일.*오후 7:00/)).toBeTruthy();
+    expect(screen.getByText("다음 운동")).toBeTruthy();
+    expect(screen.getByText("1주차 A회 · 밀고 세우기")).toBeTruthy();
+    expect(document.querySelector('img[src*="finish.webp"]')).not.toBeNull();
   });
 
   it("같은 프로그램이 진행 중이면 새 등록 대신 진행 화면으로 안내한다", () => {

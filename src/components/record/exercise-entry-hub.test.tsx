@@ -40,6 +40,21 @@ describe("ExerciseEntryHub", () => {
     expect(
       screen.queryByRole("button", { name: /^상황별 추천/ }),
     ).toBeNull();
+
+    const programButton = screen.getByRole("button", {
+      name: /프로그램으로 시작하기/,
+    });
+    const searchButton = screen.getByRole("button", {
+      name: /운동 직접 고르기/,
+    });
+    expect(programButton.getAttribute("data-priority")).toBe("primary");
+    expect(programButton.className).toContain("min-h-44");
+    expect(searchButton.getAttribute("data-priority")).toBe("secondary");
+
+    const programImage = programButton.querySelector("img");
+    expect(decodeURIComponent(programImage?.getAttribute("src") ?? "")).toContain(
+      "/program-assets/shoulder.webp",
+    );
   });
 
   it("각 카드는 대응하는 동작만 한 번 호출한다", () => {
@@ -162,5 +177,11 @@ describe("ExerciseEntryHub", () => {
     expect(images.length).toBeGreaterThan(0);
     expect(images.every((image) => image.getAttribute("alt") === "")).toBe(true);
     expect(container.querySelector("button button")).toBeNull();
+    expect(
+      container.querySelector('img[src*="hub-past.webp"]'),
+    ).not.toBeNull();
+    expect(
+      container.querySelector('img[src*="hub-routine.webp"]'),
+    ).not.toBeNull();
   });
 });
