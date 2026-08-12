@@ -7,7 +7,7 @@
 -- 쓰는 법: 함수·정책의 '현행' 정의가 필요할 때 마이그레이션 51개를
 -- 뒤지지 말고 이 파일을 검색하라. 마이그레이션을 적용한 뒤에는 다시 뽑아라.
 --
--- 함수 76개 · 정책 74개 · 인덱스 82개
+-- 함수 77개 · 정책 74개 · 인덱스 82개
 
 -- ════════════════════════════════════════════════════════════
 -- 함수
@@ -647,6 +647,56 @@ begin
    where id = p_request_id;
   return jsonb_build_object('status', 'canceled');
 end $function$;
+
+-- ── cancel_program_enrollment ──
+CREATE OR REPLACE FUNCTION public.cancel_program_enrollment(p_enrollment_id uuid)
+ RETURNS integer
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  v_user_id uuid := auth.uid();
+  v_status text;
+  v_removed int;
+begin
+  if v_user_id is null then
+    raise exception 'not_authenticated';
+  end if;
+
+  -- 같은 사용자의 등록 RPC와 한 줄로 세운다 — 취소와 재등록이 겹치면
+  -- 계획을 지우는 중에 새 계획이 들어올 수 있다.
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(v_user_id::text, 0)
+  );
+
+  select status into v_status
+  from public.program_enrollments
+  where id = p_enrollment_id and user_id = v_user_id
+  for update;
+  if not found then
+    -- 남의 등록도 여기로 온다 — 존재 여부를 알려 주지 않는다
+    raise exception 'program_enrollment_not_found';
+  end if;
+  if v_status <> 'active' then
+    raise exception 'program_not_active';
+  end if;
+
+  delete from public.workout_plans
+  where program_enrollment_id = p_enrollment_id
+    and user_id = v_user_id;
+  get diagnostics v_removed = row_count;
+
+  -- ⚠️ `cancelled_at`을 같이 채운다. 0066의 check가 둘을 묶어 두었다 —
+  --    상태만 바꾸면 행 전체가 거절된다.
+  update public.program_enrollments
+  set status = 'cancelled',
+      cancelled_at = now()
+  where id = p_enrollment_id and user_id = v_user_id;
+
+  return v_removed;
+end;
+$function$;
 
 -- ── cancel_workout ──
 CREATE OR REPLACE FUNCTION public.cancel_workout(p_session_id uuid)
