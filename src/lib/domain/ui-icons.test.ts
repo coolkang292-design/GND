@@ -49,7 +49,7 @@ describe("UI 아이콘 자산 — 경로가 실제 파일을 가리킨다", () =
     //    `streak-on|off`·`friends`·`friends-add` 파일은 `public/ui-icons/`에 남아
     //    있지만 화면은 다시 `🔥`/`🪵`/`👥` 이모지를 쓴다. 자산이 있다고 이 수를
     //    올리지 마라 — 이 테스트가 세는 것은 **화면이 참조하는 것**이다.
-    expect(referenced.size).toBe(18);
+    expect(referenced.size).toBe(16);
 
     const missing = [...referenced].filter(
       (src) => !existsSync(join(process.cwd(), "public", src)),

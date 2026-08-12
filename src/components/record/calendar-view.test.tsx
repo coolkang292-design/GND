@@ -549,6 +549,15 @@ describe("CalendarView — 남은 일정 재배치 (2026-08-12)", () => {
     expect(screen.queryByRole("button", { name: "날짜 이동" })).toBeNull();
   });
 
+  it("아직 오지 않은 프로그램 회차에는 재배치 버튼을 보이지 않는다", async () => {
+    await setup();
+    fireEvent.click(screen.getByRole("button", { name: "8월 17일" }));
+
+    expect(
+      screen.queryByRole("button", { name: "남은 일정 다시 잡기" }),
+    ).toBeNull();
+  });
+
   it("일반 계획에는 날짜 이동이 그대로 남는다 — 회귀", async () => {
     mocks.getWorkoutPlans.mockResolvedValue([PLAN]);
     mocks.getCompletedSessions.mockResolvedValue([]);

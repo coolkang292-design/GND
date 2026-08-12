@@ -28,8 +28,10 @@ import { ExerciseGuideSheet } from "@/components/record/exercise-guide-sheet";
 import { EffortFeedbackSheet } from "@/components/record/effort-feedback-sheet";
 import { guideForExercise } from "@/lib/domain/exercise-guides";
 import {
+  applyProgramLoadIfUnchanged,
   initialProgramLoad,
   restSecondsForExercise,
+  shouldDeferAutoFinishForEffort,
   shouldAskEffort,
   type EffortFeedback,
 } from "@/lib/domain/program-load";
@@ -272,6 +274,15 @@ function WorkoutScreen({ userId }: { userId: string }) {
     exKey: string;
     setIndex: number;
     isLastSet: boolean;
+    /**
+     * 이 시트 때문에 3초 자동 종료를 **미뤘는가**.
+     *
+     * ⚠️ `isLastSet`으로 대신하지 마라. 그건 "이 **종목**의 마지막 세트"라
+     * 다른 종목에 세트가 남아 있어도 참이다. 그걸로 자동 종료를 재개하면
+     * 프로그램 첫 종목을 끝낸 것만으로 "이대로 완료할까요?"가 뜬다.
+     * 미뤘을 때만 재개하는 것이 유일하게 맞는 조건이다.
+     */
+    resumeAutoFinish: boolean;
   } | null>(null);
   /**
    * 큰 팝업을 접어 뒀는가 (2026-08-04, 설계 ②).
@@ -1139,7 +1150,18 @@ function WorkoutScreen({ userId }: { userId: string }) {
       cancelRestForSource(sourceKey);
     }
 
-    if (willDone && pendingAfter === 0) {
+    const willAskEffort = shouldAskEffort({
+      hasPrescription: ex.prescription !== undefined,
+      setIndex: si,
+      setCount: ex.sets.length,
+      willDone,
+      alreadyAnswered: set.effortFeedback != null,
+    });
+    const deferAutoFinish = shouldDeferAutoFinishForEffort({
+      pendingSetCountAfter: pendingAfter,
+      willAskEffort,
+    });
+    if (willDone && pendingAfter === 0 && !deferAutoFinish) {
       stopRest(); // 앞 세트의 휴식이 돌고 있으면 축하 화면을 가린다
       scheduleAutoFinish();
     } else {
@@ -1148,19 +1170,12 @@ function WorkoutScreen({ userId }: { userId: string }) {
 
     // 첫·마지막 세트에만 체감을 묻는다 (계획 2026-08-12). 판정 규칙은
     // `shouldAskEffort`에 있다 — 여기서 조건을 다시 쓰면 두 벌이 갈라진다.
-    if (
-      shouldAskEffort({
-        hasPrescription: ex.prescription !== undefined,
-        setIndex: si,
-        setCount: ex.sets.length,
-        willDone,
-        alreadyAnswered: set.effortFeedback != null,
-      })
-    ) {
+    if (willAskEffort) {
       setEffortAsk({
         exKey,
         setIndex: si,
         isLastSet: si === ex.sets.length - 1,
+        resumeAutoFinish: deferAutoFinish,
       });
     }
   }
@@ -1202,6 +1217,19 @@ function WorkoutScreen({ userId }: { userId: string }) {
       }),
     }));
     markActivity();
+    resumeDeferredAutoFinish(ask.resumeAutoFinish);
+  }
+
+  /**
+   * 피드백 때문에 미뤄 뒀던 3초 자동 종료를 되살린다.
+   *
+   * `stopRest()`도 함께 부른다 — 앞 세트의 휴식이 돌고 있으면 축하 화면을 가린다.
+   * 미루지 않았으면 아무것도 하지 않는다.
+   */
+  function resumeDeferredAutoFinish(resume: boolean) {
+    if (!resume) return;
+    stopRest();
+    scheduleAutoFinish();
   }
 
   /**
@@ -1483,6 +1511,12 @@ function WorkoutScreen({ userId }: { userId: string }) {
    * 최신 세션 기준으로 돌려준다.
    */
   async function fillProgramLoads(exercises: LocalExercise[]) {
+    const initialWeightsByExercise = new Map(
+      exercises.map((exercise) => [
+        exercise.key,
+        exercise.sets.map((set) => [set.key, set.weightKg] as const),
+      ]),
+    );
     const prescribed = exercises.filter((ex) => ex.prescription);
     if (prescribed.length === 0) return;
     const results = await Promise.all(
@@ -1517,7 +1551,21 @@ function WorkoutScreen({ userId }: { userId: string }) {
         // 이미 완료한 세트는 건드리지 않는다 — 기록을 덮어쓰면 안 된다.
         return {
           ...ex,
-          sets: ex.sets.map((s) => (s.done ? s : { ...s, weightKg })),
+          sets: ex.sets.map((s) => {
+            if (s.done) return s;
+            const initialWeightKg = initialWeightsByExercise
+              .get(ex.key)
+              ?.find(([setKey]) => setKey === s.key)?.[1];
+            if (initialWeightKg === undefined) return s;
+            return {
+              ...s,
+              weightKg: applyProgramLoadIfUnchanged(
+                s.weightKg,
+                initialWeightKg,
+                weightKg,
+              ),
+            };
+          }),
         };
       }),
     }));
@@ -2466,10 +2514,16 @@ function WorkoutScreen({ userId }: { userId: string }) {
           exerciseName={effortAskExercise.name}
           isLastSet={effortAsk.isLastSet}
           onAnswer={answerEffort}
-          onClose={() => setEffortAsk(null)}
+          onClose={() => {
+            const resume = effortAsk.resumeAutoFinish;
+            setEffortAsk(null);
+            resumeDeferredAutoFinish(resume);
+          }}
           onPain={() => {
+            const resume = effortAsk.resumeAutoFinish;
             setEffortAsk(null);
             showToast("통증이 있으면 오늘은 여기서 멈추고 전문가에게 확인하세요");
+            resumeDeferredAutoFinish(resume);
           }}
         />
       )}

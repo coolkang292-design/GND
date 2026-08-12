@@ -20,6 +20,20 @@ export type InitialProgramLoad = {
   guide: string;
 };
 
+/**
+ * 비동기 기록 조회가 끝나기 전에 사용자가 무게를 고쳤다면 그 입력을 지킨다.
+ * 조회를 시작할 때의 값과 지금 값이 같을 때만 자동 추천을 적용한다.
+ */
+export function applyProgramLoadIfUnchanged(
+  currentWeightKg: number,
+  initialWeightKg: number,
+  recommendedWeightKg: number,
+): number {
+  return currentWeightKg === initialWeightKg
+    ? recommendedWeightKg
+    : currentWeightKg;
+}
+
 /** 부동소수 오차가 무게 입력칸에 새지 않게 한다 (2.5·1·5 단위라 소수 둘이면 충분) */
 function roundKg(value: number): number {
   return Math.round(value * 100) / 100;
@@ -63,6 +77,14 @@ export function shouldAskEffort(input: {
   if (!hasPrescription || !willDone || alreadyAnswered) return false;
   if (setCount <= 0 || setIndex < 0 || setIndex >= setCount) return false;
   return setIndex === 0 || setIndex === setCount - 1;
+}
+
+/** 마지막 세트 피드백을 받기 전에 3초 자동 종료가 먼저 실행되는 것을 막는다. */
+export function shouldDeferAutoFinishForEffort(input: {
+  pendingSetCountAfter: number;
+  willAskEffort: boolean;
+}): boolean {
+  return input.pendingSetCountAfter === 0 && input.willAskEffort;
 }
 
 /** "8~10회". 하한과 상한이 같으면 한 번만 적는다 */

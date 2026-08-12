@@ -937,7 +937,7 @@ export function CalendarView({
                     18회는 최소 2일 회복 간격으로 짜인 한 덩어리라, 한 장만 밀면
                     나머지와 간격이 깨진다. 남은 회차를 통째로 다시 잡는다.
                   */}
-                  {selectedPlan.programEnrollmentId ? (
+                  {selectedPlan.programEnrollmentId && selectedPlanMissed ? (
                     <div className="mt-2">
                       {activeProposal === null ? (
                         <button
@@ -999,7 +999,7 @@ export function CalendarView({
                         </div>
                       )}
                     </div>
-                  ) : (
+                  ) : !selectedPlan.programEnrollmentId ? (
                     <div className="mt-2 flex items-center gap-2">
                       <input
                         type="date"
@@ -1020,7 +1020,7 @@ export function CalendarView({
                         날짜 이동
                       </button>
                     </div>
-                  )}
+                  ) : null}
                 </div>
               )}
               {selectedSessions.map((s) => {

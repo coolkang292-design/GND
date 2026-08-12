@@ -168,15 +168,18 @@ describe("ExercisePicker — 진입 허브 (2026-08-06)", () => {
     expect(html).not.toContain("🔍 운동 검색 (예: 스쿼트, 벤치)");
   });
 
-  it("프로그램 카드가 기존 상단 장식 이미지를 흡수한다", () => {
+  it("프로그램 카드가 최종 어깨 대표 이미지를 한 장만 쓴다", () => {
     const { container } = setup({
       initialMode: "hub",
       onOpenPrograms: vi.fn(),
     });
-    const heroImages = [
-      ...container.querySelectorAll('img[src*="exercise-picker-hero"]'),
+    const programImages = [
+      ...container.querySelectorAll('img[src*="program-assets%2Fshoulder"]'),
     ];
-    expect(heroImages).toHaveLength(1);
+    expect(programImages).toHaveLength(1);
+    expect(
+      container.querySelector('img[src*="exercise-picker-hero"]'),
+    ).toBeNull();
   });
 
   it("기존 상황별 추천 화면을 직접 열 수 있다", () => {

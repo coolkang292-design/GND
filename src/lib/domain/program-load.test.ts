@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { ExercisePrescription } from "./workout-plan";
 import {
+  applyProgramLoadIfUnchanged,
   initialProgramLoad,
   nextProgramLoad,
   programWeightGuide,
   repRangeLabel,
   restClock,
   restSecondsForExercise,
+  shouldDeferAutoFinishForEffort,
   shouldAskEffort,
 } from "./program-load";
 
@@ -17,6 +19,16 @@ const rx: ExercisePrescription = {
   restSeconds: 120,
   loadStepKg: 2.5,
 };
+
+describe("applyProgramLoadIfUnchanged — 늦은 자동 추천이 사용자 입력을 덮지 않는다", () => {
+  it("조회 시작 뒤 사용자가 무게를 바꾸면 현재 값을 보존한다", () => {
+    expect(applyProgramLoadIfUnchanged(25, 0, 40)).toBe(25);
+  });
+
+  it("사용자가 건드리지 않았을 때만 추천 무게를 채운다", () => {
+    expect(applyProgramLoadIfUnchanged(0, 0, 40)).toBe(40);
+  });
+});
 
 /**
  * 프로그램 무게 추천 (설계 2026-08-12).
@@ -263,5 +275,53 @@ describe("shouldAskEffort — 첫·마지막 세트에만 묻는다", () => {
     expect(shouldAskEffort({ ...base, setIndex: 9 })).toBe(false);
     expect(shouldAskEffort({ ...base, setIndex: -1 })).toBe(false);
     expect(shouldAskEffort({ ...base, setIndex: 0, setCount: 0 })).toBe(false);
+  });
+});
+
+describe("shouldDeferAutoFinishForEffort — 마지막 답변을 기다린다", () => {
+  it("모든 세트가 끝났고 피드백을 물을 때만 자동 종료를 미룬다", () => {
+    expect(
+      shouldDeferAutoFinishForEffort({
+        pendingSetCountAfter: 0,
+        willAskEffort: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("남은 세트가 있거나 피드백 대상이 아니면 미루지 않는다", () => {
+    expect(
+      shouldDeferAutoFinishForEffort({
+        pendingSetCountAfter: 1,
+        willAskEffort: true,
+      }),
+    ).toBe(false);
+    expect(
+      shouldDeferAutoFinishForEffort({
+        pendingSetCountAfter: 0,
+        willAskEffort: false,
+      }),
+    ).toBe(false);
+  });
+
+  /**
+   * ⚠️ 이 단언이 회귀 방지선이다 (2026-08-12 코드 리뷰에서 잡음).
+   *
+   * 화면은 이 함수의 결과를 `effortAsk.resumeAutoFinish`에 담아 두고, 시트를
+   * 닫을 때 **그 값으로만** 자동 종료를 되살린다. 한때 "이 종목의 마지막
+   * 세트인가"로 되살렸는데, 공식 프로그램은 한 회차에 종목이 4~6개라
+   * **첫 종목을 끝낸 것만으로** 3초 뒤 "이대로 완료할까요?"가 떴다.
+   *
+   * 남은 세트가 하나라도 있으면 무슨 일이 있어도 false여야 한다.
+   */
+  it("남은 세트가 하나라도 있으면 절대 미루지 않는다 — 회귀 방지", () => {
+    for (const pendingSetCountAfter of [1, 2, 3, 5, 12, 17]) {
+      expect(
+        shouldDeferAutoFinishForEffort({
+          pendingSetCountAfter,
+          willAskEffort: true,
+        }),
+        `남은 ${pendingSetCountAfter}세트`,
+      ).toBe(false);
+    }
   });
 });

@@ -84,6 +84,7 @@ describe("RecordEmptyState — 등록 0개 화면 (사용자 지시 2026-08-06)"
 
     expect(container.querySelector("section")?.children).toHaveLength(1);
     expect(image).toBeDefined();
+    expect(image?.getAttribute("loading")).toBe("eager");
     expect(startCard.contains(addButton)).toBe(true);
     expect(startCard.contains(recentButton)).toBe(true);
     expect(startCard.textContent).toContain("초보자도 쉽게 시작");

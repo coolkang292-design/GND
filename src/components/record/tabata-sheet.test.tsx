@@ -111,6 +111,7 @@ describe("TabataSheet — 운동 고르기 배선 (2026-08-06)", () => {
     const { getByText, getAllByText } = setup();
 
     fireEvent.click(getByText("+ 운동 고르기 (0/4)"));
+    fireEvent.click(getByText("운동 직접 고르기"));
     fireEvent.click(getByText(/부위별 추천/));
     fireEvent.click(getByText("체스트프레스 머신"));
     fireEvent.click(getByText("덤벨 플라이"));
@@ -126,6 +127,7 @@ describe("TabataSheet — 운동 고르기 배선 (2026-08-06)", () => {
     const { getByText, getByPlaceholderText } = setup();
 
     fireEvent.click(getByText("+ 운동 고르기 (0/4)"));
+    fireEvent.click(getByText("운동 직접 고르기"));
     fireEvent.click(getByText(/운동 이름 검색/));
     fireEvent.change(getByPlaceholderText(/검색/), {
       target: { value: "덤벨 플라이" },
@@ -140,6 +142,7 @@ describe("TabataSheet — 운동 고르기 배선 (2026-08-06)", () => {
     const { getByText } = setup();
 
     fireEvent.click(getByText("+ 운동 고르기 (0/4)"));
+    fireEvent.click(getByText("운동 직접 고르기"));
     fireEvent.click(getByText(/부위별 추천/));
     for (const name of CATALOG.map((c) => c.name)) {
       fireEvent.click(getByText(name));

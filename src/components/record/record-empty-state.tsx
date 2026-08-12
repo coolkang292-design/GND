@@ -48,6 +48,7 @@ export function RecordEmptyState({
           width={1200}
           height={800}
           sizes="(max-width: 520px) 100vw, 520px"
+          loading="eager"
           className="h-36 w-full object-cover"
         />
         <div className="px-4 pt-4 pb-4">
