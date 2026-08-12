@@ -1022,6 +1022,9 @@ declare
   v_prescription jsonb;
   v_bad_count int;
   v_local_time text;
+  v_tabata_minutes smallint;
+  v_is_interval boolean;
+  v_interval_plans int := 0;
 begin
   if v_user_id is null then
     raise exception 'not_authenticated';
@@ -1046,7 +1049,7 @@ begin
     raise exception 'program_invalid_title';
   end if;
   if p_level_at_start is null
-    or p_level_at_start not in ('beginner', 'experienced') then
+    or p_level_at_start not in ('beginner', 'moderate', 'experienced') then
     raise exception 'program_invalid_level';
   end if;
   if p_timezone is null
@@ -1165,12 +1168,31 @@ begin
       raise exception 'program_scheduled_time_mismatch';
     end if;
 
+    -- 0070: `tabata_minutes`가 있으면 인터벌 회차다. 이 한 컬럼이 판별자다.
+    if v_plan ? 'tabata_minutes'
+      and v_plan->'tabata_minutes' is distinct from 'null'::jsonb then
+      if jsonb_typeof(v_plan->'tabata_minutes') is distinct from 'number'
+        or (v_plan->>'tabata_minutes') not in ('4', '8', '16') then
+        raise exception 'program_invalid_tabata_minutes';
+      end if;
+      v_tabata_minutes := (v_plan->>'tabata_minutes')::smallint;
+    else
+      v_tabata_minutes := null;
+    end if;
+    v_is_interval := v_tabata_minutes is not null;
+    if v_is_interval then
+      v_interval_plans := v_interval_plans + 1;
+    end if;
+
     if jsonb_typeof(v_plan->'title') is distinct from 'string'
       or char_length(btrim(v_plan->>'title')) not between 1 and 80 then
       raise exception 'program_invalid_plan_title';
     end if;
     if jsonb_typeof(v_plan->'exercises') is distinct from 'array'
-      or jsonb_array_length(v_plan->'exercises') not between 5 and 6
+      or (v_is_interval
+          and jsonb_array_length(v_plan->'exercises') <> 4)
+      or (not v_is_interval
+          and jsonb_array_length(v_plan->'exercises') not between 5 and 6)
       or octet_length((v_plan->'exercises')::text) > 200000 then
       raise exception 'program_invalid_exercises';
     end if;
@@ -1179,9 +1201,9 @@ begin
     loop
       if jsonb_typeof(v_exercise) is distinct from 'object'
         or not (v_exercise ?& array[
-          'name', 'bodyPart', 'exerciseType', 'measure', 'isCustom', 'sets',
-          'prescription'
+          'name', 'bodyPart', 'exerciseType', 'measure', 'isCustom', 'sets'
         ])
+        or (not v_is_interval and not (v_exercise ? 'prescription'))
         or jsonb_typeof(v_exercise->'name') is distinct from 'string'
         or char_length(btrim(v_exercise->>'name')) not between 1 and 40
         or jsonb_typeof(v_exercise->'bodyPart') is distinct from 'string'
@@ -1196,8 +1218,13 @@ begin
         or jsonb_typeof(v_exercise->'isCustom') is distinct from 'boolean'
         or (v_exercise->>'isCustom')::boolean
         or jsonb_typeof(v_exercise->'sets') is distinct from 'array'
-        or jsonb_array_length(v_exercise->'sets') not between 1 and 4
-        or jsonb_typeof(v_exercise->'prescription') is distinct from 'object' then
+        or (v_is_interval
+            and jsonb_array_length(v_exercise->'sets') <> 1)
+        or (not v_is_interval
+            and jsonb_array_length(v_exercise->'sets') not between 1 and 4)
+        or (not v_is_interval
+            and jsonb_typeof(v_exercise->'prescription')
+                is distinct from 'object') then
         raise exception 'program_invalid_exercise_shape';
       end if;
 
@@ -1219,28 +1246,36 @@ begin
         end if;
       end loop;
 
-      v_prescription := v_exercise->'prescription';
-      if not (v_prescription ?& array[
-          'repsMin', 'repsMax', 'targetRir', 'restSeconds', 'loadStepKg'
-        ])
-        or jsonb_typeof(v_prescription->'repsMin') is distinct from 'number'
-        or (v_prescription->>'repsMin') !~ '^[0-9]+$'
-        or (v_prescription->>'repsMin')::int not between 1 and 100
-        or jsonb_typeof(v_prescription->'repsMax') is distinct from 'number'
-        or (v_prescription->>'repsMax') !~ '^[0-9]+$'
-        or (v_prescription->>'repsMax')::int not between 1 and 100
-        or (v_prescription->>'repsMin')::int > (v_prescription->>'repsMax')::int
-        or jsonb_typeof(v_prescription->'targetRir') is distinct from 'number'
-        or (v_prescription->>'targetRir') not in ('1','2','3')
-        or jsonb_typeof(v_prescription->'restSeconds') is distinct from 'number'
-        or (v_prescription->>'restSeconds') !~ '^[0-9]+$'
-        or (v_prescription->>'restSeconds')::int not between 60 and 300
-        or jsonb_typeof(v_prescription->'loadStepKg') is distinct from 'number'
-        or (v_prescription->>'loadStepKg') not in ('1','2.5','5') then
-        raise exception 'program_invalid_prescription';
+      -- 인터벌은 20초/10초를 음원이 정한다 — 처방을 요구하지 않는다
+      if not v_is_interval then
+        v_prescription := v_exercise->'prescription';
+        if not (v_prescription ?& array[
+            'repsMin', 'repsMax', 'targetRir', 'restSeconds', 'loadStepKg'
+          ])
+          or jsonb_typeof(v_prescription->'repsMin') is distinct from 'number'
+          or (v_prescription->>'repsMin') !~ '^[0-9]+$'
+          or (v_prescription->>'repsMin')::int not between 1 and 100
+          or jsonb_typeof(v_prescription->'repsMax') is distinct from 'number'
+          or (v_prescription->>'repsMax') !~ '^[0-9]+$'
+          or (v_prescription->>'repsMax')::int not between 1 and 100
+          or (v_prescription->>'repsMin')::int > (v_prescription->>'repsMax')::int
+          or jsonb_typeof(v_prescription->'targetRir') is distinct from 'number'
+          or (v_prescription->>'targetRir') not in ('1','2','3')
+          or jsonb_typeof(v_prescription->'restSeconds') is distinct from 'number'
+          or (v_prescription->>'restSeconds') !~ '^[0-9]+$'
+          or (v_prescription->>'restSeconds')::int not between 60 and 300
+          or jsonb_typeof(v_prescription->'loadStepKg') is distinct from 'number'
+          or (v_prescription->>'loadStepKg') not in ('1','2.5','5') then
+          raise exception 'program_invalid_prescription';
+        end if;
       end if;
     end loop;
   end loop;
+
+  -- 한 등록 안에 두 모양이 섞이면 진행률·재배치·무게 추천이 회차마다 갈라진다
+  if v_interval_plans not in (0, 18) then
+    raise exception 'program_mixed_plan_kinds';
+  end if;
 
   if exists (
     select 1 from public.program_enrollments
@@ -1277,6 +1312,7 @@ begin
     begin
       insert into public.workout_plans (
         user_id, plan_date, source_session_id, exercises, title, scheduled_at,
+        tabata_minutes,
         program_enrollment_id, program_week, program_session,
         program_template_version
       ) values (
@@ -1286,6 +1322,11 @@ begin
         v_plan->'exercises',
         btrim(v_plan->>'title'),
         (v_plan->>'scheduled_at')::timestamptz,
+        case
+          when v_plan ? 'tabata_minutes'
+            and v_plan->'tabata_minutes' is distinct from 'null'::jsonb
+          then (v_plan->>'tabata_minutes')::smallint
+        end,
         v_enrollment_id,
         (v_plan->>'week')::smallint,
         (v_plan->>'session')::smallint,
