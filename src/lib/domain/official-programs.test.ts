@@ -58,6 +58,34 @@ describe("GND 공식 프로그램 카탈로그", () => {
     }
   });
 
+  it("해석 후에도 프로그램과 카탈로그 입력을 변경하지 않는다", () => {
+    const program = structuredClone(OFFICIAL_PROGRAMS[0]);
+    const names = [
+      ...new Set(
+        program.sessions.flatMap((session) =>
+          session.exercises.map((exercise) => exercise.exerciseName),
+        ),
+      ),
+    ];
+    const catalog: CatalogExercise[] = names.map((name, index) => ({
+      id: `catalog-${index}`,
+      name,
+      body_part: "가슴",
+      exercise_type: "weight",
+      measure: null,
+      is_custom: false,
+      created_by: null,
+      created_at: "2026-08-12T00:00:00.000Z",
+    }));
+    const programBefore = structuredClone(program);
+    const catalogBefore = structuredClone(catalog);
+
+    resolveProgram(program, catalog);
+
+    expect(program).toEqual(programBefore);
+    expect(catalog).toEqual(catalogBefore);
+  });
+
   it("승인된 5종을 정해진 순서와 문구로 제공한다", () => {
     expect(
       OFFICIAL_PROGRAMS.map((program) => [
