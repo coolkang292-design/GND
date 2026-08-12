@@ -102,4 +102,17 @@ describe("GND 공식 프로그램 카탈로그", () => {
       ),
     ).toMatchSnapshot();
   });
+
+  it("다섯 프로그램의 회차별 전체 처방이 승인 표와 같다", () => {
+    expect(
+      OFFICIAL_PROGRAMS.map((program) => ({
+        key: program.key,
+        sessions: program.sessions.map((session) => ({
+          key: session.key,
+          title: session.title,
+          exercises: session.exercises,
+        })),
+      })),
+    ).toMatchSnapshot();
+  });
 });
