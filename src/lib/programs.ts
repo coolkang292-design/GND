@@ -1,7 +1,14 @@
-import type {
-  ResolvedProgramExercise,
-  StrengthProgram,
+import {
+  INTERVAL_SLOTS,
+  intervalExerciseName,
+  intervalMinutesForWeek,
+  type IntervalProgram,
+  type ProgramLevel,
+  type ResolvedIntervalExercise,
+  type ResolvedProgramExercise,
+  type StrengthProgram,
 } from "@/lib/domain/official-programs";
+import type { TabataMinutes } from "@/lib/domain/tabata";
 import type {
   PreferredSlot,
   ProgramPlanMove,
@@ -28,11 +35,14 @@ export type ResolvedProgramSession = {
   exercises: readonly ResolvedProgramExercise[];
 };
 
+export type ResolvedIntervalSession = {
+  key: "A" | "B" | "C";
+  title: string;
+  exercises: readonly ResolvedIntervalExercise[];
+};
+
 export type CreateProgramEnrollmentInput = {
-  /**
-   * 아직 근력 전용이다. 인터벌 회차는 종목 4개·처방 없음·`tabata_minutes`라
-   * 모양이 달라서, RPC(0070)와 payload 조립을 함께 고쳐야 받을 수 있다 (설계 §5).
-   */
+  /** 근력 전용. 인터벌은 `CreateIntervalEnrollmentInput`이 따로 받는다 */
   program: StrengthProgram;
   sessions: readonly ResolvedProgramSession[];
   schedule: readonly ProgramScheduleItem[];
@@ -50,13 +60,32 @@ type ProgramPlanPayload = {
   template_key: "A" | "B" | "C";
   title: string;
   exercises: PlanExercise[];
+  /** 인터벌 회차에만 실린다 (0070). 이 한 칸이 회차 종류를 가른다 */
+  tabata_minutes?: TabataMinutes;
+};
+
+/**
+ * 인터벌 등록 입력.
+ *
+ * 근력(`CreateProgramEnrollmentInput`)과 **합치지 않았다.** 회차 모양이 달라서
+ * (종목 4개 · 세트 1개 · 처방 없음 · `tabata_minutes`) 한 타입에 담으면 모든
+ * 검증이 "이 회차는 어느 종류인가"로 갈라진다. 날짜·요일 규칙만 함께 쓴다.
+ */
+export type CreateIntervalEnrollmentInput = {
+  program: IntervalProgram;
+  sessions: readonly ResolvedIntervalSession[];
+  schedule: readonly ProgramScheduleItem[];
+  levelAtStart: ProgramLevel;
+  startDate: string;
+  timeZone: string;
+  preferredSlots: readonly PreferredSlot[];
 };
 
 export type CreateProgramEnrollmentRpcArgs = {
   p_program_key: string;
   p_program_version: number;
   p_title_snapshot: string;
-  p_level_at_start: "beginner" | "experienced";
+  p_level_at_start: ProgramLevel;
   p_start_date: string;
   p_timezone: string;
   p_preferred_slots: PreferredSlot[];
@@ -221,6 +250,24 @@ function validateEnrollmentInput(input: CreateProgramEnrollmentInput): void {
     }
   }
 
+  validateSchedule(input, slots);
+}
+
+/**
+ * 날짜·시각 규칙 — 근력과 인터벌이 **똑같이** 지킨다.
+ *
+ * 두 등록 경로가 이 함수를 함께 쓴다. 한쪽에만 규칙을 고치면 같은 앱에서
+ * 프로그램 종류에 따라 일정이 달라진다.
+ */
+function validateSchedule(
+  input: {
+    schedule: readonly ProgramScheduleItem[];
+    startDate: string;
+    timeZone: string;
+  },
+  slots: readonly PreferredSlot[],
+): void {
+  const keys = ["A", "B", "C"] as const;
   if (input.schedule.length !== 18) throw new Error("program_plans_count");
   const dates = new Set<string>();
   const allowedTimes = new Set(slots.map((slot) => slot.time));
@@ -358,6 +405,140 @@ export function buildCreateProgramEnrollmentRpcArgs(
     p_preferred_slots: input.preferredSlots.map((slot) => ({ ...slot })),
     p_plans: plans,
   };
+}
+
+/**
+ * 인터벌 등록 검증.
+ *
+ * 근력과 다른 것만 본다 — 회차마다 종목 4개, 난이도가 정한 종목과 실제 카탈로그
+ * 항목이 같은지, 주차가 정한 길이가 음원에 있는 길이인지. 날짜·요일은
+ * `validateSchedule`이 근력과 똑같이 본다.
+ */
+function validateIntervalEnrollmentInput(
+  input: CreateIntervalEnrollmentInput,
+): void {
+  if (!isDateKey(input.startDate)) throw new Error("program_invalid_start_date");
+  if (!isTimeZone(input.timeZone)) throw new Error("program_invalid_timezone");
+  if (input.preferredSlots.length !== 3) throw new Error("program_slots_count");
+  const slots = parsePreferredSlots(input.preferredSlots);
+  if (!slots) throw new Error("program_invalid_slots");
+
+  const keys = ["A", "B", "C"] as const;
+  if (
+    input.program.sessions.length !== 3 ||
+    input.sessions.length !== 3 ||
+    keys.some(
+      (key, index) =>
+        input.program.sessions[index]?.key !== key ||
+        input.sessions[index]?.key !== key,
+    )
+  ) {
+    throw new Error("program_template_keys");
+  }
+
+  for (let index = 0; index < keys.length; index += 1) {
+    const template = input.program.sessions[index];
+    const resolved = input.sessions[index];
+    if (
+      template.title !== resolved.title ||
+      resolved.exercises.length !== INTERVAL_SLOTS.length ||
+      template.exercises.length !== INTERVAL_SLOTS.length
+    ) {
+      throw new Error(`program_template_mismatch:${keys[index]}`);
+    }
+    for (const [slotIndex, exercise] of resolved.exercises.entries()) {
+      const expected = intervalExerciseName(
+        template.exercises[slotIndex],
+        input.levelAtStart,
+      );
+      if (
+        exercise.slot !== template.exercises[slotIndex].slot ||
+        exercise.exerciseName !== expected
+      ) {
+        throw new Error(`program_template_mismatch:${keys[index]}`);
+      }
+      if (
+        exercise.item.name !== exercise.exerciseName ||
+        exercise.item.created_by !== null ||
+        exercise.item.is_custom !== false
+      ) {
+        throw new Error(
+          `program_catalog_item_invalid:${exercise.exerciseName}`,
+        );
+      }
+    }
+  }
+
+  validateSchedule(input, slots);
+}
+
+/**
+ * 인터벌 등록 스냅샷을 만든다.
+ *
+ * ⚠️ 회차 길이는 **주차가 정한다** — 사용자가 고르지 않는다. 여기서 계산해
+ *    payload에 실어야 6주 동안 양이 자란다 (설계 §3.4).
+ * ⚠️ 처방(`prescription`)을 싣지 않는다. 20초/10초는 음원이 정하고, 0070이
+ *    인터벌 회차에서는 처방을 요구하지 않는다.
+ */
+export function buildCreateIntervalEnrollmentRpcArgs(
+  input: CreateIntervalEnrollmentInput,
+): CreateProgramEnrollmentRpcArgs {
+  validateIntervalEnrollmentInput(input);
+  const sessions = new Map(
+    input.sessions.map((session) => [session.key, session]),
+  );
+  const plans = input.schedule.map((item): ProgramPlanPayload => {
+    const template = sessions.get(item.templateKey);
+    if (!template) {
+      throw new Error(`program_template_missing:${item.templateKey}`);
+    }
+    return {
+      plan_date: item.date,
+      scheduled_at: item.scheduledAt,
+      week: item.week,
+      session: item.session,
+      template_key: item.templateKey,
+      title: input.program.title,
+      tabata_minutes: intervalMinutesForWeek(
+        input.program,
+        input.levelAtStart,
+        item.week,
+      ),
+      exercises: template.exercises.map((exercise) => ({
+        name: exercise.item.name,
+        bodyPart: exercise.item.body_part,
+        exerciseType: exercise.item.exercise_type,
+        measure: exercise.item.measure,
+        isCustom: exercise.item.is_custom,
+        sets: [{ ...ZERO_SET }],
+      })),
+    };
+  });
+  return {
+    p_program_key: input.program.key,
+    p_program_version: input.program.version,
+    p_title_snapshot: input.program.title,
+    p_level_at_start: input.levelAtStart,
+    p_start_date: input.startDate,
+    p_timezone: input.timeZone,
+    p_preferred_slots: input.preferredSlots.map((slot) => ({ ...slot })),
+    p_plans: plans,
+  };
+}
+
+export async function createIntervalProgramEnrollment(
+  input: CreateIntervalEnrollmentInput,
+): Promise<string> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase.rpc(
+    "create_program_enrollment",
+    buildCreateIntervalEnrollmentRpcArgs(input),
+  );
+  if (error) throw error;
+  if (typeof data !== "string" || !UUID.test(data)) {
+    throw new Error("program_invalid_enrollment_id");
+  }
+  return data;
 }
 
 export async function createProgramEnrollment(
