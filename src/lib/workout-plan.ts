@@ -73,6 +73,31 @@ function optionalIsoDate(value: unknown): string | null {
 function fromRow(row: WorkoutPlanRow): WorkoutPlan {
   const exercises = parsePlanExercises(row.exercises);
   if (exercises.length === 0) throw new Error("invalid_workout_plan");
+  const title = optionalTitle(row.title);
+  const scheduledAt = optionalIsoDate(row.scheduled_at);
+  const programEnrollmentId =
+    typeof row.program_enrollment_id === "string" &&
+    UUID.test(row.program_enrollment_id)
+      ? row.program_enrollment_id
+      : null;
+  const programWeek = boundedInteger(row.program_week, 1, 6);
+  const programSession = boundedInteger(row.program_session, 1, 3);
+  const programTemplateVersion = boundedInteger(
+    row.program_template_version,
+    1,
+    10_000,
+  );
+  if (
+    row.program_enrollment_id != null &&
+    (!programEnrollmentId ||
+      !title ||
+      !scheduledAt ||
+      !programWeek ||
+      !programSession ||
+      !programTemplateVersion)
+  ) {
+    throw new Error("invalid_workout_plan_program_metadata");
+  }
   return {
     id: row.id,
     userId: row.user_id,
@@ -80,20 +105,12 @@ function fromRow(row: WorkoutPlanRow): WorkoutPlan {
     sourceSessionId: row.source_session_id,
     exercises,
     tabataMinutes: asTabataMinutes(row.tabata_minutes),
-    title: optionalTitle(row.title),
-    scheduledAt: optionalIsoDate(row.scheduled_at),
-    programEnrollmentId:
-      typeof row.program_enrollment_id === "string" &&
-      UUID.test(row.program_enrollment_id)
-        ? row.program_enrollment_id
-        : null,
-    programWeek: boundedInteger(row.program_week, 1, 6),
-    programSession: boundedInteger(row.program_session, 1, 3),
-    programTemplateVersion: boundedInteger(
-      row.program_template_version,
-      1,
-      10_000,
-    ),
+    title,
+    scheduledAt,
+    programEnrollmentId,
+    programWeek,
+    programSession,
+    programTemplateVersion,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

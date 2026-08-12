@@ -115,7 +115,7 @@ describe("buildCreateProgramEnrollmentRpcArgs", () => {
         week: 1,
         session: 1,
         template_key: "A",
-        title: `${input.program.title} · ${input.sessions[0].title}`,
+        title: input.program.title,
       });
       expect(first.exercises).toHaveLength(5);
       expect(first.exercises[0]).toEqual({
@@ -167,7 +167,82 @@ describe("buildCreateProgramEnrollmentRpcArgs", () => {
         ...input,
         sessions: input.sessions.slice(0, 2),
       }),
-    ).toThrow("program_template_missing:C");
+    ).toThrow("program_template_keys");
+  });
+
+  it("프로그램 원본과 resolved session의 제목·종목·처방이 다르면 거부한다", () => {
+    const input = createInput("beginner");
+    const mismatchedTitle = structuredClone(input.sessions);
+    mismatchedTitle[0].title = "다른 회차";
+    expect(() =>
+      buildCreateProgramEnrollmentRpcArgs({ ...input, sessions: mismatchedTitle }),
+    ).toThrow("program_template_mismatch:A");
+
+    const mismatchedPrescription = structuredClone(input.sessions);
+    mismatchedPrescription[0].exercises[0].repsMax += 1;
+    expect(() =>
+      buildCreateProgramEnrollmentRpcArgs({
+        ...input,
+        sessions: mismatchedPrescription,
+      }),
+    ).toThrow("program_template_mismatch:A");
+  });
+
+  it("공식 시드가 아닌 custom item 또는 이름이 다른 item을 거부한다", () => {
+    const input = createInput("beginner");
+    const custom = structuredClone(input.sessions);
+    custom[0].exercises[0].item.is_custom = true;
+    custom[0].exercises[0].item.created_by = "user-1";
+    expect(() =>
+      buildCreateProgramEnrollmentRpcArgs({ ...input, sessions: custom }),
+    ).toThrow("program_catalog_item_invalid:바벨 백스쿼트");
+
+    const wrongName = structuredClone(input.sessions);
+    wrongName[0].exercises[0].item.name = "다른 운동";
+    expect(() =>
+      buildCreateProgramEnrollmentRpcArgs({ ...input, sessions: wrongName }),
+    ).toThrow("program_catalog_item_invalid:바벨 백스쿼트");
+  });
+
+  it("중복 날짜·순서가 깨진 일정·현지 날짜가 다른 예약시각을 거부한다", () => {
+    const input = createInput("beginner");
+    const duplicate = structuredClone(input.schedule);
+    duplicate[1].date = duplicate[0].date;
+    expect(() =>
+      buildCreateProgramEnrollmentRpcArgs({ ...input, schedule: duplicate }),
+    ).toThrow("program_plan_date_duplicate:2026-08-17");
+
+    const wrongOrder = structuredClone(input.schedule);
+    wrongOrder[0].week = 2;
+    expect(() =>
+      buildCreateProgramEnrollmentRpcArgs({ ...input, schedule: wrongOrder }),
+    ).toThrow("program_invalid_slot_order");
+
+    const wrongLocalDate = structuredClone(input.schedule);
+    wrongLocalDate[0].scheduledAt = "2026-08-18T10:00:00.000Z";
+    expect(() =>
+      buildCreateProgramEnrollmentRpcArgs({ ...input, schedule: wrongLocalDate }),
+    ).toThrow("program_scheduled_date_mismatch");
+  });
+
+  it("선호 시간·시작일·시간대를 검증하고 입력을 바꾸지 않는다", () => {
+    const input = createInput("experienced");
+    const before = structuredClone(input);
+    buildCreateProgramEnrollmentRpcArgs(input);
+    expect(input).toEqual(before);
+
+    expect(() =>
+      buildCreateProgramEnrollmentRpcArgs({
+        ...input,
+        preferredSlots: input.preferredSlots.slice(0, 2),
+      }),
+    ).toThrow("program_slots_count");
+    expect(() =>
+      buildCreateProgramEnrollmentRpcArgs({ ...input, startDate: "2026-02-30" }),
+    ).toThrow("program_invalid_start_date");
+    expect(() =>
+      buildCreateProgramEnrollmentRpcArgs({ ...input, timeZone: "Mars/Olympus" }),
+    ).toThrow("program_invalid_timezone");
   });
 });
 
@@ -192,7 +267,14 @@ describe("program enrollment I/O", () => {
     );
   });
 
-  it("본인 active enrollment만 시작일 순으로 조회하고 정상 행만 복원한다", async () => {
+  it("create RPC가 UUID가 아닌 성공값을 주면 거부한다", async () => {
+    mocks.rpc.mockResolvedValue({ data: "not-a-uuid", error: null });
+    await expect(createProgramEnrollment(createInput("beginner"))).rejects.toThrow(
+      "program_invalid_enrollment_id",
+    );
+  });
+
+  it("본인 active enrollment만 시작일 순으로 조회하고 정상 행을 복원한다", async () => {
     const valid = {
       id: "11111111-1111-4111-8111-111111111111",
       program_key: "shoulder-frame-6w",
@@ -204,10 +286,7 @@ describe("program enrollment I/O", () => {
       preferred_slots: slots,
       status: "active",
     };
-    const query = queryReturning({
-      data: [valid, { ...valid, preferred_slots: [{ weekday: 1, time: "oops" }] }],
-      error: null,
-    });
+    const query = queryReturning({ data: [valid], error: null });
 
     await expect(getActiveProgramEnrollments("user-1")).resolves.toEqual([
       {
@@ -228,6 +307,28 @@ describe("program enrollment I/O", () => {
       ["status", "active"],
     ]);
     expect(query.order).toHaveBeenCalledWith("start_date", { ascending: true });
+  });
+
+  it("조회 결과에 잘못된 행이 하나라도 있으면 전체를 fail-closed 거부한다", async () => {
+    const valid = {
+      id: "11111111-1111-4111-8111-111111111111",
+      program_key: "shoulder-frame-6w",
+      program_version: 1,
+      title_snapshot: "상체의 틀을 넓히는 6주",
+      level_at_start: "beginner",
+      start_date: "2026-08-17",
+      timezone: "Asia/Seoul",
+      preferred_slots: slots,
+      status: "active",
+    };
+    queryReturning({
+      data: [valid, { ...valid, preferred_slots: [{ weekday: 1, time: "oops" }] }],
+      error: null,
+    });
+
+    await expect(getActiveProgramEnrollments("user-1")).rejects.toThrow(
+      "program_invalid_enrollment_row",
+    );
   });
 
   it("조회 오류를 그대로 던진다", async () => {

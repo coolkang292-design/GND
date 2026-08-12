@@ -126,6 +126,132 @@ function parsePreferredSlots(value: unknown): PreferredSlot[] | null {
   return slots;
 }
 
+function localParts(iso: string, timeZone: string): { date: string; time: string } {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(new Date(iso));
+  const part = (name: Intl.DateTimeFormatPartTypes) =>
+    parts.find((item) => item.type === name)?.value ?? "";
+  return {
+    date: `${part("year")}-${part("month")}-${part("day")}`,
+    time: `${String(Number(part("hour")) % 24).padStart(2, "0")}:${part("minute")}`,
+  };
+}
+
+function dateDays(value: string): number {
+  const [year, month, day] = value.split("-").map(Number);
+  return Date.UTC(year, month - 1, day) / 86_400_000;
+}
+
+function validateEnrollmentInput(input: CreateProgramEnrollmentInput): void {
+  if (!isDateKey(input.startDate)) throw new Error("program_invalid_start_date");
+  if (!isTimeZone(input.timeZone)) throw new Error("program_invalid_timezone");
+  if (input.preferredSlots.length !== 3) throw new Error("program_slots_count");
+  const slots = parsePreferredSlots(input.preferredSlots);
+  if (!slots) throw new Error("program_invalid_slots");
+
+  const keys = ["A", "B", "C"] as const;
+  if (
+    input.program.sessions.length !== 3 ||
+    input.sessions.length !== 3 ||
+    keys.some(
+      (key, index) =>
+        input.program.sessions[index]?.key !== key ||
+        input.sessions[index]?.key !== key,
+    )
+  ) {
+    throw new Error("program_template_keys");
+  }
+
+  const prescriptionKeys = [
+    "exerciseName",
+    "beginnerSets",
+    "experiencedSets",
+    "repsMin",
+    "repsMax",
+    "targetRir",
+    "restSeconds",
+    "loadStepKg",
+  ] as const;
+  for (let index = 0; index < keys.length; index += 1) {
+    const template = input.program.sessions[index];
+    const resolved = input.sessions[index];
+    const mismatched =
+      template.title !== resolved.title ||
+      template.exercises.length !== resolved.exercises.length ||
+      template.exercises.some((exercise, exerciseIndex) => {
+        const resolvedExercise = resolved.exercises[exerciseIndex];
+        return (
+          !resolvedExercise ||
+          prescriptionKeys.some(
+            (key) => exercise[key] !== resolvedExercise[key],
+          )
+        );
+      });
+    if (mismatched) {
+      throw new Error(`program_template_mismatch:${keys[index]}`);
+    }
+    for (const exercise of resolved.exercises) {
+      if (
+        exercise.item.name !== exercise.exerciseName ||
+        exercise.item.created_by !== null ||
+        exercise.item.is_custom !== false
+      ) {
+        throw new Error(
+          `program_catalog_item_invalid:${exercise.exerciseName}`,
+        );
+      }
+    }
+  }
+
+  if (input.schedule.length !== 18) throw new Error("program_plans_count");
+  const dates = new Set<string>();
+  const allowedTimes = new Set(slots.map((slot) => slot.time));
+  let previousDate: string | null = null;
+  for (const [index, plan] of input.schedule.entries()) {
+    const expectedSession = ((index % 3) + 1) as 1 | 2 | 3;
+    if (
+      plan.week !== Math.floor(index / 3) + 1 ||
+      plan.session !== expectedSession ||
+      plan.templateKey !== keys[index % 3]
+    ) {
+      throw new Error("program_invalid_slot_order");
+    }
+    if (!isDateKey(plan.date) || plan.date < input.startDate) {
+      throw new Error("program_invalid_plan_date");
+    }
+    if (dates.has(plan.date)) {
+      throw new Error(`program_plan_date_duplicate:${plan.date}`);
+    }
+    dates.add(plan.date);
+    if (previousDate && dateDays(plan.date) - dateDays(previousDate) < 2) {
+      throw new Error("program_recovery_gap");
+    }
+    previousDate = plan.date;
+    if (
+      typeof plan.scheduledAt !== "string" ||
+      !Number.isFinite(Date.parse(plan.scheduledAt)) ||
+      new Date(plan.scheduledAt).toISOString() !== plan.scheduledAt
+    ) {
+      throw new Error("program_invalid_scheduled_at");
+    }
+    const local = localParts(plan.scheduledAt, input.timeZone);
+    if (local.date !== plan.date) {
+      throw new Error("program_scheduled_date_mismatch");
+    }
+    if (!allowedTimes.has(local.time)) {
+      throw new Error("program_scheduled_time_mismatch");
+    }
+  }
+}
+
 function parseProgramEnrollmentRow(value: unknown): ProgramEnrollment | null {
   if (!value || typeof value !== "object") return null;
   const row = value as Record<string, unknown>;
@@ -191,7 +317,7 @@ function toPlanExercise(
 export function buildCreateProgramEnrollmentRpcArgs(
   input: CreateProgramEnrollmentInput,
 ): CreateProgramEnrollmentRpcArgs {
-  if (input.schedule.length !== 18) throw new Error("program_plans_count");
+  validateEnrollmentInput(input);
   const sessions = new Map(input.sessions.map((session) => [session.key, session]));
   const plans = input.schedule.map((item): ProgramPlanPayload => {
     const template = sessions.get(item.templateKey);
@@ -204,7 +330,7 @@ export function buildCreateProgramEnrollmentRpcArgs(
       week: item.week,
       session: item.session,
       template_key: item.templateKey,
-      title: `${input.program.title} · ${template.title}`,
+      title: input.program.title,
       exercises: template.exercises.map((exercise) =>
         toPlanExercise(exercise, input.levelAtStart),
       ),
@@ -250,9 +376,11 @@ export async function getActiveProgramEnrollments(
     .eq("status", "active")
     .order("start_date", { ascending: true });
   if (error) throw error;
-  return (Array.isArray(data) ? data : [])
-    .map(parseProgramEnrollmentRow)
-    .filter((row): row is ProgramEnrollment => row !== null);
+  const rows = (Array.isArray(data) ? data : []).map(parseProgramEnrollmentRow);
+  if (rows.some((row) => row === null)) {
+    throw new Error("program_invalid_enrollment_row");
+  }
+  return rows as ProgramEnrollment[];
 }
 
 export async function rescheduleProgramPlans(input: {
