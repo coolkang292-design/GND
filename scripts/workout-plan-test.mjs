@@ -1,11 +1,30 @@
-// 0015 검증: 예정표 본인 CRUD, 날짜 제약, 중복 교체, 타인 차단.
-// 실행: node scripts/workout-plan-test.mjs
-// 사전조건: 0015_workout_plans.sql이 적용되어 있어야 한다.
-import { readFileSync } from "node:fs";
+// 0015+0066 검증: 예정표 본인 CRUD, 날짜 제약, 중복 교체, 타인 차단,
+// 프로그램 메타데이터 추가 뒤 기존 일반 예정표 회귀.
+// 실행(PowerShell): $env:GND_ALLOW_DB_TESTS='workout-plan';
+//   node scripts/workout-plan-test.mjs; Remove-Item Env:GND_ALLOW_DB_TESTS
+// 사전조건: 0015와 0066 마이그레이션이 적용되어 있어야 한다.
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createDeleteGuard } from "./_safe-delete.mjs";
 
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const worktreeMarker = `${sep}.worktrees${sep}`;
+const markerIndex = repoRoot.indexOf(worktreeMarker);
+const mainRepoRoot = markerIndex === -1 ? null : repoRoot.slice(0, markerIndex);
+const envPath = [
+  resolve(repoRoot, ".env.local"),
+  mainRepoRoot && resolve(mainRepoRoot, ".env.local"),
+].find((candidate) => candidate && existsSync(candidate));
+if (!envPath) throw new Error(".env.local을 찾을 수 없습니다");
+if (process.env.GND_ALLOW_DB_TESTS !== "workout-plan") {
+  throw new Error(
+    "DB 검사는 GND_ALLOW_DB_TESTS=workout-plan 명시 승인값이 필요합니다",
+  );
+}
+
 const env = Object.fromEntries(
-  readFileSync(".env.local", "utf8")
+  readFileSync(envPath, "utf8")
     .split(/\r?\n/)
     .filter((line) => line.includes("="))
     .map((line) => [
@@ -18,10 +37,24 @@ const URL = env.NEXT_PUBLIC_SUPABASE_URL;
 const ANON_KEY = env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const SERVICE_KEY = env.SUPABASE_SERVICE_ROLE_KEY;
 
-// 삭제 가드 — 실행 시작 시점에 있던 계정은 절대 지우지 않는다.
-const _guard = await createDeleteGuard({ url: URL, serviceKey: SERVICE_KEY });
 if (!URL || !ANON_KEY || !SERVICE_KEY) {
   throw new Error(".env.local에 Supabase 설정이 없습니다");
+}
+const EXPECTED_PROJECT_REF = "cjdskubyxlnojwzhwbfx";
+let projectHost;
+try {
+  projectHost = new globalThis.URL(URL).hostname;
+} catch {
+  throw new Error("Supabase URL 형식이 올바르지 않습니다");
+}
+if (projectHost !== `${EXPECTED_PROJECT_REF}.supabase.co`) {
+  throw new Error("승인된 GND Supabase 프로젝트가 아니므로 실행을 중단합니다");
+}
+// 삭제 가드 — 실행 시작 시점에 있던 계정은 절대 지우지 않는다.
+const _guard = await createDeleteGuard({ url: URL, serviceKey: SERVICE_KEY });
+const guardProbe = _guard.reasonToRefuse("00000000-0000-4000-8000-000000000001");
+if (guardProbe?.includes("스냅샷")) {
+  throw new Error("기존 계정 스냅샷을 못 읽어 테스트 계정을 만들지 않습니다");
 }
 
 let passed = 0;
@@ -58,10 +91,11 @@ async function anonUser() {
   const response = await fetch(`${URL}/auth/v1/signup`, {
     method: "POST",
     headers: { apikey: ANON_KEY, "Content-Type": "application/json" },
-    body: JSON.stringify({}),
+    body: JSON.stringify({ data: { codex_test: "codex/dev workout plan" } }),
   });
   const json = await response.json();
   if (!json.access_token) throw new Error(`익명 가입 실패: ${JSON.stringify(json)}`);
+  _guard.register(json.user.id);
   return { id: json.user.id, token: json.access_token };
 }
 
@@ -98,13 +132,38 @@ try {
 
   const date1 = "2099-01-10";
   const date2 = "2099-01-11";
+  const scheduledAt = "2099-01-10T10:00:00.000Z";
   const created = await api(userA.token, "POST", "/rest/v1/workout_plans", {
     user_id: userA.id,
     plan_date: date1,
     exercises,
+    title: "codex/dev 일반 예정표 회귀",
+    scheduled_at: scheduledAt,
   });
   const planId = created.json?.[0]?.id;
   check("본인 예정표 생성", created.status === 201 && Boolean(planId), JSON.stringify(created));
+  check(
+    "0066 선택 메타데이터가 일반 예정표와 호환",
+    created.json?.[0]?.title === "codex/dev 일반 예정표 회귀" &&
+      Date.parse(created.json?.[0]?.scheduled_at) === Date.parse(scheduledAt) &&
+      created.json?.[0]?.program_enrollment_id === null &&
+      created.json?.[0]?.program_week === null &&
+      created.json?.[0]?.program_session === null &&
+      created.json?.[0]?.program_template_version === null,
+    JSON.stringify(created),
+  );
+
+  const spoofedProgramMeta = await api(
+    userA.token,
+    "PATCH",
+    `/rest/v1/workout_plans?id=eq.${planId}`,
+    { program_week: 1, program_session: 1, program_template_version: 1 },
+  );
+  check(
+    "일반 예정표의 프로그램 메타데이터 위조 차단",
+    spoofedProgramMeta.status >= 400,
+    JSON.stringify(spoofedProgramMeta),
+  );
 
   const ownRead = await api(
     userA.token,
@@ -216,8 +275,11 @@ try {
     { p_plan_id: planId, p_target_date: date2, p_replace: true },
   );
   check(
-    "확인한 이동은 대상 예정표를 교체",
-    replacedMove.status === 200 && replacedMove.json?.plan_date === date2,
+    "확인한 이동은 대상 예정표를 교체하고 날짜 종속 시각만 초기화",
+    replacedMove.status === 200 &&
+      replacedMove.json?.plan_date === date2 &&
+      replacedMove.json?.title === "codex/dev 일반 예정표 회귀" &&
+      replacedMove.json?.scheduled_at === null,
     JSON.stringify(replacedMove),
   );
 
@@ -306,10 +368,41 @@ try {
   );
   check("본인 예정표 삭제", ownDelete.status === 200 && ownDelete.json?.length === 1);
 } finally {
-  if (userA) await api(SERVICE_KEY, "DELETE", `/rest/v1/workout_plans?user_id=eq.${userA.id}`);
-  if (userB) await api(SERVICE_KEY, "DELETE", `/rest/v1/workout_plans?user_id=eq.${userB.id}`);
-  if (userA) await deleteAuthUser(userA.id);
-  if (userB) await deleteAuthUser(userB.id);
+  let authCleanupSucceeded = 0;
+  for (const user of [userA, userB]) {
+    if (!user) continue;
+    const refusal = _guard.reasonToRefuse(user.id);
+    if (refusal) {
+      console.error(`FAIL service-role 정리 거부 ${user.id} - ${refusal}`);
+      failed++;
+      continue;
+    }
+    const rowCleanup = await api(
+      SERVICE_KEY,
+      "DELETE",
+      `/rest/v1/workout_plans?user_id=eq.${user.id}`,
+    );
+    if (![200, 204].includes(rowCleanup.status)) {
+      console.error(`FAIL service-role 행 정리 - ${JSON.stringify(rowCleanup)}`);
+      failed++;
+    }
+
+    const authCleanup = await deleteAuthUser(user.id);
+    if (authCleanup.ok) {
+      authCleanupSucceeded++;
+      console.log(`CLEANUP PASS 이번 실행 생성 계정 ${authCleanupSucceeded}개 정리`);
+    } else {
+      const detail = authCleanup.refused
+        ? `거부=${authCleanup.refused}`
+        : `HTTP=${authCleanup.status ?? "unknown"}`;
+      console.error(`FAIL 테스트 계정 정리 ${user.id} - ${detail}`);
+      failed++;
+    }
+  }
+  const expectedAuthCleanup = [userA, userB].filter(Boolean).length;
+  console.log(
+    `CLEANUP ${authCleanupSucceeded}/${expectedAuthCleanup} 이번 실행 생성 계정 정리`,
+  );
 }
 
 console.log(`\n${passed}/${passed + failed} passed`);
