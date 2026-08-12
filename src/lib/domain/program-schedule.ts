@@ -16,6 +16,7 @@ export type ProgramScheduleItem = {
 export type ScheduleConflict = {
   date: string;
   suggestedDate: string;
+  scheduledAt: string;
 };
 
 export type ProgramPlanForReschedule = {
@@ -28,6 +29,7 @@ export type ProgramPlanMove = {
   planId: string;
   fromDate: string;
   suggestedDate: string;
+  scheduledAt: string;
 };
 
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
@@ -107,11 +109,10 @@ export function localDateTimeToIso(
   const { hour, minute } = parseTime(time);
   const formatter = formatterFor(timeZone);
   const desired = Date.UTC(year, month - 1, day, hour, minute, 0);
-  let timestamp = desired;
-
-  // time.ts와 같은 벽시계 차이 보정 방식이다. DST 전환도 수렴하도록 여유 있게 반복한다.
-  for (let index = 0; index < 4; index += 1) {
-    const actual = wallClock(new Date(timestamp), formatter);
+  const offsets = new Set<number>();
+  for (let hours = -48; hours <= 48; hours += 6) {
+    const probeTimestamp = desired + hours * 3_600_000;
+    const actual = wallClock(new Date(probeTimestamp), formatter);
     const actualAsUtc = Date.UTC(
       actual.year,
       actual.month - 1,
@@ -120,24 +121,27 @@ export function localDateTimeToIso(
       actual.minute,
       actual.second,
     );
-    const correction = desired - actualAsUtc;
-    if (correction === 0) break;
-    timestamp += correction;
+    offsets.add(actualAsUtc - probeTimestamp);
   }
 
-  const result = new Date(timestamp);
-  const resolved = wallClock(result, formatter);
-  if (
-    resolved.year !== year ||
-    resolved.month !== month ||
-    resolved.day !== day ||
-    resolved.hour !== hour ||
-    resolved.minute !== minute ||
-    resolved.second !== 0
-  ) {
+  const matches = [...offsets]
+    .map((offset) => new Date(desired - offset))
+    .filter((candidate) => {
+      const resolved = wallClock(candidate, formatter);
+      return (
+        resolved.year === year &&
+        resolved.month === month &&
+        resolved.day === day &&
+        resolved.hour === hour &&
+        resolved.minute === minute &&
+        resolved.second === 0
+      );
+    })
+    .sort((a, b) => a.getTime() - b.getTime());
+  if (matches.length === 0) {
     throw new Error("program_local_time_missing");
   }
-  return result.toISOString();
+  return matches[0].toISOString();
 }
 
 function weekdayOf(dateKey: string): number {
@@ -174,15 +178,67 @@ function validateOccupiedDates(occupiedDates: ReadonlySet<string>): void {
   }
 }
 
-function closestAvailableFutureDate(
+function laterDate(a: string, b: string): string {
+  return a > b ? a : b;
+}
+
+function daysBetween(a: string, b: string): number {
+  const first = parseDateKey(a);
+  const second = parseDateKey(b);
+  return Math.abs(
+    (Date.UTC(second.year, second.month - 1, second.day) -
+      Date.UTC(first.year, first.month - 1, first.day)) /
+      86_400_000,
+  );
+}
+
+function isAvailableProgramDate(
   date: string,
   blockedDates: ReadonlySet<string>,
-): string {
-  let candidate = addDaysToDateKey(date, 1);
-  while (blockedDates.has(candidate)) {
+  fixedProgramDates: readonly string[],
+): boolean {
+  return (
+    !blockedDates.has(date) &&
+    fixedProgramDates.every((fixedDate) => daysBetween(fixedDate, date) >= 2)
+  );
+}
+
+function chooseProgramDate(input: {
+  minimumDate: string;
+  slotsByWeekday: ReadonlyMap<number, PreferredSlot>;
+  blockedDates: ReadonlySet<string>;
+  fixedProgramDates: readonly string[];
+  fallbackTime: string;
+}): { date: string; time: string } {
+  for (let offset = 0; offset < 7; offset += 1) {
+    const candidate = addDaysToDateKey(input.minimumDate, offset);
+    const slot = input.slotsByWeekday.get(weekdayOf(candidate));
+    if (
+      slot &&
+      isAvailableProgramDate(
+        candidate,
+        input.blockedDates,
+        input.fixedProgramDates,
+      )
+    ) {
+      return { date: candidate, time: slot.time };
+    }
+  }
+
+  let candidate = input.minimumDate;
+  for (let attempts = 0; attempts < 10_000; attempts += 1) {
+    if (
+      isAvailableProgramDate(
+        candidate,
+        input.blockedDates,
+        input.fixedProgramDates,
+      )
+    ) {
+      return { date: candidate, time: input.fallbackTime };
+    }
     candidate = addDaysToDateKey(candidate, 1);
   }
-  return candidate;
+  throw new Error("program_schedule_unavailable");
 }
 
 export function buildProgramSchedule(input: {
@@ -199,15 +255,15 @@ export function buildProgramSchedule(input: {
   const slotsByWeekday = new Map<number, PreferredSlot>(
     input.slots.map((slot) => [slot.weekday, slot] as const),
   );
-  const plans: ProgramScheduleItem[] = [];
+  const originalPlans: ProgramScheduleItem[] = [];
   let date = input.startDate;
 
-  while (plans.length < 18) {
+  while (originalPlans.length < 18) {
     const slot = slotsByWeekday.get(weekdayOf(date));
     if (slot) {
-      const index = plans.length;
+      const index = originalPlans.length;
       const session = ((index % 3) + 1) as 1 | 2 | 3;
-      plans.push({
+      originalPlans.push({
         date,
         scheduledAt: localDateTimeToIso(date, slot.time, input.timeZone),
         week: Math.floor(index / 3) + 1,
@@ -218,14 +274,37 @@ export function buildProgramSchedule(input: {
     date = addDaysToDateKey(date, 1);
   }
 
-  const originalDates = new Set(plans.map((plan) => plan.date));
-  const blockedDates = new Set([...input.occupiedDates, ...originalDates]);
+  const plans: ProgramScheduleItem[] = [];
   const conflicts: ScheduleConflict[] = [];
-  for (const plan of plans) {
-    if (!input.occupiedDates.has(plan.date)) continue;
-    const suggestedDate = closestAvailableFutureDate(plan.date, blockedDates);
-    blockedDates.add(suggestedDate);
-    conflicts.push({ date: plan.date, suggestedDate });
+  let nextAllowedDate = input.startDate;
+  for (const original of originalPlans) {
+    const originalSlot = slotsByWeekday.get(weekdayOf(original.date));
+    if (!originalSlot) throw new Error("program_slot_missing");
+    const selected = chooseProgramDate({
+      minimumDate: laterDate(original.date, nextAllowedDate),
+      slotsByWeekday,
+      blockedDates: input.occupiedDates,
+      fixedProgramDates: plans.map((plan) => plan.date),
+      fallbackTime: originalSlot.time,
+    });
+    const scheduledAt = localDateTimeToIso(
+      selected.date,
+      selected.time,
+      input.timeZone,
+    );
+    plans.push({
+      ...original,
+      date: selected.date,
+      scheduledAt,
+    });
+    nextAllowedDate = addDaysToDateKey(selected.date, 2);
+    if (selected.date !== original.date) {
+      conflicts.push({
+        date: original.date,
+        suggestedDate: selected.date,
+        scheduledAt,
+      });
+    }
   }
 
   return { plans, conflicts };
@@ -234,10 +313,14 @@ export function buildProgramSchedule(input: {
 export function buildMissedSessionProposal(input: {
   plans: readonly ProgramPlanForReschedule[];
   todayKey: string;
+  preferredSlots: readonly PreferredSlot[];
+  timeZone: string;
   occupiedDates: ReadonlySet<string>;
 }): ProgramPlanMove[] {
   parseDateKey(input.todayKey, "program_invalid_today");
+  validateSlots(input.preferredSlots);
   validateOccupiedDates(input.occupiedDates);
+  formatterFor(input.timeZone);
 
   const ids = new Set<string>();
   const dates = new Set<string>();
@@ -265,25 +348,38 @@ export function buildMissedSessionProposal(input: {
   }
 
   const blocked = new Set(input.occupiedDates);
-  for (const plan of ordered) {
-    if (plan.completed) blocked.add(plan.date);
-  }
+  const completedDates = ordered
+    .filter((plan) => plan.completed)
+    .map((plan) => plan.date);
+  const slotsByWeekday = new Map<number, PreferredSlot>(
+    input.preferredSlots.map((slot) => [slot.weekday, slot] as const),
+  );
 
   const moves: ProgramPlanMove[] = [];
   let cursor = input.todayKey;
+  const assignedDates: string[] = [];
   for (const plan of ordered) {
     if (plan.completed) continue;
-    let candidate = plan.date > cursor ? plan.date : cursor;
-    while (blocked.has(candidate)) {
-      candidate = addDaysToDateKey(candidate, 1);
-    }
-    blocked.add(candidate);
-    cursor = addDaysToDateKey(candidate, 1);
-    if (candidate !== plan.date) {
+    const originalSlot = slotsByWeekday.get(weekdayOf(plan.date));
+    const selected = chooseProgramDate({
+      minimumDate: laterDate(plan.date, cursor),
+      slotsByWeekday,
+      blockedDates: blocked,
+      fixedProgramDates: [...completedDates, ...assignedDates],
+      fallbackTime: originalSlot?.time ?? input.preferredSlots[0].time,
+    });
+    assignedDates.push(selected.date);
+    cursor = addDaysToDateKey(selected.date, 2);
+    if (selected.date !== plan.date) {
       moves.push({
         planId: plan.id,
         fromDate: plan.date,
-        suggestedDate: candidate,
+        suggestedDate: selected.date,
+        scheduledAt: localDateTimeToIso(
+          selected.date,
+          selected.time,
+          input.timeZone,
+        ),
       });
     }
   }

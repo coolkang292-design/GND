@@ -12,6 +12,19 @@ const seoulSlots = [
   { weekday: 5 as const, time: "18:00" },
 ];
 
+function dayDifference(a: string, b: string): number {
+  return (
+    (Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) /
+    86_400_000
+  );
+}
+
+function expectRecoveryGap(dates: string[]): void {
+  for (let index = 1; index < dates.length; index += 1) {
+    expect(dayDifference(dates[index - 1], dates[index])).toBeGreaterThanOrEqual(2);
+  }
+}
+
 describe("localDateTimeToIso", () => {
   it("서울 외 IANA 시간대의 벽시계 시각을 정확한 순간으로 바꾼다", () => {
     expect(
@@ -29,6 +42,13 @@ describe("localDateTimeToIso", () => {
     expect(() =>
       localDateTimeToIso("2026-03-08", "02:30", "America/New_York"),
     ).toThrow("program_local_time_missing");
+  });
+
+  it.each([
+    ["2026-11-01", "01:30", "America/New_York", "2026-11-01T05:30:00.000Z"],
+    ["2026-10-25", "01:30", "Europe/London", "2026-10-25T00:30:00.000Z"],
+  ])("DST 종료로 현지 시각이 중복되면 가장 이른 순간을 고른다", (date, time, zone, iso) => {
+    expect(localDateTimeToIso(date, time, zone)).toBe(iso);
   });
 
   it.each([
@@ -174,7 +194,7 @@ describe("buildProgramSchedule", () => {
     ]);
   });
 
-  it("충돌해도 원 계획은 유지하고 가장 가까운 비예약 미래 날짜를 제안한다", () => {
+  it("충돌하면 이후 회차도 밀어 RPC에 바로 보낼 수 있는 완성 일정을 반환한다", () => {
     const occupied = new Set(["2026-08-19", "2026-08-20"]);
     const out = buildProgramSchedule({
       startDate: "2026-08-17",
@@ -183,14 +203,28 @@ describe("buildProgramSchedule", () => {
       occupiedDates: occupied,
     });
 
-    expect(out.plans[1].date).toBe("2026-08-19");
-    expect(out.conflicts).toEqual([
-      { date: "2026-08-19", suggestedDate: "2026-08-22" },
+    const finalDates = out.plans.map((plan) => plan.date);
+    expect(finalDates.slice(0, 4)).toEqual([
+      "2026-08-17",
+      "2026-08-21",
+      "2026-08-24",
+      "2026-08-26",
     ]);
+    expect(out.plans).toHaveLength(18);
+    expect(new Set(finalDates).size).toBe(18);
+    expect(finalDates.every((date) => !occupied.has(date))).toBe(true);
+    expectRecoveryGap(finalDates);
+    expect(out.conflicts[0]).toEqual({
+      date: "2026-08-19",
+      suggestedDate: "2026-08-21",
+      scheduledAt: "2026-08-21T09:00:00.000Z",
+    });
+    expect(out.conflicts).toHaveLength(17);
+    expect(out.plans.every((plan) => Boolean(plan.scheduledAt))).toBe(true);
     expect(occupied).toEqual(new Set(["2026-08-19", "2026-08-20"]));
   });
 
-  it("복수 충돌의 제안은 결정적이고 원 날짜·기존 날짜·다른 제안과 겹치지 않는다", () => {
+  it("복수 충돌도 결정적으로 해소하고 모든 프로그램 회차의 회복 간격을 지킨다", () => {
     const input = {
       startDate: "2026-08-17",
       slots: seoulSlots,
@@ -199,21 +233,17 @@ describe("buildProgramSchedule", () => {
     };
     const first = buildProgramSchedule(input);
     const second = buildProgramSchedule(input);
-    const suggestions = first.conflicts.map((conflict) => conflict.suggestedDate);
-
-    expect(first.conflicts).toEqual([
-      { date: "2026-08-17", suggestedDate: "2026-08-18" },
-      { date: "2026-08-19", suggestedDate: "2026-08-22" },
-    ]);
     expect(second).toEqual(first);
-    expect(new Set(suggestions).size).toBe(suggestions.length);
+    expect(first.plans).toHaveLength(18);
+    expect(new Set(first.plans.map((plan) => plan.date)).size).toBe(18);
     expect(
-      suggestions.every(
-        (date) =>
-          !input.occupiedDates.has(date) &&
-          !first.plans.some((plan) => plan.date === date),
-      ),
+      first.plans.every((plan) => !input.occupiedDates.has(plan.date)),
     ).toBe(true);
+    expectRecoveryGap(first.plans.map((plan) => plan.date));
+    expect(first.conflicts[0]).toMatchObject({
+      date: "2026-08-17",
+      suggestedDate: "2026-08-21",
+    });
   });
 });
 
@@ -231,11 +261,15 @@ describe("buildMissedSessionProposal", () => {
       buildMissedSessionProposal({
         plans,
         todayKey: "2026-08-14",
+        preferredSlots: seoulSlots,
+        timeZone: "Asia/Seoul",
         occupiedDates: new Set(),
       }),
     ).toEqual([
-      { planId: "missed-a", fromDate: "2026-08-11", suggestedDate: "2026-08-14" },
-      { planId: "missed-b", fromDate: "2026-08-12", suggestedDate: "2026-08-15" },
+      { planId: "missed-a", fromDate: "2026-08-11", suggestedDate: "2026-08-14", scheduledAt: "2026-08-14T09:00:00.000Z" },
+      { planId: "missed-b", fromDate: "2026-08-12", suggestedDate: "2026-08-17", scheduledAt: "2026-08-17T10:00:00.000Z" },
+      { planId: "future-a", fromDate: "2026-08-17", suggestedDate: "2026-08-19", scheduledAt: "2026-08-19T10:00:00.000Z" },
+      { planId: "future-b", fromDate: "2026-08-19", suggestedDate: "2026-08-21", scheduledAt: "2026-08-21T09:00:00.000Z" },
     ]);
   });
 
@@ -244,12 +278,15 @@ describe("buildMissedSessionProposal", () => {
       buildMissedSessionProposal({
         plans,
         todayKey: "2026-08-16",
+        preferredSlots: seoulSlots,
+        timeZone: "Asia/Seoul",
         occupiedDates: new Set(),
       }),
     ).toEqual([
-      { planId: "missed-a", fromDate: "2026-08-11", suggestedDate: "2026-08-16" },
-      { planId: "missed-b", fromDate: "2026-08-12", suggestedDate: "2026-08-17" },
-      { planId: "future-a", fromDate: "2026-08-17", suggestedDate: "2026-08-18" },
+      { planId: "missed-a", fromDate: "2026-08-11", suggestedDate: "2026-08-17", scheduledAt: "2026-08-17T10:00:00.000Z" },
+      { planId: "missed-b", fromDate: "2026-08-12", suggestedDate: "2026-08-19", scheduledAt: "2026-08-19T10:00:00.000Z" },
+      { planId: "future-a", fromDate: "2026-08-17", suggestedDate: "2026-08-21", scheduledAt: "2026-08-21T09:00:00.000Z" },
+      { planId: "future-b", fromDate: "2026-08-19", suggestedDate: "2026-08-24", scheduledAt: "2026-08-24T10:00:00.000Z" },
     ]);
   });
 
@@ -257,6 +294,8 @@ describe("buildMissedSessionProposal", () => {
     const input = {
       plans,
       todayKey: "2026-08-14",
+      preferredSlots: seoulSlots,
+      timeZone: "Asia/Seoul",
       occupiedDates: new Set(["2026-08-14", "2026-08-15"]),
     };
     const beforePlans = structuredClone(plans);
@@ -264,9 +303,10 @@ describe("buildMissedSessionProposal", () => {
     const moves = buildMissedSessionProposal(input);
 
     expect(moves).toEqual([
-      { planId: "missed-a", fromDate: "2026-08-11", suggestedDate: "2026-08-16" },
-      { planId: "missed-b", fromDate: "2026-08-12", suggestedDate: "2026-08-17" },
-      { planId: "future-a", fromDate: "2026-08-17", suggestedDate: "2026-08-18" },
+      { planId: "missed-a", fromDate: "2026-08-11", suggestedDate: "2026-08-17", scheduledAt: "2026-08-17T10:00:00.000Z" },
+      { planId: "missed-b", fromDate: "2026-08-12", suggestedDate: "2026-08-19", scheduledAt: "2026-08-19T10:00:00.000Z" },
+      { planId: "future-a", fromDate: "2026-08-17", suggestedDate: "2026-08-21", scheduledAt: "2026-08-21T09:00:00.000Z" },
+      { planId: "future-b", fromDate: "2026-08-19", suggestedDate: "2026-08-24", scheduledAt: "2026-08-24T10:00:00.000Z" },
     ]);
     expect(plans).toEqual(beforePlans);
     expect(input.occupiedDates).toEqual(beforeOccupied);
@@ -274,6 +314,24 @@ describe("buildMissedSessionProposal", () => {
     expect(new Set(moves.map((move) => move.suggestedDate)).size).toBe(
       moves.length,
     );
+    expectRecoveryGap(moves.map((move) => move.suggestedDate));
+  });
+
+  it("한 주의 선호 요일이 모두 막히면 가장 가까운 빈 날짜를 사용한다", () => {
+    expect(
+      buildMissedSessionProposal({
+        plans: [
+          { id: "missed", date: "2026-08-10", completed: false },
+          { id: "future", date: "2026-08-24", completed: false },
+        ],
+        todayKey: "2026-08-17",
+        preferredSlots: seoulSlots,
+        timeZone: "Asia/Seoul",
+        occupiedDates: new Set(["2026-08-17", "2026-08-19", "2026-08-21"]),
+      }),
+    ).toEqual([
+      { planId: "missed", fromDate: "2026-08-10", suggestedDate: "2026-08-18", scheduledAt: "2026-08-18T10:00:00.000Z" },
+    ]);
   });
 
   it("누락된 회차가 없으면 기존 미래 날짜를 그대로 보존한다", () => {
@@ -281,6 +339,8 @@ describe("buildMissedSessionProposal", () => {
       buildMissedSessionProposal({
         plans: plans.slice(3),
         todayKey: "2026-08-14",
+        preferredSlots: seoulSlots,
+        timeZone: "Asia/Seoul",
         occupiedDates: new Set(),
       }),
     ).toEqual([]);
