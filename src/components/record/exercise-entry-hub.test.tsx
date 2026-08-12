@@ -54,23 +54,69 @@ describe("ExerciseEntryHub", () => {
       <ExerciseEntryHub hasPast routineCount={1} {...handlers} />,
     );
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /프로그램으로 시작하기/ }),
-    );
-    fireEvent.click(
-      screen.getByRole("button", { name: /운동 직접 고르기/ }),
-    );
-    fireEvent.click(screen.getByRole("button", { name: /지난 운동/ }));
-    fireEvent.click(screen.getByRole("button", { name: /내 루틴/ }));
-    fireEvent.click(
-      screen.getByRole("button", {
-        name: /4분부터 시작하는 전신 인터벌/,
-      }),
+    const cases: Array<[RegExp, keyof typeof handlers]> = [
+      [/프로그램으로 시작하기/, "onPrograms"],
+      [/운동 직접 고르기/, "onSearch"],
+      [/지난 운동/, "onPast"],
+      [/내 루틴/, "onRoutine"],
+      [/4분부터 시작하는 전신 인터벌/, "onInterval"],
+    ];
+    for (const [name, expectedHandler] of cases) {
+      for (const handler of Object.values(handlers)) handler.mockClear();
+      fireEvent.click(screen.getByRole("button", { name }));
+      expect(handlers[expectedHandler]).toHaveBeenCalledTimes(1);
+      for (const [handlerName, handler] of Object.entries(handlers)) {
+        if (handlerName !== expectedHandler) expect(handler).not.toHaveBeenCalled();
+      }
+    }
+  });
+
+  it("지난 운동만 있으면 빠른 시작 한 칸이 전체 폭을 쓴다", () => {
+    render(
+      <ExerciseEntryHub
+        hasPast
+        routineCount={0}
+        onSearch={vi.fn()}
+        onPast={vi.fn()}
+        onRoutine={vi.fn()}
+      />,
     );
 
-    for (const handler of Object.values(handlers)) {
-      expect(handler).toHaveBeenCalledTimes(1);
-    }
+    expect(screen.getByTestId("quick-reuse-grid").className).toContain(
+      "grid-cols-1",
+    );
+  });
+
+  it("내 루틴만 있으면 빠른 시작 한 칸이 전체 폭을 쓴다", () => {
+    render(
+      <ExerciseEntryHub
+        hasPast={false}
+        routineCount={1}
+        onSearch={vi.fn()}
+        onPast={vi.fn()}
+        onRoutine={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("quick-reuse-grid").className).toContain(
+      "grid-cols-1",
+    );
+  });
+
+  it("지난 운동과 내 루틴이 함께 있으면 두 칸으로 나눈다", () => {
+    render(
+      <ExerciseEntryHub
+        hasPast
+        routineCount={1}
+        onSearch={vi.fn()}
+        onPast={vi.fn()}
+        onRoutine={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("quick-reuse-grid").className).toContain(
+      "grid-cols-2",
+    );
   });
 
   it("사용할 수 없는 빠른 시작과 프로그램 경로는 렌더하지 않는다", () => {

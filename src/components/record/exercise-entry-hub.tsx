@@ -91,7 +91,12 @@ export function ExerciseEntryHub({
             빠른 시작
           </h4>
           {(hasPast || routineCount > 0) && (
-            <div className="grid grid-cols-2 gap-2">
+            <div
+              data-testid="quick-reuse-grid"
+              className={`grid gap-2 ${
+                hasPast && routineCount > 0 ? "grid-cols-2" : "grid-cols-1"
+              }`}
+            >
               {hasPast && (
                 <button
                   type="button"
