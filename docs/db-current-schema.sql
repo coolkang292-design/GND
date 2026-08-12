@@ -1088,18 +1088,8 @@ begin
   if v_bad_count <> 3 then
     raise exception 'program_slot_weekday_duplicate';
   end if;
-  if exists (
-    select 1
-    from jsonb_array_elements(p_preferred_slots) a
-    cross join jsonb_array_elements(p_preferred_slots) b
-    where (a->>'weekday')::int < (b->>'weekday')::int
-      and least(
-        abs((a->>'weekday')::int - (b->>'weekday')::int),
-        7 - abs((a->>'weekday')::int - (b->>'weekday')::int)
-      ) < 2
-  ) then
-    raise exception 'program_recovery_gap';
-  end if;
+  -- 0069: 요일 간격 제한 제거 (사용자 확정 2026-08-12).
+  --       서로 다른 요일 3개 조건은 바로 위에서 이미 지킨다.
 
   if p_plans is null
     or jsonb_typeof(p_plans) <> 'array'
@@ -1149,8 +1139,9 @@ begin
     if v_plan_date = any(v_dates) then
       raise exception 'program_plan_date_duplicate:%', v_plan_date;
     end if;
-    if v_previous_date is not null and v_plan_date - v_previous_date < 2 then
-      raise exception 'program_recovery_gap';
+    -- 0069: 같은 날 두 회차와 날짜 역행만 막는다
+    if v_previous_date is not null and v_plan_date - v_previous_date < 1 then
+      raise exception 'program_plan_date_order';
     end if;
     v_dates := array_append(v_dates, v_plan_date);
     v_previous_date := v_plan_date;
@@ -2727,7 +2718,9 @@ begin
     raise exception 'program_plan_date_taken:%', v_conflict_date;
   end if;
 
-  -- 실제 UPDATE 전에 최종 주차·회차 순서와 최소 48시간(날짜 차이 2일)을 검증한다.
+  -- 실제 UPDATE 전에 최종 주차·회차 순서를 검증한다.
+  -- 0069: 예전에는 최소 48시간(2일)을 요구했다. 이제 같은 날 두 회차와
+  --       날짜 역행만 막는다 — 연속 3일은 사용자가 고를 수 있다.
   select count(*) into v_bad_count
   from (
     select final_date,
@@ -2748,9 +2741,9 @@ begin
     ) final_rows
   ) ordered_rows
   where previous_date is not null
-    and final_date - previous_date < 2;
+    and final_date - previous_date < 1;  -- 0069
   if v_bad_count > 0 then
-    raise exception 'program_recovery_gap';
+    raise exception 'program_plan_date_order';
   end if;
 
   -- 기존 enrollment 안에서 날짜를 서로 넘겨받는 연쇄 이동도 허용하려고 잠시
