@@ -19,9 +19,16 @@ function dayDifference(a: string, b: string): number {
   );
 }
 
-function expectRecoveryGap(dates: string[]): void {
+/**
+ * 회차끼리 **같은 날에 겹치지 않는지**만 본다 (사용자 확정 2026-08-12).
+ *
+ * 예전에는 2일 이상을 요구했다. 금·토·일처럼 몰아서 하는 사람을 막고 있었고,
+ * 사용자가 그 제한을 없애기로 정했다. 하루 간격은 여전히 필요하다 —
+ * 같은 날 두 회차는 주 3회가 아니다.
+ */
+function expectDistinctDays(dates: string[]): void {
   for (let index = 1; index < dates.length; index += 1) {
-    expect(dayDifference(dates[index - 1], dates[index])).toBeGreaterThanOrEqual(2);
+    expect(dayDifference(dates[index - 1], dates[index])).toBeGreaterThanOrEqual(1);
   }
 }
 
@@ -136,15 +143,36 @@ describe("buildProgramSchedule", () => {
       { weekday: 4 as const, time: "19:00" },
       ],
     },
-  ])("주 경계를 포함해 연속 요일은 회복 간격 오류로 거부한다", ({ slots }) => {
-    expect(() =>
-      buildProgramSchedule({
-        startDate: "2026-08-17",
-        slots,
-        timeZone: "Asia/Seoul",
-        occupiedDates: new Set(),
-      }),
-    ).toThrow("program_recovery_gap");
+  ])("주 경계를 포함해 연속 요일도 허용한다 (사용자 확정 2026-08-12)", ({ slots }) => {
+    const result = buildProgramSchedule({
+      startDate: "2026-08-17",
+      slots,
+      timeZone: "Asia/Seoul",
+      occupiedDates: new Set(),
+    });
+    expect(result.plans).toHaveLength(18);
+    expect(new Set(result.plans.map((plan) => plan.date)).size).toBe(18);
+    expectDistinctDays(result.plans.map((plan) => plan.date));
+  });
+
+  it("금·토·일 연속 3일을 그대로 배치한다", () => {
+    // 2026-08-21이 금요일이다. 금·토·일을 고르면 그 세 날에 그대로 잡혀야 한다.
+    const result = buildProgramSchedule({
+      startDate: "2026-08-21",
+      slots: [
+        { weekday: 5 as const, time: "19:00" },
+        { weekday: 6 as const, time: "19:00" },
+        { weekday: 0 as const, time: "19:00" },
+      ],
+      timeZone: "Asia/Seoul",
+      occupiedDates: new Set(),
+    });
+    expect(result.plans.slice(0, 3).map((plan) => plan.date)).toEqual([
+      "2026-08-21",
+      "2026-08-22",
+      "2026-08-23",
+    ]);
+    expect(result.conflicts).toEqual([]);
   });
 
   it.each([
@@ -213,7 +241,7 @@ describe("buildProgramSchedule", () => {
     expect(out.plans).toHaveLength(18);
     expect(new Set(finalDates).size).toBe(18);
     expect(finalDates.every((date) => !occupied.has(date))).toBe(true);
-    expectRecoveryGap(finalDates);
+    expectDistinctDays(finalDates);
     expect(out.conflicts[0]).toEqual({
       date: "2026-08-19",
       suggestedDate: "2026-08-21",
@@ -239,7 +267,7 @@ describe("buildProgramSchedule", () => {
     expect(
       first.plans.every((plan) => !input.occupiedDates.has(plan.date)),
     ).toBe(true);
-    expectRecoveryGap(first.plans.map((plan) => plan.date));
+    expectDistinctDays(first.plans.map((plan) => plan.date));
     expect(first.conflicts[0]).toMatchObject({
       date: "2026-08-17",
       suggestedDate: "2026-08-21",
@@ -314,7 +342,7 @@ describe("buildMissedSessionProposal", () => {
     expect(new Set(moves.map((move) => move.suggestedDate)).size).toBe(
       moves.length,
     );
-    expectRecoveryGap(moves.map((move) => move.suggestedDate));
+    expectDistinctDays(moves.map((move) => move.suggestedDate));
   });
 
   it("한 주의 선호 요일이 모두 막히면 가장 가까운 빈 날짜를 사용한다", () => {

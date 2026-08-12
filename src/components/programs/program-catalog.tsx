@@ -39,7 +39,7 @@ const AUDIENCE: Record<OfficialProgramKey, readonly [string, string, string]> = 
   "lower-balance-6w": [
     "하체 근력과 좌우 균형을 함께 다지고 싶은 사람",
     "스쿼트와 힌지 동작을 체계적으로 반복하고 싶은 사람",
-    "회복일이 포함된 일정이 필요한 사람",
+    "주 3회를 꾸준히 지킬 수 있는 사람",
   ],
   "lean-body-6w": [
     "근육을 지키며 체지방 관리 습관을 만들고 싶은 사람",

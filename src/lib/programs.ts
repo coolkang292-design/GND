@@ -231,8 +231,10 @@ function validateEnrollmentInput(input: CreateProgramEnrollmentInput): void {
       throw new Error(`program_plan_date_duplicate:${plan.date}`);
     }
     dates.add(plan.date);
-    if (previousDate && dateDays(plan.date) - dateDays(previousDate) < 2) {
-      throw new Error("program_recovery_gap");
+    // 회복 간격 제한은 없앴다 (사용자 확정 2026-08-12). 날짜가 뒤로 가거나
+    // 같은 날이 두 번 오는 것만 막는다 — 그건 주 3회가 아니다.
+    if (previousDate && dateDays(plan.date) - dateDays(previousDate) < 1) {
+      throw new Error("program_plan_date_order");
     }
     previousDate = plan.date;
     if (

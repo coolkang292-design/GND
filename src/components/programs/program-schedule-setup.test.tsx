@@ -154,7 +154,7 @@ describe("ProgramScheduleSetup", () => {
     });
   });
 
-  it("회복이 부족한 연속 요일은 미리보기로 진행하지 않는다", () => {
+  it("연속 요일도 미리보기로 진행한다 (사용자 확정 2026-08-12)", () => {
     render(
       <ProgramScheduleSetup
         today="2026-08-12"
@@ -172,7 +172,28 @@ describe("ProgramScheduleSetup", () => {
     }
     fireEvent.click(screen.getByRole("button", { name: "일정 미리보기" }));
 
-    expect(screen.getByText(/운동일 사이에는 하루 이상 쉬어야/)).toBeTruthy();
+    // 금·토·일처럼 몰아서 하는 사람을 막고 있었다. 주 3회는 유지하되
+    // 언제 하는지는 사용자가 정한다.
+    expect(screen.queryByText(/운동일 사이에는 하루 이상 쉬어야/)).toBeNull();
+    expect(screen.getByText("3/3 · 18회 미리보기")).toBeTruthy();
+  });
+
+  it("같은 요일을 세 번 고르는 것은 여전히 막는다", () => {
+    render(
+      <ProgramScheduleSetup
+        today="2026-08-12"
+        timeZone="Asia/Seoul"
+        program={program}
+        resolvedSessions={resolvedSessions}
+        occupiedPlans={[]}
+        onConfirm={vi.fn()}
+      />,
+    );
+    openSlots();
+    fireEvent.click(screen.getByRole("button", { name: "직접 선택" }));
+    fireEvent.click(screen.getByLabelText("월요일"));
+    fireEvent.click(screen.getByRole("button", { name: "일정 미리보기" }));
+
     expect(screen.queryByText("3/3 · 18회 미리보기")).toBeNull();
   });
 

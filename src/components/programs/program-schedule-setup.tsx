@@ -97,13 +97,14 @@ function weekdayLabel(weekday: number): string {
   return WEEKDAYS.find((item) => item.value === weekday)?.short ?? "";
 }
 
-function hasRecoveryGap(days: readonly number[]): boolean {
-  if (days.length !== 3 || new Set(days).size !== 3) return false;
-  const ordered = [...days].sort((a, b) => a - b);
-  return ordered.every((day, index) => {
-    const next = ordered[(index + 1) % ordered.length];
-    return (next - day + 7) % 7 >= 2;
-  });
+/**
+ * 고른 요일이 주 3회 조건을 만족하는가.
+ *
+ * 요일 사이 간격 제한은 없앴다 (사용자 확정 2026-08-12) — 금·토·일처럼 몰아서
+ * 하는 사람을 막고 있었다. **서로 다른 요일 3개**라는 조건만 남는다.
+ */
+function hasThreeDistinctDays(days: readonly number[]): boolean {
+  return days.length === 3 && new Set(days).size === 3;
 }
 
 export function ProgramScheduleSetup({
@@ -150,7 +151,7 @@ export function ProgramScheduleSetup({
     [occupiedPlans],
   );
   const schedule = useMemo(() => {
-    if (!hasRecoveryGap(selectedDays)) return null;
+    if (!hasThreeDistinctDays(selectedDays)) return null;
     try {
       return buildProgramSchedule({
         startDate,
@@ -181,8 +182,8 @@ export function ProgramScheduleSetup({
   }
 
   function showPreview() {
-    if (!hasRecoveryGap(selectedDays)) {
-      setValidation("운동일 사이에는 하루 이상 쉬어야 회복할 수 있어요.");
+    if (!hasThreeDistinctDays(selectedDays)) {
+      setValidation("서로 다른 요일 3개를 골라 주세요.");
       return;
     }
     if (!schedule) {
@@ -272,7 +273,7 @@ export function ProgramScheduleSetup({
         <ScheduleProgress step={step} />
         <p className="text-xs font-extrabold text-accent">2/3 · 요일과 시간</p>
         <h1 className="mt-2 text-xl font-black text-text">주 3회 시간을 정하세요</h1>
-        <p className="mt-1 text-xs leading-5 text-muted">회복을 위해 운동일 사이에 하루 이상 쉽니다.</p>
+        <p className="mt-1 text-xs leading-5 text-muted">원하는 요일 3개를 고르세요. 연속으로 몰아서 해도 됩니다.</p>
 
         <p className="mt-5 text-xs font-black text-text">추천 요일</p>
         <div className="mt-2 grid grid-cols-2 gap-2">

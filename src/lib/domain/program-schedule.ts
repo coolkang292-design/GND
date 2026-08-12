@@ -163,13 +163,15 @@ function validateSlots(slots: readonly PreferredSlot[]): void {
     weekdays.add(slot.weekday);
   }
 
-  const ordered = [...weekdays].sort((a, b) => a - b);
-  for (let index = 0; index < ordered.length; index += 1) {
-    const current = ordered[index];
-    const next = ordered[(index + 1) % ordered.length];
-    const gap = (next - current + 7) % 7;
-    if (gap < 2) throw new Error("program_recovery_gap");
-  }
+  /*
+    요일 간격 제한을 없앴다 (사용자 확정 2026-08-12).
+
+    예전에는 요일 사이 2일 이상을 요구해 **금·토·일처럼 몰아서 하는 사람을
+    막고** 있었다. 주 3회라는 약속은 유지하되, 언제 하는지는 사용자가 정한다.
+
+    ⚠️ 서로 다른 요일 3개라는 조건은 위에서 이미 지킨다 — 같은 날 두 회차는
+       주 3회가 아니다.
+  */
 }
 
 function validateOccupiedDates(occupiedDates: ReadonlySet<string>): void {
@@ -197,9 +199,11 @@ function isAvailableProgramDate(
   blockedDates: ReadonlySet<string>,
   fixedProgramDates: readonly string[],
 ): boolean {
+  // 확정된 회차와 **같은 날만** 피한다. 2일 간격을 요구하던 것을 없앴다
+  // (사용자 확정 2026-08-12) — 금·토·일처럼 몰아서 하는 일정을 막고 있었다.
   return (
     !blockedDates.has(date) &&
-    fixedProgramDates.every((fixedDate) => daysBetween(fixedDate, date) >= 2)
+    fixedProgramDates.every((fixedDate) => daysBetween(fixedDate, date) >= 1)
   );
 }
 
@@ -297,7 +301,8 @@ export function buildProgramSchedule(input: {
       date: selected.date,
       scheduledAt,
     });
-    nextAllowedDate = addDaysToDateKey(selected.date, 2);
+    // 같은 날 두 회차만 막는다 — 회복 간격 제한은 없앴다 (2026-08-12)
+    nextAllowedDate = addDaysToDateKey(selected.date, 1);
     if (selected.date !== original.date) {
       conflicts.push({
         date: original.date,
@@ -369,7 +374,8 @@ export function buildMissedSessionProposal(input: {
       fallbackTime: originalSlot?.time ?? input.preferredSlots[0].time,
     });
     assignedDates.push(selected.date);
-    cursor = addDaysToDateKey(selected.date, 2);
+    // 재배치도 같은 규칙 — 하루 간격만 지킨다 (2026-08-12)
+    cursor = addDaysToDateKey(selected.date, 1);
     if (selected.date !== plan.date) {
       moves.push({
         planId: plan.id,
