@@ -11,7 +11,7 @@ export type ExercisePrescription = {
   repsMin: number;
   repsMax: number;
   targetRir: 1 | 2 | 3;
-  restSeconds: 60 | 75 | 90 | 120 | 150;
+  restSeconds: number;
   loadStepKg: 1 | 2.5 | 5;
 };
 

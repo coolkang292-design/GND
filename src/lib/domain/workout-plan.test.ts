@@ -6,6 +6,7 @@ import {
   parsePlanExercises,
   toDraftExercises,
   toPlanExercises,
+  type ExercisePrescription,
   type PlanExercise,
 } from "./workout-plan";
 import type { CatalogExercise } from "@/lib/types";
@@ -20,6 +21,20 @@ const catalogItem: CatalogExercise = {
   created_by: null,
   created_at: "2026-07-01T00:00:00Z",
 };
+
+const longRestPrescription: ExercisePrescription = {
+  repsMin: 8,
+  repsMax: 12,
+  targetRir: 2,
+  restSeconds: 180,
+  loadStepKg: 2.5,
+};
+
+describe("ExercisePrescription", () => {
+  it("계획 저장 계약의 180초 휴식을 표현한다", () => {
+    expect(longRestPrescription.restSeconds).toBe(180);
+  });
+});
 
 describe("newPlanExercises", () => {
   it("카탈로그 선택을 0값 세트 1개짜리 계획 운동으로 변환한다", () => {

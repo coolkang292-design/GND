@@ -1,5 +1,8 @@
-import { describe, expect, it } from "vitest";
-import { OFFICIAL_PROGRAMS } from "./official-programs";
+import { describe, expect, expectTypeOf, it } from "vitest";
+import {
+  OFFICIAL_PROGRAMS,
+  type OfficialProgramRestSeconds,
+} from "./official-programs";
 
 const EXPECTED = [
   ["shoulder-frame-6w", "시선이 머무는 어깨", "상체의 틀을 넓히는 6주"],
@@ -46,5 +49,21 @@ describe("GND 공식 프로그램 카탈로그", () => {
       "/program-assets/lower.webp",
       "/program-assets/lean.webp",
     ]);
+  });
+
+  it("공식 프로그램의 휴식시간은 승인된 다섯 값으로 제한한다", () => {
+    expectTypeOf<OfficialProgramRestSeconds>().toEqualTypeOf<
+      60 | 75 | 90 | 120 | 150
+    >();
+  });
+
+  it("설명과 예상 운동시간 범위가 유효하다", () => {
+    for (const program of OFFICIAL_PROGRAMS) {
+      expect(program.description.trim()).not.toBe("");
+      const [minMinutes, maxMinutes] = program.durationMinutes;
+      expect(minMinutes).toBeLessThan(maxMinutes);
+      expect(minMinutes).toBeGreaterThanOrEqual(40);
+      expect(maxMinutes).toBeLessThanOrEqual(65);
+    }
   });
 });

@@ -7,7 +7,10 @@ export type OfficialProgramKey =
   | "lower-balance-6w"
   | "lean-body-6w";
 
+export type OfficialProgramRestSeconds = 60 | 75 | 90 | 120 | 150;
+
 export type ProgramExerciseTemplate = ExercisePrescription & {
+  restSeconds: OfficialProgramRestSeconds;
   exerciseName: string;
   beginnerSets: number;
   experiencedSets: number;
