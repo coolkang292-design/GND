@@ -8,7 +8,7 @@ import {
   type ResolvedProgramExercise,
   type StrengthProgram,
 } from "@/lib/domain/official-programs";
-import type { TabataMinutes } from "@/lib/domain/tabata";
+import { tabataRepsForMinutes, type TabataMinutes } from "@/lib/domain/tabata";
 import type {
   PreferredSlot,
   ProgramPlanMove,
@@ -492,6 +492,20 @@ export function buildCreateIntervalEnrollmentRpcArgs(
     if (!template) {
       throw new Error(`program_template_missing:${item.templateKey}`);
     }
+    const minutes = intervalMinutesForWeek(
+      input.program,
+      input.levelAtStart,
+      item.week,
+    );
+    /*
+      횟수는 **길이가 정한다** — 한 종목이 도는 라운드 수다.
+      4분 = 8라운드 ÷ 4종목 = 2회 · 8분 = 4회 · 16분 = 8회.
+
+      ⚠️ 즉흥 인터벌(`tabataDraftExercises`)과 **같은 함수**를 쓴다. 여기서
+         따로 계산하면 같은 운동을 프로그램으로 하느냐 즉흥으로 하느냐에 따라
+         기록이 달라진다.
+    */
+    const reps = tabataRepsForMinutes(minutes);
     return {
       plan_date: item.date,
       scheduled_at: item.scheduledAt,
@@ -499,18 +513,14 @@ export function buildCreateIntervalEnrollmentRpcArgs(
       session: item.session,
       template_key: item.templateKey,
       title: input.program.title,
-      tabata_minutes: intervalMinutesForWeek(
-        input.program,
-        input.levelAtStart,
-        item.week,
-      ),
+      tabata_minutes: minutes,
       exercises: template.exercises.map((exercise) => ({
         name: exercise.item.name,
         bodyPart: exercise.item.body_part,
         exerciseType: exercise.item.exercise_type,
         measure: exercise.item.measure,
         isCustom: exercise.item.is_custom,
-        sets: [{ ...ZERO_SET }],
+        sets: [{ ...ZERO_SET, reps }],
       })),
     };
   });

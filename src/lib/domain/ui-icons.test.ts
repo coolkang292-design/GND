@@ -50,11 +50,12 @@ describe("UI 아이콘 자산 — 경로가 실제 파일을 가리킨다", () =
     //    있지만 화면은 다시 `🔥`/`🪵`/`👥` 이모지를 쓴다. 자산이 있다고 이 수를
     //    올리지 마라 — 이 테스트가 세는 것은 **화면이 참조하는 것**이다.
     //
-    // ⚠️ 2026-08-12: 16 → 15. 전신 인터벌 카드가 아이콘 대신 대표 이미지
-    //    (`/program-assets/interval.webp`)를 깔면서 `hub-tabata.webp` **리터럴**이
-    //    빠졌다. 아이콘 파일이 죽은 게 아니다 — `tabata-sheet.tsx`가 아직
-    //    `<UiIcon name="hub-tabata">`로 쓰고, 그건 아래 테스트가 본다.
-    expect(referenced.size).toBe(15);
+    // ⚠️ 2026-08-12: 16 → 14. 허브 카드 두 장이 아이콘 대신 **사진**을 깔면서
+    //    리터럴 두 개가 빠졌다 — `hub-tabata.webp`(인터벌이 프로그램으로 가면서)와
+    //    `hub-search.webp`(운동 직접 고르기가 사진 카드가 되면서).
+    //    아이콘 파일이 죽은 게 아니다. `tabata-sheet.tsx`·`recommended-picker.tsx`가
+    //    아직 `<UiIcon name=...>`로 쓰고, 그건 아래 테스트가 본다.
+    expect(referenced.size).toBe(14);
 
     const missing = [...referenced].filter(
       (src) => !existsSync(join(process.cwd(), "public", src)),

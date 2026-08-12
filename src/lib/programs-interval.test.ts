@@ -6,6 +6,7 @@ import {
   type ProgramLevel,
 } from "@/lib/domain/official-programs";
 import { buildProgramSchedule } from "@/lib/domain/program-schedule";
+import { tabataRepsForMinutes } from "@/lib/domain/tabata";
 
 const mocks = vi.hoisted(() => ({ rpc: vi.fn(), from: vi.fn() }));
 
@@ -103,6 +104,39 @@ describe("buildCreateIntervalEnrollmentRpcArgs", () => {
     expect(args.p_plans[0].tabata_minutes).toBe(8);
     expect(args.p_plans[6].tabata_minutes).toBe(16);
     expect(args.p_plans[17].tabata_minutes).toBe(16);
+  });
+
+  /**
+   * 횟수는 길이가 정한다 — 한 종목이 도는 라운드 수다 (사용자 지적 2026-08-12).
+   * 0으로 담으면 화면에 `0회`가 뜨고 사용자가 몇 번 해야 하는지 알 수 없다.
+   */
+  it("길이가 횟수를 정한다 — 4분 2회 · 8분 4회 · 16분 8회", () => {
+    const beginner = buildCreateIntervalEnrollmentRpcArgs(createInput("beginner"));
+    // 입문 1주차 4분 → 2회, 3주차 8분 → 4회
+    expect(beginner.p_plans[0].exercises[0].sets[0].reps).toBe(2);
+    expect(beginner.p_plans[6].exercises[0].sets[0].reps).toBe(4);
+
+    const hard = buildCreateIntervalEnrollmentRpcArgs(createInput("experienced"));
+    // 높음 1주차 8분 → 4회, 3주차 16분 → 8회
+    expect(hard.p_plans[0].exercises[0].sets[0].reps).toBe(4);
+    expect(hard.p_plans[6].exercises[0].sets[0].reps).toBe(8);
+
+    // 한 회차의 네 종목이 같은 횟수를 갖는다
+    for (const plan of hard.p_plans) {
+      const reps = plan.exercises.map((e) => e.sets[0].reps);
+      expect(new Set(reps).size).toBe(1);
+      expect(reps[0]).toBeGreaterThan(0);
+    }
+  });
+
+  it("즉흥 인터벌과 같은 함수로 횟수를 정한다", () => {
+    // 같은 운동을 프로그램으로 하느냐 즉흥으로 하느냐에 따라 기록이 달라지면 안 된다
+    const args = buildCreateIntervalEnrollmentRpcArgs(createInput("moderate"));
+    for (const plan of args.p_plans) {
+      expect(plan.exercises[0].sets[0].reps).toBe(
+        tabataRepsForMinutes(plan.tabata_minutes!),
+      );
+    }
   });
 
   it("회차마다 종목 4개 · 각 세트 1개 · 처방 없음이다", () => {

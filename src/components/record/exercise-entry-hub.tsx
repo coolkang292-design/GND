@@ -69,31 +69,41 @@ export function ExerciseEntryHub({
           </button>
         )}
 
+        {/*
+          프로그램 카드와 **같은 포맷**이다 (사용자 지시 2026-08-12) — 사진을 깔고
+          왼쪽에서 그라데이션으로 덮는다.
+
+          ⚠️ 테두리는 `border-line`으로 둔다. 크기가 같아졌으므로 위 카드의
+             `border-accent`만이 "이게 먼저다"를 말한다. 여기까지 강조하면 첫 화면에
+             같은 무게의 카드가 둘이 된다.
+        */}
         <button
           type="button"
           data-priority="secondary"
           onClick={onSearch}
-          className="flex min-h-24 w-full items-center gap-3 rounded-[20px] border border-line bg-surface-2 p-4 text-left transition-colors hover:border-accent/45 motion-reduce:transition-none"
+          className="group relative flex min-h-44 w-full overflow-hidden rounded-[24px] border border-line bg-bg p-5 text-left shadow-card transition-colors hover:border-accent/45 motion-reduce:transition-none"
         >
-          <span className="flex h-12 w-12 flex-none items-center justify-center rounded-full border border-accent/35 bg-bg">
-            <Image
-              src="/ui-icons/hub-search.webp"
-              alt=""
-              width={36}
-              height={36}
-              className="h-9 w-9 object-contain"
-            />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-sm font-extrabold text-text">
+          <Image
+            src="/record-assets/pick-exercises.webp"
+            alt=""
+            fill
+            sizes="(max-width: 768px) 60vw, 360px"
+            className="object-cover object-[center_42%] transition-transform duration-300 group-hover:scale-[1.02] motion-reduce:transition-none"
+          />
+          <span
+            aria-hidden
+            className="absolute inset-0 bg-gradient-to-r from-bg via-bg/90 to-bg/10"
+          />
+          <span className="relative z-10 flex min-w-0 max-w-[68%] flex-1 flex-col items-start">
+            <span className="block text-lg font-black leading-6 text-text">
               운동 직접 고르기
             </span>
-            <span className="mt-1 block text-xs leading-5 text-muted">
+            <span className="mt-1.5 block text-xs leading-5 text-muted">
               검색·상황·부위별로 오늘 운동을 추가해요
             </span>
-          </span>
-          <span aria-hidden className="flex-none text-lg text-accent">
-            ›
+            <span className="mt-auto pt-3 text-[11px] font-extrabold text-accent">
+              검색 · 상황별 · 부위별
+            </span>
           </span>
         </button>
 

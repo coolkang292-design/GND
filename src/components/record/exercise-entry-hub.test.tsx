@@ -57,6 +57,34 @@ describe("ExerciseEntryHub", () => {
     );
   });
 
+  it("운동 직접 고르기도 프로그램 카드와 같은 사진 포맷이다", () => {
+    // 사용자 지시 2026-08-12. 크기는 같아지되 **강조는 프로그램이 가져간다** —
+    // 두 카드가 같은 무게로 보이면 첫 결정이 흐려진다.
+    render(
+      <ExerciseEntryHub
+        hasPast
+        routineCount={1}
+        onPrograms={vi.fn()}
+        onSearch={vi.fn()}
+        onPast={vi.fn()}
+        onRoutine={vi.fn()}
+      />,
+    );
+
+    const searchButton = screen.getByRole("button", { name: /운동 직접 고르기/ });
+    const image = searchButton.querySelector("img");
+    expect(decodeURIComponent(image?.getAttribute("src") ?? "")).toContain(
+      "/record-assets/pick-exercises.webp",
+    );
+    expect(image?.getAttribute("alt")).toBe("");
+    expect(searchButton.className).toContain("min-h-44");
+    // 평상시 테두리만 본다 — hover 색은 둘 다 accent다
+    expect(searchButton.className).toContain("border border-line");
+    expect(
+      screen.getByRole("button", { name: /프로그램으로 시작하기/ }).className,
+    ).toContain("border border-accent/60");
+  });
+
   it("전신 인터벌을 이 화면에 다시 세우지 않는다", () => {
     // 사용자 지시 2026-08-12 — 인터벌은 '프로그램으로 시작하기' 안에만 있다.
     // 두 군데에 있으면 어느 쪽이 정본인지 알 수 없다.

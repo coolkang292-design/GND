@@ -8,6 +8,7 @@ import {
 } from "@/lib/domain/official-programs";
 import type { CatalogExercise } from "@/lib/types";
 import type { ProgramEnrollment } from "@/lib/programs";
+import { takeCalendarView } from "@/lib/record-view";
 import { ProgramFlow } from "./program-flow";
 
 afterEach(cleanup);
@@ -77,6 +78,13 @@ describe("ProgramFlow", () => {
     expect(screen.getByText("다음 운동")).toBeTruthy();
     expect(screen.getByText("1주차 A회 · 밀고 세우기")).toBeTruthy();
     expect(document.querySelector('img[src*="finish.webp"]')).not.toBeNull();
+
+    // 방금 담은 18회를 보러 가는 길이다 — 운동 탭이 아니라 달력으로 착지시킨다
+    // (사용자 지적 2026-08-12)
+    fireEvent.click(
+      screen.getByRole("link", { name: "달력에서 계획 확인하기" }),
+    );
+    expect(takeCalendarView()).toBe(true);
   });
 
   it("같은 프로그램이 진행 중이면 새 등록 대신 진행 화면으로 안내한다", () => {

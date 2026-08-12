@@ -94,6 +94,7 @@ import {
   tabataResumeFromSession,
   type TabataMinutes,
 } from "@/lib/domain/tabata";
+import { takeCalendarView } from "@/lib/record-view";
 import { moveItem } from "@/lib/domain/reorder";
 import {
   getRestCountdownTogglePlan,
@@ -248,7 +249,11 @@ function WorkoutScreen({ userId }: { userId: string }) {
     draftRef.current = nextDraft;
     setDraftState(nextDraft);
   }, []);
-  const [subTab, setSubTab] = useState<"workout" | "calendar">("workout");
+  // 프로그램 등록을 마치고 `달력에서 계획 확인하기`로 온 경우에만 달력으로 연다.
+  // 이펙트로 바꾸면 운동 탭이 한 번 그려졌다가 튄다 — 초기값으로 정한다.
+  const [subTab, setSubTab] = useState<"workout" | "calendar">(() =>
+    takeCalendarView() ? "calendar" : "workout",
+  );
   const [catalog, setCatalog] = useState<CatalogExercise[]>([]);
   const [groupId, setGroupId] = useState<string | null>(null);
   const [prevVolume, setPrevVolume] = useState<number | null>(null);

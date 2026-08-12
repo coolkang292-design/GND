@@ -18,6 +18,7 @@ import type {
   ResolvedProgramSession,
 } from "@/lib/programs";
 import type { CatalogExercise } from "@/lib/types";
+import { requestCalendarView } from "@/lib/record-view";
 import type { WorkoutPlan } from "@/lib/workout-plan";
 import {
   IntervalProgramDetail,
@@ -142,6 +143,9 @@ export function ProgramFlow({
         </div>
         <Link
           href="/record"
+          // 기록 화면은 항상 운동 탭으로 열린다 — 방금 담은 18회를 보러
+          // 가는 길이므로 달력으로 착지시킨다
+          onClick={() => requestCalendarView()}
           className="mt-4 flex min-h-12 w-full items-center justify-center rounded-card bg-accent text-sm font-black text-accent-ink shadow-card"
         >
           달력에서 계획 확인하기
