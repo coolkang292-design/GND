@@ -1,4 +1,5 @@
 import { formatSetAmount } from "@/lib/domain/set-display";
+import type { ExercisePrescription } from "@/lib/domain/workout-plan";
 import type { ExerciseType } from "@/lib/types";
 
 /**
@@ -24,7 +25,35 @@ export type BreakdownExercise = {
   exerciseType: ExerciseType;
   measure: "reps" | "time" | null;
   sets: BreakdownSet[];
+  /**
+   * 프로그램 계획의 처방 (2026-08-12 사용자 지적).
+   *
+   * 근력 프로그램 계획은 세트 수치가 **0으로 저장된다** — 반복은 범위(8~10회)이고
+   * 무게는 시작할 때 최근 기록으로 채워지기 때문이다. 그런데 화면이 저장된 값을
+   * 그대로 그려서 `0kg 0회`가 떴다. 할 일이 없는 것처럼 읽힌다.
+   *
+   * ⚠️ 계획에 단일 숫자를 저장하는 것으로 고치지 않는다. 범위를 한 값으로 굳히면
+   *    거짓이 되고, 무게 추천(0067)이 시작할 때 정하는 것과도 어긋난다.
+   *    **저장은 그대로 두고 화면이 처방을 보여 준다.**
+   */
+  prescription?: ExercisePrescription;
 };
+
+/** 세트에 저장된 수치가 하나도 없는가 — 그러면 처방을 대신 보여 준다 */
+function isEmptySet(set: BreakdownSet): boolean {
+  return (
+    set.weightKg === 0 &&
+    set.reps === 0 &&
+    set.distanceKm === 0 &&
+    set.durationMin === 0
+  );
+}
+
+function targetLabel(prescription: ExercisePrescription): string {
+  return prescription.repsMin === prescription.repsMax
+    ? `${prescription.repsMin}회 목표`
+    : `${prescription.repsMin}–${prescription.repsMax}회 목표`;
+}
 
 export function SetBreakdown({
   exercises,
@@ -64,14 +93,23 @@ export function SetBreakdown({
                         set.done === false ? "text-faint line-through" : ""
                       }`}
                     >
-                      {formatSetAmount({
-                        exerciseType: exercise.exerciseType,
-                        measure: exercise.measure,
-                        weightKg: set.weightKg,
-                        reps: set.reps,
-                        distanceKm: set.distanceKm,
-                        durationMin: set.durationMin,
-                      })}
+                      {exercise.prescription && isEmptySet(set) ? (
+                        <span
+                          data-testid="set-target"
+                          className="font-sans font-bold text-muted"
+                        >
+                          {targetLabel(exercise.prescription)}
+                        </span>
+                      ) : (
+                        formatSetAmount({
+                          exerciseType: exercise.exerciseType,
+                          measure: exercise.measure,
+                          weightKg: set.weightKg,
+                          reps: set.reps,
+                          distanceKm: set.distanceKm,
+                          durationMin: set.durationMin,
+                        })
+                      )}
                     </span>
                     {set.done !== undefined && (
                       <span
@@ -88,6 +126,13 @@ export function SetBreakdown({
               })}
             </ul>
           )}
+          {exercise.prescription &&
+            exercise.exerciseType === "weight" &&
+            exercise.sets.every(isEmptySet) && (
+              <p className="mt-1.5 text-[11px] text-faint">
+                무게는 시작할 때 최근 기록으로 채워져요
+              </p>
+            )}
         </section>
       ))}
     </div>

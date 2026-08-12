@@ -94,4 +94,68 @@ describe("SetBreakdown", () => {
   it("종목이 하나도 없으면 저장된 세트가 없다고 알린다", () => {
     expect(render([])).toContain("세트 기록이 없어요");
   });
+
+  /**
+   * 사용자 지적 2026-08-12 — 프로그램 계획이 `0kg 0회`로 보였다.
+   * 저장은 0이 맞다(반복은 범위, 무게는 시작할 때 정한다). 화면이 처방을 보여 준다.
+   */
+  describe("프로그램 계획의 처방 표시", () => {
+    const prescribed = {
+      name: "바벨 백스쿼트",
+      exerciseType: "weight" as const,
+      measure: null,
+      prescription: {
+        repsMin: 8,
+        repsMax: 10,
+        targetRir: 2 as const,
+        restSeconds: 120,
+        loadStepKg: 5 as const,
+      },
+      sets: [
+        { weightKg: 0, reps: 0, distanceKm: 0, durationMin: 0 },
+        { weightKg: 0, reps: 0, distanceKm: 0, durationMin: 0 },
+        { weightKg: 0, reps: 0, distanceKm: 0, durationMin: 0 },
+      ],
+    };
+
+    it("빈 세트에는 0kg 0회 대신 목표 반복을 보여준다", () => {
+      const html = render([prescribed]);
+
+      expect(html).toContain("8–10회 목표");
+      expect(html).not.toContain("0kg");
+      // 세트 수는 계획 그대로 3줄이다 — 표시를 바꾼다고 개수를 줄이지 않는다
+      expect(html.split("8–10회 목표").length - 1).toBe(3);
+    });
+
+    it("무게가 언제 정해지는지 알려준다", () => {
+      expect(render([prescribed])).toContain("무게는 시작할 때");
+    });
+
+    it("값이 들어간 세트는 그 값을 그대로 보여준다", () => {
+      // 불러와서 채운 뒤에는 실제 수치가 보여야 한다
+      const html = render([
+        {
+          ...prescribed,
+          sets: [{ weightKg: 60, reps: 8, distanceKm: 0, durationMin: 0 }],
+        },
+      ]);
+
+      expect(html).toContain("60");
+      expect(html).not.toContain("목표");
+    });
+
+    it("처방이 없는 계획은 예전 그대로다 — 회귀", () => {
+      const html = render([
+        {
+          name: "맨몸 스쿼트",
+          exerciseType: "bodyweight",
+          measure: null,
+          sets: [{ weightKg: 0, reps: 2, distanceKm: 0, durationMin: 0 }],
+        },
+      ]);
+
+      expect(html).toContain("2");
+      expect(html).not.toContain("목표");
+    });
+  });
 });
