@@ -31,7 +31,7 @@ describe("ExerciseEntryHub", () => {
     ]);
     expect(screen.getByText("GND 추천")).toBeTruthy();
     expect(
-      screen.getByText("목표만 고르면 6주 운동을 달력에 담아요"),
+      screen.getByText("목표만 고르면 6주 계획을 달력에 자동으로 담아요"),
     ).toBeTruthy();
     expect(
       screen.getByText("검색·상황·부위별로 오늘 운동을 추가해요"),

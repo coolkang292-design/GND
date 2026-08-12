@@ -41,7 +41,7 @@ export function ExerciseEntryHub({
                 프로그램으로 시작하기
               </span>
               <span className="mt-1 block text-xs leading-5 text-muted">
-                목표만 고르면 6주 운동을 달력에 담아요
+                목표만 고르면 6주 계획을 달력에 자동으로 담아요
               </span>
             </span>
             <Image
