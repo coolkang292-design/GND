@@ -1,4 +1,5 @@
 import type { ExercisePrescription } from "./workout-plan";
+import type { CatalogExercise } from "../types";
 
 export type OfficialProgramKey =
   | "shoulder-frame-6w"
@@ -59,6 +60,42 @@ export type OfficialProgram = {
     exercises: readonly ProgramExerciseTemplate[];
   }[];
 };
+
+export type ResolvedProgramExercise = ProgramExerciseTemplate & {
+  item: CatalogExercise;
+};
+
+export function resolveProgram(
+  program: OfficialProgram,
+  catalog: readonly CatalogExercise[],
+): readonly {
+  key: "A" | "B" | "C";
+  title: string;
+  exercises: readonly ResolvedProgramExercise[];
+}[] {
+  const catalogByName = new Map(catalog.map((item) => [item.name, item]));
+  const requiredNames = [
+    ...new Set(
+      program.sessions.flatMap((session) =>
+        session.exercises.map((exercise) => exercise.exerciseName),
+      ),
+    ),
+  ];
+  const missing = requiredNames.filter((name) => !catalogByName.has(name));
+
+  if (missing.length > 0) {
+    throw new Error(`program_exercise_missing:${missing.join(",")}`);
+  }
+
+  return program.sessions.map((session) => ({
+    key: session.key,
+    title: session.title,
+    exercises: session.exercises.map((exercise) => ({
+      ...exercise,
+      item: catalogByName.get(exercise.exerciseName)!,
+    })),
+  }));
+}
 
 export const OFFICIAL_PROGRAMS = [
   {
