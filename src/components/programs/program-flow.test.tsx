@@ -123,6 +123,12 @@ describe("ProgramFlow", () => {
     expect(
       screen.queryByRole("button", { name: "요일과 시간 정하기" }),
     ).toBeNull();
+
+    // 진행 중인 회차는 달력에 있다 — 등록 완료 화면과 같은 착지점
+    fireEvent.click(
+      screen.getByRole("link", { name: "진행 중인 프로그램 보기" }),
+    );
+    expect(takeCalendarView()).toBe(true);
   });
 
   it("등록 실패 뒤에는 완료 화면으로 가지 않고 일정과 오류를 유지한다", async () => {

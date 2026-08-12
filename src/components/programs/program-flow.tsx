@@ -185,6 +185,8 @@ export function ProgramFlow({
           >
             <Link
               href="/record"
+              // 등록 완료 화면과 같은 이유 — 진행 중인 회차는 달력에 있다
+              onClick={() => requestCalendarView()}
               className="mx-auto flex min-h-12 w-full max-w-md items-center justify-center rounded-card bg-accent text-sm font-black text-accent-ink shadow-card"
             >
               진행 중인 프로그램 보기
