@@ -1086,6 +1086,44 @@ function WorkoutScreen({ userId }: { userId: string }) {
   }
 
   /**
+   * 준비 카드의 입력 — **프로그램 운동에 한해** 뒤에 남은 세트에 함께 쓴다
+   * (사용자 지시 2026-08-12).
+   *
+   * 2026-08-09에 "준비 카드에는 붙이지 않는다"고 정했던 근거는 **거기가 세트마다
+   * 다르게 설계하는 자리**(피라미드·드롭세트)라는 것이었다. 공식 프로그램은
+   * 처방이 전 세트에 같은 반복·휴식을 주므로 그 근거가 성립하지 않는다.
+   * 그래서 **처방이 있는 종목만** 전파하고, 직접 담은 운동·일반 계획은
+   * 예전처럼 세트별로 둔다.
+   *
+   * ⚠️ 여기서는 토스트를 띄우지 않는다. 오버레이는 **다른 세트가 안 보여서**
+   *    말해 줘야 했지만, 준비 카드는 전 세트가 한 화면에 있어 값이 바뀌는 것이
+   *    그대로 보인다. 입력칸은 글자마다 onChange가 나므로 토스트를 붙이면
+   *    "20"을 치는 동안 두 번 뜬다.
+   */
+  function updateSetFromCard(
+    exercise: LocalExercise,
+    si: number,
+    patch: Partial<LocalSet>,
+  ) {
+    if (!exercise.prescription) {
+      updateSet(exercise.key, si, patch);
+      return;
+    }
+    const fields = amountFields(exercise.exerciseType, exercise.measure);
+    updateExercise(exercise.key, (ex) => {
+      let sets = ex.sets.map((set, index) =>
+        index === si ? { ...set, ...patch } : set,
+      );
+      for (const [key, value] of Object.entries(patch)) {
+        if (typeof value !== "number") continue;
+        if (!fields.some((field) => field.key === key)) continue;
+        sets = propagateAmount(sets, si, key as AmountFieldKey, value).sets;
+      }
+      return { ...ex, sets };
+    });
+  }
+
+  /**
    * 오버레이 스테퍼로 값을 바꿨다 — **지금 세트와 뒤에 남은 세트에 함께** 쓴다
    * (2026-08-09 사용자 지시 "운동중 무게 수정하면 다음 세트부터 일괄 적용하게").
    *
@@ -1904,7 +1942,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
       loadingLast={loadingExerciseKey === ex.key}
       loadLastDisabled={loadingExerciseKey !== null}
       onLoadLast={() => void loadLastExercise(ex)}
-      onUpdateSet={(si, patch) => updateSet(ex.key, si, patch)}
+      onUpdateSet={(si, patch) => updateSetFromCard(ex, si, patch)}
       onToggleDone={(si) => toggleDone(ex.key, si)}
       onAddSet={() => addSet(ex.key)}
       onRemoveSet={() => removeSet(ex.key)}
