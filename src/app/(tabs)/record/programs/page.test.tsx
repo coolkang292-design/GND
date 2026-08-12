@@ -1,13 +1,9 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import ProgramsPage from "./page";
 
-const push = vi.fn();
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push }),
-}));
 
 vi.mock("@/components/auth-provider", () => ({
   useAuth: () => ({
@@ -32,10 +28,6 @@ vi.mock("@/lib/programs", () => ({
 }));
 
 afterEach(cleanup);
-beforeEach(() => {
-  push.mockClear();
-  sessionStorage.clear();
-});
 
 describe("ProgramsPage", () => {
   it("인증 사용자 기준으로 카탈로그·계획·등록 현황을 읽은 뒤 프로그램 흐름을 연다", async () => {
@@ -54,19 +46,12 @@ describe("ProgramsPage", () => {
     expect(getActiveProgramEnrollments).toHaveBeenCalledWith("user-1");
   });
 
-  /**
-   * 사용자 지시 2026-08-12 — 전신 인터벌이 이 화면 안으로 들어왔다.
-   * 인터벌 시트는 `/record`가 들고 있으므로 "열어라"만 남기고 그리로 보낸다.
-   */
-  it("인터벌 카드를 누르면 요청을 남기고 기록 화면으로 보낸다", async () => {
+  it("인터벌이 프로그램 목록에 선다", async () => {
+    // 사용자 지시 2026-08-12 — 인터벌은 진입 버튼이 아니라 **공식 프로그램**이다
     render(<ProgramsPage />);
     await waitFor(() => {
-      expect(screen.getByTestId("interval-entry-card")).toBeTruthy();
+      expect(screen.getByText("짧고 굵게 태우는 전신")).toBeTruthy();
     });
-
-    fireEvent.click(screen.getByTestId("interval-entry-card"));
-
-    expect(sessionStorage.getItem("gnd-start-interval")).toBe("1");
-    expect(push).toHaveBeenCalledWith("/record");
+    expect(screen.getByText("기구 없이 4분부터 시작하는 6주")).toBeTruthy();
   });
 });

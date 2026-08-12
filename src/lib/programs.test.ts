@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CatalogExercise } from "@/lib/types";
 import {
-  OFFICIAL_PROGRAMS,
+  STRENGTH_PROGRAMS,
   resolveProgram,
 } from "@/lib/domain/official-programs";
 import { buildProgramSchedule } from "@/lib/domain/program-schedule";
@@ -31,7 +31,7 @@ const slots = [
   { weekday: 5 as const, time: "18:00" },
 ];
 
-function catalogForProgram(program = OFFICIAL_PROGRAMS[0]): CatalogExercise[] {
+function catalogForProgram(program = STRENGTH_PROGRAMS[0]): CatalogExercise[] {
   return [
     ...new Set(
       program.sessions.flatMap((session) =>
@@ -51,7 +51,7 @@ function catalogForProgram(program = OFFICIAL_PROGRAMS[0]): CatalogExercise[] {
 }
 
 function createInput(levelAtStart: "beginner" | "experienced") {
-  const program = OFFICIAL_PROGRAMS[0];
+  const program = STRENGTH_PROGRAMS[0];
   return {
     program,
     sessions: resolveProgram(program, catalogForProgram(program)),
@@ -257,7 +257,7 @@ describe("연속 요일 등록 (금·토·일)", () => {
   ];
 
   function consecutiveInput() {
-    const program = OFFICIAL_PROGRAMS[0];
+    const program = STRENGTH_PROGRAMS[0];
     return {
       program,
       sessions: resolveProgram(program, catalogForProgram(program)),

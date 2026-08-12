@@ -171,6 +171,37 @@ export function resolveProgram(
   }));
 }
 
+/**
+ * 등록 화면이 보여 줄 난이도 선택지.
+ *
+ * 근력은 **두 개**다 — `moderate`를 쓰지 않는다. 기존 5종에서 난이도는 세트
+ * 수만 가르고, 가운데 값이 무엇을 뜻하는지 정의된 적이 없다.
+ *
+ * ⚠️ 라벨은 프로그램이 준다. 같은 `experienced`가 근력에서는 "운동 경험 있음",
+ *    인터벌에서는 "높음"으로 읽힌다 (설계 §3.2).
+ */
+export function programLevelOptions(
+  program: OfficialProgram,
+): readonly { value: ProgramLevel; label: string }[] {
+  const values: readonly ProgramLevel[] = isIntervalProgram(program)
+    ? PROGRAM_LEVELS
+    : ["beginner", "experienced"];
+  const fallback: Record<ProgramLevel, string> = {
+    beginner: "초보",
+    moderate: "보통",
+    experienced: "운동 경험 있음",
+  };
+  return values.map((value) => ({
+    value,
+    label: program.levelLabels?.[value] ?? fallback[value],
+  }));
+}
+
+/** 난이도 묶음의 제목 — 인터벌은 강도를, 근력은 경험을 묻는다 */
+export function programLevelLegend(program: OfficialProgram): string {
+  return isIntervalProgram(program) ? "난이도" : "운동 경험";
+}
+
 /** 난이도에 해당하는 종목명. 문자열이면 세 난이도가 같다. */
 export function intervalExerciseName(
   template: IntervalExerciseTemplate,
@@ -370,7 +401,11 @@ export const INTERVAL_PROGRAM: IntervalProgram = {
   ],
 };
 
-export const OFFICIAL_PROGRAMS = [
+/**
+ * 근력 5종. 인터벌과 분리해 둔다 — 처방·세트 수를 단언하는 테스트가 이 목록을
+ * 돈다. 화면이 쓰는 것은 아래 `OFFICIAL_PROGRAMS`(6종)다.
+ */
+export const STRENGTH_PROGRAMS = [
   {
     key: "shoulder-frame-6w",
     version: 1,
@@ -1066,4 +1101,10 @@ export const OFFICIAL_PROGRAMS = [
       },
     ],
   },
-] as const satisfies readonly OfficialProgram[];
+] as const satisfies readonly StrengthProgram[];
+
+/** 카탈로그에 서는 전체 목록 — 근력 5종 + 인터벌 1종 */
+export const OFFICIAL_PROGRAMS: readonly OfficialProgram[] = [
+  ...STRENGTH_PROGRAMS,
+  INTERVAL_PROGRAM,
+];

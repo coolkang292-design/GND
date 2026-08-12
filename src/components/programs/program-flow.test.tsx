@@ -2,7 +2,10 @@
 
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { OFFICIAL_PROGRAMS } from "@/lib/domain/official-programs";
+import {
+  OFFICIAL_PROGRAMS,
+  STRENGTH_PROGRAMS,
+} from "@/lib/domain/official-programs";
 import type { CatalogExercise } from "@/lib/types";
 import type { ProgramEnrollment } from "@/lib/programs";
 import { ProgramFlow } from "./program-flow";
@@ -11,7 +14,7 @@ afterEach(cleanup);
 
 const catalog: CatalogExercise[] = [
   ...new Set(
-    OFFICIAL_PROGRAMS.flatMap((program) =>
+    STRENGTH_PROGRAMS.flatMap((program) =>
       program.sessions.flatMap((session) =>
         session.exercises.map((exercise) => exercise.exerciseName),
       ),
@@ -57,6 +60,7 @@ describe("ProgramFlow", () => {
         catalog={catalog}
         occupiedPlans={[]}
         onCreate={onCreate}
+        onCreateInterval={vi.fn()}
       />,
     );
 
@@ -100,6 +104,7 @@ describe("ProgramFlow", () => {
         occupiedPlans={[]}
         activeEnrollments={[activeEnrollment]}
         onCreate={vi.fn()}
+        onCreateInterval={vi.fn()}
       />,
     );
 
@@ -121,6 +126,7 @@ describe("ProgramFlow", () => {
         catalog={catalog}
         occupiedPlans={[]}
         onCreate={vi.fn().mockRejectedValue(new Error("rpc failed"))}
+        onCreateInterval={vi.fn()}
       />,
     );
 
@@ -147,6 +153,7 @@ describe("ProgramFlow", () => {
         catalog={[]}
         occupiedPlans={[]}
         onCreate={vi.fn()}
+        onCreateInterval={vi.fn()}
       />,
     );
 

@@ -2,18 +2,20 @@
 
 import Image from "next/image";
 import { useState } from "react";
-import type {
-  OfficialProgram,
-  OfficialProgramKey,
-  StrengthProgram,
+import {
+  intervalExerciseName,
+  programLevelOptions,
+  type IntervalProgram,
+  type OfficialProgram,
+  type OfficialProgramKey,
+  type ProgramLevel,
+  type StrengthProgram,
 } from "@/lib/domain/official-programs";
-import { INTERVAL_COPY } from "@/lib/domain/tabata";
 import { EXERCISE_PREVIEW_NOTES } from "./exercise-preview-notes";
 
 type ProgramCatalogProps = {
   programs: readonly OfficialProgram[];
   onPick: (key: OfficialProgramKey) => void;
-  onInterval?: () => void;
 };
 
 type ProgramDetailProps = {
@@ -149,57 +151,7 @@ function ProgramCard({
   );
 }
 
-/**
- * 전신 인터벌 진입 (사용자 지시 2026-08-12 — '프로그램으로 시작하기' 안으로).
- *
- * ⚠️ 6주 프로그램이 **아니다.** 그래서 위 격자에 6번째 칸으로 끼우지 않고
- *    아래에 따로 세운다 — 주 3회·18회라는 약속이 여기에는 해당되지 않는다.
- */
-function IntervalEntryCard({ onInterval }: { onInterval: () => void }) {
-  return (
-    <section className="mt-6" aria-labelledby="interval-entry-title">
-      <p
-        id="interval-entry-title"
-        className="text-[11px] font-extrabold tracking-[0.08em] text-accent"
-      >
-        시간이 없을 때
-      </p>
-      <button
-        type="button"
-        data-testid="interval-entry-card"
-        onClick={onInterval}
-        className="group mt-2 flex w-full overflow-hidden rounded-[22px] border border-line bg-surface text-left shadow-card transition-colors hover:border-accent/55 motion-reduce:transition-none"
-      >
-        <span className="relative aspect-[4/3] w-28 flex-none overflow-hidden bg-bg sm:w-32">
-          <Image
-            src="/program-assets/interval.webp"
-            alt=""
-            fill
-            sizes="(max-width: 480px) 30vw, 128px"
-            className="object-cover object-[center_35%]"
-          />
-        </span>
-        <span className="flex min-w-0 flex-1 flex-col p-3.5">
-          <span className="block text-sm font-black leading-5 text-text">
-            {INTERVAL_COPY.title}
-          </span>
-          <span className="mt-1 block text-[11px] leading-[1.125rem] text-muted sm:text-xs">
-            {INTERVAL_COPY.description}
-          </span>
-          <span className="mt-auto block pt-3 text-[10px] font-extrabold leading-4 text-accent sm:text-[11px]">
-            4 · 8 · 16분 · 준비물 없이 맨몸
-          </span>
-        </span>
-      </button>
-    </section>
-  );
-}
-
-export function ProgramCatalog({
-  programs,
-  onPick,
-  onInterval,
-}: ProgramCatalogProps) {
+export function ProgramCatalog({ programs, onPick }: ProgramCatalogProps) {
   const [featured, ...rest] = programs;
 
   if (!featured) return null;
@@ -227,9 +179,205 @@ export function ProgramCatalog({
           <ProgramCard key={program.key} program={program} onPick={onPick} />
         ))}
       </div>
-
-      {onInterval && <IntervalEntryCard onInterval={onInterval} />}
     </section>
+  );
+}
+
+/**
+ * 인터벌 상세 — 근력 상세와 **다른 화면**이다.
+ *
+ * 근력은 종목마다 반복·휴식이 다르지만 인터벌은 전부 20초/10초로 같다. 대신
+ * 근력에 없는 두 가지를 보여 줘야 한다 — **난이도가 종목을 바꾸고**(§3.3),
+ * **주차가 길이를 올린다**(§3.4). 같은 표에 우겨넣으면 둘 다 안 보인다.
+ */
+export function IntervalProgramDetail({
+  program,
+  onBack,
+  onSchedule,
+  scheduleAvailable = true,
+}: {
+  program: IntervalProgram;
+  onBack: () => void;
+  onSchedule: () => void;
+  scheduleAvailable?: boolean;
+}) {
+  const [level, setLevel] = useState<ProgramLevel>("beginner");
+  const options = programLevelOptions(program);
+
+  return (
+    <article className="mx-auto w-full max-w-3xl pb-28">
+      <button
+        type="button"
+        onClick={onBack}
+        className="mb-3 inline-flex min-h-11 items-center rounded-full pr-3 text-sm font-bold text-muted"
+      >
+        ← 프로그램 목록으로
+      </button>
+
+      <div className="overflow-hidden rounded-[28px] border border-line bg-surface shadow-card">
+        <ProgramCover program={program} featured />
+        <div className="p-5">
+          <p className="text-[11px] font-extrabold tracking-[0.08em] text-accent">
+            GND 공식 프로그램
+          </p>
+          <h1 className="mt-1.5 text-2xl font-black leading-8 text-text">
+            {program.eyebrow}
+          </h1>
+          <p className="mt-1 text-sm font-bold text-muted">{program.title}</p>
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-4 gap-1.5" aria-label="프로그램 핵심 수치">
+        <ProgramStat label="빈도" value={`주 ${program.sessionsPerWeek}회`} />
+        <ProgramStat label="기간" value={`${program.weeks}주`} />
+        <ProgramStat label="전체" value="18회" />
+        <ProgramStat
+          label="회당"
+          value={`${program.durationMinutes[0]}–${program.durationMinutes[1]}분`}
+        />
+      </div>
+
+      <section
+        data-testid="program-audience"
+        data-tone="highlight"
+        className="mt-6 rounded-r-card border-l-2 border-accent bg-accent/8 px-4 py-4"
+      >
+        <h2 className="text-sm font-black text-text">이런 사람에게 맞아요</h2>
+        <ul className="mt-3 space-y-2.5 text-xs leading-5 text-muted">
+          {AUDIENCE[program.key].map((item) => (
+            <li key={item} className="flex gap-2">
+              <span aria-hidden className="text-accent">✓</span>
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section className="mt-6 px-1">
+        <p className="text-[10px] font-extrabold tracking-[0.08em] text-accent">
+          PROGRAM FOCUS
+        </p>
+        <h2 className="mt-1 text-lg font-black leading-6 text-text">
+          20초 운동 · 10초 휴식을 반복해요
+        </h2>
+        <p className="mt-2 text-xs leading-5 text-muted">{program.description}</p>
+      </section>
+
+      <section className="mt-4 overflow-hidden rounded-card border border-line bg-surface">
+        <div className="border-b border-line px-4 py-4">
+          <p className="text-[10px] font-extrabold tracking-[0.08em] text-accent">
+            난이도별 구성
+          </p>
+          <h2 className="mt-1 text-base font-black text-text">
+            난이도가 종목을 정해요
+          </h2>
+          <p className="mt-1 text-xs leading-5 text-muted">
+            등록할 때 고른 난이도로 6주 내내 진행합니다.
+          </p>
+          <div
+            role="tablist"
+            aria-label="인터벌 난이도"
+            className="mt-4 grid grid-cols-3 gap-2"
+          >
+            {options.map((option) => {
+              const selected = option.value === level;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  aria-controls="interval-level-panel"
+                  onClick={() => setLevel(option.value)}
+                  className={`min-h-11 rounded-card-sm border px-2 py-2 text-center text-sm font-black transition-colors motion-reduce:transition-none ${
+                    selected
+                      ? "border-accent bg-accent/15 text-accent"
+                      : "border-line bg-surface-2 text-muted"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div id="interval-level-panel" role="tabpanel">
+          <div className="divide-y divide-line/70 px-4">
+            {program.sessions.map((session) => (
+              <div key={session.key} data-testid="interval-session" className="py-3">
+                <p className="text-[11px] font-extrabold text-accent">
+                  {session.key}회차
+                </p>
+                <ul className="mt-1.5 grid grid-cols-2 gap-1.5">
+                  {session.exercises.map((exercise) => (
+                    <li
+                      key={exercise.slot}
+                      data-testid="interval-exercise"
+                      className="rounded-card-sm bg-surface-2 px-2.5 py-2 text-[11.5px] font-bold leading-4 text-text"
+                    >
+                      {intervalExerciseName(exercise, level)}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+
+          <div className="border-t border-line px-4 py-4">
+            <p className="text-[10px] font-extrabold tracking-[0.08em] text-accent">
+              주차별 길이
+            </p>
+            <h3 className="mt-1 text-sm font-black text-text">
+              주차가 지나며 양이 자라요
+            </h3>
+            <ol
+              className="mt-3 grid grid-cols-6 gap-1.5"
+              aria-label="주차별 회차 길이"
+            >
+              {program.minutesByWeek[level].map((minutes, index) => (
+                <li
+                  key={index}
+                  data-testid="interval-week-minutes"
+                  className="rounded-card-sm border border-line/80 bg-surface-2 px-1 py-2 text-center"
+                >
+                  <span className="block text-[10px] font-bold text-muted">
+                    {index + 1}주
+                  </span>
+                  <span className="mt-0.5 block text-xs font-black text-text">
+                    {minutes}분
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </div>
+      </section>
+
+      <aside
+        role="note"
+        className="mt-4 rounded-card-sm border border-line/70 px-3 py-3 text-xs leading-5 text-muted"
+      >
+        <span className="font-bold text-text">안전 안내 · </span>
+        숨이 심하게 차거나 통증이 느껴지면 멈추고 쉬세요. 관절에 부담이 되면 점프
+        없는 난이도로 다시 등록할 수 있어요.
+      </aside>
+
+      {scheduleAvailable && (
+        <div
+          className="pointer-events-none fixed inset-x-0 z-30 px-4"
+          style={{ bottom: "calc(env(safe-area-inset-bottom) + 72px)" }}
+        >
+          <button
+            type="button"
+            onClick={onSchedule}
+            className="pointer-events-auto mx-auto block min-h-12 w-full max-w-3xl rounded-card bg-accent px-4 text-sm font-black text-accent-ink shadow-card"
+          >
+            요일과 시간 정하기
+          </button>
+        </div>
+      )}
+    </article>
   );
 }
 

@@ -1,30 +1,45 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { StrengthProgram } from "@/lib/domain/official-programs";
+import {
+  programLevelLegend,
+  programLevelOptions,
+  type OfficialProgram,
+  type ProgramLevel,
+} from "@/lib/domain/official-programs";
 import { programSaveErrorText } from "@/lib/domain/program-error-text";
 import {
   buildProgramSchedule,
   type PreferredSlot,
+  type ProgramScheduleItem,
 } from "@/lib/domain/program-schedule";
 import { addDaysToDateKey } from "@/lib/domain/workout-plan";
-import type {
-  CreateProgramEnrollmentInput,
-  ResolvedProgramSession,
-} from "@/lib/programs";
 import type { WorkoutPlan } from "@/lib/workout-plan";
 
 type ScheduleStep = "start" | "slots" | "preview";
 type TimeMode = "same" | "per-day";
 
+/**
+ * 이 화면이 정하는 것 — **날짜·요일·시간·난이도**뿐이다.
+ *
+ * 회차 종목을 합쳐 payload를 만드는 일은 `ProgramFlow`가 한다. 근력과 인터벌은
+ * 회차 모양이 달라서(종목 4개·처방 없음·`tabata_minutes`) 여기서 나누면 이
+ * 화면이 두 벌이 된다.
+ */
+export type ProgramScheduleChoice = {
+  schedule: readonly ProgramScheduleItem[];
+  levelAtStart: ProgramLevel;
+  startDate: string;
+  timeZone: string;
+  preferredSlots: readonly PreferredSlot[];
+};
+
 type ProgramScheduleSetupProps = {
   today: string;
   timeZone: string;
-  /** 아직 근력 전용 — 인터벌 등록은 2단계(0070)에서 붙인다 */
-  program: StrengthProgram;
-  resolvedSessions: readonly ResolvedProgramSession[];
+  program: OfficialProgram;
   occupiedPlans: readonly WorkoutPlan[];
-  onConfirm: (input: CreateProgramEnrollmentInput) => Promise<void>;
+  onConfirm: (choice: ProgramScheduleChoice) => Promise<void>;
 };
 
 const WEEKDAYS = [
@@ -113,10 +128,10 @@ export function ProgramScheduleSetup({
   today,
   timeZone,
   program,
-  resolvedSessions,
   occupiedPlans,
   onConfirm,
 }: ProgramScheduleSetupProps) {
+  const levelOptions = programLevelOptions(program);
   const nextMonday = addDaysToDateKey(startOfWeek(today), 7);
   const [step, setStep] = useState<ScheduleStep>("start");
   const [startDate, setStartDate] = useState(nextMonday);
@@ -133,7 +148,7 @@ export function ProgramScheduleSetup({
     5: "19:00",
     6: "19:00",
   });
-  const [levelAtStart, setLevelAtStart] = useState<"beginner" | "experienced">("beginner");
+  const [levelAtStart, setLevelAtStart] = useState<ProgramLevel>("beginner");
   const [validation, setValidation] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -202,8 +217,6 @@ export function ProgramScheduleSetup({
     setSaveError(null);
     try {
       await onConfirm({
-        program,
-        sessions: resolvedSessions,
         schedule: schedule.plans,
         levelAtStart,
         startDate,
@@ -375,19 +388,26 @@ export function ProgramScheduleSetup({
         )}
 
         <fieldset className="mt-5">
-          <legend className="text-xs font-bold text-muted">운동 경험</legend>
-          <div className="mt-2 grid grid-cols-2 gap-2">
-            {(["beginner", "experienced"] as const).map((level) => (
-              <label key={level} className={`min-h-11 rounded-card-sm border px-3 py-3 text-center text-xs font-bold ${levelAtStart === level ? "border-accent bg-accent/10 text-accent" : "border-line bg-surface text-text"}`}>
+          <legend className="text-xs font-bold text-muted">
+            {programLevelLegend(program)}
+          </legend>
+          <div
+            className={`mt-2 grid gap-2 ${levelOptions.length === 3 ? "grid-cols-3" : "grid-cols-2"}`}
+          >
+            {levelOptions.map((option) => (
+              <label
+                key={option.value}
+                className={`min-h-11 rounded-card-sm border px-3 py-3 text-center text-xs font-bold ${levelAtStart === option.value ? "border-accent bg-accent/10 text-accent" : "border-line bg-surface text-text"}`}
+              >
                 <input
                   type="radio"
                   name="program-level"
-                  value={level}
-                  checked={levelAtStart === level}
-                  onChange={() => setLevelAtStart(level)}
+                  value={option.value}
+                  checked={levelAtStart === option.value}
+                  onChange={() => setLevelAtStart(option.value)}
                   className="sr-only"
                 />
-                {level === "beginner" ? "초보" : "운동 경험 있음"}
+                {option.label}
               </label>
             ))}
           </div>

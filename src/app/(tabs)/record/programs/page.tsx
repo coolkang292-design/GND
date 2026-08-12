@@ -1,14 +1,14 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { ProgramFlow } from "@/components/programs/program-flow";
-import { requestIntervalStart } from "@/lib/interval-entry";
 import { OFFICIAL_PROGRAMS } from "@/lib/domain/official-programs";
 import {
+  createIntervalProgramEnrollment,
   createProgramEnrollment,
   getActiveProgramEnrollments,
+  type CreateIntervalEnrollmentInput,
   type CreateProgramEnrollmentInput,
   type ProgramEnrollment,
 } from "@/lib/programs";
@@ -45,7 +45,9 @@ function localTime(iso: string, timeZone: string): string {
   return `${get("hour")}:${get("minute")}`;
 }
 
-function firstPlanSummary(input: CreateProgramEnrollmentInput) {
+function firstPlanSummary(
+  input: CreateProgramEnrollmentInput | CreateIntervalEnrollmentInput,
+) {
   const first = input.schedule[0];
   const session = input.sessions.find((item) => item.key === first.templateKey);
   return {
@@ -56,7 +58,6 @@ function firstPlanSummary(input: CreateProgramEnrollmentInput) {
 }
 
 export default function ProgramsPage() {
-  const router = useRouter();
   const { userId, loading, configured, error } = useAuth();
   const [pageRef] = useState<PageReference>(() => {
     const timeZone =
@@ -121,18 +122,14 @@ export default function ProgramsPage() {
       catalog={catalog}
       occupiedPlans={plans}
       activeEnrollments={enrollments}
-      onInterval={() => {
-        // 인터벌 시트는 기록 화면이 들고 있다 — "열어라"만 남기고 그리로 보낸다
-        requestIntervalStart();
-        router.push("/record");
-      }}
-      onCreate={async (input) => {
-        const enrollmentId = await createProgramEnrollment(input);
-        return {
-          enrollmentId,
-          nextPlan: firstPlanSummary(input),
-        };
-      }}
+      onCreate={async (input) => ({
+        enrollmentId: await createProgramEnrollment(input),
+        nextPlan: firstPlanSummary(input),
+      })}
+      onCreateInterval={async (input) => ({
+        enrollmentId: await createIntervalProgramEnrollment(input),
+        nextPlan: firstPlanSummary(input),
+      })}
     />
   );
 }

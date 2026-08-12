@@ -9,18 +9,16 @@ import {
   within,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { OFFICIAL_PROGRAMS } from "@/lib/domain/official-programs";
+import {
+  INTERVAL_PROGRAM,
+  STRENGTH_PROGRAMS,
+} from "@/lib/domain/official-programs";
 import type { WorkoutPlan } from "@/lib/workout-plan";
 import { ProgramScheduleSetup } from "./program-schedule-setup";
 
 afterEach(cleanup);
 
-const program = OFFICIAL_PROGRAMS[0];
-const resolvedSessions = program.sessions.map((session) => ({
-  key: session.key,
-  title: session.title,
-  exercises: [],
-}));
+const program = STRENGTH_PROGRAMS[0];
 
 function openSlots() {
   fireEvent.click(screen.getByRole("button", { name: "다음 주 시작" }));
@@ -61,7 +59,6 @@ describe("ProgramScheduleSetup", () => {
         today="2026-08-12"
         timeZone="Asia/Seoul"
         program={program}
-        resolvedSessions={resolvedSessions}
         occupiedPlans={[]}
         onConfirm={vi.fn()}
       />,
@@ -99,7 +96,6 @@ describe("ProgramScheduleSetup", () => {
         today="2026-08-12"
         timeZone="Asia/Seoul"
         program={program}
-        resolvedSessions={resolvedSessions}
         occupiedPlans={[]}
         onConfirm={vi.fn()}
       />,
@@ -123,7 +119,6 @@ describe("ProgramScheduleSetup", () => {
         today="2026-08-12"
         timeZone="Asia/Seoul"
         program={program}
-        resolvedSessions={resolvedSessions}
         occupiedPlans={[]}
         onConfirm={onConfirm}
       />,
@@ -142,7 +137,6 @@ describe("ProgramScheduleSetup", () => {
     });
     expect(onConfirm).toHaveBeenCalledTimes(1);
     expect(onConfirm.mock.calls[0][0]).toMatchObject({
-      program,
       startDate: "2026-08-17",
       timeZone: "Asia/Seoul",
       levelAtStart: "beginner",
@@ -154,13 +148,71 @@ describe("ProgramScheduleSetup", () => {
     });
   });
 
+  it("난이도 선택지는 프로그램이 정한다", () => {
+    // 근력은 두 개(초보·운동 경험 있음), 인터벌은 세 개(입문·보통·높음).
+    // 같은 `experienced`가 프로그램에 따라 다르게 읽힌다 (설계 §3.2).
+    const strength = render(
+      <ProgramScheduleSetup
+        today="2026-08-12"
+        timeZone="Asia/Seoul"
+        program={program}
+        occupiedPlans={[]}
+        onConfirm={vi.fn()}
+      />,
+    );
+    openSlots();
+    expect(screen.getByText("운동 경험")).toBeTruthy();
+    expect(screen.getByLabelText("초보", { exact: false })).toBeTruthy();
+    expect(screen.getAllByRole("radio")).toHaveLength(2);
+    strength.unmount();
+
+    render(
+      <ProgramScheduleSetup
+        today="2026-08-12"
+        timeZone="Asia/Seoul"
+        program={INTERVAL_PROGRAM}
+        occupiedPlans={[]}
+        onConfirm={vi.fn()}
+      />,
+    );
+    openSlots();
+    expect(screen.getByText("난이도")).toBeTruthy();
+    expect(screen.getAllByRole("radio")).toHaveLength(3);
+    for (const label of ["입문", "보통", "높음"]) {
+      expect(screen.getByText(label)).toBeTruthy();
+    }
+  });
+
+  it("고른 난이도를 그대로 넘긴다", async () => {
+    const onConfirm = vi.fn().mockResolvedValue(undefined);
+    render(
+      <ProgramScheduleSetup
+        today="2026-08-12"
+        timeZone="Asia/Seoul"
+        program={INTERVAL_PROGRAM}
+        occupiedPlans={[]}
+        onConfirm={onConfirm}
+      />,
+    );
+    openSlots();
+    fireEvent.click(screen.getByRole("button", { name: "월 · 수 · 금" }));
+    fireEvent.click(screen.getByText("높음"));
+    fireEvent.click(screen.getByRole("button", { name: "일정 미리보기" }));
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: "18회 계획을 달력에 담기" }),
+      );
+    });
+
+    expect(onConfirm.mock.calls[0][0].levelAtStart).toBe("experienced");
+  });
+
   it("연속 요일도 미리보기로 진행한다 (사용자 확정 2026-08-12)", () => {
     render(
       <ProgramScheduleSetup
         today="2026-08-12"
         timeZone="Asia/Seoul"
         program={program}
-        resolvedSessions={resolvedSessions}
         occupiedPlans={[]}
         onConfirm={vi.fn()}
       />,
@@ -184,7 +236,6 @@ describe("ProgramScheduleSetup", () => {
         today="2026-08-12"
         timeZone="Asia/Seoul"
         program={program}
-        resolvedSessions={resolvedSessions}
         occupiedPlans={[]}
         onConfirm={vi.fn()}
       />,
@@ -203,7 +254,6 @@ describe("ProgramScheduleSetup", () => {
         today="2026-08-12"
         timeZone="Asia/Seoul"
         program={program}
-        resolvedSessions={resolvedSessions}
         occupiedPlans={[occupiedPlan("2026-08-17")]}
         onConfirm={vi.fn()}
       />,
@@ -224,7 +274,6 @@ describe("ProgramScheduleSetup", () => {
         today="2026-08-12"
         timeZone="Asia/Seoul"
         program={program}
-        resolvedSessions={resolvedSessions}
         occupiedPlans={[]}
         onConfirm={onConfirm}
       />,
@@ -245,7 +294,6 @@ describe("ProgramScheduleSetup", () => {
         today="2026-08-12"
         timeZone="Asia/Seoul"
         program={program}
-        resolvedSessions={resolvedSessions}
         occupiedPlans={[]}
         onConfirm={vi.fn().mockRejectedValue(new Error("network"))}
       />,
@@ -282,7 +330,6 @@ describe("ProgramScheduleSetup", () => {
         today="2026-08-12"
         timeZone="Asia/Seoul"
         program={program}
-        resolvedSessions={resolvedSessions}
         occupiedPlans={[]}
         onConfirm={vi.fn().mockRejectedValue(rejection)}
       />,

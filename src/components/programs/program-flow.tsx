@@ -4,18 +4,26 @@ import Link from "next/link";
 import { useState } from "react";
 import { UiIcon } from "@/components/ui-icon";
 import {
+  isIntervalProgram,
+  resolveIntervalProgram,
   resolveProgram,
+  PROGRAM_LEVELS,
+  type OfficialProgram,
   type OfficialProgramKey,
-  type StrengthProgram,
 } from "@/lib/domain/official-programs";
 import type {
+  CreateIntervalEnrollmentInput,
   CreateProgramEnrollmentInput,
   ProgramEnrollment,
   ResolvedProgramSession,
 } from "@/lib/programs";
 import type { CatalogExercise } from "@/lib/types";
 import type { WorkoutPlan } from "@/lib/workout-plan";
-import { ProgramCatalog, ProgramDetail } from "./program-catalog";
+import {
+  IntervalProgramDetail,
+  ProgramCatalog,
+  ProgramDetail,
+} from "./program-catalog";
 import { ProgramScheduleSetup } from "./program-schedule-setup";
 
 type ProgramFlowStep = "catalog" | "detail" | "schedule" | "done";
@@ -28,14 +36,15 @@ type CreateResult = {
 type ProgramFlowProps = {
   today: string;
   timeZone: string;
-  /** 아직 근력 5종뿐이다 — 인터벌은 2단계(0070)가 끝난 뒤 여기 선다 */
-  programs: readonly StrengthProgram[];
+  programs: readonly OfficialProgram[];
   catalog: readonly CatalogExercise[];
   occupiedPlans: readonly WorkoutPlan[];
   activeEnrollments?: readonly ProgramEnrollment[];
   onCreate: (input: CreateProgramEnrollmentInput) => Promise<CreateResult>;
-  /** 전신 인터벌 진입 (2026-08-12 사용자 지시로 이 화면 안으로 들어왔다) */
-  onInterval?: () => void;
+  /** 인터벌 등록은 회차 모양이 달라 RPC payload도 다르다 (0070) */
+  onCreateInterval: (
+    input: CreateIntervalEnrollmentInput,
+  ) => Promise<CreateResult>;
 };
 
 function dateLabel(dateKey: string): string {
@@ -58,7 +67,7 @@ export function ProgramFlow({
   occupiedPlans,
   activeEnrollments = [],
   onCreate,
-  onInterval,
+  onCreateInterval,
 }: ProgramFlowProps) {
   const [step, setStep] = useState<ProgramFlowStep>("catalog");
   const [selectedKey, setSelectedKey] = useState<OfficialProgramKey | null>(null);
@@ -87,7 +96,16 @@ export function ProgramFlow({
   function openSchedule() {
     if (!selected) return;
     try {
-      setResolvedSessions(resolveProgram(selected, catalog));
+      if (isIntervalProgram(selected)) {
+        // 난이도는 다음 화면에서 고른다. 여기서는 **세 난이도가 모두**
+        // 카탈로그로 합쳐지는지만 미리 본다 — 등록 직전에 터지지 않도록.
+        for (const level of PROGRAM_LEVELS) {
+          resolveIntervalProgram(selected, level, catalog);
+        }
+        setResolvedSessions(null);
+      } else {
+        setResolvedSessions(resolveProgram(selected, catalog));
+      }
       setLoadError(null);
       setStep("schedule");
     } catch {
@@ -99,11 +117,7 @@ export function ProgramFlow({
 
   if (step === "catalog") {
     return (
-      <ProgramCatalog
-        programs={programs}
-        onPick={pickProgram}
-        onInterval={onInterval}
-      />
+      <ProgramCatalog programs={programs} onPick={pickProgram} />
     );
   }
 
@@ -138,11 +152,7 @@ export function ProgramFlow({
 
   if (!selected) {
     return (
-      <ProgramCatalog
-        programs={programs}
-        onPick={pickProgram}
-        onInterval={onInterval}
-      />
+      <ProgramCatalog programs={programs} onPick={pickProgram} />
     );
   }
 
@@ -150,12 +160,21 @@ export function ProgramFlow({
     if (activeEnrollment) {
       return (
         <section>
-          <ProgramDetail
-            program={selected}
-            onBack={() => setStep("catalog")}
-            onSchedule={() => {}}
-            scheduleAvailable={false}
-          />
+          {isIntervalProgram(selected) ? (
+            <IntervalProgramDetail
+              program={selected}
+              onBack={() => setStep("catalog")}
+              onSchedule={() => {}}
+              scheduleAvailable={false}
+            />
+          ) : (
+            <ProgramDetail
+              program={selected}
+              onBack={() => setStep("catalog")}
+              onSchedule={() => {}}
+              scheduleAvailable={false}
+            />
+          )}
           <div
             className="fixed inset-x-0 z-40 px-4"
             style={{ bottom: "calc(env(safe-area-inset-bottom) + 72px)" }}
@@ -173,11 +192,19 @@ export function ProgramFlow({
 
     return (
       <>
-        <ProgramDetail
-          program={selected}
-          onBack={() => setStep("catalog")}
-          onSchedule={openSchedule}
-        />
+        {isIntervalProgram(selected) ? (
+          <IntervalProgramDetail
+            program={selected}
+            onBack={() => setStep("catalog")}
+            onSchedule={openSchedule}
+          />
+        ) : (
+          <ProgramDetail
+            program={selected}
+            onBack={() => setStep("catalog")}
+            onSchedule={openSchedule}
+          />
+        )}
         {loadError && (
           <p
             role="alert"
@@ -190,7 +217,7 @@ export function ProgramFlow({
     );
   }
 
-  if (!resolvedSessions) {
+  if (!isIntervalProgram(selected) && !resolvedSessions) {
     return (
       <p role="alert" className="rounded-card border border-line bg-surface p-4 text-sm text-warn">
         프로그램 운동 정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.
@@ -203,10 +230,43 @@ export function ProgramFlow({
       today={today}
       timeZone={timeZone}
       program={selected}
-      resolvedSessions={resolvedSessions}
       occupiedPlans={occupiedPlans}
-      onConfirm={async (input) => {
-        const result = await onCreate(input);
+      onConfirm={async (choice) => {
+        /*
+          회차 종목은 **여기서** 합친다.
+
+          인터벌은 난이도가 종목을 정한다(설계 §3.3). 상세 화면에서 미리
+          합쳐 두면 사용자가 다음 화면에서 난이도를 바꿔도 종목이 안 바뀐다.
+        */
+        const result = isIntervalProgram(selected)
+          ? await onCreateInterval({
+              program: selected,
+              sessions: resolveIntervalProgram(
+                selected,
+                choice.levelAtStart,
+                catalog,
+              ),
+              schedule: choice.schedule,
+              levelAtStart: choice.levelAtStart,
+              startDate: choice.startDate,
+              timeZone: choice.timeZone,
+              preferredSlots: choice.preferredSlots,
+            })
+          : await onCreate({
+              program: selected,
+              sessions: resolvedSessions ?? [],
+              schedule: choice.schedule,
+              // 근력은 선택지가 두 개뿐이다 — 화면이 moderate를 주지 않는다
+              levelAtStart:
+                choice.levelAtStart === "moderate"
+                  ? (() => {
+                      throw new Error("program_invalid_level");
+                    })()
+                  : choice.levelAtStart,
+              startDate: choice.startDate,
+              timeZone: choice.timeZone,
+              preferredSlots: choice.preferredSlots,
+            });
         setCreated(result);
         setStep("done");
       }}

@@ -5,6 +5,7 @@ import {
   INTERVAL_SLOTS,
   PROGRAM_LEVELS,
   OFFICIAL_PROGRAMS,
+  STRENGTH_PROGRAMS,
   intervalExerciseName,
   intervalMinutesForWeek,
   isIntervalProgram,
@@ -223,19 +224,23 @@ describe("주차별 회차 길이", () => {
 });
 
 describe("기존 5종 무영향", () => {
-  it("공식 프로그램 목록은 아직 근력 5종 그대로다", () => {
-    // 인터벌은 등록 흐름(2단계·0070)이 끝난 뒤에 목록에 세운다. 먼저 세우면
-    // 사용자가 고를 수 있는데 서버가 등록을 거절한다.
-    expect(OFFICIAL_PROGRAMS).toHaveLength(5);
-    expect(OFFICIAL_PROGRAMS.map((program) => program.key)).not.toContain(
+  it("근력 목록은 5종 그대로고, 카탈로그는 인터벌을 더해 6종이다", () => {
+    expect(STRENGTH_PROGRAMS).toHaveLength(5);
+    expect(STRENGTH_PROGRAMS.map((program) => program.key)).not.toContain(
       "interval-burn-6w",
     );
+    expect(OFFICIAL_PROGRAMS).toHaveLength(6);
+    expect(OFFICIAL_PROGRAMS.at(-1)?.key).toBe("interval-burn-6w");
   });
 
   it("근력 5종은 인터벌이 아니다", () => {
-    for (const program of OFFICIAL_PROGRAMS) {
+    for (const program of STRENGTH_PROGRAMS) {
       expect(isIntervalProgram(program)).toBe(false);
       expect("kind" in program).toBe(false);
     }
+  });
+
+  it("카탈로그에서 인터벌은 정확히 하나다", () => {
+    expect(OFFICIAL_PROGRAMS.filter(isIntervalProgram)).toHaveLength(1);
   });
 });

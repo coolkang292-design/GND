@@ -2,17 +2,21 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { OFFICIAL_PROGRAMS } from "@/lib/domain/official-programs";
+import {
+  INTERVAL_PROGRAM,
+  OFFICIAL_PROGRAMS,
+  STRENGTH_PROGRAMS,
+} from "@/lib/domain/official-programs";
 import { ProgramCatalog, ProgramDetail } from "./program-catalog";
 
 afterEach(cleanup);
 
 describe("ProgramCatalog", () => {
-  it("대표 카드 한 장과 선택 가능한 프로그램 네 장을 보여준다", () => {
+  it("대표 카드 한 장과 나머지 프로그램을 격자로 보여준다", () => {
     const onPick = vi.fn();
     render(<ProgramCatalog programs={OFFICIAL_PROGRAMS} onPick={onPick} />);
 
-    expect(screen.getAllByRole("button")).toHaveLength(5);
+    expect(screen.getAllByRole("button")).toHaveLength(6);
     expect(
       screen
         .getByText("시선이 머무는 어깨")
@@ -22,7 +26,7 @@ describe("ProgramCatalog", () => {
     expect(screen.getByTestId("program-cover-featured").className).toContain(
       "aspect-[16/9]",
     );
-    expect(screen.getAllByTestId("program-cover-compact")).toHaveLength(4);
+    expect(screen.getAllByTestId("program-cover-compact")).toHaveLength(5);
     for (const cover of screen.getAllByTestId("program-cover-compact")) {
       expect(cover.className).toContain("aspect-[4/3]");
     }
@@ -60,41 +64,15 @@ describe("ProgramCatalog", () => {
     expect(onPick).toHaveBeenCalledWith("shoulder-frame-6w");
   });
 
-  /**
-   * 사용자 지시 2026-08-12 — 전신 인터벌은 '프로그램으로 시작하기' **안**에 있다.
-   * 기록 화면의 운동 추가 시트에는 없다(`exercise-entry-hub.test.tsx`가 본다).
-   */
-  it("전신 인터벌을 6주 프로그램 격자 밖, 아래에 따로 세운다", () => {
-    const onInterval = vi.fn();
-    render(
-      <ProgramCatalog
-        programs={OFFICIAL_PROGRAMS}
-        onPick={vi.fn()}
-        onInterval={onInterval}
-      />,
-    );
+  it("인터벌을 6번째 카드로 세운다", () => {
+    // 사용자 지시 2026-08-12 — 인터벌은 '프로그램으로 시작하기' 안의 **프로그램**이다
+    const onPick = vi.fn();
+    render(<ProgramCatalog programs={OFFICIAL_PROGRAMS} onPick={onPick} />);
 
-    const card = screen.getByTestId("interval-entry-card");
-    expect(card.textContent).toContain("4분부터 시작하는 전신 인터벌");
-    expect(card.textContent).toContain("음악에 맞춰 20초 운동 · 10초 휴식");
-
-    // 6주 프로그램이 아니다 — 격자 카드(compact)로 세면 안 된다
-    expect(screen.getAllByTestId("program-cover-compact")).toHaveLength(4);
-    const image = card.querySelector("img");
-    expect(decodeURIComponent(image?.getAttribute("src") ?? "")).toContain(
-      "/program-assets/interval.webp",
-    );
-    expect(image?.getAttribute("alt")).toBe("");
-
-    fireEvent.click(card);
-    expect(onInterval).toHaveBeenCalledTimes(1);
-  });
-
-  it("인터벌 진입을 안 넘기면 그 카드가 없다", () => {
-    render(<ProgramCatalog programs={OFFICIAL_PROGRAMS} onPick={vi.fn()} />);
-
-    expect(screen.queryByTestId("interval-entry-card")).toBeNull();
-    expect(screen.getAllByRole("button")).toHaveLength(5);
+    expect(screen.getAllByRole("button")).toHaveLength(6);
+    expect(screen.getAllByTestId("program-cover-compact")).toHaveLength(5);
+    fireEvent.click(screen.getByText(INTERVAL_PROGRAM.eyebrow));
+    expect(onPick).toHaveBeenCalledWith("interval-burn-6w");
   });
 });
 
@@ -104,7 +82,7 @@ describe("ProgramDetail", () => {
     const onSchedule = vi.fn();
     render(
       <ProgramDetail
-        program={OFFICIAL_PROGRAMS[0]}
+        program={STRENGTH_PROGRAMS[0]}
         onBack={onBack}
         onSchedule={onSchedule}
       />,
@@ -121,7 +99,7 @@ describe("ProgramDetail", () => {
     expect(screen.getByText("반복")).toBeTruthy();
     expect(screen.getByText("세트 사이 휴식")).toBeTruthy();
     expect(screen.getAllByTestId("exercise-preview-row")).toHaveLength(
-      OFFICIAL_PROGRAMS[0].sessions[0].exercises.length,
+      STRENGTH_PROGRAMS[0].sessions[0].exercises.length,
     );
     expect(screen.getByTestId("program-audience").getAttribute("data-tone")).toBe(
       "highlight",
@@ -142,7 +120,7 @@ describe("ProgramDetail", () => {
   it("체지방 관리 프로그램은 식사와 일상 활동도 함께 안내한다", () => {
     render(
       <ProgramDetail
-        program={OFFICIAL_PROGRAMS[4]}
+        program={STRENGTH_PROGRAMS[4]}
         onBack={vi.fn()}
         onSchedule={vi.fn()}
       />,
@@ -156,7 +134,7 @@ describe("ProgramDetail", () => {
   it("운동명을 누르면 짧은 운동 설명을 같은 표 안에서 펼친다", () => {
     render(
       <ProgramDetail
-        program={OFFICIAL_PROGRAMS[0]}
+        program={STRENGTH_PROGRAMS[0]}
         onBack={vi.fn()}
         onSchedule={vi.fn()}
       />,
@@ -182,7 +160,7 @@ describe("ProgramDetail", () => {
   it("6주 전체 반복 구조와 A·B·C 회차별 운동표를 전환해 보여준다", () => {
     render(
       <ProgramDetail
-        program={OFFICIAL_PROGRAMS[0]}
+        program={STRENGTH_PROGRAMS[0]}
         onBack={vi.fn()}
         onSchedule={vi.fn()}
       />,
@@ -213,7 +191,7 @@ describe("ProgramDetail", () => {
   });
 
   it("프로그램 5종의 A·B·C 운동 모두 설명을 열 수 있다", () => {
-    for (const program of OFFICIAL_PROGRAMS) {
+    for (const program of STRENGTH_PROGRAMS) {
       const view = render(
         <ProgramDetail
           program={program}

@@ -2,7 +2,7 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 import type { CatalogExercise } from "../types";
 import {
   INTERVAL_PROGRAM,
-  OFFICIAL_PROGRAMS,
+  STRENGTH_PROGRAMS,
   PROGRAM_LEVELS,
   intervalExerciseName,
   resolveProgram,
@@ -19,7 +19,7 @@ const EXPECTED = [
 
 const catalogForFirstProgram = (): CatalogExercise[] => [
   ...new Set(
-    OFFICIAL_PROGRAMS[0].sessions.flatMap((session) =>
+    STRENGTH_PROGRAMS[0].sessions.flatMap((session) =>
       session.exercises.map((exercise) => exercise.exerciseName),
     ),
   ),
@@ -36,13 +36,13 @@ const catalogForFirstProgram = (): CatalogExercise[] => [
 
 describe("GND 공식 프로그램 카탈로그", () => {
   it("카탈로그에 없는 종목을 중복 없이 프로그램 최초 등장 순서로 모두 알린다", () => {
-    expect(() => resolveProgram(OFFICIAL_PROGRAMS[0], [])).toThrowError(
+    expect(() => resolveProgram(STRENGTH_PROGRAMS[0], [])).toThrowError(
       "program_exercise_missing:바벨 백스쿼트,벤치프레스,시티드 로우,숄더프레스,사이드 레터럴 레이즈,루마니안 데드리프트,랫풀다운,인클라인 벤치프레스,페이스풀,덤벨 컬,레그프레스,덤벨 벤치프레스,바벨 로우,덤벨 레터럴 레이즈,케이블 푸시다운",
     );
   });
 
   it("필요한 모든 카탈로그 종목을 원래 처방과 결합한다", () => {
-    const program = OFFICIAL_PROGRAMS[0];
+    const program = STRENGTH_PROGRAMS[0];
     const names = [
       ...new Set(
         program.sessions.flatMap((session) =>
@@ -79,7 +79,7 @@ describe("GND 공식 프로그램 카탈로그", () => {
   });
 
   it("해석 후에도 프로그램과 카탈로그 입력을 변경하지 않는다", () => {
-    const program = structuredClone(OFFICIAL_PROGRAMS[0]);
+    const program = structuredClone(STRENGTH_PROGRAMS[0]);
     const names = [
       ...new Set(
         program.sessions.flatMap((session) =>
@@ -121,7 +121,7 @@ describe("GND 공식 프로그램 카탈로그", () => {
       [seed, custom, ...others],
       [custom, seed, ...others],
     ]) {
-      const resolved = resolveProgram(OFFICIAL_PROGRAMS[0], catalog);
+      const resolved = resolveProgram(STRENGTH_PROGRAMS[0], catalog);
       const benchPress = resolved[0].exercises.find(
         (exercise) => exercise.exerciseName === "벤치프레스",
       );
@@ -144,7 +144,7 @@ describe("GND 공식 프로그램 카탈로그", () => {
       ...seedCatalog.filter((item) => item !== seed),
     ];
 
-    expect(() => resolveProgram(OFFICIAL_PROGRAMS[0], catalog)).toThrowError(
+    expect(() => resolveProgram(STRENGTH_PROGRAMS[0], catalog)).toThrowError(
       "program_exercise_missing:벤치프레스",
     );
   });
@@ -157,13 +157,13 @@ describe("GND 공식 프로그램 카탈로그", () => {
     const { requiredNames } = await import(/* @vite-ignore */ moduleUrl);
     const programNames = [
       ...new Set([
-        ...OFFICIAL_PROGRAMS.flatMap((program) =>
+        ...STRENGTH_PROGRAMS.flatMap((program) =>
           program.sessions.flatMap((session) =>
             session.exercises.map((exercise) => exercise.exerciseName),
           ),
         ),
         // 인터벌 9조합 36칸도 같은 스크립트가 지킨다 (2026-08-12). 아직
-        // OFFICIAL_PROGRAMS에는 없지만 종목명 오타는 지금부터 막아야 한다 —
+        // STRENGTH_PROGRAMS에는 없지만 종목명 오타는 지금부터 막아야 한다 —
         // 2단계에서 목록에 세우는 순간 등록이 통째로 실패하기 때문이다.
         ...INTERVAL_PROGRAM.sessions.flatMap((session) =>
           session.exercises.flatMap((exercise) =>
@@ -199,7 +199,7 @@ PLAIN_VALUE=plain
 
   it("승인된 5종을 정해진 순서와 문구로 제공한다", () => {
     expect(
-      OFFICIAL_PROGRAMS.map((program) => [
+      STRENGTH_PROGRAMS.map((program) => [
         program.key,
         program.eyebrow,
         program.title,
@@ -208,7 +208,7 @@ PLAIN_VALUE=plain
   });
 
   it("모두 주 3회 6주 A/B/C 구조다", () => {
-    for (const program of OFFICIAL_PROGRAMS) {
+    for (const program of STRENGTH_PROGRAMS) {
       expect(program.weeks).toBe(6);
       expect(program.sessionsPerWeek).toBe(3);
       expect(program.sessions.map((session) => session.key)).toEqual([
@@ -220,13 +220,13 @@ PLAIN_VALUE=plain
   });
 
   it("모든 프로그램의 메타데이터 버전은 1이다", () => {
-    expect(OFFICIAL_PROGRAMS.map((program) => program.version)).toEqual([
+    expect(STRENGTH_PROGRAMS.map((program) => program.version)).toEqual([
       1, 1, 1, 1, 1,
     ]);
   });
 
   it("프로그램 순서에 맞는 표지 이미지 경로를 제공한다", () => {
-    expect(OFFICIAL_PROGRAMS.map((program) => program.coverImage)).toEqual([
+    expect(STRENGTH_PROGRAMS.map((program) => program.coverImage)).toEqual([
       "/program-assets/shoulder.webp",
       "/program-assets/chest.webp",
       "/program-assets/arms.webp",
@@ -242,7 +242,7 @@ PLAIN_VALUE=plain
   });
 
   it("설명과 예상 운동시간 범위가 유효하다", () => {
-    for (const program of OFFICIAL_PROGRAMS) {
+    for (const program of STRENGTH_PROGRAMS) {
       expect(program.description.trim()).not.toBe("");
       const [minMinutes, maxMinutes] = program.durationMinutes;
       expect(minMinutes).toBeLessThan(maxMinutes);
@@ -252,7 +252,7 @@ PLAIN_VALUE=plain
   });
 
   it("모든 회차는 운동 5~6개로 구성한다", () => {
-    for (const program of OFFICIAL_PROGRAMS) {
+    for (const program of STRENGTH_PROGRAMS) {
       for (const session of program.sessions) {
         expect(session.exercises.length).toBeGreaterThanOrEqual(5);
         expect(session.exercises.length).toBeLessThanOrEqual(6);
@@ -261,7 +261,7 @@ PLAIN_VALUE=plain
   });
 
   it("모든 운동에 유효한 세트·반복·여유·휴식·증량 단위가 있다", () => {
-    for (const program of OFFICIAL_PROGRAMS) {
+    for (const program of STRENGTH_PROGRAMS) {
       for (const session of program.sessions) {
         for (const exercise of session.exercises) {
           expect(exercise.beginnerSets).toBeGreaterThanOrEqual(2);
@@ -279,7 +279,7 @@ PLAIN_VALUE=plain
 
   it("다섯 프로그램의 회차별 종목 이름이 승인 표와 같다", () => {
     expect(
-      OFFICIAL_PROGRAMS.map((program) =>
+      STRENGTH_PROGRAMS.map((program) =>
         program.sessions.map((session) =>
           session.exercises.map((exercise) => exercise.exerciseName),
         ),
@@ -289,7 +289,7 @@ PLAIN_VALUE=plain
 
   it("다섯 프로그램의 회차별 전체 처방이 승인 표와 같다", () => {
     expect(
-      OFFICIAL_PROGRAMS.map((program) => ({
+      STRENGTH_PROGRAMS.map((program) => ({
         key: program.key,
         sessions: program.sessions.map((session) => ({
           key: session.key,
