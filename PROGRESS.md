@@ -3,6 +3,36 @@
 > 새 세션은 저장소 루트 `AGENTS.md` → `CLAUDE.md` → 이 파일 → 가장 최근의 관련 `docs/superpowers/HANDOFF-*.md` 순서로 읽는다.
 > 이 파일은 전체 흐름의 요약이고, 작업별 세부 사실과 남은 확인은 최신 인수인계서가 기준이다.
 
+## ✅ 2026-08-12 — 연속 3일 등록 실패 수정 · 인터벌을 프로그램 화면 안으로 (브랜치 `codex/gnd-program-integration` · main 미반영 · 배포 안 함)
+
+- **연속 3일(금·토·일) 등록 실패의 원인을 찾아 고쳤다.** 서버가 아니라 **클라이언트**였다.
+  `src/lib/programs.ts`의 `parsePreferredSlots`에 요일 사이 2일 간격 검사가 남아 있어,
+  RPC를 부르기도 전에 `program_invalid_slots`를 던지고 있었다. 회복 간격 제한을 없앨 때
+  화면·스케줄러·DB 함수는 고쳤는데 **이 여섯 번째 자리가 빠져** 있었다.
+- 같은 함수를 조회 복원(`parseProgramEnrollmentRow`)도 쓴다. 저장이 됐더라도 다음 조회가
+  `program_invalid_enrollment_row`로 fail-closed 막아 **프로그램 화면 전체가 죽었을** 것이다.
+  아직 드러나지 않았던 이 두 번째 얼굴도 테스트로 고정했다.
+- 인수인계서가 의심하던 후보 2개는 **근거로 배제**했다. `getWorkoutPlans`는 기간 제한 없이
+  전체를 가져와 `occupiedDates`가 완전하므로 `program_plan_date_taken`이 아니고, 폴백은
+  `fallbackTime: originalSlot.time`이라 `program_scheduled_time_mismatch`도 아니다.
+- **진단이 불가능했던 결함 자체를 고쳤다.** `program-schedule-setup.tsx`의 `catch {}`가 오류를
+  통째로 삼켜 화면에도 콘솔에도 아무것도 안 남았다. `programSaveErrorText`를 새로 만들어
+  `program_` 오류는 뜻이 통하는 문구로 바꾸고, **모르는 오류는 원문을 붙여** 보여 준다.
+- **전신 인터벌을 `프로그램으로 시작하기` 안으로 옮겼다** (사용자 지시). 운동 추가 시트는
+  프로그램·직접 고르기·지난 운동·내 루틴 **네 개만** 남는다. 인터벌은 카탈로그의 6주 격자
+  **밖 아래**에 따로 선다 — 6주 프로그램이 아니라서 격자에 끼우지 않았다. 라우트가 달라
+  `sessionStorage`로 "열어라"만 넘긴다(`src/lib/interval-entry.ts`).
+- **대표 이미지 미정이 해소됐다.** 사용자가 준 원본으로 `public/program-assets/interval.webp`를
+  만들었다(1254×1254 · 138KB, 기존 자산과 같은 규격). `lean.webp`는 체지방 프로그램에 그대로 둔다.
+- 커밋: `2de73a4`(등록 실패 수정·오류 노출) → `1a6f683`(인터벌 이동·대표 이미지).
+- **검증:** `pnpm lint` 0 · `pnpm typecheck` 0 · `pnpm test` **1833/1833 통과** ·
+  `pnpm build` 성공. 개발 서버는 `.next`를 지우고 `localhost:62121`에 새로 띄웠다.
+- **[미검증] 화면 조작 — 이 세션에 브라우저 자동화 도구가 없다.** 연속 3일 **실제 등록**,
+  허브가 네 개로 줄었는지, 카탈로그의 인터벌 카드로 시트가 열리는지는 **사람이 눌러야** 안다.
+  사용자 확인 전까지 배포하지 않는다.
+- 다음 할 일 1개: 위 세 가지를 개발 서버에서 확인받은 뒤, 고강도 인터벌 프로그램 구현
+  (`docs/superpowers/specs/2026-08-12-interval-program-design.md` 1~3단계)으로 넘어간다.
+
 ## ✅ 2026-08-12 — 공식 프로그램 5종 정적 카탈로그 구현·실데이터 이름 검증 (DB 쓰기 0건 · 화면 확인·배포 미실행)
 
 - 공식 프로그램 5종의 주 3회 A/B/C 처방을 버전 1 불변 데이터로 구현했다. 회차별 처방은
