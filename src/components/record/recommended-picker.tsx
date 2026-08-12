@@ -99,7 +99,7 @@ export function RecommendedPicker({
       <button
         type="button"
         onClick={onBack}
-        aria-label="진입 화면으로 돌아가기"
+        aria-label="이전 화면으로 돌아가기"
         /* ⚠️ 테두리 있는 원으로 그린다 (2026-08-07 사용자 지적 "뒤로가기도 잘보이게").
            옛 모양은 배경도 테두리도 없는 `text-muted` 글리프 하나여서, 어두운
            배경에서 **눌 수 있는 것으로 보이지 않았다.** 44px 손가락 표적도

@@ -237,7 +237,7 @@ describe("ExercisePicker — 진입 허브 (2026-08-06)", () => {
 
     expect(getByText("오늘 어떤 상황인가요?")).toBeTruthy();
     fireEvent.click(
-      getByRole("button", { name: "진입 화면으로 돌아가기" }),
+      getByRole("button", { name: "이전 화면으로 돌아가기" }),
     );
     expect(getByPlaceholderText("🔍 운동 검색 (예: 스쿼트, 벤치)")).toBeTruthy();
   });
@@ -266,7 +266,28 @@ describe("ExercisePicker — 진입 허브 (2026-08-06)", () => {
     );
 
     fireEvent.click(
-      getByRole("button", { name: "진입 화면으로 돌아가기" }),
+      getByRole("button", { name: "이전 화면으로 돌아가기" }),
+    );
+    expect(getByText("오늘 운동을 어떻게 시작할까요?")).toBeTruthy();
+  });
+
+  it("부위별 추천을 처음부터 연 경우 뒤로 가면 기존처럼 허브로 돌아온다", () => {
+    const { getByRole, getByText } = render(
+      <ExercisePicker
+        open
+        initialMode="part"
+        catalog={CATALOG}
+        pastSessions={SESSIONS}
+        pastLoading={false}
+        onClose={vi.fn()}
+        onPickMany={vi.fn()}
+        onPickPast={vi.fn()}
+        onCreateCustom={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(
+      getByRole("button", { name: "이전 화면으로 돌아가기" }),
     );
     expect(getByText("오늘 운동을 어떻게 시작할까요?")).toBeTruthy();
   });
