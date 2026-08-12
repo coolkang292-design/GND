@@ -48,6 +48,29 @@ describe("goalLabel", () => {
   });
 });
 
+/**
+ * 명칭 통일 (2026-08-12, 사용자 지시) — 화면에 보이는 목표 이름에서
+ * "타바타"라는 전문용어를 없앤다. **key는 `tabata_count` 그대로다** —
+ * DB의 `challenge_goals.goal_type`과 서버 집계가 이 값을 쓴다.
+ */
+describe("GOAL_TYPE_META — 인터벌 목표 명칭", () => {
+  it("tabata_count의 화면 이름은 '인터벌 운동 횟수'다", () => {
+    expect(GOAL_TYPE_META.tabata_count.label).toBe("인터벌 운동 횟수");
+    expect(goalLabel("tabata_count")).toBe("인터벌 운동 횟수");
+  });
+
+  it("어떤 목표 라벨에도 '타바타'가 남지 않는다", () => {
+    const labels = Object.values(GOAL_TYPE_META).map((meta) => meta.label);
+    expect(labels.length).toBeGreaterThanOrEqual(9);
+    for (const label of labels) expect(label).not.toContain("타바타");
+  });
+
+  it("내부 key는 그대로 tabata_count다 — DB 호환성", () => {
+    expect(GOAL_TYPE_META).toHaveProperty("tabata_count");
+    expect(actualForGoal({ ...STATS, tabataCount: 7 }, "tabata_count")).toBe(7);
+  });
+});
+
 describe("actualForGoal", () => {
   it("weight_reps", () => expect(actualForGoal(STATS, "weight_reps")).toBe(240));
   it("cardio_distance", () =>
@@ -513,7 +536,14 @@ describe("toPeriodSessionRow — 방금 끝낸 draft를 집계 입력으로 (202
       timeZone: KST,
     });
     expect(out).toEqual([
-      { type: "tabata_count", label: "타바타 횟수", delta: 1, unit: "회", target: 28.3 },
+      // 명칭 통일 (2026-08-12) — 화면 라벨만 바뀌고 내부 key는 tabata_count 그대로다
+      {
+        type: "tabata_count",
+        label: "인터벌 운동 횟수",
+        delta: 1,
+        unit: "회",
+        target: 28.3,
+      },
     ]);
   });
 

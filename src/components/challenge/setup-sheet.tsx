@@ -32,7 +32,7 @@ const METRIC_LABEL: Record<GoalType, string> = {
   bodyweight_reps: "횟수",
   bodyweight_time: "시간",
   bodyweight_days: "운동일(종목)",
-  tabata_count: "타바타",
+  tabata_count: "전신 인터벌",
   volume: "총볼륨",
 };
 

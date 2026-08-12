@@ -51,7 +51,7 @@ describe("RecordEmptyState — 등록 0개 화면 (사용자 지시 2026-08-06)"
       <RecordEmptyState hasHistory onAdd={vi.fn()} onLoadRecent={vi.fn()} />,
     );
     const text = container.textContent ?? "";
-    for (const gone of ["완료 볼륨", "이전 대비", "세트 사이 휴식", "타바타", "복구됩니다", "운동 시작"]) {
+    for (const gone of ["완료 볼륨", "이전 대비", "세트 사이 휴식", "전신 인터벌", "복구됩니다", "운동 시작"]) {
       expect(text).not.toContain(gone);
     }
   });

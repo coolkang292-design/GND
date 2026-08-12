@@ -51,7 +51,7 @@ function WorkoutSummary({ item, stats }: { item: FeedItem; stats: string[] }) {
       </button>
       {item.tabataMinutes && (
         <p className="mt-1.5 mr-1 inline-block rounded-full bg-accent-weak px-2.5 py-1 text-[11px] font-extrabold text-accent">
-          🔥 타바타 {item.tabataMinutes}분
+          🔥 전신 인터벌 {item.tabataMinutes}분
         </p>
       )}
       {item.recordNote && (

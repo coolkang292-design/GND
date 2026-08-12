@@ -171,3 +171,36 @@ describe("FeedItemCard — 기록 상세 펼치기", () => {
     expect(screen.getByText("벤치프레스 · 랫풀다운")).toBeTruthy();
   });
 });
+
+/**
+ * 명칭 통일 (2026-08-12, 사용자 지시) — 피드 배지도 "타바타" 대신
+ * "전신 인터벌"로 부른다. 내부 필드명(`tabataMinutes`)은 그대로다.
+ */
+describe("FeedItemCard — 전신 인터벌 배지", () => {
+  const intervalItem = (): FeedItem => ({ ...feedItem(null), tabataMinutes: 8 });
+
+  it("인터벌 세션이면 코스 분수를 전신 인터벌로 적는다", () => {
+    render(
+      <FeedItemCard item={intervalItem()} userId="me" onProfileClick={() => {}} />,
+    );
+
+    expect(screen.getByText(/🔥 전신 인터벌 8분/)).toBeTruthy();
+  });
+
+  it("옛 용어 '타바타'는 남지 않는다", () => {
+    // 제거 검증 — 새 문구만 찾으면 옛 문구가 사라졌는지 확인한 게 아니다.
+    render(
+      <FeedItemCard item={intervalItem()} userId="me" onProfileClick={() => {}} />,
+    );
+
+    expect(screen.queryByText(/타바타/)).toBeNull();
+  });
+
+  it("일반 세션에는 인터벌 배지를 그리지 않는다", () => {
+    render(
+      <FeedItemCard item={feedItem(null)} userId="me" onProfileClick={() => {}} />,
+    );
+
+    expect(screen.queryByText(/전신 인터벌/)).toBeNull();
+  });
+});

@@ -23,6 +23,7 @@ import {
   formatWorkoutLog,
   type LogExercise,
 } from "@/lib/domain/workout-log";
+import { INTERVAL_COPY } from "@/lib/domain/tabata";
 import { getMyProfile } from "@/lib/crew";
 import { getMyWeeklyGoalDays } from "@/lib/challenge";
 import { shareOrCopyText, shareResultToast } from "@/lib/share";
@@ -696,7 +697,7 @@ export function CalendarView({
                     <div className="min-w-0">
                       <p className="text-[11px] font-extrabold text-good">
                         {selectedPlan.tabataMinutes
-                          ? `🔥 타바타 ${selectedPlan.tabataMinutes}분 예정`
+                          ? `🔥 ${INTERVAL_COPY.session(selectedPlan.tabataMinutes)} 예정`
                           : "운동 예정"}
                       </p>
                       <p className="mt-0.5 break-words text-sm font-bold">
@@ -731,7 +732,7 @@ export function CalendarView({
                       className="mt-3 h-10 w-full rounded-card-sm bg-good text-sm font-extrabold text-white disabled:opacity-50"
                     >
                       {selectedPlan.tabataMinutes
-                        ? "🔥 타바타 준비하기"
+                        ? "🔥 전신 인터벌 준비하기"
                         : "운동 준비하기"}
                     </button>
                   )}
@@ -796,7 +797,7 @@ export function CalendarView({
                           {meta.label}
                           {s.tabataMinutes && (
                             <span className="ml-1 font-bold text-accent">
-                              · 🔥 타바타 {s.tabataMinutes}분
+                              · 🔥 전신 인터벌 {s.tabataMinutes}분
                             </span>
                           )}
                           {s.recordNote && (

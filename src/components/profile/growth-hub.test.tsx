@@ -207,7 +207,12 @@ describe("XpGuideSheet — 修正17 지급되는 것만 획득 가능", () => {
   it("지금 획득 가능 항목과 하루 상한 160 XP를 안내한다", () => {
     expect(html).toContain("지금 획득 가능");
     expect(html).toContain("운동 완료");
-    expect(html).toContain("타바타 완료");
+    // 명칭 통일 (2026-08-12) — 화면에서는 "타바타" 대신 "전신 인터벌"로 부른다
+    expect(html).toContain("전신 인터벌 완료");
+    expect(html).toContain(
+      "전신 인터벌은 세트 기록 없이 완료 자체로 인정돼요.",
+    );
+    expect(html).not.toContain("타바타");
     expect(html).toContain("160 XP");
     expect(html).not.toContain("180 XP");
   });

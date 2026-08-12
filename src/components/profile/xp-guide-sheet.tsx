@@ -14,7 +14,7 @@ const AVAILABLE: { label: string; xp: string; desc: string }[] = [
   { label: "운동 완료", xp: "100", desc: "하루 첫 운동을 완료하면 기본으로 받아요." },
   { label: "기록 완성", xp: "+10", desc: "완료한 세트의 횟수를 빠짐없이 적었을 때." },
   { label: "인증 사진", xp: "+10", desc: "운동 인증 사진을 올렸을 때." },
-  { label: "타바타 완료", xp: "100", desc: "타바타는 세트 기록 없이 완료 자체로 인정돼요." },
+  { label: "전신 인터벌 완료", xp: "100", desc: "전신 인터벌은 세트 기록 없이 완료 자체로 인정돼요." },
 ];
 
 const COMING_SOON: { label: string; xp: string; desc: string }[] = [

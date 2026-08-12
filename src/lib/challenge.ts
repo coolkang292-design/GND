@@ -24,7 +24,7 @@ export const GOAL_TYPE_META: Record<
   bodyweight_reps: { label: "맨몸 횟수", unit: "회", defaultTarget: 300, category: "bodyweight" },
   bodyweight_time: { label: "맨몸 시간", unit: "분", defaultTarget: 100, category: "bodyweight" },
   bodyweight_days: { label: "맨몸 운동일", unit: "일", defaultTarget: 12, category: "bodyweight" },
-  tabata_count: { label: "타바타 횟수", unit: "회", defaultTarget: 12, category: "bodyweight" },
+  tabata_count: { label: "인터벌 운동 횟수", unit: "회", defaultTarget: 12, category: "bodyweight" },
   volume: { label: "웨이트 총볼륨", unit: "kg", defaultTarget: 5000, category: "weight" }, // 레거시
 };
 

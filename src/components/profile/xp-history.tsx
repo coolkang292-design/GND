@@ -64,7 +64,7 @@ export function XpHistoryList({ rows }: { rows: XpTransactionRow[] }) {
                     {REASON_LABEL[r.reason] ?? r.reason}
                     {r.metadata.is_tabata === true && (
                       <span className="ml-1.5 text-[10.5px] text-muted">
-                        타바타
+                        전신 인터벌
                       </span>
                     )}
                   </p>

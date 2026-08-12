@@ -251,3 +251,57 @@ describe("CalendarView — 계획 상세 (2026-08-04)", () => {
     expect(screen.getByText(/2종목/)).toBeTruthy();
   });
 });
+
+/**
+ * 명칭 통일 (2026-08-12, 사용자 지시) — 화면에서는 "타바타"라는 전문용어를
+ * 쓰지 않고 "전신 인터벌"로 부른다. 예정 배지·준비 버튼·지난 기록 줄이
+ * 같은 말을 해야 한다. 내부 필드명(`tabataMinutes`)은 그대로다.
+ */
+const INTERVAL_PLAN = {
+  ...PLAN,
+  id: "plan-interval",
+  planDate: "2026-08-15",
+  tabataMinutes: 8,
+};
+
+const INTERVAL_SESSION = {
+  ...SESSION,
+  id: "session-interval",
+  tabataMinutes: 8,
+};
+
+describe("CalendarView — 전신 인터벌 명칭 (2026-08-12)", () => {
+  it("오늘의 인터벌 계획은 예정 배지와 준비 버튼을 전신 인터벌로 안내한다", async () => {
+    mocks.getWorkoutPlans.mockResolvedValue([INTERVAL_PLAN]);
+    await setup();
+
+    fireEvent.click(screen.getByRole("button", { name: "8월 15일" }));
+
+    expect(screen.getByText("🔥 전신 인터벌 8분 예정")).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "🔥 전신 인터벌 준비하기" }),
+    ).toBeTruthy();
+  });
+
+  it("지난 인터벌 기록 줄도 전신 인터벌로 적는다", async () => {
+    mocks.getCompletedSessions.mockResolvedValue([INTERVAL_SESSION]);
+    await setup();
+
+    fireEvent.click(screen.getByRole("button", { name: "8월 10일" }));
+
+    expect(screen.getByText(/전신 인터벌 8분/)).toBeTruthy();
+  });
+
+  it("옛 용어 '타바타'는 계획에도 기록에도 남지 않는다", async () => {
+    // 제거 검증 — 새 문구가 있는지만 보면 옛 문구가 사라졌는지 확인한 게 아니다.
+    mocks.getWorkoutPlans.mockResolvedValue([INTERVAL_PLAN]);
+    mocks.getCompletedSessions.mockResolvedValue([INTERVAL_SESSION]);
+    const { container } = await setup();
+
+    fireEvent.click(screen.getByRole("button", { name: "8월 15일" }));
+    expect(container.textContent ?? "").not.toContain("타바타");
+
+    fireEvent.click(screen.getByRole("button", { name: "8월 10일" }));
+    expect(container.textContent ?? "").not.toContain("타바타");
+  });
+});

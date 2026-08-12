@@ -75,6 +75,7 @@ import {
 } from "@/lib/challenge";
 import { getLevelRewards, getProgressSummary } from "@/lib/progression";
 import {
+  INTERVAL_COPY,
   asTabataMinutes,
   tabataDraftExercises,
   tabataPickFromNames,
@@ -1248,7 +1249,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
         exercises: toPlanExercises(exercises),
         tabataMinutes: course,
       });
-      const what = course ? `🔥 타바타 ${course}분을` : "운동을";
+      const what = course ? `🔥 ${INTERVAL_COPY.session(course)}을` : "운동을";
       showToast(
         `${what} ${Number(planDate.slice(5, 7))}월 ${Number(planDate.slice(8))}일 예정표로 저장했어요`,
       );
@@ -1273,7 +1274,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
     }
     if (
       draftRef.current.exercises.length > 0 &&
-      !window.confirm("준비 중인 운동 목록을 지우고 타바타를 시작할까요?")
+      !window.confirm("준비 중인 운동 목록을 지우고 전신 인터벌을 시작할까요?")
     ) {
       return false;
     }
@@ -1338,7 +1339,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
         catalog,
       );
       if (picked.length === 0) {
-        showToast("예정표의 타바타 종목을 운동 목록에서 찾지 못했어요");
+        showToast("예정표의 전신 인터벌 종목을 운동 목록에서 찾지 못했어요");
         return false;
       }
       setSubTab("workout");
