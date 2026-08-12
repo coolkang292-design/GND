@@ -2,6 +2,8 @@
 
 import { UiIcon } from "@/components/ui-icon";
 import { guideForExercise } from "@/lib/domain/exercise-guides";
+import { repRangeLabel, restClock } from "@/lib/domain/program-load";
+import type { ExercisePrescription } from "@/lib/domain/workout-plan";
 import {
   REST_PRESET_SECONDS,
   adjustAmount,
@@ -82,6 +84,7 @@ export function ActiveSessionOverlay({
   onCancel,
   onFinish,
   onOpenGuide,
+  prescription,
 }: {
   open: boolean;
   mode: "input" | "rest";
@@ -138,6 +141,11 @@ export function ActiveSessionOverlay({
    * 자세가 헷갈리는 순간은 세트 사이라, 준비 화면과 **같은 안내**를 여기서도 연다.
    */
   onOpenGuide?: (name: string) => void;
+  /**
+   * 지금 종목의 공식 프로그램 처방 (계획 2026-08-12). 일반 운동은 없다.
+   * 준비 카드에만 두면 운동을 시작한 뒤에는 목표 범위를 볼 수 없다.
+   */
+  prescription?: ExercisePrescription;
 }) {
   if (!open) return null;
 
@@ -257,6 +265,18 @@ export function ActiveSessionOverlay({
             >
               📖 자세 안내
             </button>
+          )}
+
+          {/*
+            공식 프로그램 목표 (계획 2026-08-12) — 입력·휴식 **양쪽**에 둔다.
+            준비 카드에만 있으면 운동을 시작한 뒤로는 목표 회수를 볼 수 없다.
+            문구는 `program-load.ts`가 유일한 출처다.
+          */}
+          {prescription && (
+            <p className="mt-2 text-[11.5px] font-extrabold text-accent">
+              목표 {repRangeLabel(prescription)} · 휴식{" "}
+              {restClock(prescription.restSeconds)}
+            </p>
           )}
 
           {/*

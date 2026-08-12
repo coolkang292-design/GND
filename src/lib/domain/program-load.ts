@@ -40,6 +40,63 @@ export function programWeightGuide(prescription: ExercisePrescription): string {
 }
 
 /**
+ * 이 세트를 마친 뒤 노력 피드백을 물을 것인가 (계획 2026-08-12).
+ *
+ * **첫 세트와 마지막 세트에만 묻는다.** 세트마다 물으면 세트 사이 흐름이 끊기고,
+ * 사용자는 아무 버튼이나 눌러 치워 버린다 — 그러면 다음 회차 추천이 거짓이 된다.
+ *
+ * - 첫 세트: 오늘 남은 세트의 무게를 그 자리에서 고칠 마지막 기회다
+ * - 마지막 세트: 다음 회차 추천(`nextProgramLoad`)의 유일한 입력이다
+ *
+ * 완료를 **되돌리는** 중(`willDone === false`)에는 묻지 않는다 — 체크를 푸는
+ * 동작인데 시트가 뜨면 무엇에 답하는지 알 수 없다.
+ */
+export function shouldAskEffort(input: {
+  hasPrescription: boolean;
+  setIndex: number;
+  setCount: number;
+  willDone: boolean;
+  alreadyAnswered: boolean;
+}): boolean {
+  const { hasPrescription, setIndex, setCount, willDone, alreadyAnswered } =
+    input;
+  if (!hasPrescription || !willDone || alreadyAnswered) return false;
+  if (setCount <= 0 || setIndex < 0 || setIndex >= setCount) return false;
+  return setIndex === 0 || setIndex === setCount - 1;
+}
+
+/** "8~10회". 하한과 상한이 같으면 한 번만 적는다 */
+export function repRangeLabel(prescription: ExercisePrescription): string {
+  const { repsMin, repsMax } = prescription;
+  return repsMin === repsMax ? `${repsMin}회` : `${repsMin}~${repsMax}회`;
+}
+
+/** 초 → "2:00". 음수는 0으로 막는다 */
+export function restClock(seconds: number): string {
+  const safe = Math.max(0, Math.round(seconds));
+  return `${Math.floor(safe / 60)}:${String(safe % 60).padStart(2, "0")}`;
+}
+
+/**
+ * 이 세트 뒤에 쉴 시간 (계획 2026-08-12).
+ *
+ * **처방이 전역 설정을 이긴다.** 복합 운동은 120~150초, 고립은 75초처럼 종목마다
+ * 다르고, 전역 값을 그대로 쓰면 프로그램이 정한 회복 시간이 통째로 무시된다.
+ *
+ * 0 이하가 새어 들어오면 전역으로 되돌린다 — 휴식 0초는 타이머가 곧바로 끝나
+ * "휴식이 아예 없는" 것처럼 보인다.
+ */
+export function restSecondsForExercise(
+  prescription: ExercisePrescription | undefined,
+  fallbackSeconds: number,
+): number {
+  const prescribed = prescription?.restSeconds;
+  return typeof prescribed === "number" && prescribed > 0
+    ? prescribed
+    : fallbackSeconds;
+}
+
+/**
  * 지난 기록에서 오늘 시작할 무게를 고른다 (설계 2026-08-12).
  *
  * **근거가 되는 세트는 "완료했고, 반복 하한을 채웠고, 무게가 있는" 것뿐이다.**

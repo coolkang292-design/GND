@@ -3,6 +3,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { amountFields } from "@/lib/domain/set-input";
+import type { ExercisePrescription } from "@/lib/domain/workout-plan";
 import { ActiveSessionOverlay } from "./active-session-overlay";
 
 afterEach(cleanup);
@@ -27,6 +28,8 @@ const base = {
   // 기본은 없음 — 넘기지 않으면 자세 안내 버튼이 안 나오는 것이 기본 동작이다.
   // (`Partial<typeof inputProps>` 헬퍼가 이 키를 알아야 테스트에서 덮어쓸 수 있다)
   onOpenGuide: undefined as ((name: string) => void) | undefined,
+  // 프로그램 처방 — 기본은 없음(일반 운동)
+  prescription: undefined as ExercisePrescription | undefined,
   onChangeAmount: vi.fn(),
   onCompleteSet: vi.fn(),
   onLoadLast: vi.fn(),
@@ -660,5 +663,49 @@ describe("ActiveSessionOverlay — 자세 안내", () => {
 
     expect(onCompleteSet).not.toHaveBeenCalled();
     expect(onFinish).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * 운동 중 목표 범위 (계획 2026-08-12 Task 4).
+ *
+ * 세트를 입력하는 순간 "몇 회가 목표인지"가 화면에 있어야 한다. 준비 카드에만
+ * 있으면 운동을 시작한 뒤에는 볼 수 없다.
+ */
+const RX = {
+  repsMin: 8,
+  repsMax: 10,
+  targetRir: 2,
+  restSeconds: 120,
+  loadStepKg: 2.5,
+} as const;
+
+describe("ActiveSessionOverlay — 프로그램 목표 범위", () => {
+  it("입력 화면에 목표 반복 범위와 휴식을 보여준다", () => {
+    renderInput({ prescription: RX });
+
+    expect(screen.getByText(/목표 8~10회/)).toBeTruthy();
+    expect(screen.getByText(/휴식 2:00/)).toBeTruthy();
+  });
+
+  it("처방이 다르면 숫자가 따라 바뀐다", () => {
+    renderInput({
+      prescription: { ...RX, repsMin: 12, repsMax: 15, restSeconds: 75 },
+    });
+
+    expect(screen.getByText(/목표 12~15회/)).toBeTruthy();
+    expect(screen.getByText(/휴식 1:15/)).toBeTruthy();
+  });
+
+  it("처방이 없는 일반 운동에는 안 보여준다", () => {
+    renderInput();
+
+    expect(screen.queryByText(/목표 .*회/)).toBeNull();
+  });
+
+  it("휴식 화면에도 목표 범위가 남는다", () => {
+    renderRest({ prescription: RX });
+
+    expect(screen.getByText(/목표 8~10회/)).toBeTruthy();
   });
 });

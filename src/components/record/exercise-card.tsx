@@ -2,6 +2,11 @@
 
 import { useLongPress } from "@/hooks/use-long-press";
 import { guideForExercise } from "@/lib/domain/exercise-guides";
+import {
+  programWeightGuide,
+  repRangeLabel,
+  restClock,
+} from "@/lib/domain/program-load";
 import { planFromSets, summarizePlan } from "@/lib/domain/recommended-sets";
 import { setVolumeKg } from "@/lib/domain/volume";
 import type { LocalExercise, LocalSet } from "@/lib/workout";
@@ -115,6 +120,24 @@ export function ExerciseCard({
         >
           📖 자세 안내
         </button>
+      )}
+
+      {/*
+        공식 프로그램 처방 (0066에서 계획에 실려 온다).
+
+        ⚠️ 문구를 여기 박지 마라. 반복 범위·여유 횟수·휴식은 프로그램마다 다르고
+           `programWeightGuide()`가 유일한 출처다 — 두 곳에 두면 갈라진다.
+      */}
+      {exercise.prescription && (
+        <div className="mt-2 rounded-card-sm border border-line bg-surface-2 p-2.5">
+          <p className="text-[11.5px] font-extrabold text-accent">
+            목표 {repRangeLabel(exercise.prescription)} · 휴식{" "}
+            {restClock(exercise.prescription.restSeconds)}
+          </p>
+          <p className="mt-1 text-[11px] leading-relaxed whitespace-pre-line text-muted">
+            {programWeightGuide(exercise.prescription)}
+          </p>
+        </div>
       )}
 
       {/*

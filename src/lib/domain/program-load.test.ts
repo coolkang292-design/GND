@@ -4,6 +4,10 @@ import {
   initialProgramLoad,
   nextProgramLoad,
   programWeightGuide,
+  repRangeLabel,
+  restClock,
+  restSecondsForExercise,
+  shouldAskEffort,
 } from "./program-load";
 
 const rx: ExercisePrescription = {
@@ -149,5 +153,115 @@ describe("nextProgramLoad — 다음 회차 권장 무게", () => {
     expect(
       nextProgramLoad({ ...rx, loadStepKg: 1 }, 12, [10, 10], "on_target"),
     ).toBe(13);
+  });
+});
+
+/**
+ * 종목별 휴식 (계획 2026-08-12 Task 4).
+ *
+ * ⚠️ 복합 운동 120~150초, 고립 75초처럼 **종목마다 다르다.** 전역 휴식 설정을
+ *    그대로 쓰면 프로그램이 정한 회복 시간이 통째로 무시된다.
+ */
+describe("restSecondsForExercise — 처방이 전역 설정을 이긴다", () => {
+  it("처방이 있으면 그 휴식을 쓴다", () => {
+    expect(restSecondsForExercise(rx, 90)).toBe(120);
+  });
+
+  it("처방이 없으면 전역 휴식을 쓴다", () => {
+    expect(restSecondsForExercise(undefined, 90)).toBe(90);
+  });
+
+  it("처방 휴식이 0 이하로 새어 들어오면 전역 설정으로 되돌린다", () => {
+    // 휴식 0초는 타이머가 곧바로 끝나 "휴식이 없는" 것처럼 보인다.
+    expect(restSecondsForExercise({ ...rx, restSeconds: 0 }, 90)).toBe(90);
+    expect(restSecondsForExercise({ ...rx, restSeconds: -5 }, 90)).toBe(90);
+  });
+
+  it("종목마다 다른 값을 각각 돌려준다", () => {
+    expect(restSecondsForExercise({ ...rx, restSeconds: 150 }, 90)).toBe(150);
+    expect(restSecondsForExercise({ ...rx, restSeconds: 75 }, 90)).toBe(75);
+  });
+});
+
+describe("restClock — 휴식 표기", () => {
+  it("초를 분:초로 적는다", () => {
+    expect(restClock(120)).toBe("2:00");
+    expect(restClock(75)).toBe("1:15");
+    expect(restClock(90)).toBe("1:30");
+  });
+
+  it("한 자리 초는 0을 채운다", () => {
+    expect(restClock(61)).toBe("1:01");
+  });
+
+  it("음수는 0:00으로 막는다", () => {
+    expect(restClock(-10)).toBe("0:00");
+  });
+});
+
+describe("repRangeLabel — 목표 반복 범위", () => {
+  it("처방의 하한과 상한을 그대로 읽는다", () => {
+    expect(repRangeLabel(rx)).toBe("8~10회");
+    expect(repRangeLabel({ ...rx, repsMin: 12, repsMax: 15 })).toBe("12~15회");
+  });
+
+  it("하한과 상한이 같으면 한 번만 적는다", () => {
+    expect(repRangeLabel({ ...rx, repsMin: 5, repsMax: 5 })).toBe("5회");
+  });
+});
+
+/**
+ * 노력 피드백을 언제 묻는가 (계획 2026-08-12 Task 5).
+ *
+ * ⚠️ **첫 세트와 마지막 세트에만.** 세트마다 물으면 세트 사이 흐름이 끊기고,
+ *    사용자는 아무 버튼이나 눌러 치워 버린다 — 그러면 다음 회차 추천이 거짓이 된다.
+ */
+describe("shouldAskEffort — 첫·마지막 세트에만 묻는다", () => {
+  const base = {
+    hasPrescription: true,
+    setCount: 3,
+    willDone: true,
+    alreadyAnswered: false,
+  };
+
+  it("첫 세트를 마치면 묻는다", () => {
+    expect(shouldAskEffort({ ...base, setIndex: 0 })).toBe(true);
+  });
+
+  it("마지막 세트를 마치면 묻는다", () => {
+    expect(shouldAskEffort({ ...base, setIndex: 2 })).toBe(true);
+  });
+
+  it("중간 세트에는 묻지 않는다", () => {
+    expect(shouldAskEffort({ ...base, setIndex: 1 })).toBe(false);
+  });
+
+  it("세트가 하나뿐이면 한 번만 해당된다", () => {
+    expect(shouldAskEffort({ ...base, setIndex: 0, setCount: 1 })).toBe(true);
+  });
+
+  it("처방 없는 일반 운동에는 묻지 않는다", () => {
+    expect(
+      shouldAskEffort({ ...base, setIndex: 0, hasPrescription: false }),
+    ).toBe(false);
+  });
+
+  it("이미 답한 세트에는 다시 묻지 않는다", () => {
+    expect(shouldAskEffort({ ...base, setIndex: 0, alreadyAnswered: true })).toBe(
+      false,
+    );
+  });
+
+  it("완료를 되돌리는 중이면 묻지 않는다", () => {
+    // 체크를 푸는 동작인데 시트가 뜨면 사용자는 무엇에 답하는지 알 수 없다.
+    expect(shouldAskEffort({ ...base, setIndex: 0, willDone: false })).toBe(
+      false,
+    );
+  });
+
+  it("범위를 벗어난 인덱스는 묻지 않는다 — 방어", () => {
+    expect(shouldAskEffort({ ...base, setIndex: 9 })).toBe(false);
+    expect(shouldAskEffort({ ...base, setIndex: -1 })).toBe(false);
+    expect(shouldAskEffort({ ...base, setIndex: 0, setCount: 0 })).toBe(false);
   });
 });

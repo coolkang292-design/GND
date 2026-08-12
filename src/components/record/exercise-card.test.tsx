@@ -188,3 +188,61 @@ describe("ExerciseCard — 자세 안내", () => {
     expect(screen.getByRole("button", { name: "숄더프레스 자세 안내" })).toBeTruthy();
   });
 });
+
+/**
+ * 프로그램 처방 안내 (계획 2026-08-12 Task 4).
+ *
+ * 무게를 스스로 고르게 하려면 "몇 회를 몇 회 여유로"가 그 자리에 있어야 한다.
+ * 처방이 없는 일반 운동에는 이 영역이 통째로 없다.
+ */
+const prescribed: LocalExercise = {
+  ...guided,
+  prescription: {
+    repsMin: 8,
+    repsMax: 10,
+    targetRir: 2,
+    restSeconds: 120,
+    loadStepKg: 2.5,
+  },
+};
+
+describe("ExerciseCard — 프로그램 처방 안내", () => {
+  it("반복 범위와 2회 여유 안내를 보여준다", () => {
+    const html = renderCard({ item: prescribed });
+
+    expect(html).toContain("8~10회");
+    expect(html).toContain("2회 정도 더 할 수 있는 무게");
+  });
+
+  it("그 종목의 휴식 시간을 보여준다", () => {
+    const html = renderCard({ item: prescribed });
+
+    expect(html).toContain("휴식 2:00");
+  });
+
+  it("처방이 다르면 숫자가 따라 바뀐다 — 문구를 박아두지 않았다", () => {
+    const html = renderCard({
+      item: {
+        ...prescribed,
+        prescription: {
+          repsMin: 12,
+          repsMax: 15,
+          targetRir: 3,
+          restSeconds: 75,
+          loadStepKg: 1,
+        },
+      },
+    });
+
+    expect(html).toContain("12~15회");
+    expect(html).toContain("휴식 1:15");
+    expect(html).toContain("3회 정도 더 할 수 있는 무게");
+  });
+
+  it("처방 없는 일반 운동에는 이 영역이 없다", () => {
+    const html = renderCard();
+
+    expect(html).not.toContain("휴식 ");
+    expect(html).not.toContain("정도 더 할 수 있는 무게");
+  });
+});

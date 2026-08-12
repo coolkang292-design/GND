@@ -25,8 +25,14 @@ import { ZeroWeightSheet } from "@/components/record/zero-weight-sheet";
 import { shouldAskBodyweight } from "@/lib/domain/zero-weight";
 import { TabataSheet } from "@/components/record/tabata-sheet";
 import { ExerciseGuideSheet } from "@/components/record/exercise-guide-sheet";
+import { EffortFeedbackSheet } from "@/components/record/effort-feedback-sheet";
 import { guideForExercise } from "@/lib/domain/exercise-guides";
-import { initialProgramLoad } from "@/lib/domain/program-load";
+import {
+  initialProgramLoad,
+  restSecondsForExercise,
+  shouldAskEffort,
+  type EffortFeedback,
+} from "@/lib/domain/program-load";
 import { RestBar } from "@/components/record/rest-bar";
 import { ActiveSessionOverlay } from "@/components/record/active-session-overlay";
 import { VerificationPhoto } from "@/components/record/verification-photo";
@@ -256,6 +262,17 @@ function WorkoutScreen({ userId }: { userId: string }) {
    * 옛 내용을 붙들고 있게 된다.
    */
   const [guideExerciseName, setGuideExerciseName] = useState<string | null>(null);
+  /**
+   * 노력 피드백을 물을 세트 (계획 2026-08-12). null이면 안 묻는 중이다.
+   *
+   * 세트 자체가 아니라 **좌표**를 들고 있는다 — 시트가 열려 있는 동안 사용자가
+   * 무게를 고치면 draft가 바뀌는데, 세트 객체를 붙들고 있으면 옛 값에 답이 붙는다.
+   */
+  const [effortAsk, setEffortAsk] = useState<{
+    exKey: string;
+    setIndex: number;
+    isLastSet: boolean;
+  } | null>(null);
   /**
    * 큰 팝업을 접어 뒀는가 (2026-08-04, 설계 ②).
    *
@@ -1115,7 +1132,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
     });
 
     if (restPlan.timerAction === "start" && restAllowed) {
-      startRest(sourceKey, draft.restSeconds);
+      // 종목별 휴식 (계획 2026-08-12) — 처방이 있으면 그것이 전역 설정을 이긴다.
+      // 복합 120~150초·고립 75초라 전역 값만 쓰면 프로그램 회복 시간이 무시된다.
+      startRest(sourceKey, restSecondsForExercise(ex.prescription, draft.restSeconds));
     } else if (restPlan.timerAction === "cancel") {
       cancelRestForSource(sourceKey);
     }
@@ -1126,6 +1145,63 @@ function WorkoutScreen({ userId }: { userId: string }) {
     } else {
       clearAutoFinish();
     }
+
+    // 첫·마지막 세트에만 체감을 묻는다 (계획 2026-08-12). 판정 규칙은
+    // `shouldAskEffort`에 있다 — 여기서 조건을 다시 쓰면 두 벌이 갈라진다.
+    if (
+      shouldAskEffort({
+        hasPrescription: ex.prescription !== undefined,
+        setIndex: si,
+        setCount: ex.sets.length,
+        willDone,
+        alreadyAnswered: set.effortFeedback != null,
+      })
+    ) {
+      setEffortAsk({
+        exKey,
+        setIndex: si,
+        isLastSet: si === ex.sets.length - 1,
+      });
+    }
+  }
+
+  /**
+   * 체감을 세트에 적고, 첫 세트였으면 **남은 미완료 세트**의 무게를 제안한다.
+   *
+   * ⚠️ 이미 완료한 세트는 건드리지 않는다 — 이미 한 운동의 기록을 바꾸는 것이다.
+   * ⚠️ 마지막 세트 답은 무게를 바꾸지 않는다. 오늘은 끝났고, 이 값은 다음 회차
+   *    `initialProgramLoad()`가 읽을 근거로 DB에 남는다.
+   */
+  function answerEffort(feedback: EffortFeedback) {
+    const ask = effortAsk;
+    if (!ask) return;
+    setEffortAsk(null);
+    setDraft((d) => ({
+      ...d,
+      exercises: d.exercises.map((exercise) => {
+        if (exercise.key !== ask.exKey) return exercise;
+        const step = exercise.prescription?.loadStepKg ?? 0;
+        const answered = exercise.sets[ask.setIndex];
+        const delta =
+          !ask.isLastSet && feedback === "too_light"
+            ? step
+            : !ask.isLastSet && feedback === "too_heavy"
+              ? -step
+              : 0;
+        return {
+          ...exercise,
+          sets: exercise.sets.map((set, index) => {
+            if (index === ask.setIndex) return { ...set, effortFeedback: feedback };
+            if (set.done || delta === 0) return set;
+            return {
+              ...set,
+              weightKg: Math.max(0, (answered?.weightKg ?? set.weightKg) + delta),
+            };
+          }),
+        };
+      }),
+    }));
+    markActivity();
   }
 
   /**
@@ -1698,6 +1774,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
   });
   const activeGuide = guideExerciseName
     ? guideForExercise(guideExerciseName)
+    : null;
+  const effortAskExercise = effortAsk
+    ? (draft.exercises.find((ex) => ex.key === effortAsk.exKey) ?? null)
     : null;
   const focus = setFocus.exerciseIndex;
   const focusedExercise = draft.exercises[focus] ?? null;
@@ -2336,6 +2415,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
         onFinish={() => void handleFinish()}
         onCancel={() => void handleCancel()}
         onOpenGuide={setGuideExerciseName}
+        prescription={focusedExercise?.prescription}
       />
 
       {/* 접어 뒀을 때 돌아갈 문 — 없으면 팝업을 다시 못 연다.
@@ -2374,6 +2454,23 @@ function WorkoutScreen({ userId }: { userId: string }) {
         <ExerciseGuideSheet
           guide={activeGuide}
           onClose={() => setGuideExerciseName(null)}
+        />
+      )}
+
+      {/*
+        노력 피드백 (계획 2026-08-12). 닫으면 **아무 값도 남기지 않는다** —
+        임의로 채우면 다음 회차 무게가 사용자가 말한 적 없는 근거로 움직인다.
+      */}
+      {effortAskExercise && effortAsk && (
+        <EffortFeedbackSheet
+          exerciseName={effortAskExercise.name}
+          isLastSet={effortAsk.isLastSet}
+          onAnswer={answerEffort}
+          onClose={() => setEffortAsk(null)}
+          onPain={() => {
+            setEffortAsk(null);
+            showToast("통증이 있으면 오늘은 여기서 멈추고 전문가에게 확인하세요");
+          }}
         />
       )}
 
