@@ -22,6 +22,7 @@ export type PlanExercise = {
   measure: "reps" | "time" | null;
   isCustom: boolean;
   sets: PlanSet[];
+  prescription?: ExercisePrescription;
 };
 
 export type DraftPlanSet = PlanSet & { key: string; done: boolean };
@@ -85,6 +86,37 @@ function nonNegativeNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }
 
+function parseExercisePrescription(
+  value: unknown,
+): ExercisePrescription | null {
+  if (!value || typeof value !== "object") return null;
+  const row = value as Record<string, unknown>;
+  if (
+    !Number.isInteger(row.repsMin) ||
+    !Number.isInteger(row.repsMax) ||
+    typeof row.repsMin !== "number" ||
+    typeof row.repsMax !== "number" ||
+    row.repsMin < 1 ||
+    row.repsMax > 100 ||
+    row.repsMin > row.repsMax ||
+    ![1, 2, 3].includes(row.targetRir as number) ||
+    !Number.isInteger(row.restSeconds) ||
+    typeof row.restSeconds !== "number" ||
+    row.restSeconds < 60 ||
+    row.restSeconds > 300 ||
+    ![1, 2.5, 5].includes(row.loadStepKg as number)
+  ) {
+    return null;
+  }
+  return {
+    repsMin: row.repsMin,
+    repsMax: row.repsMax,
+    targetRir: row.targetRir as 1 | 2 | 3,
+    restSeconds: row.restSeconds,
+    loadStepKg: row.loadStepKg as 1 | 2.5 | 5,
+  };
+}
+
 /** DB JSON은 신뢰하지 않고 화면에서 사용할 수 있는 최소 구조만 복원한다. */
 export function parsePlanExercises(value: unknown): PlanExercise[] {
   if (!Array.isArray(value) || value.length === 0 || value.length > 50) return [];
@@ -128,6 +160,13 @@ export function parsePlanExercises(value: unknown): PlanExercise[] {
       });
     }
 
+    let prescription: ExercisePrescription | undefined;
+    if (row.prescription !== undefined) {
+      const parsedPrescription = parseExercisePrescription(row.prescription);
+      if (!parsedPrescription) return [];
+      prescription = parsedPrescription;
+    }
+
     parsed.push({
       name: row.name.trim(),
       bodyPart: row.bodyPart as BodyPart,
@@ -135,6 +174,7 @@ export function parsePlanExercises(value: unknown): PlanExercise[] {
       measure: row.measure as "reps" | "time" | null,
       isCustom: row.isCustom,
       sets,
+      ...(prescription ? { prescription } : {}),
     });
   }
   return parsed;
@@ -160,6 +200,9 @@ export function toPlanExercises(exercises: LocalExerciseInput[]): PlanExercise[]
       exerciseType: exercise.exerciseType,
       measure: exercise.measure,
       isCustom: exercise.isCustom,
+      ...(exercise.prescription
+        ? { prescription: { ...exercise.prescription } }
+        : {}),
       sets: exercise.sets.map((set) => ({
         weightKg: set.weightKg,
         reps: set.reps,
@@ -176,6 +219,9 @@ export function toDraftExercises(
 ): DraftPlanExercise[] {
   return exercises.map((exercise) => ({
     ...exercise,
+    ...(exercise.prescription
+      ? { prescription: { ...exercise.prescription } }
+      : {}),
     key: makeKey(),
     sets: exercise.sets.map((set) => ({
       ...set,

@@ -136,6 +136,110 @@ describe("운동 예정표 종목·세트 변환", () => {
     expect(parsePlanExercises([{ ...plan[0], ignored: "x" }])).toEqual(plan);
   });
 
+  it("프로그램 처방을 파싱하고 draft와 저장 구조에 그대로 보존한다", () => {
+    const prescription: ExercisePrescription = {
+      repsMin: 8,
+      repsMax: 12,
+      targetRir: 2,
+      restSeconds: 120,
+      loadStepKg: 2.5,
+    };
+    const parsed = parsePlanExercises([
+      { ...plan[0], prescription: { ...prescription, ignored: "x" } },
+    ]);
+
+    expect(parsed[0].prescription).toEqual(prescription);
+    expect(toDraftExercises(parsed, () => "key")[0].prescription).toEqual(
+      prescription,
+    );
+    expect(
+      toPlanExercises([
+        {
+          key: "exercise-key",
+          ...parsed[0],
+          sets: parsed[0].sets.map((set, index) => ({
+            key: `set-${index}`,
+            ...set,
+            done: false,
+          })),
+        },
+      ])[0].prescription,
+    ).toEqual(prescription);
+  });
+
+  it("처방이 없는 기존 계획은 그대로 유효하다", () => {
+    expect(parsePlanExercises(plan)).toEqual(plan);
+  });
+
+  it.each([
+    ["역전된 반복 범위", { repsMin: 12, repsMax: 8 }],
+    ["최소 반복 미만", { repsMin: 0 }],
+    ["최대 반복 초과", { repsMax: 101 }],
+    ["비정수 최소 반복", { repsMin: 8.5 }],
+    ["비정수 최대 반복", { repsMax: 12.5 }],
+    ["60초 미만 휴식", { restSeconds: 59 }],
+    ["300초 초과 휴식", { restSeconds: 301 }],
+    ["비정수 휴식", { restSeconds: 90.5 }],
+    ["잘못된 RIR", { targetRir: 4 }],
+    ["잘못된 증량 단위", { loadStepKg: 2 }],
+  ])("처방의 %s를 거부한다", (_label, override) => {
+    expect(
+      parsePlanExercises([
+        {
+          ...plan[0],
+          prescription: { ...longRestPrescription, ...override },
+        },
+      ]),
+    ).toEqual([]);
+  });
+
+  it.each([
+    {
+      repsMin: 1,
+      repsMax: 1,
+      targetRir: 1 as const,
+      restSeconds: 60,
+      loadStepKg: 1 as const,
+    },
+    {
+      repsMin: 100,
+      repsMax: 100,
+      targetRir: 3 as const,
+      restSeconds: 300,
+      loadStepKg: 5 as const,
+    },
+  ])("반복과 휴식 경계값을 수용한다", (prescription) => {
+    expect(parsePlanExercises([{ ...plan[0], prescription }])[0].prescription).toEqual(
+      prescription,
+    );
+  });
+
+  it("파싱과 draft·저장 변환은 입력을 변경하지 않는다", () => {
+    const source = [{ ...plan[0], prescription: longRestPrescription }];
+    const sourceBefore = structuredClone(source);
+    const parsed = parsePlanExercises(source);
+    const parsedBefore = structuredClone(parsed);
+    const local = [
+      {
+        key: "exercise-key",
+        ...parsed[0],
+        sets: parsed[0].sets.map((set, index) => ({
+          key: `set-${index}`,
+          ...set,
+          done: false,
+        })),
+      },
+    ];
+    const localBefore = structuredClone(local);
+
+    toDraftExercises(parsed, () => "key");
+    toPlanExercises(local);
+
+    expect(source).toEqual(sourceBefore);
+    expect(parsed).toEqual(parsedBefore);
+    expect(local).toEqual(localBefore);
+  });
+
   it("빈 종목, 잘못된 유형, 세트 없는 종목은 거부한다", () => {
     expect(parsePlanExercises([])).toEqual([]);
     expect(parsePlanExercises([{ ...plan[0], name: "" }])).toEqual([]);
