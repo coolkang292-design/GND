@@ -7,6 +7,14 @@ export type PlanSet = {
   durationMin: number;
 };
 
+export type ExercisePrescription = {
+  repsMin: number;
+  repsMax: number;
+  targetRir: 1 | 2 | 3;
+  restSeconds: 60 | 75 | 90 | 120 | 150;
+  loadStepKg: 1 | 2.5 | 5;
+};
+
 export type PlanExercise = {
   name: string;
   bodyPart: BodyPart;
