@@ -193,6 +193,22 @@ describe("운동 예정표 종목·세트 변환", () => {
     ).toEqual([]);
   });
 
+  it("잘못된 처방이 하나라도 있으면 혼합 배열 전체를 거부한다", () => {
+    expect(
+      parsePlanExercises([
+        plan[0],
+        {
+          ...plan[0],
+          name: "인클라인 벤치프레스",
+          prescription: {
+            ...longRestPrescription,
+            restSeconds: 301,
+          },
+        },
+      ]),
+    ).toEqual([]);
+  });
+
   it.each([
     {
       repsMin: 1,
