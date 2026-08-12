@@ -586,6 +586,31 @@ export async function getActiveProgramEnrollments(
   return rows as ProgramEnrollment[];
 }
 
+/**
+ * 진행 중인 프로그램을 그만둔다 (0071).
+ *
+ * 남은 계획을 지우고 등록을 `cancelled`로 남긴다. **완료한 운동은 그대로다** —
+ * 회차를 마치면 그 계획 행은 이미 지워져서, 여기 남아 있는 것은 전부 미완료다.
+ *
+ * @returns 달력에서 지운 계획 수
+ */
+export async function cancelProgramEnrollment(
+  enrollmentId: string,
+): Promise<number> {
+  if (!UUID.test(enrollmentId)) {
+    throw new Error("program_invalid_enrollment_id");
+  }
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase.rpc("cancel_program_enrollment", {
+    p_enrollment_id: enrollmentId,
+  });
+  if (error) throw error;
+  if (typeof data !== "number" || !Number.isInteger(data) || data < 0) {
+    throw new Error("program_invalid_cancel_result");
+  }
+  return data;
+}
+
 export async function rescheduleProgramPlans(input: {
   enrollmentId: string;
   moves: ProgramPlanMove[];

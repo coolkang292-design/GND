@@ -1,7 +1,7 @@
-// 0070 검증: 인터벌 회차를 실제로 등록해 본다 (설계 2026-08-12 §5).
+// 0070·0071 검증: 인터벌 회차를 실제로 등록하고, 그만두기까지 해 본다.
 // 실행(PowerShell): $env:GND_ALLOW_DB_TESTS='program-interval';
 //   node scripts/program-interval-enrollment-test.mjs; Remove-Item Env:GND_ALLOW_DB_TESTS
-// 사전조건: 0070_program_interval_sessions.sql 적용 완료.
+// 사전조건: 0070_program_interval_sessions.sql · 0071_cancel_program_enrollment.sql 적용 완료.
 // 주의: 운영 Supabase에 연결된다. 만든 계정·행은 끝에서 스스로 지운다.
 //
 // 왜 필요한가. 단위 테스트는 payload 모양까지만 본다. **서버가 그 모양을
@@ -313,6 +313,88 @@ try {
       level: "extreme",
     }),
   );
+
+  // ── 0071 그만두기 ─────────────────────────────────────────
+  const quitter = await anonUser();
+  const quitMonday = nextMonday(140);
+  const quitCreated = await api(
+    quitter.token,
+    "POST",
+    "/rest/v1/rpc/create_program_enrollment",
+    payload({ key: "interval-burn-6w", plans: buildIntervalPlans(quitMonday) }),
+  );
+  if (quitCreated.status !== 200) {
+    check("그만두기 준비 등록", false, JSON.stringify(quitCreated));
+  } else {
+    const before = await ownCounts(quitter);
+    const cancelled = await api(
+      quitter.token,
+      "POST",
+      "/rest/v1/rpc/cancel_program_enrollment",
+      { p_enrollment_id: quitCreated.json },
+    );
+    const after = await ownCounts(quitter);
+    check(
+      "그만두면 남은 계획 18개가 사라진다",
+      cancelled.status === 200 &&
+        cancelled.json === 18 &&
+        before.plans === 18 &&
+        after.plans === 0,
+      JSON.stringify({ cancelled, before, after }),
+    );
+
+    const row = await api(
+      quitter.token,
+      "GET",
+      `/rest/v1/program_enrollments?select=status&id=eq.${quitCreated.json}`,
+    );
+    check(
+      "등록 행은 남고 상태만 cancelled가 된다",
+      row.json?.[0]?.status === "cancelled",
+      JSON.stringify(row),
+    );
+
+    const again = await api(
+      quitter.token,
+      "POST",
+      "/rest/v1/rpc/cancel_program_enrollment",
+      { p_enrollment_id: quitCreated.json },
+    );
+    check(
+      "이미 그만둔 것을 또 그만둘 수 없다",
+      again.status >= 400 && String(again.json?.message).includes("program_not_active"),
+      JSON.stringify(again),
+    );
+
+    const reCreated = await api(
+      quitter.token,
+      "POST",
+      "/rest/v1/rpc/create_program_enrollment",
+      payload({
+        key: "interval-burn-6w",
+        plans: buildIntervalPlans(nextMonday(210)),
+      }),
+    );
+    check(
+      "그만둔 뒤에는 같은 프로그램을 다시 등록할 수 있다",
+      reCreated.status === 200,
+      JSON.stringify(reCreated),
+    );
+
+    const stranger = await anonUser();
+    const stolen = await api(
+      stranger.token,
+      "POST",
+      "/rest/v1/rpc/cancel_program_enrollment",
+      { p_enrollment_id: quitCreated.json },
+    );
+    check(
+      "남의 등록은 그만둘 수 없다",
+      stolen.status >= 400 &&
+        String(stolen.json?.message).includes("program_enrollment_not_found"),
+      JSON.stringify(stolen),
+    );
+  }
 
   // ⑤ 근력은 그대로여야 한다 — 인터벌을 받으려다 근력을 느슨하게 만들지 않았는가
   await expectRejectedAndRolledBack(

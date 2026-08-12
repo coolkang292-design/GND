@@ -47,6 +47,22 @@ function finishSchedule() {
   fireEvent.click(screen.getByRole("button", { name: "일정 미리보기" }));
 }
 
+const activeShoulderEnrollment: ProgramEnrollment = {
+  id: "00000000-0000-4000-8000-000000000999",
+  programKey: "shoulder-frame-6w",
+  programVersion: 1,
+  title: "상체의 틀을 넓히는 6주",
+  levelAtStart: "beginner",
+  startDate: "2026-08-17",
+  timeZone: "Asia/Seoul",
+  preferredSlots: [
+    { weekday: 1, time: "19:00" },
+    { weekday: 3, time: "19:00" },
+    { weekday: 5, time: "19:00" },
+  ],
+  status: "active",
+};
+
 describe("ProgramFlow", () => {
   it("프로그램 선택부터 18회 등록 완료까지 한 흐름으로 이어진다", async () => {
     const onCreate = vi.fn().mockResolvedValue({
@@ -129,6 +145,94 @@ describe("ProgramFlow", () => {
       screen.getByRole("link", { name: "진행 중인 프로그램 보기" }),
     );
     expect(takeCalendarView()).toBe(true);
+  });
+
+  it("그만두기는 물어본 뒤에만 지우고, 취소하면 목록으로 돌아간다", async () => {
+    // 되돌릴 수 없는 삭제다 (0071). 확인 없이 지우면 실수로 6주가 날아간다.
+    const onCancel = vi.fn().mockResolvedValue(18);
+    const confirmSpy = vi
+      .spyOn(window, "confirm")
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(true);
+    render(
+      <ProgramFlow
+        today="2026-08-12"
+        timeZone="Asia/Seoul"
+        programs={OFFICIAL_PROGRAMS}
+        catalog={catalog}
+        occupiedPlans={[]}
+        activeEnrollments={[activeShoulderEnrollment]}
+        onCreate={vi.fn()}
+        onCreateInterval={vi.fn()}
+        onCancel={onCancel}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /시선이 머무는 어깨/ }));
+    const quit = screen.getByRole("button", { name: "이 프로그램 그만두기" });
+
+    // ① 확인창에서 아니오 → 아무것도 안 지운다
+    await act(async () => fireEvent.click(quit));
+    expect(onCancel).not.toHaveBeenCalled();
+
+    // ② 예 → 지우고 목록으로 돌아간다
+    await act(async () => fireEvent.click(quit));
+    expect(onCancel).toHaveBeenCalledWith(activeShoulderEnrollment.id);
+    expect(
+      screen.getByRole("heading", { name: "목표를 고르면 6주 계획이 완성돼요" }),
+    ).toBeTruthy();
+
+    confirmSpy.mockRestore();
+  });
+
+  it("그만두기가 실패하면 이유를 보여 주고 화면을 유지한다", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    render(
+      <ProgramFlow
+        today="2026-08-12"
+        timeZone="Asia/Seoul"
+        programs={OFFICIAL_PROGRAMS}
+        catalog={catalog}
+        occupiedPlans={[]}
+        activeEnrollments={[activeShoulderEnrollment]}
+        onCreate={vi.fn()}
+        onCreateInterval={vi.fn()}
+        onCancel={vi.fn().mockRejectedValue({ message: "program_not_active" })}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /시선이 머무는 어깨/ }));
+    await act(async () =>
+      fireEvent.click(screen.getByRole("button", { name: "이 프로그램 그만두기" })),
+    );
+
+    expect(screen.getByRole("alert").textContent).toContain("program_not_active");
+    expect(
+      screen.getByRole("link", { name: "진행 중인 프로그램 보기" }),
+    ).toBeTruthy();
+    confirmSpy.mockRestore();
+    consoleError.mockRestore();
+  });
+
+  it("그만두기를 안 넘기면 그 버튼이 없다", () => {
+    render(
+      <ProgramFlow
+        today="2026-08-12"
+        timeZone="Asia/Seoul"
+        programs={OFFICIAL_PROGRAMS}
+        catalog={catalog}
+        occupiedPlans={[]}
+        activeEnrollments={[activeShoulderEnrollment]}
+        onCreate={vi.fn()}
+        onCreateInterval={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /시선이 머무는 어깨/ }));
+    expect(
+      screen.queryByRole("button", { name: "이 프로그램 그만두기" }),
+    ).toBeNull();
   });
 
   it("등록 실패 뒤에는 완료 화면으로 가지 않고 일정과 오류를 유지한다", async () => {

@@ -5,6 +5,7 @@ import { useAuth } from "@/components/auth-provider";
 import { ProgramFlow } from "@/components/programs/program-flow";
 import { OFFICIAL_PROGRAMS } from "@/lib/domain/official-programs";
 import {
+  cancelProgramEnrollment,
   createIntervalProgramEnrollment,
   createProgramEnrollment,
   getActiveProgramEnrollments,
@@ -126,6 +127,17 @@ export default function ProgramsPage() {
         enrollmentId: await createProgramEnrollment(input),
         nextPlan: firstPlanSummary(input),
       })}
+      onCancel={async (enrollmentId) => {
+        const removed = await cancelProgramEnrollment(enrollmentId);
+        // 목록에서도 빼야 카탈로그가 다시 등록을 받는다
+        setEnrollments((current) =>
+          current.filter((item) => item.id !== enrollmentId),
+        );
+        setPlans((current) =>
+          current.filter((plan) => plan.programEnrollmentId !== enrollmentId),
+        );
+        return removed;
+      }}
       onCreateInterval={async (input) => ({
         enrollmentId: await createIntervalProgramEnrollment(input),
         nextPlan: firstPlanSummary(input),

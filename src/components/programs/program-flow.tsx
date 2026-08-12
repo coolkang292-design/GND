@@ -18,6 +18,7 @@ import type {
   ResolvedProgramSession,
 } from "@/lib/programs";
 import type { CatalogExercise } from "@/lib/types";
+import { programSaveErrorText } from "@/lib/domain/program-error-text";
 import { requestCalendarView } from "@/lib/record-view";
 import type { WorkoutPlan } from "@/lib/workout-plan";
 import {
@@ -46,6 +47,8 @@ type ProgramFlowProps = {
   onCreateInterval: (
     input: CreateIntervalEnrollmentInput,
   ) => Promise<CreateResult>;
+  /** 진행 중인 프로그램 그만두기 (0071). 지운 계획 수를 돌려준다 */
+  onCancel?: (enrollmentId: string) => Promise<number>;
 };
 
 function dateLabel(dateKey: string): string {
@@ -69,6 +72,7 @@ export function ProgramFlow({
   activeEnrollments = [],
   onCreate,
   onCreateInterval,
+  onCancel,
 }: ProgramFlowProps) {
   const [step, setStep] = useState<ProgramFlowStep>("catalog");
   const [selectedKey, setSelectedKey] = useState<OfficialProgramKey | null>(null);
@@ -76,6 +80,8 @@ export function ProgramFlow({
     readonly ResolvedProgramSession[] | null
   >(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
   const [created, setCreated] = useState<CreateResult | null>(null);
   const selected = programs.find((program) => program.key === selectedKey) ?? null;
   const activeEnrollment = selected
@@ -92,6 +98,35 @@ export function ProgramFlow({
     setResolvedSessions(null);
     setLoadError(null);
     setStep("detail");
+  }
+
+  async function cancelEnrollment(enrollmentId: string) {
+    if (!onCancel || cancelling) return;
+    /*
+      되돌릴 수 없는 삭제다 — 남은 계획이 달력에서 사라진다. 물어보고 지운다.
+
+      ⚠️ 완료한 운동은 안 지워진다는 것을 문구에 밝힌다. 이 버튼이 기록까지
+         지우는 줄 알면 아무도 못 누른다.
+    */
+    if (
+      !window.confirm(
+        "이 프로그램을 그만둘까요?\n달력에 남은 회차가 사라져요. 이미 완료한 운동 기록은 그대로 남습니다.",
+      )
+    ) {
+      return;
+    }
+    setCancelling(true);
+    setCancelError(null);
+    try {
+      await onCancel(enrollmentId);
+      setSelectedKey(null);
+      setStep("catalog");
+    } catch (error) {
+      console.error("[program] 그만두기 실패", error);
+      setCancelError(programSaveErrorText(error));
+    } finally {
+      setCancelling(false);
+    }
   }
 
   function openSchedule() {
@@ -191,6 +226,24 @@ export function ProgramFlow({
             >
               진행 중인 프로그램 보기
             </Link>
+            {onCancel && (
+              <button
+                type="button"
+                disabled={cancelling}
+                onClick={() => cancelEnrollment(activeEnrollment.id)}
+                className="mx-auto mt-2 block min-h-11 w-full max-w-md text-xs font-bold text-muted disabled:opacity-50"
+              >
+                {cancelling ? "그만두는 중…" : "이 프로그램 그만두기"}
+              </button>
+            )}
+            {cancelError && (
+              <p
+                role="alert"
+                className="mx-auto mt-2 max-w-md rounded-card border border-line bg-surface p-3 text-xs font-bold text-warn shadow-card"
+              >
+                {cancelError}
+              </p>
+            )}
           </div>
         </section>
       );

@@ -20,6 +20,7 @@ vi.mock("@/lib/supabase/client", () => ({
 
 import {
   buildCreateProgramEnrollmentRpcArgs,
+  cancelProgramEnrollment,
   createProgramEnrollment,
   getActiveProgramEnrollments,
   rescheduleProgramPlans,
@@ -413,6 +414,35 @@ describe("program enrollment I/O", () => {
     const error = { message: "permission denied", code: "42501" };
     queryReturning({ data: null, error });
     await expect(getActiveProgramEnrollments("user-1")).rejects.toBe(error);
+  });
+
+  it("그만두기는 RPC에 등록 id를 넘기고 지운 계획 수를 돌려준다", async () => {
+    const id = "11111111-1111-4111-8111-111111111111";
+    mocks.rpc.mockResolvedValue({ data: 18, error: null });
+
+    await expect(cancelProgramEnrollment(id)).resolves.toBe(18);
+    expect(mocks.rpc).toHaveBeenCalledWith("cancel_program_enrollment", {
+      p_enrollment_id: id,
+    });
+  });
+
+  it("그만두기 오류를 그대로 던지고, 이상한 성공값은 거부한다", async () => {
+    const id = "11111111-1111-4111-8111-111111111111";
+    const error = { message: "program_not_active", code: "P0001" };
+    mocks.rpc.mockResolvedValueOnce({ data: null, error });
+    await expect(cancelProgramEnrollment(id)).rejects.toBe(error);
+
+    mocks.rpc.mockResolvedValueOnce({ data: "18", error: null });
+    await expect(cancelProgramEnrollment(id)).rejects.toThrow(
+      "program_invalid_cancel_result",
+    );
+  });
+
+  it("UUID가 아닌 id는 서버에 보내지 않는다", async () => {
+    await expect(cancelProgramEnrollment("not-a-uuid")).rejects.toThrow(
+      "program_invalid_enrollment_id",
+    );
+    expect(mocks.rpc).not.toHaveBeenCalled();
   });
 
   it("재배치 move를 RPC snake_case로 바꾸고 오류를 그대로 던진다", async () => {
