@@ -66,4 +66,40 @@ describe("GND 공식 프로그램 카탈로그", () => {
       expect(maxMinutes).toBeLessThanOrEqual(65);
     }
   });
+
+  it("모든 회차는 운동 5~6개로 구성한다", () => {
+    for (const program of OFFICIAL_PROGRAMS) {
+      for (const session of program.sessions) {
+        expect(session.exercises.length).toBeGreaterThanOrEqual(5);
+        expect(session.exercises.length).toBeLessThanOrEqual(6);
+      }
+    }
+  });
+
+  it("모든 운동에 유효한 세트·반복·여유·휴식·증량 단위가 있다", () => {
+    for (const program of OFFICIAL_PROGRAMS) {
+      for (const session of program.sessions) {
+        for (const exercise of session.exercises) {
+          expect(exercise.beginnerSets).toBeGreaterThanOrEqual(2);
+          expect(exercise.experiencedSets).toBeGreaterThanOrEqual(
+            exercise.beginnerSets,
+          );
+          expect(exercise.repsMin).toBeLessThanOrEqual(exercise.repsMax);
+          expect([1, 2, 3]).toContain(exercise.targetRir);
+          expect([60, 75, 90, 120, 150]).toContain(exercise.restSeconds);
+          expect([1, 2.5, 5]).toContain(exercise.loadStepKg);
+        }
+      }
+    }
+  });
+
+  it("다섯 프로그램의 회차별 종목 이름이 승인 표와 같다", () => {
+    expect(
+      OFFICIAL_PROGRAMS.map((program) =>
+        program.sessions.map((session) =>
+          session.exercises.map((exercise) => exercise.exerciseName),
+        ),
+      ),
+    ).toMatchSnapshot();
+  });
 });
