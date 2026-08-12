@@ -230,8 +230,8 @@ PLAIN_VALUE=plain
       "/program-assets/shoulder.webp",
       "/program-assets/chest.webp",
       "/program-assets/arms.webp",
-      "/program-assets/lower.webp",
-      "/program-assets/lean.webp",
+      "/program-assets/lower-v2.webp",
+      "/program-assets/lean-v2.webp",
     ]);
   });
 

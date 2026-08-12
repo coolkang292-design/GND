@@ -835,7 +835,7 @@ export const STRENGTH_PROGRAMS = [
     title: "하체의 힘과 균형을 세우는 6주",
     description: "하체 전반을 고르게 훈련해 힘과 균형을 만듭니다.",
     durationMinutes: [50, 65],
-    coverImage: "/program-assets/lower.webp",
+    coverImage: "/program-assets/lower-v2.webp",
     weeks: 6,
     sessionsPerWeek: 3,
     sessions: [
@@ -972,7 +972,7 @@ export const STRENGTH_PROGRAMS = [
     description:
       "근력과 근육을 지키며 선명한 몸을 만드는 데 집중합니다. 체중 변화는 식사와 일상 활동량의 영향도 받습니다. 이 프로그램은 근력과 근육량을 지키며 꾸준히 움직이는 습관을 만드는 데 초점을 둡니다.",
     durationMinutes: [40, 55],
-    coverImage: "/program-assets/lean.webp",
+    coverImage: "/program-assets/lean-v2.webp",
     weeks: 6,
     sessionsPerWeek: 3,
     sessions: [
