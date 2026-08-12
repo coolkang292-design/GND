@@ -13,6 +13,11 @@
 ## 실행 전 조건
 
 - 설계 원문: `docs/superpowers/specs/2026-08-12-official-workout-programs-design.md`
+- 2026-08-12 사용자 승인으로 공식 프로그램 범위와 진입 UI가 확장됐다. **이 문서의
+  Task 1은 `2026-08-12-five-official-program-catalog.md`, Task 6은
+  `2026-08-12-exercise-entry-hub-and-program-ui.md`가 대체한다.** 실행 순서는 새
+  카탈로그 계획 전체 → 이 문서 Task 2~5 → 새 UI 계획 전체 → 이 문서 Task 7~8이다.
+  대체된 Task 1과 Task 6을 다시 실행하지 않는다.
 - 현재 checkout에 사용자 미추적 파일이 많으므로 실행 시 `using-git-worktrees`로 격리한다.
 - DB 변경은 고위험 작업이다. SQL은 작성·정적 검토까지만 하고, 사용자가 Supabase SQL Editor에서 직접 Run하기 전에는 실 DB 검사를 실행하지 않는다.
 - 이 계획은 운동 중 무게 보정과 자세 안내를 구현하지 않는다. 처방 스냅샷을 보존하는 타입까지만 넣고, 실제 사용은 후속 계획이 담당한다.

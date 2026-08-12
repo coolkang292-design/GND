@@ -11,6 +11,8 @@
 - 1단계: `plans/2026-08-12-official-program-scheduling.md`
 - 2단계: `plans/2026-08-12-program-guided-workout.md`
 - 3단계: `plans/2026-08-12-exercise-guides-and-source-links.md`
+- 5종 카탈로그 확장: `plans/2026-08-12-five-official-program-catalog.md`
+- 통합 운동 추가 UI: `plans/2026-08-12-exercise-entry-hub-and-program-ui.md`
 
 ## 확정된 핵심
 
@@ -42,6 +44,6 @@
 - 개발 서버 화면 확인 0건
 - 운영 배포 0건
 
-다음 할 일은 가슴·팔·하체·다이어트 네 프로그램의 정확한 운동 처방을 근거 검토로
-완성하는 것이다. 다섯 프로그램이 모두 실제 선택 가능한 상태가 된 뒤 통합 구현 계획을
-갱신하고 TDD로 시작한다. 처방이 비어 있는 `준비 중` 카드는 운영에 노출하지 않는다.
+다음 할 일은 `2026-08-12-five-official-program-catalog.md`를 TDD로 실행하는 것이다.
+그 뒤 기존 일정 계획 Task 2~5, 통합 운동 추가 UI 계획, 기존 일정 계획 Task 7~8
+순서로 진행한다. 처방이 비어 있는 `준비 중` 카드는 운영에 노출하지 않는다.

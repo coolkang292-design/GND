@@ -21,6 +21,10 @@
   운영 배포는 실행하지 않았다.
 - 다음 할 일 1개: 가슴·팔·하체·다이어트 네 프로그램의 운동 처방을 근거 검토로 확정한
   뒤 통합 구현 계획을 작성한다.
+- **구현 계획 승인 후 작성 완료:**
+  `docs/superpowers/plans/2026-08-12-five-official-program-catalog.md` → 기존 일정 계획
+  Task 2~5 → `docs/superpowers/plans/2026-08-12-exercise-entry-hub-and-program-ui.md` →
+  기존 일정 계획 Task 7~8 순서다. 기존 Task 1·6은 새 계획이 대체한다.
 
 ## 📐 2026-08-12 — GND 공식 6주 추천 프로그램 설계·구현 계획 (코드·DB 변경 없음 · 운영 배포 안 함)
 
