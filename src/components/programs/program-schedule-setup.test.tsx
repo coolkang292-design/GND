@@ -1,6 +1,13 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { OFFICIAL_PROGRAMS } from "@/lib/domain/official-programs";
 import type { WorkoutPlan } from "@/lib/workout-plan";
@@ -48,6 +55,44 @@ function occupiedPlan(date: string): WorkoutPlan {
 }
 
 describe("ProgramScheduleSetup", () => {
+  it("세 단계 진행 상태와 선택한 추천 요일을 분명히 표시한다", () => {
+    render(
+      <ProgramScheduleSetup
+        today="2026-08-12"
+        timeZone="Asia/Seoul"
+        program={program}
+        resolvedSessions={resolvedSessions}
+        occupiedPlans={[]}
+        onConfirm={vi.fn()}
+      />,
+    );
+
+    const progress = screen.getByRole("list", { name: "일정 등록 진행" });
+    expect(progress).toBeTruthy();
+    expect(within(progress).getByText(/시작일$/).closest("li")?.getAttribute("aria-current")).toBe(
+      "step",
+    );
+
+    openSlots();
+    expect(
+      within(screen.getByRole("list", { name: "일정 등록 진행" }))
+        .getByText(/요일·시간$/)
+        .closest("li")
+        ?.getAttribute("aria-current"),
+    ).toBe("step");
+    expect(
+      screen.getByRole("button", { name: "월 · 수 · 금" }).getAttribute("aria-pressed"),
+    ).toBe("true");
+
+    fireEvent.click(screen.getByRole("button", { name: "화 · 목 · 토" }));
+    expect(
+      screen.getByRole("button", { name: "화 · 목 · 토" }).getAttribute("aria-pressed"),
+    ).toBe("true");
+    expect(
+      screen.getByRole("button", { name: "월 · 수 · 금" }).getAttribute("aria-pressed"),
+    ).toBe("false");
+  });
+
   it("이번 주 시작은 오늘보다 과거인 계획을 만들지 않는다", () => {
     render(
       <ProgramScheduleSetup
@@ -88,6 +133,7 @@ describe("ProgramScheduleSetup", () => {
     openPreview();
     expect(screen.getByText("3/3 · 18회 미리보기")).toBeTruthy();
     expect(screen.getAllByTestId("program-plan-date")).toHaveLength(18);
+    expect(screen.getAllByTestId("program-week")).toHaveLength(6);
 
     await act(async () => {
       fireEvent.click(

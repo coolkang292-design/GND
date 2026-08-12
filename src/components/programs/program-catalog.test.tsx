@@ -19,6 +19,13 @@ describe("ProgramCatalog", () => {
         .closest("button")
         ?.getAttribute("data-featured"),
     ).toBe("true");
+    expect(screen.getByTestId("program-cover-featured").className).toContain(
+      "aspect-[16/9]",
+    );
+    expect(screen.getAllByTestId("program-cover-compact")).toHaveLength(4);
+    for (const cover of screen.getAllByTestId("program-cover-compact")) {
+      expect(cover.className).toContain("aspect-[4/3]");
+    }
     for (const title of [
       "옷태를 세우는 가슴",
       "소매를 채우는 팔",
@@ -72,6 +79,20 @@ describe("ProgramDetail", () => {
     expect(screen.getByRole("heading", { name: "A회차 미리보기" })).toBeTruthy();
     expect(screen.getByText(/최근 기록을 바탕으로 8–10회/)).toBeTruthy();
     expect(screen.getByText(/통증이 느껴지면 운동을 중단/)).toBeTruthy();
+    expect(screen.getAllByTestId("program-stat")).toHaveLength(4);
+    expect(screen.getByText("운동")).toBeTruthy();
+    expect(screen.getByText("반복")).toBeTruthy();
+    expect(screen.getByText("세트 사이 휴식")).toBeTruthy();
+    expect(screen.getAllByTestId("exercise-preview-row")).toHaveLength(
+      OFFICIAL_PROGRAMS[0].sessions[0].exercises.length,
+    );
+    expect(screen.getByTestId("program-audience").getAttribute("data-tone")).toBe(
+      "highlight",
+    );
+    expect(screen.getByTestId("program-automation").getAttribute("data-tone")).toBe(
+      "accent",
+    );
+    expect(screen.getByRole("note")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "요일과 시간 정하기" }));
     expect(onSchedule).toHaveBeenCalledTimes(1);
@@ -93,5 +114,56 @@ describe("ProgramDetail", () => {
     expect(
       screen.getByText(/운동만으로 감량을 보장하지 않으며 식사와 일상 활동량/),
     ).toBeTruthy();
+  });
+
+  it("운동명을 누르면 짧은 운동 설명을 같은 표 안에서 펼친다", () => {
+    render(
+      <ProgramDetail
+        program={OFFICIAL_PROGRAMS[0]}
+        onBack={vi.fn()}
+        onSchedule={vi.fn()}
+      />,
+    );
+
+    const description =
+      "바벨을 등에 메고 앉았다 일어나 하체 전체의 힘을 기르는 운동이에요.";
+    const trigger = screen.getByRole("button", {
+      name: "바벨 백스쿼트 설명 보기",
+    });
+
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByText(description)).toBeNull();
+
+    fireEvent.click(trigger);
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByText(description)).toBeTruthy();
+
+    fireEvent.click(trigger);
+    expect(screen.queryByText(description)).toBeNull();
+  });
+
+  it("프로그램 5종의 A회차 운동 모두 설명을 열 수 있다", () => {
+    for (const program of OFFICIAL_PROGRAMS) {
+      const view = render(
+        <ProgramDetail
+          program={program}
+          onBack={vi.fn()}
+          onSchedule={vi.fn()}
+        />,
+      );
+
+      for (const exercise of program.sessions[0].exercises) {
+        const trigger = screen.getByRole("button", {
+          name: `${exercise.exerciseName} 설명 보기`,
+        });
+        fireEvent.click(trigger);
+        expect(
+          screen.getByTestId("exercise-preview-description").textContent?.trim()
+            .length,
+        ).toBeGreaterThan(10);
+        fireEvent.click(trigger);
+      }
+      view.unmount();
+    }
   });
 });

@@ -40,6 +40,44 @@ const PRESETS = {
   "화 · 목 · 토": [2, 4, 6],
 } as const;
 
+const STEP_ORDER: readonly ScheduleStep[] = ["start", "slots", "preview"];
+const STEP_LABEL: Record<ScheduleStep, string> = {
+  start: "시작일",
+  slots: "요일·시간",
+  preview: "미리보기",
+};
+
+function sameDays(left: readonly number[], right: readonly number[]): boolean {
+  return (
+    left.length === right.length &&
+    [...left].sort((a, b) => a - b).every((day, index) => day === [...right].sort((a, b) => a - b)[index])
+  );
+}
+
+function ScheduleProgress({ step }: { step: ScheduleStep }) {
+  const currentIndex = STEP_ORDER.indexOf(step);
+
+  return (
+    <ol aria-label="일정 등록 진행" className="mb-6 grid grid-cols-3 gap-2">
+      {STEP_ORDER.map((item, index) => {
+        const active = index === currentIndex;
+        const complete = index < currentIndex;
+        return (
+          <li
+            key={item}
+            aria-current={active ? "step" : undefined}
+            className={`border-t-2 pt-2 ${active || complete ? "border-accent" : "border-line"}`}
+          >
+            <span className={`block text-[10px] font-extrabold ${active ? "text-accent" : complete ? "text-text" : "text-muted"}`}>
+              {index + 1}. {STEP_LABEL[item]}
+            </span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 function weekdayOf(dateKey: string): number {
   const [year, month, day] = dateKey.split("-").map(Number);
   return new Date(Date.UTC(year, month - 1, day)).getUTCDay();
@@ -178,19 +216,20 @@ export function ProgramScheduleSetup({
 
   if (step === "start") {
     return (
-      <section>
+      <section className="mx-auto w-full max-w-2xl pb-4">
+        <ScheduleProgress step={step} />
         <p className="text-xs font-extrabold text-accent">1/3 · 시작일</p>
         <h1 className="mt-2 text-xl font-black text-text">언제 시작할까요?</h1>
         <p className="mt-1 text-xs leading-5 text-muted">첫 주부터 주 3회가 순서대로 배치됩니다.</p>
 
-        <div className="mt-4 grid grid-cols-2 gap-2">
+        <div className="mt-5 grid grid-cols-2 gap-2.5">
           <button
             type="button"
             onClick={() => {
               setStartDate(today);
               setStep("slots");
             }}
-            className="min-h-12 rounded-card border border-line bg-surface text-sm font-bold text-text"
+            className="min-h-14 rounded-card border border-line bg-surface text-sm font-bold text-text"
           >
             이번 주 시작
           </button>
@@ -200,12 +239,12 @@ export function ProgramScheduleSetup({
               setStartDate(nextMonday);
               setStep("slots");
             }}
-            className="min-h-12 rounded-card border border-accent bg-accent/10 text-sm font-black text-accent"
+            className="min-h-14 rounded-card border border-accent bg-accent/10 text-sm font-black text-accent"
           >
             다음 주 시작
           </button>
         </div>
-        <label className="mt-4 block text-xs font-bold text-muted" htmlFor="program-start-date">
+        <label className="mt-6 block text-xs font-bold text-muted" htmlFor="program-start-date">
           날짜 직접 선택
         </label>
         <input
@@ -229,34 +268,38 @@ export function ProgramScheduleSetup({
 
   if (step === "slots") {
     return (
-      <section>
+      <section className="mx-auto w-full max-w-2xl pb-4">
+        <ScheduleProgress step={step} />
         <p className="text-xs font-extrabold text-accent">2/3 · 요일과 시간</p>
         <h1 className="mt-2 text-xl font-black text-text">주 3회 시간을 정하세요</h1>
         <p className="mt-1 text-xs leading-5 text-muted">회복을 위해 운동일 사이에 하루 이상 쉽니다.</p>
 
-        <div className="mt-4 grid grid-cols-3 gap-2">
+        <p className="mt-5 text-xs font-black text-text">추천 요일</p>
+        <div className="mt-2 grid grid-cols-2 gap-2">
           {Object.entries(PRESETS).map(([label, days]) => (
             <button
               type="button"
               key={label}
+              aria-pressed={!customMode && sameDays(selectedDays, days)}
               onClick={() => choosePreset(days)}
-              className="min-h-11 rounded-card-sm border border-line bg-surface text-xs font-bold text-text"
+              className={`min-h-12 rounded-card-sm border text-xs font-bold ${!customMode && sameDays(selectedDays, days) ? "border-accent bg-accent/10 text-accent" : "border-line bg-surface text-text"}`}
             >
               {label}
             </button>
           ))}
-          <button
-            type="button"
-            onClick={() => {
-              setCustomMode(true);
-              setSelectedDays([]);
-              setValidation(null);
-            }}
-            className="min-h-11 rounded-card-sm border border-line bg-surface text-xs font-bold text-text"
-          >
-            직접 선택
-          </button>
         </div>
+        <button
+          type="button"
+          aria-pressed={customMode}
+          onClick={() => {
+            setCustomMode(true);
+            setSelectedDays([]);
+            setValidation(null);
+          }}
+          className={`mt-2 min-h-11 w-full rounded-card-sm border border-dashed text-xs font-bold ${customMode ? "border-accent bg-accent/10 text-accent" : "border-line bg-transparent text-muted"}`}
+        >
+          직접 선택
+        </button>
 
         {customMode && (
           <fieldset className="mt-3">
@@ -280,7 +323,8 @@ export function ProgramScheduleSetup({
           </fieldset>
         )}
 
-        <div className="mt-4 flex gap-1 rounded-card-sm border border-line bg-surface p-1">
+        <p className="mt-5 text-xs font-black text-text">운동 시간</p>
+        <div className="mt-2 flex gap-1 rounded-card-sm border border-line bg-surface p-1">
           <button
             type="button"
             onClick={() => setTimeMode("same")}
@@ -324,7 +368,7 @@ export function ProgramScheduleSetup({
           </div>
         )}
 
-        <fieldset className="mt-4">
+        <fieldset className="mt-5">
           <legend className="text-xs font-bold text-muted">운동 경험</legend>
           <div className="mt-2 grid grid-cols-2 gap-2">
             {(["beginner", "experienced"] as const).map((level) => (
@@ -356,7 +400,8 @@ export function ProgramScheduleSetup({
   }
 
   return (
-    <section>
+    <section className="mx-auto w-full max-w-2xl pb-4">
+      <ScheduleProgress step={step} />
       <p className="text-xs font-extrabold text-accent">3/3 · 18회 미리보기</p>
       <h1 className="mt-2 text-xl font-black text-text">6주 계획을 확인하세요</h1>
       <p className="mt-1 text-xs leading-5 text-muted">기존 계획은 지우지 않고 가까운 빈 날짜로 옮겨 담습니다.</p>
@@ -372,12 +417,16 @@ export function ProgramScheduleSetup({
         </div>
       )}
 
-      <div className="mt-4 space-y-2">
+      <div className="mt-5 space-y-2.5">
         {Array.from({ length: 6 }, (_, weekIndex) => (
-          <div key={weekIndex} className="grid grid-cols-[42px_repeat(3,minmax(0,1fr))] gap-1">
+          <div
+            key={weekIndex}
+            data-testid="program-week"
+            className="grid grid-cols-[42px_repeat(3,minmax(0,1fr))] gap-1.5"
+          >
             <span className="grid place-items-center text-[11px] font-bold text-muted">{weekIndex + 1}주</span>
             {schedule?.plans.slice(weekIndex * 3, weekIndex * 3 + 3).map((plan) => (
-              <div key={`${plan.week}-${plan.session}`} data-testid="program-plan-date" className="rounded-card-sm border border-line bg-surface p-2 text-center">
+              <div key={`${plan.week}-${plan.session}`} data-testid="program-plan-date" className="rounded-card-sm border border-line bg-surface px-1 py-2.5 text-center">
                 <p className="text-[10px] font-bold text-accent">{plan.templateKey}</p>
                 <p className="mt-1 text-[11px] font-bold text-text">{dateLabel(plan.date)}</p>
               </div>

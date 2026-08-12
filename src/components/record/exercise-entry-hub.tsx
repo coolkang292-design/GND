@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { UiIcon } from "@/components/ui-icon";
 import { INTERVAL_COPY } from "@/lib/domain/tabata";
 
 export type ExerciseEntryHubProps = {
@@ -25,39 +26,49 @@ export function ExerciseEntryHub({
   const hasQuickStart = hasPast || routineCount > 0 || Boolean(onInterval);
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto pb-1">
+    <div className="mx-auto min-h-0 w-full max-w-3xl flex-1 overflow-y-auto pb-1">
       <div className="space-y-2">
         {onPrograms && (
           <button
             type="button"
+            data-priority="primary"
             onClick={onPrograms}
-            className="relative flex min-h-32 w-full overflow-hidden rounded-card border border-accent/55 bg-bg p-4 text-left shadow-card"
+            className="group relative flex min-h-44 w-full overflow-hidden rounded-[24px] border border-accent/60 bg-bg p-5 text-left shadow-card"
           >
-            <span className="relative z-10 flex min-w-0 flex-1 flex-col items-start pr-24">
-              <span className="rounded-full border border-accent/45 bg-accent/10 px-2 py-1 text-[10px] font-extrabold text-accent">
+            <Image
+              src="/program-assets/shoulder.webp"
+              alt=""
+              fill
+              priority
+              sizes="(max-width: 768px) 60vw, 360px"
+              className="object-cover object-[center_38%] transition-transform duration-300 group-hover:scale-[1.02] motion-reduce:transition-none"
+            />
+            <span
+              aria-hidden
+              className="absolute inset-0 bg-gradient-to-r from-bg via-bg/90 to-bg/10"
+            />
+            <span className="relative z-10 flex min-w-0 max-w-[68%] flex-1 flex-col items-start">
+              <span className="rounded-full border border-accent/55 bg-bg/75 px-2.5 py-1 text-[10px] font-extrabold tracking-wide text-accent backdrop-blur-sm">
                 GND 추천
               </span>
-              <span className="mt-3 block text-base font-black text-text">
+              <span className="mt-4 block text-lg font-black leading-6 text-text">
                 프로그램으로 시작하기
               </span>
-              <span className="mt-1 block text-xs leading-5 text-muted">
+              <span className="mt-1.5 block text-xs leading-5 text-muted">
                 목표만 고르면 6주 계획을 달력에 자동으로 담아요
               </span>
+              <span className="mt-auto pt-3 text-[11px] font-extrabold text-accent">
+                주 3회 · 6주 · 총 18회
+              </span>
             </span>
-            <Image
-              src="/record-assets/exercise-picker-hero.webp"
-              alt=""
-              width={132}
-              height={132}
-              className="absolute right-0 bottom-0 h-32 w-32 object-contain object-right-bottom"
-            />
           </button>
         )}
 
         <button
           type="button"
+          data-priority="secondary"
           onClick={onSearch}
-          className="flex min-h-24 w-full items-center gap-3 rounded-card border border-line bg-surface-2 p-4 text-left"
+          className="flex min-h-24 w-full items-center gap-3 rounded-[20px] border border-line bg-surface-2 p-4 text-left transition-colors hover:border-accent/45 motion-reduce:transition-none"
         >
           <span className="flex h-12 w-12 flex-none items-center justify-center rounded-full border border-accent/35 bg-bg">
             <Image
@@ -86,7 +97,7 @@ export function ExerciseEntryHub({
         <section className="mt-4" aria-labelledby="quick-start-title">
           <h4
             id="quick-start-title"
-            className="mb-2 text-xs font-extrabold text-muted"
+            className="mb-2 text-[11px] font-extrabold tracking-[0.08em] text-muted"
           >
             빠른 시작
           </h4>
@@ -101,8 +112,9 @@ export function ExerciseEntryHub({
                 <button
                   type="button"
                   onClick={onPast}
-                  className="min-h-11 rounded-card-sm border border-line bg-surface-2 px-3 text-sm font-bold text-text"
+                  className="flex min-h-12 items-center justify-center gap-2 rounded-card-sm border border-line bg-surface-2 px-3 text-sm font-bold text-text"
                 >
+                  <UiIcon name="hub-past" size={26} />
                   지난 운동
                 </button>
               )}
@@ -110,8 +122,9 @@ export function ExerciseEntryHub({
                 <button
                   type="button"
                   onClick={onRoutine}
-                  className="min-h-11 rounded-card-sm border border-line bg-surface-2 px-3 text-sm font-bold text-text"
+                  className="flex min-h-12 items-center justify-center gap-2 rounded-card-sm border border-line bg-surface-2 px-3 text-sm font-bold text-text"
                 >
+                  <UiIcon name="hub-routine" size={26} />
                   내 루틴
                 </button>
               )}

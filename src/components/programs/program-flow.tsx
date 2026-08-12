@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { UiIcon } from "@/components/ui-icon";
 import {
   resolveProgram,
   type OfficialProgram,
@@ -98,21 +99,28 @@ export function ProgramFlow({
 
   if (step === "done" && created) {
     return (
-      <section className="pt-8 text-center">
-        <div className="mx-auto grid h-16 w-16 place-items-center rounded-full border border-accent bg-accent/10 text-2xl text-accent">
-          ✓
+      <section className="mx-auto w-full max-w-2xl pt-8 text-center">
+        <div className="mx-auto grid h-20 w-20 place-items-center rounded-full border border-accent/55 bg-accent/10">
+          <UiIcon name="finish" size={64} />
         </div>
-        <h1 className="mt-4 text-xl font-black text-text">6주 계획이 준비됐어요</h1>
-        <p className="mt-2 text-sm leading-6 text-muted">
-          첫 운동은 {dateLabel(created.nextPlan.date)} {timeLabel(created.nextPlan.time)}
-          <br />
-          {created.nextPlan.title}부터 시작합니다.
-        </p>
+        <p className="mt-5 text-[11px] font-extrabold tracking-[0.08em] text-accent">등록 완료</p>
+        <h1 className="mt-1 text-2xl font-black leading-8 text-text">6주 계획이 준비됐어요</h1>
+        <p className="mt-2 text-sm leading-6 text-muted">이제 첫 운동만 시작하면 됩니다.</p>
+
+        <div className="mt-6 rounded-[22px] border border-accent/45 bg-gradient-to-br from-accent/15 to-surface p-5 text-left shadow-card">
+          <p className="text-xs font-extrabold text-accent">다음 운동</p>
+          <p className="mt-2 text-lg font-black text-text">
+            {dateLabel(created.nextPlan.date)} · {timeLabel(created.nextPlan.time)}
+          </p>
+          <p className="mt-1 text-sm font-bold text-muted">
+            1주차 A회 · {created.nextPlan.title}
+          </p>
+        </div>
         <Link
           href="/record"
-          className="mt-6 flex min-h-12 w-full items-center justify-center rounded-card bg-accent text-sm font-black text-accent-ink"
+          className="mt-4 flex min-h-12 w-full items-center justify-center rounded-card bg-accent text-sm font-black text-accent-ink shadow-card"
         >
-          달력에서 계획 보기
+          달력에서 계획 확인하기
         </Link>
       </section>
     );

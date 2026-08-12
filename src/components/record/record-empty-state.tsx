@@ -27,8 +27,11 @@ export function RecordEmptyState({
   onLoadRecent: () => void;
 }) {
   return (
-    <section className="flex flex-col gap-3">
-      <div className="overflow-hidden rounded-card border border-line bg-surface text-center shadow-card">
+    <section>
+      <div
+        data-testid="record-start-card"
+        className="overflow-hidden rounded-card border border-line bg-surface text-center shadow-card"
+      >
         {/* ⚠️ 옛 표기는 `🏋️` 이모지 하나였다 (2026-08-07 사용자 제공 시안으로 교체).
             이 카드는 **처음 온 사람이 가장 먼저 보는 화면**인데 이모지 한 글자는
             "여기서 뭘 하는 곳인지"를 말하지 못했다. 덤벨·체크리스트·돋보기는
@@ -47,41 +50,43 @@ export function RecordEmptyState({
           sizes="(max-width: 520px) 100vw, 520px"
           className="h-36 w-full object-cover"
         />
-        <div className="px-5 pt-4 pb-8">
+        <div className="px-4 pt-4 pb-4">
           <p className="text-base font-extrabold">아직 추가된 운동이 없어요</p>
           <p className="mt-1.5 text-[12.5px] leading-5 text-muted">
             운동을 선택하면 세트와 무게를
             <br />
             쉽게 기록할 수 있어요
           </p>
+
+          <button
+            type="button"
+            data-priority="primary"
+            onClick={onAdd}
+            className="mt-4 h-14 w-full rounded-card bg-accent text-[15px] font-extrabold text-accent-ink"
+          >
+            ＋ 첫 운동 추가하기
+          </button>
+
+          {hasHistory && (
+            <button
+              type="button"
+              data-priority="secondary"
+              onClick={onLoadRecent}
+              className="mt-2 flex h-12 w-full items-center justify-center gap-1.5 rounded-card border border-accent/50 bg-transparent text-sm font-bold text-accent"
+            >
+              {/* 옛 표기는 `🕘`였다 (2026-08-07 2차 시안으로 교체) — 허브의
+                  `지난 운동 불러오기`와 **같은 그림**이라야 같은 일로 읽힌다 */}
+              <UiIcon name="hub-past" size={18} />
+              최근 운동 불러오기
+            </button>
+          )}
+
+          <p className="mt-3 text-center text-[11.5px] text-muted">
+            🎓 초보자도 쉽게 시작할 수 있게{" "}
+            <span className="font-bold text-accent">추천 운동</span>부터 안내해드려요
+          </p>
         </div>
       </div>
-
-      <button
-        type="button"
-        onClick={onAdd}
-        className="h-14 rounded-card bg-accent text-[15px] font-extrabold text-accent-ink"
-      >
-        ＋ 첫 운동 추가하기
-      </button>
-
-      {hasHistory && (
-        <button
-          type="button"
-          onClick={onLoadRecent}
-          className="flex h-12 items-center justify-center gap-1.5 rounded-card border border-accent/50 bg-surface text-sm font-bold text-accent"
-        >
-          {/* 옛 표기는 `🕘`였다 (2026-08-07 2차 시안으로 교체) — 허브의
-              `지난 운동 불러오기`와 **같은 그림**이라야 같은 일로 읽힌다 */}
-          <UiIcon name="hub-past" size={18} />
-          최근 운동 불러오기
-        </button>
-      )}
-
-      <p className="text-center text-[11.5px] text-muted">
-        🎓 초보자도 쉽게 시작할 수 있게{" "}
-        <span className="font-bold text-accent">추천 운동</span>부터 안내해드려요
-      </p>
     </section>
   );
 }
