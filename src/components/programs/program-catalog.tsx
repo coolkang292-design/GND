@@ -175,7 +175,10 @@ export function ProgramDetail({
   scheduleAvailable = true,
 }: ProgramDetailProps) {
   const [openExercise, setOpenExercise] = useState<string | null>(null);
-  const firstSession = program.sessions[0];
+  const [selectedSessionKey, setSelectedSessionKey] = useState<"A" | "B" | "C">("A");
+  const selectedSession =
+    program.sessions.find((session) => session.key === selectedSessionKey) ??
+    program.sessions[0];
 
   return (
     <article className="mx-auto w-full max-w-3xl pb-28">
@@ -228,22 +231,92 @@ export function ProgramDetail({
         <p className="mt-2 text-xs leading-5 text-muted">{program.description}</p>
       </section>
 
-      <section className="mt-6 overflow-hidden rounded-card border border-line bg-surface">
+      <section className="mt-6 rounded-card border border-line bg-surface p-4">
+        <p className="text-[10px] font-extrabold tracking-[0.08em] text-accent">6주 전체 구성</p>
+        <h2 className="mt-1 text-base font-black leading-6 text-text">
+          A·B·C 세 회차를 6주 동안 반복해요
+        </h2>
+        <p className="mt-1 text-xs leading-5 text-muted">
+          매주 세 회차를 한 번씩 진행해 총 18회를 완성합니다.
+        </p>
+        <ol className="mt-4 grid grid-cols-3 gap-2" aria-label="6주 운동 회차 로드맵">
+          {Array.from({ length: program.weeks }, (_, index) => (
+            <li
+              key={index}
+              data-testid="program-roadmap-week"
+              className="rounded-card-sm border border-line/80 bg-surface-2 px-2 py-2.5 text-center"
+            >
+              <span className="block text-[10px] font-bold text-muted">{index + 1}주</span>
+              <span className="mt-0.5 block text-xs font-black tracking-wide text-text">
+                A · B · C
+              </span>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <section className="mt-4 overflow-hidden rounded-card border border-line bg-surface">
         <div className="border-b border-line px-4 py-4">
-          <p className="text-[10px] font-extrabold tracking-[0.08em] text-accent">실제 구성</p>
-          <h2 className="mt-1 text-base font-black text-text">A회차 미리보기</h2>
-          <p className="mt-1 text-xs font-bold text-muted">{firstSession.title}</p>
+          <p className="text-[10px] font-extrabold tracking-[0.08em] text-accent">회차별 운동표</p>
+          <h2 className="mt-1 text-base font-black text-text">회차별 상세</h2>
+          <p className="mt-1 text-xs leading-5 text-muted">
+            회차를 누르면 운동·세트·반복·휴식을 모두 확인할 수 있어요.
+          </p>
+          <div
+            role="tablist"
+            aria-label="프로그램 회차"
+            className="mt-4 grid grid-cols-3 gap-2"
+          >
+            {program.sessions.map((session) => {
+              const selected = session.key === selectedSession.key;
+
+              return (
+                <button
+                  key={session.key}
+                  type="button"
+                  role="tab"
+                  id={`program-session-tab-${program.key}-${session.key}`}
+                  aria-controls={`program-session-panel-${program.key}`}
+                  aria-label={`${session.key}회 · ${session.title}`}
+                  aria-selected={selected}
+                  onClick={() => {
+                    setSelectedSessionKey(session.key);
+                    setOpenExercise(null);
+                  }}
+                  className={`min-h-14 rounded-card-sm border px-2 py-2 text-center transition-colors motion-reduce:transition-none ${
+                    selected
+                      ? "border-accent bg-accent/15 text-accent"
+                      : "border-line bg-surface-2 text-muted"
+                  }`}
+                >
+                  <span className="block text-sm font-black">{session.key}</span>
+                  <span className="mt-0.5 block truncate text-[10px] font-bold">
+                    {session.title}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
-        <div className="grid grid-cols-[minmax(0,1fr)_52px_76px] gap-2 border-b border-line/70 bg-surface-2 px-4 py-2 text-[10px] font-bold text-muted">
-          <span>운동</span>
-          <span className="text-center">반복</span>
-          <span className="text-right">세트 사이 휴식</span>
-        </div>
-        <ol className="divide-y divide-line/70 px-4 text-xs">
-          {firstSession.exercises.map((exercise, index) => {
+        <div
+          id={`program-session-panel-${program.key}`}
+          role="tabpanel"
+          aria-labelledby={`program-session-tab-${program.key}-${selectedSession.key}`}
+        >
+          <div className="grid grid-cols-[minmax(0,1fr)_52px_76px] gap-2 border-b border-line/70 bg-surface-2 px-4 py-2 text-[10px] font-bold text-muted">
+            <span>운동 · 세트</span>
+            <span className="text-center">반복</span>
+            <span className="text-right">세트 사이 휴식</span>
+          </div>
+          <ol className="divide-y divide-line/70 px-4 text-xs">
+          {selectedSession.exercises.map((exercise, index) => {
             const description = EXERCISE_PREVIEW_NOTES[exercise.exerciseName];
             const open = openExercise === exercise.exerciseName;
-            const descriptionId = `exercise-description-${program.key}-${index}`;
+            const descriptionId = `exercise-description-${program.key}-${selectedSession.key}-${index}`;
+            const setLabel =
+              exercise.beginnerSets === exercise.experiencedSets
+                ? `초보·경험 ${exercise.beginnerSets}세트`
+                : `초보 ${exercise.beginnerSets}세트 · 경험 ${exercise.experiencedSets}세트`;
 
             return (
             <li
@@ -266,8 +339,13 @@ export function ProgramDetail({
                   }
                   className="flex min-h-11 min-w-0 items-center justify-between gap-2 text-left"
                 >
-                  <span className="min-w-0 font-bold leading-5 text-text">
-                    {exercise.exerciseName}
+                  <span className="min-w-0">
+                    <span className="block font-bold leading-5 text-text">
+                      {exercise.exerciseName}
+                    </span>
+                    <span className="block text-[10px] font-bold leading-4 text-muted">
+                      {setLabel}
+                    </span>
                   </span>
                   <span
                     aria-hidden
@@ -295,7 +373,8 @@ export function ProgramDetail({
             </li>
             );
           })}
-        </ol>
+          </ol>
+        </div>
       </section>
 
       <section
