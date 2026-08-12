@@ -7,7 +7,7 @@
 -- 쓰는 법: 함수·정책의 '현행' 정의가 필요할 때 마이그레이션 51개를
 -- 뒤지지 말고 이 파일을 검색하라. 마이그레이션을 적용한 뒤에는 다시 뽑아라.
 --
--- 함수 73개 · 정책 70개 · 인덱스 77개
+-- 함수 76개 · 정책 74개 · 인덱스 82개
 
 -- ════════════════════════════════════════════════════════════
 -- 함수
@@ -997,6 +997,318 @@ begin
   return g;
 end $function$;
 
+-- ── create_program_enrollment ──
+CREATE OR REPLACE FUNCTION public.create_program_enrollment(p_program_key text, p_program_version integer, p_title_snapshot text, p_level_at_start text, p_start_date date, p_timezone text, p_preferred_slots jsonb, p_plans jsonb)
+ RETURNS uuid
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  v_user_id uuid := auth.uid();
+  v_enrollment_id uuid := pg_catalog.gen_random_uuid();
+  v_today date;
+  v_plan jsonb;
+  v_plan_index bigint;
+  v_plan_date date;
+  v_scheduled_at timestamptz;
+  v_previous_date date := null;
+  v_dates date[] := array[]::date[];
+  v_conflict_date date;
+  v_week int;
+  v_session int;
+  v_exercise jsonb;
+  v_set jsonb;
+  v_prescription jsonb;
+  v_bad_count int;
+  v_local_time text;
+begin
+  if v_user_id is null then
+    raise exception 'not_authenticated';
+  end if;
+
+  -- 같은 사용자의 RPC끼리는 충돌 검증과 삽입을 한 줄로 세운다.
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(v_user_id::text, 0)
+  );
+
+  if p_program_key is null
+    or p_program_key <> btrim(p_program_key)
+    or p_program_key !~ '^[a-z0-9]([a-z0-9-]{0,58}[a-z0-9])?$'
+    or char_length(p_program_key) > 60 then
+    raise exception 'program_invalid_key';
+  end if;
+  if p_program_version is null or p_program_version not between 1 and 10000 then
+    raise exception 'program_invalid_version';
+  end if;
+  if p_title_snapshot is null
+    or char_length(btrim(p_title_snapshot)) not between 1 and 80 then
+    raise exception 'program_invalid_title';
+  end if;
+  if p_level_at_start is null
+    or p_level_at_start not in ('beginner', 'experienced') then
+    raise exception 'program_invalid_level';
+  end if;
+  if p_timezone is null
+    or char_length(btrim(p_timezone)) not between 1 and 60
+    or not exists (
+      select 1 from pg_catalog.pg_timezone_names tz where tz.name = p_timezone
+    ) then
+    raise exception 'program_invalid_timezone';
+  end if;
+
+  v_today := (now() at time zone p_timezone)::date;
+  if p_start_date is null
+    or p_start_date < v_today
+    or p_start_date > v_today + 365 then
+    raise exception 'program_invalid_start_date';
+  end if;
+
+  if p_preferred_slots is null
+    or jsonb_typeof(p_preferred_slots) <> 'array'
+    or jsonb_array_length(p_preferred_slots) <> 3
+    or octet_length(p_preferred_slots::text) > 2000 then
+    raise exception 'program_slots_count';
+  end if;
+  if exists (
+    select 1
+    from jsonb_array_elements(p_preferred_slots) slot
+    where jsonb_typeof(slot) is distinct from 'object'
+      or not (slot ?& array['weekday', 'time'])
+      or jsonb_typeof(slot->'weekday') is distinct from 'number'
+      or (slot->>'weekday') !~ '^[0-6]$'
+      or jsonb_typeof(slot->'time') is distinct from 'string'
+      or (slot->>'time') !~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+  ) then
+    raise exception 'program_invalid_slot';
+  end if;
+  select count(distinct (slot->>'weekday')::int)
+    into v_bad_count
+  from jsonb_array_elements(p_preferred_slots) slot;
+  if v_bad_count <> 3 then
+    raise exception 'program_slot_weekday_duplicate';
+  end if;
+  if exists (
+    select 1
+    from jsonb_array_elements(p_preferred_slots) a
+    cross join jsonb_array_elements(p_preferred_slots) b
+    where (a->>'weekday')::int < (b->>'weekday')::int
+      and least(
+        abs((a->>'weekday')::int - (b->>'weekday')::int),
+        7 - abs((a->>'weekday')::int - (b->>'weekday')::int)
+      ) < 2
+  ) then
+    raise exception 'program_recovery_gap';
+  end if;
+
+  if p_plans is null
+    or jsonb_typeof(p_plans) <> 'array'
+    or jsonb_array_length(p_plans) <> 18
+    or octet_length(p_plans::text) > 512000 then
+    raise exception 'program_plans_count';
+  end if;
+
+  for v_plan, v_plan_index in
+    select value, ordinality
+    from jsonb_array_elements(p_plans) with ordinality
+  loop
+    if jsonb_typeof(v_plan) is distinct from 'object'
+      or not (v_plan ?& array[
+        'plan_date', 'scheduled_at', 'week', 'session', 'template_key',
+        'title', 'exercises'
+      ])
+      or jsonb_typeof(v_plan->'week') is distinct from 'number'
+      or (v_plan->>'week') !~ '^[1-6]$'
+      or jsonb_typeof(v_plan->'session') is distinct from 'number'
+      or (v_plan->>'session') !~ '^[1-3]$' then
+      raise exception 'program_invalid_slot_meta';
+    end if;
+    v_week := (v_plan->>'week')::int;
+    v_session := (v_plan->>'session')::int;
+    if v_week <> ((v_plan_index - 1) / 3)::int + 1
+      or v_session <> ((v_plan_index - 1) % 3)::int + 1
+      or jsonb_typeof(v_plan->'template_key') is distinct from 'string'
+      or v_plan->>'template_key' <> (array['A', 'B', 'C'])[v_session] then
+      raise exception 'program_invalid_slot_order';
+    end if;
+    if jsonb_typeof(v_plan->'plan_date') is distinct from 'string'
+      or (v_plan->>'plan_date') !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' then
+      raise exception 'program_invalid_plan_date';
+    end if;
+    begin
+      v_plan_date := (v_plan->>'plan_date')::date;
+    exception when others then
+      raise exception 'program_invalid_plan_date';
+    end;
+    if v_plan_date::text <> v_plan->>'plan_date'
+      or v_plan_date < v_today
+      or v_plan_date < p_start_date
+      or v_plan_date > p_start_date + 180 then
+      raise exception 'program_invalid_plan_date';
+    end if;
+    if v_plan_date = any(v_dates) then
+      raise exception 'program_plan_date_duplicate:%', v_plan_date;
+    end if;
+    if v_previous_date is not null and v_plan_date - v_previous_date < 2 then
+      raise exception 'program_recovery_gap';
+    end if;
+    v_dates := array_append(v_dates, v_plan_date);
+    v_previous_date := v_plan_date;
+
+    if jsonb_typeof(v_plan->'scheduled_at') is distinct from 'string' then
+      raise exception 'program_invalid_scheduled_at';
+    end if;
+    begin
+      v_scheduled_at := (v_plan->>'scheduled_at')::timestamptz;
+    exception when others then
+      raise exception 'program_invalid_scheduled_at';
+    end;
+    if (v_scheduled_at at time zone p_timezone)::date <> v_plan_date then
+      raise exception 'program_scheduled_date_mismatch';
+    end if;
+    v_local_time := to_char(v_scheduled_at at time zone p_timezone, 'HH24:MI');
+    if not exists (
+      select 1 from jsonb_array_elements(p_preferred_slots) slot
+      where slot->>'time' = v_local_time
+    ) then
+      raise exception 'program_scheduled_time_mismatch';
+    end if;
+
+    if jsonb_typeof(v_plan->'title') is distinct from 'string'
+      or char_length(btrim(v_plan->>'title')) not between 1 and 80 then
+      raise exception 'program_invalid_plan_title';
+    end if;
+    if jsonb_typeof(v_plan->'exercises') is distinct from 'array'
+      or jsonb_array_length(v_plan->'exercises') not between 5 and 6
+      or octet_length((v_plan->'exercises')::text) > 200000 then
+      raise exception 'program_invalid_exercises';
+    end if;
+
+    for v_exercise in select value from jsonb_array_elements(v_plan->'exercises')
+    loop
+      if jsonb_typeof(v_exercise) is distinct from 'object'
+        or not (v_exercise ?& array[
+          'name', 'bodyPart', 'exerciseType', 'measure', 'isCustom', 'sets',
+          'prescription'
+        ])
+        or jsonb_typeof(v_exercise->'name') is distinct from 'string'
+        or char_length(btrim(v_exercise->>'name')) not between 1 and 40
+        or jsonb_typeof(v_exercise->'bodyPart') is distinct from 'string'
+        or v_exercise->>'bodyPart' not in ('가슴','등','하체','어깨','팔','코어','유산소')
+        or jsonb_typeof(v_exercise->'exerciseType') is distinct from 'string'
+        or v_exercise->>'exerciseType' not in ('weight','bodyweight','cardio')
+        or not (v_exercise ? 'measure')
+        or not (
+          v_exercise->'measure' = 'null'::jsonb
+          or v_exercise->>'measure' in ('reps','time')
+        )
+        or jsonb_typeof(v_exercise->'isCustom') is distinct from 'boolean'
+        or (v_exercise->>'isCustom')::boolean
+        or jsonb_typeof(v_exercise->'sets') is distinct from 'array'
+        or jsonb_array_length(v_exercise->'sets') not between 1 and 4
+        or jsonb_typeof(v_exercise->'prescription') is distinct from 'object' then
+        raise exception 'program_invalid_exercise_shape';
+      end if;
+
+      for v_set in select value from jsonb_array_elements(v_exercise->'sets')
+      loop
+        if jsonb_typeof(v_set) is distinct from 'object'
+          or not (v_set ?& array[
+            'weightKg', 'reps', 'distanceKm', 'durationMin'
+          ])
+          or jsonb_typeof(v_set->'weightKg') is distinct from 'number'
+          or (v_set->>'weightKg')::numeric < 0
+          or jsonb_typeof(v_set->'reps') is distinct from 'number'
+          or (v_set->>'reps')::numeric < 0
+          or jsonb_typeof(v_set->'distanceKm') is distinct from 'number'
+          or (v_set->>'distanceKm')::numeric < 0
+          or jsonb_typeof(v_set->'durationMin') is distinct from 'number'
+          or (v_set->>'durationMin')::numeric < 0 then
+          raise exception 'program_invalid_set_shape';
+        end if;
+      end loop;
+
+      v_prescription := v_exercise->'prescription';
+      if not (v_prescription ?& array[
+          'repsMin', 'repsMax', 'targetRir', 'restSeconds', 'loadStepKg'
+        ])
+        or jsonb_typeof(v_prescription->'repsMin') is distinct from 'number'
+        or (v_prescription->>'repsMin') !~ '^[0-9]+$'
+        or (v_prescription->>'repsMin')::int not between 1 and 100
+        or jsonb_typeof(v_prescription->'repsMax') is distinct from 'number'
+        or (v_prescription->>'repsMax') !~ '^[0-9]+$'
+        or (v_prescription->>'repsMax')::int not between 1 and 100
+        or (v_prescription->>'repsMin')::int > (v_prescription->>'repsMax')::int
+        or jsonb_typeof(v_prescription->'targetRir') is distinct from 'number'
+        or (v_prescription->>'targetRir') not in ('1','2','3')
+        or jsonb_typeof(v_prescription->'restSeconds') is distinct from 'number'
+        or (v_prescription->>'restSeconds') !~ '^[0-9]+$'
+        or (v_prescription->>'restSeconds')::int not between 60 and 300
+        or jsonb_typeof(v_prescription->'loadStepKg') is distinct from 'number'
+        or (v_prescription->>'loadStepKg') not in ('1','2.5','5') then
+        raise exception 'program_invalid_prescription';
+      end if;
+    end loop;
+  end loop;
+
+  if exists (
+    select 1 from public.program_enrollments
+    where user_id = v_user_id
+      and program_key = p_program_key
+      and program_version = p_program_version
+      and status = 'active'
+  ) then
+    raise exception 'program_already_active';
+  end if;
+
+  select min(plan_date) into v_conflict_date
+  from public.workout_plans
+  where user_id = v_user_id and plan_date = any(v_dates);
+  if v_conflict_date is not null then
+    raise exception 'program_plan_date_taken:%', v_conflict_date;
+  end if;
+
+  begin
+    insert into public.program_enrollments (
+      id, user_id, program_key, program_version, title_snapshot,
+      level_at_start, start_date, timezone, preferred_slots
+    ) values (
+      v_enrollment_id, v_user_id, p_program_key, p_program_version,
+      btrim(p_title_snapshot), p_level_at_start, p_start_date, p_timezone,
+      p_preferred_slots
+    );
+  exception when unique_violation then
+    raise exception 'program_already_active';
+  end;
+
+  for v_plan in select value from jsonb_array_elements(p_plans)
+  loop
+    begin
+      insert into public.workout_plans (
+        user_id, plan_date, source_session_id, exercises, title, scheduled_at,
+        program_enrollment_id, program_week, program_session,
+        program_template_version
+      ) values (
+        v_user_id,
+        (v_plan->>'plan_date')::date,
+        null,
+        v_plan->'exercises',
+        btrim(v_plan->>'title'),
+        (v_plan->>'scheduled_at')::timestamptz,
+        v_enrollment_id,
+        (v_plan->>'week')::smallint,
+        (v_plan->>'session')::smallint,
+        p_program_version
+      );
+    exception when unique_violation then
+      raise exception 'program_plan_date_taken:%', v_plan->>'plan_date';
+    end;
+  end loop;
+
+  return v_enrollment_id;
+end;
+$function$;
+
 -- ── current_streak_days ──
 CREATE OR REPLACE FUNCTION public.current_streak_days(p_user_id uuid)
  RETURNS integer
@@ -1870,11 +2182,12 @@ CREATE OR REPLACE FUNCTION public.move_workout_plan(p_plan_id uuid, p_target_dat
  RETURNS workout_plans
  LANGUAGE plpgsql
  SECURITY DEFINER
- SET search_path TO 'public'
+ SET search_path TO ''
 AS $function$
 declare
   v_plan public.workout_plans%rowtype;
   v_existing_id uuid;
+  v_existing_enrollment_id uuid;
   v_today date;
 begin
   if auth.uid() is null then
@@ -1899,8 +2212,12 @@ begin
   if not found then
     raise exception 'plan_not_found';
   end if;
+  if v_plan.program_enrollment_id is not null then
+    raise exception 'program_plan_use_reschedule';
+  end if;
 
-  select id into v_existing_id
+  select id, program_enrollment_id
+    into v_existing_id, v_existing_enrollment_id
   from public.workout_plans
   where user_id = auth.uid()
     and plan_date = p_target_date
@@ -1911,17 +2228,23 @@ begin
     raise exception 'plan_date_taken';
   end if;
 
+  if v_existing_enrollment_id is not null then
+    raise exception 'program_plan_use_reschedule';
+  end if;
+
   if v_existing_id is not null then
     delete from public.workout_plans where id = v_existing_id;
   end if;
 
   update public.workout_plans
-  set plan_date = p_target_date
+  set plan_date = p_target_date,
+      scheduled_at = null
   where id = p_plan_id
   returning * into v_plan;
 
   return v_plan;
-end $function$;
+end;
+$function$;
 
 -- ── notify ──
 CREATE OR REPLACE FUNCTION public.notify(p_user_id uuid, p_actor_id uuid, p_type text, p_reference_id uuid, p_title text, p_body text)
@@ -2061,6 +2384,19 @@ begin
   end if;
   return new;
 end $function$;
+
+-- ── owns_program_enrollment ──
+CREATE OR REPLACE FUNCTION public.owns_program_enrollment(eid uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select exists (
+    select 1 from program_enrollments
+    where id = eid and user_id = auth.uid()
+  )
+$function$;
 
 -- ── owns_workout_exercise ──
 CREATE OR REPLACE FUNCTION public.owns_workout_exercise(eid uuid)
@@ -2262,6 +2598,197 @@ begin
   if v_count = 0 then raise exception 'not_crew'; end if;
   return jsonb_build_object('status', 'removed');
 end $function$;
+
+-- ── reschedule_program_plans ──
+CREATE OR REPLACE FUNCTION public.reschedule_program_plans(p_enrollment_id uuid, p_moves jsonb)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  v_user_id uuid := auth.uid();
+  v_enrollment public.program_enrollments%rowtype;
+  v_today date;
+  v_move jsonb;
+  v_move_index bigint;
+  v_plan_id uuid;
+  v_plan_ids uuid[] := array[]::uuid[];
+  v_target_date date;
+  v_target_dates date[] := array[]::date[];
+  v_scheduled_at timestamptz;
+  v_conflict_date date;
+  v_bad_count int;
+  v_temp_date date;
+begin
+  if v_user_id is null then
+    raise exception 'not_authenticated';
+  end if;
+  if p_enrollment_id is null then
+    raise exception 'program_enrollment_not_found';
+  end if;
+  if p_moves is null
+    or jsonb_typeof(p_moves) <> 'array'
+    or jsonb_array_length(p_moves) not between 1 and 18
+    or octet_length(p_moves::text) > 100000 then
+    raise exception 'program_invalid_moves';
+  end if;
+
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(v_user_id::text, 0)
+  );
+
+  select * into v_enrollment
+  from public.program_enrollments
+  where id = p_enrollment_id
+    and user_id = v_user_id
+    and status = 'active'
+  for update;
+  if not found then
+    raise exception 'program_enrollment_not_found';
+  end if;
+  v_today := (now() at time zone v_enrollment.timezone)::date;
+
+  for v_move, v_move_index in
+    select value, ordinality
+    from jsonb_array_elements(p_moves) with ordinality
+  loop
+    if jsonb_typeof(v_move) is distinct from 'object'
+      or not (v_move ?& array['plan_id', 'plan_date', 'scheduled_at'])
+      or jsonb_typeof(v_move->'plan_id') is distinct from 'string'
+      or (v_move->>'plan_id') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' then
+      raise exception 'program_invalid_plan_id';
+    end if;
+    v_plan_id := (v_move->>'plan_id')::uuid;
+    if v_plan_id = any(v_plan_ids) then
+      raise exception 'program_move_plan_duplicate';
+    end if;
+    if not exists (
+      select 1 from public.workout_plans
+      where id = v_plan_id
+        and user_id = v_user_id
+        and program_enrollment_id = p_enrollment_id
+    ) then
+      raise exception 'program_plan_not_found';
+    end if;
+    v_plan_ids := array_append(v_plan_ids, v_plan_id);
+
+    if jsonb_typeof(v_move->'plan_date') is distinct from 'string'
+      or (v_move->>'plan_date') !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' then
+      raise exception 'program_invalid_plan_date';
+    end if;
+    begin
+      v_target_date := (v_move->>'plan_date')::date;
+    exception when others then
+      raise exception 'program_invalid_plan_date';
+    end;
+    if v_target_date::text <> v_move->>'plan_date'
+      or v_target_date < v_today
+      or v_target_date > v_today + 730 then
+      raise exception 'program_invalid_plan_date';
+    end if;
+    if v_target_date = any(v_target_dates) then
+      raise exception 'program_plan_date_duplicate:%', v_target_date;
+    end if;
+    v_target_dates := array_append(v_target_dates, v_target_date);
+
+    if jsonb_typeof(v_move->'scheduled_at') is distinct from 'string' then
+      raise exception 'program_invalid_scheduled_at';
+    end if;
+    begin
+      v_scheduled_at := (v_move->>'scheduled_at')::timestamptz;
+    exception when others then
+      raise exception 'program_invalid_scheduled_at';
+    end;
+    if (v_scheduled_at at time zone v_enrollment.timezone)::date <> v_target_date then
+      raise exception 'program_scheduled_date_mismatch';
+    end if;
+    if not exists (
+      select 1 from jsonb_array_elements(v_enrollment.preferred_slots) slot
+      where slot->>'time' = to_char(
+        v_scheduled_at at time zone v_enrollment.timezone,
+        'HH24:MI'
+      )
+    ) then
+      raise exception 'program_scheduled_time_mismatch';
+    end if;
+  end loop;
+
+  -- 옮기는 행 자신의 기존 날짜는 충돌에서 제외한다. 옮기지 않는 같은 프로그램
+  -- 회차와 다른 모든 계획은 그대로 충돌 대상이다.
+  select min(plan_date) into v_conflict_date
+  from public.workout_plans
+  where user_id = v_user_id
+    and plan_date = any(v_target_dates)
+    and not (id = any(v_plan_ids));
+  if v_conflict_date is not null then
+    raise exception 'program_plan_date_taken:%', v_conflict_date;
+  end if;
+
+  -- 실제 UPDATE 전에 최종 주차·회차 순서와 최소 48시간(날짜 차이 2일)을 검증한다.
+  select count(*) into v_bad_count
+  from (
+    select final_date,
+      lag(final_date) over (order by program_week, program_session) as previous_date
+    from (
+      select wp.program_week, wp.program_session,
+        coalesce(
+          (
+            select (move->>'plan_date')::date
+            from jsonb_array_elements(p_moves) move
+            where (move->>'plan_id')::uuid = wp.id
+          ),
+          wp.plan_date
+        ) as final_date
+      from public.workout_plans wp
+      where wp.user_id = v_user_id
+        and wp.program_enrollment_id = p_enrollment_id
+    ) final_rows
+  ) ordered_rows
+  where previous_date is not null
+    and final_date - previous_date < 2;
+  if v_bad_count > 0 then
+    raise exception 'program_recovery_gap';
+  end if;
+
+  -- 기존 enrollment 안에서 날짜를 서로 넘겨받는 연쇄 이동도 허용하려고 잠시
+  -- 사용자에게 허용하지 않는 9999년 임시 날짜로 옮긴 뒤 최종 날짜를 쓴다.
+  if exists (
+    select 1 from public.workout_plans
+    where user_id = v_user_id
+      and plan_date between date '9999-01-01' and date '9999-01-18'
+      and not (id = any(v_plan_ids))
+  ) then
+    raise exception 'program_temp_date_taken';
+  end if;
+
+  for v_move, v_move_index in
+    select value, ordinality
+    from jsonb_array_elements(p_moves) with ordinality
+  loop
+    v_temp_date := date '9999-01-01' + (v_move_index::int - 1);
+    update public.workout_plans
+    set plan_date = v_temp_date,
+        scheduled_at = v_temp_date::timestamp at time zone v_enrollment.timezone
+    where id = (v_move->>'plan_id')::uuid
+      and user_id = v_user_id
+      and program_enrollment_id = p_enrollment_id;
+  end loop;
+
+  for v_move in select value from jsonb_array_elements(p_moves)
+  loop
+    update public.workout_plans
+    set plan_date = (v_move->>'plan_date')::date,
+        scheduled_at = (v_move->>'scheduled_at')::timestamptz
+    where id = (v_move->>'plan_id')::uuid
+      and user_id = v_user_id
+      and program_enrollment_id = p_enrollment_id;
+    if not found then
+      raise exception 'program_plan_not_found';
+    end if;
+  end loop;
+end;
+$function$;
 
 -- ── search_profile_by_nickname ──
 CREATE OR REPLACE FUNCTION public.search_profile_by_nickname(p_nickname text)
@@ -3006,6 +3533,16 @@ $function$;
 -- profiles_update_own  [UPDATE]  roles=public
 --   using  : (id = auth.uid())
 --   check  : (id = auth.uid())
+-- ── program_enrollments ──
+-- program_enrollments_delete_own  [DELETE]  roles=public
+--   using  : (user_id = auth.uid())
+-- program_enrollments_insert_own  [INSERT]  roles=public
+--   check  : (user_id = auth.uid())
+-- program_enrollments_select_own  [SELECT]  roles=public
+--   using  : (user_id = auth.uid())
+-- program_enrollments_update_own  [UPDATE]  roles=public
+--   using  : (user_id = auth.uid())
+--   check  : (user_id = auth.uid())
 -- ── push_subscriptions ──
 -- push_subscriptions_own  [ALL]  roles=authenticated
 --   using  : (user_id = auth.uid())
@@ -3073,14 +3610,14 @@ $function$;
 -- workout_plans_delete_own  [DELETE]  roles=public
 --   using  : (user_id = auth.uid())
 -- workout_plans_insert_own  [INSERT]  roles=public
---   check  : ((user_id = auth.uid()) AND ((source_session_id IS NULL) OR owns_workout_session(source_session_id)) AND (plan_date >= ((now() AT TIME ZONE COALESCE(( SELECT profiles.timezone
+--   check  : ((user_id = auth.uid()) AND (program_enrollment_id IS NULL) AND (program_week IS NULL) AND (program_session IS NULL) AND (program_template_version IS NULL) AND ((source_session_id IS NULL) OR owns_workout_session(source_session_id)) AND (plan_date >= ((now() AT TIME ZONE COALESCE(( SELECT profiles.timezone
    FROM profiles
   WHERE (profiles.id = auth.uid())), 'Asia/Seoul'::text)))::date))
 -- workout_plans_select_own  [SELECT]  roles=public
 --   using  : (user_id = auth.uid())
 -- workout_plans_update_own  [UPDATE]  roles=public
---   using  : (user_id = auth.uid())
---   check  : ((user_id = auth.uid()) AND ((source_session_id IS NULL) OR owns_workout_session(source_session_id)) AND (plan_date >= ((now() AT TIME ZONE COALESCE(( SELECT profiles.timezone
+--   using  : ((user_id = auth.uid()) AND (program_enrollment_id IS NULL))
+--   check  : ((user_id = auth.uid()) AND (program_enrollment_id IS NULL) AND (program_week IS NULL) AND (program_session IS NULL) AND (program_template_version IS NULL) AND ((source_session_id IS NULL) OR owns_workout_session(source_session_id)) AND (plan_date >= ((now() AT TIME ZONE COALESCE(( SELECT profiles.timezone
    FROM profiles
   WHERE (profiles.id = auth.uid())), 'Asia/Seoul'::text)))::date))
 -- ── workout_routines ──
@@ -3097,7 +3634,7 @@ $function$;
 -- sessions_delete_own  [DELETE]  roles=public
 --   using  : (user_id = auth.uid())
 -- sessions_insert_own_draft  [INSERT]  roles=public
---   check  : ((user_id = auth.uid()) AND (status = 'draft'::text) AND (started_at IS NULL) AND (completed_at IS NULL) AND ((group_id IS NULL) OR is_group_member(group_id, auth.uid())))
+--   check  : ((user_id = auth.uid()) AND (status = 'draft'::text) AND (started_at IS NULL) AND (completed_at IS NULL) AND ((group_id IS NULL) OR is_group_member(group_id, auth.uid())) AND ((program_enrollment_id IS NULL) OR owns_program_enrollment(program_enrollment_id)))
 -- sessions_select_own_or_crew  [SELECT]  roles=public
 --   using  : ((user_id = auth.uid()) OR ((visibility = 'group'::text) AND (status = 'completed'::text) AND (deleted_at IS NULL) AND is_crew_with(user_id)))
 -- sessions_update_own  [UPDATE]  roles=public
@@ -3161,6 +3698,9 @@ $function$;
 -- CREATE UNIQUE INDEX profiles_invite_code_unique ON public.profiles USING btree (invite_code) WHERE (invite_code IS NOT NULL);
 -- CREATE UNIQUE INDEX profiles_nickname_unique ON public.profiles USING btree (lower(TRIM(BOTH FROM nickname)));
 -- CREATE UNIQUE INDEX profiles_pkey ON public.profiles USING btree (id);
+-- CREATE UNIQUE INDEX program_enrollments_one_active_version ON public.program_enrollments USING btree (user_id, program_key, program_version) WHERE (status = 'active'::text);
+-- CREATE UNIQUE INDEX program_enrollments_pkey ON public.program_enrollments USING btree (id);
+-- CREATE INDEX program_enrollments_user_recent ON public.program_enrollments USING btree (user_id, created_at DESC);
 -- CREATE UNIQUE INDEX push_subscriptions_endpoint_key ON public.push_subscriptions USING btree (endpoint);
 -- CREATE UNIQUE INDEX push_subscriptions_pkey ON public.push_subscriptions USING btree (id);
 -- CREATE INDEX push_subscriptions_user_idx ON public.push_subscriptions USING btree (user_id);
@@ -3184,6 +3724,7 @@ $function$;
 -- CREATE UNIQUE INDEX workout_images_pkey ON public.workout_images USING btree (id);
 -- CREATE UNIQUE INDEX workout_images_session_id_key ON public.workout_images USING btree (session_id);
 -- CREATE UNIQUE INDEX workout_plans_pkey ON public.workout_plans USING btree (id);
+-- CREATE UNIQUE INDEX workout_plans_program_slot ON public.workout_plans USING btree (program_enrollment_id, program_week, program_session) WHERE (program_enrollment_id IS NOT NULL);
 -- CREATE INDEX workout_plans_user_date ON public.workout_plans USING btree (user_id, plan_date);
 -- CREATE UNIQUE INDEX workout_plans_user_id_plan_date_key ON public.workout_plans USING btree (user_id, plan_date);
 -- CREATE UNIQUE INDEX workout_routines_pkey ON public.workout_routines USING btree (id);
@@ -3191,6 +3732,7 @@ $function$;
 -- CREATE INDEX workout_routines_user_updated ON public.workout_routines USING btree (user_id, updated_at DESC);
 -- CREATE UNIQUE INDEX workout_sessions_one_active ON public.workout_sessions USING btree (user_id) WHERE (status = 'active'::text);
 -- CREATE UNIQUE INDEX workout_sessions_pkey ON public.workout_sessions USING btree (id);
+-- CREATE INDEX workout_sessions_program_progress ON public.workout_sessions USING btree (program_enrollment_id, program_week, program_session) WHERE (program_enrollment_id IS NOT NULL);
 -- CREATE INDEX workout_sessions_user_completed ON public.workout_sessions USING btree (user_id, completed_at DESC) WHERE (status = 'completed'::text);
 -- CREATE UNIQUE INDEX workout_sets_pkey ON public.workout_sets USING btree (id);
 -- CREATE UNIQUE INDEX workout_sets_workout_exercise_id_set_number_key ON public.workout_sets USING btree (workout_exercise_id, set_number);
