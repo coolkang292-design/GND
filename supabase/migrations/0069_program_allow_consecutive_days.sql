@@ -453,7 +453,9 @@ begin
     raise exception 'program_plan_date_taken:%', v_conflict_date;
   end if;
 
-  -- 실제 UPDATE 전에 최종 주차·회차 순서와 최소 48시간(날짜 차이 2일)을 검증한다.
+  -- 실제 UPDATE 전에 최종 주차·회차 순서를 검증한다.
+  -- 0069: 예전에는 최소 48시간(2일)을 요구했다. 이제 같은 날 두 회차와
+  --       날짜 역행만 막는다 — 연속 3일은 사용자가 고를 수 있다.
   select count(*) into v_bad_count
   from (
     select final_date,
