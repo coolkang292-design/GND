@@ -76,11 +76,11 @@ describe("ProgramDetail", () => {
     expect(screen.getByRole("heading", { name: "시선이 머무는 어깨" })).toBeTruthy();
     expect(screen.getByText("주 3회 · 6주 · 18회 · 회당 50–65분")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "이런 사람에게 맞아요" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "A회차 미리보기" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "회차별 상세" })).toBeTruthy();
     expect(screen.getByText(/최근 기록을 바탕으로 8–10회/)).toBeTruthy();
     expect(screen.getByText(/통증이 느껴지면 운동을 중단/)).toBeTruthy();
     expect(screen.getAllByTestId("program-stat")).toHaveLength(4);
-    expect(screen.getByText("운동")).toBeTruthy();
+    expect(screen.getByText("운동 · 세트")).toBeTruthy();
     expect(screen.getByText("반복")).toBeTruthy();
     expect(screen.getByText("세트 사이 휴식")).toBeTruthy();
     expect(screen.getAllByTestId("exercise-preview-row")).toHaveLength(
@@ -142,7 +142,40 @@ describe("ProgramDetail", () => {
     expect(screen.queryByText(description)).toBeNull();
   });
 
-  it("프로그램 5종의 A회차 운동 모두 설명을 열 수 있다", () => {
+  it("6주 전체 반복 구조와 A·B·C 회차별 운동표를 전환해 보여준다", () => {
+    render(
+      <ProgramDetail
+        program={OFFICIAL_PROGRAMS[0]}
+        onBack={vi.fn()}
+        onSchedule={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "A·B·C 세 회차를 6주 동안 반복해요" }),
+    ).toBeTruthy();
+    expect(screen.getAllByTestId("program-roadmap-week")).toHaveLength(6);
+    expect(screen.getAllByText("A · B · C")).toHaveLength(6);
+
+    const aTab = screen.getByRole("tab", { name: "A회 · 밀고 세우기" });
+    const bTab = screen.getByRole("tab", { name: "B회 · 등판과 뒤쪽 어깨" });
+    const cTab = screen.getByRole("tab", { name: "C회 · 옆선과 전신 균형" });
+    expect(aTab.getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByText("바벨 백스쿼트")).toBeTruthy();
+    expect(screen.getAllByText("초보·경험 3세트").length).toBeGreaterThan(0);
+
+    fireEvent.click(bTab);
+    expect(bTab.getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByText("루마니안 데드리프트")).toBeTruthy();
+    expect(screen.queryByText("바벨 백스쿼트")).toBeNull();
+
+    fireEvent.click(cTab);
+    expect(cTab.getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByText("덤벨 레터럴 레이즈")).toBeTruthy();
+    expect(screen.getByText("초보 3세트 · 경험 4세트")).toBeTruthy();
+  });
+
+  it("프로그램 5종의 A·B·C 운동 모두 설명을 열 수 있다", () => {
     for (const program of OFFICIAL_PROGRAMS) {
       const view = render(
         <ProgramDetail
@@ -152,18 +185,26 @@ describe("ProgramDetail", () => {
         />,
       );
 
-      for (const exercise of program.sessions[0].exercises) {
-        const trigger = screen.getByRole("button", {
-          name: `${exercise.exerciseName} 설명 보기`,
-        });
-        fireEvent.click(trigger);
-        expect(
-          screen.getByTestId("exercise-preview-description").textContent?.trim()
-            .length,
-        ).toBeGreaterThan(10);
-        fireEvent.click(trigger);
+      for (const session of program.sessions) {
+        fireEvent.click(
+          screen.getByRole("tab", {
+            name: `${session.key}회 · ${session.title}`,
+          }),
+        );
+
+        for (const exercise of session.exercises) {
+          const trigger = screen.getByRole("button", {
+            name: `${exercise.exerciseName} 설명 보기`,
+          });
+          fireEvent.click(trigger);
+          expect(
+            screen.getByTestId("exercise-preview-description").textContent?.trim()
+              .length,
+          ).toBeGreaterThan(10);
+          fireEvent.click(trigger);
+        }
       }
       view.unmount();
     }
-  });
+  }, 15_000);
 });

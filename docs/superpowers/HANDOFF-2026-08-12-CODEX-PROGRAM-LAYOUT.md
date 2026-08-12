@@ -261,3 +261,133 @@ pnpm exec eslint 'src/app/(tabs)/record/programs/page.tsx'
 9. 통합 뒤 Codex가 확인해야 할 위험
 
 완료했다고 말하기 전에 현재 화면을 직접 확인한다. 배포하지 않는다.
+
+---
+
+## 12. 2026-08-12 Codex 작업 중지 시점 인계 상태
+
+사용자 요청으로 구현을 중지하고 Claude가 이어서 작업하도록 현재 상태를 기록한다.
+
+### Git 기준
+
+- 작업공간: `C:\Users\SAMSUNG\workout-app\.worktrees\gnd-recommendation-programs`
+- 브랜치: `codex/gnd-recommendation-programs`
+- 완료 커밋: `c7f27cbb32b8d4f69b0f32582e3ee5aeb73ab2c3` (`feat: 운동 추가와 프로그램 화면 레이아웃 개선`)
+- 아래 6주 전체 구성 작업은 **미커밋** 상태다.
+- `tmp/`는 작업 전부터 있던 추적되지 않은 폴더다. 열거나 스테이징하지 않는다.
+- 배포·push·main 병합·DB 작업은 하지 않았다.
+
+### 완료 커밋 `c7f27cb`에 포함된 화면 변경
+
+- 운동 없음 화면의 기존 이미지를 유지하면서 설명과 첫 운동 추가 행동을 하나의 시작 카드로 통합했다.
+- 운동 추가 허브에서 프로그램 시작과 직접 선택의 위계를 정리했다.
+- 프로그램 5종을 대표 카드 1장 + 2×2 카드로 정리했다.
+- 프로그램 상세의 이미지 크롭, 핵심 수치, 적합 대상, 운동표, 자동 설정 안내, 안전 안내, 고정 CTA 위계를 정리했다.
+- 일정 등록을 3단계 구조로 정리하고 18회 미리보기와 완료 화면을 개선했다.
+- 운동명을 누르면 같은 표 안에서 짧은 설명을 펼치는 기능과 `세트 사이 휴식` 표기를 추가했다.
+- 새 이미지·아이콘 자산은 만들지 않았고 승인된 대표 이미지 5장을 그대로 사용했다.
+
+### 현재 미커밋 변경 파일
+
+- `src/components/programs/program-catalog.tsx`
+- `src/components/programs/program-catalog.test.tsx`
+- `src/components/programs/exercise-preview-notes.ts`
+- 이 인수인계서
+
+현재 코드 변경 규모는 프로그램 컴포넌트 3파일 기준 `177 insertions(+), 31 deletions(-)`다.
+
+### 현재 미커밋 화면 변경
+
+- 프로그램 상세에 `6주 전체 구성` 카드를 추가했다.
+- 1주부터 6주까지 각각 `A · B · C`를 보여 주며, 현재 데이터가 주차별 변형 없이 같은 세 회차를 반복한다는 사실만 표현한다.
+- `회차별 상세`에서 A/B/C 탭을 직접 전환할 수 있다.
+- 선택한 회차의 모든 운동, 반복 범위, 세트 사이 휴식, 초보·경험자 세트 수를 보여 준다.
+- 세트 수가 같으면 `초보·경험 3세트`, 다르면 `초보 2세트 · 경험 3세트`처럼 표시한다.
+- B/C에서 새로 노출되는 운동을 포함해 공식 프로그램의 고유 운동 27종 모두 짧은 설명을 열 수 있게 보완했다.
+- 기능 로직과 `official-programs.ts` 데이터는 변경하지 않았다.
+
+### TDD 기록
+
+1. 6주 로드맵, A/B/C 탭 전환, 세트 수, 모든 회차 설명 테스트를 먼저 추가했다.
+2. 첫 실행: 7개 중 3개 실패. `회차별 상세`, 6주 로드맵, 탭이 없는 예상된 RED였다.
+3. 구현 뒤 단일 파일 테스트: `7/7` 통과.
+4. 관련 화면 전체 테스트: `5 files, 32/32` 통과.
+
+검증 명령과 결과:
+
+```powershell
+pnpm test -- src/components/programs/program-catalog.test.tsx src/components/programs/program-flow.test.tsx src/components/programs/program-schedule-setup.test.tsx src/components/record/exercise-entry-hub.test.tsx src/components/record/record-empty-state.test.tsx
+# 5 files, 32 tests passed
+
+pnpm typecheck
+# exit 0
+
+pnpm exec eslint src/components/programs/program-catalog.tsx src/components/programs/program-catalog.test.tsx src/components/programs/exercise-preview-notes.ts
+# exit 0
+
+git diff --check
+# exit 0, Windows LF→CRLF 경고만 표시
+```
+
+전체 test와 build는 원래 인수인계 범위대로 아직 실행하지 않았다. Claude 기능 통합 뒤 한 번 실행한다.
+
+### 개발 서버 직접 확인
+
+- 개발 서버: `http://localhost:3100`
+- 확인 페이지: `http://localhost:3100/record/programs`
+- 현재 리스너 PID: `22788`
+- 실행 명령: `pnpm exec next dev -p 3100`
+- 표준 출력 로그: `C:\Users\SAMSUNG\AppData\Local\Temp\gnd-codex-dev-3100-v2.out.log`
+- 오류 로그: `C:\Users\SAMSUNG\AppData\Local\Temp\gnd-codex-dev-3100-v2.err.log`
+
+직접 누른 흐름:
+
+1. 프로그램 목록에서 `시선이 머무는 어깨` 선택
+2. 상세에서 1~6주 `A · B · C` 여섯 개 확인
+3. B 탭 선택 → `등판과 뒤쪽 어깨`와 `루마니안 데드리프트` 표시 확인
+4. `루마니안 데드리프트 설명 보기` 선택 → 설명 펼침 확인
+5. C 탭 선택 → `덤벨 레터럴 레이즈`, `초보 3세트 · 경험 4세트` 확인
+6. 모바일 390×844에서 `bodyScrollWidth = viewportWidth = 390`, 가로 넘침 없음
+7. 데스크톱 1280×900에서 `bodyScrollWidth = viewportWidth = 1280`, 앱 본문 폭 430px로 중앙 정렬 확인
+8. 브라우저 콘솔 error/warning 0건
+
+앱 내 브라우저에는 `/record/programs` 한 탭만 남겼고 C회차가 선택된 상태다. 임시 뷰포트 강제 설정은 해제했다.
+
+### 사용자와 확정했지만 아직 구현하지 않은 기능
+
+다음은 이번 레이아웃 허용 파일 밖이므로 구현하지 않았다.
+
+1. 주 3회 선택은 유지하되 요일 간격 제한 제거
+   - 금·토·일 같은 연속 3일 허용이 사용자 확정 사항이다.
+   - 현재 UI·도메인·DB의 회복 간격 제한은 그대로 남아 있다.
+   - 관련 금지 파일: `src/lib/domain/program-schedule.ts`, `src/lib/programs.ts`, 마이그레이션/RPC.
+
+2. 프로그램 운동표 입력 간소화
+   - 반복 횟수 자동 채움
+   - 최근 기록 기반 무게 제안
+   - 운동별 한 번 확인하면 모든 세트에 적용
+   - 운동 중 변경 시 남은 세트에 반영
+   - 신규 사용자는 운동별 최초 한 번만 입력
+   - 관련 금지 파일: `src/app/(tabs)/record/page.tsx`와 무게·운동 카드 로직.
+
+3. 종목별 세트 사이 휴식 타이머 자동 적용
+   - 프로그램 데이터의 `restSeconds`는 계획에 저장되지만 실제 운동 타이머는 현재 전역 기본값을 사용한다.
+   - 상세 화면의 `무게와 휴식도 미리 맞춰드려요` 문구는 실제 실행 기능보다 앞서 있으므로 통합 전 반드시 기능 구현 또는 문구 하향 조정이 필요하다.
+
+### Claude가 이어서 할 권장 순서
+
+1. 먼저 `git status --short`로 위 미커밋 3개 코드 파일과 이 문서만 있는지 확인한다.
+2. 앱 내 브라우저의 현재 C회차 화면을 보고 6주 로드맵과 운동표의 정보 밀도가 적절한지 판단한다.
+3. 현재 미커밋 구현을 유지한다면 관련 32개 테스트와 정적 검사를 다시 한 번 실행한 뒤 별도 커밋한다.
+4. Claude의 기능 작업과 통합할 때 위 세 가지 미구현 기능을 연결한다.
+5. 연속 3일 허용은 DB/RPC와 클라이언트 검증을 함께 바꿔야 하므로 별도 고위험 작업으로 처리한다.
+6. 전체 test·build 후 `/record` → 프로그램 선택 → 일정 등록 → 실제 운동 시작까지 개발 서버에서 다시 클릭한다.
+
+### 충돌 여부와 통합 위험
+
+- 현재 코드 변경은 `src/components/programs/*` 세 파일뿐이며 Claude 병행 작업공간의 `record/page.tsx`, 캘린더, 피드, 프로필, 챌린지, DB 파일과 겹치지 않았다.
+- 이 인수인계서 갱신 외에는 문서나 금지 파일을 수정하지 않았다.
+- 6주 로드맵은 주차별 점진 과부하나 단계 구성을 새로 만든 것이 아니다. 현재 데이터의 A/B/C 반복을 정직하게 시각화한 것이다.
+- 실제 일정 날짜는 기존 3단계 미리보기에서 별도로 보여 준다.
+- `selectedSessionKey`는 상세 컴포넌트가 프로그램 변경 때 재마운트된다는 현재 흐름을 전제로 한다. 같은 컴포넌트 인스턴스에서 `program` prop만 교체하는 통합이 생기면 A회차로 초기화하는 처리가 필요하다.
+- 개발 서버는 유지했지만 Codex 작업 종료나 PC 상태에 따라 PID가 바뀔 수 있으므로 Claude가 시작할 때 HTTP 200과 리스너를 다시 확인한다.
