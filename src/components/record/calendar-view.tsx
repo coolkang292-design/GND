@@ -157,7 +157,17 @@ export function CalendarView({
     /** 타바타 세션이면 코스 분수 — 예정표도 타바타로 남는다 (0059) */
     tabataMinutes?: number | null,
   ) => Promise<WorkoutPlan>;
-  onLoadPlan: (plan: WorkoutPlan) => boolean;
+  /**
+   * 예정표를 오늘 운동으로 가져온다.
+   *
+   * `startNow`면 **불러오기와 시작을 한 번에** 한다 (사용자 지시 2026-08-12).
+   * 계획은 종목·세트·반복·휴식을 이미 들고 있어 "준비"할 내용물이 없었다 —
+   * 이미 정한 것을 한 번 더 묻는 단계였다.
+   */
+  onLoadPlan: (
+    plan: WorkoutPlan,
+    options?: { startNow?: boolean },
+  ) => boolean | Promise<boolean>;
   onCreateCustom: (input: {
     name: string;
     bodyPart: BodyPart;
@@ -919,17 +929,26 @@ export function CalendarView({
                   <div className="mt-2.5">
                     <SetBreakdown exercises={selectedPlan.exercises} />
                   </div>
+                  {/*
+                    전신 인터벌만 '준비하기'로 남는다 — 음원과 코스를 시트에서
+                    확인하고 시작하므로, 그 시트가 곧 시작 화면이다.
+                  */}
                   {selectedDate === todayKey && (
                     <button
                       onClick={() => {
-                        if (onLoadPlan(selectedPlan)) setSelectedDate(null);
+                        void (async () => {
+                          const started = await onLoadPlan(selectedPlan, {
+                            startNow: !selectedPlan.tabataMinutes,
+                          });
+                          if (started) setSelectedDate(null);
+                        })();
                       }}
                       disabled={planBusy}
                       className="mt-3 h-10 w-full rounded-card-sm bg-good text-sm font-extrabold text-white disabled:opacity-50"
                     >
                       {selectedPlan.tabataMinutes
                         ? "🔥 전신 인터벌 준비하기"
-                        : "운동 준비하기"}
+                        : "운동 시작하기"}
                     </button>
                   )}
                   {/*

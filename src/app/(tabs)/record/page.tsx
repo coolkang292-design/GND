@@ -1433,7 +1433,22 @@ function WorkoutScreen({ userId }: { userId: string }) {
     setDraft(emptyDraft(d.restSeconds));
   }
 
-  function handleLoadPlan(plan: WorkoutPlan): boolean {
+  /**
+   * 예정표를 오늘 운동으로 가져온다.
+   *
+   * `startNow`면 **불러오기와 시작을 한 번에** 한다 (사용자 지시 2026-08-12).
+   * 예전에는 `운동 준비하기` → `운동 시작` 두 번이었는데, 계획이 종목·세트·반복·
+   * 휴식·무게를 이미 들고 있어 **그 사이에 준비할 내용물이 없었다.** 계획이 없는
+   * 날에는 종목을 담는 행위가 곧 준비라 이 단계 자체가 없었다 — 계획 있는 날에만
+   * 있던 빈 단계였다.
+   *
+   * ⚠️ 전신 인터벌은 `startNow`를 받지 않는다. 음원·코스를 시트에서 고르는 것이
+   *    곧 시작이라, 여기서 세션을 먼저 열면 시트가 그 위에 뜬다.
+   */
+  async function handleLoadPlan(
+    plan: WorkoutPlan,
+    options?: { startNow?: boolean },
+  ): Promise<boolean> {
     if (active) {
       showToast("운동 중에는 다른 예정표를 불러올 수 없어요");
       return false;
@@ -1497,6 +1512,12 @@ function WorkoutScreen({ userId }: { userId: string }) {
     // 무게는 **비동기로 뒤따라 채운다.** 지난 기록 조회를 기다리느라 화면 전환이
     // 늦어지면, 사용자는 버튼이 안 먹은 줄 안다.
     if (program) void fillProgramLoads(exercises);
+    if (options?.startNow) {
+      // `setDraft`가 `draftRef`를 동기 갱신하므로 바로 시작해도 최신 목록을 본다
+      // (beginTabata와 같은 경로).
+      await handleStart();
+      return draftRef.current.startedAtMs !== null;
+    }
     showToast("예정표를 불러왔어요 — 준비되면 운동을 시작하세요");
     return true;
   }

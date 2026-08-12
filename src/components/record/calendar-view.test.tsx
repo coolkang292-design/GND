@@ -634,3 +634,87 @@ describe("CalendarView — 남은 일정 재배치 (2026-08-12)", () => {
     }
   });
 });
+
+/**
+ * 계획이 있는 날은 준비 단계를 건너뛴다 (사용자 지시 2026-08-12).
+ *
+ * 예전에는 `운동 준비하기` → 운동 탭으로 이동 → `운동 시작`으로 **두 번** 눌러야
+ * 했다. 계획을 이미 짜 둔 날에 "준비"를 한 번 더 시키는 것은 같은 결정을 두 번
+ * 묻는 것이다.
+ *
+ * ⚠️ 전신 인터벌 계획은 예외다 — 시트에서 음원·코스를 확인하고 시작한다.
+ */
+describe("CalendarView — 계획한 날 바로 시작 (2026-08-12)", () => {
+  const todayPlan = { ...PLAN, id: "plan-today", planDate: "2026-08-15" };
+
+  it("오늘 계획의 버튼은 '운동 시작하기'다", async () => {
+    mocks.getWorkoutPlans.mockResolvedValue([todayPlan]);
+    await setup();
+
+    fireEvent.click(screen.getByRole("button", { name: "8월 15일" }));
+
+    expect(screen.getByRole("button", { name: "운동 시작하기" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "운동 준비하기" })).toBeNull();
+  });
+
+  it("누르면 바로 시작하라고 알린다", async () => {
+    const onLoadPlan = vi.fn().mockReturnValue(true);
+    mocks.getWorkoutPlans.mockResolvedValue([todayPlan]);
+    render(
+      <CalendarView
+        userId="user-1"
+        catalog={[]}
+        onScheduleSession={vi.fn()}
+        onLoadPlan={onLoadPlan}
+        onCreateCustom={vi.fn()}
+      />,
+    );
+    await screen.findByText("2026년 8월");
+
+    fireEvent.click(screen.getByRole("button", { name: "8월 15일" }));
+    fireEvent.click(screen.getByRole("button", { name: "운동 시작하기" }));
+
+    await waitFor(() => expect(onLoadPlan).toHaveBeenCalledTimes(1));
+    expect(onLoadPlan).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "plan-today" }),
+      { startNow: true },
+    );
+  });
+
+  it("전신 인터벌 계획은 시트를 여는 준비하기로 남는다", async () => {
+    const onLoadPlan = vi.fn().mockReturnValue(true);
+    mocks.getWorkoutPlans.mockResolvedValue([
+      { ...todayPlan, id: "plan-interval", tabataMinutes: 8 },
+    ]);
+    render(
+      <CalendarView
+        userId="user-1"
+        catalog={[]}
+        onScheduleSession={vi.fn()}
+        onLoadPlan={onLoadPlan}
+        onCreateCustom={vi.fn()}
+      />,
+    );
+    await screen.findByText("2026년 8월");
+
+    fireEvent.click(screen.getByRole("button", { name: "8월 15일" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "🔥 전신 인터벌 준비하기" }),
+    );
+
+    await waitFor(() => expect(onLoadPlan).toHaveBeenCalledTimes(1));
+    expect(onLoadPlan).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "plan-interval" }),
+      { startNow: false },
+    );
+  });
+
+  it("오늘이 아닌 날에는 시작 버튼을 내지 않는다", async () => {
+    mocks.getWorkoutPlans.mockResolvedValue([PLAN]);
+    await setup();
+
+    fireEvent.click(screen.getByRole("button", { name: "8월 16일" }));
+
+    expect(screen.queryByRole("button", { name: /운동 시작하기/ })).toBeNull();
+  });
+});
