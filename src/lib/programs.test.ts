@@ -246,6 +246,84 @@ describe("buildCreateProgramEnrollmentRpcArgs", () => {
   });
 });
 
+describe("연속 요일 등록 (금·토·일)", () => {
+  // 요일 간격 제한은 없앴다 (사용자 확정 2026-08-12). 화면·스케줄러·DB는 모두
+  // 고쳤는데 이 파일의 parsePreferredSlots만 남아 있어서, 등록이 **서버에 가기도
+  // 전에** program_invalid_slots로 죽었다. 회귀를 여기서 막는다.
+  const consecutiveSlots = [
+    { weekday: 0 as const, time: "19:00" },
+    { weekday: 5 as const, time: "19:00" },
+    { weekday: 6 as const, time: "19:00" },
+  ];
+
+  function consecutiveInput() {
+    const program = OFFICIAL_PROGRAMS[0];
+    return {
+      program,
+      sessions: resolveProgram(program, catalogForProgram(program)),
+      schedule: buildProgramSchedule({
+        startDate: "2026-08-14",
+        slots: consecutiveSlots,
+        timeZone: "Asia/Seoul",
+        occupiedDates: new Set<string>(),
+      }).plans,
+      levelAtStart: "beginner" as const,
+      startDate: "2026-08-14",
+      timeZone: "Asia/Seoul",
+      preferredSlots: consecutiveSlots,
+    };
+  }
+
+  it("금·토·일 18회를 RPC payload로 만든다", () => {
+    const args = buildCreateProgramEnrollmentRpcArgs(consecutiveInput());
+
+    expect(args.p_plans).toHaveLength(18);
+    expect(args.p_plans.slice(0, 3).map((plan) => plan.plan_date)).toEqual([
+      "2026-08-14",
+      "2026-08-15",
+      "2026-08-16",
+    ]);
+    expect(args.p_preferred_slots).toEqual(consecutiveSlots);
+  });
+
+  it("연속 요일로 저장된 enrollment를 다시 읽을 수 있다", async () => {
+    // 저장이 됐는데 조회가 fail-closed로 막히면 프로그램 화면 전체가 죽는다.
+    queryReturning({
+      data: [
+        {
+          id: "11111111-1111-4111-8111-111111111111",
+          program_key: "shoulder-frame-6w",
+          program_version: 1,
+          title_snapshot: "상체의 틀을 넓히는 6주",
+          level_at_start: "beginner",
+          start_date: "2026-08-14",
+          timezone: "Asia/Seoul",
+          preferred_slots: consecutiveSlots,
+          status: "active",
+        },
+      ],
+      error: null,
+    });
+
+    const rows = await getActiveProgramEnrollments("user-1");
+    expect(rows[0].preferredSlots).toEqual(consecutiveSlots);
+  });
+
+  it("같은 요일 3개는 여전히 거부한다 — 주 3회가 아니다", () => {
+    const duplicated = [
+      { weekday: 5 as const, time: "19:00" },
+      { weekday: 5 as const, time: "20:00" },
+      { weekday: 6 as const, time: "19:00" },
+    ];
+    expect(() =>
+      buildCreateProgramEnrollmentRpcArgs({
+        ...consecutiveInput(),
+        preferredSlots: duplicated,
+      }),
+    ).toThrow("program_invalid_slots");
+  });
+});
+
 describe("program enrollment I/O", () => {
   it("create RPC에 builder payload를 넘기고 UUID를 반환한다", async () => {
     const id = "11111111-1111-4111-8111-111111111111";

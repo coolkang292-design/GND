@@ -257,10 +257,52 @@ describe("ProgramScheduleSetup", () => {
       );
     });
 
+    // 모르는 오류는 **원문을 붙여** 보여 준다 — 삼키면 진단이 불가능하다
     expect(
-      screen.getByText("저장하지 못했어요. 일정은 그대로 두었어요."),
+      screen.getByText("저장하지 못했어요. 일정은 그대로 두었어요. (network)"),
     ).toBeTruthy();
     expect(screen.getByText("3/3 · 18회 미리보기")).toBeTruthy();
     expect(screen.getAllByTestId("program-plan-date")).toHaveLength(18);
+  });
+
+  /**
+   * 2026-08-12 회귀 방지. `catch {}`가 오류를 통째로 삼켜서, 연속 3일 등록이
+   * 왜 실패하는지 화면에도 콘솔에도 안 남았다.
+   */
+  it("서버가 거절한 이유를 화면과 콘솔 양쪽에 남긴다", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const rejection = {
+      message: "program_plan_date_taken:2026-08-17",
+      code: "P0001",
+    };
+    render(
+      <ProgramScheduleSetup
+        today="2026-08-12"
+        timeZone="Asia/Seoul"
+        program={program}
+        resolvedSessions={resolvedSessions}
+        occupiedPlans={[]}
+        onConfirm={vi.fn().mockRejectedValue(rejection)}
+      />,
+    );
+    openPreview();
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: "18회 계획을 달력에 담기" }),
+      );
+    });
+
+    expect(
+      screen.getByText(
+        "8월 17일에 이미 다른 계획이 있어요. 시작일이나 요일을 바꿔 주세요.",
+      ),
+    ).toBeTruthy();
+    expect(consoleError).toHaveBeenCalledWith(
+      "[program] 일정 저장 실패",
+      rejection,
+    );
+    consoleError.mockRestore();
   });
 });

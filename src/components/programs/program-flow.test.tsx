@@ -132,7 +132,7 @@ describe("ProgramFlow", () => {
     });
 
     expect(
-      screen.getByText("저장하지 못했어요. 일정은 그대로 두었어요."),
+      screen.getByText("저장하지 못했어요. 일정은 그대로 두었어요. (rpc failed)"),
     ).toBeTruthy();
     expect(screen.getByText("3/3 · 18회 미리보기")).toBeTruthy();
     expect(screen.queryByText("6주 계획이 준비됐어요")).toBeNull();

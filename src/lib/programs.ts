@@ -117,12 +117,18 @@ function parsePreferredSlots(value: unknown): PreferredSlot[] | null {
       time: row.time,
     });
   }
-  const ordered = [...weekdays].sort((a, b) => a - b);
-  for (let index = 0; index < ordered.length; index += 1) {
-    const gap =
-      (ordered[(index + 1) % ordered.length] - ordered[index] + 7) % 7;
-    if (gap < 2) return null;
-  }
+  /*
+    요일 사이 2일 간격을 요구하던 검사를 없앴다 (사용자 확정 2026-08-12).
+
+    ⚠️ 이 함수는 **등록 검증과 조회 복원 양쪽**이 쓴다. 간격 검사가 남아 있으면
+       금·토·일 등록이 RPC에 닿기도 전에 program_invalid_slots로 죽고, 설령
+       저장돼도 조회가 program_invalid_enrollment_row로 fail-closed 막아
+       프로그램 화면 전체가 죽는다.
+
+    서로 다른 요일 3개(위 weekdays 중복 검사)라는 조건만 남는다 — 같은 날
+    두 회차는 주 3회가 아니다. 0069의 DB 함수와 program-schedule.ts의
+    validateSlots도 같은 규칙이다.
+  */
   return slots;
 }
 

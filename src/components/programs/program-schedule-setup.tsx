@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { OfficialProgram } from "@/lib/domain/official-programs";
+import { programSaveErrorText } from "@/lib/domain/program-error-text";
 import {
   buildProgramSchedule,
   type PreferredSlot,
@@ -208,8 +209,11 @@ export function ProgramScheduleSetup({
         timeZone,
         preferredSlots,
       });
-    } catch {
-      setSaveError("저장하지 못했어요. 일정은 그대로 두었어요.");
+    } catch (error) {
+      // ⚠️ `catch {}`로 되돌리지 마라. 오류를 삼키면 연속 3일 등록이 왜 실패하는지
+      //    화면에도 콘솔에도 안 남는다 — 2026-08-12에 실제로 그렇게 막혔다.
+      console.error("[program] 일정 저장 실패", error);
+      setSaveError(programSaveErrorText(error));
     } finally {
       setPending(false);
     }
