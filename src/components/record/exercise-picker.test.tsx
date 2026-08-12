@@ -204,6 +204,73 @@ describe("ExercisePicker — 진입 허브 (2026-08-06)", () => {
     expect(getByPlaceholderText("🔍 운동 검색 (예: 스쿼트, 벤치)")).toBeTruthy();
   });
 
+  it("직접 고르기에 들어가면 검색창에 초점을 두고 두 추천 바로가기를 보여준다", () => {
+    const { getByRole, getByText, getByPlaceholderText, container } = setup({
+      initialMode: "hub",
+    });
+
+    fireEvent.click(getByRole("button", { name: /운동 직접 고르기/ }));
+
+    const search = getByPlaceholderText("🔍 운동 검색 (예: 스쿼트, 벤치)");
+    expect(document.activeElement).toBe(search);
+    const situation = getByRole("button", { name: "상황별 추천" });
+    const part = getByRole("button", { name: "부위별 추천" });
+    expect(situation.className).toContain("min-h-11");
+    expect(part.className).toContain("min-h-11");
+    expect(
+      container.querySelector('[data-icon="hub-situation"][aria-hidden]'),
+    ).toBeTruthy();
+    expect(
+      container.querySelector('[data-icon="hub-part"][aria-hidden]'),
+    ).toBeTruthy();
+    expect(getByText("빠르게 찾기").parentElement?.nextElementSibling).toBe(
+      getByText("⭐ 자주 한 운동").parentElement,
+    );
+  });
+
+  it("검색에서 상황별 추천에 들어갔다가 뒤로 가면 검색으로 돌아온다", () => {
+    const { getByRole, getByText, getByPlaceholderText } = setup({
+      initialMode: "hub",
+    });
+    fireEvent.click(getByRole("button", { name: /운동 직접 고르기/ }));
+    fireEvent.click(getByRole("button", { name: "상황별 추천" }));
+
+    expect(getByText("오늘 어떤 상황인가요?")).toBeTruthy();
+    fireEvent.click(
+      getByRole("button", { name: "진입 화면으로 돌아가기" }),
+    );
+    expect(getByPlaceholderText("🔍 운동 검색 (예: 스쿼트, 벤치)")).toBeTruthy();
+  });
+
+  it("검색에서 부위별 추천에 들어갈 수 있다", () => {
+    const { getByRole, getByText } = setup({ initialMode: "hub" });
+    fireEvent.click(getByRole("button", { name: /운동 직접 고르기/ }));
+    fireEvent.click(getByRole("button", { name: "부위별 추천" }));
+
+    expect(getByText("오늘 어디를 운동할까요?")).toBeTruthy();
+  });
+
+  it("상황별 추천을 처음부터 연 경우 뒤로 가면 기존처럼 허브로 돌아온다", () => {
+    const { getByRole, getByText } = render(
+      <ExercisePicker
+        open
+        initialMode="situation"
+        catalog={CATALOG}
+        pastSessions={SESSIONS}
+        pastLoading={false}
+        onClose={vi.fn()}
+        onPickMany={vi.fn()}
+        onPickPast={vi.fn()}
+        onCreateCustom={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(
+      getByRole("button", { name: "진입 화면으로 돌아가기" }),
+    );
+    expect(getByText("오늘 운동을 어떻게 시작할까요?")).toBeTruthy();
+  });
+
   it("타바타를 안 넘기면 그 카드가 없다 (달력 예정표 피커가 그렇다)", () => {
     const { queryByText } = setup({ initialMode: "hub" });
     expect(queryByText("4분부터 시작하는 전신 인터벌")).toBeNull();

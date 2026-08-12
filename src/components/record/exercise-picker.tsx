@@ -165,6 +165,10 @@ function PickerSheet({
   const [lastRecommendMode, setLastRecommendMode] = useState<
     "situation" | "part"
   >("situation");
+  /** 추천 화면의 ←가 실제 진입점(허브 또는 검색)으로 돌아가게 한다. */
+  const [recommendReturnMode, setRecommendReturnMode] = useState<
+    "hub" | "search"
+  >("hub");
   const [recommendSelected, setRecommendSelected] = useState<
     Map<string, CatalogExercise>
   >(() => new Map());
@@ -175,6 +179,7 @@ function PickerSheet({
   const [customMeasure, setCustomMeasure] = useState<"reps" | "time">("reps");
   const [saving, setSaving] = useState(false);
   const [pastBusyId, setPastBusyId] = useState<string | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
 
   // 시트가 열려 있는 동안 고정 — 매 렌더마다 now가 바뀌면 90일 창이 미세하게 흔들린다.
@@ -263,6 +268,11 @@ function PickerSheet({
       else next.set(item.id, item);
       return next;
     });
+  }
+
+  function openRecommendation(next: "situation" | "part") {
+    setRecommendReturnMode("search");
+    setMode(next);
   }
 
   /** 추천에서 고른 것들을 설정 화면으로 넘긴다 (기본 3세트·10회·운동 중 입력) */
@@ -403,7 +413,7 @@ function PickerSheet({
             onSituation={setSituation}
             selected={new Set(recommendSelected.keys())}
             onToggle={toggleRecommend}
-            onBack={() => setMode("hub")}
+            onBack={() => setMode(recommendReturnMode)}
             onSearch={() => setMode("search")}
             onNext={goToSetup}
           />
@@ -422,11 +432,49 @@ function PickerSheet({
           <>
             {backHeader("운동 이름 검색")}
             <input
+              ref={searchRef}
+              autoFocus
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="🔍 운동 검색 (예: 스쿼트, 벤치)"
               className="h-16 w-full flex-none rounded-card border-2 border-line bg-bg px-4 text-base outline-none focus:border-accent"
             />
+
+            <div className="mt-3 flex-none">
+              <p className="mb-1.5 text-xs font-bold text-muted">
+                빠르게 찾기
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => openRecommendation("situation")}
+                  className="flex min-h-11 items-center justify-center gap-2 rounded-card-sm border border-line bg-surface-2 px-3 text-sm font-bold text-text"
+                >
+                  <span
+                    aria-hidden
+                    data-icon="hub-situation"
+                    className="h-6 w-6 flex-none bg-contain bg-center bg-no-repeat"
+                    style={{
+                      backgroundImage: "url('/ui-icons/hub-situation.webp')",
+                    }}
+                  />
+                  상황별 추천
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openRecommendation("part")}
+                  className="flex min-h-11 items-center justify-center gap-2 rounded-card-sm border border-line bg-surface-2 px-3 text-sm font-bold text-text"
+                >
+                  <span
+                    aria-hidden
+                    data-icon="hub-part"
+                    className="h-6 w-6 flex-none bg-contain bg-center bg-no-repeat"
+                    style={{ backgroundImage: "url('/ui-icons/hub-part.webp')" }}
+                  />
+                  부위별 추천
+                </button>
+              </div>
+            </div>
 
             {/* ⭐ 자주 한 운동 — 검색·부위 필터 중에는 숨긴다 (설계 2026-08-02).
                 세로 목록이 아니라 가로 칩 한 줄이다: 시트가 max-h-[82dvh]라
