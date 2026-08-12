@@ -235,7 +235,7 @@ describe("buildCreateProgramEnrollmentRpcArgs", () => {
     expect(() =>
       buildCreateProgramEnrollmentRpcArgs({
         ...input,
-        preferredSlots: input.preferredSlots.slice(0, 2),
+        preferredSlots: input.preferredSlots.slice(0, 1),
       }),
     ).toThrow("program_slots_count");
     expect(() =>

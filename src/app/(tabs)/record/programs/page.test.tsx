@@ -35,7 +35,7 @@ describe("ProgramsPage", () => {
 
     expect(screen.getByText("프로그램을 불러오는 중…")).toBeTruthy();
     await waitFor(() => {
-      expect(screen.getByText("목표를 고르면 6주 계획이 완성돼요")).toBeTruthy();
+      expect(screen.getByText("목표를 고르면 18회 계획이 완성돼요")).toBeTruthy();
     });
 
     const { getExerciseCatalog } = await import("@/lib/workout");

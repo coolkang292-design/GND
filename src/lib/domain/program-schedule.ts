@@ -149,8 +149,26 @@ function weekdayOf(dateKey: string): number {
   return new Date(Date.UTC(year, month - 1, day)).getUTCDay();
 }
 
+export const MIN_SESSIONS_PER_WEEK = 2;
+export const MAX_SESSIONS_PER_WEEK = 5;
+
 function validateSlots(slots: readonly PreferredSlot[]): void {
-  if (slots.length !== 3) throw new Error("program_slots_count");
+  /*
+    주당 횟수는 사용자가 정한다 (사용자 확정 2026-08-12).
+
+    2~5개를 받는다. **총 18회는 그대로다** — 주당 횟수는 18회를 며칠에 나눠
+    담을지만 정하고, 기간이 그만큼 늘거나 줄어든다.
+
+    ⚠️ 회차 번호(`week` 1~6 · `session` 1~3)는 주당 횟수와 **무관하다.**
+       이 함수 아래의 배치는 날짜 순서로 18칸을 채우고 A·B·C를 돌 뿐이라,
+       주 2회든 5회든 같은 번호가 나온다. 0066의 컬럼 제약도 그대로 지켜진다.
+
+    ⚠️ 상한 5는 회복 때문이 아니라 **A·B·C 세 회차 구성** 때문이다. 주 6~7회면
+       같은 회차를 한 주에 세 번 하게 되어 프로그램이 의미를 잃는다.
+  */
+  if (slots.length < MIN_SESSIONS_PER_WEEK || slots.length > MAX_SESSIONS_PER_WEEK) {
+    throw new Error("program_slots_count");
+  }
   const weekdays = new Set<number>();
   for (const slot of slots) {
     if (!Number.isInteger(slot.weekday) || slot.weekday < 0 || slot.weekday > 6) {

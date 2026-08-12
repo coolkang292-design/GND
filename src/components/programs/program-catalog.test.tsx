@@ -98,7 +98,7 @@ describe("ProgramDetail", () => {
     );
 
     expect(screen.getByRole("heading", { name: "시선이 머무는 어깨" })).toBeTruthy();
-    expect(screen.getByText("주 3회 · 6주 · 18회 · 회당 50–65분")).toBeTruthy();
+    expect(screen.getByText("총 18회 · 회당 50–65분")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "이런 사람에게 맞아요" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "회차별 상세" })).toBeTruthy();
     expect(screen.getByText(/최근 기록을 바탕으로 8–10회/)).toBeTruthy();

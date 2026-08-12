@@ -179,7 +179,7 @@ describe("ProgramFlow", () => {
     await act(async () => fireEvent.click(quit));
     expect(onCancel).toHaveBeenCalledWith(activeShoulderEnrollment.id);
     expect(
-      screen.getByRole("heading", { name: "목표를 고르면 6주 계획이 완성돼요" }),
+      screen.getByRole("heading", { name: "목표를 고르면 18회 계획이 완성돼요" }),
     ).toBeTruthy();
 
     confirmSpy.mockRestore();

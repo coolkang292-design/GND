@@ -226,7 +226,7 @@ describe("buildCreateIntervalEnrollmentRpcArgs", () => {
     expect(() =>
       buildCreateIntervalEnrollmentRpcArgs({
         ...input,
-        preferredSlots: input.preferredSlots.slice(0, 2),
+        preferredSlots: input.preferredSlots.slice(0, 1),
       }),
     ).toThrow("program_slots_count");
   });

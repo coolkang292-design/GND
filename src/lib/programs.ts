@@ -9,10 +9,12 @@ import {
   type StrengthProgram,
 } from "@/lib/domain/official-programs";
 import { tabataRepsForMinutes, type TabataMinutes } from "@/lib/domain/tabata";
-import type {
-  PreferredSlot,
-  ProgramPlanMove,
-  ProgramScheduleItem,
+import {
+  MAX_SESSIONS_PER_WEEK,
+  MIN_SESSIONS_PER_WEEK,
+  type PreferredSlot,
+  type ProgramPlanMove,
+  type ProgramScheduleItem,
 } from "@/lib/domain/program-schedule";
 import type { PlanExercise, PlanSet } from "@/lib/domain/workout-plan";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -127,7 +129,19 @@ function isTimeZone(value: unknown): value is string {
 }
 
 function parsePreferredSlots(value: unknown): PreferredSlot[] | null {
-  if (!Array.isArray(value) || value.length !== 3) return null;
+  /*
+    주당 횟수는 2~5회다 (사용자 확정 2026-08-12). **총 18회는 그대로다.**
+
+    ⚠️ 이 함수는 등록 검증과 조회 복원 양쪽이 쓴다. 여기서 3개만 받으면 주 2·4·5회로
+       등록한 사람의 프로그램 화면이 통째로 죽는다 — 0069에서 겪은 것과 같은 함정이다.
+  */
+  if (
+    !Array.isArray(value) ||
+    value.length < MIN_SESSIONS_PER_WEEK ||
+    value.length > MAX_SESSIONS_PER_WEEK
+  ) {
+    return null;
+  }
   const slots: PreferredSlot[] = [];
   const weekdays = new Set<number>();
   for (const item of value) {
@@ -158,8 +172,8 @@ function parsePreferredSlots(value: unknown): PreferredSlot[] | null {
        저장돼도 조회가 program_invalid_enrollment_row로 fail-closed 막아
        프로그램 화면 전체가 죽는다.
 
-    서로 다른 요일 3개(위 weekdays 중복 검사)라는 조건만 남는다 — 같은 날
-    두 회차는 주 3회가 아니다. 0069의 DB 함수와 program-schedule.ts의
+    서로 다른 요일(위 weekdays 중복 검사)이라는 조건만 남는다 — 같은 날 두 회차는
+    하루에 두 번이지 주 N회가 아니다. DB 함수와 program-schedule.ts의
     validateSlots도 같은 규칙이다.
   */
   return slots;
@@ -192,7 +206,12 @@ function dateDays(value: string): number {
 function validateEnrollmentInput(input: CreateProgramEnrollmentInput): void {
   if (!isDateKey(input.startDate)) throw new Error("program_invalid_start_date");
   if (!isTimeZone(input.timeZone)) throw new Error("program_invalid_timezone");
-  if (input.preferredSlots.length !== 3) throw new Error("program_slots_count");
+  if (
+    input.preferredSlots.length < MIN_SESSIONS_PER_WEEK ||
+    input.preferredSlots.length > MAX_SESSIONS_PER_WEEK
+  ) {
+    throw new Error("program_slots_count");
+  }
   const slots = parsePreferredSlots(input.preferredSlots);
   if (!slots) throw new Error("program_invalid_slots");
 
@@ -419,7 +438,12 @@ function validateIntervalEnrollmentInput(
 ): void {
   if (!isDateKey(input.startDate)) throw new Error("program_invalid_start_date");
   if (!isTimeZone(input.timeZone)) throw new Error("program_invalid_timezone");
-  if (input.preferredSlots.length !== 3) throw new Error("program_slots_count");
+  if (
+    input.preferredSlots.length < MIN_SESSIONS_PER_WEEK ||
+    input.preferredSlots.length > MAX_SESSIONS_PER_WEEK
+  ) {
+    throw new Error("program_slots_count");
+  }
   const slots = parsePreferredSlots(input.preferredSlots);
   if (!slots) throw new Error("program_invalid_slots");
 

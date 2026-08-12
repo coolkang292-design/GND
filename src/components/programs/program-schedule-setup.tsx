@@ -10,6 +10,8 @@ import {
 import { programSaveErrorText } from "@/lib/domain/program-error-text";
 import {
   buildProgramSchedule,
+  MAX_SESSIONS_PER_WEEK,
+  MIN_SESSIONS_PER_WEEK,
   type PreferredSlot,
   type ProgramScheduleItem,
 } from "@/lib/domain/program-schedule";
@@ -115,13 +117,20 @@ function weekdayLabel(weekday: number): string {
 }
 
 /**
- * 고른 요일이 주 3회 조건을 만족하는가.
+ * 고른 요일로 일정을 짤 수 있는가.
  *
  * 요일 사이 간격 제한은 없앴다 (사용자 확정 2026-08-12) — 금·토·일처럼 몰아서
- * 하는 사람을 막고 있었다. **서로 다른 요일 3개**라는 조건만 남는다.
+ * 하는 사람을 막고 있었다.
+ *
+ * 주당 횟수도 **사용자가 정한다** — 2~5일 (2026-08-12). 총 18회는 그대로이고
+ * 기간이 늘거나 준다. 남은 조건은 **서로 다른 요일**뿐이다.
  */
-function hasThreeDistinctDays(days: readonly number[]): boolean {
-  return days.length === 3 && new Set(days).size === 3;
+function hasEnoughDistinctDays(days: readonly number[]): boolean {
+  return (
+    days.length >= MIN_SESSIONS_PER_WEEK &&
+    days.length <= MAX_SESSIONS_PER_WEEK &&
+    new Set(days).size === days.length
+  );
 }
 
 export function ProgramScheduleSetup({
@@ -168,7 +177,7 @@ export function ProgramScheduleSetup({
     [occupiedPlans],
   );
   const schedule = useMemo(() => {
-    if (!hasThreeDistinctDays(selectedDays)) return null;
+    if (!hasEnoughDistinctDays(selectedDays)) return null;
     try {
       return buildProgramSchedule({
         startDate,
@@ -191,7 +200,7 @@ export function ProgramScheduleSetup({
     setSelectedDays((current) =>
       current.includes(day)
         ? current.filter((value) => value !== day)
-        : current.length < 3
+        : current.length < MAX_SESSIONS_PER_WEEK
           ? [...current, day]
           : current,
     );
@@ -199,8 +208,10 @@ export function ProgramScheduleSetup({
   }
 
   function showPreview() {
-    if (!hasThreeDistinctDays(selectedDays)) {
-      setValidation("서로 다른 요일 3개를 골라 주세요.");
+    if (!hasEnoughDistinctDays(selectedDays)) {
+      setValidation(
+        `서로 다른 요일을 ${MIN_SESSIONS_PER_WEEK}~${MAX_SESSIONS_PER_WEEK}개 골라 주세요.`,
+      );
       return;
     }
     if (!schedule) {

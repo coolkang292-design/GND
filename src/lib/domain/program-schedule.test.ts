@@ -176,7 +176,7 @@ describe("buildProgramSchedule", () => {
   });
 
   it.each([
-    [seoulSlots.slice(0, 2), "program_slots_count"],
+    [seoulSlots.slice(0, 1), "program_slots_count"],
     [
       [seoulSlots[0], seoulSlots[0], seoulSlots[2]],
       "program_slot_weekday_duplicate",
@@ -194,6 +194,83 @@ describe("buildProgramSchedule", () => {
         occupiedDates: new Set(),
       }),
     ).toThrow(error);
+  });
+
+  /**
+   * 주당 횟수를 사용자가 정한다 (사용자 확정 2026-08-12).
+   *
+   * **총 18회는 그대로다** — 주당 횟수는 18회를 며칠에 나눠 담을지만 정한다.
+   * 회차 번호(주차 1~6 · 회차 1~3)는 주당 횟수와 무관하게 같아야 한다.
+   * 0066의 컬럼 제약이 그 범위를 강제하기 때문이다.
+   */
+  describe("주당 횟수 2~5회", () => {
+    const at = (weekday: 0 | 1 | 2 | 3 | 4 | 5 | 6) => ({
+      weekday,
+      time: "19:00",
+    });
+
+    it.each([
+      ["주 2회", [at(1), at(4)]],
+      ["주 3회", [at(1), at(3), at(5)]],
+      ["주 4회", [at(1), at(2), at(4), at(5)]],
+      ["주 5회", [at(1), at(2), at(3), at(4), at(5)]],
+    ])("%s도 18회를 만들고 번호 체계가 같다", (_label, slots) => {
+      const result = buildProgramSchedule({
+        startDate: "2026-08-17",
+        slots,
+        timeZone: "Asia/Seoul",
+        occupiedDates: new Set(),
+      });
+
+      expect(result.plans).toHaveLength(18);
+      expect(
+        result.plans.map((plan) => [plan.week, plan.session, plan.templateKey]),
+      ).toEqual(
+        Array.from({ length: 18 }, (_, index) => [
+          Math.floor(index / 3) + 1,
+          (index % 3) + 1,
+          ["A", "B", "C"][index % 3],
+        ]),
+      );
+      // 날짜는 겹치지 않고 앞으로만 간다
+      const dates = result.plans.map((plan) => plan.date);
+      expect(new Set(dates).size).toBe(18);
+      expect([...dates].sort()).toEqual(dates);
+    });
+
+    it("주당 횟수가 늘수록 빨리 끝난다", () => {
+      const end = (slots: { weekday: 0 | 1 | 2 | 3 | 4 | 5 | 6; time: string }[]) =>
+        buildProgramSchedule({
+          startDate: "2026-08-17",
+          slots,
+          timeZone: "Asia/Seoul",
+          occupiedDates: new Set(),
+        }).plans[17].date;
+
+      const twice = end([at(1), at(4)]);
+      const thrice = end([at(1), at(3), at(5)]);
+      const fiveTimes = end([at(1), at(2), at(3), at(4), at(5)]);
+
+      expect(twice > thrice).toBe(true);
+      expect(thrice > fiveTimes).toBe(true);
+    });
+
+    it("1회와 6회는 거부한다", () => {
+      // 6회 이상이면 한 주에 같은 회차를 세 번 하게 되어 A·B·C 구성이 무너진다
+      for (const slots of [
+        [at(1)],
+        [at(0), at(1), at(2), at(3), at(4), at(5)],
+      ]) {
+        expect(() =>
+          buildProgramSchedule({
+            startDate: "2026-08-17",
+            slots,
+            timeZone: "Asia/Seoul",
+            occupiedDates: new Set(),
+          }),
+        ).toThrow("program_slots_count");
+      }
+    });
   });
 
   it("연말과 윤년 경계를 UTC 날짜 연산으로 넘는다", () => {

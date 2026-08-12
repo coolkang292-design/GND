@@ -145,7 +145,7 @@ function ProgramCard({
           {program.title}
         </span>
         <span className="mt-auto block pt-3 text-[10px] font-extrabold leading-4 text-accent sm:text-[11px]">
-          주 {program.sessionsPerWeek}회 · {program.weeks}주 · 회당 {program.durationMinutes[0]}–{program.durationMinutes[1]}분
+          총 18회 · 회당 {program.durationMinutes[0]}–{program.durationMinutes[1]}분
         </span>
       </span>
     </button>
@@ -178,10 +178,10 @@ export function ProgramCatalog({ programs, onPick }: ProgramCatalogProps) {
         GND 공식 프로그램
       </p>
       <h1 id="program-catalog-title" className="mt-1 text-2xl font-black leading-8 text-text">
-        목표를 고르면 6주 계획이 완성돼요
+        목표를 고르면 18회 계획이 완성돼요
       </h1>
       <p className="mt-1 text-xs leading-5 text-muted">
-        모든 프로그램은 주 3회, 총 18회로 구성됩니다.
+        모든 프로그램은 총 18회예요. 주 2~5회 중에서 고를 수 있어요.
       </p>
 
       <div className="mt-5">
@@ -241,8 +241,8 @@ export function IntervalProgramDetail({
       </div>
 
       <div className="mt-3 grid grid-cols-4 gap-1.5" aria-label="프로그램 핵심 수치">
-        <ProgramStat label="빈도" value={`주 ${program.sessionsPerWeek}회`} />
-        <ProgramStat label="기간" value={`${program.weeks}주`} />
+        <ProgramStat label="빈도" value="주 2~5회" />
+        <ProgramStat label="기간" value="4~9주" />
         <ProgramStat label="전체" value="18회" />
         <ProgramStat
           label="회당"
@@ -426,11 +426,11 @@ export function ProgramDetail({
       </div>
 
       <p className="sr-only">
-        주 {program.sessionsPerWeek}회 · {program.weeks}주 · 18회 · 회당 {program.durationMinutes[0]}–{program.durationMinutes[1]}분
+        총 18회 · 회당 {program.durationMinutes[0]}–{program.durationMinutes[1]}분
       </p>
       <div className="mt-3 grid grid-cols-4 gap-1.5" aria-label="프로그램 핵심 수치">
-        <ProgramStat label="빈도" value={`주 ${program.sessionsPerWeek}회`} />
-        <ProgramStat label="기간" value={`${program.weeks}주`} />
+        <ProgramStat label="빈도" value="주 2~5회" />
+        <ProgramStat label="기간" value="4~9주" />
         <ProgramStat label="전체" value="18회" />
         <ProgramStat label="회당" value={`${program.durationMinutes[0]}–${program.durationMinutes[1]}분`} />
       </div>
