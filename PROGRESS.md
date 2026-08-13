@@ -3,7 +3,34 @@
 > 새 세션은 저장소 루트 `AGENTS.md` → `CLAUDE.md` → 이 파일 → 가장 최근의 관련 `docs/superpowers/HANDOFF-*.md` 순서로 읽는다.
 > 이 파일은 전체 흐름의 요약이고, 작업별 세부 사실과 남은 확인은 최신 인수인계서가 기준이다.
 
-## 🔄 진행 중 — 챌린지 세팅 시트: 달성 계획과 참여 계획을 갈랐다 (2026-08-14, 미커밋·미배포)
+## ✅ 2026-08-14 배포 완료 — 챌린지 세팅 시트 + 8/13 홈·인터벌 5커밋
+
+`ab94f61` 배포 (`gnd-9gp83i83r-gnd4.vercel.app` → `gnd-one.vercel.app`).
+**함께 나간 것**: `b89b904`(스트릭 헤더) · `75e31c3`(홈 크루 카드) ·
+`b06b4d8`·`1d95443`·`4503ffb`(인터벌 계획). 배포 전 운영 번들 실측으로
+"무엇이 아직 안 나갔는지"를 먼저 확인한 뒤 사용자 승인을 받았다.
+
+⚠️ **`vercel --prod`에 `--scope gnd4`가 필요하다.** 없으면 `Not authorized`로
+막힌다 — `whoami`는 통과하는데 배포만 실패해서 인증 문제로 오해하기 쉽다.
+프로젝트가 개인이 아니라 팀(`team_L239WS37mVljbb56lF8KjBkO` = `gnd4`) 소속이다.
+
+```bash
+git worktree add --detach /tmp/deploy-main main   # `main`은 이미 체크아웃돼 있어 --detach가 필요
+cp .env.local /tmp/deploy-main/ && cp -r .vercel /tmp/deploy-main/
+cd /tmp/deploy-main && npm install && npm run build
+npx vercel@latest --prod --yes --scope gnd4
+```
+
+프로덕션 실측 (번들 직접 내려받아 grep):
+- `/challenge` — `참여 계획`·`내 운동 목표`·`하루 기준으로 계산하기`·`현재 설정 요약` **있음**
+- `/challenge` — `총량 직접 입력`·`내 목표 (KPI)`·`지난 KPI` **사라짐** (제거 검증)
+- `/home` — `나의 크루`·`오늘 완료`·`오늘 아직` 있음, 옛 `내 크루` 사라짐
+- `/record` — `인터벌로 계획` 있음
+
+남은 것: **사용자 폰 실물 확인**. 그리고 `콕 알림 B 계정 수신`은 여전히 미확인
+(사용자 판단으로 배포 강행 — 2026-08-14).
+
+## 🔄 챌린지 세팅 시트: 달성 계획과 참여 계획을 갈랐다 (2026-08-14, 배포 완료)
 
 설계: `docs/superpowers/specs/2026-08-14-challenge-setup-sheet-redesign-design.md`
 계획: `docs/superpowers/plans/2026-08-14-challenge-setup-sheet-redesign.md`
