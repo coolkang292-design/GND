@@ -68,6 +68,15 @@ type TabataProps = {
   /** 예정표에서 연 타바타 — 종목·코스를 미리 채운 채 연다 (0059) */
   initialPicked?: CatalogExercise[];
   initialMinutes?: TabataMinutes;
+  /**
+   * 열자마자 시작한다 — 달력 계획에서 온 경우 (사용자 지시 2026-08-13).
+   *
+   * ⚠️ iOS는 재생을 사용자 제스처 안에서 시작하길 요구한다. 여기서는 달력의
+   *    버튼 누름이 그 제스처이고 마운트 직후 이어 부르지만, 기기가 거절하면
+   *    재생 오류가 뜨고 고르는 화면으로 남는다 — 그때는 사용자가 한 번 더
+   *    누르면 된다. 예전 동작으로 내려앉을 뿐 막히지 않는다.
+   */
+  autoStart?: boolean;
 };
 
 function TabataSheetBody({
@@ -84,6 +93,7 @@ function TabataSheetBody({
   routinesLoading,
   initialPicked,
   initialMinutes,
+  autoStart,
 }: TabataProps) {
   // 시트는 닫으면 언마운트된다 — 예약된 값은 초기값으로 넣으면 되고,
   // effect 안에서 setState 할 필요가 없다 (교훈 4).
@@ -107,6 +117,15 @@ function TabataSheetBody({
       void wakeLockRef.current?.release().catch(() => undefined);
     };
   }, []);
+
+  const startedRef = useRef(false);
+  useEffect(() => {
+    if (!autoStart || startedRef.current) return;
+    startedRef.current = true;
+    void start();
+    // 마운트 직후 한 번만 — 의존성에 start를 넣으면 렌더마다 다시 시작한다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoStart]);
 
   async function acquireWakeLock() {
     try {

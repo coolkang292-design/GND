@@ -297,7 +297,7 @@ describe("CalendarView — 전신 인터벌 명칭 (2026-08-12)", () => {
 
     expect(screen.getByText("🔥 전신 인터벌 8분 예정")).toBeTruthy();
     expect(
-      screen.getByRole("button", { name: "🔥 전신 인터벌 준비하기" }),
+      screen.getByRole("button", { name: "🔥 전신 인터벌 시작하기" }),
     ).toBeTruthy();
   });
 
@@ -743,7 +743,7 @@ describe("CalendarView — 계획한 날 바로 시작 (2026-08-12)", () => {
     );
   });
 
-  it("전신 인터벌 계획은 시트를 여는 준비하기로 남는다", async () => {
+  it("전신 인터벌 계획도 한 번에 시작한다", async () => {
     const onLoadPlan = vi.fn().mockReturnValue(true);
     mocks.getWorkoutPlans.mockResolvedValue([
       { ...todayPlan, id: "plan-interval", tabataMinutes: 8 },
@@ -761,13 +761,15 @@ describe("CalendarView — 계획한 날 바로 시작 (2026-08-12)", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "8월 15일" }));
     fireEvent.click(
-      screen.getByRole("button", { name: "🔥 전신 인터벌 준비하기" }),
+      screen.getByRole("button", { name: "🔥 전신 인터벌 시작하기" }),
     );
 
     await waitFor(() => expect(onLoadPlan).toHaveBeenCalledTimes(1));
+    // 사용자 지시 2026-08-13 — 인터벌만 `준비하기`로 한 단계 더 있었다.
+    // 계획이 종목과 코스를 이미 들고 있어서 시트에서 고를 것이 없다.
     expect(onLoadPlan).toHaveBeenCalledWith(
       expect.objectContaining({ id: "plan-interval" }),
-      { startNow: false },
+      { startNow: true },
     );
   });
 

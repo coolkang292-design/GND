@@ -224,6 +224,14 @@ type TabataPrefill = {
    * 지난 기록에서 되살린 타바타는 지울 계획이 없으므로 생략한다.
    */
   planId?: string;
+  /**
+   * 열자마자 바로 시작할 것인가 (사용자 지시 2026-08-13).
+   *
+   * 달력의 계획에서 온 경우다 — 계획이 종목과 코스를 이미 들고 있어서 시트에서
+   * 한 번 더 고를 것이 없다. 근력 계획은 이미 한 번에 시작하고 있었고, 인터벌만
+   * `준비하기`로 남아 있었다.
+   */
+  autoStart?: boolean;
 };
 
 function errorMessage(e: unknown): string {
@@ -1574,6 +1582,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
         picked,
         minutes: plan.tabataMinutes,
         planId: plan.id,
+        autoStart: options?.startNow === true,
       });
       return true;
     }
@@ -2406,6 +2415,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
       <TabataSheet
         open={tabataOpen}
         onPlayingChange={setIntervalPlaying}
+        autoStart={tabataPrefill?.autoStart}
         catalog={catalog}
         onClose={() => {
           setTabataOpen(false);

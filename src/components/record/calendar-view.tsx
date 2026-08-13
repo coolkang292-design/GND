@@ -989,15 +989,18 @@ export function CalendarView({
                     <SetBreakdown exercises={selectedPlan.exercises} />
                   </div>
                   {/*
-                    전신 인터벌만 '준비하기'로 남는다 — 음원과 코스를 시트에서
-                    확인하고 시작하므로, 그 시트가 곧 시작 화면이다.
+                    계획이 있으면 **한 번에 시작한다** (사용자 지시 2026-08-13).
+
+                    인터벌도 마찬가지다. 예전에는 시트에서 종목과 코스를 다시
+                    확인해야 해서 '준비하기'로 남겨 뒀는데, 계획이 이미 그 둘을
+                    들고 있다. 한 번 더 묻는 것은 확인이 아니라 단계다.
                   */}
                   {selectedDate === todayKey && (
                     <button
                       onClick={() => {
                         void (async () => {
                           const started = await onLoadPlan(selectedPlan, {
-                            startNow: !selectedPlan.tabataMinutes,
+                            startNow: true,
                           });
                           if (started) setSelectedDate(null);
                         })();
@@ -1006,7 +1009,7 @@ export function CalendarView({
                       className="mt-3 h-10 w-full rounded-card-sm bg-good text-sm font-extrabold text-white disabled:opacity-50"
                     >
                       {selectedPlan.tabataMinutes
-                        ? "🔥 전신 인터벌 준비하기"
+                        ? "🔥 전신 인터벌 시작하기"
                         : "운동 시작하기"}
                     </button>
                   )}
