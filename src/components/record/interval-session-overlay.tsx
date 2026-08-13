@@ -67,6 +67,12 @@ export function IntervalSessionOverlay({
     cue.phase === "done"
       ? `${cue.totalRounds}라운드 완료`
       : `${Math.min(cue.round + 1, cue.totalRounds)}라운드 / ${cue.totalRounds}라운드`;
+  /*
+    마친 라운드 수. 지금 하고 있는 라운드는 **아직 안 센다** — 20초를 다 채워야
+    한 라운드다. 근력의 `0 / 12 완료`와 같은 규칙이다.
+  */
+  const doneRounds = cue.phase === "done" ? cue.totalRounds : cue.round;
+  const percent = Math.round((doneRounds / cue.totalRounds) * 100);
 
   return (
     <section
@@ -74,16 +80,41 @@ export function IntervalSessionOverlay({
       aria-live="polite"
       className="fixed inset-x-0 bottom-0 top-0 z-40 flex flex-col bg-bg px-5 pb-[calc(env(safe-area-inset-bottom)+20px)] pt-[calc(env(safe-area-inset-top)+20px)]"
     >
-      <header className="flex items-center justify-between">
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-accent/45 bg-accent/10 px-3 py-1.5 text-[11px] font-extrabold text-accent">
-          <span aria-hidden>●</span> 지금 인터벌 중
-        </span>
-        <span
-          data-testid="interval-round"
-          className="text-[11px] font-bold text-muted"
+      <header>
+        <div className="flex items-center justify-between">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-accent/45 bg-accent/10 px-3 py-1.5 text-[11px] font-extrabold text-accent">
+            <span aria-hidden>●</span> 지금 인터벌 중
+          </span>
+          <span
+            data-testid="interval-round"
+            className="text-[11px] font-bold text-muted"
+          >
+            {roundLabel}
+          </span>
+        </div>
+
+        {/*
+          진행률 막대 (사용자 지시 2026-08-13) — 일반 운동과 같은 모양이다.
+          인터벌은 세트가 아니라 **라운드**로 센다.
+
+          ⚠️ **`transition-[width]`를 붙이지 마라.** 근력 오버레이에서 그걸
+             붙였다가 인라인 `width: 16%`가 있는데도 계산 폭이 0px에 머물러
+             막대가 아예 안 보였다(2026-08-07). 단위 테스트는 `aria-valuenow`만
+             보므로 화면을 봐야 잡힌다.
+        */}
+        <div
+          role="progressbar"
+          aria-valuenow={percent}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label="인터벌 진행률"
+          className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-surface-2"
         >
-          {roundLabel}
-        </span>
+          <div
+            className="h-full rounded-full bg-accent"
+            style={{ width: `${percent}%` }}
+          />
+        </div>
       </header>
 
       <div className="flex flex-1 flex-col items-center justify-center gap-3">

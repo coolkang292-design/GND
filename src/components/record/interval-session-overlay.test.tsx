@@ -138,6 +138,37 @@ describe("IntervalSessionOverlay", () => {
     expect(screen.queryByText(/^다음:/)).toBeNull();
   });
 
+  it("라운드 진행률 막대를 보여준다 — 일반 운동과 같은 모양", () => {
+    // 사용자 지시 2026-08-13
+    const first = view(0); // 준비 — 아직 한 라운드도 안 끝났다
+    expect(
+      screen.getByRole("progressbar").getAttribute("aria-valuenow"),
+    ).toBe("0");
+    first.unmount();
+
+    // 4라운드째 운동 중이면 세 라운드를 마쳤다 → 3/8 = 38%
+    const mid = view(13 + 3 * 30 + 5);
+    expect(
+      screen.getByRole("progressbar").getAttribute("aria-valuenow"),
+    ).toBe("38");
+    mid.unmount();
+
+    view(250);
+    expect(
+      screen.getByRole("progressbar").getAttribute("aria-valuenow"),
+    ).toBe("100");
+  });
+
+  it("막대에 transition-[width]를 붙이지 않는다", () => {
+    /*
+      2026-08-07 근력 오버레이에서 겪은 것 — 붙이면 인라인 width가 있는데도
+      계산 폭이 0px에 머물러 막대가 아예 안 보인다. 화면을 봐야만 잡히는
+      결함이라 여기서 클래스 자체를 막는다.
+    */
+    view(13);
+    const bar = screen.getByRole("progressbar").firstElementChild;
+    expect(bar?.className ?? "").not.toContain("transition");
+  });
   it("응원 문구를 함께 보여준다", () => {
     // 사용자 지시 2026-08-13 — 종목 이름만 있으니 허전하다
     view(15);
