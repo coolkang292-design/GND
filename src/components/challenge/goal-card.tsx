@@ -4,6 +4,7 @@ import { useState } from "react";
 import { NumberField } from "@/components/challenge/number-field";
 import {
   perDayFromTotal,
+  roundTarget,
   totalDaysFromPerWeek,
   totalFromPerDay,
 } from "@/lib/domain/challenge-goal-calc";
@@ -49,13 +50,50 @@ export const isDaysType = (t: GoalType) => DAYS_TYPES.includes(t);
 export type GoalRow = {
   category: GoalCategory;
   type: GoalType;
-  /** 기간 총 목표 — 저장되는 값 */
+  /** 기간 총 목표 — DB에 저장되는 값 */
   total: number;
+  /**
+   * 하루 목표 — **기준점**이다. 일수형이면 0.
+   *
+   * ⚠️ 파생값으로 만들지 마라 (2026-08-14 신고로 되돌린 설계). 처음에는
+   * `total`만 들고 `perDay`를 매번 역산했는데, 그러면 **기간을 바꿨을 때
+   * 총 목표를 그대로 두고 하루 목표를 조용히 깎게 된다.** 사용자가 직접 정한
+   * 것은 하루 기준이므로 그쪽이 남고 총 목표가 따라와야 한다.
+   */
+  perDay: number;
   /** 계산기 전용. 저장되지 않는다 */
   calcDaysPerWeek: number;
   /** 일수형: 하루 최소 종목 수. 아니면 0 */
   qualifier: number;
 };
+
+/** 기간이 바뀌었을 때 그 행의 총 목표를 다시 계산한다 (하루 기준·주 며칠은 유지) */
+export function recalcTotal(row: GoalRow, periodDays: number): number {
+  return isDaysType(row.type)
+    ? totalDaysFromPerWeek(row.calcDaysPerWeek, periodDays)
+    : roundTarget(
+        totalFromPerDay(row.perDay, row.calcDaysPerWeek, periodDays),
+        GOAL_TYPE_META[row.type].unit,
+      );
+}
+
+/** 지표를 갈아탈 때의 기본값 한 벌 — 카테고리 버튼과 select가 같이 쓴다 */
+export function rowDefaultsFor(
+  type: GoalType,
+  calcDaysPerWeek: number,
+  periodDays: number,
+  keepQualifier = 0,
+): Pick<GoalRow, "type" | "total" | "perDay" | "qualifier"> {
+  const total = GOAL_TYPE_META[type].defaultTarget;
+  return {
+    type,
+    total,
+    perDay: isDaysType(type)
+      ? 0
+      : perDayFromTotal(total, calcDaysPerWeek, periodDays),
+    qualifier: isDaysType(type) ? keepQualifier || 3 : 0,
+  };
+}
 
 export function GoalCard({
   index,
@@ -81,7 +119,7 @@ export function GoalCard({
   const meta = GOAL_TYPE_META[row.type];
   const days = isDaysType(row.type);
   const weeks = periodDays / 7;
-  const perDay = perDayFromTotal(row.total, row.calcDaysPerWeek, periodDays);
+  const perDay = row.perDay;
 
   const metricOptions = CATEGORY_TYPES[row.category].includes(row.type)
     ? CATEGORY_TYPES[row.category]
@@ -93,7 +131,7 @@ export function GoalCard({
       calcDaysPerWeek: dpw,
       total: days
         ? totalDaysFromPerWeek(dpw, periodDays)
-        : totalFromPerDay(perDay, dpw, periodDays),
+        : roundTarget(totalFromPerDay(perDay, dpw, periodDays), meta.unit),
     });
   }
 
@@ -116,15 +154,16 @@ export function GoalCard({
         {CATEGORIES.map((c) => (
           <button
             key={c.key}
-            onClick={() => {
-              const type = CATEGORY_TYPES[c.key][0];
+            onClick={() =>
               onChange({
                 category: c.key,
-                type,
-                total: GOAL_TYPE_META[type].defaultTarget,
-                qualifier: isDaysType(type) ? 3 : 0,
-              });
-            }}
+                ...rowDefaultsFor(
+                  CATEGORY_TYPES[c.key][0],
+                  row.calcDaysPerWeek,
+                  periodDays,
+                ),
+              })
+            }
             className={`h-9 flex-1 rounded-[8px] text-[12.5px] font-bold ${
               row.category === c.key ? "bg-accent-weak text-accent" : "text-muted"
             }`}
@@ -137,14 +176,16 @@ export function GoalCard({
       <select
         value={row.type}
         aria-label={`목표 ${index + 1} 지표`}
-        onChange={(e) => {
-          const type = e.target.value as GoalType;
-          onChange({
-            type,
-            total: GOAL_TYPE_META[type].defaultTarget,
-            qualifier: isDaysType(type) ? row.qualifier || 3 : 0,
-          });
-        }}
+        onChange={(e) =>
+          onChange(
+            rowDefaultsFor(
+              e.target.value as GoalType,
+              row.calcDaysPerWeek,
+              periodDays,
+              row.qualifier,
+            ),
+          )
+        }
         className="mt-2 h-11 w-full rounded-card-sm border border-line bg-surface px-2 text-sm font-bold"
       >
         {metricOptions.map((t) => (
@@ -157,10 +198,17 @@ export function GoalCard({
       <label className="mt-2 block text-[12px] font-bold text-muted">
         기간 총 목표 ({meta.unit})
       </label>
+      {/* 총 목표를 직접 고치면 하루 기준을 역산해 둔다 — 그래야 다음에 기간이
+          바뀌었을 때 방금 정한 강도가 유지된다 */}
       <NumberField
         ariaLabel={`기간 총 목표 (${meta.unit})`}
         value={row.total}
-        onValue={(v) => onChange({ total: v })}
+        onValue={(v) =>
+          onChange({
+            total: v,
+            perDay: days ? 0 : perDayFromTotal(v, row.calcDaysPerWeek, periodDays),
+          })
+        }
         className="mt-1"
       />
       <p className="mt-1 text-right text-[12px] font-bold text-accent">
@@ -195,7 +243,11 @@ export function GoalCard({
                   value={perDay}
                   onValue={(v) =>
                     onChange({
-                      total: totalFromPerDay(v, row.calcDaysPerWeek, periodDays),
+                      perDay: v,
+                      total: roundTarget(
+                        totalFromPerDay(v, row.calcDaysPerWeek, periodDays),
+                        meta.unit,
+                      ),
                     })
                   }
                   className="mt-1 bg-surface"

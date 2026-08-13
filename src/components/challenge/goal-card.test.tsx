@@ -6,10 +6,12 @@ import { GoalCard, type GoalRow } from "./goal-card";
 
 afterEach(cleanup);
 
+// 300회 ÷ (주3일 × 4주) = 하루 25회
 const WEIGHT_ROW: GoalRow = {
   category: "weight",
   type: "weight_reps",
   total: 300,
+  perDay: 25,
   calcDaysPerWeek: 3,
   qualifier: 0,
 };
@@ -18,6 +20,7 @@ const DAYS_ROW: GoalRow = {
   category: "weight",
   type: "weight_days",
   total: 12,
+  perDay: 0,
   calcDaysPerWeek: 3,
   qualifier: 3,
 };
@@ -48,7 +51,8 @@ describe("GoalCard — 기간 총 목표", () => {
     fireEvent.change(screen.getByLabelText("기간 총 목표 (회)"), {
       target: { value: "500" },
     });
-    expect(onChange).toHaveBeenCalledWith({ total: 500 });
+    // 500 ÷ (주3일 × 4주) = 41.7
+    expect(onChange).toHaveBeenCalledWith({ total: 500, perDay: 41.7 });
   });
 });
 
@@ -76,11 +80,13 @@ describe("GoalCard — 하루 기준 계산기", () => {
     );
   });
 
-  it("총 목표가 다른 값이면 역산도 따라 바뀐다 — 600 ÷ (주3일 × 4주) = 50", () => {
-    renderCard({ ...WEIGHT_ROW, total: 600 });
-    expect((screen.getByLabelText("하루 목표 (회)") as HTMLInputElement).value).toBe(
-      "50",
-    );
+  it("총 목표를 직접 고치면 하루 기준을 역산해 함께 올린다 — 600 ÷ (주3일 × 4주) = 50", () => {
+    // 기간이 나중에 바뀌어도 방금 정한 강도가 유지되려면 perDay가 같이 갱신돼야 한다
+    const onChange = renderCard(WEIGHT_ROW);
+    fireEvent.change(screen.getByLabelText("기간 총 목표 (회)"), {
+      target: { value: "600" },
+    });
+    expect(onChange).toHaveBeenCalledWith({ total: 600, perDay: 50 });
   });
 
   it("하루 목표를 바꾸면 총 목표가 다시 계산된다 — 30 × 주3일 × 4주 = 360", () => {
@@ -88,7 +94,7 @@ describe("GoalCard — 하루 기준 계산기", () => {
     fireEvent.change(screen.getByLabelText("하루 목표 (회)"), {
       target: { value: "30" },
     });
-    expect(onChange).toHaveBeenCalledWith({ total: 360 });
+    expect(onChange).toHaveBeenCalledWith({ perDay: 30, total: 360 });
   });
 
   it("주 며칠을 올리면 총 목표가 다시 계산된다 — 25 × 주4일 × 4주 = 400", () => {
@@ -125,6 +131,7 @@ describe("GoalCard — 카테고리·지표", () => {
       category: "cardio",
       type: "cardio_distance",
       total: 20,
+      perDay: 1.7, // 20km ÷ (주3일 × 4주)
       qualifier: 0,
     });
   });

@@ -2,9 +2,28 @@ import { describe, expect, it } from "vitest";
 import {
   perDayFromTotal,
   perWeekFromTotalDays,
+  roundTarget,
   totalDaysFromPerWeek,
   totalFromPerDay,
 } from "./challenge-goal-calc";
+
+describe("roundTarget — 목표값 반올림", () => {
+  it("km는 소수 첫째 자리를 남긴다", () => {
+    expect(roundTarget(5.71, "km")).toBe(5.7);
+  });
+
+  it("회는 정수로 — `171.4회`는 사람이 읽을 수 없다", () => {
+    expect(roundTarget(171.43, "회")).toBe(171);
+  });
+
+  it("분도 정수로", () => {
+    expect(roundTarget(342.86, "분")).toBe(343);
+  });
+
+  it("일도 정수로", () => {
+    expect(roundTarget(11.6, "일")).toBe(12);
+  });
+});
 
 describe("totalFromPerDay — 하루 기준 → 기간 총량", () => {
   it("하루 30회 × 주 3일 × 28일(4주) = 360회", () => {

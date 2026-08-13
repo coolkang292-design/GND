@@ -16,6 +16,20 @@ import { plannedDaysForPeriod } from "./goal-score";
 /** 소수 첫째 자리까지 */
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
+/**
+ * 기간 총 목표의 표시·저장 반올림 — **`km`만 소수 첫째 자리, 나머지는 정수.**
+ *
+ * `171.4회`·`342.9분` 같은 목표는 사람이 읽을 수 없다. 기간을 바꿀 때마다
+ * 총량을 다시 계산하게 되면서(2026-08-14 신고) 소수가 자주 나오게 됐다.
+ * 거리만 `5.7km`처럼 소수가 자연스럽다.
+ *
+ * ⚠️ **하루 목표에는 쓰지 마라.** 거기는 `하루 41.7회`가 오히려 정보다 —
+ * 정수로 뭉개면 총량과 안 맞는 것처럼 보인다.
+ */
+export function roundTarget(value: number, unit: string): number {
+  return unit === "km" ? round1(value) : Math.round(value);
+}
+
 /** 하루 목표 × 주 N일 × 주수 → 기간 총 목표 */
 export function totalFromPerDay(
   perDay: number,

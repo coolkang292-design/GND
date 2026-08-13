@@ -170,6 +170,118 @@ describe("ChallengeSetupSheet — 달성 세팅과 참여 세팅은 서로를 �
   });
 
   /**
+   * ⚠️ 사용자 신고 (2026-08-14, 배포 후) — *"목표를 세팅하고 챌린지 기간을
+   * 수정하면 자동으로 목표가 계산이 안 됨"*.
+   *
+   * 처음 설계는 기간이 바뀌어도 **총 목표를 고정**하고 하루 목표를 다시
+   * 파생시켰다. 하루 기준이 기본 입력이 된 이상 그건 거꾸로다 —
+   * `하루 30회 × 주 3일`로 4주를 잡았다가 8주로 늘리면 총 목표는 720회가
+   * 되어야 하는데, 옛 동작은 360회를 그대로 두고 **하루 목표를 15회로 조용히
+   * 깎았다.** 사용자가 정한 것(하루 기준)이 사용자 몰래 바뀌는 쪽이 나쁘다.
+   */
+  it("기간을 늘리면 하루 기준을 유지한 채 총 목표가 다시 계산된다", () => {
+    renderSheet(); // 08-02 ~ 08-29 = 28일(4주), 웨이트 300회, 계산기 주 3일 → 하루 25회
+    expect(
+      (screen.getByLabelText("하루 목표 (회)") as HTMLInputElement).value,
+    ).toBe("25");
+
+    // 종료일을 09-26으로 → 56일(8주)
+    fireEvent.change(screen.getByLabelText("종료일"), {
+      target: { value: "2026-09-26" },
+    });
+
+    // 하루 25회 × 주 3일 × 8주 = 600회
+    expect(
+      (screen.getByLabelText("기간 총 목표 (회)") as HTMLInputElement).value,
+    ).toBe("600");
+    expect(
+      (screen.getByLabelText("하루 목표 (회)") as HTMLInputElement).value,
+    ).toBe("25");
+    expect(screen.getByText("기간 56일 (8.0주)")).toBeTruthy();
+  });
+
+  it("기간을 줄여도 같은 규칙 — 하루 기준이 남고 총 목표가 준다", () => {
+    renderSheet();
+
+    // 종료일을 08-15로 → 14일(2주)
+    fireEvent.change(screen.getByLabelText("종료일"), {
+      target: { value: "2026-08-15" },
+    });
+
+    // 하루 25회 × 주 3일 × 2주 = 150회
+    expect(
+      (screen.getByLabelText("기간 총 목표 (회)") as HTMLInputElement).value,
+    ).toBe("150");
+    expect(
+      (screen.getByLabelText("하루 목표 (회)") as HTMLInputElement).value,
+    ).toBe("25");
+  });
+
+  it("나누어떨어지지 않아도 횟수 목표는 정수로 나오고, 요약의 하루 기준이 카드와 같다", () => {
+    renderSheet();
+
+    // 08-02 ~ 08-17 = 16일 (2.286주). 하루 25회 × 주 3일 × 2.286주 = 171.43
+    fireEvent.change(screen.getByLabelText("종료일"), {
+      target: { value: "2026-08-17" },
+    });
+
+    // `171.4회`가 아니라 `171회`
+    expect(
+      (screen.getByLabelText("기간 총 목표 (회)") as HTMLInputElement).value,
+    ).toBe("171");
+    // ⚠️ 요약이 반올림된 총량에서 하루 기준을 역산하면 `24.9회`가 되어
+    //    카드(`25`)와 갈린다. 같은 값을 보여야 한다 (2026-08-14 실측).
+    expect(
+      (screen.getByLabelText("하루 목표 (회)") as HTMLInputElement).value,
+    ).toBe("25");
+    expect(screen.getByText("하루 25회 × 주 3일")).toBeTruthy();
+  });
+
+  it("시작일을 바꿔도 다시 계산된다", () => {
+    renderSheet();
+
+    // 시작일을 08-16으로 → 08-16~08-29 = 14일(2주)
+    fireEvent.change(screen.getByLabelText("시작일"), {
+      target: { value: "2026-08-16" },
+    });
+
+    expect(
+      (screen.getByLabelText("기간 총 목표 (회)") as HTMLInputElement).value,
+    ).toBe("150");
+  });
+
+  it("일수형 목표도 기간을 따라 총 일수가 다시 계산된다", () => {
+    render(
+      <ChallengeSetupSheet
+        mode="create"
+        defaults={{
+          name: "일수형",
+          startDate: "2026-08-02",
+          endDate: "2026-08-29", // 28일 = 4주
+          goals: [{ type: "weight_days", target: 12, qualifier: 3 }],
+          plannedDays: 3,
+        }}
+        prevGoals={null}
+        busy={false}
+        onSubmit={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(
+      (screen.getByLabelText("기간 총 목표 (일)") as HTMLInputElement).value,
+    ).toBe("12");
+
+    fireEvent.change(screen.getByLabelText("종료일"), {
+      target: { value: "2026-09-26" }, // 56일 = 8주
+    });
+
+    // 주 3일 × 8주 = 24일
+    expect(
+      (screen.getByLabelText("기간 총 목표 (일)") as HTMLInputElement).value,
+    ).toBe("24");
+  });
+
+  /**
    * 사용자 지시 (2026-08-14) — *"하루 기준으로 설정하고 자동 계산이 되어서 설정
    * 요약에 표시되게"*. 총량만 있으면 300회가 많은지 적은지 알 수 없다.
    */

@@ -6,6 +6,7 @@ import {
   CATEGORY_TYPES,
   GoalCard,
   isDaysType,
+  recalcTotal,
   type GoalRow,
 } from "@/components/challenge/goal-card";
 import {
@@ -47,13 +48,17 @@ function rowFromGoal(
   periodDays: number,
   fallbackDays: number,
 ): GoalRow {
+  const calcDaysPerWeek = isDaysType(g.type)
+    ? perWeekFromTotalDays(g.target, periodDays)
+    : Math.min(7, Math.max(1, fallbackDays));
   return {
     category: GOAL_TYPE_META[g.type].category,
     type: g.type,
     total: g.target,
-    calcDaysPerWeek: isDaysType(g.type)
-      ? perWeekFromTotalDays(g.target, periodDays)
-      : Math.min(7, Math.max(1, fallbackDays)),
+    perDay: isDaysType(g.type)
+      ? 0
+      : perDayFromTotal(g.target, calcDaysPerWeek, periodDays),
+    calcDaysPerWeek,
     qualifier: isDaysType(g.type) ? (g.qualifier ?? 3) : 0,
   };
 }
@@ -110,6 +115,28 @@ export function ChallengeSetupSheet({
   }
 
   /**
+   * 기간이 바뀌면 **모든 목표의 총 목표를 다시 계산한다** (하루 기준·주 며칠 유지).
+   *
+   * ⚠️ 사용자 신고 (2026-08-14, 배포 후) — *"목표를 세팅하고 챌린지 기간을
+   * 수정하면 자동으로 목표가 계산이 안 됨"*. 옛 동작은 총 목표를 고정하고
+   * 하루 목표를 조용히 깎았다. 4주 `하루 30회 × 주 3일`(360회)을 8주로 늘리면
+   * 720회가 되어야 하는데 360회에 머물렀다.
+   *
+   * ⚠️ `useEffect`로 하지 마라. 이 저장소는 effect 안의 동기 setState를
+   * 금지한다(`react-hooks/set-state-in-effect`) — 날짜를 바꾸는 이 자리에서 한다.
+   */
+  function changePeriod(next: { startDate?: string; endDate?: string }) {
+    const s = next.startDate ?? startDate;
+    const e = next.endDate ?? endDate;
+    if (next.startDate !== undefined) setStartDate(next.startDate);
+    if (next.endDate !== undefined) setEndDate(next.endDate);
+    const nextPeriodDays = periodDaysOf(s, e);
+    setRows((rs) =>
+      rs.map((r) => ({ ...r, total: recalcTotal(r, nextPeriodDays) })),
+    );
+  }
+
+  /**
    * ⚠️ **새 목표는 안 쓴 분류부터 고른다.** 예전처럼 무조건 `웨이트 횟수`를 넣으면
    * `+ 목표 추가`를 누르는 순간 같은 지표가 두 개가 되고, 제출이
    * "같은 지표의 목표가 두 개 있어요"로 막힌다. 목표 3개 제한이 생기면서 이게
@@ -123,13 +150,18 @@ export function ChallengeSetupSheet({
         (["weight", "cardio", "bodyweight"] as const).find((c) => !used.has(c)) ??
         "weight";
       const type = CATEGORY_TYPES[category][0];
+      const calcDaysPerWeek = Math.min(7, Math.max(1, plannedDays));
+      const total = GOAL_TYPE_META[type].defaultTarget;
       return [
         ...rs,
         {
           category,
           type,
-          total: GOAL_TYPE_META[type].defaultTarget,
-          calcDaysPerWeek: Math.min(7, Math.max(1, plannedDays)),
+          total,
+          perDay: isDaysType(type)
+            ? 0
+            : perDayFromTotal(total, calcDaysPerWeek, periodDays),
+          calcDaysPerWeek,
           qualifier: isDaysType(type) ? 3 : 0,
         },
       ];
@@ -227,8 +259,9 @@ export function ChallengeSetupSheet({
                   <label className="text-[12px] font-bold text-muted">시작일</label>
                   <input
                     type="date"
+                    aria-label="시작일"
                     value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
+                    onChange={(e) => changePeriod({ startDate: e.target.value })}
                     className="mt-1 h-11 w-full rounded-card-sm border border-line bg-surface px-3 text-sm"
                   />
                 </div>
@@ -236,8 +269,9 @@ export function ChallengeSetupSheet({
                   <label className="text-[12px] font-bold text-muted">종료일</label>
                   <input
                     type="date"
+                    aria-label="종료일"
                     value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
+                    onChange={(e) => changePeriod({ endDate: e.target.value })}
                     className="mt-1 h-11 w-full rounded-card-sm border border-line bg-surface px-3 text-sm"
                   />
                 </div>
@@ -350,11 +384,9 @@ export function ChallengeSetupSheet({
             <div className="mt-2 flex flex-col gap-1.5">
               {rows.map((r, i) => {
                 const unit = GOAL_TYPE_META[r.type].unit;
-                const perDay = perDayFromTotal(
-                  r.total,
-                  r.calcDaysPerWeek,
-                  periodDays,
-                );
+                /* ⚠️ `r.perDay`를 그대로 쓴다. 총 목표에서 역산하면 반올림 때문에
+                   카드는 `25회`인데 요약만 `24.9회`가 된다 (2026-08-14 실측). */
+                const perDay = r.perDay;
                 return (
                   <div
                     key={i}
