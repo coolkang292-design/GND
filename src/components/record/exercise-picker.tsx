@@ -92,6 +92,11 @@ type PickerProps = {
    */
   /** 공식 프로그램 카탈로그 진입 — 기록 화면에서만 넘긴다 */
   onOpenPrograms?: () => void;
+  /**
+   * 전신 인터벌 진입 — 상황별 추천의 `전신 인터벌 할래요` 칸이 쓴다
+   * (사용자 지시 2026-08-13). 안 넘기면 그 칸은 미리보기만 보여 준다.
+   */
+  onStartInterval?: () => void;
   /** 내 루틴 (0056). **저장된 루틴이 있을 때만** 진입 카드가 나온다 */
   routines?: WorkoutRoutine[];
   routinesLoading?: boolean;
@@ -130,6 +135,7 @@ function PickerSheet({
   onPickConfigured,
   onPickPast,
   onCreateCustom,
+  onStartInterval,
   initialMode = "hub",
   onOpenPrograms,
   challengeCategories = null,
@@ -408,6 +414,7 @@ function PickerSheet({
             onPart={setRecommendPart}
             situation={situation}
             onSituation={setSituation}
+            onStartInterval={onStartInterval}
             selected={new Set(recommendSelected.keys())}
             onToggle={toggleRecommend}
             onBack={() => setMode(recommendReturnMode)}

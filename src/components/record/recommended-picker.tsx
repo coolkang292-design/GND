@@ -43,6 +43,7 @@ export function RecommendedPicker({
   onBack,
   onSearch,
   onNext,
+  onStartInterval,
 }: {
   mode: "part" | "situation";
   catalog: CatalogExercise[];
@@ -58,6 +59,14 @@ export function RecommendedPicker({
   /** '원하는 운동이 없나요?' — 검색 화면으로 */
   onSearch: () => void;
   onNext: () => void;
+  /**
+   * 전신 인터벌을 연다 (사용자 지시 2026-08-13).
+   *
+   * `interval` 칸은 다른 칸과 **하는 일이 다르다** — 종목을 목록에 담는 대신
+   * 인터벌을 시작한다. 담기만 하면 3세트 10회짜리 일반 운동이 되어 버린다.
+   * 안 넘기면 그 칸은 미리보기만 보여 준다.
+   */
+  onStartInterval?: () => void;
 }) {
   const byPart = mode === "part";
 
@@ -183,7 +192,21 @@ export function RecommendedPicker({
           </span>
         </p>
 
-        {list.length === 0 ? (
+        {activeKey === "interval" && onStartInterval ? (
+          <div className="rounded-card border border-accent/50 bg-accent-weak/40 p-4">
+            <p className="text-[13px] leading-5 text-text">
+              음악에 맞춰 <b>20초 운동 · 10초 휴식</b>을 반복해요. 시작하면 화면이
+              종목을 차례로 알려 주고, 음원이 끝나면 자동으로 기록돼요.
+            </p>
+            <button
+              type="button"
+              onClick={onStartInterval}
+              className="mt-3 h-12 w-full rounded-card bg-accent text-sm font-extrabold text-accent-ink"
+            >
+              전신 인터벌 고르러 가기
+            </button>
+          </div>
+        ) : list.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted">
             추천할 운동을 찾지 못했어요. 아래에서 직접 검색해 주세요.
           </p>

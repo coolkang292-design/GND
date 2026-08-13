@@ -118,12 +118,13 @@ describe("상황별 추천", () => {
     expect(SITUATIONS).toHaveLength(6);
   });
 
-  it("'기구를 잘 몰라요'와 '집에서 할래요'는 서로 다른 목록이다", () => {
-    // 둘 다 맨몸으로 채우면 카드가 둘 있을 이유가 없어진다.
-    // 앞은 머신만 피하고(덤벨은 쓴다), 뒤는 아무 기구도 안 쓴다.
-    const noMachines = SITUATIONS.find((s) => s.key === "no-machines")!.names;
-    const home = SITUATIONS.find((s) => s.key === "home")!.names;
-    expect([...noMachines].sort()).not.toEqual([...home].sort());
+  it("전신 인터벌 칸이 '집에서 할래요' 자리를 대신한다", () => {
+    // 사용자 지시 2026-08-13 — 인터벌을 프로그램으로만 시작할 수 있었다.
+    expect(SITUATIONS.map((s) => String(s.key))).not.toContain("home");
+    const interval = SITUATIONS.find((s) => s.key === "interval");
+    expect(interval?.label).toBe("전신 인터벌 할래요");
+    // 인터벌 구성은 4종목이다 — 미리 보여 주는 목록도 그래야 한다
+    expect(interval?.names).toHaveLength(4);
   });
 
   it("챌린지를 뺀 나머지 상황은 전부 종목을 갖고 있다", () => {

@@ -2470,6 +2470,12 @@ function WorkoutScreen({ userId }: { userId: string }) {
           closePicker();
           router.push("/record/programs");
         }}
+        onStartInterval={() => {
+          // 상황별 추천의 인터벌 칸 — 종목을 담지 않고 인터벌을 연다
+          closePicker();
+          setSubTab("workout");
+          void openTabataSheet();
+        }}
         onCreateCustom={handleCreateCustom}
         challengeCategories={challengeCategories}
         routines={routines ?? undefined}
