@@ -11,6 +11,7 @@ import { StreakCard } from "@/components/home/streak-card";
 import { WeeklyStats } from "@/components/home/weekly-stats";
 import { FriendBoardCard } from "@/components/home/friend-board-card";
 import { StartWorkoutCta } from "@/components/home/start-workout-cta";
+import { HeaderStreak } from "@/components/home/header-streak";
 import { CharacterCard } from "@/components/home/character-card";
 import { ChallengeSummaryCard } from "@/components/home/challenge-summary-card";
 import { getMyProfile } from "@/lib/crew";
@@ -219,11 +220,16 @@ export function HomeClient() {
   return (
     <div className="flex flex-col gap-3">
       <header className="flex items-center justify-between pt-2 pb-1">
+        {/* ⚠️ 옛 자리에는 `오늘도 GND 탈출하자 🔥`가 있었다 — 정보가 없는 구호다.
+            2026-08-13 사용자 지시로 **스트릭을 맨 위로** 올리면서 그 자리를 썼다.
+            카드(108px)를 올리지 않은 이유는 `header-streak.tsx` 주석 참조 —
+            크루 3명이면 `운동 시작하기`가 접힘선 밖으로 나간다. */}
         <div>
           <h1 className="text-[19px] font-extrabold tracking-tight">GND</h1>
-          <p className="mt-0.5 text-[12.5px] text-muted">
-            오늘도 GND 탈출하자 🔥
-          </p>
+          <HeaderStreak
+            completedAts={completedAts}
+            todayDone={iWorkedOutToday}
+          />
         </div>
         <NotificationBell />
       </header>
