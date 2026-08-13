@@ -1,5 +1,6 @@
 import {
   INTERVAL_SLOTS,
+  PROGRAM_LEVELS,
   intervalExerciseName,
   intervalMinutesForWeek,
   type IntervalProgram,
@@ -24,7 +25,7 @@ export type ProgramEnrollment = {
   programKey: string;
   programVersion: number;
   title: string;
-  levelAtStart: "beginner" | "experienced";
+  levelAtStart: ProgramLevel;
   startDate: string;
   timeZone: string;
   preferredSlots: PreferredSlot[];
@@ -48,6 +49,13 @@ export type CreateProgramEnrollmentInput = {
   program: StrengthProgram;
   sessions: readonly ResolvedProgramSession[];
   schedule: readonly ProgramScheduleItem[];
+  /**
+   * 근력은 **두 단계뿐**이다 — 세트 수를 가른다. `moderate`는 인터벌 전용이라
+   * 여기 들어오면 `toPlanExercise`가 세트 수를 못 정한다.
+   *
+   * ⚠️ 읽는 쪽(`ProgramEnrollment`)은 세 단계를 다 받아야 한다. 인터벌 등록도
+   *    같은 테이블에 들어가기 때문이다 (운영 장애 2026-08-13).
+   */
   levelAtStart: "beginner" | "experienced";
   startDate: string;
   timeZone: string;
@@ -347,7 +355,18 @@ function parseProgramEnrollmentRow(value: unknown): ProgramEnrollment | null {
     typeof row.title_snapshot !== "string" ||
     row.title_snapshot.trim().length === 0 ||
     row.title_snapshot.length > 80 ||
-    !["beginner", "experienced"].includes(row.level_at_start as string) ||
+    /*
+      ⚠️ **`moderate`를 빼면 프로그램 화면이 통째로 죽는다** (운영 장애 2026-08-13).
+
+      이 검증은 fail-closed다 — 한 행이라도 걸리면 `null`이 되고 화면은
+      "프로그램 정보를 불러오지 못했어요"만 남는다. 0070으로 난이도 3단계를
+      열어 놓고 **읽는 쪽을 안 넓혀서**, 인터벌을 `보통`으로 등록한 사람은
+      프로그램 탭에 아예 들어가지 못했다.
+
+      0069에서 `parsePreferredSlots`로 똑같이 당했다. 쓰는 쪽을 넓히면 **읽는
+      쪽도 같이** 넓혀야 한다.
+    */
+    !PROGRAM_LEVELS.includes(row.level_at_start as ProgramLevel) ||
     !isDateKey(row.start_date) ||
     !isTimeZone(row.timezone) ||
     !slots ||

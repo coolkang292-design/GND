@@ -310,6 +310,56 @@ describe("연속 요일 등록 (금·토·일)", () => {
     expect(rows[0].preferredSlots).toEqual(consecutiveSlots);
   });
 
+  /**
+   * 운영 장애 2026-08-13 — 인터벌을 `보통`으로 등록한 사람이 프로그램 탭에
+   * 아예 못 들어갔다. 0070으로 난이도 3단계를 열어 놓고 **읽는 쪽을 안 넓혀서**,
+   * fail-closed 검증이 그 행을 버리고 화면 전체가 오류가 됐다.
+   */
+  it("moderate로 등록한 인터벌도 읽어 온다", async () => {
+    queryReturning({
+      data: [
+        {
+          id: "11111111-1111-4111-8111-111111111111",
+          program_key: "interval-burn-6w",
+          program_version: 1,
+          title_snapshot: "기구 없이 4분부터 시작하는 6주",
+          level_at_start: "moderate",
+          start_date: "2026-08-17",
+          timezone: "Asia/Seoul",
+          preferred_slots: slots,
+          status: "active",
+        },
+      ],
+      error: null,
+    });
+
+    const rows = await getActiveProgramEnrollments("user-1");
+    expect(rows).toHaveLength(1);
+    expect(rows[0].levelAtStart).toBe("moderate");
+  });
+
+  it("없는 난이도는 여전히 버린다", async () => {
+    queryReturning({
+      data: [
+        {
+          id: "11111111-1111-4111-8111-111111111111",
+          program_key: "interval-burn-6w",
+          program_version: 1,
+          title_snapshot: "제목",
+          level_at_start: "extreme",
+          start_date: "2026-08-17",
+          timezone: "Asia/Seoul",
+          preferred_slots: slots,
+          status: "active",
+        },
+      ],
+      error: null,
+    });
+
+    await expect(getActiveProgramEnrollments("user-1")).rejects.toThrow(
+      /program_invalid_enrollment_row/,
+    );
+  });
   it("같은 요일 3개는 여전히 거부한다 — 주 3회가 아니다", () => {
     const duplicated = [
       { weekday: 5 as const, time: "19:00" },
