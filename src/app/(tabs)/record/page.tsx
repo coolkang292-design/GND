@@ -323,6 +323,16 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const [tabataOpen, setTabataOpen] = useState(false);
   /** 인터벌 음원이 도는 중인가 — 그동안 근력 오버레이를 내린다 */
   const [intervalPlaying, setIntervalPlaying] = useState(false);
+  /**
+   * 오늘의 인터벌 계획 (사용자 지시 2026-08-13).
+   *
+   * 근력 계획은 화면을 열 때 목록에 자동으로 담기는데, 인터벌은 담을 수가
+   * 없다 — 종목만 담으면 음원도 코스도 없는 맨몸 운동 넷이 된다. 그래서
+   * **버튼 하나를 대신 세운다.** 달력까지 들어가지 않아도 여기서 시작한다.
+   */
+  const [todayIntervalPlan, setTodayIntervalPlan] = useState<WorkoutPlan | null>(
+    null,
+  );
   /** 예정표에서 연 타바타 — 종목·코스를 채운 채 열고, 완료하면 그 계획을 지운다 */
   const [tabataPrefill, setTabataPrefill] = useState<TabataPrefill | null>(null);
   const tabataMinutesRef = useRef<number | null>(null);
@@ -518,6 +528,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
           Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Seoul",
         );
         const todayPlan = plans.find((plan) => plan.planDate === todayKey);
+        // 인터벌이면 담지 않고 버튼만 세운다 — 아래 판정이 false를 준다
+        setTodayIntervalPlan(todayPlan?.tabataMinutes ? todayPlan : null);
         if (
           !shouldAutoLoadTodayPlan({
             plan: todayPlan,
@@ -2258,6 +2270,45 @@ function WorkoutScreen({ userId }: { userId: string }) {
         </>
       ) : (
         <>
+      {/*
+        오늘 인터벌 계획이 있으면 **여기서 바로 시작한다** (사용자 지시 2026-08-13).
+
+        근력 계획은 화면을 열 때 목록에 자동으로 담기는데 인터벌은 담을 수가
+        없다 — 종목만 담으면 음원도 코스도 없는 맨몸 운동 넷이 된다. 그래서
+        담는 대신 버튼을 세운다. 달력까지 들어가지 않아도 된다.
+
+        ⚠️ 운동 중에는 안 보여 준다. 진행 중인 세션 위에 또 시작할 자리를 주면
+           "이미 운동 중이에요"만 보게 된다.
+      */}
+      {todayIntervalPlan && !active && (
+        <button
+          type="button"
+          data-testid="today-interval-start"
+          disabled={busy}
+          onClick={() => {
+            void (async () => {
+              const started = await handleLoadPlan(todayIntervalPlan, {
+                startNow: true,
+              });
+              if (started) setTodayIntervalPlan(null);
+            })();
+          }}
+          className="mb-3 flex w-full items-center justify-between gap-3 rounded-card border border-accent/55 bg-accent/10 px-4 py-3.5 text-left disabled:opacity-60"
+        >
+          <span className="min-w-0">
+            <span className="block text-sm font-black text-text">
+              🔥 오늘은 전신 인터벌이에요
+            </span>
+            <span className="mt-0.5 block text-[11.5px] leading-4 text-muted">
+              {todayIntervalPlan.exercises.map((item) => item.name).join(" · ")}
+            </span>
+          </span>
+          <span className="flex-none text-xs font-extrabold text-accent">
+            시작하기
+          </span>
+        </button>
+      )}
+
       {/*
         등록된 운동이 0개면 볼륨·휴식·시작·타바타·복구 안내를 **하나도** 안
         그린다 (사용자 지시 2026-08-06). 여기서 중요한 건 무엇을 더 그리느냐가

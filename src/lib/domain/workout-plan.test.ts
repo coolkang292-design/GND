@@ -320,13 +320,25 @@ describe("shouldAutoLoadTodayPlan — 오늘 계획 미리 담기", () => {
     expect(shouldAutoLoadTodayPlan({ ...base, active: true })).toBe(false);
   });
 
+  /**
+   * ⚠️ 담지 않는 것이 **끝이 아니다** (사용자 지시 2026-08-13).
+   *
+   * 목록에 담으면 음원도 코스도 없는 맨몸 운동 넷이 되므로 여기서는 false를
+   * 준다. 대신 기록 화면이 **`🔥 오늘은 전신 인터벌이에요` 버튼**을 세워
+   * 달력까지 들어가지 않고도 시작하게 한다 (`today-interval-start`).
+   *
+   * 이 판정이 true로 바뀌면 그 버튼이 아니라 종목이 담긴다 — 그러면 음악 없는
+   * 맨몸 운동이 된다.
+   */
   it("전신 인터벌 계획은 담지 않는다 — 시트로 열어야 음원·코스가 붙는다", () => {
-    expect(
-      shouldAutoLoadTodayPlan({
-        ...base,
-        plan: { planDate: "2026-08-12", tabataMinutes: 8 },
-      }),
-    ).toBe(false);
+    for (const minutes of [4, 8, 16]) {
+      expect(
+        shouldAutoLoadTodayPlan({
+          ...base,
+          plan: { planDate: "2026-08-12", tabataMinutes: minutes },
+        }),
+      ).toBe(false);
+    }
   });
 });
 
