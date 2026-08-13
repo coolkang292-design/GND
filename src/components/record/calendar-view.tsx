@@ -50,6 +50,7 @@ import type {
 import {
   getCompletedSessions,
   getSessionLogExercises,
+  localId,
   type CalendarSession,
 } from "@/lib/workout";
 import {
@@ -626,7 +627,7 @@ export function CalendarView({
           planDate: intervalPlanDate,
           sourceSessionId: null,
           exercises: toPlanExercises(
-            tabataDraftExercises(picked, () => crypto.randomUUID(), minutes),
+            tabataDraftExercises(picked, localId, minutes),
           ),
           tabataMinutes: minutes,
         }),

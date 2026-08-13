@@ -1025,7 +1025,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
   async function addRoutine(routine: WorkoutRoutine): Promise<boolean> {
     /*
       인터벌 루틴은 **인터벌로 되살린다** (0074, 사용자 지시 2026-08-13).
-      지난 기록 경로()와 같은 규칙이다 — 같은 운동을
+      지난 기록 경로(`handleScheduleFromPast`)와 같은 규칙이다 — 같은 운동을
       어디서 부르느냐에 따라 결과가 달라지면 안 된다.
     */
     const resume = tabataResumeFromSession({
@@ -1537,7 +1537,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
         저장되지 않은 세션은 "복사할 종목이 없어요"로 막힌다 — 실제로 그렇게
         막혔다.
 
-        지난 기록을 인터벌로 되살리는 경로()와 같은
+        지난 기록을 인터벌로 되살리는 경로(`tabataResumeFromSession`)와 같은
         규칙이다: **이름과 코스만 있으면 된다.**
       */
       const items = course

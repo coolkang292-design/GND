@@ -25,16 +25,21 @@ const mocks = vi.hoisted(() => ({
   getActiveProgramEnrollments: vi.fn(),
   rescheduleProgramPlans: vi.fn(),
   cancelProgramEnrollment: vi.fn(),
+  localId: vi.fn(),
+  saveWorkoutPlan: vi.fn(),
 }));
 
 vi.mock("@/lib/crew", () => ({ getMyProfile: mocks.getMyProfile }));
 vi.mock("@/lib/workout", () => ({
   getCompletedSessions: mocks.getCompletedSessions,
   getSessionLogExercises: mocks.getSessionLogExercises,
+  // 실제 `localId`와 같은 자리 — 없으면 저장 경로가 undefined를 부른다.
+  // 세는 방식이라 단언에서 키를 읽을 수 있다.
+  localId: mocks.localId,
 }));
 vi.mock("@/lib/workout-plan", () => ({
   getWorkoutPlans: mocks.getWorkoutPlans,
-  saveWorkoutPlan: vi.fn(),
+  saveWorkoutPlan: mocks.saveWorkoutPlan,
   moveWorkoutPlan: vi.fn(),
   deleteWorkoutPlan: vi.fn(),
 }));
@@ -60,13 +65,32 @@ beforeEach(() => {
   mocks.getActiveProgramEnrollments.mockResolvedValue([]);
   mocks.rescheduleProgramPlans.mockReset();
   mocks.rescheduleProgramPlans.mockResolvedValue(undefined);
+  let seq = 0;
+  mocks.localId.mockReset();
+  mocks.localId.mockImplementation(() => `id-${++seq}`);
+  mocks.saveWorkoutPlan.mockReset();
+  mocks.saveWorkoutPlan.mockResolvedValue({ id: "plan-1" });
 });
 
-async function setup() {
+/** 인터벌 고르기 화면은 맨몸·비시간형만 보여 준다 */
+const BODYWEIGHT_CATALOG = ["푸시업", "맨몸 스쿼트", "버피", "점핑잭"].map(
+  (name, i) => ({
+    id: `cat-${i}`,
+    name,
+    body_part: "코어" as const,
+    exercise_type: "bodyweight" as const,
+    measure: "reps" as const,
+    is_custom: false,
+    created_by: null,
+    created_at: "2026-01-01T00:00:00Z",
+  }),
+);
+
+async function setup(catalog: React.ComponentProps<typeof CalendarView>["catalog"] = []) {
   const view = render(
     <CalendarView
       userId="user-1"
-      catalog={[]}
+      catalog={catalog}
       onScheduleSession={vi.fn()}
       onLoadPlan={vi.fn()}
       onCreateCustom={vi.fn()}
@@ -226,6 +250,81 @@ describe("CalendarView — 인터벌로 계획하기 (2026-08-13)", () => {
       name: /8월 16일 예정표로 저장/,
     }) as HTMLButtonElement;
     expect(save.disabled).toBe(true);
+  });
+
+  /*
+    회귀: 저장이 **실제로 무엇을 보내는지**는 아무도 보지 않았다. 위 두 테스트는
+    화면이 열리는 것과 잠기는 것만 본다.
+
+    두 가지를 여기서 잡는다.
+
+    ① 코스가 세트를 정한다. 예전에 `newPlanExercises`를 쓰던 시절 인터벌 계획이
+       **3세트 10회**로 저장돼 달력에 `0회`로 떴다(사용자 지적 2026-08-13).
+       4분 = 2회다.
+    ② `tabataMinutes`가 실려야 예정표가 인터벌로 되살아난다. 빠지면 종목만 남은
+       평범한 맨몸 계획이 되고, 음원도 전체화면도 열리지 않는다.
+  */
+  it("코스가 세트를 정한다 — 4분이면 2회로 저장한다", async () => {
+    await setup(BODYWEIGHT_CATALOG);
+
+    fireEvent.click(screen.getByRole("button", { name: "8월 16일" }));
+    fireEvent.click(screen.getByText("➕ 새 운동 계획 만들기"));
+    fireEvent.click(screen.getByText("운동 직접 고르기"));
+    fireEvent.click(screen.getByText(/상황별 추천/));
+    fireEvent.click(screen.getByText("전신 인터벌 할래요"));
+    fireEvent.click(screen.getByRole("button", { name: "인터벌로 계획하기" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "4분" }));
+    fireEvent.click(screen.getByText(/운동 고르기 \(0\/4\)/));
+    for (const c of BODYWEIGHT_CATALOG) {
+      fireEvent.click(screen.getByText(c.name));
+    }
+    fireEvent.click(screen.getByText("선택한 4개 운동 추가"));
+    fireEvent.click(
+      screen.getByRole("button", { name: /8월 16일 예정표로 저장/ }),
+    );
+
+    await waitFor(() => expect(mocks.saveWorkoutPlan).toHaveBeenCalled());
+    const sent = mocks.saveWorkoutPlan.mock.calls[0][0];
+    expect(sent.planDate).toBe("2026-08-16");
+    expect(sent.tabataMinutes).toBe(4); // ② 빠지면 인터벌이 아니게 된다
+    expect(sent.exercises).toHaveLength(4);
+    for (const ex of sent.exercises) {
+      // 한 종목이 한 줄이고, 그 줄의 **횟수가 라운드 수**다.
+      // 4분 = 8라운드 ÷ 종목 4개 = 2회. 예전 `0회`가 여기서 나왔다.
+      expect(ex.sets).toHaveLength(1);
+      expect(ex.sets[0].reps).toBe(2);
+    }
+  });
+
+  /*
+    회귀: 이 화면은 `crypto.randomUUID()`를 직접 불렀다. 그건 **보안 컨텍스트
+    전용**이라 `http://<LAN IP>:3000`으로 띄운 개발 서버 — 폰으로 확인할 때 쓰는
+    바로 그 주소 — 에서는 없다. 저장이 거기서만 터졌다.
+
+    `@/lib/workout`의 `localId()`가 그 대비를 이미 들고 있다. 아래는 그 함수를
+    **거쳐 가는지**를 본다. 직접 부르면 이 단언이 0으로 떨어진다.
+  */
+  it("키를 localId로 만든다 — 보안 컨텍스트가 아니어도 저장된다", async () => {
+    await setup(BODYWEIGHT_CATALOG);
+
+    fireEvent.click(screen.getByRole("button", { name: "8월 16일" }));
+    fireEvent.click(screen.getByText("➕ 새 운동 계획 만들기"));
+    fireEvent.click(screen.getByText("운동 직접 고르기"));
+    fireEvent.click(screen.getByText(/상황별 추천/));
+    fireEvent.click(screen.getByText("전신 인터벌 할래요"));
+    fireEvent.click(screen.getByRole("button", { name: "인터벌로 계획하기" }));
+    fireEvent.click(screen.getByText(/운동 고르기 \(0\/4\)/));
+    for (const c of BODYWEIGHT_CATALOG) {
+      fireEvent.click(screen.getByText(c.name));
+    }
+    fireEvent.click(screen.getByText("선택한 4개 운동 추가"));
+    fireEvent.click(
+      screen.getByRole("button", { name: /8월 16일 예정표로 저장/ }),
+    );
+
+    await waitFor(() => expect(mocks.saveWorkoutPlan).toHaveBeenCalled());
+    expect(mocks.localId).toHaveBeenCalled();
   });
 });
 describe("CalendarView — 지난 기록 상세 (2026-08-04)", () => {
