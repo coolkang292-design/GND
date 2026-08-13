@@ -7,7 +7,11 @@ import {
   OFFICIAL_PROGRAMS,
   STRENGTH_PROGRAMS,
 } from "@/lib/domain/official-programs";
-import { ProgramCatalog, ProgramDetail } from "./program-catalog";
+import {
+  IntervalProgramDetail,
+  ProgramCatalog,
+  ProgramDetail,
+} from "./program-catalog";
 
 afterEach(cleanup);
 
@@ -85,6 +89,70 @@ describe("ProgramCatalog", () => {
   });
 });
 
+describe("IntervalProgramDetail — 종목 설명 (2026-08-13)", () => {
+  it("종목을 누르면 그 자리에서 설명이 펼쳐진다", () => {
+    // 사용자 지적 2026-08-13 — 안내 26종을 썼는데 화면에 연결이 안 돼 있었다
+    render(
+      <IntervalProgramDetail
+        program={INTERVAL_PROGRAM}
+        onBack={vi.fn()}
+        onSchedule={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByTestId("interval-exercise-guide")).toBeNull();
+    const trigger = screen.getByRole("button", { name: "맨몸 스쿼트 설명 보기" });
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(trigger);
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    const guide = screen.getByTestId("interval-exercise-guide");
+    for (const label of ["시작 자세", "동작", "호흡", "흔한 실수", "주의"]) {
+      expect(guide.textContent).toContain(label);
+    }
+    expect(guide.textContent).toContain("엉덩이를 뒤로");
+
+    fireEvent.click(trigger);
+    expect(screen.queryByTestId("interval-exercise-guide")).toBeNull();
+  });
+
+  it("난이도를 바꾸면 그 난이도의 종목 설명이 열린다", () => {
+    render(
+      <IntervalProgramDetail
+        program={INTERVAL_PROGRAM}
+        onBack={vi.fn()}
+        onSchedule={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: "높음" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "버피 설명 보기" })[0]);
+    expect(
+      screen.getByTestId("interval-exercise-guide").textContent,
+    ).toContain("다리를 뒤로 뻗었다");
+  });
+
+  it("9조합 36칸이 전부 안내를 갖고 있다", () => {
+    // 안내가 없으면 버튼이 아니라 그냥 글자로 그린다 — 눌러도 안 열리는
+    // 자리를 만들지 않기 위해서다. 하나라도 빠지면 여기서 드러난다.
+    const view = render(
+      <IntervalProgramDetail
+        program={INTERVAL_PROGRAM}
+        onBack={vi.fn()}
+        onSchedule={vi.fn()}
+      />,
+    );
+    for (const label of ["입문", "보통", "높음"]) {
+      fireEvent.click(screen.getByRole("tab", { name: label }));
+      const cells = screen.getAllByTestId("interval-exercise");
+      expect(cells).toHaveLength(12);
+      for (const cell of cells) {
+        expect(cell.querySelector("button")).not.toBeNull();
+      }
+    }
+    view.unmount();
+  });
+});
 describe("ProgramDetail", () => {
   it("운동 구성과 자동 세팅을 먼저 설명하고 일정 CTA만 강조한다", () => {
     const onBack = vi.fn();

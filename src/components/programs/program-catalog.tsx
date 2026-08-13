@@ -12,6 +12,7 @@ import {
   type ProgramLevel,
   type StrengthProgram,
 } from "@/lib/domain/official-programs";
+import { guideForExercise } from "@/lib/domain/exercise-guides";
 import { EXERCISE_PREVIEW_NOTES } from "./exercise-preview-notes";
 
 type ProgramCatalogProps = {
@@ -71,6 +72,23 @@ const COVER_POSITION: Record<OfficialProgramKey, string> = {
   "lean-body-6w": "object-[center_42%]",
   "interval-burn-6w": "object-[center_35%]",
 };
+
+/** 안내 한 줄 — `시작 자세 · 발을 어깨너비로…` 꼴로 붙인다 */
+function GuideLine({
+  label,
+  lines,
+}: {
+  label: string;
+  lines: readonly string[];
+}) {
+  if (lines.length === 0) return null;
+  return (
+    <p className="mt-1 first:mt-0">
+      <span className="font-bold text-text">{label} · </span>
+      {lines.join(" · ")}
+    </p>
+  );
+}
 
 function ProgramStat({ label, value }: { label: string; value: string }) {
   return (
@@ -215,6 +233,14 @@ export function IntervalProgramDetail({
   scheduleAvailable?: boolean;
 }) {
   const [level, setLevel] = useState<ProgramLevel>("beginner");
+  /**
+   * 펼친 칸 하나. 근력 상세와 같은 방식이다 — 표 안에서 편다.
+   *
+   * ⚠️ **이름이 아니라 회차+슬롯으로 잡는다.** 같은 종목이 두 회차에 나오는
+   *    조합이 있어서(높음 A·C의 버피), 이름으로 잡으면 하나를 눌렀는데 둘 다
+   *    펼쳐진다.
+   */
+  const [openKey, setOpenKey] = useState<string | null>(null);
   const options = programLevelOptions(program);
 
   return (
@@ -323,15 +349,80 @@ export function IntervalProgramDetail({
                   {session.key}회차
                 </p>
                 <ul className="mt-1.5 grid grid-cols-2 gap-1.5">
-                  {session.exercises.map((exercise) => (
-                    <li
-                      key={exercise.slot}
-                      data-testid="interval-exercise"
-                      className="rounded-card-sm bg-surface-2 px-2.5 py-2 text-[11.5px] font-bold leading-4 text-text"
-                    >
-                      {intervalExerciseName(exercise, level)}
-                    </li>
-                  ))}
+                  {session.exercises.map((exercise) => {
+                    const name = intervalExerciseName(exercise, level);
+                    const guide = guideForExercise(name);
+                    const cellKey = `${session.key}-${exercise.slot}`;
+                    const open = openKey === cellKey;
+                    return (
+                      <li
+                        key={exercise.slot}
+                        data-testid="interval-exercise"
+                        className={open ? "col-span-2" : undefined}
+                      >
+                        {/*
+                          누르면 그 자리에서 편다 (사용자 지적 2026-08-13).
+                          안내가 없는 종목은 버튼으로 만들지 않는다 — 눌러도
+                          아무 일도 안 일어나는 자리를 주지 않는다.
+                        */}
+                        {guide ? (
+                          <button
+                            type="button"
+                            aria-expanded={open}
+                            aria-label={`${name} 설명 보기`}
+                            onClick={() => setOpenKey(open ? null : cellKey)}
+                            className={`w-full rounded-card-sm px-2.5 py-2 text-left text-[11.5px] font-bold leading-4 ${
+                              open
+                                ? "bg-accent/15 text-accent"
+                                : "bg-surface-2 text-text"
+                            }`}
+                          >
+                            {name}
+                            <span aria-hidden className="ml-1 text-[10px] text-muted">
+                              {open ? "▲" : "▾"}
+                            </span>
+                          </button>
+                        ) : (
+                          <span className="block rounded-card-sm bg-surface-2 px-2.5 py-2 text-[11.5px] font-bold leading-4 text-text">
+                            {name}
+                          </span>
+                        )}
+                        {open && guide && (
+                          <div
+                            data-testid="interval-exercise-guide"
+                            className="mt-1 rounded-card-sm border border-line bg-surface px-3 py-2.5 text-[11.5px] leading-5 text-muted"
+                          >
+                            {/*
+                              안내를 통째로 보여 준다 (사용자 지적 2026-08-13).
+                              동작 한 줄만 띄웠더니 "설명이 너무 부족하다"는
+                              말을 들었다 — 자료는 이미 다섯 항목을 갖고 있었다.
+                            */}
+                            <GuideLine label="시작 자세" lines={guide.setup} />
+                            <GuideLine label="동작" lines={guide.movement} />
+                            <GuideLine label="호흡" lines={[guide.breathing]} />
+                            <GuideLine label="흔한 실수" lines={guide.mistakes} />
+                            <GuideLine label="주의" lines={[guide.caution]} />
+                            {/*
+                              ⚠️ 외부 원문은 **링크만** 건다. 본문·사진·영상을
+                                 복사하거나 iframe으로 넣지 않는다. 사람이 열어
+                                 확인한 링크만 자료에 들어간다
+                                 (`exercise-guides.ts`의 규칙).
+                            */}
+                            {guide.source && (
+                              <a
+                                href={guide.source.url}
+                                target="_blank"
+                                rel="noreferrer noopener"
+                                className="mt-2 inline-flex min-h-9 items-center font-bold text-accent underline decoration-accent/40 underline-offset-4"
+                              >
+                                {guide.source.provider}에서 더 보기 ↗
+                              </a>
+                            )}
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             ))}
