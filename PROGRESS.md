@@ -3,6 +3,37 @@
 > 새 세션은 저장소 루트 `AGENTS.md` → `CLAUDE.md` → 이 파일 → 가장 최근의 관련 `docs/superpowers/HANDOFF-*.md` 순서로 읽는다.
 > 이 파일은 전체 흐름의 요약이고, 작업별 세부 사실과 남은 확인은 최신 인수인계서가 기준이다.
 
+## 🔄 진행 중 — 챌린지 세팅 시트: 달성 계획과 참여 계획을 갈랐다 (2026-08-14, 미커밋·미배포)
+
+설계: `docs/superpowers/specs/2026-08-14-challenge-setup-sheet-redesign-design.md`
+계획: `docs/superpowers/plans/2026-08-14-challenge-setup-sheet-redesign.md`
+
+한 화면에 `주 N일`이 **두 개** 있었다 — 목표 카드의 총량 계산용과 시트 하단의
+참여율 분모용. 이름도 비슷해서(`주 며칠` / `계획 운동일 (주 N일)`) 사람도 코드도
+둘을 같은 것으로 읽었다. 섹션을 갈랐다:
+
+- **① 내 운동 목표** (달성률 80%) — 종목 · 지표 · **기간 총 목표** · 하루 기준 계산기
+- **② 참여 계획** (참여율 20%) — `주 N일` 하나. 종목과 무관한 '운동한 날' 기준
+- **③ 현재 설정 요약** — `웨이트 480회` / `하루 40회 × 주 3일` · `목표 N개 · 참여 계획 주 N일`
+
+**점수 로직·DB는 무변경.** `goal-score.ts`·`foldPeriodStats`·`saveMyGoals`·`SetupSubmit`
+모양 그대로라 `challenge/page.tsx`도 안 건드렸다. 마이그레이션 없음.
+
+- `하루 기준 계산 / 총량 직접 입력` 토글 제거 → 계산기가 **기본 펼침**, 총 목표와 양방향
+- 목표 **최대 3개** (완료 보너스 `COMPLETED_GOAL_BONUS_MAX`와 일치). `↺ 지난 목표`도 3개까지
+- `+ 목표 추가`가 **안 쓴 분류부터** 고른다 (옛 동작은 무조건 웨이트 횟수 → 즉시 중복으로 제출 차단)
+- 신규 파일: `lib/domain/challenge-goal-calc.ts` · `components/challenge/{goal-card,number-field}.tsx`
+
+⚠️ **두 축이 다시 엉키는 것은 `setup-sheet.test.tsx`의
+`달성 세팅과 참여 세팅은 서로를 안 건드린다`가 잡는다. 지우지 마라.**
+⚠️ CTA는 `＋ 챌린지 추가하기`와 같은 테두리형이고 **`shrink-0`이 필요하다** — 없으면
+시트의 flex 축소에 눌려 `h-14`가 26px이 된다(실측).
+
+검증: lint 0 · typecheck 0 · **테스트 144 파일 / 2084건 통과** · build 성공 ·
+개발 서버 실측(375×812, 픽스처 A): 하루 40회→총 480회 자동계산→요약 반영,
+②를 주5→주7로 바꿔도 목표 카드 불변, 목표 3개에서 잠김, goals 모드 CTA `내 목표 저장 (1개)`
+남은 것: 사용자 최종 확인 → 커밋 → 배포
+
 ## 🔄 진행 중 — 홈 통합 카드 · 챌린지 CTA (2026-08-13, 미배포)
 
 설계·검증 기록: `docs/superpowers/specs/2026-08-13-home-today-card-and-challenge-cta-design.md`
