@@ -131,6 +131,8 @@ describe("TabataSheet — 운동 고르기 배선 (2026-08-06)", () => {
     const { getByText, getAllByText } = setup();
 
     fireEvent.click(getByText("+ 운동 고르기 (0/4)"));
+    // 목록이 바로 뜬다 (2026-08-13) — 추천으로 가려면 허브로 한 번 돌아간다
+    fireEvent.click(screen.getByLabelText("진입 화면으로 돌아가기"));
     fireEvent.click(getByText("운동 직접 고르기"));
     fireEvent.click(getByText(/부위별 추천/));
     // 가슴 추천 넷 중 **맨몸은 푸시업뿐**이다 — 나머지는 걸러진다
@@ -146,9 +148,9 @@ describe("TabataSheet — 운동 고르기 배선 (2026-08-06)", () => {
   it("검색으로 고른 운동도 같은 자리에 담긴다", () => {
     const { getByText, getByPlaceholderText } = setup();
 
+    // `+ 운동 고르기`가 **바로 목록**을 연다 (사용자 지적 2026-08-13) —
+    // 예전에는 허브가 한 번 더 떠서 같은 화면이 반복되는 것으로 보였다
     fireEvent.click(getByText("+ 운동 고르기 (0/4)"));
-    fireEvent.click(getByText("운동 직접 고르기"));
-    fireEvent.click(getByText(/운동 이름 검색/));
     fireEvent.change(getByPlaceholderText(/검색/), {
       target: { value: "버피" },
     });
@@ -161,11 +163,8 @@ describe("TabataSheet — 운동 고르기 배선 (2026-08-06)", () => {
   it("4개를 넘겨 담아도 한도에서 잘린다", () => {
     const { getByText } = setup();
 
+    // 목록이 바로 뜬다 — 맨몸만 올라와 있다
     fireEvent.click(getByText("+ 운동 고르기 (0/4)"));
-    fireEvent.click(getByText("운동 직접 고르기"));
-    // 검색 경로로 담는다 — 부위별 추천은 부위마다 맨몸이 한둘뿐이라
-    // 4개를 넘길 수가 없다 (인터벌 고르기 화면은 맨몸만 보여 준다)
-    fireEvent.click(getByText(/운동 이름 검색/));
     for (const name of FOUR.map((c) => c.name)) {
       fireEvent.click(getByText(name));
     }

@@ -495,11 +495,17 @@ function TabataSheetBody({
         open={pickerOpen}
         catalog={pickerCatalog}
         /*
-          상황별 추천에서 왔으면 **바로 종목 목록**을 편다 (사용자 지시
-          2026-08-13). 기본값 `hub`로 열면 검색·상황별·부위별 카드가 다시
-          나와서, 방금 인터벌을 고른 사람에게는 제자리처럼 보인다.
+          **언제나 종목 목록으로 연다** (사용자 지적 2026-08-13).
+
+          기본값 `hub`로 열면 검색·상황별·부위별 카드가 나오는데, 여기까지 온
+          사람은 그 화면을 방금 지나왔다 — 같은 화면이 반복되는 것으로 보인다.
+          게다가 목록은 이미 **맨몸만** 걸러져 있어(`pickerCatalog`) 부위별로
+          한 번 더 좁힐 이유도 적다.
+
+          ⚠️ 지난 기록·내 루틴으로 지난번 구성을 부르는 길은 목록 화면의
+             뒤로 가기 한 번이면 닿는다 — 없앤 것이 아니라 한 단계 뒤로 뺐다.
         */
-        initialMode={openPickerOnMount ? "search" : undefined}
+        initialMode="search"
         pastSessions={pastSessions}
         pastLoading={pastLoading}
         routines={routines}
