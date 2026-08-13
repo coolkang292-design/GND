@@ -184,6 +184,50 @@ const SESSION_LOG = [
   },
 ];
 
+/**
+ * 인터벌로 계획하기 (사용자 지시 2026-08-13).
+ *
+ * 예전에는 `새 운동 계획 만들기`로 인터벌 계획을 만들 수 없었다 — 코스를 고르는
+ * 화면이 없어서, 종목만 담으면 **3세트 10회짜리 일반 계획**이 됐다.
+ */
+describe("CalendarView — 인터벌로 계획하기 (2026-08-13)", () => {
+  it("상황별 추천에 인터벌 칸이 있고, 누르면 코스 고르는 화면이 열린다", async () => {
+    await setup();
+
+    fireEvent.click(screen.getByRole("button", { name: "8월 16일" }));
+    fireEvent.click(screen.getByText("➕ 새 운동 계획 만들기"));
+    fireEvent.click(screen.getByText("운동 직접 고르기"));
+    fireEvent.click(screen.getByText(/상황별 추천/));
+    fireEvent.click(screen.getByText("전신 인터벌 할래요"));
+
+    // 기록 화면과 달리 **계획**이라고 말한다
+    fireEvent.click(screen.getByRole("button", { name: "인터벌로 계획하기" }));
+
+    // 코스 셋과 저장 버튼이 있는 화면 — 시트의 고르는 화면을 빌린다
+    expect(screen.getByRole("button", { name: "4분" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "8분" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "16분" })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: /8월 16일 예정표로 저장/ }),
+    ).toBeTruthy();
+  });
+
+  it("종목 4개를 채우기 전에는 저장할 수 없다", async () => {
+    await setup();
+
+    fireEvent.click(screen.getByRole("button", { name: "8월 16일" }));
+    fireEvent.click(screen.getByText("➕ 새 운동 계획 만들기"));
+    fireEvent.click(screen.getByText("운동 직접 고르기"));
+    fireEvent.click(screen.getByText(/상황별 추천/));
+    fireEvent.click(screen.getByText("전신 인터벌 할래요"));
+    fireEvent.click(screen.getByRole("button", { name: "인터벌로 계획하기" }));
+
+    const save = screen.getByRole("button", {
+      name: /8월 16일 예정표로 저장/,
+    }) as HTMLButtonElement;
+    expect(save.disabled).toBe(true);
+  });
+});
 describe("CalendarView — 지난 기록 상세 (2026-08-04)", () => {
   beforeEach(() => {
     mocks.getCompletedSessions.mockResolvedValue([SESSION]);

@@ -44,6 +44,7 @@ export function RecommendedPicker({
   onSearch,
   onNext,
   onStartInterval,
+  intervalCta,
 }: {
   mode: "part" | "situation";
   catalog: CatalogExercise[];
@@ -67,6 +68,8 @@ export function RecommendedPicker({
    * 안 넘기면 그 칸은 미리보기만 보여 준다.
    */
   onStartInterval?: () => void;
+  /** 인터벌 칸의 버튼 문구 — 기록 화면은 "고르러 가기", 달력은 "계획하기" */
+  intervalCta?: string;
 }) {
   const byPart = mode === "part";
 
@@ -206,7 +209,7 @@ export function RecommendedPicker({
               onClick={onStartInterval}
               className="mt-3 h-12 w-full rounded-card bg-accent text-sm font-extrabold text-accent-ink"
             >
-              전신 인터벌 고르러 가기
+              {intervalCta ?? "전신 인터벌 고르러 가기"}
             </button>
           </div>
         ) : list.length === 0 ? (

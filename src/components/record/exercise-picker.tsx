@@ -97,6 +97,8 @@ type PickerProps = {
    * (사용자 지시 2026-08-13). 안 넘기면 그 칸은 미리보기만 보여 준다.
    */
   onStartInterval?: () => void;
+  /** 인터벌 칸의 버튼 문구 */
+  intervalCta?: string;
   /** 내 루틴 (0056). **저장된 루틴이 있을 때만** 진입 카드가 나온다 */
   routines?: WorkoutRoutine[];
   routinesLoading?: boolean;
@@ -136,6 +138,7 @@ function PickerSheet({
   onPickPast,
   onCreateCustom,
   onStartInterval,
+  intervalCta,
   initialMode = "hub",
   onOpenPrograms,
   challengeCategories = null,
@@ -415,6 +418,7 @@ function PickerSheet({
             situation={situation}
             onSituation={setSituation}
             onStartInterval={onStartInterval}
+            intervalCta={intervalCta}
             selected={new Set(recommendSelected.keys())}
             onToggle={toggleRecommend}
             onBack={() => setMode(recommendReturnMode)}

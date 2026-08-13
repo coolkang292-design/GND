@@ -84,6 +84,21 @@ type TabataProps = {
    * 사람에게 빈 목록과 "운동 고르기" 버튼을 한 번 더 보여 줄 이유가 없다.
    */
   openPickerOnMount?: boolean;
+  /**
+   * **계획 모드** (사용자 지시 2026-08-13) — 시작하지 않고 예정표로 저장한다.
+   *
+   * 달력의 `새 운동 계획 만들기`가 쓴다. 거기에는 코스를 고르는 화면이 없어서
+   * 인터벌 계획을 만들 수 없었다 — 종목만 담으면 3세트 10회짜리 일반 계획이
+   * 됐고, 사용자가 그렇게 당했다.
+   *
+   * 넘기면 음원·세션·화면 유지에 손대지 않는다. 고르는 화면만 쓴다.
+   */
+  onPlan?: (
+    picked: CatalogExercise[],
+    minutes: TabataMinutes,
+  ) => Promise<boolean>;
+  /** 계획 모드에서 버튼에 쓸 날짜 문구 — 예: `8월 14일` */
+  planDateLabel?: string;
 };
 
 function TabataSheetBody({
@@ -102,6 +117,8 @@ function TabataSheetBody({
   initialMinutes,
   autoStart,
   openPickerOnMount,
+  onPlan,
+  planDateLabel = "",
 }: TabataProps) {
   // 시트는 닫으면 언마운트된다 — 예약된 값은 초기값으로 넣으면 되고,
   // effect 안에서 setState 할 필요가 없다 (교훈 4).
@@ -251,6 +268,23 @@ function TabataSheetBody({
     return filled;
   }
 
+  /**
+   * 계획 모드의 저장 (2026-08-13).
+   *
+   * ⚠️ 음원을 건드리지 않는다. 재생·세션 생성·화면 유지는 전부 시작 경로의
+   *    일이고, 여기서는 고른 것을 그대로 넘길 뿐이다.
+   */
+  async function savePlan() {
+    if (!onPlan || busy || picked.length !== TABATA_EXERCISE_COUNT) return;
+    setBusy(true);
+    setPickError(null);
+    try {
+      if (await onPlan(picked, minutes)) onClose();
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function togglePause() {
     const audio = audioRef.current;
     if (!audio || phase !== "playing") return;
@@ -339,8 +373,11 @@ function TabataSheetBody({
               {INTERVAL_COPY.description}
             </p>
             <p className="mt-1 text-xs text-muted">
-              코스와 구성 운동 {TABATA_EXERCISE_COUNT}개를 고르고 시작하세요.
-              음원이 끝나면 자동으로 기록되고, 인증샷만 찍으면 돼요.
+              코스와 구성 운동 {TABATA_EXERCISE_COUNT}개를 고르고{" "}
+              {onPlan ? "저장하세요" : "시작하세요"}.
+              {onPlan
+                ? " 그날 기록 화면에서 바로 시작할 수 있어요."
+                : " 음원이 끝나면 자동으로 기록되고, 인증샷만 찍으면 돼요."}
               <b className="text-accent">
                 {" "}
                 종목마다 {tabataRepsForMinutes(minutes)}회로 기록돼요.
@@ -408,12 +445,27 @@ function TabataSheetBody({
                 {playError}
               </p>
             )}
+            {/*
+              계획 모드에서는 **시작하지 않고 예정표로 저장한다**
+              (사용자 지시 2026-08-13).
+
+              달력의 `새 운동 계획 만들기`에는 코스를 고르는 화면이 없어서
+              인터벌 계획을 만들 수 없었다 — 종목만 담으면 3세트 10회짜리 일반
+              계획이 됐다. 코스 선택·종목 고르기가 이미 여기 다 있으므로,
+              버튼 하나만 갈아 끼운다.
+            */}
             <button
-              onClick={() => void start()}
+              onClick={() => (onPlan ? void savePlan() : void start())}
               disabled={busy || picked.length !== TABATA_EXERCISE_COUNT}
               className="mt-3 h-12 rounded-card bg-accent text-sm font-extrabold text-accent-ink disabled:opacity-50"
             >
-              {busy ? "시작 중…" : INTERVAL_COPY.start}
+              {busy
+                ? onPlan
+                  ? "저장 중…"
+                  : "시작 중…"
+                : onPlan
+                  ? `${planDateLabel} 예정표로 저장`
+                  : INTERVAL_COPY.start}
             </button>
           </div>
         </>

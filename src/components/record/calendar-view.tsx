@@ -18,12 +18,17 @@ import {
   addDaysToDateKey,
   isPlanDateAllowed,
   newPlanExercises,
+  toPlanExercises,
 } from "@/lib/domain/workout-plan";
 import {
   formatWorkoutLog,
   type LogExercise,
 } from "@/lib/domain/workout-log";
-import { INTERVAL_COPY } from "@/lib/domain/tabata";
+import {
+  INTERVAL_COPY,
+  tabataDraftExercises,
+  type TabataMinutes,
+} from "@/lib/domain/tabata";
 import {
   buildMissedSessionProposal,
   type ProgramPlanMove,
@@ -57,6 +62,7 @@ import {
 import type { WorkoutRoutine } from "@/lib/routines";
 import { SetBreakdown } from "@/components/workout/set-breakdown";
 import { ExercisePicker, type ConfiguredPick } from "./exercise-picker";
+import { TabataSheet } from "./tabata-sheet";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -198,6 +204,14 @@ export function CalendarView({
   const [planBusy, setPlanBusy] = useState(false);
   const [planToast, setPlanToast] = useState<string | null>(null);
   const [planPickerDate, setPlanPickerDate] = useState<string | null>(null);
+  /**
+   * 인터벌로 계획할 날짜 (사용자 지시 2026-08-13).
+   *
+   * `새 운동 계획 만들기`에는 코스를 고르는 화면이 없어서 인터벌 계획을
+   * 만들 수 없었다 — 종목만 담으면 3세트 10회짜리 일반 계획이 됐다.
+   * 인터벌 시트의 **고르는 화면을 그대로 빌려** 저장만 다르게 한다.
+   */
+  const [intervalPlanDate, setIntervalPlanDate] = useState<string | null>(null);
   const [enrollments, setEnrollments] = useState<ProgramEnrollment[]>([]);
   /**
    * 재배치 **미리보기**. null이면 아직 아무것도 계산하지 않았다는 뜻이다.
@@ -588,6 +602,43 @@ export function CalendarView({
     ]);
     setPlanPickerDate(null);
     showPlanToast("운동 계획을 저장했어요");
+  }
+
+  /**
+   * 인터벌 계획을 저장한다 (사용자 지시 2026-08-13).
+   *
+   * 종목과 코스를 인터벌 시트에서 받아 그대로 예정표로 남긴다.
+   *
+   * ⚠️ 세트는 **코스가 정한다** — `tabataDraftExercises`가 4분 2회·8분 4회·
+   *    16분 8회로 채운다. 일반 계획처럼 `newPlanExercises`를 쓰면 3세트 10회가
+   *    되어 인터벌이 아니게 된다. 지난 기록 복사 경로와 같은 규칙이다.
+   */
+  async function saveIntervalPlan(
+    picked: CatalogExercise[],
+    minutes: TabataMinutes,
+  ): Promise<boolean> {
+    if (!intervalPlanDate || planBusy) return false;
+    setPlanBusy(true);
+    try {
+      applySavedPlan(
+        await saveWorkoutPlan({
+          userId,
+          planDate: intervalPlanDate,
+          sourceSessionId: null,
+          exercises: toPlanExercises(
+            tabataDraftExercises(picked, () => crypto.randomUUID(), minutes),
+          ),
+          tabataMinutes: minutes,
+        }),
+      );
+      setIntervalPlanDate(null);
+      return true;
+    } catch {
+      showPlanToast("인터벌 계획을 저장하지 못했어요");
+      return false;
+    } finally {
+      setPlanBusy(false);
+    }
   }
 
   async function handleNewPlanPick(items: CatalogExercise[]) {
@@ -1302,6 +1353,37 @@ export function CalendarView({
         routines={routines}
         routinesLoading={routinesLoading}
         onPickRoutine={routines ? handleNewPlanFromRoutine : undefined}
+        /*
+          상황별 추천의 인터벌 칸 (사용자 지시 2026-08-13).
+
+          여기서는 **시작이 아니라 계획**이다 — 코스를 고르는 화면이 필요해서
+          인터벌 시트를 계획 모드로 연다. 이 prop을 안 넘기면 칸 자체가 숨는다.
+        */
+        onStartInterval={() => {
+          setIntervalPlanDate(planPickerDate);
+          setPlanPickerDate(null);
+        }}
+        intervalCta="인터벌로 계획하기"
+      />
+
+      {/*
+        인터벌 계획 만들기 — 시트의 **고르는 화면만** 빌린다.
+        `onPlan`을 넘기면 음원·세션에 손대지 않고 예정표로 저장한다.
+      */}
+      <TabataSheet
+        open={intervalPlanDate !== null}
+        catalog={catalog}
+        pastSessions={sessions}
+        pastLoading={false}
+        routines={routines}
+        routinesLoading={routinesLoading}
+        onClose={() => setIntervalPlanDate(null)}
+        onCreateCustom={onCreateCustom}
+        onBegin={async () => false}
+        onComplete={async () => undefined}
+        onCancelWorkout={async () => undefined}
+        onPlan={saveIntervalPlan}
+        planDateLabel={intervalPlanDate ? dateKeyLabel(intervalPlanDate) : ""}
       />
 
       {planToast && (
