@@ -138,6 +138,30 @@ describe("IntervalSessionOverlay", () => {
     expect(screen.queryByText(/^다음:/)).toBeNull();
   });
 
+  it("응원 문구를 함께 보여준다", () => {
+    // 사용자 지시 2026-08-13 — 종목 이름만 있으니 허전하다
+    view(15);
+    const cheer = screen.getByTestId("interval-cheer").textContent ?? "";
+    expect(cheer.length).toBeGreaterThan(3);
+  });
+
+  it("같은 라운드를 다시 그려도 문구가 안 바뀐다", () => {
+    // 이 화면은 초당 네 번쯤 다시 그려진다 — 깜빡이면 읽을 수가 없다
+    const first = view(15);
+    const before = screen.getByTestId("interval-cheer").textContent;
+    first.rerender(
+      <IntervalSessionOverlay
+        open
+        exerciseNames={NAMES}
+        minutes={4}
+        elapsedSeconds={17.5}
+        paused={false}
+        onTogglePause={vi.fn()}
+        onStop={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId("interval-cheer").textContent).toBe(before);
+  });
   it("16분 코스는 32라운드를 센다", () => {
     view(263, { minutes: 16 });
 

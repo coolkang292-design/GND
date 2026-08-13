@@ -1,5 +1,6 @@
 "use client";
 
+import { intervalCheer } from "@/lib/domain/interval-cheer";
 import { intervalCueAt } from "@/lib/domain/interval-cue";
 import type { TabataMinutes } from "@/lib/domain/tabata";
 
@@ -61,6 +62,7 @@ export function IntervalSessionOverlay({
           cue.phase === "prep" ? cue.nextExerciseIndex : cue.nextExerciseIndex,
         )
       : null;
+  const cheer = intervalCheer(cue);
   const roundLabel =
     cue.phase === "done"
       ? `${cue.totalRounds}라운드 완료`
@@ -106,6 +108,18 @@ export function IntervalSessionOverlay({
         */}
         {upcoming && (
           <p className="text-sm font-bold text-muted">다음: {upcoming}</p>
+        )}
+        {/*
+          응원 문구 (사용자 지시 2026-08-13) — 종목 이름만 있으니 허전했다.
+          라운드로 정해지는 순수 함수라 렌더마다 깜빡이지 않는다.
+        */}
+        {cheer && (
+          <p
+            data-testid="interval-cheer"
+            className="mt-1 text-center text-[13px] leading-5 text-muted"
+          >
+            {cheer}
+          </p>
         )}
         {paused && (
           <p role="status" className="text-xs font-bold text-warn">
