@@ -310,6 +310,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
   /** 팝업이 보여줄 세트 번호 — 목업의 `현재 세트 1 / 5` */
   const [focusSetIndex, setFocusSetIndex] = useState(0);
   const [tabataOpen, setTabataOpen] = useState(false);
+  /** 인터벌 음원이 도는 중인가 — 그동안 근력 오버레이를 내린다 */
+  const [intervalPlaying, setIntervalPlaying] = useState(false);
   /** 예정표에서 연 타바타 — 종목·코스를 채운 채 열고, 완료하면 그 계획을 지운다 */
   const [tabataPrefill, setTabataPrefill] = useState<TabataPrefill | null>(null);
   const tabataMinutesRef = useRef<number | null>(null);
@@ -1900,7 +1902,13 @@ function WorkoutScreen({ userId }: { userId: string }) {
    */
   const isEmpty = !active && draft.exercises.length === 0;
   // 팝업 열림은 `active`에서 파생한다 — 별도 저장 없음 (설계 ②)
-  const overlayOpen = active && !minimized;
+  /*
+    인터벌 중에는 근력 오버레이를 내린다 (사용자 지시 2026-08-13).
+
+    인터벌은 세트를 입력하는 운동이 아니다. 두 화면이 겹치면 전체화면 뒤로
+    ± 버튼과 `현재 세트 1 / 1`이 비친다 — 사용자가 잡았다.
+  */
+  const overlayOpen = active && !minimized && !intervalPlaying;
   const nextUp = nextUpSet(draft.exercises);
   /** 아직 완료하지 않은 세트 수 — 1이면 지금 보는 것이 오늘의 마지막이다 */
   const pendingSetCount = draft.exercises.reduce(
@@ -2397,6 +2405,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
 
       <TabataSheet
         open={tabataOpen}
+        onPlayingChange={setIntervalPlaying}
         catalog={catalog}
         onClose={() => {
           setTabataOpen(false);

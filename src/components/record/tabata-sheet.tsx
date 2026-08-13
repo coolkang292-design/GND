@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { UiIcon } from "@/components/ui-icon";
+import { IntervalSessionOverlay } from "./interval-session-overlay";
 import {
   INTERVAL_COPY,
   TABATA_EXERCISE_COUNT,
@@ -24,11 +25,6 @@ import { ExercisePicker } from "./exercise-picker";
 type WakeLockNavigator = Navigator & {
   wakeLock?: { request: (type: "screen") => Promise<{ release: () => Promise<void> }> };
 };
-
-function formatClock(totalSeconds: number): string {
-  const s = Math.max(0, Math.floor(totalSeconds));
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-}
 
 /**
  * 타바타 모드 (설계 2026-07-19) — 운동 4개 선택 → 음원 재생 → 종료 시 자동 기록.
@@ -55,6 +51,13 @@ type TabataProps = {
   onComplete: () => Promise<void>;
   /** 재생 중단 — 세션 취소 */
   onCancelWorkout: () => Promise<void>;
+  /**
+   * 재생 시작·종료를 알린다 (사용자 지시 2026-08-13).
+   *
+   * 기록 화면이 근력용 세트 입력 오버레이를 이걸로 내린다. 안 내리면 인터벌
+   * 전체화면 뒤에 ± 버튼이 그대로 살아 있다 — 화면이 두 겹이 된다.
+   */
+  onPlayingChange?: (playing: boolean) => void;
   // ── 지난 기록·내 루틴으로 구성 운동 채우기 (2026-08-05) ──────────
   /** 기록 탭이 이미 갖고 있는 완료 세션 — 새 질의 없이 이름만 쓴다 */
   pastSessions: CalendarSession[];
@@ -74,6 +77,7 @@ function TabataSheetBody({
   onBegin,
   onComplete,
   onCancelWorkout,
+  onPlayingChange,
   pastSessions,
   pastLoading,
   routines,
@@ -88,7 +92,9 @@ function TabataSheetBody({
   const [pickError, setPickError] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [phase, setPhase] = useState<"setup" | "playing" | "finishing">("setup");
-  const [remaining, setRemaining] = useState<number | null>(null);
+  /** 음원의 현재 위치 — 지금 몇 라운드인지는 이 값이 정한다 */
+  const [elapsed, setElapsed] = useState(0);
+  const [paused, setPaused] = useState(false);
   const [busy, setBusy] = useState(false);
   const [playError, setPlayError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -136,7 +142,10 @@ function TabataSheetBody({
         return;
       }
       await acquireWakeLock();
+      setElapsed(0);
+      setPaused(false);
       setPhase("playing");
+      onPlayingChange?.(true);
     } catch (e) {
       setPhase("setup");
       setPlayError(
@@ -194,9 +203,22 @@ function TabataSheetBody({
     return filled;
   }
 
+  function togglePause() {
+    const audio = audioRef.current;
+    if (!audio || phase !== "playing") return;
+    if (audio.paused) {
+      void audio.play().catch(() => undefined);
+      setPaused(false);
+    } else {
+      audio.pause();
+      setPaused(true);
+    }
+  }
+
   async function handleEnded() {
     if (phase !== "playing") return;
     setPhase("finishing");
+    onPlayingChange?.(false);
     await releaseWakeLock();
     await onComplete();
     onClose();
@@ -214,7 +236,10 @@ function TabataSheetBody({
       }
       await releaseWakeLock();
       await onCancelWorkout();
+      setElapsed(0);
+      setPaused(false);
       setPhase("setup");
+      onPlayingChange?.(false);
     } finally {
       setBusy(false);
     }
@@ -222,37 +247,46 @@ function TabataSheetBody({
 
   return (
     <>
-      <div
-        className="fixed inset-0 z-40 bg-black/40"
-        onClick={phase === "setup" ? onClose : undefined}
-        aria-hidden
+      {/*
+        오디오는 **늘 마운트해 둔다.** 재생은 사용자 제스처 안에서 시작해야
+        하는데(iOS), 시작 뒤에 시트를 걷어내면서 이 엘리먼트까지 사라지면
+        음악이 멈춘다. 그래서 화면 전환과 무관한 자리에 둔다.
+      */}
+      <audio
+        key={track.src}
+        ref={audioRef}
+        src={track.src}
+        preload="metadata"
+        onTimeUpdate={(e) => {
+          const el = e.currentTarget;
+          setElapsed(el.currentTime);
+        }}
+        onEnded={() => void handleEnded()}
       />
-      <div className="fixed inset-x-0 bottom-0 z-50 flex max-h-[88dvh] flex-col overflow-y-auto rounded-t-[22px] border-t border-line bg-surface p-5">
-        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
-        {/* 옛 표기는 `🔥`였다 (2026-08-07 2차 시안으로 교체) — 운동 추가 허브의
-            `타바타로 바로 시작` 카드와 **같은 그림**(불붙은 스톱워치)이라야
-            같은 기능으로 읽힌다 */}
-        <h3 className="flex items-center gap-1.5 text-base font-extrabold">
-          <UiIcon name="hub-tabata" size={22} />
-          {INTERVAL_COPY.title}
-        </h3>
 
-        <audio
-          key={track.src}
-          ref={audioRef}
-          src={track.src}
-          preload="metadata"
-          onTimeUpdate={(e) => {
-            const el = e.currentTarget;
-            if (Number.isFinite(el.duration)) {
-              setRemaining(el.duration - el.currentTime);
-            }
-          }}
-          onEnded={() => void handleEnded()}
-        />
+      {/*
+        고르는 화면과 하는 화면을 **갈랐다** (사용자 지시 2026-08-13).
 
-        {phase === "setup" && (
-          <>
+        예전에는 재생 중에도 이 시트가 떠 있었고, 뒤에는 근력용 세트 입력
+        오버레이가 그대로 살아 있었다 — 화면이 두 겹이고 인터벌에는 쓰지도
+        않는 ± 버튼이 보였다.
+      */}
+      {phase === "setup" ? (
+        <>
+          <div
+            className="fixed inset-0 z-40 bg-black/40"
+            onClick={onClose}
+            aria-hidden
+          />
+          <div className="fixed inset-x-0 bottom-0 z-50 flex max-h-[88dvh] flex-col overflow-y-auto rounded-t-[22px] border-t border-line bg-surface p-5">
+            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
+            {/* 옛 표기는 `🔥`였다 (2026-08-07 2차 시안으로 교체) — 운동 추가 허브의
+                `타바타로 바로 시작` 카드와 **같은 그림**(불붙은 스톱워치)이라야
+                같은 기능으로 읽힌다 */}
+            <h3 className="flex items-center gap-1.5 text-base font-extrabold">
+              <UiIcon name="hub-tabata" size={22} />
+              {INTERVAL_COPY.title}
+            </h3>
             <p className="mt-1 text-xs font-bold text-muted">
               {INTERVAL_COPY.description}
             </p>
@@ -333,39 +367,23 @@ function TabataSheetBody({
             >
               {busy ? "시작 중…" : INTERVAL_COPY.start}
             </button>
-          </>
-        )}
-
-        {phase !== "setup" && (
-          <>
-            <p className="mt-4 text-center font-mono text-5xl font-extrabold text-accent">
-              {remaining !== null ? formatClock(remaining) : "•••"}
-            </p>
-            <p className="mt-1 text-center text-xs text-muted">
-              {phase === "finishing"
-                ? "기록 저장 중…"
-                : "음원이 끝나면 자동으로 기록돼요 — 화면을 켜둔 채 운동하세요"}
-            </p>
-            <div className="mt-3 flex flex-wrap justify-center gap-1.5">
-              {picked.map((item) => (
-                <span
-                  key={item.id}
-                  className="rounded-full bg-surface-2 px-2.5 py-1 text-[11px] font-bold text-muted"
-                >
-                  {item.name}
-                </span>
-              ))}
-            </div>
-            <button
-              onClick={() => void stop()}
-              disabled={busy || phase === "finishing"}
-              className="mt-4 h-11 rounded-card border border-line bg-surface-2 text-sm font-bold disabled:opacity-50"
-            >
-              중단하기
-            </button>
-          </>
-        )}
-      </div>
+          </div>
+        </>
+      ) : (
+        /*
+          하는 화면 — 전체화면 하나만 뜬다. 20초가 지나면 스스로 다음 종목으로
+          넘어가고 음원이 끝나면 스스로 기록된다. 누를 것은 일시정지와 중단뿐이다.
+        */
+        <IntervalSessionOverlay
+          open
+          exerciseNames={picked.map((item) => item.name)}
+          minutes={minutes}
+          elapsedSeconds={elapsed}
+          paused={paused}
+          onTogglePause={togglePause}
+          onStop={() => void stop()}
+        />
+      )}
 
       {/*
         지난 기록·내 루틴으로도 구성 운동을 채운다 (2026-08-05).

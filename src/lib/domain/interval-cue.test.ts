@@ -137,8 +137,8 @@ describe("인터벌 진행 판정", () => {
     });
 
     it("라운드 번호가 블록을 넘어 이어진다", () => {
-      expect(intervalCueAt(260, 8).round).toBe(INTERVAL_ROUNDS_PER_BLOCK);
-      expect(intervalCueAt(760, 16).round).toBe(24);
+      expect(intervalCueAt(260, 8)).toMatchObject({ round: INTERVAL_ROUNDS_PER_BLOCK });
+      expect(intervalCueAt(760, 16)).toMatchObject({ round: 24 });
       expect(intervalCueAt(760, 16)).toMatchObject({ exerciseIndex: 0 });
     });
 
