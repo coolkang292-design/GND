@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { UiIcon } from "@/components/ui-icon";
 import { IntervalSessionOverlay } from "./interval-session-overlay";
 import {
@@ -119,6 +119,27 @@ function TabataSheetBody({
   const wakeLockRef = useRef<{ release: () => Promise<void> } | null>(null);
 
   const track = tabataTrackForMinutes(minutes) ?? TABATA_TRACKS[0];
+
+  /**
+   * 고르기 화면에는 **맨몸 종목만** 올린다 (사용자 지시 2026-08-13).
+   *
+   * 인터벌은 기구 없이 20초를 도는 운동이다. 바벨·머신이 목록에 섞여 있으면
+   * 고를 수 없는 것을 고르게 된다.
+   *
+   * ⚠️ 시간형(플랭크·월 싯 등)도 뺀다. 인터벌 기록은 **횟수**로 저장되므로
+   *    (`tabataRepsForMinutes`) 시간형이 들어가면 기록이 어긋난다 — 프로그램
+   *    9조합에서 뺀 것과 같은 이유다.
+   *
+   * ⚠️ 이름으로 되살리는 경로(`fillFromNames`)는 **원본 `catalog`** 를 쓴다.
+   *    지난 기록·루틴에 다른 종목이 섞여 있어도 찾을 수 있어야 한다.
+   */
+  const pickerCatalog = useMemo(
+    () =>
+      catalog.filter(
+        (item) => item.exercise_type === "bodyweight" && item.measure !== "time",
+      ),
+    [catalog],
+  );
 
   useEffect(() => {
     return () => {
@@ -420,7 +441,13 @@ function TabataSheetBody({
       */}
       <ExercisePicker
         open={pickerOpen}
-        catalog={catalog}
+        catalog={pickerCatalog}
+        /*
+          상황별 추천에서 왔으면 **바로 종목 목록**을 편다 (사용자 지시
+          2026-08-13). 기본값 `hub`로 열면 검색·상황별·부위별 카드가 다시
+          나와서, 방금 인터벌을 고른 사람에게는 제자리처럼 보인다.
+        */
+        initialMode={openPickerOnMount ? "search" : undefined}
         pastSessions={pastSessions}
         pastLoading={pastLoading}
         routines={routines}

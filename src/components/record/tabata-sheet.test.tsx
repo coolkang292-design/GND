@@ -29,13 +29,33 @@ function item(
   };
 }
 
-/** 가슴 추천 4종 — 부위별 추천 목록이 그대로 뜨려면 시드 이름과 같아야 한다 */
+/**
+ * 인터벌 고르기 화면은 **맨몸 종목만** 보여 준다 (사용자 지시 2026-08-13).
+ *
+ * 그래서 시드에도 맨몸을 넣는다. 마지막 두 개(`플랭크` · `체스트프레스 머신`)는
+ * **걸러지는지 확인하는 용도**다 — 시간형은 기록이 횟수로 저장돼서 어긋나고,
+ * 머신은 인터벌에서 쓸 수 없다.
+ */
 const CATALOG = [
-  item("체스트프레스 머신"),
-  item("인클라인 벤치프레스"),
-  item("덤벨 플라이"),
   item("푸시업", { exercise_type: "bodyweight", measure: "reps" }),
+  item("맨몸 스쿼트", {
+    exercise_type: "bodyweight",
+    measure: "reps",
+    body_part: "하체",
+  }),
+  item("버피", { exercise_type: "bodyweight", measure: "reps", body_part: "코어" }),
+  item("점핑잭", {
+    exercise_type: "bodyweight",
+    measure: "reps",
+    body_part: "하체",
+  }),
+  item("플랭크", { exercise_type: "bodyweight", measure: "time", body_part: "코어" }),
+  item("체스트프레스 머신"),
 ];
+
+const FOUR = CATALOG.filter(
+  (c) => c.exercise_type === "bodyweight" && c.measure !== "time",
+).slice(0, 4);
 
 function setup(
   over: {
@@ -65,7 +85,7 @@ function setup(
 
 describe("TabataSheet — 운동 고르기 배선 (2026-08-06)", () => {
   it("전신 인터벌의 시간·리듬·시작 행동을 한 언어로 안내한다", () => {
-    setup({ initialPicked: CATALOG });
+    setup({ initialPicked: FOUR });
 
     expect(
       screen.getByRole("heading", { name: /4분부터 시작하는 전신 인터벌/ }),
@@ -85,7 +105,7 @@ describe("TabataSheet — 운동 고르기 배선 (2026-08-06)", () => {
     vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
     setup({
-      initialPicked: CATALOG,
+      initialPicked: FOUR,
       onBegin: vi.fn().mockResolvedValue(true),
     });
 
@@ -113,14 +133,14 @@ describe("TabataSheet — 운동 고르기 배선 (2026-08-06)", () => {
     fireEvent.click(getByText("+ 운동 고르기 (0/4)"));
     fireEvent.click(getByText("운동 직접 고르기"));
     fireEvent.click(getByText(/부위별 추천/));
-    fireEvent.click(getByText("체스트프레스 머신"));
-    fireEvent.click(getByText("덤벨 플라이"));
+    // 가슴 추천 넷 중 **맨몸은 푸시업뿐**이다 — 나머지는 걸러진다
+    // (인터벌 고르기 화면은 맨몸만 보여 준다, 2026-08-13)
+    fireEvent.click(getByText("푸시업"));
     fireEvent.click(getByText("다음"));
-    fireEvent.click(getByText("운동 2개 추가하기"));
+    fireEvent.click(getByText("운동 1개 추가하기"));
 
-    expect(getByText("+ 운동 고르기 (2/4)")).toBeTruthy();
-    expect(getAllByText("체스트프레스 머신")).not.toHaveLength(0);
-    expect(getAllByText("덤벨 플라이")).not.toHaveLength(0);
+    expect(getByText("+ 운동 고르기 (1/4)")).toBeTruthy();
+    expect(getAllByText("푸시업")).not.toHaveLength(0);
   });
 
   it("검색으로 고른 운동도 같은 자리에 담긴다", () => {
@@ -130,9 +150,9 @@ describe("TabataSheet — 운동 고르기 배선 (2026-08-06)", () => {
     fireEvent.click(getByText("운동 직접 고르기"));
     fireEvent.click(getByText(/운동 이름 검색/));
     fireEvent.change(getByPlaceholderText(/검색/), {
-      target: { value: "덤벨 플라이" },
+      target: { value: "버피" },
     });
-    fireEvent.click(getByText("덤벨 플라이"));
+    fireEvent.click(getByText("버피"));
     fireEvent.click(getByText("선택한 1개 운동 추가"));
 
     expect(getByText("+ 운동 고르기 (1/4)")).toBeTruthy();
@@ -143,12 +163,13 @@ describe("TabataSheet — 운동 고르기 배선 (2026-08-06)", () => {
 
     fireEvent.click(getByText("+ 운동 고르기 (0/4)"));
     fireEvent.click(getByText("운동 직접 고르기"));
-    fireEvent.click(getByText(/부위별 추천/));
-    for (const name of CATALOG.map((c) => c.name)) {
+    // 검색 경로로 담는다 — 부위별 추천은 부위마다 맨몸이 한둘뿐이라
+    // 4개를 넘길 수가 없다 (인터벌 고르기 화면은 맨몸만 보여 준다)
+    fireEvent.click(getByText(/운동 이름 검색/));
+    for (const name of FOUR.map((c) => c.name)) {
       fireEvent.click(getByText(name));
     }
-    fireEvent.click(getByText("다음"));
-    fireEvent.click(getByText("운동 4개 추가하기"));
+    fireEvent.click(getByText("선택한 4개 운동 추가"));
 
     expect(getByText("+ 운동 고르기 (4/4)")).toBeTruthy();
   });
