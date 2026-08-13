@@ -4,9 +4,12 @@ import { DEFAULT_TIMEZONE, dayKey } from "@/lib/domain/time";
 import {
   plannedDaysForPeriod,
   rankParticipants,
+  scoreParticipant,
   type GoalType,
+  type ParticipantInput,
   type RankedParticipant,
 } from "@/lib/domain/goal-score";
+import { inclusiveDays } from "@/lib/domain/challenge-time";
 import type { Challenge, Profile, UserGoal } from "@/lib/types";
 
 // ── 목표 유형 메타 (§5) ──────────────────────────────────────────
@@ -1053,12 +1056,82 @@ export async function getPeriodStatsByUser(
 
 export type ChallengeRanking = { name: string; list: RankedParticipant[] };
 
-function periodDaysCount(startDate: string, endDate: string): number {
-  const toUtc = (v: string) => {
-    const [y, m, d] = v.split("-").map(Number);
-    return Date.UTC(y, m - 1, d);
+/**
+ * 한 사람의 채점 입력 조립 — 목표 × 실적 → `ParticipantInput`.
+ *
+ * ⚠️⚠️ **이 매핑을 화면에서 다시 짜지 마라** (2026-08-13에 뽑았다). 같은 코드가
+ * `getActiveChallengeRanking`과 `challenge/page.tsx`에 **두 벌** 있었고, 홈 챌린지
+ * 카드가 세 번째를 만들 뻔했다. 특히 `plannedDaysForPeriod(planned_days ?? 5, …)`의
+ * 기본값 5는 세 곳이 각자 적고 있어서, 한 곳만 고치면 **같은 사람의 참여율이 화면마다
+ * 달라진다.**
+ */
+export function buildParticipantInput(input: {
+  userId: string;
+  /** 그 사람의 목표만 (`user_id`로 이미 걸러진 것) */
+  goals: UserGoal[];
+  stats: PeriodStats;
+  /** 챌린지 전체 기간 일수 — `inclusiveDays(start, end)` */
+  periodDays: number;
+}): ParticipantInput {
+  const { userId, goals, stats, periodDays } = input;
+  return {
+    userId,
+    goals: goals.map((g) => ({
+      type: g.goal_type,
+      target: Number(g.target_value),
+      actual: actualForGoal(stats, g.goal_type, g.qualifier),
+    })),
+    workoutDays: stats.workoutDays,
+    plannedDays: plannedDaysForPeriod(goals[0]?.planned_days ?? 5, periodDays),
+    allGoalsCompletedAtMs: null,
   };
-  return Math.round((toUtc(endDate) - toUtc(startDate)) / 86_400_000) + 1;
+}
+
+/** 홈 챌린지 카드가 쓰는 내 점수 요약 (2026-08-13) */
+export type MyChallengeScore = {
+  achievement: number;
+  participation: number;
+  overall: number;
+  /** 내가 건 목표 수. 0이면 아직 KPI를 안 세웠다는 뜻이다 */
+  goalCount: number;
+};
+
+/**
+ * 진행 중 챌린지에서 **내** 점수만 (2026-08-13, 홈 카드용).
+ *
+ * ⚠️ 챌린지 탭과 **같은 함수**(`buildParticipantInput` → `scoreParticipant`)를 지난다.
+ * 홈이 따로 계산하면 같은 챌린지가 홈에서 40%, 탭에서 38%로 보인다 — 이 저장소가
+ * 반복해서 당한 종류의 사고다.
+ *
+ * ⚠️ 조회 2건이 든다(목표 + 기간 세션). 홈에서는 **다른 조회를 막지 않는 별도
+ * effect**로 부르고, 도착 전에는 카드가 이름·D-day만 그린다.
+ */
+export async function getMyChallengeScore(input: {
+  userId: string;
+  challengeId: string;
+  startDate: string;
+  endDate: string;
+  timeZone: string;
+}): Promise<MyChallengeScore> {
+  const [goals, statsByUser] = await Promise.all([
+    getChallengeGoals(input.challengeId),
+    getPeriodStatsByUser(
+      input.challengeId,
+      input.startDate,
+      input.endDate,
+      input.timeZone,
+    ),
+  ]);
+  const myGoals = goals.filter((g) => g.user_id === input.userId);
+  const scored = scoreParticipant(
+    buildParticipantInput({
+      userId: input.userId,
+      goals: myGoals,
+      stats: statsByUser.get(input.userId) ?? EMPTY_STATS,
+      periodDays: inclusiveDays(input.startDate, input.endDate),
+    }),
+  );
+  return { ...scored, goalCount: myGoals.length };
 }
 
 /**
@@ -1105,24 +1178,17 @@ export async function getActiveChallengeRanking(
     DEFAULT_TIMEZONE,
     client,
   );
-  const days = periodDaysCount(ch.start_date, ch.end_date);
+  const days = inclusiveDays(ch.start_date, ch.end_date);
 
   const list = rankParticipants(
-    userIds.map((uid) => {
-      const userGoals = goals.filter((g) => g.user_id === uid);
-      const s = stats.get(uid) ?? EMPTY_STATS;
-      return {
+    userIds.map((uid) =>
+      buildParticipantInput({
         userId: uid,
-        goals: userGoals.map((g) => ({
-          type: g.goal_type,
-          target: Number(g.target_value),
-          actual: actualForGoal(s, g.goal_type, g.qualifier),
-        })),
-        workoutDays: s.workoutDays,
-        plannedDays: plannedDaysForPeriod(userGoals[0]?.planned_days ?? 5, days),
-        allGoalsCompletedAtMs: null,
-      };
-    }),
+        goals: goals.filter((g) => g.user_id === uid),
+        stats: stats.get(uid) ?? EMPTY_STATS,
+        periodDays: days,
+      }),
+    ),
   );
   return { name: ch.name, list };
 }

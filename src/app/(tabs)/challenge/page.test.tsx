@@ -434,3 +434,88 @@ describe("ChallengePage 챌린지 전환", () => {
     expect(screen.queryByText("0.0")).toBeNull();
   });
 });
+
+/**
+ * 2026-08-13 개편.
+ * 설계: `docs/superpowers/specs/2026-08-13-home-today-card-and-challenge-cta-design.md` §4.6
+ *
+ * ⚠️ 종료일을 **고정된 먼 미래/과거**로 둔다. 실제 오늘 날짜에 기대면 언젠가
+ * 저절로 빨개지는 테스트가 된다.
+ */
+describe("ChallengePage 진행 중 — 오늘 운동하기 · 공정성 안내", () => {
+  function arrange(over: Partial<MyChallenge> = {}) {
+    const ch = {
+      ...challenge("challenge-active", "진행 중 챌린지", "2026-07-01T00:00:00Z"),
+      status: "active" as const,
+      end_date: "2099-12-31",
+      ...over,
+    };
+    mocks.getMyChallenges.mockResolvedValue([ch]);
+    mocks.getChallengeParticipantProfiles.mockResolvedValue([
+      { id: "old-user", nickname: "예전 참가자", avatar_url: null },
+    ]);
+    mocks.getChallengeGoals.mockResolvedValue([
+      {
+        id: "goal-active",
+        user_id: "old-user",
+        challenge_id: ch.id,
+        group_id: "group-1",
+        goal_type: "weight_days",
+        target_value: 12,
+        unit: "일",
+        planned_days: 5,
+        qualifier: 3,
+        created_at: "2026-07-01T00:00:00Z",
+        updated_at: "2026-07-01T00:00:00Z",
+      },
+    ]);
+    mocks.getChallengeApprovals.mockResolvedValue(new Set(["old-user"]));
+    mocks.getPeriodStatsByUser.mockResolvedValue(
+      new Map([["old-user", periodStats]]),
+    );
+  }
+
+  /**
+   * ⚠️ 이 탭에는 **"그래서 오늘 뭘 하면 되나"의 답이 없었다.** 달성률만 보여 주고
+   * 기록으로 가는 문이 없어서 탭을 나갔다 다시 들어와야 했다.
+   */
+  it("기록 화면으로 가는 문이 있다", async () => {
+    arrange();
+    render(<ChallengePage />);
+    const cta = await screen.findByText("오늘 운동하기 ›");
+    expect(cta.getAttribute("href")).toBe("/record");
+  });
+
+  it("'상세 보기' 버튼은 넣지 않는다 — 바로 아래가 이미 상세다", async () => {
+    arrange();
+    render(<ChallengePage />);
+    await screen.findByText("오늘 운동하기 ›");
+    expect(screen.queryByText("상세 보기")).toBeNull();
+  });
+
+  it("종료일이 지나면 할 일은 운동이 아니라 결과 발표다", async () => {
+    arrange({ end_date: "2000-01-01" });
+    render(<ChallengePage />);
+    await screen.findByText(/결과 발표하기/);
+    expect(screen.queryByText("오늘 운동하기 ›")).toBeNull();
+  });
+
+  /**
+   * ⚠️ 한 줄은 접지 않는다. 이 배너는 "왜 남의 점수가 안 보이나"의 답이라,
+   * 통째로 접으면 그 질문이 다시 생긴다(CrewCard와 같은 접힘 규약).
+   */
+  it("공정성 안내는 한 줄이 늘 보이고 상세만 접힌다", async () => {
+    arrange();
+    render(<ChallengePage />);
+    await screen.findByText("기간 중에는 내 진행률만");
+
+    expect(screen.queryByText("종료일에 한꺼번에")).toBeNull();
+    fireEvent.click(screen.getByText("자세히"));
+    expect(screen.getByText("종료일에 한꺼번에")).toBeTruthy();
+
+    // 접은 뒤에도 한 줄은 남는다
+    fireEvent.click(screen.getByText("자세히"));
+    expect(screen.queryByText("종료일에 한꺼번에")).toBeNull();
+    expect(screen.getByText("기간 중에는 내 진행률만")).toBeTruthy();
+  });
+});

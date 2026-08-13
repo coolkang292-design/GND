@@ -2,7 +2,13 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import { useAuth } from "@/components/auth-provider";
 import { MemberProfileSheet } from "@/components/crew/member-profile-sheet";
 import {
@@ -227,7 +233,7 @@ function FriendRowItem({
           ⚠️ 상태 칸만 색을 입힌다 — 네 칸을 다 색칠하면 상태의 색이 정보를 잃는다.
           ⚠️ **첫 칸만 1.25배 넓다.** 4등분(68px)이면 `운동 전`이 7px 잘린다(실측).
              1.25fr로 80px가 되면 세 문구가 모두 들어간다. */}
-      <div className="mt-2.5 grid grid-cols-[1.25fr_1fr_1fr_1fr] gap-1">
+      <div className="mt-2 grid grid-cols-[1.25fr_1fr_1fr_1fr] gap-1">
         <StatChip
           label="상태"
           value={STATUS_STYLE[row.status].label}
@@ -240,7 +246,12 @@ function FriendRowItem({
 
       {/* 배지 줄 — 🏅 이모지 하나에 숫자를 붙이는 대신 **실제 배지 그림**을
           쓴다(2026-08-07 사용자 지적). 키는 이미 받아 온 것이라 조회가 없다. */}
-      <div className="mt-2.5 flex items-center gap-1.5 border-t border-line/60 pt-2.5">
+      {/* ⚠️ 여백이 `mt-2 … pt-2`다 (2026-08-13). 옛 `2.5`에서 줄였다 — 375×812
+          실측에서 크루 3명일 때 `운동 시작하기`가 접힘선을 **12px 넘겼다**(824px).
+          행 하나에서 6px씩, 네 행이면 24px가 빠져 796px로 들어온다. 되돌리려면
+          먼저 재라: 이 카드의 목적이 "크루 상태를 본 순간 버튼을 누르는 것"이라
+          버튼이 접힘선 밖으로 나가면 카드를 합친 이유가 사라진다. */}
+      <div className="mt-2 flex items-center gap-1.5 border-t border-line/60 pt-2">
         {row.badgeCount === null ? (
           <span className="text-[10.5px] text-faint">배지 불러오는 중…</span>
         ) : row.badgeCount === 0 ? (
@@ -273,6 +284,33 @@ function FriendRowItem({
   );
 }
 
+/** 목록이 오기 전 자리를 잡아 두는 한 행 — 실제 행과 **같은 구조**라 높이가 같다 */
+function SkeletonRow() {
+  return (
+    <li
+      aria-hidden
+      className="animate-pulse rounded-card border border-line bg-surface-2 p-3"
+    >
+      <div className="flex items-center gap-2.5">
+        <div className="h-11 w-11 flex-none rounded-full bg-surface" />
+        <div className="h-3.5 flex-1 rounded-full bg-surface" />
+      </div>
+      <div className="mt-2.5 grid grid-cols-[1.25fr_1fr_1fr_1fr] gap-1">
+        <div className="h-[26px] rounded-full bg-surface" />
+        <div className="h-[26px] rounded-full bg-surface" />
+        <div className="h-[26px] rounded-full bg-surface" />
+        <div className="h-[26px] rounded-full bg-surface" />
+      </div>
+      <div className="mt-2.5 border-t border-line/60 pt-2.5">
+        <div className="h-[26px] w-24 rounded-full bg-surface" />
+      </div>
+    </li>
+  );
+}
+
+/** 친구 영역이 지금 무엇을 그려야 하는가 */
+export type FriendBoardStatus = "loading" | "failed" | "ready";
+
 /**
  * 표시 전용 본문 — 조회가 끝난 뒤의 그리기만 담당한다.
  * 셸에서 분리해 둬야 표시 규칙을 테스트로 덮을 수 있다(MemberProfileBody와 같은 이유).
@@ -282,6 +320,12 @@ function FriendRowItem({
  * ⚠️ `myRow`는 `rows` **밖**에 있다 (2026-08-07 사용자 지시). 섞으면 세 가지가
  * 한꺼번에 틀어진다 — 헤딩의 `친구 N명`이 나를 세고, 접힌 3행 중 한 자리를 내가
  * 차지해 친구 하나가 밀려나며, `pokeableFriendCount`가 찌를 수 없는 나를 센다.
+ *
+ * ⚠️⚠️ **`cta`는 네 갈래(로딩·실패·0명·정상) 전부에서 그려진다** (2026-08-13 개편,
+ * 설계 §4.1). 홈의 유일한 `운동 시작하기`가 이 안에 들어왔기 때문에, 어느 한
+ * 갈래에서라도 빠지면 **친구 조회가 느리거나 실패했다는 이유로 운동 시작 버튼이
+ * 사라진다.** 갈래마다 `return`을 따로 두지 마라 — 그렇게 하다 생기는 사고다.
+ * `friend-board-card.test.tsx`가 네 갈래를 각각 단언한다.
  */
 export function FriendBoardBody({
   rows,
@@ -291,6 +335,8 @@ export function FriendBoardBody({
   expanded,
   truncated,
   pokingId,
+  status = "ready",
+  cta,
   onSelect,
   onPoke,
   onToggleExpand,
@@ -303,6 +349,14 @@ export function FriendBoardBody({
   expanded: boolean;
   truncated: boolean;
   pokingId: string | null;
+  /** 친구 영역의 상태. 생략하면 `ready` — 표시 규칙 테스트가 짧아진다. */
+  status?: FriendBoardStatus;
+  /**
+   * 카드 맨 아래에 그릴 주 행동 버튼(`StartWorkoutCta`).
+   *
+   * ⚠️ 선택 prop이 아니다. 넘기지 않으면 홈에서 운동 시작 버튼이 사라진다.
+   */
+  cta: ReactNode;
   onSelect: (row: FriendRow) => void;
   onPoke: (row: FriendRow) => void;
   onToggleExpand: () => void;
@@ -310,87 +364,119 @@ export function FriendBoardBody({
   const visible = visibleFriendRows(rows, expanded);
   const canExpand = canExpandFriendRows(rows);
   const pokeable = pokeableFriendCount(rows, poked);
+  const empty = status === "ready" && rows.length === 0;
 
   return (
     <section className="rounded-card border border-line bg-surface p-4 shadow-card">
       <div className="flex items-center justify-between">
         {/* 옛 표기는 `👥`였다 (2026-08-07 2차 시안으로 교체). 옆 글자가 같은 뜻을
-            말하므로 `alt=""`다. */}
+            말하므로 `alt=""`다.
+            ⚠️ 헤딩이 상태마다 다르다. 조회 전에는 **숫자를 적지 않는다** — 0을
+            적었다가 3으로 바뀌면 "친구가 없어졌다 생겼다"로 읽힌다. */}
+        {/* ⚠️ **`친구`가 아니라 `크루`다** (2026-08-13 사용자 지시). 이 카드의
+            대상은 상호 수락으로 맺어진 크루(`crew_links`)이고, 링크도 `/crew`로
+            간다 — `친구`라고 부르면 화면의 두 말이 어긋난다. 이 카드 안의 문구를
+            크루로 통일했다(초대 카드의 `친구 초대하기`는 앱 밖 사람을 부르는
+            말이라 그대로 둔다). */}
         <h3 className="flex items-center gap-1.5 text-sm font-extrabold">
-          <UiIcon name="friends" size={22} />
-          친구 {rows.length}명
+          <UiIcon name={empty ? "friends-add" : "friends"} size={22} />
+          {empty
+            ? "크루와 함께하면 더 강해져요"
+            : status === "ready"
+              ? `나의 크루 ${rows.length}명`
+              : "나의 크루"}
         </h3>
         {/* 누를 게 없는데 링크만 있는 상태를 만들지 않는다 */}
-        {canExpand && (
+        {status === "ready" && canExpand && (
           <button
             type="button"
             onClick={onToggleExpand}
             aria-expanded={expanded}
             className="text-xs font-bold text-accent"
           >
-            {expanded ? "접기" : "전체 보기 ›"}
+            {expanded ? "접기" : "전체 크루 보기 ›"}
           </button>
         )}
       </div>
 
-      {!iWorkedOut && pokeable > 0 && (
+      {status === "ready" && !iWorkedOut && pokeable > 0 && (
         <p className="mt-1 text-[11px] text-muted">
-          오늘 운동을 마치면 친구를 콕 찌를 수 있어요 👉
+          오늘 운동을 마치면 크루를 콕 찌를 수 있어요 👉
         </p>
       )}
 
-      <ul className="mt-3 flex flex-col gap-1.5">
-        {/* ⚠️ 내 행이 **맨 위**다 (2026-08-07 사용자 지시). 정렬 대상이 아니라
-            고정이다 — 내 최근 운동일에 따라 자리가 오르내리면 매번 눈으로 찾아야 한다. */}
-        {myRow && (
-          <FriendRowItem
-            row={myRow}
-            poked={poked}
-            iWorkedOut={iWorkedOut}
-            pokingId={pokingId}
-            onSelect={onSelect}
-            onPoke={onPoke}
-          />
-        )}
-        {visible.map((row) => (
-          <FriendRowItem
-            key={row.userId}
-            row={row}
-            poked={poked}
-            iWorkedOut={iWorkedOut}
-            pokingId={pokingId}
-            onSelect={onSelect}
-            onPoke={onPoke}
-          />
-        ))}
-      </ul>
+      {/* ── 친구 영역 — 네 갈래 중 하나만 그린다. CTA는 이 밖에 있다 ── */}
+      {status === "loading" && (
+        <ul className="mt-2.5 flex flex-col gap-1">
+          <SkeletonRow />
+        </ul>
+      )}
+
+      {status === "failed" && (
+        <p className="mt-3 rounded-card-sm border border-line bg-surface-2 px-3 py-2.5 text-xs text-muted">
+          친구 정보를 불러오지 못했어요.
+        </p>
+      )}
+
+      {/* 옛 `NoFriendsCard`가 여기로 들어왔다 (2026-08-13). 별도 카드로 두면
+          그 갈래에서 카드가 통째로 갈아치워져 **CTA가 사라진다.** */}
+      {empty && (
+        <p className="mt-1 text-xs text-muted">
+          아직 크루가 없어요. 닉네임으로 크루를 찾아 서로의 기록을 확인해 보세요.
+        </p>
+      )}
+
+      {/* ⚠️ **친구가 0명이어도 내 행은 그린다** (2026-08-13에 테스트가 잡았다).
+          옛 구현은 `rows.length === 0`이면 카드를 `NoFriendsCard`로 통째로 갈아쳐서
+          **내 기록도 같이 사라졌다.** 친구가 없다는 것이 내 운동 횟수·연속일·배지를
+          숨길 이유는 없다. 그래서 목록은 "그릴 행이 하나라도 있으면" 그린다. */}
+      {status === "ready" && (myRow !== null || visible.length > 0) && (
+        <ul className="mt-2.5 flex flex-col gap-1">
+          {/* ⚠️ 내 행이 **맨 위**다 (2026-08-07 사용자 지시). 정렬 대상이 아니라
+              고정이다 — 내 최근 운동일에 따라 자리가 오르내리면 매번 눈으로 찾아야 한다. */}
+          {myRow && (
+            <FriendRowItem
+              row={myRow}
+              poked={poked}
+              iWorkedOut={iWorkedOut}
+              pokingId={pokingId}
+              onSelect={onSelect}
+              onPoke={onPoke}
+            />
+          )}
+          {visible.map((row) => (
+            <FriendRowItem
+              key={row.userId}
+              row={row}
+              poked={poked}
+              iWorkedOut={iWorkedOut}
+              pokingId={pokingId}
+              onSelect={onSelect}
+              onPoke={onPoke}
+            />
+          ))}
+        </ul>
+      )}
+
+      {/* ⚠️ 크루 링크는 **외곽선 버튼**이다. 금색을 쓰면 바로 아래 `운동 시작하기`와
+          주·부가 뒤집힌다 — 홈의 주 행동은 운동이지 친구 찾기가 아니다. */}
+      {empty && (
+        <Link
+          href="/crew"
+          className="mt-3 flex h-11 items-center justify-center rounded-card-sm border border-line bg-surface-2 text-[13px] font-extrabold text-accent"
+        >
+          크루 찾으러 가기 ›
+        </Link>
+      )}
 
       {truncated && (
         <p className="mt-2 text-[11px] text-muted">
           기록이 많아 일부만 반영된 수치예요
         </p>
       )}
-    </section>
-  );
-}
 
-/** 친구가 없을 때 — 목록 대신 크루 찾기로 보낸다 */
-export function NoFriendsCard() {
-  return (
-    <section className="rounded-card border border-line bg-surface p-4 shadow-card">
-      <h3 className="flex items-center gap-1.5 text-sm font-extrabold">
-        <UiIcon name="friends-add" size={22} />
-        친구와 함께하면 더 강해져요
-      </h3>
-      <p className="mt-1 text-xs text-muted">
-        아직 친구가 없어요. 닉네임으로 친구를 찾아 서로의 기록을 확인해 보세요.
-      </p>
-      <Link
-        href="/crew"
-        className="mt-3 flex h-11 items-center justify-center rounded-card-sm bg-accent text-[13px] font-extrabold text-accent-ink"
-      >
-        크루 찾으러 가기 ›
-      </Link>
+      {/* ⚠️ 조건 없이 그린다. 위 네 갈래 중 무엇이 그려졌든 여기까지 온다. */}
+      {cta}
     </section>
   );
 }
@@ -411,9 +497,17 @@ export function FriendBoardCard({
   activeUserIds,
   iWorkedOut,
   me,
+  cta,
 }: {
   activeUserIds: Set<string>;
   iWorkedOut: boolean;
+  /**
+   * 카드 맨 아래 주 행동 버튼 (2026-08-13 개편, 설계 §4.1).
+   *
+   * ⚠️ 홈의 **유일한** `운동 시작하기`가 이 카드 안으로 들어왔다. 그래서 이 카드는
+   * 조회 상태와 무관하게 **항상 렌더된다** — 아래 early-return을 되살리지 마라.
+   */
+  cta: ReactNode;
   /**
    * 내 행의 재료 (2026-08-07 사용자 지시). 조회 전이면 `null` — 그동안 친구 목록만
    * 그린다.
@@ -515,18 +609,21 @@ export function FriendBoardCard({
     }
   }, []);
 
-  // 깜빡임 방지 — 판정 전에는 아무것도 그리지 않는다(크루 카드와 같은 규약)
-  if (!configured || !ready) return null;
-
-  if (failed) {
-    return (
-      <p className="rounded-card-sm border border-line bg-surface px-3 py-2.5 text-xs text-muted">
-        친구 정보를 불러오지 못했어요.
-      </p>
-    );
-  }
-
-  if (rows.length === 0) return <NoFriendsCard />;
+  /**
+   * ⚠️ **여기서 `ready`·`failed`·`0명`으로 갈라져 `return`하지 마라** (2026-08-13).
+   *
+   * 옛 구현은 판정 전 `return null`, 실패 시 문구 한 줄, 친구 0명이면
+   * `NoFriendsCard`로 **카드를 통째로 갈아치웠다.** 홈의 유일한 `운동 시작하기`가
+   * 이 카드 안으로 들어온 지금 그렇게 하면 **로딩·실패·친구 0명에서 운동 시작
+   * 버튼이 사라진다.** 그래서 상태는 `status`로 넘기고 갈래는 카드 **안에서** 갈린다.
+   *
+   * 옛 주석의 "깜빡임 방지"는 이제 `SkeletonRow`가 한다 — 빈 화면 대신 같은 높이의
+   * 자리를 먼저 잡으므로 목록이 도착해도 레이아웃이 튀지 않는다.
+   *
+   * `!configured`만 예외로 남긴다. Supabase 설정 자체가 없으면 `/record`도 동작하지
+   * 않으므로 버튼만 남겨 두는 것이 오히려 거짓말이다 — 그 상태는 `AuthStatus`가 말한다.
+   */
+  if (!configured) return null;
 
   return (
     <>
@@ -538,6 +635,8 @@ export function FriendBoardCard({
         expanded={expanded}
         truncated={base?.truncated ?? false}
         pokingId={pokingId}
+        status={!ready ? "loading" : failed ? "failed" : "ready"}
+        cta={cta}
         onSelect={setSelected}
         onPoke={(row) => void poke(row)}
         onToggleExpand={() => setExpanded((v) => !v)}

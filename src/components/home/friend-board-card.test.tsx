@@ -2,11 +2,8 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  FriendBoardBody,
-  NoFriendsCard,
-  pokeErrorMessage,
-} from "./friend-board-card";
+import { FriendBoardBody, pokeErrorMessage } from "./friend-board-card";
+import { StartWorkoutCta } from "./start-workout-cta";
 import {
   buildFriendRows,
   buildMyRow,
@@ -86,6 +83,9 @@ function renderBody(
     expanded: false,
     truncated: false,
     pokingId: null,
+    // ⚠️ 가짜 노드가 아니라 **진짜 CTA**를 넘긴다. 스텁으로 두면 실제 버튼의
+    //    링크가 깨져도 이 파일의 단언이 전부 초록으로 남는다.
+    cta: <StartWorkoutCta />,
     onSelect: vi.fn(),
     onPoke: vi.fn(),
     onToggleExpand: vi.fn(),
@@ -115,7 +115,7 @@ describe("FriendBoardBody — 기본 3명, 전체 보기", () => {
 
   it("'전체 보기'를 누르면 토글을 호출한다", () => {
     const props = renderBody(rowsOf(FOUR));
-    fireEvent.click(screen.getByText("전체 보기 ›"));
+    fireEvent.click(screen.getByText("전체 크루 보기 ›"));
     expect(props.onToggleExpand).toHaveBeenCalledTimes(1);
   });
 
@@ -127,7 +127,7 @@ describe("FriendBoardBody — 기본 3명, 전체 보기", () => {
 
   it("친구가 3명이면 '전체 보기'가 아예 없다 — 누를 게 없는 링크를 만들지 않는다", () => {
     renderBody(rowsOf(FOUR.slice(0, 3)));
-    expect(screen.queryByText("전체 보기 ›")).toBeNull();
+    expect(screen.queryByText("전체 크루 보기 ›")).toBeNull();
     expect(screen.getAllByRole("listitem")).toHaveLength(3);
   });
 });
@@ -149,6 +149,7 @@ describe("FriendBoardBody — 순위를 그리지 않는다 (사용자 확정 20
         onSelect={vi.fn()}
         onPoke={vi.fn()}
         onToggleExpand={vi.fn()}
+        cta={<StartWorkoutCta />}
       />,
     );
     const html = container.innerHTML;
@@ -210,6 +211,7 @@ describe("FriendBoardBody — 네 숫자와 상태", () => {
         onSelect={vi.fn()}
         onPoke={vi.fn()}
         onToggleExpand={vi.fn()}
+        cta={<StartWorkoutCta />}
       />,
     );
     const grids = container.querySelectorAll("div.grid");
@@ -234,6 +236,7 @@ describe("FriendBoardBody — 네 숫자와 상태", () => {
         onSelect={vi.fn()}
         onPoke={vi.fn()}
         onToggleExpand={vi.fn()}
+        cta={<StartWorkoutCta />}
       />,
     );
     const srcs = [...container.querySelectorAll("img")].map((i) =>
@@ -354,6 +357,7 @@ describe("FriendBoardBody — 네 숫자와 상태", () => {
         onSelect={vi.fn()}
         onPoke={vi.fn()}
         onToggleExpand={vi.fn()}
+        cta={<StartWorkoutCta />}
       />,
     );
     const grid = container.querySelector("div.grid")!;
@@ -385,6 +389,7 @@ describe("FriendBoardBody — 네 숫자와 상태", () => {
         onSelect={vi.fn()}
         onPoke={vi.fn()}
         onToggleExpand={vi.fn()}
+        cta={<StartWorkoutCta />}
       />,
     );
     expect(screen.getByLabelText("찔렀음 찌름 완료")).toBeTruthy();
@@ -420,6 +425,7 @@ describe("FriendBoardBody — 네 숫자와 상태", () => {
         onSelect={vi.fn()}
         onPoke={vi.fn()}
         onToggleExpand={vi.fn()}
+        cta={<StartWorkoutCta />}
       />,
     );
     expect(container.innerHTML).not.toContain("👤");
@@ -468,6 +474,7 @@ describe("FriendBoardBody — 네 숫자와 상태", () => {
         onSelect={vi.fn()}
         onPoke={vi.fn()}
         onToggleExpand={vi.fn()}
+        cta={<StartWorkoutCta />}
       />,
     );
     const statusCell = container.querySelector("div.grid")!.children[0];
@@ -554,12 +561,64 @@ describe("FriendBoardBody — 잘린 집계", () => {
   });
 });
 
-describe("NoFriendsCard", () => {
-  it("친구가 없으면 크루 찾기로 보낸다", () => {
-    render(<NoFriendsCard />);
+/**
+ * 2026-08-13 개편 — 홈의 유일한 `운동 시작하기`가 이 카드 안으로 들어왔다.
+ *
+ * ⚠️ **이 describe가 이번 개편의 회귀선이다.** 옛 구현은 조회 전 `return null`,
+ * 실패 시 문구 한 줄, 친구 0명이면 `NoFriendsCard`로 카드를 통째로 갈아치웠다.
+ * 그 구조를 되살리면 **친구 조회가 느리거나 실패했다는 이유로 운동 시작 버튼이
+ * 사라진다.** 네 갈래를 각각 단언하는 이유가 그것이다.
+ *
+ * 가짜 통과 점검(2026-08-13 실행): `FriendBoardBody`에서 `{cta}` 한 줄을 지우면
+ * 아래 네 건이 모두 빨개지는 것을 확인하고 되돌렸다.
+ */
+describe("운동 시작 버튼 — 네 갈래 전부에서 살아 있다", () => {
+  const ctaHref = () =>
+    screen.getByText("운동 시작하기").closest("a")?.getAttribute("href");
+
+  it("정상 목록에서 보인다", () => {
+    renderBody(rowsOf(FOUR));
+    expect(ctaHref()).toBe("/record");
+  });
+
+  it("조회 중에도 보인다 — 빈 화면 대신 자리를 잡는다", () => {
+    renderBody([], { status: "loading" });
+    expect(ctaHref()).toBe("/record");
+    // 목록 자리는 스켈레톤이 먼저 잡는다(레이아웃 점프 방지)
+    expect(screen.getAllByRole("listitem", { hidden: true })).toHaveLength(1);
+  });
+
+  it("친구 조회가 실패해도 보인다", () => {
+    renderBody([], { status: "failed" });
+    expect(ctaHref()).toBe("/record");
+    expect(screen.getByText(/불러오지 못했어요/)).toBeTruthy();
+  });
+
+  it("친구가 0명이어도 보인다", () => {
+    renderBody([]);
+    expect(ctaHref()).toBe("/record");
+  });
+});
+
+describe("친구가 0명일 때 — 카드를 갈아치우지 않고 안에서 안내한다", () => {
+  it("크루 찾기로 보낸다", () => {
+    renderBody([]);
     expect(screen.getByText("크루 찾으러 가기 ›").getAttribute("href")).toBe(
       "/crew",
     );
+  });
+
+  it("숫자 대신 초대를 권하는 헤딩을 쓴다 — '나의 크루 0명'이 아니다", () => {
+    renderBody([]);
+    expect(screen.getByText("크루와 함께하면 더 강해져요")).toBeTruthy();
+    expect(screen.queryByText("나의 크루 0명")).toBeNull();
+  });
+
+  it("조회 중에는 친구 수를 적지 않는다 — 0이었다가 3이 되면 없어졌다 생긴 것처럼 읽힌다", () => {
+    renderBody([], { status: "loading" });
+    expect(screen.getByText("나의 크루")).toBeTruthy();
+    expect(screen.queryByText("나의 크루 0명")).toBeNull();
+    expect(screen.queryByText("크루와 함께하면 더 강해져요")).toBeNull();
   });
 });
 
@@ -585,9 +644,11 @@ describe("내 행 — 맨 위에 고정, 콕은 없다", () => {
     expect(screen.getAllByRole("listitem")).toHaveLength(4);
   });
 
-  it("헤딩의 '친구 N명'에 나를 세지 않는다", () => {
+  it("헤딩의 '나의 크루 N명'에 나를 세지 않는다", () => {
     renderBody(rowsOf(FOUR), { myRow: myRowOf() });
-    expect(screen.getByText("친구 4명")).toBeTruthy();
+    // 2026-08-13에 `친구 4명` → `나의 크루 4명`으로 바뀌었다(통합 카드 헤딩).
+    // 세는 대상은 그대로 친구뿐이다 — 내 행은 `rows` 밖에 있다.
+    expect(screen.getByText("나의 크루 4명")).toBeTruthy();
   });
 
   /**

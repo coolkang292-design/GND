@@ -102,28 +102,48 @@ export function completedGoalCountOf(goals: ScoredGoal[]): number {
 }
 
 /**
+ * 한 사람의 점수 3종 + 완료 목표 수.
+ *
+ * ⚠️⚠️ **점수 조립을 이 함수 밖에서 다시 하지 마라** (2026-08-13에 뽑았다).
+ * 종합점수는 `overallScore(달성, 참여) + completedGoalBonus(완료 수)`인데, 이 덧셈을
+ * 화면마다 손으로 조립하면 **한 화면만 보너스를 빠뜨리는** 사고가 난다. 실제로
+ * `challenge/page.tsx`가 순위표와 따로 조립하고 있었고(주석이 "순위 계산과 동일하게
+ * 보너스를 포함한다"고 스스로 경고하고 있었다), 홈 챌린지 카드가 세 번째 조립을
+ * 만들 뻔했다. 순위표(`rankParticipants`)도 이 함수를 지난다 — 그래서 홈·챌린지
+ * 탭·시상대가 **같은 자로 잰 같은 숫자**를 보여준다.
+ */
+export function scoreParticipant(p: ParticipantInput): {
+  achievement: number;
+  participation: number;
+  overall: number;
+  completedGoalCount: number;
+} {
+  const achievement = achievementScore(p.goals);
+  const participation = participationScore(p.workoutDays, p.plannedDays);
+  const completedGoalCount = completedGoalCountOf(p.goals);
+  return {
+    achievement,
+    participation,
+    // 목표를 많이 걸고 실제로 달성할수록 종합점수에 보너스가 붙는다.
+    overall:
+      overallScore(achievement, participation) +
+      completedGoalBonus(completedGoalCount),
+    completedGoalCount,
+  };
+}
+
+/**
  * 종합점수 내림차순 + 동점 규칙 (§7):
  * ① 평균 달성률 ② 참여율 ③ 먼저 전 목표 달성한 시각 ④ 완료 목표 수 ⑤ 공동
  */
 export function rankParticipants(
   list: ParticipantInput[],
 ): RankedParticipant[] {
-  const scored = list.map((p) => {
-    const achievement = achievementScore(p.goals);
-    const participation = participationScore(p.workoutDays, p.plannedDays);
-    const completedGoalCount = completedGoalCountOf(p.goals);
-    return {
-      userId: p.userId,
-      achievement,
-      participation,
-      // 목표를 많이 걸고 실제로 달성할수록 종합점수에 보너스가 붙는다.
-      overall:
-        overallScore(achievement, participation) +
-        completedGoalBonus(completedGoalCount),
-      completedGoalCount,
-      allGoalsCompletedAtMs: p.allGoalsCompletedAtMs ?? null,
-    };
-  });
+  const scored = list.map((p) => ({
+    userId: p.userId,
+    ...scoreParticipant(p),
+    allGoalsCompletedAtMs: p.allGoalsCompletedAtMs ?? null,
+  }));
 
   // 비교 사슬: 앞 기준이 사실상 같을 때만 다음 기준으로
   const compare = (a: (typeof scored)[number], b: (typeof scored)[number]) => {

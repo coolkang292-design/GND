@@ -53,7 +53,7 @@ export async function getFriendBoardBase(
     totalXp: m.totalXp,
   }));
   if (crew.length === 0) {
-    // 친구가 없으면 화면이 목록 대신 `NoFriendsCard`를 그린다 — 내 행 한 줄만
+    // 친구가 없으면 화면이 카드 안에서 친구 초대 안내를 그린다 — 내 행 한 줄만
     // 있는 "친구 목록"은 목록이 아니다. 그릴 게 없으니 질의도 하지 않는다.
     return { crew, activity: new Map(), poked: new Set(), truncated: false };
   }

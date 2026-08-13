@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { UiIcon } from "@/components/ui-icon";
 import { useAuth } from "@/components/auth-provider";
@@ -8,26 +9,25 @@ import {
   type SetupSubmit,
 } from "@/components/challenge/setup-sheet";
 import {
-  achievementScore,
-  completedGoalBonus,
-  completedGoalCountOf,
   gndLabel,
   goalRate,
-  overallScore,
-  participationScore,
-  plannedDaysForPeriod,
   rankParticipants,
+  scoreParticipant,
   type GoalType,
   type ParticipantInput,
 } from "@/lib/domain/goal-score";
 import { challengeLevel, levelLabel } from "@/lib/domain/level";
+// ⚠️ 이 파일에 있던 지역 함수 `periodDays`를 2026-08-13에 여기로 옮겼다. 홈
+//    챌린지 요약이 같은 산수를 세 번째로 짜는 것을 막기 위해서다. 되돌리지 마라 —
+//    화면마다 D-day가 하루씩 달라지는 종류의 사고다.
+import { challengeDday, inclusiveDays } from "@/lib/domain/challenge-time";
 import { dayKey } from "@/lib/domain/time";
 import { getMyGroups, getMyProfile } from "@/lib/crew";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   EMPTY_STATS,
   GOAL_TYPE_META,
-  actualForGoal,
+  buildParticipantInput,
   acceptChallengeInvite,
   approveChallengeGoals,
   goalLabel,
@@ -65,14 +65,6 @@ const NO_CHALLENGE_MEMBERS: ChallengeParticipantProfile[] = [];
 const NO_COMPLETED_ATS: Date[] = [];
 const NO_CHALLENGE_GOALS: UserGoal[] = [];
 const NO_CHALLENGE_APPROVALS = new Set<string>();
-
-function periodDays(startDate: string, endDate: string): number {
-  const toUtc = (d: string) => {
-    const [y, m, dd] = d.split("-").map(Number);
-    return Date.UTC(y, m - 1, dd);
-  };
-  return Math.round((toUtc(endDate) - toUtc(startDate)) / 86_400_000) + 1;
-}
 
 export function errorMessage(e: unknown): string {
   const msg =
@@ -155,6 +147,8 @@ function ChallengeScreen({ userId }: { userId: string }) {
     mode: "create" | "goals";
     defaults: SetupSubmit;
   } | null>(null);
+  /** 공정성 안내 상세 접힘 — 기본은 접힌다 (2026-08-13, CrewCard와 같은 규약) */
+  const [showFairness, setShowFairness] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -458,7 +452,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
 
   const todayKey = dayKey(new Date(), timeZone);
   const endedByDate = challenge ? challenge.end_date < todayKey : false;
-  const dday = challenge ? periodDays(todayKey, challenge.end_date) - 1 : 0;
+  const dday = challenge ? challengeDday(todayKey, challenge.end_date) : 0;
 
   async function handleCreate(v: SetupSubmit) {
     setBusy(true);
@@ -640,37 +634,33 @@ function ChallengeScreen({ userId }: { userId: string }) {
   }
 
   const days = challenge
-    ? periodDays(challenge.start_date, challenge.end_date)
+    ? inclusiveDays(challenge.start_date, challenge.end_date)
     : 0;
 
   // 순위·진행률 계산 재료 (§7) — 목표 있는 참여자만
+  // ⚠️ 조립은 `buildParticipantInput` 한 곳에서 한다 (2026-08-13). 여기서 손으로
+  //    짜면 `planned_days ?? 5` 같은 기본값이 화면마다 갈린다.
   const participantInputs: ParticipantInput[] = members
     .filter((m) => (goalCountByUser.get(m.id) ?? 0) > 0)
-    .map((m) => {
-      const userGoals = goals.filter((g) => g.user_id === m.id);
-      const s = stats?.get(m.id) ?? EMPTY_STATS;
-      return {
+    .map((m) =>
+      buildParticipantInput({
         userId: m.id,
-        goals: userGoals.map((g) => ({
-          type: g.goal_type,
-          target: Number(g.target_value),
-          actual: actualForGoal(s, g.goal_type, g.qualifier),
-        })),
-        workoutDays: s.workoutDays,
-        plannedDays: plannedDaysForPeriod(userGoals[0]?.planned_days ?? 5, days),
-        allGoalsCompletedAtMs: null,
-      };
-    });
+        goals: goals.filter((g) => g.user_id === m.id),
+        stats: stats?.get(m.id) ?? EMPTY_STATS,
+        periodDays: days,
+      }),
+    );
 
   const me = participantInputs.find((p) => p.userId === userId) ?? null;
-  const myAchievement = me ? achievementScore(me.goals) : 0;
-  const myParticipation = me
-    ? participationScore(me.workoutDays, me.plannedDays)
-    : 0;
-  // 순위 계산(rankParticipants)과 동일하게 완료 목표 보너스를 포함한다.
-  const myOverall =
-    overallScore(myAchievement, myParticipation) +
-    (me ? completedGoalBonus(completedGoalCountOf(me.goals)) : 0);
+  // ⚠️ 점수 조립도 한 곳에서 한다 — 옛 코드는 완료 목표 보너스를 여기서 손으로
+  //    더하면서 "순위 계산과 동일하게"라고 주석으로 스스로를 경고하고 있었다.
+  //    홈 챌린지 카드도 같은 `scoreParticipant`를 지난다(설계 §4.3).
+  const myScore = me
+    ? scoreParticipant(me)
+    : { achievement: 0, participation: 0, overall: 0, completedGoalCount: 0 };
+  const myAchievement = myScore.achievement;
+  const myParticipation = myScore.participation;
+  const myOverall = myScore.overall;
 
   const myQualifier = (type: GoalType) =>
     myGoals.find((x) => x.goal_type === type)?.qualifier;
@@ -728,9 +718,15 @@ function ChallengeScreen({ userId }: { userId: string }) {
           자리도 없으므로 그 안내는 갈 곳 없는 말이기도 했다.
           `handleCreate`는 `group`을 안 쓴다 — RPC가 준 `ch.group_id`를 쓴다. */}
       {challenges.length > 0 && (
+        /* ⚠️ **회색 외곽선이 아니다** (2026-08-13 사용자 지시 "이 버튼도 좀 잘 보이게").
+           옛 스타일은 `border-line bg-surface text-muted`라, 어두운 배경에서 흐린
+           회색 글자가 되어 **비활성 버튼처럼** 보였다. 챌린지를 하나라도 가진
+           사람에게 새 챌린지를 만드는 **유일한 입구**이므로 눌리는 것으로 읽혀야 한다.
+           강조색을 쓰되 채우지는 않는다 — 금색으로 채우면 위 진행 카드의
+           `오늘 운동하기`와 주·부가 겨룬다. */
         <button
           onClick={() => openSheet("create")}
-          className="h-11 rounded-card border border-line bg-surface text-[13px] font-bold text-muted"
+          className="h-11 rounded-card border border-accent/40 bg-accent-weak text-[13px] font-extrabold text-accent"
         >
           ＋ 챌린지 추가하기
         </button>
@@ -962,32 +958,35 @@ function ChallengeScreen({ userId }: { userId: string }) {
       {/* ── active: 내 진행률만 공개 (§6 비공개) ─────── */}
       {challenge?.status === "active" && detailsAreCurrent && (
         <>
-          <section className="rounded-card bg-gradient-to-br from-accent to-[#0B6E66] p-5 text-accent-ink shadow-card">
-            <div className="flex items-start justify-between gap-2">
-              <p className="min-w-0 break-all text-xs font-bold opacity-80">
+          {/* ⚠️ **높이를 다시 늘리지 마라** (2026-08-13 사용자 지시 — 홈 카드에 이어
+              이 카드도 "높이가 너무 높다"). 옛 구성은 `p-5` + 6줄이었다. 줄인 방법은
+              홈 챌린지 카드와 같다 — 숫자 라벨을 값 **왼쪽**에 붙여 2단 스택을 한 줄로
+              접고, `내 목표 N개`·`참여율`·`결과 발표`를 **한 줄로 합쳤다.**
+              여기는 챌린지 탭의 대표 카드라 숫자만 홈(19px)보다 크게 둔다. */}
+          <section className="rounded-card bg-gradient-to-br from-accent to-[#0B6E66] px-3.5 py-3 text-accent-ink shadow-card">
+            <div className="flex items-center justify-between gap-2">
+              <p className="min-w-0 truncate text-[13.5px] font-extrabold">
                 {challenge.name}
               </p>
               <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-extrabold">
                 {levelLabel(levelOf(userId))}
               </span>
             </div>
-            <div className="mt-2 flex items-end justify-between">
-              <div>
-                <p className="text-[13px] opacity-90">
-                  내 목표 {me?.goals.length ?? 0}개 · 평균 달성
-                </p>
-                <p className="font-mono text-[26px] leading-tight font-extrabold">
+            <div className="mt-1.5 flex items-baseline justify-between gap-2">
+              <p className="min-w-0 truncate text-[11px] opacity-90">
+                평균 달성{" "}
+                <b className="font-mono text-[22px] font-extrabold">
                   {Math.round(myAchievement)}%
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="font-mono text-[32px] leading-none font-extrabold">
+                </b>
+              </p>
+              <p className="flex-none text-[11px] opacity-90">
+                종합점수{" "}
+                <b className="font-mono text-[22px] font-extrabold">
                   {myOverall.toFixed(1)}
-                </p>
-                <p className="text-[11px] opacity-90">내 종합점수</p>
-              </div>
+                </b>
+              </p>
             </div>
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/25">
+            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/25">
               <div
                 className="h-full rounded-full bg-white"
                 style={{
@@ -995,13 +994,29 @@ function ChallengeScreen({ userId }: { userId: string }) {
                 }}
               />
             </div>
-            <p className="mt-2.5 text-xs opacity-95">
-              결과 발표까지{" "}
+            <p className="mt-2 text-[11px] opacity-95">
+              목표 {me?.goals.length ?? 0}개 · 참여율{" "}
+              {Math.round(myParticipation)}% · 결과 발표{" "}
               <b className="font-mono">
                 {endedByDate ? "종료!" : `D-${Math.max(0, dday)}`}
-              </b>{" "}
-              · 참여율 {Math.round(myParticipation)}%
+              </b>
             </p>
+
+            {/* ⚠️ 2026-08-13 추가. 이 탭에는 **"그래서 오늘 뭘 하면 되나"의 답이
+                없었다** — 달성률만 보여 주고 운동으로 가는 문이 없어서, 기록하려면
+                탭을 나갔다 다시 들어와야 했다.
+                ⚠️ 목업에 있던 `상세 보기` 버튼은 넣지 않는다. 이 버튼 바로 아래가
+                이미 상세(내 목표 진행률·참가자 성과·참여자 명단)라 자기 자신을
+                가리키는 버튼이 된다.
+                ⚠️ 종료일이 지난 뒤에는 할 일이 운동이 아니라 결과 발표다. */}
+            {!endedByDate && (
+              <Link
+                href="/record"
+                className="mt-2.5 flex h-10 items-center justify-center rounded-card-sm bg-white/20 text-[13px] font-extrabold text-accent-ink"
+              >
+                오늘 운동하기 ›
+              </Link>
+            )}
           </section>
 
           {me && me.goals.length > 0 && (
@@ -1041,8 +1056,39 @@ function ChallengeScreen({ userId }: { userId: string }) {
             </section>
           )}
 
-          <div className="rounded-card border border-line bg-surface-2 p-3 text-center text-[12px] font-bold text-muted">
-            <UiIcon name="lock" /> 공정성을 위해 <b>기간 중에는 내 진행률만</b> 볼 수 있어요
+          {/* ⚠️ **한 줄은 접지 않는다** (2026-08-13). 이 배너는 "왜 남의 점수가
+              안 보이나"의 답이라, 통째로 접으면 그 질문이 다시 생긴다. `CrewCard`가
+              쓰는 접힘 규약과 같다 — 한 줄은 남기고 상세만 펼친다.
+              ⚠️ 상세의 5일·2시간은 `viewing-pass.ts`의 `CHALLENGE_PASS_HOURS`와
+              열람권 규칙에서 온 실제 값이다. 규칙이 바뀌면 이 문구도 같이 고쳐라. */}
+          <div className="rounded-card border border-line bg-surface-2 p-3 text-[12px] font-bold text-muted">
+            <div className="flex items-center justify-between gap-2">
+              <span>
+                <UiIcon name="lock" /> 공정성을 위해{" "}
+                <b>기간 중에는 내 진행률만</b> 볼 수 있어요
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowFairness((v) => !v)}
+                aria-expanded={showFairness}
+                className="flex-none text-[11px] font-bold text-accent"
+              >
+                자세히
+              </button>
+            </div>
+            {showFairness && (
+              <div className="mt-2 flex flex-col gap-1 border-t border-line pt-2 text-left text-[11.5px] leading-relaxed font-normal">
+                <p>
+                  다른 참가자의 점수와 순위는 <b>종료일에 한꺼번에</b> 공개돼요.
+                  중간 순위를 보면 앞선 사람은 느슨해지고 뒤처진 사람은 포기하기
+                  쉬워서예요.
+                </p>
+                <p>
+                  <b>5일 연속</b> 운동하면 아래 참가자 성과가{" "}
+                  <b>2시간 동안</b> 열려요.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* 자물쇠를 푸는 장치는 자물쇠 옆에 둔다 — 2026-08-07에 홈에서 옮겨 왔다.

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { AuthStatus } from "@/components/auth-status";
@@ -11,9 +10,18 @@ import { PushEnableCard } from "@/components/push-enable-card";
 import { StreakCard } from "@/components/home/streak-card";
 import { WeeklyStats } from "@/components/home/weekly-stats";
 import { FriendBoardCard } from "@/components/home/friend-board-card";
+import { StartWorkoutCta } from "@/components/home/start-workout-cta";
 import { CharacterCard } from "@/components/home/character-card";
+import { ChallengeSummaryCard } from "@/components/home/challenge-summary-card";
 import { getMyProfile } from "@/lib/crew";
-import { getMyWeeklyGoalDays } from "@/lib/challenge";
+import {
+  getMyChallenges,
+  getMyChallengeScore,
+  getMyWeeklyGoalDays,
+  type MyChallenge,
+  type MyChallengeScore,
+} from "@/lib/challenge";
+import { pickPrimaryRow } from "@/lib/domain/challenge-room";
 import { getCompletedSessions } from "@/lib/workout";
 import { getActiveCrewSessions, type ActiveCrewSession } from "@/lib/social";
 import { getProgressSummary, type ProgressSummary } from "@/lib/progression";
@@ -36,6 +44,15 @@ export function HomeClient() {
   } | null>(null);
   const [summary, setSummary] = useState<ProgressSummary | null>(null);
   const [summaryError, setSummaryError] = useState(false);
+  // 챌린지 요약의 재료. `null` = 아직 조회 전 — 빈 상태가 번쩍이지 않게 구별한다.
+  const [challenges, setChallenges] = useState<MyChallenge[] | null>(null);
+  // ⚠️ 챌린지 요약 **전용** 타임존이다. 홈의 다른 위젯(스트릭·주간 통계)은 여전히
+  //    `DEFAULT_TIMEZONE`을 쓴다 — 홈 전체의 타임존 통일은 별도 과제다(설계 §9).
+  const [timeZone, setTimeZone] = useState(DEFAULT_TIMEZONE);
+  // 챌린지 카드의 진행률·종합점수. `null` = 아직 안 왔다 → 화면은 `—`를 그린다.
+  const [challengeScore, setChallengeScore] = useState<MyChallengeScore | null>(
+    null,
+  );
   // 진행 중 세션은 진행 중 카드와 친구 목록이 같이 쓴다 — 한 번만 조회한다.
   const [activeSessions, setActiveSessions] = useState<ActiveCrewSession[]>([]);
 
@@ -44,21 +61,33 @@ export function HomeClient() {
     let cancelled = false;
     (async () => {
       try {
-        const [sessions, profile, goalDays] = await Promise.all([
+        const [sessions, profile, goalDays, myChallenges] = await Promise.all([
           getCompletedSessions(userId),
           getMyProfile(userId),
           // ⚠️ `profile.weekly_goal`이 아니다. 그 값은 아무도 못 바꾼다 —
           //    주간 기준은 진행 중 챌린지에서 온다(설계: 2026-08-08 결정).
           getMyWeeklyGoalDays(userId).catch(() => null),
+          // ⚠️⚠️ **`.catch`를 떼지 마라.** `Promise.all`은 하나가 던지면 전부
+          //    실패해서 아래 `catch`가 `completedAts`를 `[]`로 떨어뜨린다 —
+          //    챌린지 조회 실패 하나로 **스트릭·주간 통계·친구 목록의 내 행이
+          //    통째로 사라진다.** 바로 위 `getMyWeeklyGoalDays`가 같은 이유로
+          //    달고 있다. 챌린지 요약은 부가 정보라 없으면 카드만 안 그리면 된다.
+          getMyChallenges(userId).catch(() => []),
         ]);
         if (cancelled) return;
         setCompletedAts(sessions.map((s) => s.completedAt));
         setWeeklyGoal(goalDays);
+        setChallenges(myChallenges);
         if (profile) {
           setMyName({
             nickname: profile.nickname,
             avatarUrl: profile.avatar_url,
           });
+          // ⚠️ 챌린지 요약의 D-day는 **챌린지 탭과 같은 타임존**으로 재야 한다.
+          //    탭은 `profile.timezone`을 쓰는데 홈이 `DEFAULT_TIMEZONE`으로 재면
+          //    해외 사용자에게 같은 챌린지가 D-15와 D-14로 갈린다(설계 §4.4).
+          //    이미 부른 응답에서 꺼내므로 조회는 늘지 않는다.
+          if (profile.timezone) setTimeZone(profile.timezone);
         }
       } catch {
         if (!cancelled) setCompletedAts([]);
@@ -100,6 +129,50 @@ export function HomeClient() {
       clearInterval(interval);
     };
   }, [configured, loading, userId]);
+
+  /**
+   * 홈 챌린지 카드의 점수 (2026-08-13 사용자 지시 — 목업대로 진행률·종합점수 표시).
+   *
+   * ⚠️ **위 `Promise.all`에 넣지 않았다.** 조회가 2건 더 들고, 대표 챌린지를 안 뒤에야
+   * 부를 수 있어서 넣으면 홈 전체가 그만큼 늦게 그려진다. 카드는 이름·D-day를 먼저
+   * 그리고 숫자만 나중에 채운다 — 그동안 `—`가 자리를 지킨다.
+   *
+   * ⚠️ 실패해도 조용히 넘긴다. 점수를 못 받은 것이 챌린지 카드를 통째로 없앨 이유는
+   * 아니다(이름·기한은 이미 손에 있다).
+   */
+  const primaryActive = useMemo(
+    () =>
+      challenges
+        ? pickPrimaryRow(
+            challenges.filter(
+              (c) => c.status === "active" && c.myStatus === "joined",
+            ),
+          )
+        : null,
+    [challenges],
+  );
+
+  useEffect(() => {
+    if (!userId || !primaryActive) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const s = await getMyChallengeScore({
+          userId,
+          challengeId: primaryActive.id,
+          startDate: primaryActive.start_date,
+          endDate: primaryActive.end_date,
+          timeZone,
+        });
+        if (!cancelled) setChallengeScore(s);
+      } catch {
+        /* 점수는 부가 정보다 — 실패해도 카드는 이름·기한으로 남는다 */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, primaryActive, timeZone]);
 
   const activeUserIds = useMemo(
     () =>
@@ -155,26 +228,44 @@ export function HomeClient() {
         <NotificationBell />
       </header>
 
-      <Link
-        href="/record"
-        className="block rounded-[22px] bg-gradient-to-br from-accent to-[#0B6E66] p-5 text-accent-ink shadow-card"
-      >
-        <p className="text-xs font-bold opacity-80">오늘의 운동</p>
-        <h2 className="mt-1 text-xl font-extrabold">운동 시작하기</h2>
-        <p className="mt-1 text-sm opacity-90">
-          30초면 기록할 수 있어요. 친구들이 기다리고 있어요.
-        </p>
-      </Link>
+      {/* ⚠️ **홈의 첫 카드가 친구 목록 + 운동 시작하기다** (2026-08-13 개편).
+          설계: `docs/superpowers/specs/2026-08-13-home-today-card-and-challenge-cta-design.md`
 
-      {/* 성장 카드는 "운동 시작하기" 바로 아래로 — 레벨을 눈에 먼저 띄운다 */}
+          옛 배치는 최상단에 `운동 시작하기` 단독 블록을 두고 친구 목록을 8번째에
+          뒀다. **운동할 이유(친구가 오늘 했는가)와 운동하는 수단 사이에 카드가
+          5개** 끼어 있었다 — 이유를 본 순간 누를 것이 없었다.
+
+          ⚠️ 옛 단독 CTA 블록을 되살리지 마라. 홈에 `운동 시작하기`가 둘이 된다.
+          CTA는 이제 카드 **안**에서 조회 상태와 무관하게 그려진다(설계 §4.1). */}
+      <FriendBoardCard
+        activeUserIds={activeUserIds}
+        iWorkedOut={iWorkedOutToday}
+        me={me}
+        cta={<StartWorkoutCta />}
+      />
+
+      {/* ⚠️ 진행 중 카드가 친구 목록 **아래**로 내려왔다 (2026-08-13). 옛 주석은
+          "친구 목록은 진행 중 카드 바로 아래"였는데 위아래가 뒤집혔다. 읽는 순서는
+          그대로 이어진다 — 친구 행의 `운동 중` 알약을 보고 바로 아래에서 그 사람의
+          진행 중 카드를 만난다. 세션이 없으면 아무것도 그리지 않는다. */}
+      <ActiveWorkoutCards sessions={activeSessions} />
+
+      {/* 진행 중 챌린지 요약 — **이름·기한만** 적는다. 달성률·참여율·종합점수는
+          챌린지 탭에만 둔다(설계 §4.3). 진행 중인 것이 없으면 함께하기를 권한다. */}
+      <ChallengeSummaryCard
+        challenges={challenges}
+        timeZone={timeZone}
+        score={challengeScore}
+      />
+
+      {/* 성장 카드 — 레벨을 눈에 띄게 두되, 행동(위)보다는 뒤다.
+          챌린지 성과 카드는 2026-08-07에 챌린지 탭으로 옮겼다(설계 §6.7). */}
       {summary && <CharacterCard summary={summary} />}
       {summaryError && (
         <p className="rounded-card-sm border border-line bg-surface px-3 py-2.5 text-xs text-muted">
           성장 정보를 불러오지 못했어요.
         </p>
       )}
-
-      <PushEnableCard />
 
       {completedAts && (
         <>
@@ -183,15 +274,7 @@ export function HomeClient() {
         </>
       )}
 
-      <ActiveWorkoutCards sessions={activeSessions} />
-
-      {/* 친구 목록은 진행 중 카드 바로 아래 — "운동 중"이 위에서 아래로 이어 읽힌다.
-          챌린지 성과 카드는 2026-08-07에 챌린지 탭으로 옮겼다(설계 §6.7). */}
-      <FriendBoardCard
-        activeUserIds={activeUserIds}
-        iWorkedOut={iWorkedOutToday}
-        me={me}
-      />
+      <PushEnableCard />
 
       <CrewCard />
 
