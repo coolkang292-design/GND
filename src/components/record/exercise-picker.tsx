@@ -757,6 +757,14 @@ function PickerSheet({
                   weekday: "short",
                 }).format(session.completedAt);
                 const duration = Math.round(session.durationSeconds / 60);
+                /*
+                  인터벌은 눈에 띄게 갈라 놓는다 (사용자 지시 2026-08-13).
+
+                  목록에서는 종목 이름만 보여서, 맨몸 4종이 인터벌인지 그냥
+                  운동인지 구별할 수 없었다. 고르면 하는 일도 다르다 —
+                  인터벌은 음원과 함께 되살아난다 (`tabataResumeFromSession`).
+                */
+                const intervalMinutes = session.tabataMinutes;
                 return (
                   <button
                     key={session.id}
@@ -773,6 +781,14 @@ function PickerSheet({
                             {duration}분
                           </span>
                         )}
+                        {intervalMinutes ? (
+                          <span
+                            data-testid="past-interval-badge"
+                            className="ml-2 rounded-full bg-accent-weak px-2 py-0.5 text-[10px] font-extrabold text-accent"
+                          >
+                            🔥 인터벌 {intervalMinutes}분
+                          </span>
+                        ) : null}
                       </span>
                       <span className="mt-1 block truncate text-xs text-muted">
                         {session.exerciseNames.length > 0
@@ -781,7 +797,11 @@ function PickerSheet({
                       </span>
                     </span>
                     <span className="flex-none text-xs font-extrabold text-accent">
-                      {pastBusyId === session.id ? "불러오는 중…" : "불러오기"}
+                      {pastBusyId === session.id
+                        ? "불러오는 중…"
+                        : intervalMinutes
+                          ? "인터벌 시작"
+                          : "불러오기"}
                     </span>
                   </button>
                 );

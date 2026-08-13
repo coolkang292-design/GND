@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { OFFICIAL_PROGRAMS } from "./official-programs";
+import {
+  OFFICIAL_PROGRAMS,
+  PROGRAM_LEVELS,
+  intervalExerciseName,
+  isIntervalProgram,
+} from "./official-programs";
 import {
   EXERCISE_GUIDES,
   GUIDE_SAFETY_NOTE,
@@ -54,11 +59,23 @@ describe("EXERCISE_GUIDES — GND 핵심 안내", () => {
    *    일치하는지 여기서 못 박는다 — 화면을 열어 보지 않고 잡을 수 있는 유일한 곳이다.
    */
   it("등록된 안내 이름은 전부 실제 프로그램 종목이다 — 오타 방지", () => {
+    /*
+      인터벌 프로그램은 종목명이 **난이도별 객체**라 그냥 꺼내면 안 된다
+      (2026-08-13). 세 난이도를 다 펼쳐야 실제 쓰이는 이름이 나온다.
+    */
     const programNames = new Set(
       OFFICIAL_PROGRAMS.flatMap((program) =>
-        program.sessions.flatMap((session) =>
-          session.exercises.map((exercise) => exercise.exerciseName),
-        ),
+        isIntervalProgram(program)
+          ? program.sessions.flatMap((session) =>
+              session.exercises.flatMap((exercise) =>
+                PROGRAM_LEVELS.map((level) =>
+                  intervalExerciseName(exercise, level),
+                ),
+              ),
+            )
+          : program.sessions.flatMap((session) =>
+              session.exercises.map((exercise) => exercise.exerciseName),
+            ),
       ),
     );
     expect(programNames.size).toBeGreaterThanOrEqual(15);

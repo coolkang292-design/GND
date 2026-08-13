@@ -7,12 +7,12 @@ import { RecordEmptyState } from "./record-empty-state";
 afterEach(cleanup);
 
 describe("RecordEmptyState — 등록 0개 화면 (사용자 지시 2026-08-06)", () => {
-  it("첫 운동 추가하기를 핵심 CTA로 보여준다", () => {
+  it("운동 계획하기를 핵심 CTA로 보여준다", () => {
     const { getByText } = render(
       <RecordEmptyState hasHistory={false} onAdd={vi.fn()} onLoadRecent={vi.fn()} />,
     );
     expect(getByText("아직 추가된 운동이 없어요")).toBeTruthy();
-    expect(getByText("＋ 첫 운동 추가하기")).toBeTruthy();
+    expect(getByText("운동 계획하기")).toBeTruthy();
   });
 
   it("이력이 없으면 '최근 운동 불러오기'가 아예 없다", () => {
@@ -37,7 +37,7 @@ describe("RecordEmptyState — 등록 0개 화면 (사용자 지시 2026-08-06)"
       <RecordEmptyState hasHistory onAdd={onAdd} onLoadRecent={onLoadRecent} />,
     );
 
-    fireEvent.click(getByText("＋ 첫 운동 추가하기"));
+    fireEvent.click(getByText("운동 계획하기"));
     expect(onAdd).toHaveBeenCalledTimes(1);
     expect(onLoadRecent).not.toHaveBeenCalled();
 
@@ -62,10 +62,46 @@ describe("RecordEmptyState — 등록 0개 화면 (사용자 지시 2026-08-06)"
     const { container } = render(
       <RecordEmptyState hasHistory onAdd={vi.fn()} onLoadRecent={vi.fn()} />,
     );
-    const adders = [...container.querySelectorAll("button")].filter((b) =>
-      (b.textContent ?? "").includes("운동 추가"),
+    // 2026-08-13: 문구가 `운동 계획하기`로 바뀌었다. 확인할 것은 그대로 —
+    // 같은 일을 하는 버튼이 둘 있으면 안 된다.
+    const buttons = [...container.querySelectorAll("button")];
+    expect(
+      buttons.filter((b) => (b.textContent ?? "").includes("운동 계획하기")),
+    ).toHaveLength(1);
+    expect(
+      buttons.filter((b) => (b.textContent ?? "").includes("＋ 운동 추가")),
+    ).toHaveLength(0);
+  });
+
+  it("저장된 루틴이 있을 때만 내 루틴 버튼을 보여준다", () => {
+    // 사용자 지시 2026-08-13. 최근 운동 불러오기와 같은 규칙이다 —
+    // 눌러도 빈 목록이면 막다른 길을 하나 더 주는 셈이다.
+    const onLoadRoutine = vi.fn();
+    const none = render(
+      <RecordEmptyState
+        hasHistory
+        onAdd={vi.fn()}
+        onLoadRecent={vi.fn()}
+        onLoadRoutine={onLoadRoutine}
+        routineCount={0}
+      />,
     );
-    expect(adders).toHaveLength(1);
+    expect(none.queryByRole("button", { name: /내 루틴에서 추가하기/ })).toBeNull();
+    none.unmount();
+
+    const some = render(
+      <RecordEmptyState
+        hasHistory
+        onAdd={vi.fn()}
+        onLoadRecent={vi.fn()}
+        onLoadRoutine={onLoadRoutine}
+        routineCount={2}
+      />,
+    );
+    fireEvent.click(
+      some.getByRole("button", { name: /내 루틴에서 추가하기/ }),
+    );
+    expect(onLoadRoutine).toHaveBeenCalledTimes(1);
   });
 
   it("이미지와 두 행동을 하나의 시작 카드 안에 묶는다", () => {
@@ -74,7 +110,7 @@ describe("RecordEmptyState — 등록 0개 화면 (사용자 지시 2026-08-06)"
     );
 
     const startCard = getByTestId("record-start-card");
-    const addButton = getByRole("button", { name: "＋ 첫 운동 추가하기" });
+    const addButton = getByRole("button", { name: "운동 계획하기" });
     const recentButton = getByRole("button", { name: "최근 운동 불러오기" });
     const image = Array.from(startCard.querySelectorAll("img")).find((candidate) =>
       decodeURIComponent(candidate.getAttribute("src") ?? "").includes(

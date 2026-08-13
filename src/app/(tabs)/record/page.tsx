@@ -336,7 +336,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
    */
   const [hasHistory, setHasHistory] = useState(false);
   /** 피커를 어느 화면으로 열지 — 기본은 진입 허브 */
-  const [pickerMode, setPickerMode] = useState<"hub" | "past">("hub");
+  const [pickerMode, setPickerMode] = useState<"hub" | "past" | "routine">("hub");
   // ── 나만의 루틴 (0056) ────────────────────────────────────────────
   /**
    * null = 루틴 기능을 쓸 수 없다 (0056 미적용이거나 조회 실패).
@@ -889,7 +889,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
    *   **항상 명시적으로 덮어쓴다** — 기본값 `null`이라 옛 값이 남을 수 없다.
    */
   async function openExercisePicker(
-    mode: "hub" | "past" = "hub",
+    mode: "hub" | "past" | "routine" = "hub",
     replaceKey: string | null = null,
   ) {
     setPickerMode(mode);
@@ -2210,6 +2210,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
           hasHistory={hasHistory}
           onAdd={() => void openExercisePicker("hub")}
           onLoadRecent={() => void openExercisePicker("past")}
+          onLoadRoutine={() => void openExercisePicker("routine")}
+          routineCount={routines?.length ?? 0}
         />
       )}
 

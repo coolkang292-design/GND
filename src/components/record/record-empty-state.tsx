@@ -15,6 +15,8 @@ export function RecordEmptyState({
   hasHistory,
   onAdd,
   onLoadRecent,
+  onLoadRoutine,
+  routineCount = 0,
 }: {
   /**
    * 완료한 운동이 하나라도 있나.
@@ -25,6 +27,14 @@ export function RecordEmptyState({
   hasHistory: boolean;
   onAdd: () => void;
   onLoadRecent: () => void;
+  /**
+   * 내 루틴에서 담기 (사용자 지시 2026-08-13).
+   *
+   * ⚠️ 저장된 루틴이 **있을 때만** 보여 준다. 최근 운동 불러오기와 같은 이유다 —
+   *    눌러도 빈 목록이면 막다른 길을 하나 더 주는 셈이다.
+   */
+  onLoadRoutine?: () => void;
+  routineCount?: number;
 }) {
   return (
     <section>
@@ -65,7 +75,7 @@ export function RecordEmptyState({
             onClick={onAdd}
             className="mt-4 h-14 w-full rounded-card bg-accent text-[15px] font-extrabold text-accent-ink"
           >
-            ＋ 첫 운동 추가하기
+            운동 계획하기
           </button>
 
           {hasHistory && (
@@ -79,6 +89,18 @@ export function RecordEmptyState({
                   `지난 운동 불러오기`와 **같은 그림**이라야 같은 일로 읽힌다 */}
               <UiIcon name="hub-past" size={18} />
               최근 운동 불러오기
+            </button>
+          )}
+
+          {onLoadRoutine && routineCount > 0 && (
+            <button
+              type="button"
+              data-priority="secondary"
+              onClick={onLoadRoutine}
+              className="mt-2 flex h-12 w-full items-center justify-center gap-1.5 rounded-card border border-line bg-transparent text-sm font-bold text-text"
+            >
+              <UiIcon name="hub-routine" size={18} />
+              내 루틴에서 추가하기
             </button>
           )}
 
