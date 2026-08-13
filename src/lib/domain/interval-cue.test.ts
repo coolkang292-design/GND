@@ -15,8 +15,8 @@ import {
 import { TABATA_ROUND_SECONDS, TABATA_TRACKS } from "./tabata";
 
 describe("인터벌 진행 판정", () => {
-  it("한 블록은 10초 준비 + 8라운드 × 30초 = 250초다", () => {
-    expect(INTERVAL_PREP_SECONDS).toBe(10);
+  it("한 블록은 13초 준비 + 8라운드 × 30초이고 파일은 250초다", () => {
+    expect(INTERVAL_PREP_SECONDS).toBe(13);
     expect(INTERVAL_WORK_SECONDS).toBe(20);
     expect(INTERVAL_REST_SECONDS).toBe(10);
     expect(INTERVAL_WORK_SECONDS + INTERVAL_REST_SECONDS).toBe(
@@ -41,29 +41,29 @@ describe("인터벌 진행 판정", () => {
   });
 
   describe("4분 코스", () => {
-    it("시작 10초는 준비다", () => {
+    it("시작 13초는 준비다", () => {
       const cue = intervalCueAt(0, 4);
       expect(cue).toMatchObject({
         phase: "prep",
-        secondsLeft: 10,
+        secondsLeft: 13,
         nextExerciseIndex: 0,
         round: 0,
       });
-      expect(intervalCueAt(9.5, 4)).toMatchObject({
+      expect(intervalCueAt(12.5, 4)).toMatchObject({
         phase: "prep",
         secondsLeft: 1,
       });
     });
 
-    it("10초부터 첫 종목 20초를 한다", () => {
-      expect(intervalCueAt(10, 4)).toMatchObject({
+    it("13초부터 첫 종목 20초를 한다", () => {
+      expect(intervalCueAt(13, 4)).toMatchObject({
         phase: "work",
         exerciseIndex: 0,
         secondsLeft: 20,
         round: 0,
         nextExerciseIndex: 1,
       });
-      expect(intervalCueAt(29.5, 4)).toMatchObject({
+      expect(intervalCueAt(32.5, 4)).toMatchObject({
         phase: "work",
         exerciseIndex: 0,
         secondsLeft: 1,
@@ -71,7 +71,7 @@ describe("인터벌 진행 판정", () => {
     });
 
     it("20초가 지나면 10초 쉬고 다음 종목을 예고한다", () => {
-      expect(intervalCueAt(30, 4)).toMatchObject({
+      expect(intervalCueAt(33, 4)).toMatchObject({
         phase: "rest",
         secondsLeft: 10,
         nextExerciseIndex: 1,
@@ -79,25 +79,25 @@ describe("인터벌 진행 판정", () => {
       });
     });
 
-    it("40초에 두 번째 종목으로 **자동으로** 넘어간다", () => {
+    it("43초에 두 번째 종목으로 **자동으로** 넘어간다", () => {
       // 사용자가 아무것도 안 눌러도 넘어가야 한다 (사용자 지시 2026-08-13)
-      expect(intervalCueAt(40, 4)).toMatchObject({
+      expect(intervalCueAt(43, 4)).toMatchObject({
         phase: "work",
         exerciseIndex: 1,
         round: 1,
       });
-      expect(intervalCueAt(70, 4)).toMatchObject({
+      expect(intervalCueAt(73, 4)).toMatchObject({
         phase: "work",
         exerciseIndex: 2,
         round: 2,
       });
-      expect(intervalCueAt(100, 4)).toMatchObject({
+      expect(intervalCueAt(103, 4)).toMatchObject({
         phase: "work",
         exerciseIndex: 3,
         round: 3,
       });
       // 5라운드는 다시 첫 종목
-      expect(intervalCueAt(130, 4)).toMatchObject({
+      expect(intervalCueAt(133, 4)).toMatchObject({
         phase: "work",
         exerciseIndex: 0,
         round: 4,
@@ -105,7 +105,7 @@ describe("인터벌 진행 판정", () => {
     });
 
     it("마지막 라운드에는 다음 종목이 없다", () => {
-      const last = intervalCueAt(10 + 7 * TABATA_ROUND_SECONDS, 4);
+      const last = intervalCueAt(13 + 7 * TABATA_ROUND_SECONDS, 4);
       expect(last).toMatchObject({
         phase: "work",
         round: 7,
@@ -126,10 +126,10 @@ describe("인터벌 진행 판정", () => {
       // 음원을 이어 붙였으므로 준비 구간이 블록마다 다시 온다
       expect(intervalCueAt(250, 8)).toMatchObject({
         phase: "prep",
-        secondsLeft: 10,
+        secondsLeft: 13,
         round: 8,
       });
-      expect(intervalCueAt(260, 8)).toMatchObject({
+      expect(intervalCueAt(263, 8)).toMatchObject({
         phase: "work",
         round: 8,
         exerciseIndex: 0,
@@ -137,9 +137,9 @@ describe("인터벌 진행 판정", () => {
     });
 
     it("라운드 번호가 블록을 넘어 이어진다", () => {
-      expect(intervalCueAt(260, 8)).toMatchObject({ round: INTERVAL_ROUNDS_PER_BLOCK });
-      expect(intervalCueAt(760, 16)).toMatchObject({ round: 24 });
-      expect(intervalCueAt(760, 16)).toMatchObject({ exerciseIndex: 0 });
+      expect(intervalCueAt(263, 8)).toMatchObject({ round: INTERVAL_ROUNDS_PER_BLOCK });
+      expect(intervalCueAt(763, 16)).toMatchObject({ round: 24 });
+      expect(intervalCueAt(763, 16)).toMatchObject({ exerciseIndex: 0 });
     });
 
     it("16분은 32라운드를 채우고 1000초에 끝난다", () => {

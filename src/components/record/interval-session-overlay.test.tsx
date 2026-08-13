@@ -43,6 +43,17 @@ describe("IntervalSessionOverlay", () => {
    * 사용자가 **아무것도 입력하지 않는다** (사용자 지시 2026-08-13).
    * 근력 오버레이의 ± 버튼·세트 입력은 인터벌에서 의미가 없다.
    */
+  /**
+   * 카운트다운도 뺐다 (사용자 지시 2026-08-13) — 숫자를 세는 건 음악이 한다.
+   * 화면 숫자가 음원의 3·2·1과 1~2초만 어긋나도 그게 제일 먼저 보인다.
+   */
+  it("화면에 카운트다운 숫자가 없다", () => {
+    view(15);
+
+    expect(screen.queryByTestId("interval-countdown")).toBeNull();
+    expect(screen.queryByText(/^d{2}:d{2}$/)).toBeNull();
+  });
+
   it("횟수 입력 장치가 하나도 없다", () => {
     view(15);
 
@@ -58,15 +69,13 @@ describe("IntervalSessionOverlay", () => {
     view(0);
 
     expect(screen.getByTestId("interval-phase").textContent).toBe("준비");
-    expect(screen.getByTestId("interval-countdown").textContent).toBe("00:10");
     expect(screen.getByText("다음: 맨몸 스쿼트")).toBeTruthy();
   });
 
   it("운동 구간에는 종목과 남은 초를 크게 보여준다", () => {
-    view(10);
+    view(13);
 
     expect(screen.getByTestId("interval-phase").textContent).toBe("맨몸 스쿼트");
-    expect(screen.getByTestId("interval-countdown").textContent).toBe("00:20");
     expect(screen.getByTestId("interval-round").textContent).toBe(
       "1라운드 / 8라운드",
     );
@@ -74,19 +83,18 @@ describe("IntervalSessionOverlay", () => {
   });
 
   it("20초가 지나면 휴식과 다음 종목을 알린다", () => {
-    view(30);
+    view(33);
 
     expect(screen.getByTestId("interval-phase").textContent).toBe("휴식");
-    expect(screen.getByTestId("interval-countdown").textContent).toBe("00:10");
     expect(screen.getByText("다음: 니 푸시업")).toBeTruthy();
   });
 
   it("시간만 흐르면 다음 종목으로 넘어간다 — 누르는 것이 없다", () => {
-    const first = view(10);
+    const first = view(13);
     expect(screen.getByTestId("interval-phase").textContent).toBe("맨몸 스쿼트");
     first.unmount();
 
-    view(40);
+    view(43);
     expect(screen.getByTestId("interval-phase").textContent).toBe("니 푸시업");
     expect(screen.getByTestId("interval-round").textContent).toBe(
       "2라운드 / 8라운드",
@@ -94,7 +102,7 @@ describe("IntervalSessionOverlay", () => {
   });
 
   it("지금 하는 종목을 목록에서 표시한다", () => {
-    view(70);
+    view(73);
 
     const current = screen
       .getAllByRole("listitem")
@@ -131,7 +139,7 @@ describe("IntervalSessionOverlay", () => {
   });
 
   it("16분 코스는 32라운드를 센다", () => {
-    view(260, { minutes: 16 });
+    view(263, { minutes: 16 });
 
     expect(screen.getByTestId("interval-round").textContent).toBe(
       "9라운드 / 32라운드",

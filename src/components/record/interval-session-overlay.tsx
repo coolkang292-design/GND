@@ -32,11 +32,6 @@ export type IntervalSessionOverlayProps = {
   onStop: () => void;
 };
 
-function clock(seconds: number): string {
-  const safe = Math.max(0, Math.ceil(seconds));
-  return `${String(Math.floor(safe / 60)).padStart(2, "0")}:${String(safe % 60).padStart(2, "0")}`;
-}
-
 export function IntervalSessionOverlay({
   open,
   exerciseNames,
@@ -60,7 +55,6 @@ export function IntervalSessionOverlay({
         : cue.phase === "prep"
           ? "준비"
           : "끝났어요";
-  const secondsLeft = cue.phase === "done" ? 0 : cue.secondsLeft;
   const upcoming =
     cue.phase === "work" || cue.phase === "rest" || cue.phase === "prep"
       ? nameAt(
@@ -91,22 +85,25 @@ export function IntervalSessionOverlay({
       </header>
 
       <div className="flex flex-1 flex-col items-center justify-center gap-3">
+        {/* 숫자가 빠진 자리를 종목 이름이 채운다 — 이제 이게 화면의 주인공이다 */}
         <p
           data-testid="interval-phase"
-          className={`text-center text-3xl font-black leading-9 ${
-            cue.phase === "work" ? "text-text" : "text-muted"
+          className={`text-center text-[2.75rem] font-black leading-[3rem] ${
+            cue.phase === "work" ? "text-accent" : "text-muted"
           }`}
         >
           {heading}
         </p>
-        <p
-          data-testid="interval-countdown"
-          className={`font-mono text-[4.5rem] font-black leading-none tabular-nums ${
-            cue.phase === "work" ? "text-accent" : "text-text"
-          }`}
-        >
-          {clock(secondsLeft)}
-        </p>
+        {/*
+          카운트다운을 뺐다 (사용자 지시 2026-08-13).
+
+          음원의 3·2·1 멘트와 화면 숫자가 1~2초라도 어긋나면 그게 제일 먼저
+          보인다. **숫자를 세는 건 음악이 한다** — 화면은 지금 무엇을 하고
+          다음이 무엇인지만 말한다.
+
+          ⚠️ 종목 전환은 여전히 `intervalCueAt`이 정한다. 숫자를 지웠다고
+             동기화 문제가 사라진 것이 아니라, **덜 보이게** 된 것이다.
+        */}
         {upcoming && (
           <p className="text-sm font-bold text-muted">다음: {upcoming}</p>
         )}
