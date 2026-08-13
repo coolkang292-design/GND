@@ -15,6 +15,13 @@ export type WorkoutRoutine = {
   userId: string;
   name: string;
   exercises: PlanExercise[];
+  /**
+   * 전신 인터벌 코스 분수 (0074). **null이면 일반 운동 루틴이다.**
+   *
+   * 예정표(0059)·지난 기록(2026-08-07)이 이미 코스를 싣고 다니는데 루틴만
+   * 안 실어서, 인터벌을 루틴으로 저장하면 맨몸 4종목만 남았다.
+   */
+  tabataMinutes: number | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -24,6 +31,7 @@ type WorkoutRoutineRow = {
   user_id: string;
   name: string;
   exercises: unknown;
+  tabata_minutes: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -36,6 +44,7 @@ function fromRow(row: WorkoutRoutineRow): WorkoutRoutine {
     userId: row.user_id,
     name: row.name,
     exercises,
+    tabataMinutes: row.tabata_minutes ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -75,6 +84,8 @@ export async function saveRoutine(input: {
   userId: string;
   name: string;
   exercises: PlanExercise[];
+  /** 인터벌이면 코스 분수 (0074). 안 넘기면 일반 운동 루틴이다 */
+  tabataMinutes?: number | null;
 }): Promise<WorkoutRoutine> {
   const supabase = getSupabaseBrowserClient();
   const { data, error } = await supabase
@@ -83,6 +94,7 @@ export async function saveRoutine(input: {
       user_id: input.userId,
       name: input.name.trim(),
       exercises: input.exercises,
+      tabata_minutes: input.tabataMinutes ?? null,
     })
     .select()
     .single();

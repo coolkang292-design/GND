@@ -552,8 +552,8 @@ export const STRENGTH_PROGRAMS = [
   {
     key: "chest-frame-6w",
     version: 1,
-    eyebrow: "옷태를 세우는 가슴",
-    title: "상체 앞면을 단단하게 만드는 6주",
+    eyebrow: "티셔츠 핏을 살리는 가슴",
+    title: "두껍고 탄탄한 상체를 만드는 6주",
     description: "가슴을 중심으로 상체 앞면의 힘과 형태를 만듭니다.",
     durationMinutes: [50, 65],
     coverImage: "/program-assets/chest.webp",
@@ -688,8 +688,8 @@ export const STRENGTH_PROGRAMS = [
   {
     key: "arm-outline-6w",
     version: 1,
-    eyebrow: "소매를 채우는 팔",
-    title: "팔의 두께와 윤곽을 만드는 6주",
+    eyebrow: "반팔이 달라지는 팔",
+    title: "두께와 윤곽을 동시에 만드는 6주",
     description: "팔의 앞뒤를 고르게 훈련해 두께와 윤곽을 만듭니다.",
     durationMinutes: [45, 60],
     coverImage: "/program-assets/arms.webp",
@@ -831,8 +831,8 @@ export const STRENGTH_PROGRAMS = [
   {
     key: "lower-balance-6w",
     version: 1,
-    eyebrow: "실루엣을 완성하는 하체",
-    title: "하체의 힘과 균형을 세우는 6주",
+    eyebrow: "몸의 기반을 만드는 하체",
+    title: "강하고 균형 잡힌 하체를 만드는 6주",
     description: "하체 전반을 고르게 훈련해 힘과 균형을 만듭니다.",
     durationMinutes: [50, 65],
     coverImage: "/program-assets/lower-v2.webp",
@@ -967,8 +967,8 @@ export const STRENGTH_PROGRAMS = [
   {
     key: "lean-body-6w",
     version: 1,
-    eyebrow: "몸은 가볍게, 인상은 선명하게",
-    title: "근육을 지키는 체지방 관리 6주",
+    eyebrow: "살은 빼고, 몸은 선명하게",
+    title: "근육은 지키면서 체지방을 낮추는 6주",
     description:
       "근력과 근육을 지키며 선명한 몸을 만드는 데 집중합니다. 체중 변화는 식사와 일상 활동량의 영향도 받습니다. 이 프로그램은 근력과 근육량을 지키며 꾸준히 움직이는 습관을 만드는 데 초점을 둡니다.",
     durationMinutes: [40, 55],

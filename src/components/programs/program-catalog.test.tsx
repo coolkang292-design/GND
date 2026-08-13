@@ -31,15 +31,15 @@ describe("ProgramCatalog", () => {
       expect(cover.className).toContain("aspect-[4/3]");
     }
     for (const title of [
-      "옷태를 세우는 가슴",
-      "소매를 채우는 팔",
-      "실루엣을 완성하는 하체",
-      "몸은 가볍게, 인상은 선명하게",
+      "티셔츠 핏을 살리는 가슴",
+      "반팔이 달라지는 팔",
+      "몸의 기반을 만드는 하체",
+      "살은 빼고, 몸은 선명하게",
     ]) {
       expect(screen.getByText(title)).toBeTruthy();
     }
 
-    fireEvent.click(screen.getByText("소매를 채우는 팔"));
+    fireEvent.click(screen.getByText("반팔이 달라지는 팔"));
     expect(onPick).toHaveBeenCalledWith("arm-outline-6w");
   });
 

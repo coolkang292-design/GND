@@ -863,6 +863,27 @@ export async function awardWorkoutPhotoXp(
  * 없는 종목은 그날 하지 않은 운동이므로 목록에서 뺀다.
  * 값(중량·횟수·거리·시간)은 복사하되 완료 여부는 복사하지 않는다.
  */
+/**
+ * 그 세션의 종목 이름만. **완료 여부로 거르지 않는다** (2026-08-13).
+ *
+ * 인터벌 복사가 쓴다. 인터벌은 횟수를 코스가 정하므로(4분 2회·8분 4회·16분 8회)
+ * 세트가 완료로 저장됐는지와 무관하게 이름만 있으면 복원할 수 있다 —
+ * 는 완료 세트만 주기 때문에 여기에 쓸 수 없다.
+ */
+export async function getSessionExerciseNames(
+  sessionId: string,
+): Promise<string[]> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("workout_exercises")
+    .select("exercise_name, sort_order")
+    .eq("session_id", sessionId)
+    .order("sort_order", { ascending: true });
+  if (error) throw error;
+  return ((data ?? []) as { exercise_name: string }[]).map(
+    (row) => row.exercise_name,
+  );
+}
 export async function getSessionExerciseStructure(sessionId: string): Promise<
   {
     name: string;

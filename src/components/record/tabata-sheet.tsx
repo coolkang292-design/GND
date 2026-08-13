@@ -77,6 +77,13 @@ type TabataProps = {
    *    누르면 된다. 예전 동작으로 내려앉을 뿐 막히지 않는다.
    */
   autoStart?: boolean;
+  /**
+   * 열자마자 종목 고르기 화면을 편다 (사용자 지시 2026-08-13).
+   *
+   * 상황별 추천의 인터벌 칸에서 온 경우다 — 이미 "인터벌을 하겠다"고 고른
+   * 사람에게 빈 목록과 "운동 고르기" 버튼을 한 번 더 보여 줄 이유가 없다.
+   */
+  openPickerOnMount?: boolean;
 };
 
 function TabataSheetBody({
@@ -94,13 +101,14 @@ function TabataSheetBody({
   initialPicked,
   initialMinutes,
   autoStart,
+  openPickerOnMount,
 }: TabataProps) {
   // 시트는 닫으면 언마운트된다 — 예약된 값은 초기값으로 넣으면 되고,
   // effect 안에서 setState 할 필요가 없다 (교훈 4).
   const [picked, setPicked] = useState<CatalogExercise[]>(initialPicked ?? []);
   const [minutes, setMinutes] = useState<TabataMinutes>(initialMinutes ?? 4);
   const [pickError, setPickError] = useState<string | null>(null);
-  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(openPickerOnMount === true);
   const [phase, setPhase] = useState<"setup" | "playing" | "finishing">("setup");
   /** 음원의 현재 위치 — 지금 몇 라운드인지는 이 값이 정한다 */
   const [elapsed, setElapsed] = useState(0);

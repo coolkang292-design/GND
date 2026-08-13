@@ -11,10 +11,10 @@ import {
 
 const EXPECTED = [
   ["shoulder-frame-6w", "시선이 머무는 어깨", "상체의 틀을 넓히는 6주"],
-  ["chest-frame-6w", "옷태를 세우는 가슴", "상체 앞면을 단단하게 만드는 6주"],
-  ["arm-outline-6w", "소매를 채우는 팔", "팔의 두께와 윤곽을 만드는 6주"],
-  ["lower-balance-6w", "실루엣을 완성하는 하체", "하체의 힘과 균형을 세우는 6주"],
-  ["lean-body-6w", "몸은 가볍게, 인상은 선명하게", "근육을 지키는 체지방 관리 6주"],
+  ["chest-frame-6w", "티셔츠 핏을 살리는 가슴", "두껍고 탄탄한 상체를 만드는 6주"],
+  ["arm-outline-6w", "반팔이 달라지는 팔", "두께와 윤곽을 동시에 만드는 6주"],
+  ["lower-balance-6w", "몸의 기반을 만드는 하체", "강하고 균형 잡힌 하체를 만드는 6주"],
+  ["lean-body-6w", "살은 빼고, 몸은 선명하게", "근육은 지키면서 체지방을 낮추는 6주"],
 ];
 
 const catalogForFirstProgram = (): CatalogExercise[] => [

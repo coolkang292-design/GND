@@ -171,6 +171,7 @@ import {
   markRecordBeaten,
   newSet,
   saveDraft,
+  getSessionExerciseNames,
   saveSessionExercises,
   startWorkout,
   toVolumeSets,
@@ -232,6 +233,8 @@ type TabataPrefill = {
    * `준비하기`로 남아 있었다.
    */
   autoStart?: boolean;
+  /** 열자마자 종목 고르기 화면을 편다 (상황별 추천에서 옴) */
+  openPicker?: boolean;
 };
 
 function errorMessage(e: unknown): string {
@@ -975,6 +978,27 @@ function WorkoutScreen({ userId }: { userId: string }) {
    * 통째로 여는 별개 흐름이다.)
    */
   async function addRoutine(routine: WorkoutRoutine): Promise<boolean> {
+    /*
+      인터벌 루틴은 **인터벌로 되살린다** (0074, 사용자 지시 2026-08-13).
+      지난 기록 경로()와 같은 규칙이다 — 같은 운동을
+      어디서 부르느냐에 따라 결과가 달라지면 안 된다.
+    */
+    const resume = tabataResumeFromSession({
+      session: routine.tabataMinutes
+        ? {
+            tabataMinutes: routine.tabataMinutes,
+            exerciseNames: routine.exercises.map((item) => item.name),
+          }
+        : undefined,
+      catalog,
+    });
+    if (resume) {
+      closePicker();
+      setSubTab("workout");
+      void openTabataSheet({ picked: resume.picked, minutes: resume.minutes });
+      return true;
+    }
+
     const imported = toDraftExercises(routine.exercises, localId);
     const merged = mergeImportedExercises(draft.exercises, imported);
 
@@ -1017,7 +1041,18 @@ function WorkoutScreen({ userId }: { userId: string }) {
       return false;
     }
     try {
-      const saved = await saveRoutine({ userId, name, exercises });
+      /*
+        인터벌이면 **코스 분수도 함께 저장한다** (0074, 사용자 지시 2026-08-13).
+
+        예전에는 맨몸 4종목만 남아서, 불러오면 음원도 코스도 없는 일반 운동이
+        됐다. 예정표(0059)·지난 기록(2026-08-07)은 이미 코스를 싣고 다닌다.
+      */
+      const saved = await saveRoutine({
+        userId,
+        name,
+        exercises,
+        tabataMinutes: draft.tabataMinutes ?? null,
+      });
       setRoutines((current) => [saved, ...(current ?? [])]);
       showToast(`'${saved.name}' 루틴을 저장했어요`);
       return true;
@@ -1447,12 +1482,27 @@ function WorkoutScreen({ userId }: { userId: string }) {
   ): Promise<WorkoutPlan> {
     setBusy(true);
     try {
-      const items = await getSessionExerciseStructure(sessionId);
-      if (items.length === 0) {
+      const course = asTabataMinutes(tabataMinutes);
+      /*
+        인터벌은 **코스로 복사한다** (사용자 신고 2026-08-13).
+
+        평소 복사는 완료 세트만 가져간다 — 안 한 운동을 계획에 담지 않으려는
+        규칙이다. 그런데 인터벌은 횟수를 사람이 채우는 게 아니라 **코스가**
+        정한다(4분 2회·8분 4회·16분 8회). 완료 여부로 거르면 세트가 완료로
+        저장되지 않은 세션은 "복사할 종목이 없어요"로 막힌다 — 실제로 그렇게
+        막혔다.
+
+        지난 기록을 인터벌로 되살리는 경로()와 같은
+        규칙이다: **이름과 코스만 있으면 된다.**
+      */
+      const items = course
+        ? []
+        : await getSessionExerciseStructure(sessionId);
+      if (!course && items.length === 0) {
         throw new Error("복사할 종목이 없어요");
       }
       const byName = new Map(catalog.map((c) => [c.name, c]));
-      const exercises: LocalExercise[] = items.map((it) => ({
+      let exercises: LocalExercise[] = items.map((it) => ({
         key: localId(),
         name: it.name,
         bodyPart: byName.get(it.name)?.body_part ?? it.bodyPart ?? "코어",
@@ -1461,7 +1511,15 @@ function WorkoutScreen({ userId }: { userId: string }) {
         isCustom: byName.get(it.name)?.is_custom ?? false,
         sets: it.sets,
       }));
-      const course = asTabataMinutes(tabataMinutes);
+      if (course) {
+        // 이름만 있으면 코스가 세트를 만든다 — 위 주석 참조
+        const logged = await getSessionExerciseNames(sessionId);
+        const picked = tabataPickFromNames(logged, catalog);
+        if (picked.length === 0) {
+          throw new Error("복사할 종목이 없어요");
+        }
+        exercises = tabataDraftExercises(picked, localId, course);
+      }
       const plan = await saveWorkoutPlan({
         userId,
         planDate,
@@ -2418,6 +2476,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
         open={tabataOpen}
         onPlayingChange={setIntervalPlaying}
         autoStart={tabataPrefill?.autoStart}
+        openPickerOnMount={tabataPrefill?.openPicker}
         catalog={catalog}
         onClose={() => {
           setTabataOpen(false);
@@ -2476,7 +2535,12 @@ function WorkoutScreen({ userId }: { userId: string }) {
           // 상황별 추천의 인터벌 칸 — 종목을 담지 않고 인터벌을 연다
           closePicker();
           setSubTab("workout");
-          void openTabataSheet();
+          // 이미 "인터벌을 하겠다"고 고른 사람이다 — 바로 종목 고르기로 보낸다
+          void openTabataSheet({
+            picked: [],
+            minutes: 4,
+            openPicker: true,
+          });
         }}
         onCreateCustom={handleCreateCustom}
         challengeCategories={challengeCategories}

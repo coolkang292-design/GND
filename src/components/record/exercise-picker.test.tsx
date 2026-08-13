@@ -72,6 +72,7 @@ function routine(name: string, ...exerciseNames: string[]): WorkoutRoutine {
       isCustom: false,
       sets: [{ weightKg: 60, reps: 10, distanceKm: 0, durationMin: 0 }],
     })),
+    tabataMinutes: null,
     createdAt: "2026-08-01T00:00:00Z",
     updatedAt: "2026-08-01T00:00:00Z",
   };
