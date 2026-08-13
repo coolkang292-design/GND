@@ -513,6 +513,39 @@ function WorkoutScreen({ userId }: { userId: string }) {
    *    덮지 않는 것이 핵심이라, 판정을 여기 인라인으로 쓰면 규칙이 갈라진다.
    * ⚠️ 실패해도 조용히 지나간다. 계획을 못 불러온 것이 기록 자체를 막으면 안 된다.
    */
+  /*
+    운동 탭으로 돌아올 때마다 **오늘 인터벌 계획을 다시 본다**
+    (사용자 지적 2026-08-13).
+
+    달력과 운동은 같은 페이지의 두 탭이라 컴포넌트가 다시 마운트되지 않는다.
+    아래 자동 담기 이펙트는 화면을 처음 열 때 한 번만 돌기 때문에, 달력에서
+    인터벌 계획을 만들고 운동 탭으로 넘어오면 버튼이 안 떴다.
+
+    ⚠️ 조회는 사용자가 탭을 누를 때만 돈다 — 주기 실행이 아니다.
+    ⚠️ 운동 중에는 건너뛴다. 진행 중인 세션 위에 시작 버튼을 세우지 않는다.
+  */
+  useEffect(() => {
+    if (subTab !== "workout" || !userId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const plans = await getWorkoutPlans(userId);
+        if (cancelled) return;
+        const todayKey = dayKey(
+          new Date(),
+          Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Seoul",
+        );
+        const todayPlan = plans.find((plan) => plan.planDate === todayKey);
+        setTodayIntervalPlan(todayPlan?.tabataMinutes ? todayPlan : null);
+      } catch {
+        // 못 읽으면 버튼만 안 뜬다 — 달력에서 시작하면 된다
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [subTab, userId]);
+
   const autoLoadTriedRef = useRef(false);
   useEffect(() => {
     if (autoLoadTriedRef.current || catalog.length === 0) return;

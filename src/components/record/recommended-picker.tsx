@@ -70,7 +70,10 @@ export function RecommendedPicker({
 }) {
   const byPart = mode === "part";
 
-  const situations = visibleSituations(challengeCategories);
+  const situations = visibleSituations(
+    challengeCategories,
+    onStartInterval !== undefined,
+  );
   // 목표를 모르면 '챌린지 목표에 맞게'가 목록에서 빠진다 — 그게 지금 고른
   // 상황이었다면 첫 번째로 되돌린다(빈 목록을 보여주지 않는다)
   const activeSituation =

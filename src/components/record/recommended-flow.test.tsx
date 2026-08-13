@@ -227,6 +227,12 @@ describe("상황별 추천 (2026-08-06)", () => {
         onPickPast={vi.fn()}
         onCreateCustom={vi.fn()}
         challengeCategories={challengeCategories}
+        /*
+          인터벌 칸은 **이걸 넘긴 화면에서만** 보인다 (2026-08-13).
+          못 여는 화면(달력의 계획 만들기)에서 남겨 두면 추천 목록이 그냥 떠서
+          담는 순간 3세트 10회짜리 일반 계획이 조용히 만들어진다.
+        */
+        onStartInterval={vi.fn()}
       />,
     );
   }
@@ -244,6 +250,27 @@ describe("상황별 추천 (2026-08-06)", () => {
     }
     // ⚠️ 눌러도 빈 목록인 막다른 길을 주지 않는다
     expect(queryByText("챌린지 목표에 맞게")).toBeNull();
+  });
+
+  it("인터벌을 열 수 없는 화면에서는 그 칸이 없다", () => {
+    // 사용자 지적 2026-08-13 — 달력 계획 만들기에서 골랐더니 일반 계획이 됐다
+    const { queryByText } = render(
+      <ExercisePicker
+        open
+        initialMode="situation"
+        catalog={CATALOG}
+        pastSessions={[]}
+        pastLoading={false}
+        onClose={vi.fn()}
+        onPickMany={vi.fn()}
+        onPickConfigured={vi.fn()}
+        onPickPast={vi.fn()}
+        onCreateCustom={vi.fn()}
+        challengeCategories={null}
+      />,
+    );
+
+    expect(queryByText("전신 인터벌 할래요")).toBeNull();
   });
 
   it("챌린지 목표를 알면 그 카드가 생긴다", () => {

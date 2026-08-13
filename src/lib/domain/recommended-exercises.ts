@@ -305,8 +305,21 @@ export function resolveSituation(
  */
 export function visibleSituations(
   challengeCategories: ReadonlySet<GoalCategory> | null,
+  /**
+   * 인터벌을 열 수 있는 화면인가 (사용자 지적 2026-08-13).
+   *
+   * ⚠️ 인터벌 칸은 다른 칸과 **하는 일이 다르다** — 종목을 담는 대신 인터벌을
+   *    연다. 그럴 수 없는 화면(달력의 계획 만들기)에서는 **아예 숨긴다.**
+   *    남겨 두면 추천 목록이 그냥 떠서, 담는 순간 3세트 10회짜리 **일반 계획**이
+   *    조용히 만들어진다 — 사용자가 그렇게 당했다.
+   *
+   *    달력에서 인터벌을 계획하는 길은 아직 **지난 인터벌 기록 복사**뿐이다.
+   */
+  canStartInterval = true,
 ): Situation[] {
   return SITUATIONS.filter(
-    (s) => s.key !== "challenge" || challengeCategories !== null,
+    (s) =>
+      (s.key !== "challenge" || challengeCategories !== null) &&
+      (s.key !== "interval" || canStartInterval),
   );
 }

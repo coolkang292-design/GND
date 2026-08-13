@@ -118,6 +118,20 @@ describe("상황별 추천", () => {
     expect(SITUATIONS).toHaveLength(6);
   });
 
+  /**
+   * 사용자 지적 2026-08-13 — 달력의 계획 만들기에서 이 칸을 골랐더니
+   * 3세트 10회짜리 **일반 계획**이 조용히 만들어졌다. 그 화면은 인터벌을
+   * 열 수 없으므로 칸 자체를 숨긴다.
+   */
+  it("인터벌을 열 수 없는 화면에서는 그 칸을 숨긴다", () => {
+    const withInterval = visibleSituations(null, true).map((s) => s.key);
+    const without = visibleSituations(null, false).map((s) => s.key);
+
+    expect(withInterval).toContain("interval");
+    expect(without).not.toContain("interval");
+    // 나머지 칸은 그대로다 — 인터벌 하나만 빠진다
+    expect(without.length).toBe(withInterval.length - 1);
+  });
   it("전신 인터벌 칸이 '집에서 할래요' 자리를 대신한다", () => {
     // 사용자 지시 2026-08-13 — 인터벌을 프로그램으로만 시작할 수 있었다.
     expect(SITUATIONS.map((s) => String(s.key))).not.toContain("home");
