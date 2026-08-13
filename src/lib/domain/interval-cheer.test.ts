@@ -38,10 +38,44 @@ describe("인터벌 응원 문구", () => {
     expect(intervalCheer(last)).toContain("마지막 라운드");
   });
 
-  it("마지막 운동을 앞둔 휴식은 한 번만 더라고 말한다", () => {
+  it("마지막 운동을 앞둔 휴식은 끝이 가깝다고 말한다", () => {
     const rest = intervalCueAt(13 + 6 * 30 + 25, 4);
     expect(rest).toMatchObject({ phase: "rest", round: 6 });
-    expect(intervalCheer(rest)).toContain("한 번만 더");
+    expect(intervalCheer(rest)).toContain("마지막");
+  });
+
+  /**
+   * 사용자 지적 2026-08-13 — 문구가 구간에 안 맞았다.
+   *
+   * 운동 20초는 **힘을 쓰는 구간**이라 쉬라는 말이 들어가면 안 되고, 휴식
+   * 10초에는 그 안에 할 수 없는 일을 시키면 안 된다.
+   */
+  it("운동 문구가 쉬라고 하지 않는다", () => {
+    for (let round = 0; round < 8; round += 1) {
+      const cue = intervalCueAt(13 + round * 30 + 5, 4);
+      const text = intervalCheer(cue) ?? "";
+      for (const banned of ["편하게", "쉬어", "천천히", "힘 빼"]) {
+        expect(text).not.toContain(banned);
+      }
+    }
+  });
+
+  it("휴식 문구가 10초에 못 할 일을 시키지 않는다", () => {
+    for (let round = 0; round < 8; round += 1) {
+      const cue = intervalCueAt(13 + round * 30 + 25, 4);
+      const text = intervalCheer(cue) ?? "";
+      for (const banned of ["물", "스트레칭", "마시"]) {
+        expect(text).not.toContain(banned);
+      }
+    }
+  });
+
+  it("운동 문구는 한눈에 읽히게 짧다", () => {
+    // 숨이 차고 자세를 잡는 중이라 긴 문장은 읽히지 않는다
+    for (let round = 0; round < 8; round += 1) {
+      const text = intervalCheer(intervalCueAt(13 + round * 30 + 5, 4)) ?? "";
+      expect(text.length).toBeLessThanOrEqual(14);
+    }
   });
 
   it("시작 준비와 블록 사이 준비의 말이 다르다", () => {
