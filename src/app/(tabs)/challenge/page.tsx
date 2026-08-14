@@ -20,7 +20,11 @@ import { challengeLevel, levelLabel } from "@/lib/domain/level";
 // ⚠️ 이 파일에 있던 지역 함수 `periodDays`를 2026-08-13에 여기로 옮겼다. 홈
 //    챌린지 요약이 같은 산수를 세 번째로 짜는 것을 막기 위해서다. 되돌리지 마라 —
 //    화면마다 D-day가 하루씩 달라지는 종류의 사고다.
-import { challengeDday, inclusiveDays } from "@/lib/domain/challenge-time";
+import {
+  challengeDday,
+  challengeStartHint,
+  inclusiveDays,
+} from "@/lib/domain/challenge-time";
 import { dayKey } from "@/lib/domain/time";
 import { getMyGroups, getMyProfile } from "@/lib/crew";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -453,6 +457,19 @@ function ChallengeScreen({ userId }: { userId: string }) {
   const todayKey = dayKey(new Date(), timeZone);
   const endedByDate = challenge ? challenge.end_date < todayKey : false;
   const dday = challenge ? challengeDday(todayKey, challenge.end_date) : 0;
+
+  // setup 구간의 안내문·버튼 라벨. 조립은 도메인에서 한다 — 이유는
+  // `challengeStartHint` 주석 참조(화면은 비동기 조회 뒤라 글자를 테스트로 못 잡는다).
+  const startHint = challenge
+    ? challengeStartHint({
+        startDateKey: challenge.start_date,
+        todayKey,
+        allSet,
+        allApproved,
+        approvedCount,
+        memberCount: members.length,
+      })
+    : null;
 
   async function handleCreate(v: SetupSubmit) {
     setBusy(true);
@@ -906,9 +923,17 @@ function ChallengeScreen({ userId }: { userId: string }) {
                 </div>
               );
             })}
-            <p className="mt-2 text-[11px] text-muted">
-              <UiIcon name="lock" /> <b>전원 KPI 설정 + 전원 동의</b> 시 챌린지가 시작돼요.
-            </p>
+            {/* ⚠️⚠️ **옛 문구는 자물쇠 + `전원 KPI 설정 + 전원 동의 시 챌린지가
+                시작돼요`였고, 그건 사실이 아니었다.** `autostart_due_challenges()`가
+                시작일에 동의 없이 챌린지를 연다(`docs/db-current-schema.sql:415` —
+                목표가 없는 참가자만 `dropped`로 빼고 나머지는 그대로 시작한다).
+                화면만 옛말을 해서 사용자는 안 막힌 문 앞에서 남을 기다렸다.
+
+                ⚠️ 자물쇠를 떼면서 **다른 아이콘으로 바꾸지 않았다.**
+                `public/ui-icons/`에 달력 그림이 없다 — 없는 이름을 주면 `UiIcon`이
+                `/ui-icons/<name>.webp`를 그대로 요청해서 **깨진 이미지가 조용히
+                뜬다.** 글자만으로 충분하다. */}
+            <p className="mt-2 text-[11px] text-muted">{startHint?.notice}</p>
           </section>
 
           {/* 내 동의 버튼 — 전원 목표 세팅 후에만 의미 있음 */}
@@ -932,16 +957,18 @@ function ChallengeScreen({ userId }: { userId: string }) {
             </button>
           )}
 
+          {/* ⚠️ **금색 채움에서 테두리형으로 내렸다** (2026-08-14). 이 버튼은
+              시작하는 **유일한 문이 아니라 지름길**이다 — 시작일이 오면
+              autostart가 알아서 연다. 금색으로 채워 두면 "이걸 눌러야만
+              시작된다"로 읽히고, 그게 이번에 고친 오해의 절반이었다.
+              색 조합은 위 `＋ 챌린지 추가하기`와 같다 — 같은 무게의 보조 행동이다.
+              라벨 조립은 `challengeStartHint`가 한다. */}
           <button
             onClick={handleStart}
-            disabled={busy || !allSet || !allApproved}
-            className="h-12 rounded-card bg-accent text-sm font-extrabold text-accent-ink disabled:opacity-50"
+            disabled={busy || !startHint?.canStartNow}
+            className="h-12 rounded-card border border-accent/40 bg-accent-weak text-sm font-extrabold text-accent disabled:opacity-50"
           >
-            {!allSet
-              ? "전원 목표 세팅 대기 중…"
-              : !allApproved
-                ? `전원 동의 대기 중… (${approvedCount}/${members.length})`
-                : <>챌린지 시작 <UiIcon name="finish" /></>}
+            {startHint?.buttonLabel}
           </button>
           {challenge.created_by === userId && (
             <button

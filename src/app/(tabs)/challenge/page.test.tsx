@@ -592,9 +592,14 @@ describe("ChallengePage setup — 자동 시작을 말한다", () => {
     arrangeSetup();
     render(<ChallengePage />);
 
-    const button = await screen.findByRole("button", {
-      name: /지금 바로 시작하기/,
-    });
-    expect(button).toBeEnabled();
+    // ⚠️ 이름을 **정확히** 맞춘다. `/지금 바로 시작하기/` 정규식으로 찾으면
+    //    조회가 끝나기 전의 `지금 바로 시작하기 (전원 목표 설정 필요)`까지
+    //    걸려서, 아직 잠긴 중간 상태에서 단언하게 된다(실측으로 잡았다).
+    // ⚠️ 이 저장소에는 jest-dom 매처가 없다 — `toBeEnabled`는 Chai 속성 오류가
+    //    난다. DOM 속성을 직접 읽는다.
+    const button = (await screen.findByRole("button", {
+      name: "지금 바로 시작하기",
+    })) as HTMLButtonElement;
+    expect(button.disabled).toBe(false);
   });
 });
