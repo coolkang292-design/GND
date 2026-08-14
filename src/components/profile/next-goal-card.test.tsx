@@ -7,7 +7,8 @@ const goal: Achievement = {
   key: "workout_10", title: "열 번 찍었개", description: "운동 10회 달성",
   emoji: "🦴", metricKey: "workout_count", rarity: "common", rewardPoint: 300,
   repeatable: false, currentValue: 7, targetValue: 10, progress: 0.7,
-  remainingValue: 3, unlocked: false, count: 0,
+  // 다음 목표 = 아직 못 딴 배지라 획득일이 없다 (0077에서 필수 필드가 됐다)
+  remainingValue: 3, unlocked: false, count: 0, earnedAt: null,
 };
 
 describe("NextGoalCard", () => {

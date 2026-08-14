@@ -10,6 +10,11 @@ import {
   type Achievement,
 } from "@/lib/domain/achievements";
 import type { BadgeMetricKey } from "@/lib/domain/badges";
+// ⚠️ 날짜 포맷을 새로 짜지 마라. `formatMonthDay`는 `"YYYY-MM-DD"` 문자열만 받고,
+//    `Date`를 `toLocaleDateString`에 그대로 넣으면 기기 타임존에 따라 하루가
+//    밀린다. `dayKey`로 KST 날짜를 먼저 정하고 넘긴다.
+import { formatMonthDay } from "@/lib/domain/challenge-time";
+import { dayKey } from "@/lib/domain/time";
 import { ProgressBar } from "./progress-bar";
 import { RarityPill } from "./rarity-pill";
 
@@ -55,7 +60,19 @@ function AchievementRow({ a }: { a: Achievement }) {
             {cur.amount} / {tgt.amount}{tgt.unit}
           </span>
           {a.unlocked ? (
-            <span className="text-[11px] font-extrabold text-accent">+{a.rewardPoint} P</span>
+            /* 0077: 딴 날짜를 포인트 왼쪽에 붙인다. **새 줄을 만들지 않는다** —
+               이 행은 이미 4단(그림·이름·희귀도·진행)이라 줄을 더하면 시트가
+               길어져 스크롤이 늘고, 미획득 행과 높이가 어긋난다.
+               ⚠️ 반복 횟수(`×N`)를 여기 또 넣지 마라 — 위쪽 배지 이름 옆에
+                  이미 그려진다. 두 곳에 적으면 같은 정보가 한 행에 두 번 뜬다. */
+            <span className="inline-flex items-baseline gap-1.5 text-[11px]">
+              {a.earnedAt && (
+                <span className="font-bold text-faint">
+                  {formatMonthDay(dayKey(a.earnedAt, "Asia/Seoul"))} 획득
+                </span>
+              )}
+              <span className="font-extrabold text-accent">+{a.rewardPoint} P</span>
+            </span>
           ) : (
             <span className="inline-flex items-center gap-1 text-[11px] text-muted">
               {/* 옛 표기는 `🔒`였다 (2026-08-07 2차 시안으로 교체) */}

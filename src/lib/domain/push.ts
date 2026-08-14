@@ -8,8 +8,11 @@ export type PushPayload = {
 const PUSH_URL_BY_TYPE: Record<string, string> = {
   reaction_received: "/feed",
   record_beaten: "/feed",
-  // 배지 진열대가 기록 탭 달력에 있다 (설계 2026-07-21)
-  badge_earned: "/record",
+  // ⚠️ **2026-08-14 정정: `/record` → `/profile`.** 옛 주석은 "배지 진열대가
+  //    기록 탭 달력에 있다(2026-07-21)"였는데, 그 뒤 진열대가 `GrowthHub`로
+  //    들어가면서 **내 정보 탭으로 옮겨졌다.** 라우팅만 안 따라와서, 알림은
+  //    "내 정보에서 확인해 보세요"라고 말하면서 기록 탭으로 보내고 있었다.
+  badge_earned: "/profile",
   // 크루의 레벨업 — 성장 허브가 내 정보 탭에 있다 (0029)
   level_up: "/profile",
   rank_change: "/challenge",
@@ -35,6 +38,10 @@ const PUSH_URL_BY_TYPE: Record<string, string> = {
   // 0054 — 5일 연속 달성으로 열린 2시간 열람창. 카드가 홈에 있다.
   // 창이 짧아서(2h) 목적지를 틀리면 도착 전에 닫힌다.
   challenge_peek_unlocked: "/home",
+  // 0077 — 시작 예고·탈락 통보. 둘 다 챌린지 탭에서 할 일이 있다
+  // (목표 세우기 / 다음 챌린지 찾기).
+  challenge_starting_soon: "/challenge",
+  challenge_dropped: "/challenge",
 };
 
 const DEFAULT_PUSH_URL = "/home";

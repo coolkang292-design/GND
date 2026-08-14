@@ -150,3 +150,60 @@ describe("완료율", () => {
     expect(o).toEqual({ done: 1, total: 2, pct: 50 });
   });
 });
+
+describe("획득일 (2026-08-14)", () => {
+  const metrics = {
+    workout_count: 12, total_minutes: 0, streak_days: 10,
+    weight_volume_kg: 0, cardio_distance_m: 0, record_beaten: 0,
+  };
+
+  /**
+   * ⚠️⚠️ `user_badges.earned_at`은 DB에 있고 `badges.ts:37`이 앱까지 실어 오는데,
+   * 화면이 한 번도 안 그렸다 — `badge-showcase.tsx`는 **정렬에만** 썼고
+   * `badge-sheet.tsx`는 아예 안 썼다. **배지가 수집물인데 수집 기록이 없었다.**
+   */
+  it("획득한 배지는 earnedAt을 갖는다", () => {
+    const [a] = buildAchievements(
+      [meta()],
+      [
+        {
+          badgeKey: "workout_10",
+          periodKey: "lifetime",
+          earnedAt: new Date("2026-07-20T01:00:00Z"),
+        },
+      ],
+      metrics,
+    );
+    expect(a.earnedAt?.toISOString()).toBe("2026-07-20T01:00:00.000Z");
+  });
+
+  it("미획득 배지는 null이다", () => {
+    const [a] = buildAchievements([meta()], [], { ...metrics, workout_count: 0 });
+    expect(a.earnedAt).toBeNull();
+  });
+
+  /**
+   * 반복 배지는 같은 key가 여러 행으로 온다(`EarnedBadge` 주석).
+   * 화면에 적을 것은 **마지막으로 딴 날**이다 — "언제 땄나"의 답으로
+   * 첫 회를 보여주면 최근에 또 딴 사실이 안 보인다.
+   */
+  it("반복 배지는 마지막으로 딴 날을 쓴다", () => {
+    const [a] = buildAchievements(
+      [
+        meta({
+          key: "streak_5",
+          metricKey: "streak_days",
+          threshold: 5,
+          repeatable: true,
+          repeatStep: 5,
+        }),
+      ],
+      [
+        { badgeKey: "streak_5", periodKey: "2026-07-20", earnedAt: new Date("2026-07-20T01:00:00Z") },
+        { badgeKey: "streak_5", periodKey: "2026-07-25", earnedAt: new Date("2026-07-25T01:00:00Z") },
+      ],
+      metrics,
+    );
+    expect(a.earnedAt?.toISOString()).toBe("2026-07-25T01:00:00.000Z");
+  });
+});

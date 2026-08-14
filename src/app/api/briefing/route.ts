@@ -119,6 +119,13 @@ export async function GET(req: Request) {
   const challengeTransitions: Record<string, unknown> = {};
   if (isDailySlot) {
     for (const fn of [
+      // 0077: 예고를 **먼저** 부른다. 예고는 `start_date = 내일`만 보고
+      // autostart는 `<= 오늘`만 보므로 서로 대상이 겹치지 않지만, 읽는 순서가
+      // 시간 순서(내일 예고 → 오늘 시작 → 어제 종료)와 같아야 나중에 읽는
+      // 사람이 헷갈리지 않는다.
+      // ⚠️ `remind_`는 service_role에만 EXECUTE가 있다(0077). 이 라우트는
+      //    `getSupabaseAdminClient()`라 괜찮지만, 화면에서 부르면 막힌다.
+      "remind_upcoming_challenges",
       "autostart_due_challenges",
       "autofinalize_due_challenges",
     ]) {

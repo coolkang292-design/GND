@@ -37,6 +37,8 @@ const TYPE_ICON: Record<NotificationRow["type"], string> = {
   bug_reported: "🐞",
   bug_fixed: "🔧",
   challenge_peek_unlocked: "🎟️", // 0054 — 열람창 2시간 시작
+  challenge_starting_soon: "⏰", // 0077 — 내일 시작해요
+  challenge_dropped: "💤", // 0077 — 목표가 없어 이번 회차에서 빠졌어요
 };
 
 /** 🔔 + 미읽음 뱃지 + 알림함 바텀시트 (§9 알림함 — durable 저장 원천) */
