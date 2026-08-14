@@ -64,3 +64,55 @@ export function formatMonthDay(dayKey: string): string {
   const [, month, date] = dayKey.split("-").map(Number);
   return `${month}월 ${date}일`;
 }
+
+export type ChallengeStartHint = {
+  /** 안내문 — **자동 시작이 주인공이다** */
+  notice: string;
+  /** 수동 시작 버튼 라벨 */
+  buttonLabel: string;
+  /** 수동 시작 버튼을 지금 누를 수 있는가 */
+  canStartNow: boolean;
+};
+
+/**
+ * setup 상태 챌린지의 시작 안내 (2026-08-14).
+ *
+ * ⚠️⚠️ **자동 시작이 주인공이고 수동 시작은 지름길이다.** 옛 화면은 자물쇠와
+ * 함께 `전원 KPI 설정 + 전원 동의 시 챌린지가 시작돼요`라고만 적었는데,
+ * `autostart_due_challenges()`가 시작일에 **동의 없이** 챌린지를 연다
+ * (`docs/db-current-schema.sql:415` — 목표가 없는 참가자만 `dropped`로 빼고
+ * 나머지는 그대로 시작한다). 화면이 사실과 반대로 말하고 있었고, 사용자는
+ * 안 막힌 문 앞에서 남을 기다렸다.
+ *
+ * ⚠️ 수동 경로를 **지우지 않는다.** 시작일을 앞당기고 싶을 때 쓰는 길이
+ * 사라지면 기능이 준다. 이름과 자리만 조연으로 내린다.
+ *
+ * ⚠️ 문구 조립을 화면이 아니라 여기서 하는 이유는 `viewing-pass.ts`의
+ * `challengePassCopy`와 같다 — 화면은 비동기 조회 뒤에 그려져서 글자를
+ * 테스트로 잡으려면 조립이 도메인에 있어야 한다.
+ */
+export function challengeStartHint(input: {
+  startDateKey: string;
+  todayKey: string;
+  allSet: boolean;
+  allApproved: boolean;
+  approvedCount: number;
+  memberCount: number;
+}): ChallengeStartHint {
+  const { startDateKey, todayKey, allSet, allApproved } = input;
+
+  // 시작일이 아직 안 왔을 때만 날짜를 적는다. 이미 도래했으면 autostart가
+  // 곧 처리하므로(크론 + 탭 진입) 날짜를 말하면 지난 날을 가리키게 된다.
+  const notice =
+    startDateKey > todayKey
+      ? `${formatMonthDay(startDateKey)}에 자동으로 시작돼요 · 그때까지 목표를 세우지 않으면 이번 챌린지에선 빠져요`
+      : "시작일이 됐어요 · 곧 자동으로 시작돼요";
+
+  const buttonLabel = !allSet
+    ? "지금 바로 시작하기 (전원 목표 설정 필요)"
+    : !allApproved
+      ? `지금 바로 시작하기 (동의 ${input.approvedCount}/${input.memberCount})`
+      : "지금 바로 시작하기";
+
+  return { notice, buttonLabel, canStartNow: allSet && allApproved };
+}
