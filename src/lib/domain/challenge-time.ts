@@ -52,3 +52,15 @@ export function challengeDaysLeft(
 export function challengeDday(todayKey: string, endDateKey: string): number {
   return inclusiveDays(todayKey, endDateKey) - 1;
 }
+
+/**
+ * `"2026-08-20"` → `"8월 20일"`.
+ *
+ * ⚠️ **`Date`를 쓰지 마라.** `new Date("2026-08-20")`은 UTC 자정으로 읽히고,
+ * KST보다 뒤인 기기(미주 등)에서는 `8월 19일`로 표시된다. 이 파일의 다른
+ * 함수들이 `Date`를 안 받는 것과 같은 이유다 — 문자열을 그대로 쪼갠다.
+ */
+export function formatMonthDay(dayKey: string): string {
+  const [, month, date] = dayKey.split("-").map(Number);
+  return `${month}월 ${date}일`;
+}
