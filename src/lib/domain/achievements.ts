@@ -74,6 +74,13 @@ export type Achievement = {
   remainingValue: number;
   unlocked: boolean;
   count: number; // 반복 획득 횟수
+  /**
+   * 마지막으로 딴 시각. 미획득이면 null.
+   *
+   * ⚠️ 반복 배지는 같은 key가 여러 행으로 온다 — **최신**을 쓴다. 첫 회를 쓰면
+   *    최근에 또 딴 사실이 화면에서 사라진다.
+   */
+  earnedAt: Date | null;
 };
 
 function nextRepeatTarget(current: number, step: number): number {
@@ -123,6 +130,11 @@ export function buildAchievements(
         remainingValue: remaining,
         unlocked,
         count: rows.length,
+        // `rows`는 이 배지의 EarnedBadge 전부다 — 이미 손에 있다.
+        earnedAt: rows.reduce<Date | null>(
+          (acc, r) => (acc === null || r.earnedAt > acc ? r.earnedAt : acc),
+          null,
+        ),
       };
     });
 }
