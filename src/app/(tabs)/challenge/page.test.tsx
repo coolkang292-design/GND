@@ -519,3 +519,82 @@ describe("ChallengePage 진행 중 — 오늘 운동하기 · 공정성 안내",
     expect(screen.getByText("기간 중에는 내 진행률만")).toBeTruthy();
   });
 });
+
+/**
+ * setup 화면 — **자동 시작을 말한다** (2026-08-14).
+ *
+ * ⚠️ 종료일·시작일을 **고정된 먼 미래/과거**로 둔다. 실제 오늘 날짜에 기대면
+ * 언젠가 저절로 빨개지는 테스트가 된다(바로 위 describe와 같은 규약).
+ */
+describe("ChallengePage setup — 자동 시작을 말한다", () => {
+  function arrangeSetup(over: Partial<MyChallenge> = {}) {
+    const ch = {
+      ...challenge("challenge-setup", "준비 중 챌린지", "2026-07-01T00:00:00Z"),
+      status: "setup" as const,
+      start_date: "2020-01-01", // 과거 = "곧 시작" 분기
+      end_date: "2099-12-31",
+      ...over,
+    };
+    mocks.getMyChallenges.mockResolvedValue([ch]);
+    mocks.getChallengeParticipantProfiles.mockResolvedValue([
+      { id: "old-user", nickname: "예전 참가자", avatar_url: null },
+    ]);
+    mocks.getChallengeGoals.mockResolvedValue([
+      {
+        id: "goal-setup",
+        user_id: "old-user",
+        challenge_id: ch.id,
+        group_id: "group-1",
+        goal_type: "weight_days",
+        target_value: 12,
+        unit: "일",
+        planned_days: 5,
+        qualifier: 3,
+        created_at: "2026-07-01T00:00:00Z",
+        updated_at: "2026-07-01T00:00:00Z",
+      },
+    ]);
+    mocks.getChallengeApprovals.mockResolvedValue(new Set(["old-user"]));
+    mocks.getPeriodStatsByUser.mockResolvedValue(new Map());
+  }
+
+  /**
+   * ⚠️⚠️ **회귀선이다. 지우지 마라.**
+   *
+   * `autostart_due_challenges()`가 시작일에 **동의 없이** 챌린지를 연다
+   * (`docs/db-current-schema.sql:415`). 그런데 화면은 자물쇠와 함께
+   * "전원 KPI 설정 + 전원 동의 시 챌린지가 시작돼요"라고만 적어서,
+   * 안 막혀 있는데 막혔다고 읽혔다. 옛 문구로 되돌아가면 여기서 잡힌다.
+   */
+  it("시작일이 지난 setup 챌린지는 '곧 자동으로 시작'이라고 적는다", async () => {
+    arrangeSetup();
+    render(<ChallengePage />);
+
+    await screen.findByText(/곧 자동으로 시작돼요/);
+    expect(screen.queryByText(/전원 동의 시 챌린지가 시작돼요/)).toBeNull();
+    expect(screen.queryByText("전원 목표 세팅 대기 중…")).toBeNull();
+  });
+
+  it("시작일이 아직이면 그 날짜를 적는다", async () => {
+    arrangeSetup({ start_date: "2099-01-09" });
+    render(<ChallengePage />);
+
+    await screen.findByText(/1월 9일에 자동으로 시작돼요/);
+  });
+
+  /**
+   * 수동 시작 경로를 **지우지 않았다**는 회귀선이다.
+   *
+   * ⚠️ 이 픽스처는 목표 1개 + 승인 1명이라 `allSet`·`allApproved`가 둘 다
+   *    true다. 그래서 버튼은 **눌리는 상태**로 떠야 한다.
+   */
+  it("수동 시작 버튼은 지름길로 남는다", async () => {
+    arrangeSetup();
+    render(<ChallengePage />);
+
+    const button = await screen.findByRole("button", {
+      name: /지금 바로 시작하기/,
+    });
+    expect(button).toBeEnabled();
+  });
+});
