@@ -141,6 +141,44 @@ describe("상황별 추천", () => {
     expect(interval?.names).toHaveLength(4);
   });
 
+  /**
+   * ⚠️⚠️ **회귀선이다 (2026-08-14 사용자 지적).**
+   *
+   * 옛 목록은 `["체스트프레스 머신", "랫풀다운", "레그프레스", "숄더프레스"]` —
+   * **넷 다 헬스장 기구**였다. 「처음 운동해요」는 신규 사용자가 자기에게 맞다고
+   * 믿고 누르는 칸인데, 헬스장에 등록 안 했거나 오늘 집에 있는 사람은 탭을 다
+   * 지나온 뒤 **못 하는 것을 권유받고** 멈췄다.
+   *
+   * 맨 앞이 걷기인 이유: **담을 때 정할 것이 하나도 없다.**
+   * `defaultSetupPlan`이 유산소에 `{sets:1, amount:0, weightKg:0}`을 준다 —
+   * 세 유형 중 유일하게 무게도 횟수도 안 묻는다.
+   */
+  it("'처음 운동해요'는 기구 없이 되는 것부터 권한다", () => {
+    const names = resolveSituation("beginner", FULL_CATALOG).map(
+      (r) => r.item.name,
+    );
+    expect(names[0]).toBe("걷기");
+    expect(names.indexOf("맨몸 스쿼트")).toBeLessThan(
+      names.indexOf("체스트프레스 머신"),
+    );
+    expect(names.indexOf("푸시업")).toBeLessThan(
+      names.indexOf("체스트프레스 머신"),
+    );
+  });
+
+  /**
+   * 기구를 **지우지는 않는다.** 헬스장에 다니는 사람에게는 여전히 맞고,
+   * 이 파일 아래쪽 "설명은 이름당 한 곳에만 있다"가 `체스트프레스 머신`이
+   * 이 목록에 있다고 전제한다.
+   */
+  it("기구 종목을 지우지는 않는다 — 뒤로 밀 뿐이다", () => {
+    const names = resolveSituation("beginner", FULL_CATALOG).map(
+      (r) => r.item.name,
+    );
+    expect(names).toContain("체스트프레스 머신");
+    expect(names).toContain("랫풀다운");
+  });
+
   it("챌린지를 뺀 나머지 상황은 전부 종목을 갖고 있다", () => {
     for (const s of SITUATIONS) {
       if (s.key === "challenge") continue;
