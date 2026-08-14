@@ -82,6 +82,17 @@ export function hourOfDay(instant: Date, timeZone: string): number {
   return wallClock(instant, timeZone).hour;
 }
 
+/**
+ * instant가 tz에서 가리키는 **자정부터의 분**(0~1439).
+ *
+ * 2026-08-13에 알림 시각 개인화(30분 슬롯)를 넣으며 추가했다. `hourOfDay`로는
+ * 30분 단위를 표현할 수 없다.
+ */
+export function minuteOfDay(instant: Date, timeZone: string): number {
+  const { hour, minute } = wallClock(instant, timeZone);
+  return hour * 60 + minute;
+}
+
 /** instant가 속한 tz 달력 날짜의 00:00 UTC 순간 */
 export function startOfDay(instant: Date, timeZone: string): Date {
   const { year, month, day } = wallClock(instant, timeZone);

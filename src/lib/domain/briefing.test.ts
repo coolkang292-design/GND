@@ -4,6 +4,7 @@ import {
   DEFAULT_BRIEF_HOUR,
   type BriefingUser,
 } from "./briefing";
+import { MIN_SESSIONS_FOR_ESTIMATE } from "./notify-time";
 
 // 기준 시각: 2026-07-18(토) KST 09:10 = UTC 00:10. 어제 = KST 7/17.
 const NOW = new Date("2026-07-18T00:10:00Z");
@@ -15,9 +16,23 @@ function user(over: Partial<BriefingUser>): BriefingUser {
     userId: "me",
     timezone: TZ,
     completedAts: [kst("2026-07-14T19:00:00")], // 4일 전 → d1
+    // 기본값은 **추정 불가**(표본 미달)다. 그래야 이 파일의 옛 단언들이
+    // 09:00 폴백 위에서 그대로 성립한다 — 시각 판정이 아니라 문구·dedupe를 보는 테스트다.
+    startedAts: [],
     morningBrief: true,
     ...over,
   };
+}
+
+/** 평소 시작 시각이 `hh:mm`인 사람 — 추정이 서도록 최소 표본을 채운다 */
+function withHabit(hh: number, mm = 0, over: Partial<BriefingUser> = {}) {
+  const starts = Array.from({ length: MIN_SESSIONS_FOR_ESTIMATE }, (_, i) => {
+    const day = String(17 - i).padStart(2, "0");
+    const h = String(hh).padStart(2, "0");
+    const m = String(mm).padStart(2, "0");
+    return kst(`2026-07-${day}T${h}:${m}:00`);
+  });
+  return user({ startedAts: starts, ...over });
 }
 
 describe("buildBriefings — skip 판정", () => {
@@ -34,15 +49,68 @@ describe("buildBriefings — skip 판정", () => {
     );
     expect(skipped[0].reason).toBe("opted_out");
   });
-  it("invocationHour 7이면 전원 hour_mismatch (시간 선택 확장 대비)", () => {
+  it("invocationHour 7이면 전원 slot_mismatch (수동 검증용 오버라이드)", () => {
     const { briefings, skipped } = buildBriefings([user({})], new Map(), NOW, 7);
     expect(briefings).toHaveLength(0);
-    expect(skipped[0].reason).toBe("hour_mismatch");
+    expect(skipped[0].reason).toBe("slot_mismatch");
   });
-  it("기본값: NOW(KST 9시)면 DEFAULT_BRIEF_HOUR와 일치해 발송", () => {
+  it("기록이 적어 추정이 없으면 09:00 폴백으로 발송된다", () => {
+    // NOW = KST 09:10 → 09:00 슬롯
     expect(DEFAULT_BRIEF_HOUR).toBe(9);
     const { briefings } = buildBriefings([user({})], new Map(), NOW);
     expect(briefings).toHaveLength(1);
+  });
+});
+
+/**
+ * 2026-08-13 — 전원 09:00에서 **각자 평소 시작 30분 전**으로 바뀌었다.
+ * 설계: `docs/superpowers/specs/2026-08-13-personalized-briefing-time-design.md`
+ *
+ * ⚠️ 이 describe가 개인화의 회귀선이다. 크론이 30분마다 돌지 않으면 여기가 통과해도
+ * 실제로는 한 슬롯만 발송된다 — 그건 배포 후 실물로 확인해야 한다(설계 §5).
+ */
+describe("buildBriefings — 평소 시작 30분 전", () => {
+  it("평소 19시에 운동하면 18:30 슬롯에 보낸다", () => {
+    const at1830 = new Date("2026-07-18T09:35:00Z"); // KST 18:35 → 18:30 슬롯
+    const { briefings } = buildBriefings(
+      [withHabit(19)],
+      new Map(),
+      at1830,
+    );
+    expect(briefings).toHaveLength(1);
+  });
+
+  /** ⚠️ 개인화의 핵심 — 습관이 있는 사람은 **09:00에 오지 않는다** */
+  it("평소 19시에 운동하는 사람은 아침 9시에 받지 않는다", () => {
+    const { briefings, skipped } = buildBriefings(
+      [withHabit(19)],
+      new Map(),
+      NOW, // KST 09:10
+    );
+    expect(briefings).toHaveLength(0);
+    expect(skipped[0].reason).toBe("slot_mismatch");
+  });
+
+  it("자정 직후에 운동하는 사람은 전날 23:30 슬롯에 받는다", () => {
+    const at2335 = new Date("2026-07-18T14:35:00Z"); // KST 23:35 → 23:30 슬롯
+    const { briefings } = buildBriefings(
+      [withHabit(0, 5)],
+      new Map(),
+      at2335,
+    );
+    expect(briefings).toHaveLength(1);
+  });
+
+  /**
+   * ⚠️ 크론이 30분마다 돌아도 하루 한 번만 가야 한다. 최종 보장은 DB의
+   * unique(dedupe_key)지만, 키가 **날짜 단위**임을 여기서 고정한다 —
+   * 시각이 키에 섞이면 30분마다 새 알림이 간다.
+   */
+  it("dedupe_key에 시각이 섞이지 않는다 — 하루 한 번", () => {
+    const at1830 = new Date("2026-07-18T09:35:00Z");
+    const { briefings } = buildBriefings([withHabit(19)], new Map(), at1830);
+    expect(briefings[0].dedupeKey).toBe("morning_briefing:me:2026-07-18");
+    expect(briefings[0].dedupeKey).not.toMatch(/18:30|1830/);
   });
 });
 

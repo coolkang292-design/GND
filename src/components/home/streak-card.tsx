@@ -43,7 +43,7 @@ export function StreakCard({ completedAts }: { completedAts: Date[] }) {
     stage === "none"
       ? "운동을 시작하면 불꽃이 켜져요"
       : stage === "today_done"
-        ? pickByDay(TODAY_DONE_MESSAGES, todayKey)
+        ? pickByDay(TODAY_DONE_MESSAGES, todayKey)(streak)
         : stage === "expired"
           ? pickByDay(EXPIRED_MESSAGES, todayKey)
           : gap === 1
