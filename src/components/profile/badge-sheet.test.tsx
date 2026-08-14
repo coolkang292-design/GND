@@ -50,3 +50,28 @@ describe("BadgeSheet 퀘스트", () => {
     expect(html).toContain("+800");
   });
 });
+
+describe("획득일 표시 (2026-08-14)", () => {
+  /**
+   * ⚠️⚠️ 회귀선이다. `earned_at`은 DB→앱까지 오는데 화면이 한 번도 안 그렸다 —
+   * `badge-showcase.tsx`는 정렬에만 썼고 이 파일은 아예 안 썼다.
+   * **배지가 수집물인데 언제 무엇을 땄는지 볼 자리가 앱에 없었다.**
+   *
+   * `sheet(12)`는 `workout_10`을 2026-07-20에 딴 상태다 → `7월 20일`.
+   * `new Date("2026-07-20")`은 UTC 자정 = KST 09:00이라 KST 날짜도 7월 20일이다.
+   */
+  it("획득한 배지에는 딴 날짜가 보인다", () => {
+    const html = renderToStaticMarkup(
+      <BadgeSheet achievements={sheet(12)} onClose={() => {}} />,
+    );
+    expect(html).toContain("7월 20일 획득");
+  });
+
+  /** 미획득 행은 `앞으로 N회 · +N P`를 그린다 — 날짜가 끼면 안 된다 */
+  it("아무것도 못 딴 상태에서는 날짜가 안 보인다", () => {
+    const html = renderToStaticMarkup(
+      <BadgeSheet achievements={sheet(5)} onClose={() => {}} />,
+    );
+    expect(html).not.toContain("획득");
+  });
+});
