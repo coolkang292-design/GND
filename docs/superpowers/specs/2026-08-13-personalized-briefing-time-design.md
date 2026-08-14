@@ -131,6 +131,82 @@ pg_cron이 멈춰도 하루 한 번은 돌고, 챌린지 자동 전환(UTC 0시 
 
 ## 5. 검증
 
+### 5.0 최종 동작 구성 (2026-08-14 확인 완료)
+
+```
+Supabase pg_cron  (*/30, jobname=briefing-dispatch, 0076)
+   └ net.http_get  Authorization: Bearer ← vault.decrypted_secrets['briefing_cron_secret']
+        └ GET https://gnd-one.vercel.app/api/briefing   → 200
+             └ notifications INSERT → 0016 트리거 → /api/push/notify → 기기 푸시
+```
+
+- Vercel 크론(`0 0 * * *`)은 안전망으로 남긴다. 중복은 `dedupe_key`가 막는다
+- **Vault의 값은 Vercel `CRON_SECRET`과 글자 하나까지 같아야 한다**(64자)
+
+**고장이 세 겹이었다. 하나씩 벗겨야 보인다:**
+
+| 증상 | 원인 | 고친 방법 |
+|---|---|---|
+| HTTP 흔적 자체가 없음 | pg_cron 워커 미기동 | Dashboard → Extensions에서 **껐다 켜기** |
+| `405` | `/api/briefing`은 GET인데 `http_post`로 부름 | 0076에서 `http_get`으로 |
+| `401` | Vault 값이 Vercel `CRON_SECRET`과 다름 | `vault.update_secret`로 덮어쓰기 |
+
+⚠️ **Vercel의 `Sensitive` 환경변수는 값을 다시 못 읽는다.** 화면의 `sk_1…2…`를
+복사하면 **잘린 값**이 복사되어 계속 401이 난다. 값이 필요하면 **로컬 `.env.local`**
+에서 꺼내라 — `vercel env pull`로 받아 둔 그 파일이 운영과 같은 값을 갖고 있다
+(2026-08-14에 이걸로 확인했다. 로컬 값으로 운영에 GET → 200).
+
+### 5.0.1 ⚠️ `cron.job_run_details`를 "잡이 도는가"의 지표로 쓰지 마라
+
+**이 Supabase 프로젝트는 실행 기록을 안 쌓는다.** 2026-08-14에 이것 때문에 오진했다:
+
+| 관측 | 그때의 해석 | 실제 |
+|---|---|---|
+| `cron.job_run_details` 0건 | "워커가 죽었다" | **로그만 안 쌓인다** |
+| `net._http_response`에 `02:30:00` 401 | — | **잡은 정확히 발사되고 있었다** |
+
+`02:30:00`처럼 **`:00`/`:30` 정각에 찍힌 HTTP 응답이 유일하게 믿을 만한 증거**다.
+실행 기록이 0건이라고 외부 크론으로 갈아타려다 되돌렸다.
+
+⚠️ 다만 **처음에는 정말로 안 돌았다.** Dashboard → Database → Extensions에서
+`pg_cron`을 **껐다 켠 뒤에** 발사가 시작됐다. SQL의 `create extension`만으로는
+워커가 안 뜬다 — 확장을 새로 켤 때는 대시보드 토글을 거쳐야 한다.
+
+고장은 **두 겹**이었다: ① 워커 미기동(토글로 해결) ② `http_post` → 405(0076으로 해결).
+하나를 고쳐도 증상이 그대로라 계속 첫 번째를 의심하게 된다 — **응답 코드를 보면
+어느 겹인지 바로 갈린다**(405=메서드, 401=비밀키, 없음=워커).
+
+### 5.1 운영 확인 쿼리 (Supabase SQL Editor)
+
+⚠️ **`0075` 파일 하단 주석의 확인 쿼리는 틀렸다.** `cron.job_run_details`에는
+`jobname` 컬럼이 **없다**(`jobid`만 있다) — `cron.job`과 조인해야 한다.
+2026-08-14에 실행하다 `42703: column "jobname" does not exist`로 드러났다.
+0075는 이미 적용됐으므로 파일은 고치지 않는다(적용된 마이그레이션 불변 규약).
+**아래가 올바른 쿼리다.**
+
+```sql
+-- 잡이 등록됐는가
+select jobid, jobname, schedule, active from cron.job;
+
+-- 30분마다 실제로 도는가 (start_time이 :00 / :30 간격이어야 한다)
+select d.start_time, d.status, d.return_message
+from cron.job_run_details d
+join cron.job j on j.jobid = d.jobid
+where j.jobname = 'briefing-dispatch'
+order by d.start_time desc limit 12;
+
+-- HTTP 응답 (200이어야 한다. 401 = Vault 값이 Vercel CRON_SECRET과 다름)
+select id, status_code, created from net._http_response order by created desc limit 10;
+
+-- 최종 증거: 알림이 사람마다 다른 시각에 갔는가
+select user_id, title, created_at from notifications
+where type = 'morning_briefing' order by created_at desc limit 20;
+```
+
+⚠️ `net._http_response`만 보면 **누가 불렀는지 알 수 없다.** 브리핑 크론 호출과
+0016의 푸시 발송이 같은 표에 섞인다. 크론이 도는지는 `cron.job_run_details`로 본다.
+
+
 - 순수 함수 단위 테스트 (표본 미달·최빈·동률·자정 넘김·타임존)
 - `buildBriefings` 슬롯 게이트 테스트 (하루 한 번·폴백)
 - ⚠️ **배포 후 실제 발송 시각을 본다.** 크론 주기가 요금제에 막히면 조용히 옛날처럼
