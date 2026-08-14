@@ -3,6 +3,97 @@
 > 새 세션은 저장소 루트 `AGENTS.md` → `CLAUDE.md` → 이 파일 → 가장 최근의 관련 `docs/superpowers/HANDOFF-*.md` 순서로 읽는다.
 > 이 파일은 전체 흐름의 요약이고, 작업별 세부 사실과 남은 확인은 최신 인수인계서가 기준이다.
 
+## ✅ 2026-08-14 2차 배포 — 자동 시작 알림 채우기(A2) + 배지 이름·획득일(F)
+
+`7b8bc92` 배포 (`gnd-hkngvi8ve-gnd4.vercel.app` → `gnd-one.vercel.app`).
+계획: `docs/superpowers/plans/2026-08-14-challenge-notices-and-badge-details.md`
+
+⚠️ **이 배치는 마이그레이션이 있다(`0077`).** 오전 배치와 달리 배포 롤백만으로
+안 끝난다. 되돌릴 때는 **함수 → 알림 행 삭제 → 제약** 순서를 지켜야 한다
+(제약을 먼저 되돌리면 이미 저장된 새 유형 행 때문에 위반이 난다).
+순서는 `0077` 파일 하단 `(6)`에 적혀 있다. **0077은 배포 전에 적용 완료.**
+
+### ① 자동 시작 경로의 빈 메시지를 채웠다
+
+`autostart_due_challenges()`는 **원래부터** 동의를 안 보고 시작일에 챌린지를
+열고 있었다(사용자 지시로 그 동작을 확인·유지). 빠져 있던 것은 **메시지**다.
+
+- **시작 전날 예고 신설** — `remind_upcoming_challenges()`. 목표 유무로 문구가
+  갈린다(`내일 챌린지가 시작돼요` / `내일 시작! 목표를 아직 안 세웠어요`).
+  09시 KST 크론(`api/briefing/route.ts`)의 일일 슬롯에서 부른다
+- **탈락 통보 신설** — ⚠️ 옛 `autostart`는 `dropped`로 바꾼 **뒤**
+  `status='joined'`에게만 알림을 보냈다. **목표를 안 세워 빠진 사람은 시작
+  알림도 못 받았다** — 참가했는데 어느 날 보니 자기만 없고 이유를 알 곳이
+  없었다. `returning`으로 대상을 잡아 통보한다
+- ⚠️ `remind_`는 **`grant execute … to service_role`이 반드시 있어야 한다.**
+  `public`에서 revoke하는 순간 기본 EXECUTE가 사라져 **크론이 죽는다.**
+  계획 채점에서 이게 빠진 걸 잡았다(`admin_schema_snapshot`·`pending_bug_report_count`가 같은 꼴)
+- ⚠️ `unnest(arr) u`는 별칭이 테이블이자 컬럼이라 모호하다 → `as t(uid)`
+
+### ② 배지 알림이 무슨 배지인지 말하지 않았다 (사용자 제보)
+
+`evaluate_badges`가 `v_new`에 `emoji·name·tier`를 **이미 담아 두고**
+알림 본문엔 `jsonb_array_length(v_new)` — **개수만** 썼다. 손에 쥔 것을 버리고 있었다.
+→ `🐾 동네 한 바퀴 백 번 외 1개`. ⚠️ 조사(을/를)를 안 붙인다 — 배지 이름의
+받침이 제각각이라 한쪽으로 정하면 절반이 어색해진다.
+
+⚠️ **이미 쌓인 옛 알림은 그대로 `새 배지 N개`다.** 본문은 저장된 값이라
+소급 변경되지 않는다(08-11~13 행들). 새 알림부터 이름이 나온다.
+
+### ③ 배지 알림 목적지가 틀려 있었다 (이번에 발견)
+
+`PUSH_URL_BY_TYPE.badge_earned`가 **`/record`** 였고 주석은 *"배지 진열대가
+기록 탭 달력에 있다(2026-07-21)"*. 그 뒤 진열대가 `GrowthHub`로 들어가면서
+**`/profile`로 옮겨졌는데 라우팅만 안 따라왔다.** 알림 본문은 "내 정보에서
+확인해 보세요"라고 말하면서 기록 탭으로 보내고 있었다. → `/profile`.
+
+⚠️ **`PUSH_URL_BY_TYPE`은 exhaustive가 아니다**(`Record<string,string>`).
+유형을 늘려도 컴파일러가 안 잡고 `/home`으로 조용히 떨어진다. 이번에
+`push.test.ts`에 **세 줄의 회귀선**을 박았다 — 다음에 유형을 늘릴 때 여기를 보라.
+(반면 `TYPE_ICON`은 exhaustive라 타입 오류로 막힌다. 실제로 이번에도
+`Achievement.earnedAt`을 필수로 만들자 `next-goal-card.test.tsx` 픽스처가 막혔다.)
+
+### ④ 배지 획득일이 화면에 없었다 (사용자 제보)
+
+`user_badges.earned_at`이 DB에 있고 `badges.ts:37`이 앱까지 실어 오는데
+`badge-showcase.tsx`는 **정렬에만** 썼고 `badge-sheet.tsx`는 아예 안 썼다.
+**배지가 수집물인데 수집 기록을 볼 자리가 없었다.**
+
+- `Achievement.earnedAt` 신설(반복 배지는 **최신**을 쓴다)
+- 배지 시트에 `8월 2일 획득 +300 P` — ⚠️ **포인트와 같은 줄**에 붙인다.
+  새 줄을 만들면 시트가 길어지고 미획득 행과 **높이가 어긋난다**
+- ⚠️ 반복 횟수(`×N`)를 여기 또 넣지 마라 — 배지 이름 옆에 이미 있다
+- 날짜는 `formatMonthDay(dayKey(d,'Asia/Seoul'))` — **오늘 오전에 만든 함수 재사용.**
+  `Date`를 `toLocaleDateString`에 그대로 넣으면 기기 타임존에 따라 하루 밀린다
+
+### 검증
+
+lint 오류 0 · typecheck 0 · **테스트 144파일 / 2116건** · build 성공 ·
+`455 insertions / 6 deletions` (테스트 삭제 0 — 정정 2줄뿐)
+
+**0077 적용 검증(내가 직접)** — `admin_schema_snapshot()`으로 DB의 현행 함수
+정의를 읽어 확인: `autostart`의 탈락 통보·`as t(uid)`·`ch.name` / `evaluate_badges`의
+`emoji` 사용·옛 문구 제거 / `remind_` 존재·`dedupe_key` / **service_role 호출 성공** /
+새 유형 2종 실제 insert 통과.
+
+**예고 실발송 확인** — 픽스처 A 소유 `Test11`의 시작일을 하루 당겨
+`{"sent":1}` → 2차 `{"sent":0}`(멱등) 확인, 알림 본문·`reference_id`까지 보고
+**시작일을 2026-08-16으로 원상 복구**하고 검증 알림 삭제.
+
+**개발 서버 실측**(375×812, 픽스처 A) — 배지 시트에 획득일 9건
+(`8월 2일 획득 +300 P` 등), 미획득 행 `🔒 앞으로 10회` 유지, 행 높이 정상.
+
+**프로덕션 번들 실측** — 24청크 1.3MB grep:
+`challenge_starting_soon`·`challenge_dropped` 각 2건(TYPE_ICON + PUSH_URL_BY_TYPE),
+`획득` 15건, **`badge_earned:"/profile"` 확인 · `/record` 0건**.
+
+⚠️ `[미검증]` **배지 알림 본문을 `evaluate_badges`가 실제로 만드는 장면**은
+못 봤다 — 새 배지를 따야 생기는데 픽스처 A는 다음 배지가 40/50이고, 억지로
+터뜨리려면 배지 행을 지웠다 되살려야 해 **포인트 중복 지급 위험**이 있다.
+함수 정의 검사 + 같은 모양 본문의 화면 렌더링으로 갈음했다.
+
+남은 것: **사용자 폰 실물 확인**. 릴리스 공지는 **발송하지 않았다**(지시 대기).
+
 ## ✅ 2026-08-14 배포 완료 — 화면이 하던 거짓말 두 개를 고쳤다
 
 `b6d9c39` 배포 (`gnd-mr9egmprc-gnd4.vercel.app` → `gnd-one.vercel.app`).
