@@ -42,6 +42,9 @@ const PUSH_URL_BY_TYPE: Record<string, string> = {
   // (목표 세우기 / 다음 챌린지 찾기).
   challenge_starting_soon: "/challenge",
   challenge_dropped: "/challenge",
+  // 2026-08-16 — 계획 없는 날 제안. 기록 탭이 `?suggest`를 읽어 종목을 담고
+  // 주소에서 지운다(`record/page.tsx`). 값 자체엔 의미가 없다 — 존재 플래그다.
+  workout_suggestion: "/record?suggest=1",
 };
 
 const DEFAULT_PUSH_URL = "/home";

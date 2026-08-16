@@ -114,3 +114,31 @@ describe("0077 새 알림 유형의 목적지 (exhaustive가 아니라 손으로
     ).toBe("/profile");
   });
 });
+
+/**
+ * 2026-08-16 — 계획 없는 날 제안.
+ *
+ * ⚠️⚠️ `PUSH_URL_BY_TYPE`은 **exhaustive가 아니다**(`Record<string,string>`).
+ * 유형을 늘려도 컴파일러가 안 잡고 `/home`으로 조용히 떨어진다. 그러면 알림은
+ * "담아 뒀어요"라고 말하면서 홈으로 보내고, 사용자는 담긴 것을 못 찾는다.
+ * (`TYPE_ICON`은 exhaustive라 타입 오류로 막힌다 — 여기만 손으로 챙겨야 한다.)
+ */
+describe("workout_suggestion — 계획 없는 날 제안", () => {
+  it("기록 탭으로 보내고 제안 표식을 싣는다", () => {
+    const payload = pushPayloadFor({
+      type: "workout_suggestion",
+      title: "🚶 오늘은 10분 걷기부터",
+      body: "오래 하는 것보다, 하루도 빼먹지 않는 게 중요해요",
+    });
+    expect(payload.url).toBe("/record?suggest=1");
+  });
+
+  it("홈으로 떨어지지 않는다", () => {
+    const payload = pushPayloadFor({
+      type: "workout_suggestion",
+      title: "t",
+      body: "b",
+    });
+    expect(payload.url).not.toBe("/home");
+  });
+});
