@@ -74,6 +74,22 @@ describe("pickSuggestionKind — 신규 유저", () => {
   });
 
   /**
+   * ⚠️⚠️ **경계 그 자체다.** 위의 6일·8일 단언은 각각 컷오프에서 하루씩 떨어져
+   * 있어서, `<`를 `<=`로 바꿔 창을 **위험한 방향으로** 하루 넓혀도 둘 다 통과한다
+   * (코드 품질 검토에서 실제로 고장 내서 확인했다). 이 단언이 그 구멍을 막는다.
+   */
+  it("가입 7일째는 창 밖이다 — 창은 0~6일이다", () => {
+    expect(
+      pickSuggestionKind({
+        ...base,
+        hasHistory: false,
+        signedUpDayKey: "2026-08-09", // 정확히 7일 전
+        todayKey: "2026-08-16",
+      }),
+    ).toBeNull();
+  });
+
+  /**
    * 챌린지에 참가했는데 기록이 0건인 사람. 되살릴 지난 운동이 없으므로
    * 걷기 창이 지났어도 인터벌로 보낸다 — 사용자 지시 2026-08-16.
    */
@@ -86,6 +102,24 @@ describe("pickSuggestionKind — 신규 유저", () => {
         signedUpDayKey: "2026-01-01", // 창 밖
       }),
     ).toBe("interval");
+  });
+
+  /**
+   * 날짜 문자열이 망가지면 `NaN`이 나오고 `NaN < 7`은 `false`라 제안이 없다.
+   * **안전한 방향으로 실패한다** — 알림이 덜 가지, 더 가지 않는다. 이 성질이
+   * 뒤집히면(예: 비교를 `!(x >= 7)`로 바꾸면) 여기서 잡힌다.
+   */
+  it("가입일 문자열이 망가지면 조용히 제안하지 않는다", () => {
+    for (const bad of ["", "2026-8-1", "2026-08-16T09:00:00Z", "nonsense"]) {
+      expect(
+        pickSuggestionKind({
+          ...base,
+          hasHistory: false,
+          signedUpDayKey: bad,
+          todayKey: "2026-08-16",
+        }),
+      ).toBeNull();
+    }
   });
 });
 
@@ -185,5 +219,19 @@ describe("suggestionCopy — 문구", () => {
     const a = suggestionCopy("walk", "2026-08-16", 0);
     const b = suggestionCopy("walk", "2026-08-16", 0);
     expect(a).toEqual(b);
+  });
+
+  /**
+   * ⚠️⚠️ 세 번째 변형만 `n + 1`을 쓴다. 다른 단언들은 전부 index 0에 떨어져서
+   * 이 변형을 **한 번도 안 본다** — 코드 품질 검토에서 `n + 1`을 `n - 1`로
+   * 뒤집었더니 18건이 그대로 통과했다.
+   *
+   * ⚠️ 이 단언은 `pickByDay`의 해시가 이 날짜를 index 2로 보낸다는 사실에
+   *    **의존한다.** 변형을 더하거나 빼면 여기가 먼저 깨진다 — 그때는 새 날짜를
+   *    다시 골라야 한다.
+   */
+  it("'오늘만 채우면' 변형은 다음 숫자를 말한다", () => {
+    const copy = suggestionCopy("repeat", "2026-08-18", 7);
+    expect(copy.title).toContain("8");
   });
 });

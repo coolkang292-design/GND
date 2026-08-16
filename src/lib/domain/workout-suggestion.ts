@@ -24,7 +24,13 @@ export type SuggestionKind = "walk" | "repeat" | "interval";
  */
 export const NEW_USER_GRACE_DAYS = 7;
 
-/** `"YYYY-MM-DD"` 두 개의 날짜 차이(일). `Date`를 안 쓴다 — 타임존이 끼어든다 */
+/**
+ * `"YYYY-MM-DD"` 두 날짜의 차이(일).
+ *
+ * ⚠️ `Date.parse`를 쓰되 **양쪽 모두 `T00:00:00Z`로 못 박는다.** 기기 타임존이
+ *    끼어들 자리를 없애려는 것이다 — `new Date("2026-08-16")`처럼 앵커 없이 쓰면
+ *    KST보다 뒤인 기기에서 하루가 밀린다. `Z`를 빼지 마라.
+ */
 function daysBetween(fromDayKey: string, toDayKey: string): number {
   const ms =
     Date.parse(`${toDayKey}T00:00:00Z`) - Date.parse(`${fromDayKey}T00:00:00Z`);
