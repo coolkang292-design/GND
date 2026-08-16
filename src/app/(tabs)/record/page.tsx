@@ -94,6 +94,11 @@ import {
   tabataResumeFromSession,
   type TabataMinutes,
 } from "@/lib/domain/tabata";
+import { SITUATIONS } from "@/lib/domain/recommended-exercises";
+import {
+  pickSuggestionKind,
+  type SuggestionKind,
+} from "@/lib/domain/workout-suggestion";
 import { takeCalendarView } from "@/lib/record-view";
 import { moveItem } from "@/lib/domain/reorder";
 import {
@@ -156,6 +161,7 @@ import {
   createDraftSession,
   defaultSets,
   emptyDraft,
+  expireStaleSuggestion,
   getCompletedSessions,
   getExerciseCatalog,
   getLastCompletedWeightVolume,
@@ -165,6 +171,7 @@ import {
   getPreviousExerciseRecords,
   getSessionById,
   getSessionExerciseStructure,
+  getSuggestionFacts,
   hasCompletedHistory,
   loadDraft,
   localId,
@@ -180,6 +187,17 @@ import {
   type LocalSet,
   type WorkoutDraft,
 } from "@/lib/workout";
+
+/**
+ * 4분 인터벌 구성 종목 — **상황별 추천의 `interval` 칸과 같은 목록을 쓴다.**
+ * 두 벌로 적으면 한쪽만 고쳐져 "같은 인터벌인데 종목이 다르다"가 된다.
+ *
+ * ⚠️ 이걸 `workout-suggestion.ts`로 옮기지 마라. 그 모듈은 브리핑 **서버**
+ *    라우트가 import한다 — `recommended-exercises`가 `@/lib/challenge`를 통해
+ *    `getSupabaseBrowserClient`를 끌어오므로 서버가 브라우저 클라이언트를 안게 된다.
+ */
+const INTERVAL_SUGGESTION_NAMES: readonly string[] =
+  SITUATIONS.find((s) => s.key === "interval")?.names ?? [];
 
 export default function RecordPage() {
   const { userId, loading, configured, error } = useAuth();
@@ -252,7 +270,18 @@ function errorMessage(e: unknown): string {
 function WorkoutScreen({ userId }: { userId: string }) {
   const router = useRouter();
   // 임시저장 복구: 렌더 전 lazy 초기화 (§10 새로고침 복구)
-  const [draft, setDraftState] = useState(() => loadDraft(userId));
+  //
+  // ⚠️ 어제 담긴 **제안**은 여기서 걸러 낸다 (2026-08-16). 사용자가 직접 담은 것은
+  //    스탬프가 없어서 그대로 살아남는다 — `expireStaleSuggestion` 주석 참조.
+  const [draft, setDraftState] = useState(() =>
+    expireStaleSuggestion(
+      loadDraft(userId),
+      dayKey(
+        new Date(),
+        Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Seoul",
+      ),
+    ),
+  );
   const draftRef = useRef(draft);
   const setDraft = useCallback((action: SetStateAction<WorkoutDraft>) => {
     const nextDraft =
@@ -348,6 +377,14 @@ function WorkoutScreen({ userId }: { userId: string }) {
    * 이력이 쌓일수록 커지는 무한 질의가 된다 — 필요한 건 1비트다.
    */
   const [hasHistory, setHasHistory] = useState(false);
+  /** 오늘 `workout_plans`에 행이 있나 — 제안 분기용 (2026-08-16) */
+  const [todayPlanExists, setTodayPlanExists] = useState(false);
+  /** 오늘 이미 완료한 세션이 있나 */
+  const [didWorkoutToday, setDidWorkoutToday] = useState(false);
+  /** 가장 최근 완료 세션이 인터벌이었나 */
+  const [lastSessionWasInterval, setLastSessionWasInterval] = useState(false);
+  /** 가입일 (`"YYYY-MM-DD"`) — 신규 걷기 창 판정 */
+  const [signedUpDayKey, setSignedUpDayKey] = useState("1970-01-01");
   /** 피커를 어느 화면으로 열지 — 기본은 진입 허브 */
   const [pickerMode, setPickerMode] = useState<"hub" | "past" | "routine">("hub");
   // ── 나만의 루틴 (0056) ────────────────────────────────────────────
@@ -561,6 +598,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
           Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Seoul",
         );
         const todayPlan = plans.find((plan) => plan.planDate === todayKey);
+        setTodayPlanExists(todayPlan !== undefined);
         // 인터벌이면 담지 않고 버튼만 세운다 — 아래 판정이 false를 준다
         setTodayIntervalPlan(todayPlan?.tabataMinutes ? todayPlan : null);
         if (
@@ -600,6 +638,15 @@ function WorkoutScreen({ userId }: { userId: string }) {
         if (!cancelled) setHasHistory(has);
       } catch {
         // 기록 자체는 막지 않는다
+      }
+      try {
+        const facts = await getSuggestionFacts(userId);
+        if (cancelled) return;
+        setDidWorkoutToday(facts.didWorkoutToday);
+        setLastSessionWasInterval(facts.lastSessionWasInterval);
+        setSignedUpDayKey(facts.signedUpDayKey);
+      } catch {
+        // 못 읽으면 제안이 안 뜰 뿐이다 — 기록은 그대로 된다
       }
     })();
     return () => {
@@ -750,7 +797,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
       }));
       replaced = out.replaced;
       nextExercises = out.exercises;
-      return { ...d, exercises: out.exercises };
+      // 사용자가 목록을 건드렸다 — 이제 본인 것이므로 자정 만료 대상이 아니다
+      return { ...d, exercises: out.exercises, suggestedForDayKey: null };
     });
 
     markActivity();
@@ -833,7 +881,14 @@ function WorkoutScreen({ userId }: { userId: string }) {
       sets: defaultSets(item.exercise_type, item.measure),
     }));
     markActivity();
-    setDraft((d) => ({ ...d, exercises: [...d.exercises, ...added] }));
+    setDraft((d) => ({
+      ...d,
+      exercises: [...d.exercises, ...added],
+      // 사용자가 목록을 건드렸다 — 이제 본인 것이므로 자정 만료 대상이 아니다.
+      // ⚠️ `applySuggestion`의 walk 분기는 이 뒤에 스탬프를 다시 찍는다. 순서를
+      //    뒤집으면 제안이 영영 만료되지 않는다.
+      suggestedForDayKey: null,
+    }));
     closePicker();
     showToast(
       items.length === 1
@@ -860,7 +915,14 @@ function WorkoutScreen({ userId }: { userId: string }) {
       sets,
     }));
     markActivity();
-    setDraft((d) => ({ ...d, exercises: [...d.exercises, ...added] }));
+    setDraft((d) => ({
+      ...d,
+      exercises: [...d.exercises, ...added],
+      // 사용자가 목록을 건드렸다 — 이제 본인 것이므로 자정 만료 대상이 아니다.
+      // ⚠️ 계획서는 이 경로를 빠뜨렸다. 여기서 안 지우면 제안 위에 추천으로 담은
+      //    운동이 다음 날 아침에 **사용자 것까지 통째로** 지워진다.
+      suggestedForDayKey: null,
+    }));
     closePicker();
     showToast(
       picks.length === 1
@@ -950,6 +1012,57 @@ function WorkoutScreen({ userId }: { userId: string }) {
     setTabataPrefill(prefill);
     setTabataOpen(true);
     await loadPastSessions();
+  }
+
+  /**
+   * 제안을 실제로 담는다 (2026-08-16).
+   *
+   * ⚠️⚠️ **`handleScheduleFromPast`를 쓰지 마라.** 그건 `workout_plans`에 행을
+   *    만든다 — 달력에 `예정`이 찍혀서 "제안은 자정에 사라진다"가 거짓이 된다.
+   *    draft에만 담는 길은 `addPastSession`이다.
+   *
+   * ⚠️ **인터벌만 목록에 담지 않는다.** 담으면 음원도 코스도 없는 맨몸 4개가 된다
+   *    (`tabata.ts`의 `tabataResumeFromSession` 주석에 그 옛 버그가 적혀 있다).
+   */
+  async function applySuggestion(kind: SuggestionKind): Promise<void> {
+    const todayKey = dayKey(
+      new Date(),
+      Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Seoul",
+    );
+
+    if (kind === "interval") {
+      const picked = tabataPickFromNames(INTERVAL_SUGGESTION_NAMES, catalog);
+      if (picked.length === 0) {
+        showToast("인터벌 종목을 찾지 못했어요");
+        return;
+      }
+      setSubTab("workout");
+      await openTabataSheet({ picked, minutes: 4 });
+      return;
+    }
+
+    if (kind === "walk") {
+      const walk = catalog.find((item) => item.name === "걷기");
+      if (!walk) return;
+      addExercises([walk]);
+      setDraft((current) => ({ ...current, suggestedForDayKey: todayKey }));
+      return;
+    }
+
+    // repeat — 가장 최근 완료 세션을 draft에 병합한다.
+    // ⚠️ `loadPastSessions()`는 상태만 채우고 값을 안 돌려준다. 같은 틱에 읽어야
+    //    하므로 직접 부른다.
+    const sessions = await getCompletedSessions(userId);
+    const recent = sessions[0];
+    if (!recent) return;
+    setPastSessions(sessions);
+    setPastLoaded(true);
+    // ⚠️ `addPastSession`은 `pastSessions`를 클로저로 읽어 "지난 타바타면 시트로"를
+    //    분기한다. 위 `setPastSessions`는 이번 틱에 그 클로저까지 갱신하지 못한다.
+    //    그래도 안전하다 — 지난 세션이 인터벌이면 `pickSuggestionKind`가 애초에
+    //    `"interval"`을 주므로 이 경로에 인터벌 세션이 올 수 없다.
+    const ok = await addPastSession(recent.id);
+    if (ok) setDraft((current) => ({ ...current, suggestedForDayKey: todayKey }));
   }
 
   async function addPastSession(sessionId: string): Promise<boolean> {
@@ -1490,6 +1603,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
     setDraft((d) => ({
       ...d,
       exercises: d.exercises.filter((ex) => ex.key !== exKey),
+      // 사용자가 목록을 건드렸다 — 이제 본인 것이므로 자정 만료 대상이 아니다
+      suggestedForDayKey: null,
     }));
     // 접어 두고 카드에서 지운 뒤 다시 펴는 경로가 여기다 (사용자 질문 2026-08-09).
     refocusPending(next);
@@ -2013,6 +2128,63 @@ function WorkoutScreen({ userId }: { userId: string }) {
    * 않는다: `draft.exercises.length`가 이미 그 정보를 갖고 있다.
    */
   const isEmpty = !active && draft.exercises.length === 0;
+
+  /**
+   * 오늘의 제안 (2026-08-16). 알림과 **같은 함수**로 정한다 —
+   * 설계 §3: 함수를 공유해도 입력이 갈리면 소용없어서 입력도 1비트로 낮췄다.
+   */
+  const suggestionKind = useMemo(
+    () =>
+      pickSuggestionKind({
+        hasPlanToday: todayPlanExists,
+        didWorkoutToday,
+        hasHistory,
+        lastSessionWasInterval,
+        isInActiveChallenge: challengeGoals !== null,
+        signedUpDayKey,
+        todayKey: dayKey(
+          new Date(),
+          Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Seoul",
+        ),
+      }),
+    [
+      todayPlanExists,
+      didWorkoutToday,
+      hasHistory,
+      lastSessionWasInterval,
+      challengeGoals,
+      signedUpDayKey,
+    ],
+  );
+
+  /**
+   * 푸시에서 온 `?suggest`를 읽어 오늘의 제안을 담는다 (2026-08-16).
+   *
+   * ⚠️⚠️ **`useSearchParams`를 쓰지 마라.** 이 저장소는 그 훅을 두 번 거부했다
+   *    (`record-view.ts:8`, `auth/callback/page.tsx:50`) — Suspense 경계를 요구해
+   *    빌드가 CSR로 떨어진다. 여기서는 `window.location.search`를 이펙트 안에서
+   *    읽으므로 훅이 아니고, 경계도 필요 없다.
+   *
+   * ⚠️ `record-view.ts`의 모듈 변수 방식은 여기서 **쓸 수 없다.** 푸시는 앱을
+   *    URL로 **새로** 열어서 그 모듈이 초기값(false)으로 평가된다.
+   *
+   * ⚠️ 읽는 즉시 주소에서 지운다. 안 지우면 새로고침마다 다시 담긴다.
+   *
+   * ⚠️ 이 이펙트는 `suggestionKind` **아래**에 있어야 한다. 위로 올리면 의존성
+   *    배열이 초기화 전 `const`를 읽어 렌더가 통째로 죽는다(TDZ).
+   */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!new URLSearchParams(window.location.search).has("suggest")) return;
+    window.history.replaceState({}, "", window.location.pathname);
+    if (suggestionKind === null) return;
+    // 기존 자동 담기와 **같은 가드** — 사용자가 만든 상태를 덮지 않는다
+    if (draftRef.current.exercises.length > 0) return;
+    if (draftRef.current.startedAtMs !== null) return;
+    void applySuggestion(suggestionKind);
+    // applySuggestion은 렌더마다 새로 만들어진다. 제안이 정해진 뒤 한 번만 돈다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [suggestionKind]);
   // 팝업 열림은 `active`에서 파생한다 — 별도 저장 없음 (설계 ②)
   /*
     인터벌 중에는 근력 오버레이를 내린다 (사용자 지시 2026-08-13).

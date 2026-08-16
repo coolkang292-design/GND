@@ -3,6 +3,7 @@ import {
   completedSetsInOrder,
   withCompletedSetsOnly,
 } from "@/lib/domain/workout-import";
+import { dayKey } from "@/lib/domain/time";
 import type { CompletedSession } from "@/lib/domain/calendar";
 import type { VolumeSet } from "@/lib/domain/volume";
 import type { LogExercise } from "@/lib/domain/workout-log";
@@ -1053,6 +1054,45 @@ export async function hasCompletedHistory(userId: string): Promise<boolean> {
     .not("completed_at", "is", null);
   if (error) throw error;
   return (count ?? 0) > 0;
+}
+
+/**
+ * 제안 분기에 필요한 세 가지를 **한 번에** 읽는다 (2026-08-16).
+ *
+ * ⚠️ 완료 **수**를 세지 않는다. 화면은 유무(`hasCompletedHistory`)만 알면 되고,
+ *    수를 요구하면 서버(브리핑 라우트)와 입력이 갈릴 여지가 생긴다 —
+ *    설계 §3이 막으려는 것이 정확히 그 갈림이다.
+ */
+export async function getSuggestionFacts(userId: string): Promise<{
+  didWorkoutToday: boolean;
+  lastSessionWasInterval: boolean;
+  signedUpDayKey: string;
+}> {
+  const supabase = getSupabaseBrowserClient();
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Seoul";
+  const [lastRes, profileRes] = await Promise.all([
+    supabase
+      .from("workout_sessions")
+      .select("completed_at, tabata_minutes")
+      .eq("user_id", userId)
+      .eq("status", "completed")
+      .is("deleted_at", null)
+      .not("completed_at", "is", null)
+      .order("completed_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase.from("profiles").select("created_at").eq("id", userId).single(),
+  ]);
+  const last = lastRes.data;
+  return {
+    didWorkoutToday: last
+      ? dayKey(new Date(last.completed_at as string), tz) === dayKey(new Date(), tz)
+      : false,
+    lastSessionWasInterval: last ? last.tabata_minutes !== null : false,
+    signedUpDayKey: profileRes.data
+      ? dayKey(new Date(profileRes.data.created_at as string), tz)
+      : "1970-01-01",
+  };
 }
 
 export async function getCompletedSessions(
