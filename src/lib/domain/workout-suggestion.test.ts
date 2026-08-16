@@ -234,4 +234,24 @@ describe("suggestionCopy — 문구", () => {
     const copy = suggestionCopy("repeat", "2026-08-18", 7);
     expect(copy.title).toContain("8");
   });
+
+  /**
+   * ⚠️⚠️ **회귀선이다 (2026-08-16 발견).**
+   *
+   * `currentStreak`는 연속이 끊기면 **0**을 돌려준다(`streak.ts:42`). 옛 판은
+   * 그대로 넣어서 `🔥 0일째` · `🔥 0일 이어왔어요`가 나갔다 — 하필 재참여가
+   * 가장 필요한 사람에게 말이 안 되는 문구였다.
+   *
+   * ⚠️ 날짜 셋을 도는 이유: 변형이 셋이라 한 날짜만 보면 멀쩡한 변형에
+   *    걸려 헛통과한다(`🔥 오늘만 채우면 1일`은 0에서도 말이 된다).
+   */
+  it("스트릭이 0이면 없는 연속을 숫자로 말하지 않는다", () => {
+    for (const d of ["2026-08-16", "2026-08-17", "2026-08-18"]) {
+      expect(suggestionCopy("repeat", d, 0).title).not.toContain("0일");
+    }
+  });
+
+  it("스트릭이 있으면 그 숫자를 그대로 말한다", () => {
+    expect(suggestionCopy("repeat", "2026-08-16", 12).title).toContain("12");
+  });
 });

@@ -163,10 +163,11 @@ describe("buildBriefings — 본문·dedupe_key", () => {
     ["f2", [kst("2026-07-17T08:00:00")]],
   ]);
 
-  it("본문은 언제나 null — 크루 집계 문구를 없앴다 (2026-07-28)", () => {
-    // 2026-08-16: 제안이 있으면 본문을 채운다(아래 "계획 없는 날 제안" describe).
-    // 이 단언은 그 이전의 "크루 집계 문구 제거"를 보는 것이므로, 제안이 끼어들지
-    // 않도록 오늘 계획이 있는 경우로 고정한다.
+  it("제안이 없는 날의 본문은 null이다 — 크루 집계 문구를 없앴다 (2026-07-28)", () => {
+    // 2026-08-16: body는 이제 "언제나 null"이 아니다 — 제안이 있는 날은
+    // 본문을 채운다(아래 "계획 없는 날 제안" describe). 이 단언은 그 이전의
+    // "크루 집계 문구 제거"를 보는 것이므로, hasPlanToday: true로 제안을 꺼서
+    // 그 경로만 고정해서 본다.
     // 어제 운동한 사람이 있든 없든, 크루가 있든 없든 결과가 같아야 한다.
     expect(
       buildBriefings([user({ hasPlanToday: true })], byUser, NOW).briefings[0]
@@ -277,5 +278,19 @@ describe("buildBriefings — 계획 없는 날 제안", () => {
       .briefings[0];
     expect(withPlan.dedupeKey).toBe(withSuggestion.dedupeKey);
     expect(withPlan.dedupeKey).toContain("morning_briefing:");
+  });
+
+  /**
+   * 소멸 유저(스트릭 0)도 제안을 받는다 — 다만 없는 연속을 말하지 않는다.
+   * 이 사람들이 재참여가 가장 필요한 층이다.
+   */
+  it("스트릭이 끊긴 사람에게도 제안이 가고, 0일을 말하지 않는다", () => {
+    const { briefings } = buildBriefings(
+      [user({ completedAts: [kst("2026-06-01T19:00:00")] })], // 한참 전 → 소멸
+      new Map(),
+      NOW,
+    );
+    expect(briefings[0].type).toBe("workout_suggestion");
+    expect(briefings[0].title).not.toContain("0일");
   });
 });

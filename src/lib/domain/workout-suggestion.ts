@@ -126,6 +126,23 @@ const REPEAT_TITLES: ((streak: number) => string)[] = [
   (n) => `🔥 오늘만 채우면 ${n + 1}일`,
 ];
 
+/**
+ * 스트릭이 **끊긴** 사람의 제목 (2026-08-16).
+ *
+ * ⚠️⚠️ `currentStreak`는 연속이 끊기면 **0**을 돌려준다(`streak.ts:42`). 그대로
+ *    `REPEAT_TITLES`에 넣으면 `🔥 0일째` · `🔥 0일 이어왔어요`가 나간다 —
+ *    **하필 재참여가 가장 필요한 사람에게** 말이 안 되는 문구다.
+ *
+ * ⚠️ 없는 연속을 숫자로 말하지 않는다. `streak-messages.ts` 머리주석이 같은
+ *    규칙을 적어 두고 있다: 소멸 단계는 새 출발 효과를 쓰고, *"사실을 넘지 마라.
+ *    화면이 거짓말하는 순간 다음 경고도 안 믿는다."*
+ */
+const REPEAT_RESTART_TITLES: string[] = [
+  "🔥 오늘, 다시 시작해볼까요?",
+  "🔥 지난번 그 운동부터 다시",
+  "🔥 오늘 한 번이면 다시 1일",
+];
+
 const REPEAT_BODY = "지난번 그대로 담아 뒀어요 · 시간 없으면 4분만이라도";
 
 /**
@@ -146,7 +163,12 @@ export function suggestionCopy(
 ): SuggestionCopy {
   if (kind === "repeat") {
     return {
-      title: pickByDay(REPEAT_TITLES, todayKey)(streak),
+      // ⚠️ 스트릭 0은 **끊긴 상태**다. 숫자를 말하지 않는 쪽으로 간다 —
+      //    위 `REPEAT_RESTART_TITLES` 주석 참조.
+      title:
+        streak > 0
+          ? pickByDay(REPEAT_TITLES, todayKey)(streak)
+          : pickByDay(REPEAT_RESTART_TITLES, todayKey),
       body: REPEAT_BODY,
     };
   }
