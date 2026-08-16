@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { RecordEmptyState } from "./record-empty-state";
 
@@ -126,5 +126,66 @@ describe("RecordEmptyState — 등록 0개 화면 (사용자 지시 2026-08-06)"
     expect(startCard.textContent).toContain("초보자도 쉽게 시작");
     expect(addButton.getAttribute("data-priority")).toBe("primary");
     expect(recentButton.getAttribute("data-priority")).toBe("secondary");
+  });
+});
+
+/**
+ * 2026-08-16 — 계획 없는 날 제안 카드 (C2).
+ *
+ * ⚠️⚠️ 제안이 링크에만 살면 **앱 아이콘으로 들어온 사람은 아무것도 못 본다.**
+ * 이 카드가 그 구멍을 막는다.
+ */
+describe("제안 카드", () => {
+  it("걷기 제안이면 주 버튼과 철학문이 뜬다", () => {
+    render(
+      <RecordEmptyState
+        hasHistory={false}
+        onAdd={() => {}}
+        onLoadRecent={() => {}}
+        suggestionKind="walk"
+        suggestionBody="오래 하는 것보다, 하루도 빼먹지 않는 게 중요해요"
+        onApplySuggestion={() => {}}
+        onApplySecondary={() => {}}
+      />,
+    );
+    expect(screen.getByRole("button", { name: /10분 걷기 담기/ })).toBeTruthy();
+    expect(screen.getByText(/빼먹지 않는 게 중요/)).toBeTruthy();
+  });
+
+  /**
+   * ⚠️ 보조 버튼은 주 버튼과 **하는 일이 다르다** — 담는 게 아니라 시트를 연다.
+   * `recommended-picker.tsx`가 같은 함정을 겪었다. 문구로 가른다.
+   */
+  it("지난 운동 제안에는 '4분 인터벌 시작'이 같이 뜬다", () => {
+    render(
+      <RecordEmptyState
+        hasHistory
+        onAdd={() => {}}
+        onLoadRecent={() => {}}
+        suggestionKind="repeat"
+        suggestionBody="지난번 그대로 담아 뒀어요 · 시간 없으면 4분만이라도"
+        onApplySuggestion={() => {}}
+        onApplySecondary={() => {}}
+      />,
+    );
+    expect(screen.getByRole("button", { name: /지난번 그대로 담기/ })).toBeTruthy();
+    const secondary = screen.getByRole("button", { name: /4분 인터벌/ });
+    expect(secondary.textContent).toContain("시작");
+    expect(secondary.textContent).not.toContain("담기");
+  });
+
+  it("제안이 없으면 카드가 안 뜬다", () => {
+    render(
+      <RecordEmptyState
+        hasHistory
+        onAdd={() => {}}
+        onLoadRecent={() => {}}
+        suggestionKind={null}
+        suggestionBody=""
+        onApplySuggestion={() => {}}
+        onApplySecondary={() => {}}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /담기/ })).toBeNull();
   });
 });

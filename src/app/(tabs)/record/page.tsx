@@ -97,6 +97,7 @@ import {
 import { SITUATIONS } from "@/lib/domain/recommended-exercises";
 import {
   pickSuggestionKind,
+  suggestionCopy,
   type SuggestionKind,
 } from "@/lib/domain/workout-suggestion";
 import { takeCalendarView } from "@/lib/record-view";
@@ -2526,6 +2527,26 @@ function WorkoutScreen({ userId }: { userId: string }) {
           onLoadRecent={() => void openExercisePicker("past")}
           onLoadRoutine={() => void openExercisePicker("routine")}
           routineCount={routines?.length ?? 0}
+          suggestionKind={suggestionKind}
+          suggestionBody={
+            suggestionKind
+              ? // ⚠️ 스트릭 0을 넘긴다. 카드는 `body`만 쓰는데 `body`는 스트릭에
+                // 영향받지 않는다 — 숫자가 나오는 곳은 `title`뿐이다.
+                suggestionCopy(
+                  suggestionKind,
+                  dayKey(
+                    new Date(),
+                    Intl.DateTimeFormat().resolvedOptions().timeZone ||
+                      "Asia/Seoul",
+                  ),
+                  0,
+                ).body
+              : ""
+          }
+          onApplySuggestion={() => {
+            if (suggestionKind) void applySuggestion(suggestionKind);
+          }}
+          onApplySecondary={() => void applySuggestion("interval")}
         />
       )}
 
