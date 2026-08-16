@@ -2118,6 +2118,15 @@ function WorkoutScreen({ userId }: { userId: string }) {
       setXpEvents(buildXpEvents(xp)); // 멱등 재생·XP 0이면 빈 배열 → 모달 없음
       clearDraft(userId);
       setDraft(emptyDraft(draft.restSeconds));
+      /*
+        ⚠️ 오늘 운동했다는 사실을 **여기서 바로** 세운다 (사용자 지적 2026-08-16).
+
+        `didWorkoutToday`는 화면에 들어올 때 `getSuggestionFacts`가 한 번만 읽는다.
+        같은 화면에서 운동을 끝내면 그 값이 `false`로 남아, 방금 운동을 마쳤는데도
+        빈 화면에 "오늘 뭐라도 하세요" 제안 카드가 그대로 떠 있었다.
+        다시 조회하지 않는 이유: 완료했다는 것을 이 자리가 이미 알고 있다.
+      */
+      setDidWorkoutToday(true);
       // 완료 직후 다시 운동을 준비할 때 방금 기록도 목록에 포함한다.
       setPastLoaded(false);
       setPastSessions([]);
