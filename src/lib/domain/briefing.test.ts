@@ -20,6 +20,13 @@ function user(over: Partial<BriefingUser>): BriefingUser {
     // 09:00 폴백 위에서 그대로 성립한다 — 시각 판정이 아니라 문구·dedupe를 보는 테스트다.
     startedAts: [],
     morningBrief: true,
+    // ── 2026-08-16 제안 파이프라인 ──
+    // ⚠️ 가입일 기본값은 **창 밖**이다. 창 안으로 두면 위쪽
+    //    "완료 세션 없으면 no_history" 단언이 제안 때문에 통과하게 되어 깨진다.
+    signedUpAt: kst("2026-06-01T00:00:00"),
+    hasPlanToday: false,
+    isInActiveChallenge: false,
+    lastSessionWasInterval: false,
     ...over,
   };
 }
@@ -121,8 +128,18 @@ describe("buildBriefings — 제목(스트릭 단계)", () => {
     expect(briefings[0].title).toContain("1일"); // 4일 전 1회 운동 → 스트릭 1
   });
   it("expired: 소멸 유저도 재점화 카피로 발송", () => {
+    // 2026-08-16: 계획 없는 날은 제안이 제목을 가져간다(아래 "계획 없는 날 제안"
+    // describe). 이 단언은 원래 스트릭 문구 조립 자체를 보는 것이므로,
+    // 제안이 끼어들지 않도록 오늘 계획이 있는 경우로 고정한다.
     const { briefings } = buildBriefings(
-      [user({ completedAts: [kst("2026-07-10T19:00:00")] })], new Map(), NOW,
+      [
+        user({
+          completedAts: [kst("2026-07-10T19:00:00")],
+          hasPlanToday: true,
+        }),
+      ],
+      new Map(),
+      NOW,
     );
     expect(briefings).toHaveLength(1);
     expect(briefings[0].title).toContain("불꽃");
@@ -147,14 +164,118 @@ describe("buildBriefings — 본문·dedupe_key", () => {
   ]);
 
   it("본문은 언제나 null — 크루 집계 문구를 없앴다 (2026-07-28)", () => {
+    // 2026-08-16: 제안이 있으면 본문을 채운다(아래 "계획 없는 날 제안" describe).
+    // 이 단언은 그 이전의 "크루 집계 문구 제거"를 보는 것이므로, 제안이 끼어들지
+    // 않도록 오늘 계획이 있는 경우로 고정한다.
     // 어제 운동한 사람이 있든 없든, 크루가 있든 없든 결과가 같아야 한다.
-    expect(buildBriefings([user({})], byUser, NOW).briefings[0].body).toBeNull();
     expect(
-      buildBriefings([user({})], new Map(), NOW).briefings[0].body,
+      buildBriefings([user({ hasPlanToday: true })], byUser, NOW).briefings[0]
+        .body,
+    ).toBeNull();
+    expect(
+      buildBriefings([user({ hasPlanToday: true })], new Map(), NOW)
+        .briefings[0].body,
     ).toBeNull();
   });
   it("dedupe_key = morning_briefing:{userId}:{tz 로컬 날짜}", () => {
     const { briefings } = buildBriefings([user({})], new Map(), NOW);
     expect(briefings[0].dedupeKey).toBe("morning_briefing:me:2026-07-18");
+  });
+});
+
+/**
+ * 2026-08-16 — 계획 없는 날 제안.
+ * 설계: `docs/superpowers/specs/2026-08-16-empty-day-workout-suggestion-design.md`
+ */
+describe("buildBriefings — 계획 없는 날 제안", () => {
+  /**
+   * ⚠️⚠️ **회귀선이다.** 이 게이트가 "신규에게 걷기"의 전부다.
+   * 옛 코드는 `completedAts.length === 0`이면 무조건 스킵해서 신규 유저가
+   * 알림을 **한 통도** 못 받았다.
+   */
+  it("가입 창 안의 신규 유저는 제안을 받는다", () => {
+    const { briefings, skipped } = buildBriefings(
+      [
+        user({
+          completedAts: [],
+          signedUpAt: kst("2026-07-16T00:00:00"), // 2일 전 → 창 안
+        }),
+      ],
+      new Map(),
+      NOW,
+    );
+    expect(skipped).toHaveLength(0);
+    expect(briefings).toHaveLength(1);
+    expect(briefings[0].title).toContain("10분");
+    expect(briefings[0].type).toBe("workout_suggestion");
+    expect(briefings[0].body).not.toBeNull();
+  });
+
+  /**
+   * 위와 한 쌍이다. 한쪽만 있으면 창을 통째로 열어도 통과한다.
+   */
+  it("가입 창이 지난 무기록 유저는 여전히 no_history다", () => {
+    const { briefings, skipped } = buildBriefings(
+      [user({ completedAts: [] })], // 기본 가입일 = 창 밖
+      new Map(),
+      NOW,
+    );
+    expect(briefings).toHaveLength(0);
+    expect(skipped).toEqual([{ userId: "me", reason: "no_history" }]);
+  });
+
+  /**
+   * ⚠️ opt-out은 제안보다 **앞**이다. 같은 채널이므로 똑같이 존중한다 —
+   * 순서를 뒤집으면 "알림 껐는데 오네"가 된다.
+   */
+  it("morning_brief를 끈 사람은 제안이 있어도 안 받는다", () => {
+    const { briefings, skipped } = buildBriefings(
+      [
+        user({
+          completedAts: [],
+          signedUpAt: kst("2026-07-16T00:00:00"),
+          morningBrief: false,
+        }),
+      ],
+      new Map(),
+      NOW,
+    );
+    expect(briefings).toHaveLength(0);
+    expect(skipped[0].reason).toBe("opted_out");
+  });
+
+  it("이력 있는 사람은 지난 운동 제안을 받는다", () => {
+    const { briefings } = buildBriefings([user({})], new Map(), NOW);
+    expect(briefings[0].type).toBe("workout_suggestion");
+    expect(briefings[0].body).toContain("4분");
+  });
+
+  /**
+   * ⚠️⚠️ **기존 동작 보존의 회귀선이다.** 계획이 있는 날은 지금 그대로
+   * 스트릭 브리핑이 나가야 한다. 제안이 그 자리를 뺏으면 안 된다.
+   */
+  it("오늘 계획이 있으면 지금 그대로 morning_briefing이다", () => {
+    const { briefings } = buildBriefings(
+      [user({ hasPlanToday: true })],
+      new Map(),
+      NOW,
+    );
+    expect(briefings[0].type).toBe("morning_briefing");
+    expect(briefings[0].body).toBeNull();
+  });
+
+  /**
+   * ⚠️⚠️ **전환일 두 통째 방지.** 유니크 인덱스가 `dedupe_key` 하나에만
+   * 걸려 있어서(`notifications_dedupe_key_uidx`), 키를 바꾸면 이미 브리핑을
+   * 받은 사람에게 제안이 **한 통 더** 뚫린다.
+   */
+  it("dedupe_key는 type과 무관하게 그대로다", () => {
+    const withPlan = buildBriefings(
+      [user({ hasPlanToday: true })], new Map(), NOW,
+    ).briefings[0];
+    const withSuggestion = buildBriefings([user({})], new Map(), NOW)
+      .briefings[0];
+    expect(withPlan.dedupeKey).toBe(withSuggestion.dedupeKey);
+    expect(withPlan.dedupeKey).toContain("morning_briefing:");
   });
 });
