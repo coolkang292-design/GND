@@ -5,6 +5,7 @@ import {
   bugReminderText,
 } from "@/lib/domain/bug-reminder";
 import { buildBriefings, type BriefingUser } from "@/lib/domain/briefing";
+import { dayKey } from "@/lib/domain/time";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -149,12 +150,14 @@ export async function GET(req: Request) {
     user_id: string;
     completed_at: string;
     started_at: string | null;
+    /** 인터벌 세션이면 코스 분수 (0019). 제안 분기의 `lastSessionWasInterval` 재료 */
+    tabata_minutes: number | null;
   };
   const sessionRows: SessionRow[] = [];
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await admin
       .from("workout_sessions")
-      .select("user_id, completed_at, started_at")
+      .select("user_id, completed_at, started_at, tabata_minutes")
       .eq("status", "completed")
       .is("deleted_at", null)
       .not("completed_at", "is", null)
@@ -168,12 +171,62 @@ export async function GET(req: Request) {
   }
 
   const [profilesRes, settingsRes] = await Promise.all([
-    admin.from("profiles").select("id, timezone"),
+    admin.from("profiles").select("id, timezone, created_at"),
     admin.from("notification_settings").select("user_id, morning_brief"),
   ]);
   const queryError = [profilesRes, settingsRes].find((r) => r.error)?.error;
   if (queryError) {
     return NextResponse.json({ error: queryError.message }, { status: 500 });
+  }
+
+  /*
+    오늘 계획이 있는 사람 — 있으면 제안하지 않는다.
+
+    ⚠️ **전량 조회 금지.** 이 크론은 30분마다, 하루 48번 돈다. `plan_date`를
+       어제~내일로 좁힌다 — ±1일은 유저 타임존 폭이다(UTC 기준 오늘 하루가
+       누군가에겐 어제이고 누군가에겐 내일이다).
+  */
+  const dayShift = (days: number) =>
+    new Date(now.getTime() + days * 86_400_000).toISOString().slice(0, 10);
+  const { data: planRows, error: plansError } = await admin
+    .from("workout_plans")
+    .select("user_id, plan_date")
+    .gte("plan_date", dayShift(-1))
+    .lte("plan_date", dayShift(1));
+  if (plansError) {
+    return NextResponse.json({ error: plansError.message }, { status: 500 });
+  }
+  const planDaysByUser = new Map<string, Set<string>>();
+  for (const row of planRows ?? []) {
+    const set = planDaysByUser.get(row.user_id as string) ?? new Set<string>();
+    set.add(row.plan_date as string);
+    planDaysByUser.set(row.user_id as string, set);
+  }
+
+  /*
+    active 챌린지에 joined로 들어간 사람 — 기록 0건이어도 인터벌을 제안한다.
+
+    실패해도 브리핑을 죽이지 않는다: 챌린지를 못 읽었다고 전 사용자의 아침
+    알림을 통째로 잃으면 손해가 훨씬 크다 — 같은 파일의 `remindPendingBugReports`가
+    같은 규칙을 쓴다.
+  */
+  const challengeMembers = new Set<string>();
+  try {
+    const { data: activeRows } = await admin
+      .from("challenges")
+      .select("id")
+      .eq("status", "active");
+    const activeIds = (activeRows ?? []).map((r) => r.id as string);
+    if (activeIds.length > 0) {
+      const { data: partRows } = await admin
+        .from("challenge_participants")
+        .select("user_id")
+        .eq("status", "joined")
+        .in("challenge_id", activeIds);
+      for (const r of partRows ?? []) challengeMembers.add(r.user_id as string);
+    }
+  } catch {
+    // 챌린지를 못 읽으면 그 분기만 조용히 빠진다 — 알림 자체는 나간다
   }
 
   const completedAtsByUser = new Map<string, Date[]>();
@@ -189,18 +242,41 @@ export async function GET(req: Request) {
       startedAtsByUser.set(row.user_id, starts);
     }
   }
+  /*
+    가장 최근 완료 세션이 인터벌이었나.
+
+    ⚠️ `sessionRows`는 `completed_at` **오름차순**이다(위 order). 그래서 그냥
+       덮어쓰면 마지막에 남는 것이 가장 최근이다 — 정렬을 바꾸면 여기가 뒤집힌다.
+  */
+  const lastWasIntervalByUser = new Map<string, boolean>();
+  for (const row of sessionRows) {
+    lastWasIntervalByUser.set(row.user_id, row.tabata_minutes !== null);
+  }
+
   const settings = new Map(
     (settingsRes.data ?? []).map((s) => [s.user_id, s.morning_brief as boolean]),
   );
   // 크루 조회는 없앴다(2026-07-28). 브리핑은 본문을 안 보내므로 크루 집계가 필요
   // 없고, 0039 이후 group_members는 크루의 원천도 아니다.
-  const users: BriefingUser[] = (profilesRes.data ?? []).map((p) => ({
-    userId: p.id,
-    timezone: (p.timezone as string) || "Asia/Seoul",
-    completedAts: completedAtsByUser.get(p.id) ?? [],
-    startedAts: startedAtsByUser.get(p.id) ?? [],
-    morningBrief: settings.get(p.id) ?? true,
-  }));
+  const users: BriefingUser[] = (profilesRes.data ?? []).map((p) => {
+    const timezone = (p.timezone as string) || "Asia/Seoul";
+    return {
+      userId: p.id,
+      timezone,
+      completedAts: completedAtsByUser.get(p.id) ?? [],
+      startedAts: startedAtsByUser.get(p.id) ?? [],
+      morningBrief: settings.get(p.id) ?? true,
+      // ── 계획 없는 날 제안 (2026-08-16) ──
+      signedUpAt: new Date(p.created_at as string),
+      // ⚠️ 오늘은 **이 사람 타임존 기준**이다. UTC 오늘로 재면 KST 사용자에게
+      //    하루 어긋난다 — `dayKey`가 그 계산의 단일 원천이다.
+      hasPlanToday: (planDaysByUser.get(p.id) ?? new Set()).has(
+        dayKey(now, timezone),
+      ),
+      isInActiveChallenge: challengeMembers.has(p.id),
+      lastSessionWasInterval: lastWasIntervalByUser.get(p.id) ?? false,
+    };
+  });
 
   const { briefings, skipped } = buildBriefings(
     users,
@@ -219,7 +295,7 @@ export async function GET(req: Request) {
       .upsert(
         {
           user_id: b.userId,
-          type: "morning_briefing",
+          type: b.type,
           title: b.title,
           body: b.body,
           dedupe_key: b.dedupeKey,
