@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { NEW_USER_GRACE_DAYS, pickSuggestionKind } from "./workout-suggestion";
+import {
+  NEW_USER_GRACE_DAYS,
+  pickSuggestionKind,
+  secondaryKind,
+} from "./workout-suggestion";
 
 /** 이력 있는 사람의 기본형 — 각 테스트가 필요한 것만 덮어쓴다 */
 const base = {
@@ -96,5 +100,27 @@ describe("pickSuggestionKind — 이력 있는 유저", () => {
     expect(
       pickSuggestionKind({ ...base, lastSessionWasInterval: true }),
     ).toBe("interval");
+  });
+});
+
+describe("secondaryKind — 보조 제안", () => {
+  it("지난 운동에는 4분 인터벌을 같이 낸다", () => {
+    expect(secondaryKind("repeat")).toBe("interval");
+  });
+
+  /**
+   * ⚠️ 인터벌이 주 제안일 때 보조로도 인터벌을 내면 **같은 버튼이 둘**이 된다.
+   */
+  it("인터벌이 주 제안이면 보조가 없다", () => {
+    expect(secondaryKind("interval")).toBeNull();
+  });
+
+  /**
+   * 신규에게는 걷기만 낸다 (사용자 지시 2026-08-16). 인터벌 4종
+   * (맨몸 스쿼트·니 푸시업·데드버그·마운틴 클라이머)은 처음 온 사람에게
+   * 걷기보다 부담이 크다.
+   */
+  it("걷기에는 보조가 없다", () => {
+    expect(secondaryKind("walk")).toBeNull();
   });
 });

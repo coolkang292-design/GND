@@ -67,3 +67,15 @@ export function pickSuggestionKind(input: {
   if (input.lastSessionWasInterval) return "interval";
   return "repeat";
 }
+
+/**
+ * 주 제안에 딸리는 보조 제안. 없으면 `null`.
+ *
+ * ⚠️ 보조 버튼은 주 버튼과 **하는 일이 다르다** — 주 제안은 목록에 담고,
+ * 인터벌은 4분 시트를 연다. `recommended-picker.tsx`의 `interval` 칸이 같은
+ * 함정을 겪었다(담기만 하면 3세트 10회짜리 일반 운동이 되어 버린다). 그래서
+ * 화면 문구도 `담기`가 아니라 **`시작`** 이어야 한다.
+ */
+export function secondaryKind(primary: SuggestionKind): SuggestionKind | null {
+  return primary === "repeat" ? "interval" : null;
+}
