@@ -115,7 +115,13 @@ export async function GET(req: Request) {
    *
    * ⚠️ 크론은 이 칸을 쓰지 않는다(`vercel.json`). `CRON_SECRET`으로 막혀 있다.
    */
-  const onlyUserId = new URL(req.url).searchParams.get("only");
+  const onlyParam = new URL(req.url).searchParams.get("only");
+  /*
+    ⚠️ 빈 문자열을 **null로 되돌린다.** `?only=`만 붙어 오면 `""`가 되는데,
+       그대로 두면 아무에게도 안 맞아 브리핑이 통째로 조용히 죽는다 —
+       실패가 아니라 `{"sent":0}`으로 보여서 알아채기까지 하루가 걸린다.
+  */
+  const onlyUserId = onlyParam === null || onlyParam === "" ? null : onlyParam;
 
   const admin = getSupabaseAdminClient();
 
