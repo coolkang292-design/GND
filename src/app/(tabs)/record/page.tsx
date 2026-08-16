@@ -1069,7 +1069,13 @@ function WorkoutScreen({ userId }: { userId: string }) {
 
     if (kind === "walk") {
       const walk = catalog.find((item) => item.name === "걷기");
-      if (!walk) return;
+      if (!walk) {
+        // ⚠️ 말없이 반환하지 않는다. 눌렀는데 아무 일도 안 일어나면 사용자는
+        //    앱이 멈춘 줄 안다 — 인터벌 분기와 같은 규칙이다.
+        //    (2026-08-16 확인: 카탈로그 104종에 '걷기'가 있다. 이름이 바뀌면 여기다.)
+        showToast("걷기 종목을 찾지 못했어요");
+        return;
+      }
       addExercises([walk]);
       setDraft((current) => ({ ...current, suggestedForDayKey: todayKey }));
       return;
