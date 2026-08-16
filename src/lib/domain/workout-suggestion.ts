@@ -81,6 +81,52 @@ export function pickSuggestionKind(input: {
 }
 
 /**
+ * 재료가 **다 왔을 때만** 제안한다 (2026-08-16).
+ *
+ * ⚠️⚠️ 이 함수가 있는 이유는 실제로 당했기 때문이다. 화면의 재료는 서로 다른
+ *    질의에서 **시차를 두고** 도착한다 — `hasHistory`가 먼저 오고
+ *    `lastSessionWasInterval`은 그 뒤에 온다. 그 사이의 순간값으로 계산하면
+ *    마지막 운동이 인터벌인 사람에게 `"repeat"`이 나오고, 그 값이 `?suggest`
+ *    경로에 그대로 소비돼 **인터벌 세션이 목록에 담긴다**(음원도 코스도 없는
+ *    맨몸 4개). 2026-08-16 개발 서버 확인에서 실제로 이 경로로 들어왔다.
+ *
+ * ⚠️ `ready`는 "질의가 끝났다"가 아니라 **"세 값이 다 세워졌다"**를 뜻한다.
+ *    실패하면 `false`로 남긴다 — 못 읽었으면 틀린 제안을 하느니 아무 말도 안 한다.
+ */
+export function pickSuggestionKindWhenReady(
+  ready: boolean,
+  input: Parameters<typeof pickSuggestionKind>[0],
+): SuggestionKind | null {
+  return ready ? pickSuggestionKind(input) : null;
+}
+
+/**
+ * 푸시의 `?suggest` 표식을 **지금 써도 되는가** (2026-08-16).
+ *
+ * ⚠️⚠️ 표식을 읽는 일과 쓰는 일은 **다른 순간에 일어난다.** 마운트 첫 렌더의
+ *    제안은 항상 `null`이다(재료가 아직 안 옴). 그때 표식을 소비해 버리면
+ *    제안이 정해진 뒤에는 쓸 표식이 없어 **알림을 눌러도 아무것도 안 담긴다.**
+ *    그래서 화면은 표식을 즉시 주소에서 지우되 `requested`로 들고 있다가,
+ *    이 함수가 참을 줄 때 비로소 쓴다.
+ *
+ * ⚠️ `draftExerciseCount`·`workoutStarted` 가드는 기존 자동 담기와 **같은 규칙**이다 —
+ *    사용자가 만든 상태를 덮지 않는다.
+ */
+export function shouldApplySuggestion(input: {
+  requested: boolean;
+  consumed: boolean;
+  kind: SuggestionKind | null;
+  draftExerciseCount: number;
+  workoutStarted: boolean;
+}): boolean {
+  if (!input.requested || input.consumed) return false;
+  if (input.kind === null) return false;
+  if (input.draftExerciseCount > 0) return false;
+  if (input.workoutStarted) return false;
+  return true;
+}
+
+/**
  * 주 제안에 딸리는 보조 제안. 없으면 `null`.
  *
  * ⚠️ 보조 버튼은 주 버튼과 **하는 일이 다르다** — 주 제안은 목록에 담고,

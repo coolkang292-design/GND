@@ -63,10 +63,7 @@ import {
   recordBeatenSummary,
   type ExerciseImprovement,
 } from "@/lib/domain/record-beaten";
-import {
-  nextRoutineSlotLevel,
-  routineSlotLimit,
-} from "@/lib/domain/routines";
+import { nextRoutineSlotLevel, routineSlotLimit } from "@/lib/domain/routines";
 import {
   deleteRoutine,
   getMyRoutines,
@@ -96,7 +93,8 @@ import {
 } from "@/lib/domain/tabata";
 import { SITUATIONS } from "@/lib/domain/recommended-exercises";
 import {
-  pickSuggestionKind,
+  pickSuggestionKindWhenReady,
+  shouldApplySuggestion,
   suggestionCopy,
   type SuggestionKind,
 } from "@/lib/domain/workout-suggestion";
@@ -261,8 +259,10 @@ function errorMessage(e: unknown): string {
   //    `PostgrestError`는 `Error`가 아니라 평범한 객체라 `오류: [object Object]`가
   //    떴다 — 화면에도, **버그 신고에도** 그대로 실린다. `error-text.ts` 주석 참조.
   const msg = errorText(e);
-  if (msg.includes("active_session_exists")) return "이미 진행 중인 운동이 있어요";
-  if (msg.includes("invalid_status")) return "세션 상태가 맞지 않아요. 새로고침해 주세요";
+  if (msg.includes("active_session_exists"))
+    return "이미 진행 중인 운동이 있어요";
+  if (msg.includes("invalid_status"))
+    return "세션 상태가 맞지 않아요. 새로고침해 주세요";
   if (msg.includes("session_not_found")) return "세션을 찾을 수 없어요";
   if (msg.includes("duplicate key")) return "이미 같은 이름의 운동이 있어요";
   return `오류: ${msg}`;
@@ -312,7 +312,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
    * 카드와 오버레이 양쪽에서 조회가 중복되고, 데이터를 고쳐도 열려 있는 시트가
    * 옛 내용을 붙들고 있게 된다.
    */
-  const [guideExerciseName, setGuideExerciseName] = useState<string | null>(null);
+  const [guideExerciseName, setGuideExerciseName] = useState<string | null>(
+    null,
+  );
   /**
    * 노력 피드백을 물을 세트 (계획 2026-08-12). null이면 안 묻는 중이다.
    *
@@ -360,11 +362,12 @@ function WorkoutScreen({ userId }: { userId: string }) {
    * 없다 — 종목만 담으면 음원도 코스도 없는 맨몸 운동 넷이 된다. 그래서
    * **버튼 하나를 대신 세운다.** 달력까지 들어가지 않아도 여기서 시작한다.
    */
-  const [todayIntervalPlan, setTodayIntervalPlan] = useState<WorkoutPlan | null>(
+  const [todayIntervalPlan, setTodayIntervalPlan] =
+    useState<WorkoutPlan | null>(null);
+  /** 예정표에서 연 타바타 — 종목·코스를 채운 채 열고, 완료하면 그 계획을 지운다 */
+  const [tabataPrefill, setTabataPrefill] = useState<TabataPrefill | null>(
     null,
   );
-  /** 예정표에서 연 타바타 — 종목·코스를 채운 채 열고, 완료하면 그 계획을 지운다 */
-  const [tabataPrefill, setTabataPrefill] = useState<TabataPrefill | null>(null);
   const tabataMinutesRef = useRef<number | null>(null);
   const [pastSessions, setPastSessions] = useState<CalendarSession[]>([]);
   const [pastLoading, setPastLoading] = useState(false);
@@ -402,7 +405,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
   /** 오늘 계획 조회가 끝났는가. 이게 true면 종목 목록(catalog)도 이미 와 있다 */
   const [plansReady, setPlansReady] = useState(false);
   /** 피커를 어느 화면으로 열지 — 기본은 진입 허브 */
-  const [pickerMode, setPickerMode] = useState<"hub" | "past" | "routine">("hub");
+  const [pickerMode, setPickerMode] = useState<"hub" | "past" | "routine">(
+    "hub",
+  );
   // ── 나만의 루틴 (0056) ────────────────────────────────────────────
   /**
    * null = 루틴 기능을 쓸 수 없다 (0056 미적용이거나 조회 실패).
@@ -443,7 +448,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const [xpEvents, setXpEvents] = useState<XpEvent[]>([]);
   const [busy, setBusy] = useState(false);
   const finishingRef = useRef(false); // 종료 재진입 방지
-  const [loadingExerciseKey, setLoadingExerciseKey] = useState<string | null>(null);
+  const [loadingExerciseKey, setLoadingExerciseKey] = useState<string | null>(
+    null,
+  );
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** 축하 화면 → 결과 화면 자동 전환 타이머 (B안). 언마운트·취소 시 반드시 끈다 */
@@ -503,26 +510,21 @@ function WorkoutScreen({ userId }: { userId: string }) {
     },
     [setDraft],
   );
-  const {
-    paused,
-    nowMs,
-    markActivity,
-    resumeFromPause,
-    totalPausedSeconds,
-  } = useIdleGuard({
-    active,
-    guarded: shouldGuardIdle({
-      exercises: draft.exercises,
-      isTabata: draft.tabataMinutes !== null,
-    }),
-    lastRestEndsAtMs,
-    snapshot: {
-      pausedSeconds: draft.pausedSeconds,
-      pausedAtMs: draft.pausedAtMs,
-      lastActivityMs: draft.lastActivityMs,
-    },
-    onChange: handleIdleChange,
-  });
+  const { paused, nowMs, markActivity, resumeFromPause, totalPausedSeconds } =
+    useIdleGuard({
+      active,
+      guarded: shouldGuardIdle({
+        exercises: draft.exercises,
+        isTabata: draft.tabataMinutes !== null,
+      }),
+      lastRestEndsAtMs,
+      snapshot: {
+        pausedSeconds: draft.pausedSeconds,
+        pausedAtMs: draft.pausedAtMs,
+        lastActivityMs: draft.lastActivityMs,
+      },
+      onChange: handleIdleChange,
+    });
 
   // 화면을 떠나면 자동 전환 타이머를 끈다 — 남아 있으면 다른 탭에서 운동이 끝난다
   useEffect(() => clearAutoFinish, [clearAutoFinish]);
@@ -801,21 +803,24 @@ function WorkoutScreen({ userId }: { userId: string }) {
     let previousName = "";
     let nextExercises: LocalExercise[] = draftRef.current.exercises;
     setDraft((d) => {
-      previousName =
-        d.exercises.find((ex) => ex.key === targetKey)?.name ?? "";
-      const out = replaceExercise(d.exercises, targetKey, (previousSetCount) => ({
-        key: localId(),
-        name: item.name,
-        bodyPart: item.body_part,
-        exerciseType: item.exercise_type,
-        measure: item.measure,
-        isCustom: item.is_custom,
-        // 세트 **수**는 유지하고 값은 새로 시작한다 — 4세트 하려고 담아 뒀는데
-        // 바꿨더니 1세트가 되면 계획이 사라진다.
-        sets: Array.from({ length: Math.max(1, previousSetCount) }, () =>
-          newSet(),
-        ),
-      }));
+      previousName = d.exercises.find((ex) => ex.key === targetKey)?.name ?? "";
+      const out = replaceExercise(
+        d.exercises,
+        targetKey,
+        (previousSetCount) => ({
+          key: localId(),
+          name: item.name,
+          bodyPart: item.body_part,
+          exerciseType: item.exercise_type,
+          measure: item.measure,
+          isCustom: item.is_custom,
+          // 세트 **수**는 유지하고 값은 새로 시작한다 — 4세트 하려고 담아 뒀는데
+          // 바꿨더니 1세트가 되면 계획이 사라진다.
+          sets: Array.from({ length: Math.max(1, previousSetCount) }, () =>
+            newSet(),
+          ),
+        }),
+      );
       replaced = out.replaced;
       nextExercises = out.exercises;
       // 사용자가 목록을 건드렸다 — 이제 본인 것이므로 자정 만료 대상이 아니다
@@ -1093,7 +1098,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
     // ⚠️ `addPastSession`은 `pastSessions`를 클로저로 읽는다. 위 `setPastSessions`는
     //    이번 틱에 그 클로저까지 갱신하지 못하지만, 위에서 인터벌을 이미 걸러 냈다.
     const ok = await addPastSession(recent.id);
-    if (ok) setDraft((current) => ({ ...current, suggestedForDayKey: todayKey }));
+    if (ok)
+      setDraft((current) => ({ ...current, suggestedForDayKey: todayKey }));
   }
 
   async function addPastSession(sessionId: string): Promise<boolean> {
@@ -1143,12 +1149,12 @@ function WorkoutScreen({ userId }: { userId: string }) {
 
       setDraft((current) => ({
         ...current,
-        exercises: mergeImportedExercises(current.exercises, imported).exercises,
+        exercises: mergeImportedExercises(current.exercises, imported)
+          .exercises,
         effortMessage: buildEffortMessage(merged.added),
       }));
-      const skipped = merged.skippedCount > 0
-        ? ` · 중복 ${merged.skippedCount}개 제외`
-        : "";
+      const skipped =
+        merged.skippedCount > 0 ? ` · 중복 ${merged.skippedCount}개 제외` : "";
       showToast(`지난 기록에서 ${merged.added.length}개 추가했어요${skipped}`);
       return true;
     } catch (error) {
@@ -1203,7 +1209,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
     }));
     const skipped =
       merged.skippedCount > 0 ? ` · 중복 ${merged.skippedCount}개 제외` : "";
-    showToast(`'${routine.name}'에서 ${merged.added.length}개 추가했어요${skipped}`);
+    showToast(
+      `'${routine.name}'에서 ${merged.added.length}개 추가했어요${skipped}`,
+    );
     return true;
   }
 
@@ -1280,7 +1288,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
     try {
       const renamed = await renameRoutine(routineId, name);
       setRoutines((current) =>
-        (current ?? []).map((item) => (item.id === renamed.id ? renamed : item)),
+        (current ?? []).map((item) =>
+          item.id === renamed.id ? renamed : item,
+        ),
       );
       return true;
     } catch (error) {
@@ -1474,7 +1484,10 @@ function WorkoutScreen({ userId }: { userId: string }) {
     if (restPlan.timerAction === "start" && restAllowed) {
       // 종목별 휴식 (계획 2026-08-12) — 처방이 있으면 그것이 전역 설정을 이긴다.
       // 복합 120~150초·고립 75초라 전역 값만 쓰면 프로그램 회복 시간이 무시된다.
-      startRest(sourceKey, restSecondsForExercise(ex.prescription, draft.restSeconds));
+      startRest(
+        sourceKey,
+        restSecondsForExercise(ex.prescription, draft.restSeconds),
+      );
     } else if (restPlan.timerAction === "cancel") {
       cancelRestForSource(sourceKey);
     }
@@ -1535,11 +1548,15 @@ function WorkoutScreen({ userId }: { userId: string }) {
         return {
           ...exercise,
           sets: exercise.sets.map((set, index) => {
-            if (index === ask.setIndex) return { ...set, effortFeedback: feedback };
+            if (index === ask.setIndex)
+              return { ...set, effortFeedback: feedback };
             if (set.done || delta === 0) return set;
             return {
               ...set,
-              weightKg: Math.max(0, (answered?.weightKg ?? set.weightKg) + delta),
+              weightKg: Math.max(
+                0,
+                (answered?.weightKg ?? set.weightKg) + delta,
+              ),
             };
           }),
         };
@@ -1661,7 +1678,10 @@ function WorkoutScreen({ userId }: { userId: string }) {
 
   function stepRest(delta: number) {
     markActivity();
-    setDraft((d) => ({ ...d, restSeconds: nextRestSeconds(d.restSeconds, delta) }));
+    setDraft((d) => ({
+      ...d,
+      restSeconds: nextRestSeconds(d.restSeconds, delta),
+    }));
     adjustRest(delta);
   }
 
@@ -1686,9 +1706,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
         지난 기록을 인터벌로 되살리는 경로(`tabataResumeFromSession`)와 같은
         규칙이다: **이름과 코스만 있으면 된다.**
       */
-      const items = course
-        ? []
-        : await getSessionExerciseStructure(sessionId);
+      const items = course ? [] : await getSessionExerciseStructure(sessionId);
       if (!course && items.length === 0) {
         throw new Error("복사할 종목이 없어요");
       }
@@ -1903,7 +1921,10 @@ function WorkoutScreen({ userId }: { userId: string }) {
         const previous = await getProgramLoadEvidence(userId, ex.name).catch(
           () => [],
         );
-        return { key: ex.key, load: initialProgramLoad(ex.prescription!, previous) };
+        return {
+          key: ex.key,
+          load: initialProgramLoad(ex.prescription!, previous),
+        };
       }),
     );
     const weightByKey = new Map(
@@ -2178,20 +2199,18 @@ function WorkoutScreen({ userId }: { userId: string }) {
       // ⚠️ 재료가 다 오기 전에는 **아무 제안도 하지 않는다.** 반쯤 채워진 상태로
       //    계산하면 순간적으로 틀린 제안이 나오고, 그 순간값이 화면에 깜빡이거나
       //    `?suggest` 경로에 그대로 소비된다.
-      !factsReady || !plansReady
-        ? null
-        : pickSuggestionKind({
-            hasPlanToday: todayPlanExists,
-            didWorkoutToday,
-            hasHistory,
-            lastSessionWasInterval,
-            isInActiveChallenge: challengeGoals !== null,
-            signedUpDayKey,
-            todayKey: dayKey(
-              new Date(),
-              Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Seoul",
-            ),
-          }),
+      pickSuggestionKindWhenReady(factsReady && plansReady, {
+        hasPlanToday: todayPlanExists,
+        didWorkoutToday,
+        hasHistory,
+        lastSessionWasInterval,
+        isInActiveChallenge: challengeGoals !== null,
+        signedUpDayKey,
+        todayKey: dayKey(
+          new Date(),
+          Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Seoul",
+        ),
+      }),
     [
       factsReady,
       plansReady,
@@ -2237,13 +2256,21 @@ function WorkoutScreen({ userId }: { userId: string }) {
 
   // (2) 제안이 정해지면 **그때** 담는다. 한 번만.
   useEffect(() => {
-    if (!suggestRequestedRef.current || suggestConsumedRef.current) return;
-    if (suggestionKind === null) return;
-    // 기존 자동 담기와 **같은 가드** — 사용자가 만든 상태를 덮지 않는다
-    if (draftRef.current.exercises.length > 0) return;
-    if (draftRef.current.startedAtMs !== null) return;
+    // 판정은 `shouldApplySuggestion`이 한다 — 규칙이 화면에 흩어져 있으면
+    // 테스트가 못 잡는다. 그 함수의 주석이 왜 두 단계인지 설명한다.
+    if (
+      !shouldApplySuggestion({
+        requested: suggestRequestedRef.current,
+        consumed: suggestConsumedRef.current,
+        kind: suggestionKind,
+        draftExerciseCount: draftRef.current.exercises.length,
+        workoutStarted: draftRef.current.startedAtMs !== null,
+      })
+    ) {
+      return;
+    }
     suggestConsumedRef.current = true;
-    void applySuggestion(suggestionKind);
+    void applySuggestion(suggestionKind!);
     // applySuggestion은 렌더마다 새로 만들어진다. ref가 한 번만 돌게 막는다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [suggestionKind]);
@@ -2338,7 +2365,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
     return (
       <div className="flex flex-col gap-3">
         <header className="pt-2 pb-1">
-          <h1 className="text-[19px] font-extrabold tracking-tight">운동 기록</h1>
+          <h1 className="text-[19px] font-extrabold tracking-tight">
+            운동 기록
+          </h1>
         </header>
         <section className="rounded-card border border-good bg-surface p-6 text-center shadow-card">
           <div className="text-4xl">🎉</div>
@@ -2481,9 +2510,15 @@ function WorkoutScreen({ userId }: { userId: string }) {
     >
       <header className="flex items-center justify-between pt-2 pb-1">
         <div>
-          <h1 className="text-[19px] font-extrabold tracking-tight">운동 기록</h1>
+          <h1 className="text-[19px] font-extrabold tracking-tight">
+            운동 기록
+          </h1>
           <p className="mt-0.5 text-[12.5px] text-muted">
-            {active ? "운동 중" : isEmpty ? "처음이라면 운동부터 추가해보세요" : "준비"}
+            {active
+              ? "운동 중"
+              : isEmpty
+                ? "처음이라면 운동부터 추가해보세요"
+                : "준비"}
           </p>
         </div>
         {active && subTab === "workout" && (
@@ -2504,9 +2539,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
             key={t}
             onClick={() => setSubTab(t)}
             className={`h-9 flex-1 rounded-[9px] text-sm font-bold transition-colors ${
-              subTab === t
-                ? "bg-surface text-accent shadow-card"
-                : "text-muted"
+              subTab === t ? "bg-surface text-accent shadow-card" : "text-muted"
             }`}
           >
             {t === "workout" ? "운동" : "달력"}
@@ -2537,7 +2570,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
         </>
       ) : (
         <>
-      {/*
+          {/*
         오늘 인터벌 계획이 있으면 **여기서 바로 시작한다** (사용자 지시 2026-08-13).
 
         근력 계획은 화면을 열 때 목록에 자동으로 담기는데 인터벌은 담을 수가
@@ -2547,231 +2580,237 @@ function WorkoutScreen({ userId }: { userId: string }) {
         ⚠️ 운동 중에는 안 보여 준다. 진행 중인 세션 위에 또 시작할 자리를 주면
            "이미 운동 중이에요"만 보게 된다.
       */}
-      {todayIntervalPlan && !active && (
-        <button
-          type="button"
-          data-testid="today-interval-start"
-          disabled={busy}
-          onClick={() => {
-            void (async () => {
-              const started = await handleLoadPlan(todayIntervalPlan, {
-                startNow: true,
-              });
-              if (started) setTodayIntervalPlan(null);
-            })();
-          }}
-          className="mb-3 flex w-full items-center justify-between gap-3 rounded-card border border-accent/55 bg-accent/10 px-4 py-3.5 text-left disabled:opacity-60"
-        >
-          <span className="min-w-0">
-            <span className="block text-sm font-black text-text">
-              🔥 오늘은 전신 인터벌이에요
-            </span>
-            <span className="mt-0.5 block text-[11.5px] leading-4 text-muted">
-              {todayIntervalPlan.exercises.map((item) => item.name).join(" · ")}
-            </span>
-          </span>
-          <span className="flex-none text-xs font-extrabold text-accent">
-            시작하기
-          </span>
-        </button>
-      )}
+          {todayIntervalPlan && !active && (
+            <button
+              type="button"
+              data-testid="today-interval-start"
+              disabled={busy}
+              onClick={() => {
+                void (async () => {
+                  const started = await handleLoadPlan(todayIntervalPlan, {
+                    startNow: true,
+                  });
+                  if (started) setTodayIntervalPlan(null);
+                })();
+              }}
+              className="mb-3 flex w-full items-center justify-between gap-3 rounded-card border border-accent/55 bg-accent/10 px-4 py-3.5 text-left disabled:opacity-60"
+            >
+              <span className="min-w-0">
+                <span className="block text-sm font-black text-text">
+                  🔥 오늘은 전신 인터벌이에요
+                </span>
+                <span className="mt-0.5 block text-[11.5px] leading-4 text-muted">
+                  {todayIntervalPlan.exercises
+                    .map((item) => item.name)
+                    .join(" · ")}
+                </span>
+              </span>
+              <span className="flex-none text-xs font-extrabold text-accent">
+                시작하기
+              </span>
+            </button>
+          )}
 
-      {/*
+          {/*
         등록된 운동이 0개면 볼륨·휴식·시작·타바타·복구 안내를 **하나도** 안
         그린다 (사용자 지시 2026-08-06). 여기서 중요한 건 무엇을 더 그리느냐가
         아니라 무엇을 **안 그리느냐**다 — 지금 할 일은 하나다.
       */}
-      {isEmpty && (
-        <RecordEmptyState
-          hasHistory={hasHistory}
-          onAdd={() => void openExercisePicker("hub")}
-          onLoadRecent={() => void openExercisePicker("past")}
-          onLoadRoutine={() => void openExercisePicker("routine")}
-          routineCount={routines?.length ?? 0}
-          suggestionKind={suggestionKind}
-          suggestionBody={
-            suggestionKind
-              ? // ⚠️ 스트릭 0을 넘긴다. 카드는 `body`만 쓰는데 `body`는 스트릭에
-                // 영향받지 않는다 — 숫자가 나오는 곳은 `title`뿐이다.
-                suggestionCopy(
-                  suggestionKind,
-                  dayKey(
-                    new Date(),
-                    Intl.DateTimeFormat().resolvedOptions().timeZone ||
-                      "Asia/Seoul",
-                  ),
-                  0,
-                ).body
-              : ""
-          }
-          onApplySuggestion={() => {
-            if (suggestionKind) void applySuggestion(suggestionKind);
-          }}
-          onApplySecondary={() => void applySuggestion("interval")}
-        />
-      )}
+          {isEmpty && (
+            <RecordEmptyState
+              hasHistory={hasHistory}
+              onAdd={() => void openExercisePicker("hub")}
+              onLoadRecent={() => void openExercisePicker("past")}
+              onLoadRoutine={() => void openExercisePicker("routine")}
+              routineCount={routines?.length ?? 0}
+              suggestionKind={suggestionKind}
+              suggestionBody={
+                suggestionKind
+                  ? // ⚠️ 스트릭 0을 넘긴다. 카드는 `body`만 쓰는데 `body`는 스트릭에
+                    // 영향받지 않는다 — 숫자가 나오는 곳은 `title`뿐이다.
+                    suggestionCopy(
+                      suggestionKind,
+                      dayKey(
+                        new Date(),
+                        Intl.DateTimeFormat().resolvedOptions().timeZone ||
+                          "Asia/Seoul",
+                      ),
+                      0,
+                    ).body
+                  : ""
+              }
+              onApplySuggestion={() => {
+                if (suggestionKind) void applySuggestion(suggestionKind);
+              }}
+              onApplySecondary={() => void applySuggestion("interval")}
+            />
+          )}
 
-      {/* 세션 헤더 (§10) */}
-      {!isEmpty && (
-      <section className="rounded-card border border-line bg-surface p-4 shadow-card">
-        <div className="flex items-start justify-between">
-          <div>
-            <p
-              className={`text-xs font-bold ${paused ? "text-warn" : "text-accent"}`}
-            >
-              {paused ? "⏸ 정지됨 — 무동작" : active ? "운동 중" : "준비"}
-            </p>
-            {active ? (
-              <p
-                className={`mt-1 font-mono text-2xl font-extrabold ${
-                  paused ? "text-muted" : ""
-                }`}
+          {/* 세션 헤더 (§10) */}
+          {!isEmpty && (
+            <section className="rounded-card border border-line bg-surface p-4 shadow-card">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p
+                    className={`text-xs font-bold ${paused ? "text-warn" : "text-accent"}`}
+                  >
+                    {paused ? "⏸ 정지됨 — 무동작" : active ? "운동 중" : "준비"}
+                  </p>
+                  {active ? (
+                    <p
+                      className={`mt-1 font-mono text-2xl font-extrabold ${
+                        paused ? "text-muted" : ""
+                      }`}
+                    >
+                      {hh}:{mm}:{ss}
+                    </p>
+                  ) : (
+                    <p className="mt-1 font-mono text-sm text-muted">
+                      {today.getMonth() + 1}월 {today.getDate()}일
+                    </p>
+                  )}
+                </div>
+                <div className="text-right">
+                  <p className="text-[11px] text-muted">완료 볼륨</p>
+                  <p className="font-mono text-[26px] leading-tight font-extrabold">
+                    {summary.weightVolumeKg.toLocaleString()}
+                    <span className="text-[15px]">kg</span>
+                  </p>
+                  {volumeDelta !== null && (
+                    <p className="font-mono text-xs text-muted">
+                      이전 대비{" "}
+                      <span
+                        className={volumeDelta >= 0 ? "text-good" : "text-warn"}
+                      >
+                        {volumeDelta >= 0 ? "+" : ""}
+                        {volumeDelta.toLocaleString()}kg
+                      </span>
+                    </p>
+                  )}
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* 운동 카드 목록 */}
+          {draft.effortMessage && (
+            <section className="flex items-start gap-3 rounded-card border border-accent/40 bg-accent-weak px-4 py-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-extrabold text-accent">
+                  오늘의 한 번 더
+                </p>
+                <p className="mt-1 text-sm leading-5 font-bold">
+                  {draft.effortMessage}
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="노력 제안 닫기"
+                title="닫기"
+                onClick={() =>
+                  setDraft((current) => ({ ...current, effortMessage: null }))
+                }
+                className="flex h-8 w-8 flex-none items-center justify-center rounded-full text-lg text-muted"
               >
-                {hh}:{mm}:{ss}
-              </p>
-            ) : (
-              <p className="mt-1 font-mono text-sm text-muted">
-                {today.getMonth() + 1}월 {today.getDate()}일
-              </p>
-            )}
-          </div>
-          <div className="text-right">
-            <p className="text-[11px] text-muted">완료 볼륨</p>
-            <p className="font-mono text-[26px] leading-tight font-extrabold">
-              {summary.weightVolumeKg.toLocaleString()}
-              <span className="text-[15px]">kg</span>
-            </p>
-            {volumeDelta !== null && (
-              <p className="font-mono text-xs text-muted">
-                이전 대비{" "}
-                <span className={volumeDelta >= 0 ? "text-good" : "text-warn"}>
-                  {volumeDelta >= 0 ? "+" : ""}
-                  {volumeDelta.toLocaleString()}kg
-                </span>
-              </p>
-            )}
-          </div>
-        </div>
-      </section>
-      )}
+                ×
+              </button>
+            </section>
+          )}
 
-      {/* 운동 카드 목록 */}
-      {draft.effortMessage && (
-        <section className="flex items-start gap-3 rounded-card border border-accent/40 bg-accent-weak px-4 py-3">
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-extrabold text-accent">오늘의 한 번 더</p>
-            <p className="mt-1 text-sm leading-5 font-bold">
-              {draft.effortMessage}
-            </p>
-          </div>
-          <button
-            type="button"
-            aria-label="노력 제안 닫기"
-            title="닫기"
-            onClick={() =>
-              setDraft((current) => ({ ...current, effortMessage: null }))
-            }
-            className="flex h-8 w-8 flex-none items-center justify-center rounded-full text-lg text-muted"
-          >
-            ×
-          </button>
-        </section>
-      )}
+          {/* 팝업이 열려 있으면 카드는 그 안에만 그린다 — 같은 카드를 두 곳에 두지 않는다 */}
+          {!overlayOpen && exerciseCards}
 
-      {/* 팝업이 열려 있으면 카드는 그 안에만 그린다 — 같은 카드를 두 곳에 두지 않는다 */}
-      {!overlayOpen && exerciseCards}
+          {reorderOpen && (
+            <ExerciseReorderSheet
+              exercises={draft.exercises}
+              onMove={(from, to) =>
+                setDraft((d) => ({
+                  ...d,
+                  exercises: moveItem(d.exercises, from, to),
+                }))
+              }
+              onRemove={removeExercise}
+              onClose={() => setReorderOpen(false)}
+            />
+          )}
 
-      {reorderOpen && (
-        <ExerciseReorderSheet
-          exercises={draft.exercises}
-          onMove={(from, to) =>
-            setDraft((d) => ({
-              ...d,
-              exercises: moveItem(d.exercises, from, to),
-            }))
-          }
-          onRemove={removeExercise}
-          onClose={() => setReorderOpen(false)}
-        />
-      )}
-
-      {/*
+          {/*
         운동 추가는 **보조 버튼**이다 (사용자 지시 2026-08-06) — 목록이 있으면
         핵심 행동은 '시작'이지 '더 담기'가 아니다.
         운동 중에는 '운동 종료'가 여기 그대로 남는다: 진행 중 흐름(오버레이·
         RestBar·자동완료)을 건드리면 위험만 늘고 요구에도 없다.
       */}
-      {/* ⚠️ 빈 상태에는 안 낸다 — `첫 운동 추가하기`와 같은 일을 하는 버튼이
+          {/* ⚠️ 빈 상태에는 안 낸다 — `첫 운동 추가하기`와 같은 일을 하는 버튼이
           두 개가 된다 (사용자 지적 2026-08-06) */}
-      {!isEmpty && (
-        <div className="flex gap-2">
-          <button
-            onClick={() => void openExercisePicker()}
-            className="h-12 flex-1 rounded-card border border-line bg-surface text-sm font-bold text-accent"
-          >
-            + 운동 추가
-          </button>
-          {active && (
-            <button
-              onClick={handleFinish}
-              disabled={busy || loadingExerciseKey !== null}
-              className="h-12 flex-1 rounded-card bg-good text-sm font-extrabold text-white disabled:opacity-60"
-            >
-              {busy ? "처리 중…" : "운동 종료"}
-            </button>
+          {!isEmpty && (
+            <div className="flex gap-2">
+              <button
+                onClick={() => void openExercisePicker()}
+                className="h-12 flex-1 rounded-card border border-line bg-surface text-sm font-bold text-accent"
+              >
+                + 운동 추가
+              </button>
+              {active && (
+                <button
+                  onClick={handleFinish}
+                  disabled={busy || loadingExerciseKey !== null}
+                  className="h-12 flex-1 rounded-card bg-good text-sm font-extrabold text-white disabled:opacity-60"
+                >
+                  {busy ? "처리 중…" : "운동 종료"}
+                </button>
+              )}
+            </div>
           )}
-        </div>
-      )}
 
-      {/*
+          {/*
         세트 사이 휴식은 **운동 목록 아래 부가 설정**으로 내렸다 (사용자 지시).
         시작 전 화면의 최상단은 오늘 담은 운동이어야 한다.
       */}
-      {!isEmpty && (
-        <section className="flex items-center justify-between rounded-card border border-line bg-surface px-4 py-3 shadow-card">
-          <div>
-            <p className="text-sm font-bold">세트 사이 휴식</p>
-            <p className="text-[11.5px] text-muted">
-              {active
-                ? "지금 쉬는 중이면 남은 시간도 같이 바뀌어요"
-                : "완료 체크하면 이 시간으로 시작해요"}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
+          {!isEmpty && (
+            <section className="flex items-center justify-between rounded-card border border-line bg-surface px-4 py-3 shadow-card">
+              <div>
+                <p className="text-sm font-bold">세트 사이 휴식</p>
+                <p className="text-[11.5px] text-muted">
+                  {active
+                    ? "지금 쉬는 중이면 남은 시간도 같이 바뀌어요"
+                    : "완료 체크하면 이 시간으로 시작해요"}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => stepRest(-10)}
+                  aria-label="10초 줄이기"
+                  className="h-9 w-9 rounded-full border border-line bg-surface-2 text-lg font-bold disabled:opacity-40"
+                >
+                  –
+                </button>
+                <span className="w-12 text-center font-mono text-sm font-extrabold">
+                  {restMm}:{restSs}
+                </span>
+                <button
+                  onClick={() => stepRest(10)}
+                  aria-label="10초 늘리기"
+                  className="h-9 w-9 rounded-full border border-line bg-surface-2 text-lg font-bold disabled:opacity-40"
+                >
+                  +
+                </button>
+              </div>
+            </section>
+          )}
+          {!active && draft.exercises.length > 0 && routines !== null && (
             <button
-              onClick={() => stepRest(-10)}
-              aria-label="10초 줄이기"
-              className="h-9 w-9 rounded-full border border-line bg-surface-2 text-lg font-bold disabled:opacity-40"
+              onClick={() => setRoutineSaveOpen(true)}
+              disabled={busy}
+              className="h-12 rounded-card border border-line bg-surface text-sm font-bold text-accent disabled:opacity-60"
             >
-              –
+              💾 이 목록을{" "}
+              {routines.length >= slotLimit && routines.length > 0
+                ? "기존 루틴에 덮어쓰기"
+                : "루틴으로 저장"}{" "}
+              ({routines.length}/{slotLimit})
             </button>
-            <span className="w-12 text-center font-mono text-sm font-extrabold">
-              {restMm}:{restSs}
-            </span>
-            <button
-              onClick={() => stepRest(10)}
-              aria-label="10초 늘리기"
-              className="h-9 w-9 rounded-full border border-line bg-surface-2 text-lg font-bold disabled:opacity-40"
-            >
-              +
-            </button>
-          </div>
-        </section>
-      )}
-      {!active && draft.exercises.length > 0 && routines !== null && (
-        <button
-          onClick={() => setRoutineSaveOpen(true)}
-          disabled={busy}
-          className="h-12 rounded-card border border-line bg-surface text-sm font-bold text-accent disabled:opacity-60"
-        >
-          💾 이 목록을{" "}
-          {routines.length >= slotLimit && routines.length > 0
-            ? "기존 루틴에 덮어쓰기"
-            : "루틴으로 저장"}{" "}
-          ({routines.length}/{slotLimit})
-        </button>
-      )}
-      {/*
+          )}
+          {/*
         🔥 타바타 버튼은 여기 없다 — '운동 추가' 진입 허브로 옮겼다
         (사용자 지적 2026-08-06). 타바타도 "오늘 운동을 어떻게 할까"의 한
         가지인데 혼자만 기록 화면에 상설 버튼으로 붙어 있었다.
@@ -2782,145 +2821,146 @@ function WorkoutScreen({ userId }: { userId: string }) {
         이제 어느 쪽이든 허브를 거치고, 목록이 있으면 `beginTabata`가
         "지우고 시작할까요?"를 한 번 더 묻는다.
       */}
-      {!isEmpty && (
-        <p className="text-center text-xs text-muted">
-          완료 체크한 세트만 볼륨에 반영돼요. 새로고침해도 진행 중 기록은 복구됩니다.
-        </p>
-      )}
+          {!isEmpty && (
+            <p className="text-center text-xs text-muted">
+              완료 체크한 세트만 볼륨에 반영돼요. 새로고침해도 진행 중 기록은
+              복구됩니다.
+            </p>
+          )}
 
-      {/*
+          {/*
         운동 시작은 **하단 고정 CTA**다 (사용자 지시 2026-08-06).
         0개일 때는 렌더 자체를 안 한다 — 전에는 눌리기는 하고 "운동을 먼저
         추가하세요" 토스트만 뜨는 막다른 길이었다. 비활성으로 남기지도 않는다.
         위치 규약은 RestBar와 같다(safe-area + 72px = 탭 바 높이). 둘은
         공존하지 않는다 — RestBar는 운동 중에만 뜬다.
       */}
-      {showFixedStart && (
-        <div
-          className="fixed inset-x-3 z-30"
-          style={{ bottom: "calc(env(safe-area-inset-bottom) + 72px)" }}
-        >
-          <button
-            onClick={handleStart}
-            disabled={busy || loadingExerciseKey !== null}
-            className="h-14 w-full rounded-card bg-accent text-[15px] font-extrabold text-accent-ink shadow-card disabled:opacity-60"
-          >
-            {busy ? "처리 중…" : "운동 시작"}
-          </button>
-        </div>
-      )}
+          {showFixedStart && (
+            <div
+              className="fixed inset-x-3 z-30"
+              style={{ bottom: "calc(env(safe-area-inset-bottom) + 72px)" }}
+            >
+              <button
+                onClick={handleStart}
+                disabled={busy || loadingExerciseKey !== null}
+                className="h-14 w-full rounded-card bg-accent text-[15px] font-extrabold text-accent-ink shadow-card disabled:opacity-60"
+              >
+                {busy ? "처리 중…" : "운동 시작"}
+              </button>
+            </div>
+          )}
 
-      <TabataSheet
-        open={tabataOpen}
-        onPlayingChange={setIntervalPlaying}
-        autoStart={tabataPrefill?.autoStart}
-        openPickerOnMount={tabataPrefill?.openPicker}
-        catalog={catalog}
-        onClose={() => {
-          setTabataOpen(false);
-          setTabataPrefill(null);
-        }}
-        onCreateCustom={handleCreateCustom}
-        onBegin={beginTabata}
-        onComplete={completeTabata}
-        onCancelWorkout={cancelTabata}
-        pastSessions={pastSessions}
-        pastLoading={pastLoading}
-        routines={routines ?? undefined}
-        routinesLoading={routinesLoading}
-        initialPicked={tabataPrefill?.picked}
-        initialMinutes={tabataPrefill?.minutes}
-      />
+          <TabataSheet
+            open={tabataOpen}
+            onPlayingChange={setIntervalPlaying}
+            autoStart={tabataPrefill?.autoStart}
+            openPickerOnMount={tabataPrefill?.openPicker}
+            catalog={catalog}
+            onClose={() => {
+              setTabataOpen(false);
+              setTabataPrefill(null);
+            }}
+            onCreateCustom={handleCreateCustom}
+            onBegin={beginTabata}
+            onComplete={completeTabata}
+            onCancelWorkout={cancelTabata}
+            pastSessions={pastSessions}
+            pastLoading={pastLoading}
+            routines={routines ?? undefined}
+            routinesLoading={routinesLoading}
+            initialPicked={tabataPrefill?.picked}
+            initialMinutes={tabataPrefill?.minutes}
+          />
 
-      {/*
+          {/*
         ⚠️ **큰 팝업이 열려 있으면 안 그린다** (2026-08-07, 사용자 지시 ①).
 
         팝업의 휴식 화면이 이미 남은 시간·±10초·프리셋을 다 갖고 있어서, 둘이
         같이 뜨면 같은 타이머가 화면에 두 번 보인다. RestBar가 있어야 하는 건
         `▾ 최소화`로 접었을 때뿐이다 — 그때는 남은 시간을 볼 수단이 이것뿐이다.
       */}
-      {restRemaining !== null && !overlayOpen && (
-        <RestBar
-          remainingSeconds={restRemaining}
-          nextUp={nextUp}
-          onAdjust={(delta) => stepRest(delta)}
-          onExtend={() => {
-            markActivity();
-            extendRest();
-          }}
-          onSkip={() => {
-            markActivity();
-            stopRest();
-          }}
-        />
-      )}
+          {restRemaining !== null && !overlayOpen && (
+            <RestBar
+              remainingSeconds={restRemaining}
+              nextUp={nextUp}
+              onAdjust={(delta) => stepRest(delta)}
+              onExtend={() => {
+                markActivity();
+                extendRest();
+              }}
+              onSkip={() => {
+                markActivity();
+                stopRest();
+              }}
+            />
+          )}
 
-      <ExercisePicker
-        open={pickerOpen}
-        initialMode={pickerMode}
-        catalog={catalog}
-        pastSessions={pastSessions}
-        pastLoading={pastLoading}
-        onClose={() => closePicker()}
-        onPickMany={addExercises}
-        onPickConfigured={addConfiguredExercises}
-        onPickPast={addPastSession}
-        onOpenPrograms={() => {
-          closePicker();
-          router.push("/record/programs");
-        }}
-        onStartInterval={() => {
-          // 상황별 추천의 인터벌 칸 — 종목을 담지 않고 인터벌을 연다
-          closePicker();
-          setSubTab("workout");
-          // 이미 "인터벌을 하겠다"고 고른 사람이다 — 바로 종목 고르기로 보낸다
-          void openTabataSheet({
-            picked: [],
-            minutes: 4,
-            openPicker: true,
-          });
-        }}
-        onCreateCustom={handleCreateCustom}
-        challengeCategories={challengeCategories}
-        routines={routines ?? undefined}
-        routinesLoading={routinesLoading}
-        onPickRoutine={addRoutine}
-        onRenameRoutine={handleRenameRoutine}
-        onDeleteRoutine={handleDeleteRoutine}
-      />
+          <ExercisePicker
+            open={pickerOpen}
+            initialMode={pickerMode}
+            catalog={catalog}
+            pastSessions={pastSessions}
+            pastLoading={pastLoading}
+            onClose={() => closePicker()}
+            onPickMany={addExercises}
+            onPickConfigured={addConfiguredExercises}
+            onPickPast={addPastSession}
+            onOpenPrograms={() => {
+              closePicker();
+              router.push("/record/programs");
+            }}
+            onStartInterval={() => {
+              // 상황별 추천의 인터벌 칸 — 종목을 담지 않고 인터벌을 연다
+              closePicker();
+              setSubTab("workout");
+              // 이미 "인터벌을 하겠다"고 고른 사람이다 — 바로 종목 고르기로 보낸다
+              void openTabataSheet({
+                picked: [],
+                minutes: 4,
+                openPicker: true,
+              });
+            }}
+            onCreateCustom={handleCreateCustom}
+            challengeCategories={challengeCategories}
+            routines={routines ?? undefined}
+            routinesLoading={routinesLoading}
+            onPickRoutine={addRoutine}
+            onRenameRoutine={handleRenameRoutine}
+            onDeleteRoutine={handleDeleteRoutine}
+          />
 
-      <ZeroWeightSheet
-        exerciseName={zeroWeightAsk?.name ?? null}
-        onKeepWeight={() => setZeroWeightAsk(null)}
-        onSwitchToBodyweight={() => {
-          if (zeroWeightAsk) switchToBodyweight(zeroWeightAsk.exKey);
-        }}
-      />
+          <ZeroWeightSheet
+            exerciseName={zeroWeightAsk?.name ?? null}
+            onKeepWeight={() => setZeroWeightAsk(null)}
+            onSwitchToBodyweight={() => {
+              if (zeroWeightAsk) switchToBodyweight(zeroWeightAsk.exKey);
+            }}
+          />
 
-      <RoutineSaveSheet
-        open={routineSaveOpen}
-        exerciseNames={draft.exercises.map((exercise) => exercise.name)}
-        savedCount={routines?.length ?? 0}
-        slotLimit={slotLimit}
-        nextSlotLevel={nextSlotLevel}
-        routines={(routines ?? []).map((routine) => ({
-          id: routine.id,
-          name: routine.name,
-          exerciseNames: routine.exercises.map((exercise) => exercise.name),
-        }))}
-        onClose={() => setRoutineSaveOpen(false)}
-        onSave={handleSaveRoutine}
-        onOverwrite={handleOverwriteRoutine}
-      />
+          <RoutineSaveSheet
+            open={routineSaveOpen}
+            exerciseNames={draft.exercises.map((exercise) => exercise.name)}
+            savedCount={routines?.length ?? 0}
+            slotLimit={slotLimit}
+            nextSlotLevel={nextSlotLevel}
+            routines={(routines ?? []).map((routine) => ({
+              id: routine.id,
+              name: routine.name,
+              exerciseNames: routine.exercises.map((exercise) => exercise.name),
+            }))}
+            onClose={() => setRoutineSaveOpen(false)}
+            onSave={handleSaveRoutine}
+            onOverwrite={handleOverwriteRoutine}
+          />
 
-      {toast && (
-        <div
-          className="fixed inset-x-8 z-50 rounded-card border border-line bg-surface px-4 py-3 text-center text-sm font-bold shadow-card"
-          style={{ bottom: "calc(env(safe-area-inset-bottom) + 130px)" }}
-        >
-          {toast}
-        </div>
-      )}
+          {toast && (
+            <div
+              className="fixed inset-x-8 z-50 rounded-card border border-line bg-surface px-4 py-3 text-center text-sm font-bold shadow-card"
+              style={{ bottom: "calc(env(safe-area-inset-bottom) + 130px)" }}
+            >
+              {toast}
+            </div>
+          )}
         </>
       )}
 
@@ -2947,7 +2987,10 @@ function WorkoutScreen({ userId }: { userId: string }) {
         }}
         fields={
           focusedExercise
-            ? amountFields(focusedExercise.exerciseType, focusedExercise.measure)
+            ? amountFields(
+                focusedExercise.exerciseType,
+                focusedExercise.measure,
+              )
             : []
         }
         values={{
@@ -2970,7 +3013,12 @@ function WorkoutScreen({ userId }: { userId: string }) {
         busy={busy}
         onChangeAmount={(key, value) => {
           if (!focusedExercise) return;
-          applyAmountFromHere(focusedExercise.key, setFocus.setIndex, key, value);
+          applyAmountFromHere(
+            focusedExercise.key,
+            setFocus.setIndex,
+            key,
+            value,
+          );
         }}
         onCompleteSet={() => {
           if (!focusedExercise || !focusedSet || focusedSet.done) return;
@@ -3056,7 +3104,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
           onPain={() => {
             const resume = effortAsk.resumeAutoFinish;
             setEffortAsk(null);
-            showToast("통증이 있으면 오늘은 여기서 멈추고 전문가에게 확인하세요");
+            showToast(
+              "통증이 있으면 오늘은 여기서 멈추고 전문가에게 확인하세요",
+            );
             resumeDeferredAutoFinish(resume);
           }}
         />

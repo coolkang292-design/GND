@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   NEW_USER_GRACE_DAYS,
   pickSuggestionKind,
+  pickSuggestionKindWhenReady,
   secondaryKind,
+  shouldApplySuggestion,
   SUGGESTION_PHILOSOPHY,
   suggestionCopy,
 } from "./workout-suggestion";
@@ -133,9 +135,9 @@ describe("pickSuggestionKind — 이력 있는 유저", () => {
    * 주 제안(지난 운동 = 인터벌)과 보조 제안(인터벌)이 **같은 것 둘**이 된다.
    */
   it("지난 세션이 인터벌이면 인터벌을 권한다", () => {
-    expect(
-      pickSuggestionKind({ ...base, lastSessionWasInterval: true }),
-    ).toBe("interval");
+    expect(pickSuggestionKind({ ...base, lastSessionWasInterval: true })).toBe(
+      "interval",
+    );
   });
 });
 
@@ -253,5 +255,86 @@ describe("suggestionCopy — 문구", () => {
 
   it("스트릭이 있으면 그 숫자를 그대로 말한다", () => {
     expect(suggestionCopy("repeat", "2026-08-16", 12).title).toContain("12");
+  });
+});
+
+/**
+ * 2026-08-16 개발 서버 확인에서 잡은 두 버그의 **회귀 그물**.
+ *
+ * 둘 다 lint·typecheck·테스트·build가 전부 초록인 채로 지나갔다. 화면을 눌러
+ * 봐야 드러났다 — 그래서 규칙을 순수 함수로 끌어내 여기서 잡는다.
+ */
+describe("pickSuggestionKindWhenReady — 재료가 다 온 뒤에만", () => {
+  const READY_INPUT = {
+    hasPlanToday: false,
+    didWorkoutToday: false,
+    hasHistory: true,
+    lastSessionWasInterval: true,
+    isInActiveChallenge: true,
+    signedUpDayKey: "2026-08-01",
+    todayKey: "2026-08-16",
+  };
+
+  it("재료가 덜 왔으면 아무 제안도 안 한다", () => {
+    expect(pickSuggestionKindWhenReady(false, READY_INPUT)).toBeNull();
+  });
+
+  it("재료가 다 오면 평소대로 정한다", () => {
+    expect(pickSuggestionKindWhenReady(true, READY_INPUT)).toBe("interval");
+  });
+
+  /**
+   * ⚠️ 실제로 당한 그 순간이다. `hasHistory`만 도착하고
+   * `lastSessionWasInterval`이 아직 기본값(false)일 때 계산하면 `"repeat"`이
+   * 나온다 — 그러면 인터벌 세션이 목록에 담겨 맨몸 4개가 된다.
+   */
+  it("★ hasHistory만 온 순간값으로는 repeat을 만들지 않는다", () => {
+    const halfLoaded = { ...READY_INPUT, lastSessionWasInterval: false };
+    // 재료가 다 왔다고 치면 repeat이 나온다 — 그래서 위험하다
+    expect(pickSuggestionKind(halfLoaded)).toBe("repeat");
+    // 준비 전이면 아무것도 안 나온다
+    expect(pickSuggestionKindWhenReady(false, halfLoaded)).toBeNull();
+  });
+});
+
+describe("shouldApplySuggestion — 알림 표식을 언제 쓰는가", () => {
+  const BASE = {
+    requested: true,
+    consumed: false,
+    kind: "interval" as const,
+    draftExerciseCount: 0,
+    workoutStarted: false,
+  };
+
+  it("표식이 있고 제안이 정해졌으면 쓴다", () => {
+    expect(shouldApplySuggestion(BASE)).toBe(true);
+  });
+
+  it("표식이 없으면 안 쓴다", () => {
+    expect(shouldApplySuggestion({ ...BASE, requested: false })).toBe(false);
+  });
+
+  /**
+   * ⚠️⚠️ 이 두 건이 핵심이다. 마운트 첫 렌더는 `kind === null`이다.
+   * 그때 표식을 **소비하지 않아야** 제안이 정해진 뒤에 쓸 수 있다.
+   */
+  it("제안이 아직 안 정해졌으면 쓰지 않는다 — 표식은 남는다", () => {
+    expect(shouldApplySuggestion({ ...BASE, kind: null })).toBe(false);
+  });
+
+  it("한 번 쓰고 나면 다시 안 쓴다", () => {
+    expect(shouldApplySuggestion({ ...BASE, consumed: true })).toBe(false);
+  });
+
+  it("사용자가 이미 담아 뒀으면 덮지 않는다", () => {
+    expect(shouldApplySuggestion({ ...BASE, draftExerciseCount: 2 })).toBe(
+      false,
+    );
+  });
+
+  it("운동 중이면 건드리지 않는다", () => {
+    expect(shouldApplySuggestion({ ...BASE, workoutStarted: true })).toBe(
+      false,
+    );
   });
 });
