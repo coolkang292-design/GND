@@ -102,6 +102,21 @@ export async function GET(req: Request) {
     invocationHour = n;
   }
 
+  /**
+   * 대상을 **한 사람으로** 좁힌다 — 수동 검증 전용 (2026-08-16).
+   *
+   * 왜 필요한가: `~/.claude/CLAUDE.md`는 배포 전에 알림을 **화면에서** 확인하라고
+   * 요구한다. 그런데 스테이징이 없어서 `pnpm dev`도 운영 DB에 붙는다. 이 칸이
+   * 없으면 확인 한 번에 그 슬롯의 **실제 사용자 전원**이 오늘치 브리핑을 받고,
+   * dedupe_key가 같아서 **내일 아침에는 아무도 못 받는다.**
+   *
+   * ⚠️ 이 값이 있으면 챌린지 전환 RPC도 건너뛴다. 검증하러 부른 호출이 운영
+   *    챌린지를 시작·종료시키면 안 된다.
+   *
+   * ⚠️ 크론은 이 칸을 쓰지 않는다(`vercel.json`). `CRON_SECRET`으로 막혀 있다.
+   */
+  const onlyUserId = new URL(req.url).searchParams.get("only");
+
   const admin = getSupabaseAdminClient();
 
   // 0044: 챌린지 자동 시작·종료. 브리핑과 같은 09:00 KST 슬롯에 얹는다 —
@@ -115,8 +130,9 @@ export async function GET(req: Request) {
   //    도래분은 하루 한 번만 넘기면 충분하다(옛 동작과 같다).
   const now = new Date();
   const isDailySlot =
-    invocationHour !== undefined ||
-    (now.getUTCHours() === 0 && now.getUTCMinutes() < 30);
+    onlyUserId === null &&
+    (invocationHour !== undefined ||
+      (now.getUTCHours() === 0 && now.getUTCMinutes() < 30));
   const challengeTransitions: Record<string, unknown> = {};
   if (isDailySlot) {
     for (const fn of [
@@ -254,29 +270,34 @@ export async function GET(req: Request) {
   }
 
   const settings = new Map(
-    (settingsRes.data ?? []).map((s) => [s.user_id, s.morning_brief as boolean]),
+    (settingsRes.data ?? []).map((s) => [
+      s.user_id,
+      s.morning_brief as boolean,
+    ]),
   );
   // 크루 조회는 없앴다(2026-07-28). 브리핑은 본문을 안 보내므로 크루 집계가 필요
   // 없고, 0039 이후 group_members는 크루의 원천도 아니다.
-  const users: BriefingUser[] = (profilesRes.data ?? []).map((p) => {
-    const timezone = (p.timezone as string) || "Asia/Seoul";
-    return {
-      userId: p.id,
-      timezone,
-      completedAts: completedAtsByUser.get(p.id) ?? [],
-      startedAts: startedAtsByUser.get(p.id) ?? [],
-      morningBrief: settings.get(p.id) ?? true,
-      // ── 계획 없는 날 제안 (2026-08-16) ──
-      signedUpAt: new Date(p.created_at as string),
-      // ⚠️ 오늘은 **이 사람 타임존 기준**이다. UTC 오늘로 재면 KST 사용자에게
-      //    하루 어긋난다 — `dayKey`가 그 계산의 단일 원천이다.
-      hasPlanToday: (planDaysByUser.get(p.id) ?? new Set()).has(
-        dayKey(now, timezone),
-      ),
-      isInActiveChallenge: challengeMembers.has(p.id),
-      lastSessionWasInterval: lastWasIntervalByUser.get(p.id) ?? false,
-    };
-  });
+  const users: BriefingUser[] = (profilesRes.data ?? [])
+    .filter((p) => onlyUserId === null || p.id === onlyUserId)
+    .map((p) => {
+      const timezone = (p.timezone as string) || "Asia/Seoul";
+      return {
+        userId: p.id,
+        timezone,
+        completedAts: completedAtsByUser.get(p.id) ?? [],
+        startedAts: startedAtsByUser.get(p.id) ?? [],
+        morningBrief: settings.get(p.id) ?? true,
+        // ── 계획 없는 날 제안 (2026-08-16) ──
+        signedUpAt: new Date(p.created_at as string),
+        // ⚠️ 오늘은 **이 사람 타임존 기준**이다. UTC 오늘로 재면 KST 사용자에게
+        //    하루 어긋난다 — `dayKey`가 그 계산의 단일 원천이다.
+        hasPlanToday: (planDaysByUser.get(p.id) ?? new Set()).has(
+          dayKey(now, timezone),
+        ),
+        isInActiveChallenge: challengeMembers.has(p.id),
+        lastSessionWasInterval: lastWasIntervalByUser.get(p.id) ?? false,
+      };
+    });
 
   const { briefings, skipped } = buildBriefings(
     users,
