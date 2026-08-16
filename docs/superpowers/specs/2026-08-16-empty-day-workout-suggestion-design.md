@@ -167,8 +167,13 @@ lastSessionWasInterval → "interval"     (같은 것이 주·보조로 둘이 �
 ### ⚠️ 신규 유저 게이트를 연다
 
 `briefing.ts:96`의 `completedAts.length === 0 → no_history` 스킵을 **제안이 있으면
-통과**시킨다. 이 한 줄이 "신규에게 걷기"의 전부다. 스킵 사유에 `no_suggestion`을
-더해, 통과했지만 제안이 없어 걸러진 경우를 로그에서 구별할 수 있게 한다.
+통과**시킨다. 이 한 줄이 "신규에게 걷기"의 전부다.
+
+⚠️ **스킵 사유를 새로 만들지 마라.** `briefing.test.ts:39`가 이미
+`skipped == [{userId:"me", reason:"no_history"}]`를 **통째로 비교**한다. 사유를 늘리면
+그 회귀선이 깨진다. `no_history`의 뜻을 "기록 0건" → **"기록 0건이고 제안도 없음"**
+으로 넓히면 기존 단언이 그대로 성립한다(그 픽스처의 가입일은 7일 창 밖이다).
+사유는 `no_history | opted_out | slot_mismatch` 셋 그대로다.
 
 신규는 세션이 5회 미만이라 `estimateNotifyMinute`가 `null`을 주고 **09:00**에 받는다.
 이건 기존 동작 그대로다(§2 실측).
