@@ -386,6 +386,21 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const [lastSessionWasInterval, setLastSessionWasInterval] = useState(false);
   /** 가입일 (`"YYYY-MM-DD"`) — 신규 걷기 창 판정 */
   const [signedUpDayKey, setSignedUpDayKey] = useState("1970-01-01");
+  /**
+   * ⚠️⚠️ **제안 재료가 다 왔는가.** 이게 없으면 기능이 조용히 틀린다.
+   *
+   * 재료는 **시차를 두고 따로 도착한다** — `hasHistory`가 먼저 오고
+   * `lastSessionWasInterval`은 그 뒤에 온다. 그 사이의 순간값으로 판단하면
+   * 마지막 운동이 인터벌인 사람에게 `repeat`이 나오고, 그러면 계획서가
+   * "있을 수 없다"고 적어 둔 상황 — `repeat` 경로에 인터벌 세션이 들어가는 것 —
+   * 이 실제로 벌어진다. 2026-08-16 개발 서버 확인에서 잡았다.
+   *
+   * ⚠️ 실패하면 **false로 남긴다.** 못 읽었으면 제안을 안 하는 쪽이 맞다 —
+   *    틀린 제안을 하느니 아무 말도 안 하는 게 낫다.
+   */
+  const [factsReady, setFactsReady] = useState(false);
+  /** 오늘 계획 조회가 끝났는가. 이게 true면 종목 목록(catalog)도 이미 와 있다 */
+  const [plansReady, setPlansReady] = useState(false);
   /** 피커를 어느 화면으로 열지 — 기본은 진입 허브 */
   const [pickerMode, setPickerMode] = useState<"hub" | "past" | "routine">("hub");
   // ── 나만의 루틴 (0056) ────────────────────────────────────────────
@@ -600,6 +615,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
         );
         const todayPlan = plans.find((plan) => plan.planDate === todayKey);
         setTodayPlanExists(todayPlan !== undefined);
+        // 이 이펙트는 catalog가 온 뒤에만 돈다 — 그래서 이 플래그가 서면
+        // `applySuggestion`이 종목을 고를 수 있다는 뜻이기도 하다.
+        setPlansReady(true);
         // 인터벌이면 담지 않고 버튼만 세운다 — 아래 판정이 false를 준다
         setTodayIntervalPlan(todayPlan?.tabataMinutes ? todayPlan : null);
         if (
@@ -646,6 +664,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
         setDidWorkoutToday(facts.didWorkoutToday);
         setLastSessionWasInterval(facts.lastSessionWasInterval);
         setSignedUpDayKey(facts.signedUpDayKey);
+        // ⚠️ 세 값을 **다 세운 뒤에** 연다. 먼저 열면 반쯤 채워진 상태로 판단한다.
+        setFactsReady(true);
       } catch {
         // 못 읽으면 제안이 안 뜰 뿐이다 — 기록은 그대로 된다
       }
@@ -1056,12 +1076,22 @@ function WorkoutScreen({ userId }: { userId: string }) {
     const sessions = await getCompletedSessions(userId);
     const recent = sessions[0];
     if (!recent) return;
+    // ⚠️⚠️ 지난 운동이 인터벌이면 **목록에 담지 않고** 시트로 보낸다.
+    //
+    //    계획서는 "`pickSuggestionKind`가 애초에 interval을 주므로 이 경로에
+    //    인터벌 세션이 올 수 없다"고 적었는데, **그 보장은 거짓이었다.** 재료가
+    //    시차를 두고 도착해서 `hasHistory`만 온 순간에는 `repeat`이 나온다 —
+    //    2026-08-16 개발 서버 확인에서 실제로 이 경로로 들어왔다.
+    //    `factsReady`로 그 창을 막았지만, 타이밍에 기대는 가정을 코드에 남기지
+    //    않는다. 담기면 음원도 코스도 없는 맨몸 4개가 된다.
+    if (recent.tabataMinutes !== null) {
+      await applySuggestion("interval");
+      return;
+    }
     setPastSessions(sessions);
     setPastLoaded(true);
-    // ⚠️ `addPastSession`은 `pastSessions`를 클로저로 읽어 "지난 타바타면 시트로"를
-    //    분기한다. 위 `setPastSessions`는 이번 틱에 그 클로저까지 갱신하지 못한다.
-    //    그래도 안전하다 — 지난 세션이 인터벌이면 `pickSuggestionKind`가 애초에
-    //    `"interval"`을 주므로 이 경로에 인터벌 세션이 올 수 없다.
+    // ⚠️ `addPastSession`은 `pastSessions`를 클로저로 읽는다. 위 `setPastSessions`는
+    //    이번 틱에 그 클로저까지 갱신하지 못하지만, 위에서 인터벌을 이미 걸러 냈다.
     const ok = await addPastSession(recent.id);
     if (ok) setDraft((current) => ({ ...current, suggestedForDayKey: todayKey }));
   }
@@ -2136,19 +2166,26 @@ function WorkoutScreen({ userId }: { userId: string }) {
    */
   const suggestionKind = useMemo(
     () =>
-      pickSuggestionKind({
-        hasPlanToday: todayPlanExists,
-        didWorkoutToday,
-        hasHistory,
-        lastSessionWasInterval,
-        isInActiveChallenge: challengeGoals !== null,
-        signedUpDayKey,
-        todayKey: dayKey(
-          new Date(),
-          Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Seoul",
-        ),
-      }),
+      // ⚠️ 재료가 다 오기 전에는 **아무 제안도 하지 않는다.** 반쯤 채워진 상태로
+      //    계산하면 순간적으로 틀린 제안이 나오고, 그 순간값이 화면에 깜빡이거나
+      //    `?suggest` 경로에 그대로 소비된다.
+      !factsReady || !plansReady
+        ? null
+        : pickSuggestionKind({
+            hasPlanToday: todayPlanExists,
+            didWorkoutToday,
+            hasHistory,
+            lastSessionWasInterval,
+            isInActiveChallenge: challengeGoals !== null,
+            signedUpDayKey,
+            todayKey: dayKey(
+              new Date(),
+              Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Seoul",
+            ),
+          }),
     [
+      factsReady,
+      plansReady,
       todayPlanExists,
       didWorkoutToday,
       hasHistory,
@@ -2161,6 +2198,15 @@ function WorkoutScreen({ userId }: { userId: string }) {
   /**
    * 푸시에서 온 `?suggest`를 읽어 오늘의 제안을 담는다 (2026-08-16).
    *
+   * ⚠️⚠️ **읽기와 쓰기를 두 이펙트로 나눈 이유가 있다 — 합치면 기능이 죽는다.**
+   *    마운트 첫 렌더의 `suggestionKind`는 **항상 `null`**이다. 재료
+   *    (`getSuggestionFacts`)가 아직 서버에서 안 왔고, 그 초기값
+   *    (`hasHistory=false` · `signedUpDayKey="1970-01-01"`)으로 계산하면
+   *    유예 창 밖이라 `null`이 나온다. 한 이펙트에서 주소를 지우고 `null`이라
+   *    반환해 버리면, 나중에 제안이 정해져 다시 돌 때는 **주소에 표식이 없어서**
+   *    또 반환한다 — 알림을 눌러도 아무것도 안 담긴다.
+   *    2026-08-16 개발 서버 확인에서 실제로 이 상태였다.
+   *
    * ⚠️⚠️ **`useSearchParams`를 쓰지 마라.** 이 저장소는 그 훅을 두 번 거부했다
    *    (`record-view.ts:8`, `auth/callback/page.tsx:50`) — Suspense 경계를 요구해
    *    빌드가 CSR로 떨어진다. 여기서는 `window.location.search`를 이펙트 안에서
@@ -2168,22 +2214,28 @@ function WorkoutScreen({ userId }: { userId: string }) {
    *
    * ⚠️ `record-view.ts`의 모듈 변수 방식은 여기서 **쓸 수 없다.** 푸시는 앱을
    *    URL로 **새로** 열어서 그 모듈이 초기값(false)으로 평가된다.
-   *
-   * ⚠️ 읽는 즉시 주소에서 지운다. 안 지우면 새로고침마다 다시 담긴다.
-   *
-   * ⚠️ 이 이펙트는 `suggestionKind` **아래**에 있어야 한다. 위로 올리면 의존성
-   *    배열이 초기화 전 `const`를 읽어 렌더가 통째로 죽는다(TDZ).
    */
+  const suggestRequestedRef = useRef(false);
+  const suggestConsumedRef = useRef(false);
+
+  // (1) 표식은 **즉시** 읽고 주소에서 지운다. 안 지우면 새로고침마다 다시 담긴다.
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!new URLSearchParams(window.location.search).has("suggest")) return;
+    suggestRequestedRef.current = true;
     window.history.replaceState({}, "", window.location.pathname);
+  }, []);
+
+  // (2) 제안이 정해지면 **그때** 담는다. 한 번만.
+  useEffect(() => {
+    if (!suggestRequestedRef.current || suggestConsumedRef.current) return;
     if (suggestionKind === null) return;
     // 기존 자동 담기와 **같은 가드** — 사용자가 만든 상태를 덮지 않는다
     if (draftRef.current.exercises.length > 0) return;
     if (draftRef.current.startedAtMs !== null) return;
+    suggestConsumedRef.current = true;
     void applySuggestion(suggestionKind);
-    // applySuggestion은 렌더마다 새로 만들어진다. 제안이 정해진 뒤 한 번만 돈다.
+    // applySuggestion은 렌더마다 새로 만들어진다. ref가 한 번만 돌게 막는다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [suggestionKind]);
   // 팝업 열림은 `active`에서 파생한다 — 별도 저장 없음 (설계 ②)
