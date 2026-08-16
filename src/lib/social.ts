@@ -44,7 +44,8 @@ export type NotificationRow = {
     | "bug_fixed" // 0052 — 신고자에게: 신고한 게 고쳐졌다
     | "challenge_peek_unlocked" // 0054 — 5일 연속으로 열린 2시간 열람창
     | "challenge_starting_soon" // 0077 — 시작 전날 예고
-    | "challenge_dropped"; // 0077 — 목표 미설정으로 이번 회차에서 빠짐
+    | "challenge_dropped" // 0077 — 목표 미설정으로 이번 회차에서 빠짐
+    | "workout_suggestion"; // 0078 — 계획 없는 날 운동 제안
   reference_id: string | null;
   title: string;
   body: string | null;

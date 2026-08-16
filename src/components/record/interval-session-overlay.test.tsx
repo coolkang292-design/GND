@@ -44,14 +44,52 @@ describe("IntervalSessionOverlay", () => {
    * 근력 오버레이의 ± 버튼·세트 입력은 인터벌에서 의미가 없다.
    */
   /**
-   * 카운트다운도 뺐다 (사용자 지시 2026-08-13) — 숫자를 세는 건 음악이 한다.
-   * 화면 숫자가 음원의 3·2·1과 1~2초만 어긋나도 그게 제일 먼저 보인다.
+   * 카운트다운을 **되살렸다** (사용자 지시 2026-08-16).
+   *
+   * 2026-08-13에는 뺐었다 — *"화면 숫자가 음원의 3·2·1과 1~2초만 어긋나도 그게
+   * 제일 먼저 보인다"*. 그 위험은 그대로다. 그래서 숫자를 따로 세지 않고
+   * **`intervalCueAt`의 `secondsLeft`를 그대로** 그린다. 그 값은 `audio.currentTime`
+   * 에서 나오고, 종목 전환을 정하는 값과 **같은 값**이다 — 숫자가 화면의 다른
+   * 요소와 어긋나는 것 자체가 불가능하다.
+   *
+   * ⚠️ 화면에서 따로 세는 타이머(`setInterval` 등)를 절대 두지 마라. 그 순간
+   *    2026-08-13에 뺐던 이유가 그대로 돌아온다.
    */
-  it("화면에 카운트다운 숫자가 없다", () => {
+  it("운동 구간은 20초부터 거꾸로 센다", () => {
+    expect(view(13).getByTestId("interval-countdown").textContent).toBe("20");
+    cleanup();
+    expect(view(28).getByTestId("interval-countdown").textContent).toBe("5");
+    cleanup();
+    expect(view(32.5).getByTestId("interval-countdown").textContent).toBe("1");
+  });
+
+  it("휴식 구간은 10초부터 거꾸로 센다", () => {
+    expect(view(33).getByTestId("interval-countdown").textContent).toBe("10");
+    cleanup();
+    expect(view(40).getByTestId("interval-countdown").textContent).toBe("3");
+  });
+
+  it("준비 구간에도 남은 초를 보여준다", () => {
+    expect(view(0).getByTestId("interval-countdown").textContent).toBe("13");
+  });
+
+  it("끝나면 숫자를 안 보여준다 — 셀 것이 없다", () => {
+    view(250);
+
+    expect(screen.getByTestId("interval-phase").textContent).toBe("끝났어요");
+    expect(screen.queryByTestId("interval-countdown")).toBeNull();
+  });
+
+  /**
+   * 이 화면은 `aria-live="polite"`다. 1초마다 바뀌는 숫자를 읽히면 스크린리더가
+   * 쉬지 않고 떠든다 — 게다가 숫자는 음원이 이미 말해 준다.
+   */
+  it("카운트다운은 스크린리더에서 감춘다", () => {
     view(15);
 
-    expect(screen.queryByTestId("interval-countdown")).toBeNull();
-    expect(screen.queryByText(/^d{2}:d{2}$/)).toBeNull();
+    expect(
+      screen.getByTestId("interval-countdown").getAttribute("aria-hidden"),
+    ).toBe("true");
   });
 
   it("횟수 입력 장치가 하나도 없다", () => {

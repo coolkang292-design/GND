@@ -2,6 +2,10 @@
 
 import Image from "next/image";
 import { UiIcon } from "@/components/ui-icon";
+import {
+  secondaryKind,
+  type SuggestionKind,
+} from "@/lib/domain/workout-suggestion";
 
 /**
  * 등록된 운동이 0개일 때의 기록 화면 (사용자 지시 2026-08-06).
@@ -17,6 +21,10 @@ export function RecordEmptyState({
   onLoadRecent,
   onLoadRoutine,
   routineCount = 0,
+  suggestionKind = null,
+  suggestionBody = "",
+  onApplySuggestion,
+  onApplySecondary,
 }: {
   /**
    * 완료한 운동이 하나라도 있나.
@@ -35,9 +43,53 @@ export function RecordEmptyState({
    */
   onLoadRoutine?: () => void;
   routineCount?: number;
+  /**
+   * 오늘의 제안 (2026-08-16). `null`이면 카드를 안 그린다.
+   * 판정은 `pickSuggestionKind` — 알림과 **같은 함수**다.
+   */
+  suggestionKind?: SuggestionKind | null;
+  /** 알림 본문과 **같은 말**이어야 한다 — `suggestionCopy`가 준다 */
+  suggestionBody?: string;
+  onApplySuggestion?: () => void;
+  /** 보조 제안(4분 인터벌) — 담기가 아니라 **시작**이다 */
+  onApplySecondary?: () => void;
 }) {
   return (
     <section>
+      {/* ⚠️⚠️ 제안이 알림 링크에만 살면 **앱 아이콘으로 들어온 사람은 아무것도
+          못 본다.** 이 카드가 그 구멍을 막는다 (설계 C2). */}
+      {suggestionKind && onApplySuggestion && (
+        <div
+          data-testid="suggestion-card"
+          className="mb-3 rounded-card border border-accent/50 bg-accent-weak/30 p-4"
+        >
+          <p className="text-[13px] leading-5 text-text">{suggestionBody}</p>
+          <button
+            type="button"
+            data-priority="primary"
+            onClick={onApplySuggestion}
+            className="mt-3 h-14 w-full rounded-card bg-accent text-[15px] font-extrabold text-accent-ink"
+          >
+            {suggestionKind === "walk"
+              ? "10분 걷기 담기"
+              : suggestionKind === "repeat"
+                ? "지난번 그대로 담기"
+                : "4분 인터벌 시작"}
+          </button>
+          {/* ⚠️ 보조는 **담기가 아니라 시작**이다 — 인터벌은 목록에 담으면
+              음원도 코스도 없는 맨몸 4개가 된다(`tabata.ts` 주석). */}
+          {secondaryKind(suggestionKind) === "interval" && onApplySecondary && (
+            <button
+              type="button"
+              data-priority="secondary"
+              onClick={onApplySecondary}
+              className="mt-2 h-12 w-full rounded-card border border-accent/50 bg-transparent text-sm font-bold text-accent"
+            >
+              시간 없으면 · 4분 인터벌 시작
+            </button>
+          )}
+        </div>
+      )}
       <div
         data-testid="record-start-card"
         className="overflow-hidden rounded-card border border-line bg-surface text-center shadow-card"

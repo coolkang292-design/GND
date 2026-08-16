@@ -121,24 +121,44 @@ export function IntervalSessionOverlay({
         {/* 숫자가 빠진 자리를 종목 이름이 채운다 — 이제 이게 화면의 주인공이다 */}
         <p
           data-testid="interval-phase"
-          className={`text-center text-[2.75rem] font-black leading-[3rem] ${
+          className={`text-center text-[2rem] font-black leading-[2.25rem] ${
             cue.phase === "work" ? "text-accent" : "text-muted"
           }`}
         >
           {heading}
         </p>
         {/*
-          카운트다운을 뺐다 (사용자 지시 2026-08-13).
+          카운트다운을 **되살렸다** (사용자 지시 2026-08-16).
 
-          음원의 3·2·1 멘트와 화면 숫자가 1~2초라도 어긋나면 그게 제일 먼저
-          보인다. **숫자를 세는 건 음악이 한다** — 화면은 지금 무엇을 하고
-          다음이 무엇인지만 말한다.
+          2026-08-13에는 뺐었다 — *"음원의 3·2·1 멘트와 화면 숫자가 1~2초라도
+          어긋나면 그게 제일 먼저 보인다."* 그 위험은 지금도 그대로다.
 
-          ⚠️ 종목 전환은 여전히 `intervalCueAt`이 정한다. 숫자를 지웠다고
-             동기화 문제가 사라진 것이 아니라, **덜 보이게** 된 것이다.
+          ⚠️⚠️ 그래서 **여기서 숫자를 세지 않는다.** `intervalCueAt`이 준
+             `secondsLeft`를 그대로 그린다 — 그 값은 `audio.currentTime`에서
+             나오고, 종목 전환을 정하는 값과 **같은 값**이다. 숫자가 화면의 다른
+             요소와 어긋나는 것 자체가 불가능하다.
+
+          ⚠️⚠️ `setInterval`·`requestAnimationFrame`으로 따로 세지 마라. 그 순간
+             2026-08-13에 뺐던 이유가 그대로 돌아온다. 음원이 멈추면
+             (일시정지·버퍼링) 숫자도 같이 멈춰야 하는데, 따로 세면 계속 간다.
+
+          ⚠️ 음원 대비 절대 오프셋은 `INTERVAL_PREP_SECONDS`가 정한다. 그 상수는
+             주석이 말하듯 **귀로 맞추는 값**이다. 숫자가 보이게 됐으니 이제
+             어긋나면 바로 눈에 띈다 — 화면이 이르면 그 상수를 1씩 올린다.
         */}
+        {cue.phase !== "done" && (
+          <p
+            data-testid="interval-countdown"
+            aria-hidden="true"
+            className={`text-center text-[5.5rem] font-black leading-none [font-variant-numeric:tabular-nums] ${
+              cue.phase === "work" ? "text-accent" : "text-text"
+            }`}
+          >
+            {cue.secondsLeft}
+          </p>
+        )}
         {upcoming && (
-          <p className="text-sm font-bold text-muted">다음: {upcoming}</p>
+          <p className="text-base font-bold text-muted">다음: {upcoming}</p>
         )}
         {/*
           응원 문구 (사용자 지시 2026-08-13) — 종목 이름만 있으니 허전했다.
@@ -169,9 +189,13 @@ export function IntervalSessionOverlay({
             <li
               key={`${name}-${index}`}
               data-current={current ? "true" : undefined}
-              className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${
+              /*
+                글씨를 키웠다 (사용자 지시 2026-08-16) — 11px는 운동 중에 폰을
+                내려다보는 거리에서 읽히지 않았다. 지금 하는 종목은 더 굵게.
+              */
+              className={`rounded-full px-3.5 py-1.5 text-[15px] font-bold ${
                 current
-                  ? "bg-accent text-accent-ink"
+                  ? "bg-accent font-extrabold text-accent-ink"
                   : "bg-surface-2 text-muted"
               }`}
             >

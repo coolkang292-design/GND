@@ -1670,20 +1670,24 @@ export async function getSuggestionFacts(userId: string): Promise<{
 
 ⚠️ `addPastSession`은 `pastSessions` 상태를 클로저로 읽어 "지난 타바타면 시트로" 분기를 한다. 위에서 `setPastSessions`를 불러도 그 클로저는 **이번 틱에 갱신되지 않는다.** 그래도 안전하다 — 지난 세션이 인터벌이면 `pickSuggestionKind`가 애초에 `"interval"`을 주므로 `repeat` 경로에 인터벌 세션이 올 수 없다.
 
-`INTERVAL_SUGGESTION_NAMES`는 `workout-suggestion.ts`에 둔다 (Task 3 파일 끝에 추가):
+⚠️⚠️ **`INTERVAL_SUGGESTION_NAMES`를 `workout-suggestion.ts`에 두지 마라.** 그 상수의 원천인 `recommended-exercises.ts`가 `@/lib/challenge`를 import하고, 그게 다시 **`getSupabaseBrowserClient`**를 끌어온다(`supabase/client.ts:56`). `workout-suggestion.ts`는 **브리핑 서버 라우트가 import하는 모듈**이라, 거기에 넣으면 서버 번들이 브라우저 Supabase 클라이언트를 끌고 들어간다.
+
+설계 §3이 *"서버는 종목을 알 필요가 없다"*고 못 박은 것이 정확히 이 경계다. 종목 이름은 **화면 쪽에만** 둔다. `record/page.tsx` 안, 컴포넌트 **밖**(모듈 최상단)에 선언한다:
 
 ```ts
-import { SITUATIONS } from "./recommended-exercises";
-
 /**
  * 4분 인터벌 구성 종목 — **상황별 추천의 `interval` 칸과 같은 목록을 쓴다.**
  * 두 벌로 적으면 한쪽만 고쳐져 "같은 인터벌인데 종목이 다르다"가 된다.
+ *
+ * ⚠️ 이걸 `workout-suggestion.ts`로 옮기지 마라. 그 모듈은 브리핑 **서버**
+ *    라우트가 import한다 — `recommended-exercises`가 `@/lib/challenge`를 통해
+ *    `getSupabaseBrowserClient`를 끌어오므로 서버가 브라우저 클라이언트를 안게 된다.
  */
-export const INTERVAL_SUGGESTION_NAMES: readonly string[] =
+const INTERVAL_SUGGESTION_NAMES: readonly string[] =
   SITUATIONS.find((s) => s.key === "interval")?.names ?? [];
 ```
 
-`record/page.tsx` import에 `tabataPickFromNames`(`@/lib/domain/tabata`)와 `INTERVAL_SUGGESTION_NAMES`를 더한다. `getCompletedSessions`가 이미 import돼 있는지 확인하고 없으면 더한다.
+`record/page.tsx` import에 `SITUATIONS`(`@/lib/domain/recommended-exercises`)와 `tabataPickFromNames`(`@/lib/domain/tabata`)를 더한다. `getCompletedSessions`가 이미 import돼 있는지 확인하고 없으면 더한다.
 
 - [ ] **Step 7: 사용자가 편집하면 스탬프를 지운다**
 

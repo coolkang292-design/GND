@@ -3,6 +3,7 @@ import {
   completedSetsInOrder,
   withCompletedSetsOnly,
 } from "@/lib/domain/workout-import";
+import { dayKey } from "@/lib/domain/time";
 import type { CompletedSession } from "@/lib/domain/calendar";
 import type { VolumeSet } from "@/lib/domain/volume";
 import type { LogExercise } from "@/lib/domain/workout-log";
@@ -79,7 +80,7 @@ export type ProgramDraftMeta = {
 };
 
 export type WorkoutDraft = {
-  version: 6;
+  version: 7;
   sessionId: string | null;
   startedAtMs: number | null; // 서버 started_at (RPC 응답 기준)
   scheduledPlanId: string | null; // 예정표에서 불러온 경우, 운동 시작 성공 후 정리
@@ -94,6 +95,14 @@ export type WorkoutDraft = {
   tabataMinutes: number | null; // 타바타 세션이면 그 분수 — 무동작 감지 제외 판정용
   /** 공식 프로그램 회차면 그 메타 (0067). 일반 운동은 null */
   program: ProgramDraftMeta | null;
+  /**
+   * 이 draft를 **기계가 담아 준 날** (2026-08-16). 사용자가 직접 담았으면 `null`.
+   *
+   * ⚠️ 이 칸이 차 있다는 것은 "아직 제안 그대로"라는 뜻이다. 사용자가 종목을
+   *    더하거나 빼는 **순간 `null`로 만든다** — 그때부터 본인 것이므로 다음 날
+   *    지우면 안 된다.
+   */
+  suggestedForDayKey: string | null;
 };
 
 /** 무동작 감지 필드의 초기값 — 새 세션·구버전 draft 승격에 함께 쓴다 */
@@ -107,6 +116,9 @@ const IDLE_DEFAULTS = {
 /** 프로그램 필드의 초기값 — v5 이하 승격과 새 세션이 같이 쓴다 (0067) */
 const PROGRAM_DEFAULTS = { program: null } as const;
 
+/** 제안 필드의 초기값 — v6 이하 승격과 새 세션이 같이 쓴다 (2026-08-16) */
+const SUGGESTION_DEFAULTS = { suggestedForDayKey: null } as const;
+
 /** crypto.randomUUID는 보안 컨텍스트 전용 — http+LAN IP 테스트에서도 동작해야 함 */
 export function localId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -119,7 +131,7 @@ export const DEFAULT_REST_SECONDS = 90;
 
 export function emptyDraft(restSeconds = DEFAULT_REST_SECONDS): WorkoutDraft {
   return {
-    version: 6,
+    version: 7,
     sessionId: null,
     startedAtMs: null,
     scheduledPlanId: null,
@@ -129,6 +141,7 @@ export function emptyDraft(restSeconds = DEFAULT_REST_SECONDS): WorkoutDraft {
     exercises: [],
     ...IDLE_DEFAULTS,
     ...PROGRAM_DEFAULTS,
+    ...SUGGESTION_DEFAULTS,
   };
 }
 
@@ -140,9 +153,10 @@ export function loadDraft(userId: string): WorkoutDraft {
     if (!raw) return emptyDraft();
     type IdleFields = keyof typeof IDLE_DEFAULTS;
     type ProgramFields = keyof typeof PROGRAM_DEFAULTS;
+    type SuggestionFields = keyof typeof SUGGESTION_DEFAULTS;
     type LegacyDraft<V extends number, Missing extends keyof WorkoutDraft> = Omit<
       WorkoutDraft,
-      "version" | Missing | IdleFields | ProgramFields
+      "version" | Missing | IdleFields | ProgramFields | SuggestionFields
     > & { version: V };
 
     const parsed = JSON.parse(raw) as
@@ -151,49 +165,64 @@ export function loadDraft(userId: string): WorkoutDraft {
       | LegacyDraft<2, "sourceSessionId" | "effortMessage">
       | LegacyDraft<3, "sourceSessionId">
       | LegacyDraft<4, never>
-      | (Omit<WorkoutDraft, "version" | ProgramFields> & { version: 5 });
+      | (Omit<WorkoutDraft, "version" | ProgramFields | SuggestionFields> & {
+          version: 5;
+        })
+      | (Omit<WorkoutDraft, "version" | SuggestionFields> & { version: 6 });
     if (!parsed || !Array.isArray(parsed.exercises)) {
       return emptyDraft();
     }
-    // ⚠️ 승격 경로는 **전부 v6에서 끝난다.** 하나라도 옛 번호로 끝내면 그 draft는
-    //    `parsed.version !== 6`에 걸려 통째로 버려진다 — 진행 중이던 운동이 날아간다.
+    // ⚠️ 승격 경로는 **전부 v7에서 끝난다.** 하나라도 옛 번호로 끝내면 그 draft는
+    //    `parsed.version !== 7`에 걸려 통째로 버려진다 — 진행 중이던 운동이 날아간다.
     if (parsed.version === 1) {
       return {
         ...parsed,
-        version: 6,
+        version: 7,
         scheduledPlanId: null,
         sourceSessionId: null,
         effortMessage: null,
         ...IDLE_DEFAULTS,
         ...PROGRAM_DEFAULTS,
+        ...SUGGESTION_DEFAULTS,
       };
     }
     if (parsed.version === 2) {
       return {
         ...parsed,
-        version: 6,
+        version: 7,
         sourceSessionId: null,
         effortMessage: null,
         ...IDLE_DEFAULTS,
         ...PROGRAM_DEFAULTS,
+        ...SUGGESTION_DEFAULTS,
       };
     }
     if (parsed.version === 3) {
       return {
         ...parsed,
-        version: 6,
+        version: 7,
         sourceSessionId: null,
         ...IDLE_DEFAULTS,
         ...PROGRAM_DEFAULTS,
+        ...SUGGESTION_DEFAULTS,
       };
     }
     if (parsed.version === 4) {
-      return { ...parsed, version: 6, ...IDLE_DEFAULTS, ...PROGRAM_DEFAULTS };
+      return {
+        ...parsed,
+        version: 7,
+        ...IDLE_DEFAULTS,
+        ...PROGRAM_DEFAULTS,
+        ...SUGGESTION_DEFAULTS,
+      };
     }
     if (parsed.version === 5) {
-      return { ...parsed, version: 6, ...PROGRAM_DEFAULTS };
+      return { ...parsed, version: 7, ...PROGRAM_DEFAULTS, ...SUGGESTION_DEFAULTS };
     }
-    if (parsed.version !== 6) return emptyDraft();
+    if (parsed.version === 6) {
+      return { ...parsed, version: 7, ...SUGGESTION_DEFAULTS };
+    }
+    if (parsed.version !== 7) return emptyDraft();
     return parsed;
   } catch {
     return emptyDraft();
@@ -214,6 +243,34 @@ export function clearDraft(userId: string): void {
   } catch {
     /* noop */
   }
+}
+
+/**
+ * 어제 담긴 제안을 지운다 (2026-08-16) — **순수 함수다.**
+ *
+ * `loadDraft` 안에 넣지 않는 이유: 저장소 접근과 만료 규칙은 다른 일이고,
+ * 규칙만 따로 있어야 테스트가 localStorage 없이 잡는다.
+ *
+ * ⚠️ **스탬프가 없으면 손대지 않는다.** 그건 사용자가 직접 담은 것이다 —
+ *    지우면 어제 저녁에 짜 둔 운동이 아침에 사라진다.
+ *
+ * ⚠️ 판정은 `< todayKey`가 아니라 **`!== todayKey`** 다. 기기 시계가 앞서 있거나
+ *    타임존을 옮기면 스탬프가 미래일 수 있는데, `<`면 그 draft가 영영 안 지워진다.
+ *
+ * ⚠️ 운동 중이면 어떤 경우에도 손대지 않는다. 세션이 진행 중인 채로 목록만 비면
+ *    화면과 서버가 어긋난다.
+ */
+export function expireStaleSuggestion(
+  draft: WorkoutDraft,
+  todayKey: string,
+): WorkoutDraft {
+  if (draft.suggestedForDayKey === null) return draft;
+  if (draft.suggestedForDayKey === todayKey) return draft;
+  if (draft.startedAtMs !== null) return draft;
+  return {
+    ...emptyDraft(draft.restSeconds),
+    suggestedForDayKey: null,
+  };
 }
 
 /** 유형별 기본 첫 세트 (목업 addExercise 기준) */
@@ -997,6 +1054,45 @@ export async function hasCompletedHistory(userId: string): Promise<boolean> {
     .not("completed_at", "is", null);
   if (error) throw error;
   return (count ?? 0) > 0;
+}
+
+/**
+ * 제안 분기에 필요한 세 가지를 **한 번에** 읽는다 (2026-08-16).
+ *
+ * ⚠️ 완료 **수**를 세지 않는다. 화면은 유무(`hasCompletedHistory`)만 알면 되고,
+ *    수를 요구하면 서버(브리핑 라우트)와 입력이 갈릴 여지가 생긴다 —
+ *    설계 §3이 막으려는 것이 정확히 그 갈림이다.
+ */
+export async function getSuggestionFacts(userId: string): Promise<{
+  didWorkoutToday: boolean;
+  lastSessionWasInterval: boolean;
+  signedUpDayKey: string;
+}> {
+  const supabase = getSupabaseBrowserClient();
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Seoul";
+  const [lastRes, profileRes] = await Promise.all([
+    supabase
+      .from("workout_sessions")
+      .select("completed_at, tabata_minutes")
+      .eq("user_id", userId)
+      .eq("status", "completed")
+      .is("deleted_at", null)
+      .not("completed_at", "is", null)
+      .order("completed_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase.from("profiles").select("created_at").eq("id", userId).single(),
+  ]);
+  const last = lastRes.data;
+  return {
+    didWorkoutToday: last
+      ? dayKey(new Date(last.completed_at as string), tz) === dayKey(new Date(), tz)
+      : false,
+    lastSessionWasInterval: last ? last.tabata_minutes !== null : false,
+    signedUpDayKey: profileRes.data
+      ? dayKey(new Date(profileRes.data.created_at as string), tz)
+      : "1970-01-01",
+  };
 }
 
 export async function getCompletedSessions(

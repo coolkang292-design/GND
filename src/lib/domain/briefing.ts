@@ -16,6 +16,7 @@ import {
   estimateNotifyMinute,
   sameSlot,
 } from "./notify-time";
+import { pickSuggestionKind, suggestionCopy } from "./workout-suggestion";
 import type { StreakStage } from "./streak";
 
 export const DEFAULT_BRIEF_HOUR = 9;
@@ -32,6 +33,15 @@ export type BriefingUser = {
    */
   startedAts: Date[];
   morningBrief: boolean; // notification_settings.morning_brief (행 없음 = true)
+  // ── 계획 없는 날 제안 (2026-08-16) ──
+  /** 가입 시각 — 신규 걷기 창(`NEW_USER_GRACE_DAYS`) 판정 */
+  signedUpAt: Date;
+  /** 오늘(이 사람 타임존 기준) `workout_plans`에 행이 있나 */
+  hasPlanToday: boolean;
+  /** active 챌린지에 joined로 들어가 있나 */
+  isInActiveChallenge: boolean;
+  /** 가장 최근 완료 세션이 인터벌이었나 */
+  lastSessionWasInterval: boolean;
 };
 
 export type Briefing = {
@@ -39,6 +49,14 @@ export type Briefing = {
   title: string;
   body: string | null;
   dedupeKey: string;
+  /**
+   * 알림 유형 (2026-08-16). 제안이 있는 날은 `workout_suggestion`이 되고,
+   * 푸시 목적지가 `/record?suggest=1`로 바뀐다(`push.ts`).
+   *
+   * ⚠️ `dedupe_key`는 유형과 **무관하게** 그대로다 — 유니크 인덱스가 키 하나에만
+   *    걸려 있어서, 키를 바꾸면 전환일에 두 통째가 뚫린다.
+   */
+  type: "morning_briefing" | "workout_suggestion";
 };
 
 export type BriefingSkip = {
@@ -93,14 +111,38 @@ export function buildBriefings(
   const skipped: BriefingSkip[] = [];
 
   for (const u of users) {
-    if (u.completedAts.length === 0) {
-      skipped.push({ userId: u.userId, reason: "no_history" });
-      continue;
-    }
+    // ⚠️ opt-out이 **가장 앞**이다. 제안도 같은 채널이므로 똑같이 존중한다 —
+    //    순서를 뒤집으면 "알림 껐는데 오네"가 된다.
     if (!u.morningBrief) {
       skipped.push({ userId: u.userId, reason: "opted_out" });
       continue;
     }
+
+    const todayKey = dayKey(now, u.timezone);
+    const keys = workoutDayKeys(u.completedAts, u.timezone);
+    const hasHistory = u.completedAts.length > 0;
+    const kind = pickSuggestionKind({
+      hasPlanToday: u.hasPlanToday,
+      didWorkoutToday: keys.includes(todayKey),
+      hasHistory,
+      lastSessionWasInterval: u.lastSessionWasInterval,
+      isInActiveChallenge: u.isInActiveChallenge,
+      signedUpDayKey: dayKey(u.signedUpAt, u.timezone),
+      todayKey,
+    });
+
+    /*
+      ⚠️⚠️ **옛 코드는 여기서 무조건 스킵했다** — `completedAts.length === 0`이면
+      `no_history`. 그래서 신규 유저는 알림을 **한 통도** 못 받았다(2026-08-16 실측).
+
+      ⚠️ 스킵 **사유를 늘리지 마라.** `briefing.test.ts`가 `skipped`를 통째로
+         비교한다. `no_history`의 뜻을 "기록 0건이고 제안도 없음"으로 넓힌다.
+    */
+    if (!hasHistory && kind === null) {
+      skipped.push({ userId: u.userId, reason: "no_history" });
+      continue;
+    }
+
     // 이 사람에게 보낼 분 — 평소 시작 30분 전, 추정이 없으면 09:00.
     const notifyMinute =
       estimateNotifyMinute(u.startedAts, u.timezone, now) ??
@@ -115,17 +157,19 @@ export function buildBriefings(
       continue;
     }
 
-    const todayKey = dayKey(now, u.timezone);
-    const keys = workoutDayKeys(u.completedAts, u.timezone);
     const stage = streakStage(keys, todayKey);
     const streak = currentStreak(keys, todayKey);
+    const copy = kind ? suggestionCopy(kind, todayKey, streak) : null;
 
     briefings.push({
       userId: u.userId,
-      title: briefingTitle(stage, streak, todayKey),
-      // 크루 집계 문구를 없앴다(2026-07-28). 타입은 null 허용으로 남긴다 —
-      // 알림 INSERT와 푸시 페이로드가 body를 그대로 넘기고 있다.
-      body: null,
+      type: copy ? "workout_suggestion" : "morning_briefing",
+      // 제안이 있으면 제안이 제목을 가져간다. 없으면 지금 그대로 스트릭 문구.
+      title: copy ? copy.title : briefingTitle(stage, streak, todayKey),
+      // 옛 코드는 `body`가 **항상 null**이었다(크루 집계 문구를 없앤 2026-07-28 이후).
+      // 제안이 그 빈자리를 채운다.
+      body: copy ? copy.body : null,
+      // ⚠️ 유형이 달라져도 키는 그대로다 — 위 `Briefing.type` 주석 참조.
       dedupeKey: `morning_briefing:${u.userId}:${todayKey}`,
     });
   }
