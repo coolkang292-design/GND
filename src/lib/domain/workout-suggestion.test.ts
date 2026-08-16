@@ -3,6 +3,8 @@ import {
   NEW_USER_GRACE_DAYS,
   pickSuggestionKind,
   secondaryKind,
+  SUGGESTION_PHILOSOPHY,
+  suggestionCopy,
 } from "./workout-suggestion";
 
 /** 이력 있는 사람의 기본형 — 각 테스트가 필요한 것만 덮어쓴다 */
@@ -122,5 +124,66 @@ describe("secondaryKind — 보조 제안", () => {
    */
   it("걷기에는 보조가 없다", () => {
     expect(secondaryKind("walk")).toBeNull();
+  });
+});
+
+describe("suggestionCopy — 문구", () => {
+  it("걷기는 10분을 말한다", () => {
+    const copy = suggestionCopy("walk", "2026-08-16", 0);
+    expect(copy.title).toContain("10분");
+  });
+
+  /**
+   * 제목이 스트릭을 그대로 안고 간다. 브리핑이 하던 일을 뺏지 않고,
+   * **지금 항상 null인 body를** 제안이 채운다.
+   */
+  it("지난 운동은 제목에 스트릭 일수를 싣는다", () => {
+    const copy = suggestionCopy("repeat", "2026-08-16", 7);
+    expect(copy.title).toContain("7");
+  });
+
+  it("인터벌은 4분을 말한다", () => {
+    const copy = suggestionCopy("interval", "2026-08-16", 3);
+    expect(copy.title).toContain("4분");
+  });
+
+  /**
+   * ⚠️⚠️ **회귀선이다 (사용자 지시 2026-08-16).**
+   *
+   * "오래 하는 게 중요한 게 아니라 하루라도 빼먹지 않는 게 중요하다" —
+   * 이 메시지가 이 기능의 존재 이유다. 문구를 다듬다가 이게 빠지면
+   * 그냥 또 하나의 운동 권유 알림이 된다.
+   */
+  it("본문은 '빼먹지 않는 것'을 말한다", () => {
+    for (const kind of ["walk", "interval"] as const) {
+      const copy = suggestionCopy(kind, "2026-08-16", 0);
+      expect(SUGGESTION_PHILOSOPHY).toContain(copy.body);
+    }
+  });
+
+  it("지난 운동 본문은 4분이라도 하라고 말한다", () => {
+    const copy = suggestionCopy("repeat", "2026-08-16", 5);
+    expect(copy.body).toContain("4분");
+  });
+
+  /**
+   * ⚠️⚠️ **로테이션의 회귀선이다.**
+   *
+   * 계획 없는 날이 이어지면 이 알림이 매일 온다. 문구가 고정이면 잔소리가
+   * 되고, 그건 기존 브리핑(`pickByDay`로 이미 돌고 있다)보다 후퇴다.
+   */
+  it("같은 kind라도 날짜가 다르면 제목이 다르다", () => {
+    const titles = new Set(
+      ["2026-08-16", "2026-08-17", "2026-08-18"].map(
+        (d) => suggestionCopy("walk", d, 0).title,
+      ),
+    );
+    expect(titles.size).toBeGreaterThan(1);
+  });
+
+  it("같은 날짜에는 같은 문구가 나온다 — 렌더마다 바뀌면 안 된다", () => {
+    const a = suggestionCopy("walk", "2026-08-16", 0);
+    const b = suggestionCopy("walk", "2026-08-16", 0);
+    expect(a).toEqual(b);
   });
 });
