@@ -1,22 +1,46 @@
 // @vitest-environment jsdom
 
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WeeklyStats } from "./weekly-stats";
 
-afterEach(cleanup);
+/**
+ * 기준 시각 — **2026-08-13(목) 21:00 KST**. 주 한가운데로 고정한다.
+ *
+ * ⚠️⚠️ **시계를 고정하지 않으면 이 파일은 매주 월요일에 깨진다.** 2026-08-17(월)에
+ * 실제로 그랬다. 옛 헬퍼는 `new Date()`에서 하루씩 거꾸로 날짜를 만들면서
+ * *"주 경계를 넘지 않도록"* 이라고 주석만 달아 놓고 **아무것도 막지 않았다.**
+ * 월요일에 `thisWeek(2)`를 부르면 `[월, 일]`이 되는데 주는 월요일에 시작하므로
+ * (`weekRange`) 일요일은 **지난 주**다. 이번 주 운동일이 2일이 아니라 1일이 되어
+ * `50%`가 `25%`로 나왔다.
+ *
+ * 목요일로 고정하면 3일 전까지 거슬러도 같은 주(월~일) 안에 머문다.
+ */
+const NOW = new Date("2026-08-13T12:00:00Z");
 
-/** 이번 주(월~일) 안에 드는 날 n개. 기준일을 고정해야 주 경계에 안 걸린다. */
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(NOW);
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+  cleanup();
+});
+
+/**
+ * 이번 주(월~일) 안에 드는 **서로 다른 날** n개.
+ *
+ * ⚠️ `setDate`가 아니라 `setUTCDate`다. 기준 시각을 UTC로 잡아 놨으므로 UTC 기준
+ * 하루씩 빼야 매 항목이 같은 벽시계 시각(21:00 KST)에 놓인다 — 실행 기기의
+ * 로컬 타임존이 결과를 흔들지 않는다.
+ */
 function thisWeek(n: number): Date[] {
-  const now = new Date();
-  const out: Date[] = [];
-  for (let i = 0; i < n; i++) {
-    const d = new Date(now);
-    // 오늘부터 거꾸로 — 주 경계를 넘지 않도록 요일 수만큼만 부른다.
-    d.setDate(now.getDate() - i);
-    out.push(d);
-  }
-  return out;
+  return Array.from({ length: n }, (_, i) => {
+    const d = new Date(NOW);
+    d.setUTCDate(d.getUTCDate() - i);
+    return d;
+  });
 }
 
 describe("WeeklyStats — 주간 기준은 챌린지에서 온다 (2026-08-08)", () => {

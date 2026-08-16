@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  CATCH_UP_MINUTES,
   DEFAULT_BRIEF_MINUTE,
   ESTIMATE_WINDOW_DAYS,
   MIN_SESSIONS_FOR_ESTIMATE,
   NOTIFY_LEAD_MINUTES,
+  SLOT_MINUTES,
   estimateNotifyMinute,
-  sameSlot,
+  isDue,
 } from "./notify-time";
 
 const KST = "Asia/Seoul";
@@ -101,14 +103,43 @@ describe("estimateNotifyMinute — 평소 시작 30분 전", () => {
   });
 });
 
-describe("sameSlot — 30분 슬롯 비교", () => {
-  it("같은 30분 안이면 같은 슬롯이다", () => {
-    expect(sameSlot(18 * 60 + 30, 18 * 60 + 30)).toBe(true);
-    expect(sameSlot(18 * 60 + 30, 18 * 60 + 59)).toBe(true);
+/**
+ * 2026-08-16 — 옛 `sameSlot`("지금이 정확히 그 슬롯인가")을 대체했다.
+ *
+ * ⚠️ **이 describe가 "하루를 통째로 놓치는" 사고의 재발 방지선이다.** 실측:
+ * `dev-테스터A`(예정 06:00)가 2026-08-16에 못 받았다. 슬롯은 그대로였고 같은 날
+ * 06:30 사용자들은 정상 수신했으니 06:00 발사 한 번이 빠진 것이다. 정확 일치로
+ * 판정하면 그 한 번이 곧 하루치 손실이 된다.
+ */
+describe("isDue — 놓친 발사를 따라잡는다", () => {
+  const AT_0600 = 6 * 60;
+
+  it("예정 시각이면 보낸다", () => {
+    expect(isDue(AT_0600, AT_0600)).toBe(true);
   });
 
-  it("슬롯이 다르면 false", () => {
-    expect(sameSlot(18 * 60 + 30, 19 * 60)).toBe(false);
-    expect(sameSlot(18 * 60 + 30, 18 * 60 + 29)).toBe(false);
+  it("예정 시각 전에는 안 보낸다", () => {
+    expect(isDue(AT_0600 - 1, AT_0600)).toBe(false);
+    expect(isDue(5 * 60, AT_0600)).toBe(false);
+  });
+
+  /** ⚠️ 핵심 — 06:00 발사가 실패해도 06:30이 따라잡는다 */
+  it("예정 시각을 놓쳐도 다음 발사가 따라잡는다", () => {
+    expect(isDue(AT_0600 + 30, AT_0600)).toBe(true);
+    expect(isDue(AT_0600 + 60, AT_0600)).toBe(true);
+    expect(isDue(AT_0600 + 90, AT_0600)).toBe(true);
+  });
+
+  /**
+   * ⚠️ 무한정 열어두지 않는다. "곧 운동할 시간이니 준비하세요"가 6시간 뒤에 오면
+   * 알림이 아니라 소음이다.
+   */
+  it("따라잡기 창을 넘기면 안 보낸다 — 철 지난 알림은 소음이다", () => {
+    expect(isDue(AT_0600 + CATCH_UP_MINUTES, AT_0600)).toBe(false);
+    expect(isDue(AT_0600 + CATCH_UP_MINUTES + 30, AT_0600)).toBe(false);
+  });
+
+  it("30분 발사 기준 네 번 연속 실패까지 덮는다", () => {
+    expect(CATCH_UP_MINUTES / SLOT_MINUTES).toBe(4);
   });
 });

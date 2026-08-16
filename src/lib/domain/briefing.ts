@@ -11,11 +11,7 @@ import {
   TODAY_DONE_MESSAGES,
 } from "./streak-messages";
 import { dayKey, minuteOfDay } from "./time";
-import {
-  DEFAULT_BRIEF_MINUTE,
-  estimateNotifyMinute,
-  sameSlot,
-} from "./notify-time";
+import { DEFAULT_BRIEF_MINUTE, estimateNotifyMinute, isDue } from "./notify-time";
 import { pickSuggestionKind, suggestionCopy } from "./workout-suggestion";
 import type { StreakStage } from "./streak";
 
@@ -62,11 +58,11 @@ export type Briefing = {
 export type BriefingSkip = {
   userId: string;
   /**
-   * ⚠️ 옛 이름은 `hour_mismatch`였다. 2026-08-13에 판정이 **시(hour)**에서
-   * **30분 슬롯**으로 바뀌면서 같이 고쳤다 — 옛 이름을 남기면 로그를 읽는 사람이
-   * 아직 정시 판정인 줄 안다.
+   * ⚠️ 이름이 두 번 바뀌었다. `hour_mismatch`(정시 판정) → `slot_mismatch`(30분 슬롯
+   * 정확 일치) → **`not_due`**(예정 시각이 지났고 따라잡기 창 안인가, 2026-08-16).
+   * 옛 이름을 남기면 로그를 읽는 사람이 판정 방식을 오해한다.
    */
-  reason: "no_history" | "opted_out" | "slot_mismatch";
+  reason: "no_history" | "opted_out" | "not_due";
 };
 
 /** 브리핑용 제목 조립 — 카피 데이터는 홈 카드와 공용, 조립만 채널별 (스펙 §2) */
@@ -147,13 +143,16 @@ export function buildBriefings(
     const notifyMinute =
       estimateNotifyMinute(u.startedAts, u.timezone, now) ??
       DEFAULT_BRIEF_MINUTE;
-    // 수동 검증용 오버라이드는 그 시각의 **정각 슬롯**을 뜻한다.
+    // 수동 검증용 오버라이드는 그 시각의 **정각**을 뜻한다.
     const nowMinute =
       invocationHourOverride !== undefined
         ? invocationHourOverride * 60
         : minuteOfDay(now, u.timezone);
-    if (!sameSlot(nowMinute, notifyMinute)) {
-      skipped.push({ userId: u.userId, reason: "slot_mismatch" });
+    // ⚠️ **"정확히 그 슬롯인가"로 판정하지 마라** (2026-08-16에 고쳤다). 발사가
+    //    한 번만 실패해도 그날 알림이 통째로 사라진다 — `isDue` 주석의 실측 참조.
+    //    하루 한 번은 DB의 `unique(dedupe_key)`가 보장하므로 다시 시도해도 안전하다.
+    if (!isDue(nowMinute, notifyMinute)) {
+      skipped.push({ userId: u.userId, reason: "not_due" });
       continue;
     }
 

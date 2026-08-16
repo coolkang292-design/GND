@@ -56,10 +56,10 @@ describe("buildBriefings — skip 판정", () => {
     );
     expect(skipped[0].reason).toBe("opted_out");
   });
-  it("invocationHour 7이면 전원 slot_mismatch (수동 검증용 오버라이드)", () => {
+  it("invocationHour 7이면 전원 not_due (수동 검증용 오버라이드)", () => {
     const { briefings, skipped } = buildBriefings([user({})], new Map(), NOW, 7);
     expect(briefings).toHaveLength(0);
-    expect(skipped[0].reason).toBe("slot_mismatch");
+    expect(skipped[0].reason).toBe("not_due");
   });
   it("기록이 적어 추정이 없으면 09:00 폴백으로 발송된다", () => {
     // NOW = KST 09:10 → 09:00 슬롯
@@ -95,7 +95,7 @@ describe("buildBriefings — 평소 시작 30분 전", () => {
       NOW, // KST 09:10
     );
     expect(briefings).toHaveLength(0);
-    expect(skipped[0].reason).toBe("slot_mismatch");
+    expect(skipped[0].reason).toBe("not_due");
   });
 
   it("자정 직후에 운동하는 사람은 전날 23:30 슬롯에 받는다", () => {
