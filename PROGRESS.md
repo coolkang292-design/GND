@@ -3,9 +3,17 @@
 > 새 세션은 저장소 루트 `AGENTS.md` → `CLAUDE.md` → 이 파일 → 가장 최근의 관련 `docs/superpowers/HANDOFF-*.md` 순서로 읽는다.
 > 이 파일은 전체 흐름의 요약이고, 작업별 세부 사실과 남은 확인은 최신 인수인계서가 기준이다.
 
-## ⏳ 2026-08-16 계획 없는 날 운동 제안 — **배포 대기 (사용자 승인 전)**
+## ✅ 2026-08-16 배포 — 계획 없는 날 운동 제안 + 인터벌 카운트다운
 
-브랜치 `feat/empty-day-workout-suggestion` (커밋 10개). 아직 `main`에 안 올렸다.
+`556da25` 배포 (`gnd-enxaxf0cc-gnd4.vercel.app` → `gnd-one.vercel.app`).
+브랜치 `feat/empty-day-workout-suggestion` (커밋 11개)을 `--no-ff`로 `main`에 병합.
+
+**프로덕션 실물 확인 (배포 명령 성공은 검증이 아니다):**
+- `/record` 번들에서 `지난번 그대로 담기` · `빼먹지 않는 게 중요` **발견** — 오늘 새로 만든 문구다
+- `/home`·`/feed` 번들에서 `workout_suggestion` → `/record?suggest=1` **발견**.
+  ⚠️ 이게 없으면 `DEFAULT_PUSH_URL`로 떨어져 **푸시가 `/home`으로 샌다**.
+  `pushPayloadFor`는 `/api/push/notify`(서버)가 쓰는데, 같은 빌드의 클라이언트
+  번들에 들어 있으므로 서버 쪽도 같은 소스다.
 계획: `docs/superpowers/plans/2026-08-16-empty-day-workout-suggestion.md`
 인수인계: `docs/superpowers/HANDOFF-2026-08-16-empty-day-workout-suggestion.md`
 
