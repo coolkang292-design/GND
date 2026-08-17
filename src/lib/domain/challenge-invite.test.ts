@@ -4,8 +4,10 @@ import {
   challengeInviteUrl,
   defaultChallengeName,
   defaultChallengePeriod,
+  earliestStartDate,
   inviteSharePayload,
   shareOutcomeMessage,
+  startsTooSoon,
 } from "./challenge-invite";
 
 describe("challengeInviteUrl", () => {
@@ -67,6 +69,45 @@ describe("defaultChallengePeriod", () => {
 
   it("기본 기간은 28일이다", () => {
     expect(DEFAULT_CHALLENGE_DAYS).toBe(28);
+  });
+});
+
+describe("earliestStartDate", () => {
+  /**
+   * 왜 오늘이 아닌가: `autostart_due_challenges`가 `start_date <= 오늘`인 `setup`
+   * 방을 전부 시작시키고, 시작하면 `invite_to_challenge`·
+   * `issue_challenge_invite_code`·`join_challenge_with_code`가 전부
+   * `invalid_status`로 막힌다. **오늘 시작하는 방은 초대 창이 0이다.**
+   */
+  it("가장 이른 시작일은 내일이다", () => {
+    expect(earliestStartDate("2026-08-17")).toBe("2026-08-18");
+  });
+
+  it("월말·연말을 넘어도 맞다", () => {
+    expect(earliestStartDate("2026-08-31")).toBe("2026-09-01");
+    expect(earliestStartDate("2026-12-31")).toBe("2027-01-01");
+  });
+
+  it("기본 기간의 시작일과 같은 값이다 — 규칙이 두 벌이면 갈라진다", () => {
+    for (const d of ["2026-08-17", "2026-02-28", "2028-02-28"]) {
+      expect(defaultChallengePeriod(d).startDate).toBe(earliestStartDate(d));
+    }
+  });
+});
+
+describe("startsTooSoon", () => {
+  it("오늘·어제로 시작하면 걸린다 — 초대 창이 없다", () => {
+    expect(startsTooSoon("2026-08-17", "2026-08-17")).toBe(true);
+    expect(startsTooSoon("2026-08-16", "2026-08-17")).toBe(true);
+  });
+
+  it("내일부터는 통과한다", () => {
+    expect(startsTooSoon("2026-08-18", "2026-08-17")).toBe(false);
+    expect(startsTooSoon("2026-09-01", "2026-08-17")).toBe(false);
+  });
+
+  it("빈 값은 걸지 않는다 — 날짜 미입력은 이 규칙이 할 말이 아니다", () => {
+    expect(startsTooSoon("", "2026-08-17")).toBe(false);
   });
 });
 

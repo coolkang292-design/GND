@@ -13,6 +13,7 @@ import {
   challengeInviteUrl,
   defaultChallengeName,
   defaultChallengePeriod,
+  earliestStartDate,
   inviteSharePayload,
   shareOutcomeMessage,
   type ShareOutcome,
@@ -708,14 +709,27 @@ function ChallengeScreen({ userId }: { userId: string }) {
     }
   }
 
+  /**
+   * ⚠️⚠️ **생성 시트의 기본 기간은 `defaultChallengePeriod`에서 온다** (2026-08-17).
+   *
+   * 옛 기본값은 `시작일 = 오늘`이었다. 그러면 만들자마자 초대 창이 닫힌다 —
+   * `autostart_due_challenges`가 `start_date <= 오늘`인 `setup` 방을 전부
+   * `active`로 올리고, 그 RPC는 **이 탭이 열릴 때마다** 돈다. 시작한 뒤에는
+   * 초대 RPC가 전부 `invalid_status`라 아무도 못 들어온다.
+   *
+   * 운영 실측이 그 모양이었다 — 참가자 1명짜리 챌린지 14개,
+   * 2026-07-31 하루에 7번의 생성·취소, 초대 링크로 들어온 신규 가입자 0명.
+   *
+   * ⚠️ 여기서 `dayKey(now, ...)`로 되돌리지 마라. 그게 그 버그다.
+   */
   function openSheet(mode: "create" | "goals") {
-    const now = new Date();
+    const period = defaultChallengePeriod(todayKey);
     setSheet({
       mode,
       defaults: {
         name: mode === "create" ? "" : challenge?.name ?? "",
-        startDate: dayKey(now, timeZone),
-        endDate: dayKey(new Date(now.getTime() + 27 * 86_400_000), timeZone),
+        startDate: period.startDate,
+        endDate: period.endDate,
         goals:
           mode === "goals" && myGoals.length > 0
             ? myGoals.map((g) => ({
@@ -1282,6 +1296,11 @@ function ChallengeScreen({ userId }: { userId: string }) {
           mode={sheet.mode}
           defaults={sheet.defaults}
           periodDaysFixed={sheet.mode === "goals" && challenge ? days : undefined}
+          minStartDate={
+            // ⚠️ 생성일 때만 건다. 목표 수정 시트는 날짜 칸이 아예 없어서,
+            //    거기까지 걸면 막을 것도 없이 규칙만 늘어난다.
+            sheet.mode === "create" ? earliestStartDate(todayKey) : undefined
+          }
           prevGoals={prevGoals}
           busy={busy}
           onSubmit={sheet.mode === "create" ? handleCreate : handleSaveGoals}

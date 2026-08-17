@@ -48,6 +48,33 @@ export function challengeInviteUrl(origin: string, code: string): string {
 }
 
 /**
+ * 고를 수 있는 **가장 이른 시작일 = 내일**.
+ *
+ * ⚠️⚠️ 오늘로 시작하는 방은 **초대 창이 0이다.** `autostart_due_challenges`가
+ * `status='setup' and start_date <= 오늘`인 방을 전부 `active`로 올리는데, 시작한
+ * 뒤에는 `invite_to_challenge`·`issue_challenge_invite_code`·
+ * `join_challenge_with_code`가 **모두 `invalid_status`로 막힌다.** 그 RPC는
+ * 크론뿐 아니라 **챌린지 탭이 열릴 때마다** 도니까, 만들고 화면을 한 번 더 보는
+ * 것만으로 초대가 닫힌다.
+ *
+ * 이게 운영 데이터의 모양을 설명한다 — 참가자 1명짜리 챌린지 14개,
+ * 2026-07-31 하루에 7번의 생성·취소.
+ *
+ * ⚠️ **"오늘 시작하고 싶다"를 막는 규칙이 아니다.** 목표를 세운 뒤
+ * `지금 바로 시작하기`(`start_challenge`)를 누르면 날짜와 무관하게 오늘 시작한다.
+ * 여기서 막는 것은 **초대할 수 없는 방이 조용히 만들어지는 것**뿐이다.
+ */
+export function earliestStartDate(todayKey: string): string {
+  return toKey(toUtc(todayKey) + 86_400_000);
+}
+
+/** 초대 창이 없는 시작일인가. 빈 값은 판단하지 않는다(날짜 미입력은 다른 규칙이 본다). */
+export function startsTooSoon(startDate: string, todayKey: string): boolean {
+  if (!startDate) return false;
+  return startDate < earliestStartDate(todayKey);
+}
+
+/**
  * 기본 기간 — **내일** 시작해서 28일간(양끝 포함).
  *
  * ⚠️⚠️ **`todayKey`를 그대로 시작일로 쓰지 마라.** `autostart_due_challenges`가
@@ -68,10 +95,14 @@ export function defaultChallengePeriod(todayKey: string): {
   startDate: string;
   endDate: string;
 } {
-  const start = toUtc(todayKey) + 86_400_000;
+  // ⚠️ 시작일은 `earliestStartDate`에서 받는다. 여기서 다시 `+1일`을 짜면 규칙이
+  //    두 벌이 되고, 한쪽만 고치는 날 기본값과 입력 하한이 어긋난다.
+  const startDate = earliestStartDate(todayKey);
   return {
-    startDate: toKey(start),
-    endDate: toKey(start + (DEFAULT_CHALLENGE_DAYS - 1) * 86_400_000),
+    startDate,
+    endDate: toKey(
+      toUtc(startDate) + (DEFAULT_CHALLENGE_DAYS - 1) * 86_400_000,
+    ),
   };
 }
 
