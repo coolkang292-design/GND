@@ -120,7 +120,7 @@ export function LaunchMotivationSplash() {
           alt=""
           fill
           priority
-          sizes="100vw"
+          sizes="(max-width: 430px) 100vw, 430px"
           onLoad={() => startDisplay("showing")}
           onError={() => startDisplay("fallback")}
           className={`object-contain object-center transition-opacity duration-200 ${

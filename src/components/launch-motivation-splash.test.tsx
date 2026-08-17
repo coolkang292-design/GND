@@ -55,6 +55,9 @@ describe("LaunchMotivationSplash", () => {
     expect(image.getAttribute("src")).toBe(
       "/splash/gnd-launch-motivation-v2.png",
     );
+    expect(image.getAttribute("sizes")).toBe(
+      "(max-width: 430px) 100vw, 430px",
+    );
     expect(image.className).toContain("object-contain");
     expect(image.className).not.toContain("object-cover");
     expect(
