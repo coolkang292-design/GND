@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { Black_Han_Sans } from "next/font/google";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   launchSplashGate,
@@ -10,6 +11,13 @@ import {
 const DISPLAY_MS = 1_500;
 const FADE_MS = 180;
 const MAX_BLOCK_MS = 3_000;
+
+const launchCopyFont = Black_Han_Sans({
+  weight: "400",
+  display: "swap",
+  preload: false,
+  fallback: ["Arial Black", "sans-serif"],
+});
 
 type Phase =
   | "checking"
@@ -153,8 +161,13 @@ export function LaunchMotivationSplash() {
           }}
         >
           <span
-            className="relative inline-block origin-center text-[clamp(1.8rem,7.5vw,2.4rem)] font-black leading-[1.04] tracking-[-0.055em] text-text"
-            style={{ transform: "skewX(-8deg) scaleX(0.9)" }}
+            data-testid="launch-splash-copy-text"
+            className={`${launchCopyFont.className} relative inline-block origin-center text-[clamp(2rem,8.5vw,2.7rem)] leading-[0.98] tracking-[-0.06em] text-text`}
+            style={{
+              transform: "skewX(-10deg) scaleX(0.78)",
+              textShadow:
+                "0 2px 0 rgba(0, 0, 0, 0.9), 0 0 10px rgba(0, 0, 0, 0.55)",
+            }}
           >
             <span aria-hidden className="absolute -left-7 top-1 block">
               <span className="mb-1.5 block h-1 w-5 bg-accent" />
@@ -162,7 +175,7 @@ export function LaunchMotivationSplash() {
               <span className="ml-1 block h-1 w-3 bg-accent/45" />
             </span>
             <span className="block">지금은 같은 출발선.</span>
-            <span className="mt-1 block text-[0.7em] text-accent">
+            <span className="mt-1 block text-[0.72em] text-accent">
               1년 뒤, 프로와 아마추어가 갈린다.
             </span>
           </span>

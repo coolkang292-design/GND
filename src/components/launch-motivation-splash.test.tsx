@@ -6,6 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { launchSplashGate } from "@/lib/domain/launch-splash";
 import { LaunchMotivationSplash } from "./launch-motivation-splash";
 
+vi.mock("next/font/google", () => ({
+  Black_Han_Sans: () => ({ className: "font-black-han-sans" }),
+}));
+
 vi.mock("next/image", () => ({
   default: (
     props: ImgHTMLAttributes<HTMLImageElement> & {
@@ -74,6 +78,9 @@ describe("LaunchMotivationSplash", () => {
     expect(screen.queryByText(/갈은 출발선/)).toBeNull();
     expect(screen.getByTestId("launch-splash-copy").className).not.toContain(
       "sr-only",
+    );
+    expect(screen.getByTestId("launch-splash-copy-text").className).toContain(
+      "font-black-han-sans",
     );
   });
 
