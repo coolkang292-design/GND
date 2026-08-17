@@ -13,10 +13,11 @@ vi.mock("next/image", () => ({
       priority?: boolean;
     },
   ) => {
-    const { fill, priority, ...imageProps } = props;
+    const { fill, priority, alt = "", ...imageProps } = props;
     void fill;
     void priority;
-    return <img {...imageProps} />;
+    // eslint-disable-next-line @next/next/no-img-element -- Next Image 테스트 대역
+    return <img alt={alt} {...imageProps} />;
   },
 }));
 
