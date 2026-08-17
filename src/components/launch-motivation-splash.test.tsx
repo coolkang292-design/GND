@@ -44,27 +44,36 @@ afterEach(() => {
 });
 
 describe("LaunchMotivationSplash", () => {
-  it("새 실행이면 승인 이미지와 화면 밖 브랜드 문구를 준비한다", () => {
+  it("새 실행이면 승인 배경과 오타 없는 실제 브랜드 문구를 준비한다", () => {
     render(<LaunchMotivationSplash />);
     settleSessionDecision();
 
-    expect(
-      screen.getByRole("button", { name: "시작 화면 건너뛰기" }),
-    ).toBeTruthy();
+    const splash = screen.getByRole("button", {
+      name: "시작 화면 건너뛰기",
+    });
+    expect(splash).toBeTruthy();
+    expect(splash.getAttribute("aria-describedby")).toBe(
+      "launch-splash-description",
+    );
     const image = screen.getByTestId("launch-splash-image");
     expect(image.getAttribute("src")).toBe(
-      "/splash/gnd-launch-motivation-v2.png",
+      "/splash/gnd-launch-motivation-v3.png",
     );
     expect(image.getAttribute("sizes")).toBe(
       "(max-width: 430px) 100vw, 430px",
     );
     expect(image.className).toContain("object-contain");
     expect(image.className).not.toContain("object-cover");
+    fireEvent.load(image);
+
+    expect(screen.getByText("지금은 같은 출발선.")).toBeTruthy();
     expect(
-      screen.getByText(
-        "GND. 지금은 같은 출발선. 1년 뒤, 프로와 아마추어가 갈린다.",
-      ).className,
-    ).toContain("sr-only");
+      screen.getByText("1년 뒤, 프로와 아마추어가 갈린다."),
+    ).toBeTruthy();
+    expect(screen.queryByText(/갈은 출발선/)).toBeNull();
+    expect(screen.getByTestId("launch-splash-copy").className).not.toContain(
+      "sr-only",
+    );
   });
 
   it("이미 본 실행 세션이면 덮개를 즉시 없앤다", () => {
