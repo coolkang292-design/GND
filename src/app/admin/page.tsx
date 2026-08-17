@@ -18,6 +18,14 @@ import {
   type PeriodDays,
 } from "@/lib/domain/analytics";
 import {
+  acquisitionBreakdown,
+  acquisitionCaptureRate,
+  crewOriginBreakdown,
+  originKnownRate,
+  topInviters,
+} from "@/lib/domain/analytics-acquisition";
+import {
+  activeCrewMetrics,
   briefingSlotBreakdown,
   notificationConversion,
   referralMetrics,
@@ -26,6 +34,7 @@ import {
 } from "@/lib/domain/analytics-engagement";
 import { buildProgramMetrics } from "@/lib/domain/analytics-program";
 import { DEFAULT_TIMEZONE } from "@/lib/domain/time";
+import { AcquisitionPanel } from "./_components/acquisition-panel";
 import { ActivityChart } from "./_components/activity-chart";
 import { ChallengePanel } from "./_components/challenge-panel";
 import { EngagementPanel } from "./_components/engagement-panel";
@@ -109,6 +118,18 @@ export default async function AdminPage({
     data.profiles.length,
     data.inviteCodeCount,
   );
+  // 새 질의를 하지 않는다 — 크루 쌍과 완료 세션은 이미 위에서 다 읽었다
+  const activeCrew = activeCrewMetrics(
+    data.crewLinkPairs,
+    data.sessions,
+    period,
+  );
+  // 0079. 같은 원본에서 파생한다 — 출처·초대자·유입 채널을 위해 다시 읽지 않는다
+  const origins = crewOriginBreakdown(data.crewLinkPairs);
+  const originKnown = originKnownRate(data.crewLinkPairs);
+  const inviters = topInviters(data.crewLinkPairs, data.acquisitionProfiles);
+  const channels = acquisitionBreakdown(data.acquisitionProfiles);
+  const captureRate = acquisitionCaptureRate(data.acquisitionProfiles);
 
   const userRows = buildUserRows(
     data.profiles,
@@ -174,6 +195,9 @@ export default async function AdminPage({
           </a>
           <a href="#notify">
             <i>◈</i>알림·참여
+          </a>
+          <a href="#acquisition">
+            <i>◇</i>유입·초대
           </a>
         </nav>
         <div className="sidebar-foot">GND ADMIN · 운영자 전용</div>
@@ -257,7 +281,21 @@ export default async function AdminPage({
 
         <GrowthPanel data={growth} />
 
-        <EngagementPanel pass={pass} referral={referral} />
+        <EngagementPanel
+          pass={pass}
+          referral={referral}
+          activeCrew={activeCrew}
+          periodDays={days}
+        />
+
+        <div id="acquisition" />
+        <AcquisitionPanel
+          origins={origins}
+          originKnown={originKnown}
+          inviters={inviters}
+          channels={channels}
+          captureRate={captureRate}
+        />
 
         <footer>
           <span>

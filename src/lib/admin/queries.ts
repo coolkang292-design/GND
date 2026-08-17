@@ -21,6 +21,10 @@ import {
   type EngagementNotificationRow,
 } from "@/lib/domain/analytics-engagement";
 import type {
+  AcquisitionProfileRow,
+  CrewLinkOriginRow,
+} from "@/lib/domain/analytics-acquisition";
+import type {
   ProgramEnrollmentRow,
   ProgramEnrollmentStatus,
   ProgramSessionRow,
@@ -40,8 +44,13 @@ export interface AdminDataset {
    * 크루 지표는 챌린지 참가자 수와 별개로 계산한다.
    */
   crewLinkUserIds: string[];
-  /** 확산 패널이 쓰는 연결 쌍 원본. crewLinkUserIds는 여기서 파생된다 */
-  crewLinkPairs: CrewLinkPair[];
+  /**
+   * 확산 패널이 쓰는 연결 쌍 원본. crewLinkUserIds는 여기서 파생된다.
+   * 0079부터 출처(`origin`)와 먼저 연 쪽(`initiatedBy`)이 함께 온다.
+   */
+  crewLinkPairs: (CrewLinkPair & CrewLinkOriginRow)[];
+  /** 0079: 유입 채널·초대자 집계용 프로필 행 */
+  acquisitionProfiles: AcquisitionProfileRow[];
   /**
    * 초대 코드를 가진 프로필 수. **profiles를 두 번 읽지 않으려고 여기서 낸다** —
    * 확산 패널만을 위해 같은 테이블을 다시 조회할 이유가 없다.
@@ -77,10 +86,16 @@ export async function fetchAdminDataset(): Promise<AdminDataset> {
         .select("user_id,status,started_at,completed_at")
         .is("deleted_at", null),
       // invite_code는 화면에 내보내지 않고 **발급 여부만** 센다(아래 참조)
-      db.from("profiles").select("id,nickname,avatar_url,created_at,invite_code"),
+      // 0079: 유입 출처는 채널 판정에 쓰는 두 개(source·referrer)만 읽는다 —
+      // medium·campaign·landing은 아직 화면이 없어 페이로드만 키운다.
+      db
+        .from("profiles")
+        .select(
+          "id,nickname,avatar_url,created_at,invite_code,invited_by,acquisition_source,acquisition_referrer",
+        ),
       db.from("user_progress").select("user_id,total_xp"),
-      // 0039부터 "크루" = crew_links(상호 수락).
-      db.from("crew_links").select("user_a,user_b"),
+      // 0039부터 "크루" = crew_links(상호 수락). 0079부터 출처·방향이 붙는다.
+      db.from("crew_links").select("user_a,user_b,origin,initiated_by"),
       db.auth.admin.listUsers({ page: 1, perPage: 1000 }),
     ]);
 
@@ -153,7 +168,24 @@ export async function fetchAdminDataset(): Promise<AdminDataset> {
     crewLinkPairs: keptLinks.map((r) => ({
       userA: r.user_a as string,
       userB: r.user_b as string,
+      // 0079. 초대자가 테스트 계정이면 지운다 — 실사용자 확산 표에 픽스처 닉네임이
+      // 뜨면 안 된다. 연결 자체는 양쪽이 실사용자라 남긴다.
+      origin: (r.origin as string | null) ?? null,
+      initiatedBy: isTest((r.initiated_by as string) ?? "")
+        ? null
+        : ((r.initiated_by as string | null) ?? null),
     })),
+    acquisitionProfiles: rawProfiles
+      .filter((p) => !isTest(p.id as string))
+      .map((p) => ({
+        userId: p.id as string,
+        nickname: p.nickname as string,
+        invitedBy: isTest((p.invited_by as string) ?? "")
+          ? null
+          : ((p.invited_by as string | null) ?? null),
+        source: (p.acquisition_source as string | null) ?? null,
+        referrer: (p.acquisition_referrer as string | null) ?? null,
+      })),
     // 코드 문자열은 들고 가지 않는다 — 게이트가 유일한 방어선이라 페이로드에
     // 남의 초대 코드를 실을 이유가 없다. 필요한 건 "몇 명이 가졌나"뿐이다.
     inviteCodeCount: rawProfiles.filter(

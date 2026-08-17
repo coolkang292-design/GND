@@ -338,13 +338,62 @@ describe("reworkoutRetention", () => {
     expect(r.d7.denominator).toBe(1);
   });
 
-  it("D28도 마찬가지로 아직 28일이 안 된 사람은 제외", () => {
+  it("D30도 마찬가지로 아직 30일이 안 된 사람은 제외", () => {
     const r = reworkoutRetention(
       [{ userId: "u1", createdAt: new Date("2026-07-20T00:00:00Z") }],
       [],
       now,
     );
-    expect(r.d28.denominator).toBe(0);
+    expect(r.d30.denominator).toBe(0);
+  });
+
+  it("30일 생존은 가입 30일이 지난 사람만 분모에 넣는다", () => {
+    const r = reworkoutRetention(
+      [
+        // 가입 41일 전 → 분모에 든다
+        { userId: "u1", createdAt: new Date("2026-06-17T00:00:00Z") },
+        // 가입 8일 전 → 아직 한 달이 안 됐다
+        { userId: "u2", createdAt: new Date("2026-07-20T00:00:00Z") },
+      ],
+      [],
+      now,
+    );
+    expect(r.aliveAfter30d.denominator).toBe(1);
+  });
+
+  it("30일 생존의 창은 가입일이 아니라 오늘에서 뒤로 7일이다", () => {
+    const profiles = [
+      { userId: "u1", createdAt: new Date("2026-06-17T00:00:00Z") },
+    ];
+    // 3일 전 운동 → 살아 있다
+    expect(
+      reworkoutRetention(
+        profiles,
+        [s("u1", "completed", "2026-07-25T05:00:00Z")],
+        now,
+      ).aliveAfter30d,
+    ).toEqual({ numerator: 1, denominator: 1 });
+
+    // 20일 전 운동 → 최근 7일에는 없다. **여기가 뒤집히는 지점이다** —
+    // "0이어야 한다"가 아니라 "위는 1, 아래는 0"이어야 고장을 잡는다.
+    expect(
+      reworkoutRetention(
+        profiles,
+        [s("u1", "completed", "2026-07-08T05:00:00Z")],
+        now,
+      ).aliveAfter30d,
+    ).toEqual({ numerator: 0, denominator: 1 });
+  });
+
+  it("D30(그 하루)과 30일 생존(최근 7일)은 다른 답을 낸다", () => {
+    // 가입 41일 전 사람이 D30 당일에는 안 하고, 어제 했다면
+    const r = reworkoutRetention(
+      [{ userId: "u1", createdAt: new Date("2026-06-17T00:00:00Z") }],
+      [s("u1", "completed", "2026-07-27T05:00:00Z")],
+      now,
+    );
+    expect(r.d30.numerator).toBe(0);
+    expect(r.aliveAfter30d.numerator).toBe(1);
   });
 
   it("해당 일자에 운동이 없으면 분자에 안 들어간다", () => {

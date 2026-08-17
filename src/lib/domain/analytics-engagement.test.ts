@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  activeCrewMetrics,
   BRIEFING_TYPES,
   CHALLENGE_PEEK_UNLOCKED_TYPE,
   ENGAGEMENT_NOTIFICATION_TYPES,
@@ -355,9 +356,68 @@ describe("referralMetrics", () => {
     expect(m.inviteCodeIssued).toEqual({ numerator: 7, denominator: 7 });
   });
 
-  it("출처 계측이 없다는 사실을 상수로 들고 있다", () => {
-    // crew_links에 출처 컬럼이 없어 바이럴 계수는 계산할 수 없다.
-    // 이 상수가 true가 되는 날은 마이그레이션과 RPC 3곳이 함께 바뀐 날이다.
-    expect(REFERRAL_ATTRIBUTION_AVAILABLE).toBe(false);
+  it("출처 계측이 붙었다는 사실을 상수로 들고 있다", () => {
+    // 0079(2026-08-17)에 crew_links.origin·initiated_by와 profiles.invited_by가
+    // 생기고 연결을 만드는 RPC 3곳이 함께 바뀌었다. 집계는
+    // analytics-acquisition.ts가 한다.
+    expect(REFERRAL_ATTRIBUTION_AVAILABLE).toBe(true);
+  });
+});
+
+describe("activeCrewMetrics", () => {
+  const pair = (a: string, b: string) => ({ userA: a, userB: b });
+  // period = 2026-07-20 ~ 2026-08-17
+  const inside = "2026-08-01T05:00:00Z";
+  const outside = "2026-06-01T05:00:00Z";
+
+  it("양쪽 다 · 한쪽만 · 아무도 안 을 갈라 센다", () => {
+    const m = activeCrewMetrics(
+      [pair("a", "b"), pair("c", "d"), pair("e", "f")],
+      [
+        completed("a", inside),
+        completed("b", inside),
+        completed("c", inside),
+        // d는 기간 밖에만 운동했다 → 이 쌍은 "한쪽만"이어야 한다
+        completed("d", outside),
+      ],
+      period,
+    );
+    expect(m.pairs).toBe(3);
+    expect(m.bothActive).toBe(1);
+    expect(m.oneSideOnly).toBe(1);
+    expect(m.neitherActive).toBe(1);
+    expect(m.bothActiveRate).toEqual({ numerator: 1, denominator: 3 });
+  });
+
+  it("활성 쌍에 속한 사람은 중복 없이 센다", () => {
+    // a-b, a-c 둘 다 살아 있으면 a는 한 번만 세야 한다 → 3명
+    const m = activeCrewMetrics(
+      [pair("a", "b"), pair("a", "c")],
+      [completed("a", inside), completed("b", inside), completed("c", inside)],
+      period,
+    );
+    expect(m.bothActive).toBe(2);
+    expect(m.usersInActivePair).toBe(3);
+  });
+
+  it("완료가 아닌 세션은 활동으로 치지 않는다", () => {
+    // ⚠️ 뒤집어서 확인한다 — 같은 입력에서 상태만 바꾸면 답이 갈려야 한다
+    const both = [completed("a", inside), completed("b", inside)];
+    expect(activeCrewMetrics([pair("a", "b")], both, period).bothActive).toBe(1);
+
+    const cancelled: SessionRow[] = [
+      { userId: "a", status: "cancelled", startedAt: new Date(inside), completedAt: null },
+      completed("b", inside),
+    ];
+    expect(
+      activeCrewMetrics([pair("a", "b")], cancelled, period).bothActive,
+    ).toBe(0);
+  });
+
+  it("크루 쌍이 없으면 비율은 측정 불가(모수 0)다", () => {
+    const m = activeCrewMetrics([], [completed("a", inside)], period);
+    expect(m.pairs).toBe(0);
+    expect(m.bothActiveRate).toEqual({ numerator: 0, denominator: 0 });
+    expect(m.usersInActivePair).toBe(0);
   });
 });

@@ -5,9 +5,11 @@
  * **"기능을 붙였는데 쓰이고 있나"**를 보는 세 번째 묶음이다.
  *
  * ⚠️ **이 파일이 만드는 숫자 중 인과를 말하는 것은 하나도 없다.** 앱이 푸시 클릭을
- * 수집하지 않고 초대 출처를 기록하지 않아서, 여기서 셀 수 있는 것은 상관과 개수뿐이다.
- * 라벨을 "전환율"·"클릭률"·"바이럴 계수"로 바꾸는 순간 화면이 없는 계측을 있다고
- * 말하게 된다 — 각 함수 주석의 한계를 화면 문구까지 끌고 가라.
+ * 수집하지 않아서, 여기서 셀 수 있는 것은 상관과 개수뿐이다. 라벨을 "전환율"·
+ * "클릭률"로 바꾸는 순간 화면이 없는 계측을 있다고 말하게 된다 — 각 함수 주석의
+ * 한계를 화면 문구까지 끌고 가라.
+ *
+ * 초대 출처는 0079(2026-08-17)부터 기록된다. 그 집계는 `analytics-acquisition.ts`다.
  */
 
 import { ratio, type Period, type Ratio, type SessionRow } from "./analytics";
@@ -269,6 +271,72 @@ export interface CrewLinkPair {
   userB: string;
 }
 
+export interface ActiveCrewMetrics {
+  /** 크루 연결 쌍 전체 */
+  pairs: number;
+  /** 기간 안에 **양쪽 모두** 운동을 완료한 쌍 */
+  bothActive: number;
+  /** 한쪽만 운동한 쌍 */
+  oneSideOnly: number;
+  /** 둘 다 운동하지 않은 쌍 */
+  neitherActive: number;
+  /** bothActive / pairs */
+  bothActiveRate: Ratio;
+  /** 양쪽이 다 움직인 쌍에 속한 사람 수(중복 제거) */
+  usersInActivePair: number;
+}
+
+/**
+ * **"친구끼리 실제로 운동하나?"** — 크루가 장식인지 작동하는지 본다.
+ *
+ * 크루 보유율(`crewParticipation`)은 "연결이 있다"까지만 말한다. 연결만 있고
+ * 아무도 안 움직이는 쌍과, 둘 다 매주 운동하는 쌍이 같은 숫자로 들어간다.
+ * 그래서 **쌍 단위로** 기간 안 운동 완료를 대조한다.
+ *
+ * ⚠️ **"함께" 운동했다는 뜻이 아니다.** 같은 날·같은 자리에서 했는지는 모르고,
+ * 같은 기간에 둘 다 운동을 끝냈다는 것까지가 사실이다. 앱이 동반 운동을
+ * 기록하지 않으므로 라벨을 "함께 운동"으로 쓰면 없는 계측을 있다고 말하게 된다.
+ *
+ * ⚠️ 새 질의를 만들지 않는다 — 대시보드가 이미 갖고 있는 `crewLinkPairs`와
+ * 완료 세션만 쓴다. 계측 추가 없이 오늘 낼 수 있는 지표라서 여기 둔다.
+ */
+export function activeCrewMetrics(
+  crewLinkPairs: CrewLinkPair[],
+  sessions: SessionRow[],
+  period: Period,
+): ActiveCrewMetrics {
+  const activeUsers = new Set<string>();
+  for (const s of sessions) {
+    if (s.status !== "completed" || !s.completedAt) continue;
+    if (inPeriod(s.completedAt, period)) activeUsers.add(s.userId);
+  }
+
+  let bothActive = 0;
+  let oneSideOnly = 0;
+  const inActivePair = new Set<string>();
+
+  for (const p of crewLinkPairs) {
+    const a = activeUsers.has(p.userA);
+    const b = activeUsers.has(p.userB);
+    if (a && b) {
+      bothActive += 1;
+      inActivePair.add(p.userA);
+      inActivePair.add(p.userB);
+    } else if (a || b) {
+      oneSideOnly += 1;
+    }
+  }
+
+  return {
+    pairs: crewLinkPairs.length,
+    bothActive,
+    oneSideOnly,
+    neitherActive: crewLinkPairs.length - bothActive - oneSideOnly,
+    bothActiveRate: ratio(bothActive, crewLinkPairs.length),
+    usersInActivePair: inActivePair.size,
+  };
+}
+
 export interface ReferralMetrics {
   crewLinks: number;
   /** 크루 보유자 / 전체 프로필 */
@@ -280,20 +348,22 @@ export interface ReferralMetrics {
 }
 
 /**
- * ⚠️ **바이럴 계수는 지금 데이터로 계산할 수 없다.**
+ * **0079(2026-08-17)부터 초대 출처가 기록된다.**
  *
- * `crew_links(user_a, user_b, created_at)`에 **출처 컬럼이 없다.** 검색으로 맺었는지,
- * 초대 링크를 타고 왔는지, 챌린지 신입 자동 연결인지 구분이 안 된다.
- * `profiles.invite_code`는 발급만 기록하고 그 코드로 누가 왔는지는 남기지 않는다.
+ * 그전에는 `crew_links(user_a, user_b, created_at)`에 출처 컬럼이 없어서 검색으로
+ * 맺었는지, 초대 링크를 타고 왔는지, 챌린지 신입 자동 연결인지 구분이 안 됐다.
+ * 이제 `crew_links.origin`·`initiated_by`와 `profiles.invited_by`가 있고,
+ * 연결을 만드는 RPC 세 곳이 저장할 때 함께 적는다.
  *
- * 그래서 이 함수는 **셀 수 있는 것만** 낸다 — 연결 수, 보유율, 1인 평균, 발급률.
- * 화면은 이 상수를 보고 "측정할 수 없다"를 명시한다. 가짜 계수를 만들지 마라.
+ * 집계는 `analytics-acquisition.ts`가 한다 — 이 파일은 출처와 무관한
+ * 연결 수·보유율·1인 평균·발급률만 유지한다.
  *
- * 측정하려면 `crew_links.origin`(`search|invite_link|challenge`)을 더하고
- * `accept_crew_request`·`accept_friend_invite`·`accept_challenge_invite` 세 RPC가
- * 채워야 한다. 마이그레이션이 필요해 이번 범위 밖이다.
+ * ⚠️ **그래도 아직 "바이럴 계수"라고 쓰지 마라.** 0079 이전 연결은 알림 흔적으로
+ * 되살릴 수 있는 것만 채웠고 나머지는 `unknown`이다(2026-08-17 실측 7건 중 3건).
+ * 모수가 반쪽인 채로 계수를 내면 화면이 없는 정밀도를 있다고 말하게 된다.
+ * 얼마나 채워졌는지는 `originKnownRate()`가 낸다.
  */
-export const REFERRAL_ATTRIBUTION_AVAILABLE = false;
+export const REFERRAL_ATTRIBUTION_AVAILABLE = true;
 
 export function referralMetrics(
   crewLinkPairs: CrewLinkPair[],

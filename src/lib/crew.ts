@@ -1,3 +1,4 @@
+import { acquisitionColumns } from "@/lib/acquisition";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { Group, Profile } from "@/lib/types";
 
@@ -23,6 +24,11 @@ export async function upsertMyProfile(input: {
   const { error } = await supabase.from("profiles").upsert({
     ...input,
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Seoul",
+    // 0079: 첫 진입에서 붙잡아 둔 유입 출처를 프로필과 함께 심는다.
+    // ⚠️ 프로필 편집에서도 이 upsert가 다시 도는데, 그때는 저장된 값이 그대로
+    //    다시 실린다. **덮어써도 같은 값**이고, 혹시 비어 있어도 서버 트리거가
+    //    기존 값을 지킨다(freeze_profile_attribution). 방어선이 양쪽에 있다.
+    ...acquisitionColumns(),
   });
   if (error) {
     // 0017 유니크 위반 — 같은 사람이 다른 기기/브라우저로 또 가입하는 사고 방지
