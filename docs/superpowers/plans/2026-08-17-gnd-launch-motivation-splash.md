@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 새 GND 실행 세션마다 블랙·골드 배틀로프 대표 이미지와 “지금은 같은 출발선. 1년 뒤, 프로와 아마추어가 갈린다.” 문구를 1.5초간 한 번 보여주고, 터치하면 즉시 건너뛰게 한다.
+**Goal:** 새 GND 실행 세션마다 블랙·골드 배틀로프 대표 이미지와 이미지 안의 “매일 1도의 방향이, 1년뒤 도착지를 뒤바꾼다.” 문구를 1.5초간 한 번 보여주고, 터치하면 즉시 건너뛰게 한다.
 
-**Architecture:** 일반 탭 레이아웃에 클라이언트 오버레이 하나를 마운트하고, 실행 세션 중복 방지는 `sessionStorage`와 메모리 폴백을 함께 쓰는 작은 도메인 게이트가 맡는다. 승인 배경에는 상단 GND만 두고 하단 카피는 실제 HTML 텍스트로 렌더해 한글 오타를 차단한다. 이미지·타이머·오류·접근성 상태는 `LaunchMotivationSplash` 내부에만 두며 DB, 인증, 서비스 워커에는 손대지 않는다.
+**Architecture:** 일반 탭 레이아웃에 클라이언트 오버레이 하나를 마운트하고, 실행 세션 중복 방지는 `sessionStorage`와 메모리 폴백을 함께 쓰는 작은 도메인 게이트가 맡는다. 최종 지정 이미지를 자동 압축 없이 그대로 표시하고 이미지 카피는 숨김 설명으로 보완한다. 이미지·타이머·오류·접근성 상태는 `LaunchMotivationSplash` 내부에만 두며 DB, 인증, 서비스 워커에는 손대지 않는다.
 
 **Tech Stack:** Next.js 16 App Router, React 19, TypeScript strict, Tailwind CSS v4, Next Image, Vitest 4, Testing Library, ImageGen
 
@@ -26,7 +26,7 @@
 
 | 파일 | 책임 |
 |---|---|
-| `public/splash/gnd-launch-motivation-v3.png` | 상단 GND만 포함하고 하단 카피 영역이 비어 있는 9:16 배경 이미지 |
+| `public/splash/gnd-launch-motivation-v4.png` | 상단 GND와 최종 이미지 카피를 함께 포함한 9:16 원본 이미지 |
 | `src/lib/domain/launch-splash.ts` | 세션 키와 저장소/메모리 기반 1회 노출 게이트 |
 | `src/lib/domain/launch-splash.test.ts` | 저장 성공·기존 키·저장소 오류·메모리 폴백 단위 테스트 |
 | `src/components/launch-motivation-splash.tsx` | 이미지 준비, 문구, 타이머, 터치 종료, 오류·접근성 UI |
@@ -73,10 +73,10 @@ Create an original vertical 9:16 cinematic fitness campaign photograph for a Kor
 
 Expected: 사용자가 이미지를 실제로 본 뒤 승인하거나 수정 요청을 남김.
 
-**최종 승인 결과:** 생성형 이미지가 `같은`을 `갈은`으로 반복 왜곡해 사용자가 실제
-HTML 카피 방식으로 전환을 승인했다. 2026-08-17에 문구를 제거한
-`exec-ad00adda-4124-415a-a088-e7eb81ce2b24.png` 배경을 승인했으며, 앱은 그 위에
-`지금은 같은 출발선.` / `1년 뒤, 프로와 아마추어가 갈린다.`를 실제 텍스트로 얹는다.
+**최종 승인 결과:** 2026-08-17 사용자가
+`exec-357efd9f-ef06-4ee9-940f-71396f45dc60.png`를 최종 지정했다. 앱은 이 파일을
+`gnd-launch-motivation-v4.png`로 저장해 자동 압축 없이 그대로 표시하며, 별도 HTML
+카피는 겹치지 않는다.
 
 ---
 
@@ -802,8 +802,8 @@ Expected: `http://localhost:3000`에서 Next.js 개발 서버가 준비됨. 기�
 | 이미지 | 남녀 배틀로프, 젖은 바닥, 수증기, 얼굴 그림자 |
 | 색 | 블랙 중심, 골드 윤곽·반사 |
 | 브랜드 | 상단 중앙 큰 골드 `GND` |
-| 문구 | HTML `지금은 같은 출발선.` / `1년 뒤, 프로와 아마추어가 갈린다.` 두 줄 |
-| 폰트 | Black Han Sans 기반, `-10deg` 기울기와 가로 `0.78` 압축 + 왼쪽 속도선 |
+| 문구 | 이미지 안의 `매일 1도의 방향이,` / `1년뒤 도착지를 뒤바꾼다.` 두 줄 |
+| 폰트 | 지정 원본 이미지의 글자 디자인 그대로, 별도 HTML 카피 없음 |
 | 자동 종료 | 이미지가 보인 뒤 약 1.5초 후 홈 화면 |
 | 개수 | 인물 2명, GND 1개, 메인 문구 1세트 |
 
@@ -885,8 +885,8 @@ Expected: 각 명령 exit code 0, 전체 테스트 `0 failed`, Next.js build 성
 문서 끝에 날짜가 포함된 `GND 실행 동기부여 스플래시` 섹션을 추가하고 아래 사실을
 실제 결과 그대로 기록한다.
 
-- 대표 이미지의 장면과 승인 카피
-  `지금은 같은 출발선. 1년 뒤, 프로와 아마추어가 갈린다.`
+- 대표 이미지의 장면과 이미지 내 승인 카피
+  `매일 1도의 방향이, 1년뒤 도착지를 뒤바꾼다.`
 - `sessionStorage` 기준 새 실행 세션 1회, 백그라운드 복귀 미표시
 - 생성·수정 파일 목록
 - 개발 서버에서 직접 조작한 흐름과 결과
