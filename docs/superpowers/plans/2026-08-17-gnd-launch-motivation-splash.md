@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 새 GND 실행 세션마다 블랙·골드 배틀로프 대표 이미지와 “오늘의 한 번이, 몸을 바꾼다.” 문구를 1.5초간 한 번 보여주고, 터치하면 즉시 건너뛰게 한다.
+**Goal:** 새 GND 실행 세션마다 블랙·골드 배틀로프 대표 이미지와 “오늘 1도를 틀면, 1년뒤 도착지가 바뀐다” 문구를 1.5초간 한 번 보여주고, 터치하면 즉시 건너뛰게 한다.
 
 **Architecture:** 일반 탭 레이아웃에 클라이언트 오버레이 하나를 마운트하고, 실행 세션 중복 방지는 `sessionStorage`와 메모리 폴백을 함께 쓰는 작은 도메인 게이트가 맡는다. 이미지·타이머·오류·접근성 상태는 `LaunchMotivationSplash` 내부에만 두며 DB, 인증, 서비스 워커에는 손대지 않는다.
 
@@ -73,9 +73,10 @@ Create an original vertical 9:16 cinematic fitness campaign photograph for a Kor
 
 Expected: 사용자가 이미지를 실제로 본 뒤 승인하거나 수정 요청을 남김.
 
-**승인 결과:** 사용자가 2026-08-17에 `exec-167364fa-3ec1-477b-a650-c0fd97b8b3f9.png`를
-최종안으로 확정했다. 이 승인본에는 `GND`와 `오늘의 한 번이, 몸을 바꾼다.` 문구까지
-완성되어 있으므로 앱에서 보이는 HTML 문구를 중복해서 얹지 않는다.
+**최종 승인 결과:** 사용자가 2026-08-17에 카피를 변경한
+`exec-fde32003-f522-4671-b4de-8234e2e45478.png`를 최종 승인했다. 이 승인본에는
+`GND`와 `오늘 1도를 틀면, 1년뒤 도착지가 바뀐다` 문구까지 완성되어 있으므로
+앱에서 보이는 HTML 문구를 중복해서 얹지 않는다.
 
 ---
 
@@ -237,7 +238,7 @@ Expected: 위 두 파일만 포함된 커밋 1개.
 - [ ] **Step 1: 승인된 PNG를 바이트 변경 없이 앱 자산으로 복사한다**
 
 승인 원본
-`C:\Users\SAMSUNG\.codex\generated_images\01a00e30-700a-7db3-8985-3271be4850fd\exec-167364fa-3ec1-477b-a650-c0fd97b8b3f9.png`를
+`C:\Users\SAMSUNG\.codex\generated_images\01a00e30-700a-7db3-8985-3271be4850fd\exec-fde32003-f522-4671-b4de-8234e2e45478.png`를
 `public/splash/gnd-launch-motivation.png`로 복사한다. 승인되지 않은 후보를 고르거나
 재생성·재압축·재편집하지 않는다. Next Image가 기기별 전송 크기를 최적화하게 한다.
 
@@ -254,7 +255,7 @@ Expected:
 - 성인 남녀가 각각 배틀로프를 잡고 나란히 운동한다.
 - 얼굴은 식별되지 않지만 신체·동작은 선명하다.
 - 젖은 검은 바닥, 수증기, 비말, 골드 윤곽과 반사가 보인다.
-- 상단 `GND`와 하단 `오늘의 한 번이, 몸을 바꾼다.`가 승인본 그대로 보인다.
+- 상단 `GND`와 하단 `오늘 1도를 틀면, 1년뒤 도착지가 바뀐다`가 승인본 그대로 보인다.
 - 승인 문구 외 다른 브랜드 표식·의도하지 않은 글자·해부학 오류가 없다.
 
 하나라도 어긋나면 같은 프롬프트에서 실패 요소만 명시해 다시 생성하고 다시 본다.
@@ -264,7 +265,7 @@ Expected:
 Run:
 
 ```powershell
-$source = Get-FileHash 'C:\Users\SAMSUNG\.codex\generated_images\01a00e30-700a-7db3-8985-3271be4850fd\exec-167364fa-3ec1-477b-a650-c0fd97b8b3f9.png' -Algorithm SHA256
+$source = Get-FileHash 'C:\Users\SAMSUNG\.codex\generated_images\01a00e30-700a-7db3-8985-3271be4850fd\exec-fde32003-f522-4671-b4de-8234e2e45478.png' -Algorithm SHA256
 $asset = Get-FileHash 'public\splash\gnd-launch-motivation.png' -Algorithm SHA256
 $source.Hash
 $asset.Hash
@@ -351,7 +352,7 @@ describe("LaunchMotivationSplash", () => {
       "/splash/gnd-launch-motivation.png",
     );
     expect(
-      screen.getByText("GND. 오늘의 한 번이, 몸을 바꾼다.").className,
+      screen.getByText("GND. 오늘 1도를 틀면, 1년뒤 도착지가 바뀐다").className,
     ).toContain("sr-only");
   });
 
@@ -407,8 +408,8 @@ describe("LaunchMotivationSplash", () => {
     fireEvent.error(screen.getByTestId("launch-splash-image"));
 
     expect(screen.getByText("GND")).toBeTruthy();
-    expect(screen.getByText("오늘의 한 번이,")).toBeTruthy();
-    expect(screen.getByText("몸을 바꾼다.")).toBeTruthy();
+    expect(screen.getByText("오늘 1도를 틀면,")).toBeTruthy();
+    expect(screen.getByText("1년뒤 도착지가 바뀐다")).toBeTruthy();
     expect(screen.getByTestId("launch-splash-copy").className).toContain(
       "opacity-100",
     );
@@ -591,14 +592,14 @@ export function LaunchMotivationSplash() {
           sizes="(max-width: 430px) 100vw, 430px"
           onLoad={() => startDisplay("showing")}
           onError={() => startDisplay("fallback")}
-          className={`object-cover object-center transition-opacity duration-200 ${
+          className={`object-contain object-center transition-opacity duration-200 ${
             imageVisible ? "opacity-100" : "opacity-0"
           }`}
         />
       )}
 
       <span id="launch-splash-description" className="sr-only">
-        GND. 오늘의 한 번이, 몸을 바꾼다.
+        GND. 오늘 1도를 틀면, 1년뒤 도착지가 바뀐다
       </span>
 
       {phase === "fallback" && (
@@ -610,8 +611,8 @@ export function LaunchMotivationSplash() {
             GND
           </span>
           <span className="text-center text-3xl font-black leading-tight text-text">
-            <span className="block">오늘의 한 번이,</span>
-            <span className="block text-accent">몸을 바꾼다.</span>
+            <span className="block">오늘 1도를 틀면,</span>
+            <span className="block text-accent">1년뒤 도착지가 바뀐다</span>
           </span>
         </span>
       )}
@@ -792,7 +793,7 @@ Expected: `http://localhost:3000`에서 Next.js 개발 서버가 준비됨. 기�
 | 이미지 | 남녀 배틀로프, 젖은 바닥, 수증기, 얼굴 그림자 |
 | 색 | 블랙 중심, 골드 윤곽·반사 |
 | 브랜드 | 상단 중앙 큰 골드 `GND` |
-| 문구 | `오늘의 한 번이,` / `몸을 바꾼다.` 두 줄 |
+| 문구 | `오늘 1도를 틀면,` / `1년뒤 도착지가 바뀐다` 두 줄 |
 | 폰트 | 승인 이미지 안의 앞으로 기울어진 굵은 글자 |
 | 자동 종료 | 이미지가 보인 뒤 약 1.5초 후 홈 화면 |
 | 개수 | 인물 2명, GND 1개, 메인 문구 1세트 |
@@ -875,7 +876,7 @@ Expected: 각 명령 exit code 0, 전체 테스트 `0 failed`, Next.js build 성
 문서 끝에 날짜가 포함된 `GND 실행 동기부여 스플래시` 섹션을 추가하고 아래 사실을
 실제 결과 그대로 기록한다.
 
-- 대표 이미지의 장면과 승인 카피 `오늘의 한 번이, 몸을 바꾼다.`
+- 대표 이미지의 장면과 승인 카피 `오늘 1도를 틀면, 1년뒤 도착지가 바뀐다`
 - `sessionStorage` 기준 새 실행 세션 1회, 백그라운드 복귀 미표시
 - 생성·수정 파일 목록
 - 개발 서버에서 직접 조작한 흐름과 결과
