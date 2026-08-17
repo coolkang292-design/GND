@@ -116,7 +116,7 @@ export function LaunchMotivationSplash() {
       {phase !== "checking" && (
         <Image
           data-testid="launch-splash-image"
-          src="/splash/gnd-launch-motivation.png"
+          src="/splash/gnd-launch-motivation-v2.png"
           alt=""
           fill
           priority
@@ -130,7 +130,7 @@ export function LaunchMotivationSplash() {
       )}
 
       <span id="launch-splash-description" className="sr-only">
-        GND. 오늘 1도를 틀면, 1년뒤 도착지가 바뀐다
+        GND. 지금은 같은 출발선. 1년 뒤, 프로와 아마추어가 갈린다.
       </span>
 
       {phase === "fallback" && (
@@ -142,8 +142,10 @@ export function LaunchMotivationSplash() {
             GND
           </span>
           <span className="text-center text-3xl font-black leading-tight text-text">
-            <span className="block">오늘 1도를 틀면,</span>
-            <span className="block text-accent">1년뒤 도착지가 바뀐다</span>
+            <span className="block">지금은 같은 출발선.</span>
+            <span className="block text-accent">
+              1년 뒤, 프로와 아마추어가 갈린다.
+            </span>
           </span>
         </span>
       )}

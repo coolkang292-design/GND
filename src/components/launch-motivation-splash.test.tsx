@@ -53,12 +53,14 @@ describe("LaunchMotivationSplash", () => {
     ).toBeTruthy();
     const image = screen.getByTestId("launch-splash-image");
     expect(image.getAttribute("src")).toBe(
-      "/splash/gnd-launch-motivation.png",
+      "/splash/gnd-launch-motivation-v2.png",
     );
     expect(image.className).toContain("object-contain");
     expect(image.className).not.toContain("object-cover");
     expect(
-      screen.getByText("GND. 오늘 1도를 틀면, 1년뒤 도착지가 바뀐다").className,
+      screen.getByText(
+        "GND. 지금은 같은 출발선. 1년 뒤, 프로와 아마추어가 갈린다.",
+      ).className,
     ).toContain("sr-only");
   });
 
@@ -114,8 +116,10 @@ describe("LaunchMotivationSplash", () => {
     fireEvent.error(screen.getByTestId("launch-splash-image"));
 
     expect(screen.getByText("GND")).toBeTruthy();
-    expect(screen.getByText("오늘 1도를 틀면,")).toBeTruthy();
-    expect(screen.getByText("1년뒤 도착지가 바뀐다")).toBeTruthy();
+    expect(screen.getByText("지금은 같은 출발선.")).toBeTruthy();
+    expect(
+      screen.getByText("1년 뒤, 프로와 아마추어가 갈린다."),
+    ).toBeTruthy();
     expect(screen.getByTestId("launch-splash-copy").className).toContain(
       "opacity-100",
     );

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 새 GND 실행 세션마다 블랙·골드 배틀로프 대표 이미지와 “오늘 1도를 틀면, 1년뒤 도착지가 바뀐다” 문구를 1.5초간 한 번 보여주고, 터치하면 즉시 건너뛰게 한다.
+**Goal:** 새 GND 실행 세션마다 블랙·골드 배틀로프 대표 이미지와 “지금은 같은 출발선. 1년 뒤, 프로와 아마추어가 갈린다.” 문구를 1.5초간 한 번 보여주고, 터치하면 즉시 건너뛰게 한다.
 
 **Architecture:** 일반 탭 레이아웃에 클라이언트 오버레이 하나를 마운트하고, 실행 세션 중복 방지는 `sessionStorage`와 메모리 폴백을 함께 쓰는 작은 도메인 게이트가 맡는다. 이미지·타이머·오류·접근성 상태는 `LaunchMotivationSplash` 내부에만 두며 DB, 인증, 서비스 워커에는 손대지 않는다.
 
@@ -26,7 +26,7 @@
 
 | 파일 | 책임 |
 |---|---|
-| `public/splash/gnd-launch-motivation.png` | GND와 승인 문구가 포함된 9:16 블랙·골드 배틀로프 완성 이미지 |
+| `public/splash/gnd-launch-motivation-v2.png` | GND와 승인 문구가 포함된 9:16 블랙·골드 배틀로프 완성 이미지 |
 | `src/lib/domain/launch-splash.ts` | 세션 키와 저장소/메모리 기반 1회 노출 게이트 |
 | `src/lib/domain/launch-splash.test.ts` | 저장 성공·기존 키·저장소 오류·메모리 폴백 단위 테스트 |
 | `src/components/launch-motivation-splash.tsx` | 이미지 준비, 문구, 타이머, 터치 종료, 오류·접근성 UI |
@@ -73,10 +73,10 @@ Create an original vertical 9:16 cinematic fitness campaign photograph for a Kor
 
 Expected: 사용자가 이미지를 실제로 본 뒤 승인하거나 수정 요청을 남김.
 
-**최종 승인 결과:** 사용자가 2026-08-17에 카피를 변경한
-`exec-fde32003-f522-4671-b4de-8234e2e45478.png`를 최종 승인했다. 이 승인본에는
-`GND`와 `오늘 1도를 틀면, 1년뒤 도착지가 바뀐다` 문구까지 완성되어 있으므로
-앱에서 보이는 HTML 문구를 중복해서 얹지 않는다.
+**최종 승인 결과:** 사용자가 2026-08-17에 카피와 문구 위치를 조정한
+`exec-03e00d58-ad78-4529-b552-d3b121860100.png`를 최종 승인했다. 이 승인본에는
+`GND`와 `지금은 같은 출발선. 1년 뒤, 프로와 아마추어가 갈린다.` 문구까지 완성되어
+있으므로 앱에서 보이는 HTML 문구를 중복해서 얹지 않는다.
 
 ---
 
@@ -233,21 +233,22 @@ Expected: 위 두 파일만 포함된 커밋 1개.
 ### Task 2: 승인된 대표 이미지만 앱 자산으로 확정한다
 
 **Files:**
-- Create: `public/splash/gnd-launch-motivation.png`
+- Create: `public/splash/gnd-launch-motivation-v2.png`
 
 - [ ] **Step 1: 승인된 PNG를 바이트 변경 없이 앱 자산으로 복사한다**
 
 승인 원본
-`C:\Users\SAMSUNG\.codex\generated_images\01a00e30-700a-7db3-8985-3271be4850fd\exec-fde32003-f522-4671-b4de-8234e2e45478.png`를
-`public/splash/gnd-launch-motivation.png`로 복사한다. 승인되지 않은 후보를 고르거나
-재생성·재압축·재편집하지 않는다. Next Image가 기기별 전송 크기를 최적화하게 한다.
+`C:\Users\SAMSUNG\.codex\generated_images\01a00e30-700a-7db3-8985-3271be4850fd\exec-03e00d58-ad78-4529-b552-d3b121860100.png`를
+`public/splash/gnd-launch-motivation-v2.png`로 복사한다. 승인되지 않은 후보를 고르거나
+재생성·재압축·재편집하지 않는다. 이전 이미지 최적화 캐시가 재사용되지 않도록 버전
+파일명을 쓰고, Next Image가 기기별 전송 크기를 최적화하게 한다.
 
 - [ ] **Step 2: 생성 이미지를 직접 본다**
 
 Run: 로컬 이미지 보기 도구로 아래 파일을 연다.
 
 ```text
-C:\Users\SAMSUNG\workout-app\.worktrees\gnd-launch-splash\public\splash\gnd-launch-motivation.png
+C:\Users\SAMSUNG\workout-app\.worktrees\gnd-launch-splash\public\splash\gnd-launch-motivation-v2.png
 ```
 
 Expected:
@@ -255,7 +256,8 @@ Expected:
 - 성인 남녀가 각각 배틀로프를 잡고 나란히 운동한다.
 - 얼굴은 식별되지 않지만 신체·동작은 선명하다.
 - 젖은 검은 바닥, 수증기, 비말, 골드 윤곽과 반사가 보인다.
-- 상단 `GND`와 하단 `오늘 1도를 틀면, 1년뒤 도착지가 바뀐다`가 승인본 그대로 보인다.
+- 상단 `GND`와 하단 `지금은 같은 출발선. 1년 뒤, 프로와 아마추어가 갈린다.`가
+  승인본 그대로 보인다.
 - 승인 문구 외 다른 브랜드 표식·의도하지 않은 글자·해부학 오류가 없다.
 
 하나라도 어긋나면 같은 프롬프트에서 실패 요소만 명시해 다시 생성하고 다시 본다.
@@ -265,8 +267,8 @@ Expected:
 Run:
 
 ```powershell
-$source = Get-FileHash 'C:\Users\SAMSUNG\.codex\generated_images\01a00e30-700a-7db3-8985-3271be4850fd\exec-fde32003-f522-4671-b4de-8234e2e45478.png' -Algorithm SHA256
-$asset = Get-FileHash 'public\splash\gnd-launch-motivation.png' -Algorithm SHA256
+$source = Get-FileHash 'C:\Users\SAMSUNG\.codex\generated_images\01a00e30-700a-7db3-8985-3271be4850fd\exec-03e00d58-ad78-4529-b552-d3b121860100.png' -Algorithm SHA256
+$asset = Get-FileHash 'public\splash\gnd-launch-motivation-v2.png' -Algorithm SHA256
 $source.Hash
 $asset.Hash
 ```
@@ -276,7 +278,7 @@ Expected: 두 SHA256 값이 정확히 같다.
 - [ ] **Step 4: 검수한 자산만 커밋한다**
 
 ```powershell
-git add -- public/splash/gnd-launch-motivation.png
+git add -- public/splash/gnd-launch-motivation-v2.png
 git diff --cached --check
 git commit -m "feat: GND 실행 동기부여 이미지 추가"
 ```
@@ -349,10 +351,12 @@ describe("LaunchMotivationSplash", () => {
       screen.getByRole("button", { name: "시작 화면 건너뛰기" }),
     ).toBeTruthy();
     expect(screen.getByTestId("launch-splash-image").getAttribute("src")).toBe(
-      "/splash/gnd-launch-motivation.png",
+      "/splash/gnd-launch-motivation-v2.png",
     );
     expect(
-      screen.getByText("GND. 오늘 1도를 틀면, 1년뒤 도착지가 바뀐다").className,
+      screen.getByText(
+        "GND. 지금은 같은 출발선. 1년 뒤, 프로와 아마추어가 갈린다.",
+      ).className,
     ).toContain("sr-only");
   });
 
@@ -408,8 +412,8 @@ describe("LaunchMotivationSplash", () => {
     fireEvent.error(screen.getByTestId("launch-splash-image"));
 
     expect(screen.getByText("GND")).toBeTruthy();
-    expect(screen.getByText("오늘 1도를 틀면,")).toBeTruthy();
-    expect(screen.getByText("1년뒤 도착지가 바뀐다")).toBeTruthy();
+    expect(screen.getByText("지금은 같은 출발선.")).toBeTruthy();
+    expect(screen.getByText("1년 뒤, 프로와 아마추어가 갈린다.")).toBeTruthy();
     expect(screen.getByTestId("launch-splash-copy").className).toContain(
       "opacity-100",
     );
@@ -585,7 +589,7 @@ export function LaunchMotivationSplash() {
       {phase !== "checking" && (
         <Image
           data-testid="launch-splash-image"
-          src="/splash/gnd-launch-motivation.png"
+          src="/splash/gnd-launch-motivation-v2.png"
           alt=""
           fill
           priority
@@ -599,7 +603,7 @@ export function LaunchMotivationSplash() {
       )}
 
       <span id="launch-splash-description" className="sr-only">
-        GND. 오늘 1도를 틀면, 1년뒤 도착지가 바뀐다
+        GND. 지금은 같은 출발선. 1년 뒤, 프로와 아마추어가 갈린다.
       </span>
 
       {phase === "fallback" && (
@@ -611,8 +615,10 @@ export function LaunchMotivationSplash() {
             GND
           </span>
           <span className="text-center text-3xl font-black leading-tight text-text">
-            <span className="block">오늘 1도를 틀면,</span>
-            <span className="block text-accent">1년뒤 도착지가 바뀐다</span>
+            <span className="block">지금은 같은 출발선.</span>
+            <span className="block text-accent">
+              1년 뒤, 프로와 아마추어가 갈린다.
+            </span>
           </span>
         </span>
       )}
@@ -793,7 +799,7 @@ Expected: `http://localhost:3000`에서 Next.js 개발 서버가 준비됨. 기�
 | 이미지 | 남녀 배틀로프, 젖은 바닥, 수증기, 얼굴 그림자 |
 | 색 | 블랙 중심, 골드 윤곽·반사 |
 | 브랜드 | 상단 중앙 큰 골드 `GND` |
-| 문구 | `오늘 1도를 틀면,` / `1년뒤 도착지가 바뀐다` 두 줄 |
+| 문구 | `지금은 같은 출발선.` / `1년 뒤, 프로와 아마추어가 갈린다.` 두 줄 |
 | 폰트 | 승인 이미지 안의 앞으로 기울어진 굵은 글자 |
 | 자동 종료 | 이미지가 보인 뒤 약 1.5초 후 홈 화면 |
 | 개수 | 인물 2명, GND 1개, 메인 문구 1세트 |
@@ -847,7 +853,7 @@ Expected: 3000 포트의 이 worktree 개발 서버가 종료됨. build 전에 �
 Run:
 
 ```powershell
-Get-FileHash 'public\splash\gnd-launch-motivation.png' -Algorithm SHA256
+Get-FileHash 'public\splash\gnd-launch-motivation-v2.png' -Algorithm SHA256
 git diff --check
 git status --short
 ```
@@ -876,7 +882,8 @@ Expected: 각 명령 exit code 0, 전체 테스트 `0 failed`, Next.js build 성
 문서 끝에 날짜가 포함된 `GND 실행 동기부여 스플래시` 섹션을 추가하고 아래 사실을
 실제 결과 그대로 기록한다.
 
-- 대표 이미지의 장면과 승인 카피 `오늘 1도를 틀면, 1년뒤 도착지가 바뀐다`
+- 대표 이미지의 장면과 승인 카피
+  `지금은 같은 출발선. 1년 뒤, 프로와 아마추어가 갈린다.`
 - `sessionStorage` 기준 새 실행 세션 1회, 백그라운드 복귀 미표시
 - 생성·수정 파일 목록
 - 개발 서버에서 직접 조작한 흐름과 결과
