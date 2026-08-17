@@ -3,13 +3,17 @@ import {
   type FunnelStep,
   type Ratio,
 } from "@/lib/domain/analytics";
+import { MetricHelp } from "./metric-help";
 
 export function FunnelPanel({
   steps,
   crew,
+  anonymousExcluded,
 }: {
   steps: FunnelStep[];
   crew: Ratio;
+  /** 프로필을 만들지 않아 퍼널에서 뺀 익명 계정 수 */
+  anonymousExcluded: number;
 }) {
   const top = steps[0]?.count ?? 0;
 
@@ -27,8 +31,9 @@ export function FunnelPanel({
       <div className="funnel">
         {steps.map((step, i) => {
           const prev = i === 0 ? null : steps[i - 1].count;
+          // 줄지 않았으면 아무것도 안 적는다 — "-0%"는 오류처럼 읽힌다
           const loss =
-            prev === null || prev === 0
+            prev === null || prev === 0 || prev === step.count
               ? ""
               : `-${Math.round(((prev - step.count) / prev) * 100)}%`;
           return (
@@ -51,9 +56,24 @@ export function FunnelPanel({
       </div>
 
       <div className="insight" style={{ marginTop: 14 }}>
-        가입은 <b>auth 계정</b> 기준, 프로필 설정은 <b>profiles</b> 기준입니다 —
-        온보딩을 시작만 하고 프로필을 안 만든 사람이 이탈로 잡히게 하기 위해서입니다.
+        <b>프로필을 만든 계정만 셉니다.</b> 앱이 익명 인증이라 브라우저를 새로 열
+        때마다 계정이 하나씩 생기는데, 지금 그런 계정이{" "}
+        <b>{anonymousExcluded}개</b> 있고 대부분 개발·테스트 흔적입니다. 그대로
+        세면 첫 단계에서 큰 폭이 빠지지만 그건 온보딩 이탈이 아닙니다.
+        <br />
+        ⚠️ 대신 <b>온보딩 중도 이탈은 이제 측정하지 않습니다</b> — 진짜 이탈자도
+        함께 빠졌기 때문입니다. 되살리려면 익명 계정에서 테스트 흔적을 가려낼
+        표식이 먼저 필요합니다.
       </div>
+
+      <MetricHelp
+        keys={[
+          "funnel-profile",
+          "funnel-first-workout",
+          "funnel-three-workouts",
+          "crew-participation",
+        ]}
+      />
     </article>
   );
 }

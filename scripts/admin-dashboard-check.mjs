@@ -48,8 +48,8 @@ check("workout_sessions(user_id,status,started_at,completed_at,deleted_at)",
 
 const profiles = await db
   .from("profiles")
-  .select("id,nickname,avatar_url,created_at");
-check("profiles(id,nickname,avatar_url,created_at)",
+  .select("id,nickname,avatar_url,created_at,invite_code");
+check("profiles(id,nickname,avatar_url,created_at,invite_code)",
   !profiles.error, profiles.error?.message ?? `${profiles.data.length}행`);
 
 const progress = await db.from("user_progress").select("user_id,total_xp");
@@ -115,6 +115,53 @@ const badgeDefs = await db
 check("badge_definitions(badge_key,rarity)",
   !badgeDefs.error, badgeDefs.error?.message ?? `${badgeDefs.data.length}종`);
 
+// fetchProgramDataset (2026-08-17)
+const enrollments = await db
+  .from("program_enrollments")
+  .select(
+    "id,user_id,program_key,title_snapshot,status,created_at,completed_at,cancelled_at",
+  );
+check(
+  "program_enrollments(id,user_id,program_key,title_snapshot,status,created_at,completed_at,cancelled_at)",
+  !enrollments.error,
+  enrollments.error?.message ?? `${enrollments.data.length}행`,
+);
+
+const programSessions = await db
+  .from("workout_sessions")
+  .select("program_enrollment_id,completed_at")
+  .not("program_enrollment_id", "is", null)
+  .is("deleted_at", null);
+check("workout_sessions(program_enrollment_id) — 0067에서 추가된 컬럼",
+  !programSessions.error,
+  programSessions.error?.message ?? `${programSessions.data.length}행`);
+
+// fetchEngagementDataset (2026-08-17)
+const ENGAGEMENT_TYPES = [
+  "workout_suggestion",
+  "morning_briefing",
+  "challenge_peek_unlocked",
+];
+const notifications = await db
+  .from("notifications")
+  .select("user_id,type,created_at,read_at")
+  .in("type", ENGAGEMENT_TYPES);
+check("notifications(user_id,type,created_at,read_at) in 대시보드 유형",
+  !notifications.error,
+  notifications.error?.message ?? `${notifications.data.length}행`);
+
+const recordViews = await db
+  .from("record_views")
+  .select("id", { count: "exact", head: true });
+check("record_views 개수 질의(head:true)",
+  !recordViews.error, recordViews.error?.message ?? `${recordViews.count}행`);
+
+const peekPicks = await db
+  .from("challenge_peek_picks")
+  .select("viewer_id", { count: "exact", head: true });
+check("challenge_peek_picks 개수 질의(head:true)",
+  !peekPicks.error, peekPicks.error?.message ?? `${peekPicks.count}행`);
+
 console.log("\n=== 2. ADMIN_USER_IDS가 실재하는 계정인가 ===");
 const adminIds = (env.ADMIN_USER_IDS ?? "")
   .split(",").map((s) => s.trim()).filter(Boolean);
@@ -133,6 +180,8 @@ for (const id of adminIds) {
 }
 
 console.log("\n=== 3. 대시보드가 보여줄 실제 숫자 (미리보기) ===");
+console.log("  ⚠️ 아래 숫자는 **DB 전체**다. /admin은 2026-08-17부터 테스트 계정을 빼고 그린다.");
+console.log("     그래서 화면 숫자가 더 작은 것이 정상이다. 제외 대상은 섹션 5 참조.");
 const completed = (sessions.data ?? []).filter((s) => s.status === "completed");
 const now = new Date();
 const d28 = new Date(now.getTime() - 28 * 86_400_000);
@@ -149,6 +198,31 @@ console.log(`  최근 28일 활성 사용자 ${new Set(recent.map((s) => s.user_
 console.log(`  크루 연결            ${links.data?.length ?? 0}쌍`);
 console.log(`  진행 중 챌린지       ${challenges.data?.length ?? 0}건`);
 console.log(`  배지 정의 / 획득     ${badgeDefs.data?.length ?? 0}종 / ${badges.data?.length ?? 0}건`);
+
+// 새 패널 3종이 화면에 낼 숫자 — /admin을 눈으로 볼 때 이 값과 대조한다
+const enrollByStatus = {};
+for (const e of enrollments.data ?? []) {
+  enrollByStatus[e.status] = (enrollByStatus[e.status] ?? 0) + 1;
+}
+const enrollByProgram = {};
+for (const e of enrollments.data ?? []) {
+  enrollByProgram[e.program_key] = (enrollByProgram[e.program_key] ?? 0) + 1;
+}
+const notifyByType = {};
+const notifyReadByType = {};
+for (const n of notifications.data ?? []) {
+  notifyByType[n.type] = (notifyByType[n.type] ?? 0) + 1;
+  if (n.read_at) notifyReadByType[n.type] = (notifyReadByType[n.type] ?? 0) + 1;
+}
+console.log(`  프로그램 등록        ${enrollments.data?.length ?? 0}건 ${JSON.stringify(enrollByStatus)}`);
+console.log(`  프로그램별 등록      ${JSON.stringify(enrollByProgram)}`);
+console.log(`  프로그램 회차 행     ${programSessions.data?.length ?? 0}행 (완료 ${(programSessions.data ?? []).filter((s) => s.completed_at).length}건)`);
+for (const type of ENGAGEMENT_TYPES) {
+  console.log(`  알림 ${type.padEnd(24)} ${String(notifyByType[type] ?? 0).padStart(4)}건 · 열람 ${notifyReadByType[type] ?? 0}건`);
+}
+console.log(`  꾸준왕 열람 사용     ${recordViews.count ?? 0}회`);
+console.log(`  챌린지 대상 선택     ${peekPicks.count ?? 0}회`);
+console.log(`  초대코드 보유 프로필 ${(profiles.data ?? []).filter((p) => p.invite_code).length}명 / ${profiles.data?.length ?? 0}명`);
 
 console.log("\n=== 4. 앱 화면과 대조할 값 (사용자별) ===");
 console.log("  아래 스트릭·레벨이 앱의 홈 🔥 / 내 정보와 같아야 한다.");
@@ -168,6 +242,45 @@ for (const p of profiles.data ?? []) {
     ` · 경과 ${days === null ? "-" : days + "일"}`,
   );
 }
+
+console.log("\n=== 5. /admin이 집계에서 빼는 계정 (2026-08-17~) ===");
+console.log("  판정 규칙은 src/lib/domain/analytics-accounts.ts와 같아야 한다.");
+const emailById = new Map((auth.data?.users ?? []).map((u) => [u.id, (u.email ?? "").toLowerCase()]));
+const manualIds = (env.ANALYTICS_EXCLUDED_USER_IDS ?? "")
+  .split(",").map((s) => s.trim()).filter(Boolean);
+const reasonOf = (p) => {
+  if (manualIds.includes(p.id)) return "수동 제외 목록";
+  if ((emailById.get(p.id) ?? "").endsWith("@gnd.local")) return "픽스처 계정";
+  if ((p.nickname ?? "").trim().toLowerCase() === "test") return "테스트 닉네임";
+  return null;
+};
+const excluded = (profiles.data ?? []).filter((p) => reasonOf(p));
+const testIds = new Set(excluded.map((p) => p.id));
+for (const p of excluded) {
+  const mine = (sessions.data ?? []).filter((s) => s.user_id === p.id);
+  console.log(
+    `  · ${p.nickname.padEnd(12)} ${reasonOf(p).padEnd(8)} 운동 ${String(mine.length).padStart(3)}건 · ` +
+    `프로그램 ${(enrollments.data ?? []).filter((e) => e.user_id === p.id).length}건`,
+  );
+}
+const anonNoProfile = (auth.data?.users ?? []).filter(
+  (u) => !(profiles.data ?? []).some((p) => p.id === u.id),
+).length;
+console.log(`  · 프로필 없는 익명 계정 ${anonNoProfile}개 (가입 퍼널에서 제외)`);
+console.log("\n  ── 화면에 떠야 하는 값 (테스트 제외 후) ──");
+const realProfiles = (profiles.data ?? []).filter((p) => !testIds.has(p.id));
+const realEnroll = (enrollments.data ?? []).filter((e) => !testIds.has(e.user_id));
+const realLinks = (links.data ?? []).filter(
+  (l) => !testIds.has(l.user_a) && !testIds.has(l.user_b),
+);
+const realEnrollByStatus = {};
+for (const e of realEnroll) realEnrollByStatus[e.status] = (realEnrollByStatus[e.status] ?? 0) + 1;
+console.log(`  실사용자            ${realProfiles.length}명 (${realProfiles.map((p) => p.nickname).join(", ")})`);
+console.log(`  프로그램 등록        ${realEnroll.length}건 ${JSON.stringify(realEnrollByStatus)}`);
+console.log(`  크루 연결            ${realLinks.length}쌍`);
+console.log(
+  `  완료 세션            ${(sessions.data ?? []).filter((s) => s.status === "completed" && !testIds.has(s.user_id)).length}건`,
+);
 
 console.log(`\n결과: ${pass} 통과 / ${fail} 실패`);
 if (fail > 0) {

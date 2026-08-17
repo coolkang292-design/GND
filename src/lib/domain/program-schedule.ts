@@ -152,6 +152,16 @@ function weekdayOf(dateKey: string): number {
 export const MIN_SESSIONS_PER_WEEK = 2;
 export const MAX_SESSIONS_PER_WEEK = 5;
 
+/**
+ * 프로그램 한 벌의 총 회차. 6주 × A·B·C = 18.
+ *
+ * ⚠️ **주당 횟수와 무관하다.** 주 2회든 5회든 18칸을 채우고, 기간만 늘거나 준다
+ * (0073). 아래 `buildProgramSchedule`의 배치 루프와 관리자 대시보드의 완주 판정이
+ * 같은 값을 써야 해서 상수로 뺐다 — 한쪽만 고치면 "18회를 다 했는데 완주가 아닌"
+ * 상태가 생긴다.
+ */
+export const PROGRAM_TOTAL_SESSIONS = 18;
+
 function validateSlots(slots: readonly PreferredSlot[]): void {
   /*
     주당 횟수는 사용자가 정한다 (사용자 확정 2026-08-12).
@@ -280,7 +290,7 @@ export function buildProgramSchedule(input: {
   const originalPlans: ProgramScheduleItem[] = [];
   let date = input.startDate;
 
-  while (originalPlans.length < 18) {
+  while (originalPlans.length < PROGRAM_TOTAL_SESSIONS) {
     const slot = slotsByWeekday.get(weekdayOf(date));
     if (slot) {
       const index = originalPlans.length;

@@ -90,8 +90,24 @@ td b{font-size:10px;color:#deddd8}.pill{display:inline-flex;padding:5px 8px;bord
 .warn{color:#efaa5a;background:#f5a84b16}.sleep{color:#858892;background:#8b8e9816}
 .risk:before{content:"";display:inline-block;width:6px;height:6px;margin-right:5px;border-radius:50%}.low:before{background:var(--green)}
 .mid:before{background:var(--orange)}.high:before{background:var(--red)}footer{display:flex;justify-content:space-between;color:#565862;font-size:8px;padding-top:17px}
+/* 지표 설명 접기 (2026-08-17). 자바스크립트 없이 <details>가 접고 편다 —
+ * /admin은 전부 서버 컴포넌트라 설명 글 하나 때문에 클라이언트로 내릴 이유가 없다. */
+.metric-help{margin-top:14px;border:1px solid var(--line);border-radius:8px;background:#101116}
+.metric-help>summary{padding:10px 12px;color:#8f939c;font-size:10px;font-weight:700;cursor:pointer;list-style:none}
+.metric-help>summary::-webkit-details-marker{display:none}
+.metric-help>summary:before{content:"ⓘ ";color:var(--gold)}
+.metric-help>summary:hover{color:var(--gold2)}
+.metric-help[open]>summary{color:var(--gold2);border-bottom:1px solid var(--line)}
+.metric-help-body{display:grid;gap:6px;padding:10px 12px 12px}
+.metric-item{border:1px solid #22242a;border-radius:6px;background:#141519}
+.metric-item>summary{padding:9px 11px;color:#c7c9d0;font-size:10px;font-weight:700;cursor:pointer}
+.metric-item>summary:hover,.metric-item[open]>summary{color:var(--gold2)}
+.metric-item p{display:grid;grid-template-columns:34px 1fr;gap:8px;margin:0;padding:0 11px 9px;
+  color:#8f939c;font-size:10px;line-height:1.75}
+.metric-item p b{color:#bec8c1;font-size:9px}
+.metric-item p.metric-caveat b{color:var(--orange)}
 @media(max-width:1080px){.metrics{grid-template-columns:1fr 1fr}.grid,.grid.equal{grid-template-columns:1fr}}
-@media(max-width:720px){.sidebar{inset:auto 0 0;width:100%;height:64px;padding:6px;z-index:5}.brand,.sidebar-foot{display:none}nav{grid-template-columns:repeat(5,1fr);padding:0}nav a{min-height:50px;display:grid;place-items:center;padding:2px;font-size:0}nav i{font-size:11px}
+@media(max-width:720px){.sidebar{inset:auto 0 0;width:100%;height:64px;padding:6px;z-index:5}.brand,.sidebar-foot{display:none}nav{grid-template-columns:repeat(7,1fr);padding:0}nav a{min-height:50px;display:grid;place-items:center;padding:2px;font-size:0}nav i{font-size:11px}
   .main{width:100%;margin:0;padding:24px 15px 82px}header{align-items:start;flex-direction:column}.actions{width:100%;flex-wrap:wrap}.live{display:none}
   .metrics{grid-template-columns:1fr 1fr}.summary{grid-template-columns:1fr 1fr}.table-top,.filters{align-items:stretch;flex-direction:column}.search input{width:100%}}
 @media(max-width:430px){.metrics{grid-template-columns:1fr}.frow{grid-template-columns:105px 1fr}.loss{display:none}}

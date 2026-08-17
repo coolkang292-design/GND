@@ -286,7 +286,7 @@ export interface FunnelStep {
 }
 
 /**
- * 활성화 퍼널 4단계.
+ * 활성화 퍼널 3단계.
  *
  * **크루 단계를 넣지 않는 이유**: 온보딩의 "혼자 시작하기"는 DB에 흔적을
  * 남기지 않아(setStep("done")만 하고 쓰기 없음) "혼자 완료"와 "크루 단계
@@ -294,35 +294,37 @@ export interface FunnelStep {
  * 첫 운동을 완료해 다음 단계가 이전 단계보다 커지는 비단조 퍼널이 된다.
  * 크루 참여율은 crewParticipation()으로 따로 낸다.
  *
- * 가입은 profiles가 아니라 authUsers 기준이다 — 그래야 온보딩을 시작만 하고
- * 프로필을 안 만든 사람이 "프로필 설정" 단계의 이탈로 잡힌다.
+ * ⚠️ **2026-08-17에 `가입 완료`(auth 기준) 단계를 뺐다.** 앱이 익명 인증이라
+ * 브라우저를 새로 열 때마다 auth 계정이 하나씩 생긴다. 실측에서 auth 66개 중
+ * **59개가 프로필 없는 익명 계정**이었고 대부분 개발자 본인의 브라우저·자동화
+ * 세션이었다 — 그 상태로 퍼널을 그리면 첫 단계에서 -89%가 빠지는데 그건 온보딩
+ * 이탈이 아니라 **테스트 흔적**이다. 사용자 지시로 프로필을 만든 계정만 센다.
+ *
+ * ⚠️ **대신 "온보딩 중도 이탈"은 이제 측정하지 않는다.** 진짜 이탈자도 같이
+ * 빠졌기 때문이다. 되살리려면 익명 계정 중 테스트 흔적을 가려낼 표식(예: 온보딩
+ * 시작 이벤트)이 먼저 필요하다. 화면도 이 사실을 적는다.
  */
 export function activationFunnel(
-  authUsers: ProfileRow[],
   profiles: ProfileRow[],
   sessions: SessionRow[],
 ): FunnelStep[] {
-  const profileIds = new Set(profiles.map((p) => p.userId));
-
   const completedCount = new Map<string, number>();
   for (const s of sessions) {
     if (s.status !== "completed") continue;
     completedCount.set(s.userId, (completedCount.get(s.userId) ?? 0) + 1);
   }
 
-  // 이후 단계는 전부 "프로필이 있는 사용자" 부분집합에서 센다 —
+  // 모든 단계를 "프로필이 있는 사용자" 부분집합에서 센다 —
   // 그래야 프로필 없는 사용자의 세션이 단조성을 깨지 않는다.
-  const withProfile = authUsers.filter((u) => profileIds.has(u.userId));
-  const withFirst = withProfile.filter(
-    (u) => (completedCount.get(u.userId) ?? 0) >= 1,
+  const withFirst = profiles.filter(
+    (p) => (completedCount.get(p.userId) ?? 0) >= 1,
   );
-  const withThree = withProfile.filter(
-    (u) => (completedCount.get(u.userId) ?? 0) >= 3,
+  const withThree = profiles.filter(
+    (p) => (completedCount.get(p.userId) ?? 0) >= 3,
   );
 
   return [
-    { label: "가입 완료", count: authUsers.length },
-    { label: "프로필 설정", count: withProfile.length },
+    { label: "가입·프로필 완료", count: profiles.length },
     { label: "첫 운동 완료", count: withFirst.length },
     { label: "3회 운동 완료", count: withThree.length },
   ];

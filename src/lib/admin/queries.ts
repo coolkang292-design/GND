@@ -5,13 +5,33 @@ import { getLevelProgress } from "@/lib/domain/progression";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import type {
   AdminProfileRow,
-  ProfileRow,
   SessionRow,
   SessionStatus,
 } from "@/lib/domain/analytics";
+import {
+  parseExcludedIds,
+  testAccountReason,
+  testUserIds,
+  type TestAccountReason,
+} from "@/lib/domain/analytics-accounts";
+import {
+  CHALLENGE_PEEK_UNLOCKED_TYPE,
+  ENGAGEMENT_NOTIFICATION_TYPES,
+  type CrewLinkPair,
+  type EngagementNotificationRow,
+} from "@/lib/domain/analytics-engagement";
+import type {
+  ProgramEnrollmentRow,
+  ProgramEnrollmentStatus,
+  ProgramSessionRow,
+} from "@/lib/domain/analytics-program";
+
+export interface ExcludedAccount {
+  nickname: string;
+  reason: TestAccountReason;
+}
 
 export interface AdminDataset {
-  authUsers: ProfileRow[];
   profiles: AdminProfileRow[];
   sessions: SessionRow[];
   totalXpByUser: Map<string, number>;
@@ -20,6 +40,22 @@ export interface AdminDataset {
    * 크루 지표는 챌린지 참가자 수와 별개로 계산한다.
    */
   crewLinkUserIds: string[];
+  /** 확산 패널이 쓰는 연결 쌍 원본. crewLinkUserIds는 여기서 파생된다 */
+  crewLinkPairs: CrewLinkPair[];
+  /**
+   * 초대 코드를 가진 프로필 수. **profiles를 두 번 읽지 않으려고 여기서 낸다** —
+   * 확산 패널만을 위해 같은 테이블을 다시 조회할 이유가 없다.
+   */
+  inviteCodeCount: number;
+  /**
+   * 집계에서 뺀 테스트 계정. **화면이 무엇을 뺐는지 말해야 한다** — 안 그러면
+   * 대시보드 숫자와 DB 숫자가 조용히 갈려 다음 사람이 집계를 의심한다.
+   */
+  excludedTestAccounts: ExcludedAccount[];
+  /** 프로필을 만들지 않은 익명 auth 계정 수 — 퍼널에서 뺀 만큼 */
+  anonymousWithoutProfile: number;
+  /** 프로그램·참여 조회가 같은 기준으로 거를 수 있게 넘긴다 */
+  testUserIds: string[];
 }
 
 /**
@@ -40,7 +76,8 @@ export async function fetchAdminDataset(): Promise<AdminDataset> {
         .from("workout_sessions")
         .select("user_id,status,started_at,completed_at")
         .is("deleted_at", null),
-      db.from("profiles").select("id,nickname,avatar_url,created_at"),
+      // invite_code는 화면에 내보내지 않고 **발급 여부만** 센다(아래 참조)
+      db.from("profiles").select("id,nickname,avatar_url,created_at,invite_code"),
       db.from("user_progress").select("user_id,total_xp"),
       // 0039부터 "크루" = crew_links(상호 수락).
       db.from("crew_links").select("user_a,user_b"),
@@ -59,35 +96,220 @@ export async function fetchAdminDataset(): Promise<AdminDataset> {
     throw new Error(`auth.users 조회 실패: ${authRes.error.message}`);
   }
 
+  /*
+    ── 테스트 계정 제외 (2026-08-17 사용자 지시) ────────────────────────────
+    운영 Supabase 하나로 개발까지 해서 픽스처 계정의 기록이 실사용자 통계에
+    섞인다. **DB는 건드리지 않고** 집계에서만 뺀다 — 판정 규칙과 이유는
+    `domain/analytics-accounts.ts` 참조.
+
+    한 곳에서만 거른다. 패널마다 따로 거르면 기준이 조용히 갈린다.
+  */
+  const emailById = new Map(
+    authRes.data.users.map((u) => [u.id, u.email ?? null]),
+  );
+  const rawProfiles = profilesRes.data ?? [];
+  const excludedIds = parseExcludedIds(process.env.ANALYTICS_EXCLUDED_USER_IDS);
+  const identities = rawProfiles.map((p) => ({
+    userId: p.id as string,
+    nickname: p.nickname as string,
+    email: emailById.get(p.id as string) ?? null,
+  }));
+  const testIds = testUserIds(identities, excludedIds);
+  const isTest = (userId: string) => testIds.has(userId);
+
+  const profileIds = new Set(rawProfiles.map((p) => p.id as string));
+  const keptLinks = (linksRes.data ?? []).filter(
+    // 한쪽 끝이라도 테스트 계정이면 그 연결은 실사용자 사이의 연결이 아니다
+    (r) => !isTest(r.user_a as string) && !isTest(r.user_b as string),
+  );
+
   return {
-    // 가입 퍼널 최상단은 profiles가 아니라 auth 기준이다(설계 §4.5)
-    authUsers: authRes.data.users.map((u) => ({
-      userId: u.id,
-      createdAt: new Date(u.created_at),
-    })),
-    profiles: (profilesRes.data ?? []).map((p) => ({
-      userId: p.id as string,
-      nickname: p.nickname as string,
-      avatarUrl: (p.avatar_url as string | null) ?? null,
-      createdAt: new Date(p.created_at as string),
-    })),
-    sessions: (sessionsRes.data ?? []).map((r) => ({
-      userId: r.user_id as string,
-      status: r.status as SessionStatus,
-      startedAt: r.started_at ? new Date(r.started_at as string) : null,
-      completedAt: r.completed_at ? new Date(r.completed_at as string) : null,
-    })),
+    profiles: rawProfiles
+      .filter((p) => !isTest(p.id as string))
+      .map((p) => ({
+        userId: p.id as string,
+        nickname: p.nickname as string,
+        avatarUrl: (p.avatar_url as string | null) ?? null,
+        createdAt: new Date(p.created_at as string),
+      })),
+    sessions: (sessionsRes.data ?? [])
+      .filter((r) => !isTest(r.user_id as string))
+      .map((r) => ({
+        userId: r.user_id as string,
+        status: r.status as SessionStatus,
+        startedAt: r.started_at ? new Date(r.started_at as string) : null,
+        completedAt: r.completed_at ? new Date(r.completed_at as string) : null,
+      })),
     totalXpByUser: new Map(
-      (progressRes.data ?? []).map((r) => [
-        r.user_id as string,
-        r.total_xp as number,
-      ]),
+      (progressRes.data ?? [])
+        .filter((r) => !isTest(r.user_id as string))
+        .map((r) => [r.user_id as string, r.total_xp as number]),
     ),
     // 연결의 양쪽 끝을 모두 "크루 보유자"로 센다
-    crewLinkUserIds: (linksRes.data ?? []).flatMap((r) => [
+    crewLinkUserIds: keptLinks.flatMap((r) => [
       r.user_a as string,
       r.user_b as string,
     ]),
+    crewLinkPairs: keptLinks.map((r) => ({
+      userA: r.user_a as string,
+      userB: r.user_b as string,
+    })),
+    // 코드 문자열은 들고 가지 않는다 — 게이트가 유일한 방어선이라 페이로드에
+    // 남의 초대 코드를 실을 이유가 없다. 필요한 건 "몇 명이 가졌나"뿐이다.
+    inviteCodeCount: rawProfiles.filter(
+      (p) => p.invite_code && !isTest(p.id as string),
+    ).length,
+    excludedTestAccounts: identities
+      .filter((a) => testIds.has(a.userId))
+      .map((a) => ({
+        nickname: a.nickname ?? "(닉네임 없음)",
+        reason: testAccountReason(a, excludedIds)!,
+      })),
+    // 익명 인증이라 브라우저를 새로 열 때마다 auth 계정이 하나씩 생긴다.
+    // 프로필을 만들지 않은 계정은 대부분 그 흔적이라 퍼널에서 뺀다.
+    anonymousWithoutProfile: authRes.data.users.filter(
+      (u) => !profileIds.has(u.id),
+    ).length,
+    testUserIds: [...testIds],
+  };
+}
+
+export interface ProgramDataset {
+  enrollments: ProgramEnrollmentRow[];
+  programSessions: ProgramSessionRow[];
+}
+
+/**
+ * 공식 6주 프로그램 등록과 그 회차. **requireAdmin() 통과 뒤에만 호출할 것.**
+ *
+ * ⚠️ **기간으로 자르지 않는다.** 6주짜리를 7일 창으로 보면 완주가 0일 수밖에 없다.
+ * 기간 처리는 `buildProgramMetrics`가 신규 등록 하나에만 적용한다.
+ *
+ * ⚠️ 컬럼명 주의: 제목은 `title`이 아니라 **`title_snapshot`**이다(등록 당시 이름을
+ * 남긴다). 회차 쪽은 0067에서 붙은 `program_enrollment_id`다.
+ */
+export async function fetchProgramDataset(
+  /** `fetchAdminDataset()`이 정한 테스트 계정 — 같은 기준으로 거른다 */
+  testIds: ReadonlySet<string>,
+): Promise<ProgramDataset> {
+  const db = getSupabaseAdminClient();
+
+  const [enrollRes, sessionRes] = await Promise.all([
+    db
+      .from("program_enrollments")
+      .select(
+        "id,user_id,program_key,title_snapshot,status,created_at,completed_at,cancelled_at",
+      ),
+    db
+      .from("workout_sessions")
+      .select("program_enrollment_id,completed_at")
+      .not("program_enrollment_id", "is", null)
+      .is("deleted_at", null),
+  ]);
+
+  // 조용히 빈 배열로 떨어뜨리지 않는다 — 조회가 깨진 화면은 "0건"이라고 거짓말한다
+  for (const [name, res] of [
+    ["program_enrollments", enrollRes],
+    ["workout_sessions(program)", sessionRes],
+  ] as const) {
+    if (res.error) throw new Error(`${name} 조회 실패: ${res.error.message}`);
+  }
+
+  const enrollments = (enrollRes.data ?? [])
+    .filter((r) => !testIds.has(r.user_id as string))
+    .map((r) => ({
+      id: r.id as string,
+      userId: r.user_id as string,
+      programKey: r.program_key as string,
+      title: r.title_snapshot as string,
+      status: r.status as ProgramEnrollmentStatus,
+      createdAt: new Date(r.created_at as string),
+      // 끝난 시각은 완주면 completed_at, 포기면 cancelled_at이다
+      endedAt: r.completed_at
+        ? new Date(r.completed_at as string)
+        : r.cancelled_at
+          ? new Date(r.cancelled_at as string)
+          : null,
+    }));
+
+  // 회차는 등록을 통해서만 사람에 닿는다 — 남은 등록에 걸린 것만 들고 간다
+  const keptIds = new Set(enrollments.map((e) => e.id));
+  return {
+    enrollments,
+    programSessions: (sessionRes.data ?? [])
+      .filter((r) => keptIds.has(r.program_enrollment_id as string))
+      .map((r) => ({
+        enrollmentId: r.program_enrollment_id as string,
+        completedAt: r.completed_at ? new Date(r.completed_at as string) : null,
+      })),
+  };
+}
+
+export interface EngagementDataset {
+  notifications: EngagementNotificationRow[];
+  /** 꾸준왕 열람권을 실제로 쓴 횟수 (2026-08-17 실측 **0행**) */
+  recordViewCount: number;
+  /** 챌린지 열람창에서 대상을 고른 횟수 */
+  challengePickCount: number;
+  /** 챌린지 열람창이 열린 횟수 — 위 notifications에서 파생한다 */
+  challengeUnlockedCount: number;
+}
+
+/**
+ * 알림 · 열람권 참여 원본. **requireAdmin() 통과 뒤에만 호출할 것.**
+ *
+ * 알림은 **유형을 서버에서 좁힌다**(`ENGAGEMENT_NOTIFICATION_TYPES`). 찌르기·응원까지
+ * 든 537행(2026-08-17 실측) 전부를 끌어올 이유가 없다.
+ *
+ * 열람권 쪽은 개수만 있으면 되므로 `head:true` 카운트 질의를 쓴다 — 행을 받아서
+ * 세면 record_views가 늘어날수록 페이로드만 커진다.
+ */
+export async function fetchEngagementDataset(
+  /** `fetchAdminDataset()`이 정한 테스트 계정 — 같은 기준으로 거른다 */
+  testIds: ReadonlySet<string>,
+): Promise<EngagementDataset> {
+  const db = getSupabaseAdminClient();
+
+  // ⚠️ 열람권 쪽은 개수 질의(head:true)를 쓰지 않는다. 테스트 계정을 빼야 해서
+  //    누가 썼는지를 알아야 한다. 두 테이블 다 작다(실측 0행·2행).
+  const [notifyRes, viewRes, pickRes] = await Promise.all([
+    db
+      .from("notifications")
+      .select("user_id,type,created_at,read_at")
+      .in("type", [...ENGAGEMENT_NOTIFICATION_TYPES]),
+    db.from("record_views").select("viewer_id"),
+    db.from("challenge_peek_picks").select("viewer_id"),
+  ]);
+
+  for (const [name, res] of [
+    ["notifications", notifyRes],
+    ["record_views", viewRes],
+    ["challenge_peek_picks", pickRes],
+  ] as const) {
+    if (res.error) throw new Error(`${name} 조회 실패: ${res.error.message}`);
+  }
+
+  const notifications: EngagementNotificationRow[] = (notifyRes.data ?? [])
+    .filter((r) => !testIds.has(r.user_id as string))
+    .map((r) => ({
+      userId: r.user_id as string,
+      type: r.type as string,
+      createdAt: new Date(r.created_at as string),
+      readAt: r.read_at ? new Date(r.read_at as string) : null,
+    }));
+
+  const notTest = (rows: { viewer_id: unknown }[] | null) =>
+    (rows ?? []).filter((r) => !testIds.has(r.viewer_id as string)).length;
+
+  return {
+    notifications,
+    recordViewCount: notTest(viewRes.data),
+    challengePickCount: notTest(pickRes.data),
+    // 이미 받아 온 행에서 센다. "창이 열렸다"는 곧 이 알림이 나갔다는 뜻이라
+    // 연속 5일 판정을 서버에서 다시 재현할 필요가 없다.
+    challengeUnlockedCount: notifications.filter(
+      (n) => n.type === CHALLENGE_PEEK_UNLOCKED_TYPE,
+    ).length,
   };
 }
 
@@ -105,6 +327,8 @@ export interface AdminChallenge {
  */
 export async function fetchActiveChallenges(
   now: Date,
+  /** `fetchAdminDataset()`이 정한 테스트 계정 — 같은 기준으로 거른다 */
+  testIds: ReadonlySet<string>,
 ): Promise<AdminChallenge[]> {
   const db = getSupabaseAdminClient();
 
@@ -117,7 +341,7 @@ export async function fetchActiveChallenges(
   // 관리자 챌린지 인원은 실제 joined/dropped 참가자만 센다.
   const { data: participants, error: participantError } = await db
     .from("challenge_participants")
-    .select("challenge_id,status")
+    .select("challenge_id,user_id,status")
     .in("status", ["joined", "dropped"]);
   if (participantError) {
     throw new Error(
@@ -126,13 +350,31 @@ export async function fetchActiveChallenges(
   }
 
   const memberCount = new Map<string, number>();
+  const realMemberCount = new Map<string, number>();
   for (const participant of participants ?? []) {
     const challengeId = participant.challenge_id as string;
     memberCount.set(challengeId, (memberCount.get(challengeId) ?? 0) + 1);
+    if (!testIds.has(participant.user_id as string)) {
+      realMemberCount.set(challengeId, (realMemberCount.get(challengeId) ?? 0) + 1);
+    }
   }
 
+  /*
+    참가자가 **전원 테스트 계정**인 방은 뺀다 (2026-08-17). 실사용자가 한 명도
+    없는 방은 실제 활동이 아니다 — 실측에서 `Test11`·`개발 확인용 챌린지`가 그랬다.
+
+    ⚠️ **이름으로 거르지 않는다.** "Test11"처럼 보이는 이름을 실사용자가 지을 수
+    있다. 판정 근거는 누가 들어가 있느냐다.
+    ⚠️ 참가자가 0명인 방은 남긴다. 아직 아무도 안 들어온 새 방일 수 있고,
+    "전원 테스트"라고 말할 근거도 없다.
+  */
+  const realChallenges = (data ?? []).filter((c) => {
+    const total = memberCount.get(c.id as string) ?? 0;
+    return total === 0 || (realMemberCount.get(c.id as string) ?? 0) > 0;
+  });
+
   return Promise.all(
-    (data ?? []).map(async (c) => {
+    realChallenges.map(async (c) => {
       // ChallengeRanking = { name, list: RankedParticipant[] }
       // RankedParticipant.achievement는 0~100 스케일이다.
       // challenge.ts는 기본이 브라우저 클라이언트라 서버에선 동작하지 않는다.

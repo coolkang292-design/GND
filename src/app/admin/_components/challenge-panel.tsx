@@ -1,4 +1,5 @@
 import type { AdminChallenge } from "@/lib/admin/queries";
+import { MetricHelp } from "./metric-help";
 
 export function ChallengePanel({ items }: { items: AdminChallenge[] }) {
   return (
@@ -37,6 +38,10 @@ export function ChallengePanel({ items }: { items: AdminChallenge[] }) {
           ))}
         </div>
       )}
+
+      <MetricHelp
+        keys={["challenge-members", "challenge-achievement", "challenge-dday"]}
+      />
     </article>
   );
 }

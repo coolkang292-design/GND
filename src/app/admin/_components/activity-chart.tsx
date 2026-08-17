@@ -3,6 +3,7 @@ import {
   type ActiveUserCounts,
   type DailyActivePoint,
 } from "@/lib/domain/analytics";
+import { MetricHelp } from "./metric-help";
 
 /** 막대가 촘촘할 때 라벨을 솎아낸다 — 7개는 전부, 그 이상은 간헐 표기 */
 function labelFor(points: DailyActivePoint[], i: number): string {
@@ -72,6 +73,10 @@ export function ActivityChart({
           </b>
         </div>
       </div>
+
+      <MetricHelp
+        keys={["daily-active", "dau", "wau", "mau", "dau-over-mau"]}
+      />
     </article>
   );
 }
