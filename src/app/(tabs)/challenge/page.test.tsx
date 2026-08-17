@@ -113,6 +113,8 @@ const challenge = (id: string, name: string, createdAt: string) =>
     status: "setup",
     created_by: "old-user",
     created_at: createdAt,
+    // 0064부터 방을 만들 때 같이 들어온다(`create_challenge_room`).
+    invite_code: `GND-${id.slice(-5).toUpperCase()}`,
     myRole: "host",
     myStatus: "joined",
   }) satisfies MyChallenge;

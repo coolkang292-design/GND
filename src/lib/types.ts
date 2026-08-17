@@ -11,6 +11,15 @@ export type Challenge = {
   status: "setup" | "active" | "ended" | "cancelled";
   created_by: string;
   created_at: string;
+  /**
+   * 초대 코드 (0064). `create_challenge_room`이 **방을 만들 때 같이 넣어** 준다 —
+   * 방을 만든 직후에는 `issue_challenge_invite_code`를 다시 부를 필요가 없다.
+   *
+   * ⚠️ `null`일 수 있다. 코드 유니크 충돌이 10번 난 폴백 경로에서 코드 없이 방만
+   * 만들기 때문이다(RPC 주석: "방이 안 만들어지면 사용자는 아무것도 못 한다").
+   * 그때는 `issue_challenge_invite_code`로 나중에 받는다.
+   */
+  invite_code: string | null;
 };
 
 export type UserGoal = {

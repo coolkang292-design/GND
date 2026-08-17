@@ -8,6 +8,15 @@ import {
   ChallengeSetupSheet,
   type SetupSubmit,
 } from "@/components/challenge/setup-sheet";
+import { ChallengeStartCard } from "@/components/challenge/start-card";
+import {
+  challengeInviteUrl,
+  defaultChallengeName,
+  defaultChallengePeriod,
+  inviteSharePayload,
+  shareOutcomeMessage,
+  type ShareOutcome,
+} from "@/lib/domain/challenge-invite";
 import {
   gndLabel,
   goalRate,
@@ -45,6 +54,7 @@ import {
   getMyChallenges,
   getMyPreviousGoals,
   getPeriodStatsByUser,
+  issueChallengeInviteCode,
   joinChallengeWithCode,
   clearPendingChallengeInvite,
   savePendingChallengeInvite,
@@ -503,6 +513,79 @@ function ChallengeScreen({ userId }: { userId: string }) {
     }
   }
 
+  /**
+   * **친구부터 부르기** — 방을 기본값으로 만들고 링크를 즉시 손에 쥐여 준다
+   * (2026-08-17 사용자 승인).
+   *
+   * 옛 순서는 `폼 다 채우기 → 저장 → 그제서야 초대 영역 등장`이었다. 그래서
+   * 방장이 혼자 만들고 아무도 안 오면 지우고 다시 만들기를 반복했다 —
+   * 2026-07-31 하루에 7개를 만들고 전부 취소한 기록이 남아 있다.
+   *
+   * ⚠️ **목표를 여기서 저장하지 않는다.** `handleCreate`는 `saveMyGoals`를 같이
+   *    부르지만 이 경로는 일부러 안 부른다. 목표가 없으면 아래 setup 화면이
+   *    `내 KPI를 설정해야 시작돼요`를 띄우는데, 그게 이 개편이 원하는 순서다 —
+   *    규칙은 필요해지는 순간에 나온다. 여기서 기본 목표를 심으면 사용자가
+   *    **자기가 안 정한 목표**로 시작하게 된다.
+   *
+   * ⚠️⚠️ **`reload()`를 링크보다 먼저 부르지 마라.** 2026-08-17 브라우저 실측에서
+   *    이 순서 때문에 초대가 그 자리에서 닫혔다 — `reload()`가 시작시키는 조회
+   *    묶음에 `autostart_due_challenges`가 들어 있고, 그게 방금 만든 `setup` 방을
+   *    `active`로 올려 버린다. 그다음 코드 발급이 `invalid_status:active`로 400.
+   *    링크를 손에 쥔 **뒤에** 화면을 새로 고친다.
+   *
+   * ⚠️ **코드를 다시 발급하지 마라.** `create_challenge_room`이 0064부터
+   *    `invite_code`를 **같은 트랜잭션에서 넣어 돌려준다.** 한 번 더 부르면
+   *    왕복이 늘고, 위의 경합에 스스로를 노출시킨다. 없을 때만(코드 충돌 10회
+   *    폴백 경로) 발급을 시도한다.
+   *
+   * ⚠️ **링크가 실패해도 방을 되돌리지 마라.** 방은 이미 만들어졌고 아래
+   *    `InviteSheet`가 같은 코드를 다시 낸다. 여기서 롤백하면 사용자는 빈 화면으로
+   *    돌아가 방금 누른 게 무슨 뜻이었는지 알 수 없게 된다.
+   */
+  async function handleInviteFirst() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const { startDate, endDate } = defaultChallengePeriod(todayKey);
+      const name = defaultChallengeName();
+      const ch = await createChallengeRoom({ name, startDate, endDate });
+
+      // ⚠️ 이 블록이 끝나기 전에는 `reload()`를 부르지 않는다(위 주석).
+      let outcome: ShareOutcome = "manual";
+      try {
+        const code = ch.invite_code ?? (await issueChallengeInviteCode(ch.id));
+        const url = challengeInviteUrl(window.location.origin, code);
+        if (typeof navigator !== "undefined" && navigator.share) {
+          await navigator.share(inviteSharePayload(name, url));
+          outcome = "shared";
+        } else {
+          await navigator.clipboard.writeText(url);
+          outcome = "copied";
+        }
+      } catch {
+        // 공유 시트를 사용자가 **닫은 것**도 여기로 온다(AbortError). 그때도
+        // 링크는 살아 있으니 클립보드에 담아 두면 다시 보낼 수 있다.
+        try {
+          const code = ch.invite_code ?? (await issueChallengeInviteCode(ch.id));
+          await navigator.clipboard.writeText(
+            challengeInviteUrl(window.location.origin, code),
+          );
+          outcome = "copied";
+        } catch {
+          outcome = "manual";
+        }
+      }
+
+      setSelectedId(ch.id);
+      reload();
+      showToast(shareOutcomeMessage(outcome));
+    } catch (e) {
+      showToast(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handleSaveGoals(v: SetupSubmit) {
     // 0044: 내 그룹 유무는 상관없다. 타 그룹에서 초대받아 참가한 사람도
     // 목표를 세울 수 있어야 한다.
@@ -750,25 +833,16 @@ function ChallengeScreen({ userId }: { userId: string }) {
       )}
 
       {/* ── 챌린지 없음 ─────────────────────────────── */}
+      {/* ⚠️ 옛 블록(트로피 40px + `아직 진행 중인 챌린지가 없어요` +
+          `＋ 새 챌린지 만들기 (기간·목표 설정)`)을 되살리지 마라. 2026-08-17에
+          사용자 승인으로 교체했다 — 바꾼 이유와 실측치는 `start-card.tsx` 주석에
+          있고, `start-card.test.tsx`가 옛 문구의 **부재**를 단언한다. */}
       {!challenge && (
-        <>
-          <section className="rounded-card border border-line bg-surface p-5 text-center shadow-card">
-            <UiIcon name="trophy" size={40} />
-            <h2 className="mt-1 text-base font-extrabold">
-              아직 진행 중인 챌린지가 없어요
-            </h2>
-            <p className="mt-1 text-xs text-muted">
-              기간을 정하면 참가자 각자 자기 목표(KPI)를 세우고, 전원 설정 완료
-              시 시작돼요.
-            </p>
-          </section>
-          <button
-            onClick={() => openSheet("create")}
-            className="h-12 rounded-card bg-accent text-sm font-extrabold text-accent-ink"
-          >
-            ＋ 새 챌린지 만들기 (기간·목표 설정)
-          </button>
-        </>
+        <ChallengeStartCard
+          busy={busy}
+          onInviteFirst={() => void handleInviteFirst()}
+          onCreateAlone={() => openSheet("create")}
+        />
       )}
 
       {/* ── setup: 전원 KPI 게이트 (§6) ─────────────── */}
