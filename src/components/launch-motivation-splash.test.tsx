@@ -51,11 +51,14 @@ describe("LaunchMotivationSplash", () => {
     expect(
       screen.getByRole("button", { name: "시작 화면 건너뛰기" }),
     ).toBeTruthy();
-    expect(screen.getByTestId("launch-splash-image").getAttribute("src")).toBe(
+    const image = screen.getByTestId("launch-splash-image");
+    expect(image.getAttribute("src")).toBe(
       "/splash/gnd-launch-motivation.png",
     );
+    expect(image.className).toContain("object-contain");
+    expect(image.className).not.toContain("object-cover");
     expect(
-      screen.getByText("GND. 오늘의 한 번이, 몸을 바꾼다.").className,
+      screen.getByText("GND. 오늘 1도를 틀면, 1년뒤 도착지가 바뀐다").className,
     ).toContain("sr-only");
   });
 
@@ -111,8 +114,8 @@ describe("LaunchMotivationSplash", () => {
     fireEvent.error(screen.getByTestId("launch-splash-image"));
 
     expect(screen.getByText("GND")).toBeTruthy();
-    expect(screen.getByText("오늘의 한 번이,")).toBeTruthy();
-    expect(screen.getByText("몸을 바꾼다.")).toBeTruthy();
+    expect(screen.getByText("오늘 1도를 틀면,")).toBeTruthy();
+    expect(screen.getByText("1년뒤 도착지가 바뀐다")).toBeTruthy();
     expect(screen.getByTestId("launch-splash-copy").className).toContain(
       "opacity-100",
     );

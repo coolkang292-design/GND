@@ -123,14 +123,14 @@ export function LaunchMotivationSplash() {
           sizes="100vw"
           onLoad={() => startDisplay("showing")}
           onError={() => startDisplay("fallback")}
-          className={`object-cover object-center transition-opacity duration-200 ${
+          className={`object-contain object-center transition-opacity duration-200 ${
             imageVisible ? "opacity-100" : "opacity-0"
           }`}
         />
       )}
 
       <span id="launch-splash-description" className="sr-only">
-        GND. 오늘의 한 번이, 몸을 바꾼다.
+        GND. 오늘 1도를 틀면, 1년뒤 도착지가 바뀐다
       </span>
 
       {phase === "fallback" && (
@@ -142,8 +142,8 @@ export function LaunchMotivationSplash() {
             GND
           </span>
           <span className="text-center text-3xl font-black leading-tight text-text">
-            <span className="block">오늘의 한 번이,</span>
-            <span className="block text-accent">몸을 바꾼다.</span>
+            <span className="block">오늘 1도를 틀면,</span>
+            <span className="block text-accent">1년뒤 도착지가 바뀐다</span>
           </span>
         </span>
       )}
