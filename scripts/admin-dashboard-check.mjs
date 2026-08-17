@@ -180,6 +180,8 @@ for (const id of adminIds) {
 }
 
 console.log("\n=== 3. 대시보드가 보여줄 실제 숫자 (미리보기) ===");
+console.log("  ⚠️ 아래 숫자는 **DB 전체**다. /admin은 2026-08-17부터 테스트 계정을 빼고 그린다.");
+console.log("     그래서 화면 숫자가 더 작은 것이 정상이다. 제외 대상은 섹션 5 참조.");
 const completed = (sessions.data ?? []).filter((s) => s.status === "completed");
 const now = new Date();
 const d28 = new Date(now.getTime() - 28 * 86_400_000);
@@ -240,6 +242,45 @@ for (const p of profiles.data ?? []) {
     ` · 경과 ${days === null ? "-" : days + "일"}`,
   );
 }
+
+console.log("\n=== 5. /admin이 집계에서 빼는 계정 (2026-08-17~) ===");
+console.log("  판정 규칙은 src/lib/domain/analytics-accounts.ts와 같아야 한다.");
+const emailById = new Map((auth.data?.users ?? []).map((u) => [u.id, (u.email ?? "").toLowerCase()]));
+const manualIds = (env.ANALYTICS_EXCLUDED_USER_IDS ?? "")
+  .split(",").map((s) => s.trim()).filter(Boolean);
+const reasonOf = (p) => {
+  if (manualIds.includes(p.id)) return "수동 제외 목록";
+  if ((emailById.get(p.id) ?? "").endsWith("@gnd.local")) return "픽스처 계정";
+  if ((p.nickname ?? "").trim().toLowerCase() === "test") return "테스트 닉네임";
+  return null;
+};
+const excluded = (profiles.data ?? []).filter((p) => reasonOf(p));
+const testIds = new Set(excluded.map((p) => p.id));
+for (const p of excluded) {
+  const mine = (sessions.data ?? []).filter((s) => s.user_id === p.id);
+  console.log(
+    `  · ${p.nickname.padEnd(12)} ${reasonOf(p).padEnd(8)} 운동 ${String(mine.length).padStart(3)}건 · ` +
+    `프로그램 ${(enrollments.data ?? []).filter((e) => e.user_id === p.id).length}건`,
+  );
+}
+const anonNoProfile = (auth.data?.users ?? []).filter(
+  (u) => !(profiles.data ?? []).some((p) => p.id === u.id),
+).length;
+console.log(`  · 프로필 없는 익명 계정 ${anonNoProfile}개 (가입 퍼널에서 제외)`);
+console.log("\n  ── 화면에 떠야 하는 값 (테스트 제외 후) ──");
+const realProfiles = (profiles.data ?? []).filter((p) => !testIds.has(p.id));
+const realEnroll = (enrollments.data ?? []).filter((e) => !testIds.has(e.user_id));
+const realLinks = (links.data ?? []).filter(
+  (l) => !testIds.has(l.user_a) && !testIds.has(l.user_b),
+);
+const realEnrollByStatus = {};
+for (const e of realEnroll) realEnrollByStatus[e.status] = (realEnrollByStatus[e.status] ?? 0) + 1;
+console.log(`  실사용자            ${realProfiles.length}명 (${realProfiles.map((p) => p.nickname).join(", ")})`);
+console.log(`  프로그램 등록        ${realEnroll.length}건 ${JSON.stringify(realEnrollByStatus)}`);
+console.log(`  크루 연결            ${realLinks.length}쌍`);
+console.log(
+  `  완료 세션            ${(sessions.data ?? []).filter((s) => s.status === "completed" && !testIds.has(s.user_id)).length}건`,
+);
 
 console.log(`\n결과: ${pass} 통과 / ${fail} 실패`);
 if (fail > 0) {
