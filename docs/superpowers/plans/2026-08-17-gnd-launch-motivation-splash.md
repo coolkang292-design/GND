@@ -4,7 +4,7 @@
 
 **Goal:** 새 GND 실행 세션마다 블랙·골드 배틀로프 대표 이미지와 “지금은 같은 출발선. 1년 뒤, 프로와 아마추어가 갈린다.” 문구를 1.5초간 한 번 보여주고, 터치하면 즉시 건너뛰게 한다.
 
-**Architecture:** 일반 탭 레이아웃에 클라이언트 오버레이 하나를 마운트하고, 실행 세션 중복 방지는 `sessionStorage`와 메모리 폴백을 함께 쓰는 작은 도메인 게이트가 맡는다. 이미지·타이머·오류·접근성 상태는 `LaunchMotivationSplash` 내부에만 두며 DB, 인증, 서비스 워커에는 손대지 않는다.
+**Architecture:** 일반 탭 레이아웃에 클라이언트 오버레이 하나를 마운트하고, 실행 세션 중복 방지는 `sessionStorage`와 메모리 폴백을 함께 쓰는 작은 도메인 게이트가 맡는다. 승인 배경에는 상단 GND만 두고 하단 카피는 실제 HTML 텍스트로 렌더해 한글 오타를 차단한다. 이미지·타이머·오류·접근성 상태는 `LaunchMotivationSplash` 내부에만 두며 DB, 인증, 서비스 워커에는 손대지 않는다.
 
 **Tech Stack:** Next.js 16 App Router, React 19, TypeScript strict, Tailwind CSS v4, Next Image, Vitest 4, Testing Library, ImageGen
 
@@ -26,7 +26,7 @@
 
 | 파일 | 책임 |
 |---|---|
-| `public/splash/gnd-launch-motivation-v2.png` | GND와 승인 문구가 포함된 9:16 블랙·골드 배틀로프 완성 이미지 |
+| `public/splash/gnd-launch-motivation-v3.png` | 상단 GND만 포함하고 하단 카피 영역이 비어 있는 9:16 배경 이미지 |
 | `src/lib/domain/launch-splash.ts` | 세션 키와 저장소/메모리 기반 1회 노출 게이트 |
 | `src/lib/domain/launch-splash.test.ts` | 저장 성공·기존 키·저장소 오류·메모리 폴백 단위 테스트 |
 | `src/components/launch-motivation-splash.tsx` | 이미지 준비, 문구, 타이머, 터치 종료, 오류·접근성 UI |
@@ -73,10 +73,10 @@ Create an original vertical 9:16 cinematic fitness campaign photograph for a Kor
 
 Expected: 사용자가 이미지를 실제로 본 뒤 승인하거나 수정 요청을 남김.
 
-**최종 승인 결과:** 사용자가 2026-08-17에 카피와 문구 위치를 조정한
-`exec-03e00d58-ad78-4529-b552-d3b121860100.png`를 최종 승인했다. 이 승인본에는
-`GND`와 `지금은 같은 출발선. 1년 뒤, 프로와 아마추어가 갈린다.` 문구까지 완성되어
-있으므로 앱에서 보이는 HTML 문구를 중복해서 얹지 않는다.
+**최종 승인 결과:** 생성형 이미지가 `같은`을 `갈은`으로 반복 왜곡해 사용자가 실제
+HTML 카피 방식으로 전환을 승인했다. 2026-08-17에 문구를 제거한
+`exec-ad00adda-4124-415a-a088-e7eb81ce2b24.png` 배경을 승인했으며, 앱은 그 위에
+`지금은 같은 출발선.` / `1년 뒤, 프로와 아마추어가 갈린다.`를 실제 텍스트로 얹는다.
 
 ---
 
@@ -233,13 +233,13 @@ Expected: 위 두 파일만 포함된 커밋 1개.
 ### Task 2: 승인된 대표 이미지만 앱 자산으로 확정한다
 
 **Files:**
-- Create: `public/splash/gnd-launch-motivation-v2.png`
+- Create: `public/splash/gnd-launch-motivation-v3.png`
 
 - [ ] **Step 1: 승인된 PNG를 바이트 변경 없이 앱 자산으로 복사한다**
 
 승인 원본
-`C:\Users\SAMSUNG\.codex\generated_images\01a00e30-700a-7db3-8985-3271be4850fd\exec-03e00d58-ad78-4529-b552-d3b121860100.png`를
-`public/splash/gnd-launch-motivation-v2.png`로 복사한다. 승인되지 않은 후보를 고르거나
+`C:\Users\SAMSUNG\.codex\generated_images\01a00e30-700a-7db3-8985-3271be4850fd\exec-ad00adda-4124-415a-a088-e7eb81ce2b24.png`를
+`public/splash/gnd-launch-motivation-v3.png`로 복사한다. 승인되지 않은 후보를 고르거나
 재생성·재압축·재편집하지 않는다. 이전 이미지 최적화 캐시가 재사용되지 않도록 버전
 파일명을 쓰고, Next Image가 기기별 전송 크기를 최적화하게 한다.
 
@@ -248,7 +248,7 @@ Expected: 위 두 파일만 포함된 커밋 1개.
 Run: 로컬 이미지 보기 도구로 아래 파일을 연다.
 
 ```text
-C:\Users\SAMSUNG\workout-app\.worktrees\gnd-launch-splash\public\splash\gnd-launch-motivation-v2.png
+C:\Users\SAMSUNG\workout-app\.worktrees\gnd-launch-splash\public\splash\gnd-launch-motivation-v3.png
 ```
 
 Expected:
@@ -256,8 +256,7 @@ Expected:
 - 성인 남녀가 각각 배틀로프를 잡고 나란히 운동한다.
 - 얼굴은 식별되지 않지만 신체·동작은 선명하다.
 - 젖은 검은 바닥, 수증기, 비말, 골드 윤곽과 반사가 보인다.
-- 상단 `GND`와 하단 `지금은 같은 출발선. 1년 뒤, 프로와 아마추어가 갈린다.`가
-  승인본 그대로 보인다.
+- 상단 `GND`는 그대로이고 하단에는 읽을 수 있는 글자나 속도선이 남아 있지 않다.
 - 승인 문구 외 다른 브랜드 표식·의도하지 않은 글자·해부학 오류가 없다.
 
 하나라도 어긋나면 같은 프롬프트에서 실패 요소만 명시해 다시 생성하고 다시 본다.
@@ -267,8 +266,8 @@ Expected:
 Run:
 
 ```powershell
-$source = Get-FileHash 'C:\Users\SAMSUNG\.codex\generated_images\01a00e30-700a-7db3-8985-3271be4850fd\exec-03e00d58-ad78-4529-b552-d3b121860100.png' -Algorithm SHA256
-$asset = Get-FileHash 'public\splash\gnd-launch-motivation-v2.png' -Algorithm SHA256
+$source = Get-FileHash 'C:\Users\SAMSUNG\.codex\generated_images\01a00e30-700a-7db3-8985-3271be4850fd\exec-ad00adda-4124-415a-a088-e7eb81ce2b24.png' -Algorithm SHA256
+$asset = Get-FileHash 'public\splash\gnd-launch-motivation-v3.png' -Algorithm SHA256
 $source.Hash
 $asset.Hash
 ```
@@ -278,7 +277,7 @@ Expected: 두 SHA256 값이 정확히 같다.
 - [ ] **Step 4: 검수한 자산만 커밋한다**
 
 ```powershell
-git add -- public/splash/gnd-launch-motivation-v2.png
+git add -- public/splash/gnd-launch-motivation-v3.png
 git diff --cached --check
 git commit -m "feat: GND 실행 동기부여 이미지 추가"
 ```
@@ -343,7 +342,7 @@ afterEach(() => {
 });
 
 describe("LaunchMotivationSplash", () => {
-  it("새 실행이면 승인 이미지와 화면 밖 브랜드 문구를 준비한다", () => {
+  it("새 실행이면 승인 배경과 오타 없는 실제 브랜드 문구를 준비한다", () => {
     render(<LaunchMotivationSplash />);
     settleSessionDecision();
 
@@ -351,13 +350,15 @@ describe("LaunchMotivationSplash", () => {
       screen.getByRole("button", { name: "시작 화면 건너뛰기" }),
     ).toBeTruthy();
     expect(screen.getByTestId("launch-splash-image").getAttribute("src")).toBe(
-      "/splash/gnd-launch-motivation-v2.png",
+      "/splash/gnd-launch-motivation-v3.png",
     );
+    expect(screen.getByText("지금은 같은 출발선.")).toBeTruthy();
     expect(
-      screen.getByText(
-        "GND. 지금은 같은 출발선. 1년 뒤, 프로와 아마추어가 갈린다.",
-      ).className,
-    ).toContain("sr-only");
+      screen.getByText("1년 뒤, 프로와 아마추어가 갈린다."),
+    ).toBeTruthy();
+    expect(screen.getByTestId("launch-splash-copy").className).not.toContain(
+      "sr-only",
+    );
   });
 
   it("이미 본 실행 세션이면 덮개를 즉시 없앤다", () => {
@@ -589,7 +590,7 @@ export function LaunchMotivationSplash() {
       {phase !== "checking" && (
         <Image
           data-testid="launch-splash-image"
-          src="/splash/gnd-launch-motivation-v2.png"
+          src="/splash/gnd-launch-motivation-v3.png"
           alt=""
           fill
           priority
@@ -602,21 +603,23 @@ export function LaunchMotivationSplash() {
         />
       )}
 
-      <span id="launch-splash-description" className="sr-only">
-        GND. 지금은 같은 출발선. 1년 뒤, 프로와 아마추어가 갈린다.
-      </span>
-
-      {phase === "fallback" && (
+      {(imageVisible || phase === "fallback") && (
         <span
+          id="launch-splash-description"
           data-testid="launch-splash-copy"
-          className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-5 opacity-100"
+          className="absolute inset-x-0 bottom-[8%] z-20 px-7 opacity-100"
         >
-          <span className="text-4xl font-black tracking-[0.28em] text-accent">
-            GND
-          </span>
-          <span className="text-center text-3xl font-black leading-tight text-text">
+          <span
+            className="relative block origin-center text-center text-[clamp(1.7rem,7vw,2.35rem)] font-black leading-[1.05] tracking-[-0.055em] text-text"
+            style={{ transform: "skewX(-8deg) scaleX(0.9)" }}
+          >
+            <span aria-hidden className="absolute -left-3 top-1 block">
+              <span className="mb-1.5 block h-1 w-4 bg-accent" />
+              <span className="mb-1.5 ml-2 block h-1 w-3 bg-accent/70" />
+              <span className="ml-1 block h-1 w-2 bg-accent/45" />
+            </span>
             <span className="block">지금은 같은 출발선.</span>
-            <span className="block text-accent">
+            <span className="mt-1 block text-[0.78em] text-accent">
               1년 뒤, 프로와 아마추어가 갈린다.
             </span>
           </span>
@@ -799,8 +802,8 @@ Expected: `http://localhost:3000`에서 Next.js 개발 서버가 준비됨. 기�
 | 이미지 | 남녀 배틀로프, 젖은 바닥, 수증기, 얼굴 그림자 |
 | 색 | 블랙 중심, 골드 윤곽·반사 |
 | 브랜드 | 상단 중앙 큰 골드 `GND` |
-| 문구 | `지금은 같은 출발선.` / `1년 뒤, 프로와 아마추어가 갈린다.` 두 줄 |
-| 폰트 | 승인 이미지 안의 앞으로 기울어진 굵은 글자 |
+| 문구 | HTML `지금은 같은 출발선.` / `1년 뒤, 프로와 아마추어가 갈린다.` 두 줄 |
+| 폰트 | 실제 HTML로 표시한 앞으로 기울어진 굵은 글자 + 왼쪽 속도선 |
 | 자동 종료 | 이미지가 보인 뒤 약 1.5초 후 홈 화면 |
 | 개수 | 인물 2명, GND 1개, 메인 문구 1세트 |
 
@@ -853,7 +856,7 @@ Expected: 3000 포트의 이 worktree 개발 서버가 종료됨. build 전에 �
 Run:
 
 ```powershell
-Get-FileHash 'public\splash\gnd-launch-motivation-v2.png' -Algorithm SHA256
+Get-FileHash 'public\splash\gnd-launch-motivation-v3.png' -Algorithm SHA256
 git diff --check
 git status --short
 ```
