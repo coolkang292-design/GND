@@ -57,19 +57,22 @@ export default async function AdminPage({
   const period = buildPeriod(days, now);
 
   const data = await fetchAdminDataset();
+  // 테스트 계정 기준은 fetchAdminDataset()이 한 번만 정한다 — 아래 조회들이
+  // 각자 판정하면 패널마다 모수가 조용히 갈린다.
+  const testIds = new Set(data.testUserIds);
   // 순차 await를 붙이면 페이지가 그만큼 느려진다 — 서로 의존이 없으니 같이 던진다
   const [challenges, growth, program, engagement] = await Promise.all([
-    fetchActiveChallenges(now),
+    fetchActiveChallenges(now, testIds),
     fetchGrowthDataset(data.totalXpByUser),
-    fetchProgramDataset(),
-    fetchEngagementDataset(),
+    fetchProgramDataset(testIds),
+    fetchEngagementDataset(testIds),
   ]);
 
   const kpi = buildKpi(data.sessions, data.profiles, period, now);
   const points = dailyActiveSeries(data.sessions, period, DEFAULT_TIMEZONE);
   const counts = activeUserCounts(data.sessions, now);
   const retention = reworkoutRetention(data.profiles, data.sessions, now);
-  const funnel = activationFunnel(data.authUsers, data.profiles, data.sessions);
+  const funnel = activationFunnel(data.profiles, data.sessions);
   const crew = crewParticipation(data.profiles, data.crewLinkUserIds);
 
   // 등록률의 모수는 **위 KPI가 이미 센 활성 사용자**를 그대로 쓴다. 다시 세면
@@ -215,6 +218,17 @@ export default async function AdminPage({
           <div>
             <b>모수가 5명 미만인 비율은 퍼센트 대신 원시수치로 표시합니다.</b>{" "}
             작은 표본에서 퍼센트는 실제보다 확신을 주기 때문입니다.
+            <br />
+            {/* 뺐다는 사실을 화면이 말한다 — 안 그러면 DB 숫자와 조용히 갈린다 */}
+            <b>
+              테스트 계정 {data.excludedTestAccounts.length}개
+              {data.excludedTestAccounts.length > 0
+                ? `(${data.excludedTestAccounts.map((a) => a.nickname).join("·")})`
+                : ""}
+              와 프로필 없는 익명 계정 {data.anonymousWithoutProfile}개를 모든
+              집계에서 제외했습니다.
+            </b>{" "}
+            DB는 그대로이고 화면에서만 뺍니다 — 되돌릴 수 있습니다.
           </div>
         </div>
 
@@ -227,7 +241,11 @@ export default async function AdminPage({
         </section>
 
         <section className="grid equal">
-          <FunnelPanel steps={funnel} crew={crew} />
+          <FunnelPanel
+            steps={funnel}
+            crew={crew}
+            anonymousExcluded={data.anonymousWithoutProfile}
+          />
           <ChallengePanel items={challenges} />
         </section>
 

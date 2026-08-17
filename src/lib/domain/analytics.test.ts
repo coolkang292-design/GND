@@ -359,13 +359,8 @@ describe("reworkoutRetention", () => {
 });
 
 describe("activationFunnel", () => {
-  it("가입은 auth 기준, 프로필 설정은 profiles 기준", () => {
+  it("프로필을 만든 계정만 세고 운동 횟수로 갈린다", () => {
     const f = activationFunnel(
-      [
-        { userId: "u1", createdAt: new Date("2026-07-01T00:00:00Z") },
-        { userId: "u2", createdAt: new Date("2026-07-02T00:00:00Z") },
-        { userId: "u3", createdAt: new Date("2026-07-03T00:00:00Z") },
-      ],
       [
         { userId: "u1", createdAt: new Date("2026-07-01T00:00:00Z") },
         { userId: "u2", createdAt: new Date("2026-07-02T00:00:00Z") },
@@ -377,19 +372,23 @@ describe("activationFunnel", () => {
         s("u2", "completed", "2026-07-04T00:00:00Z"),
       ],
     );
-    expect(f.map((step) => step.count)).toEqual([3, 2, 2, 1]);
+    expect(f.map((step) => step.count)).toEqual([2, 2, 1]);
     expect(f.map((step) => step.label)).toEqual([
-      "가입 완료",
-      "프로필 설정",
+      "가입·프로필 완료",
       "첫 운동 완료",
       "3회 운동 완료",
     ]);
   });
 
+  // ⚠️ 2026-08-17에 auth 기준 `가입 완료` 단계를 뺐다. 익명 인증이라 브라우저마다
+  //    계정이 생겨 첫 단계 이탈이 온보딩 이탈이 아니라 테스트 흔적이었다.
+  it("auth 계정 수를 받지 않는다 — 익명 테스트 계정이 첫 단계를 부풀렸다", () => {
+    expect(activationFunnel.length).toBe(2);
+  });
+
   // 단계 수는 절대 늘어나면 안 된다 — 늘어나면 퍼널을 읽을 수 없다
   it("단계는 단조 감소한다", () => {
     const f = activationFunnel(
-      [{ userId: "u1", createdAt: new Date("2026-07-01T00:00:00Z") }],
       [{ userId: "u1", createdAt: new Date("2026-07-01T00:00:00Z") }],
       [s("u1", "completed", "2026-07-02T00:00:00Z")],
     );
@@ -399,19 +398,16 @@ describe("activationFunnel", () => {
   });
 
   // 프로필 없는 사용자가 세션을 갖고 있어도 단조성이 깨지면 안 된다
-  it("프로필 없는 사용자의 운동은 이후 단계에 안 들어간다", () => {
+  it("프로필 없는 사용자의 운동은 어느 단계에도 안 들어간다", () => {
     const f = activationFunnel(
-      [{ userId: "orphan", createdAt: new Date("2026-07-01T00:00:00Z") }],
       [],
       [s("orphan", "completed", "2026-07-02T00:00:00Z")],
     );
-    expect(f.map((step) => step.count)).toEqual([1, 0, 0, 0]);
+    expect(f.map((step) => step.count)).toEqual([0, 0, 0]);
   });
 
-  it("가입자가 없으면 전 단계 0", () => {
-    expect(activationFunnel([], [], []).map((step) => step.count)).toEqual([
-      0, 0, 0, 0,
-    ]);
+  it("프로필이 없으면 전 단계 0", () => {
+    expect(activationFunnel([], []).map((step) => step.count)).toEqual([0, 0, 0]);
   });
 });
 

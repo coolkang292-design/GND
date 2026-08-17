@@ -1,5 +1,6 @@
 import { formatRatio } from "@/lib/domain/analytics";
 import type { ProgramMetrics } from "@/lib/domain/analytics-program";
+import { MetricHelp } from "./metric-help";
 
 export function ProgramPanel({ metrics }: { metrics: ProgramMetrics }) {
   const top = metrics.funnel[0]?.count ?? 0;
@@ -27,8 +28,9 @@ export function ProgramPanel({ metrics }: { metrics: ProgramMetrics }) {
           <div className="funnel">
             {metrics.funnel.map((step, i) => {
               const prev = i === 0 ? null : metrics.funnel[i - 1].count;
+              // 줄지 않았으면 아무것도 안 적는다 — "-0%"는 오류처럼 읽힌다
               const loss =
-                prev === null || prev === 0
+                prev === null || prev === 0 || prev === step.count
                   ? ""
                   : `-${Math.round(((prev - step.count) / prev) * 100)}%`;
               return (
@@ -84,6 +86,19 @@ export function ProgramPanel({ metrics }: { metrics: ProgramMetrics }) {
           포기 중 한 회차도 하지 않은 비율은{" "}
           <b>{formatRatio(metrics.dropoutBeforeFirstSession)}</b>입니다.
         </div>
+
+        <MetricHelp
+          keys={[
+            "program-period-rule",
+            "program-enrollments",
+            "program-funnel",
+            "program-enrolled-users",
+            "program-adoption",
+            "program-completion-rate",
+            "program-avg-dropout",
+            "program-new-in-period",
+          ]}
+        />
       </article>
 
       <article className="panel">
@@ -125,6 +140,8 @@ export function ProgramPanel({ metrics }: { metrics: ProgramMetrics }) {
           바뀌어도 그때 이름으로 남아, 같은 키의 옛 등록과 새 등록이 한 줄로
           묶입니다.
         </div>
+
+        <MetricHelp keys={["program-by-key"]} />
       </article>
     </section>
   );

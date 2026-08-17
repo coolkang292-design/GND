@@ -1,4 +1,5 @@
 import type { GrowthDataset } from "@/lib/admin/queries";
+import { MetricHelp } from "./metric-help";
 
 const RARITY_ORDER = ["mythic", "legend", "epic", "rare", "common"];
 
@@ -57,6 +58,8 @@ export function GrowthPanel({ data }: { data: GrowthDataset }) {
             </div>
           ))}
         </div>
+
+        <MetricHelp keys={["stage-distribution", "badge-earned"]} />
       </article>
 
       <article className="panel">
@@ -113,6 +116,10 @@ export function GrowthPanel({ data }: { data: GrowthDataset }) {
             <b className="gold">{data.badgeCounts.length}</b>
           </div>
         </div>
+
+        <MetricHelp
+          keys={["xp-by-reason", "points-issued", "wallet-balance"]}
+        />
       </article>
     </section>
   );

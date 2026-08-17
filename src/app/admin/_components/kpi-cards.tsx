@@ -1,4 +1,5 @@
 import { formatRatio, type Kpi } from "@/lib/domain/analytics";
+import { MetricHelp } from "./metric-help";
 
 function Delta({ pct }: { pct: number | null }) {
   // 직전 구간이 0이면 퍼센트를 만들지 않는다(0→5는 ∞%)
@@ -13,6 +14,7 @@ function Delta({ pct }: { pct: number | null }) {
 
 export function KpiCards({ kpi }: { kpi: Kpi }) {
   return (
+    <>
     <section className="metrics">
       <article className="card">
         <div className="card-head">
@@ -73,5 +75,24 @@ export function KpiCards({ kpi }: { kpi: Kpi }) {
         </div>
       </article>
     </section>
+
+    {/* 전 화면에 걸리는 두 규칙(비율 표기·테스트 계정 제외)도 여기서 설명한다 —
+        맨 위 카드가 대시보드를 처음 보는 사람이 먼저 만나는 곳이다 */}
+    <MetricHelp
+      keys={[
+        "active-users",
+        "new-users",
+        "completed-workouts",
+        "cancelled-workouts",
+        "abandoned-workouts",
+        "completion-rate",
+        "workouts-per-user",
+        "top-quartile",
+        "delta",
+        "ratio-rule",
+        "test-account-exclusion",
+      ]}
+    />
+    </>
   );
 }

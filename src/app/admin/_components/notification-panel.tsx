@@ -3,6 +3,7 @@ import type {
   BriefingSlot,
   NotificationConversion,
 } from "@/lib/domain/analytics-engagement";
+import { MetricHelp } from "./metric-help";
 
 /** 발송을 100%로 놓고 그 아래 단계를 비율로 그린다 */
 function Row({
@@ -83,6 +84,10 @@ export function NotificationPanel({
           본 것(`read_at`)이지 푸시를 누른 것이 아닙니다. 모수는 사람이 아니라{" "}
           <b>발송 건</b>입니다.
         </div>
+
+        <MetricHelp
+          keys={["notify-sent", "notify-opened", "notify-same-day-workout"]}
+        />
       </article>
 
       <article className="panel">
@@ -129,6 +134,8 @@ export function NotificationPanel({
           발송 시각은 각자 <b>평소 운동 시작 30분 전</b>으로 추정합니다. 전원이
           09:00에 몰려 있다면 추정이 거의 되지 않고 있다는 뜻입니다.
         </div>
+
+        <MetricHelp keys={["briefing-slots"]} />
       </article>
     </section>
   );

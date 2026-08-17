@@ -3,6 +3,7 @@ import type {
   ReferralMetrics,
   ViewingPassMetrics,
 } from "@/lib/domain/analytics-engagement";
+import { MetricHelp } from "./metric-help";
 import { Ring } from "./ring";
 
 export function EngagementPanel({
@@ -58,6 +59,15 @@ export function EngagementPanel({
           것은 버그가 아니라 안 쓴 것입니다. 챌린지 쪽 모수는 &ldquo;창이
           열렸다&rdquo;는 알림 수이고, 분자는 실제로 대상을 고른 횟수입니다.
         </div>
+
+        <MetricHelp
+          keys={[
+            "king-eligible-weeks",
+            "king-used",
+            "challenge-unlocked",
+            "challenge-picked",
+          ]}
+        />
       </article>
 
       <article className="panel">
@@ -98,6 +108,16 @@ export function EngagementPanel({
           출처 컬럼과 RPC 3곳(크루 요청·친구 초대·챌린지 초대 수락)의 기록이
           필요합니다.
         </div>
+
+        <MetricHelp
+          keys={[
+            "crew-links",
+            "crew-coverage",
+            "avg-crew",
+            "invite-code",
+            "referral-attribution",
+          ]}
+        />
       </article>
     </section>
   );

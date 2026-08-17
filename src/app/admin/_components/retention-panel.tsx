@@ -1,4 +1,5 @@
 import type { Retention } from "@/lib/domain/analytics";
+import { MetricHelp } from "./metric-help";
 import { Ring } from "./ring";
 
 export function RetentionPanel({ retention }: { retention: Retention }) {
@@ -23,6 +24,8 @@ export function RetentionPanel({ retention }: { retention: Retention }) {
         앱이 방문·페이지뷰를 수집하지 않아 &ldquo;재방문&rdquo;은 측정할 수
         없습니다. 해당 일수가 아직 지나지 않은 가입자는 분모에서 제외합니다.
       </div>
+
+      <MetricHelp keys={["retention"]} />
     </article>
   );
 }

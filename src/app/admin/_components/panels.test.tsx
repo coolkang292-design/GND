@@ -19,6 +19,8 @@ import {
   buildProgramMetrics,
   type ProgramEnrollmentRow,
 } from "@/lib/domain/analytics-program";
+import { METRIC_HELP, type MetricHelpKey } from "@/lib/domain/metric-help";
+import { MetricHelp } from "./metric-help";
 import { ActivityChart } from "./activity-chart";
 import { ChallengePanel } from "./challenge-panel";
 import { EngagementPanel } from "./engagement-panel";
@@ -135,30 +137,58 @@ describe("FunnelPanel", () => {
     const html = renderToStaticMarkup(
       <FunnelPanel
         steps={[
-          { label: "가입 완료", count: 10 },
-          { label: "프로필 설정", count: 8 },
-          { label: "첫 운동 완료", count: 5 },
+          { label: "가입·프로필 완료", count: 10 },
+          { label: "첫 운동 완료", count: 8 },
           { label: "3회 운동 완료", count: 2 },
         ]}
         crew={ratio(3, 10)}
+        anonymousExcluded={59}
       />,
     );
-    expect(html).toContain("가입 완료");
+    expect(html).toContain("가입·프로필 완료");
     expect(html).toContain("3회 운동 완료");
     expect(html).toContain("크루 참여 30% (3/10)");
     expect(html).toContain("-20%"); // 10 → 8
+  });
+
+  it("단계가 줄지 않으면 -0%를 적지 않는다", () => {
+    // "-0%"는 화면에서 오류처럼 읽힌다 (2026-08-17 개발 서버에서 확인)
+    const html = renderToStaticMarkup(
+      <FunnelPanel
+        steps={[
+          { label: "가입·프로필 완료", count: 4 },
+          { label: "첫 운동 완료", count: 4 },
+        ]}
+        crew={ratio(4, 4)}
+        anonymousExcluded={0}
+      />,
+    );
+    expect(html).not.toContain("-0%");
+  });
+
+  it("뺀 익명 계정 수와 그 대가를 화면에 적는다", () => {
+    const html = renderToStaticMarkup(
+      <FunnelPanel
+        steps={[{ label: "가입·프로필 완료", count: 4 }]}
+        crew={ratio(1, 4)}
+        anonymousExcluded={59}
+      />,
+    );
+    expect(html).toContain("59개");
+    // ⚠️ 이 단언을 지우지 마라. 뺀 대가를 안 적으면 "온보딩 이탈 0%"로 읽힌다.
+    expect(html).toContain("온보딩 중도 이탈은 이제 측정하지 않습니다");
   });
 
   it("가입자가 0이면 나눗셈이 깨지지 않는다", () => {
     const html = renderToStaticMarkup(
       <FunnelPanel
         steps={[
-          { label: "가입 완료", count: 0 },
-          { label: "프로필 설정", count: 0 },
+          { label: "가입·프로필 완료", count: 0 },
           { label: "첫 운동 완료", count: 0 },
           { label: "3회 운동 완료", count: 0 },
         ]}
         crew={ratio(0, 0)}
+        anonymousExcluded={0}
       />,
     );
     expect(html).not.toContain("NaN");
@@ -442,5 +472,109 @@ describe("EngagementPanel", () => {
     // ⚠️ 이 단언을 지우지 마라. 문구가 사라지면 화면이 없는 계측을 있다고 말한다.
     expect(html).toContain("바이럴 계수는 측정할 수 없습니다");
     expect(html).toContain("crew_links에 같은 모양으로");
+  });
+});
+
+describe("지표 설명", () => {
+  /** 모든 패널을 최소 데이터로 한 번씩 그린 HTML */
+  function renderAllPanels(): string {
+    const emptyProgram = buildProgramMetrics([], [], 0, period);
+    return [
+      renderToStaticMarkup(<KpiCards kpi={buildKpi([], [], period, now)} />),
+      renderToStaticMarkup(
+        <ActivityChart
+          points={dailyActiveSeries([], period, KST)}
+          counts={activeUserCounts([], now)}
+        />,
+      ),
+      renderToStaticMarkup(
+        <RetentionPanel
+          retention={{ d1: ratio(0, 0), d7: ratio(0, 0), d28: ratio(0, 0) }}
+        />,
+      ),
+      renderToStaticMarkup(
+        <FunnelPanel steps={[]} crew={ratio(0, 0)} anonymousExcluded={0} />,
+      ),
+      renderToStaticMarkup(<ChallengePanel items={[]} />),
+      renderToStaticMarkup(
+        <GrowthPanel
+          data={{
+            stageDistribution: [],
+            xpByReason: [],
+            pointsIssued: 0,
+            walletBalance: 0,
+            badgeCounts: [],
+          }}
+        />,
+      ),
+      renderToStaticMarkup(<ProgramPanel metrics={emptyProgram} />),
+      renderToStaticMarkup(
+        <NotificationPanel
+          conversions={notificationConversion([], new Map(), period, KST)}
+          slots={briefingSlotBreakdown([], new Map(), period, KST)}
+        />,
+      ),
+      renderToStaticMarkup(
+        <EngagementPanel
+          pass={viewingPassMetrics([], 0, 0, 0, KST)}
+          referral={referralMetrics([], 0, 0)}
+        />,
+      ),
+    ].join("");
+  }
+
+  it("카탈로그의 모든 지표가 어느 패널엔가 붙어 있다", () => {
+    // ⚠️ 이 단언이 이 기능의 핵심이다. 지표를 새로 만들고 설명을 안 붙이면
+    //    "설명이 있는 지표와 없는 지표가 섞인 화면"이 되는데, 그건 설명이
+    //    아예 없는 것보다 나쁘다 — 없는 것을 찾다가 자기가 잘못 본 줄 안다.
+    const html = renderAllPanels();
+    for (const [key, help] of Object.entries(METRIC_HELP)) {
+      expect(html, `설명이 어느 패널에도 안 붙은 지표: ${key}`).toContain(
+        help.label,
+      );
+    }
+  });
+
+  it("뜻·계산·주의를 라벨과 함께 낸다", () => {
+    const html = renderToStaticMarkup(
+      <MetricHelp keys={["notify-same-day-workout"]} />,
+    );
+    expect(html).toContain("받은 날 운동");
+    expect(html).toContain("뜻");
+    expect(html).toContain("계산");
+    expect(html).toContain("주의");
+    // 인과가 아니라는 경고가 설명에도 들어 있어야 한다
+    expect(html).toContain("인과가 아닙니다");
+  });
+
+  it("자바스크립트 없이 접힌다 — details/summary로 그린다", () => {
+    // 클라이언트 컴포넌트로 내리면 /admin 전체가 서버 렌더가 아니게 된다
+    const html = renderToStaticMarkup(<MetricHelp keys={["dau"]} />);
+    expect(html).toContain("<details");
+    expect(html).toContain("<summary");
+    expect(html).not.toContain("onclick");
+  });
+
+  it("주의가 없는 지표는 주의 칸을 만들지 않는다", () => {
+    const html = renderToStaticMarkup(<MetricHelp keys={["dau"]} />);
+    expect(html).not.toContain("metric-caveat");
+  });
+
+  it("**강조**를 별표째로 찍지 않는다", () => {
+    // ⚠️ 개발 서버에서 실제로 별표가 그대로 보였다(2026-08-17). 설명 글에
+    //    마크다운 강조를 쓰는 이상 이 단언이 있어야 한다.
+    const withBold = Object.entries(METRIC_HELP).filter(([, h]) =>
+      [h.meaning, h.howMeasured, h.caveat ?? ""].some((t) => t.includes("**")),
+    );
+    expect(withBold.length).toBeGreaterThan(0); // 표본이 있어야 의미 있는 단언이다
+    const html = renderToStaticMarkup(
+      <MetricHelp keys={withBold.map(([k]) => k) as MetricHelpKey[]} />,
+    );
+    expect(html).not.toContain("**");
+    expect(html).toContain("<b>");
+  });
+
+  it("빈 목록이면 아무것도 그리지 않는다", () => {
+    expect(renderToStaticMarkup(<MetricHelp keys={[]} />)).toBe("");
   });
 });
