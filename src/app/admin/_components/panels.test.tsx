@@ -9,6 +9,7 @@ import {
   type Retention,
 } from "@/lib/domain/analytics";
 import {
+  activeCrewMetrics,
   briefingSlotBreakdown,
   notificationConversion,
   referralMetrics,
@@ -16,11 +17,21 @@ import {
   type EngagementNotificationRow,
 } from "@/lib/domain/analytics-engagement";
 import {
+  acquisitionBreakdown,
+  acquisitionCaptureRate,
+  crewOriginBreakdown,
+  originKnownRate,
+  topInviters,
+  type AcquisitionProfileRow,
+  type CrewLinkOriginRow,
+} from "@/lib/domain/analytics-acquisition";
+import {
   buildProgramMetrics,
   type ProgramEnrollmentRow,
 } from "@/lib/domain/analytics-program";
 import { METRIC_HELP, type MetricHelpKey } from "@/lib/domain/metric-help";
 import { MetricHelp } from "./metric-help";
+import { AcquisitionPanel } from "./acquisition-panel";
 import { ActivityChart } from "./activity-chart";
 import { ChallengePanel } from "./challenge-panel";
 import { EngagementPanel } from "./engagement-panel";
@@ -34,6 +45,31 @@ import { RetentionPanel } from "./retention-panel";
 const now = new Date("2026-07-28T00:00:00Z");
 const period = buildPeriod(28, now);
 const KST = "Asia/Seoul";
+
+/**
+ * 유입 패널용 최소 픽스처. **빈 입력이면 줄이 하나도 안 그려져** 라벨이 화면에
+ * 나오지 않는다 — 카탈로그 단언이 라벨을 찾으므로 각 갈래를 1건씩 넣는다.
+ */
+const ORIGIN_ROWS: CrewLinkOriginRow[] = [
+  { userA: "a", userB: "b", origin: "invite_link", initiatedBy: "a" },
+  { userA: "c", userB: "d", origin: "unknown", initiatedBy: null },
+];
+const ACQ_PROFILES: AcquisitionProfileRow[] = [
+  {
+    userId: "a",
+    nickname: "부른사람",
+    invitedBy: null,
+    source: "kakao",
+    referrer: null,
+  },
+  {
+    userId: "b",
+    nickname: "들어온사람",
+    invitedBy: "a",
+    source: null,
+    referrer: null,
+  },
+];
 
 /** 숫자가 깨진 화면은 어떤 패널에서도 나오면 안 된다 */
 function expectNoBrokenNumbers(html: string) {
@@ -120,7 +156,8 @@ describe("RetentionPanel", () => {
     const retention: Retention = {
       d1: ratio(1, 4),
       d7: ratio(0, 0),
-      d28: ratio(2, 10),
+      d30: ratio(2, 10),
+      aliveAfter30d: ratio(5, 10),
     };
     const html = renderToStaticMarkup(
       <RetentionPanel retention={retention} />,
@@ -129,6 +166,24 @@ describe("RetentionPanel", () => {
     expect(html).toContain("1/4"); // 모수 4 → 퍼센트 없음
     expect(html).toContain("20% (2/10)"); // 모수 10 → 퍼센트
     expect(html).toContain("—"); // 모수 0
+  });
+
+  it("D30과 30일 생존을 둘 다 그리고, 옛 D28 라벨은 없다", () => {
+    const html = renderToStaticMarkup(
+      <RetentionPanel
+        retention={{
+          d1: ratio(1, 10),
+          d7: ratio(2, 10),
+          d30: ratio(3, 10),
+          aliveAfter30d: ratio(7, 10),
+        }}
+      />,
+    );
+    expect(html).toContain(">D30<");
+    expect(html).toContain("30일 생존");
+    // 제거 확인 — 새 라벨이 있는지만 보면 교체를 검증한 게 아니다
+    expect(html).not.toContain(">D28<");
+    expect(html).toContain("70% (7/10)");
   });
 });
 
@@ -434,6 +489,8 @@ describe("EngagementPanel", () => {
       <EngagementPanel
         pass={viewingPassMetrics([], 0, 0, 0, KST)}
         referral={referralMetrics([], 0, 0)}
+        activeCrew={activeCrewMetrics([], [], period)}
+        periodDays={28}
       />,
     );
     expect(html).toContain("열람권 사용");
@@ -454,6 +511,8 @@ describe("EngagementPanel", () => {
           challengeUsage: ratio(2, 3),
         }}
         referral={referralMetrics([{ userA: "u1", userB: "u2" }], 7, 7)}
+        activeCrew={activeCrewMetrics([{ userA: "u1", userB: "u2" }], [], period)}
+        periodDays={28}
       />,
     );
     expect(html).toContain("0% (0/6)");
@@ -467,11 +526,17 @@ describe("EngagementPanel", () => {
       <EngagementPanel
         pass={viewingPassMetrics([], 0, 0, 0, KST)}
         referral={referralMetrics([{ userA: "u1", userB: "u2" }], 7, 7)}
+        activeCrew={activeCrewMetrics([{ userA: "u1", userB: "u2" }], [], period)}
+        periodDays={28}
       />,
     );
-    // ⚠️ 이 단언을 지우지 마라. 문구가 사라지면 화면이 없는 계측을 있다고 말한다.
-    expect(html).toContain("바이럴 계수는 측정할 수 없습니다");
-    expect(html).toContain("crew_links에 같은 모양으로");
+    // ⚠️ 이 단언을 지우지 마라. 문구가 사라지면 화면이 없는 정밀도를 있다고 말한다.
+    expect(html).toContain("바이럴 계수는 내지 않습니다");
+    expect(html).toContain("출처와 무관한 총량");
+    // 제거 확인 — 0079로 출처가 기록되기 시작했으므로 옛 문구가 남아 있으면
+    // 바로 아래 INVITE ORIGIN 패널과 정반대 말을 하는 화면이 된다
+    expect(html).not.toContain("초대 출처가 기록되지 않아");
+    expect(html).not.toContain("crew_links에 같은 모양으로");
   });
 });
 
@@ -489,7 +554,12 @@ describe("지표 설명", () => {
       ),
       renderToStaticMarkup(
         <RetentionPanel
-          retention={{ d1: ratio(0, 0), d7: ratio(0, 0), d28: ratio(0, 0) }}
+          retention={{
+            d1: ratio(0, 0),
+            d7: ratio(0, 0),
+            d30: ratio(0, 0),
+            aliveAfter30d: ratio(0, 0),
+          }}
         />,
       ),
       renderToStaticMarkup(
@@ -518,6 +588,17 @@ describe("지표 설명", () => {
         <EngagementPanel
           pass={viewingPassMetrics([], 0, 0, 0, KST)}
           referral={referralMetrics([], 0, 0)}
+          activeCrew={activeCrewMetrics([], [], period)}
+          periodDays={28}
+        />,
+      ),
+      renderToStaticMarkup(
+        <AcquisitionPanel
+          origins={crewOriginBreakdown(ORIGIN_ROWS)}
+          originKnown={originKnownRate(ORIGIN_ROWS)}
+          inviters={topInviters(ORIGIN_ROWS, ACQ_PROFILES)}
+          channels={acquisitionBreakdown(ACQ_PROFILES)}
+          captureRate={acquisitionCaptureRate(ACQ_PROFILES)}
         />,
       ),
     ].join("");

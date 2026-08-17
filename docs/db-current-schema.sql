@@ -7,7 +7,7 @@
 -- 쓰는 법: 함수·정책의 '현행' 정의가 필요할 때 마이그레이션 51개를
 -- 뒤지지 말고 이 파일을 검색하라. 마이그레이션을 적용한 뒤에는 다시 뽑아라.
 --
--- 함수 77개 · 정책 74개 · 인덱스 82개
+-- 함수 80개 · 정책 74개 · 인덱스 85개
 
 -- ════════════════════════════════════════════════════════════
 -- 함수
@@ -68,20 +68,20 @@ declare
   v_other uuid;
 begin
   if v_me is null then raise exception 'not_authenticated'; end if;
-
+ 
   -- 잠금 키를 얻기 위한 사전 읽기(락 없음). 상대가 requester인지 addressee인지
   -- 아직 모르므로 행을 한 번 읽어서만 판단하고, 실제 검증은 아래에서 다시 한다.
   select * into v_req from crew_requests where id = p_request_id;
   if not found then raise exception 'not_addressee'; end if;
   v_other := case when v_req.requester_id = v_me then v_req.addressee_id else v_req.requester_id end;
-
+ 
   -- 쌍 단위 직렬화. 이게 없으면 (a) 서로 동시에 수락할 때 락 순서가 엇갈려
   -- 40P01 데드락, (b) 서로 동시에 요청할 때 역방향을 못 봐서 자동수락이 불발,
   -- (c) 빠른 두 번 탭이 request_exists 대신 23505를 그대로 뱉는다.
   perform pg_advisory_xact_lock(
     hashtext(least(v_me, v_other)::text || greatest(v_me, v_other)::text)
   );
-
+ 
   select * into v_req from crew_requests where id = p_request_id for update;
   if not found or v_req.addressee_id <> v_me then
     raise exception 'not_addressee';
@@ -89,16 +89,18 @@ begin
   if v_req.status <> 'pending' then
     raise exception 'not_pending';
   end if;
-
-  insert into crew_links (user_a, user_b)
+ 
+  -- 0079: 출처는 '검색', 먼저 연 쪽은 요청을 보낸 사람이다.
+  insert into crew_links (user_a, user_b, origin, initiated_by)
   values (least(v_req.requester_id, v_req.addressee_id),
-          greatest(v_req.requester_id, v_req.addressee_id))
+          greatest(v_req.requester_id, v_req.addressee_id),
+          'search', v_req.requester_id)
   on conflict do nothing;
-
+ 
   update crew_requests
      set status = 'accepted', responded_at = now()
    where id = p_request_id;
-
+ 
   -- 반대 방향에 남아 있던 pending도 함께 닫는다. 안 닫으면 이미 크루가 된
   -- 뒤에도 상대 받은함에 요청이 남아 "수락" 버튼이 계속 보인다.
   update crew_requests
@@ -106,7 +108,11 @@ begin
    where requester_id = v_req.addressee_id
      and addressee_id = v_req.requester_id
      and status = 'pending';
-
+ 
+  -- ⚠️ 여기서는 profiles.invited_by를 채우지 않는다. 검색으로 맺는 쪽은 **둘 다
+  --    이미 가입한 사람**이라 "데려왔다"가 성립하지 않는다. 유입 귀속은 신규가
+  --    링크를 타고 들어온 경우에만 의미가 있다(3-2 · 3-3).
+ 
   select nickname into v_nick from profiles where id = v_me;
   -- 알림 실패가 연결까지 되돌리면 안 된다. 연결이 본체고 알림은 곁가지다.
   -- (0029에서 알림 insert 하나가 운동 완료 트랜잭션을 통째로 롤백시킨 전례가 있다.)
@@ -134,34 +140,41 @@ declare
   v_owner_nick text;
   v_my_nick    text;
   v_existed    boolean;
+  v_had_links  boolean;
 begin
   if v_me is null then raise exception 'not_authenticated'; end if;
-
+ 
   select id, nickname into v_owner, v_owner_nick
   from public.profiles
   where invite_code = upper(trim(p_code));
-
+ 
   -- ⚠️ 이 예외 이름을 바꾸지 마라. `/invite/[code]`가 이 코드를 보고 **옛 그룹
   --    코드로 재시도**한다(하위 호환). 이름이 바뀌면 카카오톡에 뿌려진 옛 링크가
   --    전부 "잘못된 초대"가 된다.
   if not found then raise exception 'invalid_friend_code'; end if;
   if v_owner = v_me then raise exception 'self_invite'; end if;
-
+ 
   perform pg_advisory_xact_lock(
     hashtext(least(v_me, v_owner)::text || greatest(v_me, v_owner)::text)
   );
-
+ 
   -- 이미 친구였는지 **먼저** 본다. insert 뒤에 보면 항상 true다 —
   -- 알림을 두 번 보내지 않으려면 이 순서여야 한다.
   select exists (
     select 1 from public.crew_links
     where user_a = least(v_me, v_owner) and user_b = greatest(v_me, v_owner)
   ) into v_existed;
-
-  insert into public.crew_links (user_a, user_b)
-  values (least(v_me, v_owner), greatest(v_me, v_owner))
+ 
+  -- 0079: **insert 전에** 재야 한다. 뒤에서 재면 방금 만든 링크가 잡혀 항상
+  -- true가 되고, invited_by가 영영 안 채워진다.
+  select exists (
+    select 1 from public.crew_links where user_a = v_me or user_b = v_me
+  ) into v_had_links;
+ 
+  insert into public.crew_links (user_a, user_b, origin, initiated_by)
+  values (least(v_me, v_owner), greatest(v_me, v_owner), 'invite_link', v_owner)
   on conflict do nothing;
-
+ 
   -- 반대 방향에 남아 있던 pending 요청도 닫는다. 안 닫으면 이미 친구가 된 뒤에도
   -- 받은함에 "수락" 버튼이 남는다 (accept_crew_request와 같은 규약).
   update public.crew_requests
@@ -169,7 +182,15 @@ begin
    where status = 'pending'
      and ((requester_id = v_me and addressee_id = v_owner)
        or (requester_id = v_owner and addressee_id = v_me));
-
+ 
+  -- 0079: **이 링크가 내 첫 연결일 때만** 초대자로 적는다. 이미 크루가 있는
+  -- 사람이 남의 링크를 눌렀다고 그 사람이 나를 데려온 것은 아니다.
+  if not v_had_links then
+    update public.profiles
+       set invited_by = v_owner
+     where id = v_me and invited_by is null;
+  end if;
+ 
   if not v_existed then
     select nickname into v_my_nick from public.profiles where id = v_me;
     -- 알림 실패가 연결까지 되돌리면 안 된다. 연결이 본체고 알림은 곁가지다.
@@ -183,7 +204,7 @@ begin
     exception when others then null;
     end;
   end if;
-
+ 
   return jsonb_build_object(
     'ownerId', v_owner,
     'nickname', v_owner_nick,
@@ -422,30 +443,30 @@ declare
   v_today date := (now() at time zone 'Asia/Seoul')::date;
   v_started int := 0;
   v_dropped int := 0;
-  v_dropped_now int := 0;
+  v_dropped_ids uuid[];
   c record;
 begin
   for c in
-    select ch.id from challenges ch
+    select ch.id, ch.name from challenges ch
     where ch.status = 'setup' and ch.start_date <= v_today
     order by ch.start_date
     for update
   loop
     -- 목표 0개인 joined는 명단에서 뺀다 (설계 §4.2). 행은 남긴다 — 지우면
     -- 수락 때 맺어진 crew_links의 근거가 사라진다.
-    update challenge_participants cp
-       set status = 'dropped'
-     where cp.challenge_id = c.id
-       and cp.status = 'joined'
-       and not exists (
-         select 1 from user_goals ug
-         where ug.challenge_id = c.id and ug.user_id = cp.user_id
-       );
-    -- ⚠ 이번 update가 바꾼 행 수만 더한다. select count(*)로 세면 이미
-    --    dropped였던 행까지 매 루프마다 다시 더해져 과다 집계된다.
-    --    ROW_COUNT는 직전 문장의 값이므로 update 바로 뒤에서 읽어야 한다.
-    get diagnostics v_dropped_now = row_count;
-    v_dropped := v_dropped + v_dropped_now;
+    with dropped as (
+      update challenge_participants cp
+         set status = 'dropped'
+       where cp.challenge_id = c.id
+         and cp.status = 'joined'
+         and not exists (
+           select 1 from user_goals ug
+           where ug.challenge_id = c.id and ug.user_id = cp.user_id
+         )
+      returning cp.user_id
+    )
+    select coalesce(array_agg(user_id), '{}'::uuid[]) into v_dropped_ids from dropped;
+    v_dropped := v_dropped + coalesce(array_length(v_dropped_ids, 1), 0);
 
     -- 미응답 초대는 만료시킨다
     delete from challenge_participants
@@ -454,13 +475,25 @@ begin
     update challenges set status = 'active' where id = c.id;
     v_started := v_started + 1;
 
-    -- 참가자 전원에게 시작 알림
+    -- 남은 참가자에게 시작 알림
     begin
       perform notify(
         cp.user_id, null, 'challenge_started', c.id,
         '🏁 챌린지가 시작됐어요', '오늘부터 기록이 반영돼요'
       ) from challenge_participants cp
       where cp.challenge_id = c.id and cp.status = 'joined';
+    exception when others then null;
+    end;
+
+    -- 0077: **빠진 사람에게도 말해 준다.** 조용히 사라지지 않게.
+    -- ⚠ `unnest(arr) u`로 쓰면 별칭 `u`가 테이블이자 컬럼이라 모호하다.
+    --   `as t(uid)`로 컬럼 이름을 못 박는다.
+    begin
+      perform notify(
+        t.uid, null, 'challenge_dropped', c.id,
+        '이번 챌린지에선 빠졌어요',
+        c.name || ' · 목표를 세우지 않아 이번 회차 집계에서 빠졌어요. 다음엔 함께해요'
+      ) from unnest(v_dropped_ids) as t(uid);
     exception when others then null;
     end;
   end loop;
@@ -748,6 +781,16 @@ AS $function$
     select 1 from challenges where id = cid and status = 'setup'
   )
 $function$;
+
+-- ── clear_profile_invited_by_on_insert ──
+CREATE OR REPLACE FUNCTION public.clear_profile_invited_by_on_insert()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  new.invited_by := null;
+  return new;
+end $function$;
 
 -- ── complete_workout ──
 CREATE OR REPLACE FUNCTION public.complete_workout(p_session_id uuid)
@@ -1527,6 +1570,7 @@ declare
   v_value numeric;
   v_period text;
   v_inserted int;
+  v_count int;
   d record;
 begin
   v_metrics := public.badge_metrics(p_user_id);
@@ -1564,11 +1608,15 @@ begin
       'tier', d.tier, 'points', d.point_reward);
   end loop;
 
-  if jsonb_array_length(v_new) > 0 then
+  v_count := jsonb_array_length(v_new);
+  if v_count > 0 then
     insert into notifications (user_id, actor_id, type, reference_id, title, body)
     values (p_user_id, p_user_id, 'badge_earned', null,
             '🏅 배지 획득!',
-            '새 배지 ' || jsonb_array_length(v_new) || '개를 얻었어요 — 내 정보에서 확인해 보세요');
+            (v_new -> 0 ->> 'emoji') || ' ' || (v_new -> 0 ->> 'name')
+              || case when v_count > 1
+                      then ' 외 ' || (v_count - 1) || '개'
+                      else '' end);
   end if;
 
   return v_new;
@@ -1607,6 +1655,28 @@ begin
   where id = p_challenge_id
   returning * into c;
   return c;
+end $function$;
+
+-- ── freeze_profile_attribution ──
+CREATE OR REPLACE FUNCTION public.freeze_profile_attribution()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  -- 초대자는 따로 논다. 유입 계측과 시점이 달라서다(위 주석 참고).
+  new.invited_by := coalesce(old.invited_by, new.invited_by);
+
+  -- 유입 6칸은 한 벌이다. 한 번 잡혔으면 통째로 그때 것을 지킨다.
+  if old.acquisition_captured_at is not null then
+    new.acquisition_source      := old.acquisition_source;
+    new.acquisition_medium      := old.acquisition_medium;
+    new.acquisition_campaign    := old.acquisition_campaign;
+    new.acquisition_referrer    := old.acquisition_referrer;
+    new.acquisition_landing     := old.acquisition_landing;
+    new.acquisition_captured_at := old.acquisition_captured_at;
+  end if;
+
+  return new;
 end $function$;
 
 -- ── generate_invite_code ──
@@ -2051,7 +2121,7 @@ declare
   v_my_nick   text;
 begin
   if v_me is null then raise exception 'not_authenticated'; end if;
-
+ 
   -- ── 신입 가드 ────────────────────────────────────────────
   --
   -- ⚠️ **참가 전에 센다.** 참가 뒤에 세면 challenge_participants가 1행이 되어
@@ -2066,13 +2136,13 @@ begin
   ) then
     raise exception 'not_newcomer';
   end if;
-
+ 
   if exists (
     select 1 from public.challenge_participants where user_id = v_me
   ) then
     raise exception 'not_newcomer';
   end if;
-
+ 
   -- ── 참가 ─────────────────────────────────────────────────
   --
   -- ⚠️ 참가 절차를 **베끼지 않는다.** advisory lock · status='setup' 검사 ·
@@ -2083,32 +2153,39 @@ begin
   -- 트랜잭션 전체가 롤백된다 — **챌린지에 못 들어갔는데 친구만 된 상태가 없다.**
   v_result := public.join_challenge_with_code(p_code);
   v_challenge := (v_result ->> 'challengeId')::uuid;
-
+ 
   -- ── 방장과 연결 ──────────────────────────────────────────
   select cp.user_id into v_host
   from public.challenge_participants cp
   where cp.challenge_id = v_challenge and cp.role = 'host'
   order by cp.joined_at nulls last
   limit 1;
-
+ 
   -- 방장이 없는 방은 있을 수 없지만(create_challenge_room이 같은 트랜잭션에서
   -- 넣는다), 없으면 챌린지 참가만 하고 조용히 끝낸다. 친구 연결이 없다고 참가를
   -- 되돌릴 이유는 없다.
   if v_host is null or v_host = v_me then
     return v_result || jsonb_build_object('crewLinked', 0);
   end if;
-
+ 
   perform pg_advisory_xact_lock(
     hashtext(least(v_me, v_host)::text || greatest(v_me, v_host)::text)
   );
-
-  insert into public.crew_links (user_a, user_b)
-  values (least(v_me, v_host), greatest(v_me, v_host))
+ 
+  -- 0079: 출처는 '챌린지', 먼저 연 쪽은 방장이다.
+  insert into public.crew_links (user_a, user_b, origin, initiated_by)
+  values (least(v_me, v_host), greatest(v_me, v_host), 'challenge', v_host)
   on conflict do nothing;
-
+ 
+  -- 0079: 위 신입 가드가 **crew_links 0건**을 이미 보장한다 —
+  -- 이 경로로 온 사람은 정의상 신규라 여기서 다시 재지 않는다.
+  update public.profiles
+     set invited_by = v_host
+   where id = v_me and invited_by is null;
+ 
   select nickname into v_host_nick from public.profiles where id = v_host;
   select nickname into v_my_nick   from public.profiles where id = v_me;
-
+ 
   -- 알림 실패가 연결·참가까지 되돌리면 안 된다.
   begin
     perform public.notify(
@@ -2118,7 +2195,7 @@ begin
     );
   exception when others then null;
   end;
-
+ 
   return v_result || jsonb_build_object(
     'crewLinked', 1,
     'hostId', v_host,
@@ -2663,6 +2740,54 @@ begin
   update crew_requests set status = 'rejected', responded_at = now()
    where id = p_request_id;
   return jsonb_build_object('status', 'rejected');
+end $function$;
+
+-- ── remind_upcoming_challenges ──
+CREATE OR REPLACE FUNCTION public.remind_upcoming_challenges()
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_tomorrow date := ((now() at time zone 'Asia/Seoul')::date + 1);
+  v_sent int := 0;
+  v_n int;
+  c record;
+  p record;
+begin
+  for c in
+    select ch.id, ch.name from challenges ch
+    where ch.status = 'setup' and ch.start_date = v_tomorrow
+  loop
+    for p in
+      select cp.user_id,
+             exists (
+               select 1 from user_goals ug
+               where ug.challenge_id = c.id and ug.user_id = cp.user_id
+             ) as has_goal
+      from challenge_participants cp
+      where cp.challenge_id = c.id and cp.status = 'joined'
+    loop
+      insert into notifications
+        (user_id, actor_id, type, reference_id, title, body, dedupe_key)
+      values (
+        p.user_id, null, 'challenge_starting_soon', c.id,
+        case when p.has_goal
+             then '내일 챌린지가 시작돼요 🏁'
+             else '내일 시작! 목표를 아직 안 세웠어요 🎯' end,
+        case when p.has_goal
+             then c.name || ' · 내일부터 기록이 반영돼요'
+             else c.name || ' · 오늘 안에 목표를 세우지 않으면 이번 챌린지에선 빠져요' end,
+        'challenge_starting_soon:' || c.id::text || ':' || p.user_id::text
+      )
+      on conflict (dedupe_key) do nothing;
+      get diagnostics v_n = row_count;
+      v_sent := v_sent + v_n;
+    end loop;
+  end loop;
+
+  return jsonb_build_object('sent', v_sent);
 end $function$;
 
 -- ── remove_crew ──
@@ -3758,6 +3883,8 @@ $function$;
 -- CREATE UNIQUE INDEX challenges_pkey ON public.challenges USING btree (id);
 -- CREATE UNIQUE INDEX cheers_pkey ON public.cheers USING btree (id);
 -- CREATE INDEX cheers_session_sender_idx ON public.cheers USING btree (session_id, sender_id, created_at DESC);
+-- CREATE INDEX crew_links_initiated_by_idx ON public.crew_links USING btree (initiated_by);
+-- CREATE INDEX crew_links_origin_idx ON public.crew_links USING btree (origin);
 -- CREATE UNIQUE INDEX crew_links_pkey ON public.crew_links USING btree (user_a, user_b);
 -- CREATE INDEX crew_links_user_b_idx ON public.crew_links USING btree (user_b);
 -- CREATE INDEX crew_requests_inbox_idx ON public.crew_requests USING btree (addressee_id, status);
@@ -3782,6 +3909,7 @@ $function$;
 -- CREATE UNIQUE INDEX point_transactions_source_unique ON public.point_transactions USING btree (user_id, reason, source_type, source_id) WHERE (transaction_type = 'earn'::text);
 -- CREATE INDEX point_transactions_user_recent ON public.point_transactions USING btree (user_id, created_at DESC);
 -- CREATE UNIQUE INDEX profiles_invite_code_unique ON public.profiles USING btree (invite_code) WHERE (invite_code IS NOT NULL);
+-- CREATE INDEX profiles_invited_by_idx ON public.profiles USING btree (invited_by);
 -- CREATE UNIQUE INDEX profiles_nickname_unique ON public.profiles USING btree (lower(TRIM(BOTH FROM nickname)));
 -- CREATE UNIQUE INDEX profiles_pkey ON public.profiles USING btree (id);
 -- CREATE UNIQUE INDEX program_enrollments_one_active_version ON public.program_enrollments USING btree (user_id, program_key, program_version) WHERE (status = 'active'::text);

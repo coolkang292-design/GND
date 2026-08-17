@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/components/auth-provider";
 import { ServiceWorkerRegister } from "@/components/service-worker-register";
+import { AcquisitionTracker } from "@/components/acquisition-tracker";
 import { TrailTracker } from "@/components/trail-tracker";
 
 export const metadata: Metadata = {
@@ -34,6 +35,7 @@ export default function RootLayout({
       <body className="min-h-full flex justify-center" suppressHydrationWarning>
         <ServiceWorkerRegister />
         <TrailTracker />
+        <AcquisitionTracker />
         <AuthProvider>
           <div className="w-full max-w-[430px] h-dvh flex flex-col relative bg-bg">
             {children}

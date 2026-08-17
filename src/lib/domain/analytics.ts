@@ -251,8 +251,26 @@ export function activeUserCounts(
 export interface Retention {
   d1: Ratio;
   d7: Ratio;
-  d28: Ratio;
+  /**
+   * ⚠️ **2026-08-17에 D28을 D30으로 바꿨다** (사용자 지시 — "한 달 뒤 남나?").
+   * 28은 MAU 창(4주)에 맞춘 값이었는데, 물어보는 질문이 "한 달"이라 창을 질문에
+   * 맞춘다. 두 개를 나란히 두면 거의 같은 숫자 둘이 화면에서 헷갈린다.
+   */
+  d30: Ratio;
+  /**
+   * 가입 30일이 지난 사람 중 **최근 7일에 운동한** 사람.
+   *
+   * d30이 "30일째 되는 그 하루"만 보는 것과 다르다. 하루 창은 표본이 작을수록
+   * 튀고, 29일째·31일째에 온 사람을 놓친다. "한 달 뒤에도 **살아 있나**"를
+   * 물으려면 이쪽이 맞다 — 둘 다 두는 이유다.
+   */
+  aliveAfter30d: Ratio;
 }
+
+/** 가입 후 며칠째를 코호트 리텐션으로 볼 것인가 — 화면 라벨과 같아야 한다 */
+export const RETENTION_ALIVE_DAYS = 30;
+/** "살아 있다"로 볼 최근 며칠 */
+export const RETENTION_ALIVE_WINDOW_DAYS = 7;
 
 export function reworkoutRetention(
   profiles: ProfileRow[],
@@ -261,12 +279,13 @@ export function reworkoutRetention(
 ): Retention {
   const completedByUser = completedDatesByUser(sessions);
 
+  // 아직 D일이 지나지 않은 사람은 분모에서 뺀다 — 안 그러면 최근 가입자가
+  // 전부 "미복귀"로 잡혀 리텐션이 실제보다 낮게 나온다.
+  const cohortOf = (day: number) =>
+    profiles.filter((p) => now.getTime() - p.createdAt.getTime() >= day * DAY_MS);
+
   const at = (day: number): Ratio => {
-    // 아직 D일이 지나지 않은 사람은 분모에서 뺀다 — 안 그러면 최근 가입자가
-    // 전부 "미복귀"로 잡혀 리텐션이 실제보다 낮게 나온다.
-    const cohort = profiles.filter(
-      (p) => now.getTime() - p.createdAt.getTime() >= day * DAY_MS,
-    );
+    const cohort = cohortOf(day);
     const returned = cohort.filter((p) => {
       const windowFrom = new Date(p.createdAt.getTime() + day * DAY_MS);
       const windowTo = new Date(windowFrom.getTime() + DAY_MS);
@@ -277,7 +296,23 @@ export function reworkoutRetention(
     return ratio(returned.length, cohort.length);
   };
 
-  return { d1: at(1), d7: at(7), d28: at(28) };
+  // 창의 기준이 **가입일이 아니라 오늘**이다. 코호트만 가입일로 자른다.
+  const aliveFrom = new Date(
+    now.getTime() - RETENTION_ALIVE_WINDOW_DAYS * DAY_MS,
+  );
+  const aliveCohort = cohortOf(RETENTION_ALIVE_DAYS);
+  const stillAlive = aliveCohort.filter((p) =>
+    (completedByUser.get(p.userId) ?? []).some(
+      (d) => d >= aliveFrom && d <= now,
+    ),
+  );
+
+  return {
+    d1: at(1),
+    d7: at(7),
+    d30: at(RETENTION_ALIVE_DAYS),
+    aliveAfter30d: ratio(stillAlive.length, aliveCohort.length),
+  };
 }
 
 export interface FunnelStep {

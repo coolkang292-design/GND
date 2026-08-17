@@ -1,5 +1,6 @@
 import { formatRatio } from "@/lib/domain/analytics";
 import type {
+  ActiveCrewMetrics,
   ReferralMetrics,
   ViewingPassMetrics,
 } from "@/lib/domain/analytics-engagement";
@@ -9,9 +10,13 @@ import { Ring } from "./ring";
 export function EngagementPanel({
   pass,
   referral,
+  activeCrew,
+  periodDays,
 }: {
   pass: ViewingPassMetrics;
   referral: ReferralMetrics;
+  activeCrew: ActiveCrewMetrics;
+  periodDays: number;
 }) {
   return (
     <section className="grid equal">
@@ -73,6 +78,53 @@ export function EngagementPanel({
       <article className="panel">
         <div className="panel-title">
           <div>
+            <p className="kicker">ACTIVE CREW</p>
+            <h2>크루가 작동하나</h2>
+          </div>
+          <span className="muted">최근 {periodDays}일</span>
+        </div>
+
+        <div className="rings">
+          <Ring label="양쪽 다 운동" r={activeCrew.bothActiveRate} />
+        </div>
+
+        <div className="summary">
+          <div>
+            <small>크루 쌍</small>
+            <b>{activeCrew.pairs}</b>
+          </div>
+          <div>
+            <small>양쪽 다</small>
+            <b className={activeCrew.bothActive > 0 ? "gold" : undefined}>
+              {activeCrew.bothActive}
+            </b>
+          </div>
+          <div>
+            <small>한쪽만</small>
+            <b>{activeCrew.oneSideOnly}</b>
+          </div>
+          <div>
+            <small>아무도 안</small>
+            <b>{activeCrew.neitherActive}</b>
+          </div>
+        </div>
+
+        <div className="insight" style={{ marginTop: 14 }}>
+          <b>
+            크루 연결 하나를 쌍으로 놓고, 기간 안에 양쪽 모두 운동을 끝냈는지
+            봅니다.
+          </b>{" "}
+          양쪽이 다 움직인 쌍에 속한 사람은 {activeCrew.usersInActivePair}명입니다.
+          <br />
+          {/* ⚠️ 이 단서를 지우지 마라 — "함께 운동"으로 읽히는 순간 없는 계측이 된다 */}
+          ⚠️ <b>&ldquo;함께&rdquo; 운동했다는 뜻은 아닙니다.</b> 같은 날 같은
+          자리에서 했는지는 앱이 기록하지 않습니다.
+        </div>
+
+        {/* 확산은 같은 패널 안에 둔다 — `.grid.equal`이 2칸이라 패널을 셋으로
+            나누면 셋째가 반쪽만 차지하고 오른쪽이 빈다. 주제도 같은 크루다. */}
+        <div className="panel-title" style={{ marginTop: 26 }}>
+          <div>
             <p className="kicker">REFERRAL</p>
             <h2>크루 확산</h2>
           </div>
@@ -98,19 +150,26 @@ export function EngagementPanel({
           </div>
         </div>
 
-        {/* ⚠️ 이 문구를 지우지 마라. 사라지면 화면이 없는 계측을 있다고 말하게 된다 */}
+        {/* ⚠️ 이 문구를 지우지 마라. 사라지면 화면이 없는 정밀도를 있다고 말하게 된다.
+            2026-08-17: 0079로 출처가 기록되기 시작해 옛 문구("측정할 수 없습니다")를
+            갈아 끼웠다 — 바로 아래 INVITE ORIGIN 패널과 정반대 말을 하고 있었다. */}
         <div className="insight" style={{ marginTop: 14 }}>
-          <b>초대 출처가 기록되지 않아 바이럴 계수는 측정할 수 없습니다.</b>
+          <b>
+            초대 출처는 아래 <span style={{ whiteSpace: "nowrap" }}>“누가 어떻게 불렀나”</span>
+            에서 봅니다.
+          </b>
           <br />
-          검색으로 맺은 크루, 초대 링크를 타고 온 크루, 챌린지 자동 연결이{" "}
-          <b>crew_links에 같은 모양으로</b> 저장됩니다. `profiles.invite_code`는
-          발급만 기록하고 그 코드로 누가 왔는지는 남기지 않습니다. 측정하려면
-          출처 컬럼과 RPC 3곳(크루 요청·친구 초대·챌린지 초대 수락)의 기록이
-          필요합니다.
+          여기 네 숫자는 <b>출처와 무관한 총량</b>입니다 — 어떻게 맺어졌든 연결이
+          몇 개인지, 몇 명이 크루를 가졌는지입니다.
+          <br />
+          ⚠️ 아직 <b>바이럴 계수는 내지 않습니다.</b> 0079(2026-08-17) 이전 연결은
+          출처를 되살릴 수 없는 것이 남아 있어, 모수가 반쪽인 채로 계수를 만들면
+          없는 정밀도를 있다고 말하게 됩니다.
         </div>
 
         <MetricHelp
           keys={[
+            "active-crew",
             "crew-links",
             "crew-coverage",
             "avg-crew",
