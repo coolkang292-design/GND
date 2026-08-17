@@ -78,6 +78,7 @@ export function ChallengeSetupSheet({
   defaults,
   prevGoals,
   periodDaysFixed,
+  minStartDate,
   busy,
   onSubmit,
   onClose,
@@ -86,6 +87,22 @@ export function ChallengeSetupSheet({
   defaults: SetupSubmit;
   prevGoals: GoalDraft[] | null;
   periodDaysFixed?: number;
+  /**
+   * 고를 수 있는 가장 이른 시작일(`earliestStartDate`) — 보통 **내일**.
+   *
+   * ⚠️⚠️ 왜 오늘을 막나: `autostart_due_challenges`가 `start_date <= 오늘`인
+   * `setup` 방을 전부 `active`로 올리고, 시작한 뒤에는 초대 RPC가 전부
+   * `invalid_status`로 막힌다. 그 RPC는 **챌린지 탭이 열릴 때마다** 도니까,
+   * 오늘로 만들면 화면을 한 번 더 보는 것만으로 **초대 창이 닫힌다.**
+   * 참가자 1명짜리 챌린지 14개와 2026-07-31 하루 7번의 생성·취소가 그 결과다.
+   *
+   * ⚠️ "오늘 시작"을 막는 게 아니다. 목표를 세우고 `지금 바로 시작하기`를 누르면
+   * 날짜와 무관하게 오늘 시작한다 — 여기서 막는 건 **초대할 수 없는 방이 조용히
+   * 만들어지는 것**뿐이다.
+   *
+   * 안 주면 아무것도 막지 않는다(목표 수정 시트는 날짜를 안 쓴다).
+   */
+  minStartDate?: string;
   busy: boolean;
   onSubmit: (value: SetupSubmit) => void;
   onClose: () => void;
@@ -194,6 +211,15 @@ export function ChallengeSetupSheet({
         setNotice("기간을 확인하세요 (시작일 ≤ 종료일)");
         return;
       }
+      // ⚠️ `min` 속성만으로는 못 막는다 — 날짜 칸은 손으로 칠 수 있다.
+      //    문구에 **이유**를 적는다. "안 됩니다"만 있으면 사용자는 왜 자기 날짜가
+      //    거부됐는지 모른 채 오늘을 다시 고른다.
+      if (minStartDate && startDate < minStartDate) {
+        setNotice(
+          `시작일은 ${minStartDate}부터예요 — 시작하면 초대가 닫혀서, 친구를 부를 하루가 필요해요`,
+        );
+        return;
+      }
     }
     const types = rows.map((r) => r.type);
     if (new Set(types).size !== types.length) {
@@ -257,9 +283,12 @@ export function ChallengeSetupSheet({
               <div className="mt-2 flex gap-2">
                 <div className="flex-1">
                   <label className="text-[12px] font-bold text-muted">시작일</label>
+                  {/* ⚠️ `min`은 시작일에만 건다. 종료일에 걸면 "시작일보다 뒤"라는
+                      진짜 규칙과 겹쳐 엉뚱한 날짜를 못 고르게 된다. */}
                   <input
                     type="date"
                     aria-label="시작일"
+                    min={minStartDate}
                     value={startDate}
                     onChange={(e) => changePeriod({ startDate: e.target.value })}
                     className="mt-1 h-11 w-full rounded-card-sm border border-line bg-surface px-3 text-sm"
@@ -413,12 +442,22 @@ export function ChallengeSetupSheet({
             </p>
           </section>
 
-          {notice && (
-            <p className="mt-2 text-center text-[12.5px] font-bold text-warn">
-              {notice}
-            </p>
-          )}
         </div>
+
+        {/* ⚠️⚠️ **경고문은 스크롤 영역 밖, 버튼 바로 위다** (2026-08-17).
+            옛 자리는 위 `overflow-y-auto` 안이었다. 저장 버튼은 시트 바닥에
+            고정(`shrink-0`)이라, 목표 카드가 길어지면 경고만 접힘선 밖으로 밀린다 —
+            **버튼을 눌렀는데 아무 일도 안 일어난 것처럼 보인다.** 시작일 하한을
+            넣으면서 개발 서버 화면에서 잡았고, 이름·기간·중복 지표 경고도 전부
+            같은 자리에 있었다. `setup-sheet.test.tsx`가 부모 관계로 고정한다. */}
+        {notice && (
+          <p
+            role="alert"
+            className="mt-2 shrink-0 text-center text-[12.5px] font-bold text-warn"
+          >
+            {notice}
+          </p>
+        )}
 
         <button
           onClick={submit}

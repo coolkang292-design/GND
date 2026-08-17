@@ -390,3 +390,124 @@ describe("ChallengeSetupSheet — 없어진 것들 (제거 검증)", () => {
     expect(text).not.toContain("KPI");
   });
 });
+
+/**
+ * 시작일 하한 (2026-08-17).
+ *
+ * `autostart_due_challenges`가 `start_date <= 오늘`인 `setup` 방을 전부 시작시키고,
+ * 시작한 뒤에는 초대 RPC가 전부 `invalid_status`로 막힌다. **오늘 시작하는 방은
+ * 초대 창이 0이다** — 참가자 1명짜리 챌린지 14개가 그렇게 만들어졌다.
+ */
+describe("ChallengeSetupSheet — 시작일 하한", () => {
+  const base = {
+    name: "하한 검증",
+    startDate: "2026-08-18",
+    endDate: "2026-09-14",
+    goals: [{ type: "weight_reps", target: 300 }] as GoalDraft[],
+    plannedDays: 3,
+  };
+
+  function renderSheet(over: {
+    minStartDate?: string;
+    startDate?: string;
+    onSubmit?: () => void;
+  } = {}) {
+    const onSubmit = over.onSubmit ?? vi.fn();
+    render(
+      <ChallengeSetupSheet
+        mode="create"
+        defaults={{ ...base, startDate: over.startDate ?? base.startDate }}
+        prevGoals={null}
+        minStartDate={over.minStartDate ?? "2026-08-18"}
+        busy={false}
+        onSubmit={onSubmit}
+        onClose={vi.fn()}
+      />,
+    );
+    return onSubmit;
+  }
+
+  it("시작일 칸이 오늘 이전을 못 고르게 막는다", () => {
+    renderSheet();
+    expect(screen.getByLabelText("시작일").getAttribute("min")).toBe("2026-08-18");
+  });
+
+  it("종료일에는 하한을 걸지 않는다 — 시작일보다 뒤이기만 하면 된다", () => {
+    renderSheet();
+    expect(screen.getByLabelText("종료일").getAttribute("min")).toBeNull();
+  });
+
+  it("그래도 이른 날짜가 들어오면 저장을 막고 **이유**를 적는다", () => {
+    // 날짜 입력은 손으로 칠 수 있어서 min만으로는 못 막는다.
+    const onSubmit = renderSheet({ startDate: "2026-08-17" });
+    fireEvent.click(screen.getByRole("button", { name: /챌린지 만들기 \(목표/ }));
+    expect(onSubmit).not.toHaveBeenCalled();
+    // ⚠️ "안 됩니다"로 끝내지 마라 — 왜 안 되는지가 있어야 사용자가 고칠 수 있다.
+    expect(document.body.textContent).toContain("초대");
+  });
+
+  it("하한 이후면 통과한다", () => {
+    const onSubmit = renderSheet({ startDate: "2026-08-18" });
+    fireEvent.click(screen.getByRole("button", { name: /챌린지 만들기 \(목표/ }));
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it("`minStartDate`를 안 주면 아무것도 막지 않는다 — 목표 수정 시트가 그렇다", () => {
+    const onSubmit = vi.fn();
+    render(
+      <ChallengeSetupSheet
+        mode="create"
+        defaults={{ ...base, startDate: "2020-01-01" }}
+        prevGoals={null}
+        busy={false}
+        onSubmit={onSubmit}
+        onClose={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /챌린지 만들기 \(목표/ }));
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * 경고문의 자리 (2026-08-17 개발 서버 실측으로 잡음).
+ *
+ * 옛 자리는 **스크롤 영역 안**이었다. 저장 버튼은 시트 바닥에 고정돼 있어서,
+ * 목표 카드가 길어지면 경고가 접힘선 밖으로 밀려난다 — 사용자는 버튼을 눌렀는데
+ * **아무 일도 안 일어난 것처럼** 보고, 왜 저장이 안 되는지 알 수 없다.
+ * 시작일 하한을 넣으면서 화면에서 처음 보였고, 이름·기간·중복 지표 경고도
+ * 전부 같은 자리에 있었다.
+ */
+describe("ChallengeSetupSheet — 경고문은 버튼 옆에 붙어 있다", () => {
+  function submitEmpty() {
+    render(
+      <ChallengeSetupSheet
+        mode="create"
+        defaults={{
+          name: "",
+          startDate: "2026-08-18",
+          endDate: "2026-09-14",
+          goals: [{ type: "weight_reps", target: 300 }],
+          plannedDays: 3,
+        }}
+        prevGoals={null}
+        busy={false}
+        onSubmit={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /챌린지 만들기 \(목표/ }));
+    return screen.getByText("챌린지 이름을 입력하세요");
+  }
+
+  it("경고가 스크롤 영역 **밖에** 있다 — 안에 있으면 밀려나서 안 보인다", () => {
+    const notice = submitEmpty();
+    expect(notice.closest(".overflow-y-auto")).toBeNull();
+  });
+
+  it("경고와 저장 버튼이 같은 부모에 있다 — 늘 같이 보인다", () => {
+    const notice = submitEmpty();
+    const button = screen.getByRole("button", { name: /챌린지 만들기 \(목표/ });
+    expect(notice.parentElement).toBe(button.parentElement);
+  });
+});
