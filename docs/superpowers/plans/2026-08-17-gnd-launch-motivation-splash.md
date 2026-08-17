@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 새 GND 실행 세션마다 블랙·골드 배틀로프 대표 이미지와 “파도를 만들고, 한계를 잠재워라.” 문구를 1.5초간 한 번 보여주고, 터치하면 즉시 건너뛰게 한다.
+**Goal:** 새 GND 실행 세션마다 블랙·골드 배틀로프 대표 이미지와 “오늘의 한 번이, 몸을 바꾼다.” 문구를 1.5초간 한 번 보여주고, 터치하면 즉시 건너뛰게 한다.
 
 **Architecture:** 일반 탭 레이아웃에 클라이언트 오버레이 하나를 마운트하고, 실행 세션 중복 방지는 `sessionStorage`와 메모리 폴백을 함께 쓰는 작은 도메인 게이트가 맡는다. 이미지·타이머·오류·접근성 상태는 `LaunchMotivationSplash` 내부에만 두며 DB, 인증, 서비스 워커에는 손대지 않는다.
 
@@ -26,7 +26,7 @@
 
 | 파일 | 책임 |
 |---|---|
-| `public/splash/gnd-launch-motivation.webp` | 글자 없는 9:16 블랙·골드 배틀로프 대표 이미지 |
+| `public/splash/gnd-launch-motivation.png` | GND와 승인 문구가 포함된 9:16 블랙·골드 배틀로프 완성 이미지 |
 | `src/lib/domain/launch-splash.ts` | 세션 키와 저장소/메모리 기반 1회 노출 게이트 |
 | `src/lib/domain/launch-splash.test.ts` | 저장 성공·기존 키·저장소 오류·메모리 폴백 단위 테스트 |
 | `src/components/launch-motivation-splash.tsx` | 이미지 준비, 문구, 타이머, 터치 종료, 오류·접근성 UI |
@@ -42,7 +42,7 @@
 **Files:**
 - No app file changes before approval
 
-- [ ] **Step 1: ImageGen 스킬로 글자 없는 시안을 생성한다**
+- [x] **Step 1: ImageGen 스킬로 시안을 생성한다**
 
 실행 시 `imagegen` 스킬을 먼저 읽고 다음 프롬프트를 사용한다. 이 단계의 결과는
 대화에 시안으로만 표시하며 아직 `public/`에 넣지 않는다.
@@ -51,7 +51,7 @@
 Create an original vertical 9:16 cinematic fitness campaign photograph for a Korean workout app called GND. Nighttime outdoor training immediately after heavy rain. A visibly adult athletic woman and adult athletic man stand side by side, each powerfully whipping battle ropes toward the foreground. Wet black asphalt reflects restrained warm gold rim lighting. Cold rain droplets remain in the air while visible steam rises naturally from their shoulders and muscular bodies. Their faces must be obscured by deep backlit shadow so no person is recognizable, while their strong athletic physiques and explosive motion remain clear. Premium black-and-gold color grade, deep charcoal clothing, high contrast, realistic anatomy, realistic rope physics, low camera angle, intense forward energy, generous clean dark space at the top center for a GND wordmark and at the bottom for two lines of Korean copy. No text, no letters, no numbers, no logos, no Netflix marks, no Physical 100 marks, no celebrity likeness, no crowd, no extra limbs, no sexualized posing.
 ```
 
-- [ ] **Step 2: 생성 결과를 직접 검수해 명백한 실패 시안은 먼저 거른다**
+- [x] **Step 2: 생성 결과를 직접 검수해 명백한 실패 시안은 먼저 거른다**
 
 로컬 이미지 보기 도구로 생성 결과를 열고 다음을 확인한다.
 
@@ -63,7 +63,7 @@ Create an original vertical 9:16 cinematic fitness campaign photograph for a Kor
 
 명백한 실패가 있으면 그 실패만 구체적으로 적어 다시 생성하고 다시 검수한다.
 
-- [ ] **Step 3: 실제 시안을 사용자에게 보여주고 명시적 승인을 기다린다**
+- [x] **Step 3: 실제 시안을 사용자에게 보여주고 명시적 승인을 기다린다**
 
 생성된 이미지를 대화에 렌더링하고 다음 한 가지를 요청한다.
 
@@ -73,8 +73,9 @@ Create an original vertical 9:16 cinematic fitness campaign photograph for a Kor
 
 Expected: 사용자가 이미지를 실제로 본 뒤 승인하거나 수정 요청을 남김.
 
-**승인 전 중단:** 승인이 없으면 Task 1로 넘어가지 않는다. 수정 요청이 오면 Step 1의
-프롬프트에 그 요청을 반영해 새 시안을 만들고 Step 2~3을 반복한다.
+**승인 결과:** 사용자가 2026-08-17에 `exec-167364fa-3ec1-477b-a650-c0fd97b8b3f9.png`를
+최종안으로 확정했다. 이 승인본에는 `GND`와 `오늘의 한 번이, 몸을 바꾼다.` 문구까지
+완성되어 있으므로 앱에서 보이는 HTML 문구를 중복해서 얹지 않는다.
 
 ---
 
@@ -231,22 +232,21 @@ Expected: 위 두 파일만 포함된 커밋 1개.
 ### Task 2: 승인된 대표 이미지만 앱 자산으로 확정한다
 
 **Files:**
-- Create: `public/splash/gnd-launch-motivation.webp`
+- Create: `public/splash/gnd-launch-motivation.png`
 
-- [ ] **Step 1: 승인된 시안만 앱의 최종 WebP 자산으로 내보낸다**
+- [ ] **Step 1: 승인된 PNG를 바이트 변경 없이 앱 자산으로 복사한다**
 
-Task 0에서 사용자가 승인한 동일한 시안을
-`public/splash/gnd-launch-motivation.webp`로 저장한다. 승인되지 않은 후보를 새로
-고르거나 장면을 바꾸지 않는다. 생성 도구가 다른 형식을 반환하면 같은 이미지 생성
-도구의 내보내기/편집 기능으로 WebP를 만든다. Python이나 일반 그래픽 스크립트로
-이미지를 다시 그리지 않는다.
+승인 원본
+`C:\Users\SAMSUNG\.codex\generated_images\01a00e30-700a-7db3-8985-3271be4850fd\exec-167364fa-3ec1-477b-a650-c0fd97b8b3f9.png`를
+`public/splash/gnd-launch-motivation.png`로 복사한다. 승인되지 않은 후보를 고르거나
+재생성·재압축·재편집하지 않는다. Next Image가 기기별 전송 크기를 최적화하게 한다.
 
 - [ ] **Step 2: 생성 이미지를 직접 본다**
 
 Run: 로컬 이미지 보기 도구로 아래 파일을 연다.
 
 ```text
-C:\Users\SAMSUNG\workout-app\public\splash\gnd-launch-motivation.webp
+C:\Users\SAMSUNG\workout-app\.worktrees\gnd-launch-splash\public\splash\gnd-launch-motivation.png
 ```
 
 Expected:
@@ -254,27 +254,28 @@ Expected:
 - 성인 남녀가 각각 배틀로프를 잡고 나란히 운동한다.
 - 얼굴은 식별되지 않지만 신체·동작은 선명하다.
 - 젖은 검은 바닥, 수증기, 비말, 골드 윤곽과 반사가 보인다.
-- 상단 중앙과 하단에 실제 글자를 얹을 어두운 여백이 있다.
-- 읽을 수 있는 글자·다른 브랜드 표식·해부학 오류가 없다.
+- 상단 `GND`와 하단 `오늘의 한 번이, 몸을 바꾼다.`가 승인본 그대로 보인다.
+- 승인 문구 외 다른 브랜드 표식·의도하지 않은 글자·해부학 오류가 없다.
 
 하나라도 어긋나면 같은 프롬프트에서 실패 요소만 명시해 다시 생성하고 다시 본다.
 
-- [ ] **Step 3: 시작 자산의 크기를 확인한다**
+- [ ] **Step 3: 원본과 앱 자산의 무결성을 확인한다**
 
 Run:
 
 ```powershell
-$asset = Get-Item 'public\splash\gnd-launch-motivation.webp'
-$asset.Length
+$source = Get-FileHash 'C:\Users\SAMSUNG\.codex\generated_images\01a00e30-700a-7db3-8985-3271be4850fd\exec-167364fa-3ec1-477b-a650-c0fd97b8b3f9.png' -Algorithm SHA256
+$asset = Get-FileHash 'public\splash\gnd-launch-motivation.png' -Algorithm SHA256
+$source.Hash
+$asset.Hash
 ```
 
-Expected: `512000` 이하. 그보다 크면 ImageGen의 내보내기/편집 기능으로 화질을
-유지한 채 WebP 용량을 줄이고 다시 확인한다.
+Expected: 두 SHA256 값이 정확히 같다.
 
 - [ ] **Step 4: 검수한 자산만 커밋한다**
 
 ```powershell
-git add -- public/splash/gnd-launch-motivation.webp
+git add -- public/splash/gnd-launch-motivation.png
 git diff --cached --check
 git commit -m "feat: GND 실행 동기부여 이미지 추가"
 ```
@@ -339,16 +340,19 @@ afterEach(() => {
 });
 
 describe("LaunchMotivationSplash", () => {
-  it("새 실행이면 접근 가능한 전체 화면과 정확한 브랜드 문구를 준비한다", () => {
+  it("새 실행이면 승인 이미지와 화면 밖 브랜드 문구를 준비한다", () => {
     render(<LaunchMotivationSplash />);
     settleSessionDecision();
 
     expect(
       screen.getByRole("button", { name: "시작 화면 건너뛰기" }),
     ).toBeTruthy();
-    expect(screen.getByText("GND")).toBeTruthy();
-    expect(screen.getByText("파도를 만들고,")).toBeTruthy();
-    expect(screen.getByText("한계를 잠재워라.")).toBeTruthy();
+    expect(screen.getByTestId("launch-splash-image").getAttribute("src")).toBe(
+      "/splash/gnd-launch-motivation.png",
+    );
+    expect(
+      screen.getByText("GND. 오늘의 한 번이, 몸을 바꾼다.").className,
+    ).toContain("sr-only");
   });
 
   it("이미 본 실행 세션이면 덮개를 즉시 없앤다", () => {
@@ -403,7 +407,8 @@ describe("LaunchMotivationSplash", () => {
     fireEvent.error(screen.getByTestId("launch-splash-image"));
 
     expect(screen.getByText("GND")).toBeTruthy();
-    expect(screen.getByText("한계를 잠재워라.")).toBeTruthy();
+    expect(screen.getByText("오늘의 한 번이,")).toBeTruthy();
+    expect(screen.getByText("몸을 바꾼다.")).toBeTruthy();
     expect(screen.getByTestId("launch-splash-copy").className).toContain(
       "opacity-100",
     );
@@ -565,12 +570,12 @@ export function LaunchMotivationSplash() {
   if (phase === "hidden") return null;
 
   const imageVisible = phase === "showing" || phase === "fading";
-  const copyVisible = imageVisible || phase === "fallback";
 
   return (
     <button
       type="button"
       aria-label="시작 화면 건너뛰기"
+      aria-describedby="launch-splash-description"
       onClick={dismiss}
       className={`absolute inset-0 z-[100] overflow-hidden bg-bg p-0 text-left transition-opacity duration-200 motion-reduce:transition-none ${
         phase === "fading" ? "opacity-0" : "opacity-100"
@@ -579,7 +584,7 @@ export function LaunchMotivationSplash() {
       {phase !== "checking" && (
         <Image
           data-testid="launch-splash-image"
-          src="/splash/gnd-launch-motivation.webp"
+          src="/splash/gnd-launch-motivation.png"
           alt=""
           fill
           priority
@@ -592,50 +597,24 @@ export function LaunchMotivationSplash() {
         />
       )}
 
-      <span
-        aria-hidden
-        className="absolute inset-0 z-10 bg-gradient-to-b from-black/50 via-transparent to-black/95"
-      />
+      <span id="launch-splash-description" className="sr-only">
+        GND. 오늘의 한 번이, 몸을 바꾼다.
+      </span>
 
-      <span
-        data-testid="launch-splash-copy"
-        className={`absolute inset-0 z-20 transition-opacity duration-200 ${
-          copyVisible ? "opacity-100" : "opacity-0"
-        }`}
-      >
+      {phase === "fallback" && (
         <span
-          className="absolute inset-x-0 top-0 block px-6 text-center"
-          style={{ paddingTop: "max(2rem, env(safe-area-inset-top))" }}
+          data-testid="launch-splash-copy"
+          className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-5 opacity-100"
         >
-          <span
-            className="block text-[clamp(2.1rem,10vw,2.8rem)] font-black leading-none text-accent"
-            style={{ letterSpacing: "0.28em", paddingLeft: "0.28em" }}
-          >
+          <span className="text-4xl font-black tracking-[0.28em] text-accent">
             GND
           </span>
-        </span>
-
-        <span
-          className="absolute inset-x-0 bottom-0 block px-6"
-          style={{
-            paddingBottom:
-              "max(2.5rem, calc(env(safe-area-inset-bottom) + 1.5rem))",
-          }}
-        >
-          <span
-            className="relative block origin-left text-[clamp(1.9rem,8vw,2.5rem)] font-black leading-[0.98] tracking-[-0.055em] text-text"
-            style={{ transform: "skewX(-8deg) scaleX(0.9)" }}
-          >
-            <span aria-hidden className="absolute -left-5 top-1 block">
-              <span className="mb-1.5 block h-1 w-4 bg-accent" />
-              <span className="mb-1.5 ml-2 block h-1 w-3 bg-accent/70" />
-              <span className="ml-1 block h-1 w-2 bg-accent/45" />
-            </span>
-            <span className="block">파도를 만들고,</span>
-            <span className="mt-1 block text-accent">한계를 잠재워라.</span>
+          <span className="text-center text-3xl font-black leading-tight text-text">
+            <span className="block">오늘의 한 번이,</span>
+            <span className="block text-accent">몸을 바꾼다.</span>
           </span>
         </span>
-      </span>
+      )}
     </button>
   );
 }
@@ -813,8 +792,8 @@ Expected: `http://localhost:3000`에서 Next.js 개발 서버가 준비됨. 기�
 | 이미지 | 남녀 배틀로프, 젖은 바닥, 수증기, 얼굴 그림자 |
 | 색 | 블랙 중심, 골드 윤곽·반사 |
 | 브랜드 | 상단 중앙 큰 골드 `GND` |
-| 문구 | `파도를 만들고,` / `한계를 잠재워라.` 두 줄 |
-| 폰트 | 앞으로 기울어진 굵은 글자 + 왼쪽 속도선 |
+| 문구 | `오늘의 한 번이,` / `몸을 바꾼다.` 두 줄 |
+| 폰트 | 승인 이미지 안의 앞으로 기울어진 굵은 글자 |
 | 자동 종료 | 이미지가 보인 뒤 약 1.5초 후 홈 화면 |
 | 개수 | 인물 2명, GND 1개, 메인 문구 1세트 |
 
@@ -867,13 +846,13 @@ Expected: 3000 포트의 이 worktree 개발 서버가 종료됨. build 전에 �
 Run:
 
 ```powershell
-(Get-Item 'public\splash\gnd-launch-motivation.webp').Length
+Get-FileHash 'public\splash\gnd-launch-motivation.png' -Algorithm SHA256
 git diff --check
 git status --short
 ```
 
-Expected: 이미지 `512000`바이트 이하, whitespace 오류 없음, 계획에 명시된 파일과
-`PROGRESS.md` 외 예상하지 않은 변경 없음.
+Expected: Task 2에서 확인한 승인 원본 SHA256과 같고, whitespace 오류가 없으며,
+계획에 명시된 파일과 `PROGRESS.md` 외 예상하지 않은 변경이 없음.
 
 - [ ] **Step 2: 프로젝트 전체 검증을 한 번 실행한다**
 
@@ -896,7 +875,7 @@ Expected: 각 명령 exit code 0, 전체 테스트 `0 failed`, Next.js build 성
 문서 끝에 날짜가 포함된 `GND 실행 동기부여 스플래시` 섹션을 추가하고 아래 사실을
 실제 결과 그대로 기록한다.
 
-- 대표 이미지의 장면, 카피, 전진 기울기 폰트
+- 대표 이미지의 장면과 승인 카피 `오늘의 한 번이, 몸을 바꾼다.`
 - `sessionStorage` 기준 새 실행 세션 1회, 백그라운드 복귀 미표시
 - 생성·수정 파일 목록
 - 개발 서버에서 직접 조작한 흐름과 결과
