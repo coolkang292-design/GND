@@ -2,7 +2,9 @@ import { requireAdmin } from "@/lib/admin/auth";
 import {
   fetchActiveChallenges,
   fetchAdminDataset,
+  fetchEngagementDataset,
   fetchGrowthDataset,
+  fetchProgramDataset,
 } from "@/lib/admin/queries";
 import {
   activationFunnel,
@@ -15,12 +17,23 @@ import {
   reworkoutRetention,
   type PeriodDays,
 } from "@/lib/domain/analytics";
+import {
+  briefingSlotBreakdown,
+  notificationConversion,
+  referralMetrics,
+  viewingPassMetrics,
+  workoutDayKeysByUser,
+} from "@/lib/domain/analytics-engagement";
+import { buildProgramMetrics } from "@/lib/domain/analytics-program";
 import { DEFAULT_TIMEZONE } from "@/lib/domain/time";
 import { ActivityChart } from "./_components/activity-chart";
 import { ChallengePanel } from "./_components/challenge-panel";
+import { EngagementPanel } from "./_components/engagement-panel";
 import { FunnelPanel } from "./_components/funnel-panel";
 import { GrowthPanel } from "./_components/growth-panel";
 import { KpiCards } from "./_components/kpi-cards";
+import { NotificationPanel } from "./_components/notification-panel";
+import { ProgramPanel } from "./_components/program-panel";
 import { RetentionPanel } from "./_components/retention-panel";
 import { UserTable, type UserTableRow } from "./_components/user-table";
 
@@ -44,9 +57,12 @@ export default async function AdminPage({
   const period = buildPeriod(days, now);
 
   const data = await fetchAdminDataset();
-  const [challenges, growth] = await Promise.all([
+  // 순차 await를 붙이면 페이지가 그만큼 느려진다 — 서로 의존이 없으니 같이 던진다
+  const [challenges, growth, program, engagement] = await Promise.all([
     fetchActiveChallenges(now),
     fetchGrowthDataset(data.totalXpByUser),
+    fetchProgramDataset(),
+    fetchEngagementDataset(),
   ]);
 
   const kpi = buildKpi(data.sessions, data.profiles, period, now);
@@ -55,6 +71,41 @@ export default async function AdminPage({
   const retention = reworkoutRetention(data.profiles, data.sessions, now);
   const funnel = activationFunnel(data.authUsers, data.profiles, data.sessions);
   const crew = crewParticipation(data.profiles, data.crewLinkUserIds);
+
+  // 등록률의 모수는 **위 KPI가 이미 센 활성 사용자**를 그대로 쓴다. 다시 세면
+  // 화면 위쪽 숫자와 아래쪽 모수가 조용히 갈린다.
+  const programMetrics = buildProgramMetrics(
+    program.enrollments,
+    program.programSessions,
+    kpi.activeUsers,
+    period,
+  );
+  // 새 질의를 하지 않는다 — 완료 세션은 이미 data.sessions에 다 있다
+  const workoutDays = workoutDayKeysByUser(data.sessions, DEFAULT_TIMEZONE);
+  const conversions = notificationConversion(
+    engagement.notifications,
+    workoutDays,
+    period,
+    DEFAULT_TIMEZONE,
+  );
+  const slots = briefingSlotBreakdown(
+    engagement.notifications,
+    workoutDays,
+    period,
+    DEFAULT_TIMEZONE,
+  );
+  const pass = viewingPassMetrics(
+    data.sessions,
+    engagement.recordViewCount,
+    engagement.challengeUnlockedCount,
+    engagement.challengePickCount,
+    DEFAULT_TIMEZONE,
+  );
+  const referral = referralMetrics(
+    data.crewLinkPairs,
+    data.profiles.length,
+    data.inviteCodeCount,
+  );
 
   const userRows = buildUserRows(
     data.profiles,
@@ -113,6 +164,13 @@ export default async function AdminPage({
           </a>
           <a href="#levels">
             <i>✦</i>성장·XP
+          </a>
+          {/* i는 글리프 문자다 — 이미지·이모지를 넣으면 폰트가 달라 정렬이 깨진다 */}
+          <a href="#programs">
+            <i>▤</i>프로그램
+          </a>
+          <a href="#notify">
+            <i>◈</i>알림·참여
           </a>
         </nav>
         <div className="sidebar-foot">GND ADMIN · 운영자 전용</div>
@@ -173,9 +231,15 @@ export default async function AdminPage({
           <ChallengePanel items={challenges} />
         </section>
 
+        <ProgramPanel metrics={programMetrics} />
+
+        <NotificationPanel conversions={conversions} slots={slots} />
+
         <UserTable rows={tableRows} periodDays={days} />
 
         <GrowthPanel data={growth} />
+
+        <EngagementPanel pass={pass} referral={referral} />
 
         <footer>
           <span>

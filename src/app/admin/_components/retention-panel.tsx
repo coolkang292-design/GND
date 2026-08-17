@@ -1,25 +1,5 @@
-import {
-  formatRatio,
-  MIN_RATIO_SAMPLE,
-  type Ratio,
-  type Retention,
-} from "@/lib/domain/analytics";
-
-function Ring({ label, r }: { label: string; r: Ratio }) {
-  // 모수가 작으면 링을 채우지 않는다 — 1/1을 꽉 찬 100% 링으로 그리면
-  // 숫자는 정직해도 그림이 거짓 인상을 준다.
-  const showRing = r.denominator >= MIN_RATIO_SAMPLE;
-  const deg = showRing ? (r.numerator / r.denominator) * 360 : 0;
-
-  return (
-    <div className="ring" style={{ ["--p" as string]: `${deg}deg` }}>
-      <div>
-        <b style={{ fontSize: 12 }}>{formatRatio(r)}</b>
-        <small>{label}</small>
-      </div>
-    </div>
-  );
-}
+import type { Retention } from "@/lib/domain/analytics";
+import { Ring } from "./ring";
 
 export function RetentionPanel({ retention }: { retention: Retention }) {
   return (

@@ -9,6 +9,17 @@ import type {
   SessionRow,
   SessionStatus,
 } from "@/lib/domain/analytics";
+import {
+  CHALLENGE_PEEK_UNLOCKED_TYPE,
+  ENGAGEMENT_NOTIFICATION_TYPES,
+  type CrewLinkPair,
+  type EngagementNotificationRow,
+} from "@/lib/domain/analytics-engagement";
+import type {
+  ProgramEnrollmentRow,
+  ProgramEnrollmentStatus,
+  ProgramSessionRow,
+} from "@/lib/domain/analytics-program";
 
 export interface AdminDataset {
   authUsers: ProfileRow[];
@@ -20,6 +31,13 @@ export interface AdminDataset {
    * 크루 지표는 챌린지 참가자 수와 별개로 계산한다.
    */
   crewLinkUserIds: string[];
+  /** 확산 패널이 쓰는 연결 쌍 원본. crewLinkUserIds는 여기서 파생된다 */
+  crewLinkPairs: CrewLinkPair[];
+  /**
+   * 초대 코드를 가진 프로필 수. **profiles를 두 번 읽지 않으려고 여기서 낸다** —
+   * 확산 패널만을 위해 같은 테이블을 다시 조회할 이유가 없다.
+   */
+  inviteCodeCount: number;
 }
 
 /**
@@ -40,7 +58,8 @@ export async function fetchAdminDataset(): Promise<AdminDataset> {
         .from("workout_sessions")
         .select("user_id,status,started_at,completed_at")
         .is("deleted_at", null),
-      db.from("profiles").select("id,nickname,avatar_url,created_at"),
+      // invite_code는 화면에 내보내지 않고 **발급 여부만** 센다(아래 참조)
+      db.from("profiles").select("id,nickname,avatar_url,created_at,invite_code"),
       db.from("user_progress").select("user_id,total_xp"),
       // 0039부터 "크루" = crew_links(상호 수락).
       db.from("crew_links").select("user_a,user_b"),
@@ -88,6 +107,136 @@ export async function fetchAdminDataset(): Promise<AdminDataset> {
       r.user_a as string,
       r.user_b as string,
     ]),
+    crewLinkPairs: (linksRes.data ?? []).map((r) => ({
+      userA: r.user_a as string,
+      userB: r.user_b as string,
+    })),
+    // 코드 문자열은 들고 가지 않는다 — 게이트가 유일한 방어선이라 페이로드에
+    // 남의 초대 코드를 실을 이유가 없다. 필요한 건 "몇 명이 가졌나"뿐이다.
+    inviteCodeCount: (profilesRes.data ?? []).filter((p) => p.invite_code)
+      .length,
+  };
+}
+
+export interface ProgramDataset {
+  enrollments: ProgramEnrollmentRow[];
+  programSessions: ProgramSessionRow[];
+}
+
+/**
+ * 공식 6주 프로그램 등록과 그 회차. **requireAdmin() 통과 뒤에만 호출할 것.**
+ *
+ * ⚠️ **기간으로 자르지 않는다.** 6주짜리를 7일 창으로 보면 완주가 0일 수밖에 없다.
+ * 기간 처리는 `buildProgramMetrics`가 신규 등록 하나에만 적용한다.
+ *
+ * ⚠️ 컬럼명 주의: 제목은 `title`이 아니라 **`title_snapshot`**이다(등록 당시 이름을
+ * 남긴다). 회차 쪽은 0067에서 붙은 `program_enrollment_id`다.
+ */
+export async function fetchProgramDataset(): Promise<ProgramDataset> {
+  const db = getSupabaseAdminClient();
+
+  const [enrollRes, sessionRes] = await Promise.all([
+    db
+      .from("program_enrollments")
+      .select(
+        "id,user_id,program_key,title_snapshot,status,created_at,completed_at,cancelled_at",
+      ),
+    db
+      .from("workout_sessions")
+      .select("program_enrollment_id,completed_at")
+      .not("program_enrollment_id", "is", null)
+      .is("deleted_at", null),
+  ]);
+
+  // 조용히 빈 배열로 떨어뜨리지 않는다 — 조회가 깨진 화면은 "0건"이라고 거짓말한다
+  for (const [name, res] of [
+    ["program_enrollments", enrollRes],
+    ["workout_sessions(program)", sessionRes],
+  ] as const) {
+    if (res.error) throw new Error(`${name} 조회 실패: ${res.error.message}`);
+  }
+
+  return {
+    enrollments: (enrollRes.data ?? []).map((r) => ({
+      id: r.id as string,
+      userId: r.user_id as string,
+      programKey: r.program_key as string,
+      title: r.title_snapshot as string,
+      status: r.status as ProgramEnrollmentStatus,
+      createdAt: new Date(r.created_at as string),
+      // 끝난 시각은 완주면 completed_at, 포기면 cancelled_at이다
+      endedAt: r.completed_at
+        ? new Date(r.completed_at as string)
+        : r.cancelled_at
+          ? new Date(r.cancelled_at as string)
+          : null,
+    })),
+    programSessions: (sessionRes.data ?? []).map((r) => ({
+      enrollmentId: r.program_enrollment_id as string,
+      completedAt: r.completed_at ? new Date(r.completed_at as string) : null,
+    })),
+  };
+}
+
+export interface EngagementDataset {
+  notifications: EngagementNotificationRow[];
+  /** 꾸준왕 열람권을 실제로 쓴 횟수 (2026-08-17 실측 **0행**) */
+  recordViewCount: number;
+  /** 챌린지 열람창에서 대상을 고른 횟수 */
+  challengePickCount: number;
+  /** 챌린지 열람창이 열린 횟수 — 위 notifications에서 파생한다 */
+  challengeUnlockedCount: number;
+}
+
+/**
+ * 알림 · 열람권 참여 원본. **requireAdmin() 통과 뒤에만 호출할 것.**
+ *
+ * 알림은 **유형을 서버에서 좁힌다**(`ENGAGEMENT_NOTIFICATION_TYPES`). 찌르기·응원까지
+ * 든 537행(2026-08-17 실측) 전부를 끌어올 이유가 없다.
+ *
+ * 열람권 쪽은 개수만 있으면 되므로 `head:true` 카운트 질의를 쓴다 — 행을 받아서
+ * 세면 record_views가 늘어날수록 페이로드만 커진다.
+ */
+export async function fetchEngagementDataset(): Promise<EngagementDataset> {
+  const db = getSupabaseAdminClient();
+
+  const [notifyRes, viewRes, pickRes] = await Promise.all([
+    db
+      .from("notifications")
+      .select("user_id,type,created_at,read_at")
+      .in("type", [...ENGAGEMENT_NOTIFICATION_TYPES]),
+    db.from("record_views").select("id", { count: "exact", head: true }),
+    db
+      .from("challenge_peek_picks")
+      .select("viewer_id", { count: "exact", head: true }),
+  ]);
+
+  for (const [name, res] of [
+    ["notifications", notifyRes],
+    ["record_views", viewRes],
+    ["challenge_peek_picks", pickRes],
+  ] as const) {
+    if (res.error) throw new Error(`${name} 조회 실패: ${res.error.message}`);
+  }
+
+  const notifications: EngagementNotificationRow[] = (
+    notifyRes.data ?? []
+  ).map((r) => ({
+    userId: r.user_id as string,
+    type: r.type as string,
+    createdAt: new Date(r.created_at as string),
+    readAt: r.read_at ? new Date(r.read_at as string) : null,
+  }));
+
+  return {
+    notifications,
+    recordViewCount: viewRes.count ?? 0,
+    challengePickCount: pickRes.count ?? 0,
+    // 이미 받아 온 행에서 센다. "창이 열렸다"는 곧 이 알림이 나갔다는 뜻이라
+    // 연속 5일 판정을 서버에서 다시 재현할 필요가 없다.
+    challengeUnlockedCount: notifications.filter(
+      (n) => n.type === CHALLENGE_PEEK_UNLOCKED_TYPE,
+    ).length,
   };
 }
 
