@@ -33,6 +33,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -40,11 +41,33 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-!.env.example
-
-.vercel
-.env*
 
 # Claude Code 로컬 전용 설정 (공유하는 것은 .claude/settings.json 뿐)
 .claude/settings.local.json
 .claude/launch.json
+
+# 학습 교재 묶음 (생성물 — node scripts/make-study-pack.mjs)
+study-pack/
+
+# ── 저장소에 두지만 git이 추적하지 않는 것 (2026-08-19 정리) ──────────
+# 아래는 전부 **지우지 않는다.** 추적만 안 한다.
+# 추적도 무시도 안 된 상태로 두면 `git status`가 매번 ?? 로 도배돼
+# 진짜 변경이 묻힌다. 그리고 .vercelignore가 없어 Vercel CLI가
+# .gitignore를 대신 쓰므로, 여기 없으면 배포마다 통째로 업로드된다.
+
+# 디자인 원본 (ChatGPT 생성 PNG 약 118MB). 가공 결과만 public/ 에 들어간다.
+/배지이미지/
+/어플 UI 이미지/
+/이미지 꾸미기/
+/7단계 캐릭터/
+/icon-preview.png
+
+# 개발 서버 로그
+/tmp-dev-main.log
+
+# 아바타 에셋 파이프라인 작업 도구 (feature/avatar-coordinate-v2 진행 중)
+scripts/*-temp.py
+
+# 에이전트 로컬 상태
+/.superpowers/
+.claude/skills/
