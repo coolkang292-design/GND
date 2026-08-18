@@ -177,39 +177,48 @@ node scripts/bug-reports.mjs --fix <id> --release <release-id> --send   # 신고
 
 ### 회귀 기준선 — 전부 `0 failed`
 
-| 스크립트 | 기준 |
+**기준선은 이 문서가 아니라 `scripts/regression-baselines.json`이 갖는다.**
+표를 손으로 고치던 시절에 두 번 어긋났다 — 2026-08-01 이전 표(113·11·20·32)는
+단언이 늘어난 뒤로도 안 고쳐져 통과인데 "기준보다 많다"고 헷갈리게 만들었고,
+표에 6종만 있어서 나머지 23종은 기대값이 아예 없었다. 기계가 읽고 기계가 갱신한다.
+
+```bash
+pnpm verify:regression                  # core 6종 — 배포 전 기본 루틴
+pnpm verify:regression --tier readonly  # 계정 안 만드는 5종 — 빠르고 안전
+pnpm verify:regression --list           # 29종 전량 목록과 현재 기준선
+pnpm verify:regression --all            # 전량 ⚠️ 30분+ (익명 가입 대기 포함)
+pnpm verify:regression --only rls-test --record   # 측정값으로 기준선 갱신
+```
+
+**판정 규칙** (러너가 강제한다):
+
+| 결과 | 뜻 |
 |---|---|
-| `rls-test.mjs` | 128 / 0 |
-| `poke-levelup-check.mjs` | 14 / 14 |
-| `challenge-consent-test.mjs` | 22 / 0 |
-| `challenge-room-check.mjs` | 48 / 0 |
-| `challenge-invite-link-check.mjs` | 27 / 0 |
-| `peek-reset-check.mjs` | 8 / 0 (**0065 필요**) |
+| `failed > 0` | 실패. **예외 없다.** |
+| `passed < 기준선` | 실패 — 단언이 사라진 것이므로 회귀다 |
+| `passed > 기준선` | 경고 — 단언이 늘었으니 `--record`로 갱신하라 |
 
-`rls-test.mjs`는 2026-08-02에 루틴(0056) 단언 10건이 늘어 115 → **125**가 됐고,
-2026-08-04에 루틴 종목 교체(덮어쓰기) 단언 3건이 늘어 → **128**이 됐다(실측).
+⚠️ **러너는 종료 코드를 믿지 않는다.** 요약줄의 `passed`/`failed`를 파싱해 기준선과
+대조한다. 단언이 통째로 사라져 "0 failed"가 된 경우는 종료 코드로 안 잡히기 때문이다
+(§테스트가 진짜 테스트인지 확인한다).
 
-`challenge-invite-link-check.mjs`는 2026-08-08에 0061~0063 단언 4건이 늘어
-21 → **25**, 같은 날 0064 단언 2건이 더 늘어 → **27**이 됐다(2026-08-09 실측).
-⚠️ **`🎯 0051 회귀` 단언을 지우지 마라** — "기존 사용자가
-챌린지 링크를 눌러도 방장 크루가 늘지 않는다"가 2026-07-31 사고(D5)의 재발 방지선이다.
+⚠️ `tier: accounts`인 23종은 실행마다 **운영 Supabase에 익명 계정을 만든다.**
+러너가 사이에 90초씩 대기한다(429 회피). 배포 직전이 아니면 `--tier readonly`로 충분하다.
 
-`peek-reset-check.mjs`는 2026-08-09에 생겼다. 챌린지 열람권의 **화면 규칙
-(`viewing-pass.ts`)과 서버 규칙(`notify_challenge_peek_unlock`)이 같은 답을 내는지**
-같은 입력으로 대조한다. 둘이 갈리면 "🎟️ 2시간 시작!" 푸시를 받고 들어갔더니 자물쇠가
-걸린 막다른 길이 된다(0045→0046→0047과 같은 종류). 픽스처 A에 **과거 날짜 세션을
-심었다가 지우므로** `dev-fixture.mjs create` + `challenge`가 먼저 필요하다.
+⚠️ `peek-reset-check`는 `tier: fixture`다 — 먼저
+`node scripts/dev-fixture.mjs create && node scripts/dev-fixture.mjs challenge`.
 
-⚠️ **루틴 단언의 순서를 바꾸지 마라.** 이름 중복(409)은 **슬롯 한도에 걸리기 전에**
-확인해야 한다. 슬롯 트리거가 `before insert`라, 한도에 도달한 상태에서는 유니크
-인덱스에 닿기도 전에 `routine_slot_limit`(400)으로 막혀 **유니크 제약을 전혀
-검증하지 못한다.** 첫 실행에서 실제로 409 대신 400이 와서 드러났다.
-
-기준선은 2026-08-01 실측으로 갱신했다. 이전 표(113·11·20·32)는 단언이 늘어난 뒤로도
-안 고쳐져 있어서, 통과인데도 "기준보다 많다"고 헷갈리게 만들었다. **숫자가 기준보다
-크면 단언이 늘어난 것이니 표를 갱신하라. 판정 기준은 언제나 `0 failed`다.**
+**기준선의 신뢰도는 `source` 필드가 말한다.** `measured`(6종)는 실측이고,
+`derived`(17종)는 `check()` 호출을 정적으로 센 **±1 추정**이다 — 처음 돌릴 때
+`--record`로 확정하면 된다. `no-count`(4종)는 단언 카운터가 없어 종료 코드만 본다
+(`streak-parity-check`·`badge-metrics-check`·`official-program-catalog-check`·`cardio-xp-check`
+— 카운터를 붙이는 것이 남은 일이다).
 
 **실패가 하나라도 있으면 회귀다.** 예전엔 "원래 6건 실패"인 상태라 진짜 고장을 가렸다.
+지금 `observed`로 표시된 2종(`admin-dashboard-check`·`challenge-aggregation-parity`)에
+알려진 실패가 있다 — 원인과 고치는 법은 매니페스트의 `knownFailure` 필드에 적혀 있다.
+
+⚠️ **이건 RPC·DB 계층 검증이다. 화면 확인을 대신하지 않는다** (§개발 환경에서 먼저 확인한다).
 
 ---
 
