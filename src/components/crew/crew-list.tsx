@@ -1,5 +1,6 @@
 "use client";
 
+import { Avatar } from "@/components/avatar";
 import { getLevelProgress } from "@/lib/domain/progression";
 import type { CrewMember, CrewRequest } from "@/lib/domain/crew-link";
 
@@ -34,9 +35,10 @@ export function CrewList({
               className="flex items-center justify-between gap-3 rounded-card border border-line bg-surface px-3.5 py-3"
             >
               <div className="flex min-w-0 items-center gap-2.5">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-line/40 text-lg">
-                  {r.avatarUrl ?? "👤"}
-                </span>
+                <Avatar
+                  src={r.avatarUrl}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-line/40 text-lg"
+                />
                 <span className="truncate text-[14px] font-extrabold">
                   {r.nickname}
                 </span>
@@ -85,9 +87,10 @@ export function CrewList({
                 onClick={() => onSelect(m)}
                 className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
               >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-line/40 text-lg">
-                  {m.avatarUrl ?? "👤"}
-                </span>
+                <Avatar
+                  src={m.avatarUrl}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-line/40 text-lg"
+                />
                 <span className="min-w-0">
                   <span className="block truncate text-[14px] font-extrabold">
                     {m.nickname}

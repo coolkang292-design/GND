@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { UiIcon } from "@/components/ui-icon";
 import { useAuth } from "@/components/auth-provider";
+import { Avatar } from "@/components/avatar";
+import { MemberProfileSheet } from "@/components/crew/member-profile-sheet";
 import {
   ChallengeSetupSheet,
   type SetupSubmit,
@@ -138,6 +140,19 @@ export default function ChallengePage() {
 }
 
 function ChallengeScreen({ userId }: { userId: string }) {
+  /**
+   * 참가자 프로필 시트 (2026-08-19 사용자 요청 — *"프로필 클릭하면 지난 히스토리
+   * 성과 확인"*).
+   *
+   * ⚠️ **시트는 화면당 하나다.** 참가자마다 두면 DOM이 인원 수만큼 늘어난다
+   *    (피드가 같은 이유로 이렇게 한다 — `feed/page.tsx` 주석).
+   * ⚠️ 시상대(`ResultView`)도 이 상태를 쓴다. 거기서 따로 띄우면 시트가 둘이 된다.
+   */
+  const [profileTarget, setProfileTarget] = useState<{
+    id: string;
+    nickname: string;
+    avatar_url: string | null;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [group, setGroup] = useState<Group | null>(null);
   const [loadedMembers, setMembers] = useState<ChallengeParticipantProfile[]>(
@@ -960,15 +975,25 @@ function ChallengeScreen({ userId }: { userId: string }) {
               return (
                 <div key={m.id} className="border-t border-line py-2 first:border-t-0 first:pt-1">
                   <div className="flex items-center gap-2.5">
-                    <span className="grid h-8 w-8 place-items-center rounded-full bg-surface-2 text-base">
-                      {m.avatar_url ?? "👤"}
-                    </span>
-                    <span className="flex-1 text-[13.5px] font-bold">
-                      {m.nickname}
-                      {m.id === userId && (
-                        <span className="ml-1 text-faint">(나)</span>
-                      )}
-                    </span>
+                    {/* ⚠️ 아바타와 닉네임이 **한 버튼**이다. 아바타만 누르게 하면
+                        8px짜리 과녁이 된다 — 피드·홈 친구목록도 같은 폭이다. */}
+                    <button
+                      type="button"
+                      onClick={() => setProfileTarget(m)}
+                      aria-label={`${m.nickname} 프로필 보기`}
+                      className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+                    >
+                      <Avatar
+                        src={m.avatar_url}
+                        className="grid h-8 w-8 flex-none place-items-center overflow-hidden rounded-full bg-surface-2 text-base"
+                      />
+                      <span className="min-w-0 flex-1 truncate text-[13.5px] font-bold">
+                        {m.nickname}
+                        {m.id === userId && (
+                          <span className="ml-1 text-faint">(나)</span>
+                        )}
+                      </span>
+                    </button>
                     <span className="flex flex-none items-center gap-1.5">
                       {count > 0 ? (
                         <span className="rounded-full bg-good-weak px-2.5 py-1 text-[11px] font-bold text-good">
@@ -1228,15 +1253,23 @@ function ChallengeScreen({ userId }: { userId: string }) {
             </div>
             {members.map((m) => (
               <div key={m.id} className="flex items-center gap-2.5 py-1.5">
-                <span className="grid h-8 w-8 place-items-center rounded-full bg-surface-2 text-base">
-                  {m.avatar_url ?? "👤"}
-                </span>
-                <span className="flex-1 text-[13.5px] font-bold">
-                  {m.nickname}
-                  {m.id === userId && (
-                    <span className="ml-1 text-faint">(나)</span>
-                  )}
-                </span>
+                <button
+                  type="button"
+                  onClick={() => setProfileTarget(m)}
+                  aria-label={`${m.nickname} 프로필 보기`}
+                  className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+                >
+                  <Avatar
+                    src={m.avatar_url}
+                    className="grid h-8 w-8 flex-none place-items-center overflow-hidden rounded-full bg-surface-2 text-base"
+                  />
+                  <span className="min-w-0 flex-1 truncate text-[13.5px] font-bold">
+                    {m.nickname}
+                    {m.id === userId && (
+                      <span className="ml-1 text-faint">(나)</span>
+                    )}
+                  </span>
+                </button>
                 <span className="font-mono text-sm font-extrabold text-faint">
                   {m.id === userId ? (
                         `${Math.round(myAchievement)}%`
@@ -1278,6 +1311,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
             profileOf={profileOf}
             myUserId={userId}
             levelOf={levelOf}
+            onProfileClick={setProfileTarget}
           />
           {/* 챌린지가 끝났으면 새 챌린지를 시작할 수 있게 (추가 생성) */}
           <button
@@ -1308,6 +1342,17 @@ function ChallengeScreen({ userId }: { userId: string }) {
         />
       )}
 
+      {profileTarget && (
+        <MemberProfileSheet
+          userId={profileTarget.id}
+          nickname={profileTarget.nickname}
+          avatarUrl={profileTarget.avatar_url}
+          viewerId={userId}
+          source="challenge"
+          onClose={() => setProfileTarget(null)}
+        />
+      )}
+
       {toast && (
         <div
           className="fixed inset-x-8 z-[60] rounded-card border border-line bg-surface px-4 py-3 text-center text-sm font-bold shadow-card"
@@ -1327,12 +1372,15 @@ function ResultView({
   profileOf,
   myUserId,
   levelOf,
+  onProfileClick,
 }: {
   participants: ParticipantInput[];
   goals: UserGoal[];
   profileOf: (id: string) => ChallengeParticipantProfile | undefined;
   myUserId: string;
   levelOf: (id: string) => number;
+  /** ⚠️ 시트를 여기서 띄우지 않는다 — 화면에 시트가 둘이 된다 */
+  onProfileClick: (p: ChallengeParticipantProfile) => void;
 }) {
   const ranked = rankParticipants(participants);
   const total = ranked.length;
@@ -1354,12 +1402,23 @@ function ResultView({
             return (
               <div key={r.userId} className="flex w-20 flex-col items-center">
                 {r.rank === 1 && <UiIcon name="crown" size={20} />}
-                <span className="grid h-10 w-10 place-items-center rounded-full bg-surface-2 text-xl">
-                  {p?.avatar_url ?? "👤"}
-                </span>
-                <span className="mt-1 text-xs font-extrabold">
-                  {p?.nickname ?? "?"}
-                </span>
+                {/* ⚠️ 프로필을 못 찾으면(`p` 없음) 누를 수 없다 — 누구인지 모르는
+                    대상의 시트를 열면 조회가 `not_crew`로 떨어진다. */}
+                <button
+                  type="button"
+                  disabled={!p}
+                  onClick={() => p && onProfileClick(p)}
+                  aria-label={p ? `${p.nickname} 프로필 보기` : undefined}
+                  className="flex w-full flex-col items-center disabled:cursor-default"
+                >
+                  <Avatar
+                    src={p?.avatar_url}
+                    className="grid h-10 w-10 place-items-center overflow-hidden rounded-full bg-surface-2 text-xl"
+                  />
+                  <span className="mt-1 w-full truncate text-center text-xs font-extrabold">
+                    {p?.nickname ?? "?"}
+                  </span>
+                </button>
                 <span className="font-mono text-[11px] text-muted">
                   {r.overall.toFixed(1)}점
                 </span>

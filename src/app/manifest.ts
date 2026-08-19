@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { APP_LANDING_PATH } from "@/lib/domain/landing";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
@@ -7,7 +8,7 @@ export default function manifest(): MetadataRoute.Manifest {
     description:
       "소규모 크루의 운동 출석 챌린지. NO EXCUSES. JUST RESULTS. — 오늘도 GND 탈출하자.",
     id: "/",
-    start_url: "/home",
+    start_url: APP_LANDING_PATH,
     display: "standalone",
     orientation: "portrait",
     background_color: "#0B0B0C",

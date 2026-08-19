@@ -5,6 +5,7 @@ import { ScreenError } from "@/components/screen-error";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { getMyProfile } from "@/lib/crew";
 import { peekPendingChallengeInvite } from "@/lib/challenge";
+import { APP_LANDING_PATH } from "@/lib/domain/landing";
 import { identityError, takeAuthIntent } from "@/lib/identity";
 
 /**
@@ -140,7 +141,7 @@ export default function AuthCallbackPage() {
       // ⚠️ 의도를 모를 때(저장소가 막혔거나 주소를 직접 친 경우)는 `/account`에
       //    남긴다. 연결하러 간 사람을 홈으로 보내면 **연결됐다는 말을 어디서도
       //    못 본다** — 그 침묵이 2026-08-08 사고의 원인이었다(위 주석).
-      return intent === "signin" ? "/home" : "/account";
+      return intent === "signin" ? APP_LANDING_PATH : "/account";
     }
 
     async function leave() {
@@ -162,13 +163,16 @@ export default function AuthCallbackPage() {
         icon="🔐"
         message={error}
         exitHref={exitHref}
-        // ⚠️ 문구가 행선지를 따라와야 한다. `/home`이 붙은 뒤에도 "계정 화면으로
-        //    돌아가기"라고 쓰면 링크가 거짓말을 한다.
+        // ⚠️⚠️ 문구가 행선지를 **따라와야** 한다. 여기에 주소를 손으로 적으면
+        //    랜딩을 바꿀 때 조용히 거짓말이 된다 — 2026-08-19에 실제로 그럴 뻔했다.
+        //    랜딩을 `/home` → `/record`로 옮기자 이 비교가 어긋나면서 "계정 화면으로
+        //    돌아가기"로 떨어졌다. **lint도 typecheck도 못 잡는다.**
+        //    그래서 상수와 비교하고, 문구도 화면 이름 대신 **앱 이름**으로 적는다.
         exitLabel={
           exitHref === "/onboarding"
             ? "가입 화면으로 돌아가기"
-            : exitHref === "/home"
-              ? "홈으로 돌아가기"
+            : exitHref === APP_LANDING_PATH
+              ? "GND로 돌아가기"
               : "계정 화면으로 돌아가기"
         }
       />

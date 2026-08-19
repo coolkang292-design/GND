@@ -127,6 +127,17 @@ export interface CrewMemberProfile {
   xpToNextLevel: number;
   levelProgressPercent: number;
   badges: EarnedBadge[];
+  /**
+   * 0081부터. **0080 이전 서버에서는 전부 비어 있다** — 마이그레이션을 Run 하기
+   * 전에 배포돼도 화면이 안 깨지도록 옵셔널이 아니라 **빈 값**으로 채운다.
+   * (`joinedAt: null` · `levelUps: []` · 누적 0)
+   */
+  joinedAt: Date | null;
+  levelUps: { level: number; at: Date }[];
+  workoutCount: number;
+  totalMinutes: number;
+  workoutDays: number;
+  distanceMeters: number;
 }
 
 type CrewProfileRow = {
@@ -134,6 +145,14 @@ type CrewProfileRow = {
   currentLevel?: number;
   currentStage?: number;
   badges?: { badgeKey: string; periodKey: string; earnedAt: string }[];
+  // 0081
+  joinedAt?: string | null;
+  levelUps?: { level: number; at: string }[];
+  workoutCount?: number;
+  totalMinutes?: number;
+  workoutDays?: number;
+  /** numeric은 supabase-js가 문자열로 줄 수 있다 — Number()로 통과시킨다 */
+  distanceMeters?: number | string;
 };
 
 /**
@@ -169,5 +188,16 @@ export async function getCrewMemberProfile(
       periodKey: b.periodKey,
       earnedAt: new Date(b.earnedAt),
     })),
+    // ⚠️ 0081 이전 서버는 이 키들을 안 준다. `?? 기본값`을 떼지 마라 —
+    //    마이그레이션 Run 전에 배포되면 시트가 NaN·Invalid Date를 그린다.
+    joinedAt: row.joinedAt ? new Date(row.joinedAt) : null,
+    levelUps: (row.levelUps ?? []).map((l) => ({
+      level: l.level,
+      at: new Date(l.at),
+    })),
+    workoutCount: row.workoutCount ?? 0,
+    totalMinutes: row.totalMinutes ?? 0,
+    workoutDays: row.workoutDays ?? 0,
+    distanceMeters: Number(row.distanceMeters ?? 0),
   };
 }

@@ -83,11 +83,11 @@ describe("/auth/callback — 갈라 보내기", () => {
    * 다시 들어온 사람을 `/account`(설정)에 떨어뜨리고 있었다 — 그 사람이 하려던
    * 일은 "돌아오기"지 "설정 보기"가 아니다.
    */
-  it("프로필이 있고 로그인(signin)하러 갔었으면 홈으로 보낸다", async () => {
+  it("프로필이 있고 로그인(signin)하러 갔었으면 랜딩(기록)으로 보낸다", async () => {
     mocks.getMyProfile.mockResolvedValue({ id: "u1", nickname: "나" });
     localStorage.setItem("gnd-auth-intent", "signin");
     render(<AuthCallbackPage />);
-    await waitFor(() => expect(assign).toHaveBeenCalledWith("/home"));
+    await waitFor(() => expect(assign).toHaveBeenCalledWith("/record"));
   });
 
   /**
@@ -99,7 +99,7 @@ describe("/auth/callback — 갈라 보내기", () => {
     mocks.getMyProfile.mockResolvedValue({ id: "u1", nickname: "나" });
     localStorage.setItem("gnd-auth-intent", "signin");
     render(<AuthCallbackPage />);
-    await waitFor(() => expect(assign).toHaveBeenCalledWith("/home"));
+    await waitFor(() => expect(assign).toHaveBeenCalledWith("/record"));
     expect(localStorage.getItem("gnd-auth-intent")).toBeNull();
   });
 
@@ -231,13 +231,13 @@ describe("/auth/callback — 오류 화면에 가두지 않는다", () => {
    * ⚠️ 문구가 행선지를 따라와야 한다. `/home`을 붙이고 라벨을 그대로 두면
    * 링크에 "계정 화면으로 돌아가기"라고 쓰여 있고 누르면 홈으로 간다.
    */
-  it("로그인하러 갔던 사람의 탈출구는 홈이고, 문구도 홈이라고 말한다", async () => {
+  it("로그인하러 갔던 사람의 탈출구는 랜딩이고, 문구도 그것을 말한다", async () => {
     mocks.getMyProfile.mockResolvedValue({ id: "u1", nickname: "나" });
     localStorage.setItem("gnd-auth-intent", "signin");
     setUrl("?error=server_error&error_code=identity_already_exists");
     render(<AuthCallbackPage />);
 
-    const link = await screen.findByRole("link", { name: "홈으로 돌아가기" });
-    expect(link.getAttribute("href")).toBe("/home");
+    const link = await screen.findByRole("link", { name: "GND로 돌아가기" });
+    expect(link.getAttribute("href")).toBe("/record");
   });
 });

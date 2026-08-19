@@ -1,5 +1,6 @@
 "use client";
 
+import { Avatar } from "@/components/avatar";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import {
@@ -120,8 +121,13 @@ function ActiveWorkoutCard({
   return (
     <section className="rounded-card border border-accent/40 bg-surface p-4 shadow-card">
       <div className="flex items-center gap-2.5">
-        <span className="relative flex h-9 w-9 items-center justify-center rounded-full bg-surface-2 text-lg">
-          {session.avatarUrl ?? "👤"}
+        {/* ⚠️ 초록 점은 아바타의 **형제**다. `<Avatar>` 안에 넣을 수 없어서
+            (사진일 때 img 하나만 그린다) 바깥 relative 칸으로 감쌌다. */}
+        <span className="relative flex h-9 w-9 flex-none">
+          <Avatar
+            src={session.avatarUrl}
+            className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-surface-2 text-lg"
+          />
           <span className="absolute -right-0.5 -bottom-0.5 h-2.5 w-2.5 rounded-full border-2 border-surface bg-accent" />
         </span>
         <div className="flex-1">

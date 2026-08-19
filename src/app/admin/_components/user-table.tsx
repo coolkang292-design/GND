@@ -1,5 +1,6 @@
 "use client";
 
+import { Avatar } from "@/components/avatar";
 import { useMemo, useState } from "react";
 import type { ChurnRisk, UserStatus } from "@/lib/domain/analytics";
 
@@ -10,7 +11,8 @@ import type { ChurnRisk, UserStatus } from "@/lib/domain/analytics";
  */
 export interface UserTableRow {
   nickname: string;
-  avatar: string;
+  /** 이모지 · 사진 URL · null 아무거나 — 판정은 <Avatar>가 한다 */
+  avatar: string | null;
   stageName: string;
   level: number;
   workoutsInPeriod: number;
@@ -156,7 +158,7 @@ export function UserTable({
                 <tr key={r.nickname}>
                   <td>
                     <div className="user">
-                      <span className="avatar">{r.avatar}</span>
+                      <Avatar src={r.avatar} fallback="🙂" className="avatar" />
                       <b>{r.nickname}</b>
                     </div>
                   </td>

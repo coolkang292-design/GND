@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { APP_LANDING_PATH } from "@/lib/domain/landing";
 import { useAuth } from "@/components/auth-provider";
 import { UiIcon } from "@/components/ui-icon";
 import { ScreenArt, type ScreenArtKey } from "@/components/brand/hero-art";
@@ -164,7 +165,9 @@ export default function OnboardingPage() {
       // 홈으로 떨어뜨리면 초대가 조용히 사라진다(`/auth/callback`과 같은 규칙).
       const pending = peekPendingChallengeInvite();
       router.replace(
-        pending ? `/challenge?join=${encodeURIComponent(pending)}` : "/home",
+        pending
+          ? `/challenge?join=${encodeURIComponent(pending)}`
+          : APP_LANDING_PATH,
       );
     })();
     return () => {
@@ -245,7 +248,7 @@ export default function OnboardingPage() {
           //    "챌린지에 초대받았어요"로 열려 같은 실패를 반복한다.
           clearPendingChallengeInvite();
           saveOnboardingNotice(message);
-          router.replace("/home");
+          router.replace(APP_LANDING_PATH);
           return;
         }
         clearPendingChallengeInvite();
@@ -279,12 +282,12 @@ export default function OnboardingPage() {
           // 보낸다 — 프로필이 생긴 뒤에는 같은 링크를 다시 눌렀을 때
           // `/invite/[code]`가 바로 친구를 맺어 주므로 되돌릴 수 있다.
           // ⚠️ 그래서 코드는 **지우지 않는다.** 다시 누르면 살아난다.
-          router.replace("/home");
+          router.replace(APP_LANDING_PATH);
           return;
         }
       }
 
-      router.replace("/home");
+      router.replace(APP_LANDING_PATH);
     } catch (e) {
       setError(e instanceof Error ? e.message : "저장 실패");
     } finally {
@@ -445,7 +448,7 @@ export default function OnboardingPage() {
           </p>
 
           <div className="mt-6">
-            <Primary onClick={() => router.replace("/home")}>
+            <Primary onClick={() => router.replace(APP_LANDING_PATH)}>
               GND 시작하기
             </Primary>
           </div>
