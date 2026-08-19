@@ -35,6 +35,13 @@ function profile(over: Partial<CrewMemberProfile> = {}): CrewMemberProfile {
       { badgeKey: "record_beaten_5", periodKey: "lifetime",
         earnedAt: new Date("2026-07-24T10:00:00+09:00") },
     ],
+    // 0081 — 이력·누적. 기본값은 "가입일만 있고 나머지는 0"이다.
+    joinedAt: new Date("2026-07-19T10:00:00+09:00"),
+    levelUps: [],
+    workoutCount: 0,
+    totalMinutes: 0,
+    workoutDays: 0,
+    distanceMeters: 0,
     ...over,
   };
 }
@@ -110,6 +117,68 @@ describe("MemberProfileBody — 배지 (보유만 + 의미·보상)", () => {
     );
     expect(html).not.toContain("future_badge_99");
     expect(html).toContain("0 / 3");
+  });
+});
+
+/**
+ * 2026-08-19 사용자 요청 — *"언제 가입했고 언제 어떤 배지를 받았으며 언제
+ * 레벨업을 했는지 … 누적으로 몇 시간·며칠·몇 km"*
+ */
+describe("MemberProfileBody — 이력·누적 (0081)", () => {
+  it("누적 성과는 RPC 값으로 그린다 — stats prop이 없어도 뜬다", () => {
+    const html = renderToStaticMarkup(
+      <MemberProfileBody
+        profile={profile({
+          workoutCount: 23,
+          workoutDays: 22,
+          totalMinutes: 1873,
+          distanceMeters: 110490,
+        })}
+        catalog={CATALOG}
+      />,
+    );
+    // ⚠️ 옛 판은 `stats`(홈에서만 넘김)가 있어야 성과 블록을 그렸다 —
+    //    그래서 피드·크루에서 열면 성과가 통째로 안 보였다.
+    expect(html).toContain("누적 성과");
+    expect(html).toContain("23회");
+    expect(html).toContain("22일");
+    expect(html).toContain("31시간 13분");
+    expect(html).toContain("110.5km");
+  });
+
+  it("거리가 0이면 거리 칸을 안 그린다", () => {
+    const html = renderToStaticMarkup(
+      <MemberProfileBody profile={profile({ distanceMeters: 0 })} catalog={CATALOG} />,
+    );
+    expect(html).not.toContain("거리");
+  });
+
+  it("가입·레벨업·배지를 최신순 이력으로 그린다", () => {
+    const html = renderToStaticMarkup(
+      <MemberProfileBody
+        profile={profile({
+          joinedAt: new Date("2026-07-19T10:00:00+09:00"),
+          levelUps: [{ level: 17, at: new Date("2026-08-10T10:00:00+09:00") }],
+        })}
+        catalog={CATALOG}
+      />,
+    );
+    expect(html).toContain("이력");
+    expect(html).toContain("Lv.17 달성");
+    expect(html).toContain("GND 시작");
+    expect(html).toContain("어제의 나를 이겼개"); // 배지 이름
+    // 최신(레벨업 8/10)이 가입(7/19)보다 앞에 온다
+    expect(html.indexOf("Lv.17 달성")).toBeLessThan(html.indexOf("GND 시작"));
+  });
+
+  it("이력이 하나도 없으면 이력 블록을 안 그린다", () => {
+    const html = renderToStaticMarkup(
+      <MemberProfileBody
+        profile={profile({ joinedAt: null, levelUps: [], badges: [] })}
+        catalog={CATALOG}
+      />,
+    );
+    expect(html).not.toContain(">이력<");
   });
 });
 

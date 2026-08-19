@@ -147,7 +147,8 @@ export default async function AdminPage({
     .sort((a, b) => b.workoutsInPeriod - a.workoutsInPeriod)
     .map((r) => ({
       nickname: r.nickname,
-      avatar: r.avatarUrl ?? "🙂",
+      // 기본값은 <Avatar fallback>이 정한다 — 두 곳에서 정하면 갈린다
+      avatar: r.avatarUrl,
       stageName: r.stageName,
       level: r.level,
       workoutsInPeriod: r.workoutsInPeriod,

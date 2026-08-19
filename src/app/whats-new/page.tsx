@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { APP_LANDING_PATH } from "@/lib/domain/landing";
 import { RELEASE_NOTES, parseHighlight } from "@/lib/domain/release-notes";
 
 export const metadata = { title: "새 소식 · GND" };
@@ -9,7 +10,7 @@ export default function WhatsNewPage() {
     <main className="flex flex-1 flex-col overflow-y-auto">
       <header className="sticky top-0 z-10 flex items-center gap-2.5 border-b border-line bg-surface/95 px-4 py-3 backdrop-blur">
         <Link
-          href="/home"
+          href={APP_LANDING_PATH}
           aria-label="닫기"
           className="flex h-9 w-9 items-center justify-center rounded-full border border-line bg-surface text-lg"
         >

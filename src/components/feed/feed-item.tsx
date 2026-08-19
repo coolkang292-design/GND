@@ -1,5 +1,6 @@
 "use client";
 
+import { Avatar } from "@/components/avatar";
 import { useState } from "react";
 import { ReactionBar } from "@/components/feed/reaction-bar";
 import { PhotoStamp } from "@/components/photo-stamp";
@@ -102,9 +103,10 @@ export function FeedItemCard({ item, userId, onProfileClick }: Props) {
               aria-label={`${item.nickname} 프로필 보기`}
               className="flex min-w-0 items-center gap-2 text-left"
             >
-              <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-white/20 text-base backdrop-blur">
-                {item.avatarUrl ?? "👤"}
-              </span>
+              <Avatar
+                src={item.avatarUrl}
+                className="flex h-8 w-8 flex-none items-center justify-center overflow-hidden rounded-full bg-white/20 text-base backdrop-blur"
+              />
               <p className="truncate text-sm font-extrabold">
                 {item.nickname}
                 {item.userId === userId && (
@@ -143,9 +145,10 @@ export function FeedItemCard({ item, userId, onProfileClick }: Props) {
           aria-label={`${item.nickname} 프로필 보기`}
           className="flex min-w-0 items-center gap-2.5 text-left"
         >
-          <span className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-surface-2 text-lg">
-            {item.avatarUrl ?? "👤"}
-          </span>
+          <Avatar
+            src={item.avatarUrl}
+            className="flex h-9 w-9 flex-none items-center justify-center overflow-hidden rounded-full bg-surface-2 text-lg"
+          />
           <div className="min-w-0">
             <p className="truncate text-sm font-extrabold">
               {item.nickname}

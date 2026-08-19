@@ -237,6 +237,8 @@ export default function CrewPage() {
           userId={selected.id}
           nickname={selected.nickname}
           avatarUrl={selected.avatarUrl}
+          viewerId={userId ?? undefined}
+          source="crew"
           onClose={() => setSelected(null)}
         />
       )}

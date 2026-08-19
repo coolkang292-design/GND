@@ -141,6 +141,8 @@ export default function FeedPage() {
           nickname={selected.nickname}
           avatarUrl={selected.avatarUrl}
           streak={selected.streak}
+          viewerId={userId ?? undefined}
+          source="feed"
           onClose={() => setSelected(null)}
         />
       )}

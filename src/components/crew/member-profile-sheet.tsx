@@ -2,12 +2,22 @@
 
 import Image from "next/image";
 import { useEffect, useState } from "react";
+import { Avatar } from "@/components/avatar";
 import { badgeShelf, earnedBadgeCount, type BadgeMeta } from "@/lib/domain/badges";
 import { getBadgeCatalog } from "@/lib/badges";
 import {
   getCrewMemberProfile,
   type CrewMemberProfile,
 } from "@/lib/progression";
+import {
+  buildProfileHistory,
+  formatCumulativeDistance,
+  formatCumulativeMinutes,
+} from "@/lib/domain/profile-history";
+import {
+  recordProfileView,
+  type ProfileViewSource,
+} from "@/lib/profile-views";
 
 /**
  * 성과 요약 (2026-08-07) — 홈 친구 목록이 **이미 계산해 둔 값**을 넘겨준다.
@@ -24,9 +34,18 @@ export type MemberPerformance = {
   weekDays: number;
 };
 
-function formatMinutes(minutes: number): string {
-  const safe = Math.max(0, Math.round(minutes));
-  return safe < 60 ? `${safe}분` : `${Math.floor(safe / 60)}시간`;
+/** 이력 줄의 날짜 — `2026. 8. 19.`처럼 길면 한 줄에 안 들어간다 */
+function historyDate(at: Date): string {
+  return `${at.getFullYear() % 100}.${at.getMonth() + 1}.${at.getDate()}`;
+}
+
+function Tile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-card-sm border border-line bg-surface-2 px-3 py-2">
+      <p className="text-[11px] text-muted">{label}</p>
+      <p className="mt-0.5 text-[15px] font-extrabold">{value}</p>
+    </div>
+  );
 }
 
 /**
@@ -46,6 +65,13 @@ export function MemberProfileBody({
   streak?: number;
 }) {
   const pct = Math.min(100, Math.round(profile.levelProgressPercent));
+  const distance = formatCumulativeDistance(profile.distanceMeters);
+  const history = buildProfileHistory({
+    joinedAt: profile.joinedAt,
+    levelUps: profile.levelUps,
+    badges: profile.badges,
+    catalog,
+  });
   const maxed = profile.nextLevelRequiredXp === null;
   // 카탈로그에 없는 badge_key는 badgeShelf가 자연히 걸러낸다 —
   // 배지가 46개로 늘어도 이 컴포넌트는 그대로다.
@@ -91,15 +117,62 @@ export function MemberProfileBody({
         </div>
       </div>
 
-      {stats && (
-        <div className="mt-4 border-t border-line pt-3.5">
-          <h4 className="text-sm font-extrabold">성과</h4>
-          <p className="mt-1.5 text-[12.5px] text-muted">
-            누적 <b className="text-text">{stats.workoutCount}회</b> ·{" "}
-            <b className="text-text">{formatMinutes(stats.totalMinutes)}</b>
-            {streak !== undefined && streak > 0 && <> · 🔥 {streak}일</>} · 이번
-            주 <b className="text-text">{stats.weekDays}일</b>
+      {/* ⚠️⚠️ 누적 수치는 **RPC(0081)가 단일 원천**이다 — `stats` prop이 아니다.
+          옛 판은 홈 친구 목록이 계산해 넘길 때만 이 블록을 그렸다. 그래서
+          **피드·크루 화면에서 프로필을 열면 성과가 통째로 안 보였다**
+          (2026-08-19 실측). 이제 어느 경로로 열어도 같은 숫자가 나온다.
+
+          `stats`는 **이번 주**에만 쓴다 — 그건 RPC가 안 준다. */}
+      <div className="mt-4 border-t border-line pt-3.5">
+        <h4 className="text-sm font-extrabold">누적 성과</h4>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <Tile label="운동" value={`${profile.workoutCount}회`} />
+          <Tile label="운동한 날" value={`${profile.workoutDays}일`} />
+          <Tile label="시간" value={formatCumulativeMinutes(profile.totalMinutes)} />
+          {distance ? (
+            <Tile label="거리" value={distance} />
+          ) : (
+            stats && <Tile label="이번 주" value={`${stats.weekDays}일`} />
+          )}
+        </div>
+        {(streak !== undefined && streak > 0) || (distance && stats) ? (
+          <p className="mt-1.5 text-[11.5px] text-muted">
+            {streak !== undefined && streak > 0 && <>🔥 연속 {streak}일</>}
+            {streak !== undefined && streak > 0 && distance && stats && " · "}
+            {distance && stats && <>이번 주 {stats.weekDays}일</>}
           </p>
+        ) : null}
+      </div>
+
+      {/* ── 이력 (2026-08-19 사용자 요청) ───────────────────────
+          *"언제 가입했고 언제 어떤 배지를 받았으며 언제 레벨업을 했는지"*
+
+          ⚠️ 꾸준왕 열람권과 **무관하다.** 열람권은 챌린지 KPI를 보는 권리다. */}
+      {history.length > 0 && (
+        <div className="mt-4 border-t border-line pt-3.5">
+          <h4 className="text-sm font-extrabold">이력</h4>
+          <ul className="mt-2 flex flex-col gap-1.5">
+            {history.map((e, i) => (
+              <li
+                key={`${e.kind}-${e.at.getTime()}-${i}`}
+                className="flex items-center gap-2.5 text-[12.5px]"
+              >
+                <span className="w-[74px] flex-none font-mono text-[11px] text-faint">
+                  {historyDate(e.at)}
+                </span>
+                <span className="flex-none">
+                  {e.kind === "joined" ? "🎬" : e.kind === "level_up" ? "⬆️" : e.emoji}
+                </span>
+                <span className="min-w-0 flex-1 truncate">
+                  {e.kind === "joined"
+                    ? "GND 시작"
+                    : e.kind === "level_up"
+                      ? `Lv.${e.level} 달성`
+                      : e.name}
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -161,14 +234,20 @@ export function MemberProfileSheet({
   avatarUrl,
   streak,
   stats,
+  viewerId,
+  source,
   onClose,
 }: {
   userId: string;
   nickname: string;
   avatarUrl: string | null;
   streak?: number;
-  /** 홈 친구 목록만 넘긴다 — 크루 카드·피드에서는 없어서 성과 블록이 안 뜬다 */
+  /** 홈 친구 목록만 넘긴다 — **이번 주 일수에만** 쓴다(누적은 RPC가 준다) */
   stats?: MemberPerformance;
+  /** 계측용. 없으면 안 남긴다 — 화면은 그대로 동작한다 */
+  viewerId?: string;
+  /** 어느 화면에서 눌렀나. 0건이 나왔을 때 어느 진입점이 죽었는지 알아야 한다 */
+  source?: ProfileViewSource;
   onClose: () => void;
 }) {
   const [profile, setProfile] = useState<CrewMemberProfile | null>(null);
@@ -196,6 +275,14 @@ export function MemberProfileSheet({
     };
   }, [userId, reloadKey]);
 
+  // ⚠️ 조회 성공 여부와 무관하게 **연 순간** 남긴다. 성공한 것만 세면
+  //    "열었는데 못 봤다"는 실패가 통계에서 사라진다.
+  // ⚠️ `reloadKey`를 의존성에 넣지 않는다 — 다시 시도를 누를 때마다 중복으로 쌓인다.
+  useEffect(() => {
+    if (!viewerId || !source) return;
+    void recordProfileView(viewerId, userId, source);
+  }, [viewerId, userId, source]);
+
   return (
     <>
       <div
@@ -212,9 +299,11 @@ export function MemberProfileSheet({
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
 
         <div className="flex items-center gap-3">
-          <span className="flex h-11 w-11 flex-none items-center justify-center rounded-full bg-surface-2 text-2xl">
-            {avatarUrl ?? "👤"}
-          </span>
+          <Avatar
+            src={avatarUrl}
+            label={`${nickname}님 프로필 사진`}
+            className="flex h-11 w-11 flex-none items-center justify-center overflow-hidden rounded-full bg-surface-2 text-2xl"
+          />
           <p id="member-profile-title" className="text-lg font-extrabold">
             {nickname}님
           </p>

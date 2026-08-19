@@ -10,7 +10,9 @@ import {
   type ReactNode,
 } from "react";
 import { useAuth } from "@/components/auth-provider";
+import { Avatar } from "@/components/avatar";
 import { MemberProfileSheet } from "@/components/crew/member-profile-sheet";
+import { isPhotoAvatar } from "@/lib/domain/avatar-source";
 import {
   getFriendBadges,
   getFriendBoardBase,
@@ -155,17 +157,34 @@ function FriendRowItem({
           aria-label={`${row.nickname} 성과 보기`}
           className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
         >
-          {/* 프로필 이모지가 아니라 **현재 레벨의 캐릭터**를 쓴다(2026-08-07
-              사용자 요청). 성장 카드·프로필 시트와 같은 원천이라 셋이 안 갈린다.
-              object-top이 없으면 원형으로 깎을 때 얼굴이 잘린다. */}
-          <Image
-            src={row.characterPath}
-            alt={`${row.stageName} 캐릭터`}
-            width={44}
-            height={58}
-            sizes="44px"
-            className="h-11 w-11 flex-none rounded-full border border-line bg-surface object-cover object-top"
-          />
+          {/* ⚠️⚠️ **여기는 이모지 자리가 아니다.** 2026-08-07 사용자 요청으로
+              **현재 레벨의 캐릭터**를 그린다 — 성장 카드·프로필 시트와 같은
+              원천이라 셋이 안 갈린다. object-top이 없으면 원형으로 깎을 때
+              얼굴이 잘린다.
+
+              ⚠️ 2026-08-19에 프로필 사진이 생기면서 **사진이 있을 때만** 그것으로
+              덮는다. 캐릭터를 통째로 걷어내지 않는 이유가 여기다 — 안 올린
+              사람에게는 08-07 결정이 그대로 남아야 하고, 그래야 레벨을 올려
+              캐릭터가 진화하는 재미가 안 죽는다.
+
+              ⚠️ 판정에 `isPhotoAvatar`를 쓴다. `row.avatarUrl`에는 이모지도
+              들어 있어서 `!= null`로 가르면 **전원이 이모지로 바뀐다.** */}
+          {isPhotoAvatar(row.avatarUrl) ? (
+            <Avatar
+              src={row.avatarUrl}
+              label={`${row.nickname}님 프로필 사진`}
+              className="h-11 w-11 flex-none overflow-hidden rounded-full border border-line bg-surface"
+            />
+          ) : (
+            <Image
+              src={row.characterPath}
+              alt={`${row.stageName} 캐릭터`}
+              width={44}
+              height={58}
+              sizes="44px"
+              className="h-11 w-11 flex-none rounded-full border border-line bg-surface object-cover object-top"
+            />
+          )}
           <span className="flex min-w-0 flex-1 items-center gap-1.5">
             <span className="truncate text-[14px] font-extrabold">
               {row.nickname}
@@ -652,6 +671,8 @@ export function FriendBoardCard({
           nickname={selected.nickname}
           avatarUrl={selected.avatarUrl}
           streak={selected.streak}
+          viewerId={userId ?? undefined}
+          source="home"
           stats={{
             workoutCount: selected.workoutCount,
             totalMinutes: selected.totalMinutes,

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Avatar } from "@/components/avatar";
 import { useAuth } from "@/components/auth-provider";
 import { UiIcon } from "@/components/ui-icon";
 import { DEFAULT_TIMEZONE } from "@/lib/domain/time";
@@ -154,7 +155,12 @@ export function KingCard({
                   onClick={() => setConfirmTarget(m)}
                   className="flex items-center gap-2 rounded-card-sm border border-line bg-surface-2 px-3 py-2 text-left"
                 >
-                  <span className="text-lg">{m.avatar_url ?? "👤"}</span>
+                  {/* ⚠️ 옛 판은 박스 없이 `text-lg`만 줬다. 사진이 오면 높이가
+                      0이 되므로 **명시적인 h/w가 필요하다** (2026-08-19). */}
+                  <Avatar
+                    src={m.avatar_url}
+                    className="flex h-7 w-7 flex-none items-center justify-center overflow-hidden rounded-full text-lg"
+                  />
                   <span className="flex-1 text-sm font-bold">{m.nickname}</span>
                   <span className="text-xs font-bold text-accent">성과 ›</span>
                 </button>
@@ -215,7 +221,11 @@ export function KingCard({
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50">
           <div className="w-full max-w-md rounded-t-[22px] bg-surface p-5 pb-8">
             <div className="flex items-center gap-3">
-              <span className="text-3xl">{perf.who.avatar_url ?? "👤"}</span>
+              <Avatar
+                src={perf.who.avatar_url}
+                label={`${perf.who.nickname}님 프로필 사진`}
+                className="flex h-10 w-10 flex-none items-center justify-center overflow-hidden rounded-full text-3xl"
+              />
               <div>
                 <p className="text-lg font-extrabold">{perf.who.nickname}님</p>
                 <p className="text-xs text-muted">꾸준왕 열람권으로 확인 👀</p>

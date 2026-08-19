@@ -9,6 +9,7 @@ import {
   type SetStateAction,
 } from "react";
 import { useRouter } from "next/navigation";
+import { AFTER_WORKOUT_PATH } from "@/lib/domain/landing";
 import { useAuth } from "@/components/auth-provider";
 import { UiIcon } from "@/components/ui-icon";
 import { CalendarView } from "@/components/record/calendar-view";
@@ -134,6 +135,14 @@ import {
   skipExercise,
 } from "@/lib/domain/session-flow";
 import { dayKey } from "@/lib/domain/time";
+import { TodayStatusCard } from "@/components/record/today-status-card";
+import { weeklyBars } from "@/lib/domain/today-status";
+import {
+  currentStreak,
+  daysSinceLastWorkout,
+  streakStage,
+  workoutDayKeys,
+} from "@/lib/domain/streak";
 import { errorText } from "@/lib/domain/error-text";
 import { XpResultModal } from "@/components/record/xp-result-modal";
 import { buildXpEvents, type XpEvent } from "@/lib/domain/xp-events";
@@ -170,6 +179,7 @@ import {
   getPreviousExerciseRecords,
   getSessionById,
   getSessionExerciseStructure,
+  getCompletedSessionMinutes,
   getSuggestionFacts,
   hasCompletedHistory,
   loadDraft,
@@ -381,6 +391,13 @@ function WorkoutScreen({ userId }: { userId: string }) {
    * 이력이 쌓일수록 커지는 무한 질의가 된다 — 필요한 건 1비트다.
    */
   const [hasHistory, setHasHistory] = useState(false);
+  /**
+   * 오늘 상태 카드의 재료 (2026-08-19). `null` = 아직 안 왔다 —
+   * 빈 배열(`[]`)과 구별해야 **기록이 0건인 사람에게 카드가 번쩍이지 않는다.**
+   */
+  const [sessionMinutes, setSessionMinutes] = useState<
+    { completedAt: Date; durationMinutes: number | null }[] | null
+  >(null);
   /** 오늘 `workout_plans`에 행이 있나 — 제안 분기용 (2026-08-16) */
   const [todayPlanExists, setTodayPlanExists] = useState(false);
   /** 오늘 이미 완료한 세션이 있나 */
@@ -659,6 +676,13 @@ function WorkoutScreen({ userId }: { userId: string }) {
         if (!cancelled) setHasHistory(has);
       } catch {
         // 기록 자체는 막지 않는다
+      }
+      try {
+        // ⚠️ 실패하면 `null`로 남긴다 — 카드만 안 그린다. 기록은 그대로 된다.
+        const rows = await getCompletedSessionMinutes(userId);
+        if (!cancelled) setSessionMinutes(rows);
+      } catch {
+        // 카드가 안 뜰 뿐이다
       }
       try {
         const facts = await getSuggestionFacts(userId);
@@ -2200,6 +2224,33 @@ function WorkoutScreen({ userId }: { userId: string }) {
    * 오늘의 제안 (2026-08-16). 알림과 **같은 함수**로 정한다 —
    * 설계 §3: 함수를 공유해도 입력이 갈리면 소용없어서 입력도 1비트로 낮췄다.
    */
+  /**
+   * 오늘 상태 카드의 파생값 (2026-08-19).
+   *
+   * ⚠️⚠️ 타임존은 **이 화면이 이미 쓰는 브라우저 타임존**이다. 홈은
+   *    `DEFAULT_TIMEZONE`을 쓰는 알려진 불일치가 있는데(`home-client.tsx` §9),
+   *    여기서 홈을 따라가면 이 화면 안에서 자정 판정이 갈린다 — 같은 화면의
+   *    `getSuggestionFacts`·계획 조회가 전부 브라우저 타임존이다.
+   *
+   * ⚠️ 스트릭은 **전체 이력**으로 잰다. 7일만 보고 세면 홈과 다른 숫자가 나온다.
+   */
+  const todayStatus = useMemo(() => {
+    if (!sessionMinutes) return null;
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Seoul";
+    const todayKey = dayKey(new Date(), tz);
+    const keys = workoutDayKeys(
+      sessionMinutes.map((r) => r.completedAt),
+      tz,
+    );
+    return {
+      todayKey,
+      bars: weeklyBars(sessionMinutes, todayKey, tz),
+      streak: currentStreak(keys, todayKey),
+      stage: streakStage(keys, todayKey),
+      gap: daysSinceLastWorkout(keys, todayKey),
+    };
+  }, [sessionMinutes]);
+
   const suggestionKind = useMemo(
     () =>
       // ⚠️ 재료가 다 오기 전에는 **아무 제안도 하지 않는다.** 반쯤 채워진 상태로
@@ -2228,6 +2279,26 @@ function WorkoutScreen({ userId }: { userId: string }) {
       signedUpDayKey,
     ],
   );
+
+  /**
+   * 오늘 카드의 "오늘의 운동" 한 줄 (2026-08-19).
+   *
+   * ⚠️⚠️ **담긴 종목이 있을 때만 말한다.** 처음엔 제안(`suggestionCopy`)까지
+   *    실었는데, 개발 서버에서 보니 바로 아래 제안 카드가 같은 말을 하고 그
+   *    아래 버튼이 또 같은 말을 해서 **한 화면에 같은 문장이 세 번** 나왔다
+   *    (`오늘의 운동 · 지난번 그 운동부터 다시` / `지난번 그대로 담아 뒀어요` /
+   *    `지난번 그대로 담기`). 화면을 안 봤으면 못 잡았을 종류다.
+   *
+   *    "오늘 뭐 하지"의 답은 **아래 제안 카드가 이미 한다** — 거긴 누를 수도
+   *    있다. 이 줄은 목록이 길어졌을 때의 요약이다.
+   */
+  const todayLine = useMemo(() => {
+    const names = draft.exercises.map((e) => e.name);
+    if (names.length === 0) return null;
+    return names.length <= 3
+      ? names.join(" · ")
+      : `${names.slice(0, 3).join(" · ")} 외 ${names.length - 3}`;
+  }, [draft.exercises]);
 
   /**
    * 푸시에서 온 `?suggest`를 읽어 오늘의 제안을 담는다 (2026-08-16).
@@ -2484,11 +2555,29 @@ function WorkoutScreen({ userId }: { userId: string }) {
         >
           📤 AI 코치에게 공유
         </button>
+        {/*
+          운동을 마치면 **홈으로 보낸다** (2026-08-19 사장님 결정).
+
+          ⚠️⚠️ **여기가 유일한 이동 시점이다. 사진 업로드를 트리거로 걸지 마라.**
+          이 화면에는 사진 말고도 기록 갱신 · 챌린지 기여 · XP 결과가 함께 있다.
+          사진을 올리자마자 보내면 사진 올린 사람(진짜 유저의 93%)이 나머지를
+          못 보고, 안 올리는 사람은 영영 안 넘어간다.
+
+          ⚠️ `setResult(null)`을 **먼저** 부른다. 안 지우면 나중에 기록 탭으로
+          돌아왔을 때 지난 완료 화면이 그대로 남는다.
+
+          ⚠️ 문구가 "확인"이 아니다. 어디로 가는지 안 알려주고 튕기면 놀란다.
+          그리고 지금이 **찌르기가 열린 순간**이다 — 홈에만 있는 기능이다
+          (`friend-board-card.tsx:234`의 `iWorkedOut` 잠금).
+        */}
         <button
-          onClick={() => setResult(null)}
+          onClick={() => {
+            setResult(null);
+            router.push(AFTER_WORKOUT_PATH);
+          }}
           className="h-12 rounded-card bg-accent text-sm font-extrabold text-accent-ink"
         >
-          확인
+          크루 보러 가기 👉
         </button>
         {xpEvents.length > 0 && (
           <XpResultModal events={xpEvents} onClose={() => setXpEvents([])} />
@@ -2510,6 +2599,12 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const showFixedStart =
     subTab === "workout" && !active && draft.exercises.length > 0;
 
+  /**
+   * 오늘 카드를 그리는가 — 헤더 부제와 **같은 판정을 써야 한다**.
+   * 둘이 갈리면 부제와 카드가 동시에 뜨거나 둘 다 사라진다.
+   */
+  const showTodayCard = !active && subTab === "workout" && todayStatus !== null;
+
   return (
     <div
       className={`flex flex-col gap-3 ${showFixedStart ? "pb-40" : "pb-24"}`}
@@ -2519,13 +2614,21 @@ function WorkoutScreen({ userId }: { userId: string }) {
           <h1 className="text-[19px] font-extrabold tracking-tight">
             운동 기록
           </h1>
-          <p className="mt-0.5 text-[12.5px] text-muted">
-            {active
-              ? "운동 중"
-              : isEmpty
-                ? "처음이라면 운동부터 추가해보세요"
-                : "준비"}
-          </p>
+          {/*
+            ⚠️ 오늘 카드가 뜨면 부제를 **안 그린다** (2026-08-19).
+            안 그러면 "오늘 운동 완료! 🎉" **바로 위에** "처음이라면 운동부터
+            추가해보세요"가 남아 화면이 스스로 모순된다 — 개발 서버에서 잡았다.
+            부제의 일(지금 무슨 상태인가)을 카드가 더 잘 한다.
+          */}
+          {!showTodayCard && (
+            <p className="mt-0.5 text-[12.5px] text-muted">
+              {active
+                ? "운동 중"
+                : isEmpty
+                  ? "처음이라면 운동부터 추가해보세요"
+                  : "준비"}
+            </p>
+          )}
         </div>
         {active && subTab === "workout" && (
           <button
@@ -2537,6 +2640,28 @@ function WorkoutScreen({ userId }: { userId: string }) {
           </button>
         )}
       </header>
+
+      {/*
+        오늘 상태 카드 (2026-08-19 사용자 요청) — **앱을 켜면 보이는 첫 카드**다.
+        랜딩이 이 화면으로 바뀌면서(`domain/landing.ts`) 첫 문장 자리가 됐다.
+
+        ⚠️ **운동 중에는 안 그린다.** 진행 중 화면이 이미 상태를 말하는데 그 위에
+           "오늘은 아직이에요"를 얹으면 화면이 스스로 모순된다.
+        ⚠️ **달력 탭에서도 안 그린다.** 달력은 지난 기록을 보는 자리다.
+        ⚠️ `todayStatus`가 `null`이면(조회 전·실패) 그냥 안 그린다 — 0으로 채운
+           막대를 잠깐 보여 주면 "이번 주에 아무것도 안 했다"는 거짓말이 된다.
+      */}
+      {showTodayCard && (
+        <TodayStatusCard
+          didWorkoutToday={didWorkoutToday}
+          bars={todayStatus.bars}
+          streak={todayStatus.streak}
+          stage={todayStatus.stage}
+          gap={todayStatus.gap}
+          todayKey={todayStatus.todayKey}
+          todayLine={todayLine}
+        />
+      )}
 
       {/* 운동 / 달력 서브탭 (§12) */}
       <div className="flex gap-1 rounded-card border border-line bg-surface-2 p-1">

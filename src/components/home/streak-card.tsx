@@ -9,10 +9,9 @@ import {
 } from "@/lib/domain/streak";
 import { DEFAULT_TIMEZONE, dayKey } from "@/lib/domain/time";
 import {
-  EXPIRED_MESSAGES,
   pickByDay,
   STAGE_MESSAGES,
-  TODAY_DONE_MESSAGES,
+  streakHeadline,
 } from "@/lib/domain/streak-messages";
 
 function weekdayLabel(key: string): string {
@@ -39,16 +38,8 @@ export function StreakCard({ completedAts }: { completedAts: Date[] }) {
   // 카드 부제는 **사실 상태**, 아래 경고 배너는 **재촉 카피**로 나눈다.
   // 예전엔 둘 다 STAGE_MESSAGES를 계산해 같은 문장이 두 번 보였다(2026-07-23).
   const gap = daysSinceLastWorkout(keys, todayKey);
-  const sub =
-    stage === "none"
-      ? "운동을 시작하면 불꽃이 켜져요"
-      : stage === "today_done"
-        ? pickByDay(TODAY_DONE_MESSAGES, todayKey)(streak)
-        : stage === "expired"
-          ? pickByDay(EXPIRED_MESSAGES, todayKey)
-          : gap === 1
-            ? `어제 운동했어요 · 오늘 하면 ${streak + 1}일째`
-            : `${gap}일째 쉬는 중 · 오늘 하면 ${streak + 1}일째`;
+  // 2026-08-19: 기록 화면 오늘 카드가 같은 말을 해야 해서 도메인으로 옮겼다.
+  const sub = streakHeadline({ stage, streak, gap, todayKey });
 
   const warning =
     streak > 0 && STAGE_MESSAGES[stage]

@@ -114,6 +114,37 @@ export const EXPIRED_MESSAGES = [
   "불꽃 꺼진 지 좀 됐어요. 뭐 어때요, 오늘 켜면 또 1일이죠~",
 ];
 
+/**
+ * **스트릭 한 줄 문구** — 홈 스트릭 카드와 기록 화면 오늘 카드가 같이 쓴다.
+ *
+ * ⚠️ 2026-08-19에 여기로 옮겼다. 그 전에는 `home/streak-card.tsx` 안에 있었고,
+ *    기록 화면에도 같은 말이 필요해지면서 **세 번째 복사본**이 생길 뻔했다
+ *    (`domain/briefing.ts`가 이미 서버용으로 비슷한 것을 갖고 있다 —
+ *    그쪽은 `🔥` 접두사와 재촉 톤이 달라 합치지 않았다).
+ *
+ * ⚠️ **재촉 문구(`STAGE_MESSAGES`)와 다르다.** 이건 **사실 상태**를 말하고,
+ *    재촉은 경고 배너가 따로 한다. 둘을 합치면 같은 문장이 두 번 보인다
+ *    (2026-07-23에 실제로 그랬다).
+ */
+export function streakHeadline(input: {
+  stage: StreakStage;
+  streak: number;
+  /** 마지막 운동 이후 지난 일수. **한 번도 안 했으면 `null`이다** */
+  gap: number | null;
+  todayKey: string;
+}): string {
+  const { stage, streak, gap, todayKey } = input;
+  if (stage === "none") return "운동을 시작하면 불꽃이 켜져요";
+  if (stage === "today_done") return pickByDay(TODAY_DONE_MESSAGES, todayKey)(streak);
+  if (stage === "expired") return pickByDay(EXPIRED_MESSAGES, todayKey);
+  // ⚠️ `gap`이 `null`이면 기록이 없다는 뜻이다 — 위 `none`에서 이미 걸러지지만
+  //    단계 판정과 gap 계산이 갈릴 여지를 남기지 않는다.
+  if (gap === null) return "운동을 시작하면 불꽃이 켜져요";
+  return gap === 1
+    ? `어제 운동했어요 · 오늘 하면 ${streak + 1}일째`
+    : `${gap}일째 쉬는 중 · 오늘 하면 ${streak + 1}일째`;
+}
+
 /** 날짜 문자열 해시로 변형 하나 선택 — 같은 날엔 고정, 날마다 로테이션 */
 export function pickByDay<T>(variants: T[], todayKey: string): T {
   let h = 0;

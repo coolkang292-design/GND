@@ -488,6 +488,26 @@ describe("ChallengePage 진행 중 — 오늘 운동하기 · 공정성 안내",
     expect(cta.getAttribute("href")).toBe("/record");
   });
 
+  /**
+   * 2026-08-19 사용자 요청 — *"유저의 프로필 클릭하면 지난 히스토리 성과 확인"*.
+   *
+   * ⚠️⚠️ **옛 판은 참가자 아바타가 `<span>`이라 누를 수 없었다.** 프로필 시트는
+   * 피드·크루·홈 세 곳에서만 열렸고, 챌린지에는 **진입점 자체가 없었다.**
+   * 이 테스트가 그 재발을 막는다.
+   */
+  it("참가자 이름을 눌러 프로필 시트를 연다", async () => {
+    arrange();
+    render(<ChallengePage />);
+    await screen.findByText("오늘 운동하기 ›");
+
+    const opener = await screen.findByLabelText("예전 참가자 프로필 보기");
+    expect(opener.tagName).toBe("BUTTON");
+
+    fireEvent.click(opener);
+    // 조회는 이 테스트에서 모킹하지 않는다 — 열리는지만 본다
+    expect(await screen.findByRole("dialog")).toBeTruthy();
+  });
+
   it("'상세 보기' 버튼은 넣지 않는다 — 바로 아래가 이미 상세다", async () => {
     arrange();
     render(<ChallengePage />);

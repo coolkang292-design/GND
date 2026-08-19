@@ -1095,6 +1095,42 @@ export async function getSuggestionFacts(userId: string): Promise<{
   };
 }
 
+/**
+ * 완료 세션의 **날짜와 분만** — 기록 화면 오늘 카드용 (2026-08-19).
+ *
+ * ⚠️ `getCompletedSessions`를 쓰지 않는다. 그건 `workout_exercises`를 join해
+ *    종목명까지 끌고 온다(달력·상세시트용). 여기 필요한 건 두 컬럼뿐이라,
+ *    **랜딩 화면**에 그 무게를 얹을 이유가 없다.
+ *
+ * ⚠️⚠️ **기간을 자르지 않는다.** 막대는 7일만 쓰지만 **스트릭은 전체 이력이
+ *    있어야 맞는다.** 90일로 잘랐다가 90일 넘는 스트릭을 만나면 이 화면만
+ *    작은 숫자를 말하고, 사용자는 홈과 기록 중 어느 쪽이 맞는지 확인하러
+ *    탭을 오간다. 홈(`getCompletedSessions`)과 **같은 모집단**이어야 한다.
+ *
+ * ⚠️ `getSuggestionFacts`에 합치지 마라. 그 함수의 입력은 **브리핑 서버와 같은
+ *    판정**을 해야 해서, 화면 사정으로 늘리면 둘이 갈린다(그 함수 주석 §3).
+ *
+ * 실패하면 던진다 — 부르는 쪽이 빈 배열로 떨어뜨려 카드만 안 그린다.
+ */
+export async function getCompletedSessionMinutes(
+  userId: string,
+): Promise<{ completedAt: Date; durationMinutes: number | null }[]> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("workout_sessions")
+    .select("completed_at, duration_minutes")
+    .eq("user_id", userId)
+    .eq("status", "completed")
+    .is("deleted_at", null)
+    .not("completed_at", "is", null)
+    .order("completed_at", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((r) => ({
+    completedAt: new Date(r.completed_at as string),
+    durationMinutes: (r.duration_minutes as number | null) ?? null,
+  }));
+}
+
 export async function getCompletedSessions(
   userId: string,
 ): Promise<CalendarSession[]> {

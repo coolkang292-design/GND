@@ -356,14 +356,14 @@ describe("OnboardingPage 챌린지 초대 모드", () => {
     ["invalid_status:active", /이미 시작해서 참가가 닫혔어요/],
     ["invalid_status:cancelled", /취소된 챌린지예요/],
     ["already_joined", /이미 참가한 챌린지예요/],
-  ])("%s면 이유를 말하고 홈으로 보낸다 (갇히지 않는다)", async (code, text) => {
+  ])("%s면 이유를 말하고 랜딩(기록)으로 보낸다 (갇히지 않는다)", async (code, text) => {
     mocks.joinChallengeAsNewcomer.mockRejectedValue(new Error(code));
     await submitNickname();
 
     // ⚠️ 되돌릴 수 없는 실패다. 가입은 이미 끝났으므로 화면에 붙잡아 두면
     //    사용자가 갇힌다 — `/onboarding`은 `(tabs)` 밖이라 OnboardingGate가
     //    없어서 새로고침해도 못 나간다.
-    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/home"));
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/record"));
     expect(mocks.saveOnboardingNotice.mock.calls[0]?.[0]).toMatch(text);
     // ⚠️ 코드도 지운다. 남기면 이 브라우저의 **다음 가입**까지 오염된다.
     expect(mocks.clearPendingChallengeInvite).toHaveBeenCalledOnce();
@@ -477,15 +477,15 @@ describe("OnboardingPage 친구 초대 링크 모드", () => {
 
   /**
    * ⚠️ 코드가 죽었다고 앱에 못 들어오게 막으면 안 된다. 2026-08-08에 코드 손입력
-   * 화면을 지웠으므로(사용자 지시) **홈으로 보낸다** — 가입은 이미 끝났고,
+   * 화면을 지웠으므로(사용자 지시) **랜딩(기록)으로 보낸다** — 가입은 이미 끝났고,
    * 프로필이 생긴 뒤에는 같은 링크를 다시 눌렀을 때 `/invite/[code]`가 바로
    * 친구를 맺어 주므로 되돌릴 수 있다.
    */
-  it("코드가 죽었어도 갇히지 않고 홈으로 보낸다", async () => {
+  it("코드가 죽었어도 갇히지 않고 랜딩(기록)으로 보낸다", async () => {
     mocks.redeemInviteCode.mockRejectedValue(new Error("invalid_invite_code"));
     await finishProfile();
 
-    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/home"));
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/record"));
   });
 });
 
@@ -511,11 +511,11 @@ describe("온보딩 — 이미 가입한 사람은 머물지 않는다 (D8)", ()
     linkedIdentity();
   });
 
-  it("프로필이 이미 있으면 홈으로 보낸다", async () => {
+  it("프로필이 이미 있으면 랜딩(기록)으로 보낸다", async () => {
     mocks.getMyProfile.mockResolvedValue({ id: "u1", nickname: "오뎅끼데스까" });
     render(<OnboardingPage />);
 
-    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/home"));
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/record"));
   });
 
   /**

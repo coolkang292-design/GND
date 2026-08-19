@@ -1,5 +1,6 @@
 "use client";
 
+import { Avatar } from "@/components/avatar";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import {
@@ -48,9 +49,10 @@ export function CrewLatestWorkout() {
         <PhotoStamp completedAt={item.completedAt} position="top" />
         <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/70 to-transparent px-3.5 pt-8 pb-3">
           <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/20 text-base backdrop-blur">
-              {item.avatarUrl ?? "👤"}
-            </span>
+            <Avatar
+              src={item.avatarUrl}
+              className="flex h-7 w-7 flex-none items-center justify-center overflow-hidden rounded-full bg-white/20 text-base backdrop-blur"
+            />
             <span className="text-sm font-extrabold text-white">
               {item.nickname}
               {item.userId === userId && (

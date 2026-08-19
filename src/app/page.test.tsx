@@ -27,18 +27,18 @@ async function go(params: Record<string, string | string[] | undefined>) {
 }
 
 describe("RootPage 리다이렉트", () => {
-  it("utm이 없으면 그냥 /home", async () => {
-    expect(await go({})).toBe("/home");
+  it("utm이 없으면 그냥 /record", async () => {
+    expect(await go({})).toBe("/record");
   });
 
-  it("utm 세 개를 /home으로 실어 보낸다", async () => {
+  it("utm 세 개를 /record로 실어 보낸다", async () => {
     const url = await go({
       utm_source: "kakao",
       utm_medium: "social",
       utm_campaign: "8월오픈",
     });
     const qs = new URLSearchParams(url.split("?")[1]);
-    expect(url.startsWith("/home?")).toBe(true);
+    expect(url.startsWith("/record?")).toBe(true);
     expect(qs.get("utm_source")).toBe("kakao");
     expect(qs.get("utm_medium")).toBe("social");
     expect(qs.get("utm_campaign")).toBe("8월오픈");
@@ -46,24 +46,24 @@ describe("RootPage 리다이렉트", () => {
 
   it("일부만 있어도 있는 것만 넘긴다", async () => {
     const url = await go({ utm_source: "instagram" });
-    expect(url).toBe("/home?utm_source=instagram");
+    expect(url).toBe("/record?utm_source=instagram");
   });
 
   it("utm이 아닌 파라미터는 넘기지 않는다", async () => {
     // 들어온 것을 통째로 실어 나르면 남의 링크에 붙은 값이 우리 주소로 옮겨 붙는다
     const url = await go({ utm_source: "kakao", next: "https://evil.example" });
-    expect(url).toBe("/home?utm_source=kakao");
+    expect(url).toBe("/record?utm_source=kakao");
     expect(url).not.toContain("evil");
   });
 
   it("배열로 들어오면 첫 값만 쓴다", async () => {
     // `?utm_source=a&utm_source=b`는 Next가 배열로 준다
     expect(await go({ utm_source: ["kakao", "naver"] })).toBe(
-      "/home?utm_source=kakao",
+      "/record?utm_source=kakao",
     );
   });
 
   it("빈 값은 넘기지 않는다", async () => {
-    expect(await go({ utm_source: "" })).toBe("/home");
+    expect(await go({ utm_source: "" })).toBe("/record");
   });
 });

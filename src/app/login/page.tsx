@@ -6,6 +6,7 @@ import { ScreenArt } from "@/components/brand/hero-art";
 import { GoldCta, GoldLine } from "@/components/brand/gold";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { peekPendingChallengeInvite } from "@/lib/challenge";
+import { APP_LANDING_PATH } from "@/lib/domain/landing";
 import {
   PROVIDER_META,
   enabledProviders,
@@ -92,7 +93,7 @@ export default function LoginPage() {
     window.location.assign(
       pendingChallenge
         ? `/challenge?join=${encodeURIComponent(pendingChallenge)}`
-        : "/home",
+        : APP_LANDING_PATH,
     );
   }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import {
   AVATARS,
@@ -8,10 +8,16 @@ import {
   DEFAULT_WEEKLY_GOAL,
   clampWeeklyGoal,
 } from "@/lib/domain/avatars";
+import { Avatar } from "@/components/avatar";
 import { getMyProfile, upsertMyProfile } from "@/lib/crew";
+import { uploadAvatarPhoto } from "@/lib/avatar";
+import { isPhotoAvatar } from "@/lib/domain/avatar-source";
 
 /**
- * 프로필 편집 — 닉네임 · 이모지 (설계 §4.3).
+ * 프로필 편집 — 닉네임 · 프로필 사진(사진 업로드 또는 이모지) (설계 §4.3).
+ *
+ * ⚠️ **사진 업로드가 2026-08-19에 붙었다.** `avatar_url` 한 칸에 이모지와 사진
+ * URL이 섞여 산다 — 그리는 쪽은 `<Avatar>`만 쓴다(`domain/avatar-source.ts`).
  *
  * ⚠️⚠️ **이건 새 기능이 아니라 온보딩에서 뺀 것을 옮겨 놓은 자리다. 지우지 마라.**
  * 2026-08-08에 온보딩 첫 화면을 카카오·구글만 남기고 정리하면서 이모지 선택과
@@ -48,6 +54,8 @@ export function ProfileEditSheet({ onSaved }: { onSaved?: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   // 열 때 현재 값을 읽는다. 미리 읽어 두면 다른 기기에서 바꾼 값이 낡은 채로
   // 화면에 남고, 저장 시 그 낡은 값으로 덮어쓴다.
@@ -71,6 +79,31 @@ export function ProfileEditSheet({ onSaved }: { onSaved?: () => void }) {
       cancelled = true;
     };
   }, [open, userId]);
+
+  /**
+   * 고르는 즉시 올린다 — 저장 버튼을 기다리지 않는다.
+   *
+   * ⚠️ 미리보기를 `URL.createObjectURL`로 대신하지 않는다. 그러면 "보이는 것"과
+   * "저장될 것"이 갈려서, 업로드가 실패해도 화면은 성공한 것처럼 보인다.
+   * 올라간 실제 URL을 그대로 미리보기에 쓰면 그 거짓말이 불가능하다.
+   *
+   * 고르고 저장 안 하고 닫으면 파일만 버킷에 남는다 — 해가 없어서 받아들인다.
+   */
+  async function pickPhoto(file: File | undefined) {
+    if (!file || !userId || uploading) return;
+    setUploading(true);
+    setError(null);
+    setDone(false);
+    try {
+      setAvatar(await uploadAvatarPhoto(userId, file));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "사진을 올리지 못했어요");
+    } finally {
+      setUploading(false);
+      // 같은 파일을 다시 고를 수 있게 비운다 — 안 비우면 onChange가 안 뜬다
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
 
   async function save() {
     if (!userId || busy) return;
@@ -111,7 +144,7 @@ export function ProfileEditSheet({ onSaved }: { onSaved?: () => void }) {
         className="flex items-center justify-between rounded-card border border-line bg-surface px-3.5 py-3.5 shadow-card"
       >
         <span className="text-[14px] font-extrabold">프로필 편집</span>
-        <span className="text-[13px] text-muted">이름 · 이모지 ›</span>
+        <span className="text-[13px] text-muted">이름 · 사진 ›</span>
       </button>
     );
   }
@@ -136,6 +169,50 @@ export function ProfileEditSheet({ onSaved }: { onSaved?: () => void }) {
         <>
           <p className="mt-4 mb-2 text-[11px] font-bold text-muted">
             프로필 사진
+          </p>
+
+          {/* 지금 값을 **실물 그대로** 보여준다 — 사진이면 사진, 이모지면 이모지.
+              홈 크루 목록·챌린지 참가자에 뜰 모습과 같은 컴포넌트다. */}
+          <div className="flex items-center gap-3">
+            <Avatar
+              src={avatar}
+              label="내 프로필 사진"
+              className="flex h-16 w-16 flex-none items-center justify-center overflow-hidden rounded-full border border-line bg-surface-2 text-3xl"
+            />
+            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                aria-label="프로필 사진 파일"
+                onChange={(e) => void pickPhoto(e.target.files?.[0])}
+              />
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                disabled={uploading}
+                className="h-10 rounded-card-sm border border-accent bg-accent-weak text-[13px] font-extrabold text-accent disabled:opacity-60"
+              >
+                {uploading ? "올리는 중…" : "사진 올리기"}
+              </button>
+              {isPhotoAvatar(avatar) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAvatar(DEFAULT_AVATAR);
+                    setDone(false);
+                  }}
+                  className="h-9 rounded-card-sm border border-line text-[12.5px] font-bold text-muted"
+                >
+                  사진 빼고 이모지로
+                </button>
+              )}
+            </div>
+          </div>
+
+          <p className="mt-3 mb-2 text-[11px] font-bold text-muted">
+            또는 이모지로
           </p>
           <div className="flex flex-wrap gap-2">
             {AVATARS.map((a) => (
