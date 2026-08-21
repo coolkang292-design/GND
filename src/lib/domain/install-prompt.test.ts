@@ -4,7 +4,7 @@ import {
   MAX_DISMISS,
   OFFER_STATE_VERSION,
   decideGuide,
-  OFFER_COOLDOWN_MS,
+  OFFER_COOLDOWNS_MS,
   canOfferInstall,
   detectInstallEnv,
   isStandaloneDisplay,
@@ -168,19 +168,39 @@ describe("노출 정책", () => {
     expect(shouldOfferInstall({ ...base, state: readOfferState(s) })).toBe(false);
   });
 
-  it("닫으면 유예 동안 안 뜨고, 유예가 지나면 다시 뜬다", () => {
+  /**
+   * ⚠️ 처음부터 7일은 너무 길었다(2026-08-22). 사장님이 안내를 따라 **설치를
+   * 끝내면서** 닫았는데, 앱을 지우고 다시 해 보니 유예에 걸려 안 떴다.
+   * 닫기가 "설치했다"인지 "지금은 아니다"인지 **우리는 구분할 수 없으므로**
+   * 첫 번째는 짧게 잡는다.
+   */
+  it("⚠️ 처음 닫으면 유예는 하루뿐이다", () => {
     const s = memoryStorage();
     const closedAt = 1_000_000;
     recordDismiss(s, closedAt);
     const state = readOfferState(s);
+    const day = OFFER_COOLDOWNS_MS[0];
 
-    expect(shouldOfferInstall({ ...base, state, now: closedAt + 1 })).toBe(false);
+    expect(day).toBe(24 * 60 * 60 * 1000);
+    expect(shouldOfferInstall({ ...base, state, now: closedAt + day - 1 })).toBe(
+      false,
+    );
+    expect(shouldOfferInstall({ ...base, state, now: closedAt + day })).toBe(true);
+  });
+
+  it("두 번 닫으면 유예가 일주일로 길어진다 — 반복해서 닫는 사람에게만 조용해진다", () => {
+    const s = memoryStorage();
+    recordDismiss(s, 1);
+    const closedAt = 1_000_000;
+    recordDismiss(s, closedAt);
+    const state = readOfferState(s);
+    const week = OFFER_COOLDOWNS_MS[1];
+
+    expect(state.dismissCount).toBe(2);
     expect(
-      shouldOfferInstall({ ...base, state, now: closedAt + OFFER_COOLDOWN_MS - 1 }),
+      shouldOfferInstall({ ...base, state, now: closedAt + OFFER_COOLDOWNS_MS[0] }),
     ).toBe(false);
-    expect(
-      shouldOfferInstall({ ...base, state, now: closedAt + OFFER_COOLDOWN_MS }),
-    ).toBe(true);
+    expect(shouldOfferInstall({ ...base, state, now: closedAt + week })).toBe(true);
   });
 
   it(`${MAX_DISMISS}번 닫으면 유예가 지나도 영영 안 뜬다 — 성가심의 상한`, () => {
@@ -189,7 +209,7 @@ describe("노출 정책", () => {
     const state = readOfferState(s);
     expect(state.dismissCount).toBe(MAX_DISMISS);
     expect(
-      shouldOfferInstall({ ...base, state, now: 1_000 + OFFER_COOLDOWN_MS * 10 }),
+      shouldOfferInstall({ ...base, state, now: 1_000 + OFFER_COOLDOWNS_MS[1] * 10 }),
     ).toBe(false);
   });
 

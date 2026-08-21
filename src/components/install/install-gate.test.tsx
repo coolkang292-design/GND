@@ -203,4 +203,60 @@ describe("InstallGate — 안 뜨는가 (부정 확인)", () => {
     window.dispatchEvent(new Event(OPEN_INSTALL_GUIDE_EVENT));
     expect(await sheetTitle()).toBe("홈 화면에 GND 놓기");
   });
+
+  /**
+   * ⚠️⚠️ **회귀 (2026-08-22, 사장님 실기기).**
+   * *"처음은 성공해서 앱 깔았는데 다시 지우고 같은 절차 하니까 사파리에선 안내가
+   * 안 뜨네?"* — 원인이 둘이었다. ① 첫 닫기에 7일 유예가 걸렸고 ② 세션 표식이
+   * 사파리 탭에 며칠씩 살아남아 **유예가 지난 뒤에도** 막았다. 표식은 탈출
+   * 안내에만 쓴다.
+   */
+  it("⚠️ 유예가 지나면 같은 탭이어도 다시 뜬다 — 세션 표식이 숨은 빗장이 되면 안 된다", async () => {
+    const twoDaysAgo = Date.now() - 2 * 24 * 60 * 60 * 1000;
+    localStorage.setItem(
+      "gnd:install-offer",
+      JSON.stringify({
+        dismissedAt: twoDaysAgo,
+        dismissCount: 1,
+        done: false,
+        v: 2,
+      }),
+    );
+    // 옛 코드가 남기던 표식 — 이게 있어도 막히면 안 된다
+    sessionStorage.setItem("gnd:install:offer-shown", "1");
+
+    render(<InstallGate />);
+    expect(await sheetTitle()).toBe("홈 화면에 GND 놓기");
+  });
+
+  it("유예 안이면 안 뜬다", async () => {
+    localStorage.setItem(
+      "gnd:install-offer",
+      JSON.stringify({
+        dismissedAt: Date.now(),
+        dismissCount: 1,
+        done: false,
+        v: 2,
+      }),
+    );
+    render(<InstallGate />);
+    expect(await sheetTitle()).toBeNull();
+  });
+
+  /**
+   * ⚠️⚠️ **회귀 (2026-08-22).** 닫기 처리를 `setVariant`의 갱신함수 안에 뒀더니
+   * 한 번 닫았는데 `dismissCount`가 **2**가 됐다 — React는 갱신함수를 순수하다고
+   * 보고 두 번 부를 수 있다. 유예가 두 배로 빨리 길어지고 중단 상한에도 절반
+   * 만에 닿는다. 부수효과는 갱신함수 밖에 둔다.
+   */
+  it("⚠️ 한 번 닫으면 dismissCount는 정확히 1이다", async () => {
+    render(<InstallGate />);
+    expect(await sheetTitle()).toBe("홈 화면에 GND 놓기");
+
+    fireEvent.click(screen.getByRole("button", { name: "닫기" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+
+    const saved = JSON.parse(localStorage.getItem("gnd:install-offer") ?? "{}");
+    expect(saved.dismissCount).toBe(1);
+  });
 });

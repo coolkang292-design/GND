@@ -135,8 +135,21 @@ export const INSTALL_PENDING_KEY = "gnd:install-offer:pending";
  */
 export const OFFER_STATE_VERSION = 2;
 
-/** 닫은 뒤 다시 물어보기까지 기다리는 시간 */
-export const OFFER_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+/**
+ * **닫은 뒤 다시 물어보기까지 기다리는 시간 — 닫을수록 길어진다.**
+ *
+ * ⚠️ 처음부터 7일은 너무 길었다(2026-08-22). 사장님이 안내를 따라 **설치를
+ *    끝내면서** 시트를 닫았는데, 앱을 지우고 다시 해 보니 유예에 걸려 안내가
+ *    안 떴다. 닫기는 "설치했다"는 뜻일 수도 있고 "지금은 아니다"라는 뜻일 수도
+ *    있는데 **우리는 구분할 수 없다** — 그러니 첫 번째는 짧게 잡고, 반복해서
+ *    닫는 사람에게만 조용해진다.
+ *
+ * 정말 설치한 사람은 어차피 `standalone`으로 걸러지므로 짧은 유예로 성가시지 않다.
+ */
+export const OFFER_COOLDOWNS_MS = [
+  24 * 60 * 60 * 1000, // 1번 닫은 뒤: 하루
+  7 * 24 * 60 * 60 * 1000, // 2번 닫은 뒤: 일주일
+];
 /** 이만큼 닫으면 더 묻지 않는다 — 내 정보 탭의 상시 진입점만 남는다 */
 export const MAX_DISMISS = 3;
 
@@ -224,9 +237,9 @@ export function shouldOfferInstall(args: {
 function withinPolicy(state: OfferState, now: number): boolean {
   if (state.done) return false;
   if (state.dismissCount >= MAX_DISMISS) return false;
-  if (state.dismissedAt !== null && now - state.dismissedAt < OFFER_COOLDOWN_MS)
-    return false;
-  return true;
+  if (state.dismissedAt === null) return true;
+  const step = Math.min(state.dismissCount, OFFER_COOLDOWNS_MS.length) - 1;
+  return now - state.dismissedAt >= OFFER_COOLDOWNS_MS[Math.max(step, 0)];
 }
 
 /** 지금 무엇을 보여줄 것인가 */

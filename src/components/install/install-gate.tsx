@@ -62,7 +62,6 @@ export const OPEN_INSTALL_GUIDE_EVENT = "gnd:open-install-guide";
  *    표식은 **사람이 봤다는 증거**여야 한다. 렌더는 증거가 아니다.
  */
 const SESSION_ESCAPE = "gnd:install:escape-shown";
-const SESSION_INSTALL = "gnd:install:offer-shown";
 
 function sessionSeen(key: string): boolean {
   try {
@@ -164,9 +163,15 @@ export function InstallGate() {
       });
       if (kind === "none") return;
 
-      // 반복 노출은 세션 단위로 막는다. 표식은 **사용자가 닫을 때** 남는다.
-      const sessionKey = kind === "escape" ? SESSION_ESCAPE : SESSION_INSTALL;
-      if (sessionSeen(sessionKey)) return;
+      // ⚠️ 세션 표식은 **탈출 안내에만** 쓴다.
+      //
+      //    탈출 안내는 닫아도 저장소에 이력을 안 남긴다(카톡에 다시 들어올 때마다
+      //    필요하니까). 그래서 같은 세션에서 반복 노출을 막을 것이 세션 표식뿐이다.
+      //
+      //    설치·로그인 안내는 다르다. 닫으면 저장소에 유예가 남으므로 세션 표식이
+      //    **중복**이고, 사파리 탭은 며칠씩 살아 있어서 유예가 지난 뒤에도 계속
+      //    막는 **숨은 빗장**이 된다(2026-08-22, 앱을 지우고 다시 해도 안 뜬 원인).
+      if (kind === "escape" && sessionSeen(SESSION_ESCAPE)) return;
 
       const v =
         kind === "escape"
@@ -230,18 +235,17 @@ export function InstallGate() {
    * 어느 표식인지는 지금 떠 있던 시트가 정한다.
    */
   const close = useCallback(() => {
-    setVariant((v) => {
-      if (v) {
-        markSessionSeen(
-          v.startsWith("escape-") ? SESSION_ESCAPE : SESSION_INSTALL,
-        );
-        // ⚠️ 닫기는 **유예**다(영구 중단이 아니다). 탈출 안내는 카톡에 다시 들어올
-        //    때마다 필요하므로 이력을 남기지 않는다 — 세션 표식으로 충분하다.
-        if (!v.startsWith("escape-")) recordDismiss(localStore(), Date.now());
-      }
-      return null;
-    });
-  }, []);
+    // ⚠️⚠️ **부수효과를 `setState` 갱신함수 안에 넣지 마라** (2026-08-22).
+    //    거기 넣었더니 한 번 닫았는데 `dismissCount`가 **2**가 됐다 — React는
+    //    갱신함수를 순수하다고 보고 두 번 부를 수 있다(StrictMode). 유예가 두
+    //    배로 빨리 길어지고 중단 상한에도 절반 만에 닿는다.
+    if (variant) {
+      // 탈출 안내는 카톡에 다시 들어올 때마다 필요하므로 이력을 남기지 않는다.
+      if (variant.startsWith("escape-")) markSessionSeen(SESSION_ESCAPE);
+      else recordDismiss(localStore(), Date.now());
+    }
+    setVariant(null);
+  }, [variant]);
 
   const copyUrl = useCallback(() => {
     void navigator.clipboard
