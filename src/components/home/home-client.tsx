@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { AuthStatus } from "@/components/auth-status";
 import { CrewCard } from "@/components/crew-card";
 import { ActiveWorkoutCards } from "@/components/feed/active-workout-cards";
 import { NotificationBell } from "@/components/notification-bell";
+import { MemberProfileSheet } from "@/components/crew/member-profile-sheet";
 import { PushEnableCard } from "@/components/push-enable-card";
 import { FriendBoardCard } from "@/components/home/friend-board-card";
 import {
@@ -28,7 +29,9 @@ import { getActiveCrewSessions, type ActiveCrewSession } from "@/lib/social";
 import { getProgressSummary, type ProgressSummary } from "@/lib/progression";
 import { workedOutToday } from "@/lib/domain/friend-board";
 import { resolvePersonalTodayStatus } from "@/lib/domain/home-competition";
-import { DEFAULT_TIMEZONE } from "@/lib/domain/time";
+import { currentStreak, workoutDayKeys } from "@/lib/domain/streak";
+import { weekWorkoutDays } from "@/lib/domain/viewing-pass";
+import { DEFAULT_TIMEZONE, dayKey } from "@/lib/domain/time";
 
 const NO_ACTIVE_IDS: Set<string> = new Set();
 
@@ -75,6 +78,13 @@ export function HomeClient() {
    * 다른 "오늘"을 쓴다. 렌더마다 새로 만들지 않도록 `useState` 초기화로 못 박는다.
    */
   const [dateRef] = useState(() => new Date());
+  /**
+   * 내 성과 시트 (2026-08-21 사용자 지시 — "다른 크루와 동일한 화면으로").
+   *
+   * ⚠️ 홈이 소유한다. 카드 안에서 열면 카드가 조회·상태를 갖게 되는데, 그 카드는
+   * "홈이 이미 부른 값만 받아 그린다"는 규약으로 만들어졌다(크루 카드도 같다).
+   */
+  const [selfProfileOpen, setSelfProfileOpen] = useState(false);
 
   useEffect(() => {
     if (!configured || loading || !userId) return;
@@ -243,6 +253,34 @@ export function HomeClient() {
   );
 
 
+  /**
+   * 내 시트에 넘길 이번 주 일수.
+   *
+   * ⚠️ `MemberProfileSheet`가 `stats`에서 **쓰는 값은 이번 주뿐**이다 — 누적 횟수·
+   * 시간·거리는 시트가 `get_crew_member_profile`로 직접 받는다. 그래서 손에 없는
+   * 누적 분을 `0`으로 지어내 넘기지 않는다.
+   */
+  const myWeekDays = useMemo(
+    () =>
+      completedAts
+        ? weekWorkoutDays(completedAts, dateRef, DEFAULT_TIMEZONE).days.length
+        : 0,
+    [completedAts, dateRef],
+  );
+
+  const myStreak = useMemo(
+    () =>
+      completedAts
+        ? currentStreak(
+            workoutDayKeys(completedAts, DEFAULT_TIMEZONE),
+            dayKey(dateRef, DEFAULT_TIMEZONE),
+          )
+        : 0,
+    [completedAts, dateRef],
+  );
+
+  const openSelfProfile = useCallback(() => setSelfProfileOpen(true), []);
+
   return (
     <div className="flex flex-col gap-3">
       <header className="flex items-center justify-between pt-2 pb-1">
@@ -276,6 +314,7 @@ export function HomeClient() {
           weeklyGoal={weeklyGoal}
           status={myTodayStatus}
           badgeCount={badgeCount}
+          onOpenProfile={openSelfProfile}
           now={dateRef}
         />
       ) : (
@@ -318,6 +357,24 @@ export function HomeClient() {
       <CrewCard />
 
       <AuthStatus />
+
+      {/* ⚠️ **크루 행이 여는 것과 같은 시트다** (2026-08-21 사용자 지시).
+          `get_crew_member_profile`은 본인을 허용한다 — `p_target_id <> auth.uid()`일
+          때만 크루를 따진다(`db-current-schema.sql:1255`).
+
+          ⚠️ `viewerId`·`source`를 **넘기지 않는다.** 그 둘은 "누가 누구 프로필을
+          봤나"를 남기는 계측인데, 내가 내 것을 연 것은 프로필 방문이 아니다 —
+          넘기면 크루 방문 통계가 자기 조회로 부풀어 오른다. */}
+      {selfProfileOpen && userId && myName && (
+        <MemberProfileSheet
+          userId={userId}
+          nickname={myName.nickname}
+          avatarUrl={myName.avatarUrl}
+          streak={myStreak}
+          stats={{ weekDays: myWeekDays }}
+          onClose={() => setSelfProfileOpen(false)}
+        />
+      )}
     </div>
   );
 }

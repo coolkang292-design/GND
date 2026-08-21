@@ -126,6 +126,17 @@ export type PersonalTodayCardProps = {
    * 배지 썸네일 줄은 프로필 상세에 남는다.
    */
   badgeCount: number | null;
+  /**
+   * 프로필 영역을 눌렀을 때 (2026-08-21 사용자 지시).
+   *
+   * ⚠️ **설정 화면(`/profile`)으로 보내지 않는다.** 크루 행은 누르면
+   * `MemberProfileSheet`가 열리는데 내 행만 설정으로 가면 같은 자리에서 같은 모양을
+   * 누른 결과가 사람마다 달랐다. 홈은 세 행 모두 **같은 시트**를 연다.
+   * 설정은 하단 탭 `내 정보`가 그대로 맡는다.
+   *
+   * ⚠️ 시트는 홈이 소유한다 — 이 카드는 조회도 상태도 갖지 않는다(크루 카드와 같은 규약).
+   */
+  onOpenProfile: () => void;
   /** 홈이 한 번 만든 기준 시각. 카드가 `new Date()`를 부르면 화면마다 "오늘"이 갈린다 */
   now: Date;
 };
@@ -137,6 +148,7 @@ export function PersonalTodayCard({
   weeklyGoal,
   status,
   badgeCount,
+  onOpenProfile,
   now,
 }: PersonalTodayCardProps) {
   const tz = DEFAULT_TIMEZONE;
@@ -155,13 +167,21 @@ export function PersonalTodayCard({
         나의 오늘
       </h2>
 
-      {/* ⚠️ 아바타·이름·레벨 영역**만** 링크다 (설계 §6.3). 카드 전체를 `<Link>`로
-          감싸면 아래 주 행동 버튼이 링크 안의 링크가 되어 — HTML상 무효인 데다 —
-          운동하러 가려다 프로필이 열린다. CTA는 이 링크의 **형제**로 둔다. */}
-      <Link
-        href="/profile"
-        aria-label={`${profile.nickname} 프로필 열기`}
-        className="mt-2.5 flex items-center gap-3"
+      {/* ⚠️ 아바타·이름·레벨 영역**만** 누를 수 있다. 카드 전체를 감싸면 아래 주
+          행동 링크가 이 버튼 안에 들어가 — 운동하러 가려다 시트가 열린다.
+          CTA는 이 버튼의 **형제**로 둔다(크루 행과 같은 구조).
+
+          ⚠️ **`<Link href="/profile">`로 되돌리지 마라** (2026-08-21 사용자 지시).
+          그러면 크루 행은 성과 시트가 열리는데 내 행만 설정 화면으로 가서, 같은
+          자리에서 같은 모양을 누른 결과가 사람마다 달라진다.
+
+          ⚠️ 접근 가능한 이름도 크루 행과 **같은 말**(`성과 보기`)을 쓴다 — 같은 것을
+          여는 버튼이 화면 낭독에서 다른 이름으로 읽히면 안 된다. */}
+      <button
+        type="button"
+        onClick={onOpenProfile}
+        aria-label={`${profile.nickname} 성과 보기`}
+        className="mt-2.5 flex w-full items-center gap-3 text-left"
       >
         {/* ⚠️ 판정은 `isPhotoAvatar` 한 곳이다. `avatarUrl != null`로 가르면
             이모지를 쓰는 사람 전원이 캐릭터를 잃는다.
@@ -234,7 +254,7 @@ export function PersonalTodayCard({
             </p>
           )}
         </div>
-      </Link>
+      </button>
 
       {/* ⚠️ **세 칸이다** — 이번 주 · 연속 · 배지 (2026-08-21 사용자 지시로 배지 복원).
           칸을 더 늘리기 전에 375px에서 재라: 카드 안쪽 폭 311px를 3등분하면 한 칸이

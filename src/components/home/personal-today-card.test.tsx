@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   PersonalTodayCard,
   PersonalTodayCardSkeleton,
@@ -46,6 +46,7 @@ function renderCard(
     weeklyGoal: 5 as number | null,
     status: "idle" as const,
     badgeCount: 9 as number | null,
+    onOpenProfile: vi.fn(),
     now: NOW,
     ...overrides,
   };
@@ -80,6 +81,7 @@ describe("PersonalTodayCard — 승인된 지표만 그린다", () => {
         weeklyGoal={5}
         status="idle"
         badgeCount={9}
+        onOpenProfile={() => {}}
         now={NOW}
       />,
     );
@@ -105,6 +107,7 @@ describe("PersonalTodayCard — 승인된 지표만 그린다", () => {
         weeklyGoal={5}
         status="idle"
         badgeCount={9}
+        onOpenProfile={() => {}}
         now={NOW}
       />,
     );
@@ -143,6 +146,7 @@ describe("PersonalTodayCard — 승인된 지표만 그린다", () => {
         weeklyGoal={5}
         status="idle"
         badgeCount={9}
+        onOpenProfile={() => {}}
         now={NOW}
       />,
     );
@@ -221,6 +225,7 @@ describe("PersonalTodayCard — 주간 목표가 없을 때", () => {
         weeklyGoal={null}
         status="idle"
         badgeCount={9}
+        onOpenProfile={() => {}}
         now={NOW}
       />,
     );
@@ -256,16 +261,51 @@ describe("PersonalTodayCard — 성장 조회 실패", () => {
 
 describe("PersonalTodayCard — 프로필로 가는 길과 아바타", () => {
   /**
-   * ⚠️ 카드 전체를 링크로 감싸지 않는다 (설계 §6.3). 주 행동 버튼과 중첩되기
-   * 때문이다 — 링크 안의 링크는 HTML상 무효이고, 운동하러 가려다 프로필이 열린다.
+   * ⚠️ **설정 화면(`/profile`)으로 보내지 않는다** (2026-08-21 사용자 지시 —
+   * "내 프로필을 클릭하니까 설정 화면으로 랜딩되네, 다른 크루와 동일한 화면으로").
+   *
+   * 크루 행을 누르면 `MemberProfileSheet`가 열리는데 내 행만 설정으로 가면,
+   * **같은 자리에서 같은 모양을 누른 결과가 사람마다 달랐다.** 이제 셋 다 같은
+   * 시트를 연다 — `get_crew_member_profile`은 본인도 허용한다.
+   *
+   * 설정은 하단 탭 `내 정보`가 그대로 맡는다.
    */
-  it("아바타·이름 영역만 /profile 링크이고 CTA는 그 형제다", () => {
+  it("프로필 영역은 링크가 아니라 시트를 여는 버튼이다", () => {
+    const props = renderCard();
+    expect(screen.queryByRole("link", { name: /dev-테스터A/ })).toBeNull();
+
+    const open = screen.getByRole("button", { name: "dev-테스터A 성과 보기" });
+    fireEvent.click(open);
+    expect(props.onOpenProfile).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * ⚠️ 프로필 버튼과 주 행동은 **형제**여야 한다. 버튼 안에 링크를 넣으면
+   * 운동하러 가려다 시트가 함께 열린다(크루 행이 같은 이유로 형제 구조다).
+   */
+  it("프로필 버튼과 CTA가 서로를 품지 않는다", () => {
     renderCard();
-    const profileLink = screen.getByRole("link", { name: /dev-테스터A 프로필/ });
-    expect(profileLink.getAttribute("href")).toBe("/profile");
+    const open = screen.getByRole("button", { name: "dev-테스터A 성과 보기" });
     const cta = screen.getByRole("link", { name: /오늘 운동하고/ });
-    expect(profileLink.contains(cta)).toBe(false);
-    expect(cta.contains(profileLink)).toBe(false);
+    expect(open.contains(cta)).toBe(false);
+    expect(cta.contains(open)).toBe(false);
+    expect(open.querySelector("a")).toBeNull();
+  });
+
+  it("홈 카드 어디에서도 /profile로 보내지 않는다 — 설정은 하단 탭이 맡는다", () => {
+    const { container } = render(
+      <PersonalTodayCard
+        profile={{ nickname: "dev-테스터A", avatarUrl: null }}
+        summary={SUMMARY}
+        completedAts={[YESTERDAY]}
+        weeklyGoal={5}
+        status="idle"
+        badgeCount={9}
+        onOpenProfile={() => {}}
+        now={NOW}
+      />,
+    );
+    expect(container.querySelector('a[href="/profile"]')).toBeNull();
   });
 
   /**

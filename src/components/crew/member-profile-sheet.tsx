@@ -29,9 +29,16 @@ import {
  * 받는다. 크루 시트가 홈 모듈에 묶이면 안 된다(challenge.ts의 PeriodSessionRow와 같은 수법).
  */
 export type MemberPerformance = {
-  workoutCount: number;
-  totalMinutes: number;
+  /**
+   * 이번 주 운동일. **이 값만 화면에 쓰인다** — 누적 수치는 RPC(0081)가 준다.
+   *
+   * ⚠️ 그래서 나머지 둘은 선택이다 (2026-08-21). 홈 내 카드는 누적 분(分)을 손에
+   * 들고 있지 않은데, 안 쓰는 칸을 채우자고 `0`을 넘기면 **화면에 안 보이는 거짓말**이
+   * 남는다 — 나중에 그 칸을 그리는 순간 0분으로 나온다.
+   */
   weekDays: number;
+  workoutCount?: number;
+  totalMinutes?: number;
 };
 
 /** 이력 줄의 날짜 — `2026. 8. 19.`처럼 길면 한 줄에 안 들어간다 */
