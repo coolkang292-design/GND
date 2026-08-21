@@ -21,6 +21,10 @@ afterEach(cleanup);
 const NOW = new Date("2026-08-21T03:00:00Z");
 /** 2026-08-20(목) 12:00 KST — 어제 하루 운동 */
 const YESTERDAY = new Date("2026-08-20T03:00:00Z");
+/** 2026-08-21(금) 10:00 KST — 오늘 이미 운동한 상태 */
+const TODAY = new Date("2026-08-21T01:00:00Z");
+/** 2026-08-10(월) — 5일 유예(`STREAK_EXPIRY_DAYS`)를 넘겨 **이미 소멸**한 기록 */
+const LONG_AGO = new Date("2026-08-10T03:00:00Z");
 
 /** 640 XP = Lv.4(개노답). 다음 레벨까지 남은 XP가 0이 아니라 진행바가 보인다. */
 const SUMMARY: ProgressSummary = {
@@ -333,6 +337,73 @@ describe("PersonalTodayCard — 프로필로 가는 길과 아바타", () => {
     const img = screen.getByAltText("dev-테스터A님 프로필 사진");
     expect(img.getAttribute("src")).toContain("a.jpg");
     expect(screen.queryByAltText(/캐릭터$/)).toBeNull();
+  });
+});
+
+/**
+ * 스트릭 **소멸 경고 배너** (2026-08-21 복원).
+ *
+ * ⚠️ 같은 날 홈 개편에서 `StreakCard`를 홈에서 빼면서 이 배너가 **같이 사라졌다.**
+ * 승인 설계 §5는 "데이터는 모두 내 카드에 통합"이라 적었는데 구현은 숫자만 옮겼다.
+ * 사용자가 배포된 화면을 보고 지적했고, 되살릴 범위를 **경고 배너 하나**로 확정했다 —
+ * 7일 점·헤더 한 줄·옛 카드는 되살리지 않는다
+ * (`docs/superpowers/HANDOFF-2026-08-21-home-streak-warning.md`).
+ *
+ * ⚠️ **문구를 통째로 박지 마라.** `pickByDay`가 `todayKey`로 변형을 고르므로 `now`를
+ * 고정하면 결정적이긴 하지만, 문장을 그대로 단언하면 카피를 다듬는 순간 깨진다.
+ * 여기서 지키려는 것은 **단계 표식**(`소멸 D-4`)과 **잃을 숫자**가 화면에 나온다는 것뿐이다.
+ */
+describe("PersonalTodayCard — 스트릭 소멸 경고", () => {
+  it("스트릭이 끊길 위험이면 소멸 경고를 띄운다", () => {
+    renderCard({ completedAts: [YESTERDAY], status: "idle" });
+    const warn = screen.getByRole("alert");
+    expect(warn.textContent).toContain("소멸 D-4");
+    expect(warn.textContent).toContain("1일"); // 잃을 스트릭이 문구에 들어간다
+  });
+
+  /**
+   * ⚠️ **부정 확인이 핵심이다.** 평소(오늘 완료) 안 보이는 것이 이 배너의 설계다 —
+   * 오늘 마친 사람을 재촉하지 않고 같은 면적을 칭찬 배너가 쓴다(설계 §6.2).
+   */
+  it("오늘 운동을 마쳤으면 경고를 띄우지 않는다", () => {
+    renderCard({ completedAts: [TODAY], status: "done" });
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  /**
+   * ⚠️ 기록이 없는 사람은 잃을 것이 없고, 이미 소멸한 사람에게 "N일이 사라진다"는
+   * 재촉이 아니라 **면박**이다(`streak-messages.ts`의 `EXPIRED_MESSAGES` 주석).
+   * `STAGE_MESSAGES`가 `Partial`이라 `none`·`expired`·`today_done`은 자동으로
+   * `undefined`가 된다 — 조건을 손으로 더 붙이지 마라.
+   */
+  it("기록이 없거나 이미 소멸했으면 경고가 없다", () => {
+    renderCard({ completedAts: [] });
+    expect(screen.queryByRole("alert")).toBeNull();
+    cleanup();
+    renderCard({ completedAts: [LONG_AGO] });
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  /** ⚠️ 경고는 **알리는 것**이지 누르는 것이 아니다. 누를 것은 바로 위 금색 CTA 하나다 */
+  it("경고는 링크도 버튼도 아니다", () => {
+    renderCard({ completedAts: [YESTERDAY] });
+    const warn = screen.getByRole("alert");
+    expect(warn.closest("a")).toBeNull();
+    expect(warn.querySelector("button")).toBeNull();
+  });
+
+  /**
+   * ⚠️ **금색 CTA 아래다.** 위에 두면 오늘 눌러야 할 것보다 경고가 먼저 읽힌다 —
+   * 이 카드의 목적은 "비교하고 바로 누르는 것"이다(인수인계서 §4 Task 3).
+   * 카드 **밖**(내 카드와 크루 카드 사이)도 안 된다 — 그 순간 비교 구역이 갈라진다.
+   */
+  it("경고는 주 행동 아래에 온다", () => {
+    renderCard({ completedAts: [YESTERDAY], status: "idle" });
+    const cta = screen.getByRole("link", { name: /오늘 운동하고/ });
+    const warn = screen.getByRole("alert");
+    expect(
+      cta.compareDocumentPosition(warn) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 });
 

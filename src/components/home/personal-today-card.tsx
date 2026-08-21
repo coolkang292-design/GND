@@ -7,7 +7,8 @@ import { UiIcon } from "@/components/ui-icon";
 import { isPhotoAvatar } from "@/lib/domain/avatar-source";
 import type { FriendStatus } from "@/lib/domain/friend-board";
 import { personalTodayAction } from "@/lib/domain/home-competition";
-import { currentStreak, workoutDayKeys } from "@/lib/domain/streak";
+import { currentStreak, streakStage, workoutDayKeys } from "@/lib/domain/streak";
+import { pickByDay, STAGE_MESSAGES } from "@/lib/domain/streak-messages";
 import { DEFAULT_TIMEZONE, dayKey } from "@/lib/domain/time";
 import { weekWorkoutDays } from "@/lib/domain/viewing-pass";
 import { MAX_DAILY_WORKOUT_XP_NOW } from "@/lib/domain/xp";
@@ -30,6 +31,11 @@ import type { ProgressSummary } from "@/lib/progression";
  * ⚠️ 실제 렌더 높이 목표는 **330px 이내**다(설계 §10). 지표를 늘리기 전에 재라 —
  * 이 카드가 커지면 크루 두 행이 375×812의 하단 탭 아래로 밀려 카드를 나눈 이유가
  * 사라진다.
+ *
+ * ⚠️ **2026-08-21 실측: 평소 281px, 소멸 경고가 뜨면 347px**로 목표를 17px 넘는다.
+ * 넘겨도 되는 이유는 목표의 **목적**이 지켜지기 때문이다 — 그 상태에서도 크루 카드
+ * 하단이 375×812에서 697px라 하단 탭(754px) **위**에 남는다(dev-테스터A 실측).
+ * 여유는 57px뿐이다. 지표든 문구든 한 줄 더 얹기 전에 이 두 숫자를 다시 재라.
  */
 
 /** 오늘 상태 알약 — 크루 행과 **같은 3단계**, 문구만 넓은 자리에 맞춰 온전하다.
@@ -153,7 +159,26 @@ export function PersonalTodayCard({
 }: PersonalTodayCardProps) {
   const tz = DEFAULT_TIMEZONE;
   const { days } = weekWorkoutDays(completedAts, now, tz);
-  const streak = currentStreak(workoutDayKeys(completedAts, tz), dayKey(now, tz));
+  const keys = workoutDayKeys(completedAts, tz);
+  const todayKey = dayKey(now, tz);
+  const streak = currentStreak(keys, todayKey);
+  /**
+   * 소멸 경고 문구 — 옛 `home/streak-card.tsx`의 판정을 **그대로** 옮긴 것이다.
+   *
+   * ⚠️ `STAGE_MESSAGES`는 `Partial`이라 `d4`~`d1`에만 값이 있다. `today_done`·
+   * `expired`·`none`은 자동으로 `undefined`가 되어 경고가 안 뜬다 — 이게
+   * "평소엔 안 보인다"의 구현이다. **조건을 손으로 더 붙이지 마라.**
+   *
+   * ⚠️ **문구를 여기서 짓지 마라.** 이 앱의 스트릭은 5일 유예다
+   * (`STREAK_EXPIRY_DAYS = 5`) — 어제 운동한 사람(d4)에게 "오늘 안 하면 리셋"은
+   * 거짓말이고, 화면이 한 번 거짓말하면 다음 경고도 안 믿는다. 단계마다 말할 수
+   * 있는 손실이 다른 이유는 `streak-messages.ts`의 표가 설명한다.
+   */
+  const stage = streakStage(keys, todayKey);
+  const warning =
+    streak > 0 && STAGE_MESSAGES[stage]
+      ? pickByDay(STAGE_MESSAGES[stage], todayKey)(streak)
+      : undefined;
   const hasGoal = weeklyGoal !== null && weeklyGoal > 0;
   const action = personalTodayAction(status, MAX_DAILY_WORKOUT_XP_NOW);
   const pct = summary
@@ -312,6 +337,31 @@ export function PersonalTodayCard({
         >
           {action.label}
         </div>
+      )}
+
+      {/* 소멸 경고 배너 — 2026-08-21 홈 개편에서 `StreakCard`와 함께 사라졌다가
+          사용자 지적으로 **이 카드 안에** 되살아났다(인수인계서
+          `HANDOFF-2026-08-21-home-streak-warning.md`).
+
+          ⚠️ **금색 CTA 아래다.** 위에 두면 오늘 눌러야 할 것보다 경고가 먼저 읽힌다 —
+          이 카드의 목적은 "비교하고 바로 누르는 것"이다.
+
+          ⚠️ **카드 밖(내 카드와 크루 카드 사이)으로 빼지 마라.** 홈의 주석대로 그
+          사이에 무엇을 끼우면 비교 구역이 스크롤 너머로 갈라진다. 이건 내 스트릭
+          이야기이므로 내 카드 안이 맞다.
+
+          ⚠️ 되살린 것은 **경고 하나뿐**이다. 7일 점·헤더 한 줄·옛 카드는 되살리지
+          않기로 사용자가 골랐다 — `home-client.order.test.ts`가 그 부재를 지킨다.
+
+          ⚠️ 평소엔 `warning`이 `undefined`라 높이 비용이 **0**이다. 위험할 때만
+          붙는다 — 2026-08-21 실측 배너 54px + 위 여백 12px = 66px. */}
+      {warning && (
+        <p
+          role="alert"
+          className="mt-3 rounded-card-sm border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-xs font-bold text-amber-600 dark:text-amber-400"
+        >
+          ⚠️ {warning}
+        </p>
       )}
     </section>
   );
