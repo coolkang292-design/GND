@@ -43,7 +43,17 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 };
 
-/** 세션당 1회 — 화면을 옮길 때마다 다시 뜨는 것을 막는다 */
+/**
+ * 세션당 1회 — 화면을 옮길 때마다 다시 뜨는 것을 막는다.
+ *
+ * ⚠️⚠️ **표식은 "띄울 때"가 아니라 "사용자가 닫을 때" 남긴다** (2026-08-22 수정).
+ *    처음엔 띄우는 순간 남겼는데, 그러면 **사용자가 아무 버튼도 누르기 전에**
+ *    페이지가 한 번 더 로드되는 순간(사파리가 다시 여는 경우·새로고침·복원)
+ *    표식만 남고 시트는 사라져 그 세션에서 영영 안 뜬다. 사장님 실기기에서
+ *    *"설치 화면이 잠깐 떴다가 사라지고 기록화면으로 랜딩"* 으로 나타났다.
+ *
+ *    표식은 **사람이 봤다는 증거**여야 한다. 렌더는 증거가 아니다.
+ */
 const SESSION_ESCAPE = "gnd:install:escape-shown";
 const SESSION_INSTALL = "gnd:install:offer-shown";
 
@@ -138,7 +148,6 @@ export function InstallGate() {
         if (sessionSeen(SESSION_ESCAPE)) return;
         const v = escapeVariant(env);
         if (!v) return;
-        markSessionSeen(SESSION_ESCAPE);
         decided.current = true;
         setVariant(v);
         return;
@@ -155,7 +164,6 @@ export function InstallGate() {
       if (!ok) return;
       const v = installVariant(env);
       if (!v) return;
-      markSessionSeen(SESSION_INSTALL);
       decided.current = true;
       setVariant(v);
     })();
@@ -165,7 +173,20 @@ export function InstallGate() {
     };
   }, [loading, userId, promptEvent]);
 
-  const close = useCallback(() => setVariant(null), []);
+  /**
+   * 사용자가 시트를 닫았다 — **이때** 세션 표식을 남긴다(위 상수 주석).
+   * 어느 표식인지는 지금 떠 있던 시트가 정한다.
+   */
+  const close = useCallback(() => {
+    setVariant((v) => {
+      if (v) {
+        markSessionSeen(
+          v.startsWith("escape-") ? SESSION_ESCAPE : SESSION_INSTALL,
+        );
+      }
+      return null;
+    });
+  }, []);
 
   const copyUrl = useCallback(() => {
     void navigator.clipboard

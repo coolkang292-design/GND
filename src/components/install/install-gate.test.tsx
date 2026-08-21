@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { InstallGate } from "./install-gate";
@@ -108,6 +114,23 @@ describe("InstallGate — 뜨는가", () => {
     render(<InstallGate />);
     expect(await sheetTitle()).toBe("홈 화면에 GND 놓기");
   });
+
+  /**
+   * ⚠️⚠️ **회귀 테스트 (2026-08-22, 사장님 실기기 신고).**
+   * *"설치 화면이 잠깐 떴다가 사라지고 기록화면으로 랜딩"* — 옛 코드는 시트를
+   * **띄우는 순간** 세션 표식을 남겨서, 사용자가 버튼을 누르기 전에 페이지가
+   * 한 번 더 로드되면 표식만 남고 시트는 영영 안 떴다.
+   * 표식은 **사람이 봤다는 증거**여야 한다. 렌더는 증거가 아니다.
+   */
+  it("⚠️ 아무 버튼도 안 눌렀으면 페이지가 다시 로드돼도 또 뜬다", async () => {
+    render(<InstallGate />);
+    expect(await sheetTitle()).toBe("홈 화면에 GND 놓기");
+
+    cleanup(); // 페이지가 통째로 다시 로드된 상황 (sessionStorage는 남는다)
+
+    render(<InstallGate />);
+    expect(await sheetTitle()).toBe("홈 화면에 GND 놓기");
+  });
 });
 
 describe("InstallGate — 안 뜨는가 (부정 확인)", () => {
@@ -136,11 +159,16 @@ describe("InstallGate — 안 뜨는가 (부정 확인)", () => {
     expect(await sheetTitle()).toBeNull();
   });
 
-  it("같은 세션에서 한 번 띄웠으면 다시 안 띄운다", async () => {
+  it("사용자가 닫으면 같은 세션에서는 다시 안 뜬다", async () => {
+    setUA(UA.iosKakao);
     render(<InstallGate />);
-    expect(await sheetTitle()).toBe("홈 화면에 GND 놓기");
+    expect(await sheetTitle()).toBe("이제 홈 화면에 놓을 차례예요");
+
+    fireEvent.click(screen.getByRole("button", { name: "알겠어요" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     cleanup();
 
+    setUA(UA.iosKakao);
     render(<InstallGate />);
     expect(await sheetTitle()).toBeNull();
   });
