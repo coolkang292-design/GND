@@ -59,7 +59,7 @@ Next Image 자동 압축을 끄고 `941×1672` 원본 PNG를 직접 로드한다
 | `src/app/(tabs)/layout.tsx` | 일반 앱 셸 연결 |
 | `src/app/(tabs)/layout.test.tsx` | 정확히 한 번 마운트하는 연결 테스트 1건 |
 | `docs/superpowers/specs/2026-08-17-gnd-launch-motivation-splash-design.md` | 최종 설계 |
-| `docs/superpowers/plans/2026-08-17-gnd-launch-motivation-splash.md` | 구현 계획 |
+| `docs/superpowers/plans/archive/2026-08-17-gnd-launch-motivation-splash.md` | 구현 계획 |
 
 승인 배경 원본:
 `C:\Users\SAMSUNG\.codex\generated_images\01a00e30-700a-7db3-8985-3271be4850fd\exec-357efd9f-ef06-4ee9-940f-71396f45dc60.png`

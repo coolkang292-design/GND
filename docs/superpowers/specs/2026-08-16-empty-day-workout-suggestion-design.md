@@ -14,7 +14,7 @@
 도달하는 경로가 검색 화면 뒤에 숨어 있다.** 계획 없는 날 기록 탭을 열면
 `RecordEmptyState`의 버튼 세 개뿐이고, 걷기까지 5~6번을 눌러야 한다.
 
-`docs/superpowers/plans/2026-08-14-friction-copy-and-beginner-recommendations.md:11`이
+`docs/superpowers/plans/archive/2026-08-14-friction-copy-and-beginner-recommendations.md:11`이
 이것을 **C2(계획 빈 날 유산소 제안)·C3(챌린지 참가자에게 지난 운동 제안)** 으로 적어
 두고 다음 배치로 미뤘다. 같은 줄의 A2(시작 전 리마인드)는 그날 2차 배포로 나갔고,
 C2·C3만 남았다. 이 설계가 그 둘을 한 번에 처리한다.

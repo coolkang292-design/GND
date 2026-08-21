@@ -11,8 +11,8 @@
 | 문서 | 용도 |
 |---|---|
 | `docs/superpowers/specs/2026-07-23-xp-level-character-system-design.md` | 설계(확정 정책·화면 구성·보완 11건) |
-| `docs/superpowers/plans/2026-07-23-xp-level-character-system.md` | **메인 실행 계획(Task 1~14 + 8B)** |
-| `docs/superpowers/plans/2026-07-23-plan-completion-xp.md` | 후속 계획(0023 계획완료 +20). **0022 배포 후** 착수 |
+| `docs/superpowers/plans/archive/2026-07-23-xp-level-character-system.md` | **메인 실행 계획(Task 1~14 + 8B)** |
+| `docs/superpowers/plans/archive/2026-07-23-plan-completion-xp.md` | 후속 계획(0023 계획완료 +20). **0022 배포 후** 착수 |
 | `docs/design/character-image-guide.md` | 캐릭터 이미지 생성 가이드(참고) |
 
 ## 2. 브랜치·커밋 상태
@@ -68,7 +68,7 @@
 
 ### 다음 — 0023 계획 완료 보너스
 
-`docs/superpowers/plans/2026-07-23-plan-completion-xp.md` 6개 Task. 이때 `MAX_DAILY_WORKOUT_XP_NOW`를 **160 → 180으로 올리는 것도 같이** 해야 한다(§6).
+`docs/superpowers/plans/archive/2026-07-23-plan-completion-xp.md` 6개 Task. 이때 `MAX_DAILY_WORKOUT_XP_NOW`를 **160 → 180으로 올리는 것도 같이** 해야 한다(§6).
 
 ### 운영 배포 후 아직 안 본 것
 
