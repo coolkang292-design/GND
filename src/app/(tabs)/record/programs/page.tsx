@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { ProgramFlow } from "@/components/programs/program-flow";
 import { OFFICIAL_PROGRAMS } from "@/lib/domain/official-programs";
+import { resolveTimeZone } from "@/lib/domain/time";
 import {
   cancelProgramEnrollment,
   createIntervalProgramEnrollment,
@@ -62,7 +63,7 @@ export default function ProgramsPage() {
   const { userId, loading, configured, error } = useAuth();
   const [pageRef] = useState<PageReference>(() => {
     const timeZone =
-      Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Seoul";
+      resolveTimeZone();
     return { today: localDateKey(new Date(), timeZone), timeZone };
   });
   const [catalog, setCatalog] = useState<CatalogExercise[]>([]);

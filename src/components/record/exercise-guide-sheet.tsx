@@ -6,7 +6,7 @@ import {
   isReviewedSource,
   type ExerciseGuide,
 } from "@/lib/domain/exercise-guides";
-import { dayKey } from "@/lib/domain/time";
+import { dayKey, resolveTimeZone } from "@/lib/domain/time";
 
 /**
  * 운동 자세 안내 시트 (계획 2026-08-12).
@@ -63,7 +63,7 @@ export function ExerciseGuideSheet({
   // 몇 시간 동안 "미래 검수"로 잡혀 조용히 사라진다.
   const today = dayKey(
     new Date(),
-    Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Seoul",
+    resolveTimeZone(),
   );
   const source =
     guide.source && isReviewedSource(guide.source, today) ? guide.source : null;

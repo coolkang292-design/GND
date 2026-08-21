@@ -7,7 +7,7 @@ import { ActiveWorkoutCards } from "@/components/feed/active-workout-cards";
 import { FeedItemCard } from "@/components/feed/feed-item";
 import { NotificationBell } from "@/components/notification-bell";
 import { feedDateLabel, groupByDay } from "@/lib/domain/social";
-import { dayKey } from "@/lib/domain/time";
+import { dayKey, resolveTimeZone } from "@/lib/domain/time";
 import {
   FEED_PAGE_SIZE,
   getCrewFeed,
@@ -50,7 +50,7 @@ export default function FeedPage() {
   // 날짜별 히스토리 그룹 — 크루 운동을 날짜 단위로 훑어볼 수 있게 (2026-07-18)
   // 기준 시각은 마운트 시 1회 고정 (렌더 중 Date.now()는 purity 규칙 위반)
   const [dateRef] = useState(() => {
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const tz = resolveTimeZone();
     const now = Date.now();
     return {
       tz,

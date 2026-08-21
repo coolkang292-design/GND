@@ -6,6 +6,28 @@
 
 export const DEFAULT_TIMEZONE = "Asia/Seoul";
 
+/** 하루(밀리초). 날짜 산술에 쓰는 리터럴 `86_400_000`을 여기로 모았다. */
+export const DAY_MS = 86_400_000;
+
+/**
+ * 이 브라우저의 타임존. 못 읽으면 `DEFAULT_TIMEZONE`.
+ *
+ * ⚠️ **타임존 정책을 통일하는 함수가 아니다.** 이 앱은 화면마다 기준이 다르고,
+ *    그건 의도된 것이다 — 기록 화면은 **브라우저 타임존**(여행 중에도 "지금 여기"의
+ *    오늘에 기록이 붙는다), 홈은 `DEFAULT_TIMEZONE`(크루·챌린지가 같은 하루를
+ *    봐야 하므로). 한쪽으로 합치면 **같은 운동이 화면마다 다른 날로 잡힌다**
+ *    (`domain/today-status.ts` 주석 참조).
+ *
+ *    그래서 이 함수는 "브라우저 타임존을 쓰기로 한 자리"에서만 부른다.
+ *    `DEFAULT_TIMEZONE`을 쓰는 자리는 그 상수를 그대로 쓴다.
+ *
+ * ⚠️ 순수 함수가 아니다(환경을 읽는다). 도메인 계산에 넘길 **값을 만드는** 용도라
+ *    여기 두지만, 계산 함수에는 반드시 인자로 넘긴다 — 안에서 부르지 마라.
+ */
+export function resolveTimeZone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || DEFAULT_TIMEZONE;
+}
+
 type WallClock = {
   year: number;
   month: number; // 1~12
