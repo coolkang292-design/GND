@@ -76,28 +76,14 @@ export function crewTodaySummary(
 }
 
 /**
- * 홈에서 완료 인원을 말하는 **유일한 문장** (설계 §6.1).
+ * ⚠️ **`personalComparisonText`가 2026-08-21에 사라졌다.**
  *
- * ⚠️ 크루 카드 헤더에 `1 / 2명 완료` 칩을 다시 만들지 마라. 같은 사실을 두 곳에서
- * 말하면 화면이 넓어지기만 하고 읽는 속도는 느려진다(2026-08-21 보완 기준 2).
+ * `크루 2명 중 1명 완료 · 나는 아직` 한 줄을 만들던 함수인데, 같은 날 크루 카드
+ * 헤더에 `1 / 2명 완료` 칩이 들어오고 내 카드에 `운동 전` 알약이 있으면서
+ * **앞뒤가 둘 다 중복**이 됐다. 사용자가 화면을 보고 지우라고 했다.
  *
- * `null`(조회 전)과 `total === 0`(크루 없음)을 구별한다 — 합치면 조회가 늦는 동안
- * "아직 크루가 없어요"가 번쩍인다.
+ * 되살리려거든 그 칩과 알약부터 없애라 — 셋이 같은 말을 한다.
  */
-export function personalComparisonText(
-  summary: CrewTodaySummary | null,
-  status: FriendStatus,
-): string {
-  if (summary === null) return "크루 현황을 불러오는 중…";
-  if (summary.total === 0) return "아직 크루가 없어요";
-  const mine =
-    status === "done"
-      ? "나도 완료"
-      : status === "active"
-        ? "나는 운동 중"
-        : "나는 아직";
-  return `크루 ${summary.total}명 중 ${summary.done}명 완료 · ${mine}`;
-}
 
 /**
  * 상태별 주 행동.

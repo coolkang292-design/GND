@@ -193,11 +193,14 @@ describe("FriendBoardBody — 크루 전용으로 줄었다", () => {
   });
 
   /**
-   * ⚠️ 완료 인원 요약은 **내 카드의 한 문장에만** 있다(설계 §7.1, 보완 기준 2).
-   * 헤더에 `1 / 2명 완료` 칩을 되살리면 같은 사실을 두 곳에서 말하게 된다.
+   * 헤더의 완료 요약 칩 — 2026-08-21 설계 검토에서 한 번 빠졌다가 같은 날 사용자가
+   * 목업을 보고 **되살리라고 지시했다**(보완 기준 2 철회).
+   *
+   * ⚠️ 이 칩은 **추가 조회를 만들지 않는다.** 이미 손에 든 행에서 센다 —
+   * `crewTodaySummary`와 같은 정의라 내 카드의 비교 문구와 숫자가 어긋날 수 없다.
    */
-  it("헤더는 '오늘의 크루'뿐 — 완료 요약 칩을 두지 않는다", () => {
-    const { container } = render(
+  it("헤더에 오늘 완료 인원을 칩으로 적는다", () => {
+    render(
       <FriendBoardBody
         rows={rowsOf(FOUR, {
           sessions: [
@@ -219,9 +222,44 @@ describe("FriendBoardBody — 크루 전용으로 줄었다", () => {
       />,
     );
     expect(screen.getByText("오늘의 크루")).toBeTruthy();
-    expect(container.textContent).not.toMatch(/\d명 완료/);
-    expect(container.textContent).not.toMatch(/\/\s*\d명/);
+    // 크루 4명 중 u1만 오늘 완료 — 분모는 **크루 수**이지 접힌 2명이 아니다
+    expect(screen.getByText("1")).toBeTruthy();
+    expect(screen.getByText("/ 4명 완료")).toBeTruthy();
     expect(screen.queryByText(/나의 크루/)).toBeNull();
+  });
+
+  it("크루가 0명이거나 조회 중이면 완료 칩을 그리지 않는다", () => {
+    const { container } = render(
+      <FriendBoardBody
+        rows={[]}
+        poked={new Set()}
+        iWorkedOut
+        expanded={false}
+        truncated={false}
+        pokingId={null}
+        onSelect={vi.fn()}
+        onPoke={vi.fn()}
+        onToggleExpand={vi.fn()}
+      />,
+    );
+    expect(container.textContent).not.toMatch(/명 완료/);
+    cleanup();
+
+    const loading = render(
+      <FriendBoardBody
+        rows={[]}
+        status="loading"
+        poked={new Set()}
+        iWorkedOut
+        expanded={false}
+        truncated={false}
+        pokingId={null}
+        onSelect={vi.fn()}
+        onPoke={vi.fn()}
+        onToggleExpand={vi.fn()}
+      />,
+    );
+    expect(loading.container.textContent).not.toMatch(/명 완료/);
   });
 
   it("순위·등수를 그리지 않는다 — 순위표가 아니다", () => {

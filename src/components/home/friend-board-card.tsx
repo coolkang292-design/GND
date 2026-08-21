@@ -18,7 +18,6 @@ import {
 import {
   crewTodaySummary,
   TODAY_STATUS_LABEL,
-  type CrewTodaySummary,
 } from "@/lib/domain/home-competition";
 import { pokeUser, SocialError } from "@/lib/social";
 import { UiIcon } from "@/components/ui-icon";
@@ -82,8 +81,13 @@ function FriendRowItem({
   onPoke: (row: FriendRow) => void;
 }) {
   return (
-    <li className="rounded-card border border-line bg-surface-2 px-3 py-2.5">
-      <div className="flex items-center gap-2.5">
+    /* ⚠️ `py-2`다. 실측 90px에서 84px 목표까지 6px을 여기와 지표 줄에서 뺐다
+        (2026-08-21). 여백을 되돌리려거든 먼저 375×812에서 재라 — 크루 둘째 행이
+        하단 탭 밑으로 내려가면 카드를 나눈 이유가 사라진다. */
+    <li className="rounded-card border border-line bg-surface-2 px-3 py-2">
+      {/* ⚠️ `gap-2`·`gap-1`이다. 2.5/1.5로 되돌리면 375px에서 `오뎅끼데스까`가
+          4px 잘린다(2026-08-21 실측 80/84). 이름 줄의 남는 폭은 전부 닉네임 몫이다. */}
+      <div className="flex items-center gap-2">
         {/* ⚠️ `min-h-11`(44px)은 접근성 요구다(설계 §10). 아바타가 44px라 실제
             높이는 안 늘지만, 아바타를 줄이는 날에도 터치 영역이 44px 아래로
             내려가지 않게 못 박아 둔다. */}
@@ -116,7 +120,7 @@ function FriendRowItem({
               className="h-11 w-11 flex-none rounded-full border border-line bg-surface object-cover object-top"
             />
           )}
-          <span className="flex min-w-0 flex-1 items-center gap-1.5">
+          <span className="flex min-w-0 flex-1 items-center gap-1">
             <span className="truncate text-[14px] font-extrabold">
               {row.nickname}
             </span>
@@ -144,27 +148,27 @@ function FriendRowItem({
         {poked.has(row.userId) ? (
           <span
             aria-label={`${row.nickname} 찌름 완료`}
-            className="flex min-h-11 flex-none items-center rounded-full px-2.5 text-[11px] font-bold text-faint opacity-70"
+            className="flex-none rounded-full bg-surface px-2.5 py-1 text-[11px] font-bold text-faint opacity-70"
           >
             ✅ 찌름
           </span>
         ) : (
+          /* ⚠️ 44px 터치 영역을 **`after`로** 만든다 (설계 §10). 2026-08-21에
+             버튼 안에 알약 span을 넣어 높이를 키웠더니 폭이 50 → 66px로 늘어
+             375px에서 `오뎅끼데스까`가 84px 중 64px로 **잘렸다**(실측). 가상
+             요소는 레이아웃 폭·높이를 먹지 않으면서 탭 영역만 넓힌다. */
           <button
             type="button"
             onClick={() => onPoke(row)}
             disabled={!iWorkedOut || pokingId === row.userId}
             aria-label={`${row.nickname} 찌르기`}
-            className={`flex min-h-11 flex-none items-center rounded-full px-2.5 text-[11px] font-extrabold ${
-              iWorkedOut ? "text-accent" : "text-faint opacity-60"
+            className={`relative flex-none rounded-full px-2.5 py-1 text-[11px] font-extrabold after:absolute after:inset-x-0 after:top-1/2 after:h-11 after:-translate-y-1/2 after:content-[''] ${
+              iWorkedOut
+                ? "bg-accent text-accent-ink"
+                : "bg-surface text-faint opacity-60"
             }`}
           >
-            <span
-              className={`rounded-full px-2 py-1 ${
-                iWorkedOut ? "bg-accent text-accent-ink" : "bg-surface"
-              }`}
-            >
-              👉 콕
-            </span>
+            👉 콕
           </button>
         )}
       </div>
@@ -174,7 +178,7 @@ function FriendRowItem({
              화면 낭독이 붙여 읽고, 테스트도 라벨만 짚을 수 없다.
           ⚠️ 연속 0일에도 칸을 그린다 — 빼면 그 행만 칸이 밀려 크루끼리 세로가
              안 맞는다(2026-08-07 사용자 요청 "일자로 고정"). */}
-      <div className="mt-1 grid grid-cols-[1fr_auto_auto] items-center gap-2">
+      <div className="mt-0.5 grid grid-cols-[1fr_auto_auto] items-center gap-2">
         <span
           className={`justify-self-start rounded-full px-2 py-[2px] text-[11px] font-bold ${STATUS_TONE[row.status]}`}
         >
@@ -182,13 +186,13 @@ function FriendRowItem({
         </span>
         <span className="flex items-baseline gap-1 text-[11px] text-muted">
           <span>이번 주</span>
-          <b className="text-[12.5px] font-extrabold text-text">
+          <b className="text-[12px] font-extrabold text-text">
             {row.weekDays}일
           </b>
         </span>
         <span className="flex items-baseline gap-1 text-[11px] text-muted">
           <span>연속</span>
-          <b className="text-[12.5px] font-extrabold text-text">
+          <b className="text-[12px] font-extrabold text-text">
             {row.streak}일
           </b>
         </span>
@@ -202,13 +206,13 @@ function SkeletonRow() {
   return (
     <li
       aria-hidden
-      className="animate-pulse rounded-card border border-line bg-surface-2 px-3 py-2.5"
+      className="animate-pulse rounded-card border border-line bg-surface-2 px-3 py-2"
     >
-      <div className="flex items-center gap-2.5">
+      <div className="flex items-center gap-2">
         <div className="h-11 w-11 flex-none rounded-full bg-surface" />
         <div className="h-3.5 flex-1 rounded-full bg-surface" />
       </div>
-      <div className="mt-1 grid grid-cols-[1fr_auto_auto] items-center gap-2">
+      <div className="mt-0.5 grid grid-cols-[1fr_auto_auto] items-center gap-2">
         <div className="h-[19px] w-14 justify-self-start rounded-full bg-surface" />
         <div className="h-[19px] w-14 rounded-full bg-surface" />
         <div className="h-[19px] w-12 rounded-full bg-surface" />
@@ -263,28 +267,34 @@ export function FriendBoardBody({
   const canExpand = canExpandFriendRows(rows);
   const pokeable = pokeableFriendCount(rows, poked);
   const empty = status === "ready" && rows.length === 0;
+  const summary = crewTodaySummary(rows);
 
   return (
     <section className="rounded-card border border-line bg-surface p-4 shadow-card">
       <div className="flex items-center justify-between">
         {/* ⚠️ 제목이 **상태와 무관하게 하나**다 (2026-08-21). 옛 헤딩은 조회 상태마다
             `나의 크루` / `나의 크루 N명` / `크루와 함께하면 더 강해져요`로 갈렸는데,
-            이제 이 카드는 "오늘"을 말하는 자리라 인원수가 제목에 있을 이유가 없다 —
-            크루 수는 내 카드의 비교 문구가 말한다. */}
+            이제 이 카드는 "오늘"을 말하는 자리라 인원수가 제목에 있을 이유가 없다. */}
         <h3 className="flex items-center gap-1.5 text-sm font-extrabold">
           <UiIcon name={empty ? "friends-add" : "friends"} size={22} />
           오늘의 크루
         </h3>
-        {/* 누를 게 없는데 링크만 있는 상태를 만들지 않는다 */}
-        {status === "ready" && canExpand && (
-          <button
-            type="button"
-            onClick={onToggleExpand}
-            aria-expanded={expanded}
-            className="text-xs font-bold text-accent"
-          >
-            {expanded ? "접기" : "전체 크루 보기 ›"}
-          </button>
+        {/* ⚠️ 완료 칩 — 2026-08-21 설계 검토에서 한 번 뺐다가 같은 날 사용자가
+            목업을 보고 **되살리라고 지시했다**(보완 기준 2 철회).
+
+            ⚠️ **조회를 늘리지 않는다.** 이미 손에 든 `rows`에서 `crewTodaySummary`로
+            센다 — 내 카드의 비교 문구와 **같은 정의**라 두 숫자가 어긋날 수 없다.
+            여기서 손으로 다시 세지 마라.
+
+            ⚠️ 분모는 **크루 전체 수**다. 접힌 2명이 아니다 — 접었다 폈다에 따라
+            분모가 움직이면 같은 사실이 화면 조작마다 달라 보인다.
+
+            ⚠️ 조회 전·크루 0명에는 그리지 않는다. `0 / 0명 완료`는 정보가 아니고,
+            조회 중 `0 / 0`이 떴다가 `1 / 4`로 바뀌면 크루가 생긴 것처럼 읽힌다. */}
+        {status === "ready" && summary.total > 0 && (
+          <span className="flex-none rounded-full border border-good/40 bg-good-weak/60 px-2.5 py-1 text-[11px] font-bold text-muted">
+            <b className="text-good">{summary.done}</b> / {summary.total}명 완료
+          </span>
         )}
       </div>
 
@@ -338,6 +348,20 @@ export function FriendBoardBody({
         </Link>
       )}
 
+      {/* ⚠️ 전체 보기가 **카드 하단 가운데**다 (목업 배치). 헤더 오른쪽은 완료 칩이
+          차지했다 — 둘을 같은 줄에 두면 375px에서 서로를 민다.
+          ⚠️ 누를 게 없는데 링크만 있는 상태를 만들지 않는다(2명 이하면 아예 없다). */}
+      {status === "ready" && canExpand && (
+        <button
+          type="button"
+          onClick={onToggleExpand}
+          aria-expanded={expanded}
+          className="mt-2 flex h-9 w-full items-center justify-center text-xs font-bold text-accent"
+        >
+          {expanded ? "접기" : "전체 크루 보기 ›"}
+        </button>
+      )}
+
       {truncated && (
         <p className="mt-2 text-[11px] text-muted">
           기록이 많아 일부만 반영된 수치예요
@@ -362,20 +386,9 @@ export function FriendBoardBody({
 export function FriendBoardCard({
   activeUserIds,
   iWorkedOut,
-  onSummaryChange,
 }: {
   activeUserIds: Set<string>;
   iWorkedOut: boolean;
-  /**
-   * 계산이 끝난 크루 완료 요약을 홈으로 올린다 — 내 카드의 비교 문구가 쓴다.
-   *
-   * ⚠️ **홈에서 `useCallback`으로 안정화해서 넘겨라.** 매 렌더 새 함수가 오면 아래
-   * `useEffect`가 매번 다시 돌아 setState → 렌더 → effect의 고리가 된다.
-   *
-   * ⚠️ 요약을 얻자고 홈이 크루를 **다시 조회하지 않게** 하려는 것이 이 prop의
-   * 전부다. 같은 질의를 두 번 내보내는 순간 카드를 나눈 이득이 사라진다.
-   */
-  onSummaryChange: (summary: CrewTodaySummary | null) => void;
 }) {
   const { userId, loading, configured } = useAuth();
   const [base, setBase] = useState<FriendBoardBase | null>(null);
@@ -432,11 +445,6 @@ export function FriendBoardCard({
         : [],
     [base, activeUserIds],
   );
-
-  // 홈은 크루를 따로 조회하지 않는다 — 이미 손에 든 행에서 센 값을 올려 준다.
-  useEffect(() => {
-    onSummaryChange(ready && !failed ? crewTodaySummary(rows) : null);
-  }, [failed, onSummaryChange, ready, rows]);
 
   const poke = useCallback(async (row: FriendRow) => {
     setPokingId(row.userId);

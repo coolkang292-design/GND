@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { AuthStatus } from "@/components/auth-status";
 import { CrewCard } from "@/components/crew-card";
@@ -14,6 +14,7 @@ import {
 } from "@/components/home/personal-today-card";
 import { ChallengeSummaryCard } from "@/components/home/challenge-summary-card";
 import { getMyProfile } from "@/lib/crew";
+import { getFriendBadges } from "@/lib/friends";
 import {
   getMyChallenges,
   getMyChallengeScore,
@@ -26,10 +27,7 @@ import { getCompletedSessions } from "@/lib/workout";
 import { getActiveCrewSessions, type ActiveCrewSession } from "@/lib/social";
 import { getProgressSummary, type ProgressSummary } from "@/lib/progression";
 import { workedOutToday } from "@/lib/domain/friend-board";
-import {
-  resolvePersonalTodayStatus,
-  type CrewTodaySummary,
-} from "@/lib/domain/home-competition";
+import { resolvePersonalTodayStatus } from "@/lib/domain/home-competition";
 import { DEFAULT_TIMEZONE } from "@/lib/domain/time";
 
 const NO_ACTIVE_IDS: Set<string> = new Set();
@@ -49,6 +47,16 @@ export function HomeClient() {
   } | null>(null);
   const [summary, setSummary] = useState<ProgressSummary | null>(null);
   const [summaryError, setSummaryError] = useState(false);
+  /**
+   * 내 배지 종류 수 (2026-08-21 사용자 지시로 내 카드에 복원).
+   *
+   * ⚠️ `null` = 아직 안 왔거나 실패. 카드가 `0`과 구별해 `—`를 그린다.
+   *
+   * ⚠️ 개수 정의를 손으로 다시 쓰지 않고 `getFriendBadges`를 그대로 쓴다 —
+   * 크루 프로필 시트의 "보유 배지 N / M"과 **같은 함수**라 두 화면의 숫자가
+   * 어긋날 수 없다(`lib/friends.ts` 주석).
+   */
+  const [badgeCount, setBadgeCount] = useState<number | null>(null);
   // 챌린지 요약의 재료. `null` = 아직 조회 전 — 빈 상태가 번쩍이지 않게 구별한다.
   const [challenges, setChallenges] = useState<MyChallenge[] | null>(null);
   // ⚠️ 챌린지 요약 **전용** 타임존이다. 홈의 다른 위젯(스트릭·주간 통계)은 여전히
@@ -60,14 +68,6 @@ export function HomeClient() {
   );
   // 진행 중 세션은 진행 중 카드와 크루 목록이 같이 쓴다 — 한 번만 조회한다.
   const [activeSessions, setActiveSessions] = useState<ActiveCrewSession[]>([]);
-  /**
-   * 크루 카드가 계산해 올려 주는 오늘 완료 요약 (2026-08-21).
-   *
-   * ⚠️ **홈이 크루를 다시 조회하지 않는다.** 내 카드의 비교 문구가 이 값을 쓰는데,
-   * 그걸 얻자고 홈에서 크루를 한 번 더 부르면 같은 질의가 두 번 나간다.
-   * `null` = 조회 전 — 크루 0명과 구별한다(문구가 갈린다).
-   */
-  const [crewSummary, setCrewSummary] = useState<CrewTodaySummary | null>(null);
   /**
    * 홈이 한 번 만드는 기준 시각.
    *
@@ -113,7 +113,7 @@ export function HomeClient() {
         if (!cancelled) setCompletedAts([]);
       }
     })();
-    // 성장 카드는 별도 조회 — 실패해도 홈의 다른 기능은 유지(修正14)
+    // 성장 요약은 별도 조회 — 실패해도 홈의 다른 기능은 유지(修正14)
     (async () => {
       try {
         const s = await getProgressSummary();
@@ -123,6 +123,23 @@ export function HomeClient() {
         }
       } catch {
         if (!cancelled) setSummaryError(true);
+      }
+    })();
+    /**
+     * 배지 개수도 별도 조회다.
+     *
+     * ⚠️ 위 `Promise.all`에 넣지 마라. 카탈로그 + RPC로 2건이 더 들고, 이 값이
+     * 없다고 홈의 나머지가 늦어질 이유가 없다 — 그동안 칸은 `—`가 지킨다.
+     *
+     * ⚠️ 실패해도 조용히 넘긴다. `null`로 남으면 카드가 `—`를 그린다.
+     */
+    (async () => {
+      try {
+        const counts = await getFriendBadges([userId]);
+        const mine = counts.get(userId);
+        if (!cancelled && mine) setBadgeCount(mine.total);
+      } catch {
+        /* 부가 정보 — 실패하면 카드가 `—`를 그린다 */
       }
     })();
     return () => {
@@ -225,20 +242,6 @@ export function HomeClient() {
     [activeUserIds, iWorkedOutToday, userId],
   );
 
-  /**
-   * ⚠️ **`useCallback`을 떼지 마라.** 크루 카드는 이 함수를 `useEffect`의 의존성으로
-   * 쓴다 — 매 렌더 새 함수가 내려가면 effect가 매번 다시 돌아 setState → 렌더 →
-   * effect의 고리가 된다.
-   *
-   * ⚠️ 값이 같으면 **같은 객체를 유지한다.** 크루 카드는 렌더마다 새 요약 객체를
-   * 만들어 올리는데, 그대로 받으면 내용이 같아도 상태가 바뀐 것으로 보여 홈이 다시
-   * 렌더된다.
-   */
-  const handleCrewSummary = useCallback((next: CrewTodaySummary | null) => {
-    setCrewSummary((prev) =>
-      prev?.total === next?.total && prev?.done === next?.done ? prev : next,
-    );
-  }, []);
 
   return (
     <div className="flex flex-col gap-3">
@@ -272,19 +275,20 @@ export function HomeClient() {
           completedAts={completedAts}
           weeklyGoal={weeklyGoal}
           status={myTodayStatus}
-          crewSummary={crewSummary}
+          badgeCount={badgeCount}
           now={dateRef}
         />
       ) : (
         <PersonalTodayCardSkeleton />
       )}
 
-      {/* ⚠️ `onSummaryChange`는 **`useCallback`으로 안정화된 함수**여야 한다 —
-          위 `handleCrewSummary` 주석 참조. 인라인 화살표 함수로 바꾸지 마라. */}
+      {/* ⚠️ 완료 인원 요약은 **크루 카드가 스스로 센다** — 이미 손에 든 행에서
+          `crewTodaySummary`로 세므로 홈이 그 값을 받아 둘 이유가 없다.
+          2026-08-21에 잠깐 `onSummaryChange`로 홈까지 끌어올렸는데, 그 값을 쓰던
+          내 카드의 비교 문구가 같은 날 중복으로 지워지면서 배선도 함께 걷어냈다. */}
       <FriendBoardCard
         activeUserIds={activeUserIds}
         iWorkedOut={iWorkedOutToday}
-        onSummaryChange={handleCrewSummary}
       />
 
       {/* ⚠️ 진행 중 카드가 크루 목록 **아래**다 (2026-08-13). 읽는 순서가 그대로

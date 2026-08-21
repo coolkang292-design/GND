@@ -90,10 +90,15 @@ describe("홈 상단 경쟁 보드 순서", () => {
   });
 
   /**
-   * ⚠️ 자식이 요약을 부모로 올리는 콜백은 **반드시 안정화한다.** 매 렌더 새 함수가
-   * 내려가면 크루 카드의 effect가 매번 다시 돌아 setState → 렌더 → effect가 된다.
+   * ⚠️ 완료 인원 요약은 **크루 카드가 스스로 센다.** 2026-08-21에 잠깐
+   * `onSummaryChange`로 홈까지 끌어올렸다가, 그 값을 쓰던 비교 문구가 중복으로
+   * 지워지면서 배선도 걷어냈다. 다시 끌어올릴 일이 생기면 `useCallback`으로
+   * 안정화해라 — 매 렌더 새 함수가 내려가면 자식 effect가 무한히 다시 돈다.
    */
-  it("크루 요약 콜백을 useCallback으로 안정화한다", () => {
-    expect(src).toMatch(/const handleCrewSummary = useCallback\(/);
+  it("크루 요약을 홈으로 끌어올리는 배선을 남겨 두지 않는다", () => {
+    // ⚠️ prop **전달**만 본다. 왜 걷어냈는지 적은 주석은 남아 있어야 한다.
+    expect(src).not.toContain("onSummaryChange={");
+    expect(src).not.toContain("crewSummary={");
+    expect(src).not.toContain("useState<CrewTodaySummary");
   });
 });

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   crewTodaySummary,
-  personalComparisonText,
   personalTodayAction,
   resolvePersonalTodayStatus,
   TODAY_STATUS_LABEL,
@@ -32,30 +31,6 @@ describe("home competition rules", () => {
         { status: "idle" },
       ]),
     ).toEqual({ total: 3, done: 1 });
-  });
-
-  it("비교 문구는 완료 요약을 한 번만 말하고 내 상태를 붙인다", () => {
-    const summary = { total: 2, done: 1 };
-    expect(personalComparisonText(summary, "idle")).toBe(
-      "크루 2명 중 1명 완료 · 나는 아직",
-    );
-    expect(personalComparisonText(summary, "active")).toBe(
-      "크루 2명 중 1명 완료 · 나는 운동 중",
-    );
-    expect(personalComparisonText(summary, "done")).toBe(
-      "크루 2명 중 1명 완료 · 나도 완료",
-    );
-  });
-
-  /**
-   * ⚠️ 조회 전(`null`)과 크루 0명을 구별한다. 둘을 합치면 조회가 늦는 동안
-   * "아직 크루가 없어요"가 번쩍였다가 사라진다 — 없던 크루가 생긴 것처럼 읽힌다.
-   */
-  it("조회 전과 크루 0명을 다르게 말한다", () => {
-    expect(personalComparisonText(null, "idle")).toBe("크루 현황을 불러오는 중…");
-    expect(personalComparisonText({ total: 0, done: 0 }, "done")).toBe(
-      "아직 크루가 없어요",
-    );
   });
 
   it("운동 완료 뒤에는 링크가 아니라 칭찬 배너다", () => {

@@ -45,7 +45,7 @@ function renderCard(
     completedAts: [YESTERDAY],
     weeklyGoal: 5 as number | null,
     status: "idle" as const,
-    crewSummary: { total: 2, done: 1 } as { total: number; done: number } | null,
+    badgeCount: 9 as number | null,
     now: NOW,
     ...overrides,
   };
@@ -62,16 +62,16 @@ describe("PersonalTodayCard — 승인된 지표만 그린다", () => {
     expect(screen.getByText("1 / 5")).toBeTruthy();
     expect(screen.getByText("연속")).toBeTruthy();
     expect(screen.getByText("1일")).toBeTruthy();
-    expect(screen.getByText("크루 2명 중 1명 완료 · 나는 아직")).toBeTruthy();
+    expect(screen.getByText("배지")).toBeTruthy();
+    expect(screen.getByText("9")).toBeTruthy();
   });
 
   /**
-   * ⚠️ **부정 확인이 이 카드의 절반이다** (2026-08-21 보완 기준 1, 설계 §6.1).
-   * 목업에는 배지 타일이 있었지만 승인 문서가 이미지를 이긴다 — 배지·달성률·누적
-   * 수치를 홈 상단에 되살리면 330px 목표가 깨지고 크루가 접힘선 아래로 내려간다.
-   * 이 정보는 사라진 것이 아니라 프로필 상세로 옮겨졌다.
+   * ⚠️ **부정 확인.** `크루 2명 중 1명 완료 · 나는 아직` 한 줄이 2026-08-21에
+   * 사용자 지시로 지워졌다 — 완료 인원은 크루 카드 헤더 칩이, 내 상태는 위
+   * `운동 전` 알약이 이미 말한다. 되살리면 화면이 같은 말을 두 번 한다.
    */
-  it("배지·목표 달성률·누적 수치를 그리지 않는다", () => {
+  it("크루 완료 인원을 다시 문장으로 적지 않는다", () => {
     const { container } = render(
       <PersonalTodayCard
         profile={{ nickname: "dev-테스터A", avatarUrl: null }}
@@ -79,15 +79,59 @@ describe("PersonalTodayCard — 승인된 지표만 그린다", () => {
         completedAts={[YESTERDAY]}
         weeklyGoal={5}
         status="idle"
-        crewSummary={{ total: 2, done: 1 }}
+        badgeCount={9}
         now={NOW}
       />,
     );
-    expect(screen.queryByText("배지")).toBeNull();
+    expect(container.textContent).not.toMatch(/크루 \d+명 중/);
+    expect(container.textContent).not.toContain("나는 아직");
+    expect(container.textContent).not.toContain("크루 현황을 불러오는 중");
+  });
+
+  /**
+   * ⚠️ **부정 확인이 이 카드의 절반이다.**
+   *
+   * 배지 타일은 2026-08-21 설계 검토에서 한 번 빠졌다가, 같은 날 사용자가 목업을
+   * 보고 **되살리라고 지시했다**(보완 기준 1 철회). 되살린 것은 배지 **개수 한 칸**
+   * 뿐이다 — 옛 홈 행의 배지 썸네일 줄·누적 운동 횟수·누적 시간·목표 달성률은
+   * 그대로 빠져 있어야 한다. 셋 중 하나라도 돌아오면 330px 목표가 깨진다.
+   */
+  it("배지 개수는 그리되 달성률·누적 수치·썸네일은 그리지 않는다", () => {
+    const { container } = render(
+      <PersonalTodayCard
+        profile={{ nickname: "dev-테스터A", avatarUrl: null }}
+        summary={SUMMARY}
+        completedAts={[YESTERDAY]}
+        weeklyGoal={5}
+        status="idle"
+        badgeCount={9}
+        now={NOW}
+      />,
+    );
+    expect(screen.getByText("배지")).toBeTruthy();
     expect(screen.queryByText("목표 달성률")).toBeNull();
     expect(container.textContent).not.toContain("🏅");
+    expect(container.querySelectorAll('img[src*="/badges/"]')).toHaveLength(0);
     expect(container.textContent).not.toMatch(/\d+회/); // 누적 운동 횟수
     expect(container.textContent).not.toMatch(/\d+시간/); // 누적 운동 시간
+  });
+
+  /**
+   * ⚠️ **`null`과 `0`을 구별한다** — "아직 안 왔다/실패했다"와 "정말 0개"는 다른
+   * 화면이다(`FriendRow.badgeCount`가 같은 규약). 조회가 늦다고 `0개`로 속이면
+   * 도착하는 순간 숫자가 튀어 배지가 생긴 것처럼 읽힌다.
+   */
+  it("배지 수를 못 받으면 0으로 속이지 않는다", () => {
+    renderCard({ badgeCount: null });
+    expect(screen.getByText("배지")).toBeTruthy();
+    expect(screen.getByText("—")).toBeTruthy();
+    expect(screen.queryByText("0")).toBeNull();
+  });
+
+  it("배지가 정말 0개면 0을 적는다", () => {
+    renderCard({ badgeCount: 0 });
+    expect(screen.getByText("0")).toBeTruthy();
+    expect(screen.queryByText("—")).toBeNull();
   });
 
   it("레벨 진행을 단계명·레벨·진행바·남은 XP로 적는다", () => {
@@ -98,7 +142,7 @@ describe("PersonalTodayCard — 승인된 지표만 그린다", () => {
         completedAts={[YESTERDAY]}
         weeklyGoal={5}
         status="idle"
-        crewSummary={{ total: 2, done: 1 }}
+        badgeCount={9}
         now={NOW}
       />,
     );
@@ -176,7 +220,7 @@ describe("PersonalTodayCard — 주간 목표가 없을 때", () => {
         completedAts={[YESTERDAY]}
         weeklyGoal={null}
         status="idle"
-        crewSummary={{ total: 2, done: 1 }}
+        badgeCount={9}
         now={NOW}
       />,
     );
@@ -195,19 +239,7 @@ describe("PersonalTodayCard — 주간 목표가 없을 때", () => {
   });
 });
 
-describe("PersonalTodayCard — 크루 요약과 성장 조회 상태", () => {
-  it("크루 조회 전에는 없다고 단정하지 않는다", () => {
-    renderCard({ crewSummary: null });
-    expect(screen.getByText("크루 현황을 불러오는 중…")).toBeTruthy();
-    expect(screen.queryByText("아직 크루가 없어요")).toBeNull();
-  });
-
-  it("크루가 0명이면 그렇게 말하고 주 행동은 남는다", () => {
-    renderCard({ crewSummary: { total: 0, done: 0 } });
-    expect(screen.getByText("아직 크루가 없어요")).toBeTruthy();
-    expect(screen.getByRole("link", { name: /오늘 운동하고/ })).toBeTruthy();
-  });
-
+describe("PersonalTodayCard — 성장 조회 실패", () => {
   /**
    * 설계 §9 — 성장 요약이 실패해도 **오늘 상태와 주 행동은 유지한다.**
    * 레벨을 못 받았다는 이유로 오늘 운동할 이유와 수단을 같이 지우면 안 된다.

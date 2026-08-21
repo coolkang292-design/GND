@@ -6,11 +6,7 @@ import { Avatar } from "@/components/avatar";
 import { UiIcon } from "@/components/ui-icon";
 import { isPhotoAvatar } from "@/lib/domain/avatar-source";
 import type { FriendStatus } from "@/lib/domain/friend-board";
-import {
-  personalComparisonText,
-  personalTodayAction,
-  type CrewTodaySummary,
-} from "@/lib/domain/home-competition";
+import { personalTodayAction } from "@/lib/domain/home-competition";
 import { currentStreak, workoutDayKeys } from "@/lib/domain/streak";
 import { DEFAULT_TIMEZONE, dayKey } from "@/lib/domain/time";
 import { weekWorkoutDays } from "@/lib/domain/viewing-pass";
@@ -52,12 +48,48 @@ const STATUS_STYLE: Record<FriendStatus, { label: string; className: string }> =
 const METRIC_CLASS =
   "flex flex-col items-center justify-center rounded-card-sm border border-line bg-surface-2 px-2 py-2";
 
-function Metric({ label, value }: { label: string; value: string }) {
+function Metric({
+  label,
+  value,
+  icon,
+}: {
+  label: string;
+  value: string;
+  /** 값 옆 장식. 옆에 숫자가 있으므로 낭독에서는 빼도 된다 */
+  icon?: React.ReactNode;
+}) {
   return (
     <div className={METRIC_CLASS}>
       <span className="text-[11px] text-muted">{label}</span>
-      <strong className="text-[17px] font-extrabold">{value}</strong>
+      <span className="flex items-center gap-1">
+        <strong className="text-[17px] font-extrabold">{value}</strong>
+        {icon}
+      </span>
     </div>
+  );
+}
+
+/**
+ * 배지 칸의 금색 육각형 (목업 그대로).
+ *
+ * ⚠️ 인라인 SVG인 이유는 `public/ui-icons`에 배지 글리프가 **없어서**다. 자산을
+ * 새로 만들지 않고 목업의 모양만 맞춘다. 옆에 개수가 글자로 있으므로 `aria-hidden`이다.
+ */
+function BadgeHex() {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 24 24"
+      className="h-[15px] w-[15px] flex-none"
+      fill="currentColor"
+    >
+      <path
+        d="M12 1.5 21.5 7v10L12 22.5 2.5 17V7z"
+        className="text-accent"
+        fill="currentColor"
+      />
+      <path d="M12 5.2 18.2 8.8v7.2L12 19.6 5.8 16V8.8z" fill="#0b0b0c" opacity="0.28" />
+    </svg>
   );
 }
 
@@ -82,8 +114,18 @@ export type PersonalTodayCardProps = {
   /** 진행 중 챌린지의 주 운동일. 없으면 `null` — 가짜 달성률을 만들지 않는다 */
   weeklyGoal: number | null;
   status: FriendStatus;
-  /** 크루 완료 요약. `null` = 조회 전 — 0명과 구별한다 */
-  crewSummary: CrewTodaySummary | null;
+  /**
+   * 내 보유 배지 종류 수.
+   *
+   * ⚠️ `null` = **아직 안 왔거나 조회 실패**다. `0`(정말 없다)과 구별해 `—`를 그린다 —
+   * 늦다고 `0`으로 속이면 도착하는 순간 숫자가 튀어 배지가 생긴 것처럼 읽힌다
+   * (`FriendRow.badgeCount`가 같은 규약).
+   *
+   * ⚠️ 2026-08-21 설계 검토에서 이 칸을 한 번 뺐다가, 같은 날 사용자가 목업을 보고
+   * **되살리라고 지시했다**(보완 기준 1 철회). 되살린 것은 개수 한 칸뿐이다 —
+   * 배지 썸네일 줄은 프로필 상세에 남는다.
+   */
+  badgeCount: number | null;
   /** 홈이 한 번 만든 기준 시각. 카드가 `new Date()`를 부르면 화면마다 "오늘"이 갈린다 */
   now: Date;
 };
@@ -94,7 +136,7 @@ export function PersonalTodayCard({
   completedAts,
   weeklyGoal,
   status,
-  crewSummary,
+  badgeCount,
   now,
 }: PersonalTodayCardProps) {
   const tz = DEFAULT_TIMEZONE;
@@ -194,10 +236,11 @@ export function PersonalTodayCard({
         </div>
       </Link>
 
-      {/* ⚠️ **두 칸이다.** 목업에는 배지 타일이 있었지만 2026-08-21 보완 기준 1이
-          이미지를 이긴다 — 배지는 프로필 상세에 남고 홈에서는 뺀다(설계 §6.1).
-          칸을 늘리기 전에 330px를 재라. */}
-      <div className="mt-3 grid grid-cols-2 gap-2">
+      {/* ⚠️ **세 칸이다** — 이번 주 · 연속 · 배지 (2026-08-21 사용자 지시로 배지 복원).
+          칸을 더 늘리기 전에 375px에서 재라: 카드 안쪽 폭 311px를 3등분하면 한 칸이
+          98px인데, `1 / 5`가 45px라 아직 여유가 있지만 네 칸이면 잘린다.
+          ⚠️ 칸을 늘려도 **행이 하나**라 카드 높이는 그대로다(실측 326px). */}
+      <div className="mt-3 grid grid-cols-3 gap-2">
         {hasGoal ? (
           <Metric label="이번 주" value={`${days.length} / ${weeklyGoal}`} />
         ) : (
@@ -217,16 +260,18 @@ export function PersonalTodayCard({
           </Link>
         )}
         <Metric label="연속" value={`${streak}일`} />
+        <Metric
+          label="배지"
+          value={badgeCount === null ? "—" : `${badgeCount}`}
+          icon={badgeCount === null ? undefined : <BadgeHex />}
+        />
       </div>
 
-      {/* ⚠️ **완료 인원을 말하는 홈의 유일한 문장이다** (설계 §6.1, 보완 기준 2).
-          크루 카드 헤더에 `1 / 2명 완료` 칩을 다시 만들지 마라 — 같은 사실을 두 곳에
-          두면 화면만 넓어지고 읽는 속도는 느려진다. */}
-      <p className="mt-3 flex items-center gap-1.5 rounded-card-sm border border-line bg-surface-2 px-3 py-2 text-xs text-muted">
-        <UiIcon name="friends" size={16} />
-        {personalComparisonText(crewSummary, status)}
-      </p>
-
+      {/* ⚠️ **여기 비교 문구를 다시 넣지 마라** (2026-08-21 사용자 지시).
+          `크루 2명 중 1명 완료 · 나는 아직` 한 줄이 있었는데, 같은 날 크루 헤더에
+          `1 / 2명 완료` 칩이 들어오면서 **앞뒤가 둘 다 중복**이 됐다 —
+          완료 인원은 크루 칩이, 내 상태는 위 `운동 전` 알약이 이미 말한다.
+          사용자가 화면을 보고 지우라고 했다. 되살리려면 그 둘부터 없애라. */}
       {/* ⚠️ 완료 상태는 **링크가 아니다** (설계 §6.2, 사용자 확정 9번 요구).
           오늘 마친 사람에게 다음 운동을 재촉하지 않고 같은 면적을 칭찬에 쓴다.
           문구만 바꾸고 `<Link>`로 그리면 그 결정이 화면에서 사라진다.
@@ -278,7 +323,8 @@ export function PersonalTodayCardSkeleton() {
             <div className="mt-2 h-2 rounded-full bg-surface-2" />
           </div>
         </div>
-        <div className="mt-3 grid grid-cols-2 gap-2">
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          <div className="h-14 rounded-card-sm bg-surface-2" />
           <div className="h-14 rounded-card-sm bg-surface-2" />
           <div className="h-14 rounded-card-sm bg-surface-2" />
         </div>
