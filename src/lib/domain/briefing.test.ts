@@ -5,6 +5,7 @@ import {
   type BriefingUser,
 } from "./briefing";
 import { MIN_SESSIONS_FOR_ESTIMATE } from "./notify-time";
+import { dailyMessage } from "./streak-messages";
 
 // 기준 시각: 2026-07-18(토) KST 09:10 = UTC 00:10. 어제 = KST 7/17.
 const NOW = new Date("2026-07-18T00:10:00Z");
@@ -45,19 +46,28 @@ function withHabit(hh: number, mm = 0, over: Partial<BriefingUser> = {}) {
 describe("buildBriefings — skip 판정", () => {
   it("완료 세션 없으면 no_history", () => {
     const { briefings, skipped } = buildBriefings(
-      [user({ completedAts: [] })], new Map(), NOW,
+      [user({ completedAts: [] })],
+      new Map(),
+      NOW,
     );
     expect(briefings).toHaveLength(0);
     expect(skipped).toEqual([{ userId: "me", reason: "no_history" }]);
   });
   it("morning_brief=false면 opted_out", () => {
     const { skipped } = buildBriefings(
-      [user({ morningBrief: false })], new Map(), NOW,
+      [user({ morningBrief: false })],
+      new Map(),
+      NOW,
     );
     expect(skipped[0].reason).toBe("opted_out");
   });
   it("invocationHour 7이면 전원 not_due (수동 검증용 오버라이드)", () => {
-    const { briefings, skipped } = buildBriefings([user({})], new Map(), NOW, 7);
+    const { briefings, skipped } = buildBriefings(
+      [user({})],
+      new Map(),
+      NOW,
+      7,
+    );
     expect(briefings).toHaveLength(0);
     expect(skipped[0].reason).toBe("not_due");
   });
@@ -79,11 +89,7 @@ describe("buildBriefings — skip 판정", () => {
 describe("buildBriefings — 평소 시작 30분 전", () => {
   it("평소 19시에 운동하면 18:30 슬롯에 보낸다", () => {
     const at1830 = new Date("2026-07-18T09:35:00Z"); // KST 18:35 → 18:30 슬롯
-    const { briefings } = buildBriefings(
-      [withHabit(19)],
-      new Map(),
-      at1830,
-    );
+    const { briefings } = buildBriefings([withHabit(19)], new Map(), at1830);
     expect(briefings).toHaveLength(1);
   });
 
@@ -100,11 +106,7 @@ describe("buildBriefings — 평소 시작 30분 전", () => {
 
   it("자정 직후에 운동하는 사람은 전날 23:30 슬롯에 받는다", () => {
     const at2335 = new Date("2026-07-18T14:35:00Z"); // KST 23:35 → 23:30 슬롯
-    const { briefings } = buildBriefings(
-      [withHabit(0, 5)],
-      new Map(),
-      at2335,
-    );
+    const { briefings } = buildBriefings([withHabit(0, 5)], new Map(), at2335);
     expect(briefings).toHaveLength(1);
   });
 
@@ -146,7 +148,9 @@ describe("buildBriefings — 제목(스트릭 단계)", () => {
   });
   it("today_done: 오늘 이미 완료면 칭찬 카피", () => {
     const { briefings } = buildBriefings(
-      [user({ completedAts: [kst("2026-07-18T07:00:00")] })], new Map(), NOW,
+      [user({ completedAts: [kst("2026-07-18T07:00:00")] })],
+      new Map(),
+      NOW,
     );
     expect(briefings[0].title).toContain("오늘 완료");
   });
@@ -163,20 +167,31 @@ describe("buildBriefings — 본문·dedupe_key", () => {
     ["f2", [kst("2026-07-17T08:00:00")]],
   ]);
 
-  it("제안이 없는 날의 본문은 null이다 — 크루 집계 문구를 없앴다 (2026-07-28)", () => {
-    // 2026-08-16: body는 이제 "언제나 null"이 아니다 — 제안이 있는 날은
-    // 본문을 채운다(아래 "계획 없는 날 제안" describe). 이 단언은 그 이전의
-    // "크루 집계 문구 제거"를 보는 것이므로, hasPlanToday: true로 제안을 꺼서
-    // 그 경로만 고정해서 본다.
-    // 어제 운동한 사람이 있든 없든, 크루가 있든 없든 결과가 같아야 한다.
+  /**
+   * ⚠️ **2026-08-21에 계약이 바뀌었다.** 예전엔 제안이 없는 날 본문이 `null`이었다
+   * (2026-07-28에 크루 집계 문구를 없앤 뒤로). 이제는 홈 `나의 오늘` 카드와
+   * **같은 문장**이 들어간다 — 사용자 지시: *"해당 메시지는 각 크루에게 하루 한 번
+   * 배포되는 메시지와 동일하게 align"*.
+   *
+   * ⚠️ 여기서 지키는 것은 **크루 집계 문구가 돌아오지 않는다**는 것과
+   * **홈과 같은 문장**이라는 것 둘이다. 그래서 크루 데이터를 넣든 안 넣든 결과가
+   * 같은지도 그대로 본다(옛 단언의 목적).
+   */
+  it("제안이 없는 날의 본문은 홈 카드와 같은 '오늘의 한 줄'이다", () => {
+    // 기본 픽스처 = 4일 전 운동(d1), 스트릭 1일, todayKey 2026-07-18
+    const line = dailyMessage({
+      stage: "d1",
+      streak: 1,
+      todayKey: "2026-07-18",
+    });
     expect(
       buildBriefings([user({ hasPlanToday: true })], byUser, NOW).briefings[0]
         .body,
-    ).toBeNull();
+    ).toBe(line);
     expect(
       buildBriefings([user({ hasPlanToday: true })], new Map(), NOW)
         .briefings[0].body,
-    ).toBeNull();
+    ).toBe(line);
   });
   it("dedupe_key = morning_briefing:{userId}:{tz 로컬 날짜}", () => {
     const { briefings } = buildBriefings([user({})], new Map(), NOW);
@@ -262,7 +277,11 @@ describe("buildBriefings — 계획 없는 날 제안", () => {
       NOW,
     );
     expect(briefings[0].type).toBe("morning_briefing");
-    expect(briefings[0].body).toBeNull();
+    // ⚠️ 2026-08-21부터 본문은 홈 카드와 같은 한 줄이다(위 "본문·dedupe_key" 참조).
+    // 여기서 지키는 것은 **제안이 스트릭 브리핑 자리를 뺏지 않는다**는 것뿐이다.
+    expect(briefings[0].body).toBe(
+      dailyMessage({ stage: "d1", streak: 1, todayKey: "2026-07-18" }),
+    );
   });
 
   /**
@@ -272,7 +291,9 @@ describe("buildBriefings — 계획 없는 날 제안", () => {
    */
   it("dedupe_key는 type과 무관하게 그대로다", () => {
     const withPlan = buildBriefings(
-      [user({ hasPlanToday: true })], new Map(), NOW,
+      [user({ hasPlanToday: true })],
+      new Map(),
+      NOW,
     ).briefings[0];
     const withSuggestion = buildBriefings([user({})], new Map(), NOW)
       .briefings[0];

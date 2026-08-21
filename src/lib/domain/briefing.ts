@@ -5,13 +5,18 @@
  */
 import { currentStreak, streakStage, workoutDayKeys } from "./streak";
 import {
+  dailyMessage,
   EXPIRED_MESSAGES,
   pickByDay,
   STAGE_MESSAGES,
   TODAY_DONE_MESSAGES,
 } from "./streak-messages";
 import { dayKey, minuteOfDay } from "./time";
-import { DEFAULT_BRIEF_MINUTE, estimateNotifyMinute, isDue } from "./notify-time";
+import {
+  DEFAULT_BRIEF_MINUTE,
+  estimateNotifyMinute,
+  isDue,
+} from "./notify-time";
 import { pickSuggestionKind, suggestionCopy } from "./workout-suggestion";
 import type { StreakStage } from "./streak";
 
@@ -165,9 +170,22 @@ export function buildBriefings(
       type: copy ? "workout_suggestion" : "morning_briefing",
       // 제안이 있으면 제안이 제목을 가져간다. 없으면 지금 그대로 스트릭 문구.
       title: copy ? copy.title : briefingTitle(stage, streak, todayKey),
-      // 옛 코드는 `body`가 **항상 null**이었다(크루 집계 문구를 없앤 2026-07-28 이후).
-      // 제안이 그 빈자리를 채운다.
-      body: copy ? copy.body : null,
+      /*
+        본문 — 제안이 있으면 제안이 채우고, 없으면 **홈 `나의 오늘` 카드와 같은
+        한 줄**이 들어간다 (2026-08-21 사용자 지시: *"해당 메시지는 각 크루에게
+        하루 한 번 배포되는 메시지와 동일하게 align"*).
+
+        ⚠️ 제목(`briefingTitle`)과 **다른 갈래여야 한다.** 제목은 스트릭 상태와
+        재촉을 말하고(`STAGE_MESSAGES`), 본문은 "성공은 반복에서 온다 / 쉬었어도
+        돌아오면 된다"를 말한다. 둘을 같은 갈래로 채우면 알림 하나가 같은 말을
+        두 번 한다(2026-07-23에 홈 카드에서 실제로 그랬다).
+
+        ⚠️ 홈과 **같은 `todayKey`**를 넘기므로 두 화면의 문장이 저절로 맞는다.
+        한쪽만 다른 날짜·다른 함수를 쓰면 "오늘의 말"이 둘로 갈린다.
+
+        ⚠️ 옛 코드는 여기가 **항상 null**이었다(크루 집계 문구를 없앤 2026-07-28 이후).
+      */
+      body: copy ? copy.body : dailyMessage({ stage, streak, todayKey }),
       // ⚠️ 유형이 달라져도 키는 그대로다 — 위 `Briefing.type` 주석 참조.
       dedupeKey: `morning_briefing:${u.userId}:${todayKey}`,
     });

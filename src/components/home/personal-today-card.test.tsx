@@ -6,6 +6,7 @@ import {
   PersonalTodayCard,
   PersonalTodayCardSkeleton,
 } from "./personal-today-card";
+import { AT_RISK_MESSAGES, dailyMessage } from "@/lib/domain/streak-messages";
 import { MAX_DAILY_WORKOUT_XP_NOW } from "@/lib/domain/xp";
 import type { ProgressSummary } from "@/lib/progression";
 
@@ -365,6 +366,72 @@ describe("PersonalTodayCard — 프로필로 가는 길과 아바타", () => {
  * 함수다 — 여기서 다시 계산하면 같은 주가 두 화면에서 다르게 잘릴 수 있다.
  */
 describe("PersonalTodayCard — 최근 7일 점", () => {
+  /**
+   * ⚠️ **점만 있으면 줄의 절반이 빈다** (2026-08-21 사용자 지시 — "요일칸은 빈 공간을
+   * 줄이고 스트릭이 몇일째 유지되는지도 표시"). 그래서 이 줄은 점 + 유지 일수를
+   * 한 칸에 담는다.
+   *
+   * ⚠️ 문구는 옛 `StreakCard`의 것을 **그대로** 쓴다(`스트릭 N일 유지 중` /
+   * `스트릭 없음`). 같은 사실을 부르는 말을 새로 지으면 화면마다 다른 이름이 된다.
+   */
+  it("스트릭이 며칠째 유지 중인지 같은 칸에 적는다", () => {
+    renderCard({ completedAts: [YESTERDAY] });
+    expect(screen.getByText("스트릭 1일 유지 중")).toBeTruthy();
+  });
+
+  /**
+   * ⚠️ **문구를 여기 박지 마라.** `pickByDay`가 `todayKey`로 고르므로 `now`를 고정하면
+   * 결정적이지만, 문장을 그대로 쓰면 카피를 다듬는 순간 깨진다. 도메인이 고른 값과
+   * 화면이 그린 값이 **같은가**만 본다(경고 배너가 같은 규약).
+   */
+  it("오늘 마친 사람에게는 반복이 성공을 만든다고 적는다", () => {
+    renderCard({ completedAts: [YESTERDAY, TODAY], status: "done" }); // 스트릭 2일
+    const line = dailyMessage({
+      stage: "today_done",
+      streak: 2,
+      todayKey: "2026-08-21",
+    });
+    expect(screen.getByText(line)).toBeTruthy();
+  });
+
+  /**
+   * ⚠️ **위험할 때는 겁이 아니라 회복을 말한다** (2026-08-21 사용자 지시 — "꺼질 위험에
+   * 있거나 꺼진 사람에게는 실패에도 불구하고 극복할 수 있다는 메시지 위주로").
+   *
+   * 잃을 양과 남은 날은 바로 아래 **경고 배너**가 이미 말한다. 이 줄까지 겁을 주면
+   * 같은 자리에서 두 번 몰아붙이게 된다 — 그래서 두 줄은 **다른 갈래**여야 한다.
+   */
+  it("경고가 뜨는 날에는 회복을 말한다 — 경고와 다른 갈래다", () => {
+    renderCard({ completedAts: [YESTERDAY], status: "idle" }); // d4 → 경고
+    const line = dailyMessage({
+      stage: "d4",
+      streak: 1,
+      todayKey: "2026-08-21",
+    });
+    expect(AT_RISK_MESSAGES.map((make) => make(1))).toContain(line);
+    expect(screen.getByText(line)).toBeTruthy();
+    // 겁주는 쪽은 경고 배너 하나뿐이다
+    expect(screen.getByRole("alert").textContent).toContain("소멸 D-4");
+    expect(line).not.toContain("소멸");
+  });
+
+  it("한 번도 안 한 사람에게는 시작을 권한다", () => {
+    renderCard({ completedAts: [] });
+    const line = dailyMessage({
+      stage: "none",
+      streak: 0,
+      todayKey: "2026-08-21",
+    });
+    expect(screen.getByText(line)).toBeTruthy();
+    expect(line).not.toContain("0일");
+  });
+
+  it("스트릭이 없으면 없다고 적는다", () => {
+    renderCard({ completedAts: [] });
+    expect(screen.getByText("스트릭 없음")).toBeTruthy();
+    expect(screen.queryByText(/유지 중/)).toBeNull();
+  });
+
   it("마지막 칸이 오늘인 요일 일곱 칸을 그린다", () => {
     renderCard({ completedAts: [YESTERDAY] });
     // 2026-08-15(토) ~ 08-21(금). 기준 시각이 금요일이라 마지막이 `금`이다

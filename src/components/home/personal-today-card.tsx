@@ -7,8 +7,16 @@ import { UiIcon } from "@/components/ui-icon";
 import { isPhotoAvatar } from "@/lib/domain/avatar-source";
 import type { FriendStatus } from "@/lib/domain/friend-board";
 import { personalTodayAction } from "@/lib/domain/home-competition";
-import { currentStreak, streakStage, workoutDayKeys } from "@/lib/domain/streak";
-import { pickByDay, STAGE_MESSAGES } from "@/lib/domain/streak-messages";
+import {
+  currentStreak,
+  streakStage,
+  workoutDayKeys,
+} from "@/lib/domain/streak";
+import {
+  dailyMessage,
+  pickByDay,
+  STAGE_MESSAGES,
+} from "@/lib/domain/streak-messages";
 import { DEFAULT_TIMEZONE, dayKey } from "@/lib/domain/time";
 import { weeklyBars } from "@/lib/domain/today-status";
 import { weekWorkoutDays } from "@/lib/domain/viewing-pass";
@@ -105,7 +113,11 @@ function BadgeHex() {
         className="text-accent"
         fill="currentColor"
       />
-      <path d="M12 5.2 18.2 8.8v7.2L12 19.6 5.8 16V8.8z" fill="#0b0b0c" opacity="0.28" />
+      <path
+        d="M12 5.2 18.2 8.8v7.2L12 19.6 5.8 16V8.8z"
+        fill="#0b0b0c"
+        opacity="0.28"
+      />
     </svg>
   );
 }
@@ -203,6 +215,22 @@ export function PersonalTodayCard({
     todayKey,
     tz,
   );
+  /**
+   * 스트릭 칸 아래 **오늘의 한 줄** (2026-08-21 사용자 지시).
+   *
+   * 목적은 **성공과 운동을 같은 것으로 보게 만들어 반복을 잇게 하는 것**이다. 그래서
+   * 상태마다 말이 다르다 — 오늘 마쳤으면 반복의 값어치를, 위험하거나 꺼졌으면
+   * "실패에도 불구하고 돌아올 수 있다"를 말한다.
+   *
+   * ⚠️ 경고 배너(`warning`)와 **다른 갈래다.** 저건 잃을 양과 남은 날을 말한다.
+   * 이 줄까지 겁을 주면 같은 자리에서 두 번 몰아붙인다.
+   *
+   * ⚠️ **아침 브리핑 본문과 같은 문장이다**(`domain/briefing.ts`). 같은 날 같은
+   * `todayKey`를 넘기므로 저절로 맞는다 — 한쪽만 다른 값을 넘기지 마라.
+   *
+   * ⚠️ 문구·인물 사례·출처는 전부 `streak-messages.ts`가 갖는다. 여기서 짓지 마라.
+   */
+  const persistence = dailyMessage({ stage, streak, todayKey });
   const hasGoal = weeklyGoal !== null && weeklyGoal > 0;
   const action = personalTodayAction(status, MAX_DAILY_WORKOUT_XP_NOW);
   const pct = summary
@@ -322,7 +350,9 @@ export function PersonalTodayCard({
                 숫자인지 알 수 없다(2026-08-21 테스트가 잡았다). 주간 통계 카드는
                 3칸이라 폭이 111px뿐이어서 라벨을 못 늘렸지만(`weekly-stats.tsx`
                 주석), 이 카드는 2칸이라 375px에서도 ~135px가 남는다. */}
-            <span className="text-[11px] text-accent">이번 주 · 목표 정하기 ›</span>
+            <span className="text-[11px] text-accent">
+              이번 주 · 목표 정하기 ›
+            </span>
             <strong className="text-[17px] font-extrabold">
               {days.length}일
             </strong>
@@ -336,39 +366,68 @@ export function PersonalTodayCard({
         />
       </div>
 
-      {/* 최근 7일 점 — 옛 `StreakCard`가 갖던 것으로, 2026-08-21 사용자 지시로
-          **이 카드에** 들어왔다. 위 `연속 N일`이 숫자라면 이 줄은 그 숫자가 **어느
-          날들로** 만들어졌는지를 말한다.
+      {/* **스트릭 칸** — 유지 일수 + 최근 7일 점을 한 줄에 담는다.
 
-          ⚠️ 한 번 "되살리지 않는다"로 정했다가 같은 날 뒤집혔다. 지표 칸·배너 여백을
-          줄여 자리가 생긴 뒤 사용자가 넣으라고 했다 — 다시 뺄 일이 있으면 그 맥락부터
-          확인해라(인수인계서 §11).
+          ⚠️ 2026-08-21에 두 번 고쳤다. ① 7일 점을 넣었고(그때는 점만 있었다)
+          ② 사용자가 화면을 보고 *"요일칸은 빈 공간을 줄이고 스트릭이 몇일째 유지되는지도
+          표시"* 하라고 했다. 점 일곱 개가 폭을 다 쓰면서 정보는 적어 줄의 절반이 비어
+          있었다. 지금은 왼쪽이 상태 문구, 오른쪽이 점이다.
 
-          ⚠️ **`role="img"` + `aria-label`이다.** 요일 글자만 낭독하면 `월 화 수 목…`이
-          되어 아무 뜻도 전달되지 않는다. 묶어서 "최근 7일 중 N일 운동" 한 번만 읽힌다.
+          ⚠️ 문구는 옛 `StreakCard`의 것을 **그대로** 옮겼다(`스트릭 N일 유지 중` /
+          `스트릭 없음`). 같은 사실을 부르는 말을 새로 지으면 화면마다 다른 이름이 된다.
 
-          ⚠️ 점 크기·라벨을 키우기 전에 재라. 이 줄이 30px이고, 경고까지 뜨면 카드가
-          357px다(2026-08-21 실측). 크루 두 행은 아직 하단 탭 위에 남는다. */}
-      <div
-        role="img"
-        aria-label={`최근 7일 중 ${weekDots.filter((d) => d.done).length}일 운동`}
-        className="mt-2 flex gap-1"
-      >
-        {weekDots.map((d) => (
-          <span
-            key={d.dayKey}
-            className="flex flex-1 flex-col items-center gap-0.5"
-          >
-            <span
-              className={`h-2.5 w-2.5 rounded-full ${
-                d.done ? "bg-accent" : "border border-line bg-surface-2"
-              }`}
-            />
-            <span className="text-[10px] leading-none text-faint">
-              {d.label}
-            </span>
+          ⚠️ 위 `연속 N일` 칸과 숫자가 겹치는 것은 **알고 둔 것이다**(사용자 지시).
+          칸은 숫자만 말하고 이 줄은 "유지 중"이라는 상태를 말한다. 되살리지 말라고
+          적혀 있던 것은 헤더 한 줄(`11일 연속 · 오늘 완료`)이고 그건 여전히 없다.
+
+          ⚠️ **`role="img"` + `aria-label`은 점에만 건다.** 요일 글자만 낭독하면
+          `토 일 월 화…`가 되어 아무 뜻도 전달되지 않는다. 왼쪽 문구는 그대로 읽힌다.
+
+          ⚠️ 점·라벨을 키우기 전에 재라. 이 칸이 37px이고, 경고까지 뜨면 카드가 364px다
+          (2026-08-21 실측). 크루 두 행은 그래도 하단 탭 위에 남는다. */}
+      <div className="mt-2 rounded-card-sm border border-line bg-surface-2 px-2.5 py-1.5">
+        <div className="flex items-center gap-2">
+          {/* ⚠️ 꺼진 쪽이 **장작이 아니라 같은 불꽃의 빈 판**이다 — 옛 카드가 2026-08-07에
+            그렇게 정했다. 옆 문구가 같은 말을 글자로 하므로 장식이다. */}
+          <UiIcon name={streak > 0 ? "streak-on" : "streak-off"} size={18} />
+          <span className="min-w-0 flex-1 truncate text-[12px] font-bold leading-tight">
+            {streak > 0 ? `스트릭 ${streak}일 유지 중` : "스트릭 없음"}
           </span>
-        ))}
+          <div
+            role="img"
+            aria-label={`최근 7일 중 ${weekDots.filter((d) => d.done).length}일 운동`}
+            className="flex flex-none gap-[3px]"
+          >
+            {weekDots.map((d) => (
+              <span
+                key={d.dayKey}
+                className="flex w-[13px] flex-col items-center gap-[3px]"
+              >
+                <span
+                  className={`h-2 w-2 rounded-full ${
+                    d.done ? "bg-accent" : "border border-line bg-surface"
+                  }`}
+                />
+                <span className="text-[9px] leading-none text-faint">
+                  {d.label}
+                </span>
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* ⚠️ **성공은 반복에서 나온다** 계열 한 줄 (2026-08-21 사용자 지시 —
+            "메시지는 성공과 관련해서… 같은 류의 다양한 메시지로", "성공한 사업가가
+            운동루틴을 반복하는 사례같은거도 온라인에서 찾아서 활용").
+
+            ⚠️ 문구도 인물 사례도 **출처도** `streak-messages.ts`가 갖는다. 실존 인물에
+            대한 사실 주장이라 지어내면 안 되고, 테스트가 확인된 이름만 허용한다.
+
+            ⚠️ 아래 경고 배너와 **다른 갈래다.** 저건 위험을, 이건 반복의 값어치를
+            말한다. 한쪽으로 합치면 같은 자리에서 같은 말이 두 번 나온다. */}
+        <p className="mt-1 text-[11px] leading-snug text-muted">
+          {persistence}
+        </p>
       </div>
 
       {/* 소멸 경고 배너 — 2026-08-21 홈 개편에서 `StreakCard`와 함께 사라졌다가
@@ -427,7 +486,6 @@ export function PersonalTodayCard({
           {action.label}
         </div>
       )}
-
     </section>
   );
 }

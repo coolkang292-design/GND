@@ -49,24 +49,20 @@ export const STAGE_MESSAGES: Partial<
   d4: [
     (n) =>
       `${n}일 연속 중, 오늘 칸만 비어 있어요. 채우면 ${n + 1}일입니다 (소멸 D-4)`,
-    (n) =>
-      `어제까지 ${n}일. 오늘 한 번이면 ${n + 1}일이 돼요 (소멸 D-4)`,
-    (n) =>
-      `${n}일에서 멈출지 ${n + 1}일로 갈지, 오늘이 정합니다 (소멸 D-4)`,
+    (n) => `어제까지 ${n}일. 오늘 한 번이면 ${n + 1}일이 돼요 (소멸 D-4)`,
+    (n) => `${n}일에서 멈출지 ${n + 1}일로 갈지, 오늘이 정합니다 (소멸 D-4)`,
   ],
   // 보유 효과 + 매몰 노력 — "당신의 n일"이라는 소유감과 그걸 쌓는 데 든 수고.
   d3: [
     (n) =>
       `${n}일 조용히 기다리는 중이에요. 쌓는 데 ${n}일, 남은 건 3일입니다 (소멸 D-3)`,
-    (n) =>
-      `${n}일은 그냥 생긴 게 아니잖아요. 아직 당신 겁니다 (소멸 D-3)`,
+    (n) => `${n}일은 그냥 생긴 게 아니잖아요. 아직 당신 겁니다 (소멸 D-3)`,
     (n) =>
       `${n}일짜리 기록, 지키기만 하면 되는데 요즘 주인이 안 보이네요 (소멸 D-3)`,
   ],
   // 손실 회피 + 자기효능 — 잃을 양을 못 박되 문턱("30분")을 같이 낮춘다.
   d2: [
-    (n) =>
-      `${n}일이 바람 앞의 촛불이에요. 30분이면 지킵니다 (소멸 D-2)`,
+    (n) => `${n}일이 바람 앞의 촛불이에요. 30분이면 지킵니다 (소멸 D-2)`,
     (n) =>
       `여기서 놓치면 ${n}일이 0일이 돼요. 오늘 한 번이면 지킵니다 (소멸 D-2)`,
     (n) =>
@@ -76,10 +72,8 @@ export const STAGE_MESSAGES: Partial<
   d1: [
     (n) =>
       `마지막입니다. 오늘 안 하면 ${n}일 → 0일. 지금 30분이면 지켜요 (D-1)`,
-    (n) =>
-      `${n}일이 오늘 하루로 0일이 돼요. 지금 30분이면 지킵니다 (D-1)`,
-    (n) =>
-      `${n}일 지킬 기회는 오늘이 끝이에요. 지금 시작하면 지킵니다 (D-1)`,
+    (n) => `${n}일이 오늘 하루로 0일이 돼요. 지금 30분이면 지킵니다 (D-1)`,
+    (n) => `${n}일 지킬 기회는 오늘이 끝이에요. 지금 시작하면 지킵니다 (D-1)`,
   ],
 };
 
@@ -115,6 +109,178 @@ export const EXPIRED_MESSAGES = [
 ];
 
 /**
+ * **반복·지속 한 줄** — 홈 `나의 오늘`의 스트릭 칸에 붙는다 (2026-08-21 사용자 지시:
+ * *"메시지는 성공과 관련해서, 성공은 반복과 지속에서 나온다 같은 류의 다양한 메시지로"*).
+ *
+ * ⚠️ **`STAGE_MESSAGES`(재촉)도 `streakHeadline`(사실 상태)도 아닌 세 번째 갈래다.**
+ * 위험을 말하지 않고, 지금 하고 있는 반복 자체를 성공의 재료로 되돌려 준다.
+ * 셋을 한 곳에 섞지 마라 — 2026-07-23에 같은 문장이 두 번 보이는 사고가 있었다.
+ *
+ * ⚠️⚠️ **"매일"이라고 쓰면 거짓말이다.** 이 앱의 스트릭은 5일 유예다
+ * (`STREAK_EXPIRY_DAYS = 5`) — 사흘 쉬어도 이어진다. `11일째`는 "11일 동안 하루도
+ * 안 빠졌다"가 아니라 "11번의 운동이 끊기지 않고 이어졌다"는 뜻이다. 문구를 다듬다가
+ * 이 선을 넘으면 화면이 사용자에게 **없던 성실**을 씌운다.
+ * `streak-messages.test.ts`가 금지어를 단언한다.
+ */
+export const PERSISTENCE_MESSAGES: ((streak: number) => string)[] = [
+  (n) => `성공은 반복에서 옵니다 · ${n}일째 반복 중`,
+  (n) => `잘하는 사람보다 계속하는 사람이 멀리 갑니다 · ${n}일째`,
+  (n) => `한 번의 완벽보다 ${n}번의 반복이 셉니다`,
+  (n) => `${n}일을 이어온 힘, 그게 실력이 됩니다`,
+  (n) => `꾸준함이 재능을 이깁니다 · ${n}일째 지속 중`,
+  (n) => `오늘의 반복이 내일의 기본기가 됩니다 · ${n}일째`,
+  (n) => `크게 바꾸는 건 결심이 아니라 ${n}번의 반복입니다`,
+  (n) => `성공은 이렇게 쌓입니다 · ${n}일째 이어지는 중`,
+];
+
+/**
+ * 실존 인물의 운동 루틴 사례 (2026-08-21 사용자 지시: *"성공한 사업가가 운동루틴을
+ * 반복하는 사례같은거도 온라인에서 찾아서 활용"*).
+ *
+ * ⚠️⚠️ **여기 문장을 지어내지 마라.** 실존 인물에 대한 사실 주장이다. 아래 넷은
+ * 2026-08-21에 검색으로 확인한 것이고, 출처는 이렇다:
+ *
+ * - 팀 쿡(Apple) 새벽 3:45 기상 → 헬스장:
+ *   https://www.uniladtech.com/apple/apple-ceo-tim-cook-morning-routine-019830-20250106
+ * - 리처드 브랜슨(Virgin) "운동하면 하루에 4시간을 더 쓴다":
+ *   https://www.cnbc.com/2016/11/10/richard-branson-says-this-daily-habit-doubles-his-productivity.html
+ * - 마크 저커버그 주 3회, 아침 첫 일과 (페이스북 타운홀 Q&A):
+ *   https://www.entrepreneur.com/living/mark-zuckerberg-talks-workouts-telepathy-and-ai/247958
+ * - 하워드 슐츠(Starbucks) 새벽 4:30 기상 → 자전거:
+ *   https://www.cnbc.com/2016/09/06/what-9-self-made-millionaires-do-before-breakfast.html
+ *
+ * 사람을 더하려면 **출처를 같이 남겨라.** 테스트가 확인된 이름만 허용한다 —
+ * 이름을 늘릴 때 그 목록도 같이 늘려야 하고, 그때 출처를 확인하게 된다.
+ */
+export const ROLE_MODEL_MESSAGES: ((streak: number) => string)[] = [
+  (n) =>
+    `팀 쿡은 새벽 4시 전에 일어나 운동부터 합니다 · 당신은 ${n}일째 이어가는 중`,
+  (n) =>
+    `저커버그는 주 3회, 아침 첫 일과로 운동합니다 · 당신은 ${n}일째 반복 중`,
+  (n) => `하워드 슐츠는 새벽 4시 반에 자전거부터 탔습니다 · ${n}일째 쌓는 중`,
+];
+
+/**
+ * **그들이 직접 한 말** (2026-08-21 사용자 지시: *"성공한 사업가들이 운동을 하는
+ * 이유나 그들의 말을 인용하는 것도 좋을 것 같아"*).
+ *
+ * ⚠️⚠️ **인용문을 지어내거나 다듬지 마라.** 실제 발언이라고 화면이 말하는 순간
+ * 사실 주장이 된다. 아래 넷은 2026-08-21에 원문을 확인한 뒤 옮긴 것이다:
+ *
+ * - 팀 쿡 "I go to the gym and work out for an hour … because it keeps my stress at bay":
+ *   https://www.cnbc.com/2018/11/27/tim-cook-reveals-the-morning-routine-that-sets-him-up-for-success.html
+ * - 리처드 브랜슨 "I seriously doubt that I would have been as successful in my career
+ *   (and happy in my personal life) if I hadn't always placed importance on my health
+ *   and fitness" (2017 Virgin 블로그):
+ *   https://www.cnbc.com/2017/05/28/mark-zuckerberg-and-richard-branson-exercise-is-key-to-success.html
+ * - 리처드 브랜슨 — 운동이 하루에 4시간을 더 준다:
+ *   https://www.cnbc.com/2016/11/10/richard-branson-says-this-daily-habit-doubles-his-productivity.html
+ * - 마크 큐번 "That I will find a way to get [a workout] done … reflects how relentless
+ *   I can be in the business world as well":
+ *   https://www.cnbc.com/2024/12/11/mark-cuban-on-productivity-youll-be-shocked-by-my-daily-routine.html
+ *
+ * ⚠️ **스트릭 수를 붙이지 않는다.** 남의 말에 내 숫자를 이어 붙이면 그 사람이 내
+ * 기록을 두고 한 말처럼 읽힌다. 이 줄은 인용만 하고 물러선다.
+ */
+export const QUOTE_MESSAGES = [
+  '"헬스장에서 한 시간 운동합니다. 스트레스를 잡아 주거든요" — 팀 쿡',
+  '"운동을 중요하게 여기지 않았다면 지금만큼 성공하지 못했을 겁니다" — 리처드 브랜슨',
+  '"운동하면 하루에 네 시간을 더 씁니다" — 리처드 브랜슨',
+  '"운동을 기어이 해내는 것, 그게 사업에서의 집요함을 보여줍니다" — 마크 큐번',
+];
+
+/**
+ * **위험할 때**(`d4`~`d1`) — 극복·회복 (2026-08-21 사용자 지시: *"스트릭이 꺼질 위험에
+ * 있거나 꺼진 사람에게는 실패에도 불구하고 극복할 수 있다는 메시지 위주로"*).
+ *
+ * ⚠️ **여기서 겁주지 마라.** 잃을 양과 남은 날은 **경고 배너**(`STAGE_MESSAGES`)가
+ * 바로 아래에서 말한다. 같은 자리에서 둘 다 겁을 주면 화면이 사람을 몰아붙인다.
+ * 이 줄이 맡은 것은 "쉬었어도 돌아오면 된다"는 회복 가능성이다.
+ *
+ * ⚠️⚠️ **한 줄을 넘기지 마라(28자).** 이 줄은 경고 배너와 **같이** 뜬다. 두 줄이 되면
+ * 카드가 403px가 되고 375×812에서 크루 카드 하단이 하단 탭(754px)에 닿는다 —
+ * 카드를 둘로 나눈 이유가 사라진다. `streak-messages.test.ts`가 길이를 단언한다.
+ */
+export const AT_RISK_MESSAGES: ((streak: number) => string)[] = [
+  () => `쉰 날이 있어도 반복은 이어집니다`,
+  () => `완벽한 사람은 없어요. 다시 하면 됩니다`,
+  (n) => `멈춘 게 아니라 쉰 거예요 · ${n}일째`,
+  () => `성공한 사람도 거릅니다. 돌아오는 게 실력이에요`,
+  (n) => `며칠 쉬어도 ${n}일은 그대로예요`,
+];
+
+/**
+ * **이미 꺼진 사람에게** — 실패에도 불구하고 (2026-08-21 사용자 지시).
+ *
+ * ⚠️ `EXPIRED_MESSAGES`(능청)와 **다른 갈래다.** 저건 "원래 없던 걸로 해요"라고 농담을
+ * 하고, 이건 다시 붙일 수 있다고 말한다. 둘을 합치지 마라 — 브리핑 제목이 저것을 쓰고
+ * 이 줄은 그 아래(본문·홈 카드)에 붙는다.
+ *
+ * ⚠️ **숫자를 세지 않는다.** `0일째 반복 중`은 응원이 아니라 통보다.
+ * ⚠️ 길이 28자 — 위 `AT_RISK_MESSAGES`와 같은 이유다.
+ */
+export const RESTART_MESSAGES = [
+  "끊긴 게 끝은 아니에요. 다시 1일부터입니다",
+  "실패는 그만둘 때만 실패가 됩니다",
+  "성공한 사람들도 다시 시작합니다",
+  "오늘 한 번이면 불꽃은 다시 켜져요",
+];
+
+/**
+ * 아직 한 번도 안 한 사람에게 (`none`).
+ *
+ * ⚠️ **"다시"라고 하지 않는다.** 시작한 적이 없는 사람에게 재시작을 권하면 자기
+ * 기록이 사라진 줄 안다. 길이 28자는 위와 같은 이유다.
+ */
+export const START_MESSAGES = [
+  "성공은 반복에서 옵니다. 오늘이 1일째",
+  "계속하는 사람이 멀리 갑니다",
+  "잘하지 않아도 됩니다. 한 번이면 돼요",
+  "첫 1일이 제일 큽니다",
+];
+
+/**
+ * **오늘의 한 줄** — 홈 `나의 오늘`의 스트릭 칸과 **아침 브리핑 본문**이 같이 쓴다
+ * (2026-08-21 사용자 지시: *"해당 메시지는 각 크루에게 하루 한 번 배포되는 메시지와
+ * 동일하게 align 시키는 게 좋을 것 같아"*).
+ *
+ * 목적은 하나다 — **성공과 운동을 같은 것으로 보게 만들어 반복을 잇게 하는 것**
+ * (사용자 설명). 그래서 상태마다 말하는 것이 다르다:
+ *
+ * | 상태 | 무엇을 말하나 |
+ * |---|---|
+ * | `today_done` | 반복이 성공을 만든다 — 내 기록·성공한 사람들의 루틴·그들의 말 |
+ * | `d4`~`d1` | 쉬었어도 **돌아오면 된다**. 겁주는 건 경고 배너가 따로 한다 |
+ * | `expired` | 실패에도 불구하고 다시 붙일 수 있다 |
+ * | `none` | 시작 문턱을 낮춘다 |
+ *
+ * ⚠️ **같은 날엔 같은 문장이다.** 홈과 알림이 다른 말을 하면 "무엇이 오늘의 말인지"가
+ * 사라진다. `pickByDay`가 `todayKey`로 고르므로 둘이 저절로 맞는다 — 한쪽만 다른
+ * 데이터를 넘기지 마라.
+ */
+export function dailyMessage(input: {
+  stage: StreakStage;
+  streak: number;
+  todayKey: string;
+}): string {
+  const { stage, streak, todayKey } = input;
+  if (stage === "none") return pickByDay(START_MESSAGES, todayKey);
+  if (stage === "expired") return pickByDay(RESTART_MESSAGES, todayKey);
+  if (stage !== "today_done")
+    return pickByDay(AT_RISK_MESSAGES, todayKey)(streak);
+  // 세 갈래(내 반복 · 남의 사례 · 그들의 말)를 **한 통에 넣고** 돌린다 —
+  // 갈래를 번갈아 강제하면 같은 문장이 사흘에 한 번씩 와서 금세 외워진다.
+  return pickByDay(
+    [
+      ...PERSISTENCE_MESSAGES.map((make) => make(streak)),
+      ...ROLE_MODEL_MESSAGES.map((make) => make(streak)),
+      ...QUOTE_MESSAGES,
+    ],
+    todayKey,
+  );
+}
+
+/**
  * **스트릭 한 줄 문구** — 홈 스트릭 카드와 기록 화면 오늘 카드가 같이 쓴다.
  *
  * ⚠️ 2026-08-19에 여기로 옮겼다. 그 전에는 `home/streak-card.tsx` 안에 있었고,
@@ -135,7 +301,8 @@ export function streakHeadline(input: {
 }): string {
   const { stage, streak, gap, todayKey } = input;
   if (stage === "none") return "운동을 시작하면 불꽃이 켜져요";
-  if (stage === "today_done") return pickByDay(TODAY_DONE_MESSAGES, todayKey)(streak);
+  if (stage === "today_done")
+    return pickByDay(TODAY_DONE_MESSAGES, todayKey)(streak);
   if (stage === "expired") return pickByDay(EXPIRED_MESSAGES, todayKey);
   // ⚠️ `gap`이 `null`이면 기록이 없다는 뜻이다 — 위 `none`에서 이미 걸러지지만
   //    단계 판정과 gap 계산이 갈릴 여지를 남기지 않는다.
