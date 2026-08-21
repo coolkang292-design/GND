@@ -2,7 +2,15 @@ import Link from "next/link";
 import { UiIcon } from "@/components/ui-icon";
 
 /**
- * 홈의 유일한 주 행동 버튼 (2026-08-13 개편).
+ * 금색 단일 `운동 시작하기` 버튼.
+ *
+ * ⚠️⚠️ **2026-08-21 현재 호출부가 없다.** 홈의 주 행동 버튼은
+ * `personal-today-card.tsx`로 옮겨 갔고, 거기서는 오늘 상태에 따라 문구가
+ * `오늘 운동하고 +N XP` / `운동 이어가기` / 칭찬 배너로 갈린다(설계 §6.2).
+ * 이 파일을 홈에 되살리면 **주 행동 버튼이 둘**이 된다. 아래 옛 설명은 2026-08-13~
+ * 08-20의 배치를 적은 것이다.
+ *
+ * (옛 설명) 홈의 유일한 주 행동 버튼 (2026-08-13 개편).
  *
  * 설계: `docs/superpowers/specs/2026-08-13-home-today-card-and-challenge-cta-design.md`
  *

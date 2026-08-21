@@ -1,18 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { AuthStatus } from "@/components/auth-status";
 import { CrewCard } from "@/components/crew-card";
 import { ActiveWorkoutCards } from "@/components/feed/active-workout-cards";
 import { NotificationBell } from "@/components/notification-bell";
 import { PushEnableCard } from "@/components/push-enable-card";
-import { StreakCard } from "@/components/home/streak-card";
-import { WeeklyStats } from "@/components/home/weekly-stats";
 import { FriendBoardCard } from "@/components/home/friend-board-card";
-import { StartWorkoutCta } from "@/components/home/start-workout-cta";
-import { HeaderStreak } from "@/components/home/header-streak";
-import { CharacterCard } from "@/components/home/character-card";
+import {
+  PersonalTodayCard,
+  PersonalTodayCardSkeleton,
+} from "@/components/home/personal-today-card";
 import { ChallengeSummaryCard } from "@/components/home/challenge-summary-card";
 import { getMyProfile } from "@/lib/crew";
 import {
@@ -27,6 +26,10 @@ import { getCompletedSessions } from "@/lib/workout";
 import { getActiveCrewSessions, type ActiveCrewSession } from "@/lib/social";
 import { getProgressSummary, type ProgressSummary } from "@/lib/progression";
 import { workedOutToday } from "@/lib/domain/friend-board";
+import {
+  resolvePersonalTodayStatus,
+  type CrewTodaySummary,
+} from "@/lib/domain/home-competition";
 import { DEFAULT_TIMEZONE } from "@/lib/domain/time";
 
 const NO_ACTIVE_IDS: Set<string> = new Set();
@@ -36,9 +39,10 @@ export function HomeClient() {
   const { userId, loading, configured } = useAuth();
   const [completedAts, setCompletedAts] = useState<Date[] | null>(null);
   // ⚠️ 기본 숫자를 넣지 마라. `null` = "챌린지에서 아직 안 정했다"이고, 화면은
-  //    그때 분모를 안 그린다 (2026-08-08 사용자 결정 — weekly-stats.tsx 주석).
+  //    그때 분모 대신 `목표 정하기 ›`를 그린다 (2026-08-08 사용자 결정 —
+  //    `personal-today-card.tsx`의 `hasGoal` 갈래).
   const [weeklyGoal, setWeeklyGoal] = useState<number | null>(null);
-  // 친구 목록의 내 행에 쓴다 — 이미 부르는 `getMyProfile` 응답에서 꺼낸다.
+  // 내 카드의 이름·아바타 — 이미 부르는 `getMyProfile` 응답에서 꺼낸다.
   const [myName, setMyName] = useState<{
     nickname: string;
     avatarUrl: string | null;
@@ -54,8 +58,23 @@ export function HomeClient() {
   const [challengeScore, setChallengeScore] = useState<MyChallengeScore | null>(
     null,
   );
-  // 진행 중 세션은 진행 중 카드와 친구 목록이 같이 쓴다 — 한 번만 조회한다.
+  // 진행 중 세션은 진행 중 카드와 크루 목록이 같이 쓴다 — 한 번만 조회한다.
   const [activeSessions, setActiveSessions] = useState<ActiveCrewSession[]>([]);
+  /**
+   * 크루 카드가 계산해 올려 주는 오늘 완료 요약 (2026-08-21).
+   *
+   * ⚠️ **홈이 크루를 다시 조회하지 않는다.** 내 카드의 비교 문구가 이 값을 쓰는데,
+   * 그걸 얻자고 홈에서 크루를 한 번 더 부르면 같은 질의가 두 번 나간다.
+   * `null` = 조회 전 — 크루 0명과 구별한다(문구가 갈린다).
+   */
+  const [crewSummary, setCrewSummary] = useState<CrewTodaySummary | null>(null);
+  /**
+   * 홈이 한 번 만드는 기준 시각.
+   *
+   * ⚠️ 위젯마다 `new Date()`를 부르면 자정 언저리에 헤더·내 카드·크루 행이 서로
+   * 다른 "오늘"을 쓴다. 렌더마다 새로 만들지 않도록 `useState` 초기화로 못 박는다.
+   */
+  const [dateRef] = useState(() => new Date());
 
   useEffect(() => {
     if (!configured || loading || !userId) return;
@@ -188,71 +207,88 @@ export function HomeClient() {
   const iWorkedOutToday = useMemo(
     () =>
       completedAts
-        ? workedOutToday(completedAts, new Date(), DEFAULT_TIMEZONE)
+        ? workedOutToday(completedAts, dateRef, DEFAULT_TIMEZONE)
         : false,
-    [completedAts],
+    [completedAts, dateRef],
   );
 
   /**
-   * 친구 목록 맨 위에 그릴 내 행의 재료 (2026-08-07 사용자 지시).
-   *
-   * ⚠️ **홈이 이미 부른 두 조회에서 꺼낸다** — 닉네임·아바타는 `getMyProfile`,
-   * `totalXp`는 성장 카드가 쓰는 `getProgressSummary`. 친구 목록 카드 안에서 다시
-   * 부르면 홈에서 같은 질의가 두 번 나간다.
-   *
-   * ⚠️ `totalXp`를 넘기는 것이지 레벨을 넘기는 게 아니다. 레벨은 받는 쪽이
-   * `getLevelProgress`로 다시 계산한다 — 친구와 **같은 함수**를 지나야 같은 사람이
-   * 화면마다 다른 레벨로 보이지 않는다(인수인계서 §5.4).
+   * 내 오늘 상태 3단계 — 크루 행과 **같은 규칙**(`resolvePersonalTodayStatus`)을 지난다.
+   * 판정을 여기서 손으로 다시 쓰면 같은 사람이 내 카드와 크루 행에서 갈릴 수 있다.
    */
-  const me = useMemo(
+  const myTodayStatus = useMemo(
     () =>
-      userId && myName && summary
-        ? {
-            id: userId,
-            nickname: myName.nickname,
-            avatarUrl: myName.avatarUrl,
-            totalXp: summary.totalXp,
-          }
-        : null,
-    [userId, myName, summary],
+      resolvePersonalTodayStatus(
+        iWorkedOutToday,
+        userId ? activeUserIds.has(userId) : false,
+      ),
+    [activeUserIds, iWorkedOutToday, userId],
   );
+
+  /**
+   * ⚠️ **`useCallback`을 떼지 마라.** 크루 카드는 이 함수를 `useEffect`의 의존성으로
+   * 쓴다 — 매 렌더 새 함수가 내려가면 effect가 매번 다시 돌아 setState → 렌더 →
+   * effect의 고리가 된다.
+   *
+   * ⚠️ 값이 같으면 **같은 객체를 유지한다.** 크루 카드는 렌더마다 새 요약 객체를
+   * 만들어 올리는데, 그대로 받으면 내용이 같아도 상태가 바뀐 것으로 보여 홈이 다시
+   * 렌더된다.
+   */
+  const handleCrewSummary = useCallback((next: CrewTodaySummary | null) => {
+    setCrewSummary((prev) =>
+      prev?.total === next?.total && prev?.done === next?.done ? prev : next,
+    );
+  }, []);
 
   return (
     <div className="flex flex-col gap-3">
       <header className="flex items-center justify-between pt-2 pb-1">
-        {/* ⚠️ 옛 자리에는 `오늘도 GND 탈출하자 🔥`가 있었다 — 정보가 없는 구호다.
-            2026-08-13 사용자 지시로 **스트릭을 맨 위로** 올리면서 그 자리를 썼다.
-            카드(108px)를 올리지 않은 이유는 `header-streak.tsx` 주석 참조 —
-            크루 3명이면 `운동 시작하기`가 접힘선 밖으로 나간다. */}
-        <div>
-          <h1 className="text-[19px] font-extrabold tracking-tight">GND</h1>
-          <HeaderStreak
-            completedAts={completedAts}
-            todayDone={iWorkedOutToday}
-          />
-        </div>
+        {/* ⚠️ **헤더의 스트릭 한 줄이 2026-08-21에 빠졌다.** 2026-08-13에 여기 올린
+            이유는 스트릭 카드(108px)를 맨 위로 올리면 `운동 시작하기`가 접힘선 밖으로
+            나가서였는데, 이제 스트릭은 `나의 오늘` 카드의 `연속` 칸에 있고 그 카드가
+            홈의 첫 카드다 — 같은 숫자를 두 줄 위아래로 두 번 적을 이유가 없다(설계 §5).
+            되살리려거든 먼저 왜 두 곳에 있어야 하는지를 적어라. */}
+        <h1 className="text-[19px] font-extrabold tracking-tight">GND</h1>
         <NotificationBell />
       </header>
 
-      {/* ⚠️ **홈의 첫 카드가 친구 목록 + 운동 시작하기다** (2026-08-13 개편).
-          설계: `docs/superpowers/specs/2026-08-13-home-today-card-and-challenge-cta-design.md`
+      {/* ⚠️ **홈 첫 두 카드가 하나의 비교 구역이다** (2026-08-21 개편).
+          설계: `docs/superpowers/specs/2026-08-21-home-personal-crew-competition-board-design.md`
 
-          옛 배치는 최상단에 `운동 시작하기` 단독 블록을 두고 친구 목록을 8번째에
-          뒀다. **운동할 이유(친구가 오늘 했는가)와 운동하는 수단 사이에 카드가
-          5개** 끼어 있었다 — 이유를 본 순간 누를 것이 없었다.
+          내 오늘 상태 바로 아래에 크루의 오늘이 붙어야 "나는 아직인데 크루는 했다"가
+          한눈에 읽힌다. 사이에 다른 카드를 끼우지 마라 — 그 순간 비교가 스크롤 너머로
+          갈라지고, 카드를 나눈 이유가 사라진다.
 
-          ⚠️ 옛 단독 CTA 블록을 되살리지 마라. 홈에 `운동 시작하기`가 둘이 된다.
-          CTA는 이제 카드 **안**에서 조회 상태와 무관하게 그려진다(설계 §4.1). */}
+          ⚠️ 홈의 **유일한** 주 행동 버튼이 `PersonalTodayCard` 안에 있다. 다른 곳에
+          `운동 시작하기`를 또 만들지 마라(2026-08-13에 같은 실수를 한 번 했다).
+
+          ⚠️ 조회가 끝나기 전에는 **자리를 비우지 않는다.** 스켈레톤도 `/record`
+          버튼을 그대로 갖고 있어서, 조회가 느리다는 이유로 운동을 시작할 수 없게
+          되지 않는다(설계 §9). */}
+      {myName && completedAts && (summary || summaryError) ? (
+        <PersonalTodayCard
+          profile={myName}
+          summary={summary}
+          completedAts={completedAts}
+          weeklyGoal={weeklyGoal}
+          status={myTodayStatus}
+          crewSummary={crewSummary}
+          now={dateRef}
+        />
+      ) : (
+        <PersonalTodayCardSkeleton />
+      )}
+
+      {/* ⚠️ `onSummaryChange`는 **`useCallback`으로 안정화된 함수**여야 한다 —
+          위 `handleCrewSummary` 주석 참조. 인라인 화살표 함수로 바꾸지 마라. */}
       <FriendBoardCard
         activeUserIds={activeUserIds}
         iWorkedOut={iWorkedOutToday}
-        me={me}
-        cta={<StartWorkoutCta />}
+        onSummaryChange={handleCrewSummary}
       />
 
-      {/* ⚠️ 진행 중 카드가 친구 목록 **아래**로 내려왔다 (2026-08-13). 옛 주석은
-          "친구 목록은 진행 중 카드 바로 아래"였는데 위아래가 뒤집혔다. 읽는 순서는
-          그대로 이어진다 — 친구 행의 `운동 중` 알약을 보고 바로 아래에서 그 사람의
+      {/* ⚠️ 진행 중 카드가 크루 목록 **아래**다 (2026-08-13). 읽는 순서가 그대로
+          이어진다 — 크루 행의 `운동 중` 알약을 보고 바로 아래에서 그 사람의
           진행 중 카드를 만난다. 세션이 없으면 아무것도 그리지 않는다. */}
       <ActiveWorkoutCards sessions={activeSessions} />
 
@@ -264,22 +300,15 @@ export function HomeClient() {
         score={challengeScore}
       />
 
-      {/* 성장 카드 — 레벨을 눈에 띄게 두되, 행동(위)보다는 뒤다.
-          챌린지 성과 카드는 2026-08-07에 챌린지 탭으로 옮겼다(설계 §6.7). */}
-      {summary && <CharacterCard summary={summary} />}
-      {summaryError && (
-        <p className="rounded-card-sm border border-line bg-surface px-3 py-2.5 text-xs text-muted">
-          성장 정보를 불러오지 못했어요.
-        </p>
-      )}
+      {/* ⚠️ **성장·스트릭·주간 통계 카드가 2026-08-21에 여기서 사라졌다.**
+          세 카드의 데이터는 전부 `나의 오늘`로 올라갔다(설계 §5) — 같은 숫자를
+          첫 화면과 여기 두 번 그리면 아래 카드들이 그만큼 밀린다.
 
-      {completedAts && (
-        <>
-          <StreakCard completedAts={completedAts} />
-          <WeeklyStats completedAts={completedAts} weeklyGoal={weeklyGoal} />
-        </>
-      )}
+          지운 것이 아니라 옮긴 것이다. 레벨 진행·7일 점·주간 달성률의 **자세한**
+          화면은 프로필 탭의 성장 허브가 계속 갖는다. 되살리기 전에 설계 §5의
+          표를 읽어라 — 카드별로 유지/통합/제거가 이미 정해져 있다.
 
+          성장 조회 실패 문구도 카드 안(레벨 자리)으로 들어갔다. */}
       <PushEnableCard />
 
       <CrewCard />
