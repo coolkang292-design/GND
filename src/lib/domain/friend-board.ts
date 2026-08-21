@@ -15,8 +15,16 @@ import { getLevelProgress } from "./progression";
 import { currentStreak, workoutDayKeys } from "./streak";
 import { dayKey, weekRange } from "./time";
 
-/** 접었을 때 보이는 친구 수. '전체 보기'가 이 수를 넘을 때만 뜬다. */
-export const FRIEND_PREVIEW_COUNT = 3;
+/**
+ * 접었을 때 보이는 크루 수. '전체 보기'가 이 수를 넘을 때만 뜬다.
+ *
+ * ⚠️ 2026-08-21에 3 → **2**로 줄였다 (사용자 승인, 설계 §7.1). 같은 날 내 정보가
+ * `PersonalTodayCard`로 분리돼 홈 첫 화면 위쪽을 차지했고, 3명이면 375×812에서
+ * 크루 셋째 행이 하단 탭 아래로 밀린다. 이 개편의 목적은 **내 상태와 크루 상태를
+ * 한 화면에서 비교하는 것**이라 그게 깨지면 카드를 나눈 이유가 사라진다.
+ * 되돌리려면 먼저 재라 — `friend-board.test.ts`가 2를 직접 단언한다.
+ */
+export const FRIEND_PREVIEW_COUNT = 2;
 
 /**
  * 세션 질의 행 상한.

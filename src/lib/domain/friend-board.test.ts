@@ -7,6 +7,7 @@ import {
   formatTotalMinutes,
   FRIEND_PREVIEW_COUNT,
   pokeableFriendCount,
+  sortFriendRows,
   visibleFriendRows,
   workedOutToday,
   type FriendRow,
@@ -303,6 +304,64 @@ describe("정렬 — 순위가 아니라 '지금 할 수 있는 일' 순", () =>
   });
 });
 
+/**
+ * 접힌 2명이 **누구**인가 (2026-08-21 사용자 확인 질문 — "보이는 2명은 최근 운동한
+ * 크루 위주인가" → 그렇다).
+ *
+ * ⚠️ 위 `정렬` describe는 `foldFriendSessions`를 지나 간접적으로 잰다. 여기서는
+ * `lastWorkoutAt`을 **직접 박아** 정렬 함수 하나만 고정한다 — 세션 접기 규칙이
+ * 바뀌어도 "최근 완료 운동순"이라는 의미는 남아야 한다.
+ */
+describe("sortFriendRows — 최근 완료 운동순, 기록 없는 사람은 뒤", () => {
+  function rowWith(nickname: string, lastWorkoutAt: Date | null): FriendRow {
+    const [row] = buildFriendRows({
+      crew: [{ id: nickname, nickname, avatarUrl: null, totalXp: 0 }],
+      activity: new Map(),
+      badges: new Map(),
+      activeUserIds: new Set(),
+    });
+    return { ...row, lastWorkoutAt };
+  }
+
+  it("최근에 마친 사람이 앞, 기록 없는 사람이 맨 뒤다", () => {
+    const rows = [
+      rowWith("기록없음", null),
+      rowWith("그다음", new Date("2026-08-05T02:00:00Z")),
+      rowWith("가장최근", new Date("2026-08-07T02:00:00Z")),
+    ];
+    expect(sortFriendRows(rows).map((row) => row.nickname)).toEqual([
+      "가장최근",
+      "그다음",
+      "기록없음",
+    ]);
+  });
+
+  it("완료 시각이 같으면 한국어 닉네임 순이다", () => {
+    const same = new Date("2026-08-07T02:00:00Z");
+    const rows = [rowWith("하늘", same), rowWith("가람", same)];
+    expect(sortFriendRows(rows).map((row) => row.nickname)).toEqual([
+      "가람",
+      "하늘",
+    ]);
+  });
+
+  /**
+   * ⚠️ 접힌 자리가 2개뿐이라 정렬이 곧 "누가 보이는가"다. 정렬과 미리보기를
+   * 따로 재면 둘 중 하나가 바뀌어도 화면이 틀렸다는 것을 못 잡는다.
+   */
+  it("접힌 2명은 가장 최근에 마친 두 사람이다", () => {
+    const rows = sortFriendRows([
+      rowWith("셋째", new Date("2026-08-03T02:00:00Z")),
+      rowWith("첫째", new Date("2026-08-07T02:00:00Z")),
+      rowWith("둘째", new Date("2026-08-05T02:00:00Z")),
+    ]);
+    expect(visibleFriendRows(rows, false).map((row) => row.nickname)).toEqual([
+      "첫째",
+      "둘째",
+    ]);
+  });
+});
+
 describe("접기·펼치기", () => {
   function many(n: number): FriendRow[] {
     return buildFriendRows({
@@ -318,21 +377,29 @@ describe("접기·펼치기", () => {
     });
   }
 
-  it(`접으면 ${FRIEND_PREVIEW_COUNT}명만 보인다`, () => {
-    expect(visibleFriendRows(many(7), false)).toHaveLength(FRIEND_PREVIEW_COUNT);
+  /**
+   * ⚠️ **숫자를 상수로 재지 마라.** 옛 단언은
+   * `toHaveLength(FRIEND_PREVIEW_COUNT)`였는데, 그러면 상수가 몇으로 바뀌든 늘
+   * 통과한다 — 사용자가 승인한 값이 실제로 그 값인지를 검사하지 못한다.
+   * 2명은 2026-08-21 사용자 승인값이다(설계 §7.1) — 내 카드와 크루 두 행이
+   * 375×812 첫 화면에 함께 보이게 하는 근거다.
+   */
+  it("접으면 2명만 보인다 — 2026-08-21 승인값", () => {
+    expect(FRIEND_PREVIEW_COUNT).toBe(2);
+    expect(visibleFriendRows(many(7), false)).toHaveLength(2);
   });
 
   it("펼치면 전원이 보인다", () => {
     expect(visibleFriendRows(many(7), true)).toHaveLength(7);
   });
 
-  it("3명 이하면 접어도 전원이 보이고 '전체 보기'가 필요 없다", () => {
-    expect(visibleFriendRows(many(3), false)).toHaveLength(3);
-    expect(canExpandFriendRows(many(3))).toBe(false);
+  it("2명 이하면 접어도 전원이 보이고 '전체 보기'가 필요 없다", () => {
+    expect(visibleFriendRows(many(2), false)).toHaveLength(2);
+    expect(canExpandFriendRows(many(2))).toBe(false);
   });
 
-  it("4명부터 '전체 보기'가 생긴다", () => {
-    expect(canExpandFriendRows(many(4))).toBe(true);
+  it("3명부터 '전체 보기'가 생긴다", () => {
+    expect(canExpandFriendRows(many(3))).toBe(true);
   });
 });
 
@@ -524,16 +591,15 @@ describe("buildMyRow — 내 행은 친구와 같은 자로 재되, 섞이지 �
       crew: [
         { id: "u1", nickname: "친구하나", avatarUrl: null, totalXp: 0 },
         { id: "u2", nickname: "친구둘", avatarUrl: null, totalXp: 0 },
-        { id: "u3", nickname: "친구셋", avatarUrl: null, totalXp: 0 },
       ],
       activity: new Map(),
       badges: new Map(),
       activeUserIds: new Set(),
     });
-    // 친구가 정확히 3명이면 '전체 보기'가 뜨지 않는다 — 내 행이 섞였다면 4가 되어 떴다.
-    expect(friends).toHaveLength(FRIEND_PREVIEW_COUNT);
+    // 크루가 정확히 2명이면 '전체 보기'가 뜨지 않는다 — 내 행이 섞였다면 3이 되어 떴다.
+    expect(friends).toHaveLength(2);
     expect(canExpandFriendRows(friends)).toBe(false);
-    expect(pokeableFriendCount(friends, new Set())).toBe(3);
+    expect(pokeableFriendCount(friends, new Set())).toBe(2);
   });
 });
 
