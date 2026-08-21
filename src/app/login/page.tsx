@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { ScreenArt } from "@/components/brand/hero-art";
 import { GoldCta, GoldLine } from "@/components/brand/gold";
@@ -39,6 +39,29 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [oauthBusy, setOauthBusy] = useState<OAuthProvider | null>(null);
   const providers = enabledProviders();
+
+  /**
+   * **홈 화면 앱을 방금 설치하고 처음 연 사람인가** (`auth-provider.tsx`가 붙인다).
+   *
+   * iOS는 설치본과 사파리의 저장소가 갈려서 설치본이 로그아웃 상태로 열린다.
+   * 그 사람에게 "돌아오셨군요"는 맞는 말이 아니다 — 방금 사파리에서 로그인했는데
+   * 또 로그인 화면을 보면 **가입이 안 된 줄 알고 다시 가입한다.** 그게 계정 분리다.
+   *
+   * ⚠️ `useSearchParams`를 쓰지 않는다 — Suspense 경계를 요구해 빌드가 깨진다
+   *    (`auth/callback/page.tsx`와 같은 이유). 착지 직후 한 번만 읽으면 되는 값이다.
+   *
+   * ⚠️ `useEffect` + `setState`도 아니다. 그건 `react-hooks/set-state-in-effect`에
+   *    걸리고, 초기값을 `window`에서 읽으면 **서버가 그린 글자와 달라져**
+   *    하이드레이션이 깨진다(이 값이 화면 문구를 바꾸기 때문에 실제로 보인다).
+   *    `useSyncExternalStore`가 정확히 이 경우를 위한 것이다 — 서버 스냅샷은
+   *    false, 하이드레이션 뒤 클라이언트 값으로 한 번 다시 그린다.
+   *    값이 바뀔 일이 없으므로 구독은 빈 함수다.
+   */
+  const fromInstalled = useSyncExternalStore(
+    () => () => {},
+    () => new URLSearchParams(window.location.search).get("from") === "installed",
+    () => false,
+  );
 
   async function handleOAuth(provider: OAuthProvider) {
     if (oauthBusy) return;
@@ -122,7 +145,21 @@ export default function LoginPage() {
             ⚠️ 19px에서 **한 줄에 들어가는 길이**로 유지하라. 넘치면 텍스트 블록이
             27.5px 자라 그림의 아트 존 계산이 틀어진다
             (`docs/design-sources/onboarding-canvas-spec.md` §4-3). */}
-        <GoldLine big>돌아오셨군요! 기록은 그대로예요</GoldLine>
+        <GoldLine big>
+          {fromInstalled
+            ? "한 번만 다시 로그인해요"
+            : "돌아오셨군요! 기록은 그대로예요"}
+        </GoldLine>
+
+        {/* ⚠️ 설치 직후에만 나온다. "새로 가입하지 마세요"를 말하지 않으면
+            사람들이 아래 "처음이신가요? 시작하기"를 누르고 기록이 갈린다. */}
+        {fromInstalled && (
+          <p className="mt-2 rounded-card-sm border border-accent-weak bg-accent-weak/40 px-3 py-2 text-[11.5px] leading-relaxed text-muted">
+            💡 기록은 그대로 있어요. 아까 사파리에서 쓰던{" "}
+            <b className="text-text">같은 버튼</b>을 누르세요 — 새로 가입하면{" "}
+            <b className="text-text">기록이 따로 생겨요.</b>
+          </p>
+        )}
 
         {providers.length > 0 && (
           <div className="mt-5 flex flex-col gap-2.5">

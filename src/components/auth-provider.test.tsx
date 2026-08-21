@@ -2,7 +2,7 @@
 
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -223,5 +223,103 @@ describe("AuthProvider — 로그인으로 계정이 바뀔 때", () => {
     });
 
     expect(result.current).toBe(before);
+  });
+});
+
+/**
+ * **설치본(홈 화면 앱)의 첫 실행** — 계정 분리를 막는 안전핀.
+ *
+ * ⚠️ iOS는 홈 화면 앱과 사파리의 저장소가 갈려서, 사파리에서 로그인해 두고
+ *    설치해도 설치본은 **세션 없이** 처음 열린다. 여기서 익명 계정을 발급하면
+ *    그 사람은 새 사람이 되고 온보딩으로 밀려나 `identity_already_exists`
+ *    막다른 길에 앉는다. 그래서 `/login`으로 보낸다.
+ */
+describe("AuthProvider — 설치본 첫 실행", () => {
+  const assign = vi.fn();
+  let realLocation: Location;
+
+  function setStandalone(on: boolean) {
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      writable: true,
+      value: (q: string) => ({
+        matches: on && q.includes("standalone"),
+        media: q,
+      }),
+    });
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    nav.pathname = "/record";
+    realLocation = window.location;
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: { pathname: "/record", search: "", assign },
+    });
+  });
+
+  afterEach(() => {
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: realLocation,
+    });
+    setStandalone(false);
+  });
+
+  it("⚠️ 설치본에서 세션이 없으면 익명 계정을 만들지 않고 /login으로 보낸다", async () => {
+    setStandalone(true);
+    const auth = stubSupabase();
+
+    renderHook(() => useAuth(), { wrapper });
+
+    await waitFor(() =>
+      expect(assign).toHaveBeenCalledWith("/login?from=installed"),
+    );
+    // 이게 핵심이다 — 발급됐다면 그 사람은 이미 남이 됐다
+    expect(auth.signInAnonymously).not.toHaveBeenCalled();
+  });
+
+  it("설치본이라도 세션이 있으면 그대로 쓴다 — 안드로이드는 로그인이 유지된다", async () => {
+    setStandalone(true);
+    const auth = stubSupabase({
+      getSession: vi.fn(async () => ({
+        data: { session: { user: { id: "kept-id" } } },
+      })),
+      getUser: vi.fn(async () => ({
+        data: { user: { id: "kept-id" } },
+        error: null,
+      })),
+    });
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await waitFor(() => expect(result.current.userId).toBe("kept-id"));
+    expect(assign).not.toHaveBeenCalled();
+    expect(auth.signInAnonymously).not.toHaveBeenCalled();
+  });
+
+  it("⚠️ /onboarding은 예외 — 여기서도 되돌리면 두 화면이 서로를 가리키며 갇힌다", async () => {
+    setStandalone(true);
+    nav.pathname = "/onboarding";
+    const auth = stubSupabase();
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(assign).not.toHaveBeenCalled();
+    expect(auth.signInAnonymously).toHaveBeenCalledOnce();
+  });
+
+  it("브라우저 탭(설치본 아님)에서는 예전처럼 익명 계정을 발급한다", async () => {
+    setStandalone(false);
+    const auth = stubSupabase();
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(assign).not.toHaveBeenCalled();
+    expect(auth.signInAnonymously).toHaveBeenCalledOnce();
+    expect(result.current.userId).toBe("fresh-anon-id");
   });
 });

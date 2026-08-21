@@ -12,6 +12,7 @@ import {
   getSupabaseBrowserClient,
   isSupabaseConfigured,
 } from "@/lib/supabase/client";
+import { isStandaloneDisplay } from "@/lib/domain/install-prompt";
 
 type AuthState = {
   /** Supabase env 미설정이면 false — 인증 시도 안 함 */
@@ -54,12 +55,23 @@ export function useAuth(): AuthState {
 const NO_ANON_ROUTES = ["/login", "/auth/callback"];
 
 /**
+ * **설치본에서 세션이 없어도 익명 계정을 발급해 주는** 경로.
+ *
+ * `/onboarding`만이다. `/login`의 "처음이신가요? 시작하기"로 온 사람인데, 여기서도
+ * `/login`으로 되돌리면 **두 화면이 서로를 가리키며 갇힌다.** 진짜 신규 가입자는
+ * 이 문으로 들어와야 한다.
+ */
+const STANDALONE_ANON_OK_ROUTES = ["/onboarding"];
+
+/**
  * 앱 첫 진입 시 자동 익명 신원 발급 (§3).
  * 세션이 이미 있으면 재사용, 없으면 signInAnonymously().
  */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const configured = isSupabaseConfigured();
-  const isNoAnonRoute = NO_ANON_ROUTES.includes(usePathname());
+  const pathname = usePathname();
+  const isNoAnonRoute = NO_ANON_ROUTES.includes(pathname);
+  const isStandaloneAnonOk = STANDALONE_ANON_OK_ROUTES.includes(pathname);
   const [state, setState] = useState<AuthState>({
     configured,
     loading: configured,
@@ -117,6 +129,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      // ⚠️⚠️ **설치본에서 세션이 없다 = 방금 홈 화면에 추가했다는 뜻이다.**
+      //
+      // iOS는 홈 화면 앱과 사파리의 **저장소가 갈린다.** 사파리에서 로그인해
+      // 두고 설치하면, 설치본은 로그인되지 않은 상태로 처음 열린다. 여기서
+      // 익명 계정을 발급하면 그 사람은 **새 사람**이 되고, `OnboardingGate`가
+      // 온보딩으로 보낸다 → 카카오를 누르면 `identity_already_exists`
+      // (`identity.ts`), 닉네임을 넣으면 중복. **나갈 문이 없는 화면에 앉는다.**
+      //
+      // 그래서 발급 대신 `/login`으로 보낸다. 거기엔 두 문이 다 있다 —
+      // 돌아오는 사람은 로그인, 진짜 신규는 "처음이신가요? 시작하기".
+      //
+      // ⚠️ `/login`은 `NO_ANON_ROUTES`라 도착해서 다시 발급하지 않는다. 루프는
+      //    생기지 않는다. `/onboarding`을 예외로 둔 이유는 위 상수의 주석 참고.
+      // ⚠️ 안드로이드는 여기 안 걸린다 — 크롬과 저장소를 공유해서 설치본에도
+      //    세션이 그대로 있다. 즉 이 분기는 사실상 iOS 전용이다.
+      if (
+        !isStandaloneAnonOk &&
+        typeof window !== "undefined" &&
+        isStandaloneDisplay(window)
+      ) {
+        // 이동 중에는 상태를 건드리지 않는다. loading을 끄면 그 한 프레임에
+        // 게이트가 돌아 엉뚱한 화면이 번쩍인다.
+        window.location.assign("/login?from=installed");
+        return;
+      }
+
       const { data, error } = await supabase.auth.signInAnonymously();
       if (cancelled) return;
       if (error) {
@@ -167,7 +205,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
     // isNoAnonRoute는 /login·/auth/callback에 들어가고 나올 때만 뒤집힌다 —
     // 매 이동마다 재실행되지 않는다.
-  }, [configured, isNoAnonRoute]);
+  }, [configured, isNoAnonRoute, isStandaloneAnonOk]);
 
   return <AuthContext.Provider value={state}>{children}</AuthContext.Provider>;
 }

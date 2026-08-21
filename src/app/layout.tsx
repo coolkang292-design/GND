@@ -4,6 +4,7 @@ import { AuthProvider } from "@/components/auth-provider";
 import { ServiceWorkerRegister } from "@/components/service-worker-register";
 import { AcquisitionTracker } from "@/components/acquisition-tracker";
 import { TrailTracker } from "@/components/trail-tracker";
+import { InstallGate } from "@/components/install/install-gate";
 
 export const metadata: Metadata = {
   title: "GND",
@@ -39,6 +40,9 @@ export default function RootLayout({
         <AuthProvider>
           <div className="w-full max-w-[430px] h-dvh flex flex-col relative bg-bg">
             {children}
+            {/* ⚠️ `(tabs)` 안이 아니라 **여기**다 — 카톡 인앱 탈출 안내가
+                `/login`·`/onboarding`보다 먼저 떠야 하는데 그 둘은 탭 밖이다. */}
+            <InstallGate />
           </div>
         </AuthProvider>
       </body>
