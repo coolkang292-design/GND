@@ -51,8 +51,16 @@ const STATUS_STYLE: Record<FriendStatus, { label: string; className: string }> =
     idle: { label: "운동 전", className: "bg-surface text-muted" },
   };
 
+/**
+ * 지표 한 칸.
+ *
+ * ⚠️ **세로 여백과 줄높이가 빡빡한 것은 의도다** (2026-08-21 사용자 지시 —
+ * "네모 상자를 좀 줄이고 스트릭 칸도 최적화"). 이 행 아래에 소멸 경고 칸이
+ * 들어오면서 카드가 347px까지 커졌고, 그 17px을 여기서 되돌렸다.
+ * `py-2`·기본 줄높이로 되돌리면 카드가 다시 330px 목표를 넘는다 — 되돌리기 전에 재라.
+ */
 const METRIC_CLASS =
-  "flex flex-col items-center justify-center rounded-card-sm border border-line bg-surface-2 px-2 py-2";
+  "flex flex-col items-center justify-center rounded-card-sm border border-line bg-surface-2 px-2 py-1.5 leading-tight";
 
 function Metric({
   label,
@@ -284,7 +292,7 @@ export function PersonalTodayCard({
       {/* ⚠️ **세 칸이다** — 이번 주 · 연속 · 배지 (2026-08-21 사용자 지시로 배지 복원).
           칸을 더 늘리기 전에 375px에서 재라: 카드 안쪽 폭 311px를 3등분하면 한 칸이
           98px인데, `1 / 5`가 45px라 아직 여유가 있지만 네 칸이면 잘린다.
-          ⚠️ 칸을 늘려도 **행이 하나**라 카드 높이는 그대로다(실측 326px). */}
+          ⚠️ 칸을 늘려도 **행이 하나**라 카드 높이는 그대로다. */}
       <div className="mt-3 grid grid-cols-3 gap-2">
         {hasGoal ? (
           <Metric label="이번 주" value={`${days.length} / ${weeklyGoal}`} />
@@ -311,6 +319,36 @@ export function PersonalTodayCard({
           icon={badgeCount === null ? undefined : <BadgeHex />}
         />
       </div>
+
+      {/* 소멸 경고 배너 — 2026-08-21 홈 개편에서 `StreakCard`와 함께 사라졌다가
+          사용자 지적으로 **이 카드 안에** 되살아났다(인수인계서
+          `HANDOFF-2026-08-21-home-streak-warning.md`).
+
+          ⚠️ **자리는 `이번 주 · 연속 · 배지` 3칸 바로 아래, 금색 CTA 위다**
+          (2026-08-21 사용자 지시 — "이번주 연속 배지 바로 밑칸에 스트릭 칸으로").
+          한 번 CTA **아래**로 만들었다가 사용자가 화면을 보고 뒤집었다 —
+          `연속 11일`을 읽은 **바로 다음**에 "그게 사라진다"가 와야 두 줄이 한 문장으로
+          읽히고, 그 기세로 아래 버튼을 누르게 된다. 버튼 뒤로 내리면 순서가 끊긴다.
+          `personal-today-card.test.tsx`가 이 앞뒤를 단언한다.
+
+          ⚠️ **카드 밖(내 카드와 크루 카드 사이)으로 빼지 마라.** 홈의 주석대로 그
+          사이에 무엇을 끼우면 비교 구역이 스크롤 너머로 갈라진다. 이건 내 스트릭
+          이야기이므로 내 카드 안이 맞다.
+
+          ⚠️ 되살린 것은 **경고 하나뿐**이다. 7일 점·헤더 한 줄·옛 카드는 되살리지
+          않기로 사용자가 골랐다 — `home-client.order.test.ts`가 그 부재를 지킨다.
+
+          ⚠️ 평소엔 `warning`이 `undefined`라 높이 비용이 **0**이다. 위험할 때만 붙는다.
+          여백·줄높이를 줄여 둔 것은 그 순간의 비용을 깎기 위해서다 — 위 `METRIC_CLASS`
+          주석과 한 세트이므로 한쪽만 되돌리면 카드가 330px 목표를 넘는다. */}
+      {warning && (
+        <p
+          role="alert"
+          className="mt-2 rounded-card-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs font-bold leading-snug text-amber-600 dark:text-amber-400"
+        >
+          ⚠️ {warning}
+        </p>
+      )}
 
       {/* ⚠️ **여기 비교 문구를 다시 넣지 마라** (2026-08-21 사용자 지시).
           `크루 2명 중 1명 완료 · 나는 아직` 한 줄이 있었는데, 같은 날 크루 헤더에
@@ -339,30 +377,6 @@ export function PersonalTodayCard({
         </div>
       )}
 
-      {/* 소멸 경고 배너 — 2026-08-21 홈 개편에서 `StreakCard`와 함께 사라졌다가
-          사용자 지적으로 **이 카드 안에** 되살아났다(인수인계서
-          `HANDOFF-2026-08-21-home-streak-warning.md`).
-
-          ⚠️ **금색 CTA 아래다.** 위에 두면 오늘 눌러야 할 것보다 경고가 먼저 읽힌다 —
-          이 카드의 목적은 "비교하고 바로 누르는 것"이다.
-
-          ⚠️ **카드 밖(내 카드와 크루 카드 사이)으로 빼지 마라.** 홈의 주석대로 그
-          사이에 무엇을 끼우면 비교 구역이 스크롤 너머로 갈라진다. 이건 내 스트릭
-          이야기이므로 내 카드 안이 맞다.
-
-          ⚠️ 되살린 것은 **경고 하나뿐**이다. 7일 점·헤더 한 줄·옛 카드는 되살리지
-          않기로 사용자가 골랐다 — `home-client.order.test.ts`가 그 부재를 지킨다.
-
-          ⚠️ 평소엔 `warning`이 `undefined`라 높이 비용이 **0**이다. 위험할 때만
-          붙는다 — 2026-08-21 실측 배너 54px + 위 여백 12px = 66px. */}
-      {warning && (
-        <p
-          role="alert"
-          className="mt-3 rounded-card-sm border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-xs font-bold text-amber-600 dark:text-amber-400"
-        >
-          ⚠️ {warning}
-        </p>
-      )}
     </section>
   );
 }

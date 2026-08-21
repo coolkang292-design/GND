@@ -393,16 +393,27 @@ describe("PersonalTodayCard — 스트릭 소멸 경고", () => {
   });
 
   /**
-   * ⚠️ **금색 CTA 아래다.** 위에 두면 오늘 눌러야 할 것보다 경고가 먼저 읽힌다 —
-   * 이 카드의 목적은 "비교하고 바로 누르는 것"이다(인수인계서 §4 Task 3).
-   * 카드 **밖**(내 카드와 크루 카드 사이)도 안 된다 — 그 순간 비교 구역이 갈라진다.
+   * ⚠️ **자리는 `이번 주 · 연속 · 배지` 3칸 바로 아래, 금색 CTA 위다**
+   * (2026-08-21 사용자 지시 — "이번주 연속 배지 바로 밑칸에 스트릭 칸으로").
+   *
+   * 계획서 §4 Task 3은 CTA **아래**로 적었고 한 번 그렇게 만들었다. 사용자가 화면을
+   * 보고 뒤집었다 — `연속 11일`을 읽은 **바로 다음**에 "그게 사라진다"가 와야 두 줄이
+   * 한 문장으로 읽히고, 그 기세 그대로 아래 버튼을 누르게 된다. CTA 아래에 두면
+   * 경고가 버튼 **뒤**라 읽는 순서가 끊긴다.
+   *
+   * ⚠️ 카드 **밖**(내 카드와 크루 카드 사이)은 여전히 안 된다 — 그 순간 비교 구역이
+   * 스크롤 너머로 갈라진다(`home-client.tsx` 주석).
    */
-  it("경고는 주 행동 아래에 온다", () => {
+  it("경고는 지표 3칸 아래·주 행동 위에 온다", () => {
     renderCard({ completedAts: [YESTERDAY], status: "idle" });
-    const cta = screen.getByRole("link", { name: /오늘 운동하고/ });
     const warn = screen.getByRole("alert");
+    const badge = screen.getByText("배지"); // 지표 3칸의 마지막 칸
+    const cta = screen.getByRole("link", { name: /오늘 운동하고/ });
     expect(
-      cta.compareDocumentPosition(warn) & Node.DOCUMENT_POSITION_FOLLOWING,
+      badge.compareDocumentPosition(warn) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      cta.compareDocumentPosition(warn) & Node.DOCUMENT_POSITION_PRECEDING,
     ).toBeTruthy();
   });
 });
