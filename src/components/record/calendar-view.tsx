@@ -8,7 +8,7 @@ import {
   summarizeMonth,
   type Verification,
 } from "@/lib/domain/calendar";
-import { dayKey } from "@/lib/domain/time";
+import { dayKey, resolveTimeZone } from "@/lib/domain/time";
 import {
   canAttachPhotoLater,
   missingRequiredPhoto,
@@ -186,7 +186,7 @@ export function CalendarView({
   const [sessions, setSessions] = useState<CalendarSession[]>([]);
   const [plans, setPlans] = useState<WorkoutPlan[]>([]);
   const [timeZone, setTimeZone] = useState(
-    () => Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Seoul",
+    () => resolveTimeZone(),
   );
   // ⚠️ 기본 숫자를 넣지 마라 — 주간 기준은 진행 중 챌린지에서 온다(2026-08-08).
   const [weeklyGoal, setWeeklyGoal] = useState<number | null>(null);

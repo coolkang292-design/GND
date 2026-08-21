@@ -37,7 +37,7 @@ import {
   challengeStartHint,
   inclusiveDays,
 } from "@/lib/domain/challenge-time";
-import { dayKey } from "@/lib/domain/time";
+import { dayKey, resolveTimeZone } from "@/lib/domain/time";
 import { getMyGroups, getMyProfile } from "@/lib/crew";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
@@ -345,8 +345,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
       setGroup(g);
       const tz =
         profile?.timezone ||
-        Intl.DateTimeFormat().resolvedOptions().timeZone ||
-        "Asia/Seoul";
+        resolveTimeZone();
       setTimeZone(tz);
 
       setChallenges(myChallenges);

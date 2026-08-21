@@ -1,4 +1,5 @@
 import { acquisitionColumns } from "@/lib/acquisition";
+import { resolveTimeZone } from "@/lib/domain/time";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { Group, Profile } from "@/lib/types";
 
@@ -23,7 +24,7 @@ export async function upsertMyProfile(input: {
   const supabase = getSupabaseBrowserClient();
   const { error } = await supabase.from("profiles").upsert({
     ...input,
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Seoul",
+    timezone: resolveTimeZone(),
     // 0079: 첫 진입에서 붙잡아 둔 유입 출처를 프로필과 함께 심는다.
     // ⚠️ 프로필 편집에서도 이 upsert가 다시 도는데, 그때는 저장된 값이 그대로
     //    다시 실린다. **덮어써도 같은 값**이고, 혹시 비어 있어도 서버 트리거가

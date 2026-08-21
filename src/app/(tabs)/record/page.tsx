@@ -134,7 +134,7 @@ import {
   shouldRestAfterCompletion,
   skipExercise,
 } from "@/lib/domain/session-flow";
-import { dayKey } from "@/lib/domain/time";
+import { dayKey, resolveTimeZone } from "@/lib/domain/time";
 import { TodayStatusCard } from "@/components/record/today-status-card";
 import { weeklyBars } from "@/lib/domain/today-status";
 import {
@@ -157,7 +157,7 @@ import type {
 } from "@/lib/types";
 import {
   deleteWorkoutPlan,
-  getWorkoutPlans,
+  getWorkoutPlanByDate,
   saveWorkoutPlan,
   type WorkoutPlan,
 } from "@/lib/workout-plan";
@@ -289,7 +289,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
       loadDraft(userId),
       dayKey(
         new Date(),
-        Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Seoul",
+        resolveTimeZone(),
       ),
     ),
   );
@@ -601,13 +601,11 @@ function WorkoutScreen({ userId }: { userId: string }) {
     let cancelled = false;
     void (async () => {
       try {
-        const plans = await getWorkoutPlans(userId);
-        if (cancelled) return;
-        const todayKey = dayKey(
-          new Date(),
-          Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Seoul",
+        const todayPlan = await getWorkoutPlanByDate(
+          userId,
+          dayKey(new Date(), resolveTimeZone()),
         );
-        const todayPlan = plans.find((plan) => plan.planDate === todayKey);
+        if (cancelled) return;
         setTodayIntervalPlan(todayPlan?.tabataMinutes ? todayPlan : null);
       } catch {
         // 못 읽으면 버튼만 안 뜬다 — 달력에서 시작하면 된다
@@ -625,14 +623,11 @@ function WorkoutScreen({ userId }: { userId: string }) {
     let cancelled = false;
     (async () => {
       try {
-        const plans = await getWorkoutPlans(userId);
+        const todayKey = dayKey(new Date(), resolveTimeZone());
+        const todayPlan =
+          (await getWorkoutPlanByDate(userId, todayKey)) ?? undefined;
         if (cancelled) return;
         const current = draftRef.current;
-        const todayKey = dayKey(
-          new Date(),
-          Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Seoul",
-        );
-        const todayPlan = plans.find((plan) => plan.planDate === todayKey);
         setTodayPlanExists(todayPlan !== undefined);
         // 이 이펙트는 catalog가 온 뒤에만 돈다 — 그래서 이 플래그가 서면
         // `applySuggestion`이 종목을 고를 수 있다는 뜻이기도 하다.
@@ -1077,7 +1072,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
   async function applySuggestion(kind: SuggestionKind): Promise<void> {
     const todayKey = dayKey(
       new Date(),
-      Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Seoul",
+      resolveTimeZone(),
     );
 
     if (kind === "interval") {
@@ -2007,7 +2002,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
       let sessionId = draft.sessionId;
       if (!sessionId) {
         const tz =
-          Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Seoul";
+          resolveTimeZone();
         const s = await createDraftSession({
           groupId,
           timezone: tz,
@@ -2144,7 +2139,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
         logText: formatWorkoutLog(
           dayKey(
             new Date(completedAtMs),
-            Intl.DateTimeFormat().resolvedOptions().timeZone,
+            resolveTimeZone(),
           ),
           draft.exercises,
         ),
@@ -2162,7 +2157,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
                   tabataMinutes: draft.tabataMinutes,
                 }),
                 goals: challengeGoals,
-                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                timeZone: resolveTimeZone(),
               })
             : [],
       });
@@ -2236,7 +2231,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
    */
   const todayStatus = useMemo(() => {
     if (!sessionMinutes) return null;
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Seoul";
+    const tz = resolveTimeZone();
     const todayKey = dayKey(new Date(), tz);
     const keys = workoutDayKeys(
       sessionMinutes.map((r) => r.completedAt),
@@ -2265,7 +2260,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
         signedUpDayKey,
         todayKey: dayKey(
           new Date(),
-          Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Seoul",
+          resolveTimeZone(),
         ),
       }),
     [
@@ -2369,7 +2364,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
   // 문구는 날짜 기준 로테이션이다 — 렌더 중 랜덤은 재렌더마다 문구가 바뀐다
   const messageDayKey = dayKey(
     new Date(),
-    Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Seoul",
+    resolveTimeZone(),
   );
   const completionMessage = workoutCompletionMessage({
     todayKey: messageDayKey,
@@ -2763,8 +2758,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
                       suggestionKind,
                       dayKey(
                         new Date(),
-                        Intl.DateTimeFormat().resolvedOptions().timeZone ||
-                          "Asia/Seoul",
+                        resolveTimeZone(),
                       ),
                       0,
                     ).body

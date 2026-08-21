@@ -7,10 +7,10 @@
  * 과대평가되지 않는다. 한 세션에 같은 종목이 여러 번 들어 있어도 1회다.
  */
 
+import { DAY_MS } from "./time";
+
 export const FREQUENT_WINDOW_DAYS = 90;
 export const FREQUENT_LIMIT = 5;
-
-const DAY_MS = 86_400_000;
 
 export type ExerciseFrequency = {
   name: string;

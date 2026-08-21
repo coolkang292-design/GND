@@ -7,7 +7,7 @@
 
 import { getLevelProgress } from "./progression";
 import { currentStreak, workoutDayKeys } from "./streak";
-import { dayKey } from "./time";
+import { DAY_MS, dayKey } from "./time";
 
 export type PeriodDays = 7 | 28 | 90;
 
@@ -30,8 +30,6 @@ export const MIN_RATIO_SAMPLE = 5;
 
 /** 피드의 "운동 중" 판정과 같은 값 — 화면마다 다른 기준을 쓰면 어긋난다 */
 export const ABANDON_AFTER_HOURS = 6;
-
-const DAY_MS = 86_400_000;
 
 export type SessionStatus = "draft" | "active" | "completed" | "cancelled";
 

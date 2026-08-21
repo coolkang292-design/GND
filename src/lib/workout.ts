@@ -3,7 +3,7 @@ import {
   completedSetsInOrder,
   withCompletedSetsOnly,
 } from "@/lib/domain/workout-import";
-import { dayKey } from "@/lib/domain/time";
+import { dayKey, resolveTimeZone } from "@/lib/domain/time";
 import type { CompletedSession } from "@/lib/domain/calendar";
 import type { VolumeSet } from "@/lib/domain/volume";
 import type { LogExercise } from "@/lib/domain/workout-log";
@@ -1069,7 +1069,7 @@ export async function getSuggestionFacts(userId: string): Promise<{
   signedUpDayKey: string;
 }> {
   const supabase = getSupabaseBrowserClient();
-  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Seoul";
+  const tz = resolveTimeZone();
   const [lastRes, profileRes] = await Promise.all([
     supabase
       .from("workout_sessions")

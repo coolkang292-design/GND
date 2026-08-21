@@ -127,6 +127,32 @@ export async function getWorkoutPlans(userId: string): Promise<WorkoutPlan[]> {
   return ((data ?? []) as WorkoutPlanRow[]).map(fromRow);
 }
 
+/**
+ * 특정 날짜의 계획 하나 (없으면 `null`).
+ *
+ * 기록 화면은 **오늘 계획 하나**만 쓰는데 예전에는 두 이펙트가 각자
+ * `getWorkoutPlans`로 전 기간을 긁어와 `find`로 오늘을 골랐다 — 같은 조회가
+ * 두 번 돌고, "오늘을 고르는 규칙"도 두 벌이라 한쪽만 고치면 갈라진다.
+ * 날짜 필터를 DB에 맡기고 규칙을 여기 한 곳에 둔다.
+ *
+ * 달력과 프로그램 화면은 여전히 `getWorkoutPlans`로 전량을 받는다 — 그쪽은
+ * 정말로 목록이 필요하다.
+ */
+export async function getWorkoutPlanByDate(
+  userId: string,
+  planDate: string,
+): Promise<WorkoutPlan | null> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("workout_plans")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("plan_date", planDate)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? fromRow(data as WorkoutPlanRow) : null;
+}
+
 export async function saveWorkoutPlan(input: {
   userId: string;
   planDate: string;
