@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   MAX_DISMISS,
+  decideGuide,
   OFFER_COOLDOWN_MS,
   canOfferInstall,
   detectInstallEnv,
@@ -251,5 +252,77 @@ describe("isStandaloneDisplay", () => {
     ).toBe(false);
     expect(isStandaloneDisplay(undefined)).toBe(false);
     expect(isStandaloneDisplay({})).toBe(false);
+  });
+});
+
+/**
+ * ⚠️⚠️ **익명이라고 침묵하지 않는다** (2026-08-22 사장님 지시 — *"로그인을 했든
+ * 안 했든 앱이 안 깔려 있으면 나가게 세팅된 게 아닌가?"*).
+ */
+describe("decideGuide — 무엇을 보여줄 것인가", () => {
+  const state = readOfferState(null);
+  const now = 1_000_000;
+
+  it("⚠️ 신원이 없으면 침묵이 아니라 '먼저 로그인'이다", () => {
+    expect(
+      decideGuide({ env: "ios-safari", linked: false, state, now }),
+    ).toBe("login-first");
+    expect(
+      decideGuide({ env: "android-prompt", linked: false, state, now }),
+    ).toBe("login-first");
+    // 인앱 브라우저에서도 마찬가지다 — 순서만 하나 앞설 뿐이다
+    expect(decideGuide({ env: "inapp-ios", linked: false, state, now })).toBe(
+      "login-first",
+    );
+  });
+
+  it("신원이 붙었으면 환경대로 안내한다", () => {
+    expect(decideGuide({ env: "ios-safari", linked: true, state, now })).toBe(
+      "install",
+    );
+    expect(decideGuide({ env: "inapp-ios", linked: true, state, now })).toBe(
+      "escape",
+    );
+  });
+
+  it("이미 설치했거나 PC면 아무것도 안 한다 — 로그인 여부와 무관하게", () => {
+    for (const linked of [true, false]) {
+      expect(decideGuide({ env: "installed", linked, state, now })).toBe("none");
+      expect(decideGuide({ env: "desktop", linked, state, now })).toBe("none");
+    }
+  });
+
+  it("'다 했어요'를 누른 뒤에는 자동 안내가 멈춘다", () => {
+    const done = { dismissedAt: null, dismissCount: 0, done: true };
+    expect(decideGuide({ env: "ios-safari", linked: true, state: done, now })).toBe(
+      "none",
+    );
+  });
+
+  /**
+   * ⚠️⚠️ 여기가 사장님이 갇혔던 자리다 — "다 했어요"를 한 번 누르면 자동 안내가
+   * 영영 안 뜬다. 내 정보 탭에서 **직접 열면** 그 이력을 보지 않아야 한다.
+   */
+  it("⚠️ 직접 열면(manual) 닫기 이력을 무시한다 — 돌아올 문", () => {
+    const blocked = { dismissedAt: now, dismissCount: MAX_DISMISS, done: true };
+    expect(
+      decideGuide({ env: "ios-safari", linked: true, state: blocked, now }),
+    ).toBe("none");
+    expect(
+      decideGuide({
+        env: "ios-safari",
+        linked: true,
+        state: blocked,
+        now,
+        manual: true,
+      }),
+    ).toBe("install");
+  });
+
+  it("탈출 안내는 닫기 이력에 막히지 않는다 — 카톡에 다시 들어올 때마다 필요하다", () => {
+    const blocked = { dismissedAt: now, dismissCount: MAX_DISMISS, done: true };
+    expect(
+      decideGuide({ env: "inapp-ios", linked: true, state: blocked, now }),
+    ).toBe("escape");
   });
 });

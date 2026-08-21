@@ -9,7 +9,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { InstallGate } from "./install-gate";
+import { InstallGate, OPEN_INSTALL_GUIDE_EVENT } from "./install-gate";
 
 /**
  * **게이트가 실제로 시트를 띄우는가.**
@@ -38,7 +38,7 @@ const identity = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/identity", () => ({
   hasLinkedIdentity: async () => {
-    if (identity.fail) throw new Error("network");
+    if (identity.fail) throw new Error("판단 불가");
     return identity.providers.length > 0;
   },
 }));
@@ -109,6 +109,16 @@ describe("InstallGate — 뜨는가", () => {
     expect(await sheetTitle()).toBe("이제 홈 화면에 놓을 차례예요");
   });
 
+  /**
+   * ⚠️⚠️ 2026-08-22 사장님 지시로 뒤집었다 — *"로그인을 했든 안 했든 앱이 안
+   * 깔려 있으면 나가게 세팅된 게 아닌가?"*. 옛 판은 익명이면 **침묵**했다.
+   */
+  it("⚠️ 익명 계정에는 '먼저 로그인' 시트가 뜬다 — 침묵하지 않는다", async () => {
+    identity.providers = [];
+    render(<InstallGate />);
+    expect(await sheetTitle()).toBe("먼저 로그인해 주세요");
+  });
+
   it("안드로이드에도 뜬다 (이벤트가 없으면 손으로 하는 안내)", async () => {
     setUA(UA.androidChrome);
     render(<InstallGate />);
@@ -140,13 +150,9 @@ describe("InstallGate — 안 뜨는가 (부정 확인)", () => {
     expect(await sheetTitle()).toBeNull();
   });
 
-  it("⚠️ 익명 계정에는 안 뜬다 — 설치하면 그 계정으로 못 돌아온다", async () => {
-    identity.providers = [];
-    render(<InstallGate />);
-    expect(await sheetTitle()).toBeNull();
-  });
-
-  it("신원 판단이 실패하면 안 띄운다 — '모른다'는 '붙었다'가 아니다", async () => {
+  it("⚠️ 신원 판단이 실패하면 아무 말도 안 한다 — '모른다'는 '안 붙었다'가 아니다", async () => {
+    // 여기서 '익명'으로 밀면 멀쩡히 로그인한 사람에게 "먼저 로그인하세요"라는
+    // **틀린 말**을 하게 된다.
     identity.fail = true;
     render(<InstallGate />);
     expect(await sheetTitle()).toBeNull();
@@ -180,5 +186,21 @@ describe("InstallGate — 안 뜨는가 (부정 확인)", () => {
     );
     render(<InstallGate />);
     expect(await sheetTitle()).toBeNull();
+  });
+
+  /**
+   * ⚠️⚠️ 사장님이 갇혔던 자리 — "다 했어요"를 누르면 자동 안내가 영영 안 뜬다.
+   * 내 정보 탭의 진입점이 그 문을 다시 연다.
+   */
+  it("⚠️ '다 했어요'로 막혀 있어도 내 정보 탭에서 직접 열면 뜬다", async () => {
+    localStorage.setItem(
+      "gnd:install-offer",
+      JSON.stringify({ dismissedAt: null, dismissCount: 0, done: true }),
+    );
+    render(<InstallGate />);
+    expect(await sheetTitle()).toBeNull();
+
+    window.dispatchEvent(new Event(OPEN_INSTALL_GUIDE_EVENT));
+    expect(await sheetTitle()).toBe("홈 화면에 GND 놓기");
   });
 });

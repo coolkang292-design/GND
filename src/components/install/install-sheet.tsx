@@ -12,6 +12,8 @@ import Image from "next/image";
  */
 
 export type SheetVariant =
+  /** 신원이 없다 — 설치보다 로그인이 먼저다 */
+  | "login-first"
   /** 카톡 등 iOS 인앱 브라우저 — 사파리로 내보낸다 */
   | "escape-ios"
   /** 안드로이드 인앱 브라우저 — 크롬으로 내보낸다 */
@@ -76,6 +78,35 @@ type Copy = {
 
 function copyFor(variant: SheetVariant): Copy {
   switch (variant) {
+    case "login-first":
+      /**
+       * ⚠️⚠️ **익명 사용자에게 침묵하지 않는다** (2026-08-22 사장님 지시 —
+       *    *"로그인을 했든 안 했든 앱이 안 깔려 있으면 나가게 세팅된 게 아닌가?"*).
+       *
+       * 옛 판은 신원이 없으면 아무것도 안 띄웠다. 익명으로 설치하면 설치본에서
+       * 그 계정으로 못 돌아와 기록이 갈리기 때문인데, **막는 게 답이 아니었다.**
+       * 안 깔린 사람에게는 전부 말을 걸되, 익명이면 순서를 하나 앞세운다.
+       *
+       * ⚠️ 여기에 로그인 버튼을 직접 두지 마라. 익명 세션이 있는 상태에서
+       *    `signInWithOAuth`를 쓰면 **계정이 갈린다**(`identity.ts` 상단 표).
+       *    `linkIdentity`를 쓰는 `/account`로 보낸다.
+       */
+      return {
+        title: "먼저 로그인해 주세요",
+        desc: "홈 화면에 놓기 전에 딱 한 단계예요",
+        steps: [],
+        pointDown: false,
+        note: (
+          <>
+            지금은 <b className="text-text">이 브라우저에만</b> 계정이 있어요.
+            카카오·구글을 연결해 두면 앱을 깔거나 폰을 바꿔도{" "}
+            <b className="text-text">기록이 그대로예요.</b>
+          </>
+        ),
+        primary: "계정 연결하러 가기",
+        secondary: "나중에 할게요",
+      };
+
     case "escape-ios":
       /**
        * ⚠️⚠️ **이 안내는 로그인/가입에 성공한 뒤에만 뜬다** (2026-08-21 사장님 결정).

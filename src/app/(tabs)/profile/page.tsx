@@ -8,6 +8,7 @@ import { BugReportSheet } from "@/components/bug-report-sheet";
 import { GrowthHub } from "@/components/profile/growth-hub";
 import { ProfileEditSheet } from "@/components/profile/profile-edit-sheet";
 import { PushSettings } from "@/components/push-settings";
+import { InstallAppRow } from "@/components/install/install-app-row";
 import { UiIcon } from "@/components/ui-icon";
 import { getIncomingCrewRequests } from "@/lib/crew-link";
 import {
@@ -141,6 +142,10 @@ export default function ProfilePage() {
             </div>
             <span className="text-muted">›</span>
           </Link>
+
+          {/* ⚠️ 푸시 설정 **위**다. iOS는 **설치본에서만 푸시가 온다** —
+              설치가 알림의 선행 조건이라 순서가 곧 안내다. */}
+          <InstallAppRow />
 
           <PushSettings />
 

@@ -34,7 +34,7 @@ export type InstallEnv =
   | "inapp-ios"
   /** 안드로이드 인앱 브라우저 — 크롬으로 내보낸다 */
   | "inapp-android"
-  /** iOS 사파리 — 공유 → 홈 화면에 추가 3단계 안내 */
+  /** iOS 사파리 — `···` → 공유 → 홈 화면에 추가 4단계 안내 */
   | "ios-safari"
   /** iOS의 크롬·파이어폭스 등 — 사파리로 옮기라고 안내한다 */
   | "ios-other"
@@ -190,11 +190,7 @@ export function recordDone(storage: InstallStorage | null): OfferState {
 }
 
 /**
- * 지금 설치 안내를 띄울 것인가.
- *
- * ⚠️ `loggedIn`이 false면 **띄우지 않는다.** 익명 계정인 사람에게 설치를 밀면
- *    설치본에서 그 계정으로 돌아올 방법이 없어 **기록이 갈린다.** 신원(카카오·
- *    구글·이메일)이 붙은 뒤라야 설치본에서 로그인으로 되찾을 수 있다.
+ * 지금 설치 안내를 띄울 것인가 (설치 안내 전용 — 익명 판단은 `decideGuide`가 한다).
  */
 export function shouldOfferInstall(args: {
   env: InstallEnv;
@@ -205,11 +201,64 @@ export function shouldOfferInstall(args: {
   const { env, state, loggedIn, now } = args;
   if (!canOfferInstall(env)) return false;
   if (!loggedIn) return false;
+  return withinPolicy(state, now);
+}
+
+/** 닫기 이력이 지금 안내를 막고 있는가 */
+function withinPolicy(state: OfferState, now: number): boolean {
   if (state.done) return false;
   if (state.dismissCount >= MAX_DISMISS) return false;
   if (state.dismissedAt !== null && now - state.dismissedAt < OFFER_COOLDOWN_MS)
     return false;
   return true;
+}
+
+/** 지금 무엇을 보여줄 것인가 */
+export type GuideKind =
+  /** 아무것도 안 보여준다 */
+  | "none"
+  /** 신원이 없다 — 설치보다 로그인이 먼저다 */
+  | "login-first"
+  /** 인앱 브라우저다 — 사파리·크롬으로 내보낸다 */
+  | "escape"
+  /** 설치 안내 */
+  | "install";
+
+/**
+ * **안내의 단일 결정 지점.**
+ *
+ * ⚠️⚠️ **익명이라고 침묵하지 않는다** (2026-08-22 사장님 지시 — *"로그인을 했든
+ *    안 했든 앱이 안 깔려 있으면 나가게 세팅된 게 아닌가?"*).
+ *
+ *    옛 판은 신원이 없으면 **아무것도** 안 띄웠다. 익명 계정으로 설치하면
+ *    설치본에서 그 계정으로 못 돌아와 기록이 갈리기 때문인데, **막는 것은 답이
+ *    아니었다.** 안 깔린 사람에게는 전부 말을 걸되, 익명이면 *"먼저 로그인"*
+ *    을 먼저 보여주면 된다. 설치도 늘고 계정도 지켜진다.
+ *
+ * ⚠️ `manual`은 사용자가 **직접 눌러서** 연 경우다(내 정보 탭의 상시 진입점).
+ *    이때는 닫기 이력을 보지 않는다 — "다 했어요"를 한 번 누르면 영영 못 보는
+ *    상태가 되는 것이 실제로 문제가 됐다(사장님 사파리, 2026-08-22).
+ */
+export function decideGuide(args: {
+  env: InstallEnv;
+  linked: boolean;
+  state: OfferState;
+  now: number;
+  manual?: boolean;
+}): GuideKind {
+  const { env, linked, state, now, manual = false } = args;
+
+  // 이미 설치했거나 PC면 할 말이 없다
+  if (env === "installed" || env === "desktop") return "none";
+
+  // 인앱 브라우저의 탈출 안내는 닫기 이력을 보지 않는다 — 카톡으로 다시 들어올
+  // 때마다 필요한 안내다. 반복 노출은 세션 단위로 막는다(게이트 담당).
+  if (linked && needsBrowserEscape(env)) return "escape";
+
+  if (!manual && !withinPolicy(state, now)) return "none";
+
+  if (!linked) return "login-first";
+  return canOfferInstall(env) ? "install" : "none";
 }
 
 /**

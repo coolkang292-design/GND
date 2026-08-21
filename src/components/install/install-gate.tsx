@@ -5,14 +5,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { hasLinkedIdentity } from "@/lib/identity";
 import {
-  canOfferInstall,
+  decideGuide,
   detectInstallEnv,
   isStandaloneDisplay,
-  needsBrowserEscape,
   readOfferState,
   recordDismiss,
   recordDone,
-  shouldOfferInstall,
   type InstallEnv,
 } from "@/lib/domain/install-prompt";
 
@@ -42,6 +40,15 @@ type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 };
+
+/**
+ * **내 정보 탭에서 직접 열 때 쓰는 신호.**
+ *
+ * ⚠️ 게이트는 루트 레이아웃에 한 벌만 있다. 시트를 여는 동작(안드로이드
+ *    `prompt()`·주소 복사·크롬 인텐트)을 다른 화면이 복사하면 두 벌이 갈린다.
+ *    화면은 "열어라"만 보내고 실제 동작은 여기 한 곳에 둔다.
+ */
+export const OPEN_INSTALL_GUIDE_EVENT = "gnd:open-install-guide";
 
 /**
  * 세션당 1회 — 화면을 옮길 때마다 다시 뜨는 것을 막는다.
@@ -141,32 +148,32 @@ export function InstallGate() {
         try {
           linked = await hasLinkedIdentity();
         } catch {
-          linked = false;
+          // ⚠️ **"모른다"는 "안 붙었다"가 아니다.** 여기서 false로 밀면 신원이
+          //    멀쩡히 붙은 사람에게 "먼저 로그인해 주세요"라는 **틀린 말**을 한다.
+          //    아무 말도 안 하고 다음 기회로 넘긴다.
+          return;
         }
       }
       if (cancelled) return;
 
-      if (needsBrowserEscape(env)) {
-        // ⚠️ 로그인 전에는 아무 말도 하지 않는다 — 위 주석의 2번 이유.
-        if (!linked) return;
-        if (sessionSeen(SESSION_ESCAPE)) return;
-        const v = escapeVariant(env);
-        if (!v) return;
-        decided.current = true;
-        setVariant(v);
-        return;
-      }
-
-      if (!canOfferInstall(env)) return;
-      if (sessionSeen(SESSION_INSTALL)) return;
-      const ok = shouldOfferInstall({
+      const kind = decideGuide({
         env,
+        linked,
         state: readOfferState(localStore()),
-        loggedIn: linked,
         now: Date.now(),
       });
-      if (!ok) return;
-      const v = installVariant(env);
+      if (kind === "none") return;
+
+      // 반복 노출은 세션 단위로 막는다. 표식은 **사용자가 닫을 때** 남는다.
+      const sessionKey = kind === "escape" ? SESSION_ESCAPE : SESSION_INSTALL;
+      if (sessionSeen(sessionKey)) return;
+
+      const v =
+        kind === "escape"
+          ? escapeVariant(env)
+          : kind === "login-first"
+            ? ("login-first" as const)
+            : installVariant(env);
       if (!v) return;
       decided.current = true;
       setVariant(v);
@@ -176,6 +183,47 @@ export function InstallGate() {
       cancelled = true;
     };
   }, [loading, userId, promptEvent]);
+
+  /**
+   * **내 정보 탭에서 직접 열었다** — 닫기 이력을 보지 않는다.
+   *
+   * ⚠️ "다 했어요"를 한 번 누르면 자동 안내가 영영 안 뜬다. 실제로 그 상태에
+   *    갇힌 일이 있었다(사장님 사파리, 2026-08-22). 그때 돌아올 문이 여기다.
+   */
+  useEffect(() => {
+    function openNow() {
+      const env = detectInstallEnv({
+        userAgent: navigator.userAgent,
+        standalone: isStandaloneDisplay(window),
+        hasPromptEvent: promptEvent !== null,
+      });
+      void (async () => {
+        let linked = false;
+        try {
+          linked = await hasLinkedIdentity();
+        } catch {
+          linked = false;
+        }
+        const kind = decideGuide({
+          env,
+          linked,
+          state: readOfferState(localStore()),
+          now: Date.now(),
+          manual: true,
+        });
+        if (kind === "none") return;
+        const v =
+          kind === "escape"
+            ? escapeVariant(env)
+            : kind === "login-first"
+              ? ("login-first" as const)
+              : installVariant(env);
+        if (v) setVariant(v);
+      })();
+    }
+    window.addEventListener(OPEN_INSTALL_GUIDE_EVENT, openNow);
+    return () => window.removeEventListener(OPEN_INSTALL_GUIDE_EVENT, openNow);
+  }, [promptEvent]);
 
   /**
    * 사용자가 시트를 닫았다 — **이때** 세션 표식을 남긴다(위 상수 주석).
@@ -228,6 +276,14 @@ export function InstallGate() {
       return;
     }
 
+    if (variant === "login-first") {
+      // ⚠️ 여기서 로그인시키지 않는다 — 익명 세션에 `signInWithOAuth`를 쓰면
+      //    계정이 갈린다. `linkIdentity`를 쓰는 화면으로 보낸다.
+      close();
+      window.location.assign("/account");
+      return;
+    }
+
     // "알겠어요" / "다 했어요"
     if (variant === "install-ios" || variant === "install-android-manual") {
       recordDone(localStore());
@@ -236,6 +292,11 @@ export function InstallGate() {
   }, [busy, variant, promptEvent, close]);
 
   const handleSecondary = useCallback(() => {
+    if (variant === "login-first") {
+      recordDismiss(localStore(), Date.now());
+      close();
+      return;
+    }
     if (variant === "install-ios" || variant === "install-android-manual") {
       recordDismiss(localStore(), Date.now());
       close();
