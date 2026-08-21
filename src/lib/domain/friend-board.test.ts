@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   buildFriendRows,
-  buildMyRow,
   canExpandFriendRows,
   foldFriendSessions,
   formatTotalMinutes,
   FRIEND_PREVIEW_COUNT,
   pokeableFriendCount,
+  sortFriendRows,
   visibleFriendRows,
   workedOutToday,
   type FriendRow,
@@ -303,6 +303,64 @@ describe("정렬 — 순위가 아니라 '지금 할 수 있는 일' 순", () =>
   });
 });
 
+/**
+ * 접힌 2명이 **누구**인가 (2026-08-21 사용자 확인 질문 — "보이는 2명은 최근 운동한
+ * 크루 위주인가" → 그렇다).
+ *
+ * ⚠️ 위 `정렬` describe는 `foldFriendSessions`를 지나 간접적으로 잰다. 여기서는
+ * `lastWorkoutAt`을 **직접 박아** 정렬 함수 하나만 고정한다 — 세션 접기 규칙이
+ * 바뀌어도 "최근 완료 운동순"이라는 의미는 남아야 한다.
+ */
+describe("sortFriendRows — 최근 완료 운동순, 기록 없는 사람은 뒤", () => {
+  function rowWith(nickname: string, lastWorkoutAt: Date | null): FriendRow {
+    const [row] = buildFriendRows({
+      crew: [{ id: nickname, nickname, avatarUrl: null, totalXp: 0 }],
+      activity: new Map(),
+      badges: new Map(),
+      activeUserIds: new Set(),
+    });
+    return { ...row, lastWorkoutAt };
+  }
+
+  it("최근에 마친 사람이 앞, 기록 없는 사람이 맨 뒤다", () => {
+    const rows = [
+      rowWith("기록없음", null),
+      rowWith("그다음", new Date("2026-08-05T02:00:00Z")),
+      rowWith("가장최근", new Date("2026-08-07T02:00:00Z")),
+    ];
+    expect(sortFriendRows(rows).map((row) => row.nickname)).toEqual([
+      "가장최근",
+      "그다음",
+      "기록없음",
+    ]);
+  });
+
+  it("완료 시각이 같으면 한국어 닉네임 순이다", () => {
+    const same = new Date("2026-08-07T02:00:00Z");
+    const rows = [rowWith("하늘", same), rowWith("가람", same)];
+    expect(sortFriendRows(rows).map((row) => row.nickname)).toEqual([
+      "가람",
+      "하늘",
+    ]);
+  });
+
+  /**
+   * ⚠️ 접힌 자리가 2개뿐이라 정렬이 곧 "누가 보이는가"다. 정렬과 미리보기를
+   * 따로 재면 둘 중 하나가 바뀌어도 화면이 틀렸다는 것을 못 잡는다.
+   */
+  it("접힌 2명은 가장 최근에 마친 두 사람이다", () => {
+    const rows = sortFriendRows([
+      rowWith("셋째", new Date("2026-08-03T02:00:00Z")),
+      rowWith("첫째", new Date("2026-08-07T02:00:00Z")),
+      rowWith("둘째", new Date("2026-08-05T02:00:00Z")),
+    ]);
+    expect(visibleFriendRows(rows, false).map((row) => row.nickname)).toEqual([
+      "첫째",
+      "둘째",
+    ]);
+  });
+});
+
 describe("접기·펼치기", () => {
   function many(n: number): FriendRow[] {
     return buildFriendRows({
@@ -318,21 +376,29 @@ describe("접기·펼치기", () => {
     });
   }
 
-  it(`접으면 ${FRIEND_PREVIEW_COUNT}명만 보인다`, () => {
-    expect(visibleFriendRows(many(7), false)).toHaveLength(FRIEND_PREVIEW_COUNT);
+  /**
+   * ⚠️ **숫자를 상수로 재지 마라.** 옛 단언은
+   * `toHaveLength(FRIEND_PREVIEW_COUNT)`였는데, 그러면 상수가 몇으로 바뀌든 늘
+   * 통과한다 — 사용자가 승인한 값이 실제로 그 값인지를 검사하지 못한다.
+   * 2명은 2026-08-21 사용자 승인값이다(설계 §7.1) — 내 카드와 크루 두 행이
+   * 375×812 첫 화면에 함께 보이게 하는 근거다.
+   */
+  it("접으면 2명만 보인다 — 2026-08-21 승인값", () => {
+    expect(FRIEND_PREVIEW_COUNT).toBe(2);
+    expect(visibleFriendRows(many(7), false)).toHaveLength(2);
   });
 
   it("펼치면 전원이 보인다", () => {
     expect(visibleFriendRows(many(7), true)).toHaveLength(7);
   });
 
-  it("3명 이하면 접어도 전원이 보이고 '전체 보기'가 필요 없다", () => {
-    expect(visibleFriendRows(many(3), false)).toHaveLength(3);
-    expect(canExpandFriendRows(many(3))).toBe(false);
+  it("2명 이하면 접어도 전원이 보이고 '전체 보기'가 필요 없다", () => {
+    expect(visibleFriendRows(many(2), false)).toHaveLength(2);
+    expect(canExpandFriendRows(many(2))).toBe(false);
   });
 
-  it("4명부터 '전체 보기'가 생긴다", () => {
-    expect(canExpandFriendRows(many(4))).toBe(true);
+  it("3명부터 '전체 보기'가 생긴다", () => {
+    expect(canExpandFriendRows(many(3))).toBe(true);
   });
 });
 
@@ -445,97 +511,13 @@ describe("workedOutToday — 콕 활성 조건", () => {
  * 정렬·3명 미리보기·`pokeableFriendCount`가 전부 나를 한 명으로 세게 되고,
  * 그러면 "친구 N명"이 틀리고 접힌 목록에서 친구 하나가 밀려난다.
  */
-describe("buildMyRow — 내 행은 친구와 같은 자로 재되, 섞이지 않는다", () => {
-  const ME = { id: "me", nickname: "나야", avatarUrl: null, totalXp: 640 };
-
-  function myRowOf(
-    sessions: FriendSessionRow[] = [],
-    badges?: [number, string[]],
-    active = false,
-  ): FriendRow {
-    return buildMyRow({
-      me: ME,
-      activity: foldFriendSessions(sessions, NOW, KST),
-      badges: new Map(
-        badges ? [["me", { total: badges[0], showcaseKeys: badges[1] }]] : [],
-      ),
-      activeUserIds: new Set(active ? ["me"] : []),
-    });
-  }
-
-  it("isMe가 true다 — 화면이 콕 버튼을 뺄 근거", () => {
-    expect(myRowOf().isMe).toBe(true);
-  });
-
-  it("친구 행은 isMe가 false다", () => {
-    const rows = buildFriendRows({
-      crew: [{ id: "u1", nickname: "친구", avatarUrl: null, totalXp: 0 }],
-      activity: new Map(),
-      badges: new Map(),
-      activeUserIds: new Set(),
-    });
-    expect(rows[0].isMe).toBe(false);
-  });
-
-  /**
-   * ⚠️ 레벨은 `total_xp`로 **다시 계산**한다 — 친구 행과 같은 함수다.
-   * 캐시 컬럼(`user_progress.current_level`)을 쓰면 같은 사람이 화면마다 다른
-   * 레벨로 보인다(인수인계서 §5.4). 640 XP의 진짜 레벨은 **4**다.
-   */
-  it("레벨을 total_xp로 계산한다 — 친구 행과 같은 규칙", () => {
-    expect(myRowOf().level).toBe(4);
-    expect(myRowOf().characterPath).toContain("char-");
-  });
-
-  it("내 활동도 친구와 같은 집계 함수를 지난다", () => {
-    const row = myRowOf([
-      session("me", "2026-08-07T02:00:00Z", 30),
-      session("me", "2026-08-06T02:00:00Z", 20),
-    ]);
-    expect(row.workoutCount).toBe(2);
-    expect(row.totalMinutes).toBe(50);
-    expect(row.workedOutToday).toBe(true);
-    expect(row.status).toBe("done");
-  });
-
-  it("배지도 친구와 같은 자리에서 온다", () => {
-    const row = myRowOf([], [6, ["streak_5", "first_workout"]]);
-    expect(row.badgeCount).toBe(6);
-    expect(row.badgeKeys).toEqual(["streak_5", "first_workout"]);
-  });
-
-  /**
-   * ⚠️ `null`을 `0`으로 접지 마라 — "아직 안 왔다"와 "정말 0개"는 다른 화면을 그린다
-   * (인수인계서 §5.6). 내 행도 같은 규칙을 따른다.
-   */
-  it("배지가 아직 안 왔으면 null이다 — 0개와 구별한다", () => {
-    expect(myRowOf().badgeCount).toBeNull();
-  });
-
-  it("내가 운동 중이면 active다", () => {
-    expect(myRowOf([], undefined, true).status).toBe("active");
-  });
-
-  /**
-   * ⚠️ 이 셋이 이 설계의 핵심이다. 내 행을 친구 배열에 넣으면 전부 깨진다.
-   */
-  it("친구 목록·미리보기·콕 대상 수 어디에도 나를 세지 않는다", () => {
-    const friends = buildFriendRows({
-      crew: [
-        { id: "u1", nickname: "친구하나", avatarUrl: null, totalXp: 0 },
-        { id: "u2", nickname: "친구둘", avatarUrl: null, totalXp: 0 },
-        { id: "u3", nickname: "친구셋", avatarUrl: null, totalXp: 0 },
-      ],
-      activity: new Map(),
-      badges: new Map(),
-      activeUserIds: new Set(),
-    });
-    // 친구가 정확히 3명이면 '전체 보기'가 뜨지 않는다 — 내 행이 섞였다면 4가 되어 떴다.
-    expect(friends).toHaveLength(FRIEND_PREVIEW_COUNT);
-    expect(canExpandFriendRows(friends)).toBe(false);
-    expect(pokeableFriendCount(friends, new Set())).toBe(3);
-  });
-});
+/**
+ * ⚠️ **`buildMyRow`와 `isMe`는 2026-08-21에 사라졌다.** 여기 있던 describe도 같이
+ * 지웠다 — 내 정보가 `PersonalTodayCard`로 분리되면서 크루 목록에는 크루만 온다
+ * (설계 §5). 내 행을 다시 이 목록에 넣으려거든 먼저 설계를 읽어라: 크루 완료
+ * 요약이 나를 세게 되고, 접힌 2자리 중 하나를 내가 차지해 크루가 밀려난다.
+ * 내 행의 지표 검증은 `components/home/personal-today-card.test.tsx`에 있다.
+ */
 
 describe("formatTotalMinutes — 누적이라 값이 크다", () => {
   it("60분 미만은 분으로 적는다", () => {
