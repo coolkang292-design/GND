@@ -235,6 +235,9 @@ export function InstallGate() {
         markSessionSeen(
           v.startsWith("escape-") ? SESSION_ESCAPE : SESSION_INSTALL,
         );
+        // ⚠️ 닫기는 **유예**다(영구 중단이 아니다). 탈출 안내는 카톡에 다시 들어올
+        //    때마다 필요하므로 이력을 남기지 않는다 — 세션 표식으로 충분하다.
+        if (!v.startsWith("escape-")) recordDismiss(localStore(), Date.now());
       }
       return null;
     });
@@ -250,9 +253,17 @@ export function InstallGate() {
   const handlePrimary = useCallback(async () => {
     if (busy) return;
 
+    if (variant === "login-first") {
+      // ⚠️ 여기서 로그인시키지 않는다 — 익명 세션에 `signInWithOAuth`를 쓰면
+      //    계정이 갈린다. `linkIdentity`를 쓰는 화면으로 보낸다.
+      close();
+      window.location.assign("/account");
+      return;
+    }
+
     if (variant === "escape-android") {
-      // 크롬을 직접 연다. 안드로이드만 되는 방식이고, 크롬이 없으면 아무 일도
-      // 안 일어나므로 '주소 복사하기'를 항상 같이 둔다.
+      // 크롬을 직접 연다. 크롬이 없으면 아무 일도 안 일어나므로
+      // '주소 복사하기'를 항상 같이 둔다.
       const { host, pathname, search } = window.location;
       window.location.href = `intent://${host}${pathname}${search}#Intent;scheme=https;package=com.android.chrome;end`;
       return;
@@ -263,11 +274,11 @@ export function InstallGate() {
       try {
         await promptEvent.prompt();
         const { outcome } = await promptEvent.userChoice;
+        // ⚠️ 브라우저가 "설치됨"이라고 확인해 준 유일한 자리다. 사람의 선언이
+        //    아니라 **시스템의 답**이라 믿을 수 있다.
         if (outcome === "accepted") recordDone(localStore());
-        else recordDismiss(localStore(), Date.now());
       } catch {
         // 이벤트는 한 번만 쓸 수 있다 — 실패하면 다음 기회로 넘긴다
-        recordDismiss(localStore(), Date.now());
       } finally {
         setPromptEvent(null);
         setBusy(false);
@@ -276,41 +287,13 @@ export function InstallGate() {
       return;
     }
 
-    if (variant === "login-first") {
-      // ⚠️ 여기서 로그인시키지 않는다 — 익명 세션에 `signInWithOAuth`를 쓰면
-      //    계정이 갈린다. `linkIdentity`를 쓰는 화면으로 보낸다.
-      close();
-      window.location.assign("/account");
-      return;
-    }
-
-    // "알겠어요" / "다 했어요"
-    if (variant === "install-ios" || variant === "install-android-manual") {
-      recordDone(localStore());
-    }
-    close();
-  }, [busy, variant, promptEvent, close]);
-
-  const handleSecondary = useCallback(() => {
-    if (variant === "login-first") {
-      recordDismiss(localStore(), Date.now());
-      close();
-      return;
-    }
-    if (variant === "install-ios" || variant === "install-android-manual") {
-      recordDismiss(localStore(), Date.now());
-      close();
-      return;
-    }
-    if (variant === "install-android-prompt") {
-      recordDismiss(localStore(), Date.now());
-      close();
-      return;
-    }
-    // 탈출 안내의 보조 버튼은 '주소 복사하기' — 닫지 않는다. 복사하고 나서도
-    // 안내를 봐야 어디에 붙여넣을지 안다.
+    // 그 밖(탈출 안내의 '주소 복사하기')은 복사만 하고 닫지 않는다 —
+    // 복사한 뒤에도 안내를 봐야 어디에 붙여넣을지 안다.
     copyUrl();
-  }, [variant, close, copyUrl]);
+  }, [busy, variant, promptEvent, close, copyUrl]);
+
+  /** 지금은 안드로이드 탈출 안내의 '주소 복사하기' 하나뿐이다 */
+  const handleSecondary = useCallback(() => copyUrl(), [copyUrl]);
 
   if (!variant) return null;
 
@@ -319,6 +302,7 @@ export function InstallGate() {
       <InstallSheet
         variant={variant}
         busy={busy}
+        onClose={close}
         onPrimary={() => void handlePrimary()}
         onSecondary={handleSecondary}
       />

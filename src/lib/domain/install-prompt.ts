@@ -124,6 +124,17 @@ export function needsReloginAfterInstall(env: InstallEnv): boolean {
 export const INSTALL_OFFER_KEY = "gnd:install-offer";
 export const INSTALL_PENDING_KEY = "gnd:install-offer:pending";
 
+/**
+ * **닫기 이력의 판 번호.**
+ *
+ * ⚠️ 올리면 **모든 사람의 닫기 이력이 한 번 무효**가 된다. 함부로 올리지 마라.
+ *    2(2026-08-22): 1판에는 **되돌아올 문이 없었다** — `다 했어요`를 한 번 누르면
+ *    영영 안 뜨는데 다시 여는 방법이 아예 없었다. 그 상태에서 눌린 기록은
+ *    사용자의 뜻이 아니라 우리 결함이므로 한 번 지운다. 이미 설치한 사람은
+ *    `standalone` 판정에서 걸러지므로 이 초기화로 성가셔지지 않는다.
+ */
+export const OFFER_STATE_VERSION = 2;
+
 /** 닫은 뒤 다시 물어보기까지 기다리는 시간 */
 export const OFFER_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 /** 이만큼 닫으면 더 묻지 않는다 — 내 정보 탭의 상시 진입점만 남는다 */
@@ -151,7 +162,9 @@ export function readOfferState(storage: InstallStorage | null): OfferState {
     if (!raw) return EMPTY;
     const parsed: unknown = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") return EMPTY;
-    const o = parsed as Partial<OfferState>;
+    const o = parsed as Partial<OfferState> & { v?: number };
+    // 판이 다르면 못 본 것으로 친다 (위 상수의 주석)
+    if (o.v !== OFFER_STATE_VERSION) return EMPTY;
     return {
       dismissedAt: typeof o.dismissedAt === "number" ? o.dismissedAt : null,
       dismissCount: typeof o.dismissCount === "number" ? o.dismissCount : 0,
@@ -166,7 +179,10 @@ export function readOfferState(storage: InstallStorage | null): OfferState {
 
 function write(storage: InstallStorage | null, next: OfferState): OfferState {
   try {
-    storage?.setItem(INSTALL_OFFER_KEY, JSON.stringify(next));
+    storage?.setItem(
+      INSTALL_OFFER_KEY,
+      JSON.stringify({ ...next, v: OFFER_STATE_VERSION }),
+    );
   } catch {
     // 사파리 프라이빗 모드 등 — 이번 세션에서만 닫힌 것으로 둔다
   }

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   MAX_DISMISS,
+  OFFER_STATE_VERSION,
   decideGuide,
   OFFER_COOLDOWN_MS,
   canOfferInstall,
@@ -190,6 +191,30 @@ describe("노출 정책", () => {
     expect(
       shouldOfferInstall({ ...base, state, now: 1_000 + OFFER_COOLDOWN_MS * 10 }),
     ).toBe(false);
+  });
+
+  /**
+   * ⚠️ 1판에는 **되돌아올 문이 없었다** — `다 했어요`를 누르면 영영 안 뜨는데
+   * 다시 여는 방법이 없었다. 그때 눌린 기록은 사용자의 뜻이 아니라 우리 결함이다.
+   */
+  it("⚠️ 옛 판(v 없음)의 닫기 이력은 한 번 무효가 된다", () => {
+    const s = memoryStorage();
+    s.setItem(
+      "gnd:install-offer",
+      JSON.stringify({ dismissedAt: null, dismissCount: 3, done: true }),
+    );
+    expect(readOfferState(s)).toEqual({
+      dismissedAt: null,
+      dismissCount: 0,
+      done: false,
+    });
+  });
+
+  it("지금 판으로 저장한 이력은 그대로 읽힌다", () => {
+    const s = memoryStorage();
+    recordDone(s);
+    expect(readOfferState(s).done).toBe(true);
+    expect(JSON.parse(s.dump()["gnd:install-offer"]).v).toBe(OFFER_STATE_VERSION);
   });
 
   it("저장된 값이 깨져 있어도 앱을 세우지 않는다", () => {

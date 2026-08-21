@@ -69,10 +69,29 @@ type Copy = {
   title: string;
   desc: string;
   steps: Step[];
+  /**
+   * **그다음에 무엇이 기다리는가.**
+   *
+   * ⚠️ 사장님 지시(2026-08-22): *"사파리에서 홈화면 추가까지 안내가 되는 게
+   *    낫지 않아?"*. 카톡 안내만 보면 사파리로 옮긴 뒤 무엇을 해야 하는지
+   *    모른 채 끊긴다 — 여정이 두 화면에 걸쳐 있으면 **첫 화면이 지도를 줘야 한다.**
+   */
+  next?: React.ReactNode;
   /** 아래를 가리키는 빨간 화살표를 그릴 것인가 (공유 버튼이 화면 밖 바로 아래에 있을 때) */
   pointDown: boolean;
   note?: React.ReactNode;
-  primary: string;
+  /**
+   * ⚠️⚠️ **실제로 무언가를 하는 버튼만 둔다** (2026-08-22 사장님 지시 —
+   *    *"버튼 입력 자체를 없애는 게 맞지 않아?"*).
+   *
+   *    "다 했어요"처럼 **닫기만 하는 버튼**은 사용자에게 선언을 요구한다. 그 선언은
+   *    검증할 수 없고(정말 설치했는지 우리는 모른다), 틀린 선언이 사람을 가뒀다.
+   *    설치 여부는 **다음 실행에 `standalone`으로** 저절로 알 수 있다 — 물어볼
+   *    이유가 없다.
+   *
+   *    닫기는 ✕와 바깥 탭이다. 버튼이 아니다.
+   */
+  primary?: string;
   secondary?: string;
 };
 
@@ -104,7 +123,6 @@ function copyFor(variant: SheetVariant): Copy {
           </>
         ),
         primary: "계정 연결하러 가기",
-        secondary: "나중에 할게요",
       };
 
     case "escape-ios":
@@ -144,11 +162,17 @@ function copyFor(variant: SheetVariant): Copy {
           },
         ],
         pointDown: true,
+        next: (
+          <>
+            사파리로 옮기면 <b className="text-text">공유 → 홈 화면에 추가</b>{" "}
+            안내가 이어서 나와요.
+          </>
+        ),
         // ⚠️ 사파리에서 또 로그인해야 한다는 걸 **미리** 말한다. 안 말하면
         //    로그인 화면을 다시 보고 "아까 한 게 날아갔나?" 하고 되돌아온다.
         note: "사파리에서 카카오 버튼 한 번만 더 누르면 끝이에요. 기록은 그대로예요.",
-        primary: "알겠어요",
-        secondary: "주소 복사하기",
+        // 닫기 버튼은 없다 — ✕와 바깥 탭. 주소 복사는 실제로 무언가를 한다.
+        primary: "주소 복사하기",
       };
 
     case "escape-android":
@@ -176,8 +200,7 @@ function copyFor(variant: SheetVariant): Copy {
           },
         ],
         pointDown: false,
-        primary: "알겠어요",
-        secondary: "주소 복사하기",
+        primary: "주소 복사하기",
       };
 
     case "install-ios":
@@ -244,8 +267,12 @@ function copyFor(variant: SheetVariant): Copy {
             아까 누른 <b className="text-text">카카오 버튼</b> 그대로요.
           </>
         ),
-        primary: "다 했어요",
-        secondary: "나중에 할게요",
+        // ⚠️⚠️ **"다 했어요" 버튼은 없앴다** (2026-08-22 사장님 지적 —
+        //    *"어차피 어플을 설치하면 해당 알림이 안 뜨는 거잖아?"*). 맞는 말이다.
+        //    설치하면 다음 실행부터 `standalone`으로 잡혀 **자동으로** 안 뜬다.
+        //    그 버튼이 하던 유일한 일은 "했다고 말했지만 안 한 사람"을 **영구히**
+        //    막는 것이었고, 그게 실제로 사람을 가뒀다(사장님 사파리).
+        //    닫기는 ✕와 바깥 탭으로 한다.
       };
 
     case "install-android-prompt":
@@ -257,7 +284,6 @@ function copyFor(variant: SheetVariant): Copy {
         // ⚠️ 안드로이드에는 재로그인 안내를 붙이지 않는다 — 크롬과 저장소를
         //    공유해서 로그인이 그대로 유지된다.
         primary: "앱 설치하기",
-        secondary: "나중에 할게요",
       };
 
     case "install-android-manual":
@@ -282,8 +308,7 @@ function copyFor(variant: SheetVariant): Copy {
           },
         ],
         pointDown: false,
-        primary: "다 했어요",
-        secondary: "나중에 할게요",
+        // install-ios 와 같은 이유로 버튼이 없다
       };
   }
 }
@@ -291,12 +316,15 @@ function copyFor(variant: SheetVariant): Copy {
 export function InstallSheet({
   variant,
   busy = false,
+  onClose,
   onPrimary,
   onSecondary,
 }: {
   variant: SheetVariant;
   busy?: boolean;
-  onPrimary: () => void;
+  /** ✕ · 바깥 탭 — **닫기는 버튼이 아니다** */
+  onClose: () => void;
+  onPrimary?: () => void;
   onSecondary?: () => void;
 }) {
   const c = copyFor(variant);
@@ -309,6 +337,10 @@ export function InstallSheet({
       role="dialog"
       aria-modal="true"
       aria-label={c.title}
+      /* 바깥을 탭하면 닫힌다. 시트 안쪽 탭이 새어 올라오지 않게 target을 본다. */
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       {/* ⚠️⚠️ **버튼을 스크롤 밖에 둔다.** 아이폰 사파리의 4단계 시트는 사진까지
           넣으면 730px가 넘는데, 폰의 실제 가시 영역은 700px 안팎이다. 통째로
@@ -321,10 +353,20 @@ export function InstallSheet({
           <div className="flex h-11 w-11 flex-none items-center justify-center rounded-card-sm bg-accent text-[13px] font-black text-accent-ink">
             GND
           </div>
-          <div>
+          <div className="min-w-0 flex-1">
             <p className="text-[16px] font-extrabold">{c.title}</p>
             <p className="mt-0.5 text-xs text-muted">{c.desc}</p>
           </div>
+          {/* ⚠️ 닫는 방법이 눈에 보여야 한다. 안 보이면 갇혔다고 느낀다 —
+              그게 이 화면이 고치려는 바로 그 문제였다. */}
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="닫기"
+            className="flex h-8 w-8 flex-none items-center justify-center rounded-full border border-line bg-surface-2 text-muted"
+          >
+            ✕
+          </button>
         </header>
 
         {c.steps.length > 0 && (
@@ -365,20 +407,28 @@ export function InstallSheet({
         {/* ⚠️⚠️ **이 줄도 스크롤 밖이다.** 설치 뒤 재로그인 안내가 접혀 있으면
             사람들은 설치본의 로그인 화면을 보고 **다시 가입**한다 — 계정이 갈리는
             그 사고를 막는 한 줄이라, 단계보다 먼저 보여야 한다. */}
+        {c.next && (
+          <p className="mt-2 flex-none rounded-card-sm border border-line bg-surface-2 px-2.5 py-2 text-[11.5px] leading-relaxed text-muted">
+            ➡️ {c.next}
+          </p>
+        )}
+
         {c.note && (
           <p className="mt-3 flex-none rounded-card-sm border border-accent-weak bg-accent-weak/40 px-2.5 py-2 text-[11.5px] leading-relaxed text-muted">
             💡 {c.note}
           </p>
         )}
 
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onPrimary}
-          className="mt-3 w-full flex-none rounded-card-sm bg-accent py-3 text-[15px] font-extrabold text-accent-ink disabled:opacity-50"
-        >
-          {c.primary}
-        </button>
+        {c.primary && onPrimary && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onPrimary}
+            className="mt-3 w-full flex-none rounded-card-sm bg-accent py-3 text-[15px] font-extrabold text-accent-ink disabled:opacity-50"
+          >
+            {c.primary}
+          </button>
+        )}
 
         {c.secondary && onSecondary && (
           <button
@@ -393,8 +443,16 @@ export function InstallSheet({
         {/* ⚠️ 공유 버튼은 **브라우저 UI**라 그 위에 표시를 그릴 수 없다. 대신
             우리 화면 맨 아래에서 그쪽을 가리킨다 — 사진과 달리 이건 안 낡는다.
             카톡·사파리 모두 공유 버튼이 하단 바 **오른쪽 끝**이다. */}
+        {/* ⚠️⚠️ **되돌아올 문의 이정표.** 안내를 닫고 나면 다시 여는 방법을
+            아무도 모른다 — 실제로 "다 했어요"를 눌러 갇힌 일이 있었다
+            (2026-08-22). 문을 만들었으면 **어디 있는지도 말해야** 한다. */}
+        <p className="mt-2 flex-none text-center text-[11px] leading-relaxed text-faint">
+          이 안내를 놓쳤다면 언제든{" "}
+          <b className="text-muted">내 정보 → ⚙️ → 📲 홈 화면에 앱 설치</b>
+        </p>
+
         {c.pointDown && (
-          <p className="mt-2 flex-none text-right text-[11.5px] font-extrabold text-[#ff6b6b]">
+          <p className="mt-1.5 flex-none text-right text-[11.5px] font-extrabold text-[#ff6b6b]">
             바로 아래 이 버튼! ↓
           </p>
         )}

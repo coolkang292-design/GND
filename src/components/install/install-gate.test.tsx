@@ -170,7 +170,7 @@ describe("InstallGate — 안 뜨는가 (부정 확인)", () => {
     render(<InstallGate />);
     expect(await sheetTitle()).toBe("이제 홈 화면에 놓을 차례예요");
 
-    fireEvent.click(screen.getByRole("button", { name: "알겠어요" }));
+    fireEvent.click(screen.getByRole("button", { name: "닫기" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     cleanup();
 
@@ -182,7 +182,7 @@ describe("InstallGate — 안 뜨는가 (부정 확인)", () => {
   it("'다 했어요'를 누른 적이 있으면 새 세션에도 안 뜬다", async () => {
     localStorage.setItem(
       "gnd:install-offer",
-      JSON.stringify({ dismissedAt: null, dismissCount: 0, done: true }),
+      JSON.stringify({ dismissedAt: null, dismissCount: 0, done: true, v: 2 }),
     );
     render(<InstallGate />);
     expect(await sheetTitle()).toBeNull();
@@ -195,7 +195,7 @@ describe("InstallGate — 안 뜨는가 (부정 확인)", () => {
   it("⚠️ '다 했어요'로 막혀 있어도 내 정보 탭에서 직접 열면 뜬다", async () => {
     localStorage.setItem(
       "gnd:install-offer",
-      JSON.stringify({ dismissedAt: null, dismissCount: 0, done: true }),
+      JSON.stringify({ dismissedAt: null, dismissCount: 0, done: true, v: 2 }),
     );
     render(<InstallGate />);
     expect(await sheetTitle()).toBeNull();
