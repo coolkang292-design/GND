@@ -28,7 +28,9 @@ Codex 공통 효율·소통·승인 규칙은 `C:\Users\SAMSUNG\.codex\AGENTS.md
 1. `git rev-parse --show-toplevel`, `git status --short`, `git log -1 --oneline`으로 실제 저장소와 현재 변경을 확인한다.
 2. `CLAUDE.md` → `PROGRESS.md` → 최신 관련 `docs/superpowers/HANDOFF-*.md` → 진행 중인 설계·계획 문서 순서로 읽는다.
 3. 문서만 믿지 말고 실제 코드·테스트·필요하면 `docs/db-current-schema.sql`을 확인한다.
-   - ⚠️ `docs/superpowers/plans/`는 **이미 실행이 끝난 계획서가 대부분**이다. 검색에 먼저 걸리더라도 현행 사실이 아니다. 현행은 코드와 `db-current-schema.sql`이다.
+   - ⚠️ `docs/superpowers/plans/archive/`(44건)는 **실행이 끝난 계획서**다. 검색에 먼저 걸리더라도 현행 사실이 아니다.
+     `plans/`에 남은 4건만 진행 중이다. **빈 체크박스를 미완료로 읽지 마라** — 실행하면서 표시하지 않았을 뿐이다.
+     현행 사실은 코드와 `docs/db-current-schema.sql`이다. 자세히는 `docs/superpowers/plans/README.md`.
    - ⚠️ `.worktrees/` 아래에는 다른 브랜치의 사본이 있다. `find`·`grep`이 그쪽 파일을 물어 오면 현재 코드로 착각하지 않는다.
 
 ## 종료 기록

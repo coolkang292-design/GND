@@ -1,7 +1,7 @@
 # 크루원 프로필 시트 — 상대의 레벨·배지 보기 설계
 
 작성일: 2026-07-26
-관련 문서: `docs/superpowers/plans/2026-07-24-routines-friend-level-friend-requests.md`(Phase 2를 대체) ·
+관련 문서: `docs/superpowers/plans/archive/2026-07-24-routines-friend-level-friend-requests.md`(Phase 2를 대체) ·
 `docs/superpowers/specs/2026-07-25-badge-points-item-shop-design.md`(배지 확장 예정)
 
 ---

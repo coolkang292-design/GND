@@ -1,7 +1,7 @@
 # 크루 연결 그래프 — 닉네임 검색 · 상호 수락 설계
 
 작성일: 2026-07-28
-관련 문서: `docs/superpowers/plans/2026-07-24-routines-friend-level-friend-requests.md`(§1 결정 **F1을 뒤집는다**) ·
+관련 문서: `docs/superpowers/plans/archive/2026-07-24-routines-friend-level-friend-requests.md`(§1 결정 **F1을 뒤집는다**) ·
 `docs/superpowers/specs/2026-07-26-crew-member-profile-sheet-design.md`(프로필 시트 재사용)
 
 ---

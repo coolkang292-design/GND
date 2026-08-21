@@ -16,7 +16,7 @@
 | 파일 | 무엇 |
 |---|---|
 | `docs/superpowers/specs/2026-08-16-empty-day-workout-suggestion-design.md` | **설계서.** 왜 이렇게 만드는지, 무엇을 안 하는지 |
-| `docs/superpowers/plans/2026-08-16-empty-day-workout-suggestion.md` | **구현 계획.** Task 0~12의 전체 코드가 들어 있다 |
+| `docs/superpowers/plans/archive/2026-08-16-empty-day-workout-suggestion.md` | **구현 계획.** Task 0~12의 전체 코드가 들어 있다 |
 | `CLAUDE.md` (저장소 루트) | 배포·검증·DB 규칙. **배포 전 개발 서버 확인은 건너뛸 수 없다** |
 | `~/.claude/CLAUDE.md` | 전역 규칙. 같은 내용의 상위 버전 |
 
@@ -100,7 +100,7 @@ f7d4636 feat(suggest): 지난 운동에 4분 인터벌을 보조로 붙이는 se
 
 ## 5. 다음에 할 일 — Task 7부터
 
-전체 코드는 `docs/superpowers/plans/2026-08-16-empty-day-workout-suggestion.md`에 있다.
+전체 코드는 `docs/superpowers/plans/archive/2026-08-16-empty-day-workout-suggestion.md`에 있다.
 아래는 **경로와 함정만** 요약한 것이다.
 
 ### Task 7 — draft v6 → v7, 자정 만료
@@ -185,7 +185,7 @@ node scripts/rls-test.mjs   # 기준선 128 / 0 failed
 ## 6. ⚠️ 미커밋 문서 변경
 
 ```
- M docs/superpowers/plans/2026-08-16-empty-day-workout-suggestion.md
+ M docs/superpowers/plans/archive/2026-08-16-empty-day-workout-suggestion.md
  M docs/superpowers/specs/2026-08-16-empty-day-workout-suggestion-design.md
 ```
 
@@ -193,7 +193,7 @@ node scripts/rls-test.mjs   # 기준선 128 / 0 failed
 회귀선 3줄 추가). **커밋해도 된다:**
 
 ```bash
-git add docs/superpowers/plans/2026-08-16-empty-day-workout-suggestion.md \
+git add docs/superpowers/plans/archive/2026-08-16-empty-day-workout-suggestion.md \
         docs/superpowers/specs/2026-08-16-empty-day-workout-suggestion-design.md \
         docs/superpowers/HANDOFF-2026-08-16-empty-day-workout-suggestion.md
 git commit -m "docs: 제안 파이프라인 설계·계획 갱신 + 인수인계"

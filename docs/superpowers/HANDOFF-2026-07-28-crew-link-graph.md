@@ -8,7 +8,7 @@
 
 **문서 3종:**
 - 설계 `docs/superpowers/specs/2026-07-28-crew-link-graph-design.md`
-- 계획 `docs/superpowers/plans/2026-07-28-crew-link-graph.md` (12 태스크)
+- 계획 `docs/superpowers/plans/archive/2026-07-28-crew-link-graph.md` (12 태스크)
 - 이 문서
 
 ---

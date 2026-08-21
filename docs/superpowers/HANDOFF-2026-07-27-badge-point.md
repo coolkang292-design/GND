@@ -1,7 +1,7 @@
 # 인수인계 — 배지 30종 + 포인트 경제 (2026-07-27 중단 시점)
 
 > 이 문서 하나만 읽으면 이어서 작업할 수 있게 썼다.
-> 계획서 전문: `docs/superpowers/plans/2026-07-27-badge-catalog-and-point-economy.md`
+> 계획서 전문: `docs/superpowers/plans/archive/2026-07-27-badge-catalog-and-point-economy.md`
 > 설계 전문: `docs/superpowers/specs/2026-07-27-badge-catalog-and-point-economy-design.md`
 
 ---
@@ -163,7 +163,7 @@ pnpm vitest run src/components/profile/badge-showcase.test.tsx   → 8/8
 ## 5. 이어서 시작하는 법
 
 ```
-1. docs/superpowers/plans/2026-07-27-badge-catalog-and-point-economy.md 를 연다
+1. docs/superpowers/plans/archive/2026-07-27-badge-catalog-and-point-economy.md 를 연다
 2. "Task 9" 섹션부터 그대로 따라간다 (코드가 전부 들어 있다)
 3. Task 9를 끝내고 pnpm typecheck 가 통과하는지 확인한다  ← 회복 지점
 4. Task 11에서 사용자에게 0033 Run을 요청한다

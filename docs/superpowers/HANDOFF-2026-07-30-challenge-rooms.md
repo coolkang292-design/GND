@@ -8,7 +8,7 @@
 
 **문서 3종:**
 - 설계 `docs/superpowers/specs/2026-07-29-challenge-rooms-design.md` (13개 결정, 전체 그림)
-- 계획 `docs/superpowers/plans/2026-07-30-challenge-rooms-0042.md` (0042 단계만, 10 태스크)
+- 계획 `docs/superpowers/plans/archive/2026-07-30-challenge-rooms-0042.md` (0042 단계만, 10 태스크)
 - 이 문서
 
 ---

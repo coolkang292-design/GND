@@ -1,7 +1,7 @@
 # 나만의 루틴 · 자주 한 운동 상위 표시 · 달력 날짜별 계획 — 설계
 
 > 작성 2026-08-02. 사용자 지시 3건을 한 설계로 묶는다.
-> 관련: `docs/superpowers/plans/2026-07-24-routines-friend-level-friend-requests.md`(Phase 1을 **대체**한다) ·
+> 관련: `docs/superpowers/plans/archive/2026-07-24-routines-friend-level-friend-requests.md`(Phase 1을 **대체**한다) ·
 > `docs/superpowers/specs/2026-07-18-calendar-workout-plans-design.md`(예정표 원설계)
 
 ## 목표

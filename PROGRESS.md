@@ -278,7 +278,7 @@ const isTest = (p) =>
 
 `7da808b` 배포 (`gnd-iufq9voos-gnd4.vercel.app` → `gnd-one.vercel.app`).
 브랜치 `feat/admin-gap-metrics` (커밋 5개)을 `--no-ff`로 `main`에 병합.
-계획: `docs/superpowers/plans/2026-08-17-admin-dashboard-gap-metrics.md`
+계획: `docs/superpowers/plans/archive/2026-08-17-admin-dashboard-gap-metrics.md`
 
 **프로덕션 실물 확인 (배포 명령 성공은 검증이 아니다):**
 관리자로 `https://gnd-one.vercel.app/admin`을 열어 **26건 확인**. 개발 서버와 같은
@@ -392,7 +392,7 @@ const isTest = (p) =>
   ⚠️ 이게 없으면 `DEFAULT_PUSH_URL`로 떨어져 **푸시가 `/home`으로 샌다**.
   `pushPayloadFor`는 `/api/push/notify`(서버)가 쓰는데, 같은 빌드의 클라이언트
   번들에 들어 있으므로 서버 쪽도 같은 소스다.
-계획: `docs/superpowers/plans/2026-08-16-empty-day-workout-suggestion.md`
+계획: `docs/superpowers/plans/archive/2026-08-16-empty-day-workout-suggestion.md`
 인수인계: `docs/superpowers/HANDOFF-2026-08-16-empty-day-workout-suggestion.md`
 
 **마이그레이션 `0078`은 이미 적용됐다** (2026-08-16, 사용자 Run).
@@ -461,7 +461,7 @@ const isTest = (p) =>
 ## ✅ 2026-08-14 2차 배포 — 자동 시작 알림 채우기(A2) + 배지 이름·획득일(F)
 
 `7b8bc92` 배포 (`gnd-hkngvi8ve-gnd4.vercel.app` → `gnd-one.vercel.app`).
-계획: `docs/superpowers/plans/2026-08-14-challenge-notices-and-badge-details.md`
+계획: `docs/superpowers/plans/archive/2026-08-14-challenge-notices-and-badge-details.md`
 
 ⚠️ **이 배치는 마이그레이션이 있다(`0077`).** 오전 배치와 달리 배포 롤백만으로
 안 끝난다. 되돌릴 때는 **함수 → 알림 행 삭제 → 제약** 순서를 지켜야 한다
@@ -552,7 +552,7 @@ lint 오류 0 · typecheck 0 · **테스트 144파일 / 2116건** · build 성�
 ## ✅ 2026-08-14 배포 완료 — 화면이 하던 거짓말 두 개를 고쳤다
 
 `b6d9c39` 배포 (`gnd-mr9egmprc-gnd4.vercel.app` → `gnd-one.vercel.app`).
-계획: `docs/superpowers/plans/2026-08-14-friction-copy-and-beginner-recommendations.md`
+계획: `docs/superpowers/plans/archive/2026-08-14-friction-copy-and-beginner-recommendations.md`
 
 **로직·DB·점수 무변경. 마이그레이션 없음.** 화면 문구와 추천 목록뿐이라
 배포 롤백만으로 완전히 되돌아간다.
@@ -682,7 +682,7 @@ npx vercel@latest --prod --yes --scope gnd4
 ## 🔄 챌린지 세팅 시트: 달성 계획과 참여 계획을 갈랐다 (2026-08-14, 배포 완료)
 
 설계: `docs/superpowers/specs/2026-08-14-challenge-setup-sheet-redesign-design.md`
-계획: `docs/superpowers/plans/2026-08-14-challenge-setup-sheet-redesign.md`
+계획: `docs/superpowers/plans/archive/2026-08-14-challenge-setup-sheet-redesign.md`
 
 한 화면에 `주 N일`이 **두 개** 있었다 — 목표 카드의 총량 계산용과 시트 하단의
 참여율 분모용. 이름도 비슷해서(`주 며칠` / `계획 운동일 (주 N일)`) 사람도 코드도
@@ -904,8 +904,8 @@ RPC가 전부 같은 함수를 지난다 — 화면마다 숫자가 갈리던 �
 - 다음 할 일 1개: 가슴·팔·하체·다이어트 네 프로그램의 운동 처방을 근거 검토로 확정한
   뒤 통합 구현 계획을 작성한다.
 - **구현 계획 승인 후 작성 완료:**
-  `docs/superpowers/plans/2026-08-12-five-official-program-catalog.md` → 기존 일정 계획
-  Task 2~5 → `docs/superpowers/plans/2026-08-12-exercise-entry-hub-and-program-ui.md` →
+  `docs/superpowers/plans/archive/2026-08-12-five-official-program-catalog.md` → 기존 일정 계획
+  Task 2~5 → `docs/superpowers/plans/archive/2026-08-12-exercise-entry-hub-and-program-ui.md` →
   기존 일정 계획 Task 7~8 순서다. 기존 Task 1·6은 새 계획이 대체한다.
 
 ## 📐 2026-08-12 — GND 공식 6주 추천 프로그램 설계·구현 계획 (코드·DB 변경 없음 · 운영 배포 안 함)
@@ -1522,7 +1522,7 @@ RPC가 전부 같은 함수를 지난다 — 화면마다 숫자가 갈리던 �
 
 ## ✅ 2026-07-31 — 챌린지 방 전환 0044: 여러 챌린지 동시 진행 (운영 배포 ✅ · 폰 확인 대기)
 
-계획 `docs/superpowers/plans/2026-07-30-challenge-rooms-0044.md`(13 태스크). **마이그레이션 0044 운영 적용 ✅ · 배포 ✅**(`gnd-1qs5rxe3n-gnd4.vercel.app` → `gnd-one.vercel.app`). 전체 3단계 중 **2단계 완료**: 추가(0042·0043) → **전환(0044)** → 정리(0045).
+계획 `docs/superpowers/plans/archive/2026-07-30-challenge-rooms-0044.md`(13 태스크). **마이그레이션 0044 운영 적용 ✅ · 배포 ✅**(`gnd-1qs5rxe3n-gnd4.vercel.app` → `gnd-one.vercel.app`). 전체 3단계 중 **2단계 완료**: 추가(0042·0043) → **전환(0044)** → 정리(0045).
 
 - **0044가 한 것은 두 가지뿐이다** — `challenges_one_live` 유니크 인덱스 드롭(여기서 개수 제한이 풀린다) + `challenges`·`user_goals`의 SELECT 정책을 참가자에게 **덧붙이기**(`is_challenge_participant(...) or is_group_member(...)`). **점수를 바꾸는 것은 하나도 넣지 않았다** — 진행 중인 7월 GND 챌린지 때문이다.
 - **⚠️ 지시서에 없었지만 넣은 정책 확대** — 0042의 `invite_to_challenge`는 대상에게 **프로필만 있으면** 초대한다(그룹 검사 없음). 서버는 이미 타 그룹 초대를 허용하는데 읽기 정책이 `is_group_member` 한 줄뿐이라, **초대받은 사람이 챌린지 행도 목표도 못 읽었다.** "한 사람이 여러 크루"라는 목적 자체가 그 한 줄에 막혀 있었다. OR로 덧붙이기만 하므로 기존 같은 그룹 사용자에게는 판정이 그대로다.
@@ -1558,7 +1558,7 @@ RPC가 전부 같은 함수를 지난다 — 화면마다 숫자가 갈리던 �
 
 ## ✅ 2026-07-28 — 관리자 분석 대시보드 `/admin` 실데이터 연동 (운영 배포 ✅ · 폰 확인 대기)
 
-설계 `docs/superpowers/specs/2026-07-28-admin-analytics-dashboard-design.md` · 계획 `docs/superpowers/plans/2026-07-28-admin-analytics-dashboard.md`. ChatGPT로 만든 목업(`docs/dashboard-source.html`, 샘플 데이터)을 앱 안 관리자 전용 `/admin`으로 옮기고 값을 전부 운영 DB 실데이터로 교체했다. **마이그레이션 없음.** 배포 `gnd-7vq27wae9-gnd4.vercel.app` → `gnd-one.vercel.app` 별칭.
+설계 `docs/superpowers/specs/2026-07-28-admin-analytics-dashboard-design.md` · 계획 `docs/superpowers/plans/archive/2026-07-28-admin-analytics-dashboard.md`. ChatGPT로 만든 목업(`docs/dashboard-source.html`, 샘플 데이터)을 앱 안 관리자 전용 `/admin`으로 옮기고 값을 전부 운영 DB 실데이터로 교체했다. **마이그레이션 없음.** 배포 `gnd-7vq27wae9-gnd4.vercel.app` → `gnd-one.vercel.app` 별칭.
 
 - **⚠️ 접근 방법 2가지 (둘 중 하나만 맞으면 통과)**
   - **① 암호키 (권장)** — `gnd-one.vercel.app/admin?key=<ADMIN_ACCESS_KEY>` 로 한 번 열면 미들웨어가 **httpOnly 쿠키**(path=/admin, 180일)를 심고 주소에서 key를 지운 뒤 리다이렉트한다. 이후 그 브라우저에서 계속 열린다. **기기·브라우저를 안 가리고 재배포도 필요 없다.** 키는 Vercel Production `ADMIN_ACCESS_KEY`.
@@ -1585,7 +1585,7 @@ RPC가 전부 같은 함수를 지난다 — 화면마다 숫자가 갈리던 �
 
 ## ✅ 2026-07-28 — 크루 연결 그래프: 닉네임 검색 · 상호 수락 (운영 배포 ✅)
 
-설계 `docs/superpowers/specs/2026-07-28-crew-link-graph-design.md` · 계획 `docs/superpowers/plans/2026-07-28-crew-link-graph.md`(12 태스크). **"같은 그룹이니 크루" → "닉네임으로 찾아 서로 수락했으니 크루"**. 마이그레이션 **0038·0039·0040 운영 적용 ✅**. 그룹은 지우지 않았다 — 챌린지가 아직 그룹 기반이라 의미만 축소했다.
+설계 `docs/superpowers/specs/2026-07-28-crew-link-graph-design.md` · 계획 `docs/superpowers/plans/archive/2026-07-28-crew-link-graph.md`(12 태스크). **"같은 그룹이니 크루" → "닉네임으로 찾아 서로 수락했으니 크루"**. 마이그레이션 **0038·0039·0040 운영 적용 ✅**. 그룹은 지우지 않았다 — 챌린지가 아직 그룹 기반이라 의미만 축소했다.
 
 - **왜 두 개로 쪼갰나** — 0038(추가만·무해) 적용 후 `/crew` 화면을 먼저 배포해 실기기로 확인하고, 그 뒤 0039(전환)로 넘어갔다. 한 번에 하면 "요청도 안 되고 피드도 비어 있는" 상태에서 원인을 못 가른다.
 - **0038** — `crew_requests`(요청 이력) + `crew_links`(수락된 연결, `user_a < user_b` 정규화라 쌍 하나 = 행 하나) + `is_crew_with()` + RPC 8개. 쌍 단위 `pg_advisory_xact_lock`으로 동시성 3종(상호 동시수락 데드락·상호 동시요청 시 자동수락 불발·두 번 탭의 raw 23505) 차단. 거절 후 **7일 재요청 쿨다운**(에러코드는 `request_exists` 재사용 — 거절 사실을 숨긴다). 기존 3명 → **3쌍 백필**, 재실행이 해제한 사이를 되살리지 않게 `where not exists` 가드.
@@ -1600,7 +1600,7 @@ RPC가 전부 같은 함수를 지난다 — 화면마다 숫자가 갈리던 �
 
 ## ✅ 2026-07-27 — 업적(배지) 퀘스트 UX v2.0 (운영 배포 ✅)
 
-설계=사용자 피드백 13항목, 계획 `docs/superpowers/plans/2026-07-27-badge-quest-ux.md`. 배지 화면을 "도감"에서 **다음 목표·진행률·남은수치·희귀도·완료율의 퀘스트 화면**으로. 서브에이전트 구동(구현 태스크별 에이전트 + opus 최종 리뷰)으로 실행. 마이그레이션 **0036·0037 운영 적용 ✅**. 배포 `gnd-5txy2wpe3-gnd4.vercel.app` Ready.
+설계=사용자 피드백 13항목, 계획 `docs/superpowers/plans/archive/2026-07-27-badge-quest-ux.md`. 배지 화면을 "도감"에서 **다음 목표·진행률·남은수치·희귀도·완료율의 퀘스트 화면**으로. 서브에이전트 구동(구현 태스크별 에이전트 + opus 최종 리뷰)으로 실행. 마이그레이션 **0036·0037 운영 적용 ✅**. 배포 `gnd-5txy2wpe3-gnd4.vercel.app` Ready.
 
 - **진행 지표 원천 = 판정과 같은 SQL(0036)** — 진행바의 "7/10"은 사용자 현재 지표가 필요한데, `evaluate_badges`가 이미 내부에서 계산하던 지표 6종 집계를 `badge_metrics(uuid)`로 빼고 `evaluate_badges`도 그걸 부르게 리팩터(DRY). 클라는 `get_my_badge_metrics()`로 읽는다. 진행바와 실제 지급이 갈라지는 "조용한 버그"를 원천 차단. 신규 `scripts/badge-metrics-check.mjs`가 RPC↔직접집계를 실계정으로 대조.
 - **희귀도(0037)** — `badge_definitions.rarity`(common/rare/epic/legend/mythic) 컬럼 + 30종 seed. 분포 common 8·rare 9·epic 7·legend 5·mythic 1. 이름 2건 변경(서울 탈출·반도 횡단), 설명은 사실 한 줄("운동 30회 달성")로 통일(이전 위트 설명 대체 — 위트는 이름이 담당).
@@ -1621,7 +1621,7 @@ RPC가 전부 같은 함수를 지난다 — 화면마다 숫자가 갈리던 �
 
 ## ✅ 2026-07-27 — 배지 30종 + 포인트 경제 (운영 배포 ✅)
 
-설계 `docs/superpowers/specs/2026-07-27-badge-catalog-and-point-economy-design.md` · 계획 `docs/superpowers/plans/2026-07-27-badge-catalog-and-point-economy.md`. 배지를 3개 → **30종**으로 늘리고 **포인트 경제**를 붙였다. 마이그레이션 **0031·0032·0033 운영 적용 ✅**. 배포 `gnd-jdfmnf0if-gnd4.vercel.app` production Ready → `gnd-one.vercel.app` 별칭.
+설계 `docs/superpowers/specs/2026-07-27-badge-catalog-and-point-economy-design.md` · 계획 `docs/superpowers/plans/archive/2026-07-27-badge-catalog-and-point-economy.md`. 배지를 3개 → **30종**으로 늘리고 **포인트 경제**를 붙였다. 마이그레이션 **0031·0032·0033 운영 적용 ✅**. 배포 `gnd-jdfmnf0if-gnd4.vercel.app` production Ready → `gnd-one.vercel.app` 별칭.
 
 - **0031 스키마 + 배지 30종 seed** — 배지 조건을 `badge_definitions` **테이블**로 둬 30종을 SQL 함수에 하드코딩하지 않는다(배지 추가 = seed 한 줄). `user_badges` PK를 `(user_id, badge_key, period_key)`로 확장해 반복 획득을 담고 기존 2건은 `period_key='lifetime'`으로 보존. `point_transactions` 원장 + `user_wallet`.
 - **0032 판정·지급 엔진** — 포인트는 **운동마다 100 + 배지 보너스**(배지에서만 나오면 다 딴 순간 수입이 끊기고 ⚡배수가 곱할 대상을 잃는다). 불꽃은 **홈 🔥와 같은 사슬 규칙**(`current_streak_days`가 `domain/streak.ts`와 동일), 불꽃 배지는 **5일마다 스택**(재달성 방식이면 배지를 더 받으려 5일 쉬는 게 이득이 된다). 반복 배지 멱등키 = **달성한 날(KST)**. 하루 2번째 운동은 **XP·포인트 모두 0**. RPC가 `pointsAwarded·pointMultiplier·streakDays·newBadges`를 완료 응답에 실어 준다.
@@ -1648,7 +1648,7 @@ RPC가 전부 같은 함수를 지난다 — 화면마다 숫자가 갈리던 �
 
 ## ✅ 2026-07-24 — 혼자모드 + 챌린지 동의 게이트 + 성과 열람권 개편 (운영 배포 ✅)
 
-계획 `docs/superpowers/plans/2026-07-24-challenge-consent-and-performance-pass.md`(§1 결정 3건 모두 권장안 확정: **엄밀 연속 5일 · 크루 전체 순위판 · 달성 시각부터 2h**). 세 작업 모두 커밋·배포·검증 완료. 배포 `gnd-qjdgtrrj0-gnd4.vercel.app` production Ready.
+계획 `docs/superpowers/plans/archive/2026-07-24-challenge-consent-and-performance-pass.md`(§1 결정 3건 모두 권장안 확정: **엄밀 연속 5일 · 크루 전체 순위판 · 달성 시각부터 2h**). 세 작업 모두 커밋·배포·검증 완료. 배포 `gnd-qjdgtrrj0-gnd4.vercel.app` production Ready.
 
 - **리라 → 리얼GND 크루 제거** (운영 DB 직접, service_role): 리라는 목표 0개라 동의 게이트를 영구 차단하므로 크루에서 제거(계정은 유지·크루 멤버십만 삭제). 리얼GND = 오뎅끼데스까(owner)·스칼레또·낭만송곳니 **3명**.
 - **혼자모드** (`7842d29`): GND는 이미 크루 없이 기록·XP·성장이 되도록 설계됨(`workout_sessions.group_id` nullable, RLS도 null 허용). 유일한 관문이 **온보딩의 크루 강제**였다. ① 온보딩 crew 스텝에 "혼자 시작하기(나중에 크루 참여)" 탈출구 ② 크루 없을 때 홈 `CrewCard`가 null 대신 **NoCrewCard**(만들기/초대코드 참여) 렌더 — 앱 내 최초의 크루 진입점(피드·챌린지의 "홈에서 참여" 안내가 이제 실제로 동작). 브라우저 E2E로 혼자 유저 홈(캐릭터·기록·스트릭 전부 정상) 확인.
@@ -1670,7 +1670,7 @@ XP 시스템 배포 직후 사용자 실사용에서 나온 이슈 3건을 고�
 
 ## ✅ 2026-07-23 — XP·35레벨·7단계 캐릭터 시스템 (Task 1~14 완료 · **운영 배포 ✅**)
 
-- **문서**: 설계 `docs/superpowers/specs/2026-07-23-xp-level-character-system-design.md` · 계획 `docs/superpowers/plans/2026-07-23-xp-level-character-system.md` · 인수인계 `docs/superpowers/HANDOFF-2026-07-23-xp-system.md`.
+- **문서**: 설계 `docs/superpowers/specs/2026-07-23-xp-level-character-system-design.md` · 계획 `docs/superpowers/plans/archive/2026-07-23-xp-level-character-system.md` · 인수인계 `docs/superpowers/HANDOFF-2026-07-23-xp-system.md`.
 - **배포 완료 (2026-07-23)**: `feat/xp-level-character-system` → main **fast-forward 병합**(11커밋, `ba79ef8`) → `pnpm dlx vercel deploy --prod --yes` → `gnd-oiutfai04-gnd4.vercel.app` ● Ready(target production). `/home`·`/profile`·`/record`·`/feed` 전부 **HTTP 200**, `char-1.png` 200(**248,857B** = 최적화본이 실제로 서빙됨).
 - **번들 실검증(교훈 9 절차)**: 배포된 청크에서 `7단계 캐릭터 진화`·`판을짜개`·`성장 타임라인`·`준비 중`·`XP 획득 방법` 전부 확인. 홈 카드는 `` `오늘 운동하면 최대 ${MAX_DAILY_WORKOUT_XP_NOW} XP` `` 로 상수 참조하며, **옛 하드코딩 "최대 180 XP"는 0건**.
 - **실기기 검수에서 잡힌 것 1건 (`ba79ef8`)**: "7단계 안내 ›"가 캐러셀로 스크롤만 해서, 캐러셀이 이미 화면에 보이는 위치라 **아무 동작도 하지 않았다**(계획서 지시대로 만든 결과). 라벨이 약속하는 설명이 실제로 없었으므로 `StageGuideSheet`(7단계 전체 · 캐릭터 · 레벨구간 · 상태설명 · 해금 XP · 남은 XP)를 만들고, 진입점 3개(현재단계 "7단계 안내 ›" · 캐러셀 헤더 `?` · 캐러셀 타일 — 뒤 둘도 눌러도 무반응이었다)를 여기에 연결했다.
@@ -1685,11 +1685,11 @@ XP 시스템 배포 직후 사용자 실사용에서 나온 이슈 3건을 고�
 - **검수 방식**: Vercel **프리뷰 배포**(`target: null`, Production 무영향)로 실기기 확인 후 배포했다. Preview 환경에 공개 키 2개(`NEXT_PUBLIC_SUPABASE_URL`·`ANON_KEY`)만 넣었고 서비스 롤 키는 넣지 않았다. 프리뷰는 Vercel SSO로 보호되므로 계정 로그인 후 접근한다.
 - **알려진 것**: 성장 타임라인에 **날짜는 없다** — 0022에 레벨 이력 테이블이 없어 추정 날짜를 지어내지 않았다. 레벨·누적 XP·상태만 보여준다.
 - **배포 후 폰 확인 잔여**: 푸시 알림·아침 브리핑 크론은 프리뷰에서 검증하지 않았다(VAPID·CRON_SECRET을 Preview에 안 넣음). **운영 주소에서** 기존대로 동작하는지 한 번 봐야 한다 — 이번 변경이 건드린 영역은 아니다.
-- **다음**: `docs/superpowers/plans/2026-07-23-plan-completion-xp.md`(0023 계획 완료 +20). 착수 시 `MAX_DAILY_WORKOUT_XP_NOW`를 **160 → 180**으로 올리는 것도 함께.
+- **다음**: `docs/superpowers/plans/archive/2026-07-23-plan-completion-xp.md`(0023 계획 완료 +20). 착수 시 `MAX_DAILY_WORKOUT_XP_NOW`를 **160 → 180**으로 올리는 것도 함께.
 
 ## ✅ 2026-07-21 — 기록 갱신을 종목별 판정으로 교체
 
-- **문서**: 설계 `docs/superpowers/specs/2026-07-21-per-exercise-record-beaten-design.md` · 계획 `docs/superpowers/plans/2026-07-21-per-exercise-record-beaten.md`.
+- **문서**: 설계 `docs/superpowers/specs/2026-07-21-per-exercise-record-beaten-design.md` · 계획 `docs/superpowers/plans/archive/2026-07-21-per-exercise-record-beaten.md`.
 - **왜 바꿨나**: 세션 총합 비교는 ①종목 구성이 하나만 달라도 판정 자체를 안 하고 ②종목을 빼면 유리해지는 악용 경로가 있었으며 ③"볼륨 +300kg"이 어느 종목인지 알 수 없었다.
 - **새 규칙**: 종목마다 **그 종목의 직전 기록**(최근 20세션, 타바타·당일 세션 제외)과 비교. 문구는 실제로 변한 항목으로 쓴다 — 세트↑ → "N세트 더", 무게↑ → "Nkg 더 무겁게", 횟수↑ → "N회 더". 조사(을/를)는 받침으로 고른다.
 - **알림**: 세션당 **1건**으로 묶는다. 대표는 개선율 최대 종목, 나머지는 "외 N종목 갱신". **개선폭 문턱 없음**(사용자 확정 — 1회만 더 해도 발송).
@@ -1702,7 +1702,7 @@ XP 시스템 배포 직후 사용자 실사용에서 나온 이슈 3건을 고�
 
 ## ✅ 2026-07-21 — 비프음 2배 + 칭찬 알림 + 배지 시스템 (0020 적용 ✅, 운영 배포 ✅)
 
-- **문서**: 설계 `docs/superpowers/specs/2026-07-21-beep-boost-praise-badges-design.md` · 계획 `docs/superpowers/plans/2026-07-21-beep-boost-praise-badges.md`. 브랜치 `feat/beep-badges`(main 미병합).
+- **문서**: 설계 `docs/superpowers/specs/2026-07-21-beep-boost-praise-badges-design.md` · 계획 `docs/superpowers/plans/archive/2026-07-21-beep-boost-praise-badges.md`. 브랜치 `feat/beep-badges`(main 미병합).
 - **비프음 2배** (`9e9d1f2`): `BEEP_GAIN` 0.25 → **0.5**. 음악에 여전히 묻힌다는 사용자 신고. 사인파 단일 오실레이터라 0.5에서도 클리핑 없음(호출 간격 1초 > 최장 비프 0.35초라 중첩도 없음).
 - **판정 범위 확대** (`c618bd6`·`ab56dea`·`75e6d84`): 복사 예정표뿐 아니라 **종목 이름 집합이 똑같은 내 직전 완료 세션**과 자동 비교. `findComparableSession` TDD 10케이스(집합 일치·순서 무관·최근 우선·동점은 먼저 만난 것·타바타 제외·자기 자신 제외). 타바타는 세트 실적이 0이라 후보가 되면 정상 후보를 가리므로 뺀다. 복사 원본(`sourceSessionId`)이 있으면 그쪽 우선 — 기존 동작 보존.
 - **칭찬 CTA** (0020): 크루 알림이 `🏅 기록 갱신! 칭찬해주세요` / `…님이 지난 기록을 넘었어요 — {문구}. 칭찬 한마디 남겨주세요! 👏`.
@@ -1725,21 +1725,21 @@ XP 시스템 배포 직후 사용자 실사용에서 나온 이슈 3건을 고�
 
 - **전문가 평가·강화 패스 (`e80a04a` + 최종 배포 `gnd-kajhy44t1`)**: 배포 전 3축 평가(보안 96 · 코드/테스트 94 · UX/운영 95 → 종합 95/100) 후 보완 — ①비프 창·길이 상수화 ②CRON_SECRET 타이밍 안전 비교(sha256+timingSafeEqual, 운영에서 유효 200/무효 401 검증) ③`src/lib/supabase/admin.ts`에 `server-only` 가드(클라 import 시 빌드 실패) ④lint 경고 0 달성. 남은 백로그: record/page.tsx(823줄) 분할, 오프라인 캐시(P1).
 - **프로덕션 데이터 전체 초기화 (2026-07-19, 사용자 승인)**: 테스트 잔여물 전부 삭제 — groups 39 · auth 익명 유저 112 · workout-images 파일 44. 16개 테이블+auth 전부 0 검증, 운동 카탈로그 77종 유지. 리셋 후 신규 익명 가입·온보딩 정상 확인(확인용 계정도 삭제, 최종 0명). **크루 온보딩 대기 상태.** 순서 주의: groups 먼저(owner_id FK 비cascade) → auth 유저(cascade) → storage.
-- **운동 순서 이동 완료 (2026-07-19, `1223059`~`6b44b21` + 배포)**: 설계 `docs/superpowers/specs/2026-07-19-exercise-reorder-design.md` · 계획 `docs/superpowers/plans/2026-07-19-exercise-reorder.md`. 운동 카드 제목 0.5초 길게 누르기 → "운동 순서 이동" 바텀시트(부위|이름 + 🗑 + ≡ 드래그 핸들, 완료 세트 있으면 삭제 확인). `lib/domain/reorder.ts` moveItem TDD 9케이스 + `hooks/use-long-press.ts` TDD 7케이스(10px 이동·조기해제 취소). draft 배열만 재배열 — 세트 기록·휴식 타이머는 운동별 uuid 키라 무영향, localStorage·완료 저장 순서 자동 반영. 검증: 전체 267/267·typecheck·lint 0·build, 실기기(준비/운동 중 드래그·새로고침 유지·🗑) 확인 후 운영 배포 200. 와이파이 IP .104→.112 재변동(allowedDevOrigins에 둘 다 등록됨).
+- **운동 순서 이동 완료 (2026-07-19, `1223059`~`6b44b21` + 배포)**: 설계 `docs/superpowers/specs/2026-07-19-exercise-reorder-design.md` · 계획 `docs/superpowers/plans/archive/2026-07-19-exercise-reorder.md`. 운동 카드 제목 0.5초 길게 누르기 → "운동 순서 이동" 바텀시트(부위|이름 + 🗑 + ≡ 드래그 핸들, 완료 세트 있으면 삭제 확인). `lib/domain/reorder.ts` moveItem TDD 9케이스 + `hooks/use-long-press.ts` TDD 7케이스(10px 이동·조기해제 취소). draft 배열만 재배열 — 세트 기록·휴식 타이머는 운동별 uuid 키라 무영향, localStorage·완료 저장 순서 자동 반영. 검증: 전체 267/267·typecheck·lint 0·build, 실기기(준비/운동 중 드래그·새로고침 유지·🗑) 확인 후 운영 배포 200. 와이파이 IP .104→.112 재변동(allowedDevOrigins에 둘 다 등록됨).
 - **새 운동 계획 짜기 완료 (2026-07-19, `33bf4b5` + 배포)**: 설계 `docs/superpowers/specs/2026-07-19-new-workout-plan-design.md`. 달력 오늘 이후 날짜 → "➕ 새 운동 계획 만들기" → 기록 탭과 같은 피커(검색·직접 만들기·지난 기록 탭=복사 파이프라인 재사용)로 예정표 생성. 0015가 source null을 이미 허용해 **마이그레이션 불필요**. `newPlanExercises` TDD 3케이스.
 - **🏅 기록 갱신 보상 완료 (2026-07-19, `7c65128`~`2278918` + 0018 + 배포)**: 설계 `docs/superpowers/specs/2026-07-19-record-beaten-design.md`. 복사 예정표 운동 완료 시 원본 세션과 유형별 합계 비교(웨이트 볼륨→맨몸 횟수→맨몸 시간→거리→유산소 시간, **원본에 실적 있던 지표만**) → 초과 시 완료 화면 축하 + 피드/달력 🏅 뱃지 + 크루 알림·푸시. draft v4(`sourceSessionId`), `lib/domain/record-beaten.ts` TDD 11케이스, **0018**(record_note 컬럼·notifications type에 record_beaten 추가·mark_record_beaten definer RPC) 적용 ✅ — `scripts/record-beaten-test.mjs` **8/8**(위조·재마킹·빈 문구 차단, 크루 알림 생성, 본인 제외). 판정/알림 실패는 완료 흐름을 막지 않음. 배포 직전 전체 게이트: unit 283/283 · RLS 107 · 예정표 15 · 사진 8 · 브리핑 8 · 푸시 8 · 실기기 확인. 후속 백로그(B안): 챌린지 "기록 갱신왕" 부문.
 - **🔥 타바타 모드 완료 (2026-07-19~20, `e132f32`~`105b7f0` + 0019 + 배포)**: 설계 `2026-07-19-tabata-mode-design.md`·`2026-07-19-tabata-courses-design.md` · 계획 `2026-07-19-tabata-courses.md`. 사용자 제작 음원(권리 확인) 내장 — 기록 탭 🔥 타바타 → **4·8·16분 코스**(8·16분은 ffmpeg 이어붙임, 원본은 4:10으로 트림해 종료 축하 구간 제거) → 운동 4개 선택 → 음원 재생(HTML5 audio라 무음 스위치 무시, Wake Lock) → **음원 종료 시 자동 완료 기록**(구성 운동 4개 그대로) → 인증샷. **0019** 적용 ✅: `workout_sessions.tabata_minutes`(4|8|16, 컬럼 grant) + goal_type `tabata_count`. 피드·달력 "🔥 타바타 N분" 배지, 챌린지 맨몸 카테고리에 "타바타 횟수"(`tabataCount` 집계, fold TDD). 검증: unit 289/289 · 실 DB 6종 · 배포 200.
 - **rls-test 잔여물 사고 (2026-07-20, `71ba64a`) — 교훈 13**: rls-test에 픽스처 정리가 없어 실행마다 계정 2개+크루가 누적돼 왔고(리셋 전 112개의 정체), 0017 닉네임 유니크 이후 잔여 "유저A"가 다음 실행과 충돌해 107 중 31개 연쇄 실패. 수정 = 닉네임 실행별 고유화 + 종료 시 크루→계정 순 자동 정리(owner FK 비cascade 주의) + 잔여물 전량 삭제. **실 DB 픽스처 스크립트는 반드시 정리까지 책임져야 한다.**
 - **크루 사용 안내서**: `docs/GND-크루-사용안내.md` — 설치 먼저 → 홈 화면 앱에서 1회 가입(초대 코드 입력) → 푸시 켜기 → 사용법 → 계정 유실 주의 순 (웹 푸시·중복 가입 방지 반영, 2026-07-19 갱신).
-- **웹 푸시 알림 완료 (2026-07-19, `70b7837`~`2d619ed`)**: 설계 `docs/superpowers/specs/2026-07-19-web-push-design.md` · 계획 `docs/superpowers/plans/2026-07-19-web-push.md`. 알림함에 저장되는 모든 알림을 잠금화면 푸시로 발송 — **0016**(push_subscriptions 본인 RLS + notifications.pushed_at + pg_net 트리거→`/api/push/notify`) 적용 ✅, 발송 API는 service_role 재조회·pushed_at 원자 선점·만료 구독(404/410) 자동 삭제, 도메인 TDD 16케이스(payload url 매핑·10분 창), sw.js push/notificationclick 핸들러, `lib/push.ts` 구독 헬퍼 + 프로필 "기기 푸시 알림" 토글 + 홈 1회 안내 카드. VAPID 3종 env는 `.env.local`+Vercel Production(Bash printf). **검증 실측**: unit 251/251 · push RLS 8/8(`scripts/push-rls-test.mjs`) · 발송 API invalid_id/not_found/already_pushed 경로 · **실기기 잠금화면 수신 확인**(테스트 알림 → pushed_at 마킹 → 폰 도착). 제약: 아이폰은 iOS 16.4+·홈 화면 설치 앱에서만.
+- **웹 푸시 알림 완료 (2026-07-19, `70b7837`~`2d619ed`)**: 설계 `docs/superpowers/specs/2026-07-19-web-push-design.md` · 계획 `docs/superpowers/plans/archive/2026-07-19-web-push.md`. 알림함에 저장되는 모든 알림을 잠금화면 푸시로 발송 — **0016**(push_subscriptions 본인 RLS + notifications.pushed_at + pg_net 트리거→`/api/push/notify`) 적용 ✅, 발송 API는 service_role 재조회·pushed_at 원자 선점·만료 구독(404/410) 자동 삭제, 도메인 TDD 16케이스(payload url 매핑·10분 창), sw.js push/notificationclick 핸들러, `lib/push.ts` 구독 헬퍼 + 프로필 "기기 푸시 알림" 토글 + 홈 1회 안내 카드. VAPID 3종 env는 `.env.local`+Vercel Production(Bash printf). **검증 실측**: unit 251/251 · push RLS 8/8(`scripts/push-rls-test.mjs`) · 발송 API invalid_id/not_found/already_pushed 경로 · **실기기 잠금화면 수신 확인**(테스트 알림 → pushed_at 마킹 → 폰 도착). 제약: 아이폰은 iOS 16.4+·홈 화면 설치 앱에서만.
 - **2차 정리 (2026-07-19 오후)**: "다시 열면 처음부터" 신고 → 접속 이력 분석 결과 원인 = 익명 계정의 브라우저 저장소 분리(카톡 인앱/사파리/홈 화면 앱이 각각 별개 계정). 스칼레또는 1차 정리에서 실사용 쪽(13:44)이 삭제돼 닉네임이 옛 계정에 잠긴 상태였음 → 사용자 승인 후 스칼레또 옛 계정·낭만송곳니(크루 미합류 중복)·온보딩 미완 유령 4개 삭제. 잔존: 오뎅끼데스까·송곳니 2계정(전부 크루O). 스칼레또는 홈 화면 앱에서 재가입+초대 코드 재합류. **운영 원칙: 크루는 항상 홈 화면 앱으로만 접속.** 근본 해결(실계정 로그인)은 백로그.
 - **중복 가입 정리 + 방지 (2026-07-19)**: 사파리↔홈 화면 앱 저장소 분리로 오뎅끼데스까·스칼레또 각 2계정 발생 → 사용자 확인 후 중복 2계정·빈 불꽃 크루 삭제(잔존: 리얼GND + 실사용 2계정). **0017**(닉네임 lower(trim) 유니크) 적용 ✅ — 중복 닉네임 재가입 409 차단 실검증, `upsertMyProfile`이 23505를 친절한 안내로 변환. 안내서도 "설치 먼저 → 앱에서 1회 가입" 순서로 재작성해 원인 차단.
 
-**관련 문서**: 설계 `docs/superpowers/specs/2026-07-19-rest-countdown-beeps-design.md` · 계획 `docs/superpowers/plans/2026-07-19-five-second-rest-beeps-and-deploy.md`(체크박스 완료 처리됨).
+**관련 문서**: 설계 `docs/superpowers/specs/2026-07-19-rest-countdown-beeps-design.md` · 계획 `docs/superpowers/plans/archive/2026-07-19-five-second-rest-beeps-and-deploy.md`(체크박스 완료 처리됨).
 
 ### ✅ 운영 배포 완료 (2026-07-19) — 챌린지 사진 인증 필수 + 레벨 시스템
 
-- **문서**: 설계 `docs/superpowers/specs/2026-07-18-challenge-photo-levels-design.md` · 계획 `docs/superpowers/plans/2026-07-18-challenge-photo-levels.md` (사용자 승인 완료, 커밋 `a727c70`·`6046890`).
+- **문서**: 설계 `docs/superpowers/specs/2026-07-18-challenge-photo-levels-design.md` · 계획 `docs/superpowers/plans/archive/2026-07-18-challenge-photo-levels.md` (사용자 승인 완료, 커밋 `a727c70`·`6046890`).
 - **요구사항 요약**: ①새로 만드는 챌린지는 사진 인증한 운동만 목표·참여율·레벨에 집계(기존 챌린지는 소급 없음, DB `challenges.photo_required` 컬럼) ②챌린지 기간 전용 불독 5단계 레벨(Lv.1 잠만보 불독~Lv.5 개노답 탈출) — 시작일 기준 7일 블록에 5일+ 운동하면 +1(블록당 1회), 운동일 공백 5일(스트릭 소멸 규칙 재사용)마다 -1, 챌린지 종료 시 시상대에 최종 레벨 공개.
 - **구현 완료**: Task 1 레벨 도메인(`5a7aeff`) · Task 2 운동일 배열(`4af8d12`) · Task 3 사진 필수 집계(`4b7f5b4`) · Task 4 DB 보안(`872ddcc`) · Task 5 안내 UI(`a659533`) · Task 6 레벨 UI(`d3d958b`). 각 단계 리뷰 완료.
 - **DB 완료**: `0014_challenge_photo_required.sql` 사용자가 SQL Editor에 적용. 실제 Storage 파일이 없는 가짜 인증 행과 연결 사진 삭제 우회를 차단하며, 새 챌린지는 `photo_required=true`만 생성 가능.
@@ -1748,7 +1748,7 @@ XP 시스템 배포 직후 사용자 실사용에서 나온 이슈 3건을 고�
 
 ### ✅ 운영 배포 완료 (2026-07-19) — 달력 운동 예정표 계정 동기화
 
-- **문서**: 설계 `docs/superpowers/specs/2026-07-18-calendar-workout-plans-design.md` · 계획 `docs/superpowers/plans/2026-07-18-calendar-workout-plans.md`.
+- **문서**: 설계 `docs/superpowers/specs/2026-07-18-calendar-workout-plans-design.md` · 계획 `docs/superpowers/plans/archive/2026-07-18-calendar-workout-plans.md`.
 - **구현 완료**: 과거 운동 `복사` → 오늘 이후 날짜 선택 → 날짜별 예정표 저장 → 달력 `예정` 표시 → 당일 `운동 준비하기` → 실제 완료 후 예정표 제거. 미래 예정표는 날짜 이동·삭제 가능.
 - **통계 안전**: 예정표는 완료 세션과 별도 `workout_plans`에 저장하므로 실제 완료 전에는 월간 통계·챌린지·레벨에 포함되지 않는다.
 - **DB 완료**: `0015_workout_plans.sql` 적용 완료. 본인만 CRUD 가능하고, 타인 세션 원본·타인 수정/삭제/RPC 이동·과거 날짜·확인 없는 교체를 차단한다.
@@ -1805,7 +1805,7 @@ XP 시스템 배포 직후 사용자 실사용에서 나온 이슈 3건을 고�
 
 ### 2026-07-18 후반 산출물 (`cdb89c1`~`a9cd612` + 프로덕션 재배포)
 
-- **설계·계획**: `docs/superpowers/specs/2026-07-18-briefing-cron-notification-settings-design.md` · `docs/superpowers/plans/2026-07-18-briefing-cron-notification-settings.md` (9개 태스크, TDD·커밋 분리·0013 게이트).
+- **설계·계획**: `docs/superpowers/specs/2026-07-18-briefing-cron-notification-settings-design.md` · `docs/superpowers/plans/archive/2026-07-18-briefing-cron-notification-settings.md` (9개 태스크, TDD·커밋 분리·0013 게이트).
 - **아침 브리핑 크론** (`ca37e98`~`f06c5f6`, 0013): `lib/domain/time.ts` `hourOfDay`(tz 기준 시각) + `lib/domain/briefing.ts` 발송 판정 TDD 16케이스(스펙 §3). 스트릭 카피는 `lib/domain/streak-messages.ts`로 공용 추출(`bbf407b`, streak-card와 브리핑이 재사용). **0013_briefing_dedupe_ranks_setting.sql**(적용 완료 ✅): notifications `dedupe_key` unique(하루 1건 멱등 upsert) + finalize_challenge가 ranks 알림 설정 존중. `src/app/api/briefing/route.ts`(GET, CRON_SECRET Bearer·hour 검증) + `src/lib/supabase/admin.ts`(service_role 클라, 서버 전용) + `vercel.json` crons. 알림함 브리핑 카드에 앱 아이콘 표시(`b82c3b4`).
 - **알림 설정 토글 5종** (`920ed06`·`6f54f09`): 프로필 탭 — morning_brief(아침 브리핑)·cheers(응원)·pokes(찌르기)·ranks(챌린지 순위)·record_views(성과 열람). `lib/notification-settings.ts`, **행 없음=전부 on** 기본(0011 관례), 부분 upsert 저장, 토글 in-flight 가드·로드 실패 표시(리뷰 반영).
 - **피드 사진 인증 모아보기 필터** (`8e52e91`·`a9cd612`): 피드 상단 칩 — `workout_images` inner join으로 사진 인증 세션만, 페이지네이션·날짜 헤더 유지, 필터 전환 중 스테일 페이지 가드·칩 `aria-pressed`(리뷰 반영).
@@ -1823,7 +1823,7 @@ XP 시스템 배포 직후 사용자 실사용에서 나온 이슈 3건을 고�
 
 ### 꾸준왕 열람권 + 홈 위젯 산출물 (2026-07-17, `5dd688c`~`59e62f9`)
 
-- **설계·계획**: `docs/superpowers/specs/2026-07-17-king-viewing-pass-home-widgets-design.md` · `docs/superpowers/plans/2026-07-17-king-viewing-pass-home-widgets.md`. 핵심 결정: 꾸준왕=고정 주5일(운동한 '날' 기준, 하루 2회=1일) → 5일째 완료 시각부터 24h 유효·1회·주당 1장 열람권 → 크루원 1명 성과+진행중 챌린지 달성률·순위(Phase 5 🔒의 열쇠) 열람 → 👀 알림. 목업의 "꾸준왕 성과를 누구나 열람"을 사용자 결정으로 뒤집음.
+- **설계·계획**: `docs/superpowers/specs/2026-07-17-king-viewing-pass-home-widgets-design.md` · `docs/superpowers/plans/archive/2026-07-17-king-viewing-pass-home-widgets.md`. 핵심 결정: 꾸준왕=고정 주5일(운동한 '날' 기준, 하루 2회=1일) → 5일째 완료 시각부터 24h 유효·1회·주당 1장 열람권 → 크루원 1명 성과+진행중 챌린지 달성률·순위(Phase 5 🔒의 열쇠) 열람 → 👀 알림. 목업의 "꾸준왕 성과를 누구나 열람"을 사용자 결정으로 뒤집음.
 - **0012_record_view_rpc.sql** (적용 완료 ✅): A안(파생 상태) — 열람권 테이블 없이 `view_record` RPC가 열람 순간 자격 판정(주5일·24h·미사용·크루) 후 record_views insert + notify. 직접 insert 권한·정책 회수. 에러 코드: not_eligible/pass_expired/pass_used/not_crew/self_view.
 - `lib/domain/viewing-pass.ts`(TDD 11): `weekWorkoutDays`(주간 고유 운동일·5일째 시각)·`viewingPassStatus`(progress/available/used/expired). 서버와 같은 판정을 클라에서 재현.
 - I/O: `lib/social.ts` `viewRecord`·`getMyRecordViewAts`·`getCrewPerformance`(주간 운동일·스트릭·챌린지 달성률·순위), `lib/challenge.ts` `getActiveChallengeRanking`.
@@ -1836,7 +1836,7 @@ XP 시스템 배포 직후 사용자 실사용에서 나온 이슈 3건을 고�
 
 ### Phase 5.2~5.3 산출물 (2026-07-17, 커밋 `63e5c27`~`88d959b` + `b499510`)
 
-- **챌린지 목표 카테고리 우선 개편 (5.2)**: goal_type 7종 + 레거시 volume(`weight_reps·weight_days·cardio_distance·cardio_time·bodyweight_reps·bodyweight_time·bodyweight_days`). 맨몸은 `measure`(reps/time)로 횟수형/시간형 구분(매달리기·플랭크·사이드플랭크·핸드스탠드=time), `*_days`는 하루 N부위/N종목+ 조건(`qualifier`, 0007). 설계·계획: `docs/superpowers/specs/2026-07-17-challenge-category-goals-design.md`, `docs/superpowers/plans/2026-07-17-challenge-category-goals.md`. 카테고리 코드는 0007(body_part·qualifier)+0008(measure·goal_type)을 모두 쿼리 — 하나라도 미적용이면 챌린지 화면 400.
+- **챌린지 목표 카테고리 우선 개편 (5.2)**: goal_type 7종 + 레거시 volume(`weight_reps·weight_days·cardio_distance·cardio_time·bodyweight_reps·bodyweight_time·bodyweight_days`). 맨몸은 `measure`(reps/time)로 횟수형/시간형 구분(매달리기·플랭크·사이드플랭크·핸드스탠드=time), `*_days`는 하루 N부위/N종목+ 조건(`qualifier`, 0007). 설계·계획: `docs/superpowers/specs/2026-07-17-challenge-category-goals-design.md`, `docs/superpowers/plans/archive/2026-07-17-challenge-category-goals.md`. 카테고리 코드는 0007(body_part·qualifier)+0008(measure·goal_type)을 모두 쿼리 — 하나라도 미적용이면 챌린지 화면 400.
 - **burnfit 카탈로그 40종 시드 (5.3, 0009)**: https://burnfit.io/라이브러리/ 기반, 기존 시드 중복 제외, `on conflict do nothing` 재실행 안전.
 - **맨몸 루틴 6종 시드 + 맨몸 칩 (0010)**: 점프 스쿼트·마운틴 클라이머·슈퍼맨 로우·인치웜 푸시업·라잉 Y 레이즈·타이슨 푸시업(전부 bodyweight·reps). `exercise-picker.tsx`에 "맨몸" 칩 — body_part가 아닌 `exercise_type==='bodyweight'` 모달리티 필터. 루틴 템플릿(종목 묶음) 기능은 별도 주제로 보류 — 현재는 "지난 운동 복사"로 대체.
 - **홈 크루 최근 인증사진 (5.3)**: `getLatestCrewWorkoutWithPhoto(groupId)`(signed URL 1h) + `crew-latest-workout.tsx` 카드, 홈 "최근 친구 활동" 자리 배치. 목업 홈의 스트릭 카드·주간 stat·그룹 공동목표·오늘 그룹 현황·꾸준왕은 Phase 6에서(실데이터 필요).
@@ -1953,7 +1953,7 @@ Storage 버킷도 SQL로 생성 가능했음(`insert into storage.buckets`, 0005
 
 **설계·계획 완료 (2026-07-17):**
 - 스펙: `docs/superpowers/specs/2026-07-17-phase6-social-design.md` (핵심 결정: 알림=definer RPC+트리거, 응원 스팸제한=send_cheer RPC, Realtime=notifications 단일 구독, 진행중 카드=workout_events)
-- 계획: `docs/superpowers/plans/2026-07-17-phase6-social.md` (Task 1 RLS 테스트 → 2 도메인 TDD → 3 I/O → 4 피드 → 5 응원·배너 → 6 찌르기·알림함 → 7 검증)
+- 계획: `docs/superpowers/plans/archive/2026-07-17-phase6-social.md` (Task 1 RLS 테스트 → 2 도메인 TDD → 3 I/O → 4 피드 → 5 응원·배너 → 6 찌르기·알림함 → 7 검증)
 - `supabase/migrations/0011_social.sql` — 커밋·DB 적용 완료 ✅ (당시엔 미적용 상태로 설계 후 사용자 SQL Editor 적용, 0007·0009 전례).
 - 꾸준왕 열람 UI·홈 위젯은 후속 계획(record_views 테이블만 0011에 선반영).
 
