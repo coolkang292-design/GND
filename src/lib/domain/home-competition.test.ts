@@ -4,6 +4,7 @@ import {
   personalComparisonText,
   personalTodayAction,
   resolvePersonalTodayStatus,
+  TODAY_STATUS_LABEL,
 } from "./home-competition";
 
 describe("home competition rules", () => {
@@ -11,6 +12,16 @@ describe("home competition rules", () => {
     expect(resolvePersonalTodayStatus(true, true)).toBe("done");
     expect(resolvePersonalTodayStatus(false, true)).toBe("active");
     expect(resolvePersonalTodayStatus(false, false)).toBe("idle");
+  });
+
+  /**
+   * ⚠️ 문구를 **문자열 그대로** 단언한다. `TODAY_STATUS_LABEL[x]`로 기대값을 만들면
+   * 빈 문자열을 돌려줘도 통과한다 — 화면에서 상태가 사라진 것을 잡지 못한다.
+   */
+  it("오늘 상태 문구는 한 곳에서 온다", () => {
+    expect(TODAY_STATUS_LABEL.done).toBe("오늘 완료");
+    expect(TODAY_STATUS_LABEL.active).toBe("운동 중");
+    expect(TODAY_STATUS_LABEL.idle).toBe("운동 전");
   });
 
   it("크루 완료 인원은 크루 행만 센다", () => {

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   buildFriendRows,
-  buildMyRow,
   canExpandFriendRows,
   foldFriendSessions,
   formatTotalMinutes,
@@ -512,96 +511,13 @@ describe("workedOutToday — 콕 활성 조건", () => {
  * 정렬·3명 미리보기·`pokeableFriendCount`가 전부 나를 한 명으로 세게 되고,
  * 그러면 "친구 N명"이 틀리고 접힌 목록에서 친구 하나가 밀려난다.
  */
-describe("buildMyRow — 내 행은 친구와 같은 자로 재되, 섞이지 않는다", () => {
-  const ME = { id: "me", nickname: "나야", avatarUrl: null, totalXp: 640 };
-
-  function myRowOf(
-    sessions: FriendSessionRow[] = [],
-    badges?: [number, string[]],
-    active = false,
-  ): FriendRow {
-    return buildMyRow({
-      me: ME,
-      activity: foldFriendSessions(sessions, NOW, KST),
-      badges: new Map(
-        badges ? [["me", { total: badges[0], showcaseKeys: badges[1] }]] : [],
-      ),
-      activeUserIds: new Set(active ? ["me"] : []),
-    });
-  }
-
-  it("isMe가 true다 — 화면이 콕 버튼을 뺄 근거", () => {
-    expect(myRowOf().isMe).toBe(true);
-  });
-
-  it("친구 행은 isMe가 false다", () => {
-    const rows = buildFriendRows({
-      crew: [{ id: "u1", nickname: "친구", avatarUrl: null, totalXp: 0 }],
-      activity: new Map(),
-      badges: new Map(),
-      activeUserIds: new Set(),
-    });
-    expect(rows[0].isMe).toBe(false);
-  });
-
-  /**
-   * ⚠️ 레벨은 `total_xp`로 **다시 계산**한다 — 친구 행과 같은 함수다.
-   * 캐시 컬럼(`user_progress.current_level`)을 쓰면 같은 사람이 화면마다 다른
-   * 레벨로 보인다(인수인계서 §5.4). 640 XP의 진짜 레벨은 **4**다.
-   */
-  it("레벨을 total_xp로 계산한다 — 친구 행과 같은 규칙", () => {
-    expect(myRowOf().level).toBe(4);
-    expect(myRowOf().characterPath).toContain("char-");
-  });
-
-  it("내 활동도 친구와 같은 집계 함수를 지난다", () => {
-    const row = myRowOf([
-      session("me", "2026-08-07T02:00:00Z", 30),
-      session("me", "2026-08-06T02:00:00Z", 20),
-    ]);
-    expect(row.workoutCount).toBe(2);
-    expect(row.totalMinutes).toBe(50);
-    expect(row.workedOutToday).toBe(true);
-    expect(row.status).toBe("done");
-  });
-
-  it("배지도 친구와 같은 자리에서 온다", () => {
-    const row = myRowOf([], [6, ["streak_5", "first_workout"]]);
-    expect(row.badgeCount).toBe(6);
-    expect(row.badgeKeys).toEqual(["streak_5", "first_workout"]);
-  });
-
-  /**
-   * ⚠️ `null`을 `0`으로 접지 마라 — "아직 안 왔다"와 "정말 0개"는 다른 화면을 그린다
-   * (인수인계서 §5.6). 내 행도 같은 규칙을 따른다.
-   */
-  it("배지가 아직 안 왔으면 null이다 — 0개와 구별한다", () => {
-    expect(myRowOf().badgeCount).toBeNull();
-  });
-
-  it("내가 운동 중이면 active다", () => {
-    expect(myRowOf([], undefined, true).status).toBe("active");
-  });
-
-  /**
-   * ⚠️ 이 셋이 이 설계의 핵심이다. 내 행을 친구 배열에 넣으면 전부 깨진다.
-   */
-  it("친구 목록·미리보기·콕 대상 수 어디에도 나를 세지 않는다", () => {
-    const friends = buildFriendRows({
-      crew: [
-        { id: "u1", nickname: "친구하나", avatarUrl: null, totalXp: 0 },
-        { id: "u2", nickname: "친구둘", avatarUrl: null, totalXp: 0 },
-      ],
-      activity: new Map(),
-      badges: new Map(),
-      activeUserIds: new Set(),
-    });
-    // 크루가 정확히 2명이면 '전체 보기'가 뜨지 않는다 — 내 행이 섞였다면 3이 되어 떴다.
-    expect(friends).toHaveLength(2);
-    expect(canExpandFriendRows(friends)).toBe(false);
-    expect(pokeableFriendCount(friends, new Set())).toBe(2);
-  });
-});
+/**
+ * ⚠️ **`buildMyRow`와 `isMe`는 2026-08-21에 사라졌다.** 여기 있던 describe도 같이
+ * 지웠다 — 내 정보가 `PersonalTodayCard`로 분리되면서 크루 목록에는 크루만 온다
+ * (설계 §5). 내 행을 다시 이 목록에 넣으려거든 먼저 설계를 읽어라: 크루 완료
+ * 요약이 나를 세게 되고, 접힌 2자리 중 하나를 내가 차지해 크루가 밀려난다.
+ * 내 행의 지표 검증은 `components/home/personal-today-card.test.tsx`에 있다.
+ */
 
 describe("formatTotalMinutes — 누적이라 값이 크다", () => {
   it("60분 미만은 분으로 적는다", () => {

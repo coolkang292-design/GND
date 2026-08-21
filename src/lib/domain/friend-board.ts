@@ -91,14 +91,6 @@ export type FriendRow = FriendActivity & {
    */
   badgeKeys: string[];
   status: FriendStatus;
-  /**
-   * 이 행이 **나**인가 (2026-08-07 사용자 지시).
-   *
-   * 화면은 이 값으로 **콕 버튼을 뺀다** — 자기 자신은 찌를 수 없다. 서버
-   * `poke_user`도 같은 이유로 막지만, 누를 수 없는 버튼을 그려 놓고 에러 토스트로
-   * 알리는 것은 화면이 거짓말을 하는 것이다.
-   */
-  isMe: boolean;
 };
 
 /** 행에 그릴 배지 썸네일 수. 나머지는 "+N"으로 접는다. */
@@ -175,38 +167,18 @@ export function buildFriendRows(input: {
   badges: Map<string, FriendBadges>;
   activeUserIds: Set<string>;
 }): FriendRow[] {
-  const rows = input.crew.map((member) => assembleRow(member, input, false));
-  return sortFriendRows(rows);
+  return sortFriendRows(input.crew.map((member) => assembleRow(member, input)));
 }
 
 /**
- * 내 행 (2026-08-07 사용자 지시 — "친구리스트 최상단에 각 유저 본인의 정보도 표시").
+ * 행 조립.
  *
- * ⚠️ **친구 배열에 섞지 않는다.** `buildFriendRows`에 나를 넣으면 세 가지가 한꺼번에
- * 틀어진다 — 헤딩의 `친구 N명`이 나를 한 명으로 세고, 접힌 3행 중 한 자리를 내가
- * 차지해 친구 하나가 밀려나며, `pokeableFriendCount`가 찌를 수 없는 나를 센다.
- * 그래서 별도 함수로 만들어 화면이 목록 **위에 고정**해 그린다(정렬 대상이 아니다).
- *
- * ⚠️ 다만 **재는 자는 친구와 같아야 한다** — 같은 `getLevelProgress`, 같은
- * `foldFriendSessions`, 같은 배지 정의. 내 숫자만 다른 경로로 만들면 같은 화면에서
- * 나와 친구를 비교할 수 없다. 세션 질의도 친구와 똑같이 `visibility='group'`으로
- * 좁혀서 내 비공개 세션이 내 행만 부풀리지 않게 한다(`lib/friends.ts` 참조).
- *
- * ⚠️ 2026-08-07 오전에 사용자가 확정했던 "목록에 '나'를 넣지 않는다"를 **사용자가
- * 직접 뒤집었다**(인수인계서 §7). 그때의 근거는 "순위가 없으니 비교 기준으로서의
- * 존재 이유가 사라졌다"였는데, 이번 지시는 순위가 아니라 **내 숫자를 친구와 같은
- * 화면에서 같은 자로 보는 것**이다. 임의로 되돌리지 마라.
+ * ⚠️ 2026-08-21에 `buildMyRow`와 `isMe`가 **사라졌다.** 2026-08-07~08-20에는 내 행도
+ * 이 함수를 지나 크루 목록 맨 위에 고정됐는데, 08-21 개편에서 내 정보가
+ * `PersonalTodayCard`로 분리되면서 이 목록에는 크루만 온다(설계 §5·§7.2).
+ * 내 행을 다시 여기 넣지 마라 — 크루 완료 요약(`crewTodaySummary`)이 나를 세게 되고,
+ * 접힌 2자리 중 하나를 내가 차지해 크루 한 명이 밀려난다.
  */
-export function buildMyRow(input: {
-  me: FriendCrewInput;
-  activity: Map<string, FriendActivity>;
-  badges: Map<string, FriendBadges>;
-  activeUserIds: Set<string>;
-}): FriendRow {
-  return assembleRow(input.me, input, true);
-}
-
-/** 행 조립 — 나와 친구가 **같은 함수**를 지나야 두 숫자를 같은 자로 잰 것이 된다 */
 function assembleRow(
   member: FriendCrewInput,
   source: {
@@ -214,7 +186,6 @@ function assembleRow(
     badges: Map<string, FriendBadges>;
     activeUserIds: Set<string>;
   },
-  isMe: boolean,
 ): FriendRow {
   const activity = source.activity.get(member.id) ?? EMPTY_ACTIVITY;
   const badge = source.badges.get(member.id);
@@ -234,7 +205,6 @@ function assembleRow(
       activity.workedOutToday,
       source.activeUserIds.has(member.id),
     ),
-    isMe,
   };
 }
 
