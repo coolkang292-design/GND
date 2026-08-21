@@ -353,6 +353,41 @@ describe("PersonalTodayCard — 프로필로 가는 길과 아바타", () => {
  * 고정하면 결정적이긴 하지만, 문장을 그대로 단언하면 카피를 다듬는 순간 깨진다.
  * 여기서 지키려는 것은 **단계 표식**(`소멸 D-4`)과 **잃을 숫자**가 화면에 나온다는 것뿐이다.
  */
+/**
+ * 최근 7일 점 (2026-08-21 사용자 지시로 추가).
+ *
+ * ⚠️ 이 칸은 홈 개편 때 `StreakCard`와 함께 빠졌고, 경고 배너를 되살릴 때도 사용자가
+ * **고르지 않아서** 한 번 뺐다. 지표 칸·배너 여백을 줄여 자리가 생긴 뒤 같은 날
+ * 사용자가 넣으라고 했다 — 옛 결정을 뒤집은 것이니 인수인계서 §3의 "하지 말 것"에서도
+ * 빠졌다.
+ *
+ * ⚠️ 창(오늘까지 7칸)은 **`weeklyBars`가 정한다.** 기록 화면 오늘 카드가 쓰는 그
+ * 함수다 — 여기서 다시 계산하면 같은 주가 두 화면에서 다르게 잘릴 수 있다.
+ */
+describe("PersonalTodayCard — 최근 7일 점", () => {
+  it("마지막 칸이 오늘인 요일 일곱 칸을 그린다", () => {
+    renderCard({ completedAts: [YESTERDAY] });
+    // 2026-08-15(토) ~ 08-21(금). 기준 시각이 금요일이라 마지막이 `금`이다
+    const row = screen.getByRole("img", { name: "최근 7일 중 1일 운동" });
+    expect(row.textContent).toBe("토일월화수목금");
+  });
+
+  it("오늘 운동했으면 오늘 칸까지 센다", () => {
+    renderCard({ completedAts: [YESTERDAY, TODAY], status: "done" });
+    expect(
+      screen.getByRole("img", { name: "최근 7일 중 2일 운동" }),
+    ).toBeTruthy();
+  });
+
+  /** ⚠️ 창 밖(8일 전)의 운동을 세면 점과 `연속` 칸이 서로 다른 말을 한다 */
+  it("7일 창 밖의 운동은 세지 않는다", () => {
+    renderCard({ completedAts: [LONG_AGO, YESTERDAY] });
+    expect(
+      screen.getByRole("img", { name: "최근 7일 중 1일 운동" }),
+    ).toBeTruthy();
+  });
+});
+
 describe("PersonalTodayCard — 스트릭 소멸 경고", () => {
   it("스트릭이 끊길 위험이면 소멸 경고를 띄운다", () => {
     renderCard({ completedAts: [YESTERDAY], status: "idle" });

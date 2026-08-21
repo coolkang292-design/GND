@@ -10,6 +10,7 @@ import { personalTodayAction } from "@/lib/domain/home-competition";
 import { currentStreak, streakStage, workoutDayKeys } from "@/lib/domain/streak";
 import { pickByDay, STAGE_MESSAGES } from "@/lib/domain/streak-messages";
 import { DEFAULT_TIMEZONE, dayKey } from "@/lib/domain/time";
+import { weeklyBars } from "@/lib/domain/today-status";
 import { weekWorkoutDays } from "@/lib/domain/viewing-pass";
 import { MAX_DAILY_WORKOUT_XP_NOW } from "@/lib/domain/xp";
 import type { ProgressSummary } from "@/lib/progression";
@@ -32,10 +33,11 @@ import type { ProgressSummary } from "@/lib/progression";
  * 이 카드가 커지면 크루 두 행이 375×812의 하단 탭 아래로 밀려 카드를 나눈 이유가
  * 사라진다.
  *
- * ⚠️ **2026-08-21 실측: 평소 281px, 소멸 경고가 뜨면 347px**로 목표를 17px 넘는다.
- * 넘겨도 되는 이유는 목표의 **목적**이 지켜지기 때문이다 — 그 상태에서도 크루 카드
- * 하단이 375×812에서 697px라 하단 탭(754px) **위**에 남는다(dev-테스터A 실측).
- * 여유는 57px뿐이다. 지표든 문구든 한 줄 더 얹기 전에 이 두 숫자를 다시 재라.
+ * ⚠️ **2026-08-21 실측: 평소 302px, 소멸 경고까지 뜨면 357px**로 목표를 넘는다.
+ * 같은 날 사용자가 7일 점을 넣기로 하면서 그 맞바꿈을 **알고 골랐다**. 넘겨도 되는
+ * 이유는 목표의 **목적**이 지켜지기 때문이다 — 그 상태에서도 크루 카드 하단이
+ * 375×812에서 706px라 하단 탭(754px) **위**에 남는다(dev-테스터A 실측).
+ * 여유는 48px뿐이다. 한 줄 더 얹기 전에 이 두 숫자를 다시 재라.
  */
 
 /** 오늘 상태 알약 — 크루 행과 **같은 3단계**, 문구만 넓은 자리에 맞춰 온전하다.
@@ -55,9 +57,10 @@ const STATUS_STYLE: Record<FriendStatus, { label: string; className: string }> =
  * 지표 한 칸.
  *
  * ⚠️ **세로 여백과 줄높이가 빡빡한 것은 의도다** (2026-08-21 사용자 지시 —
- * "네모 상자를 좀 줄이고 스트릭 칸도 최적화"). 이 행 아래에 소멸 경고 칸이
- * 들어오면서 카드가 347px까지 커졌고, 그 17px을 여기서 되돌렸다.
- * `py-2`·기본 줄높이로 되돌리면 카드가 다시 330px 목표를 넘는다 — 되돌리기 전에 재라.
+ * "네모 상자를 좀 줄이고 스트릭 칸도 최적화"). 이 행 아래에 7일 점과 소멸 경고가
+ * 들어오면서 카드가 커졌고, 여기서 깎은 10px이 그 자리를 냈다.
+ * `py-2`·기본 줄높이로 되돌리면 그만큼 다시 커진다 — 되돌리기 전에 아래 두 숫자를
+ * 재라(2026-08-21 실측: 평소 302px, 경고 뜰 때 357px).
  */
 const METRIC_CLASS =
   "flex flex-col items-center justify-center rounded-card-sm border border-line bg-surface-2 px-2 py-1.5 leading-tight";
@@ -187,6 +190,19 @@ export function PersonalTodayCard({
     streak > 0 && STAGE_MESSAGES[stage]
       ? pickByDay(STAGE_MESSAGES[stage], todayKey)(streak)
       : undefined;
+  /**
+   * 최근 7일 점 — **오늘까지 7칸, 마지막이 오늘**.
+   *
+   * ⚠️ 창을 여기서 다시 계산하지 않고 `weeklyBars`를 쓴다. 기록 화면 오늘 카드가
+   * 쓰는 그 함수라, 직접 세면 같은 주가 두 화면에서 다르게 잘릴 수 있다.
+   * 분(`minutes`)은 이 카드가 쓰지 않으므로 `null`을 넘긴다 — 점은 **운동 유무**만
+   * 말한다(`DayBar.done`이 분과 별개인 이유는 그 파일 주석에 있다).
+   */
+  const weekDots = weeklyBars(
+    completedAts.map((completedAt) => ({ completedAt, durationMinutes: null })),
+    todayKey,
+    tz,
+  );
   const hasGoal = weeklyGoal !== null && weeklyGoal > 0;
   const action = personalTodayAction(status, MAX_DAILY_WORKOUT_XP_NOW);
   const pct = summary
@@ -320,6 +336,41 @@ export function PersonalTodayCard({
         />
       </div>
 
+      {/* 최근 7일 점 — 옛 `StreakCard`가 갖던 것으로, 2026-08-21 사용자 지시로
+          **이 카드에** 들어왔다. 위 `연속 N일`이 숫자라면 이 줄은 그 숫자가 **어느
+          날들로** 만들어졌는지를 말한다.
+
+          ⚠️ 한 번 "되살리지 않는다"로 정했다가 같은 날 뒤집혔다. 지표 칸·배너 여백을
+          줄여 자리가 생긴 뒤 사용자가 넣으라고 했다 — 다시 뺄 일이 있으면 그 맥락부터
+          확인해라(인수인계서 §11).
+
+          ⚠️ **`role="img"` + `aria-label`이다.** 요일 글자만 낭독하면 `월 화 수 목…`이
+          되어 아무 뜻도 전달되지 않는다. 묶어서 "최근 7일 중 N일 운동" 한 번만 읽힌다.
+
+          ⚠️ 점 크기·라벨을 키우기 전에 재라. 이 줄이 30px이고, 경고까지 뜨면 카드가
+          357px다(2026-08-21 실측). 크루 두 행은 아직 하단 탭 위에 남는다. */}
+      <div
+        role="img"
+        aria-label={`최근 7일 중 ${weekDots.filter((d) => d.done).length}일 운동`}
+        className="mt-2 flex gap-1"
+      >
+        {weekDots.map((d) => (
+          <span
+            key={d.dayKey}
+            className="flex flex-1 flex-col items-center gap-0.5"
+          >
+            <span
+              className={`h-2.5 w-2.5 rounded-full ${
+                d.done ? "bg-accent" : "border border-line bg-surface-2"
+              }`}
+            />
+            <span className="text-[10px] leading-none text-faint">
+              {d.label}
+            </span>
+          </span>
+        ))}
+      </div>
+
       {/* 소멸 경고 배너 — 2026-08-21 홈 개편에서 `StreakCard`와 함께 사라졌다가
           사용자 지적으로 **이 카드 안에** 되살아났다(인수인계서
           `HANDOFF-2026-08-21-home-streak-warning.md`).
@@ -338,9 +389,9 @@ export function PersonalTodayCard({
           ⚠️ 되살린 것은 **경고 하나뿐**이다. 7일 점·헤더 한 줄·옛 카드는 되살리지
           않기로 사용자가 골랐다 — `home-client.order.test.ts`가 그 부재를 지킨다.
 
-          ⚠️ 평소엔 `warning`이 `undefined`라 높이 비용이 **0**이다. 위험할 때만 붙는다.
-          여백·줄높이를 줄여 둔 것은 그 순간의 비용을 깎기 위해서다 — 위 `METRIC_CLASS`
-          주석과 한 세트이므로 한쪽만 되돌리면 카드가 330px 목표를 넘는다. */}
+          ⚠️ 평소엔 `warning`이 `undefined`라 높이 비용이 **0**이다. 위험할 때만 붙는다
+          (2026-08-21 실측 47px + 위 여백 8px). 여백·줄높이를 줄여 둔 것은 그 순간의
+          비용을 깎기 위해서다 — 위 `METRIC_CLASS` 주석과 **한 세트**다. */}
       {warning && (
         <p
           role="alert"
