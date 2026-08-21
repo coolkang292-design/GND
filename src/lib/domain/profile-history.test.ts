@@ -3,6 +3,7 @@ import {
   buildProfileHistory,
   formatCumulativeDistance,
   formatCumulativeMinutes,
+  formatCumulativeVolume,
   type ProfileHistoryInput,
 } from "./profile-history";
 
@@ -32,7 +33,9 @@ describe("buildProfileHistory", () => {
         { level: 2, at: new Date("2026-07-20T00:00:00Z") },
         { level: 5, at: new Date("2026-08-01T00:00:00Z") },
       ],
-      badges: [{ badgeKey: "streak_7", earnedAt: new Date("2026-07-25T00:00:00Z") }],
+      badges: [
+        { badgeKey: "streak_7", earnedAt: new Date("2026-07-25T00:00:00Z") },
+      ],
     });
 
     expect(events.map((e) => e.kind)).toEqual([
@@ -49,9 +52,15 @@ describe("buildProfileHistory", () => {
     const [event] = buildProfileHistory({
       ...base,
       joinedAt: null,
-      badges: [{ badgeKey: "volume_1t", earnedAt: new Date("2026-08-01T00:00:00Z") }],
+      badges: [
+        { badgeKey: "volume_1t", earnedAt: new Date("2026-08-01T00:00:00Z") },
+      ],
     });
-    expect(event).toMatchObject({ kind: "badge", name: "1톤 클럽", emoji: "🏋️" });
+    expect(event).toMatchObject({
+      kind: "badge",
+      name: "1톤 클럽",
+      emoji: "🏋️",
+    });
   });
 
   /**
@@ -62,7 +71,9 @@ describe("buildProfileHistory", () => {
     const events = buildProfileHistory({
       ...base,
       joinedAt: null,
-      badges: [{ badgeKey: "없는배지", earnedAt: new Date("2026-08-01T00:00:00Z") }],
+      badges: [
+        { badgeKey: "없는배지", earnedAt: new Date("2026-08-01T00:00:00Z") },
+      ],
     });
     expect(events).toEqual([]);
   });
@@ -132,5 +143,35 @@ describe("formatCumulativeDistance", () => {
   it("1km 이상은 소수 한 자리", () => {
     expect(formatCumulativeDistance(110490)).toBe("110.5km");
     expect(formatCumulativeDistance(1000)).toBe("1.0km");
+  });
+});
+
+/**
+ * 누적 든 무게 (2026-08-21 사용자 요청 — 기록 탭에 누적 지표 넷).
+ *
+ * ⚠️ **단위가 도중에 바뀐다.** 시작한 사람은 수백 kg이고 오래 한 사람은 수십 톤이다.
+ * 늘 톤으로 적으면 초보에게 `0.3톤`이 되고, 늘 kg으로 적으면 `284,500kg`이 칸을
+ * 넘는다. `toDisplayUnit`(배지 진행바)은 늘 톤인데, 그건 배지 기준값이 톤 단위라
+ * 그렇다 — 여기는 사람의 누적이라 다르다.
+ */
+describe("formatCumulativeVolume", () => {
+  it("1톤 미만은 kg으로 적는다", () => {
+    expect(formatCumulativeVolume(0)).toBe("0kg");
+    expect(formatCumulativeVolume(284.4)).toBe("284kg");
+    expect(formatCumulativeVolume(999)).toBe("999kg");
+  });
+
+  it("1톤부터는 톤으로 적고 소수 첫째 자리까지 남긴다", () => {
+    expect(formatCumulativeVolume(1000)).toBe("1톤");
+    expect(formatCumulativeVolume(12345)).toBe("12.3톤");
+  });
+
+  it("큰 수는 천 단위를 끊어 읽게 한다", () => {
+    expect(formatCumulativeVolume(1234567)).toBe("1,234.6톤");
+  });
+
+  /** ⚠️ 음수는 데이터 사고다. 화면이 `-3kg`을 말하게 두지 않는다 */
+  it("음수는 0으로 눕힌다", () => {
+    expect(formatCumulativeVolume(-5)).toBe("0kg");
   });
 });

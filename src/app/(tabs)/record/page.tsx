@@ -135,7 +135,9 @@ import {
   skipExercise,
 } from "@/lib/domain/session-flow";
 import { dayKey, resolveTimeZone } from "@/lib/domain/time";
+import { getMyBadgeMetrics } from "@/lib/badges";
 import { TodayStatusCard } from "@/components/record/today-status-card";
+import { CumulativeStatsCard } from "@/components/record/cumulative-stats-card";
 import { weeklyBars } from "@/lib/domain/today-status";
 import {
   currentStreak,
@@ -287,10 +289,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const [draft, setDraftState] = useState(() =>
     expireStaleSuggestion(
       loadDraft(userId),
-      dayKey(
-        new Date(),
-        resolveTimeZone(),
-      ),
+      dayKey(new Date(), resolveTimeZone()),
     ),
   );
   const draftRef = useRef(draft);
@@ -398,6 +397,20 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const [sessionMinutes, setSessionMinutes] = useState<
     { completedAt: Date; durationMinutes: number | null }[] | null
   >(null);
+  /**
+   * 누적 무게·거리·시간 (2026-08-21 사용자 요청).
+   *
+   * ⚠️ **서버가 합산한다** — `get_my_badge_metrics`(0036 RPC)가 원천이다. 세트를
+   * 전부 내려받아 브라우저에서 더하지 않는다: 오래 한 사람은 수천 행이고, 그걸
+   * 기록 탭을 열 때마다 하게 된다.
+   *
+   * ⚠️ 실패하면 `null`로 남긴다 — 카드만 안 그린다. 0으로 채우면 "아무것도 안 했다"가 된다.
+   */
+  const [cumulative, setCumulative] = useState<{
+    totalMinutes: number;
+    volumeKg: number;
+    distanceMeters: number;
+  } | null>(null);
   /** 오늘 `workout_plans`에 행이 있나 — 제안 분기용 (2026-08-16) */
   const [todayPlanExists, setTodayPlanExists] = useState(false);
   /** 오늘 이미 완료한 세션이 있나 */
@@ -678,6 +691,17 @@ function WorkoutScreen({ userId }: { userId: string }) {
         if (!cancelled) setSessionMinutes(rows);
       } catch {
         // 카드가 안 뜰 뿐이다
+      }
+      try {
+        const m = await getMyBadgeMetrics();
+        if (!cancelled)
+          setCumulative({
+            totalMinutes: m.total_minutes,
+            volumeKg: m.weight_volume_kg,
+            distanceMeters: m.cardio_distance_m,
+          });
+      } catch {
+        // 누적 카드만 안 뜬다
       }
       try {
         const facts = await getSuggestionFacts(userId);
@@ -1070,10 +1094,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
    *    (`tabata.ts`의 `tabataResumeFromSession` 주석에 그 옛 버그가 적혀 있다).
    */
   async function applySuggestion(kind: SuggestionKind): Promise<void> {
-    const todayKey = dayKey(
-      new Date(),
-      resolveTimeZone(),
-    );
+    const todayKey = dayKey(new Date(), resolveTimeZone());
 
     if (kind === "interval") {
       const picked = tabataPickFromNames(INTERVAL_SUGGESTION_NAMES, catalog);
@@ -2001,8 +2022,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
     try {
       let sessionId = draft.sessionId;
       if (!sessionId) {
-        const tz =
-          resolveTimeZone();
+        const tz = resolveTimeZone();
         const s = await createDraftSession({
           groupId,
           timezone: tz,
@@ -2137,10 +2157,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
         durationMinutes: s?.duration_minutes ?? 0,
         summary: summarizeVolume(toVolumeSets(draft.exercises)),
         logText: formatWorkoutLog(
-          dayKey(
-            new Date(completedAtMs),
-            resolveTimeZone(),
-          ),
+          dayKey(new Date(completedAtMs), resolveTimeZone()),
           draft.exercises,
         ),
         recordNote,
@@ -2246,6 +2263,26 @@ function WorkoutScreen({ userId }: { userId: string }) {
     };
   }, [sessionMinutes]);
 
+  /**
+   * 누적 운동일 수 — **세션 횟수가 아니라 날 수**다. 하루에 두 번 해도 하루다.
+   *
+   * ⚠️ 이미 손에 든 `sessionMinutes`에서 센다. RPC를 하나 더 부르지 않는다 —
+   * `get_my_badge_metrics`는 `workout_count`(횟수)만 주고 날 수는 안 준다.
+   *
+   * ⚠️ 타임존은 위 `todayStatus`와 **같은 브라우저 타임존**이다. 여기만 다른 것을
+   * 쓰면 같은 화면의 7칸 막대와 누적 날 수가 다른 하루 경계를 쓴다.
+   */
+  const cumulativeDays = useMemo(
+    () =>
+      sessionMinutes
+        ? workoutDayKeys(
+            sessionMinutes.map((r) => r.completedAt),
+            resolveTimeZone(),
+          ).length
+        : null,
+    [sessionMinutes],
+  );
+
   const suggestionKind = useMemo(
     () =>
       // ⚠️ 재료가 다 오기 전에는 **아무 제안도 하지 않는다.** 반쯤 채워진 상태로
@@ -2258,10 +2295,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
         lastSessionWasInterval,
         isInActiveChallenge: challengeGoals !== null,
         signedUpDayKey,
-        todayKey: dayKey(
-          new Date(),
-          resolveTimeZone(),
-        ),
+        todayKey: dayKey(new Date(), resolveTimeZone()),
       }),
     [
       factsReady,
@@ -2362,10 +2396,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
     0,
   );
   // 문구는 날짜 기준 로테이션이다 — 렌더 중 랜덤은 재렌더마다 문구가 바뀐다
-  const messageDayKey = dayKey(
-    new Date(),
-    resolveTimeZone(),
-  );
+  const messageDayKey = dayKey(new Date(), resolveTimeZone());
   const completionMessage = workoutCompletionMessage({
     todayKey: messageDayKey,
   });
@@ -2658,6 +2689,24 @@ function WorkoutScreen({ userId }: { userId: string }) {
         />
       )}
 
+      {/* 누적 성과 (2026-08-21 사용자 요청 — "누적 운동일수, 누적 중량, 누적 Km,
+          누적 운동 시간을 같이").
+
+          ⚠️ **오늘 상태 카드와 같은 문(`showTodayCard`)을 쓴다.** 운동 중과 달력 탭에는
+          안 그린다 — 운동 중에 지난 총합을 들이밀 이유가 없고, 달력은 지난 기록을
+          날짜로 보는 자리다.
+
+          ⚠️ 값이 다 오기 전에는 **안 그린다.** 0으로 채운 카드를 잠깐 보여 주면
+          "아무것도 안 했다"는 거짓말이 된다(오늘 상태 카드가 같은 규약). */}
+      {showTodayCard && cumulative && cumulativeDays !== null && (
+        <CumulativeStatsCard
+          workoutDays={cumulativeDays}
+          totalMinutes={cumulative.totalMinutes}
+          volumeKg={cumulative.volumeKg}
+          distanceMeters={cumulative.distanceMeters}
+        />
+      )}
+
       {/* 운동 / 달력 서브탭 (§12) */}
       <div className="flex gap-1 rounded-card border border-line bg-surface-2 p-1">
         {(["workout", "calendar"] as const).map((t) => (
@@ -2756,10 +2805,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
                     // 영향받지 않는다 — 숫자가 나오는 곳은 `title`뿐이다.
                     suggestionCopy(
                       suggestionKind,
-                      dayKey(
-                        new Date(),
-                        resolveTimeZone(),
-                      ),
+                      dayKey(new Date(), resolveTimeZone()),
                       0,
                     ).body
                   : ""

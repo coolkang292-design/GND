@@ -95,3 +95,21 @@ export function formatCumulativeDistance(meters: number): string | null {
   if (meters < 1000) return `${Math.round(meters)}m`;
   return `${(meters / 1000).toFixed(1)}km`;
 }
+
+/**
+ * 누적 든 무게 (2026-08-21 사용자 요청 — 기록 탭 누적 지표).
+ *
+ * ⚠️ **단위가 도중에 바뀐다.** 시작한 사람은 수백 kg이고 오래 한 사람은 수십 톤이다.
+ * 늘 톤으로 적으면 초보에게 `0.3톤`이 되어 아무것도 안 한 것처럼 읽히고, 늘 kg으로
+ * 적으면 `284,500kg`이 칸을 넘는다.
+ *
+ * ⚠️ `achievements.ts`의 `toDisplayUnit`은 **늘 톤**이다. 거기를 고치지 마라 —
+ * 그건 배지 기준값(1톤·10톤…)과 같은 단위로 진행바를 그려야 해서 그렇다.
+ * 여기는 사람의 누적을 혼자 세우는 숫자라 규칙이 다르다.
+ */
+export function formatCumulativeVolume(kg: number): string {
+  const safe = Math.max(0, kg);
+  if (safe < 1000) return `${Math.round(safe)}kg`;
+  const tons = Math.round((safe / 1000) * 10) / 10;
+  return `${tons.toLocaleString("ko-KR", { maximumFractionDigits: 1 })}톤`;
+}
