@@ -26,6 +26,8 @@ function rowsOf(
       durationMinutes: number;
     }[];
     active?: string[];
+    /** [사용자, 총 배지 수, 썸네일 키들] */
+    badges?: [string, number, string[]][];
   } = {},
 ): FriendRow[] {
   return buildFriendRows({
@@ -36,7 +38,12 @@ function rowsOf(
       totalXp: c.totalXp ?? 0,
     })),
     activity: foldFriendSessions(options.sessions ?? [], NOW, KST),
-    badges: new Map(),
+    badges: new Map(
+      (options.badges ?? []).map(([id, total, keys]) => [
+        id,
+        { total, showcaseKeys: keys },
+      ]),
+    ),
     activeUserIds: new Set(options.active ?? []),
   });
 }
@@ -157,7 +164,14 @@ describe("FriendBoardBody — 크루 전용으로 줄었다", () => {
     expect(screen.queryByText(/오늘 운동하고/)).toBeNull();
   });
 
-  it("누적 운동·시간·배지 대신 이번 주·연속만 표시한다", () => {
+  /**
+   * ⚠️ 크루 행의 배지는 **개수 한 칸**이다 (2026-08-21 사용자 지시 — "친구의 배지수도
+   * 표시해주면 좋을거 같은데"). 내 카드와 같은 취급이다.
+   *
+   * ⚠️ 옛 행의 **배지 썸네일 줄**을 되살리는 것이 아니다. 그 줄은 행 높이를 152px로
+   * 만들던 원인 중 하나다 — 그림은 프로필 상세에만 남는다.
+   */
+  it("오늘 상태·이번 주·연속·배지 개수만 표시한다", () => {
     const { container } = render(
       <FriendBoardBody
         rows={rowsOf([{ id: "u1", nickname: "친구하나" }], {
@@ -168,6 +182,7 @@ describe("FriendBoardBody — 크루 전용으로 줄었다", () => {
               durationMinutes: 70,
             },
           ],
+          badges: [["u1", 7, ["streak_5", "volume_1t"]]],
         })}
         poked={new Set()}
         iWorkedOut
@@ -181,15 +196,39 @@ describe("FriendBoardBody — 크루 전용으로 줄었다", () => {
     );
     expect(screen.getByText("이번 주")).toBeTruthy();
     expect(screen.getByText("연속")).toBeTruthy();
-    // 옛 4칸 그리드의 라벨들 — 하나라도 남으면 행이 다시 152px로 자란다
-    expect(screen.queryByText("배지")).toBeNull();
+    expect(screen.getByText("배지")).toBeTruthy();
+    expect(screen.getByText("7")).toBeTruthy();
+    // 옛 4칸 그리드의 라벨과 배지 그림 — 하나라도 남으면 행이 다시 152px로 자란다
     expect(screen.queryByText("시간")).toBeNull();
     expect(screen.queryByText("운동")).toBeNull();
     expect(screen.queryByText("상태")).toBeNull();
-    expect(container.textContent).not.toContain("배지 ");
-    expect(container.textContent).not.toContain("불러오는 중");
+    expect(container.textContent).not.toContain("배지 7개");
     expect(container.textContent).not.toContain("1시간");
     expect(container.querySelectorAll('img[src*="/badges/"]')).toHaveLength(0);
+  });
+
+  /**
+   * ⚠️ `null`(아직 안 왔거나 그 사람만 실패)과 `0`(정말 없다)을 구별한다.
+   * 배지는 1인 1콜이라 목록보다 늦게 도착한다 — 그동안 `0`을 적으면 도착하는 순간
+   * 숫자가 튀어 배지가 생긴 것처럼 읽힌다.
+   */
+  it("배지 수를 못 받은 크루는 0으로 속이지 않는다", () => {
+    renderBody(rowsOf([{ id: "u1", nickname: "친구하나" }]));
+    expect(screen.getByText("배지")).toBeTruthy();
+    expect(screen.getByText("—")).toBeTruthy();
+  });
+
+  it("배지가 정말 0개면 0을 적는다", () => {
+    renderBody(
+      rowsOf([{ id: "u1", nickname: "친구하나" }], { badges: [["u1", 0, []]] }),
+    );
+    // ⚠️ 행 안에서 찾는다 — 헤더 완료 칩의 `0`(오늘 완료 0명)과 헷갈리면 안 된다
+    const row = screen.getByRole("listitem");
+    const badge = [...row.querySelectorAll("span")].find(
+      (el) => el.firstChild?.textContent === "배지",
+    )!;
+    expect(badge.textContent).toBe("배지0");
+    expect(row.textContent).not.toContain("—");
   });
 
   /**

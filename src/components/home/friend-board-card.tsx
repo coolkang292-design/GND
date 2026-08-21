@@ -7,12 +7,17 @@ import { useAuth } from "@/components/auth-provider";
 import { Avatar } from "@/components/avatar";
 import { MemberProfileSheet } from "@/components/crew/member-profile-sheet";
 import { isPhotoAvatar } from "@/lib/domain/avatar-source";
-import { getFriendBoardBase, type FriendBoardBase } from "@/lib/friends";
+import {
+  getFriendBadges,
+  getFriendBoardBase,
+  type FriendBoardBase,
+} from "@/lib/friends";
 import {
   buildFriendRows,
   canExpandFriendRows,
   pokeableFriendCount,
   visibleFriendRows,
+  type FriendBadges,
   type FriendRow,
 } from "@/lib/domain/friend-board";
 import {
@@ -128,7 +133,10 @@ function FriendRowItem({
                 "개노답 LV2 이 순으로"). 순서를 뒤집지 마라.
                 ⚠️ 레벨과 단계를 **한 알약**에 담는다. 둘로 쪼개면 요소가 하나 늘어
                 좁은 폰에서 닉네임이 더 잘린다. */}
-            <span className="flex-none rounded-full border border-accent/40 bg-accent-weak px-1.5 py-[1px] text-[10.5px] font-extrabold text-accent">
+            {/* ⚠️ `px-1`이다. 1.5로 되돌리면 375px에서 `오뎅끼데스까`가 1px 모자라
+                말줄임표가 뜬다(2026-08-21 실측 83/84). 이름 줄의 남는 폭은 전부
+                닉네임 몫이라 여기서 4px을 빼 여유를 만들었다. */}
+            <span className="flex-none rounded-full border border-accent/40 bg-accent-weak px-1 py-[1px] text-[10.5px] font-extrabold text-accent">
               {row.stageName} Lv.{row.level}
             </span>
           </span>
@@ -148,7 +156,7 @@ function FriendRowItem({
         {poked.has(row.userId) ? (
           <span
             aria-label={`${row.nickname} 찌름 완료`}
-            className="flex-none rounded-full bg-surface px-2.5 py-1 text-[11px] font-bold text-faint opacity-70"
+            className="flex-none rounded-full bg-surface px-2 py-1 text-[11px] font-bold text-faint opacity-70"
           >
             ✅ 찌름
           </span>
@@ -162,7 +170,7 @@ function FriendRowItem({
             onClick={() => onPoke(row)}
             disabled={!iWorkedOut || pokingId === row.userId}
             aria-label={`${row.nickname} 찌르기`}
-            className={`relative flex-none rounded-full px-2.5 py-1 text-[11px] font-extrabold after:absolute after:inset-x-0 after:top-1/2 after:h-11 after:-translate-y-1/2 after:content-[''] ${
+            className={`relative flex-none rounded-full px-2 py-1 text-[11px] font-extrabold after:absolute after:inset-x-0 after:top-1/2 after:h-11 after:-translate-y-1/2 after:content-[''] ${
               iWorkedOut
                 ? "bg-accent text-accent-ink"
                 : "bg-surface text-faint opacity-60"
@@ -178,7 +186,7 @@ function FriendRowItem({
              화면 낭독이 붙여 읽고, 테스트도 라벨만 짚을 수 없다.
           ⚠️ 연속 0일에도 칸을 그린다 — 빼면 그 행만 칸이 밀려 크루끼리 세로가
              안 맞는다(2026-08-07 사용자 요청 "일자로 고정"). */}
-      <div className="mt-0.5 grid grid-cols-[1fr_auto_auto] items-center gap-2">
+      <div className="mt-0.5 grid grid-cols-[1fr_auto_auto_auto] items-center gap-2">
         <span
           className={`justify-self-start rounded-full px-2 py-[2px] text-[11px] font-bold ${STATUS_TONE[row.status]}`}
         >
@@ -194,6 +202,16 @@ function FriendRowItem({
           <span>연속</span>
           <b className="text-[12px] font-extrabold text-text">
             {row.streak}일
+          </b>
+        </span>
+        {/* ⚠️ **개수 한 칸이다** (2026-08-21 사용자 지시 — "친구의 배지수도 표시해주면
+            좋을거 같은데"). 내 카드와 같은 취급이고, 옛 행의 **배지 썸네일 줄**을
+            되살리는 것이 아니다 — 그 줄이 행을 152px로 만들던 원인 중 하나다.
+            ⚠️ `null`(아직 안 왔거나 그 사람만 실패)과 `0`(정말 없다)을 구별한다. */}
+        <span className="flex items-baseline gap-1 text-[11px] text-muted">
+          <span>배지</span>
+          <b className="text-[12px] font-extrabold text-text">
+            {row.badgeCount === null ? "—" : row.badgeCount}
           </b>
         </span>
       </div>
@@ -212,10 +230,11 @@ function SkeletonRow() {
         <div className="h-11 w-11 flex-none rounded-full bg-surface" />
         <div className="h-3.5 flex-1 rounded-full bg-surface" />
       </div>
-      <div className="mt-0.5 grid grid-cols-[1fr_auto_auto] items-center gap-2">
+      <div className="mt-0.5 grid grid-cols-[1fr_auto_auto_auto] items-center gap-2">
         <div className="h-[19px] w-14 justify-self-start rounded-full bg-surface" />
         <div className="h-[19px] w-14 rounded-full bg-surface" />
         <div className="h-[19px] w-12 rounded-full bg-surface" />
+        <div className="h-[19px] w-10 rounded-full bg-surface" />
       </div>
     </li>
   );
@@ -392,6 +411,18 @@ export function FriendBoardCard({
 }) {
   const { userId, loading, configured } = useAuth();
   const [base, setBase] = useState<FriendBoardBase | null>(null);
+  /**
+   * 크루별 배지 (2026-08-21 사용자 지시로 **개수만** 복원).
+   *
+   * ⚠️ 1인 1콜이라 목록보다 늦다. 목록을 먼저 그리고 나중에 채운다 — 그동안 칸은
+   * `—`가 지키므로 행 높이가 변하지 않는다.
+   *
+   * ⚠️ 썸네일 키(`showcaseKeys`)는 받아도 **그리지 않는다.** 행에 그림을 되살리면
+   * 높이가 다시 자란다 — 배지 그림은 프로필 상세가 갖는다.
+   */
+  const [badges, setBadges] = useState<Map<string, FriendBadges>>(
+    () => new Map(),
+  );
   const [poked, setPoked] = useState<Set<string>>(() => new Set());
   const [expanded, setExpanded] = useState(false);
   const [selected, setSelected] = useState<FriendRow | null>(null);
@@ -413,6 +444,11 @@ export function FriendBoardCard({
         // 끝나면 낙관적으로 잠근 버튼이 도로 열릴 수 있다(크루 카드와 같은 규약).
         setPoked((prev) => new Set([...prev, ...loaded.poked]));
         setFailed(false);
+
+        // ⚠️ 목록을 그린 **뒤에** 부른다. 위 `await`에 묶으면 배지 1인 1콜이
+        //    크루 목록 전체를 그만큼 늦춘다.
+        const counts = await getFriendBadges(loaded.crew.map((m) => m.id));
+        if (!cancelled) setBadges(counts);
       } catch {
         if (!cancelled) setFailed(true);
       } finally {
@@ -426,12 +462,12 @@ export function FriendBoardCard({
   }, [configured, loading, userId]);
 
   /**
-   * ⚠️ 배지 조회가 여기서 **빠졌다** (2026-08-21). 옛 코드는 1인 1콜로 크루 전원의
-   * 배지를 받아 행에 썸네일을 그렸는데, 압축된 행은 배지를 그리지 않는다.
+   * ⚠️ 배지는 **개수만** 행에 쓴다 (2026-08-21). 썸네일 줄은 되살리지 않는다 —
+   * 그 줄이 행을 152px로 만들던 원인 중 하나다.
    *
-   * ⚠️ 그렇다고 배지가 앱에서 사라진 것이 아니다 — 행을 누르면 열리는
-   * `MemberProfileSheet`가 `get_crew_member_profile`로 **자기 몫을 직접 조회**한다.
-   * 그래서 빈 맵으로 행을 만들어도 상세에서는 배지·이력·누적 성과가 모두 보인다.
+   * ⚠️ 배지 조회가 실패하거나 늦어도 행은 그린다. 그 사람은 맵에서 빠지고
+   * `buildFriendRows`가 `badgeCount: null`로 남겨 화면이 `—`를 그린다 — **0개가
+   * 아니다.** 상세한 배지 목록·획득일은 `MemberProfileSheet`가 직접 조회한다.
    */
   const rows = useMemo(
     () =>
@@ -439,11 +475,11 @@ export function FriendBoardCard({
         ? buildFriendRows({
             crew: base.crew,
             activity: base.activity,
-            badges: new Map(),
+            badges,
             activeUserIds,
           })
         : [],
-    [base, activeUserIds],
+    [base, badges, activeUserIds],
   );
 
   const poke = useCallback(async (row: FriendRow) => {
