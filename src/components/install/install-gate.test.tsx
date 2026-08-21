@@ -37,9 +37,9 @@ const identity = vi.hoisted(() => ({
   fail: false,
 }));
 vi.mock("@/lib/identity", () => ({
-  getMyIdentities: async () => {
+  hasLinkedIdentity: async () => {
     if (identity.fail) throw new Error("network");
-    return identity.providers;
+    return identity.providers.length > 0;
   },
 }));
 
@@ -146,7 +146,7 @@ describe("InstallGate — 안 뜨는가 (부정 확인)", () => {
     expect(await sheetTitle()).toBeNull();
   });
 
-  it("신원 조회가 실패하면 안 띄운다 — '모른다'는 '붙었다'가 아니다", async () => {
+  it("신원 판단이 실패하면 안 띄운다 — '모른다'는 '붙었다'가 아니다", async () => {
     identity.fail = true;
     render(<InstallGate />);
     expect(await sheetTitle()).toBeNull();

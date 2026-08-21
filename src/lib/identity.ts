@@ -150,6 +150,32 @@ export async function signInWithProvider(
  * `email` 같은 우리가 안 그리는 제공자는 걸러내지 않고 그대로 준다. `/account`가
  * 이메일 연결 여부도 같이 말해야 하기 때문이다.
  */
+/**
+ * **신원(카카오·구글·이메일)이 붙어 있는가 — 네트워크를 타지 않는다.**
+ *
+ * ⚠️⚠️ **이 함수가 존재하는 이유: `getMyIdentities()`는 네트워크를 탄다.**
+ *    `getUserIdentities()`는 내부적으로 `/auth/v1/user`를 호출해서, 전파가 늦거나
+ *    네트워크가 흔들리면 던진다. 그걸 "신원 없음"으로 처리하면 **판단이 그때그때
+ *    달라진다** — 2026-08-22에 설치 안내가 "떴다 안 떴다" 한 원인이 정확히 이거였다
+ *    (카톡 → 사파리로 막 넘어온 순간이 네트워크가 가장 불안정하다).
+ *
+ *    세션은 **이미 로컬에 있다.** 거기 `is_anonymous`와 `identities`가 들어 있으므로
+ *    물어볼 필요가 없다. 화면을 띄울지 말지 같은 **판단**에는 이걸 써라.
+ *    서버의 최신 상태가 정말 필요한 곳(`/account`의 연결 목록)만 `getMyIdentities()`를 쓴다.
+ *
+ * 세션이 없으면 false다 — 붙일 계정 자체가 없다.
+ */
+export async function hasLinkedIdentity(): Promise<boolean> {
+  const supabase = getSupabaseBrowserClient();
+  const { data } = await supabase.auth.getSession();
+  const user = data.session?.user;
+  if (!user) return false;
+  // 익명 계정은 명시적으로 표시된다. 옛 세션에 이 필드가 없을 수 있어
+  // identities 길이도 함께 본다 — 익명이면 어차피 비어 있다.
+  if (user.is_anonymous === true) return false;
+  return (user.identities ?? []).length > 0;
+}
+
 export async function getMyIdentities(): Promise<string[]> {
   const supabase = getSupabaseBrowserClient();
   const { data, error } = await supabase.auth.getUserIdentities();

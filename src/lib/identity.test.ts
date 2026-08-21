@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   linkIdentity: vi.fn(),
   signInWithOAuth: vi.fn(),
   getUserIdentities: vi.fn(),
+  getSession: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/client", () => ({
@@ -12,6 +13,7 @@ vi.mock("@/lib/supabase/client", () => ({
       linkIdentity: mocks.linkIdentity,
       signInWithOAuth: mocks.signInWithOAuth,
       getUserIdentities: mocks.getUserIdentities,
+      getSession: mocks.getSession,
     },
   }),
 }));
@@ -20,6 +22,7 @@ import {
   ALL_PROVIDERS,
   enabledProviders,
   getMyIdentities,
+  hasLinkedIdentity,
   identityError,
   linkProvider,
   signInWithProvider,
@@ -246,5 +249,65 @@ describe("identityError — 실패 갈래 (설계 §5.5)", () => {
 
   it("모르는 오류는 원문을 보여준다 (조용히 삼키지 않는다)", () => {
     expect(identityError(new Error("boom"))).toBe("연결하지 못했어요 (boom)");
+  });
+});
+
+/**
+ * ⚠️⚠️ **이 묶음이 존재하는 이유**: 설치 안내가 "떴다 안 떴다" 했다(2026-08-22).
+ * 신원 판단에 네트워크를 타는 `getMyIdentities()`를 써서, 호출이 실패하면
+ * 익명으로 간주해 안 띄웠기 때문이다. `hasLinkedIdentity()`는 **로컬 세션만**
+ * 읽으므로 같은 상황에서 같은 답을 준다.
+ */
+describe("hasLinkedIdentity — 네트워크를 타지 않는다", () => {
+  beforeEach(() => {
+    mocks.getSession.mockReset();
+    mocks.getUserIdentities.mockReset();
+  });
+
+  it("카카오가 붙어 있으면 true", async () => {
+    mocks.getSession.mockResolvedValue({
+      data: {
+        session: {
+          user: { is_anonymous: false, identities: [{ provider: "kakao" }] },
+        },
+      },
+    });
+    expect(await hasLinkedIdentity()).toBe(true);
+  });
+
+  it("익명 계정이면 false", async () => {
+    mocks.getSession.mockResolvedValue({
+      data: { session: { user: { is_anonymous: true, identities: [] } } },
+    });
+    expect(await hasLinkedIdentity()).toBe(false);
+  });
+
+  it("옛 세션에 is_anonymous가 없어도 identities로 가른다", async () => {
+    mocks.getSession.mockResolvedValue({
+      data: { session: { user: { identities: [] } } },
+    });
+    expect(await hasLinkedIdentity()).toBe(false);
+
+    mocks.getSession.mockResolvedValue({
+      data: { session: { user: { identities: [{ provider: "email" }] } } },
+    });
+    expect(await hasLinkedIdentity()).toBe(true);
+  });
+
+  it("세션이 없으면 false", async () => {
+    mocks.getSession.mockResolvedValue({ data: { session: null } });
+    expect(await hasLinkedIdentity()).toBe(false);
+  });
+
+  it("⚠️ 서버에 물어보지 않는다 — 이게 이 함수의 존재 이유다", async () => {
+    mocks.getSession.mockResolvedValue({
+      data: {
+        session: {
+          user: { is_anonymous: false, identities: [{ provider: "kakao" }] },
+        },
+      },
+    });
+    await hasLinkedIdentity();
+    expect(mocks.getUserIdentities).not.toHaveBeenCalled();
   });
 });

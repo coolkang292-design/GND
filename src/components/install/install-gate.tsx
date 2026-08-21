@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
-import { getMyIdentities } from "@/lib/identity";
+import { hasLinkedIdentity } from "@/lib/identity";
 import {
   canOfferInstall,
   detectInstallEnv,
@@ -129,14 +129,18 @@ export function InstallGate() {
       });
       if (env === "installed" || env === "desktop") return;
 
-      // 익명 계정인지 신원이 붙었는지 — 빈 배열이 "이 브라우저에만 있는 계정"이다
+      // 익명 계정인지 신원이 붙었는지.
+      //
+      // ⚠️⚠️ **네트워크를 타는 `getMyIdentities()`를 쓰면 안 된다** (2026-08-22).
+      //    그건 `/auth/v1/user`를 호출해서, 느리거나 실패하면 "신원 없음"이 되고
+      //    안내가 **떴다 안 떴다** 한다. 카톡 → 사파리로 막 넘어온 순간이 네트워크가
+      //    가장 불안정한데 하필 그때가 이 안내를 띄워야 하는 순간이다.
+      //    세션은 이미 로컬에 있다 — 물어보지 말고 읽는다.
       let linked = false;
       if (userId) {
         try {
-          linked = (await getMyIdentities()).length > 0;
+          linked = await hasLinkedIdentity();
         } catch {
-          // 조회 실패는 "모른다"이지 "붙었다"가 아니다. 안전한 쪽(익명)으로 둔다 —
-          // 잘못 띄우면 기록이 갈리고, 안 띄우면 다음 기회에 뜬다.
           linked = false;
         }
       }
