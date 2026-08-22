@@ -1,8 +1,11 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Avatar } from "@/components/avatar";
+import { UiIcon } from "@/components/ui-icon";
+import { uploadAvatarPhoto } from "@/lib/avatar";
+import { updateMyAvatar } from "@/lib/crew";
 import { badgeShelf, earnedBadgeCount, type BadgeMeta } from "@/lib/domain/badges";
 import { getBadgeCatalog } from "@/lib/badges";
 import {
@@ -243,6 +246,7 @@ export function MemberProfileSheet({
   stats,
   viewerId,
   source,
+  onAvatarChanged,
   onClose,
 }: {
   userId: string;
@@ -255,12 +259,64 @@ export function MemberProfileSheet({
   viewerId?: string;
   /** 어느 화면에서 눌렀나. 0건이 나왔을 때 어느 진입점이 죽었는지 알아야 한다 */
   source?: ProfileViewSource;
+  /**
+   * **이걸 넘긴 호출부는 "이건 내 프로필이다"라고 말하는 것이다** (2026-08-22
+   * 사용자 지시 — *"설정 화면이 아니라 홈 화면에 프로필 누른 뒤에 프로필 사진을
+   * 눌러서 바로 수정"*).
+   *
+   * 넘기면 맨 위 아바타가 **누르는 순간 사진첩이 열리는 버튼**이 된다. 고른 사진은
+   * 올라가서 곧바로 `profiles.avatar_url`에 저장되고, 새 URL이 이 콜백으로 온다 —
+   * **저장 버튼이 없다.** 사진 하나만 바꾸는 자리에 저장 단계를 두면 홈에서 2탭에
+   * 끝내려던 이유가 사라진다.
+   *
+   * ⚠️⚠️ **남의 프로필을 여는 5곳(챌린지·피드·크루 화면·크루 카드·크루 목록)에
+   * 넘기지 마라.** 서버는 RLS(`profiles_update_own`)가 막지만, 화면에는 남의
+   * 사진에 카메라 표시가 붙고 눌러도 실패만 한다. 지금 넘기는 곳은
+   * `home-client.tsx`의 **내 시트 하나뿐**이다.
+   *
+   * ⚠️ 콜백을 받은 쪽이 `avatarUrl` prop을 새 값으로 올려 줘야 화면이 바뀐다 —
+   * 이 시트는 사진을 자기 안에 따로 기억하지 않는다. 두 곳에 두면 홈 카드와 시트가
+   * 서로 다른 사진을 그리는 순간이 생긴다.
+   */
+  onAvatarChanged?: (avatarUrl: string) => void;
   onClose: () => void;
 }) {
   const [profile, setProfile] = useState<CrewMemberProfile | null>(null);
   const [catalog, setCatalog] = useState<BadgeMeta[] | null>(null);
   const [failure, setFailure] = useState<"not_crew" | "failed" | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  /** 사진 교체 중 — 아바타 버튼을 잠그고 그 위에 진행 표시를 덮는다 */
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const avatarFileRef = useRef<HTMLInputElement>(null);
+
+  /**
+   * 고른 사진을 올리고 **바로 저장한다** — 저장 버튼이 없다.
+   *
+   * ⚠️ 순서가 규칙이다: 업로드 → DB 저장 → **그다음에** 콜백. 올리기만 하고
+   * 콜백을 부르면 화면은 새 사진인데 `profiles`는 옛 사진이라, 탭을 옮기면
+   * 되돌아간다. 사용자는 "저장이 안 됐다"가 아니라 "사진이 사라졌다"로 읽는다.
+   *
+   * ⚠️ `URL.createObjectURL`로 미리보기를 앞당기지 마라 —
+   * `profile-edit-sheet.tsx`가 같은 이유로 안 쓴다. 실제로 올라간 URL만 그리면
+   * "보이는 것 ≠ 저장된 것"이 불가능해진다.
+   */
+  async function pickAvatar(file: File | undefined) {
+    if (!file || !onAvatarChanged || avatarBusy) return;
+    setAvatarBusy(true);
+    setAvatarError(null);
+    try {
+      const url = await uploadAvatarPhoto(userId, file);
+      await updateMyAvatar(userId, url);
+      onAvatarChanged(url);
+    } catch (e) {
+      setAvatarError(e instanceof Error ? e.message : "사진을 바꾸지 못했어요");
+    } finally {
+      setAvatarBusy(false);
+      // 같은 파일을 다시 고를 수 있게 비운다 — 안 비우면 onChange가 안 뜬다
+      if (avatarFileRef.current) avatarFileRef.current.value = "";
+    }
+  }
 
   // 실패 상태 초기화는 재시도 핸들러가 한다 — effect 본문에서 setState를 동기로
   // 부르면 렌더가 연쇄된다.
@@ -306,11 +362,58 @@ export function MemberProfileSheet({
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
 
         <div className="flex items-center gap-3">
-          <Avatar
-            src={avatarUrl}
-            label={`${nickname}님 프로필 사진`}
-            className="flex h-11 w-11 flex-none items-center justify-center overflow-hidden rounded-full bg-surface-2 text-2xl"
-          />
+          {/* ⚠️ **내 프로필일 때만 눌린다** (`onAvatarChanged` 유무로 가른다).
+              남의 시트에서는 옛날 그대로 그냥 그림이다 — 카메라 표시조차 안 붙는다.
+
+              ⚠️ 이 자리가 프로필 사진을 바꾸는 **홈 쪽 유일한 입구**다
+              (2026-08-22). 설정 탭의 `프로필 편집`은 닉네임과 함께 그대로 남아
+              있으므로 둘 중 하나가 없어져도 길이 끊기지는 않는다.
+
+              ⚠️ 44px는 눌리는 최소 크기라 **더 줄이지 마라.** 카메라 칩이 없으면
+              눌린다는 것을 알 방법이 아예 없다 — 같이 지우지 마라. */}
+          {onAvatarChanged ? (
+            <>
+              <button
+                type="button"
+                onClick={() => avatarFileRef.current?.click()}
+                disabled={avatarBusy}
+                aria-busy={avatarBusy}
+                aria-label="프로필 사진 바꾸기"
+                className="relative flex-none rounded-full disabled:opacity-60"
+              >
+                <Avatar
+                  src={avatarUrl}
+                  /* 버튼의 접근 가능한 이름이 이미 말한다 — 채우면 두 번 읽힌다 */
+                  className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border border-accent/60 bg-surface-2 text-2xl"
+                />
+                <span
+                  aria-hidden
+                  className="absolute -bottom-0.5 -right-0.5 flex h-[19px] w-[19px] items-center justify-center rounded-full border border-line bg-surface shadow-card"
+                >
+                  <UiIcon name="camera" size={11} />
+                </span>
+                {avatarBusy && (
+                  <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/55 text-[9px] font-extrabold leading-none text-white">
+                    올리는 중
+                  </span>
+                )}
+              </button>
+              <input
+                ref={avatarFileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                aria-label="프로필 사진 파일"
+                onChange={(e) => void pickAvatar(e.target.files?.[0])}
+              />
+            </>
+          ) : (
+            <Avatar
+              src={avatarUrl}
+              label={`${nickname}님 프로필 사진`}
+              className="flex h-11 w-11 flex-none items-center justify-center overflow-hidden rounded-full bg-surface-2 text-2xl"
+            />
+          )}
           <p id="member-profile-title" className="text-lg font-extrabold">
             {nickname}님
           </p>
@@ -320,6 +423,14 @@ export function MemberProfileSheet({
             </span>
           )}
         </div>
+
+        {/* ⚠️ 성공은 **사진이 바뀌는 것 자체**가 알린다 — "저장했어요"를 따로 적지
+            않는다. 실패만 말한다. */}
+        {avatarError && (
+          <p role="alert" className="mt-2 text-[12.5px] text-warn">
+            {avatarError}
+          </p>
+        )}
 
         {failure === "not_crew" && (
           <p className="mt-4 text-sm text-muted">크루원만 볼 수 있어요</p>

@@ -372,6 +372,24 @@ export function HomeClient() {
           avatarUrl={myName.avatarUrl}
           streak={myStreak}
           stats={{ weekDays: myWeekDays }}
+          /**
+           * 시트 맨 위 아바타를 **누르면 사진첩이 열리는 버튼**으로 만든다
+           * (2026-08-22 사용자 지시 — *"설정 화면이 아니라 홈 화면에 프로필 누른
+           * 뒤에 프로필 사진을 눌러서 바로 수정"*).
+           *
+           * ⚠️⚠️ **이 콜백을 넘기는 곳은 여기 하나뿐이다.** 크루 행이 여는 시트
+           * (`FriendBoardCard`)·피드·챌린지·크루 화면은 **남의 프로필**이라
+           * 넘기면 안 된다 — 서버는 RLS가 막지만 화면에 카메라 표시가 붙는다.
+           *
+           * ⚠️ 여기서 `myName`을 갱신하는 것이 화면을 바꾸는 **유일한 경로**다.
+           * 시트는 사진을 따로 기억하지 않는다(그 파일 주석). 새 URL이 `myName`에
+           * 들어가면 시트의 아바타와 `나의 오늘` 카드가 **같은 값으로 함께** 바뀐다 —
+           * 이모지를 쓰던 사람은 그 순간 카드의 레벨 캐릭터가 사진으로 갈린다
+           * (`isPhotoAvatar` 갈래, `personal-today-card.tsx`).
+           */
+          onAvatarChanged={(url) =>
+            setMyName((n) => (n ? { ...n, avatarUrl: url } : n))
+          }
           onClose={() => setSelfProfileOpen(false)}
         />
       )}

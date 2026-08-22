@@ -42,6 +42,34 @@ export async function upsertMyProfile(input: {
   }
 }
 
+/**
+ * 프로필 사진 **한 칸만** 바꾼다 (2026-08-22).
+ *
+ * ⚠️ **`upsertMyProfile`을 쓰지 않는 이유가 있다. 되돌리지 마라.**
+ * 저건 `nickname`·`weekly_goal`을 **함께** 요구하는 온보딩용 upsert다. 사진만
+ * 바꾸는 자리(홈 → 프로필 시트)에서 그걸 부르면
+ *   ① 그 화면이 갖고 있지도 않은 `weekly_goal`을 지어내 덮어써야 하고
+ *   ② 다른 기기에서 방금 바꾼 닉네임을 **손에 든 낡은 값으로 되돌린다**
+ *   ③ 닉네임을 건드리지도 않았는데 23505(닉네임 중복)로 실패할 수 있다
+ * 사진을 바꾸는 일에 셋 다 필요 없다.
+ *
+ * `update`라서 프로필 행이 **이미 있어야** 한다 — 온보딩을 마친 사람만 이 경로에
+ * 닿으므로(홈은 `getMyProfile`이 준 값으로 그려진다) 전제가 성립한다.
+ *
+ * RLS `profiles_update_own`(using·check 모두 `id = auth.uid()`)이 남의 행을 막는다.
+ */
+export async function updateMyAvatar(
+  userId: string,
+  avatarUrl: string,
+): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  const { error } = await supabase
+    .from("profiles")
+    .update({ avatar_url: avatarUrl })
+    .eq("id", userId);
+  if (error) throw error;
+}
+
 /** 크루 만들기 — 그룹 생성 + owner 멤버십 (단일 트랜잭션 RPC) */
 export async function createGroup(name: string): Promise<Group> {
   const supabase = getSupabaseBrowserClient();
