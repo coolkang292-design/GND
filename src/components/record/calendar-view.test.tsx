@@ -847,7 +847,9 @@ describe("CalendarView — 남은 일정 재배치 (2026-08-12)", () => {
  * 했다. 계획을 이미 짜 둔 날에 "준비"를 한 번 더 시키는 것은 같은 결정을 두 번
  * 묻는 것이다.
  *
- * ⚠️ 전신 인터벌 계획은 예외다 — 시트에서 음원·코스를 확인하고 시작한다.
+ * ⚠️ 전신 인터벌 계획은 예외다 — 시트에서 음원·코스를 확인하고 시작한다
+ *    (2026-08-25 사용자 지시로 다시 이 규칙이다. 달력은 `startNow`를 그대로
+ *    넘기고, 기록 화면이 인터벌에서만 그 값을 무시한다).
  */
 describe("CalendarView — 계획한 날 바로 시작 (2026-08-12)", () => {
   const todayPlan = { ...PLAN, id: "plan-today", planDate: "2026-08-15" };
@@ -886,7 +888,7 @@ describe("CalendarView — 계획한 날 바로 시작 (2026-08-12)", () => {
     );
   });
 
-  it("전신 인터벌 계획도 한 번에 시작한다", async () => {
+  it("전신 인터벌 계획도 같은 버튼으로 연다", async () => {
     const onLoadPlan = vi.fn().mockReturnValue(true);
     mocks.getWorkoutPlans.mockResolvedValue([
       { ...todayPlan, id: "plan-interval", tabataMinutes: 8 },
@@ -908,8 +910,12 @@ describe("CalendarView — 계획한 날 바로 시작 (2026-08-12)", () => {
     );
 
     await waitFor(() => expect(onLoadPlan).toHaveBeenCalledTimes(1));
-    // 사용자 지시 2026-08-13 — 인터벌만 `준비하기`로 한 단계 더 있었다.
-    // 계획이 종목과 코스를 이미 들고 있어서 시트에서 고를 것이 없다.
+    /*
+      달력은 인터벌도 근력과 **같은 인자**로 넘긴다 — 갈라지는 곳은 받는 쪽
+      한 군데뿐이어야 한다. 인터벌 계획을 눌렀을 때 바로 시작하지 않고 시간을
+      고르는 시트가 열리는 것은 `record/page.tsx`의 `handleLoadPlan`이 정한다
+      (사용자 지시 2026-08-25).
+    */
     expect(onLoadPlan).toHaveBeenCalledWith(
       expect.objectContaining({ id: "plan-interval" }),
       { startNow: true },

@@ -68,15 +68,14 @@ type TabataProps = {
   /** 예정표에서 연 타바타 — 종목·코스를 미리 채운 채 연다 (0059) */
   initialPicked?: CatalogExercise[];
   initialMinutes?: TabataMinutes;
-  /**
-   * 열자마자 시작한다 — 달력 계획에서 온 경우 (사용자 지시 2026-08-13).
-   *
-   * ⚠️ iOS는 재생을 사용자 제스처 안에서 시작하길 요구한다. 여기서는 달력의
-   *    버튼 누름이 그 제스처이고 마운트 직후 이어 부르지만, 기기가 거절하면
-   *    재생 오류가 뜨고 고르는 화면으로 남는다 — 그때는 사용자가 한 번 더
-   *    누르면 된다. 예전 동작으로 내려앉을 뿐 막히지 않는다.
-   */
-  autoStart?: boolean;
+  /*
+    ⚠️ **`autoStart`를 되살리지 마라** (사용자 지시 2026-08-25).
+
+    2026-08-13에 달력·기록 화면의 인터벌 계획이 시트를 열자마자 재생하게
+    했었다. 그러면 계획에 적힌 코스로 음악이 곧장 시작돼 **오늘 몇 분을 할지
+    고를 자리가 없다.** 계획을 짤 때와 실제로 몸을 쓰는 때의 컨디션은 다르다.
+    계획은 `initialPicked`·`initialMinutes`로 채워 두고, 시작은 사람이 누른다.
+  */
   /**
    * 열자마자 종목 고르기 화면을 편다 (사용자 지시 2026-08-13).
    *
@@ -115,7 +114,6 @@ function TabataSheetBody({
   routinesLoading,
   initialPicked,
   initialMinutes,
-  autoStart,
   openPickerOnMount,
   onPlan,
   planDateLabel = "",
@@ -163,15 +161,6 @@ function TabataSheetBody({
       void wakeLockRef.current?.release().catch(() => undefined);
     };
   }, []);
-
-  const startedRef = useRef(false);
-  useEffect(() => {
-    if (!autoStart || startedRef.current) return;
-    startedRef.current = true;
-    void start();
-    // 마운트 직후 한 번만 — 의존성에 start를 넣으면 렌더마다 다시 시작한다
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoStart]);
 
   async function acquireWakeLock() {
     try {
@@ -384,7 +373,14 @@ function TabataSheetBody({
               </b>
             </p>
 
-            <div className="mt-3 flex gap-1.5">
+            {/*
+              고르는 것이 **시간**임을 글자로 적는다 (사용자 지시 2026-08-25).
+
+              예정표에서 온 경우 이 줄이 특히 중요하다 — 계획한 코스가 이미
+              눌려 있어서, 이름표가 없으면 "바꿀 수 있는 값"으로 안 읽힌다.
+            */}
+            <p className="mt-3 text-xs font-extrabold">오늘 할 시간</p>
+            <div className="mt-1.5 flex gap-1.5">
               {TABATA_TRACKS.map((t: TabataTrack) => (
                 <button
                   key={t.id}

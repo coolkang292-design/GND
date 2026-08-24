@@ -270,14 +270,6 @@ type TabataPrefill = {
    * 지난 기록에서 되살린 타바타는 지울 계획이 없으므로 생략한다.
    */
   planId?: string;
-  /**
-   * 열자마자 바로 시작할 것인가 (사용자 지시 2026-08-13).
-   *
-   * 달력의 계획에서 온 경우다 — 계획이 종목과 코스를 이미 들고 있어서 시트에서
-   * 한 번 더 고를 것이 없다. 근력 계획은 이미 한 번에 시작하고 있었고, 인터벌만
-   * `준비하기`로 남아 있었다.
-   */
-  autoStart?: boolean;
   /** 열자마자 종목 고르기 화면을 편다 (상황별 추천에서 옴) */
   openPicker?: boolean;
 };
@@ -2040,7 +2032,16 @@ function WorkoutScreen({ userId }: { userId: string }) {
     } finally {
       tabataMinutesRef.current = null; // 일반 운동 시작에 표식이 새지 않게
     }
-    return draftRef.current.startedAtMs !== null;
+    const started = draftRef.current.startedAtMs !== null;
+    /*
+      오늘 인터벌 계획 배너는 **실제로 시작했을 때** 내린다 (2026-08-25).
+
+      예전에는 배너를 누른 자리에서 바로 지웠다. 그때는 누르는 것이 곧 시작이라
+      맞았지만, 지금은 누르면 코스를 고르는 시트가 열릴 뿐이다 — 거기서 닫으면
+      계획은 그대로인데 배너만 사라져서 달력까지 들어가야 했다.
+    */
+    if (started) setTodayIntervalPlan(null);
+    return started;
   }
 
   async function completeTabata() {
@@ -2075,6 +2076,12 @@ function WorkoutScreen({ userId }: { userId: string }) {
    *
    * ⚠️ 전신 인터벌은 `startNow`를 받지 않는다. 음원·코스를 시트에서 고르는 것이
    *    곧 시작이라, 여기서 세션을 먼저 열면 시트가 그 위에 뜬다.
+   *
+   * ⚠️⚠️ **인터벌 계획을 눌러도 바로 시작하지 않는다** (사용자 지시 2026-08-25).
+   *    2026-08-13에 시트를 열자마자 자동 재생하게 했었는데, 그러면 계획에 적힌
+   *    코스(4·8·16분)로 음악이 곧장 시작돼 **오늘 몇 분을 할지 고를 자리가
+   *    없었다.** 계획을 짤 때와 실제로 몸을 쓰는 때의 컨디션은 다르다.
+   *    시트를 고르는 화면(`setup`)으로 열고, 시작은 시트의 버튼이 한다.
    */
   async function handleLoadPlan(
     plan: WorkoutPlan,
@@ -2108,7 +2115,6 @@ function WorkoutScreen({ userId }: { userId: string }) {
         picked,
         minutes: plan.tabataMinutes,
         planId: plan.id,
-        autoStart: options?.startNow === true,
       });
       return true;
     }
@@ -2997,11 +3003,15 @@ function WorkoutScreen({ userId }: { userId: string }) {
       ) : (
         <>
           {/*
-        오늘 인터벌 계획이 있으면 **여기서 바로 시작한다** (사용자 지시 2026-08-13).
+        오늘 인터벌 계획이 있으면 **여기서 인터벌 시트를 연다** (2026-08-13).
 
         근력 계획은 화면을 열 때 목록에 자동으로 담기는데 인터벌은 담을 수가
         없다 — 종목만 담으면 음원도 코스도 없는 맨몸 운동 넷이 된다. 그래서
         담는 대신 버튼을 세운다. 달력까지 들어가지 않아도 된다.
+
+        ⚠️ 누르면 **바로 시작하지 않는다** (사용자 지시 2026-08-25). 계획한
+           종목·코스를 채운 채 시트를 열고, 오늘 할 시간(4·8·16분)을 고른 뒤
+           시트의 `전신 인터벌 시작`이 시작한다.
 
         ⚠️ 운동 중에는 안 보여 준다. 진행 중인 세션 위에 또 시작할 자리를 주면
            "이미 운동 중이에요"만 보게 된다.
@@ -3012,12 +3022,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
               data-testid="today-interval-start"
               disabled={busy}
               onClick={() => {
-                void (async () => {
-                  const started = await handleLoadPlan(todayIntervalPlan, {
-                    startNow: true,
-                  });
-                  if (started) setTodayIntervalPlan(null);
-                })();
+                // 배너를 내리는 것은 `beginTabata`가 한다 — 시트를 닫고 돌아온
+                // 사람에게 계획이 사라져 보이면 안 된다 (2026-08-25).
+                void handleLoadPlan(todayIntervalPlan);
               }}
               className="mb-3 flex w-full items-center justify-between gap-3 rounded-card border border-accent/55 bg-accent/10 px-4 py-3.5 text-left disabled:opacity-60"
             >
@@ -3275,7 +3282,6 @@ function WorkoutScreen({ userId }: { userId: string }) {
           <TabataSheet
             open={tabataOpen}
             onPlayingChange={setIntervalPlaying}
-            autoStart={tabataPrefill?.autoStart}
             openPickerOnMount={tabataPrefill?.openPicker}
             catalog={catalog}
             onClose={() => {

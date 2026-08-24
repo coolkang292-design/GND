@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CatalogExercise } from "@/lib/types";
 import type { CalendarSession } from "@/lib/workout";
@@ -61,6 +67,7 @@ function setup(
   over: {
     pastSessions?: CalendarSession[];
     initialPicked?: CatalogExercise[];
+    initialMinutes?: TabataMinutes;
     onBegin?: (
       picked: CatalogExercise[],
       minutes: TabataMinutes,
@@ -74,6 +81,7 @@ function setup(
       pastSessions={over.pastSessions ?? []}
       pastLoading={false}
       initialPicked={over.initialPicked}
+      initialMinutes={over.initialMinutes}
       onClose={vi.fn()}
       onCreateCustom={vi.fn()}
       onBegin={over.onBegin ?? vi.fn()}
@@ -82,6 +90,46 @@ function setup(
     />,
   );
 }
+
+/**
+ * 예정표에서 연 인터벌도 **고르는 화면으로 연다** (사용자 지시 2026-08-25).
+ *
+ * 2026-08-13에는 계획에서 열면 마운트 직후 자동 재생(`autoStart`)했다. 계획이
+ * 종목과 코스를 이미 들고 있으니 고를 것이 없다고 봤는데, **오늘 몇 분을 할지는
+ * 그날 정하는 값**이었다. 계획을 짤 때와 실제로 몸을 쓰는 때의 컨디션이 다르다.
+ *
+ * ⚠️ 이 테스트가 지키는 것은 "안 시작한다"는 **부정**이다. `autoStart`가 다시
+ *    들어오면 `onBegin`과 `play`가 눌리지 않았는데도 불린다.
+ */
+describe("TabataSheet — 예정표에서 열어도 바로 시작하지 않는다 (2026-08-25)", () => {
+  it("계획한 코스를 고른 채 setup으로 열고, 음원도 세션도 건드리지 않는다", () => {
+    const play = vi
+      .spyOn(HTMLMediaElement.prototype, "play")
+      .mockResolvedValue();
+    const onBegin = vi.fn().mockResolvedValue(true);
+    setup({ initialPicked: FOUR, initialMinutes: 8, onBegin });
+
+    expect(screen.getByText("오늘 할 시간")).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "8분" }).getAttribute("aria-pressed"),
+    ).toBe("true");
+    // 고르는 화면이다 — 하는 화면(전체화면 오버레이)의 버튼은 아직 없다
+    expect(screen.queryByRole("button", { name: "중단하기" })).toBeNull();
+    expect(onBegin).not.toHaveBeenCalled();
+    expect(play).not.toHaveBeenCalled();
+  });
+
+  it("계획한 8분 대신 16분을 골라 시작할 수 있다", async () => {
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
+    const onBegin = vi.fn().mockResolvedValue(true);
+    setup({ initialPicked: FOUR, initialMinutes: 8, onBegin });
+
+    fireEvent.click(screen.getByRole("button", { name: "16분" }));
+    fireEvent.click(screen.getByRole("button", { name: "전신 인터벌 시작" }));
+
+    await waitFor(() => expect(onBegin).toHaveBeenCalledWith(FOUR, 16));
+  });
+});
 
 describe("TabataSheet — 운동 고르기 배선 (2026-08-06)", () => {
   it("전신 인터벌의 시간·리듬·시작 행동을 한 언어로 안내한다", () => {
