@@ -75,3 +75,6 @@ scripts/*-temp.py
 # 설치 안내 스크린샷 원본 (장당 1~3MB) — 산출물 webp만 커밋한다.
 # 무엇을 어떻게 찍는지는 docs/design-sources/install-guide/README.md
 docs/design-sources/install-guide/*.png
+
+# 앱스토어 제출용 스크린샷 원본 (로컬 보관, 저장소에 넣지 않는다)
+어플 설치이미지/
