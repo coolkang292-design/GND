@@ -120,6 +120,15 @@ import {
   propagateAmount,
   type AmountFieldKey,
 } from "@/lib/domain/set-input";
+import {
+  buildSpreadOffer,
+  type SpreadOffer,
+} from "@/lib/domain/set-spread";
+import {
+  previousHintFor,
+  type PreviousHint,
+  type PreviousSet,
+} from "@/lib/domain/previous-set";
 import { bottomOffset, MINIMIZED_BAR } from "@/lib/domain/floating-bars";
 import {
   lastSetCheer,
@@ -209,6 +218,13 @@ import {
  */
 const INTERVAL_SUGGESTION_NAMES: readonly string[] =
   SITUATIONS.find((s) => s.key === "interval")?.names ?? [];
+
+/**
+ * 지난 기록을 아직 못 받았을 때 쓰는 빈 Map — **모듈 상수여야 한다.**
+ * 렌더마다 `new Map()`을 만들면 참조가 매번 달라져 이것을 의존성에 쓰는 곳이
+ * 무한히 다시 돈다.
+ */
+const EMPTY_PREVIOUS: ReadonlyMap<string, PreviousSet[]> = new Map();
 
 export default function RecordPage() {
   const { userId, loading, configured, error } = useAuth();
@@ -353,6 +369,39 @@ function WorkoutScreen({ userId }: { userId: string }) {
    */
   const [minimized, setMinimized] = useState(false);
   /**
+   * 오버레이에서 **지금 세트의 어느 칸을 실제로 건드렸나** (설계 2026-08-24 §2.3).
+   *
+   * ⚠️ **값 비교로 대신할 수 없다.** 담기 단계는 세트마다 다른 값을 **일부러**
+   * 넣는 자리라(피라미드·드롭세트), "뒤 세트와 값이 다르다"만으로 물으면 매 세트
+   * 거짓 알림이 된다. 사용자가 스테퍼·빠른칩·'한 번 더'로 바꾼 것만 여기 담긴다.
+   *
+   * 종목·세트 번호를 같이 든다 — 초점이 옮겨간 뒤 옛 흔적이 다음 세트에 붙는 것을
+   * 막는다. 안 맞으면 그냥 무시되므로 따로 비울 일이 없다.
+   */
+  const [touchedAmounts, setTouchedAmounts] = useState<{
+    exKey: string;
+    setIndex: number;
+    keys: AmountFieldKey[];
+  } | null>(null);
+  /**
+   * 휴식 화면에 띄울 **"남은 세트도 이렇게 할까요?" 제안** (설계 2026-08-24 §2.4).
+   *
+   * ⚠️ **`운동 완료` 시점에 굳힌다.** `toggleDone()`이 `advanceSetFocus()`로 초점을
+   * 이미 다음 세트로 옮기므로, 휴식 화면에서 `touchedAmounts`를 읽으면 늦는다.
+   * 그래서 **어느 종목 몇 번째 세트에서 나왔는지**를 같이 든다 — 화면의
+   * `focusedExercise`로는 대상을 못 찾는다.
+   *
+   * ⚠️ **localStorage에 넣지 않는다.** 새로고침하면 배너 하나를 놓치지만, draft
+   * 버전을 올리면 승격 코드가 는다 — `minimized`와 같은 판단이다.
+   */
+  const [spreadOffer, setSpreadOffer] = useState<{
+    /** 어느 세션에서 나온 제안인가 — 지난 운동의 배너가 되살아나지 않게 */
+    sessionId: string;
+    exKey: string;
+    fromIndex: number;
+    offer: SpreadOffer;
+  } | null>(null);
+  /**
    * 팝업이 보여줄 **한 종목**의 위치 (2026-08-04, 사용자 지적으로 추가).
    *
    * 파생하지 않고 상태로 든다 — "미완료 첫 세트가 있는 종목"으로 매번 계산하면
@@ -487,6 +536,120 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const autoFinishTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const active = draft.sessionId !== null && draft.startedAtMs !== null;
+  /*
+    지금 세션의 제안만 살아 있는 것으로 본다 (설계 2026-08-24 §2.4).
+
+    ⚠️ **`handleFinish`·`handleCancel`에서 지우는 방식으로 바꾸지 마라.** 리셋
+    경로는 지금도 둘이고 앞으로 더 늘 수 있다(자동 종료·세션 만료) — 한 군데를
+    빠뜨리면 **다음 운동을 시작한 순간 지난 운동의 배너가 되살아난다.**
+    세션 id를 대조하면 그 사고가 구조적으로 불가능하다.
+    (effect에서 `setState`로 지우는 방법은 `react-hooks/set-state-in-effect`가 막는다.)
+  */
+  const liveSpreadOffer =
+    spreadOffer && spreadOffer.sessionId === draft.sessionId
+      ? spreadOffer
+      : null;
+  /*
+    종목 이름 → **지난번 완료 세트들** (설계 2026-08-24 §3.9).
+
+    ⚠️ **`sessionId`를 같이 든다.** 안 그러면 운동을 마치고 곧바로 같은 종목을
+    다시 담았을 때, 방금 끝낸 세션을 뺀 옛 자료가 "지난번"으로 남는다.
+    `liveSpreadOffer`와 같은 방식이다.
+
+    ⚠️ **draft(localStorage)에 넣지 않는다.** 넣으면 draft 버전을 올려야 하고
+    승격 코드가 는다. 새로고침 때 아래 effect가 다시 받는다.
+
+    **없음(`Map`에 키 없음)과 빈 배열은 다르다.** 없음은 "아직 못 받았다"이고
+    빈 배열은 "받아 봤는데 완료 기록이 없다(첫 기록)"이다. 이걸 합치면 자료가
+    도착하기 전 한 순간 `첫 기록이에요`가 번쩍인다.
+  */
+  const [previousSets, setPreviousSets] = useState<{
+    sessionId: string;
+    byName: Map<string, PreviousSet[]>;
+  } | null>(null);
+  const previousByName =
+    previousSets && previousSets.sessionId === draft.sessionId
+      ? previousSets.byName
+      : EMPTY_PREVIOUS;
+  /** 이미 조회를 띄운 이름 — 같은 종목을 두 번 요청하지 않는다 */
+  const previousRequested = useRef<{ sessionId: string | null; names: Set<string> }>(
+    { sessionId: null, names: new Set() },
+  );
+  /**
+   * 담긴 종목 이름들 — 배열은 렌더마다 새 참조라 의존성으로 못 쓴다.
+   * ⚠️ 구분자로 이어 붙이지 마라. 종목 이름에 그 문자가 들어갈 수 있다.
+   */
+  const exerciseNamesKey = JSON.stringify(draft.exercises.map((ex) => ex.name));
+
+  /*
+    운동 중인 종목들의 **지난번 완료 세트**를 받아 둔다 (설계 2026-08-24 §3.9).
+
+    ⚠️ **호출 자리를 셋으로 나누지 마라.** 운동 시작·종목 추가/교체·새로고침 복구
+    세 경우가 전부 "담긴 이름이 바뀌었다"로 같다. `handleStart`·`addPicked`·복구에
+    각각 심으면 새 경로가 생길 때마다 빠뜨린다.
+
+    ⚠️ **아직 안 받은 이름만 요청한다.** `getPreviousExerciseRecords`는 쿼리 2번으로
+    이름 여러 개를 한 번에 처리하므로, 종목을 하나 더 담아도 그 하나만 나간다.
+
+    ⚠️ **실패해도 운동을 막지 않는다.** 지난 기록은 참고지 필수가 아니다. 요청
+    이력에서만 빼서 다음 기회에 다시 받는다.
+  */
+  useEffect(() => {
+    const sessionId = draft.sessionId;
+    if (!active || !sessionId) return;
+
+    if (previousRequested.current.sessionId !== sessionId) {
+      previousRequested.current = { sessionId, names: new Set() };
+    }
+    const requested = previousRequested.current.names;
+    const names = Array.from(
+      new Set((JSON.parse(exerciseNamesKey) as string[]).filter(Boolean)),
+    ).filter((name) => !requested.has(name));
+    if (names.length === 0) return;
+    names.forEach((name) => requested.add(name));
+
+    /*
+      ⚠️ **`cancelled` 플래그를 도로 넣지 마라** (2026-08-24 개발 서버에서 잡음).
+
+      처음엔 cleanup에서 `cancelled = true`로 결과를 버렸다. 그런데 이 effect는
+      요청을 띄우기 **전에** 이름을 `requested`에 표시한다 — StrictMode가 개발에서
+      effect를 두 번 실행하면 ① 1회차가 표시하고 fetch 시작 ② cleanup이 결과를
+      버리도록 표시 ③ 2회차는 이미 표시돼 있어 건너뜀. **아무도 채우지 않는다.**
+      새로고침으로 세션을 복구하면 지난 기록이 영영 안 떴다.
+
+      버려도 안전한 이유가 없으니 그냥 받는다. 결과는 `sessionId`로 묶여 있고,
+      화면은 `draft.sessionId`와 대조해서 쓴다(`previousByName`) — 옛 세션 응답이
+      늦게 와도 화면에 못 들어간다.
+    */
+    void getPreviousExerciseRecords(userId, names, sessionId)
+      .then((records) => {
+        setPreviousSets((current) => {
+          const byName =
+            current && current.sessionId === sessionId
+              ? new Map(current.byName)
+              : new Map<string, PreviousSet[]>();
+          for (const name of names) {
+            // 기록이 없으면 **빈 배열**을 넣는다 — "못 받았다"와 구분해야
+            // `첫 기록이에요`를 자료 도착 전에 띄우지 않는다
+            byName.set(
+              name,
+              (records.get(name)?.sets ?? [])
+                .filter((set) => set.isCompleted)
+                .map((set) => ({
+                  weightKg: set.weightKg,
+                  reps: set.reps,
+                  distanceKm: set.distanceKm,
+                  durationMin: set.durationMin,
+                })),
+            );
+          }
+          return { sessionId, byName };
+        });
+      })
+      .catch(() => {
+        names.forEach((name) => requested.delete(name));
+      });
+  }, [active, draft.sessionId, exerciseNamesKey, userId]);
 
   const clearAutoFinish = useCallback(() => {
     if (autoFinishTimer.current) {
@@ -912,6 +1075,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
     ) {
       return;
     }
+
+    // 이 종목에 걸린 제안은 대상이 사라지므로 같이 치운다 (설계 2026-08-24 §2.4)
+    if (liveSpreadOffer?.exKey === exKey) setSpreadOffer(null);
 
     let skipped = 0;
     let nextExercises: LocalExercise[] = draftRef.current.exercises;
@@ -1419,42 +1585,62 @@ function WorkoutScreen({ userId }: { userId: string }) {
   }
 
   /**
-   * 오버레이 스테퍼로 값을 바꿨다 — **지금 세트와 뒤에 남은 세트에 함께** 쓴다
-   * (2026-08-09 사용자 지시 "운동중 무게 수정하면 다음 세트부터 일괄 적용하게").
+   * 오버레이에서 값을 바꿨다 — **지금 세트만** 바꾸고, 건드린 칸을 기억한다
+   * (설계 2026-08-24 §2.2, 사용자 지시 "운동완료를 누르기 전에 무게나 세트를
+   * 변경을 하게 되면 적용시키는 걸로").
+   *
+   * ⚠️ **여기서 뒤 세트에 전파하지 마라.** 2026-08-09~2026-08-24 사이에는 스테퍼를
+   * 누르는 즉시 `propagateAmount()`가 돌아 뒤 세트가 조용히 바뀌고 토스트가 떴다.
+   * 이제는 `운동 완료` 때 제안을 만들고(`toggleDone`), 사용자가 휴식 화면 배너에서
+   * `적용하기`를 눌러야 전파한다(`applySpreadOffer`).
    *
    * ⚠️ **`ExerciseCard`의 입력창에는 붙이지 않는다.** 거기는 담기 단계에서
-   * 세트별로 다르게 설계하는 자리다(피라미드·드롭세트). 사용자의 요구도
-   * "운동 시작하고 운동중"이라 **오버레이 경로 한정**이다.
-   *
-   * 조용히 바꾸지 않는다 — 뒤 세트 셋이 말없이 바뀌면 사용자는 모른다.
-   * 실제로 바뀐 개수(`propagateAmount`의 `changed`)로만 토스트를 띄운다.
+   * 세트별로 다르게 설계하는 자리다 — `updateSetFromCard()`가 따로 있다.
    */
-  function applyAmountFromHere(
+  function changeAmountInSet(
     exKey: string,
     si: number,
     key: AmountFieldKey,
     value: number,
   ) {
-    const exercise = draftRef.current.exercises.find((ex) => ex.key === exKey);
-    const field = exercise
-      ? amountFields(exercise.exerciseType, exercise.measure).find(
-          (f) => f.key === key,
-        )
-      : undefined;
-
-    let changed = 0;
-    updateExercise(exKey, (ex) => {
-      const withCurrent = ex.sets.map((s, i) =>
-        i === si ? { ...s, [key]: value } : s,
-      );
-      const spread = propagateAmount(withCurrent, si, key, value);
-      changed = spread.changed;
-      return { ...ex, sets: spread.sets };
+    updateSet(exKey, si, { [key]: value });
+    setTouchedAmounts((current) => {
+      if (current?.exKey !== exKey || current.setIndex !== si) {
+        return { exKey, setIndex: si, keys: [key] };
+      }
+      return current.keys.includes(key)
+        ? current
+        : { ...current, keys: [...current.keys, key] };
     });
+  }
 
-    if (changed > 0 && field) {
-      showToast(`다음 ${changed}세트에도 ${value}${field.unit} 적용했어요`);
-    }
+  /**
+   * 배너의 `적용하기` — 굳혀 둔 제안을 뒤 세트에 쓴다.
+   *
+   * ⚠️ **대상이 사라졌으면 조용히 넘어간다.** 배너를 답하기 전에 종목을 빼거나
+   * (`handleSkipExercise`) 세트가 줄었을 수 있다. 그때 토스트로 실패를 알리면
+   * 방금 자기가 뺀 종목 이야기를 듣게 된다.
+   */
+  function applySpreadOffer() {
+    const pending = liveSpreadOffer;
+    setSpreadOffer(null);
+    if (!pending) return;
+
+    const target = draftRef.current.exercises.find(
+      (ex) => ex.key === pending.exKey,
+    );
+    if (!target || !target.sets[pending.fromIndex]) return;
+
+    updateExercise(pending.exKey, (ex) => {
+      let sets = ex.sets;
+      for (const field of pending.offer.fields) {
+        // 전파 규칙은 `propagateAmount`가 유일한 출처다 — 완료한 세트를 건너뛰는
+        // 것도 거기 있다. 여기서 다시 짜면 두 벌이 갈라진다.
+        sets = propagateAmount(sets, pending.fromIndex, field.key, field.value)
+          .sets;
+      }
+      return { ...ex, sets };
+    });
   }
 
   function toggleDone(exKey: string, si: number) {
@@ -1471,6 +1657,33 @@ function WorkoutScreen({ userId }: { userId: string }) {
     const restPlan = getRestCountdownTogglePlan(ex.exerciseType, willDone);
     if (restPlan.prepareAudio) prepareRestCountdownAudio();
     updateSet(exKey, si, { done: willDone });
+    /*
+      "남은 세트도 이렇게 할까요?" 제안을 **여기서 굳힌다** (설계 2026-08-24 §2.4).
+
+      ⚠️ **`advanceSetFocus()`보다 앞이어야 한다.** 초점이 다음 세트로 옮겨간 뒤에
+      `touchedAmounts`를 읽으면 이미 늦다 — 비우면 배너가 읽을 게 없고, 안 비우면
+      옛 흔적이 다음 세트에 붙는다.
+
+      `ex.sets`를 그대로 쓴다. 방금 건 `done`은 판정에 안 쓰이고(대상은 **뒤** 세트다),
+      `draftRef`는 바로 위 `updateSet`을 아직 반영하지 않았을 수 있다.
+    */
+    if (willDone) {
+      const touched =
+        touchedAmounts?.exKey === exKey && touchedAmounts.setIndex === si
+          ? touchedAmounts.keys
+          : [];
+      const offer = buildSpreadOffer({
+        sets: ex.sets,
+        fromIndex: si,
+        touched,
+        fields: amountFields(ex.exerciseType, ex.measure),
+      });
+      const sessionId = draftRef.current.sessionId;
+      setSpreadOffer(
+        offer && sessionId ? { sessionId, exKey, fromIndex: si, offer } : null,
+      );
+      setTouchedAmounts(null);
+    }
     // 그 종목을 다 끝냈으면 다음 종목으로 옮겨 준다 (설계 ②).
     // 해제(willDone=false)에는 움직이지 않는다 — 되돌리는 중에 화면이 튀면 안 된다.
     if (willDone) {
@@ -2389,6 +2602,44 @@ function WorkoutScreen({ userId }: { userId: string }) {
   */
   const overlayOpen = active && !minimized && !intervalPlaying;
   const nextUp = nextUpSet(draft.exercises);
+
+  /*
+    지난번 같은 번호 세트와 견준 결과 (설계 2026-08-24 §3).
+
+    ⚠️ **`previousByName.get()`이 `undefined`면 아직 못 받은 것이다.** 그걸
+    "기록 없음"으로 넘기면 자료가 도착하기 전 한 순간 `첫 기록이에요`가 번쩍인다.
+    빈 배열만 "받아 봤는데 없다"이다.
+
+    ⚠️ 유형 분기는 `previousHintFor` 안에서 한다 — 여기서 칸 목록을 만들어
+    넘기면 종목과 안 맞는 것을 넘길 수 있다.
+  */
+  function previousHintOf(
+    exercise: LocalExercise | undefined,
+    setIndex: number,
+  ): PreviousHint | null {
+    if (!exercise) return null;
+    const recorded = previousByName.get(exercise.name);
+    if (recorded === undefined) return null;
+    const set = exercise.sets[setIndex];
+    if (!set) return null;
+    return previousHintFor({
+      previousSets: recorded,
+      setIndex,
+      current: {
+        weightKg: set.weightKg,
+        reps: set.reps,
+        distanceKm: set.distanceKm,
+        durationMin: set.durationMin,
+      },
+      exerciseType: exercise.exerciseType,
+      measure: exercise.measure,
+    });
+  }
+
+  /** 휴식 화면은 **다음에 할 세트**를 견준다 — 방금 끝낸 세트가 아니다 */
+  const nextUpHint = nextUp
+    ? previousHintOf(draft.exercises[nextUp.exerciseIndex], nextUp.setNumber - 1)
+    : null;
   /** 아직 완료하지 않은 세트 수 — 1이면 지금 보는 것이 오늘의 마지막이다 */
   const pendingSetCount = draft.exercises.reduce(
     (count, exercise) =>
@@ -3184,19 +3435,33 @@ function WorkoutScreen({ userId }: { userId: string }) {
         busy={busy}
         onChangeAmount={(key, value) => {
           if (!focusedExercise) return;
-          applyAmountFromHere(
+          changeAmountInSet(focusedExercise.key, setFocus.setIndex, key, value);
+        }}
+        previousHint={previousHintOf(focusedExercise, setFocus.setIndex)}
+        onChallengeReps={(reps) => {
+          if (!focusedExercise) return;
+          changeAmountInSet(
             focusedExercise.key,
             setFocus.setIndex,
-            key,
-            value,
+            "reps",
+            reps,
           );
         }}
+        nextUpHint={nextUpHint}
+        onNextUpChallengeReps={(reps) => {
+          // 다음 세트를 바꾼다 — 지금 세트가 아니다. `한 번 더`도 사용자가 직접
+          // 바꾼 값이므로 `changeAmountInSet`을 거쳐 `touched`에 남는다.
+          if (!nextUp) return;
+          const target = draft.exercises[nextUp.exerciseIndex];
+          if (!target) return;
+          changeAmountInSet(target.key, nextUp.setNumber - 1, "reps", reps);
+        }}
+        spreadOffer={liveSpreadOffer?.offer ?? null}
+        onApplySpread={applySpreadOffer}
+        onDismissSpread={() => setSpreadOffer(null)}
         onCompleteSet={() => {
           if (!focusedExercise || !focusedSet || focusedSet.done) return;
           toggleDone(focusedExercise.key, setFocus.setIndex);
-        }}
-        onLoadLast={() => {
-          if (focusedExercise) void loadLastExercise(focusedExercise);
         }}
         canReplaceExercise={canReplaceExercise(focusedExercise)}
         onReplaceExercise={() => {

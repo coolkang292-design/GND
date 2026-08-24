@@ -3,6 +3,8 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { amountFields } from "@/lib/domain/set-input";
+import type { SpreadOffer } from "@/lib/domain/set-spread";
+import type { PreviousHint } from "@/lib/domain/previous-set";
 import type { ExercisePrescription } from "@/lib/domain/workout-plan";
 import { ActiveSessionOverlay } from "./active-session-overlay";
 
@@ -30,9 +32,17 @@ const base = {
   onOpenGuide: undefined as ((name: string) => void) | undefined,
   // 프로그램 처방 — 기본은 없음(일반 운동)
   prescription: undefined as ExercisePrescription | undefined,
+  // 지난 기록 — 기본은 없음(아직 못 받은 상태). 보려는 테스트만 실어 준다
+  previousHint: null as PreviousHint | null,
+  onChallengeReps: vi.fn(),
+  nextUpHint: null as PreviousHint | null,
+  onNextUpChallengeReps: vi.fn(),
+  // 적용 제안 — 기본은 없음. 배너를 보려는 테스트만 실어 준다 (설계 2026-08-24 §2)
+  spreadOffer: null as SpreadOffer | null,
+  onApplySpread: vi.fn(),
+  onDismissSpread: vi.fn(),
   onChangeAmount: vi.fn(),
   onCompleteSet: vi.fn(),
-  onLoadLast: vi.fn(),
   canReplaceExercise: true,
   onReplaceExercise: vi.fn(),
   onSkipExercise: vi.fn(),
@@ -170,12 +180,20 @@ describe("ActiveSessionOverlay — 운동 중(입력) 화면", () => {
     expect(onCompleteSet).toHaveBeenCalled();
   });
 
-  it("이전 기록 불러오기가 있다", () => {
-    const onLoadLast = vi.fn();
-    renderInput({ onLoadLast });
+  /**
+   * ⚠️ **되돌리지 마라.** 예전 이 자리에는 `이전 기록 불러오기가 있다`가 있었고,
+   * "버튼이 콜백을 부른다"만 단언했다. 정작 그 콜백(`loadLastExercise`)은
+   * `if (active) return;`으로 시작하는데 오버레이는 **항상 `active`**라, 눌러도
+   * 아무 일도 안 일어나는 버튼을 2026-08-09부터 통과시키고 있었다.
+   * (`CLAUDE.md` §테스트가 진짜 테스트인지 확인한다의 표본이다.)
+   *
+   * 지금은 세트마다 지난 기록이 보이므로(§3) 그 버튼의 용무가 끝났다.
+   * `ExerciseCard`(담기 단계)의 같은 버튼은 `active`가 아니라 정상 동작한다.
+   */
+  it("운동 중에는 '이전 기록 불러오기'를 그리지 않는다", () => {
+    renderInput();
 
-    fireEvent.click(screen.getByRole("button", { name: /이전 기록 불러오기/ }));
-    expect(onLoadLast).toHaveBeenCalled();
+    expect(screen.queryByText(/이전 기록 불러오기/)).toBeNull();
   });
 
   it("휴식 화면의 것들은 그리지 않는다", () => {
@@ -183,6 +201,172 @@ describe("ActiveSessionOverlay — 운동 중(입력) 화면", () => {
 
     expect(screen.queryByText(/휴식 중/)).toBeNull();
     expect(screen.queryByText(/다음 운동 시작/)).toBeNull();
+  });
+});
+
+/**
+ * 지난번 기록 + "한 번 더" (설계 2026-08-24 §3).
+ *
+ * 운동 중에는 지난번에 몇 kg 몇 회를 했는지 볼 길이 없었다.
+ */
+describe("ActiveSessionOverlay — 지난번 기록", () => {
+  const challengeable: PreviousHint = {
+    kind: "set",
+    previous: { weightKg: 40, reps: 10, distanceKm: 0, durationMin: 0 },
+    amountLabel: "40kg 10회",
+    challengeReps: 11,
+    cheer: "🔥 지난번보다 한 번 더 — 11회로",
+  };
+  const weightRaised: PreviousHint = {
+    kind: "set",
+    previous: { weightKg: 40, reps: 10, distanceKm: 0, durationMin: 0 },
+    amountLabel: "40kg 10회",
+    challengeReps: null,
+    cheer: "무게를 올렸어요 — 횟수는 무리하지 말고",
+  };
+
+  it("입력 화면에 지난번 값과 세트 번호를 보여준다", () => {
+    renderInput({ previousHint: challengeable, setPosition: { index: 1, total: 3 } });
+
+    expect(screen.getByText(/지난번 2세트/)).toBeTruthy();
+    expect(screen.getByText("40kg 10회")).toBeTruthy();
+  });
+
+  it("한 번 더를 누르면 지난번+1 횟수를 올려 보낸다", () => {
+    const onChallengeReps = vi.fn();
+    renderInput({ previousHint: challengeable, onChallengeReps });
+
+    fireEvent.click(screen.getByRole("button", { name: /한 번 더/ }));
+    expect(onChallengeReps).toHaveBeenCalledWith(11);
+  });
+
+  it("도전할 수 없으면 누를 수 있는 버튼을 그리지 않는다", () => {
+    // 무게를 올린 날이다. 눌러도 아무 일 없는 버튼은 화면이 거짓말하는 것이다.
+    renderInput({ previousHint: weightRaised });
+
+    expect(screen.getByText(/무게를 올렸어요/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /한 번 더/ })).toBeNull();
+  });
+
+  it("첫 기록이면 안내만 낸다", () => {
+    renderInput({
+      previousHint: { kind: "first", message: "이 종목은 오늘이 첫 기록이에요" },
+    });
+
+    expect(screen.getByText(/첫 기록이에요/)).toBeTruthy();
+    expect(screen.queryByText(/지난번/)).toBeNull();
+  });
+
+  it("지난 기록이 없으면 입력 화면에 아무것도 안 그린다", () => {
+    renderInput({ previousHint: null });
+
+    expect(screen.queryByText(/지난번/)).toBeNull();
+    expect(screen.queryByText(/첫 기록/)).toBeNull();
+  });
+
+  it("휴식 화면은 지난번·오늘 칩을 나란히 그린다", () => {
+    renderRest({ nextUpHint: challengeable });
+
+    expect(screen.getByText("지난번")).toBeTruthy();
+    expect(screen.getByText("오늘")).toBeTruthy();
+    expect(screen.getByText("40kg 10회")).toBeTruthy();
+    // `오늘` 칩은 다음 세트의 **실제** 값이다 — 도전 횟수를 미리 채우지 않는다
+    expect(screen.getByText("260kg 15회")).toBeTruthy();
+  });
+
+  it("휴식 화면의 한 번 더는 다음 세트 횟수를 바꾼다", () => {
+    const onNextUpChallengeReps = vi.fn();
+    renderRest({ nextUpHint: challengeable, onNextUpChallengeReps });
+
+    fireEvent.click(screen.getByRole("button", { name: /한 번 더/ }));
+    expect(onNextUpChallengeReps).toHaveBeenCalledWith(11);
+  });
+
+  it("지난 기록이 없으면 휴식 화면은 칩을 하나만 그린다 — 라벨도 없다", () => {
+    renderRest({ nextUpHint: null });
+
+    expect(screen.getByText("260kg 15회")).toBeTruthy();
+    expect(screen.queryByText("지난번")).toBeNull();
+    expect(screen.queryByText("오늘")).toBeNull();
+  });
+});
+
+/**
+ * "남은 세트도 이렇게 할까요?" 배너 (설계 2026-08-24 §2).
+ *
+ * 2026-08-09~2026-08-24 사이에는 스테퍼를 누르는 즉시 뒤 세트가 조용히 바뀌고
+ * 토스트가 떴다. 이제 묻고 나서 적용한다.
+ */
+describe("ActiveSessionOverlay — 남은 세트 적용 배너", () => {
+  const weightOnly: SpreadOffer = {
+    fields: [{ key: "weightKg", label: "무게", unit: "kg", value: 12.5 }],
+    targetCount: 2,
+  };
+
+  it("제안이 있으면 배너를 그리고 남은 세트 수를 그대로 말한다", () => {
+    renderRest({ spreadOffer: weightOnly });
+
+    // ⚠️ "배너가 있다"가 아니라 **숫자가 2인지**를 본다. 개수가 틀리면
+    //    사용자는 3세트가 바뀔 줄 알고 누른다.
+    expect(screen.getByText(/남은 2세트도 이렇게 할까요/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "적용하기" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "이번만" })).toBeTruthy();
+  });
+
+  it("제안이 없으면 배너가 아예 없다", () => {
+    renderRest({ spreadOffer: null });
+
+    expect(screen.queryByText(/이렇게 할까요/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "적용하기" })).toBeNull();
+  });
+
+  it("건드린 칸만 말한다 — 무게만 바꿨으면 횟수를 말하지 않는다", () => {
+    // 안 건드린 횟수까지 말하면 `적용하기`가 횟수도 바꿀 것처럼 읽힌다.
+    renderRest({ spreadOffer: weightOnly });
+
+    expect(screen.getByText(/12.5kg/)).toBeTruthy();
+    expect(screen.queryByText(/12.5kg 11회/)).toBeNull();
+  });
+
+  it("두 칸을 건드렸으면 둘 다 말한다", () => {
+    renderRest({
+      spreadOffer: {
+        fields: [
+          { key: "weightKg", label: "무게", unit: "kg", value: 12.5 },
+          { key: "reps", label: "횟수", unit: "회", value: 11 },
+        ],
+        targetCount: 3,
+      },
+    });
+
+    expect(screen.getByText(/12.5kg 11회/)).toBeTruthy();
+    expect(screen.getByText(/남은 3세트도/)).toBeTruthy();
+  });
+
+  it("적용하기와 이번만이 서로 다른 콜백을 부른다", () => {
+    const onApplySpread = vi.fn();
+    const onDismissSpread = vi.fn();
+    renderRest({ spreadOffer: weightOnly, onApplySpread, onDismissSpread });
+
+    fireEvent.click(screen.getByRole("button", { name: "적용하기" }));
+    expect(onApplySpread).toHaveBeenCalledTimes(1);
+    expect(onDismissSpread).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "이번만" }));
+    expect(onDismissSpread).toHaveBeenCalledTimes(1);
+    expect(onApplySpread).toHaveBeenCalledTimes(1);
+  });
+
+  it("입력 화면에는 배너를 그리지 않는다 — 휴식 화면 것이다", () => {
+    renderInput({ spreadOffer: weightOnly });
+
+    expect(screen.queryByText(/이렇게 할까요/)).toBeNull();
+  });
+
+  it("다 끝냈으면 배너를 그리지 않는다 — 적용할 세트가 없다", () => {
+    renderRest({ spreadOffer: weightOnly, nextUp: null });
+
+    expect(screen.queryByText(/이렇게 할까요/)).toBeNull();
   });
 });
 
@@ -584,28 +768,51 @@ describe("진행률·세트 남음 표시 (2026-08-07, 사용자 목업)", () =>
   it("휴식 중에 이 종목이 몇 세트 남았는지 말한다 (지시 ③)", () => {
     renderRest();
 
-    expect(screen.getByText("3세트 / 4세트")).toBeTruthy();
-    expect(screen.getByText("1세트 남음")).toBeTruthy();
+    // ⚠️ 숫자와 `세트 남음`이 **다른 span**이다 (2026-08-24, 숫자만 34px).
+    //    `getByText("1세트 남음")`으로 되돌리면 안 잡힌다.
+    const label = screen.getByText("세트 남음");
+    expect(label.previousElementSibling?.textContent).toBe("1");
+    expect(screen.getByText("3세트 / 4세트 완료")).toBeTruthy();
   });
 
   it("다 끝낸 화면에는 세트 남음 카드를 그리지 않는다", () => {
     renderRest({ nextUp: null });
 
-    expect(screen.queryByText("1세트 남음")).toBeNull();
+    // ⚠️ `"1세트 남음"`으로 찾지 마라. 2026-08-24부터 숫자와 문구가 쪼개져서
+    //    **카드가 멀쩡히 떠 있어도 null이 나온다** — 가짜 통과가 된다.
+    expect(screen.queryByText("세트 남음")).toBeNull();
   });
 
-  it("운동 시간은 휴식 타이머보다 작게 그린다 (사용자 지시 2026-08-07)", () => {
-    // 휴식 화면에서 제일 큰 숫자는 지금 세고 있는 휴식 시간이어야 한다.
+  it("이 종목을 다 했으면 큰 숫자 대신 다 했어요를 낸다", () => {
+    // `0 세트 남음`을 34px로 띄우면 남은 게 있다는 뜻으로 읽힌다.
+    renderRest({ setProgress: { done: 4, total: 4, remaining: 0 } });
+
+    expect(screen.getByText("이 종목은 다 했어요")).toBeTruthy();
+    expect(screen.queryByText("세트 남음")).toBeNull();
+  });
+
+  it("남은 세트는 휴식 타이머와 같은 크기, 운동 시간은 그보다 작다", () => {
+    /*
+      2026-08-07에는 "제일 큰 숫자는 휴식 시간 하나"였다. 2026-08-24 사용자
+      지시로 **남은 세트를 휴식 타이머와 같은 크기로** 올려 둘이 동급이 됐다.
+
+      ⚠️ 절대값(34)을 박지 않고 **셋의 관계**를 단언한다. 값을 박으면 디자인
+      토큰을 손볼 때 버그도 없이 깨진다.
+    */
     renderRest();
 
-    const elapsed = screen.getByText("24:18");
-    const rest = screen.getByText("00:50");
     const px = (el: HTMLElement) =>
-      Number(/text-\[(\d+)px\]/.exec(el.className)?.[1] ?? 0);
+      Number(/text-\[(\d+(?:\.\d+)?)px\]/.exec(el.className)?.[1] ?? 0);
+    const elapsed = px(screen.getByText("24:18"));
+    const rest = px(screen.getByText("00:50"));
+    const remaining = px(
+      screen.getByText("세트 남음").previousElementSibling as HTMLElement,
+    );
 
-    expect(px(elapsed)).toBeGreaterThan(0);
-    expect(px(rest)).toBeGreaterThan(0);
-    expect(px(elapsed)).toBeLessThan(px(rest));
+    expect(elapsed).toBeGreaterThan(0);
+    expect(rest).toBeGreaterThan(0);
+    expect(remaining).toBe(rest);
+    expect(elapsed).toBeLessThan(rest);
   });
 });
 

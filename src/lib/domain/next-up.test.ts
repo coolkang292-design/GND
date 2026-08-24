@@ -32,6 +32,7 @@ describe("nextUpSet", () => {
   it("같은 종목에 남은 세트가 있으면 그 세트를 가리킨다", () => {
     expect(nextUpSet([bench])).toEqual({
       exerciseName: "벤치 프레스",
+      exerciseIndex: 0,
       setNumber: 2,
       amount: "60kg 8회",
     });
@@ -51,6 +52,7 @@ describe("nextUpSet", () => {
 
     expect(nextUpSet([done, squat])).toEqual({
       exerciseName: "스쿼트",
+      exerciseIndex: 1,
       setNumber: 1,
       amount: "80kg 5회",
     });
@@ -103,6 +105,28 @@ describe("nextUpSet", () => {
 
     expect(nextUpSet([cardio])?.amount).toBe("3km 25분");
     expect(nextUpSet([plank])?.amount).toBe("2분");
+  });
+
+  it("세트가 없거나 다 끝난 종목을 건너뛰어도 exerciseIndex가 실제 위치를 가리킨다", () => {
+    // ⚠️ 화면은 이 값으로 `exercises[i]`를 찾아 **그 종목의 지난 기록**을 띄운다.
+    //    0부터 세거나 건너뛴 종목을 안 세면 엉뚱한 종목 기록이 붙는다.
+    const empty: NextUpExercise = {
+      name: "빈 종목",
+      exerciseType: "weight",
+      measure: null,
+      sets: [],
+    };
+    const finished: NextUpExercise = {
+      name: "끝난 종목",
+      exerciseType: "weight",
+      measure: null,
+      sets: [set(true)],
+    };
+
+    const next = nextUpSet([empty, finished, bench]);
+
+    expect(next?.exerciseName).toBe("벤치 프레스");
+    expect(next?.exerciseIndex).toBe(2);
   });
 
   it("세트가 없는 종목은 건너뛴다", () => {

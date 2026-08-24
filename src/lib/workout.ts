@@ -589,13 +589,21 @@ export async function getPreviousExerciseRecords(
       name: row.exercise_name,
       exerciseType: row.exercise_type,
       measure: row.measure,
-      sets: (row.workout_sets ?? []).map((s) => ({
-        weightKg: Number(s.weight_kg ?? 0),
-        reps: s.reps ?? 0,
-        distanceKm: Number(s.distance_meters ?? 0) / 1000,
-        durationMin: Math.round((s.duration_seconds ?? 0) / 60),
-        isCompleted: s.is_completed,
-      })),
+      // ⚠️ **`set_number`로 정렬한다** (2026-08-24). 예전엔 Supabase가 준 순서를
+      //    그대로 썼는데, 그건 보장이 없다. 완료 판정은 합계를 보므로 순서가
+      //    안 중요했지만, 운동 중 '지난번 기록'은 **같은 번호 세트끼리** 견주므로
+      //    (`previous-set.ts`) 순서가 어긋나면 1세트에 지난번 3세트가 붙는다.
+      //    반환 타입에 `set_number`가 없어 호출자는 정렬할 수 없다 — 여기가 유일한 자리다.
+      sets: (row.workout_sets ?? [])
+        .slice()
+        .sort((a, b) => (a.set_number ?? 0) - (b.set_number ?? 0))
+        .map((s) => ({
+          weightKg: Number(s.weight_kg ?? 0),
+          reps: s.reps ?? 0,
+          distanceKm: Number(s.distance_meters ?? 0) / 1000,
+          durationMin: Math.round((s.duration_seconds ?? 0) / 60),
+          isCompleted: s.is_completed,
+        })),
     });
   }
 
