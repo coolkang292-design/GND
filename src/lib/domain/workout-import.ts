@@ -1,13 +1,8 @@
 import type { LocalExercise, LocalSet } from "@/lib/workout";
 
-/**
- * `LocalExercise`가 기본이지만 **이름만 있으면 되는** 규칙이라 열어 둔다.
- * 예정표 편집(`plan-edit.ts`)이 `PlanExercise`로 같은 규칙을 쓴다 — 중복
- * 판정을 두 벌로 만들면 한쪽만 고쳐졌을 때 갈라진다.
- */
-export type ImportMergeResult<T = LocalExercise> = {
-  exercises: T[];
-  added: T[];
+export type ImportMergeResult = {
+  exercises: LocalExercise[];
+  added: LocalExercise[];
   skippedCount: number;
 };
 
@@ -87,12 +82,12 @@ function normalizedName(name: string): string {
 }
 
 /** 기존 준비 목록을 유지하면서 이름이 겹치지 않는 지난 운동만 뒤에 붙인다. */
-export function mergeImportedExercises<T extends { name: string }>(
-  current: T[],
-  imported: T[],
-): ImportMergeResult<T> {
+export function mergeImportedExercises(
+  current: LocalExercise[],
+  imported: LocalExercise[],
+): ImportMergeResult {
   const knownNames = new Set(current.map((item) => normalizedName(item.name)));
-  const added: T[] = [];
+  const added: LocalExercise[] = [];
 
   for (const item of imported) {
     const name = normalizedName(item.name);

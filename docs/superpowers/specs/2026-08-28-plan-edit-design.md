@@ -21,9 +21,38 @@
 | 가정 | 판정 | 근거 |
 |---|---|---|
 | 편집하려면 DB 작업이 필요하다 | **폐기** | `workout_plans_update_own`(0066)이 이미 UPDATE를 허용하고 `saveWorkoutPlan`은 `onConflict: user_id,plan_date` upsert다. 마이그레이션 0건 |
-| 예정표 편집 시트를 새로 만들어야 한다 | **폐기** | 세트·횟수·무게를 조절하는 화면이 이미 있다 — `ExerciseSetupSheet` |
-| 종목 이름을 카탈로그에서 찾아 복원해야 한다 | **폐기** | 그 화면이 실제로 읽는 건 `id`(key)·`name`·`exercise_type`·`measure` 넷뿐이고 `PlanExercise`에 셋이 다 있다. `item` 타입을 좁히면 카탈로그 조회도, "삭제된 커스텀 종목" 예외도 사라진다 |
-| `SetupPlan`으로 왕복하면 된다 | **보완** | 지난 기록 복사 계획은 세트마다 무게가 다르다(60/65/70). 대표값 하나로 왕복시키면 조절을 **펼치기만 해도** 60/60/60으로 뭉개진다 |
+| 예정표 편집 시트를 새로 만들어야 한다 | **폐기** | 종목 목록을 세트 단위로 편집하는 화면이 이미 있다 — 기록 화면의 `ExerciseCard` |
+| 그 화면은 `ExerciseSetupSheet`다 | **폐기 (2차 검토, 사용자 지적)** | §2.1 |
+| `SetupPlan`으로 왕복하면 된다 | **문제 자체가 소멸** | §2.1 |
+
+### 2.1 1차 설계의 오류 — 재사용 대상을 잘못 골랐다
+
+처음에는 추천 흐름의 `ExerciseSetupSheet`(요약 줄 + 접힌 ± 스테퍼)를 빌렸다.
+그런데 그 화면이 다루는 `SetupPlan`은 **대표값 하나**뿐이다(`planFromSets`가 첫
+세트를 읽는다). 지난 기록을 복사한 예정표는 세트마다 무게가 다르므로
+(60·65·70kg), 돌려받은 값을 전 세트에 뿌리면 조절을 펼쳤다 접기만 해도
+60·60·60이 된다. 그래서 "바뀐 항목만 반영"하는 보정 로직(`applySetupPlanToRow`,
+약 100줄 + 테스트 120줄)을 새로 써야 했다.
+
+**사용자 지적 (2026-08-28): 기록 화면의 종목 카드를 그대로 쓰면 된다.** 맞다.
+`ExerciseCard`는 세트별 kg·회 입력창을 갖고 있어 **뭉개짐이 발생하지 않는다** —
+보정 로직이 필요 없어지는 것이 아니라, 필요할 일 자체가 없다.
+
+| 편집에 필요한 것 | `ExerciseCard` | `ExerciseSetupSheet` |
+|---|---|---|
+| 세트별 kg·회 직접 입력 | ✅ | ❌ 대표값 하나 |
+| 세트 추가·삭제 | ✅ `+ 세트`/`– 세트` | ✅ ± |
+| 종목 삭제 | ✅ `✕` | ❌ |
+| 직전 기록 불러오기 | ✅ `↻ 불러오기` | ❌ |
+| 요약 줄 | ✅ `summarizePlan` (같은 함수) | ✅ |
+| 계획에 없는 것 | ⚠️ 완료 `✓` 열·볼륨 줄 → `planning`으로 접는다 | — |
+
+변환도 이미 있었다: `toDraftExercises` ↔ `toPlanExercises`. 1차 설계의
+`planEditRows`·`setupEntriesFromRows`는 그 재발명이었다.
+
+**교훈:** 재사용 대상을 잘못 고르면 재사용을 하고도 신규 코드가 생긴다.
+"이 화면이 그 일을 하는가"가 아니라 **"이 화면이 그 데이터를 손실 없이
+다루는가"** 로 골라야 했다.
 
 ## 3. 폐기한 대안 — 안 Z: "기록 화면을 편집기로 쓴다"
 
@@ -55,26 +84,23 @@
 
 | 필요한 것 | 어디서 오나 |
 |---|---|
-| 종목 목록 + 요약줄 + 조절 펼치기 | `ExerciseSetupSheet` 그대로 |
-| 세트± / 횟수± / 무게± / 「운동 중 입력」 | 같은 파일의 기존 스테퍼 그대로 |
-| 종목 삭제 `×` | `onRemove?` prop 추가 — 안 넘기면 안 보인다(피커는 무변화) |
-| `＋ 종목 추가` | `onAdd?` prop → 달력이 **이미 렌더 중인** `ExercisePicker`를 `edit` 모드로 연다 |
-| 확인 버튼 문구 | `confirmLabel?` prop (기본값은 지금의 "운동 N개 추가하기") |
+| 종목 카드 · 세트별 입력 · `+ 세트`/`– 세트` · `✕` · `↻ 불러오기` | `ExerciseCard` **그대로** |
+| 계획에 없는 완료 열·볼륨 줄 | `planning` prop으로 접는다 (기록 화면은 무변화) |
+| `PlanExercise[]` ↔ 편집 목록 | `toDraftExercises` / `toPlanExercises` — 둘 다 기존 |
+| 중복 종목 판정 | `mergeImportedExercises` — 기록 화면과 같은 규칙 |
+| `＋ 종목 추가` | 달력이 **이미 렌더 중인** `ExercisePicker`를 `edit` 모드로 |
 | 저장 | `saveWorkoutPlan` upsert 그대로 |
-| 인터벌 수정 | `TabataSheet` + `initialPicked`·`initialMinutes`·`onPlan` 전부 이미 있음 |
+| 인터벌 수정 | `TabataSheet` + `initialPicked`·`initialMinutes`·`onPlan` 전부 기존 |
 
-### 4.3 유일한 신규 로직 — 세트 값 보존
+`plan-edit-sheet.tsx`는 시트 껍데기와 취소·저장 버튼만 갖는다. 편집 로직은 없다.
 
-`PlanSet[]`을 원본으로 두고 **바뀐 항목만** 반영한다.
+### 4.3 신규 도메인 로직: 없음
 
-| 사용자가 바꾼 것 | 결과 |
-|---|---|
-| 세트 3 → 4 | 마지막 세트를 복사해 뒤에 붙인다 (60/65/70/**70**) |
-| 세트 3 → 2 | 뒤에서 자른다 (60/65) |
-| 목표 횟수 · 무게 | 그 순간 전 세트에 일괄 적용 |
-| 안 건드림 | 원본 그대로 |
+1차 설계의 `src/lib/domain/plan-edit.ts`는 **삭제했다**. 세트별로 직접
+편집하므로 대표값 왕복이 없고, 따라서 보정할 것도 없다.
 
-`src/lib/domain/plan-edit.ts`의 순수 함수. 이것만 새 로직이다.
+세트를 늘릴 때 직전값을 복사하는 규약은 기록 화면 `addSet`과 같다 —
+계획에서도 같은 규칙이어야 하므로 같은 코드 모양을 쓴다.
 
 ### 4.4 저장
 
@@ -111,19 +137,29 @@ saveWorkoutPlan({
 
 | 파일 | 무엇 |
 |---|---|
-| `src/lib/domain/plan-edit.ts` (새) | 세트 보존 규칙 · `PlanExercise` ↔ `SetupEntry` |
-| `src/lib/domain/plan-edit.test.ts` (새) | 뭉개짐 방지 회귀 |
-| `src/components/record/plan-edit-sheet.tsx` (새) | 시트 껍데기 + `ExerciseSetupSheet` 조립 |
-| `src/components/record/plan-edit-sheet.test.tsx` (새) | 시트 동작 |
-| `src/components/record/exercise-setup-sheet.tsx` | `item` 타입 좁힘 + 선택 prop 3개 |
-| `src/components/record/calendar-view.tsx` | `수정` 버튼 · 편집 상태 · 저장 · 피커 `edit` 모드 · 인터벌 재진입 |
-| `src/components/record/calendar-view.test.tsx` | 진입 · 저장 · 프로그램엔 버튼 없음 |
+| `src/components/record/plan-edit-sheet.tsx` (새) | 시트 껍데기 + `ExerciseCard` 조립 (편집 로직 없음) |
+| `src/components/record/exercise-card.tsx` | `planning` prop — 완료 열·볼륨 줄만 접는다. `onToggleDone`·`onLongPress`를 선택으로 |
+| `src/components/record/calendar-view.tsx` | `수정` 버튼 · 편집 상태 · 세트 조작 · `↻ 불러오기` · 저장 · 피커 `edit` 모드 · 인터벌 재진입 |
+| `src/components/record/calendar-view.test.tsx` | 아래 §6 |
 
-**DB 마이그레이션 없음.**
+**DB 마이그레이션 없음. 신규 도메인 파일 없음.**
 
 ## 6. 검증
 
-- `plan-edit` 순수 함수 테스트 — 특히 "세트 수만 바꿨을 때 60/65/70이 살아남는가"
-- 시트 테스트 — 삭제 `×`, 추가 버튼, 0개일 때 저장 막힘
-- 달력 테스트 — 일반엔 `수정`이 있고 프로그램엔 없다, 저장이 upsert를 부른다
-- `pnpm dev`에서 실제 화면 조작 (프로젝트 `CLAUDE.md` §개발 환경에서 먼저 확인한다)
+달력 테스트 15건이 고정하는 것:
+
+- 일반엔 `수정`이 있고 **프로그램 회차·지난 날짜에는 없다** (죽은 버튼 방지)
+- **완료 열이 그려지지 않는다** — 기록 전용 UI가 새어 들어오면 잡힌다
+- **세트별로 다른 무게를 넣을 수 있다** (60→2세트만 99, 나머지 유지)
+- 세트를 늘리면 직전값 복사 / 줄이면 뒤에서 자름
+- `↻ 불러오기`가 그 종목의 직전 기록을 세트째 가져온다 · 기록이 없으면 그대로 둔다
+- 종목 빼고 저장 → 남은 종목만, 손대지 않은 종목의 세트별 값은 그대로
+- 0개면 저장 잠김 · 취소하면 저장 안 함 · `＋ 종목 추가`는 같은 피커
+- 인터벌은 종목·코스가 채워진 인터벌 시트로 간다
+
+일부러 고장냈을 때 실패하는지 확인했다: `updateEditSet`을 전 세트 적용으로
+바꾸면 "세트별 무게" 1건, `planning`을 끄면 "완료 열" 1건이 실패한다.
+
+개발 서버 실물 확인: 생성 → 수정 → 세트별 25/99/110kg 저장 → 카드에 그대로
+표시 → `↻ 불러오기`로 직전 기록(3세트·10회·10kg) 적용 → 취소 시 저장 안 됨.
+인터벌은 코스 4분→8분 변경 시 종목당 횟수가 2→4회로 재계산됐다.

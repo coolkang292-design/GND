@@ -27,15 +27,31 @@ const mocks = vi.hoisted(() => ({
   cancelProgramEnrollment: vi.fn(),
   localId: vi.fn(),
   saveWorkoutPlan: vi.fn(),
+  getLastRecordedSets: vi.fn(),
+  getSessionExerciseStructure: vi.fn(),
 }));
 
 vi.mock("@/lib/crew", () => ({ getMyProfile: mocks.getMyProfile }));
 vi.mock("@/lib/workout", () => ({
   getCompletedSessions: mocks.getCompletedSessions,
   getSessionLogExercises: mocks.getSessionLogExercises,
+  getSessionExerciseStructure: mocks.getSessionExerciseStructure,
+  getLastRecordedSets: mocks.getLastRecordedSets,
   // 실제 `localId`와 같은 자리 — 없으면 저장 경로가 undefined를 부른다.
   // 세는 방식이라 단언에서 키를 읽을 수 있다.
   localId: mocks.localId,
+  // 예정표 고치기의 `+ 세트`가 쓴다. 실제와 같은 기본값이어야 "직전값 복사"를
+  // 검사하는 단언이 뜻을 갖는다.
+  newSet: (partial: Record<string, unknown> = {}) => ({
+    key: mocks.localId(),
+    weightKg: 0,
+    reps: 0,
+    distanceKm: 0,
+    durationMin: 0,
+    done: false,
+    effortFeedback: null,
+    ...partial,
+  }),
 }));
 vi.mock("@/lib/workout-plan", () => ({
   getWorkoutPlans: mocks.getWorkoutPlans,
@@ -932,11 +948,13 @@ describe("CalendarView — 계획한 날 바로 시작 (2026-08-12)", () => {
   });
 });
 
+
 /**
  * ⑦ 계획한 운동 수정 (사용자 지시 2026-08-28).
  *
- * 편집 화면을 새로 만들지 않고 `ExerciseSetupSheet`를 빌려 쓴다. 여기서
- * 고정하는 것은 **배선**과, 세트별 값이 뭉개지지 않는다는 약속이다.
+ * 편집 화면을 새로 만들지 않고 **기록 화면의 종목 카드**(`ExerciseCard`)를
+ * `planning`으로 빌려 쓴다. 여기서 고정하는 것은 배선과, 계획에 없는 개념
+ * (완료 체크)이 빠졌다는 것, 그리고 세트별 값을 직접 다룰 수 있다는 것이다.
  */
 const RAMPED_PLAN = {
   ...PLAN,
@@ -989,6 +1007,13 @@ async function openEditSheet() {
   await screen.findByText("8월 16일 예정표 고치기");
 }
 
+/** 저장 호출에 실린 첫 종목의 세트별 무게 */
+function savedWeights(): number[] {
+  return mocks.saveWorkoutPlan.mock.calls[0][0].exercises[0].sets.map(
+    (s: { weightKg: number }) => s.weightKg,
+  );
+}
+
 describe("CalendarView — 계획한 운동 수정 (2026-08-28)", () => {
   it("일반 예정표에는 수정 버튼이 있다", async () => {
     mocks.getWorkoutPlans.mockResolvedValue([RAMPED_PLAN]);
@@ -1019,9 +1044,8 @@ describe("CalendarView — 계획한 운동 수정 (2026-08-28)", () => {
   });
 
   it("지난 날짜의 계획에는 수정 버튼을 내지 않는다", async () => {
-    // 부정 확인 — 0015/0066 RLS가 `plan_date >= 오늘`을 요구하므로 눌러도
-    // 저장이 실패한다. 놓친 계획도 카드는 그려지므로 여기서 막지 않으면
-    // 눌리는데 저장만 실패하는 죽은 버튼이 된다.
+    // 0015/0066 RLS가 plan_date >= 오늘을 요구한다. 놓친 계획도 카드는
+    // 그려지므로 여기서 막지 않으면 저장만 실패하는 죽은 버튼이 된다.
     mocks.getWorkoutPlans.mockResolvedValue([
       { ...RAMPED_PLAN, id: "plan-past", planDate: "2026-08-10" },
     ]);
@@ -1034,27 +1058,136 @@ describe("CalendarView — 계획한 운동 수정 (2026-08-28)", () => {
     expect(screen.queryByRole("button", { name: "수정" })).toBeNull();
   });
 
-  it("수정을 누르면 계획한 종목이 담긴 고치기 시트가 열린다", async () => {
+  it("수정을 누르면 기록 화면과 같은 종목 카드로 열린다", async () => {
     mocks.getWorkoutPlans.mockResolvedValue([RAMPED_PLAN]);
     await setup();
     await openEditSheet();
 
     expect(screen.getByText("벤치프레스")).toBeTruthy();
     expect(screen.getByText("랫풀다운")).toBeTruthy();
-    // 첫 세트를 대표로 요약한다
+    // 기록 화면 카드가 쓰는 요약 줄이 그대로 온다
+    expect(screen.getByText("3세트 · 10회 · 60kg")).toBeTruthy();
+    // 세트 추가·삭제·직전 기록 불러오기도 카드에 딸려 온다
+    expect(screen.getAllByRole("button", { name: "+ 세트" })).toHaveLength(2);
+    expect(
+      screen.getByRole("button", { name: "벤치프레스 직전 기록 불러오기" }),
+    ).toBeTruthy();
+  });
+
+  it("계획에는 완료 개념이 없으므로 완료 열을 그리지 않는다", async () => {
+    // 제거 확인 — 카드를 빌려 쓸 때 기록 전용 UI가 새어 들어오면 여기서 잡힌다
+    mocks.getWorkoutPlans.mockResolvedValue([RAMPED_PLAN]);
+    await setup();
+    await openEditSheet();
+
+    expect(screen.queryByRole("button", { name: "1세트 완료" })).toBeNull();
+    expect(screen.queryByText("완료")).toBeNull();
+    expect(screen.queryByText(/현재 완료 볼륨/)).toBeNull();
+  });
+
+  it("세트별 무게를 각각 다르게 고칠 수 있다", async () => {
+    // 이 카드를 고른 이유 자체다. 대표값 하나만 다루는 화면이었다면
+    // 60·65·70을 유지한 채 2세트만 99로 바꾸는 것이 불가능하다.
+    mocks.getWorkoutPlans.mockResolvedValue([RAMPED_PLAN]);
+    mocks.saveWorkoutPlan.mockResolvedValue(RAMPED_PLAN);
+    const { container } = await setup();
+    await openEditSheet();
+
+    const kgInputs = container.querySelectorAll("input[inputmode=decimal]");
+    fireEvent.change(kgInputs[1], { target: { value: "99" } });
+    fireEvent.click(screen.getByRole("button", { name: "이대로 저장하기" }));
+
+    await waitFor(() => expect(mocks.saveWorkoutPlan).toHaveBeenCalled());
+    expect(savedWeights()).toEqual([60, 99, 70]);
+  });
+
+  it("세트를 늘리면 직전 세트값을 복사한다", async () => {
+    mocks.getWorkoutPlans.mockResolvedValue([RAMPED_PLAN]);
+    mocks.saveWorkoutPlan.mockResolvedValue(RAMPED_PLAN);
+    await setup();
+    await openEditSheet();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "+ 세트" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "이대로 저장하기" }));
+
+    await waitFor(() => expect(mocks.saveWorkoutPlan).toHaveBeenCalled());
+    expect(savedWeights()).toEqual([60, 65, 70, 70]);
+  });
+
+  it("세트를 줄이면 뒤에서 자른다", async () => {
+    mocks.getWorkoutPlans.mockResolvedValue([RAMPED_PLAN]);
+    mocks.saveWorkoutPlan.mockResolvedValue(RAMPED_PLAN);
+    await setup();
+    await openEditSheet();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "– 세트" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "이대로 저장하기" }));
+
+    await waitFor(() => expect(mocks.saveWorkoutPlan).toHaveBeenCalled());
+    expect(savedWeights()).toEqual([60, 65]);
+  });
+
+  it("불러오기로 그 종목의 직전 기록을 세트째 가져온다", async () => {
+    mocks.getWorkoutPlans.mockResolvedValue([RAMPED_PLAN]);
+    mocks.saveWorkoutPlan.mockResolvedValue(RAMPED_PLAN);
+    mocks.getLastRecordedSets.mockResolvedValue([
+      {
+        key: "s1",
+        weightKg: 100,
+        reps: 5,
+        distanceKm: 0,
+        durationMin: 0,
+        done: true,
+        effortFeedback: null,
+      },
+      {
+        key: "s2",
+        weightKg: 105,
+        reps: 3,
+        distanceKm: 0,
+        durationMin: 0,
+        done: true,
+        effortFeedback: null,
+      },
+    ]);
+    await setup();
+    await openEditSheet();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "벤치프레스 직전 기록 불러오기" }),
+    );
+    await screen.findByText(/직전 기록을 불러왔어요/);
+    fireEvent.click(screen.getByRole("button", { name: "이대로 저장하기" }));
+
+    await waitFor(() => expect(mocks.saveWorkoutPlan).toHaveBeenCalled());
+    expect(savedWeights()).toEqual([100, 105]);
+    expect(mocks.getLastRecordedSets).toHaveBeenCalledWith(
+      "user-1",
+      "벤치프레스",
+    );
+  });
+
+  it("직전 기록이 없으면 그대로 두고 알린다", async () => {
+    mocks.getWorkoutPlans.mockResolvedValue([RAMPED_PLAN]);
+    mocks.getLastRecordedSets.mockResolvedValue(null);
+    await setup();
+    await openEditSheet();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "벤치프레스 직전 기록 불러오기" }),
+    );
+
+    await screen.findByText("아직 불러올 직전 기록이 없어요");
     expect(screen.getByText("3세트 · 10회 · 60kg")).toBeTruthy();
   });
 
   it("종목을 빼고 저장하면 남은 종목만 그 날짜에 덮어쓴다", async () => {
     mocks.getWorkoutPlans.mockResolvedValue([RAMPED_PLAN]);
-    mocks.saveWorkoutPlan.mockResolvedValue({
-      ...RAMPED_PLAN,
-      exercises: [RAMPED_PLAN.exercises[0]],
-    });
+    mocks.saveWorkoutPlan.mockResolvedValue(RAMPED_PLAN);
     await setup();
     await openEditSheet();
 
-    fireEvent.click(screen.getByRole("button", { name: "랫풀다운 빼기" }));
+    fireEvent.click(screen.getByRole("button", { name: "랫풀다운 삭제" }));
     fireEvent.click(screen.getByRole("button", { name: "이대로 저장하기" }));
 
     await waitFor(() => expect(mocks.saveWorkoutPlan).toHaveBeenCalled());
@@ -1063,42 +1196,8 @@ describe("CalendarView — 계획한 운동 수정 (2026-08-28)", () => {
     expect(saved.exercises.map((e: { name: string }) => e.name)).toEqual([
       "벤치프레스",
     ]);
-  });
-
-  it("세트만 늘려도 세트별 무게가 뭉개지지 않는다", async () => {
-    // 이 단언이 이 기능의 유일한 신규 로직(`applySetupPlanToRow`)의 존재
-    // 이유다. 대표값을 전 세트에 그대로 뿌리면 60·65·70이 60·60·60이 된다.
-    mocks.getWorkoutPlans.mockResolvedValue([RAMPED_PLAN]);
-    mocks.saveWorkoutPlan.mockResolvedValue(RAMPED_PLAN);
-    await setup();
-    await openEditSheet();
-
-    fireEvent.click(screen.getAllByText("조절")[0]);
-    fireEvent.click(screen.getByRole("button", { name: "세트 늘리기" }));
-    fireEvent.click(screen.getByRole("button", { name: "이대로 저장하기" }));
-
-    await waitFor(() => expect(mocks.saveWorkoutPlan).toHaveBeenCalled());
-    const saved = mocks.saveWorkoutPlan.mock.calls[0][0];
-    expect(
-      saved.exercises[0].sets.map((s: { weightKg: number }) => s.weightKg),
-    ).toEqual([60, 65, 70, 70]);
-  });
-
-  it("무게를 바꾸면 그때는 전 세트에 적용한다", async () => {
-    mocks.getWorkoutPlans.mockResolvedValue([RAMPED_PLAN]);
-    mocks.saveWorkoutPlan.mockResolvedValue(RAMPED_PLAN);
-    await setup();
-    await openEditSheet();
-
-    fireEvent.click(screen.getAllByText("조절")[0]);
-    fireEvent.click(screen.getByRole("button", { name: "무게 5kg 늘리기" }));
-    fireEvent.click(screen.getByRole("button", { name: "이대로 저장하기" }));
-
-    await waitFor(() => expect(mocks.saveWorkoutPlan).toHaveBeenCalled());
-    const saved = mocks.saveWorkoutPlan.mock.calls[0][0];
-    expect(
-      saved.exercises[0].sets.map((s: { weightKg: number }) => s.weightKg),
-    ).toEqual([65, 65, 65]);
+    // 손대지 않은 종목의 세트별 무게는 그대로다
+    expect(savedWeights()).toEqual([60, 65, 70]);
   });
 
   it("종목을 전부 빼면 저장 버튼이 잠기고 안내가 뜬다", async () => {
@@ -1106,8 +1205,8 @@ describe("CalendarView — 계획한 운동 수정 (2026-08-28)", () => {
     await setup();
     await openEditSheet();
 
-    fireEvent.click(screen.getByRole("button", { name: "벤치프레스 빼기" }));
-    fireEvent.click(screen.getByRole("button", { name: "랫풀다운 빼기" }));
+    fireEvent.click(screen.getByRole("button", { name: "벤치프레스 삭제" }));
+    fireEvent.click(screen.getByRole("button", { name: "랫풀다운 삭제" }));
 
     const save = screen.getByRole("button", {
       name: "이대로 저장하기",
@@ -1122,14 +1221,14 @@ describe("CalendarView — 계획한 운동 수정 (2026-08-28)", () => {
     await setup();
     await openEditSheet();
 
-    fireEvent.click(screen.getByRole("button", { name: "랫풀다운 빼기" }));
+    fireEvent.click(screen.getByRole("button", { name: "랫풀다운 삭제" }));
     fireEvent.click(screen.getByRole("button", { name: "고치기 취소" }));
 
     expect(screen.queryByText("8월 16일 예정표 고치기")).toBeNull();
     expect(mocks.saveWorkoutPlan).not.toHaveBeenCalled();
   });
 
-  it("＋ 종목 추가는 기록 탭과 같은 피커를 연다", async () => {
+  it("종목 추가는 기록 탭과 같은 피커를 연다", async () => {
     mocks.getWorkoutPlans.mockResolvedValue([RAMPED_PLAN]);
     await setup(BODYWEIGHT_CATALOG);
     await openEditSheet();
@@ -1140,7 +1239,7 @@ describe("CalendarView — 계획한 운동 수정 (2026-08-28)", () => {
   });
 
   it("인터벌 예정표의 수정은 계획한 종목·코스를 채운 인터벌 시트를 연다", async () => {
-    // 세트 수를 코스가 정하므로 세트 스테퍼로 만지면 인터벌이 아니게 된다.
+    // 세트 수를 코스가 정하므로 세트를 손으로 만지면 인터벌이 아니게 된다.
     // 저장 버튼이 살아 있다는 것은 4종목이 채워져 열렸다는 뜻이다.
     mocks.getWorkoutPlans.mockResolvedValue([INTERVAL_PLAN_PICKED]);
     await setup(BODYWEIGHT_CATALOG);

@@ -18,18 +18,11 @@ import {
   addDaysToDateKey,
   isPlanDateAllowed,
   newPlanExercises,
+  toDraftExercises,
   toPlanExercises,
   type PlanExercise,
 } from "@/lib/domain/workout-plan";
-import {
-  appendPlanRows,
-  applySetupPlanToRow,
-  planEditRows,
-  planExercisesFromRows,
-  removePlanRow,
-  type PlanEditRow,
-} from "@/lib/domain/plan-edit";
-import type { SetupPlan } from "@/lib/domain/recommended-sets";
+import { mergeImportedExercises } from "@/lib/domain/workout-import";
 import {
   formatWorkoutLog,
   type LogExercise,
@@ -60,10 +53,14 @@ import type {
 } from "@/lib/types";
 import {
   getCompletedSessions,
+  getLastRecordedSets,
   getSessionExerciseStructure,
   getSessionLogExercises,
   localId,
+  newSet,
   type CalendarSession,
+  type LocalExercise,
+  type LocalSet,
 } from "@/lib/workout";
 import {
   deleteWorkoutPlan,
@@ -252,8 +249,10 @@ export function CalendarView({
    */
   const [editing, setEditing] = useState<{
     plan: WorkoutPlan;
-    rows: PlanEditRow[];
+    exercises: LocalExercise[];
   } | null>(null);
+  /** 직전 기록을 불러오는 중인 종목 키 (↻ 불러오기) */
+  const [loadingLastKey, setLoadingLastKey] = useState<string | null>(null);
   /** 고치는 중에 연 '＋ 종목 추가' 피커. `planPickerDate`(새 계획)와 배타적이다 */
   const [addPickerOpen, setAddPickerOpen] = useState(false);
   const [enrollments, setEnrollments] = useState<ProgramEnrollment[]>([]);
@@ -666,11 +665,14 @@ export function CalendarView({
    * 계획 카드의 `수정`.
    *
    * ⚠️ **인터벌은 여기서 다루지 않는다.** 세트 수를 코스(4·8·16분)가 정하므로
-   *    세트 스테퍼로 만지면 인터벌이 아니게 된다. 종목·코스를 채운 인터벌
+   *    세트를 손으로 만지면 인터벌이 아니게 된다. 종목·코스를 채운 인터벌
    *    시트를 계획 모드로 다시 열고, 저장은 새로 만들 때와 같은 길로 간다.
    *
    * ⚠️ 프로그램 회차에는 이 버튼 자체를 내지 않는다 — RLS가
    *    `program_enrollment_id is null`을 요구해 클라이언트가 못 고친다.
+   *
+   * 목록은 `toDraftExercises`로 만든다. 기록 화면이 예정표를 불러올 때 쓰는
+   * 바로 그 함수이고, 되돌리는 `toPlanExercises`도 짝으로 이미 있다.
    */
   function openPlanEdit() {
     if (!selectedPlan || planBusy) return;
@@ -681,7 +683,7 @@ export function CalendarView({
     }
     setEditing({
       plan: selectedPlan,
-      rows: planEditRows(selectedPlan.exercises, localId),
+      exercises: toDraftExercises(selectedPlan.exercises, localId),
     });
     setSelectedDate(null);
   }
@@ -689,33 +691,124 @@ export function CalendarView({
   function closePlanEdit() {
     setEditing(null);
     setAddPickerOpen(false);
+    setLoadingLastKey(null);
   }
 
-  function changeEditRow(index: number, next: SetupPlan) {
-    if (!editing) return;
-    setEditing({
-      ...editing,
-      rows: editing.rows.map((row, i) =>
-        i === index ? applySetupPlanToRow(row, next) : row,
+  /** 편집 중인 종목 하나를 갈아 끼운다 — 아래 세트 조작이 전부 이걸 쓴다 */
+  function updateEditExercise(
+    exKey: string,
+    change: (exercise: LocalExercise) => LocalExercise,
+  ) {
+    setEditing((current) =>
+      current
+        ? {
+            ...current,
+            exercises: current.exercises.map((exercise) =>
+              exercise.key === exKey ? change(exercise) : exercise,
+            ),
+          }
+        : current,
+    );
+  }
+
+  function updateEditSet(exKey: string, si: number, patch: Partial<LocalSet>) {
+    updateEditExercise(exKey, (exercise) => ({
+      ...exercise,
+      sets: exercise.sets.map((set, i) =>
+        i === si ? { ...set, ...patch } : set,
       ),
+    }));
+  }
+
+  /** 새 세트는 직전값 복사 — 기록 화면 `addSet`과 같은 규약 */
+  function addEditSet(exKey: string) {
+    updateEditExercise(exKey, (exercise) => {
+      const last = exercise.sets.at(-1);
+      return {
+        ...exercise,
+        sets: [
+          ...exercise.sets,
+          newSet(
+            last
+              ? {
+                  weightKg: last.weightKg,
+                  reps: last.reps,
+                  distanceKm: last.distanceKm,
+                  durationMin: last.durationMin,
+                }
+              : {},
+          ),
+        ],
+      };
     });
   }
 
-  function removeEditRow(index: number) {
-    const target = editing?.rows[index];
-    if (!editing || !target) return;
-    setEditing({ ...editing, rows: removePlanRow(editing.rows, target.key) });
+  function removeEditSet(exKey: string) {
+    updateEditExercise(exKey, (exercise) =>
+      exercise.sets.length > 1
+        ? { ...exercise, sets: exercise.sets.slice(0, -1) }
+        : exercise,
+    );
   }
 
-  /** 피커가 준 종목을 고치는 중인 목록 뒤에 붙인다 (이름이 겹치면 건너뛴다) */
+  function removeEditExercise(exKey: string) {
+    setEditing((current) =>
+      current
+        ? {
+            ...current,
+            exercises: current.exercises.filter(
+              (exercise) => exercise.key !== exKey,
+            ),
+          }
+        : current,
+    );
+  }
+
+  /**
+   * 그 종목의 **직전 기록**을 세트째 가져온다 (사용자 요청 2026-08-28).
+   *
+   * 기록 화면 카드의 `↻ 불러오기`와 같은 조회·같은 적용 함수를 쓴다. 계획을
+   * 짤 때 "지난번 그 무게로"가 가장 흔한 요구인데, 검색으로 담은 종목은
+   * 0kg·0회로 시작해 매번 손으로 넣어야 했다.
+   */
+  async function loadLastIntoEdit(exercise: LocalExercise) {
+    if (!editing || loadingLastKey !== null) return;
+    setLoadingLastKey(exercise.key);
+    try {
+      const recordedSets = await getLastRecordedSets(userId, exercise.name);
+      if (!recordedSets) {
+        showPlanToast("아직 불러올 직전 기록이 없어요");
+        return;
+      }
+      updateEditExercise(exercise.key, (target) => ({
+        ...target,
+        sets: recordedSets.map((set) => ({ ...set, done: false })),
+      }));
+      showPlanToast(`${exercise.name} 직전 기록을 불러왔어요`);
+    } catch {
+      showPlanToast("직전 기록을 불러오지 못했어요");
+    } finally {
+      setLoadingLastKey(null);
+    }
+  }
+
+  /**
+   * 피커가 준 종목을 고치는 중인 목록 뒤에 붙인다.
+   *
+   * 중복 판정은 `mergeImportedExercises`에 맡긴다 — 기록 화면의 '지난 기록
+   * 불러오기'와 같은 규칙이다. 두 벌로 만들면 한쪽만 고쳐졌을 때 갈라진다.
+   */
   function addToEdit(added: PlanExercise[]) {
     if (!editing) return;
-    const merged = appendPlanRows(editing.rows, added, localId);
-    setEditing({ ...editing, rows: merged.rows });
+    const merged = mergeImportedExercises(
+      editing.exercises,
+      toDraftExercises(added, localId),
+    );
+    setEditing({ ...editing, exercises: merged.exercises });
     setAddPickerOpen(false);
     if (merged.skippedCount > 0) {
       showPlanToast(
-        merged.addedCount > 0
+        merged.added.length > 0
           ? `${merged.skippedCount}개는 이미 있어서 건너뛰었어요`
           : "이미 담긴 운동이에요",
       );
@@ -777,15 +870,17 @@ export function CalendarView({
    */
   async function handleSavePlanEdit() {
     if (!editing || planBusy) return;
-    const exercises = planExercisesFromRows(editing.rows);
+    // `toPlanExercises`가 DB 파서를 그대로 통과시킨다 — 저장 직전에 한 번 더
+    // 거르므로, 파서가 통째로 버려 계획이 조용히 비는 일을 여기서 잡는다
+    const exercises = toPlanExercises(editing.exercises);
     if (exercises.length === 0) {
       /*
-        줄이 남았는데 빈 배열이면 파서가 통째로 버린 것이다(종목 50개 초과 등).
+        종목이 남았는데 빈 배열이면 파서가 버린 것이다(종목 50개 초과 등).
         그때 "하나는 있어야 해요"라고 하면 화면에 종목이 보이는 사람에게
         거짓말이 된다 — 이유가 다른 두 경우를 다른 말로 알린다.
       */
       showPlanToast(
-        editing.rows.length === 0
+        editing.exercises.length === 0
           ? "운동이 하나는 있어야 해요"
           : "이 구성은 저장할 수 없어요",
       );
@@ -1595,10 +1690,14 @@ export function CalendarView({
       <PlanEditSheet
         open={editing !== null}
         dateLabel={editing ? dateKeyLabel(editing.plan.planDate) : ""}
-        rows={editing?.rows ?? []}
+        exercises={editing?.exercises ?? []}
         busy={planBusy}
-        onChangeRow={changeEditRow}
-        onRemoveRow={removeEditRow}
+        loadingKey={loadingLastKey}
+        onUpdateSet={updateEditSet}
+        onAddSet={addEditSet}
+        onRemoveSet={removeEditSet}
+        onRemoveExercise={removeEditExercise}
+        onLoadLast={(exercise) => void loadLastIntoEdit(exercise)}
         onAdd={() => setAddPickerOpen(true)}
         onCancel={closePlanEdit}
         onSave={() => void handleSavePlanEdit()}

@@ -7,20 +7,6 @@ export const RECOMMENDED_REPS = 10;
 /** 시간형(플랭크·월 싯 등)의 기본 — "10회 플랭크"는 뜻이 없다 */
 export const RECOMMENDED_MINUTES = 1;
 
-/**
- * 조절 화면이 종목에서 **실제로 읽는 것**만 (2026-08-28).
- *
- * `CatalogExercise`를 요구하지 않는다. 예정표를 편집할 때는 카탈로그에서
- * 종목을 되찾을 수 없는 경우가 있고(삭제된 커스텀 종목), 그렇다고 편집이
- * 막혀서는 안 된다. `CatalogExercise`는 이 모양을 이미 만족한다.
- */
-export type SetupItem = {
-  id: string;
-  name: string;
-  exercise_type: ExerciseType;
-  measure: "reps" | "time" | null;
-};
-
 export type SetupPlan = {
   /** 세트 수 */
   sets: number;

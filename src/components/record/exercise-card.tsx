@@ -27,6 +27,7 @@ export function ExerciseCard({
   onRemoveExercise,
   onLongPress,
   onOpenGuide,
+  planning = false,
 }: {
   exercise: LocalExercise;
   index: number;
@@ -35,11 +36,25 @@ export function ExerciseCard({
   loadLastDisabled: boolean;
   onLoadLast: () => void;
   onUpdateSet: (setIndex: number, patch: Partial<LocalSet>) => void;
-  onToggleDone: (setIndex: number) => void;
+  /** 계획 모드에서는 완료 열이 없으므로 넘기지 않는다 */
+  onToggleDone?: (setIndex: number) => void;
   onAddSet: () => void;
   onRemoveSet: () => void;
   onRemoveExercise: () => void;
-  onLongPress: () => void;
+  /** 순서 이동 시트를 여는 쪽에서만 넘긴다 */
+  onLongPress?: () => void;
+  /**
+   * **계획을 짜는 중이다** (사용자 지시 2026-08-28).
+   *
+   * 달력의 「예정표 고치기」가 이 카드를 그대로 빌려 쓴다. 계획에는 완료라는
+   * 개념이 없으므로 완료 열과 볼륨 줄만 접는다 — 세트별 kg·회 입력, ± 세트,
+   * ✕, ↻ 불러오기는 계획에서도 그대로 필요한 것들이라 손대지 않는다.
+   *
+   * 편집 화면을 따로 만들지 않는 이유: 세트마다 다른 무게를 다루는 화면이
+   * 이것뿐이라, 다른 화면을 쓰면 "대표값 하나"로 눌러 담았다가 되펴는
+   * 보정 로직을 새로 써야 한다.
+   */
+  planning?: boolean;
   /**
    * 자세 안내 열기 (계획 2026-08-12). 넘기지 않으면 버튼 자체가 안 나온다 —
    * 안내 시트를 띄울 수 없는 화면(달력 예정표 미리보기 등)에서 죽은 버튼을
@@ -47,8 +62,9 @@ export function ExerciseCard({
    */
   onOpenGuide?: (name: string) => void;
 }) {
-  // 제목 줄을 약 0.5초 길게 누르면 순서 이동 시트 (설계 2026-07-19)
-  const longPressHandlers = useLongPress(onLongPress);
+  // 제목 줄을 약 0.5초 길게 누르면 순서 이동 시트 (설계 2026-07-19).
+  // 시트를 열 수 없는 화면에서는 넘기지 않으므로 아무 일도 하지 않는다.
+  const longPressHandlers = useLongPress(onLongPress ?? (() => {}));
   // 안내가 **있는 종목에만** 버튼을 낸다. 없는데 내면 눌러도 아무 일 없는
   // 죽은 버튼이 된다 (커스텀 종목이 대부분 여기 해당).
   const hasGuide = onOpenGuide ? guideForExercise(exercise.name) !== null : false;
@@ -157,8 +173,11 @@ export function ExerciseCard({
       )}
 
       <div className="mt-2 flex items-center justify-between gap-3">
+        {/* 계획에는 완료가 없으므로 볼륨·집계 안내를 접는다 (2026-08-28) */}
         <p className="min-w-0 text-xs text-muted">
-          {isWeight ? (
+          {planning ? (
+            "계획한 값이에요 · 그날 바꿔도 돼요"
+          ) : isWeight ? (
             <>
               현재 완료 볼륨{" "}
               <span className="font-mono font-bold text-text">
@@ -196,17 +215,19 @@ export function ExerciseCard({
                 <div className="mb-1 text-[11px] text-faint">시간 (분)</div>
                 {numInput(s.durationMin, (v) => onUpdateSet(si, { durationMin: v }), "numeric")}
               </div>
-              <button
-                onClick={() => onToggleDone(si)}
-                aria-label="완료 체크"
-                className={`h-9 w-11 flex-none rounded-card-sm border text-sm font-bold ${
-                  s.done
-                    ? "border-good bg-good text-white"
-                    : "border-line bg-surface-2 text-faint"
-                }`}
-              >
-                ✓
-              </button>
+              {!planning && (
+                <button
+                  onClick={() => onToggleDone?.(si)}
+                  aria-label="완료 체크"
+                  className={`h-9 w-11 flex-none rounded-card-sm border text-sm font-bold ${
+                    s.done
+                      ? "border-good bg-good text-white"
+                      : "border-line bg-surface-2 text-faint"
+                  }`}
+                >
+                  ✓
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -218,17 +239,19 @@ export function ExerciseCard({
                 <div className="mb-1 text-[11px] text-faint">시간 (분)</div>
                 {numInput(s.durationMin, (v) => onUpdateSet(si, { durationMin: v }), "numeric")}
               </div>
-              <button
-                onClick={() => onToggleDone(si)}
-                aria-label={`${si + 1}세트 완료`}
-                className={`h-9 w-11 flex-none rounded-card-sm border text-sm font-bold ${
-                  s.done
-                    ? "border-good bg-good text-white"
-                    : "border-line bg-surface-2 text-faint"
-                } ${active ? "" : "opacity-60"}`}
-              >
-                ✓
-              </button>
+              {!planning && (
+                <button
+                  onClick={() => onToggleDone?.(si)}
+                  aria-label={`${si + 1}세트 완료`}
+                  className={`h-9 w-11 flex-none rounded-card-sm border text-sm font-bold ${
+                    s.done
+                      ? "border-good bg-good text-white"
+                      : "border-line bg-surface-2 text-faint"
+                  } ${active ? "" : "opacity-60"}`}
+                >
+                  ✓
+                </button>
+              )}
             </div>
           ))}
           <div className="mt-2 flex gap-2">
@@ -254,7 +277,7 @@ export function ExerciseCard({
                 <th className="w-10 pb-1 font-bold">세트</th>
                 {isWeight && <th className="pb-1 font-bold">kg</th>}
                 <th className="pb-1 font-bold">회</th>
-                <th className="w-12 pb-1 font-bold">완료</th>
+                {!planning && <th className="w-12 pb-1 font-bold">완료</th>}
               </tr>
             </thead>
             <tbody>
@@ -271,19 +294,21 @@ export function ExerciseCard({
                   <td className="py-1 pr-2">
                     {numInput(s.reps, (v) => onUpdateSet(si, { reps: v }), "numeric")}
                   </td>
-                  <td className="py-1 text-center">
-                    <button
-                      onClick={() => onToggleDone(si)}
-                      aria-label={`${si + 1}세트 완료`}
-                      className={`h-9 w-10 rounded-card-sm border text-sm font-bold ${
-                        s.done
-                          ? "border-good bg-good text-white"
-                          : "border-line bg-surface-2 text-faint"
-                      } ${active ? "" : "opacity-60"}`}
-                    >
-                      ✓
-                    </button>
-                  </td>
+                  {!planning && (
+                    <td className="py-1 text-center">
+                      <button
+                        onClick={() => onToggleDone?.(si)}
+                        aria-label={`${si + 1}세트 완료`}
+                        className={`h-9 w-10 rounded-card-sm border text-sm font-bold ${
+                          s.done
+                            ? "border-good bg-good text-white"
+                            : "border-line bg-surface-2 text-faint"
+                        } ${active ? "" : "opacity-60"}`}
+                      >
+                        ✓
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

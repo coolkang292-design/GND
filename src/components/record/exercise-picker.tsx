@@ -179,11 +179,7 @@ function PickerSheet({
   const [recommendSelected, setRecommendSelected] = useState<
     Map<string, CatalogExercise>
   >(() => new Map());
-  // 추천 경로는 카탈로그 항목만 담는다 — `confirmSetup`이 `CatalogExercise`를
-  // 그대로 `onPickConfigured`로 넘기기 때문이다
-  const [setupEntries, setSetupEntries] = useState<SetupEntry<CatalogExercise>[]>(
-    [],
-  );
+  const [setupEntries, setSetupEntries] = useState<SetupEntry[]>([]);
   const [customOpen, setCustomOpen] = useState(false);
   const [customPart, setCustomPart] = useState<BodyPart>("가슴");
   const [customType, setCustomType] = useState<ExerciseType>("weight");
