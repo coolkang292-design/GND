@@ -65,7 +65,7 @@ describe("LaunchMotivationSplash", () => {
     );
     const image = screen.getByTestId("launch-splash-image");
     expect(image.getAttribute("src")).toBe(
-      "/splash/gnd-launch-motivation-v4.png",
+      "/splash/gnd-launch-motivation-v5.png",
     );
     expect(image.getAttribute("data-unoptimized")).toBe("true");
     expect(image.getAttribute("sizes")).toBe(
@@ -78,8 +78,10 @@ describe("LaunchMotivationSplash", () => {
     const description = screen.getByTestId("launch-splash-description");
     expect(description.className).toContain("sr-only");
     expect(description.textContent).toBe(
-      "매일 1도의 방향이, 1년뒤 도착지를 뒤바꾼다.",
+      "의지가 꺾인 날에도 계속한 사람이, 결국 이긴다",
     );
+    expect(description.textContent).not.toContain("매일 1도의 방향이");
+    expect(description.textContent).not.toContain("1년뒤 도착지를 뒤바꾼다");
     expect(screen.queryByTestId("launch-splash-copy")).toBeNull();
   });
 
@@ -135,8 +137,9 @@ describe("LaunchMotivationSplash", () => {
     fireEvent.error(screen.getByTestId("launch-splash-image"));
 
     expect(screen.getByText("GND")).toBeTruthy();
-    expect(screen.getByText("매일 1도의 방향이,")).toBeTruthy();
-    expect(screen.getByText("1년뒤 도착지를 뒤바꾼다.")).toBeTruthy();
+    expect(screen.getByText("의지가 꺾인 날에도")).toBeTruthy();
+    expect(screen.getByText("계속한 사람이, 결국 이긴다")).toBeTruthy();
+    expect(screen.queryByText("매일 1도의 방향이,")).toBeNull();
     expect(screen.getByTestId("launch-splash-copy").className).toContain(
       "opacity-100",
     );
