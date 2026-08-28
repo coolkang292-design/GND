@@ -5,16 +5,27 @@ import {
   defaultSetupPlan,
   isTimeMeasured,
   summarizePlan,
+  type SetupItem,
   type SetupPlan,
 } from "@/lib/domain/recommended-sets";
 import type { CatalogExercise } from "@/lib/types";
 
-export type SetupEntry = { item: CatalogExercise; plan: SetupPlan };
+/**
+ * 종목 타입을 열어 둔다 (2026-08-28).
+ *
+ * 추천 경로는 `CatalogExercise`를 그대로 넘기고, 예정표 편집은 계획에 적힌
+ * 이름·유형만으로 만든 `SetupItem`을 넘긴다. 이 화면이 실제로 읽는 것은
+ * `id`·`name`·`exercise_type`·`measure` 넷뿐이라 둘 다 그린다.
+ */
+export type SetupEntry<T extends SetupItem = SetupItem> = {
+  item: T;
+  plan: SetupPlan;
+};
 
 /** 고른 종목들로 초기 설정값을 만든다 (기본 3세트 · 10회 · 무게 운동 중 입력) */
 export function initialSetupEntries(
   items: readonly CatalogExercise[],
-): SetupEntry[] {
+): SetupEntry<CatalogExercise>[] {
   return items.map((item) => ({
     item,
     plan: defaultSetupPlan(item.exercise_type, item.measure),
@@ -35,12 +46,43 @@ export function ExerciseSetupSheet({
   onBack,
   onConfirm,
   busy = false,
+  title = "세트와 횟수 설정",
+  subtitle = "그대로 두고 바로 추가해도 괜찮아요",
+  backLabel = "추천 운동으로 돌아가기",
+  confirmLabel,
+  busyLabel = "추가하는 중…",
+  onRemove,
+  onAdd,
+  addLabel = "＋ 종목 추가",
+  maxSets = 10,
 }: {
-  entries: SetupEntry[];
+  entries: readonly SetupEntry[];
   onChange: (index: number, plan: SetupPlan) => void;
   onBack: () => void;
   onConfirm: () => void;
   busy?: boolean;
+  /*
+    ── 아래는 전부 선택이다. 하나도 안 넘기면 추천 경로의 화면 그대로다. ──
+    예정표 편집(2026-08-28)이 이 화면을 빌려 쓰려고 연 자리다. 편집기를 따로
+    만들면 무게의 「운동 중 입력」 같은 규칙이 두 벌로 갈라진다.
+  */
+  title?: string;
+  subtitle?: string;
+  backLabel?: string;
+  /** 기본은 "운동 N개 추가하기" */
+  confirmLabel?: string;
+  busyLabel?: string;
+  /** 넘기면 줄마다 빼기(×)가 나온다 */
+  onRemove?: (index: number) => void;
+  /** 넘기면 목록 아래에 종목 추가 버튼이 나온다 */
+  onAdd?: () => void;
+  addLabel?: string;
+  /**
+   * 세트 상한. 추천 경로는 10이면 충분하지만 예정표에는 그보다 많은 세트가
+   * 이미 들어 있을 수 있다(지난 기록 복사·루틴). 그때 10으로 묶으면 `＋`를
+   * 눌렀는데 12세트가 10세트로 **줄어든다**.
+   */
+  maxSets?: number;
 }) {
   // 펼쳐서 조절 중인 행 — 기본은 전부 접혀 있다(값이 이미 맞으면 안 눌러도 된다)
   const [openIndex, setOpenIndex] = useState<number | null>(null);
@@ -51,16 +93,14 @@ export function ExerciseSetupSheet({
         <button
           type="button"
           onClick={onBack}
-          aria-label="추천 운동으로 돌아가기"
+          aria-label={backLabel}
           className="flex h-8 w-8 items-center justify-center rounded-full text-lg text-muted"
         >
           ←
         </button>
         <div className="min-w-0">
-          <p className="text-sm font-extrabold">세트와 횟수 설정</p>
-          <p className="text-[11.5px] text-muted">
-            그대로 두고 바로 추가해도 괜찮아요
-          </p>
+          <p className="text-sm font-extrabold">{title}</p>
+          <p className="text-[11.5px] text-muted">{subtitle}</p>
         </div>
       </div>
 
@@ -79,24 +119,45 @@ export function ExerciseSetupSheet({
               key={item.id}
               className="mb-2 rounded-card border border-line bg-surface-2 p-3"
             >
-              <button
-                type="button"
-                onClick={() => setOpenIndex(open ? null : index)}
-                aria-expanded={open}
-                className="flex w-full items-center justify-between gap-2 text-left"
-              >
-                <span className="min-w-0">
-                  <span className="block text-sm font-extrabold">
-                    {item.name}
+              {/*
+                빼기(×)는 토글 버튼의 **형제**다. 안에 넣으면 버튼 안의 버튼이
+                되어 눌리는 곳이 겹친다 (달력 요약 줄과 같은 규칙).
+              */}
+              <div className="flex w-full items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setOpenIndex(open ? null : index)}
+                  aria-expanded={open}
+                  className="flex min-w-0 flex-1 items-center justify-between gap-2 text-left"
+                >
+                  <span className="min-w-0">
+                    <span className="block text-sm font-extrabold">
+                      {item.name}
+                    </span>
+                    <span className="mt-0.5 block text-xs text-muted">
+                      {summarizePlan(item.exercise_type, item.measure, plan)}
+                    </span>
                   </span>
-                  <span className="mt-0.5 block text-xs text-muted">
-                    {summarizePlan(item.exercise_type, item.measure, plan)}
+                  <span className="flex-none text-xs font-bold text-accent">
+                    {open ? "접기" : "조절"}
                   </span>
-                </span>
-                <span className="flex-none text-xs font-bold text-accent">
-                  {open ? "접기" : "조절"}
-                </span>
-              </button>
+                </button>
+                {onRemove && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // 지운 줄보다 뒤가 당겨지므로 펼침 상태를 접는다 — 안
+                      // 접으면 엉뚱한 종목의 조절이 열린 채로 남는다
+                      setOpenIndex(null);
+                      onRemove(index);
+                    }}
+                    aria-label={`${item.name} 빼기`}
+                    className="h-8 w-8 flex-none rounded-full border border-line bg-surface text-sm font-bold text-muted"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
 
               {open && (
                 <div className="mt-3 flex flex-col gap-2 border-t border-line pt-3">
@@ -105,7 +166,13 @@ export function ExerciseSetupSheet({
                     value={plan.sets}
                     suffix="세트"
                     onStep={(d) =>
-                      patch({ sets: Math.min(10, Math.max(1, plan.sets + d)) })
+                      patch({
+                        sets: Math.min(
+                          // 이미 상한을 넘겨 담긴 계획을 ＋ 한 번에 깎지 않는다
+                          Math.max(maxSets, plan.sets),
+                          Math.max(1, plan.sets + d),
+                        ),
+                      })
                     }
                   />
                   {!isCardio && (
@@ -116,7 +183,7 @@ export function ExerciseSetupSheet({
                       onStep={(d) =>
                         patch({
                           amount: Math.min(
-                            timed ? 60 : 100,
+                            Math.max(timed ? 60 : 100, plan.amount),
                             Math.max(1, plan.amount + d),
                           ),
                         })
@@ -143,7 +210,10 @@ export function ExerciseSetupSheet({
                             label="무게 5kg 늘리기"
                             onClick={() =>
                               patch({
-                                weightKg: Math.min(300, plan.weightKg + 5),
+                                weightKg: Math.min(
+                                  Math.max(300, plan.weightKg),
+                                  plan.weightKg + 5,
+                                ),
                               })
                             }
                           >
@@ -177,13 +247,26 @@ export function ExerciseSetupSheet({
         })}
       </div>
 
+      {onAdd && (
+        <button
+          type="button"
+          onClick={onAdd}
+          disabled={busy}
+          className="mt-2 h-11 w-full flex-none rounded-card-sm border border-accent bg-surface text-sm font-extrabold text-accent disabled:opacity-40"
+        >
+          {addLabel}
+        </button>
+      )}
+
       <button
         type="button"
         onClick={onConfirm}
         disabled={busy || entries.length === 0}
         className="mt-2 h-12 w-full flex-none rounded-card-sm bg-accent text-sm font-extrabold text-accent-ink disabled:opacity-40"
       >
-        {busy ? "추가하는 중…" : `운동 ${entries.length}개 추가하기`}
+        {busy
+          ? busyLabel
+          : (confirmLabel ?? `운동 ${entries.length}개 추가하기`)}
       </button>
     </div>
   );

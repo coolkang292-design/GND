@@ -19,7 +19,17 @@ import {
   isPlanDateAllowed,
   newPlanExercises,
   toPlanExercises,
+  type PlanExercise,
 } from "@/lib/domain/workout-plan";
+import {
+  appendPlanRows,
+  applySetupPlanToRow,
+  planEditRows,
+  planExercisesFromRows,
+  removePlanRow,
+  type PlanEditRow,
+} from "@/lib/domain/plan-edit";
+import type { SetupPlan } from "@/lib/domain/recommended-sets";
 import {
   formatWorkoutLog,
   type LogExercise,
@@ -27,6 +37,7 @@ import {
 import {
   INTERVAL_COPY,
   tabataDraftExercises,
+  tabataResumeFromSession,
   type TabataMinutes,
 } from "@/lib/domain/tabata";
 import {
@@ -49,6 +60,7 @@ import type {
 } from "@/lib/types";
 import {
   getCompletedSessions,
+  getSessionExerciseStructure,
   getSessionLogExercises,
   localId,
   type CalendarSession,
@@ -63,6 +75,7 @@ import {
 import type { WorkoutRoutine } from "@/lib/routines";
 import { SetBreakdown } from "@/components/workout/set-breakdown";
 import { ExercisePicker, type ConfiguredPick } from "./exercise-picker";
+import { PlanEditSheet } from "./plan-edit-sheet";
 import { TabataSheet } from "./tabata-sheet";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
@@ -94,6 +107,23 @@ function pad(n: number): string {
 function dateKeyLabel(dateKey: string): string {
   const [, month, day] = dateKey.split("-");
   return `${Number(month)}월 ${Number(day)}일`;
+}
+
+/** 추천 경로가 정한 세트 그대로 예정표 종목으로 (새 계획·고치기 공용) */
+function planExercisesFromPicks(picks: ConfiguredPick[]): PlanExercise[] {
+  return picks.map(({ item, sets }) => ({
+    name: item.name,
+    bodyPart: item.body_part,
+    exerciseType: item.exercise_type,
+    measure: item.measure,
+    isCustom: item.is_custom,
+    sets: sets.map((set) => ({
+      weightKg: set.weightKg,
+      reps: set.reps,
+      distanceKm: set.distanceKm,
+      durationMin: set.durationMin,
+    })),
+  }));
 }
 
 /** 회차 번호(1·2·3) → 프로그램 상세에서 본 기호(A·B·C) */
@@ -213,6 +243,19 @@ export function CalendarView({
    * 인터벌 시트의 **고르는 화면을 그대로 빌려** 저장만 다르게 한다.
    */
   const [intervalPlanDate, setIntervalPlanDate] = useState<string | null>(null);
+  /**
+   * 고치는 중인 예정표 (사용자 지시 2026-08-28).
+   *
+   * ⚠️ 줄 목록을 **여기** 두는 이유: '＋ 종목 추가'가 여는 `ExercisePicker`가
+   *    이 화면에 있다. 시트 안에 두면 피커를 여는 동안 시트가 가려질 뿐인데도
+   *    상태 주인이 갈라져, 추가한 종목이 어디로 가야 하는지 모호해진다.
+   */
+  const [editing, setEditing] = useState<{
+    plan: WorkoutPlan;
+    rows: PlanEditRow[];
+  } | null>(null);
+  /** 고치는 중에 연 '＋ 종목 추가' 피커. `planPickerDate`(새 계획)와 배타적이다 */
+  const [addPickerOpen, setAddPickerOpen] = useState(false);
   const [enrollments, setEnrollments] = useState<ProgramEnrollment[]>([]);
   /**
    * 재배치 **미리보기**. null이면 아직 아무것도 계산하지 않았다는 뜻이다.
@@ -310,6 +353,27 @@ export function CalendarView({
     () => new Set(sessions.map((s) => dayKey(s.completedAt, timeZone))),
     [sessions, timeZone],
   );
+
+  /**
+   * 인터벌 시트를 채울 종목·코스 (2026-08-28).
+   *
+   * 상태를 하나 더 두지 않고 **그 날짜의 계획에서 읽는다.** 새로 만드는
+   * 경로는 그 날짜에 계획이 없으므로 자연히 null이 되어, "고치기로 열렸나"를
+   * 따로 기억할 필요가 없다. 카탈로그에서 종목을 하나도 못 찾으면
+   * `tabataResumeFromSession`이 null을 주고 시트는 빈 채로 열린다.
+   */
+  const intervalPrefill = useMemo(() => {
+    const plan = intervalPlanDate ? planByDate.get(intervalPlanDate) : undefined;
+    return tabataResumeFromSession({
+      session: plan
+        ? {
+            tabataMinutes: plan.tabataMinutes,
+            exerciseNames: plan.exercises.map((exercise) => exercise.name),
+          }
+        : undefined,
+      catalog,
+    });
+  }, [intervalPlanDate, planByDate, catalog]);
 
   const selectedEnrollment = useMemo(
     () =>
@@ -596,6 +660,162 @@ export function CalendarView({
     }
   }
 
+  // ── 예정표 고치기 (사용자 지시 2026-08-28) ──────────────────────────────
+
+  /**
+   * 계획 카드의 `수정`.
+   *
+   * ⚠️ **인터벌은 여기서 다루지 않는다.** 세트 수를 코스(4·8·16분)가 정하므로
+   *    세트 스테퍼로 만지면 인터벌이 아니게 된다. 종목·코스를 채운 인터벌
+   *    시트를 계획 모드로 다시 열고, 저장은 새로 만들 때와 같은 길로 간다.
+   *
+   * ⚠️ 프로그램 회차에는 이 버튼 자체를 내지 않는다 — RLS가
+   *    `program_enrollment_id is null`을 요구해 클라이언트가 못 고친다.
+   */
+  function openPlanEdit() {
+    if (!selectedPlan || planBusy) return;
+    if (selectedPlan.tabataMinutes) {
+      setIntervalPlanDate(selectedPlan.planDate);
+      setSelectedDate(null);
+      return;
+    }
+    setEditing({
+      plan: selectedPlan,
+      rows: planEditRows(selectedPlan.exercises, localId),
+    });
+    setSelectedDate(null);
+  }
+
+  function closePlanEdit() {
+    setEditing(null);
+    setAddPickerOpen(false);
+  }
+
+  function changeEditRow(index: number, next: SetupPlan) {
+    if (!editing) return;
+    setEditing({
+      ...editing,
+      rows: editing.rows.map((row, i) =>
+        i === index ? applySetupPlanToRow(row, next) : row,
+      ),
+    });
+  }
+
+  function removeEditRow(index: number) {
+    const target = editing?.rows[index];
+    if (!editing || !target) return;
+    setEditing({ ...editing, rows: removePlanRow(editing.rows, target.key) });
+  }
+
+  /** 피커가 준 종목을 고치는 중인 목록 뒤에 붙인다 (이름이 겹치면 건너뛴다) */
+  function addToEdit(added: PlanExercise[]) {
+    if (!editing) return;
+    const merged = appendPlanRows(editing.rows, added, localId);
+    setEditing({ ...editing, rows: merged.rows });
+    setAddPickerOpen(false);
+    if (merged.skippedCount > 0) {
+      showPlanToast(
+        merged.addedCount > 0
+          ? `${merged.skippedCount}개는 이미 있어서 건너뛰었어요`
+          : "이미 담긴 운동이에요",
+      );
+    }
+  }
+
+  /**
+   * 지난 기록의 종목을 고치는 중인 목록에 붙인다.
+   *
+   * ⚠️ **인터벌 기록은 막는다.** 코스(`tabataMinutes`)를 실을 자리가 일반
+   *    계획에 없어서, 담으면 음원도 코스도 없는 맨몸 4종목이 된다. 같은
+   *    기록을 어디서 부르느냐로 결과가 갈리지 않게 여기서 돌려보낸다.
+   */
+  async function addPastToEdit(sessionId: string): Promise<boolean> {
+    if (!editing || planBusy) return false;
+    if (sessions.find((s) => s.id === sessionId)?.tabataMinutes) {
+      showPlanToast("인터벌 기록은 인터벌로 계획해 주세요");
+      return false;
+    }
+    setPlanBusy(true);
+    try {
+      const items = await getSessionExerciseStructure(sessionId);
+      if (items.length === 0) {
+        showPlanToast("불러올 운동 종목이 없어요");
+        return false;
+      }
+      // 부위·커스텀 여부는 카탈로그가 정본이다 (기록 화면 `addPastSession`과 동일)
+      const byName = new Map(catalog.map((item) => [item.name, item]));
+      addToEdit(
+        items.map((item) => ({
+          name: item.name,
+          bodyPart: byName.get(item.name)?.body_part ?? item.bodyPart ?? "코어",
+          exerciseType: item.exerciseType,
+          measure: item.measure,
+          isCustom: byName.get(item.name)?.is_custom ?? false,
+          sets: item.sets.map((set) => ({
+            weightKg: set.weightKg,
+            reps: set.reps,
+            distanceKm: set.distanceKm,
+            durationMin: set.durationMin,
+          })),
+        })),
+      );
+      return true;
+    } catch {
+      showPlanToast("지난 기록을 불러오지 못했어요");
+      return false;
+    } finally {
+      setPlanBusy(false);
+    }
+  }
+
+  /**
+   * 고친 결과를 그 날짜에 덮어쓴다.
+   *
+   * `saveWorkoutPlan`은 `(user_id, plan_date)` upsert라 **같은 행을 UPDATE**한다
+   * — id·created_at이 유지되고 마이그레이션도 필요 없다(0066의
+   * `workout_plans_update_own`이 이미 허용).
+   */
+  async function handleSavePlanEdit() {
+    if (!editing || planBusy) return;
+    const exercises = planExercisesFromRows(editing.rows);
+    if (exercises.length === 0) {
+      /*
+        줄이 남았는데 빈 배열이면 파서가 통째로 버린 것이다(종목 50개 초과 등).
+        그때 "하나는 있어야 해요"라고 하면 화면에 종목이 보이는 사람에게
+        거짓말이 된다 — 이유가 다른 두 경우를 다른 말로 알린다.
+      */
+      showPlanToast(
+        editing.rows.length === 0
+          ? "운동이 하나는 있어야 해요"
+          : "이 구성은 저장할 수 없어요",
+      );
+      return;
+    }
+    setPlanBusy(true);
+    try {
+      const saved = await saveWorkoutPlan({
+        userId,
+        planDate: editing.plan.planDate,
+        // upsert라 넘기지 않으면 null로 덮인다 — 원본 세션 연결을 잃지 않는다
+        sourceSessionId: editing.plan.sourceSessionId,
+        exercises,
+        tabataMinutes: editing.plan.tabataMinutes,
+      });
+      setPlans((current) => [
+        ...current.filter((plan) => plan.planDate !== saved.planDate),
+        saved,
+      ]);
+      closePlanEdit();
+      // 고친 결과를 바로 보여준다 — 시트만 닫으면 달력으로 튕겨 확인이 안 된다
+      openDate(saved.planDate);
+      showPlanToast("예정표를 고쳤어요");
+    } catch {
+      showPlanToast("예정표를 고치지 못했어요");
+    } finally {
+      setPlanBusy(false);
+    }
+  }
+
   function applySavedPlan(saved: WorkoutPlan) {
     setPlans((current) => [
       ...current.filter((plan) => plan.planDate !== saved.planDate),
@@ -643,7 +863,13 @@ export function CalendarView({
   }
 
   async function handleNewPlanPick(items: CatalogExercise[]) {
-    if (!planPickerDate || items.length === 0 || planBusy) return;
+    if (items.length === 0) return;
+    // 고치는 중이면 저장하지 않고 편집 목록에 붙인다 (2026-08-28)
+    if (addPickerOpen) {
+      addToEdit(newPlanExercises(items));
+      return;
+    }
+    if (!planPickerDate || planBusy) return;
     setPlanBusy(true);
     try {
       applySavedPlan(
@@ -669,7 +895,12 @@ export function CalendarView({
    * 그대로 예정표에 넣는다 — 정해 놓고 사라지면 그 화면이 무의미해진다.
    */
   async function handleNewPlanConfigured(picks: ConfiguredPick[]) {
-    if (!planPickerDate || picks.length === 0 || planBusy) return;
+    if (picks.length === 0) return;
+    if (addPickerOpen) {
+      addToEdit(planExercisesFromPicks(picks));
+      return;
+    }
+    if (!planPickerDate || planBusy) return;
     setPlanBusy(true);
     try {
       applySavedPlan(
@@ -677,19 +908,7 @@ export function CalendarView({
           userId,
           planDate: planPickerDate,
           sourceSessionId: null,
-          exercises: picks.map(({ item, sets }) => ({
-            name: item.name,
-            bodyPart: item.body_part,
-            exerciseType: item.exercise_type,
-            measure: item.measure,
-            isCustom: item.is_custom,
-            sets: sets.map((set) => ({
-              weightKg: set.weightKg,
-              reps: set.reps,
-              distanceKm: set.distanceKm,
-              durationMin: set.durationMin,
-            })),
-          })),
+          exercises: planExercisesFromPicks(picks),
         }),
       );
     } catch {
@@ -703,6 +922,10 @@ export function CalendarView({
   async function handleNewPlanFromRoutine(
     routine: WorkoutRoutine,
   ): Promise<boolean> {
+    if (addPickerOpen) {
+      addToEdit(routine.exercises);
+      return true;
+    }
     if (!planPickerDate || planBusy) return false;
     setPlanBusy(true);
     try {
@@ -724,6 +947,7 @@ export function CalendarView({
   }
 
   async function handleNewPlanFromPast(sessionId: string): Promise<boolean> {
+    if (addPickerOpen) return addPastToEdit(sessionId);
     if (!planPickerDate || planBusy) return false;
     setPlanBusy(true);
     try {
@@ -1014,6 +1238,25 @@ export function CalendarView({
                       끝내려는 사람이 18번 눌러야 한다 (사용자 지적 2026-08-12).
                     */}
                     <div className="flex shrink-0 flex-col items-end gap-1.5">
+                      {/*
+                        `수정`을 내지 않는 두 경우 (2026-08-28):
+
+                        ① 프로그램 회차 — RLS가 `program_enrollment_id is null`을
+                           요구해 클라이언트가 못 고친다 (사용자 결정).
+                        ② 지난 날짜 — 같은 RLS의 `plan_date >= 오늘`에 막힌다.
+                           놓친 계획도 카드는 그려지므로, 여기서 안 막으면
+                           **눌리는데 저장만 실패하는 죽은 버튼**이 된다.
+                      */}
+                      {!selectedPlan.programEnrollmentId &&
+                        isPlanDateAllowed(selectedPlan.planDate, todayKey) && (
+                          <button
+                            onClick={openPlanEdit}
+                            disabled={planBusy}
+                            className="text-xs font-bold text-accent disabled:opacity-50"
+                          >
+                            수정
+                          </button>
+                        )}
                       <button
                         onClick={handleDeletePlan}
                         disabled={planBusy}
@@ -1343,13 +1586,34 @@ export function CalendarView({
         </>
       )}
 
+      {/*
+        예정표 고치기 (사용자 지시 2026-08-28).
+
+        편집 UI를 새로 만들지 않고 `ExerciseSetupSheet`를 빌린다. 피커보다
+        **먼저** 그린다 — '＋ 종목 추가'로 연 피커가 위에 와야 한다.
+      */}
+      <PlanEditSheet
+        open={editing !== null}
+        dateLabel={editing ? dateKeyLabel(editing.plan.planDate) : ""}
+        rows={editing?.rows ?? []}
+        busy={planBusy}
+        onChangeRow={changeEditRow}
+        onRemoveRow={removeEditRow}
+        onAdd={() => setAddPickerOpen(true)}
+        onCancel={closePlanEdit}
+        onSave={() => void handleSavePlanEdit()}
+      />
+
       {/* 새 운동 계획 피커 — 기록 탭과 같은 피커 재사용 (설계 2026-07-19) */}
       <ExercisePicker
-        open={planPickerDate !== null}
+        open={planPickerDate !== null || addPickerOpen}
         catalog={catalog}
         pastSessions={sessions}
         pastLoading={false}
-        onClose={() => setPlanPickerDate(null)}
+        onClose={() => {
+          setPlanPickerDate(null);
+          setAddPickerOpen(false);
+        }}
         onPickMany={(items) => void handleNewPlanPick(items)}
         onPickConfigured={(picks) => void handleNewPlanConfigured(picks)}
         onPickPast={handleNewPlanFromPast}
@@ -1363,10 +1627,15 @@ export function CalendarView({
           여기서는 **시작이 아니라 계획**이다 — 코스를 고르는 화면이 필요해서
           인터벌 시트를 계획 모드로 연다. 이 prop을 안 넘기면 칸 자체가 숨는다.
         */
-        onStartInterval={() => {
-          setIntervalPlanDate(planPickerDate);
-          setPlanPickerDate(null);
-        }}
+        onStartInterval={
+          // 고치는 중에는 숨긴다 — 일반 계획에 코스를 실을 자리가 없다
+          addPickerOpen
+            ? undefined
+            : () => {
+                setIntervalPlanDate(planPickerDate);
+                setPlanPickerDate(null);
+              }
+        }
         intervalCta="인터벌로 계획하기"
       />
 
@@ -1388,6 +1657,13 @@ export function CalendarView({
         onCancelWorkout={async () => undefined}
         onPlan={saveIntervalPlan}
         planDateLabel={intervalPlanDate ? dateKeyLabel(intervalPlanDate) : ""}
+        /*
+          고치기로 들어왔으면 계획한 종목·코스를 채운 채 연다 (2026-08-28).
+          새로 만드는 경로는 그 날짜에 계획이 없으므로 둘 다 undefined다 —
+          상태를 하나 더 두지 않고 계획에서 바로 읽는다.
+        */
+        initialPicked={intervalPrefill?.picked}
+        initialMinutes={intervalPrefill?.minutes}
       />
 
       {planToast && (
