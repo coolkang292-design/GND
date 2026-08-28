@@ -32,17 +32,44 @@ describe("amountFields — 유형별 입력 칸", () => {
     expect(amountFields("bodyweight", null).map((f) => f.key)).toEqual(["reps"]);
   });
 
-  it("맨몸 시간형은 시간 한 칸", () => {
+  /**
+   * ⚠️ **`durationMin`으로 되돌리면 이 단언이 잡는다** (2026-08-28).
+   * 분이던 시절엔 `step: 1`분이라 매달리기 37초를 넣을 방법이 아예 없었다 —
+   * 0분 아니면 1분이었다.
+   */
+  it("맨몸 시간형은 시간 한 칸이고 **초**로 잰다", () => {
     const fields = amountFields("bodyweight", "time");
 
-    expect(fields.map((f) => f.key)).toEqual(["durationMin"]);
-    expect(fields[0]).toMatchObject({ label: "시간", unit: "분" });
+    expect(fields.map((f) => f.key)).toEqual(["durationSec"]);
+    expect(fields[0].label).toBe("시간");
+    // 37초를 스테퍼로 만들 수 있어야 한다 — 5초 단위
+    expect(fields[0].step).toBe(5);
+  });
+
+  it("시간 칸은 세트 시계가 채운다고 표시돼 있다", () => {
+    expect(amountFields("bodyweight", "time")[0].timed).toBe(true);
+    expect(amountFields("cardio", null)[1].timed).toBe(true);
+    // 웨이트·횟수형에는 시계가 붙지 않는다
+    for (const field of amountFields("weight", null)) {
+      expect(field.timed).toBeUndefined();
+    }
+    expect(amountFields("bodyweight", "reps")[0].timed).toBeUndefined();
+  });
+
+  it("시간 칸은 숫자를 사람 말로 바꿔 준다 — `1960` → `32분 40초`", () => {
+    const hold = amountFields("bodyweight", "time")[0];
+    const cardio = amountFields("cardio", null)[1];
+
+    expect(hold.format?.(37)).toBe("37초");
+    expect(cardio.format?.(1_960)).toBe("32분 40초");
+    // 분이 딱 떨어지면 초를 안 붙인다 — 옛 기록 표기가 안 바뀐다
+    expect(cardio.format?.(1_800)).toBe("30분");
   });
 
   it("유산소는 거리와 시간 두 칸", () => {
     const fields = amountFields("cardio", null);
 
-    expect(fields.map((f) => f.key)).toEqual(["distanceKm", "durationMin"]);
+    expect(fields.map((f) => f.key)).toEqual(["distanceKm", "durationSec"]);
     expect(fields[0]).toMatchObject({ label: "거리", unit: "km" });
   });
 
@@ -58,11 +85,19 @@ describe("amountFields — 유형별 입력 칸", () => {
    * 2026-08-09 사용자 지시로 0.5 → 0.1이 됐다. "유산소 거리는 보통 0.1 단위
    * 수정을 해야 하므로." 0.5로 되돌리면 3.2km를 스테퍼로 만들 수 없다.
    */
-  it("거리는 0.1km, 시간은 1분 단위로 조절한다", () => {
+  it("거리는 0.1km, 시간은 1분(=60초) 단위로 조절한다", () => {
     const cardio = amountFields("cardio", null);
 
     expect(cardio[0].step).toBe(0.1);
-    expect(cardio[1].step).toBe(1);
+    /*
+      ⚠️ 값은 **초**지만 손으로 담을 때 러닝은 분 단위 일이다 (2026-08-28).
+      5초 단위로 바꾸면 30분을 만드는 데 360번 눌러야 한다.
+    */
+    expect(cardio[1].step).toBe(60);
+    expect(cardio[1].quickSteps).toEqual([-300, -60, 60, 300]);
+    // 칩 문구는 초가 아니라 분으로 읽힌다
+    expect(cardio[1].stepLabel?.(300)).toBe("+5분");
+    expect(amountFields("bodyweight", "time")[0].stepLabel?.(30)).toBe("+30초");
   });
 
   it("거리의 빠른 칩에는 굵은 조절(±1)이 남아 있다", () => {
@@ -78,7 +113,13 @@ describe("amountFields — 유형별 입력 칸", () => {
         amountFields(type, measure as "reps" | "time" | null).map((f) => f.key),
       ),
     );
-    const allowed = new Set(["weightKg", "reps", "distanceKm", "durationMin"]);
+    const allowed = new Set([
+      "weightKg",
+      "reps",
+      "distanceKm",
+      "durationMin",
+      "durationSec",
+    ]);
 
     for (const key of all) expect(allowed.has(key)).toBe(true);
   });

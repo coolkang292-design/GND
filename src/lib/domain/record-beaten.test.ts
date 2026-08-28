@@ -42,6 +42,23 @@ function bodyweightEx(
   };
 }
 
+/** 초로 재는 홀드 종목 — 실제 저장 모양(`durationSec`)을 그대로 쓴다 */
+function holdEx(name: string, seconds: number[]) {
+  return {
+    name,
+    exerciseType: "bodyweight" as const,
+    measure: "time" as const,
+    sets: seconds.map((durationSec) => ({
+      weightKg: 0,
+      reps: 0,
+      distanceKm: 0,
+      durationMin: 0,
+      durationSec,
+      isCompleted: true,
+    })),
+  };
+}
+
 function cardioEx(
   name: string,
   sets: Array<[distanceKm: number, durationMin: number]>,
@@ -73,16 +90,33 @@ describe("exerciseMetric", () => {
     expect(exerciseMetric(bodyweightEx("푸시업", "reps", [[20, 0], [15, 0]]))).toBe(35);
   });
 
-  it("맨몸 시간형은 총 시간(분)", () => {
-    expect(exerciseMetric(bodyweightEx("플랭크", "time", [[0, 2], [0, 1]]))).toBe(3);
+  /**
+   * ⚠️ 지표는 **초**다 (2026-08-28). 분으로 재던 시절엔 매달리기가 30초에서
+   * 45초로 늘어도 둘 다 `0분`이라 **기록 갱신이 영영 안 잡혔다.**
+   */
+  it("맨몸 시간형은 총 시간(초)", () => {
+    expect(exerciseMetric(bodyweightEx("플랭크", "time", [[0, 2], [0, 1]]))).toBe(
+      180,
+    );
+  });
+
+  it("1분 미만의 향상도 잡는다 — 30초 → 45초", () => {
+    const before = holdEx("매달리기", [30]);
+    const after = holdEx("매달리기", [45]);
+
+    expect(exerciseMetric(before)).toBe(30);
+    expect(exerciseMetric(after)).toBe(45);
+    expect(exerciseImprovementNote(before, after)).toBe(
+      "매달리기를 15초 더 버텼어요",
+    );
   });
 
   it("유산소는 거리 km", () => {
     expect(exerciseMetric(cardioEx("러닝", [[3, 20]]))).toBe(3);
   });
 
-  it("유산소 거리가 0이면 시간(분)을 쓴다", () => {
-    expect(exerciseMetric(cardioEx("러닝", [[0, 25]]))).toBe(25);
+  it("유산소 거리가 0이면 시간(초)을 쓴다", () => {
+    expect(exerciseMetric(cardioEx("러닝", [[0, 25]]))).toBe(1_500);
   });
 });
 

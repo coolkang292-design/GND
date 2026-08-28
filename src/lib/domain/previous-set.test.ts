@@ -34,9 +34,21 @@ function prev(
 }
 
 function now(
-  partial: Partial<Record<"weightKg" | "reps" | "distanceKm" | "durationMin", number>> = {},
+  partial: Partial<
+    Record<
+      "weightKg" | "reps" | "distanceKm" | "durationMin" | "durationSec",
+      number
+    >
+  > = {},
 ) {
-  return { weightKg: 60, reps: 10, distanceKm: 0, durationMin: 0, ...partial };
+  return {
+    weightKg: 60,
+    reps: 10,
+    distanceKm: 0,
+    durationMin: 0,
+    durationSec: 0,
+    ...partial,
+  };
 }
 
 describe("previousHintFor — 지난번과 견주기", () => {

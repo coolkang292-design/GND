@@ -43,6 +43,12 @@ const base = {
   onDismissSpread: vi.fn(),
   onChangeAmount: vi.fn(),
   onCompleteSet: vi.fn(),
+  // 세트 시계 — 기본은 안 도는 상태 (2026-08-28)
+  timerRunning: false,
+  timerSeconds: 0,
+  timerTargetSeconds: 0,
+  onStartTimer: vi.fn(),
+  onStopTimer: vi.fn(),
   canReplaceExercise: true,
   onReplaceExercise: vi.fn(),
   onSkipExercise: vi.fn(),
@@ -65,7 +71,7 @@ const inputProps = {
   exerciseName: "데드리프트",
   setPosition: { index: 0, total: 5 },
   fields: amountFields("weight", null),
-  values: { weightKg: 40, reps: 11, distanceKm: 0, durationMin: 0 },
+  values: { weightKg: 40, reps: 11, distanceKm: 0, durationMin: 0, durationSec: 0 },
   restSeconds: 60,
   restPresetSeconds: 60,
   nextUp: null,
@@ -77,7 +83,7 @@ const restProps = {
   exerciseName: "데드리프트",
   setPosition: { index: 0, total: 5 },
   fields: amountFields("weight", null),
-  values: { weightKg: 40, reps: 11, distanceKm: 0, durationMin: 0 },
+  values: { weightKg: 40, reps: 11, distanceKm: 0, durationMin: 0, durationSec: 0 },
   restSeconds: 50,
   restPresetSeconds: 60,
   nextUp: { exerciseName: "레그프레스", amount: "260kg 15회" } as {
@@ -90,6 +96,222 @@ const renderInput = (o: Partial<typeof inputProps> = {}) =>
   render(<ActiveSessionOverlay {...inputProps} {...o} />);
 const renderRest = (o: Partial<typeof restProps> = {}) =>
   render(<ActiveSessionOverlay {...restProps} {...o} />);
+
+/**
+ * 세트 시계 (사장님 지시 2026-08-28 — *"시작 하면 운동시간이 카운팅되고 마침
+ * 하면 그 시간이 기록"*, *"트레드밀이나 유산소 운동등 시간이 기록되는 운동에
+ * 모두 적용"*).
+ */
+describe("ActiveSessionOverlay — 세트 시계", () => {
+  const holdFields = amountFields("bodyweight", "time");
+  const cardioFields = amountFields("cardio", null);
+  const holdValues = {
+    weightKg: 0,
+    reps: 0,
+    distanceKm: 0,
+    durationMin: 0,
+    durationSec: 0,
+  };
+
+  it("웨이트에는 시계가 붙지 않는다 — 스테퍼 그대로", () => {
+    renderInput();
+
+    expect(screen.queryByTestId("set-timer-card")).toBeNull();
+    expect(screen.queryByText("▶ 시작")).toBeNull();
+    expect(screen.getByLabelText("무게 늘리기")).toBeTruthy();
+  });
+
+  it("횟수형 맨몸에도 붙지 않는다", () => {
+    renderInput({
+      fields: amountFields("bodyweight", "reps"),
+      values: holdValues,
+    });
+
+    expect(screen.queryByTestId("set-timer-card")).toBeNull();
+  });
+
+  it("매달리기는 스테퍼 대신 `▶ 시작`이 뜬다", () => {
+    renderInput({ fields: holdFields, values: holdValues });
+
+    expect(screen.getByTestId("set-timer-card")).toBeTruthy();
+    expect(screen.getByText("▶ 시작")).toBeTruthy();
+    // ⚠️ `분` 스테퍼가 남아 있으면 안 된다 — 그게 37초를 막던 것이다
+    expect(screen.queryByLabelText("시간 늘리기")).toBeNull();
+  });
+
+  it("`▶ 시작`을 누르면 부모에게 알린다", () => {
+    const onStartTimer = vi.fn();
+    renderInput({ fields: holdFields, values: holdValues, onStartTimer });
+
+    fireEvent.click(screen.getByText("▶ 시작"));
+    expect(onStartTimer).toHaveBeenCalledTimes(1);
+  });
+
+  it("도는 동안 잰 시간을 mm:ss로 크게 보여준다", () => {
+    renderInput({
+      fields: holdFields,
+      values: { ...holdValues, durationSec: 37 },
+      timerRunning: true,
+      timerSeconds: 37,
+    });
+
+    expect(screen.getByText("00:37")).toBeTruthy();
+    expect(screen.getByText(/재는 중/)).toBeTruthy();
+  });
+
+  /**
+   * ⚠️ 홀드는 시간 말고 적을 것이 없어서 `마침`이 곧 세트 완료다.
+   * 버튼 문구가 무엇이 기록되는지 말해야 한다 — 안 그러면 눌러 봐야 안다.
+   */
+  it("매달리기의 정지 버튼은 기록될 값을 말한다", () => {
+    renderInput({
+      fields: holdFields,
+      values: { ...holdValues, durationSec: 37 },
+      timerRunning: true,
+      timerSeconds: 37,
+    });
+
+    expect(screen.getByText("✓ 마침 · 37초 기록")).toBeTruthy();
+  });
+
+  /**
+   * ⚠️ 유산소는 **거리가 남는다.** 정지가 곧 완료면 거리를 넣을 기회가 사라진다.
+   * 문구가 `마침`이 되면 안 된다.
+   */
+  it("유산소의 정지 버튼은 `■ 정지`다 — 거리를 아직 안 넣었다", () => {
+    renderInput({
+      fields: cardioFields,
+      values: { ...holdValues, distanceKm: 5, durationSec: 1_960 },
+      timerRunning: true,
+      timerSeconds: 1_960,
+    });
+
+    expect(screen.getByText("■ 정지")).toBeTruthy();
+    expect(screen.queryByText(/마침/)).toBeNull();
+    // 거리 스테퍼는 그대로 있어야 한다
+    expect(screen.getByLabelText("거리 늘리기")).toBeTruthy();
+  });
+
+  it("32분 40초를 `32분 40초`로 읽는다 — 초를 잃지 않는다", () => {
+    renderInput({
+      fields: cardioFields,
+      values: { ...holdValues, durationSec: 1_960 },
+      timerRunning: false,
+      timerSeconds: 1_960,
+    });
+
+    expect(screen.getByText("32:40")).toBeTruthy();
+  });
+
+  /**
+   * 매달리거나 뛰는 중에는 폰을 못 만진다. 누를 수 없는 버튼을 그리면
+   * 화면이 거짓말을 하고, 눌리면 시계가 잰 값과 싸운다.
+   */
+  it("도는 동안 시간의 빠른 칩을 숨긴다", () => {
+    const { rerender } = render(
+      <ActiveSessionOverlay
+        {...inputProps}
+        fields={holdFields}
+        values={holdValues}
+        timerRunning={false}
+      />,
+    );
+    expect(screen.getByText("+30초")).toBeTruthy();
+
+    rerender(
+      <ActiveSessionOverlay
+        {...inputProps}
+        fields={holdFields}
+        values={holdValues}
+        timerRunning
+        timerSeconds={12}
+      />,
+    );
+    expect(screen.queryByText("+30초")).toBeNull();
+  });
+
+  it("유산소는 시계가 도는 중에도 거리 칩은 남는다", () => {
+    renderInput({
+      fields: cardioFields,
+      values: holdValues,
+      timerRunning: true,
+      timerSeconds: 12,
+    });
+
+    expect(screen.getByLabelText("거리 +1")).toBeTruthy();
+    expect(screen.queryByText("+5분")).toBeNull();
+  });
+
+  /**
+   * 목표 도달 (사장님 결정 2026-08-28, B안 — 알리기만 하고 **멈추지 않는다**).
+   */
+  it("목표가 있으면 시작 전에 보여준다", () => {
+    renderInput({
+      fields: holdFields,
+      values: { ...holdValues, durationSec: 30 },
+      timerSeconds: 30,
+      timerTargetSeconds: 30,
+    });
+
+    expect(screen.getByText("목표 30초")).toBeTruthy();
+  });
+
+  it("목표에 못 미치면 `재는 중`이다", () => {
+    renderInput({
+      fields: holdFields,
+      values: holdValues,
+      timerRunning: true,
+      timerSeconds: 20,
+      timerTargetSeconds: 30,
+    });
+
+    expect(screen.getByText(/재는 중/)).toBeTruthy();
+    expect(screen.queryByText(/목표 달성/)).toBeNull();
+  });
+
+  /**
+   * ⚠️ **닿아도 멈추지 않는다.** 자동 종료면 30초 목표에 37초 버틴 기록을
+   * 못 담는다 — 문구가 `더 가요`인 이유다.
+   */
+  it("목표에 닿으면 문구가 바뀌고 시계는 계속 간다", () => {
+    renderInput({
+      fields: holdFields,
+      values: holdValues,
+      timerRunning: true,
+      timerSeconds: 37,
+      timerTargetSeconds: 30,
+    });
+
+    expect(screen.getByText("● 목표 달성 — 더 가요")).toBeTruthy();
+    // 37초가 그대로 보인다 — 30초에서 잘리지 않았다
+    expect(screen.getByText("00:37")).toBeTruthy();
+    expect(screen.getByText("✓ 마침 · 37초 기록")).toBeTruthy();
+  });
+
+  it("목표가 없으면 목표 줄을 안 그린다", () => {
+    renderInput({
+      fields: cardioFields,
+      values: holdValues,
+      timerTargetSeconds: 0,
+    });
+
+    expect(screen.queryByText(/목표/)).toBeNull();
+  });
+
+  it("정지를 누르면 부모에게 알린다", () => {
+    const onStopTimer = vi.fn();
+    renderInput({
+      fields: holdFields,
+      values: holdValues,
+      timerRunning: true,
+      timerSeconds: 37,
+      onStopTimer,
+    });
+
+    fireEvent.click(screen.getByText("✓ 마침 · 37초 기록"));
+    expect(onStopTimer).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe("ActiveSessionOverlay — 운동 중(입력) 화면", () => {
   it("열려 있지 않으면 아무것도 그리지 않는다", () => {
@@ -123,7 +345,13 @@ describe("ActiveSessionOverlay — 운동 중(입력) 화면", () => {
   it("유산소는 같은 틀에 거리·시간 칸으로 바뀐다", () => {
     renderInput({
       fields: amountFields("cardio", null),
-      values: { weightKg: 0, reps: 0, distanceKm: 3.5, durationMin: 25 },
+      values: {
+        weightKg: 0,
+        reps: 0,
+        distanceKm: 3.5,
+        durationMin: 25,
+        durationSec: 1_500,
+      },
     });
 
     expect(screen.getByText("거리")).toBeTruthy();
@@ -135,7 +363,13 @@ describe("ActiveSessionOverlay — 운동 중(입력) 화면", () => {
   it("맨몸 시간형은 시간 한 칸만 그린다", () => {
     renderInput({
       fields: amountFields("bodyweight", "time"),
-      values: { weightKg: 0, reps: 0, distanceKm: 0, durationMin: 2 },
+      values: {
+        weightKg: 0,
+        reps: 0,
+        distanceKm: 0,
+        durationMin: 2,
+        durationSec: 120,
+      },
     });
 
     expect(screen.getByText("시간")).toBeTruthy();
@@ -165,7 +399,13 @@ describe("ActiveSessionOverlay — 운동 중(입력) 화면", () => {
     const onChangeAmount = vi.fn();
     renderInput({
       onChangeAmount,
-      values: { weightKg: 1, reps: 0, distanceKm: 0, durationMin: 0 },
+      values: {
+        weightKg: 1,
+        reps: 0,
+        distanceKm: 0,
+        durationMin: 0,
+        durationSec: 0,
+      },
     });
 
     fireEvent.click(screen.getByRole("button", { name: "무게 줄이기" }));

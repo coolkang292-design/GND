@@ -1,5 +1,7 @@
 import type { ExerciseType } from "@/lib/types";
 
+import { formatDurationAmount, formatStepLabel } from "./set-timer";
+
 /**
  * 큰 팝업의 세트 입력 정의 (2026-08-04, 설계 ② · 사용자 목업).
  *
@@ -14,7 +16,8 @@ export type AmountFieldKey =
   | "weightKg"
   | "reps"
   | "distanceKm"
-  | "durationMin";
+  | "durationMin"
+  | "durationSec";
 
 export type AmountField = {
   key: AmountFieldKey;
@@ -24,6 +27,26 @@ export type AmountField = {
   step: number;
   /** 목업의 빠른 조절 칩 */
   quickSteps: number[];
+  /**
+   * 큰 숫자를 사람 말로 바꾼다 (2026-08-28, 시간 칸에만 있다).
+   *
+   * 시간은 저장 단위(초)와 읽는 단위(분·초)가 다르다 — `1960`을 그대로 띄우면
+   * 몇 분인지 세어야 한다. 나머지 칸은 숫자와 `unit`을 붙이면 그만이라 없다.
+   *
+   * ⚠️ 이 함수가 있으면 화면은 **`unit`을 따로 붙이지 않는다.** 포맷 결과에
+   * 단위가 이미 들어 있다(`32분 40초`).
+   */
+  format?: (value: number) => string;
+  /** 빠른 칩 문구. 없으면 `+2`/`-1`처럼 숫자를 그대로 쓴다 */
+  stepLabel?: (delta: number) => string;
+  /**
+   * 이 칸은 **세트 시계가 채운다** (2026-08-28 사장님 지시).
+   *
+   * 시작을 누르면 세고 마치면 그 값이 기록된다. `±`는 손으로 고칠 때만 쓴다.
+   * 유형을 나열하지 않고 이 표식으로 판정한다 — 화면이 유형을 다시 분기하면
+   * 저장 구조와 갈라진다.
+   */
+  timed?: boolean;
 };
 
 const WEIGHT: AmountField = {
@@ -58,12 +81,43 @@ const DISTANCE: AmountField = {
   quickSteps: [-1, -0.1, 0.1, 1],
 };
 
-const DURATION: AmountField = {
-  key: "durationMin",
+/**
+ * 유산소의 시간 — **초로 담고 분으로 읽는다** (2026-08-28).
+ *
+ * 예전에는 `durationMin`(분·`step: 1`)이라 32분 40초를 `32`분까지만 넣을 수
+ * 있었다. DB는 처음부터 초(`duration_seconds`)였으므로 저장소를 따라간 것이지
+ * 새 단위를 만든 게 아니다.
+ *
+ * ⚠️ **`step`·`quickSteps`는 분 단위 그대로다**(60·300초 = 1·5분). 손으로 넣는
+ * 사람에게 러닝은 여전히 분 단위 일이다 — 초 단위 스테퍼로 30분을 만들려면
+ * 1800번을 눌러야 한다. 시계가 재 준 값을 **다듬는** 용도다.
+ */
+const CARDIO_TIME: AmountField = {
+  key: "durationSec",
   label: "시간",
-  unit: "분",
-  step: 1,
-  quickSteps: [-5, -1, 1, 5],
+  unit: "",
+  step: 60,
+  quickSteps: [-300, -60, 60, 300],
+  format: formatDurationAmount,
+  stepLabel: formatStepLabel,
+  timed: true,
+};
+
+/**
+ * 시간형 맨몸의 버틴 시간 — 매달리기·플랭크·핸드스탠드·사이드 플랭크·월 싯.
+ *
+ * ⚠️ **분이 아니라 초다.** 예전 `durationMin`은 `step: 1`분이라 **37초를 입력할
+ * 방법이 아예 없었다** — 매달리기가 `0분` 아니면 `1분`이었다. 되돌리지 마라.
+ */
+const HOLD_TIME: AmountField = {
+  key: "durationSec",
+  label: "시간",
+  unit: "",
+  step: 5,
+  quickSteps: [-30, -10, 10, 30],
+  format: formatDurationAmount,
+  stepLabel: formatStepLabel,
+  timed: true,
 };
 
 /** 이 종목이 어떤 칸을 쓰는가. 저장 구조와 같은 규칙(`saveSessionExercises`)이다. */
@@ -72,8 +126,18 @@ export function amountFields(
   measure: "reps" | "time" | null,
 ): AmountField[] {
   if (exerciseType === "weight") return [WEIGHT, REPS];
-  if (exerciseType === "cardio") return [DISTANCE, DURATION];
-  return measure === "time" ? [DURATION] : [REPS];
+  if (exerciseType === "cardio") return [DISTANCE, CARDIO_TIME];
+  return measure === "time" ? [HOLD_TIME] : [REPS];
+}
+
+/**
+ * 세트 시계가 채우는 칸 — 없으면 `null` (웨이트·횟수형 맨몸).
+ *
+ * 화면은 유형을 다시 분기하지 말고 이걸 부른다. `amountFields`가 유일한 원천인
+ * 채로 남는다.
+ */
+export function timedField(fields: AmountField[]): AmountField | null {
+  return fields.find((field) => field.timed) ?? null;
 }
 
 /**

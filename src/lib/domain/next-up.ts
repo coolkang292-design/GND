@@ -18,6 +18,7 @@ export type NextUpExercise = {
     reps: number;
     distanceKm: number;
     durationMin: number;
+    durationSec?: number;
     done: boolean;
   }[];
 };
@@ -57,6 +58,7 @@ export function nextUpSet(exercises: NextUpExercise[]): NextUp | null {
         reps: set.reps,
         distanceKm: set.distanceKm,
         durationMin: set.durationMin,
+        durationSec: set.durationSec,
       }),
     };
   }

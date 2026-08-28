@@ -1,17 +1,25 @@
 import { newSet, type LocalSet } from "@/lib/workout";
 import type { ExerciseType } from "@/lib/types";
+import {
+  DEFAULT_HOLD_SECONDS,
+  durationSecondsOf,
+  formatDurationAmount,
+} from "./set-timer";
 
 /** 추천 흐름의 기본값 (사용자 지시 2026-08-06) */
 export const RECOMMENDED_SET_COUNT = 3;
 export const RECOMMENDED_REPS = 10;
-/** 시간형(플랭크·월 싯 등)의 기본 — "10회 플랭크"는 뜻이 없다 */
-export const RECOMMENDED_MINUTES = 1;
+/**
+ * 시간형(매달리기·플랭크·월 싯 등)의 기본 — **초** (2026-08-28).
+ * 정의는 `set-timer.ts`가 갖는다 (`defaultSets()`도 같은 값을 써야 한다).
+ */
+export const RECOMMENDED_HOLD_SECONDS = DEFAULT_HOLD_SECONDS;
 
 export type SetupPlan = {
   /** 세트 수 */
   sets: number;
   /**
-   * 목표량. `reps`형이면 횟수, `time`형이면 분.
+   * 목표량. `reps`형이면 횟수, `time`형이면 **초** (2026-08-28에 분에서 바뀌었다).
    * 유산소는 쓰지 않는다(거리·시간 모두 운동 중 입력).
    */
   amount: number;
@@ -47,7 +55,7 @@ export function defaultSetupPlan(
   return {
     sets: RECOMMENDED_SET_COUNT,
     amount: isTimeMeasured(type, measure)
-      ? RECOMMENDED_MINUTES
+      ? RECOMMENDED_HOLD_SECONDS
       : RECOMMENDED_REPS,
     weightKg: 0, // = 운동 중 입력
   };
@@ -68,7 +76,14 @@ export function planToSets(
   const count = Math.max(1, plan.sets);
   return Array.from({ length: count }, () => {
     if (isCardio(type)) return newSet();
-    if (isTimeMeasured(type, measure)) return newSet({ durationMin: plan.amount });
+    if (isTimeMeasured(type, measure)) {
+      // 계획 호환 필드(`durationMin`)도 같이 채운다 — 달력·루틴 JSON이 그 키를
+      // 쓰고 서버 RPC가 존재를 검사한다. 진실은 `durationSec`다.
+      return newSet({
+        durationSec: plan.amount,
+        durationMin: Math.round((plan.amount / 60) * 1000) / 1000,
+      });
+    }
     if (type === "weight") {
       return newSet({ reps: plan.amount, weightKg: plan.weightKg });
     }
@@ -84,13 +99,18 @@ export function planToSets(
  * 실제 값은 바로 아래 입력 행에 그대로 보인다.
  */
 export function planFromSets(
-  sets: readonly { weightKg: number; reps: number; durationMin: number }[],
+  sets: readonly {
+    weightKg: number;
+    reps: number;
+    durationMin: number;
+    durationSec?: number;
+  }[],
   timed: boolean,
 ): SetupPlan {
   const first = sets[0];
   return {
     sets: sets.length,
-    amount: first ? (timed ? first.durationMin : first.reps) : 0,
+    amount: first ? (timed ? durationSecondsOf(first) : first.reps) : 0,
     weightKg: first?.weightKg ?? 0,
   };
 }
@@ -103,7 +123,7 @@ export function summarizePlan(
 ): string {
   if (isCardio(type)) return `${plan.sets}세트 · 거리·시간 운동 중 입력`;
   const amount = isTimeMeasured(type, measure)
-    ? `${plan.amount}분`
+    ? formatDurationAmount(plan.amount)
     : `${plan.amount}회`;
   if (type !== "weight") return `${plan.sets}세트 · ${amount}`;
   const weight = plan.weightKg > 0 ? `${plan.weightKg}kg` : "무게 운동 중 입력";

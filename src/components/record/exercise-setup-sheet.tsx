@@ -7,7 +7,12 @@ import {
   summarizePlan,
   type SetupPlan,
 } from "@/lib/domain/recommended-sets";
+import { formatDurationAmount } from "@/lib/domain/set-timer";
 import type { CatalogExercise } from "@/lib/types";
+
+/** 목표 시간 스테퍼의 증감·상한 — 초 (2026-08-28) */
+const HOLD_STEP_SECONDS = 5;
+const HOLD_MAX_SECONDS = 20 * 60;
 
 export type SetupEntry = { item: CatalogExercise; plan: SetupPlan };
 
@@ -108,16 +113,23 @@ export function ExerciseSetupSheet({
                       patch({ sets: Math.min(10, Math.max(1, plan.sets + d)) })
                     }
                   />
+                  {/*
+                    ⚠️ **시간형의 단위는 초다** (2026-08-28). 예전엔 `분`에
+                    `±1`·상한 60이라 `30초 매달리기`를 담을 수 없었고 상한이
+                    **60분**이었다. 지금은 5초 단위·상한 20분이다.
+                  */}
                   {!isCardio && (
                     <Stepper
                       label={timed ? "목표 시간" : "목표 횟수"}
                       value={plan.amount}
-                      suffix={timed ? "분" : "회"}
+                      suffix={timed ? "" : "회"}
+                      step={timed ? HOLD_STEP_SECONDS : 1}
+                      format={timed ? formatDurationAmount : undefined}
                       onStep={(d) =>
                         patch({
                           amount: Math.min(
-                            timed ? 60 : 100,
-                            Math.max(1, plan.amount + d),
+                            timed ? HOLD_MAX_SECONDS : 100,
+                            Math.max(timed ? HOLD_STEP_SECONDS : 1, plan.amount + d),
                           ),
                         })
                       }
@@ -193,25 +205,30 @@ function Stepper({
   label,
   value,
   suffix,
+  step = 1,
+  format,
   onStep,
 }: {
   label: string;
   value: number;
   suffix: string;
+  /** 버튼 한 번의 증감. 시간형은 5초다 */
+  step?: number;
+  /** 있으면 숫자+접미사 대신 이 결과를 쓴다 (`90` → `1분 30초`) */
+  format?: (value: number) => string;
   onStep: (delta: number) => void;
 }) {
   return (
     <div className="flex items-center justify-between gap-2">
       <span className="text-xs font-bold text-muted">{label}</span>
       <span className="flex items-center gap-2">
-        <StepButton label={`${label} 줄이기`} onClick={() => onStep(-1)}>
+        <StepButton label={`${label} 줄이기`} onClick={() => onStep(-step)}>
           –
         </StepButton>
         <span className="w-16 text-center font-mono text-sm font-extrabold">
-          {value}
-          {suffix}
+          {format ? format(value) : `${value}${suffix}`}
         </span>
-        <StepButton label={`${label} 늘리기`} onClick={() => onStep(1)}>
+        <StepButton label={`${label} 늘리기`} onClick={() => onStep(step)}>
           ＋
         </StepButton>
       </span>

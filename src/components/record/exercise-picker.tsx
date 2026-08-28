@@ -692,7 +692,7 @@ function PickerSheet({
                     className="mt-1 h-10 w-full rounded-card-sm border border-line bg-bg px-2 text-sm"
                   >
                     <option value="reps">횟수 (회)</option>
-                    <option value="time">시간 (분)</option>
+                    <option value="time">시간 (초) — 플랭크·매달리기처럼</option>
                   </select>
                 </div>
               )}

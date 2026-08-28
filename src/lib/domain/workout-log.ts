@@ -10,6 +10,7 @@ export type LogSet = {
   reps: number;
   distanceKm: number;
   durationMin: number;
+  durationSec?: number;
   done: boolean;
 };
 
@@ -35,6 +36,7 @@ function setLine(ex: LogExercise, s: LogSet, n: number): string {
     reps: s.reps,
     distanceKm: s.distanceKm,
     durationMin: s.durationMin,
+    durationSec: s.durationSec,
   })}`;
 }
 

@@ -1,5 +1,7 @@
 import type { ExerciseType } from "@/lib/types";
 
+import { durationSecondsOf, formatDurationAmount } from "./set-timer";
+
 /** 판정 입력 — 종목 하나의 완료 실적 (설계 2026-07-21) */
 export type ComparableExercise = {
   name: string;
@@ -10,6 +12,7 @@ export type ComparableExercise = {
     reps: number;
     distanceKm: number;
     durationMin: number;
+    durationSec?: number;
     isCompleted: boolean;
   }>;
 };
@@ -44,13 +47,17 @@ export function exerciseMetric(exercise: ComparableExercise): number {
   if (exercise.exerciseType === "weight") {
     return sum(sets.map((set) => set.weightKg * set.reps));
   }
+  /*
+    ⚠️ **초로 잰다** (2026-08-28). `durationMin`으로 재던 시절엔 매달리기가
+    30초에서 45초로 늘어도 둘 다 `0분`이라 **기록 갱신이 영영 안 잡혔다**.
+  */
   if (exercise.exerciseType === "bodyweight") {
     return exercise.measure === "time"
-      ? sum(sets.map((set) => set.durationMin))
+      ? sum(sets.map(durationSecondsOf))
       : sum(sets.map((set) => set.reps));
   }
   const distance = sum(sets.map((set) => set.distanceKm));
-  return distance > 0 ? distance : sum(sets.map((set) => set.durationMin));
+  return distance > 0 ? distance : sum(sets.map(durationSecondsOf));
 }
 
 /**
@@ -90,15 +97,19 @@ export function exerciseImprovementNote(
   }
 
   if (current.exerciseType === "bodyweight") {
+    // 지표가 초라서 문구도 초다 — `formatDurationAmount`가 60초를 넘으면
+    // `1분 30초`로 읽어 준다.
     return current.measure === "time"
-      ? `${name}${particle} ${trimNumber(after - before)}분 더 버텼어요`
+      ? `${name}${particle} ${formatDurationAmount(after - before)} 더 버텼어요`
       : `${name}${particle} ${trimNumber(after - before)}회 더 하셨어요`;
   }
 
   const usesDistance = sum(completedSets(current).map((set) => set.distanceKm)) > 0;
   return usesDistance
     ? `${name}${particle} ${trimNumber(after - before)}km 더 뛰었어요`
-    : `${name}${particle} ${trimNumber(after - before)}분 더 뛰었어요`;
+    // 거리를 안 적은 유산소는 지표가 **초**다 (2026-08-28) — `분`이라고 쓰면
+    // 60초 더 뛴 것이 `60분 더 뛰었어요`가 된다.
+    : `${name}${particle} ${formatDurationAmount(after - before)} 더 뛰었어요`;
 }
 
 /** 개선된 종목 하나 — 문구와 개선율(비율) */

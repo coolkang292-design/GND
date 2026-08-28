@@ -8,6 +8,7 @@ import {
   restClock,
 } from "@/lib/domain/program-load";
 import { planFromSets, summarizePlan } from "@/lib/domain/recommended-sets";
+import { durationSecondsOf } from "@/lib/domain/set-timer";
 import { setVolumeKg } from "@/lib/domain/volume";
 import type { LocalExercise, LocalSet } from "@/lib/workout";
 import { TYPE_LABEL } from "./exercise-picker";
@@ -212,8 +213,17 @@ export function ExerciseCard({
                 {numInput(s.distanceKm, (v) => onUpdateSet(si, { distanceKm: v }), "decimal")}
               </div>
               <div className="flex-1">
+              {/*
+                화면은 **분**, 저장은 **초**다 (2026-08-28). 손으로 담을 땐 러닝이
+                분 단위지만 세트 시계가 재면 `32분 40초`처럼 초가 남는다 —
+                `durationSec`이 진실이라 여기서 60을 곱해 넣는다.
+              */}
                 <div className="mb-1 text-[11px] text-faint">시간 (분)</div>
-                {numInput(s.durationMin, (v) => onUpdateSet(si, { durationMin: v }), "numeric")}
+                {numInput(
+                  Math.round(durationSecondsOf(s) / 60),
+                  (v) => onUpdateSet(si, { durationSec: Math.round(v * 60) }),
+                  "numeric",
+                )}
               </div>
               {!planning && (
                 <button
@@ -236,8 +246,16 @@ export function ExerciseCard({
           {exercise.sets.map((s, si) => (
             <div key={s.key} className="mb-2 flex items-end gap-2">
               <div className="flex-1">
-                <div className="mb-1 text-[11px] text-faint">시간 (분)</div>
-                {numInput(s.durationMin, (v) => onUpdateSet(si, { durationMin: v }), "numeric")}
+              {/*
+                ⚠️ **초다.** `분`이던 시절엔 매달리기 37초를 넣을 방법이 아예
+                없었다(정수 분 입력이라 0분 아니면 1분). 되돌리지 마라.
+              */}
+                <div className="mb-1 text-[11px] text-faint">시간 (초)</div>
+                {numInput(
+                  durationSecondsOf(s),
+                  (v) => onUpdateSet(si, { durationSec: Math.round(v) }),
+                  "numeric",
+                )}
               </div>
               {!planning && (
                 <button

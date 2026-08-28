@@ -134,13 +134,14 @@ describe("추천 흐름 — 부위 → 다중 선택 → 설정 → 추가 (2026
     expect(getByText("운동 2개 추가하기")).toBeTruthy();
   });
 
-  it("시간형 종목은 '10회'가 아니라 '1분'이다", () => {
+  it("시간형 종목은 '10회'가 아니라 '30초'다", () => {
     const { getByText, getAllByText } = setup();
     fireEvent.click(getAllByText("코어")[0]);
     fireEvent.click(getByText("플랭크"));
     fireEvent.click(getByText("다음"));
 
-    expect(getByText("3세트 · 1분")).toBeTruthy();
+    // ⚠️ 기본이 `1분`이던 시절엔 매달리기를 담자마자 못 채울 목표가 서 있었다
+    expect(getByText("3세트 · 30초")).toBeTruthy();
   });
 
   it("한 행의 세트를 바꿔도 다른 행은 그대로다", () => {

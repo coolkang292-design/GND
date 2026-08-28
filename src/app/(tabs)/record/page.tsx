@@ -118,8 +118,15 @@ import {
 import {
   amountFields,
   propagateAmount,
+  timedField,
   type AmountFieldKey,
 } from "@/lib/domain/set-input";
+import {
+  durationSecondsOf,
+  goalReachedBeep,
+  setTimerSeconds,
+  stopFinishesSet,
+} from "@/lib/domain/set-timer";
 import {
   buildSpreadOffer,
   type SpreadOffer,
@@ -158,7 +165,10 @@ import { errorText } from "@/lib/domain/error-text";
 import { XpResultModal } from "@/components/record/xp-result-modal";
 import { buildXpEvents, type XpEvent } from "@/lib/domain/xp-events";
 import { shareOrCopyText, shareResultToast } from "@/lib/share";
-import { prepareRestCountdownAudio } from "@/lib/rest-countdown-audio";
+import {
+  playRestCountdownBeep,
+  prepareRestCountdownAudio,
+} from "@/lib/rest-countdown-audio";
 import { getMyGroups } from "@/lib/crew";
 import type {
   BodyPart,
@@ -402,6 +412,27 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const [focusIndex, setFocusIndex] = useState(0);
   /** 팝업이 보여줄 세트 번호 — 목업의 `현재 세트 1 / 5` */
   const [focusSetIndex, setFocusSetIndex] = useState(0);
+  /**
+   * 세트 시계가 시작된 시각 — 안 돌면 `null` (사장님 지시 2026-08-28
+   * *"시작 하면 운동시간이 카운팅되고 마침 하면 그 시간이 기록"*).
+   *
+   * ⚠️ **남은 초를 세지 않고 시작 시각만 들고 있는다.** 남은 초를 상태로 두면
+   * 백그라운드에서 틱이 밀릴 때 시계가 멈춘다 — `use-rest-countdown.ts`가 이미
+   * 같은 이유로 종료 시각을 든다(*"90초 휴식이 5분이 됐다"*).
+   */
+  const [timer, setTimer] = useState<{
+    startedAtMs: number;
+    /** 어느 세트의 시계인가 — 초점이 옮겨가면 저절로 무효가 된다 */
+    focusKey: string;
+    /**
+     * 시작할 때 잡아 둔 목표 초 (2026-08-28, B안).
+     *
+     * ⚠️ **시작 시점에 굳힌다.** 세트의 `durationSec`는 시계가 도는 동안
+     * 화면상 값이 잰 초로 바뀌므로, 매 렌더 다시 읽으면 목표가 잰 시간을
+     * 따라다녀서 **영영 도달하지 않는다.**
+     */
+    targetSec: number;
+  } | null>(null);
   const [tabataOpen, setTabataOpen] = useState(false);
   /** 인터벌 음원이 도는 중인가 — 그동안 근력 오버레이를 내린다 */
   const [intervalPlaying, setIntervalPlaying] = useState(false);
@@ -528,6 +559,19 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const autoFinishTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const active = draft.sessionId !== null && draft.startedAtMs !== null;
+  /*
+    세트 시계의 주인 (2026-08-28).
+
+    ⚠️ **이펙트로 초기화하지 않는다.** `setState`를 이펙트에서 부르면
+    `react-hooks/set-state-in-effect`에 걸리고 연쇄 렌더가 난다. 대신 시계가
+    **자기 세트를 들고 다니게** 해서, 초점이 옮겨가면 값 자체가 무효가 된다.
+
+    안 그러면 1세트를 37초 버티고 넘어간 뒤 2세트 화면이 `00:37`부터 세기
+    시작해서, 20초 버틴 2세트가 57초로 기록된다.
+  */
+  const timerFocusKey = `${focusIndex}:${focusSetIndex}:${active}`;
+  /** 이 시계에서 목표 비프를 이미 냈는가 — 안 두면 목표를 넘긴 뒤 매 초 운다 */
+  const goalBeepedRef = useRef<string | null>(null);
   /*
     지금 세션의 제안만 살아 있는 것으로 본다 (설계 2026-08-24 §2.4).
 
@@ -1635,6 +1679,41 @@ function WorkoutScreen({ userId }: { userId: string }) {
     });
   }
 
+  /**
+   * 시간이 기록되는 종목의 `마침` — **잰 초를 굳히고, 남은 칸이 없으면 세트까지
+   * 끝낸다** (사장님 지시 2026-08-28).
+   *
+   * 세 갈래가 한 함수에 있는 이유: `✓ 운동 완료`(하단 버튼)와 `✓ 마침`(홀드
+   * 카드)과 `■ 정지`(유산소 카드)가 **같은 값을 같은 규칙으로** 굳혀야 한다.
+   * 세 자리에 나눠 적으면 하나만 고쳤을 때 기록이 갈라진다.
+   *
+   * ⚠️ **`changeAmountInSet`이 아니라 `updateSet`을 쓴다.** 전자는 `touched`에
+   * 표시를 남겨 완료 시 *"남은 2세트도 37초로 할까요?"* 배너를 띄운다. 실패
+   * 지점까지 버틴 시간을 다음 세트의 **예정값**으로 미는 것은 뜻이 없다 —
+   * 사람이 `±` 칩으로 직접 고친 경우에만 그 배너가 떠야 한다.
+   */
+  function finishTimedSet(exercise: LocalExercise, si: number) {
+    const fields = amountFields(exercise.exerciseType, exercise.measure);
+    const timed = timedField(fields);
+    const running = timer !== null && timer.focusKey === timerFocusKey;
+
+    if (timed && running) {
+      updateSet(exercise.key, si, {
+        durationSec: setTimerSeconds({
+          startedAtMs: timer.startedAtMs,
+          nowMs: Date.now(),
+        }),
+      });
+    }
+    setTimer(null);
+
+    // 유산소는 거리가 남아 있다 — 정지가 곧 완료면 넣을 기회가 사라진다.
+    // 이때는 시간만 굳히고 화면에 머문다(하단 `✓ 운동 완료`가 마무리한다).
+    if (timed && running && !stopFinishesSet(fields.length)) return;
+
+    toggleDone(exercise.key, si);
+  }
+
   function toggleDone(exKey: string, si: number) {
     if (!active) {
       showToast("운동을 먼저 시작하세요 💪");
@@ -2636,6 +2715,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
         reps: set.reps,
         distanceKm: set.distanceKm,
         durationMin: set.durationMin,
+        durationSec: durationSecondsOf(set),
       },
       exerciseType: exercise.exerciseType,
       measure: exercise.measure,
@@ -2697,6 +2777,54 @@ function WorkoutScreen({ userId }: { userId: string }) {
       onOpenGuide={setGuideExerciseName}
     />
   ));
+  /*
+    세트 시계 (2026-08-28).
+
+    돌고 있으면 **잰 초**, 멈춰 있으면 **세트에 담긴 초**를 보여준다. 계획에서
+    담아 온 세트는 `durationSec`가 없고 `durationMin`만 있으므로
+    `durationSecondsOf`를 거친다 — 안 거치면 `30분 러닝` 계획이 `0초`로 뜬다.
+
+    `nowMs`는 `useIdleGuard`가 1초마다 준다. **새 타이머를 만들지 않았다.**
+  */
+  const focusedFields = focusedExercise
+    ? amountFields(focusedExercise.exerciseType, focusedExercise.measure)
+    : [];
+  const timerRunning = timer !== null && timer.focusKey === timerFocusKey;
+  const timerSeconds =
+    timer !== null && timerRunning
+      ? setTimerSeconds({ startedAtMs: timer.startedAtMs, nowMs })
+      : focusedSet
+        ? durationSecondsOf(focusedSet)
+        : 0;
+  /** 멈춰 있을 때의 목표 = 세트에 담긴 값 자체 (돌 때는 시작 시점 값을 쓴다) */
+  const timerTargetSeconds = focusedSet ? durationSecondsOf(focusedSet) : 0;
+
+  /*
+    목표 시간에 닿으면 **한 번 삐** (사장님 결정 2026-08-28, B안).
+
+    ⚠️ **멈추지 않는다.** 자동 종료는 목표를 상한으로 만들어 30초 목표에 37초
+    버틴 기록을 못 담는다. 매달리는 동안 화면을 못 보니 소리로만 알리고 계속 센다.
+
+    ⚠️ 판정은 `goalReachedBeep()`이 한다 — 여기에 조건을 다시 적으면 "한 번만
+    운다"·"목표 0이면 안 운다" 규칙이 두 곳으로 갈라진다.
+
+    ⚠️ `setState`를 부르지 않는다(`react-hooks/set-state-in-effect`). 낸 적이
+    있는지는 **ref**에 적는다 — 렌더를 다시 돌릴 이유가 없는 기억이다.
+  */
+  useEffect(() => {
+    if (!timerRunning || timer === null) return;
+    const key = `${timer.focusKey}:${timer.startedAtMs}`;
+    const beep = goalReachedBeep({
+      seconds: timerSeconds,
+      targetSeconds: timer.targetSec,
+      alreadyPlayed: goalBeepedRef.current === key,
+    });
+    if (!beep) return;
+    goalBeepedRef.current = key;
+    playRestCountdownBeep(beep);
+  }, [timerRunning, timer, timerSeconds]);
+
+
   // 멈춰 있던 시간은 경과 시간에서 뺀다. 정지 중에는 정지 시작 시점에 멈춰 있다.
   const elapsedSec =
     active && draft.startedAtMs
@@ -3413,19 +3541,14 @@ function WorkoutScreen({ userId }: { userId: string }) {
           index: setFocus.setIndex,
           total: focusedExercise?.sets.length ?? 0,
         }}
-        fields={
-          focusedExercise
-            ? amountFields(
-                focusedExercise.exerciseType,
-                focusedExercise.measure,
-              )
-            : []
-        }
+        fields={focusedFields}
         values={{
           weightKg: focusedSet?.weightKg ?? 0,
           reps: focusedSet?.reps ?? 0,
           distanceKm: focusedSet?.distanceKm ?? 0,
           durationMin: focusedSet?.durationMin ?? 0,
+          // 돌고 있으면 잰 초가 곧 값이다 — 빠른 칩이 이 값에서 ±한다
+          durationSec: timerSeconds,
         }}
         restSeconds={restRemaining ?? draft.restSeconds}
         restPresetSeconds={draft.restSeconds}
@@ -3467,7 +3590,28 @@ function WorkoutScreen({ userId }: { userId: string }) {
         onDismissSpread={() => setSpreadOffer(null)}
         onCompleteSet={() => {
           if (!focusedExercise || !focusedSet || focusedSet.done) return;
-          toggleDone(focusedExercise.key, setFocus.setIndex);
+          finishTimedSet(focusedExercise, setFocus.setIndex);
+        }}
+        timerRunning={timerRunning}
+        timerSeconds={timerSeconds}
+        timerTargetSeconds={timerRunning && timer ? timer.targetSec : timerTargetSeconds}
+        onStartTimer={() => {
+          markActivity();
+          /*
+            ⚠️ **여기서 오디오를 깨워야 한다.** 브라우저는 사용자 제스처 뒤에만
+            소리를 허용한다 — `▶ 시작` 탭이 그 제스처다. 목표 도달 시점에
+            처음 부르면 그때는 제스처가 없어 아무 소리도 안 난다.
+          */
+          prepareRestCountdownAudio();
+          setTimer({
+            startedAtMs: Date.now(),
+            focusKey: timerFocusKey,
+            targetSec: focusedSet ? durationSecondsOf(focusedSet) : 0,
+          });
+        }}
+        onStopTimer={() => {
+          if (!focusedExercise || !focusedSet) return;
+          finishTimedSet(focusedExercise, setFocus.setIndex);
         }}
         canReplaceExercise={canReplaceExercise(focusedExercise)}
         onReplaceExercise={() => {

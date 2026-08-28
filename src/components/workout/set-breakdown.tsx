@@ -1,4 +1,5 @@
 import { formatSetAmount } from "@/lib/domain/set-display";
+import { durationSecondsOf } from "@/lib/domain/set-timer";
 import type { ExercisePrescription } from "@/lib/domain/workout-plan";
 import type { ExerciseType } from "@/lib/types";
 
@@ -16,6 +17,7 @@ export type BreakdownSet = {
   reps: number;
   distanceKm: number;
   durationMin: number;
+  durationSec?: number;
   /** 기록이면 완료 여부, 계획이면 없음 */
   done?: boolean;
 };
@@ -45,7 +47,9 @@ function isEmptySet(set: BreakdownSet): boolean {
     set.weightKg === 0 &&
     set.reps === 0 &&
     set.distanceKm === 0 &&
-    set.durationMin === 0
+    // 초가 진실이다 (2026-08-28) — `durationMin`만 보면 37초 매달리기가
+    // `빈 세트`로 판정돼 기록 대신 `목표 30초`가 그려진다
+    durationSecondsOf(set) === 0
   );
 }
 
@@ -108,6 +112,7 @@ export function SetBreakdown({
                           reps: set.reps,
                           distanceKm: set.distanceKm,
                           durationMin: set.durationMin,
+                          durationSec: set.durationSec,
                         })
                       )}
                     </span>

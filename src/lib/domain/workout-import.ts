@@ -1,4 +1,5 @@
 import type { LocalExercise, LocalSet } from "@/lib/workout";
+import { durationSecondsOf, formatDurationAmount } from "./set-timer";
 
 export type ImportMergeResult = {
   exercises: LocalExercise[];
@@ -132,17 +133,19 @@ export function buildEffortMessage(exercises: LocalExercise[]): string {
     if (
       exercise.exerciseType === "bodyweight" &&
       exercise.measure === "time" &&
-      set.durationMin > 0
+      durationSecondsOf(set) > 0
     ) {
-      return `${exercise.name}를 지난번에는 ${formatNumber(set.durationMin)}분 했어요. 컨디션 괜찮으면 오늘은 1분만 더 버텨봐요.`;
+      // 초로 말한다 (2026-08-28). `분`이던 시절엔 45초 버틴 사람에게
+      // `0분 했어요`라고 했다.
+      return `${exercise.name}를 지난번에는 ${formatDurationAmount(durationSecondsOf(set))} 버텼어요. 컨디션 괜찮으면 오늘은 5초만 더 버텨봐요.`;
     }
 
     if (exercise.exerciseType === "cardio" && set.distanceKm > 0) {
       return `${exercise.name}을 지난번에는 ${formatNumber(set.distanceKm)}km 했어요. 컨디션 괜찮으면 오늘은 0.1km만 더 가봐요.`;
     }
 
-    if (exercise.exerciseType === "cardio" && set.durationMin > 0) {
-      return `${exercise.name}을 지난번에는 ${formatNumber(set.durationMin)}분 했어요. 컨디션 괜찮으면 오늘은 1분만 더 해봐요.`;
+    if (exercise.exerciseType === "cardio" && durationSecondsOf(set) > 0) {
+      return `${exercise.name}을 지난번에는 ${formatDurationAmount(durationSecondsOf(set))} 했어요. 컨디션 괜찮으면 오늘은 1분만 더 해봐요.`;
     }
   }
 

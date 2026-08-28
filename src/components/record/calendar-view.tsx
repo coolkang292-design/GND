@@ -735,6 +735,9 @@ export function CalendarView({
                   reps: last.reps,
                   distanceKm: last.distanceKm,
                   durationMin: last.durationMin,
+                  // 초를 안 실으면 `30초 매달리기` 계획에 세트를 더할 때
+                  // 새 세트만 `0초`가 된다
+                  durationSec: last.durationSec,
                 }
               : {},
           ),

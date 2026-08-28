@@ -202,6 +202,8 @@ export function toFeedBreakdown(
           reps: set.reps ?? 0,
           distanceKm: Number(set.distance_meters ?? 0) / 1000,
           durationMin: Math.round((set.duration_seconds ?? 0) / 60),
+          // 표기는 초를 본다 (2026-08-28) — 분만 넘기면 매달리기가 `0분`이 된다
+          durationSec: set.duration_seconds ?? 0,
           done: set.is_completed,
         })),
     }));

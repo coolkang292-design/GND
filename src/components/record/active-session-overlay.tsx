@@ -10,6 +10,7 @@ import {
   type AmountField,
   type AmountFieldKey,
 } from "@/lib/domain/set-input";
+import { formatSetClock, stopFinishesSet } from "@/lib/domain/set-timer";
 import type { SpreadOffer } from "@/lib/domain/set-spread";
 import type { PreviousHint } from "@/lib/domain/previous-set";
 import type {
@@ -53,6 +54,110 @@ function clock(seconds: number): string {
   const mm = String(Math.floor(Math.max(0, seconds) / 60)).padStart(2, "0");
   const ss = String(Math.max(0, seconds) % 60).padStart(2, "0");
   return `${mm}:${ss}`;
+}
+
+/**
+ * 세트 시계 — **시작하면 세고, 마치면 그 값이 기록된다** (사장님 지시 2026-08-28).
+ *
+ * `±` 스테퍼 카드가 있던 자리를 그대로 쓴다. 새 화면도, 새 버튼 줄도 만들지
+ * 않는다 — 지시가 *"기존 운동화면에서"* 였다.
+ *
+ * ## 왜 카운트**업**인가
+ *
+ * 카운트다운은 목표를 **상한**으로 만든다. 30초를 목표로 잡고 37초를 버텨도
+ * 30초까지밖에 못 담는다. 근력 운동에서 목표는 하한이다 — 더 버틴 것이 기록이다.
+ *
+ * ## 왜 유산소는 정지와 완료를 나누는가
+ *
+ * 매달리기·플랭크는 시간 말고 적을 것이 없어서 `마침` 한 번이 곧 세트 완료다.
+ * 유산소는 **거리가 남는다.** 뛰면서 거리를 넣을 수 없으니 멈춘 뒤에 넣어야 하고,
+ * 정지가 곧 완료면 그 기회가 사라진다. 판정은 유형이 아니라 `stopFinishesSet()` —
+ * 남은 칸이 몇 개냐로 정한다.
+ *
+ * ⚠️ **버튼 높이 `h-13`을 줄이지 마라.** 매달린 직후 손이 아픈 상태에서 누른다.
+ */
+function SetTimerCard({
+  field,
+  seconds,
+  targetSeconds,
+  running,
+  finishesSet,
+  busy,
+  onStart,
+  onStop,
+}: {
+  field: AmountField;
+  seconds: number;
+  /** 계획·설정에서 정한 목표 초. `0`이면 목표 없음 */
+  targetSeconds: number;
+  running: boolean;
+  /** 멈추면 세트까지 끝나는가 — 홀드는 `true`, 유산소는 `false` */
+  finishesSet: boolean;
+  busy: boolean;
+  onStart: () => void;
+  onStop: () => void;
+}) {
+  const amount = field.format ? field.format(seconds) : `${seconds}${field.unit}`;
+  /*
+    목표 도달 (사장님 결정 2026-08-28, B안).
+
+    ⚠️ **닿아도 멈추지 않는다.** 자동 종료는 목표를 상한으로 만들어 30초 목표에
+    37초 버틴 기록을 못 담는다. 소리로 알리고(부모가 `goalReachedBeep`) 화면은
+    문구만 바꾼다 — 계속 세는 것이 요점이다.
+  */
+  // ⚠️ `running`을 빼지 마라. 시작 전에는 큰 숫자가 **목표값 자체**라
+  //    `seconds >= targetSeconds`가 늘 참이고, 목표 줄이 통째로 사라진다.
+  const reached = running && targetSeconds > 0 && seconds >= targetSeconds;
+  const goalLabel = targetSeconds > 0
+    ? `목표 ${field.format ? field.format(targetSeconds) : targetSeconds}`
+    : null;
+  return (
+    <div
+      data-testid="set-timer-card"
+      className={`flex-1 rounded-card border p-3 ${
+        running ? "border-accent bg-accent-weak" : "border-line bg-surface-2"
+      }`}
+    >
+      <p
+        className={`text-[11.5px] font-bold ${
+          running && reached ? "text-good" : "text-muted"
+        }`}
+      >
+        {running ? (reached ? "● 목표 달성 — 더 가요" : "● 재는 중") : field.label}
+      </p>
+      {goalLabel && !reached && (
+        <p className="text-[10.5px] font-bold text-faint">{goalLabel}</p>
+      )}
+      <p
+        role="timer"
+        aria-label={`${field.label} ${amount}`}
+        className={`mt-1 font-mono text-[30px] leading-none font-extrabold ${
+          running ? "text-accent" : ""
+        }`}
+      >
+        {formatSetClock(seconds)}
+      </p>
+      {running ? (
+        <button
+          type="button"
+          onClick={onStop}
+          disabled={busy}
+          className="mt-2 h-13 w-full rounded-card-sm bg-accent py-3 text-[13px] font-extrabold text-accent-ink disabled:opacity-60"
+        >
+          {finishesSet ? `✓ 마침 · ${amount} 기록` : "■ 정지"}
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={onStart}
+          disabled={busy}
+          className="mt-2 h-13 w-full rounded-card-sm border-2 border-accent bg-transparent py-3 text-[13px] font-extrabold text-accent disabled:opacity-60"
+        >
+          ▶ 시작
+        </button>
+      )}
+    </div>
+  );
 }
 
 /**
@@ -130,6 +235,11 @@ export function ActiveSessionOverlay({
   onDismissSpread,
   onChangeAmount,
   onCompleteSet,
+  timerRunning,
+  timerSeconds,
+  timerTargetSeconds,
+  onStartTimer,
+  onStopTimer,
   onReplaceExercise,
   onSkipExercise,
   onAdjustRest,
@@ -203,6 +313,18 @@ export function ActiveSessionOverlay({
   onDismissSpread: () => void;
   onChangeAmount: (key: AmountFieldKey, value: number) => void;
   onCompleteSet: () => void;
+  /**
+   * 세트 시계가 돌고 있는가 (2026-08-28 사장님 지시 — 시작하면 카운팅, 마치면 기록).
+   * 시간 칸이 없는 종목(웨이트·횟수형 맨몸)에서는 언제나 `false`다.
+   */
+  timerRunning: boolean;
+  /** 돌고 있으면 잰 초, 멈춰 있으면 세트에 담긴 초 */
+  timerSeconds: number;
+  /** 계획·설정이 정한 목표 초. `0`이면 목표 없음 — 그때는 알림도 없다 */
+  timerTargetSeconds: number;
+  onStartTimer: () => void;
+  /** 멈춘다. 홀드(시간 칸 하나뿐)면 부모가 세트 완료까지 같이 한다 */
+  onStopTimer: () => void;
   /*
     ⚠️ **`onLoadLast`를 되살리지 마라** (2026-08-24 제거).
 
@@ -445,7 +567,12 @@ export function ActiveSessionOverlay({
                 이번 세트는{" "}
                 <span className="font-extrabold text-accent">
                   {spreadOffer.fields
-                    .map((field) => `${field.value}${field.unit}`)
+                    .map(
+                      (field) =>
+                        // 시간 칸은 `buildSpreadOffer`가 이미 `32분 40초`로 지었다.
+                        // 여기서 `1960초`로 다시 지으면 배너만 다른 말을 한다.
+                        field.display ?? `${field.value}${field.unit}`,
+                    )
                     .join(" ")}
                 </span>
                 로 했어요
@@ -645,71 +772,101 @@ export function ActiveSessionOverlay({
               )}
 
               <div className="mt-3 flex gap-2.5">
-                {fields.map((field) => (
-                  <div
-                    key={field.key}
-                    className="flex-1 rounded-card border border-line bg-surface-2 p-3"
-                  >
-                    <p className="text-[11.5px] font-bold text-muted">
-                      {field.label}
-                    </p>
-                    <p className="mt-1 font-mono text-[30px] leading-none font-extrabold">
-                      {values[field.key]}
-                      <span className="ml-1 text-[12px] font-bold text-muted">
-                        {field.unit}
-                      </span>
-                    </p>
-                    <div className="mt-2 flex gap-1.5">
-                      <button
-                        type="button"
-                        aria-label={`${field.label} 줄이기`}
-                        onClick={() =>
-                          onChangeAmount(
-                            field.key,
-                            adjustAmount(values[field.key], -field.step),
-                          )
-                        }
-                        className="h-9 flex-1 rounded-card-sm border border-line bg-surface text-lg font-bold"
-                      >
-                        –
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={`${field.label} 늘리기`}
-                        onClick={() =>
-                          onChangeAmount(
-                            field.key,
-                            adjustAmount(values[field.key], field.step),
-                          )
-                        }
-                        className="h-9 flex-1 rounded-card-sm border border-line bg-surface text-lg font-bold"
-                      >
-                        +
-                      </button>
+                {fields.map((field) =>
+                  field.timed ? (
+                    <SetTimerCard
+                      key={field.key}
+                      field={field}
+                      seconds={timerSeconds}
+                      targetSeconds={timerTargetSeconds}
+                      running={timerRunning}
+                      finishesSet={stopFinishesSet(fields.length)}
+                      busy={busy}
+                      onStart={onStartTimer}
+                      onStop={onStopTimer}
+                    />
+                  ) : (
+                    <div
+                      key={field.key}
+                      className="flex-1 rounded-card border border-line bg-surface-2 p-3"
+                    >
+                      <p className="text-[11.5px] font-bold text-muted">
+                        {field.label}
+                      </p>
+                      <p className="mt-1 font-mono text-[30px] leading-none font-extrabold">
+                        {values[field.key]}
+                        <span className="ml-1 text-[12px] font-bold text-muted">
+                          {field.unit}
+                        </span>
+                      </p>
+                      <div className="mt-2 flex gap-1.5">
+                        <button
+                          type="button"
+                          aria-label={`${field.label} 줄이기`}
+                          onClick={() =>
+                            onChangeAmount(
+                              field.key,
+                              adjustAmount(values[field.key], -field.step),
+                            )
+                          }
+                          className="h-9 flex-1 rounded-card-sm border border-line bg-surface text-lg font-bold"
+                        >
+                          –
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`${field.label} 늘리기`}
+                          onClick={() =>
+                            onChangeAmount(
+                              field.key,
+                              adjustAmount(values[field.key], field.step),
+                            )
+                          }
+                          className="h-9 flex-1 rounded-card-sm border border-line bg-surface text-lg font-bold"
+                        >
+                          +
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ),
+                )}
               </div>
 
+              {/*
+                빠른 칩 — **돌고 있는 시계의 칸은 뺀다** (2026-08-28).
+
+                매달리거나 뛰는 중에는 폰을 못 만진다. 그때 `+30초`를 그려 두면
+                누를 수 없는 버튼이고, 눌리면 시계가 잰 값과 싸운다. 멈춘 뒤에는
+                다시 나와서 잰 값을 다듬는 데 쓴다.
+              */}
               <div className="mt-2.5 flex flex-wrap justify-center gap-1.5">
-                {fields.flatMap((field) =>
-                  field.quickSteps.map((delta) => (
-                    <button
-                      key={`${field.key}:${delta}`}
-                      type="button"
-                      aria-label={`${field.label} ${delta > 0 ? "+" : ""}${delta}`}
-                      onClick={() =>
-                        onChangeAmount(
-                          field.key,
-                          adjustAmount(values[field.key], delta),
-                        )
-                      }
-                      className="h-8 rounded-card-sm border border-line bg-surface-2 px-2.5 font-mono text-[11.5px] font-bold text-muted"
-                    >
-                      {delta > 0 ? `+${delta}` : delta}
-                    </button>
-                  )),
-                )}
+                {fields
+                  .filter((field) => !(field.timed && timerRunning))
+                  .flatMap((field) =>
+                    field.quickSteps.map((delta) => {
+                      const label = field.stepLabel
+                        ? field.stepLabel(delta)
+                        : delta > 0
+                          ? `+${delta}`
+                          : `${delta}`;
+                      return (
+                        <button
+                          key={`${field.key}:${delta}`}
+                          type="button"
+                          aria-label={`${field.label} ${label}`}
+                          onClick={() =>
+                            onChangeAmount(
+                              field.key,
+                              adjustAmount(values[field.key], delta),
+                            )
+                          }
+                          className="h-8 rounded-card-sm border border-line bg-surface-2 px-2.5 font-mono text-[11.5px] font-bold text-muted"
+                        >
+                          {label}
+                        </button>
+                      );
+                    }),
+                  )}
               </div>
 
               {/*

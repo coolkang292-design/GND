@@ -25,6 +25,8 @@ export type SpreadCandidateSet = {
   reps: number;
   distanceKm: number;
   durationMin: number;
+  /** 시간 기록의 진실 (2026-08-28). 옛 draft에는 없어서 선택이다 */
+  durationSec?: number;
 };
 
 export type SpreadOfferField = {
@@ -34,6 +36,11 @@ export type SpreadOfferField = {
   /** "kg" */
   unit: string;
   value: number;
+  /**
+   * 이미 단위까지 붙은 표기 — 시간 칸만 채워진다 (`32분 40초`).
+   * 없으면 화면이 `value + unit`으로 짓는다.
+   */
+  display?: string | null;
 };
 
 export type SpreadOffer = {
@@ -75,21 +82,26 @@ export function buildSpreadOffer({
   const offerFields: SpreadOfferField[] = [];
   for (const field of fields) {
     if (!touched.includes(field.key)) continue;
-    const value = source[field.key];
+    // `durationSec`는 선택 필드라 옛 draft 세트에는 없다 — 0으로 좁힌다.
+    // 좁히지 않으면 배너가 `undefined초`라고 말한다.
+    const value = source[field.key] ?? 0;
     // 뒤 세트가 이미 같은 값이면 실을 이유가 없다 — 실으면 배너가
     // "적용할까요?"라고 묻고 눌러도 아무것도 안 바뀐다
-    if (!pending.some((set) => set[field.key] !== value)) continue;
+    if (!pending.some((set) => (set[field.key] ?? 0) !== value)) continue;
     offerFields.push({
       key: field.key,
       label: field.label,
       unit: field.unit,
       value,
+      // 시간처럼 단위 환산이 필요한 칸은 포맷 결과를 그대로 쓴다
+      // (`1960` → `32분 40초`). 없으면 화면이 `값 + unit`으로 짓는다.
+      display: field.format ? field.format(value) : null,
     });
   }
   if (offerFields.length === 0) return null;
 
   const targetCount = pending.filter((set) =>
-    offerFields.some((field) => set[field.key] !== field.value),
+    offerFields.some((field) => (set[field.key] ?? 0) !== field.value),
   ).length;
 
   return { fields: offerFields, targetCount };

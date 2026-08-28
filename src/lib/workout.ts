@@ -3,6 +3,10 @@ import {
   completedSetsInOrder,
   withCompletedSetsOnly,
 } from "@/lib/domain/workout-import";
+import {
+  DEFAULT_HOLD_SECONDS,
+  durationSecondsOf,
+} from "@/lib/domain/set-timer";
 import { dayKey, resolveTimeZone } from "@/lib/domain/time";
 import type { CompletedSession } from "@/lib/domain/calendar";
 import type { VolumeSet } from "@/lib/domain/volume";
@@ -28,7 +32,26 @@ export type LocalSet = {
   weightKg: number;
   reps: number;
   distanceKm: number;
+  /**
+   * ⚠️ **계획·루틴 호환용으로만 남아 있다.** 실제 시간 기록은 `durationSec`다.
+   *
+   * 달력 계획·루틴·공식 프로그램 JSON이 이 키를 쓰고 서버 RPC가 `?&`로 **존재를
+   * 검사**한다(0066·0069·0070·0073). 지우면 계획 저장이 통째로 거부된다.
+   * 읽을 때는 언제나 `durationSecondsOf()`를 거친다.
+   */
   durationMin: number;
+  /**
+   * 시간 기록의 **진실** — 초 (2026-08-28 사장님 지시).
+   *
+   * DB는 처음부터 초다(`workout_sets.duration_seconds`, 0004). 분으로 눌러
+   * 담던 탓에 매달리기 37초는 **입력조차 못 했고** 러닝 32분 40초는 40초를
+   * 잃었다. 이제 세트 시계가 잰 초가 그대로 들어온다.
+   *
+   * 선택 필드인 이유: `effortFeedback`(0067)과 같다 — 옛 draft·계획에서 온
+   * 세트에는 없다. 없으면 `durationMin * 60`으로 읽는다(`durationSecondsOf`).
+   * 그래서 **draft 버전을 올리지 않았다.**
+   */
+  durationSec?: number;
   done: boolean;
   /**
    * 첫·마지막 세트에서 받은 체감 (0067).
@@ -50,6 +73,7 @@ export function newSet(partial: Partial<Omit<LocalSet, "key">> = {}): LocalSet {
     reps: 0,
     distanceKm: 0,
     durationMin: 0,
+    durationSec: 0,
     done: false,
     effortFeedback: null,
     ...partial,
@@ -280,7 +304,16 @@ export function defaultSets(
 ): LocalSet[] {
   if (type === "weight") return [newSet({ weightKg: 20, reps: 10 })];
   if (type === "bodyweight") {
-    if (measure === "time") return [newSet({ durationMin: 1 })];
+    // 초가 진실이다 (2026-08-28). `durationMin`이던 시절 기본값은 **1분**이라
+    // 매달리기를 담자마자 못 채울 목표가 서 있었다.
+    if (measure === "time") {
+      return [
+        newSet({
+          durationSec: DEFAULT_HOLD_SECONDS,
+          durationMin: Math.round((DEFAULT_HOLD_SECONDS / 60) * 1000) / 1000,
+        }),
+      ];
+    }
     return [newSet({ reps: 12 })];
   }
   return [newSet()]; // cardio: 거리·시간 1행
@@ -602,6 +635,7 @@ export async function getPreviousExerciseRecords(
           reps: s.reps ?? 0,
           distanceKm: Number(s.distance_meters ?? 0) / 1000,
           durationMin: Math.round((s.duration_seconds ?? 0) / 60),
+          durationSec: s.duration_seconds ?? 0,
           isCompleted: s.is_completed,
         })),
     });
@@ -678,8 +712,14 @@ export async function saveSessionExercises(
       weight_kg: ex.exerciseType === "weight" ? s.weightKg : null,
       reps: isCardio || isTime ? null : s.reps,
       distance_meters: isCardio ? Math.round(s.distanceKm * 1000) : null,
+      /*
+        시간은 **초가 진실**이다 (2026-08-28). 예전엔 `durationMin * 60`이라
+        세트 시계가 잰 37초를 담을 수 없었다 — `durationMin`은 분 스테퍼라
+        0분 아니면 1분이었다. `durationSecondsOf`가 계획(분)에서 온 세트도
+        같은 규칙으로 읽어 준다.
+      */
       duration_seconds:
-        isCardio || isTime ? Math.round(s.durationMin * 60) : null,
+        isCardio || isTime ? Math.round(durationSecondsOf(s)) : null,
       is_completed: s.done,
       // 0067. 안 물어본 세트는 undefined라 `?? null`로 좁힌다 — undefined를 그대로
       // 보내면 PostgREST가 키를 빼서 열마다 행 모양이 달라진다.
@@ -735,6 +775,7 @@ function toLocalSet(s: WorkoutSet): LocalSet {
     reps: s.reps ?? 0,
     distanceKm: Number(s.distance_meters ?? 0) / 1000,
     durationMin: Math.round((s.duration_seconds ?? 0) / 60),
+    durationSec: s.duration_seconds ?? 0,
   });
 }
 
@@ -1025,6 +1066,7 @@ export async function getSessionLogExercises(
         reps: s.reps ?? 0,
         distanceKm: Number(s.distance_meters ?? 0) / 1000,
         durationMin: Math.round((s.duration_seconds ?? 0) / 60),
+        durationSec: s.duration_seconds ?? 0,
         done: s.is_completed,
       })),
   }));

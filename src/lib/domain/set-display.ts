@@ -1,5 +1,7 @@
 import type { ExerciseType } from "@/lib/types";
 
+import { durationSecondsOf, formatDurationAmount } from "./set-timer";
+
 /**
  * 세트 하나의 **수량 표기** — 지난 기록 상세(④)·계획 상세(⑥)·공유 텍스트가 공유한다.
  *
@@ -14,20 +16,31 @@ export type SetAmount = {
   reps: number;
   distanceKm: number;
   durationMin: number;
+  /** 시간 기록의 진실 (2026-08-28). 없으면 `durationMin * 60`으로 읽는다 */
+  durationSec?: number;
 };
 
 export function formatSetAmount(set: SetAmount): string {
   if (set.exerciseType === "weight") {
     return `${set.weightKg}kg ${set.reps}회`;
   }
+  /*
+    ⚠️ **시간은 초로 읽는다** (2026-08-28). 예전엔 `${set.durationMin}분`이라
+    매달리기 37초가 `0분`으로 찍혔다. `formatDurationAmount`는 분이 딱 떨어지면
+    초를 안 붙이므로 **옛 기록의 표기(`30분`)는 그대로다**.
+  */
+  const seconds = durationSecondsOf(set);
+
   if (set.exerciseType === "bodyweight") {
-    return set.measure === "time" ? `${set.durationMin}분` : `${set.reps}회`;
+    return set.measure === "time"
+      ? formatDurationAmount(seconds)
+      : `${set.reps}회`;
   }
 
   // 유산소: 0인 항목은 생략한다. 둘 다 0이면 빈 문자열 대신 "0분".
   const parts: string[] = [];
   if (set.distanceKm > 0) parts.push(`${set.distanceKm}km`);
-  if (set.durationMin > 0) parts.push(`${set.durationMin}분`);
+  if (seconds > 0) parts.push(formatDurationAmount(seconds));
   if (parts.length === 0) parts.push("0분");
   return parts.join(" ");
 }

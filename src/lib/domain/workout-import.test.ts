@@ -211,7 +211,7 @@ describe("buildEffortMessage", () => {
     );
   });
 
-  it("시간 운동은 1분 추가를 제안한다", () => {
+  it("시간 운동은 5초 추가를 제안한다", () => {
     const message = buildEffortMessage([
       exercise({
         name: "플랭크",
@@ -224,7 +224,7 @@ describe("buildEffortMessage", () => {
     ]);
 
     expect(message).toBe(
-      "플랭크를 지난번에는 3분 했어요. 컨디션 괜찮으면 오늘은 1분만 더 버텨봐요.",
+      "플랭크를 지난번에는 3분 버텼어요. 컨디션 괜찮으면 오늘은 5초만 더 버텨봐요.",
     );
   });
 

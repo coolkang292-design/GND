@@ -24,6 +24,8 @@ export type PreviousSet = {
   reps: number;
   distanceKm: number;
   durationMin: number;
+  /** 시간 기록의 진실 (2026-08-28). 옛 기록에는 없어서 선택이다 */
+  durationSec?: number;
 };
 
 export type PreviousHint =
@@ -151,6 +153,7 @@ export function previousHintFor({
       reps: previous.reps,
       distanceKm: previous.distanceKm,
       durationMin: previous.durationMin,
+      durationSec: previous.durationSec,
     }),
     challengeReps,
     cheer,

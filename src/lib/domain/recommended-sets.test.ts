@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  RECOMMENDED_MINUTES,
+  RECOMMENDED_HOLD_SECONDS,
   RECOMMENDED_REPS,
   RECOMMENDED_SET_COUNT,
   defaultSetupPlan,
@@ -28,14 +28,22 @@ describe("defaultSetupPlan — 추천 기본값 (사용자 지시 2026-08-06)", 
     });
   });
 
-  it("맨몸 시간형은 회가 아니라 분이다", () => {
-    // "10회 플랭크"는 뜻이 없다. 요구에 없는 분기지만 카탈로그에 시간형이
-    // 실제로 있다(플랭크·월 싯·핸드스탠드…).
+  it("맨몸 시간형은 회가 아니라 **초**다", () => {
+    // "10회 플랭크"는 뜻이 없다. 카탈로그에 시간형이 실제로 있다
+    // (플랭크·매달리기·월 싯·핸드스탠드…).
     expect(defaultSetupPlan("bodyweight", "time")).toEqual({
       sets: 3,
-      amount: RECOMMENDED_MINUTES,
+      amount: RECOMMENDED_HOLD_SECONDS,
       weightKg: 0,
     });
+  });
+
+  /**
+   * ⚠️ 2026-08-28에 `1분` → `30초`로 내렸다. 기본값이 1분이면 매달리기를 담는
+   * 순간부터 웬만한 사람이 못 채울 목표가 서 있었다.
+   */
+  it("시간형 기본 목표는 30초다 — 1분으로 되돌리지 마라", () => {
+    expect(RECOMMENDED_HOLD_SECONDS).toBe(30);
   });
 
   it("유산소는 1세트이고 거리·시간을 미리 정하지 않는다", () => {
@@ -81,14 +89,20 @@ describe("planToSets", () => {
     expect(sets.map((s) => s.weightKg)).toEqual([40, 40]);
   });
 
-  it("시간형은 reps가 아니라 durationMin에 넣는다", () => {
+  it("시간형은 reps가 아니라 durationSec에 넣는다", () => {
     const [set] = planToSets("bodyweight", "time", {
       sets: 1,
-      amount: 2,
+      amount: 45,
       weightKg: 0,
     });
-    expect(set.durationMin).toBe(2);
+    expect(set.durationSec).toBe(45);
     expect(set.reps).toBe(0);
+    /*
+      계획 호환 필드도 같이 채운다 — 달력·루틴 JSON이 `durationMin` 키를 쓰고
+      서버 RPC가 `?&`로 **존재를 검사**한다(0066·0069·0070·0073). 빼면 계획
+      저장이 통째로 거부된다.
+    */
+    expect(set.durationMin).toBe(0.75);
   });
 
   it("유산소는 값 없이 빈 행이다 (운동 중 입력)", () => {
@@ -121,10 +135,13 @@ describe("summarizePlan — 카드 한 줄 요약", () => {
     ).toBe("3세트 · 12회");
   });
 
-  it("시간형은 회가 아니라 분이다", () => {
+  it("시간형은 회가 아니라 시간이다 — 60초 미만은 초로 읽는다", () => {
     expect(
-      summarizePlan("bodyweight", "time", { sets: 3, amount: 1, weightKg: 0 }),
-    ).toBe("3세트 · 1분");
+      summarizePlan("bodyweight", "time", { sets: 3, amount: 30, weightKg: 0 }),
+    ).toBe("3세트 · 30초");
+    expect(
+      summarizePlan("bodyweight", "time", { sets: 3, amount: 90, weightKg: 0 }),
+    ).toBe("3세트 · 1분 30초");
   });
 
   it("유산소는 거리·시간을 운동 중 입력이라고 말한다", () => {
@@ -147,9 +164,18 @@ describe("planFromSets — 이미 담긴 세트 → 요약값", () => {
     expect(plan).toEqual({ sets: 3, amount: 10, weightKg: 0 });
   });
 
-  it("시간형이면 durationMin을 읽는다", () => {
+  it("시간형이면 durationSec을 읽는다", () => {
+    const plan = planFromSets(
+      [{ weightKg: 0, reps: 0, durationMin: 0.75, durationSec: 45 }],
+      true,
+    );
+    expect(plan.amount).toBe(45);
+  });
+
+  /** 계획에서 담아 온 세트에는 초가 없다 — 분을 환산해서라도 읽어야 한다 */
+  it("초가 없으면 계획의 분을 초로 환산해 읽는다", () => {
     const plan = planFromSets([{ weightKg: 0, reps: 0, durationMin: 2 }], true);
-    expect(plan.amount).toBe(2);
+    expect(plan.amount).toBe(120);
   });
 
   it("세트가 없어도 던지지 않는다", () => {
