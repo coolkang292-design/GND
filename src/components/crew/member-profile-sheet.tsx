@@ -3,9 +3,11 @@
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { Avatar } from "@/components/avatar";
+import { ImageLightbox } from "@/components/image-lightbox";
 import { UiIcon } from "@/components/ui-icon";
 import { uploadAvatarPhoto } from "@/lib/avatar";
 import { updateMyAvatar } from "@/lib/crew";
+import { avatarSource } from "@/lib/domain/avatar-source";
 import { badgeShelf, earnedBadgeCount, type BadgeMeta } from "@/lib/domain/badges";
 import { getBadgeCatalog } from "@/lib/badges";
 import {
@@ -289,6 +291,27 @@ export function MemberProfileSheet({
   const [avatarBusy, setAvatarBusy] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
   const avatarFileRef = useRef<HTMLInputElement>(null);
+  /** 친구 사진을 크게 띄우는 중 (2026-08-28) */
+  const [zoomOpen, setZoomOpen] = useState(false);
+
+  /**
+   * 사진일 때만 값이 있다 — 이모지·빈 값이면 `null`이다.
+   *
+   * ⚠️ 이모지를 512px로 키워 봐야 볼 것이 없다. `avatar_url` 한 칸에는 사진 URL과
+   * 이모지가 같이 들어온다(`domain/avatar-source.ts`). **판정을 여기서 손으로 쓰지
+   * 않고 `avatarSource`를 부르는 것이 규칙이다** — `startsWith("http")`를 다시 쓰면
+   * 판정이 두 곳으로 갈린다.
+   *
+   * ⚠️⚠️ **여기서 "내 프로필인가"를 보지 않는다.** 그 판정은 아래 렌더 분기
+   * `onAvatarChanged ? … : avatarPhotoUrl ? …` **한 곳뿐**이어야 한다. 예전 판은
+   * 여기서도 한 번 더 걸렀는데, 그러면 규칙이 두 겹이 되어 **한 겹을 부숴도
+   * 테스트가 통과한다** — 2026-08-28에 일부러 고장 내 보고 실제로 그랬다.
+   * 안전장치를 늘리는 대신 진실을 하나로 뒀다.
+   */
+  const avatarPhotoUrl = (() => {
+    const source = avatarSource(avatarUrl);
+    return source.kind === "photo" ? source.url : null;
+  })();
 
   /**
    * 고른 사진을 올리고 **바로 저장한다** — 저장 버튼이 없다.
@@ -407,6 +430,51 @@ export function MemberProfileSheet({
                 onChange={(e) => void pickAvatar(e.target.files?.[0])}
               />
             </>
+          ) : avatarPhotoUrl ? (
+            /* ⚠️⚠️ **이 삼항의 순서가 기능의 전부다.** `onAvatarChanged`(내 프로필)가
+                **먼저** 걸러지므로 내 시트에는 확대가 절대 안 붙는다 — 그 자리는
+                2026-08-22부터 **홈에서 사진을 바꾸는 유일한 입구**이고, 확대를 겹쳐
+                달면 2탭에 사진을 바꾸려던 이유가 사라진다(2026-08-28 "이번엔 친구만").
+                **순서를 뒤집지 마라.** 이 규칙이 사는 곳은 여기 한 줄뿐이다.
+
+                ⚠️ 사진일 때만 이 갈래다. 이모지·빈 값이면 아래 옛 `<Avatar>` 그대로 —
+                누를 수 없는 그림이다. `member-profile-sheet.zoom.test.tsx`가
+                "이모지면 버튼이 없다"·"내 시트면 확대가 아니라 사진 바꾸기다"를
+                **먼저 단언한다**(부정 확인이 이 기능의 증거다).
+
+                ⚠️ 44px는 눌리는 최소 크기다 — 카메라 버튼과 같은 이유로 줄이지 마라. */
+            <button
+              type="button"
+              onClick={() => setZoomOpen(true)}
+              aria-label={`${nickname}님 프로필 사진 크게 보기`}
+              className="relative flex-none rounded-full"
+            >
+              <Avatar
+                src={avatarUrl}
+                /* 버튼의 접근 가능한 이름이 이미 말한다 — 채우면 두 번 읽힌다 */
+                className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border border-line bg-surface-2 text-2xl"
+              />
+              {/* ⚠️ 칩을 지우지 마라. 내 시트의 카메라 칩과 **같은 자리·같은 19px**
+                  이고, 이유도 같다 — 표시가 없으면 눌린다는 것을 알 방법이 아예 없다.
+                  `ui-icons`에 확대 아이콘이 없어서 `personal-today-card.tsx`의
+                  `BadgeHex`와 같은 방식으로 인라인 SVG를 그린다. */}
+              <span
+                aria-hidden
+                className="absolute -bottom-0.5 -right-0.5 flex h-[19px] w-[19px] items-center justify-center rounded-full border border-line bg-surface text-accent shadow-card"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-[11px] w-[11px]"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M3 9V3h6M15 3h6v6M21 15v6h-6M9 21H3v-6" />
+                </svg>
+              </span>
+            </button>
           ) : (
             <Avatar
               src={avatarUrl}
@@ -477,6 +545,17 @@ export function MemberProfileSheet({
           닫기
         </button>
       </div>
+
+      {/* ⚠️ 시트 **위**에 겹친다(z 60/70 vs 시트 50). 시트를 닫지 않으므로 확대를
+          닫으면 보고 있던 성과 화면이 그대로 남는다 — 사진 한 장 보려고 프로필을
+          다시 여는 일이 없어야 한다. */}
+      {zoomOpen && avatarPhotoUrl && (
+        <ImageLightbox
+          src={avatarPhotoUrl}
+          alt={`${nickname}님 프로필 사진`}
+          onClose={() => setZoomOpen(false)}
+        />
+      )}
     </>
   );
 }
