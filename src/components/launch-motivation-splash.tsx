@@ -116,7 +116,7 @@ export function LaunchMotivationSplash() {
       {phase !== "checking" && (
         <Image
           data-testid="launch-splash-image"
-          src="/splash/gnd-launch-motivation-v4.png"
+          src="/splash/gnd-launch-motivation-v5.png"
           alt=""
           fill
           priority
@@ -135,7 +135,7 @@ export function LaunchMotivationSplash() {
         data-testid="launch-splash-description"
         className="sr-only"
       >
-        매일 1도의 방향이, 1년뒤 도착지를 뒤바꾼다.
+        의지가 꺾인 날에도 계속한 사람이, 결국 이긴다
       </span>
 
       {phase === "fallback" && (
@@ -157,10 +157,10 @@ export function LaunchMotivationSplash() {
             }}
           >
             <span className="block text-[clamp(1.8rem,7.5vw,2.4rem)] font-black leading-[1.04] tracking-[-0.055em] text-text">
-              매일 1도의 방향이,
+              의지가 꺾인 날에도
             </span>
             <span className="mt-1 block text-[clamp(1.25rem,5.25vw,1.7rem)] font-black leading-[1.04] tracking-[-0.055em] text-accent">
-              1년뒤 도착지를 뒤바꾼다.
+              계속한 사람이, 결국 이긴다
             </span>
           </span>
         </span>
