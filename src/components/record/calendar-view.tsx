@@ -1332,7 +1332,17 @@ export function CalendarView({
                       `프로그램 그만두기`. 그냥 `삭제` 하나만 두면 프로그램을
                       끝내려는 사람이 18번 눌러야 한다 (사용자 지적 2026-08-12).
                     */}
-                    <div className="flex shrink-0 flex-col items-end gap-1.5">
+                    {/*
+                      맨 텍스트 두 줄을 6px 간격으로 세워 뒀더니 손가락 표적이
+                      겹쳤다 (사용자 지적 2026-08-28). **아래쪽이 삭제**라
+                      잘못 누르면 계획이 사라진다 — 확인 창이 받아 주긴 하지만
+                      애초에 헷갈리지 않게 만드는 편이 맞다.
+
+                      테두리를 줘서 각자 눌리는 영역을 눈에 보이게 하고,
+                      높이 32px·간격 8px로 벌린다. 종목 목록의 ± 버튼(h-9)과
+                      같은 계열이라 새 크기를 만들지 않는다.
+                    */}
+                    <div className="flex shrink-0 flex-col items-end gap-2">
                       {/*
                         `수정`을 내지 않는 두 경우 (2026-08-28):
 
@@ -1347,7 +1357,7 @@ export function CalendarView({
                           <button
                             onClick={openPlanEdit}
                             disabled={planBusy}
-                            className="text-xs font-bold text-accent disabled:opacity-50"
+                            className="h-8 rounded-card-sm border border-accent/50 bg-surface px-3 text-xs font-bold text-accent disabled:opacity-50"
                           >
                             수정
                           </button>
@@ -1355,7 +1365,7 @@ export function CalendarView({
                       <button
                         onClick={handleDeletePlan}
                         disabled={planBusy}
-                        className="text-xs font-bold text-warn disabled:opacity-50"
+                        className="h-8 rounded-card-sm border border-line bg-surface px-3 text-xs font-bold text-warn disabled:opacity-50"
                       >
                         {selectedPlan.programEnrollmentId ? "이 회차만 삭제" : "삭제"}
                       </button>
