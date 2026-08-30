@@ -2,11 +2,12 @@
 
 import { Avatar } from "@/components/avatar";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CaptionPicker } from "@/components/feed/caption-picker";
 import { CommentThread } from "@/components/feed/comment-thread";
 import { LikersSheet } from "@/components/feed/likers-sheet";
 import { ReactionBar } from "@/components/feed/reaction-bar";
+import { ImageLightbox } from "@/components/image-lightbox";
 import { PhotoStamp } from "@/components/photo-stamp";
 import { SetBreakdown } from "@/components/workout/set-breakdown";
 import { normalizeCaption } from "@/lib/domain/session-caption";
@@ -159,11 +160,14 @@ function CardFooter({
   userId,
   onItemChange,
   openComments,
+  likeTrigger,
 }: {
   item: FeedItem;
   userId: string;
   onItemChange?: (next: FeedItem) => void;
   openComments?: boolean;
+  /** 사진 더블탭이 올려 보내는 신호 (Phase D) */
+  likeTrigger?: number;
 }) {
   const [showComments, setShowComments] = useState(openComments ?? false);
   const [showLikers, setShowLikers] = useState(false);
@@ -187,6 +191,7 @@ function CardFooter({
           userId={userId}
           counts={item.reactions}
           myReactions={item.myReactions}
+          likeTrigger={likeTrigger}
         />
         <button
           type="button"
@@ -251,6 +256,21 @@ export function FeedItemCard({
   onItemChange,
   openComments,
 }: Props) {
+  // Phase D — 사진 상호작용. 사진이 없는 기록에서는 전부 놀고 있다.
+  const [lightbox, setLightbox] = useState(false);
+  const [burst, setBurst] = useState(false);
+  const [likeTrigger, setLikeTrigger] = useState(0);
+  const tapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 카드가 화면에서 사라진 뒤 타이머가 살아 있으면 언마운트된 컴포넌트에
+  // setState가 걸린다. 피드는 스크롤로 계속 바뀌는 목록이라 실제로 일어난다.
+  useEffect(
+    () => () => {
+      if (tapTimer.current) clearTimeout(tapTimer.current);
+    },
+    [],
+  );
+
   const stats: string[] = [];
   if (item.durationMinutes > 0) stats.push(`${item.durationMinutes}분`);
   if (item.volume.weightVolumeKg > 0)
@@ -260,10 +280,37 @@ export function FeedItemCard({
   if (item.volume.cardioDistanceMeters > 0)
     stats.push(`${(item.volume.cardioDistanceMeters / 1000).toFixed(1)}km`);
 
+  /**
+   * 사진 탭 (Phase D).
+   *
+   * ⚠️ 한 번 탭과 두 번 탭이 같은 자리에 있다. 터치에서 더블탭은 click을 **두 번**
+   *    쏘므로, 첫 click을 곧바로 처리하면 라이트박스가 열린 뒤에 좋아요가 붙는다.
+   *    그래서 첫 click을 잠깐 재워 두고, 그 사이에 두 번째가 오면 취소한다.
+   */
+  function handlePhotoTap() {
+    if (tapTimer.current) return;
+    tapTimer.current = setTimeout(() => {
+      tapTimer.current = null;
+      setLightbox(true);
+    }, 260);
+  }
+
+  function handlePhotoDoubleTap() {
+    if (tapTimer.current) {
+      clearTimeout(tapTimer.current);
+      tapTimer.current = null;
+    }
+    setLikeTrigger((n) => n + 1);
+    setBurst(true);
+    setTimeout(() => setBurst(false), 700);
+  }
+
   if (item.photoUrl) {
     return (
       <article className="overflow-hidden rounded-card border border-line bg-surface shadow-card">
-        <div className="relative aspect-[4/3] w-full">
+        {/* Phase D: 4/3 → 4/5. 세로 화면에서 사진이 크게 보이고, 스크롤 한 번에
+            게시물 하나가 온다 — 인스타가 세로를 기본으로 두는 이유다. */}
+        <div className="relative aspect-[4/5] w-full">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={item.photoUrl}
@@ -271,6 +318,30 @@ export function FeedItemCard({
             className="h-full w-full object-cover"
             loading="lazy"
           />
+
+          {/* 사진 탭 판. 한 번 = 크게 보기, 두 번 = 좋아요.
+              ⚠️ 아래 PhotoStamp·프로필 오버레이보다 **먼저** 그린다 — 그래야
+                 그 둘이 위에 남아 자기 탭을 그대로 받는다. */}
+          <button
+            type="button"
+            aria-label={`${item.nickname}님의 인증사진 크게 보기 (두 번 탭하면 좋아요)`}
+            onClick={handlePhotoTap}
+            onDoubleClick={handlePhotoDoubleTap}
+            className="absolute inset-0 h-full w-full"
+          />
+
+          {/* 더블탭 하트. 위에 떠서 잠깐 커졌다 사라진다. 눌린 것이 눈에 보이지
+              않으면 사용자는 한 번 더 두드린다. */}
+          {burst && (
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-0 flex items-center justify-center text-[88px] drop-shadow-lg"
+              style={{ animation: "gnd-heart-burst 700ms ease-out forwards" }}
+            >
+              ❤️
+            </span>
+          )}
+
           <PhotoStamp
             completedAt={item.completedAt}
             durationMinutes={item.durationMinutes}
@@ -309,7 +380,18 @@ export function FeedItemCard({
           userId={userId}
           onItemChange={onItemChange}
           openComments={openComments}
+          likeTrigger={likeTrigger}
         />
+
+        {/* Phase D: 라이트박스는 **이미 만들어져 있었고** 아무도 안 부르고 있었다.
+            사진을 크게 볼 곳이 없으면 인증사진을 올릴 이유가 반쯤 사라진다. */}
+        {lightbox && (
+          <ImageLightbox
+            src={item.photoUrl}
+            alt={`${item.nickname}님의 운동 인증`}
+            onClose={() => setLightbox(false)}
+          />
+        )}
       </article>
     );
   }

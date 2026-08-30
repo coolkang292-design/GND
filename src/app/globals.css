@@ -93,3 +93,41 @@ body {
   line-height: 1.45;
   min-height: 100dvh;
 }
+
+/* 사진 더블탭 하트 (Phase D, 2026-08-31).
+   눌린 것이 눈에 보이지 않으면 사용자는 한 번 더 두드린다 — 그러면 좋아요가
+   두 번 나가는 것처럼 느껴진다(실제로는 켜기 전용이라 한 번이지만, 불안하다). */
+@keyframes gnd-heart-burst {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  35% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
+/* 흔들림에 약한 사람에게는 커지지 않고 잠깐 뜨기만 한다. */
+@media (prefers-reduced-motion: reduce) {
+  @keyframes gnd-heart-burst {
+    0%,
+    100% {
+      opacity: 0;
+      transform: none;
+    }
+    35%,
+    70% {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}

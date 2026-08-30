@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * 피드 화면 상단 탭 — `피드` | `챌린지 모집` (2026-08-31 사용자 결정).
+ * 피드 화면 상단 탭 — `피드` | `사진` | `챌린지 모집` (2026-08-31).
  *
  * ⚠️ **왜 나눴나.** 모집 카드를 피드 위에 얹어 봤더니 화면 위쪽을 통째로 먹어서
  *    **첫 운동 게시물이 접힘선 밖으로 밀렸다**(사용자 화면 확인). 피드에 온
@@ -14,7 +14,7 @@
  * ⚠️ 모집 개수를 탭에 붙인다. 안 붙이면 **탭이 있는 줄도 모르고** 아무도 안 눌러서,
  *    나눈 의미가 사라진다. 0개면 숫자를 안 그린다.
  */
-export type FeedTab = "feed" | "recruit";
+export type FeedTab = "feed" | "photos" | "recruit";
 
 export function FeedTabs({
   value,
@@ -28,6 +28,10 @@ export function FeedTabs({
 }) {
   const tabs: { key: FeedTab; label: string; count?: number }[] = [
     { key: "feed", label: "피드" },
+    // Phase D: 인증사진 모아 보기. getCrewFeed의 photoOnly가 이미 있었는데
+    // 부르는 곳이 없었다. 개수는 안 붙인다 — 사진은 계속 쌓여서 숫자가
+    // 커지기만 하고, 커진 숫자는 "새 것이 있다"를 뜻하지 않는다.
+    { key: "photos", label: "사진" },
     { key: "recruit", label: "챌린지 모집", count: recruitCount },
   ];
 

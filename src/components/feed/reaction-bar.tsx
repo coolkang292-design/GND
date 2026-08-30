@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   foldReactions,
   typesToClear,
@@ -13,6 +13,14 @@ type Props = {
   userId: string;
   counts: ReactionCounts;
   myReactions: Set<ReactionType>;
+  /**
+   * 사진 더블탭용 (Phase D). 값이 **바뀔 때마다** 좋아요를 켠다.
+   *
+   * ⚠️ 토글이 아니라 **켜기만** 한다. 인스타의 더블탭이 그렇고, 그래야 이미
+   *    좋아요한 글을 두 번 탭했을 때 실수로 꺼지지 않는다 — 사진을 크게 보려다
+   *    두 번 친 사람이 자기 좋아요를 지우게 된다.
+   */
+  likeTrigger?: number;
 };
 
 /**
@@ -39,7 +47,13 @@ type Props = {
  *
  * 낙관적 토글, 실패 시 롤백 (§9).
  */
-export function ReactionBar({ sessionId, userId, counts, myReactions }: Props) {
+export function ReactionBar({
+  sessionId,
+  userId,
+  counts,
+  myReactions,
+  likeTrigger,
+}: Props) {
   const [local, setLocal] = useState(() => ({
     counts: { ...counts },
     mine: new Set(myReactions),
@@ -84,6 +98,34 @@ export function ReactionBar({ sessionId, userId, counts, myReactions }: Props) {
       setBusy(false);
     }
   }
+
+  /** 켜기 전용 경로. 이미 켜져 있으면 아무 일도 안 한다. */
+  async function likeOn() {
+    if (busy || liked) return;
+    const previous = { counts: { ...local.counts }, mine: new Set(local.mine) };
+    setLocal({
+      counts: { ...local.counts, like: local.counts.like + 1 },
+      mine: new Set(local.mine).add("like"),
+    });
+    setBusy(true);
+    try {
+      await toggleReaction(sessionId, userId, "like", true);
+    } catch {
+      setLocal(previous);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // 마운트 때는 안 쏜다 — 초기값을 기억해 두고 **바뀐 다음부터** 반응한다.
+  const seenTrigger = useRef(likeTrigger);
+  useEffect(() => {
+    if (likeTrigger === undefined) return;
+    if (seenTrigger.current === likeTrigger) return;
+    seenTrigger.current = likeTrigger;
+    void likeOn();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [likeTrigger]);
 
   return (
     <button

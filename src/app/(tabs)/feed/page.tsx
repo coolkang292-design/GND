@@ -4,12 +4,14 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
 } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { MemberProfileSheet } from "@/components/crew/member-profile-sheet";
-import { ActiveWorkoutCards } from "@/components/feed/active-workout-cards";
+import { PhotoGrid } from "@/components/feed/photo-grid";
+import { StoryTray } from "@/components/feed/story-tray";
 import {
   DiscoverableChallengeList,
   useDiscoverableChallenges,
@@ -156,6 +158,17 @@ export default function FeedPage() {
     );
   }, []);
 
+  /**
+   * 무한 스크롤 감시자 (Phase D).
+   *
+   * ⚠️ `loadMore`가 `items`에 의존해서 페이지마다 새 함수가 된다. 그래서 관찰도
+   *    매번 다시 건다 — 이게 맞다. 옛 클로저를 붙들고 있으면 **같은 20건을
+   *    무한히 다시 부른다.**
+   * ⚠️ `loadingMore` 중에는 관찰을 걸지 않는다. 이게 없으면 응답이 오기 전에
+   *    관찰자가 여러 번 발화해 같은 페이지를 겹쳐 붙인다.
+   */
+  const sentinelRef = useRef<HTMLButtonElement>(null);
+
   const loadMore = useCallback(async () => {
     if (!userId || items.length === 0) return;
     setLoadingMore(true);
@@ -168,6 +181,22 @@ export default function FeedPage() {
       setLoadingMore(false);
     }
   }, [userId, items]);
+
+  // 감시자 부착. loadMore가 바뀔 때마다 다시 건다(위 주석 참조).
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || !hasMore || loadingMore) return;
+    if (typeof IntersectionObserver === "undefined") return; // 버튼으로 폴백
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) void loadMore();
+      },
+      // 화면에 닿기 전에 미리 부른다 — 바닥을 보고 나서 부르면 빈 화면이 보인다
+      { rootMargin: "400px 0px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [loadMore, hasMore, loadingMore]);
 
   return (
     <div className="flex flex-col gap-3">
@@ -185,9 +214,15 @@ export default function FeedPage() {
 
       {tab === "recruit" ? (
         <DiscoverableChallengeList items={recruits} setItems={setRecruits} />
+      ) : tab === "photos" ? (
+        userId ? (
+          <PhotoGrid userId={userId} />
+        ) : null
       ) : (
         <>
-      <ActiveWorkoutCards />
+      {/* Phase C: 진행 중 크루를 카드 대신 가로 한 줄로. 카드는 1명당 ~180px라
+          3명이 운동 중이면 첫 화면에 게시물이 하나도 안 보였다. 홈은 그대로 카드다. */}
+      <StoryTray />
 
       {pinnedId && (
         <section className="flex flex-col gap-2">
@@ -246,8 +281,13 @@ export default function FeedPage() {
               ))}
             </section>
           ))}
+          {/* Phase D: 무한 스크롤. 이 자리가 화면에 들어오면 다음 20건을 부른다.
+              ⚠️ 버튼을 **없애지 않았다.** IntersectionObserver가 없는 환경(아주 옛
+                 브라우저)과 자동 로드가 실패했을 때 손으로 이어갈 길이 남아야
+                 한다. 관찰 중에는 문구만 "불러오는 중…"으로 바뀐다. */}
           {hasMore && (
             <button
+              ref={sentinelRef}
               onClick={() => void loadMore()}
               disabled={loadingMore}
               className="h-11 w-full rounded-card-sm border border-line text-sm font-bold text-accent disabled:opacity-60"

@@ -1,80 +1,43 @@
 "use client";
 
 import { Avatar } from "@/components/avatar";
-import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
-import {
-  getActiveCrewSessions,
-  sendCheer,
-  SocialError,
-  type ActiveCrewSession,
-  type CheerType,
-} from "@/lib/social";
+import { CheerActions } from "@/components/feed/cheer-actions";
+import { useActiveCrewSessions } from "@/lib/hooks/use-active-crew-sessions";
+import type { ActiveCrewSession } from "@/lib/social";
 import { minutesSince } from "@/lib/time-ago";
-import { cheerToastMessage } from "@/lib/domain/cheer-points";
-import { CheerPointModal } from "@/components/feed/cheer-point-modal";
-
-const CHEER_BUTTONS: { type: CheerType; emoji: string; label: string }[] = [
-  { type: "fire", emoji: "🔥", label: "불태워" },
-  { type: "power", emoji: "💪", label: "힘내" },
-  { type: "clap", emoji: "👏", label: "멋져" },
-  { type: "finish", emoji: "🏁", label: "끝까지" },
-];
-
-function cheerErrorMessage(e: unknown): string {
-  if (e instanceof SocialError) {
-    if (e.code === "cheer_cooldown") return "잠시 후 다시 응원할 수 있어요";
-    if (e.code === "cheer_limit") return "이 운동엔 3번까지 응원할 수 있어요";
-    if (e.code === "not_active") return "운동이 방금 끝났어요";
-  }
-  return "응원을 보내지 못했어요";
-}
 
 /**
- * 진행 중 크루 세션 카드 목록 — 홈·피드 공용.
+ * 진행 중 크루 세션 카드 목록 — **홈 전용이 됐다** (Phase C, 2026-08-31).
+ *
+ * 피드는 같은 데이터를 `StoryTray`로 그린다. 1명당 세로 ~180px이라 3명이 운동
+ * 중이면 피드 첫 화면에 게시물이 하나도 안 보였기 때문이다. 홈은 목록이 아니라
+ * 현황판이라 카드가 맞아서 **그대로 둔다.**
  *
  * `sessions`를 받으면 그리기만 한다. 홈은 같은 값을 친구 목록의 "🔥 운동 중"
  * 판정에도 쓰기 때문에 **한 번만 조회해 내려준다** — 여기서 또 부르면 같은 질의가
- * 홈에서 두 번 나가고 폴링도 두 벌이 된다. 피드처럼 안 넘기면 지금까지처럼
- * 스스로 불러온다.
+ * 홈에서 두 번 나가고 폴링도 두 벌이 된다. 안 넘기면 스스로 불러온다.
  */
 export function ActiveWorkoutCards({
   sessions: provided,
 }: {
   sessions?: ActiveCrewSession[];
 } = {}) {
-  const { userId, loading, configured } = useAuth();
-  const [ownSessions, setSessions] = useState<ActiveCrewSession[]>([]);
-  const sessions = provided ?? ownSessions;
-
-  useEffect(() => {
-    if (provided) return; // 부모가 관리한다 — 중복 조회·중복 폴링 방지
-    if (!configured || loading || !userId) return;
-    let cancelled = false;
-
-    async function load() {
-      try {
-        // 0039: 그룹 소속 → 크루 연결. 그룹이 없어도 크루가 있으면 보여야 한다.
-        const active = await getActiveCrewSessions(userId!);
-        if (!cancelled) setSessions(active);
-      } catch {
-        /* 진행 중 카드는 부가 정보 — 실패해도 화면을 막지 않는다 */
-      }
-    }
-    void load();
-    const interval = setInterval(() => void load(), 60_000); // 완료/신규 반영
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [configured, loading, userId, provided]);
+  const { userId } = useAuth();
+  // 부모가 넘겨줬으면 훅을 끈다 — 중복 조회·중복 폴링 방지.
+  const own = useActiveCrewSessions({ enabled: provided === undefined });
+  const sessions = provided ?? own.sessions;
 
   if (sessions.length === 0) return null;
 
   return (
     <div className="flex flex-col gap-3">
       {sessions.map((s) => (
-        <ActiveWorkoutCard key={s.sessionId} session={s} isMine={s.userId === userId} />
+        <ActiveWorkoutCard
+          key={s.sessionId}
+          session={s}
+          isMine={s.userId === userId}
+        />
       ))}
     </div>
   );
@@ -87,37 +50,6 @@ function ActiveWorkoutCard({
   session: ActiveCrewSession;
   isMine: boolean;
 }) {
-  const [sent, setSent] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [customOpen, setCustomOpen] = useState(false);
-  const [sending, setSending] = useState(false);
-  /** 지급받은 포인트. 0이면 팝업 없이 토스트만 (하루 1회 상한). */
-  const [earned, setEarned] = useState<number | null>(null);
-  const messageRef = useRef<HTMLInputElement>(null);
-
-  async function cheer(type: CheerType, message?: string) {
-    setSending(true);
-    setNotice(null);
-    try {
-      const { pointsAwarded } = await sendCheer(session.sessionId, type, message);
-      setSent(true);
-      setCustomOpen(false);
-      if (pointsAwarded > 0) {
-        // 받았을 때만 팝업. 토스트는 3초 뒤 사라져서 "받았나?"가 남는다.
-        setEarned(pointsAwarded);
-      } else {
-        setNotice(cheerToastMessage(pointsAwarded));
-        setTimeout(() => setNotice(null), 3000);
-      }
-      setTimeout(() => setSent(false), 3000);
-    } catch (e) {
-      setNotice(cheerErrorMessage(e));
-      setTimeout(() => setNotice(null), 3000);
-    } finally {
-      setSending(false);
-    }
-  }
-
   return (
     <section className="rounded-card border border-accent/40 bg-surface p-4 shadow-card">
       <div className="flex items-center gap-2.5">
@@ -142,66 +74,7 @@ function ActiveWorkoutCard({
       </div>
 
       {!isMine && (
-        <>
-          <div className="mt-3 flex gap-1.5">
-            {CHEER_BUTTONS.map((b) => (
-              <button
-                key={b.type}
-                onClick={() => void cheer(b.type)}
-                disabled={sent || sending}
-                className="flex-1 rounded-card-sm border border-line bg-surface-2 py-2 text-center disabled:opacity-50"
-              >
-                <span className="block text-base">{b.emoji}</span>
-                <span className="block text-[10px] font-bold text-muted">
-                  {b.label}
-                </span>
-              </button>
-            ))}
-            <button
-              onClick={() => setCustomOpen((v) => !v)}
-              disabled={sent || sending}
-              className="flex-1 rounded-card-sm border border-line bg-surface-2 py-2 text-center disabled:opacity-50"
-            >
-              <span className="block text-base">✍️</span>
-              <span className="block text-[10px] font-bold text-muted">
-                한마디
-              </span>
-            </button>
-          </div>
-
-          {customOpen && (
-            <div className="mt-2 flex gap-1.5">
-              <input
-                ref={messageRef}
-                maxLength={30}
-                placeholder="응원 한마디 (30자)"
-                className="h-10 flex-1 rounded-card-sm border border-line bg-bg px-3 text-sm outline-none focus:border-accent"
-              />
-              <button
-                onClick={() => {
-                  const msg = (messageRef.current?.value ?? "").trim();
-                  if (msg) void cheer("custom", msg);
-                }}
-                disabled={sending}
-                className="h-10 rounded-card-sm bg-accent px-3.5 text-sm font-extrabold text-accent-ink disabled:opacity-60"
-              >
-                보내기
-              </button>
-            </div>
-          )}
-
-          {earned !== null && (
-        <CheerPointModal
-          points={earned}
-          nickname={session.nickname}
-          onClose={() => setEarned(null)}
-        />
-      )}
-
-      {notice && (
-            <p className="mt-2 text-xs font-bold text-accent">{notice}</p>
-          )}
-        </>
+        <CheerActions sessionId={session.sessionId} nickname={session.nickname} />
       )}
     </section>
   );

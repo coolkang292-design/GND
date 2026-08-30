@@ -1,8 +1,16 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// Phase D의 사진 상호작용만 서버를 건드린다. 나머지 테스트는 순수 렌더라
+// 부분 모킹으로 충분하다.
+const mocks = vi.hoisted(() => ({ toggleReaction: vi.fn() }));
+vi.mock("@/lib/social", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/social")>()),
+  toggleReaction: mocks.toggleReaction,
+}));
 import type { BreakdownExercise } from "@/components/workout/set-breakdown";
 import { EMPTY_SESSION_THREAD } from "@/lib/domain/session-comments";
 import type { FeedItem } from "@/lib/social";
@@ -476,5 +484,91 @@ describe("FeedItemCard — 액션 줄", () => {
       <FeedItemCard item={item} userId="me" onProfileClick={() => {}} />,
     );
     expect(html).not.toContain(">0<");
+  });
+});
+
+
+/**
+ * Phase D — 사진 상호작용 (2026-08-31).
+ *
+ * 한 번 탭과 두 번 탭이 **같은 자리**에 있다. 터치에서 더블탭은 click을 두 번
+ * 쏘므로, 첫 click을 곧바로 처리하면 라이트박스가 열린 뒤에 좋아요가 붙는다.
+ * 그 분기를 여기서 못 박는다.
+ */
+describe("FeedItemCard — 사진 탭 (Phase D)", () => {
+  const PHOTO = "https://example.com/workout.jpg";
+
+  beforeEach(() => {
+    mocks.toggleReaction.mockReset();
+    mocks.toggleReaction.mockResolvedValue(undefined);
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function renderPhotoCard(item = feedItem(PHOTO)) {
+    return render(
+      <FeedItemCard item={item} userId="me" onProfileClick={() => {}} />,
+    );
+  }
+
+  it("사진 비율이 4/5다 — 세로 화면에서 스크롤당 게시물 하나", () => {
+    const html = renderToStaticMarkup(
+      <FeedItemCard item={feedItem(PHOTO)} userId="me" onProfileClick={() => {}} />,
+    );
+    expect(html).toContain("aspect-[4/5]");
+    expect(html).not.toContain("aspect-[4/3]");
+  });
+
+  it("한 번 탭하면 잠깐 뒤에 라이트박스가 열린다", () => {
+    renderPhotoCard();
+    fireEvent.click(screen.getByLabelText(/인증사진 크게 보기/));
+    // 곧바로 열면 더블탭의 첫 click에 반응해 버린다
+    expect(screen.queryByRole("dialog")).toBeNull();
+    act(() => vi.advanceTimersByTime(300));
+    expect(screen.getByRole("dialog")).toBeTruthy();
+  });
+
+  it("두 번 탭하면 라이트박스가 열리지 않고 좋아요가 나간다", async () => {
+    renderPhotoCard();
+    const photo = screen.getByLabelText(/인증사진 크게 보기/);
+    fireEvent.click(photo);
+    fireEvent.doubleClick(photo);
+    act(() => vi.advanceTimersByTime(500));
+
+    expect(screen.queryByRole("dialog")).toBeNull();
+    await vi.waitFor(() =>
+      expect(mocks.toggleReaction).toHaveBeenCalledWith(
+        "session-1",
+        "me",
+        "like",
+        true,
+      ),
+    );
+  });
+
+  /**
+   * 이게 이 묶음에서 가장 중요한 단언이다. 인스타의 더블탭은 **켜기만** 한다.
+   * 토글로 만들면 사진을 크게 보려고 두 번 친 사람이 자기 좋아요를 지운다.
+   */
+  it("이미 좋아요한 글을 두 번 탭해도 꺼지지 않는다", async () => {
+    const liked = feedItem(PHOTO);
+    liked.myReactions = new Set(["like"]);
+    liked.reactions = { fire: 0, clap: 0, like: 1 };
+    renderPhotoCard(liked);
+
+    fireEvent.doubleClick(screen.getByLabelText(/인증사진 크게 보기/));
+    act(() => vi.advanceTimersByTime(500));
+    await Promise.resolve();
+
+    expect(mocks.toggleReaction).not.toHaveBeenCalled();
+  });
+
+  it("사진이 없는 기록에는 사진 탭 판이 없다", () => {
+    const html = renderToStaticMarkup(
+      <FeedItemCard item={feedItem(null)} userId="me" onProfileClick={() => {}} />,
+    );
+    expect(html).not.toContain("인증사진 크게 보기");
   });
 });
