@@ -1,4 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
+import { ReportPanel } from "./report-panel";
 import { describe, expect, it } from "vitest";
 import {
   buildPeriod,
@@ -657,5 +658,62 @@ describe("지표 설명", () => {
 
   it("빈 목록이면 아무것도 그리지 않는다", () => {
     expect(renderToStaticMarkup(<MetricHelp keys={[]} />)).toBe("");
+  });
+});
+
+describe("ReportPanel — 신고함 (0089)", () => {
+  const base = {
+    id: "r1",
+    createdAt: "2026-08-31T10:05:00.000Z",
+    reason: "harassment",
+    note: null as string | null,
+    reporterNickname: "스칼레또",
+    targetNickname: "아무개",
+    targetId: "11111111-2222-3333-4444-555555555555",
+    challengeName: null as string | null,
+  };
+
+  it("0건이면 '없습니다'를 보여준다", () => {
+    const html = renderToStaticMarkup(<ReportPanel items={[]} />);
+    expect(html).toContain("처리할 신고가 없습니다");
+    expect(html).toContain("0건");
+  });
+
+  // 사유 코드를 그대로 그리면 관리자가 'harassment'를 읽게 된다. 화면과 DB가
+  // 같은 목록을 쓰는지는 moderation.test.ts가 따로 못 박는다.
+  it("사유를 코드가 아니라 한국어 라벨로 그린다", () => {
+    const html = renderToStaticMarkup(<ReportPanel items={[base]} />);
+    expect(html).toContain("괴롭힘·욕설");
+    expect(html).not.toContain("harassment");
+  });
+
+  it("신고자·대상·대상 id를 모두 보여준다", () => {
+    const html = renderToStaticMarkup(<ReportPanel items={[base]} />);
+    expect(html).toContain("아무개");
+    expect(html).toContain("스칼레또");
+    // 차단·조치를 하려면 id가 필요하다. 닉네임은 바뀔 수 있다.
+    expect(html).toContain(base.targetId);
+  });
+
+  // 설명이 판단의 핵심이다. 접거나 자르면 관리자가 신고를 열어 볼 곳이 없다.
+  it("신고자가 쓴 설명을 그대로 보여준다", () => {
+    const html = renderToStaticMarkup(
+      <ReportPanel items={[{ ...base, note: "계속 같은 글을 올려요" }]} />,
+    );
+    expect(html).toContain("계속 같은 글을 올려요");
+  });
+
+  it("모집글에서 온 신고면 어느 챌린지인지 보여준다", () => {
+    const html = renderToStaticMarkup(
+      <ReportPanel items={[{ ...base, challengeName: "9월 러닝" }]} />,
+    );
+    expect(html).toContain("9월 러닝");
+  });
+
+  it("건수를 센다", () => {
+    const html = renderToStaticMarkup(
+      <ReportPanel items={[base, { ...base, id: "r2" }]} />,
+    );
+    expect(html).toContain("2건");
   });
 });

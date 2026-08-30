@@ -144,9 +144,16 @@ export function InviteSheet({
           ? "피드에 모집 카드가 올라갔어요"
           : "피드에서 내렸어요 — 새로 들어올 수 없어요",
       );
-    } catch {
+    } catch (e) {
       setOpen(!next); // 롤백
-      setMessage("바꾸지 못했어요");
+      // 0089: 방장 1인당 동시에 열 수 있는 공개 모집은 1건이다. 이유를 말해 주지
+      // 않으면 "왜 안 되지?"만 남고, 사용자는 이미 열어 둔 모집이 있다는 것을
+      // 떠올리지 못한다 — 다른 챌린지 화면에 있으니 눈앞에 없다.
+      setMessage(
+        e instanceof Error && e.message === "recruit_already_open"
+          ? "이미 공개 모집 중인 챌린지가 있어요 — 그걸 내리고 다시 열어 주세요"
+          : "바꾸지 못했어요",
+      );
     } finally {
       setOpenBusy(false);
     }

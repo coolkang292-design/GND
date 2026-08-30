@@ -1446,6 +1446,16 @@ export async function setChallengeDiscoverable(
     .update({ discoverable })
     .eq("id", challengeId)
     .select("id");
-  if (error) throw error;
+  if (error) {
+    // 0089: 방장 1인당 동시에 열 수 있는 공개 모집은 1건이다
+    // (challenges_one_open_recruit_per_host 부분 유니크 인덱스).
+    // 23505를 그대로 흘리면 화면에 "duplicate key value violates unique
+    // constraint"가 뜬다 — 사용자가 무엇을 해야 하는지 알 수 없는 문구다.
+    if (error.code === "23505") throw new Error("recruit_already_open");
+    throw error;
+  }
+  // ⚠️ .select("id")를 빼지 마라. PostgREST가 return=minimal로 보내서
+  //    한 줄도 안 바뀌어도 error가 null이다 — 화면은 "저장했어요"라 말하고
+  //    DB는 그대로다 (0085에서 완료 세션 136개가 이렇게 조용히 실패했다).
   if (!data || data.length === 0) throw new Error("discoverable_not_saved");
 }

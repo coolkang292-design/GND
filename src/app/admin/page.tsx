@@ -1,6 +1,7 @@
 import { requireAdmin } from "@/lib/admin/auth";
 import {
   fetchActiveChallenges,
+  fetchOpenReports,
   fetchAdminDataset,
   fetchEngagementDataset,
   fetchGrowthDataset,
@@ -43,6 +44,7 @@ import { GrowthPanel } from "./_components/growth-panel";
 import { KpiCards } from "./_components/kpi-cards";
 import { NotificationPanel } from "./_components/notification-panel";
 import { ProgramPanel } from "./_components/program-panel";
+import { ReportPanel } from "./_components/report-panel";
 import { RetentionPanel } from "./_components/retention-panel";
 import { UserTable, type UserTableRow } from "./_components/user-table";
 
@@ -70,11 +72,14 @@ export default async function AdminPage({
   // 각자 판정하면 패널마다 모수가 조용히 갈린다.
   const testIds = new Set(data.testUserIds);
   // 순차 await를 붙이면 페이지가 그만큼 느려진다 — 서로 의존이 없으니 같이 던진다
-  const [challenges, growth, program, engagement] = await Promise.all([
+  const [challenges, growth, program, engagement, reports] = await Promise.all([
     fetchActiveChallenges(now, testIds),
     fetchGrowthDataset(data.totalXpByUser),
     fetchProgramDataset(testIds),
     fetchEngagementDataset(testIds),
+    // ⚠️ testIds를 넘기지 않는다 — 신고는 지표가 아니라 처리해야 할 일이라
+    //    픽스처 계정이 낸 것도 보여야 한다 (0089).
+    fetchOpenReports(),
   ]);
 
   const kpi = buildKpi(data.sessions, data.profiles, period, now);
@@ -256,6 +261,14 @@ export default async function AdminPage({
             DB는 그대로이고 화면에서만 뺍니다 — 되돌릴 수 있습니다.
           </div>
         </div>
+
+        {/* 신고함은 지표보다 위다 (0089). 아래에 끼우면 스크롤해야 보이고,
+            안 내리면 며칠씩 방치된다. 0건이면 한 줄로 접힌다. */}
+
+        <ReportPanel items={reports} />
+
+        
+
 
         <div id="overview" />
         <KpiCards kpi={kpi} />

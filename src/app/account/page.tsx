@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { BlockedUsersSection } from "@/components/moderation/blocked-users-section";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   PROVIDER_META,
@@ -313,6 +314,10 @@ export default function AccountPage() {
             </form>
           </section>
         )}
+
+        {/* 차단한 사람 (0089). 0명이면 스스로 아무것도 그리지 않는다 —
+            대부분의 사람은 평생 0명이라 빈 카드를 상설로 두지 않는다. */}
+        <BlockedUsersSection />
 
         {/* ⚠️ 조건이 `email`이 아니라 `isProtected`다. 이메일로 되돌리면 카카오만
             붙인 사람이 영영 로그아웃하지 못한다. */}

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Avatar } from "@/components/avatar";
 import { useAuth } from "@/components/auth-provider";
+import { ReportBlockSheet } from "@/components/moderation/report-block-sheet";
 import {
   getDiscoverableChallenges,
   joinDiscoverableChallenge,
@@ -94,11 +95,14 @@ function RecruitDetailSheet({
   busy,
   onJoin,
   onClose,
+  onReport,
 }: {
   challenge: DiscoverableChallenge;
   busy: boolean;
   onJoin: () => void;
   onClose: () => void;
+  /** 신고·차단 시트를 연다 (0089) */
+  onReport: () => void;
 }) {
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -192,6 +196,17 @@ function RecruitDetailSheet({
           >
             닫기
           </button>
+
+          {/* 신고·차단 (0089). 참여 버튼과 **같은 무게로 두지 않는다** — 작고
+              조용한 글씨다. 대부분의 사람은 이걸 평생 안 누르고, 눈에 띄게
+              두면 목록 전체가 의심스러운 곳처럼 읽힌다. */}
+          <button
+            type="button"
+            onClick={onReport}
+            className="mt-1 self-center text-[11.5px] font-bold text-faint underline underline-offset-2"
+          >
+            이 모집글 신고 · 차단
+          </button>
         </div>
       </div>
     </>
@@ -221,6 +236,7 @@ export function DiscoverableChallengeList({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<DiscoverableChallenge | null>(null);
+  const [moderating, setModerating] = useState<DiscoverableChallenge | null>(null);
 
   async function join(challenge: DiscoverableChallenge) {
     if (busyId) return;
@@ -329,6 +345,24 @@ export function DiscoverableChallengeList({
           busy={busyId === detail.id}
           onJoin={() => void join(detail)}
           onClose={() => setDetail(null)}
+          onReport={() => setModerating(detail)}
+        />
+      )}
+
+      {moderating && (
+        <ReportBlockSheet
+          targetId={moderating.hostId}
+          targetNickname={moderating.hostNickname}
+          challengeId={moderating.id}
+          onClose={() => setModerating(null)}
+          onBlocked={() => {
+            // ⚠️ 그 모집글 하나가 아니라 **그 방장의 글 전부**를 뺀다. 한 방장이
+            //    여러 방을 갖고 있을 수 있고(옛 글은 만료 전까지 남는다), 하나만
+            //    빼면 차단했는데 같은 사람 카드가 그대로 남아 있다.
+            setItems((prev) => prev.filter((c) => c.hostId !== moderating.hostId));
+            setDetail(null);
+            setModerating(null);
+          }}
         />
       )}
     </section>

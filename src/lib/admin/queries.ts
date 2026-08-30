@@ -527,3 +527,83 @@ export async function fetchGrowthDataset(
     })),
   };
 }
+
+// ── 신고함 (0089) ────────────────────────────────────────────
+
+export type AdminReport = {
+  id: string;
+  createdAt: string;
+  reason: string;
+  note: string | null;
+  reporterNickname: string;
+  targetNickname: string;
+  targetId: string;
+  challengeName: string | null;
+};
+
+/**
+ * 처리 안 된 신고 (0089).
+ *
+ * ⚠️ **테스트 계정으로 거르지 않는다.** 다른 패널은 실사용자 지표를 보려고
+ *    테스트 계정을 빼지만, 신고는 지표가 아니라 **처리해야 할 일**이다.
+ *    픽스처 계정이 낸 신고라도 화면에 떠야 그게 픽스처인 줄 알고 닫는다.
+ *    조용히 빼면 "신고했는데 아무 데도 안 뜬다"가 되고, 그 상태는 신고 기능이
+ *    죽은 것과 구별되지 않는다.
+ *
+ * status 변경(reviewed/dismissed)은 아직 화면에 없다 — SQL Editor에서 한다.
+ * 지금 규모에서 버튼을 먼저 만들면 쓰지도 않는 화면만 는다.
+ */
+export async function fetchOpenReports(): Promise<AdminReport[]> {
+  const db = getSupabaseAdminClient();
+
+  const { data, error } = await db
+    .from("user_reports")
+    .select("id,created_at,reason,note,reporter_id,target_id,challenge_id")
+    .eq("status", "open")
+    .order("created_at", { ascending: false })
+    .limit(50);
+  // 신고 테이블은 0089에서 생긴다. 마이그레이션 Run 전에 배포되면 여기서
+  // 던지는데, 그러면 /admin 전체가 500이 된다 — 지표를 보러 온 사람이 신고
+  // 기능 때문에 아무것도 못 본다. 빈 목록으로 접는다.
+  if (error) return [];
+
+  const rows = data ?? [];
+  if (rows.length === 0) return [];
+
+  const userIds = [
+    ...new Set(rows.flatMap((r) => [r.reporter_id as string, r.target_id as string])),
+  ];
+  const challengeIds = [
+    ...new Set(rows.map((r) => r.challenge_id as string | null).filter(Boolean)),
+  ] as string[];
+
+  const [{ data: profiles }, { data: challenges }] = await Promise.all([
+    db.from("profiles").select("id,nickname").in("id", userIds),
+    challengeIds.length > 0
+      ? db.from("challenges").select("id,name").in("id", challengeIds)
+      : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+  ]);
+
+  const nickname = new Map(
+    (profiles ?? []).map((p) => [p.id as string, p.nickname as string]),
+  );
+  const challengeName = new Map(
+    (challenges ?? []).map((c) => [c.id as string, c.name as string]),
+  );
+
+  return rows.map((r) => ({
+    id: r.id as string,
+    createdAt: r.created_at as string,
+    reason: r.reason as string,
+    note: (r.note as string | null) ?? null,
+    // 프로필이 없는 계정일 수 있다(익명). id 앞자리로라도 구별되게 둔다.
+    reporterNickname:
+      nickname.get(r.reporter_id as string) ?? `(프로필 없음 ${String(r.reporter_id).slice(0, 8)})`,
+    targetNickname:
+      nickname.get(r.target_id as string) ?? `(프로필 없음 ${String(r.target_id).slice(0, 8)})`,
+    targetId: r.target_id as string,
+    challengeName: r.challenge_id
+      ? (challengeName.get(r.challenge_id as string) ?? "(지워진 챌린지)")
+      : null,
+  }));
+}
