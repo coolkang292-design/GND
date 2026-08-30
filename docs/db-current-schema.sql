@@ -637,7 +637,9 @@ CREATE OR REPLACE FUNCTION public.cancel_challenge(p_challenge_id uuid)
  SET search_path TO 'public'
 AS $function$
 declare
-  c challenges;
+  c      challenges;
+  r      record;
+  v_nick text;
 begin
   if auth.uid() is null then
     raise exception 'not_authenticated';
@@ -654,9 +656,35 @@ begin
     raise exception 'invalid_status:%', c.status;
   end if;
 
+  -- ⚠️ 알림 대상을 **상태를 바꾸기 전에** 모은다. 참가자 행은 그대로 남지만,
+  --    순서를 뒤집으면 나중에 정리 로직이 붙었을 때 조용히 0명이 된다.
+  select nickname into v_nick from profiles where id = auth.uid();
+
   update challenges set status = 'cancelled'
   where id = p_challenge_id
   returning * into c;
+
+  -- ── 0088: 취소 알림 ────────────────────────────────────────
+  --
+  -- 여기가 비어 있었다. 취소하면 **아무 말 없이 방이 사라졌다.** 아는 사람끼리는
+  -- 밖에서 전했겠지만, 공개 모집으로 들어온 사람은 목표까지 세워 두고도 이유를
+  -- 알 길이 없다.
+  for r in
+    select cp.user_id
+    from challenge_participants cp
+    where cp.challenge_id = p_challenge_id
+      and cp.status = 'joined'
+  loop
+    continue when r.user_id = auth.uid();   -- 취소한 본인에게는 안 보낸다
+    perform notify(
+      r.user_id,
+      auth.uid(),
+      'challenge_cancelled',
+      p_challenge_id,
+      '💤 ' || c.name || ' 취소됨',
+      coalesce(v_nick, '방장') || '님이 챌린지를 취소했어요'
+    );
+  end loop;
 
   return c;
 end $function$;
@@ -2453,9 +2481,10 @@ CREATE OR REPLACE FUNCTION public.join_discoverable_challenge(p_challenge_id uui
  SET search_path TO 'public', 'pg_temp'
 AS $function$
 declare
-  v_me  uuid := auth.uid();
-  c     public.challenges;
-  v_row public.challenge_participants;
+  v_me   uuid := auth.uid();
+  c      public.challenges;
+  v_row  public.challenge_participants;
+  v_nick text;
 begin
   if v_me is null then raise exception 'not_authenticated'; end if;
 
@@ -2468,15 +2497,17 @@ begin
   end if;
 
   -- 2차: 행을 잠그고 다시 읽는다. start_challenge와 같은 자원이다.
+  --
+  -- ⚠️⚠️ advisory lock으로 바꾸지 마라. `start_challenge`는 advisory lock을
+  --    쓰지 않고 challenges 행에 FOR UPDATE를 건다 — 다른 자원을 잡으면 둘이
+  --    서로를 전혀 막지 않아 **시작된 챌린지에 중도 합류**가 생긴다.
   select * into c
   from public.challenges
   where id = p_challenge_id
   for update;
 
   if not found then raise exception 'not_discoverable'; end if;
-  -- 방장이 방금 모집을 껐을 수 있다
   if not c.discoverable then raise exception 'not_discoverable'; end if;
-  -- 방장이 방금 시작했을 수 있다
   if c.status <> 'setup' then raise exception 'invalid_status:%', c.status; end if;
 
   select * into v_row
@@ -2496,6 +2527,19 @@ begin
   )
   on conflict (challenge_id, user_id)
   do update set status = 'joined', joined_at = now();
+
+  -- 0088: 방장에게 알린다
+  if c.created_by <> v_me then
+    select nickname into v_nick from profiles where id = v_me;
+    perform notify(
+      c.created_by,
+      v_me,
+      'challenge_joined',
+      c.id,
+      coalesce(v_nick, '크루원') || '님이 참가했어요 🙌',
+      c.name
+    );
+  end if;
 
   return jsonb_build_object(
     'status', 'joined',
@@ -3808,7 +3852,9 @@ CREATE OR REPLACE FUNCTION public.start_challenge(p_challenge_id uuid)
  SECURITY DEFINER
  SET search_path TO 'public'
 AS $function$
-declare c challenges; total int; missing int; approvals int;
+declare
+  r      record;
+  v_nick text; c challenges; total int; missing int; approvals int;
 begin
   if auth.uid() is null then raise exception 'not_authenticated'; end if;
   select * into c from challenges where id = p_challenge_id for update;
@@ -3843,6 +3889,35 @@ begin
   if approvals < total then raise exception 'consent_incomplete:%/%', approvals, total; end if;
 
   update challenges set status = 'active' where id = p_challenge_id returning * into c;
+
+  -- ── 0088: 시작 알림 ────────────────────────────────────────
+  --
+  -- 여기가 비어 있었다. `autostart_due_challenges`(예정일 도래)에만 알림이 붙어
+  -- 있어서, **방장이 `지금 바로 시작하기`로 직접 시작하면 아무도 몰랐다.**
+  -- 공개 모집으로 모르는 사람이 들어오면서 이게 진짜 문제가 된다 — 밖에서 말로
+  -- 전할 사이가 아니다.
+  --
+  -- ⚠️ 중복 알림은 안 난다. `autostart_due_challenges`는 `setup`인 방만 올리는데,
+  --    여기까지 왔으면 이미 `active`라 그 cron이 이 방을 건드리지 않는다.
+  select nickname into v_nick from profiles where id = auth.uid();
+
+  for r in
+    select cp.user_id
+    from challenge_participants cp
+    where cp.challenge_id = p_challenge_id
+      and cp.status = 'joined'
+  loop
+    continue when r.user_id = auth.uid();   -- 시작한 본인에게는 안 보낸다
+    perform notify(
+      r.user_id,
+      auth.uid(),
+      'challenge_started',
+      p_challenge_id,                        -- ⚠ 챌린지 id다. 딥링크가 이걸 쓴다
+      '🚀 ' || c.name || ' 시작!',
+      coalesce(v_nick, '방장') || '님이 챌린지를 시작했어요'
+    );
+  end loop;
+
   return c;
 end $function$;
 
