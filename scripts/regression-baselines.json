@@ -234,6 +234,13 @@
       "core": false,
       "what": "유산소·시간 종목이 XP를 받는지(0024). 단언 카운터 없음.",
       "todo": "카운터를 붙일 것."
+    },
+    "block-report-goal-check": {
+      "assertions": 23,
+      "source": "measured",
+      "tier": "fixture",
+      "core": false,
+      "what": "차단·신고·목표 상향(0089·0090) RPC 회귀. 차단은 is_crew_with 한 함수에 얹혀 있어 그 함수를 손대면 아홉 곳이 동시에 풀린다. 0090 트리거는 REST·스냅샷으로 안 보여 실제로 낮춰 봐야 한다. 운영 DB에 쓰고 되돌린다."
     }
   },
   "notScripts": {

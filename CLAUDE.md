@@ -292,7 +292,7 @@ node scripts/bug-reports.mjs --fix <id> --release <release-id> --send   # 신고
 ```bash
 pnpm verify:regression                  # core 6종 — 배포 전 기본 루틴
 pnpm verify:regression --tier readonly  # 계정 안 만드는 5종 — 빠르고 안전
-pnpm verify:regression --list           # 29종 전량 목록과 현재 기준선
+pnpm verify:regression --list           # 30종 전량 목록과 현재 기준선
 pnpm verify:regression --all            # 전량 ⚠️ 30분+ (익명 가입 대기 포함)
 pnpm verify:regression --only rls-test --record   # 측정값으로 기준선 갱신
 ```
@@ -312,10 +312,19 @@ pnpm verify:regression --only rls-test --record   # 측정값으로 기준선 �
 ⚠️ `tier: accounts`인 23종은 실행마다 **운영 Supabase에 익명 계정을 만든다.**
 러너가 사이에 90초씩 대기한다(429 회피). 배포 직전이 아니면 `--tier readonly`로 충분하다.
 
-⚠️ `peek-reset-check`는 `tier: fixture`다 — 먼저
+⚠️ `tier: fixture`가 2종이다(`peek-reset-check` · `block-report-goal-check`) — 먼저
 `node scripts/dev-fixture.mjs create && node scripts/dev-fixture.mjs challenge`.
 
-**기준선의 신뢰도는 `source` 필드가 말한다.** `measured`(6종)는 실측이고,
+⚠️ **`block-report-goal-check`는 운영 DB에 쓴다**(차단·신고·모집 토글). 전부
+되돌리고 되돌렸는지까지 단언하지만, 중간에 죽으면 픽스처 A가 B를 차단한 채로
+남을 수 있다 — 그때는 다시 돌리면 정리된다. 이 스크립트가 필요한 이유는
+**차단이 `is_crew_with` 한 함수에 얹혀 있어서**다. 그 함수를 손대면 피드·댓글·
+응원·프로필·콕찌르기·기록열람·크루목록·검색·모집글 아홉 곳이 동시에 풀리는데,
+화면으로는 "안 보여야 할 것이 안 보인다"를 확인하기 어렵다(부정 확인이다).
+0090의 트리거 두 개도 **REST로도 스키마 스냅샷으로도 안 보인다** — 실제로
+목표를 낮춰 보는 것이 유일한 확인이다.
+
+**기준선의 신뢰도는 `source` 필드가 말한다.** `measured`(9종)는 실측이고,
 `derived`(17종)는 `check()` 호출을 정적으로 센 **±1 추정**이다 — 처음 돌릴 때
 `--record`로 확정하면 된다. `no-count`(4종)는 단언 카운터가 없어 종료 코드만 본다
 (`streak-parity-check`·`badge-metrics-check`·`official-program-catalog-check`·`cardio-xp-check`

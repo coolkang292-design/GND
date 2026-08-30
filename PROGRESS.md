@@ -53,8 +53,9 @@
 ### ⚠️ 다음 사람이 할 일 (순서가 있다)
 
 1. ~~0089 → 0090 Run~~ ✅ · ~~`pnpm db:snapshot`~~ ✅ (2026-08-31)
-2. **0090 끝의 `do $$ … ROLLBACK_ON_PURPOSE`** 를 돌려 트리거가 진짜 막는지 확인
-   — 트리거는 REST·스냅샷으로 안 보인다
+2. ~~트리거 확인~~ ✅ — `scripts/block-report-goal-check.mjs`(신규, 단언 23건)로
+   픽스처 A·B를 써서 실제로 확인했다. 트리거는 REST·스냅샷으로 안 보여서
+   **실제로 목표를 낮춰 보는 것**이 유일한 방법이었다
 3. `pnpm dev` → **A·B 두 계정으로** 화면 확인. 차단·신고·크루 신청은 전부
    상대가 있어야 성립한다 (CLAUDE.md §사회적 기능)
 4. `pnpm verify:regression --tier readonly` · lint · typecheck · test · build

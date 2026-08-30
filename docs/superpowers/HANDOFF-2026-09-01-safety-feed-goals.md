@@ -31,10 +31,17 @@ DB        0089 · 0090  ✅ 사용자가 Run 완료 (2026-08-31)
 | `is_crew_with` | 차단 조건 추가 | ✅ 스냅샷에서 확인 |
 | `goals_update_own_setup` | `challenge_is_active` 추가 | ✅ 스냅샷에서 확인 |
 
-⚠️ **트리거 2개**(`challenges_set_recruit_opened_at` ·
-`user_goals_raise_only_when_active`)는 REST·스냅샷으로 확인이 안 된다.
-**0090 파일 끝의 `do $$ … ROLLBACK_ON_PURPOSE` 블록**을 SQL Editor에서 돌리면
-실제로 막히는지까지 본다 — 그게 유일한 확인 방법이다. **[미검증]**
+✅ **트리거 2개도 확인했다.** REST·스냅샷으로는 안 보여서, 픽스처 A·B로 실제
+RPC를 불러 검증했다 — 목표를 실제로 낮춰 보고 `goal_lowered`로 막히는 것,
+`discoverable` 토글에 `recruit_opened_at`이 따라오는 것까지.
+
+그 검증을 일회성으로 버리지 않고 **회귀 스크립트로 등재했다**:
+`scripts/block-report-goal-check.mjs` (tier `fixture`, 단언 23건).
+
+```bash
+node scripts/dev-fixture.mjs create
+pnpm verify:regression --only block-report-goal-check
+```
 
 ---
 
@@ -56,11 +63,9 @@ DB        0089 · 0090  ✅ 사용자가 Run 완료 (2026-08-31)
 
 ## 2. ⚠️ 다음 사람이 할 일 — 순서가 있다
 
-### ~~① 마이그레이션 Run~~ · ~~② 스냅샷 갱신~~ — **끝났다** (2026-08-31)
+### ~~① 마이그레이션 Run~~ · ~~② 스냅샷 갱신~~ · ~~RPC 검증~~ — **끝났다** (2026-08-31)
 
-남은 것은 **0090의 트리거가 진짜로 막는지**다. 0090 파일 끝의
-`do $$ … ROLLBACK_ON_PURPOSE` 블록을 SQL Editor에서 돌린다. `NOTICE: OK 낮추기
-거부됨` · `OK 올리기 허용됨`이 뜨고 `ROLLBACK_ON_PURPOSE`로 끝나면 통과다.
+`block-report-goal-check` 23/23 통과. 남은 것은 **화면**뿐이다.
 
 ### ③ 화면 확인 — **A·B 두 계정으로**
 
