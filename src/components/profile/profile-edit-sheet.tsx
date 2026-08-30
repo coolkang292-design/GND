@@ -49,9 +49,34 @@ import { isPhotoAvatar } from "@/lib/domain/avatar-source";
  * 닉네임 중복(23505)은 `upsertMyProfile`이 이미 사람 말로 바꿔 준다 — 여기서
  * 다시 판정하지 않는다. 두 곳에서 판정하면 문구가 갈린다.
  */
-export function ProfileEditSheet({ onSaved }: { onSaved?: () => void }) {
+export function ProfileEditSheet({
+  onSaved,
+  open: openProp,
+  onOpenChange,
+  hideTrigger = false,
+}: {
+  onSaved?: () => void;
+  /**
+   * 밖에서 여닫기 (2026-08-31, 사용자 지시).
+   *
+   * 홈 캐릭터를 눌러서도 소개를 쓸 수 있어야 한다. 그런데 **시트를 하나 더
+   * 만들면 안 된다** — 저장 경로가 둘이 되고, 언젠가 한쪽만 고쳐진다.
+   * 같은 컴포넌트를 두 곳에서 열게 한다.
+   *
+   * 안 넘기면 예전처럼 스스로 상태를 갖는다(내 정보 탭).
+   */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** 접힌 상태의 `프로필 편집 ›` 입구를 숨긴다 — 홈은 캐릭터가 그 역할을 한다 */
+  hideTrigger?: boolean;
+}) {
   const { userId } = useAuth();
-  const [open, setOpen] = useState(false);
+  const [selfOpen, setSelfOpen] = useState(false);
+  const open = openProp ?? selfOpen;
+  const setOpen = (next: boolean) => {
+    if (onOpenChange) onOpenChange(next);
+    else setSelfOpen(next);
+  };
   const [ready, setReady] = useState(false);
 
   const [nickname, setNickname] = useState("");
@@ -181,6 +206,8 @@ export function ProfileEditSheet({ onSaved }: { onSaved?: () => void }) {
   }
 
   if (!open) {
+    // 홈처럼 다른 것이 입구 역할을 하면 접힌 버튼을 그리지 않는다
+    if (hideTrigger) return null;
     return (
       <button
         type="button"
@@ -188,7 +215,10 @@ export function ProfileEditSheet({ onSaved }: { onSaved?: () => void }) {
         className="flex items-center justify-between rounded-card border border-line bg-surface px-3.5 py-3.5 shadow-card"
       >
         <span className="text-[14px] font-extrabold">프로필 편집</span>
-        <span className="text-[13px] text-muted">이름 · 사진 ›</span>
+        {/* ⚠️ 시트 안의 항목이 늘면 **여기도 같이 고친다.** 0085에서 소개·SNS를
+            더했는데 이 줄이 "이름 · 사진"으로 남아 있어, 소개를 어디서 쓰는지
+            찾을 수 없었다(2026-08-31 사용자 질문). 입구가 안을 정확히 말해야 한다. */}
+        <span className="text-[13px] text-muted">이름 · 사진 · 소개 ›</span>
       </button>
     );
   }

@@ -9,6 +9,7 @@ import { uploadAvatarPhoto } from "@/lib/avatar";
 import { updateMyAvatar } from "@/lib/crew";
 import { avatarSource } from "@/lib/domain/avatar-source";
 import { linkLabel } from "@/lib/domain/profile-links";
+import { ProfileEditSheet } from "@/components/profile/profile-edit-sheet";
 import { badgeShelf, earnedBadgeCount, type BadgeMeta } from "@/lib/domain/badges";
 import { getBadgeCatalog } from "@/lib/badges";
 import {
@@ -342,6 +343,15 @@ export function MemberProfileSheet({
   const avatarFileRef = useRef<HTMLInputElement>(null);
   /** 친구 사진을 크게 띄우는 중 (2026-08-28) */
   const [zoomOpen, setZoomOpen] = useState(false);
+  /**
+   * 소개·SNS 편집 열림 (2026-08-31, 사용자 지시 — *"내 정보 탭에서 만들지 말고
+   * 홈화면에 내 캐릭터 클릭하면 거기서 작성할 수 있게"*).
+   *
+   * ⚠️ **새 편집 화면을 만들지 않는다.** 기존 `ProfileEditSheet`를 그대로 연다 —
+   *    시트를 하나 더 만들면 저장 경로가 둘이 되고, 언젠가 한쪽만 고쳐진다.
+   *    사진 수정을 여기 넣을 때(2026-08-22)와 같은 판단이다.
+   */
+  const [editOpen, setEditOpen] = useState(false);
 
   /**
    * 사진일 때만 값이 있다 — 이모지·빈 값이면 `null`이다.
@@ -584,6 +594,41 @@ export function MemberProfileSheet({
             stats={stats}
             streak={streak}
           />
+        )}
+
+        {/*
+          내 프로필일 때만 소개·SNS를 여기서 쓴다 (2026-08-31 사용자 지시).
+
+          ⚠️⚠️ **판정은 `onAvatarChanged` 하나다.** 위 아바타 분기가 쓰는 것과
+             같은 신호다 — "이걸 넘긴 호출부는 이건 내 프로필이다라고 말하는 것"
+             (2026-08-22 주석). 여기서 `viewerId === userId` 같은 두 번째 판정을
+             만들면 **한 겹을 부숴도 테스트가 통과한다.**
+
+          ⚠️ 열리는 것은 **기존 `ProfileEditSheet`**다. 닉네임·사진·주간 목표까지
+             한 저장 버튼으로 처리하던 그 컴포넌트를 그대로 쓴다.
+
+          ⚠️ 저장하면 `reloadKey`를 올려 이 시트를 다시 읽는다. 안 그러면 방금 쓴
+             소개가 위 본문에 안 나타나 "저장이 안 됐다"로 읽힌다.
+        */}
+        {onAvatarChanged && (
+          <div className="mt-4 border-t border-line pt-3.5">
+            {editOpen ? (
+              <ProfileEditSheet
+                open
+                hideTrigger
+                onOpenChange={setEditOpen}
+                onSaved={() => setReloadKey((k) => k + 1)}
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setEditOpen(true)}
+                className="flex h-11 w-full items-center justify-center gap-1.5 rounded-card border border-line bg-surface-2 text-[13px] font-bold text-muted"
+              >
+                ✏️ 이름 · 소개 · 링크 편집
+              </button>
+            )}
+          </div>
         )}
 
         <button

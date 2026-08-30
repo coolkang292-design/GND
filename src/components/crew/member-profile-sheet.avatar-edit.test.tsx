@@ -154,3 +154,38 @@ describe("프로필 시트 아바타 — 고르는 즉시 저장한다 (저장 �
     expect(mocks.uploadAvatarPhoto).toHaveBeenCalledTimes(1);
   });
 });
+
+/**
+ * 소개·링크 편집 (2026-08-31, 사용자 지시 — *"내 정보 탭에서 만들지 말고 홈화면에
+ * 내 캐릭터 클릭하면 거기서 작성할 수 있게"*).
+ *
+ * ⚠️⚠️ 이 파일 맨 위 주석의 성질이 그대로 적용된다 — 판정은 `onAvatarChanged`
+ * **하나뿐**이어야 한다. 두 번째 판정을 만들면 한 겹을 부숴도 테스트가 통과한다.
+ * 그래서 여기서도 **"없을 때 없다"를 먼저** 단언한다.
+ */
+describe("소개·링크 편집 입구", () => {
+  it("남의 프로필에는 편집 입구가 없다 (부정 확인)", () => {
+    open();
+    expect(screen.queryByText(/이름 · 소개 · 링크 편집/)).toBeNull();
+  });
+
+  it("내 프로필이면 편집 입구가 있다", () => {
+    open(() => {});
+    expect(screen.getByText(/이름 · 소개 · 링크 편집/)).toBeTruthy();
+  });
+
+  /**
+   * 새 편집 화면을 만들지 않았다 — **기존 `ProfileEditSheet`**가 그대로 열린다.
+   *
+   * ⚠️ 입력칸까지는 안 본다. 그건 `getMyProfile`이 끝나야 그려지는데 이 파일은
+   *    `@/lib/crew`를 아바타용으로만 모의해서 프로필 조회가 안 돈다. 입력칸의
+   *    동작은 `profile-edit-sheet.test.tsx`가 따로 지킨다 — 같은 것을 두 곳에서
+   *    검사하지 않는다.
+   */
+  it("누르면 기존 프로필 편집이 열린다", () => {
+    open(() => {});
+    expect(screen.queryByRole("heading", { name: "프로필 편집" })).toBeNull();
+    fireEvent.click(screen.getByText(/이름 · 소개 · 링크 편집/));
+    expect(screen.getByRole("heading", { name: "프로필 편집" })).toBeTruthy();
+  });
+});
