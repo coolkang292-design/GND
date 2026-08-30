@@ -59,7 +59,16 @@ type Props = {
  * 사진 카드와 일반 카드가 **같은 블록을 쓰므로** 여기 한 번만 붙이면 두 변형
  * 모두에서 펼칠 수 있다. 세트는 `getCrewFeed`가 이미 받아 온 것이라 새 질의가 없다.
  */
-function WorkoutSummary({ item, stats }: { item: FeedItem; stats: string[] }) {
+function WorkoutSummary({
+  item,
+  stats,
+  isMine,
+}: {
+  item: FeedItem;
+  stats: string[];
+  /** 내 기록이면 따라하기를 안 그린다 (2026-08-31 사용자 지시) */
+  isMine: boolean;
+}) {
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -91,18 +100,22 @@ function WorkoutSummary({ item, stats }: { item: FeedItem; stats: string[] }) {
           🏅 기록 갱신 · {item.recordNote}
         </p>
       )}
-      {expanded && (
-        <div className="mt-2.5">
-          <SetBreakdown exercises={item.breakdown} />
-        </div>
-      )}
-
       {/*
         이 운동 따라하기 (2026-08-31).
 
         ⚠️ **❤️ 💬 액션 줄에 두지 마라.** 그 줄은 "사람과 소통하는" 버튼만 남기려고
            공유·북마크까지 일부러 뺀 자리다(`reaction-bar.tsx` 주석). 따라하기는
            **운동을 실행하는** 버튼이라 성격이 다르다 — 종목·세트 옆이 제자리다.
+
+        ⚠️ **상세를 펼쳐야 보인다** (2026-08-31 사용자 지시). 접힌 카드에 항상
+           띄웠더니 게시물마다 큰 버튼이 하나씩 붙어 목록이 버튼 목록처럼 읽혔다.
+           그리고 종목 이름만 보고 따라할지 정하지도 않는다 — **무게·세트를 봐야**
+           결정한다. 그 정보가 열리는 순간에 함께 나오는 것이 순서에 맞다.
+
+        ⚠️ **내 기록에는 안 그린다** (같은 지시). 내가 한 운동을 내가 따라하는
+           것은 말이 안 되고, `getSessionCopySource`가 남의 세션을 전제로 만든
+           경로다(§인수인계서 함정 ⑦ — `source_session_id`에 남의 id를 넣으면
+           INSERT가 통째로 거부된다).
 
         ⚠️ URL에 운동 JSON을 싣지 않는다. **session id 하나만** 넘기고 기록 화면이
            조회한다. 실어 보내면 RLS를 우회한 두 번째 진실이 생긴다.
@@ -111,12 +124,19 @@ function WorkoutSummary({ item, stats }: { item: FeedItem; stats: string[] }) {
            사용자가 무게를 확인한 뒤 기존 `운동 시작`을 누른다 — 친구가 든 무게가
            나에게 맞으리라는 보장이 없다.
       */}
-      <Link
-        href={`/record?copy=${item.sessionId}`}
-        className="mt-2.5 flex min-h-[38px] w-full items-center justify-center gap-1.5 rounded-card-sm border border-accent/50 bg-accent-weak text-[12.5px] font-extrabold text-accent"
-      >
-        <span>🏋️</span> 이 운동 따라하기
-      </Link>
+      {expanded && (
+        <div className="mt-2.5">
+          <SetBreakdown exercises={item.breakdown} />
+          {!isMine && (
+            <Link
+              href={`/record?copy=${item.sessionId}`}
+              className="mt-2.5 flex min-h-[38px] w-full items-center justify-center gap-1.5 rounded-card-sm border border-accent/50 bg-accent-weak text-[12.5px] font-extrabold text-accent"
+            >
+              <span>🏋️</span> 이 운동 따라하기
+            </Link>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -400,7 +420,7 @@ export function FeedItemCard({
           </div>
         </div>
 
-        <WorkoutSummary item={item} stats={stats} />
+        <WorkoutSummary item={item} stats={stats} isMine={item.userId === userId} />
         <CardFooter
           item={item}
           userId={userId}
@@ -455,7 +475,7 @@ export function FeedItemCard({
         </button>
       </div>
 
-      <WorkoutSummary item={item} stats={stats} />
+      <WorkoutSummary item={item} stats={stats} isMine={item.userId === userId} />
       <CardFooter
         item={item}
         userId={userId}

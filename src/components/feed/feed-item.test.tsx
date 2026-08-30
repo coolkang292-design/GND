@@ -578,3 +578,64 @@ describe("FeedItemCard — 사진 탭 (Phase D)", () => {
     expect(html).not.toContain("인증사진 크게 보기");
   });
 });
+
+
+/**
+ * 이 운동 따라하기 — 보이는 조건 (2026-08-31 사용자 지시).
+ *
+ * > *"상세 토글이 펼쳐지면 같이 보이도록 수정을 하고, 내가 운동한 상세에는
+ * >  이 버튼이 필요없을거 같아"*
+ *
+ * 둘 다 **부정 조건**이라 화면을 대충 보면 놓친다 — "접었을 때 없는가",
+ * "내 것에 없는가"는 눈에 안 띈다. 그래서 테스트가 지킨다.
+ */
+describe("FeedItemCard — 따라하기 버튼", () => {
+  const PHOTO2 = "https://example.com/w.jpg";
+
+  function html(photo: string | null, mine: boolean) {
+    const it = feedItem(photo);
+    return renderToStaticMarkup(
+      <FeedItemCard
+        item={it}
+        userId={mine ? it.userId : "someone-else"}
+        onProfileClick={() => {}}
+      />,
+    );
+  }
+
+  it("접혀 있으면 안 보인다 — 사진 카드", () => {
+    expect(html(PHOTO2, false)).not.toContain("이 운동 따라하기");
+  });
+
+  it("접혀 있으면 안 보인다 — 요약 카드", () => {
+    expect(html(null, false)).not.toContain("이 운동 따라하기");
+  });
+
+  it("상세를 펼치면 보인다", () => {
+    render(
+      <FeedItemCard
+        item={feedItem(null)}
+        userId="someone-else"
+        onProfileClick={() => {}}
+      />,
+    );
+    expect(screen.queryByText(/이 운동 따라하기/)).toBeNull();
+    fireEvent.click(screen.getByLabelText(/운동 상세/));
+    expect(screen.getByText(/이 운동 따라하기/)).toBeTruthy();
+  });
+
+  /**
+   * ⚠️ 내가 한 운동을 내가 따라하는 것은 말이 안 될 뿐 아니라,
+   *    `workout_plans_insert_own`의 WITH CHECK가 `source_session_id`에 남의
+   *    세션만 허용한다(인수인계서 함정 ⑦). 화면에서 막는 것이 맞다.
+   */
+  it("내 기록은 펼쳐도 안 보인다", () => {
+    render(
+      <FeedItemCard item={feedItem(null)} userId={feedItem(null).userId} onProfileClick={() => {}} />,
+    );
+    fireEvent.click(screen.getByLabelText(/운동 상세/));
+    // 세트 상세는 열렸는데 따라하기만 없어야 한다
+    expect(screen.getByText(/접기/)).toBeTruthy();
+    expect(screen.queryByText(/이 운동 따라하기/)).toBeNull();
+  });
+});
