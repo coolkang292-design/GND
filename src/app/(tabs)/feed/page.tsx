@@ -10,7 +10,11 @@ import {
 import { useAuth } from "@/components/auth-provider";
 import { MemberProfileSheet } from "@/components/crew/member-profile-sheet";
 import { ActiveWorkoutCards } from "@/components/feed/active-workout-cards";
-import { DiscoverableChallenges } from "@/components/feed/discoverable-challenges";
+import {
+  DiscoverableChallengeList,
+  useDiscoverableChallenges,
+} from "@/components/feed/discoverable-challenges";
+import { FeedTabs, type FeedTab } from "@/components/feed/feed-tabs";
 import { FeedItemCard } from "@/components/feed/feed-item";
 import { NotificationBell } from "@/components/notification-bell";
 import { feedDateLabel, groupByDay } from "@/lib/domain/social";
@@ -29,6 +33,18 @@ export default function FeedPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   // 시트는 화면당 1개만 띄운다 — 카드마다 두면 DOM이 항목 수만큼 늘어난다
   const [selected, setSelected] = useState<FeedItem | null>(null);
+
+  /*
+    피드 / 챌린지 모집 탭 (2026-08-31 사용자 결정).
+
+    ⚠️ 모집을 피드 위에 얹었더니 화면 위쪽을 통째로 먹어 **첫 운동 게시물이
+       접힘선 밖으로 밀렸다.** 피드에 온 사람은 크루의 운동을 보러 온 것이다.
+
+    ⚠️ 조회는 탭과 **무관하게** 마운트 때 한 번 돈다 — 모집 개수를 탭 배지에
+       띄워야 탭이 있는 줄 알고 누른다. 안 보이면 나눈 의미가 사라진다.
+  */
+  const [tab, setTab] = useState<FeedTab>("feed");
+  const { items: recruits, setItems: setRecruits } = useDiscoverableChallenges();
 
   /**
    * 알림에서 온 게시물 (0082) — `/feed?session=<id>`.
@@ -165,16 +181,13 @@ export default function FeedPage() {
         <NotificationBell />
       </header>
 
+      <FeedTabs value={tab} onChange={setTab} recruitCount={recruits.length} />
+
+      {tab === "recruit" ? (
+        <DiscoverableChallengeList items={recruits} setItems={setRecruits} />
+      ) : (
+        <>
       <ActiveWorkoutCards />
-
-      {/*
-        같이 할 챌린지 (0085) — 진행 중 카드 **아래**, 날짜별 피드 **위**.
-
-        ⚠️⚠️ 아래 `items.length === 0` 분기 **바깥**에 둔다. 크루가 0명인 신규
-           사용자는 피드가 비는데, 그때 이 줄까지 숨기면 **이 기능이 가장 필요한
-           사람에게 안 보인다.** 스스로 조회하고, 0개면 스스로 사라진다.
-      */}
-      <DiscoverableChallenges />
 
       {pinnedId && (
         <section className="flex flex-col gap-2">
@@ -242,6 +255,8 @@ export default function FeedPage() {
               {loadingMore ? "불러오는 중…" : "더 보기"}
             </button>
           )}
+        </>
+      )}
         </>
       )}
 

@@ -1,9 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useAuth } from "@/components/auth-provider";
+import { uploadRecruitPhoto } from "@/lib/avatar";
 import { UiIcon } from "@/components/ui-icon";
 import {
-  setChallengeDiscoverable, inviteToChallenge, issueChallengeInviteCode } from "@/lib/challenge";
+  RECRUIT_NOTE_MAX_LENGTH,
+  setChallengeDiscoverable,
+  setChallengeRecruitImage,
+  setChallengeRecruitNote, inviteToChallenge, issueChallengeInviteCode } from "@/lib/challenge";
 // 0038이 만든 닉네임 정확 일치 검색. 단일 결과 또는 null을 돌려준다(배열 아님).
 // isSearchable 게이트가 있어 빈 입력은 조회 없이 null이 된다.
 import { searchProfileByNickname } from "@/lib/crew-link";
@@ -30,6 +35,8 @@ export function InviteSheet({
   myRole,
   status,
   discoverable,
+  recruitNote,
+  recruitImageUrl,
   onInvited,
 }: {
   challengeId: string;
@@ -37,8 +44,13 @@ export function InviteSheet({
   status: string;
   /** 피드에서 참가자를 모집 중인가 (0085) */
   discoverable: boolean;
+  /** 저장된 모집글 (0087) */
+  recruitNote: string | null;
+  /** 저장된 모집 사진 (0087) */
+  recruitImageUrl: string | null;
   onInvited: () => void;
 }) {
+  const { userId } = useAuth();
   const [nickname, setNickname] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -52,6 +64,74 @@ export function InviteSheet({
   */
   const [open, setOpen] = useState(discoverable);
   const [openBusy, setOpenBusy] = useState(false);
+  /*
+    모집글 (0087, 사용자 지시 "공개 모집을 할 때는 모집글을 작성하게").
+
+    ⚠️ 토글과 달리 **저장 버튼이 있다.** 글자마다 요청을 보낼 수는 없다.
+  */
+  const [note, setNote] = useState(recruitNote ?? "");
+  const [noteBusy, setNoteBusy] = useState(false);
+  /*
+    모집 사진 (0087).
+
+    ⚠️ **고르는 즉시 올리고 저장한다** — 프로필 사진과 같은 규약이다
+       (`profile-edit-sheet.tsx`). 저장 버튼을 기다리면 "보이는 것"과
+       "저장된 것"이 갈린다.
+
+    ⚠️ 미리보기를 `URL.createObjectURL`로 앞당기지 않는다. 올라간 실제 URL만
+       그리면 업로드가 실패했는데 성공한 것처럼 보이는 일이 불가능해진다.
+  */
+  const [image, setImage] = useState<string | null>(recruitImageUrl);
+  const [imageBusy, setImageBusy] = useState(false);
+  const imageFileRef = useRef<HTMLInputElement>(null);
+
+  async function pickImage(file: File | undefined) {
+    if (!file || !userId || imageBusy) return;
+    setImageBusy(true);
+    setMessage(null);
+    try {
+      const url = await uploadRecruitPhoto(userId, file);
+      await setChallengeRecruitImage(challengeId, url);
+      setImage(url);
+      setMessage("모집 사진을 올렸어요");
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "사진을 올리지 못했어요");
+    } finally {
+      setImageBusy(false);
+      // 같은 파일을 다시 고를 수 있게 비운다 — 안 비우면 onChange가 안 뜬다
+      if (imageFileRef.current) imageFileRef.current.value = "";
+    }
+  }
+
+  async function removeImage() {
+    if (imageBusy) return;
+    setImageBusy(true);
+    try {
+      await setChallengeRecruitImage(challengeId, null);
+      setImage(null);
+    } catch {
+      setMessage("사진을 지우지 못했어요");
+    } finally {
+      setImageBusy(false);
+    }
+  }
+
+  async function saveNote() {
+    if (noteBusy) return;
+    if (note.trim().length > RECRUIT_NOTE_MAX_LENGTH) {
+      setMessage(`모집글은 ${RECRUIT_NOTE_MAX_LENGTH}자까지 쓸 수 있어요`);
+      return;
+    }
+    setNoteBusy(true);
+    try {
+      await setChallengeRecruitNote(challengeId, note);
+      setMessage("모집글을 저장했어요");
+    } catch {
+      setMessage("모집글을 저장하지 못했어요");
+    } finally {
+      setNoteBusy(false);
+    }
+  }
 
   async function toggleDiscoverable(next: boolean) {
     if (openBusy) return;
@@ -194,6 +274,87 @@ export function InviteSheet({
             </span>
           </span>
         </label>
+
+        {/*
+          모집글은 **켰을 때만** 보인다 (0087). 꺼진 상태에서 글부터 쓰게 하면
+          "왜 안 뜨지"가 된다 — 켜는 것이 먼저다.
+
+          ⚠️ 토글과 달리 저장 버튼이 있다. 글자마다 요청을 보낼 수 없다.
+        */}
+        {open && (
+          <div className="mt-2.5">
+            <p className="mb-1.5 text-[11px] font-bold text-muted">
+              모집글{" "}
+              <span className="text-faint">
+                {note.trim().length}/{RECRUIT_NOTE_MAX_LENGTH}
+              </span>
+            </p>
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              maxLength={RECRUIT_NOTE_MAX_LENGTH}
+              rows={2}
+              aria-label="모집글"
+              placeholder="주 3회 이상 꾸준히 하실 분 찾아요. 초보 환영!"
+              className="w-full resize-none rounded-card-sm border border-line bg-surface-2 px-3 py-2 text-[13px] outline-none focus:border-accent"
+            />
+            <button
+              type="button"
+              onClick={() => void saveNote()}
+              disabled={noteBusy}
+              className="mt-1.5 h-9 w-full rounded-card-sm border border-line bg-surface-2 text-[12.5px] font-bold disabled:opacity-50"
+            >
+              {noteBusy ? "저장 중…" : "모집글 저장"}
+            </button>
+            <p className="mt-1 text-[11px] text-faint">
+              이름만 보고는 어떤 사람을 찾는지 알 수 없어요. 한두 줄이면 충분해요.
+            </p>
+
+            {/* 모집 사진 (0087) — 피드 게시물처럼 사진이 있으면 눈에 띈다.
+                고르는 즉시 올라가고 저장된다(저장 버튼 없음). */}
+            <div className="mt-2.5">
+              {image && (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={image}
+                  alt="모집 사진 미리보기"
+                  className="mb-1.5 aspect-[16/9] w-full rounded-card-sm object-cover"
+                />
+              )}
+              <input
+                ref={imageFileRef}
+                type="file"
+                accept="image/*"
+                hidden
+                onChange={(e) => void pickImage(e.target.files?.[0])}
+              />
+              <div className="flex gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => imageFileRef.current?.click()}
+                  disabled={imageBusy}
+                  className="h-9 flex-1 rounded-card-sm border border-line bg-surface-2 text-[12.5px] font-bold disabled:opacity-50"
+                >
+                  {imageBusy
+                    ? "올리는 중…"
+                    : image
+                      ? "📷 사진 바꾸기"
+                      : "📷 모집 사진 넣기"}
+                </button>
+                {image && (
+                  <button
+                    type="button"
+                    onClick={() => void removeImage()}
+                    disabled={imageBusy}
+                    className="h-9 flex-none rounded-card-sm border border-line bg-surface-2 px-3 text-[12.5px] font-bold text-faint disabled:opacity-50"
+                  >
+                    지우기
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 크루 밖 사람을 부르려면 닉네임을 정확히 알아야 하는데, 그걸 알려면

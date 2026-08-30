@@ -39,6 +39,15 @@ export type Challenge = {
    *    공개"로 판단했다면 **비공개 챌린지가 전부 노출된다.**
    */
   discoverable: boolean;
+  /**
+   * 모집글 (0087). 피드 모집 카드에 이름 아래로 들어간다.
+   *
+   * ⚠️ DB CHECK가 150자다. 카드 한 장에 두세 줄로 들어가는 길이 — 길어지면
+   *    가로 스크롤 한 줄이라는 전제가 깨진다.
+   */
+  recruit_note: string | null;
+  /** 모집 사진 (0087). `avatars` 버킷 공개 URL */
+  recruit_image_url: string | null;
 };
 
 export type UserGoal = {

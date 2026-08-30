@@ -25,33 +25,23 @@ function joinErrorMessage(e: unknown): string {
 }
 
 /**
- * 같이 할 챌린지 — 피드의 공개 모집 줄 (0085).
+ * 모집 중인 챌린지 조회 (0085).
  *
- * ⚠️ **운동 게시물 사이에 끼워 넣지 않는다.** 진행 중 카드 아래, 날짜별 피드
- *    위에 가로 한 줄로 둔다. 게시물 사이에 반복 삽입하면 광고처럼 읽힌다.
+ * ⚠️⚠️ **피드 목록과 무관하게 스스로 조회한다.** `getCrewFeed` 결과가 0이라고
+ *    이것까지 숨기면 **크루가 0명인 신규 사용자에게 안 보인다** — 이 기능이
+ *    가장 필요한 사람이다.
  *
- * ⚠️⚠️ **크루가 0명인 신규 사용자에게도 보여야 한다.** 이 컴포넌트는 피드 목록과
- *    독립적으로 스스로 조회한다 — `getCrewFeed` 결과가 0이라고 이것까지 숨기면,
- *    **이 기능이 가장 필요한 사람에게 안 보인다.**
- *
- * ⚠️ 공개 챌린지가 0개면 영역 자체를 그리지 않는다. 빈 제목만 남으면 고장 같다.
- *
- * ⚠️ 이미 참가한 방을 목록에서 **감추지 않는다.** 감추면 내가 들어간 방이 갑자기
- *    사라진 것처럼 보인다 — 버튼만 `참가 중 · 보기`로 바꾼다.
+ * 실패해도 던지지 않는다(`getDiscoverableChallenges`가 빈 배열을 준다) —
+ * 모집은 부가 정보라 피드 화면 전체를 막으면 손해가 더 크다.
  */
-export function DiscoverableChallenges() {
+export function useDiscoverableChallenges() {
   const { userId, loading, configured } = useAuth();
-  const router = useRouter();
   const [items, setItems] = useState<DiscoverableChallenge[]>([]);
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!configured || loading || !userId) return;
     let cancelled = false;
     void (async () => {
-      // 실패해도 던지지 않는다(`getDiscoverableChallenges`가 빈 배열을 준다) —
-      // 모집 카드는 부가 정보라 피드 전체를 막으면 안 된다.
       const list = await getDiscoverableChallenges();
       if (!cancelled) setItems(list);
     })();
@@ -59,6 +49,178 @@ export function DiscoverableChallenges() {
       cancelled = true;
     };
   }, [configured, loading, userId]);
+
+  return { items, setItems };
+}
+
+function JoinButton({
+  challenge,
+  busy,
+  onJoin,
+  size = "md",
+}: {
+  challenge: DiscoverableChallenge;
+  busy: boolean;
+  onJoin: () => void;
+  size?: "md" | "lg";
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onJoin}
+      disabled={busy}
+      className={`rounded-card-sm font-extrabold disabled:opacity-60 ${
+        size === "lg" ? "h-12 text-sm" : "h-11 text-[13px]"
+      } ${
+        challenge.alreadyJoined
+          ? "border border-line bg-surface-2 text-muted"
+          : "bg-accent text-accent-ink"
+      }`}
+    >
+      {busy ? "…" : challenge.alreadyJoined ? "참가 중 · 보기" : "참여하기"}
+    </button>
+  );
+}
+
+/**
+ * 모집글 상세 (2026-08-31 사용자 지시 — *"해당 게시글을 클릭하면 모집글의 상세를
+ * 확인할 수 있게"*).
+ *
+ * ⚠️ 카드는 목록이라 글을 **잘라서** 보여준다(`line-clamp-2`). 잘린 글을 끝까지
+ *    읽을 자리가 없으면 150자를 쓸 이유가 없다. 여기서 통째로 보여준다.
+ */
+function RecruitDetailSheet({
+  challenge,
+  busy,
+  onJoin,
+  onClose,
+}: {
+  challenge: DiscoverableChallenge;
+  busy: boolean;
+  onJoin: () => void;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  return (
+    <>
+      <div
+        className="fixed inset-0 z-40 bg-black/40"
+        onClick={onClose}
+        aria-hidden
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="recruit-detail-title"
+        className="fixed inset-x-0 bottom-0 z-50 flex max-h-[85dvh] flex-col overflow-y-auto rounded-t-[22px] border-t border-line bg-surface pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-card"
+      >
+        <div className="mx-auto my-3 h-1 w-10 flex-none rounded-full bg-line" />
+
+        {challenge.recruitImageUrl && (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src={challenge.recruitImageUrl}
+            alt=""
+            className="aspect-[16/9] w-full object-cover"
+          />
+        )}
+
+        <div className="flex flex-col gap-3 p-5">
+          <div className="flex items-center gap-2.5">
+            <Avatar
+              src={challenge.hostAvatarUrl}
+              className="flex h-9 w-9 flex-none items-center justify-center overflow-hidden rounded-full bg-surface-2 text-lg"
+            />
+            <p className="min-w-0 flex-1 truncate text-[13px] font-bold text-muted">
+              {challenge.hostNickname}
+            </p>
+          </div>
+
+          <h3
+            id="recruit-detail-title"
+            className="text-lg leading-snug font-extrabold"
+          >
+            {challenge.name}
+          </h3>
+
+          {challenge.recruitNote && (
+            /* 줄바꿈을 지킨다 — 방장이 나눠 쓴 것을 한 줄로 붙이지 않는다 */
+            <p className="text-sm leading-relaxed break-words whitespace-pre-line">
+              {challenge.recruitNote}
+            </p>
+          )}
+
+          <dl className="mt-1 grid grid-cols-2 gap-2">
+            <div className="rounded-card-sm border border-line bg-surface-2 px-3 py-2">
+              <dt className="text-[11px] text-muted">기간</dt>
+              <dd className="mt-0.5 text-[13px] font-extrabold">
+                {shortDate(challenge.startDate)} ~ {shortDate(challenge.endDate)}
+              </dd>
+            </div>
+            <div className="rounded-card-sm border border-line bg-surface-2 px-3 py-2">
+              <dt className="text-[11px] text-muted">참가</dt>
+              <dd className="mt-0.5 text-[13px] font-extrabold">
+                {challenge.participantCount}명
+              </dd>
+            </div>
+          </dl>
+
+          <p className="text-[11.5px] text-faint">
+            {challenge.photoRequired
+              ? "📷 인증사진을 올린 운동만 집계돼요."
+              : "인증사진 없이도 집계돼요."}{" "}
+            참가해도 서로 크루가 되지는 않아요.
+          </p>
+
+          <JoinButton
+            challenge={challenge}
+            busy={busy}
+            onJoin={onJoin}
+            size="lg"
+          />
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-11 rounded-card border border-line bg-surface text-[13px] font-bold text-muted"
+          >
+            닫기
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/**
+ * 챌린지 모집 목록 (0085 · 탭 분리·사진·상세 2026-08-31).
+ *
+ * ⚠️ **세로 목록이다.** 처음엔 피드 위에 가로 스크롤 한 줄로 얹었는데, 그러면
+ *    화면 위쪽을 통째로 먹어 **첫 운동 게시물이 접힘선 밖으로 밀렸다**
+ *    (사용자 화면 확인). 지금은 전용 탭이라 세로로 펼친다.
+ *
+ * ⚠️ 이미 참가한 방을 **감추지 않는다.** 감추면 내가 들어간 방이 갑자기 사라진
+ *    것처럼 보인다 — 버튼만 `참가 중 · 보기`로 바꾼다.
+ */
+export function DiscoverableChallengeList({
+  items,
+  setItems,
+}: {
+  items: DiscoverableChallenge[];
+  setItems: (
+    update: (prev: DiscoverableChallenge[]) => DiscoverableChallenge[],
+  ) => void;
+}) {
+  const router = useRouter();
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [detail, setDetail] = useState<DiscoverableChallenge | null>(null);
 
   async function join(challenge: DiscoverableChallenge) {
     if (busyId) return;
@@ -70,76 +232,105 @@ export function DiscoverableChallenges() {
     setError(null);
     try {
       await joinDiscoverableChallenge(challenge.id);
-      // 참가 뒤에는 기존 챌린지 화면으로 보낸다 — 목표 설정·시작 흐름은 거기 있다
+      // 참가 뒤에는 기존 챌린지 화면으로 — 목표 설정·시작 흐름이 거기 있다
       router.push(`/challenge?open=${challenge.id}`);
     } catch (e) {
       setError(joinErrorMessage(e));
-      // 방장이 방금 시작했거나 모집을 껐으면 목록에서 뺀다
+      setDetail(null);
+      // 방장이 방금 시작했거나 모집을 껐으면 계속 눌러도 계속 실패한다 — 뺀다
       setItems((prev) => prev.filter((c) => c.id !== challenge.id));
     } finally {
       setBusyId(null);
     }
   }
 
-  /*
-    ⚠️⚠️ `items.length === 0`만 보고 null을 돌려주면, **거절 직후 마지막 카드를
-       뺐을 때 오류 문구까지 같이 사라진다** — 사용자는 왜 안 됐는지 못 본다.
-       (`discoverable-challenges.test.tsx`가 이 회귀를 잡는다.)
-  */
-  if (items.length === 0 && !error) return null;
+  if (items.length === 0 && !error) {
+    return (
+      <section className="rounded-card border border-line bg-surface p-5 text-center shadow-card">
+        <p className="text-sm font-bold">지금은 모집 중인 챌린지가 없어요</p>
+        <p className="mt-1 text-xs text-muted">
+          챌린지 탭에서 방을 만들고 <b className="text-text">챌린지 초대</b> 안의{" "}
+          <b className="text-text">피드에서 참가자 구하기</b>를 켜면 여기 올라와요.
+        </p>
+      </section>
+    );
+  }
 
   return (
-    <section className="flex flex-col gap-2">
-      <p className="flex items-center gap-2 text-xs font-extrabold text-muted">
-        <span className="text-accent">🏆</span> 같이 할 챌린지
-      </p>
-
-      <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
-        {items.map((c) => (
-          <article
-            key={c.id}
-            className="flex w-[210px] flex-none flex-col gap-2 rounded-card border border-line bg-surface p-3 shadow-card"
+    <section className="flex flex-col gap-3">
+      {items.map((c) => (
+        <article
+          key={c.id}
+          className="overflow-hidden rounded-card border border-line bg-surface shadow-card"
+        >
+          {/* 카드 본문 전체가 상세 버튼이다.
+              ⚠️ `참여하기`를 이 버튼 **안**에 넣지 마라. 중첩 버튼은 유효하지 않은
+                 HTML이고, 참여를 눌러도 상세가 먼저 열린다. */}
+          <button
+            type="button"
+            onClick={() => setDetail(c)}
+            aria-label={`${c.name} 모집글 자세히 보기`}
+            className="block w-full text-left"
           >
-            <div className="flex items-center gap-2">
-              <Avatar
-                src={c.hostAvatarUrl}
-                className="flex h-6 w-6 flex-none items-center justify-center overflow-hidden rounded-full bg-surface-2 text-xs"
+            {c.recruitImageUrl && (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={c.recruitImageUrl}
+                alt=""
+                loading="lazy"
+                className="aspect-[16/9] w-full object-cover"
               />
-              <p className="min-w-0 flex-1 truncate text-[11.5px] font-bold text-muted">
-                {c.hostNickname}
+            )}
+
+            <div className="flex flex-col gap-2 px-4 pt-3.5">
+              <div className="flex items-center gap-2">
+                <Avatar
+                  src={c.hostAvatarUrl}
+                  className="flex h-7 w-7 flex-none items-center justify-center overflow-hidden rounded-full bg-surface-2 text-sm"
+                />
+                <p className="min-w-0 flex-1 truncate text-[12px] font-bold text-muted">
+                  {c.hostNickname}
+                </p>
+              </div>
+
+              <p className="text-[15px] leading-snug font-extrabold">{c.name}</p>
+
+              {/* 모집글 (0087). 없으면 안 그린다 — 이름만으로는 참여를 결정할
+                  근거가 없다. 잘린 나머지는 상세에서 읽는다. */}
+              {c.recruitNote && (
+                <p className="line-clamp-2 text-[13px] leading-snug break-words text-muted">
+                  {c.recruitNote}
+                </p>
+              )}
+
+              <p className="text-[12px] font-bold text-muted">
+                {shortDate(c.startDate)} ~ {shortDate(c.endDate)} · 참가{" "}
+                {c.participantCount}명
+                {c.photoRequired && <span className="ml-1">· 📷 인증</span>}
               </p>
             </div>
+          </button>
 
-            <p className="line-clamp-2 text-[13.5px] leading-snug font-extrabold">
-              {c.name}
-            </p>
+          <div className="flex flex-col px-4 pt-2.5 pb-3.5">
+            <JoinButton
+              challenge={c}
+              busy={busyId === c.id}
+              onJoin={() => void join(c)}
+            />
+          </div>
+        </article>
+      ))}
 
-            <p className="text-[11.5px] font-bold text-muted">
-              {shortDate(c.startDate)} 시작 · 참가 {c.participantCount}명
-              {c.photoRequired && <span className="ml-1">· 📷 인증</span>}
-            </p>
+      {error && <p className="text-[12px] font-bold text-accent">{error}</p>}
 
-            <button
-              type="button"
-              onClick={() => void join(c)}
-              disabled={busyId === c.id}
-              className={`mt-0.5 h-9 rounded-card-sm text-[12.5px] font-extrabold disabled:opacity-60 ${
-                c.alreadyJoined
-                  ? "border border-line bg-surface-2 text-muted"
-                  : "bg-accent text-accent-ink"
-              }`}
-            >
-              {busyId === c.id
-                ? "…"
-                : c.alreadyJoined
-                  ? "참가 중 · 보기"
-                  : "참여하기"}
-            </button>
-          </article>
-        ))}
-      </div>
-
-      {error && <p className="text-[11.5px] font-bold text-accent">{error}</p>}
+      {detail && (
+        <RecruitDetailSheet
+          challenge={detail}
+          busy={busyId === detail.id}
+          onJoin={() => void join(detail)}
+          onClose={() => setDetail(null)}
+        />
+      )}
     </section>
   );
 }

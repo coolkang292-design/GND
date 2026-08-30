@@ -940,6 +940,8 @@ function ChallengeScreen({ userId }: { userId: string }) {
           myRole={challenge.myRole}
           status={challenge.status}
           discoverable={challenge.discoverable}
+          recruitNote={challenge.recruit_note}
+          recruitImageUrl={challenge.recruit_image_url}
           onInvited={reload}
         />
       )}

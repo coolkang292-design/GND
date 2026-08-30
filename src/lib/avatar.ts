@@ -33,11 +33,45 @@ export async function uploadAvatarPhoto(
   userId: string,
   file: File,
 ): Promise<string> {
+  return uploadToAvatars(userId, file, AVATAR_MAX_DIMENSION);
+}
+
+/**
+ * 챌린지 모집 사진 (0087).
+ *
+ * ⚠️ **`avatars` 버킷을 그대로 쓴다 — 새 버킷도 새 정책도 없다.** 이 버킷은
+ * public이고 `avatars_upload_own` 정책이 `{auth.uid()}/…` 경로를 허용한다(0005).
+ * 모집글은 크루 밖 사람에게 보여 주려고 만든 것이라 **public이 맞다** —
+ * 인증사진(`workout-images`)이 private + 서명 URL인 것과 목적이 다르다.
+ *
+ * ⚠️ 크기만 다르다. 아바타는 44~96px 원형이라 512로 충분하지만, 모집 카드는
+ * 화면 너비를 채우므로 그 값으로 올리면 뭉갠 그림이 된다.
+ */
+export const RECRUIT_IMAGE_MAX_DIMENSION = 1080;
+
+export async function uploadRecruitPhoto(
+  userId: string,
+  file: File,
+): Promise<string> {
+  return uploadToAvatars(userId, file, RECRUIT_IMAGE_MAX_DIMENSION);
+}
+
+/**
+ * 공통 업로드. **경로 첫 칸이 `auth.uid()`여야** 정책을 통과한다(0005).
+ *
+ * ⚠️⚠️ 파일 이름의 타임스탬프를 고정 이름으로 바꾸지 마라 — 위 주석의 이유가
+ * 모집 사진에도 그대로 적용된다(public 버킷 = URL 단위 캐시).
+ */
+async function uploadToAvatars(
+  userId: string,
+  file: File,
+  maxDimension: number,
+): Promise<string> {
   if (file.size > AVATAR_MAX_INPUT_BYTES) {
     throw new Error("사진이 너무 커요 (20MB 이하)");
   }
 
-  const blob = await compressImage(file, AVATAR_MAX_DIMENSION);
+  const blob = await compressImage(file, maxDimension);
   const path = `${userId}/${Date.now()}.jpg`;
 
   const supabase = getSupabaseBrowserClient();

@@ -6,6 +6,8 @@ const html = (
   myRole: "host" | "member",
   status: string,
   discoverable = false,
+  recruitNote: string | null = null,
+  recruitImageUrl: string | null = null,
 ) =>
   renderToStaticMarkup(
     <InviteSheet
@@ -13,6 +15,8 @@ const html = (
       myRole={myRole}
       status={status}
       discoverable={discoverable}
+      recruitNote={recruitNote}
+      recruitImageUrl={recruitImageUrl}
       onInvited={() => {}}
     />,
   );

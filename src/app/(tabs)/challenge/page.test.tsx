@@ -117,6 +117,8 @@ const challenge = (id: string, name: string, createdAt: string) =>
     invite_code: `GND-${id.slice(-5).toUpperCase()}`,
     // 0085 — 기존 챌린지는 전부 비공개다
     discoverable: false,
+    recruit_note: null,
+    recruit_image_url: null,
     myRole: "host",
     myStatus: "joined",
   }) satisfies MyChallenge;

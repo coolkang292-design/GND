@@ -1262,9 +1262,19 @@ export async function pickPeekTarget(
 
 // ── 공개 챌린지 모집 (0085) ──────────────────────────────────
 
+/** `challenges.recruit_note`의 CHECK가 150자다 (0087) */
+export const RECRUIT_NOTE_MAX_LENGTH = 150;
+
 export type DiscoverableChallenge = {
   id: string;
   name: string;
+  /**
+   * 모집글 (0087). 이름만으로는 "누가 어떤 사람을 찾는지"를 알 수 없어서
+   * 모르는 사람이 참여를 결정할 근거가 없다.
+   */
+  recruitNote: string | null;
+  /** 모집 사진 (0087). `avatars` 버킷의 공개 URL 또는 null */
+  recruitImageUrl: string | null;
   startDate: string; // YYYY-MM-DD
   endDate: string;
   /**
@@ -1306,6 +1316,8 @@ export async function getDiscoverableChallenges(): Promise<
     (data ?? []) as {
       id: string;
       name: string;
+      recruit_note: string | null;
+      recruit_image_url: string | null;
       start_date: string;
       end_date: string;
       photo_required: boolean;
@@ -1318,6 +1330,8 @@ export async function getDiscoverableChallenges(): Promise<
   ).map((r) => ({
     id: r.id,
     name: r.name,
+    recruitNote: r.recruit_note,
+    recruitImageUrl: r.recruit_image_url,
     startDate: r.start_date,
     endDate: r.end_date,
     photoRequired: r.photo_required,
@@ -1379,6 +1393,49 @@ export async function leaveSetupChallenge(challengeId: string): Promise<void> {
  * ⚠️ 0행이어도 PostgREST는 오류를 주지 않는다. `.select()`로 바뀐 행을 받아
  *    확인한다 — 2026-08-30에 캡션 저장이 정확히 이 함정으로 조용히 실패했다.
  */
+/**
+ * 모집글 저장 (0087).
+ *
+ * ⚠️ 0086과 **같은 함정**을 조심한다 — RLS 정책(`challenges_update_creator`)이
+ *    있어도 컬럼 GRANT가 없으면 `42501`로 죽는다. 0087이
+ *    `grant update (recruit_note)`를 준다.
+ *
+ * ⚠️ 0행이어도 PostgREST는 오류를 주지 않는다. `.select()`로 확인한다.
+ */
+export async function setChallengeRecruitNote(
+  challengeId: string,
+  note: string | null,
+): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  const trimmed = (note ?? "").trim();
+  const { data, error } = await supabase
+    .from("challenges")
+    .update({ recruit_note: trimmed.length === 0 ? null : trimmed })
+    .eq("id", challengeId)
+    .select("id");
+  if (error) throw error;
+  if (!data || data.length === 0) throw new Error("recruit_note_not_saved");
+}
+
+/**
+ * 모집 사진 저장 (0087). 업로드는 `uploadRecruitPhoto`가 먼저 끝나 있어야 한다.
+ *
+ * ⚠️ 0086과 같은 함정 — 컬럼 GRANT가 없으면 `42501`이다. 0087이 준다.
+ */
+export async function setChallengeRecruitImage(
+  challengeId: string,
+  imageUrl: string | null,
+): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("challenges")
+    .update({ recruit_image_url: imageUrl })
+    .eq("id", challengeId)
+    .select("id");
+  if (error) throw error;
+  if (!data || data.length === 0) throw new Error("recruit_image_not_saved");
+}
+
 export async function setChallengeDiscoverable(
   challengeId: string,
   discoverable: boolean,

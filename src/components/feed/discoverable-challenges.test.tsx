@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -31,7 +32,19 @@ vi.mock("@/components/auth-provider", () => ({
   useAuth: () => ({ userId: "me", loading: false, configured: true }),
 }));
 
-import { DiscoverableChallenges } from "./discoverable-challenges";
+import {
+  DiscoverableChallengeList,
+  useDiscoverableChallenges,
+} from "./discoverable-challenges";
+
+/**
+ * 조회(훅)와 표시(목록)가 갈렸다 — 피드 페이지가 모집 개수를 탭 배지로 써야
+ * 하기 때문이다. 테스트는 둘을 원래대로 붙여서 화면 단위로 본다.
+ */
+function DiscoverableChallenges() {
+  const { items, setItems } = useDiscoverableChallenges();
+  return <DiscoverableChallengeList items={items} setItems={setItems} />;
+}
 
 function challenge(over: Record<string, unknown> = {}) {
   return {
@@ -44,6 +57,8 @@ function challenge(over: Record<string, unknown> = {}) {
     hostId: "host-1",
     hostNickname: "오빙크",
     hostAvatarUrl: null,
+    recruitNote: null,
+    recruitImageUrl: null,
     alreadyJoined: false,
     ...over,
   };
@@ -62,7 +77,8 @@ describe("DiscoverableChallenges", () => {
 
     expect(await screen.findByText("9월 같이 달려요")).toBeTruthy();
     expect(screen.getByText("오빙크")).toBeTruthy();
-    expect(screen.getByText(/9\/1 시작 · 참가 3명/)).toBeTruthy();
+    // 전용 탭이 되면서 기간을 통째로 보여준다 (가로 한 줄이 아니라 세로 카드)
+    expect(screen.getByText(/9\/1 ~ 9\/30 · 참가 3명/)).toBeTruthy();
   });
 
   /**
@@ -81,12 +97,17 @@ describe("DiscoverableChallenges", () => {
     expect(screen.queryByText("9월 같이 달려요")).toBeNull();
   });
 
-  /** ⚠️ 빈 제목만 남으면 고장 난 것처럼 보인다. 0개면 영역 자체가 없어야 한다 */
-  it("0개면 영역 자체를 그리지 않는다", async () => {
+  /**
+   * 전용 탭이 생기면서(2026-08-31) 0개일 때 **빈 화면이 아니라 안내**를 낸다.
+   * 탭을 눌러 들어왔는데 아무것도 없으면 고장으로 읽힌다 — 어디서 켜는지 알려준다.
+   */
+  it("0개면 어디서 모집을 켜는지 알려준다", async () => {
     mocks.getDiscoverableChallenges.mockResolvedValue([]);
-    const { container } = render(<DiscoverableChallenges />);
-    await waitFor(() => expect(mocks.getDiscoverableChallenges).toHaveBeenCalled());
-    expect(container.textContent).not.toContain("같이 할 챌린지");
+    render(<DiscoverableChallenges />);
+    expect(
+      await screen.findByText("지금은 모집 중인 챌린지가 없어요"),
+    ).toBeTruthy();
+    expect(screen.getByText(/피드에서 참가자 구하기/)).toBeTruthy();
   });
 
   /**
@@ -182,5 +203,89 @@ describe("DiscoverableChallenges", () => {
 
     expect(await screen.findByText("9월 같이 달려요")).toBeTruthy();
     expect(screen.queryByText(/📷 인증/)).toBeNull();
+  });
+});
+
+/** 모집글·사진·상세 (0087, 2026-08-31 사용자 지시) */
+describe("모집글 상세", () => {
+  it("모집글이 있으면 카드에 보인다", async () => {
+    mocks.getDiscoverableChallenges.mockResolvedValue([
+      challenge({ recruitNote: "주 3회 이상 꾸준히 하실 분 찾아요" }),
+    ]);
+    render(<DiscoverableChallenges />);
+    expect(
+      await screen.findByText("주 3회 이상 꾸준히 하실 분 찾아요"),
+    ).toBeTruthy();
+  });
+
+  it("모집글이 없으면 그 줄을 안 그린다", async () => {
+    mocks.getDiscoverableChallenges.mockResolvedValue([challenge()]);
+    const { container } = render(<DiscoverableChallenges />);
+    await screen.findByText("9월 같이 달려요");
+    expect(container.querySelectorAll("p.line-clamp-2")).toHaveLength(0);
+  });
+
+  it("모집 사진이 있으면 카드에 그린다", async () => {
+    mocks.getDiscoverableChallenges.mockResolvedValue([
+      challenge({ recruitImageUrl: "https://cdn.example/x.jpg" }),
+    ]);
+    const { container } = render(<DiscoverableChallenges />);
+    await screen.findByText("9월 같이 달려요");
+    expect(container.querySelector('img[src="https://cdn.example/x.jpg"]')).toBeTruthy();
+  });
+
+  /**
+   * ⚠️ 카드는 목록이라 글을 두 줄로 자른다. 끝까지 읽을 자리가 없으면 150자를
+   * 쓸 이유가 없다.
+   */
+  it("카드를 누르면 상세가 열린다", async () => {
+    mocks.getDiscoverableChallenges.mockResolvedValue([
+      challenge({ recruitNote: "긴 모집글" }),
+    ]);
+    render(<DiscoverableChallenges />);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: /모집글 자세히 보기/ }),
+    );
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(screen.getByText("기간")).toBeTruthy();
+    expect(screen.getByText("참가")).toBeTruthy();
+  });
+
+  /**
+   * ⚠️⚠️ 회귀 방어. `참여하기`를 상세 버튼 **안**에 넣으면 중첩 버튼이 되어
+   * 유효하지 않은 HTML이 되고, 참여를 눌러도 상세가 먼저 열린다.
+   */
+  it("참여하기는 상세를 열지 않고 바로 참가한다", async () => {
+    mocks.getDiscoverableChallenges.mockResolvedValue([challenge()]);
+    mocks.joinDiscoverableChallenge.mockResolvedValue({
+      challengeId: "c1",
+      challengeName: "9월 같이 달려요",
+    });
+    render(<DiscoverableChallenges />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "참여하기" }));
+    await waitFor(() =>
+      expect(mocks.joinDiscoverableChallenge).toHaveBeenCalledWith("c1"),
+    );
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("상세에서도 참가할 수 있다", async () => {
+    mocks.getDiscoverableChallenges.mockResolvedValue([challenge()]);
+    mocks.joinDiscoverableChallenge.mockResolvedValue({
+      challengeId: "c1",
+      challengeName: "9월 같이 달려요",
+    });
+    render(<DiscoverableChallenges />);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: /모집글 자세히 보기/ }),
+    );
+    const dialog = screen.getByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "참여하기" }));
+    await waitFor(() =>
+      expect(mocks.joinDiscoverableChallenge).toHaveBeenCalledWith("c1"),
+    );
   });
 });
