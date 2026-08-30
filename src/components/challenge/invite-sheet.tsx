@@ -56,6 +56,8 @@ export function InviteSheet({
   const [message, setMessage] = useState<string | null>(null);
   const [link, setLink] = useState<string | null>(null);
   const [linkBusy, setLinkBusy] = useState(false);
+  /** 방금 만든 링크가 개발 서버 주소인가 (다른 기기에서 안 열린다) */
+  const [localOnly, setLocalOnly] = useState(false);
   /*
     피드 모집 (0085).
 
@@ -195,6 +197,13 @@ export function InviteSheet({
               <p className="mt-0.5 break-all text-[11px] text-muted">{link}</p>
             </div>
           )}
+          {localOnly && (
+            <p className="mt-1.5 rounded-card-sm border border-warn/40 bg-surface-2 px-2.5 py-2 text-[11px] font-bold text-warn">
+              ⚠️ 개발 서버 주소예요. <b>다른 기기(폰)에서는 안 열려요</b> —
+              &ldquo;localhost&rdquo;는 그 기기 자신을 가리켜요. 배포된
+              뒤에는 실제 주소로 나가요.
+            </p>
+          )}
           <p className="mt-1.5 text-[11px] text-muted">
             <b className="text-text">이미 GND를 쓰는 사람</b>은 링크로 참가해도 서로
             크루가 되지 않아요. 이름과 랭킹은 이 챌린지 안에서만 보여요.{" "}
@@ -245,6 +254,12 @@ export function InviteSheet({
         //    두 곳에서 받으면 언젠가 한쪽만 갱신된다.
         (userId ? `&by=${encodeURIComponent(userId)}` : "");
       setLink(url);
+      // 개발 서버에서 만든 링크는 **다른 기기에서 안 열린다** — `localhost`는
+      // "그 기기 자신"이라 폰에서 열면 폰을 찾는다. 2026-08-31에 사장님이
+      // 실제로 겪었다("테스트 계정에서 링크를 만드니까 실 계정에서 접속 자체가
+      // 안 되네"). 코드 문제가 아니라 주소 문제인데, 화면이 말해 주지 않으면
+      // 참가 기능이 고장난 것으로 읽힌다.
+      setLocalOnly(/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|$)/.test(url));
       // 클립보드는 권한·컨텍스트에 따라 실패할 수 있다. 실패해도 링크는 화면에
       // 띄워 두므로 손으로 복사하면 된다 — 조용히 사라지게 두지 않는다.
       try {
@@ -446,6 +461,13 @@ export function InviteSheet({
 
             ⚠️ 조건절을 빼고 단정문으로 되돌리지 마라 — `invite-sheet.test.tsx`가
             조건절의 존재를 단언한다. */}
+        {localOnly && (
+          <p className="mt-1.5 rounded-card-sm border border-warn/40 bg-surface-2 px-2.5 py-2 text-[11px] font-bold text-warn">
+            ⚠️ 개발 서버 주소예요. <b>다른 기기(폰)에서는 안 열려요</b> —
+            &ldquo;localhost&rdquo;는 그 기기 자신을 가리켜요. 배포된
+            뒤에는 실제 주소로 나가요.
+          </p>
+        )}
         <p className="mt-1.5 text-[11px] text-muted">
           <b className="text-text">이미 GND를 쓰는 사람</b>은 링크로 참가해도 서로
           크루가 되지 않아요. 이름과 랭킹은 이 챌린지 안에서만 보여요.{" "}

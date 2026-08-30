@@ -46,7 +46,27 @@ async function login(email) {
     body: JSON.stringify({ email, password: PW }),
   });
   const j = await r.json();
-  if (!j.access_token) throw new Error(`${email} 로그인 실패: ${JSON.stringify(j).slice(0, 200)}`);
+  if (!j.access_token) {
+    // ⚠️ 2026-08-31에 실제로 여기서 막혔다. 픽스처 계정은 **운영 Supabase에
+    //    상주**하는데, 사람이 앱에서 그 계정으로 로그인해 비밀번호나 닉네임을
+    //    바꾸면 `.env.local`의 DEV_FIXTURE_PASSWORD와 어긋난다.
+    //    `dev-fixture.mjs create`는 계정을 **만들 때만** 비밀번호를 넣으므로
+    //    기존 계정은 고쳐 주지 않는다 — 그래서 "create 했는데도 안 된다"가 된다.
+    if (String(j.error_code ?? j.code ?? "").includes("invalid_credentials")) {
+      throw new Error(
+        `${email} 로그인 실패: 비밀번호가 안 맞는다.
+` +
+          `  픽스처 계정을 사람이 앱에서 쓰면서 비밀번호를 바꿨을 가능성이 크다.
+` +
+          `  .env.local의 DEV_FIXTURE_PASSWORD를 실제 값으로 맞추거나,
+` +
+          `  그 계정을 더 안 쓸 것이면 Supabase에서 비밀번호를 되돌려라.
+` +
+          `  ⚠️ 임의로 되돌리면 그 계정을 쓰는 사람이 못 들어간다 — 먼저 물어라.`,
+      );
+    }
+    throw new Error(`${email} 로그인 실패: ${JSON.stringify(j).slice(0, 200)}`);
+  }
   return { token: j.access_token, id: j.user.id };
 }
 
