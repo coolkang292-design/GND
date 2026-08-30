@@ -107,8 +107,14 @@ vercel --prod  →  이게 실제 배포다.
 git worktree add /tmp/deploy-main main
 cp .env.local .vercel -r /tmp/deploy-main/    # 둘 다 gitignore라 따로 복사
 cd /tmp/deploy-main && npm install && npm run build
-npx vercel@latest --prod --yes
+npx vercel@latest --prod --yes --scope gnd4
 ```
+
+⚠️ **`--scope gnd4`를 빼면 `Not authorized`로 죽는다** (2026-08-31에 겪었다).
+프로젝트가 개인이 아니라 **팀(`gnd4`) 소유**라서, 로그인은 돼 있어도(`vercel whoami`가
+`coolkang292-2207`을 준다) 스코프를 안 주면 팀 프로젝트에 배포 권한이 없다고 판단한다.
+`vercel teams ls`로 팀 slug을 확인할 수 있다. **같은 날 첫 배포는 스코프 없이 됐다가
+두 번째에 막혔으므로, 되더라도 항상 붙여라.**
 
 **2. 배포 후 반드시 실물로 검증한다.** "배포 명령이 성공했다"는 증거가 아니다. 프로덕션에서 파일을 직접 받아 바뀐 코드가 들어갔는지 확인한다.
 
