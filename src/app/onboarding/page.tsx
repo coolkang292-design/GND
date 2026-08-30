@@ -23,7 +23,8 @@ import {
   isNotNewcomer,
   joinChallengeAsNewcomer,
   joinChallengeWithCode,
-  peekPendingChallengeInvite,
+  peekPendingChallengeInviteDetail,
+  pendingChallengeInvitePath,
   saveOnboardingNotice,
 } from "@/lib/challenge";
 // ⚠️ `joinGroupWithCode`를 직접 부르지 않는다. 코드가 친구 것인지 그룹 것인지
@@ -83,9 +84,12 @@ export default function OnboardingPage() {
   );
   // 챌린지 초대 링크(/challenge?join=CODE)로 들어온 경우. 이 사람은 크루가
   // 아니라 **챌린지**에 초대받은 것이라 크루 선택 단계가 통째로 무의미하다.
-  const [challengeCode] = useState<string>(() =>
-    typeof window === "undefined" ? "" : (peekPendingChallengeInvite() ?? ""),
+  // 0091: 코드와 **초대자**를 같이 꺼낸다. 초대자는 서버가 검증하므로 여기서는
+  // 그대로 나르기만 한다.
+  const [pendingInvite] = useState<{ code: string; by: string | null } | null>(
+    () => (typeof window === "undefined" ? null : peekPendingChallengeInviteDetail()),
   );
+  const challengeCode = pendingInvite?.code ?? "";
 
   /**
    * 신원이 붙어 있는가 = 모드 2인가.
@@ -163,12 +167,10 @@ export default function OnboardingPage() {
       if (cancelled || !existing) return;
       // 챌린지 초대를 들고 온 기존 사용자는 그 챌린지로 이어 보낸다.
       // 홈으로 떨어뜨리면 초대가 조용히 사라진다(`/auth/callback`과 같은 규칙).
-      const pending = peekPendingChallengeInvite();
-      router.replace(
-        pending
-          ? `/challenge?join=${encodeURIComponent(pending)}`
-          : APP_LANDING_PATH,
-      );
+      // 0091: 초대자도 같이 실어 보낸다. 안 실으면 이 경로를 거친 사람만
+      // 초대자를 잃는다 — 기존 사용자는 크루 연결이 없어 티가 안 나지만,
+      // 링크가 반쪽이 되는 것을 남겨 두면 다음에 신입 경로로 새어 들어온다.
+      router.replace(pendingChallengeInvitePath() ?? APP_LANDING_PATH);
     })();
     return () => {
       cancelled = true;
@@ -217,7 +219,10 @@ export default function OnboardingPage() {
           //    폴백이 없으면 그 사람은 챌린지에 아예 못 들어간다.
           let joined;
           try {
-            joined = await joinChallengeAsNewcomer(challengeCode);
+            joined = await joinChallengeAsNewcomer(
+              challengeCode,
+              pendingInvite?.by,
+            );
           } catch (e) {
             if (!isNotNewcomer(e)) throw e;
             joined = await joinChallengeWithCode(challengeCode);

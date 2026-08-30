@@ -28,8 +28,34 @@ describe("InviteSheet — 노출 조건", () => {
     expect(out).toContain('placeholder="닉네임"');
   });
 
-  it("host가 아니면 아무것도 렌더하지 않는다", () => {
-    expect(html("member", "setup")).toBe("");
+  /**
+   * 참가자 초대 (0091, 사장님 지시 2026-08-31).
+   *
+   * 옛 동작은 `member`면 통째로 `null`이었다. 이제 **링크만** 준다.
+   */
+  it("참가자에게는 초대 링크만 보인다", () => {
+    const out = html("member", "setup");
+    expect(out).toContain("초대 링크 복사하기");
+    expect(out).toContain("친구 초대");
+  });
+
+  /**
+   * ⚠️ 이게 이 묶음에서 가장 중요한 단언이다. 참가자에게 방장 기능이 새면
+   *    **눌리는데 서버가 not_host로 막는 버튼**이 된다 — 사용자는 고장으로 읽는다.
+   */
+  it("참가자에게 방장 전용 기능이 새지 않는다", () => {
+    const out = html("member", "setup", true, "모집글이에요", "https://x/y.jpg");
+    expect(out, "닉네임 초대가 샜다").not.toContain('placeholder="닉네임"');
+    expect(out, "모집 공개 토글이 샜다").not.toContain("피드에서 참가자 구하기");
+    expect(out, "모집글이 샜다").not.toContain("모집글 저장");
+    expect(out, "모집 사진이 샜다").not.toContain("모집 사진");
+  });
+
+  it("시작한 뒤에는 참가자에게 아무것도 안 보인다", () => {
+    // 방장은 이유를 적은 자리를 남기지만, 참가자는 애초에 관리 화면이 아니라
+    // 빈 카드를 남길 이유가 없다.
+    expect(html("member", "active")).toBe("");
+    expect(html("member", "ended")).toBe("");
   });
 
   it("시작한 뒤에는 초대 수단을 없애되 자리는 지키고 이유를 말한다", () => {

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ScreenArt } from "@/components/brand/hero-art";
 import { GoldCta, GoldLine } from "@/components/brand/gold";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { peekPendingChallengeInvite } from "@/lib/challenge";
+import { pendingChallengeInvitePath } from "@/lib/challenge";
 import { APP_LANDING_PATH } from "@/lib/domain/landing";
 import {
   PROVIDER_META,
@@ -112,12 +112,7 @@ export default function LoginPage() {
     //    초대 링크를 탭했다가 "이미 계정이 있나요? 로그인"으로 넘어온 사람인데,
     //    홈에 떨어뜨리면 **초대가 조용히 사라진다.** `/auth/callback`이 소셜
     //    로그인에서 하는 것과 같은 처리다.
-    const pendingChallenge = peekPendingChallengeInvite();
-    window.location.assign(
-      pendingChallenge
-        ? `/challenge?join=${encodeURIComponent(pendingChallenge)}`
-        : APP_LANDING_PATH,
-    );
+    window.location.assign(pendingChallengeInvitePath() ?? APP_LANDING_PATH);
   }
 
   return (

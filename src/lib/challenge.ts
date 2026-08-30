@@ -539,10 +539,19 @@ export type NewcomerJoinResult = {
  */
 export async function joinChallengeAsNewcomer(
   code: string,
+  /**
+   * 링크를 준 사람 (0091). 없으면 서버가 **방장**과 잇는다(옛 동작).
+   *
+   * ⚠️ 못 믿는 값이다 — URL에서 왔고 사용자가 고칠 수 있다. 그래서 서버가
+   *    "그 방의 joined 참가자인가"를 확인한 뒤에만 쓴다. 화면에서 미리 거르지
+   *    않는 이유는, 거르는 규칙이 두 곳에 생기면 언젠가 한쪽만 고쳐지기 때문이다.
+   */
+  inviterId?: string | null,
 ): Promise<NewcomerJoinResult> {
   const supabase = getSupabaseBrowserClient();
   const { data, error } = await supabase.rpc("join_challenge_as_newcomer", {
     p_code: code,
+    p_inviter: inviterId ?? null,
   });
   if (error) throw error;
   return data as NewcomerJoinResult;
@@ -636,12 +645,68 @@ export function takeOnboardingNotice(): string | null {
 // 그걸 꺼내 참가시킨다. 그룹 초대(savePendingInvite)와 같은 방식이고 키만 다르다.
 const PENDING_CHALLENGE_KEY = "gnd-pending-challenge-invite";
 
-export function savePendingChallengeInvite(code: string): void {
-  localStorage.setItem(PENDING_CHALLENGE_KEY, code);
+/**
+ * 초대 링크로 들어왔지만 아직 프로필이 없는 사람의 보관함.
+ *
+ * 0091부터 **초대자 id도 같이** 나른다. 링크(`?join=CODE&by=<id>`) → 여기 →
+ * 온보딩 → `join_challenge_as_newcomer(code, inviter)` 순서다.
+ *
+ * ⚠️ **옛 값(코드 문자열 하나)이 그대로 남아 있을 수 있다.** 배포 순간에 이미
+ *    링크를 열어 둔 사람이 있고, 그 사람의 localStorage에는 `"GND-XXXXX"`가
+ *    들어 있다. JSON으로만 읽으면 그 사람은 챌린지에 못 들어간다 —
+ *    `peek`이 두 형태를 모두 받는다.
+ */
+export function savePendingChallengeInvite(
+  code: string,
+  inviterId?: string | null,
+): void {
+  localStorage.setItem(
+    PENDING_CHALLENGE_KEY,
+    JSON.stringify({ code, by: inviterId ?? null }),
+  );
 }
 
+/** 코드만 (옛 호출부 호환) */
 export function peekPendingChallengeInvite(): string | null {
-  return localStorage.getItem(PENDING_CHALLENGE_KEY);
+  return peekPendingChallengeInviteDetail()?.code ?? null;
+}
+
+/** 코드 + 초대자 (0091) */
+export function peekPendingChallengeInviteDetail():
+  | { code: string; by: string | null }
+  | null {
+  const raw = localStorage.getItem(PENDING_CHALLENGE_KEY);
+  if (!raw) return null;
+  // 옛 형태: 코드 문자열 그대로
+  if (!raw.startsWith("{")) return { code: raw, by: null };
+  try {
+    const parsed = JSON.parse(raw) as { code?: unknown; by?: unknown };
+    if (typeof parsed.code !== "string" || !parsed.code) return null;
+    return {
+      code: parsed.code,
+      by: typeof parsed.by === "string" ? parsed.by : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 보관해 둔 초대를 **이어가는 주소** (0091).
+ *
+ * ⚠️ 이 조립을 호출부에서 하지 마라. 로그인·OAuth 콜백·온보딩 **세 곳**이 같은
+ *    주소를 만들었는데, 0091이 `&by=`를 더하면서 두 곳이 그걸 흘렸다. 세 벌이
+ *    있으면 언젠가 한쪽만 고쳐지고, 흘린 쪽으로 온 사람만 조용히 초대자를 잃는다.
+ *
+ * 보관된 초대가 없으면 `null` — 호출부가 기본 착지 주소로 보낸다.
+ */
+export function pendingChallengeInvitePath(): string | null {
+  const pending = peekPendingChallengeInviteDetail();
+  if (!pending) return null;
+  return (
+    `/challenge?join=${encodeURIComponent(pending.code)}` +
+    (pending.by ? `&by=${encodeURIComponent(pending.by)}` : "")
+  );
 }
 
 export function clearPendingChallengeInvite(): void {

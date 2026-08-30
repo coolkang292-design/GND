@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ScreenError } from "@/components/screen-error";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { getMyProfile } from "@/lib/crew";
-import { peekPendingChallengeInvite } from "@/lib/challenge";
+import { pendingChallengeInvitePath } from "@/lib/challenge";
 import { APP_LANDING_PATH } from "@/lib/domain/landing";
 import { identityError, takeAuthIntent } from "@/lib/identity";
 
@@ -131,9 +131,8 @@ export default function AuthCallbackPage() {
       //    (2026-08-08). 초대 링크를 탭한 사람을 `/account`로 보내면, 계정
       //    화면에서 "내가 왜 여기 있지"가 되고 초대는 조용히 사라진다.
       //    `/challenge`가 보관된 코드로 참가까지 마무리한다.
-      const pendingChallenge = peekPendingChallengeInvite();
-      if (pendingChallenge)
-        return `/challenge?join=${encodeURIComponent(pendingChallenge)}`;
+      const pendingChallenge = pendingChallengeInvitePath();
+      if (pendingChallenge) return pendingChallenge;
 
       // ⚠️ 로그아웃했다가 `/login`으로 다시 들어온 사람을 `/account`(설정)에
       //    떨어뜨리지 마라 — 사용자 지적 2026-08-10. 그 사람이 하려던 일은

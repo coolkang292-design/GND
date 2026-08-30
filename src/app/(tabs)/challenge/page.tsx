@@ -279,14 +279,19 @@ function ChallengeScreen({ userId }: { userId: string }) {
   const joinAttempted = useRef(false);
   useEffect(() => {
     if (joinAttempted.current) return;
-    const code = new URLSearchParams(window.location.search).get("join");
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("join");
     if (!code) return;
+    // 0091: 링크를 준 사람. 참가자도 링크를 뿌릴 수 있게 되면서, 신입이
+    // **누구와** 친구가 되는지가 여기서 정해진다. 못 믿는 값이라 서버가
+    // "그 방의 참가자인가"를 확인한다.
+    const invitedBy = params.get("by");
     joinAttempted.current = true;
 
     // 프로필이 없는 첫 방문자는 OnboardingGate가 곧바로 온보딩으로 보낸다.
     // 그 전에 코드를 보관해 둬야 닉네임을 정한 뒤 이어서 참가할 수 있다.
     // (await보다 앞이라 리다이렉트와 경쟁하지 않는다.)
-    savePendingChallengeInvite(code);
+    savePendingChallengeInvite(code, invitedBy);
 
     (async () => {
       // 새 사용자는 아직 프로필이 없다. 여기서 먼저 참가시키면 참가 성공 뒤

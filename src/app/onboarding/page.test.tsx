@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => ({
   isNotNewcomer: vi.fn(),
   saveOnboardingNotice: vi.fn(),
   peekPendingChallengeInvite: vi.fn(),
+  /** 0091: 링크가 나른 초대자. 테스트가 이 값을 바꿔 통과를 확인한다 */
+  pendingInviteBy: { value: null as string | null },
   clearPendingInvite: vi.fn(),
   createGroup: vi.fn(),
   peekPendingInvite: vi.fn(),
@@ -57,6 +59,17 @@ vi.mock("@/lib/challenge", async (importOriginal) => ({
   joinChallengeAsNewcomer: mocks.joinChallengeAsNewcomer,
   saveOnboardingNotice: mocks.saveOnboardingNotice,
   peekPendingChallengeInvite: mocks.peekPendingChallengeInvite,
+  // 0091: 새 이름 둘을 옛 목에서 **파생**시킨다. 각 테스트가
+  //       `peekPendingChallengeInvite.mockReturnValue("GND-ABCDE")`로 표현하던
+  //       의도를 그대로 두면서 새 호출부를 잇는다.
+  peekPendingChallengeInviteDetail: () => {
+    const c = mocks.peekPendingChallengeInvite();
+    return c ? { code: c, by: mocks.pendingInviteBy.value } : null;
+  },
+  pendingChallengeInvitePath: () => {
+    const c = mocks.peekPendingChallengeInvite();
+    return c ? `/challenge?join=${encodeURIComponent(c)}` : null;
+  },
 }));
 
 vi.mock("@/lib/crew", () => ({
@@ -88,6 +101,8 @@ function linkedIdentity() {
 }
 
 beforeEach(() => {
+  // 0091: 테스트끼리 새지 않게 초대자를 매번 비운다
+  mocks.pendingInviteBy.value = null;
   process.env.NEXT_PUBLIC_OAUTH_PROVIDERS = "kakao,google";
   mocks.linkIdentity.mockResolvedValue({ data: {}, error: null });
   // 기본은 **신규**(프로필 없음)다. 이 화면의 정상 손님이 그쪽이다.
@@ -291,12 +306,37 @@ describe("OnboardingPage 챌린지 초대 모드", () => {
     );
   }
 
-  it("신입은 방장과 친구까지 맺고 챌린지 화면으로 이동한다", async () => {
+  /**
+   * 0091: 인자가 **둘**이 됐다 — 코드와 **초대자**.
+   *
+   * ⚠️ 초대자를 안 넘기면 서버가 방장 폴백을 쓴다. 참가자가 뿌린 링크로 온
+   *    신입이 **부른 사람 대신 모르는 방장과** 친구가 되는 그 버그다.
+   *    여기 목은 초대자 없는 링크(`by` 없음)를 흉내 내므로 null이 맞다.
+   */
+  /**
+   * ⚠️ 이게 0091의 핵심이다. 참가자가 뿌린 링크(`?join=CODE&by=<id>`)로 온
+   *    신입은 **부른 사람**과 친구가 돼야 한다. 이 인자가 끊기면 서버가 방장
+   *    폴백을 쓰는데, 화면은 "나와 친구가 돼요"라고 말한 뒤라 거짓말이 된다.
+   *    (서버가 "그 방의 참가자인가"를 다시 검증하므로 위조는 못 한다.)
+   */
+  it("링크가 나른 초대자가 참가 RPC까지 전달된다", async () => {
+    mocks.pendingInviteBy.value = "inviter-1";
+    await submitNickname();
+    await waitFor(() =>
+      expect(mocks.joinChallengeAsNewcomer).toHaveBeenCalledWith(
+        "GND-ABCDE",
+        "inviter-1",
+      ),
+    );
+  });
+
+  it("신입은 초대자(없으면 방장)와 친구까지 맺고 챌린지 화면으로 이동한다", async () => {
     await submitNickname();
 
     await waitFor(() =>
       expect(mocks.joinChallengeAsNewcomer).toHaveBeenCalledWith(
         "GND-ABCDE",
+        null,
       ),
     );
     expect(mocks.upsertMyProfile).toHaveBeenCalledWith({

@@ -159,8 +159,54 @@ export function InviteSheet({
     }
   }
 
-  // 방장이 아니면 초대 권한이 없으므로 자리도 만들지 않는다(서버도 not_host로 막는다).
-  if (myRole !== "host") return null;
+  /**
+   * 참가자(방장 아님)는 **링크만** 쓴다 (0091, 사장님 지시 2026-08-31).
+   *
+   * ⚠️ 닉네임 초대·모집 공개·모집글·모집사진은 방장 것으로 남는다. 서버도
+   *    `invite_to_challenge`가 `not_host`로 막는다 — 화면만 열면 눌리는데 안 되는
+   *    버튼이 된다.
+   *
+   * ⚠️ 시작한 뒤에는 아래 방장 분기와 **같은 이유로** 닫힌다. 여기서 status를
+   *    다시 안 보고 아래 공통 분기를 타게 두면 순서가 꼬이므로 여기서 막는다.
+   */
+  if (myRole !== "host") {
+    if (status !== "setup") return null;
+    return (
+      <section className="rounded-card border border-line bg-surface p-4 shadow-card">
+        <h3 className="flex items-center gap-1.5 text-sm font-extrabold">
+          <UiIcon name="trophy" size={20} />
+          친구 초대
+        </h3>
+        <p className="mt-0.5 text-[11px] text-muted">
+          링크를 보내면 같이 할 수 있어요. 시작 전에만 들어올 수 있어요.
+        </p>
+        <div className="mt-2.5">
+          <button
+            type="button"
+            onClick={() => void handleShareLink()}
+            disabled={linkBusy}
+            className="h-10 w-full rounded-card-sm border border-line bg-surface-2 text-[13px] font-bold disabled:opacity-40"
+          >
+            {linkBusy ? "링크 만드는 중…" : "🔗 초대 링크 복사하기"}
+          </button>
+          {link && (
+            <div className="mt-2 rounded-card-sm bg-surface-2 px-2.5 py-2">
+              <p className="text-[10px] font-bold text-faint">상대에게 보낼 링크</p>
+              <p className="mt-0.5 break-all text-[11px] text-muted">{link}</p>
+            </div>
+          )}
+          <p className="mt-1.5 text-[11px] text-muted">
+            <b className="text-text">이미 GND를 쓰는 사람</b>은 링크로 참가해도 서로
+            크루가 되지 않아요. 이름과 랭킹은 이 챌린지 안에서만 보여요.{" "}
+            <b className="text-text">GND가 처음인 사람</b>은 나와 친구가 돼요.
+          </p>
+          {message && (
+            <p className="mt-2 text-[11px] font-bold text-accent">{message}</p>
+          )}
+        </div>
+      </section>
+    );
+  }
 
   // 시작한 뒤에는 초대가 닫힌다 — 중도 합류는 점수가 불공정해지기 때문이고,
   // 서버(invite_to_challenge·join_challenge_with_code)가 invalid_status로 막는다.
@@ -190,7 +236,14 @@ export function InviteSheet({
     setMessage(null);
     try {
       const code = await issueChallengeInviteCode(challengeId);
-      const url = `${window.location.origin}/challenge?join=${code}`;
+      // 0091: 링크를 준 사람을 실어 보낸다. 참가자도 링크를 뿌릴 수 있게 되면서
+      // **신입이 누구와 친구가 되는지**가 여기서 정해진다. 서버가 "그 방의
+      // 참가자인가"를 확인하므로 위조해도 방 밖 사람과는 못 이어진다.
+      const url =
+        `${window.location.origin}/challenge?join=${code}` +
+        // ⚠️ `useAuth()`의 userId를 쓴다. prop으로 또 받지 않는다 — 같은 값을
+        //    두 곳에서 받으면 언젠가 한쪽만 갱신된다.
+        (userId ? `&by=${encodeURIComponent(userId)}` : "");
       setLink(url);
       // 클립보드는 권한·컨텍스트에 따라 실패할 수 있다. 실패해도 링크는 화면에
       // 띄워 두므로 손으로 복사하면 된다 — 조용히 사라지게 두지 않는다.

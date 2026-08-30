@@ -292,15 +292,37 @@ describe("ChallengePage 신규 사용자 초대 링크", () => {
 
     render(<ChallengePage />);
 
+    // 0091: 초대자도 같이 보관한다. 이 링크에는 `by`가 없어 null이다.
     await waitFor(() =>
       expect(mocks.savePendingChallengeInvite).toHaveBeenCalledWith(
         "GND-ABCDE",
+        null,
       ),
     );
     await waitFor(() => expect(mocks.getMyProfile).toHaveBeenCalled());
 
     expect(mocks.joinChallengeWithCode).not.toHaveBeenCalled();
     expect(mocks.clearPendingChallengeInvite).not.toHaveBeenCalled();
+  });
+
+  /**
+   * 0091: 참가자가 뿌린 링크는 `?join=CODE&by=<id>` 형태다. 초대자를 보관하지
+   * 않으면 온보딩을 거치는 동안 사라지고, 신입은 **부른 사람 대신 방장과**
+   * 친구가 된다 — 화면은 "나와 친구가 돼요"라고 말한 뒤라 거짓말이 된다.
+   */
+  it("링크에 초대자가 있으면 코드와 함께 보관한다", async () => {
+    window.history.replaceState({}, "", "/challenge?join=GND-ABCDE&by=inviter-1");
+    mocks.getMyProfile.mockResolvedValue(null);
+    mocks.getMyChallenges.mockResolvedValue([]);
+
+    render(<ChallengePage />);
+
+    await waitFor(() =>
+      expect(mocks.savePendingChallengeInvite).toHaveBeenCalledWith(
+        "GND-ABCDE",
+        "inviter-1",
+      ),
+    );
   });
 
   it("프로필이 있으면 기존처럼 초대 코드로 바로 참가하고 보관 코드를 지운다", async () => {

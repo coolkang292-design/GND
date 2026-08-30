@@ -34,6 +34,17 @@ vi.mock("@/lib/supabase/client", () => ({
 vi.mock("@/lib/crew", () => ({ getMyProfile: mocks.getMyProfile }));
 vi.mock("@/lib/challenge", () => ({
   peekPendingChallengeInvite: mocks.peekPendingChallengeInvite,
+  // 0091: 새 이름 둘을 옛 목에서 **파생**시킨다. 각 테스트가
+  //       `peekPendingChallengeInvite.mockReturnValue("GND-ABCDE")`로 표현하던
+  //       의도를 그대로 두면서 새 호출부를 잇는다.
+  peekPendingChallengeInviteDetail: () => {
+    const c = mocks.peekPendingChallengeInvite();
+    return c ? { code: c, by: null } : null;
+  },
+  pendingChallengeInvitePath: () => {
+    const c = mocks.peekPendingChallengeInvite();
+    return c ? `/challenge?join=${encodeURIComponent(c)}` : null;
+  },
 }));
 // identityError는 목으로 덮지 않는다 — "원인을 말하는가"가 검사 대상이라,
 // 그 모듈을 가리면 문구를 뭉개도 통과한다.
