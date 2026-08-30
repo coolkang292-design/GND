@@ -1,6 +1,7 @@
 "use client";
 
 import { Avatar } from "@/components/avatar";
+import Link from "next/link";
 import { useState } from "react";
 import { CaptionPicker } from "@/components/feed/caption-picker";
 import { CommentThread } from "@/components/feed/comment-thread";
@@ -83,6 +84,27 @@ function WorkoutSummary({ item, stats }: { item: FeedItem; stats: string[] }) {
           <SetBreakdown exercises={item.breakdown} />
         </div>
       )}
+
+      {/*
+        이 운동 따라하기 (2026-08-31).
+
+        ⚠️ **❤️ 💬 액션 줄에 두지 마라.** 그 줄은 "사람과 소통하는" 버튼만 남기려고
+           공유·북마크까지 일부러 뺀 자리다(`reaction-bar.tsx` 주석). 따라하기는
+           **운동을 실행하는** 버튼이라 성격이 다르다 — 종목·세트 옆이 제자리다.
+
+        ⚠️ URL에 운동 JSON을 싣지 않는다. **session id 하나만** 넘기고 기록 화면이
+           조회한다. 실어 보내면 RLS를 우회한 두 번째 진실이 생긴다.
+
+        ⚠️ 누르는 순간 운동이 시작되지 않는다. 기록 화면 draft에 담기고,
+           사용자가 무게를 확인한 뒤 기존 `운동 시작`을 누른다 — 친구가 든 무게가
+           나에게 맞으리라는 보장이 없다.
+      */}
+      <Link
+        href={`/record?copy=${item.sessionId}`}
+        className="mt-2.5 flex min-h-[38px] w-full items-center justify-center gap-1.5 rounded-card-sm border border-accent/50 bg-accent-weak text-[12.5px] font-extrabold text-accent"
+      >
+        <span>🏋️</span> 이 운동 따라하기
+      </Link>
     </div>
   );
 }

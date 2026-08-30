@@ -20,6 +20,18 @@ export async function upsertMyProfile(input: {
   nickname: string;
   avatar_url: string;
   weekly_goal: number;
+  /**
+   * 소개·SNS (0085). **optional인 이유** — 이 함수를 부르는 곳이 프로필 편집만이
+   * 아니다. 필수로 만들면 기존 호출부를 전부 고쳐야 하고, 안 고친 곳은 값을
+   * 안 넘겨 **저장돼 있던 소개가 지워진다.**
+   *
+   * ⚠️ 그래서 편집 화면은 세 필드를 **언제나 값 또는 null로** 넘긴다.
+   *    `undefined`로 두면 upsert에서 키가 빠져 옛 값이 남는다 — 사용자가 지운
+   *    소개가 안 지워진다.
+   */
+  bio?: string | null;
+  instagram_url?: string | null;
+  youtube_url?: string | null;
 }): Promise<void> {
   const supabase = getSupabaseBrowserClient();
   const { error } = await supabase.from("profiles").upsert({

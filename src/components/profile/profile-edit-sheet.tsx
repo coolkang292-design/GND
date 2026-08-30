@@ -11,6 +11,13 @@ import {
 import { Avatar } from "@/components/avatar";
 import { getMyProfile, upsertMyProfile } from "@/lib/crew";
 import { uploadAvatarPhoto } from "@/lib/avatar";
+import {
+  BIO_MAX_LENGTH,
+  LINK_MAX_LENGTH,
+  checkProfileLink,
+  linkErrorMessage,
+  normalizeText,
+} from "@/lib/domain/profile-links";
 import { isPhotoAvatar } from "@/lib/domain/avatar-source";
 
 /**
@@ -50,6 +57,10 @@ export function ProfileEditSheet({ onSaved }: { onSaved?: () => void }) {
   const [nickname, setNickname] = useState("");
   const [avatar, setAvatar] = useState<string>(DEFAULT_AVATAR);
   const [weeklyGoal, setWeeklyGoal] = useState(DEFAULT_WEEKLY_GOAL);
+  // 0085 — 소개·SNS. 저장 버튼은 **기존 것 하나**를 그대로 쓴다.
+  const [bio, setBio] = useState("");
+  const [instagram, setInstagram] = useState("");
+  const [youtube, setYoutube] = useState("");
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -69,6 +80,9 @@ export function ProfileEditSheet({ onSaved }: { onSaved?: () => void }) {
         setNickname(p.nickname ?? "");
         setAvatar(p.avatar_url || DEFAULT_AVATAR);
         setWeeklyGoal(clampWeeklyGoal(p.weekly_goal ?? DEFAULT_WEEKLY_GOAL));
+        setBio(p.bio ?? "");
+        setInstagram(p.instagram_url ?? "");
+        setYoutube(p.youtube_url ?? "");
       } catch {
         if (!cancelled) setError("프로필을 불러오지 못했어요");
       } finally {
@@ -112,6 +126,31 @@ export function ProfileEditSheet({ onSaved }: { onSaved?: () => void }) {
       setError("닉네임을 입력해주세요");
       return;
     }
+    /*
+      0085 — 소개·SNS 검증.
+
+      ⚠️ 여기서 안 막으면 DB CHECK에 걸려 저장이 **통째로** 실패한다.
+         닉네임까지 같이 안 저장되고, 사용자는 왜인지 모른다.
+
+      ⚠️ 도메인 검사는 `profile-links.ts`가 한다 — DB CHECK는 `https://`까지만
+         보므로 `https://evil.com`은 DB를 통과한다.
+    */
+    const nextBio = normalizeText(bio);
+    if (nextBio !== null && nextBio.length > BIO_MAX_LENGTH) {
+      setError(`소개는 ${BIO_MAX_LENGTH}자까지 쓸 수 있어요`);
+      return;
+    }
+    const ig = checkProfileLink("instagram", instagram);
+    if (!ig.ok) {
+      setError(linkErrorMessage("instagram", ig));
+      return;
+    }
+    const yt = checkProfileLink("youtube", youtube);
+    if (!yt.ok) {
+      setError(linkErrorMessage("youtube", yt));
+      return;
+    }
+
     setBusy(true);
     setError(null);
     try {
@@ -120,6 +159,11 @@ export function ProfileEditSheet({ onSaved }: { onSaved?: () => void }) {
         nickname: nick,
         avatar_url: avatar,
         weekly_goal: weeklyGoal,
+        // ⚠️ `undefined`로 두지 마라. upsert에서 키가 빠져 **사용자가 지운
+        //    소개가 안 지워진다.** 언제나 값 또는 null을 넘긴다.
+        bio: nextBio,
+        instagram_url: ig.value,
+        youtube_url: yt.value,
       });
       setDone(true);
       // 저장 뒤 부모에게 알린다. `/profile`은 이걸 받아 GrowthHub를 리마운트한다.
@@ -246,6 +290,66 @@ export function ProfileEditSheet({ onSaved }: { onSaved?: () => void }) {
             placeholder="닉네임"
             className="w-full rounded-card-sm border border-line bg-surface-2 px-4 py-3 text-[15px] outline-none focus:border-accent"
           />
+
+          {/*
+            소개 · SNS (0085).
+
+            ⚠️ **별도 저장 버튼을 만들지 않는다.** 아래 기존 `저장`이 닉네임·사진과
+               함께 한 번에 보낸다 — 저장 버튼이 둘이면 어느 쪽이 무엇을 저장하는지
+               알 수 없다.
+
+            ⚠️ 값이 비면 `null`로 정규화해서 보낸다(`save()`). `undefined`로 두면
+               upsert에서 키가 빠져 **지운 소개가 안 지워진다.**
+          */}
+          <p className="mt-4 mb-2 text-[11px] font-bold text-muted">
+            자기소개{" "}
+            <span className="text-faint">
+              {bio.trim().length}/{BIO_MAX_LENGTH}
+            </span>
+          </p>
+          <textarea
+            value={bio}
+            onChange={(e) => {
+              setBio(e.target.value);
+              setDone(false);
+            }}
+            maxLength={BIO_MAX_LENGTH}
+            rows={2}
+            placeholder="퇴근 후 주 4회 웨이트 중입니다."
+            aria-label="자기소개"
+            className="w-full resize-none rounded-card-sm border border-line bg-surface-2 px-4 py-3 text-[15px] outline-none focus:border-accent"
+          />
+
+          <p className="mt-4 mb-2 text-[11px] font-bold text-muted">Instagram</p>
+          <input
+            value={instagram}
+            onChange={(e) => {
+              setInstagram(e.target.value);
+              setDone(false);
+            }}
+            maxLength={LINK_MAX_LENGTH}
+            inputMode="url"
+            placeholder="https://instagram.com/내계정"
+            aria-label="Instagram 주소"
+            className="w-full rounded-card-sm border border-line bg-surface-2 px-4 py-3 text-[15px] outline-none focus:border-accent"
+          />
+
+          <p className="mt-4 mb-2 text-[11px] font-bold text-muted">YouTube</p>
+          <input
+            value={youtube}
+            onChange={(e) => {
+              setYoutube(e.target.value);
+              setDone(false);
+            }}
+            maxLength={LINK_MAX_LENGTH}
+            inputMode="url"
+            placeholder="https://youtube.com/@내채널"
+            aria-label="YouTube 주소"
+            className="w-full rounded-card-sm border border-line bg-surface-2 px-4 py-3 text-[15px] outline-none focus:border-accent"
+          />
+          <p className="mt-1.5 text-[11px] text-faint">
+            크루와 같은 챌린지 참가자에게만 보여요.
+          </p>
 
           {error && (
             <p className="mt-3 text-[13px] text-warn" role="alert">

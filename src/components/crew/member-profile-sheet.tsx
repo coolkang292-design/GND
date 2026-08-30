@@ -8,6 +8,7 @@ import { UiIcon } from "@/components/ui-icon";
 import { uploadAvatarPhoto } from "@/lib/avatar";
 import { updateMyAvatar } from "@/lib/crew";
 import { avatarSource } from "@/lib/domain/avatar-source";
+import { linkLabel } from "@/lib/domain/profile-links";
 import { badgeShelf, earnedBadgeCount, type BadgeMeta } from "@/lib/domain/badges";
 import { getBadgeCatalog } from "@/lib/badges";
 import {
@@ -128,6 +129,54 @@ export function MemberProfileBody({
           </p>
         </div>
       </div>
+
+      {/*
+        소개 · SNS (0085) — 레벨·성과보다 **앞**이다.
+
+        ⚠️ 사람을 먼저 보여주고 숫자를 나중에 보여준다. 이 시트의 목적은 "이 사람이
+           누구인가"이고, 그 답은 XP가 아니라 소개다.
+
+        ⚠️ 값이 없는 항목은 **그리지 않는다.** 빈 줄과 죽은 버튼이 남으면 프로필이
+           비어 보인다.
+
+        ⚠️ 외부 링크는 `target="_blank"` + `rel="noopener noreferrer"`다. `noopener`가
+           없으면 열린 페이지가 `window.opener`로 이 창을 조종할 수 있다.
+           도메인 검증(`profile-links.ts`)을 통과한 주소여도 **이건 별개 방어**다 —
+           다른 클라이언트가 넣은 값이 DB에 남아 있을 수 있다.
+      */}
+      {(profile.bio || profile.instagramUrl || profile.youtubeUrl) && (
+        <div className="mt-3.5 flex flex-col gap-2">
+          {profile.bio && (
+            <p className="text-[13.5px] leading-snug break-words">
+              {profile.bio}
+            </p>
+          )}
+          {(profile.instagramUrl || profile.youtubeUrl) && (
+            <div className="flex flex-wrap gap-1.5">
+              {profile.instagramUrl && (
+                <a
+                  href={profile.instagramUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex min-h-[34px] items-center gap-1 rounded-full border border-line bg-surface-2 px-3 text-[12px] font-bold text-muted"
+                >
+                  📷 {linkLabel("instagram", profile.instagramUrl)}
+                </a>
+              )}
+              {profile.youtubeUrl && (
+                <a
+                  href={profile.youtubeUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex min-h-[34px] items-center gap-1 rounded-full border border-line bg-surface-2 px-3 text-[12px] font-bold text-muted"
+                >
+                  ▶️ {linkLabel("youtube", profile.youtubeUrl)}
+                </a>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ⚠️⚠️ 누적 수치는 **RPC(0081)가 단일 원천**이다 — `stats` prop이 아니다.
           옛 판은 홈 친구 목록이 계산해 넘길 때만 이 블록을 그렸다. 그래서

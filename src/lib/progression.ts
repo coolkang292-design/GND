@@ -138,6 +138,13 @@ export interface CrewMemberProfile {
   totalMinutes: number;
   workoutDays: number;
   distanceMeters: number;
+  /**
+   * 0085부터. 0084 이전 서버에서는 **없다** — 마이그레이션 Run 전에 배포돼도
+   * 화면이 안 깨지도록 `null`로 채운다 (`joinedAt`과 같은 규약).
+   */
+  bio: string | null;
+  instagramUrl: string | null;
+  youtubeUrl: string | null;
 }
 
 type CrewProfileRow = {
@@ -153,6 +160,10 @@ type CrewProfileRow = {
   workoutDays?: number;
   /** numeric은 supabase-js가 문자열로 줄 수 있다 — Number()로 통과시킨다 */
   distanceMeters?: number | string;
+  // 0085
+  bio?: string | null;
+  instagramUrl?: string | null;
+  youtubeUrl?: string | null;
 };
 
 /**
@@ -199,5 +210,9 @@ export async function getCrewMemberProfile(
     totalMinutes: row.totalMinutes ?? 0,
     workoutDays: row.workoutDays ?? 0,
     distanceMeters: Number(row.distanceMeters ?? 0),
+    // ⚠️ 0085 이전 서버는 이 키들을 안 준다. `?? null`을 떼지 마라.
+    bio: row.bio ?? null,
+    instagramUrl: row.instagramUrl ?? null,
+    youtubeUrl: row.youtubeUrl ?? null,
   };
 }

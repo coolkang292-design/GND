@@ -115,6 +115,8 @@ const challenge = (id: string, name: string, createdAt: string) =>
     created_at: createdAt,
     // 0064부터 방을 만들 때 같이 들어온다(`create_challenge_room`).
     invite_code: `GND-${id.slice(-5).toUpperCase()}`,
+    // 0085 — 기존 챌린지는 전부 비공개다
+    discoverable: false,
     myRole: "host",
     myStatus: "joined",
   }) satisfies MyChallenge;

@@ -1339,3 +1339,54 @@ export async function updateSessionCaption(
     throw new Error("caption_not_saved");
   }
 }
+
+// ── 이 운동 따라하기 (2026-08-31) ────────────────────────────
+
+/**
+ * 따라할 세션의 **메타 한 줄** — 타바타인지 가르는 데만 쓴다.
+ *
+ * ⚠️⚠️ **이 함수가 없으면 친구 타바타가 일반 운동으로 변질된다.**
+ *    `addPastSession`은 타바타 판정을 `pastSessions`에서 세션을 찾아서 한다.
+ *    그런데 그 목록을 채우는 `getCompletedSessions`는 `.eq("user_id", userId)` —
+ *    **내 세션만**이다. 친구 세션은 거기 없으니 타바타인 줄 모르고 일반 복사로
+ *    떨어져서, `🔥 8분 타바타`가 **맨몸운동 몇 개짜리 화면**이 된다.
+ *
+ * ⚠️ `getSessionExerciseStructure`로는 알 수 없다 — 그건 `workout_exercises`만
+ *    읽어서 `tabata_minutes`를 모른다.
+ *
+ * 반환은 `tabataResumeFromSession`이 요구하는 **최소 모양**이다. 운동 내용은
+ * 여전히 `getSessionExerciseStructure`가 가져온다 — 여기서 중복해 싣지 않는다.
+ *
+ * RLS(`sessions_select_own_or_crew`)가 크루 공개 완료 세션만 통과시킨다.
+ * 볼 수 없는 세션이면 `null`.
+ */
+export async function getSessionCopySource(sessionId: string): Promise<{
+  tabataMinutes: number | null;
+  exerciseNames: string[];
+  ownerId: string;
+} | null> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("workout_sessions")
+    .select(
+      "id, user_id, tabata_minutes, workout_exercises(exercise_name, sort_order)",
+    )
+    .eq("id", sessionId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+
+  const row = data as {
+    user_id: string;
+    tabata_minutes: number | null;
+    workout_exercises: { exercise_name: string; sort_order: number }[] | null;
+  };
+
+  return {
+    tabataMinutes: row.tabata_minutes ?? null,
+    exerciseNames: [...(row.workout_exercises ?? [])]
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map((e) => e.exercise_name),
+    ownerId: row.user_id,
+  };
+}

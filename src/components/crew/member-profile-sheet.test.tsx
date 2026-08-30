@@ -37,6 +37,10 @@ function profile(over: Partial<CrewMemberProfile> = {}): CrewMemberProfile {
     ],
     // 0081 — 이력·누적. 기본값은 "가입일만 있고 나머지는 0"이다.
     joinedAt: new Date("2026-07-19T10:00:00+09:00"),
+    // 0085 — 소개·SNS. 기본은 셋 다 없음
+    bio: null,
+    instagramUrl: null,
+    youtubeUrl: null,
     levelUps: [],
     workoutCount: 0,
     totalMinutes: 0,
@@ -212,5 +216,72 @@ describe("MemberProfileSheet", () => {
     );
     expect(html).not.toContain("🔥");
     expect(html).toContain("👤"); // 아바타 없으면 기본 얼굴
+  });
+});
+
+/**
+ * 소개 · SNS (0085).
+ *
+ * ⚠️ `MemberProfileSheet` **하나만** 고쳐서 피드·크루·챌린지 전 진입점에
+ *    동시에 반영된다. 진입점마다 따로 그리면 한 곳만 고쳐지는 날이 온다.
+ */
+describe("MemberProfileBody — 소개·SNS", () => {
+  it("소개가 있으면 그린다", () => {
+    const html = renderToStaticMarkup(
+      <MemberProfileBody
+        profile={profile({ bio: "퇴근 후 주 4회 웨이트 중입니다." })}
+        catalog={CATALOG}
+      />,
+    );
+    expect(html).toContain("퇴근 후 주 4회 웨이트 중입니다.");
+  });
+
+  it("소개도 링크도 없으면 블록 자체를 안 그린다", () => {
+    const html = renderToStaticMarkup(
+      <MemberProfileBody profile={profile()} catalog={CATALOG} />,
+    );
+    expect(html).not.toContain("📷");
+    expect(html).not.toContain("▶️");
+  });
+
+  it("링크가 있으면 핸들로 보여준다", () => {
+    const html = renderToStaticMarkup(
+      <MemberProfileBody
+        profile={profile({
+          instagramUrl: "https://instagram.com/gnd_user",
+          youtubeUrl: "https://youtube.com/@gnd",
+        })}
+        catalog={CATALOG}
+      />,
+    );
+    expect(html).toContain("@gnd_user");
+    expect(html).toContain("@gnd");
+  });
+
+  /**
+   * ⚠️⚠️ 회귀 방어. `noopener`가 없으면 열린 페이지가 `window.opener`로 이 창을
+   * 조종할 수 있다. 도메인 검증을 통과한 주소여도 **별개 방어**다 — 다른
+   * 클라이언트가 넣은 값이 DB에 남아 있을 수 있다.
+   */
+  it("외부 링크는 새 탭 + noopener noreferrer", () => {
+    const html = renderToStaticMarkup(
+      <MemberProfileBody
+        profile={profile({ instagramUrl: "https://instagram.com/gnd_user" })}
+        catalog={CATALOG}
+      />,
+    );
+    expect(html).toContain('target="_blank"');
+    expect(html).toContain('rel="noopener noreferrer"');
+  });
+
+  it("한쪽만 있으면 그것만 그린다", () => {
+    const html = renderToStaticMarkup(
+      <MemberProfileBody
+        profile={profile({ youtubeUrl: "https://youtube.com/@only" })}
+        catalog={CATALOG}
+      />,
+    );
+    expect(html).toContain("@only");
+    expect(html).not.toContain("📷");
   });
 });

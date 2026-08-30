@@ -40,6 +40,12 @@ import { RestBar } from "@/components/record/rest-bar";
 import { ActiveSessionOverlay } from "@/components/record/active-session-overlay";
 import { VerificationPhoto } from "@/components/record/verification-photo";
 import { CaptionPicker } from "@/components/feed/caption-picker";
+import {
+  applyMyWeights,
+  referenceLabel,
+  shouldApplyCopy,
+  type CopyReference,
+} from "@/lib/domain/workout-copy";
 import { useIdleGuard, type IdleGuardSnapshot } from "@/hooks/use-idle-guard";
 import { useRestCountdown } from "@/hooks/use-rest-countdown";
 import {
@@ -200,6 +206,7 @@ import {
   getMyActiveSession,
   getPreviousExerciseRecords,
   getSessionById,
+  getSessionCopySource,
   getSessionExerciseStructure,
   getCompletedSessionMinutes,
   getSuggestionFacts,
@@ -544,6 +551,14 @@ function WorkoutScreen({ userId }: { userId: string }) {
    * 하는 용도다(낙관적 반영·롤백의 되돌릴 자리이기도 하다).
    */
   const [resultCaption, setResultCaption] = useState<string | null>(null);
+  /**
+   * 따라하기로 담았을 때 **원본(친구)이 든 무게** — 참고 표시 전용 (2026-08-31).
+   *
+   * ⚠️ `LocalExercise`에 넣지 않는다. 그 타입은 `workout_plans.exercises`로
+   *    직렬화되고 서버 RPC가 키 존재를 `?&`로 검사한다(0066·0069·0070·0073).
+   *    화면에만 쓰는 값은 화면에만 둔다.
+   */
+  const [copyReference, setCopyReference] = useState<CopyReference[]>([]);
   /** 0kg 되묻기 — 열려 있는 질문과, 종목별로 이미 물어봤는지 */
   const [zeroWeightAsk, setZeroWeightAsk] = useState<{
     exKey: string;
@@ -1358,7 +1373,28 @@ function WorkoutScreen({ userId }: { userId: string }) {
       setDraft((current) => ({ ...current, suggestedForDayKey: todayKey }));
   }
 
-  async function addPastSession(sessionId: string): Promise<boolean> {
+  async function addPastSession(
+    sessionId: string,
+    /**
+     * 타바타 판정에 쓸 **출처를 밖에서 넣는 길** (2026-08-31).
+     *
+     * ⚠️⚠️ 안 넣으면 아래 `pastSessions`에서 찾는데, 그 목록은
+     *    `getCompletedSessions(userId)`가 채워서 **내 세션만** 들어 있다.
+     *    피드에서 온 **친구 세션은 거기 없으므로** 타바타인 줄 모르고 일반
+     *    복사로 떨어진다 — `🔥 8분 타바타`가 맨몸운동 몇 개가 된다.
+     *    `?copy=` 경로는 `getSessionCopySource`로 받아 여기 넘긴다.
+     */
+    tabataSource?: { tabataMinutes: number | null; exerciseNames: string[] },
+    /**
+     * 친구 운동을 따라할 때 **무게를 내 것으로 갈아 끼운다** (사용자 결정 2026-08-31).
+     *
+     * > "따라하기 = 친구의 운동 설계 복사 + 내 직전 중량 적용"
+     *
+     * ⚠️⚠️ 내 지난 기록을 부를 때는 **꺼야 한다.** 그건 이미 내 무게다 —
+     *    켜면 같은 값을 한 번 더 조회할 뿐이다.
+     */
+    useMyWeights = false,
+  ): Promise<boolean> {
     /*
       지난 **타바타**는 타바타로 되살린다 (2026-08-07, 사용자 지시).
 
@@ -1369,7 +1405,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
       타바타가 아니거나 종목을 못 찾으면 `null`이라 아래 평소 경로로 흘러간다.
     */
     const resume = tabataResumeFromSession({
-      session: pastSessions.find((s) => s.id === sessionId),
+      session: tabataSource ?? pastSessions.find((s) => s.id === sessionId),
       catalog,
     });
     if (resume) {
@@ -1396,7 +1432,38 @@ function WorkoutScreen({ userId }: { userId: string }) {
         isCustom: byName.get(item.name)?.is_custom ?? false,
         sets: item.sets.map((set) => ({ ...set, done: false })),
       }));
-      const merged = mergeImportedExercises(draft.exercises, imported);
+      /*
+        친구 운동이면 **설계만 가져오고 무게는 내 것**으로 바꾼다.
+
+        ⚠️⚠️ 친구가 벤치 100kg을 들었다고 내 화면에 100kg이 채워지면 그건
+           편의가 아니라 **다칠 수 있는 기본값**이다. 규칙은 `applyMyWeights`에
+           있고 테스트가 지킨다 — ① 내 기록 있음 → 내 최근 무게 ② 없음 → 비움
+           ③ 친구 무게는 참고로만.
+
+        조회는 **무게 종목에만** 나간다. 맨몸·유산소·시간형은 갈아 끼울 무게가 없다.
+      */
+      let prepared = imported;
+      if (useMyWeights && userId) {
+        const weightNames = imported
+          .filter((e) => e.exerciseType === "weight")
+          .map((e) => e.name);
+        const myLastByName = new Map<string, LocalSet[]>();
+        await Promise.all(
+          weightNames.map(async (name) => {
+            try {
+              const sets = await getLastRecordedSets(userId, name);
+              if (sets && sets.length > 0) myLastByName.set(name, sets);
+            } catch {
+              /* 한 종목을 못 읽어도 나머지는 담는다 — 없으면 무게가 빌 뿐이다 */
+            }
+          }),
+        );
+        const applied = applyMyWeights({ imported, myLastByName });
+        prepared = applied.exercises;
+        setCopyReference(applied.reference);
+      }
+
+      const merged = mergeImportedExercises(draft.exercises, prepared);
 
       if (merged.added.length === 0) {
         showToast("이 기록의 운동은 이미 모두 추가되어 있어요");
@@ -1405,13 +1472,17 @@ function WorkoutScreen({ userId }: { userId: string }) {
 
       setDraft((current) => ({
         ...current,
-        exercises: mergeImportedExercises(current.exercises, imported)
+        exercises: mergeImportedExercises(current.exercises, prepared)
           .exercises,
         effortMessage: buildEffortMessage(merged.added),
       }));
       const skipped =
         merged.skippedCount > 0 ? ` · 중복 ${merged.skippedCount}개 제외` : "";
-      showToast(`지난 기록에서 ${merged.added.length}개 추가했어요${skipped}`);
+      showToast(
+        useMyWeights
+          ? `${merged.added.length}개 담았어요 · 무게는 내 기록 기준이에요${skipped}`
+          : `지난 기록에서 ${merged.added.length}개 추가했어요${skipped}`,
+      );
       return true;
     } catch (error) {
       showToast(errorMessage(error));
@@ -2660,13 +2731,65 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const suggestRequestedRef = useRef(false);
   const suggestConsumedRef = useRef(false);
 
+  /*
+    피드의 `이 운동 따라하기` — `/record?copy=<sessionId>` (2026-08-31).
+
+    ⚠️ `?suggest`와 **같은 두 단계**다. (1) 표식을 즉시 읽고 주소에서 지운다,
+       (2) 재료(카탈로그)가 준비되면 그때 한 번만 담는다. 한 단계로 합치면
+       카탈로그가 아직일 때 담겨 종목이 전부 "코어"로 떨어진다.
+
+    ⚠️ URL에 운동 JSON을 싣지 않는다. **session id 하나만** 넘기고 조회와 RLS를
+       재사용한다 — 실어 보내면 그게 두 번째 진실이 되고, 권한 검사도 우회된다.
+  */
+  const copyRequestedRef = useRef<string | null>(null);
+  const copyConsumedRef = useRef(false);
+
   // (1) 표식은 **즉시** 읽고 주소에서 지운다. 안 지우면 새로고침마다 다시 담긴다.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (!new URLSearchParams(window.location.search).has("suggest")) return;
-    suggestRequestedRef.current = true;
+    const params = new URLSearchParams(window.location.search);
+    const copyId = params.get("copy");
+    const hasSuggest = params.has("suggest");
+    if (!hasSuggest && !copyId) return;
+    if (hasSuggest) suggestRequestedRef.current = true;
+    if (copyId) copyRequestedRef.current = copyId;
     window.history.replaceState({}, "", window.location.pathname);
   }, []);
+
+  // (2) 카탈로그가 준비되면 그때 담는다. 한 번만.
+  useEffect(() => {
+    if (
+      !shouldApplyCopy({
+        requested: copyRequestedRef.current !== null,
+        consumed: copyConsumedRef.current,
+        catalogReady: catalog.length > 0,
+        workoutStarted: draftRef.current.startedAtMs !== null,
+      })
+    ) {
+      return;
+    }
+    const sessionId = copyRequestedRef.current!;
+    copyConsumedRef.current = true;
+
+    void (async () => {
+      try {
+        // 타바타인지 먼저 가른다. 이 조회가 없으면 친구 타바타가 일반 운동이 된다.
+        const source = await getSessionCopySource(sessionId);
+        if (!source) {
+          showToast("지금은 볼 수 없는 운동이에요");
+          return;
+        }
+        setSubTab("workout");
+        // 내 운동을 따라하는 경우도 있다(내 피드 카드). 그때는 이미 내 무게라
+        // 갈아 끼울 필요가 없다.
+        await addPastSession(sessionId, source, source.ownerId !== userId);
+      } catch {
+        showToast("운동을 불러오지 못했어요");
+      }
+    })();
+    // addPastSession은 렌더마다 새로 만들어진다. ref가 한 번만 돌게 막는다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catalog.length]);
 
   // (2) 제안이 정해지면 **그때** 담는다. 한 번만.
   useEffect(() => {
@@ -3298,6 +3421,44 @@ function WorkoutScreen({ userId }: { userId: string }) {
                 onClick={() =>
                   setDraft((current) => ({ ...current, effortMessage: null }))
                 }
+                className="flex h-8 w-8 flex-none items-center justify-center rounded-full text-lg text-muted"
+              >
+                ×
+              </button>
+            </section>
+          )}
+
+          {/*
+            따라하기 참고 무게 (2026-08-31, 사용자 결정 ③).
+
+            ⚠️ 무게 칸에는 **내 기록**이 들어가 있다. 원본이 든 무게는 여기서
+               **읽기만** 한다 — 채워 넣으면 남의 무게로 운동하게 된다.
+          */}
+          {copyReference.length > 0 && (
+            <section className="flex items-start gap-3 rounded-card border border-line bg-surface-2 px-4 py-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-extrabold text-muted">
+                  참고 · 원본이 든 무게
+                </p>
+                <ul className="mt-1 flex flex-col gap-0.5">
+                  {copyReference.map((ref) => (
+                    <li key={ref.exerciseKey} className="text-[12.5px] font-bold">
+                      {ref.name}{" "}
+                      <span className="text-muted">
+                        {referenceLabel(ref.weights)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-1 text-[11px] text-faint">
+                  무게 칸은 내 기록 기준으로 채웠어요. 처음 하는 종목은 비어 있어요.
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="참고 무게 닫기"
+                title="닫기"
+                onClick={() => setCopyReference([])}
                 className="flex h-8 w-8 flex-none items-center justify-center rounded-full text-lg text-muted"
               >
                 ×

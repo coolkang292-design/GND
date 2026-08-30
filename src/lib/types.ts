@@ -6,7 +6,16 @@ export type Challenge = {
   name: string;
   start_date: string; // YYYY-MM-DD
   end_date: string;
-  /** 사진 인증한 운동만 집계 (0014) - 새 챌린지는 항상 true */
+  /**
+   * 사진 인증한 운동만 집계 (0014).
+   *
+   * ⚠️ **"항상 true"가 아니다** (2026-08-31 정정). 옛 주석이 그렇게 적혀 있었고
+   *    그 때문에 "구조상 false는 불가능"이라는 잘못된 판단이 한 번 나왔다.
+   *    `create_challenge_room`은 `SECURITY DEFINER`라 `challenges_insert_member`
+   *    정책의 `photo_required = true`를 지나가고, 시그니처가
+   *    `p_photo_required boolean`이라 **false를 저장할 수 있다.**
+   *    지금 운영 값이 전부 true인 것은 그렇게 만들어 왔을 뿐이다.
+   */
   photo_required: boolean;
   status: "setup" | "active" | "ended" | "cancelled";
   created_by: string;
@@ -20,6 +29,16 @@ export type Challenge = {
    * 그때는 `issue_challenge_invite_code`로 나중에 받는다.
    */
   invite_code: string | null;
+  /**
+   * 피드에서 참가자를 모집해도 되는가 (0085).
+   *
+   * ⚠️ "챌린지 내부가 공개"라는 뜻이 **아니다.** 모집 카드에 이름과 시작일만
+   *    나가고, 참가는 `join_discoverable_challenge`가 따로 검사한다.
+   *
+   * ⚠️ 기본값 false다. 모든 챌린지에 `invite_code`가 있으므로 "코드가 있다 =
+   *    공개"로 판단했다면 **비공개 챌린지가 전부 노출된다.**
+   */
+  discoverable: boolean;
 };
 
 export type UserGoal = {
@@ -44,6 +63,17 @@ export type Profile = {
   timezone: string;
   created_at: string;
   updated_at: string;
+  /**
+   * 한 줄 소개 (0085). DB CHECK가 120자.
+   *
+   * ⚠️ `profiles`의 SELECT 정책은 **넓히지 않았다.** 이 값이 남에게 보이는 길은
+   *    `get_crew_member_profile`(본인/크루/같은 챌린지) 하나뿐이다 —
+   *    이 테이블엔 `invite_code`와 `acquisition_*`가 같이 산다.
+   */
+  bio: string | null;
+  /** DB CHECK: https:// 로 시작 + 200자. 도메인 검증은 `domain/profile-links.ts` */
+  instagram_url: string | null;
+  youtube_url: string | null;
 };
 
 export type Group = {

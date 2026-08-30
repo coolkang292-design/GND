@@ -92,9 +92,66 @@ describe("프로필 편집 시트 — 온보딩에서 뺀 값을 바꾸는 유�
         // ⚠️ 화면에서 스테퍼를 뺐어도(2026-08-08 사용자 지시) **읽은 값을 그대로
         //    다시 넣어야** 한다. 안 넣으면 저장할 때마다 주간 목표가 날아간다.
         weekly_goal: 5,
+        // ⚠️⚠️ 0085 — 비어 있어도 **`null`을 명시해서 보낸다.** `undefined`로 두면
+        //    upsert 페이로드에서 키가 빠져 **사용자가 지운 소개가 안 지워진다.**
+        //    이 세 줄이 그 규약을 고정한다.
+        bio: null,
+        instagram_url: null,
+        youtube_url: null,
       }),
     );
     await screen.findByText("저장했어요 ✓");
+  });
+
+  it("소개·SNS를 함께 저장한다 — 저장 버튼은 하나다", async () => {
+    await open();
+
+    fireEvent.change(screen.getByLabelText("자기소개"), {
+      target: { value: "  퇴근 후 주 4회  " },
+    });
+    fireEvent.change(screen.getByLabelText("Instagram 주소"), {
+      target: { value: "https://instagram.com/gnd_user" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "저장" }));
+
+    await waitFor(() =>
+      expect(mocks.upsertMyProfile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          // 앞뒤 공백은 떼어서 저장한다
+          bio: "퇴근 후 주 4회",
+          instagram_url: "https://instagram.com/gnd_user",
+          youtube_url: null,
+        }),
+      ),
+    );
+  });
+
+  /**
+   * ⚠️⚠️ 회귀 방어. 여기서 안 막으면 DB CHECK에 걸려 저장이 **통째로** 실패한다 —
+   * 닉네임까지 같이 안 저장되고 사용자는 이유를 모른다.
+   */
+  it("Instagram이 아닌 주소는 저장을 막고 이유를 말한다", async () => {
+    await open();
+
+    fireEvent.change(screen.getByLabelText("Instagram 주소"), {
+      target: { value: "https://evilinstagram.com/me" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "저장" }));
+
+    expect((await screen.findByRole("alert")).textContent).toContain("Instagram");
+    expect(mocks.upsertMyProfile).not.toHaveBeenCalled();
+  });
+
+  it("javascript: 스킴은 저장되지 않는다", async () => {
+    await open();
+
+    fireEvent.change(screen.getByLabelText("YouTube 주소"), {
+      target: { value: "javascript:alert(1)" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "저장" }));
+
+    await screen.findByRole("alert");
+    expect(mocks.upsertMyProfile).not.toHaveBeenCalled();
   });
 
   it("주간 목표 스테퍼가 화면에 없다 (부정 확인)", async () => {
