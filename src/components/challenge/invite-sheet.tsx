@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { UiIcon } from "@/components/ui-icon";
-import { inviteToChallenge, issueChallengeInviteCode } from "@/lib/challenge";
+import {
+  setChallengeDiscoverable, inviteToChallenge, issueChallengeInviteCode } from "@/lib/challenge";
 // 0038이 만든 닉네임 정확 일치 검색. 단일 결과 또는 null을 돌려준다(배열 아님).
 // isSearchable 게이트가 있어 빈 입력은 조회 없이 null이 된다.
 import { searchProfileByNickname } from "@/lib/crew-link";
@@ -28,11 +29,14 @@ export function InviteSheet({
   challengeId,
   myRole,
   status,
+  discoverable,
   onInvited,
 }: {
   challengeId: string;
   myRole: "host" | "member";
   status: string;
+  /** 피드에서 참가자를 모집 중인가 (0085) */
+  discoverable: boolean;
   onInvited: () => void;
 }) {
   const [nickname, setNickname] = useState("");
@@ -40,6 +44,33 @@ export function InviteSheet({
   const [message, setMessage] = useState<string | null>(null);
   const [link, setLink] = useState<string | null>(null);
   const [linkBusy, setLinkBusy] = useState(false);
+  /*
+    피드 모집 (0085).
+
+    ⚠️ **새 화면을 만들지 않고 여기 둔다.** 닉네임 초대·링크 초대·피드 공개는
+       전부 "참가자를 모으는 방법"이다. 다른 화면에 두면 방장이 셋 중 둘만 안다.
+  */
+  const [open, setOpen] = useState(discoverable);
+  const [openBusy, setOpenBusy] = useState(false);
+
+  async function toggleDiscoverable(next: boolean) {
+    if (openBusy) return;
+    setOpenBusy(true);
+    setOpen(next); // 낙관적 반영
+    try {
+      await setChallengeDiscoverable(challengeId, next);
+      setMessage(
+        next
+          ? "피드에 모집 카드가 올라갔어요"
+          : "피드에서 내렸어요 — 새로 들어올 수 없어요",
+      );
+    } catch {
+      setOpen(!next); // 롤백
+      setMessage("바꾸지 못했어요");
+    } finally {
+      setOpenBusy(false);
+    }
+  }
 
   // 방장이 아니면 초대 권한이 없으므로 자리도 만들지 않는다(서버도 not_host로 막는다).
   if (myRole !== "host") return null;
@@ -135,6 +166,36 @@ export function InviteSheet({
           {busy ? "초대 중…" : "초대"}
         </button>
       </div>
+      {/*
+        피드에서 참가자 구하기 (0085) — 초대 링크 바로 위.
+
+        ⚠️ `setup`에서만 보인다. 시작한 뒤에는 이 컴포넌트가 위에서 이미
+           `status !== "setup"` 분기로 빠져나간다.
+
+        ⚠️ 껐다 켤 수 있어야 해서 참가에 `invite_code`를 쓰지 않는다. 코드로
+           참가시키면 **모집을 끈 뒤에도 그 코드로 계속 들어온다.**
+      */}
+      <div className="mt-3 border-t border-line pt-3">
+        <label className="flex items-start gap-2.5">
+          <input
+            type="checkbox"
+            checked={open}
+            disabled={openBusy}
+            onChange={(e) => void toggleDiscoverable(e.target.checked)}
+            className="mt-0.5 h-4 w-4 flex-none accent-[var(--accent)]"
+          />
+          <span className="min-w-0 flex-1">
+            <span className="block text-[13px] font-bold">
+              피드에서 참가자 구하기
+            </span>
+            <span className="mt-0.5 block text-[11px] text-muted">
+              GND 피드에 이 챌린지가 뜨고, 크루가 아닌 사람도 참여할 수 있어요.
+              끄면 새로 들어올 수 없어요.
+            </span>
+          </span>
+        </label>
+      </div>
+
       {/* 크루 밖 사람을 부르려면 닉네임을 정확히 알아야 하는데, 그걸 알려면
           어차피 밖에서 연락해야 한다. 링크가 그 자리를 대신한다. */}
       <div className="mt-3 border-t border-line pt-3">

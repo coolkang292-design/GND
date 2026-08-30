@@ -2,12 +2,17 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { InviteSheet, inviteError } from "./invite-sheet";
 
-const html = (myRole: "host" | "member", status: string) =>
+const html = (
+  myRole: "host" | "member",
+  status: string,
+  discoverable = false,
+) =>
   renderToStaticMarkup(
     <InviteSheet
       challengeId="c1"
       myRole={myRole}
       status={status}
+      discoverable={discoverable}
       onInvited={() => {}}
     />,
   );
@@ -72,5 +77,35 @@ describe("inviteError — 서버 오류 코드를 사람 말로", () => {
 
   it("모르는 오류는 원문을 보여준다 (조용히 삼키지 않는다)", () => {
     expect(inviteError(new Error("boom"))).toBe("초대 실패: boom");
+  });
+});
+
+/**
+ * 피드 모집 토글 (0085).
+ *
+ * ⚠️ 닉네임 초대·링크 초대와 **같은 시트**에 둔다. 참가자를 모으는 방법 셋이
+ *    흩어지면 방장이 그중 둘만 안다.
+ */
+describe("InviteSheet — 피드 모집", () => {
+  it("host + setup이면 모집 토글이 보인다", () => {
+    expect(html("host", "setup")).toContain("피드에서 참가자 구하기");
+  });
+
+  it("이미 켜져 있으면 체크된 채로 그린다", () => {
+    expect(html("host", "setup", true)).toContain("checked");
+  });
+
+  /** 시작한 뒤에는 시트 전체가 닫힌 이유만 그린다 — 모집도 함께 사라진다 */
+  it("active에서는 모집 토글이 없다", () => {
+    expect(html("host", "active")).not.toContain("피드에서 참가자 구하기");
+  });
+
+  it("방장이 아니면 아무것도 없다", () => {
+    expect(html("member", "setup")).not.toContain("피드에서 참가자 구하기");
+  });
+
+  /** ⚠️ 끌 수 있다는 사실을 말해 준다 — 못 내리는 줄 알면 아무도 안 켠다 */
+  it("끄면 새로 못 들어온다고 알려준다", () => {
+    expect(html("host", "setup")).toContain("끄면 새로 들어올 수 없어요");
   });
 });

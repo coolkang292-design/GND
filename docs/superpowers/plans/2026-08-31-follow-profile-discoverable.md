@@ -218,12 +218,31 @@ weekly_goal` 넷이고 `...input` 스프레드로 upsert한다. `bio?`·`instagr
 
 ---
 
-## 0-B. 기록해 두는 기존 부채 (이번 범위 아님)
+## 0-B. ~~기록해 두는 기존 부채~~ → **철회** (2026-08-31 구현 중 확인)
 
-`challenges_update_creator`는 `created_by = auth.uid()`만 본다. RLS는 컬럼을 못 가리므로
-**방장이 API를 직접 호출해 `status`를 `setup → active`로 바꿀 여지가 이미 있다.**
-정상 UI는 전용 RPC(`start_challenge`)를 쓰기 때문에 드러나지 않았을 뿐이다.
-이번 기능의 필수 수정은 아니지만 **정합성 부채로 남긴다.**
+1·2차 계획서에 *"방장이 API를 직접 호출해 `status`를 바꿀 여지가 있다"*고 부채로
+적었다. **틀렸다.**
+
+운영 DB를 확인하니 `authenticated`의 `challenges` 권한은
+`DELETE, REFERENCES, SELECT, TRIGGER, TRUNCATE`뿐 — **UPDATE가 아예 없다.**
+RLS 정책(`challenges_update_creator`)은 있지만 **GRANT가 없어서 도달하지 못한다.**
+
+> **RLS 정책 = 어떤 행을 건드릴 수 있나 · GRANT = 그 작업 자체를 할 수 있나.**
+> 둘 다 있어야 한다. 정책만 보고 "쓸 수 있다"고 판단한 것이 오류였다.
+
+### 그래서 `discoverable` 토글도 **RPC 없이는 안 된다** (0086)
+
+같은 이유로 "토글에 RPC가 필요 없다"는 판단도 틀렸다. 직접 UPDATE는
+`42501 permission denied`로 죽는다 — 흉내 내서 실제로 잡았다.
+
+**0086이 컬럼 하나에만 UPDATE를 연다:**
+`grant update (discoverable) on public.challenges to authenticated;`
+
+⚠️ **테이블 전체를 열지 않는다.** 이 스키마가 이미 그렇게 한다 —
+`workout_sessions`도 테이블 UPDATE는 없고 컬럼 8개
+(`title`·`memo`·`visibility`·`deleted_at` 등)만 열려 있고,
+`completed_at`·`status`처럼 서버 시간이 진실인 칸은 빠져 있다.
+(캡션 저장이 되던 것도 `title`이 마침 그 목록에 있었기 때문이다.)
 
 ---
 
@@ -396,7 +415,10 @@ grant  execute ... to authenticated;   -- 각각
 **모집 켜기:** 기존 `InviteSheet`의 초대 링크 영역 근처에 토글
 `피드에서 참가자 구하기`. 닉네임 초대·링크 초대·피드 공개는 전부 "참가자 모집 방법"이라
 한자리에 있어야 한다. **방장 + `setup`에서만** 보인다.
-`challenges_update_creator`가 이미 방장 UPDATE를 열어 두므로 **토글에 RPC가 필요 없다.**
+
+⚠️ 직접 UPDATE로 하되 **0086의 컬럼 GRANT가 있어야 한다** (§0-B). 정책만으로는
+`42501`로 죽는다. 저장 확인은 `.select("id")`로 한다 — 0행이어도 PostgREST는
+오류를 주지 않는다(2026-08-30 캡션이 그 함정으로 조용히 실패했다).
 
 **참여하기** → `join_discoverable_challenge` → 성공 → `/challenge?open=<id>`.
 목표 설정·참가자·시작 흐름은 기존 화면 그대로.

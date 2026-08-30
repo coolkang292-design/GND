@@ -48,6 +48,7 @@ import {
   approveChallengeGoals,
   goalLabel,
   cancelChallenge,
+  leaveSetupChallenge,
   createChallengeRoom,
   declineChallengeInvite,
   finalizeChallenge,
@@ -689,6 +690,31 @@ function ChallengeScreen({ userId }: { userId: string }) {
     }
   }
 
+  /**
+   * setup 단계에서 나가기 (0085).
+   *
+   * ⚠️⚠️ **참가 버튼만 있고 나갈 문이 없으면 안 된다.** 초대 링크는 누가 일부러
+   *    보내 준 것이라 오조작이 드물었지만, 피드 공개 모집은 "발견 → 참여하기"라
+   *    잘못 누르는 일이 필연이다.
+   *
+   * 방장은 여기 안 온다 — 서버가 `host_cannot_leave`로 막고, 방장에게는 대신
+   * `챌린지 취소`가 있다.
+   */
+  async function handleLeave() {
+    if (!challenge || busy) return;
+    if (!window.confirm("이 챌린지에서 나갈까요? 세운 목표도 지워져요.")) return;
+    setBusy(true);
+    try {
+      await leaveSetupChallenge(challenge.id);
+      showToast("챌린지에서 나왔어요");
+      reload();
+    } catch {
+      showToast("나가지 못했어요");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handleCancel() {
     if (!challenge) return;
     if (!window.confirm("챌린지를 취소할까요? 되돌릴 수 없어요.")) return;
@@ -913,6 +939,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
           challengeId={challenge.id}
           myRole={challenge.myRole}
           status={challenge.status}
+          discoverable={challenge.discoverable}
           onInvited={reload}
         />
       )}
@@ -1089,6 +1116,26 @@ function ChallengeScreen({ userId }: { userId: string }) {
               className="h-11 rounded-card border border-line bg-surface text-[13px] font-bold text-muted disabled:opacity-50"
             >
               <UiIcon name="trash" /> 챌린지 취소하고 새로 만들기
+            </button>
+          )}
+
+          {/*
+            나가기 (0085) — 방장이 **아닌** 참가자에게만.
+
+            ⚠️⚠️ 피드 공개 모집을 열면서 같이 넣는다. "발견 → 참여하기"는 잘못
+               누르기 쉬운데, 여기까지 `challenge_participants`에는 SELECT 정책만
+               있어서 **사용자가 스스로 나갈 방법이 아예 없었다.**
+
+            방장에게는 안 보인다 — 방장이 사라지면 방을 시작할 사람이 없다.
+            대신 위의 `챌린지 취소`가 있고, 서버도 `host_cannot_leave`로 막는다.
+          */}
+          {challenge.created_by !== userId && (
+            <button
+              onClick={handleLeave}
+              disabled={busy}
+              className="h-11 rounded-card border border-line bg-surface text-[13px] font-bold text-muted disabled:opacity-50"
+            >
+              이 챌린지에서 나가기
             </button>
           )}
         </>

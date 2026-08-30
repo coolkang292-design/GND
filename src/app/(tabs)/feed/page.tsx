@@ -10,6 +10,7 @@ import {
 import { useAuth } from "@/components/auth-provider";
 import { MemberProfileSheet } from "@/components/crew/member-profile-sheet";
 import { ActiveWorkoutCards } from "@/components/feed/active-workout-cards";
+import { DiscoverableChallenges } from "@/components/feed/discoverable-challenges";
 import { FeedItemCard } from "@/components/feed/feed-item";
 import { NotificationBell } from "@/components/notification-bell";
 import { feedDateLabel, groupByDay } from "@/lib/domain/social";
@@ -165,6 +166,15 @@ export default function FeedPage() {
       </header>
 
       <ActiveWorkoutCards />
+
+      {/*
+        같이 할 챌린지 (0085) — 진행 중 카드 **아래**, 날짜별 피드 **위**.
+
+        ⚠️⚠️ 아래 `items.length === 0` 분기 **바깥**에 둔다. 크루가 0명인 신규
+           사용자는 피드가 비는데, 그때 이 줄까지 숨기면 **이 기능이 가장 필요한
+           사람에게 안 보인다.** 스스로 조회하고, 0개면 스스로 사라진다.
+      */}
+      <DiscoverableChallenges />
 
       {pinnedId && (
         <section className="flex flex-col gap-2">

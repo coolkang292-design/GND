@@ -1259,3 +1259,136 @@ export async function pickPeekTarget(
   const row = data as { targetId: string; locked: boolean };
   return { targetId: row.targetId, locked: row.locked };
 }
+
+// ── 공개 챌린지 모집 (0085) ──────────────────────────────────
+
+export type DiscoverableChallenge = {
+  id: string;
+  name: string;
+  startDate: string; // YYYY-MM-DD
+  endDate: string;
+  /**
+   * 인증사진 필수인가.
+   *
+   * ⚠️ **"항상 true"라고 가정하지 마라.** `create_challenge_room`이
+   *    `SECURITY DEFINER`라 `challenges_insert_member`의 `photo_required = true`
+   *    검사를 지나가고, `p_photo_required boolean`으로 false를 저장할 수 있다.
+   *    지금 운영 값이 전부 true인 것은 그렇게 만들어 왔을 뿐이다.
+   */
+  photoRequired: boolean;
+  /** `status='joined'`인 사람만 센다 — invited·dropped를 세면 숫자가 부푼다 */
+  participantCount: number;
+  hostId: string;
+  hostNickname: string;
+  hostAvatarUrl: string | null;
+  /** 내가 이미 참가 중인가 — 버튼이 `참여하기`/`참가 중 · 보기`로 갈린다 */
+  alreadyJoined: boolean;
+};
+
+/**
+ * 피드에 띄울 공개 모집 챌린지 (0085).
+ *
+ * `challenges_select_member` 정책이 "참가자 OR 그룹원"이라 **비참가자는 목록을
+ * 볼 수 없다.** 그래서 정의자 RPC가 `discoverable = true` + `status='setup'`인
+ * 것만, 최소값만 돌려준다 — `invite_code`·`group_id`·목표·랭킹·참가자 명단은
+ * 나오지 않는다.
+ *
+ * ⚠️ 실패해도 던지지 않는다. 모집 카드는 **부가 정보**라, 못 불러왔다고 피드
+ *    전체가 안 뜨면 손해가 더 크다(진행 중 카드와 같은 규약).
+ */
+export async function getDiscoverableChallenges(): Promise<
+  DiscoverableChallenge[]
+> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase.rpc("list_discoverable_challenges");
+  if (error) return [];
+  return (
+    (data ?? []) as {
+      id: string;
+      name: string;
+      start_date: string;
+      end_date: string;
+      photo_required: boolean;
+      participant_count: number;
+      host_id: string;
+      host_nickname: string;
+      host_avatar_url: string | null;
+      already_joined: boolean;
+    }[]
+  ).map((r) => ({
+    id: r.id,
+    name: r.name,
+    startDate: r.start_date,
+    endDate: r.end_date,
+    photoRequired: r.photo_required,
+    participantCount: r.participant_count,
+    hostId: r.host_id,
+    hostNickname: r.host_nickname,
+    hostAvatarUrl: r.host_avatar_url,
+    alreadyJoined: r.already_joined,
+  }));
+}
+
+/**
+ * 공개 모집 챌린지에 참가 (0085).
+ *
+ * ⚠️ `join_challenge_with_code`를 재사용하지 않는 이유 — 그러려면 카드에
+ *    `invite_code`를 실어야 하는데, 그러면 **방장이 모집을 끈 뒤에도 그 코드로
+ *    계속 들어온다.** 공개는 껐다 켤 수 있어야 한다.
+ *
+ * 서버가 `challenges` 행을 `FOR UPDATE`로 잠그고 `discoverable`·`status`를
+ * 다시 본다 — 참가와 시작이 겹쳐도 중도 합류가 안 생긴다.
+ *
+ * ⚠️ 참가해도 **크루가 되지 않는다.** GND의 "챌린지 관계 ≠ 크루 관계" 원칙이다.
+ */
+export async function joinDiscoverableChallenge(
+  challengeId: string,
+): Promise<{ challengeId: string; challengeName: string }> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase.rpc("join_discoverable_challenge", {
+    p_challenge_id: challengeId,
+  });
+  if (error) throw error;
+  return data as { challengeId: string; challengeName: string };
+}
+
+/**
+ * setup 단계에서 나가기 (0085).
+ *
+ * ⚠️ **공개 참가의 되돌리기 버튼이다.** 초대 링크는 누가 일부러 보내 준 것이라
+ *    잘못 눌릴 일이 드물었지만, 공개 모집은 "발견 → 참여하기"라 오조작이
+ *    필연이다. 나갈 문 없는 참가 버튼은 만들면 안 된다.
+ *
+ * 방장은 나갈 수 없다(`host_cannot_leave`) — 방을 접으려면 `cancelChallenge`다.
+ */
+export async function leaveSetupChallenge(challengeId: string): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  const { error } = await supabase.rpc("leave_setup_challenge", {
+    p_challenge_id: challengeId,
+  });
+  if (error) throw error;
+}
+
+/**
+ * 피드 모집 켜기/끄기 (0085).
+ *
+ * RPC가 아닌 직접 UPDATE인 이유 — `challenges_update_creator` 정책이
+ * `created_by = auth.uid()`로 방장의 UPDATE를 이미 연다. 컬럼 하나를 더 바꾼다고
+ * 권한이 넓어지지 않는다(방장은 이미 `name`·`start_date`도 바꿀 수 있다).
+ *
+ * ⚠️ 0행이어도 PostgREST는 오류를 주지 않는다. `.select()`로 바뀐 행을 받아
+ *    확인한다 — 2026-08-30에 캡션 저장이 정확히 이 함정으로 조용히 실패했다.
+ */
+export async function setChallengeDiscoverable(
+  challengeId: string,
+  discoverable: boolean,
+): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("challenges")
+    .update({ discoverable })
+    .eq("id", challengeId)
+    .select("id");
+  if (error) throw error;
+  if (!data || data.length === 0) throw new Error("discoverable_not_saved");
+}
