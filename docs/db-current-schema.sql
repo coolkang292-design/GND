@@ -7,7 +7,7 @@
 -- 쓰는 법: 함수·정책의 '현행' 정의가 필요할 때 마이그레이션 51개를
 -- 뒤지지 말고 이 파일을 검색하라. 마이그레이션을 적용한 뒤에는 다시 뽑아라.
 --
--- 함수 84개 · 정책 76개 · 인덱스 90개
+-- 함수 87개 · 정책 76개 · 인덱스 91개
 
 -- ════════════════════════════════════════════════════════════
 -- 함수
@@ -1849,6 +1849,9 @@ CREATE OR REPLACE FUNCTION public.get_crew_member_profile(p_target_id uuid)
  SET search_path TO 'public'
 AS $function$
 declare
+  v_bio       text;
+  v_instagram text;
+  v_youtube   text;
   v_progress user_progress%rowtype;
   v_badges jsonb;
   v_level_ups jsonb;
@@ -1882,8 +1885,11 @@ begin
   where b.user_id = p_target_id;
 
   -- ── 가입일 · 타임존 ────────────────────────────────────────
-  select p.created_at, coalesce(nullif(p.timezone, ''), 'Asia/Seoul')
-    into v_joined_at, v_tz
+  -- 0085: bio·SNS를 **여기 얹는다.** 이 select는 이미 profiles를 읽고 있어서
+  -- 왕복이 늘지 않는다. 별도 조회를 새로 놓으면 문지기가 두 곳으로 갈라진다.
+  select p.created_at, coalesce(nullif(p.timezone, ''), 'Asia/Seoul'),
+         p.bio, p.instagram_url, p.youtube_url
+    into v_joined_at, v_tz, v_bio, v_instagram, v_youtube
   from profiles p where p.id = p_target_id;
 
   -- ── 레벨업 시점 ────────────────────────────────────────────
@@ -1956,7 +1962,11 @@ begin
     'workoutCount',   coalesce(v_count, 0),
     'totalMinutes',   coalesce(v_minutes, 0),
     'workoutDays',    coalesce(v_days, 0),
-    'distanceMeters', coalesce(v_meters, 0)
+    'distanceMeters', coalesce(v_meters, 0),
+    -- 0085 — 소개·SNS. 문지기(본인/크루/같은 챌린지)는 위에서 이미 통과했다.
+    'bio',           v_bio,
+    'instagramUrl',  v_instagram,
+    'youtubeUrl',    v_youtube
   );
 end $function$;
 
@@ -2395,7 +2405,9 @@ begin
 
   perform pg_advisory_xact_lock(hashtext(c.id::text));
 
-  select * into c from public.challenges where id = c.id;
+  -- 0085: `for update` 추가. start_challenge가 advisory lock을 쓰지 않고
+  --       challenges 행만 잠그기 때문에, 여기서도 같은 행을 잡아야 직렬화된다.
+  select * into c from public.challenges where id = c.id for update;
   if c.status <> 'setup' then raise exception 'invalid_status:%', c.status; end if;
 
   select * into v_row
@@ -2421,6 +2433,66 @@ begin
     'member',
     'joined',
     now()
+  )
+  on conflict (challenge_id, user_id)
+  do update set status = 'joined', joined_at = now();
+
+  return jsonb_build_object(
+    'status', 'joined',
+    'challengeId', c.id,
+    'challengeName', c.name,
+    'crewLinked', 0
+  );
+end $function$;
+
+-- ── join_discoverable_challenge ──
+CREATE OR REPLACE FUNCTION public.join_discoverable_challenge(p_challenge_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+declare
+  v_me  uuid := auth.uid();
+  c     public.challenges;
+  v_row public.challenge_participants;
+begin
+  if v_me is null then raise exception 'not_authenticated'; end if;
+
+  -- 1차 조회: 공개된 방인가
+  if not exists (
+    select 1 from public.challenges
+    where id = p_challenge_id and discoverable
+  ) then
+    raise exception 'not_discoverable';
+  end if;
+
+  -- 2차: 행을 잠그고 다시 읽는다. start_challenge와 같은 자원이다.
+  select * into c
+  from public.challenges
+  where id = p_challenge_id
+  for update;
+
+  if not found then raise exception 'not_discoverable'; end if;
+  -- 방장이 방금 모집을 껐을 수 있다
+  if not c.discoverable then raise exception 'not_discoverable'; end if;
+  -- 방장이 방금 시작했을 수 있다
+  if c.status <> 'setup' then raise exception 'invalid_status:%', c.status; end if;
+
+  select * into v_row
+  from public.challenge_participants
+  where challenge_id = c.id
+    and user_id = v_me
+  for update;
+
+  if found and v_row.status = 'joined' then
+    raise exception 'already_joined';
+  end if;
+
+  insert into public.challenge_participants (
+    challenge_id, user_id, role, status, joined_at
+  ) values (
+    c.id, v_me, 'member', 'joined', now()
   )
   on conflict (challenge_id, user_id)
   do update set status = 'joined', joined_at = now();
@@ -2461,6 +2533,77 @@ begin
 
   return query select g.id, g.name;
 end $function$;
+
+-- ── leave_setup_challenge ──
+CREATE OR REPLACE FUNCTION public.leave_setup_challenge(p_challenge_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+declare
+  v_me  uuid := auth.uid();
+  c     public.challenges;
+  v_row public.challenge_participants;
+begin
+  if v_me is null then raise exception 'not_authenticated'; end if;
+
+  -- 참가/시작과 같은 자원을 잡는다
+  select * into c from public.challenges where id = p_challenge_id for update;
+  if not found then raise exception 'challenge_not_found'; end if;
+  if c.status <> 'setup' then raise exception 'invalid_status:%', c.status; end if;
+  if c.created_by = v_me then raise exception 'host_cannot_leave'; end if;
+
+  select * into v_row
+  from public.challenge_participants
+  where challenge_id = p_challenge_id and user_id = v_me
+  for update;
+  if not found then raise exception 'not_participant'; end if;
+
+  -- 내 목표와 동의를 먼저 걷는다. 남기면 시작 게이트(kpi_incomplete /
+  -- consent_incomplete)가 이미 나간 사람을 계속 기다린다.
+  delete from public.user_goals
+   where challenge_id = p_challenge_id and user_id = v_me;
+
+  delete from public.challenge_participants
+   where challenge_id = p_challenge_id and user_id = v_me;
+
+  return jsonb_build_object('status', 'left', 'challengeId', p_challenge_id);
+end $function$;
+
+-- ── list_discoverable_challenges ──
+CREATE OR REPLACE FUNCTION public.list_discoverable_challenges()
+ RETURNS TABLE(id uuid, name text, recruit_note text, recruit_image_url text, start_date date, end_date date, photo_required boolean, participant_count integer, host_id uuid, host_nickname text, host_avatar_url text, already_joined boolean)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select c.id,
+         c.name,
+         c.recruit_note,
+         c.recruit_image_url,
+         c.start_date,
+         c.end_date,
+         c.photo_required,
+         (select count(*)::int
+            from challenge_participants cp
+           where cp.challenge_id = c.id
+             and cp.status = 'joined')                    as participant_count,
+         c.created_by                                     as host_id,
+         p.nickname                                       as host_nickname,
+         p.avatar_url                                     as host_avatar_url,
+         exists (select 1 from challenge_participants me
+                  where me.challenge_id = c.id
+                    and me.user_id = (select auth.uid())
+                    and me.status = 'joined')             as already_joined
+  from challenges c
+  join profiles p on p.id = c.created_by
+  where c.discoverable
+    and c.status = 'setup'
+    and (select auth.uid()) is not null
+  order by c.start_date asc, c.created_at desc
+  limit 12
+$function$;
 
 -- ── mark_record_beaten ──
 CREATE OR REPLACE FUNCTION public.mark_record_beaten(p_session_id uuid, p_note text)
@@ -4191,6 +4334,7 @@ $function$;
 -- CREATE UNIQUE INDEX challenge_participants_pkey ON public.challenge_participants USING btree (challenge_id, user_id);
 -- CREATE INDEX challenge_participants_user_idx ON public.challenge_participants USING btree (user_id, status);
 -- CREATE UNIQUE INDEX challenge_peek_picks_pkey ON public.challenge_peek_picks USING btree (viewer_id, challenge_id, pick_date);
+-- CREATE INDEX challenges_discoverable_idx ON public.challenges USING btree (start_date, created_at DESC) WHERE (discoverable AND (status = 'setup'::text));
 -- CREATE UNIQUE INDEX challenges_invite_code_key ON public.challenges USING btree (invite_code) WHERE (invite_code IS NOT NULL);
 -- CREATE UNIQUE INDEX challenges_pkey ON public.challenges USING btree (id);
 -- CREATE INDEX cheers_parent_idx ON public.cheers USING btree (parent_id) WHERE (parent_id IS NOT NULL);

@@ -53,7 +53,9 @@ export type NotificationRow = {
     | "challenge_starting_soon" // 0077 — 시작 전날 예고
     | "challenge_dropped" // 0077 — 목표 미설정으로 이번 회차에서 빠짐
     | "workout_suggestion" // 0078 — 계획 없는 날 운동 제안
-    | "comment_received"; // 0082 — 내 운동(또는 내가 댓글 단 운동)에 새 댓글
+    | "comment_received" // 0082 — 내 운동(또는 내가 댓글 단 운동)에 새 댓글
+    | "challenge_cancelled" // 0088 — 방장이 챌린지를 취소했다
+    | "challenge_joined"; // 0088 — 공개 모집에 새 참가자 (방장에게만)
   reference_id: string | null;
   title: string;
   body: string | null;

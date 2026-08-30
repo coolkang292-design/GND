@@ -5,6 +5,29 @@ export type PushPayload = {
 };
 
 /**
+ * `reference_id`가 **챌린지 id**인 유형 (0088).
+ *
+ * 이 유형들만 `/challenge?open=<id>`로 보낸다. 챌린지를 여러 개 가진 사람에게
+ * `/challenge`만 주면 `pickPrimaryRow`가 **대표 챌린지**를 고르므로,
+ * 알림이 말한 그 방이 아니라 엉뚱한 방이 열린다.
+ *
+ * ⚠️⚠️ **`challenge_dropped`를 여기 넣지 마라.** 운영 데이터를 세어 보니
+ * 그 유형의 `reference_id`는 **챌린지 id가 아니다**(3건 중 0건만 일치).
+ * 넣으면 존재하지 않는 방으로 보낸다 — `cheer_received`와 같은 함정이다.
+ *
+ * ⚠️ `challenge_peek_unlocked`도 뺀다. 그건 목적지가 `/home`이다(열람 카드가
+ * 거기 있다) — 딥링크를 붙이면 목적지가 바뀐다.
+ */
+const CHALLENGE_DEEP_LINK_TYPES = new Set([
+  "challenge_started",
+  "challenge_ended",
+  "challenge_invite",
+  "challenge_starting_soon",
+  "challenge_cancelled", // 0088
+  "challenge_joined", // 0088
+]);
+
+/**
  * `reference_id`가 **세션 id**인 유형 (0082).
  *
  * 이 유형들만 `/feed?session=<id>`로 보낸다. 나머지는 목적지가 유형만으로
@@ -63,6 +86,9 @@ const PUSH_URL_BY_TYPE: Record<string, string> = {
   // (목표 세우기 / 다음 챌린지 찾기).
   challenge_starting_soon: "/challenge",
   challenge_dropped: "/challenge",
+  // 0088 — 방장이 취소 · 공개 모집에 새 참가자. 아래에서 `?open=`이 붙는다.
+  challenge_cancelled: "/challenge",
+  challenge_joined: "/challenge",
   // 2026-08-16 — 계획 없는 날 제안. 기록 탭이 `?suggest`를 읽어 종목을 담고
   // 주소에서 지운다(`record/page.tsx`). 값 자체엔 의미가 없다 — 존재 플래그다.
   workout_suggestion: "/record?suggest=1",
@@ -86,10 +112,14 @@ export function pushPayloadFor(notification: {
   referenceId?: string | null;
 }): PushPayload {
   const base = PUSH_URL_BY_TYPE[notification.type] ?? DEFAULT_PUSH_URL;
-  const deepLink =
-    notification.referenceId && SESSION_DEEP_LINK_TYPES.has(notification.type)
-      ? `/feed?session=${notification.referenceId}`
-      : base;
+  let deepLink = base;
+  if (notification.referenceId) {
+    if (SESSION_DEEP_LINK_TYPES.has(notification.type)) {
+      deepLink = `/feed?session=${notification.referenceId}`;
+    } else if (CHALLENGE_DEEP_LINK_TYPES.has(notification.type)) {
+      deepLink = `/challenge?open=${notification.referenceId}`;
+    }
+  }
 
   return {
     title: notification.title || "GND",

@@ -41,6 +41,8 @@ const TYPE_ICON: Record<NotificationRow["type"], string> = {
   challenge_dropped: "💤", // 0077 — 목표가 없어 이번 회차에서 빠졌어요
   workout_suggestion: "🚶", // 0078 — 계획 없는 날 운동 제안
   comment_received: "💬", // 0082 — 게시물에 댓글
+  challenge_cancelled: "💤", // 0088 — 방장이 취소
+  challenge_joined: "🙌", // 0088 — 공개 모집에 새 참가자
 };
 
 /** 🔔 + 미읽음 뱃지 + 알림함 바텀시트 (§9 알림함 — durable 저장 원천) */

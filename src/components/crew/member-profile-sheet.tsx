@@ -71,12 +71,22 @@ export function MemberProfileBody({
   catalog,
   stats,
   streak,
+  editSlot,
 }: {
   profile: CrewMemberProfile;
   catalog: BadgeMeta[];
   /** 없으면 성과 블록을 안 그린다 — 크루 카드·피드에서 열 때는 값이 없다 */
   stats?: MemberPerformance;
   streak?: number;
+  /**
+   * 내 프로필일 때 **레벨 사진 바로 밑**에 끼우는 편집 자리
+   * (2026-08-31 사용자 지시 — 맨 아래에 뒀더니 배지·이력을 다 지나야 나왔다).
+   *
+   * ⚠️ 여기서 `ProfileEditSheet`를 직접 부르지 않는다. 이 컴포넌트는 **남의
+   *    프로필도 그리는 표시 전용**이라 편집을 알면 안 된다 — 무엇을 넣을지는
+   *    셸이 정한다(넣는 곳도 `onAvatarChanged` 하나로 갈린다).
+   */
+  editSlot?: React.ReactNode;
 }) {
   const pct = Math.min(100, Math.round(profile.levelProgressPercent));
   const distance = formatCumulativeDistance(profile.distanceMeters);
@@ -130,6 +140,10 @@ export function MemberProfileBody({
           </p>
         </div>
       </div>
+
+      {/* 편집 자리 — 레벨 사진 바로 밑. 소개보다도 위다: 소개가 비어 있을 때
+          "어디서 쓰지?"가 되면 안 된다 (2026-08-31 사용자 화면 확인). */}
+      {editSlot && <div className="mt-3.5">{editSlot}</div>}
 
       {/*
         소개 · SNS (0085) — 레벨·성과보다 **앞**이다.
@@ -428,6 +442,66 @@ export function MemberProfileSheet({
     void recordProfileView(viewerId, userId, source);
   }, [viewerId, userId, source]);
 
+  /*
+    내 프로필일 때 **레벨 사진 바로 밑**에 들어가는 편집 자리
+    (2026-08-31 사용자 지시). 맨 아래에 뒀더니 배지·이력을 다 지나야 나왔다.
+
+    ⚠️⚠️ **판정은 `onAvatarChanged` 하나다.** 위 아바타 분기가 쓰는 것과 같은
+       신호다 — "이걸 넘긴 호출부는 이건 내 프로필이다라고 말하는 것"
+       (2026-08-22 주석). 두 번째 판정을 만들면 한 겹을 부숴도 테스트가 통과한다.
+
+    ⚠️ 열리는 것은 **기존 `ProfileEditSheet`**다. 새 편집 화면을 만들면 저장
+       경로가 둘이 되고 언젠가 한쪽만 고쳐진다.
+
+    ⚠️ 저장하면 `reloadKey`를 올려 시트를 다시 읽는다 — 안 그러면 방금 쓴 소개가
+       바로 아래 본문에 안 나타나 "저장이 안 됐다"로 읽힌다.
+  */
+  /*
+    ⚠️ **문구가 상태에 따라 갈린다** (2026-08-31 사용자 지시 — "마케팅적인 요소를
+       참고해서").
+
+    옛 문구 `✏️ 이름 · 소개 · 링크 편집`은 **기능 나열**이었다. 무엇을 하는
+    버튼인지는 말하지만 **왜 눌러야 하는지**를 말하지 않는다 — 비어 있는 사람은
+    누를 이유가 없다.
+
+    비었을 때는 **초대**로, 채워졌을 때는 **도구**로 말한다:
+      · 비었음 → 얻는 것을 말한다 + 비용이 작다는 것을 말한다("한 줄")
+      · 채웠음 → 짧게. 이미 아는 기능에 광고를 붙이면 잔소리가 된다
+  */
+  const hasProfileInfo = Boolean(
+    profile?.bio || profile?.instagramUrl || profile?.youtubeUrl,
+  );
+
+  const editSlot = editOpen ? (
+    <ProfileEditSheet
+      open
+      hideTrigger
+      onOpenChange={setEditOpen}
+      onSaved={() => setReloadKey((k) => k + 1)}
+    />
+  ) : hasProfileInfo ? (
+    <button
+      type="button"
+      onClick={() => setEditOpen(true)}
+      className="flex h-11 w-full items-center justify-center gap-1.5 rounded-card border border-line bg-surface-2 text-[13px] font-bold text-muted"
+    >
+      ✏️ 내 프로필 다듬기
+    </button>
+  ) : (
+    <button
+      type="button"
+      onClick={() => setEditOpen(true)}
+      className="flex w-full flex-col items-center gap-0.5 rounded-card border border-accent/40 bg-accent-weak px-4 py-3"
+    >
+      <span className="text-[13.5px] font-extrabold text-accent">
+        ✨ 나를 한 줄로 소개해요
+      </span>
+      <span className="text-[11.5px] font-bold text-muted">
+        크루가 나를 알아야 같이 운동하자고 말을 걸어요
+      </span>
+    </button>
+  );
+
   return (
     <>
       <div
@@ -593,42 +667,8 @@ export function MemberProfileSheet({
             catalog={catalog}
             stats={stats}
             streak={streak}
+            editSlot={onAvatarChanged ? editSlot : undefined}
           />
-        )}
-
-        {/*
-          내 프로필일 때만 소개·SNS를 여기서 쓴다 (2026-08-31 사용자 지시).
-
-          ⚠️⚠️ **판정은 `onAvatarChanged` 하나다.** 위 아바타 분기가 쓰는 것과
-             같은 신호다 — "이걸 넘긴 호출부는 이건 내 프로필이다라고 말하는 것"
-             (2026-08-22 주석). 여기서 `viewerId === userId` 같은 두 번째 판정을
-             만들면 **한 겹을 부숴도 테스트가 통과한다.**
-
-          ⚠️ 열리는 것은 **기존 `ProfileEditSheet`**다. 닉네임·사진·주간 목표까지
-             한 저장 버튼으로 처리하던 그 컴포넌트를 그대로 쓴다.
-
-          ⚠️ 저장하면 `reloadKey`를 올려 이 시트를 다시 읽는다. 안 그러면 방금 쓴
-             소개가 위 본문에 안 나타나 "저장이 안 됐다"로 읽힌다.
-        */}
-        {onAvatarChanged && (
-          <div className="mt-4 border-t border-line pt-3.5">
-            {editOpen ? (
-              <ProfileEditSheet
-                open
-                hideTrigger
-                onOpenChange={setEditOpen}
-                onSaved={() => setReloadKey((k) => k + 1)}
-              />
-            ) : (
-              <button
-                type="button"
-                onClick={() => setEditOpen(true)}
-                className="flex h-11 w-full items-center justify-center gap-1.5 rounded-card border border-line bg-surface-2 text-[13px] font-bold text-muted"
-              >
-                ✏️ 이름 · 소개 · 링크 편집
-              </button>
-            )}
-          </div>
         )}
 
         <button

@@ -205,3 +205,72 @@ describe("게시물 딥링크 (reference_id)", () => {
     ).toBe("/profile");
   });
 });
+
+/**
+ * 0088 — 챌린지 알림에서 **그 방**으로.
+ *
+ * 챌린지를 여러 개 가진 사람에게 `/challenge`만 주면 `pickPrimaryRow`가
+ * 대표 챌린지를 고른다 — 알림이 말한 방이 아니라 엉뚱한 방이 열린다.
+ */
+describe("챌린지 딥링크 (0088)", () => {
+  const CID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+
+  it.each([
+    "challenge_started",
+    "challenge_ended",
+    "challenge_invite",
+    "challenge_starting_soon",
+    "challenge_cancelled",
+    "challenge_joined",
+  ])("%s는 그 챌린지로 보낸다", (type) => {
+    expect(
+      pushPayloadFor({ type, title: "t", body: "b", referenceId: CID }).url,
+    ).toBe(`/challenge?open=${CID}`);
+  });
+
+  /**
+   * ⚠️⚠️ 회귀 방어. 운영 데이터를 세어 보니 `challenge_dropped`의
+   * `reference_id`는 **챌린지 id가 아니다**(3건 중 0건 일치). 딥링크에 넣으면
+   * 존재하지 않는 방으로 보낸다 — `cheer_received`와 같은 함정이다.
+   */
+  it("challenge_dropped는 딥링크로 만들지 않는다", () => {
+    expect(
+      pushPayloadFor({
+        type: "challenge_dropped",
+        title: "t",
+        body: "b",
+        referenceId: CID,
+      }).url,
+    ).toBe("/challenge");
+  });
+
+  /** ⚠️ 열람창 카드는 홈에 있다. 딥링크를 붙이면 목적지가 바뀐다 */
+  it("challenge_peek_unlocked는 홈 그대로", () => {
+    expect(
+      pushPayloadFor({
+        type: "challenge_peek_unlocked",
+        title: "t",
+        body: "b",
+        referenceId: CID,
+      }).url,
+    ).toBe("/home");
+  });
+
+  it("reference_id가 없으면 예전 그대로 /challenge", () => {
+    expect(
+      pushPayloadFor({ type: "challenge_cancelled", title: "t", body: "b" }).url,
+    ).toBe("/challenge");
+  });
+
+  /** 세션 딥링크와 섞이지 않는다 */
+  it("게시물 유형은 여전히 피드로 간다", () => {
+    expect(
+      pushPayloadFor({
+        type: "comment_received",
+        title: "t",
+        body: "b",
+        referenceId: CID,
+      }).url,
+    ).toBe(`/feed?session=${CID}`);
+  });
+});

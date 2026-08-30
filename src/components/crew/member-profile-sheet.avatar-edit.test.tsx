@@ -164,14 +164,66 @@ describe("프로필 시트 아바타 — 고르는 즉시 저장한다 (저장 �
  * 그래서 여기서도 **"없을 때 없다"를 먼저** 단언한다.
  */
 describe("소개·링크 편집 입구", () => {
-  it("남의 프로필에는 편집 입구가 없다 (부정 확인)", () => {
+  /**
+   * ⚠️ 편집 자리는 **레벨 사진 바로 밑**, 즉 `MemberProfileBody` 안이다
+   * (2026-08-31 사용자 지시). 그래서 프로필 조회가 끝나야 나타난다 —
+   * 이 파일의 기본 모의는 영원히 pending이라 여기서만 풀어 준다.
+   */
+  function loaded(over: Record<string, unknown> = {}) {
+    mocks.getCrewMemberProfile.mockResolvedValue({
+      totalXp: 100,
+      currentLevel: 2,
+      currentStage: 1,
+      stageName: "눈떴개",
+      characterPath: "/characters/char-01.png",
+      nextLevelRequiredXp: 200,
+      xpToNextLevel: 100,
+      levelProgressPercent: 50,
+      badges: [],
+      joinedAt: null,
+      levelUps: [],
+      workoutCount: 0,
+      totalMinutes: 0,
+      workoutDays: 0,
+      distanceMeters: 0,
+      bio: null,
+      instagramUrl: null,
+      youtubeUrl: null,
+      ...over,
+    });
+    mocks.getBadgeCatalog.mockResolvedValue([]);
+  }
+
+  it("남의 프로필에는 편집 입구가 없다 (부정 확인)", async () => {
+    loaded();
     open();
-    expect(screen.queryByText(/이름 · 소개 · 링크 편집/)).toBeNull();
+    await screen.findByText("누적 성과");
+    expect(screen.queryByText(/소개해요|다듬기/)).toBeNull();
   });
 
-  it("내 프로필이면 편집 입구가 있다", () => {
+  /**
+   * ⚠️ **문구가 상태에 따라 갈린다** (2026-08-31 사용자 지시).
+   * 옛 문구 `이름 · 소개 · 링크 편집`은 기능 나열이라, 비어 있는 사람에게
+   * **누를 이유를 말하지 않았다.** 비었을 때는 초대로, 채웠을 때는 도구로 말한다.
+   */
+  it("소개가 비어 있으면 얻는 것을 말해 준다", async () => {
+    loaded();
     open(() => {});
-    expect(screen.getByText(/이름 · 소개 · 링크 편집/)).toBeTruthy();
+    expect(await screen.findByText("✨ 나를 한 줄로 소개해요")).toBeTruthy();
+    expect(screen.getByText(/같이 운동하자고 말을 걸어요/)).toBeTruthy();
+  });
+
+  it("이미 채워져 있으면 짧게만 말한다 — 아는 기능에 광고를 붙이지 않는다", async () => {
+    loaded({ bio: "퇴근 후 주 4회" });
+    open(() => {});
+    expect(await screen.findByText("✏️ 내 프로필 다듬기")).toBeTruthy();
+    expect(screen.queryByText(/나를 한 줄로 소개해요/)).toBeNull();
+  });
+
+  it("링크만 있어도 채워진 것으로 본다", async () => {
+    loaded({ instagramUrl: "https://instagram.com/me" });
+    open(() => {});
+    expect(await screen.findByText("✏️ 내 프로필 다듬기")).toBeTruthy();
   });
 
   /**
@@ -182,10 +234,10 @@ describe("소개·링크 편집 입구", () => {
    *    동작은 `profile-edit-sheet.test.tsx`가 따로 지킨다 — 같은 것을 두 곳에서
    *    검사하지 않는다.
    */
-  it("누르면 기존 프로필 편집이 열린다", () => {
+  it("누르면 기존 프로필 편집이 열린다", async () => {
+    loaded();
     open(() => {});
-    expect(screen.queryByRole("heading", { name: "프로필 편집" })).toBeNull();
-    fireEvent.click(screen.getByText(/이름 · 소개 · 링크 편집/));
+    fireEvent.click(await screen.findByText("✨ 나를 한 줄로 소개해요"));
     expect(screen.getByRole("heading", { name: "프로필 편집" })).toBeTruthy();
   });
 });
