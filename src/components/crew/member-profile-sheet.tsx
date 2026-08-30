@@ -10,6 +10,9 @@ import { updateMyAvatar } from "@/lib/crew";
 import { avatarSource } from "@/lib/domain/avatar-source";
 import { linkLabel } from "@/lib/domain/profile-links";
 import { ProfileEditSheet } from "@/components/profile/profile-edit-sheet";
+import { ReportBlockSheet } from "@/components/moderation/report-block-sheet";
+import { sendCrewRequest } from "@/lib/crew-link";
+import { SocialError } from "@/lib/social";
 import { badgeShelf, earnedBadgeCount, type BadgeMeta } from "@/lib/domain/badges";
 import { getBadgeCatalog } from "@/lib/badges";
 import {
@@ -350,6 +353,12 @@ export function MemberProfileSheet({
   const [profile, setProfile] = useState<CrewMemberProfile | null>(null);
   const [catalog, setCatalog] = useState<BadgeMeta[] | null>(null);
   const [failure, setFailure] = useState<"not_crew" | "failed" | null>(null);
+  /** 크루가 아닌 사람에게 요청 보내기 (2026-08-31) */
+  const [requestState, setRequestState] = useState<
+    "idle" | "sending" | "sent" | "accepted"
+  >("idle");
+  const [requestError, setRequestError] = useState<string | null>(null);
+  const [moderating, setModerating] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   /** 사진 교체 중 — 아바타 버튼을 잠그고 그 위에 진행 표시를 덮는다 */
   const [avatarBusy, setAvatarBusy] = useState(false);
@@ -385,6 +394,36 @@ export function MemberProfileSheet({
     const source = avatarSource(avatarUrl);
     return source.kind === "photo" ? source.url : null;
   })();
+
+  /**
+   * 크루 신청 (2026-08-31).
+   *
+   * ⚠️ 서버가 역방향 pending을 보면 **즉시 수락**하고 'accepted'를 준다(0038).
+   *    둘 다 "보냈어요"로 그리면, 이미 크루가 된 사람이 상대의 수락을 기다린다.
+   * ⚠️ blocked_by_me는 내가 한 일이라 알려 준다. 상대가 나를 차단한 경우는
+   *    서버가 request_exists로 숨기므로(0089) 여기서도 구분하지 않는다.
+   */
+  async function requestCrew() {
+    if (requestState === "sending") return;
+    setRequestState("sending");
+    setRequestError(null);
+    try {
+      const status = await sendCrewRequest(userId);
+      setRequestState(status === "accepted" ? "accepted" : "sent");
+    } catch (e) {
+      const code = e instanceof SocialError ? e.code : null;
+      setRequestError(
+        code === "already_crew"
+          ? "이미 크루예요"
+          : code === "request_exists"
+            ? "이미 요청을 보냈어요"
+            : code === "blocked_by_me"
+              ? "차단한 사람이에요. 계정 화면에서 차단을 풀 수 있어요"
+              : "요청을 보내지 못했어요",
+      );
+      setRequestState("idle");
+    }
+  }
 
   /**
    * 고른 사진을 올리고 **바로 저장한다** — 저장 버튼이 없다.
@@ -633,8 +672,65 @@ export function MemberProfileSheet({
           </p>
         )}
 
+        {/*
+          크루가 아닌 사람 (2026-08-31).
+
+          ⚠️ 전에는 "크루원만 볼 수 있어요" 한 줄로 끝났다. 틀린 말은 아닌데
+             **막다른 길**이다 — 공개 모집·댓글로 모르는 사람을 만나게 된 뒤로는
+             여기가 "그래서 어떻게 크루가 되는데?"가 되는 자리다.
+             send_crew_request는 원래부터 크루 여부를 요구하지 않으므로
+             (0038) 버튼만 붙이면 동작한다. 마이그레이션 0.
+        */}
         {failure === "not_crew" && (
-          <p className="mt-4 text-sm text-muted">크루원만 볼 수 있어요</p>
+          <div className="mt-4 flex flex-col gap-2.5">
+            <p className="text-sm text-muted">
+              아직 크루가 아니에요. 크루가 되면 서로의 운동 소식을 받아볼 수 있어요.
+            </p>
+
+            {requestState === "sent" ? (
+              <p className="text-[13px] font-bold text-accent">
+                크루 요청을 보냈어요 🤝
+              </p>
+            ) : requestState === "accepted" ? (
+              <p className="text-[13px] font-bold text-accent">
+                크루가 됐어요! 🎉 다시 열면 프로필이 보여요
+              </p>
+            ) : (
+              <button
+                type="button"
+                onClick={() => void requestCrew()}
+                disabled={requestState === "sending"}
+                className="h-12 rounded-card bg-accent text-sm font-extrabold text-accent-ink disabled:opacity-60"
+              >
+                {requestState === "sending" ? "보내는 중…" : "크루 신청하기"}
+              </button>
+            )}
+
+            {requestError && (
+              <p role="alert" className="text-[12.5px] font-bold text-warn">
+                {requestError}
+              </p>
+            )}
+
+            {/* 모르는 사람을 만나는 자리라 신고·차단이 여기에도 있어야 한다.
+                작고 조용한 글씨다 — 크루 신청과 같은 무게로 두지 않는다. */}
+            <button
+              type="button"
+              onClick={() => setModerating(true)}
+              className="self-center text-[11.5px] font-bold text-faint underline underline-offset-2"
+            >
+              신고 · 차단
+            </button>
+          </div>
+        )}
+
+        {moderating && (
+          <ReportBlockSheet
+            targetId={userId}
+            targetNickname={nickname}
+            onClose={() => setModerating(false)}
+            onBlocked={onClose}
+          />
         )}
 
         {failure === "failed" && (

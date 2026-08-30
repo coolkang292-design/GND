@@ -10,6 +10,7 @@ import {
 } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { MemberProfileSheet } from "@/components/crew/member-profile-sheet";
+import type { CommentAuthor } from "@/components/feed/comment-thread";
 import { PhotoGrid } from "@/components/feed/photo-grid";
 import { StoryTray } from "@/components/feed/story-tray";
 import {
@@ -35,6 +36,14 @@ export default function FeedPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   // 시트는 화면당 1개만 띄운다 — 카드마다 두면 DOM이 항목 수만큼 늘어난다
   const [selected, setSelected] = useState<FeedItem | null>(null);
+  /**
+   * 댓글 작성자를 탭해서 연 사람 (2026-08-31).
+   *
+   * ⚠️ `selected`(게시물 주인)와 **따로 둔다.** 하나로 합치면 FeedItem이 없는
+   *    사람을 담으려고 가짜 FeedItem을 만들게 되고, 그 가짜가 streak·반응 같은
+   *    엉뚱한 값을 시트에 흘린다.
+   */
+  const [author, setAuthor] = useState<CommentAuthor | null>(null);
 
   /*
     피드 / 챌린지 모집 탭 (2026-08-31 사용자 결정).
@@ -240,6 +249,7 @@ export default function FeedPage() {
               item={pinned}
               userId={userId!}
               onProfileClick={() => setSelected(pinned)}
+              onAuthorTap={setAuthor}
               onItemChange={updateItem}
               openComments
             />
@@ -276,6 +286,7 @@ export default function FeedPage() {
                   item={item}
                   userId={userId!}
                   onProfileClick={() => setSelected(item)}
+                  onAuthorTap={setAuthor}
                   onItemChange={updateItem}
                 />
               ))}
@@ -309,6 +320,18 @@ export default function FeedPage() {
           viewerId={userId ?? undefined}
           source="feed"
           onClose={() => setSelected(null)}
+        />
+      )}
+
+      {/* 댓글 작성자. 크루가 아니면 시트가 "크루 신청"으로 무너진다. */}
+      {author && (
+        <MemberProfileSheet
+          userId={author.userId}
+          nickname={author.nickname}
+          avatarUrl={author.avatarUrl}
+          viewerId={userId ?? undefined}
+          source="feed"
+          onClose={() => setAuthor(null)}
         />
       )}
     </div>

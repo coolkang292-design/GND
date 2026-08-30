@@ -4,7 +4,10 @@ import { Avatar } from "@/components/avatar";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { CaptionPicker } from "@/components/feed/caption-picker";
-import { CommentThread } from "@/components/feed/comment-thread";
+import {
+  CommentThread,
+  type CommentAuthor,
+} from "@/components/feed/comment-thread";
 import { LikersSheet } from "@/components/feed/likers-sheet";
 import { ReactionBar } from "@/components/feed/reaction-bar";
 import { ImageLightbox } from "@/components/image-lightbox";
@@ -40,6 +43,14 @@ type Props = {
   onItemChange?: (next: FeedItem) => void;
   /** 알림에서 들어온 게시물 — 댓글을 펼친 채로 연다 */
   openComments?: boolean;
+  /**
+   * 댓글 작성자를 탭했다 (2026-08-31).
+   *
+   * ⚠️ 게시물 주인(`onProfileClick`)과 **다른 사람**일 수 있다. 0084가 세션
+   *    주인의 크루까지 이름을 주기 때문이고, 그 사람은 내 크루가 아닐 수 있다.
+   *    프로필 시트가 not_crew일 때 "크루 신청"으로 무너지므로 그대로 넘긴다.
+   */
+  onAuthorTap?: (author: CommentAuthor) => void;
 };
 
 /**
@@ -161,6 +172,7 @@ function CardFooter({
   onItemChange,
   openComments,
   likeTrigger,
+  onAuthorTap,
 }: {
   item: FeedItem;
   userId: string;
@@ -168,6 +180,8 @@ function CardFooter({
   openComments?: boolean;
   /** 사진 더블탭이 올려 보내는 신호 (Phase D) */
   likeTrigger?: number;
+  /** 댓글 작성자를 탭했다 (2026-08-31) */
+  onAuthorTap?: (author: CommentAuthor) => void;
 }) {
   const [showComments, setShowComments] = useState(openComments ?? false);
   const [showLikers, setShowLikers] = useState(false);
@@ -233,6 +247,7 @@ function CardFooter({
           onThreadChange={(thread: SessionThread) =>
             onItemChange({ ...item, thread })
           }
+          onAuthorTap={onAuthorTap}
         />
       )}
 
@@ -255,6 +270,7 @@ export function FeedItemCard({
   onProfileClick,
   onItemChange,
   openComments,
+  onAuthorTap,
 }: Props) {
   // Phase D — 사진 상호작용. 사진이 없는 기록에서는 전부 놀고 있다.
   const [lightbox, setLightbox] = useState(false);
@@ -381,6 +397,7 @@ export function FeedItemCard({
           onItemChange={onItemChange}
           openComments={openComments}
           likeTrigger={likeTrigger}
+          onAuthorTap={onAuthorTap}
         />
 
         {/* Phase D: 라이트박스는 **이미 만들어져 있었고** 아무도 안 부르고 있었다.
@@ -434,6 +451,7 @@ export function FeedItemCard({
         userId={userId}
         onItemChange={onItemChange}
         openComments={openComments}
+        onAuthorTap={onAuthorTap}
       />
     </article>
   );

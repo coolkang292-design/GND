@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { RaiseGoalSheet } from "@/components/challenge/raise-goal-sheet";
 import { UiIcon } from "@/components/ui-icon";
 import { useAuth } from "@/components/auth-provider";
 import { Avatar } from "@/components/avatar";
@@ -180,6 +181,8 @@ function ChallengeScreen({ userId }: { userId: string }) {
   } | null>(null);
   /** 공정성 안내 상세 접힘 — 기본은 접힌다 (2026-08-13, CrewCard와 같은 규약) */
   const [showFairness, setShowFairness] = useState(false);
+  /** 목표 올리기 시트 (0090) */
+  const [raisingGoals, setRaisingGoals] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -192,6 +195,14 @@ function ChallengeScreen({ userId }: { userId: string }) {
   }, []);
 
   const reload = useCallback(() => setRefreshKey((k) => k + 1), []);
+  /**
+   * 목표를 올린 뒤 (0090).
+   *
+   * ⚠️ 시트를 닫지 않는다 — 목표가 여러 개면 이어서 다른 것도 올린다.
+   *    대신 화면을 다시 읽어야 진행률 막대의 **분모**가 새 목표로 바뀐다.
+   *    안 읽으면 방금 올린 목표인데 달성률이 옛 분모로 계속 그려진다.
+   */
+  const reloadAfterGoalRaise = useCallback(() => reload(), [reload]);
 
   /**
    * 온보딩이 참가·친구 연결을 이미 끝냈을 때 남겨 둔 한 줄 (0063, 설계 §3.6).
@@ -1241,7 +1252,35 @@ function ChallengeScreen({ userId }: { userId: string }) {
               <p className="mt-2 text-[11px] text-muted">
                 초과 달성은 표시만 — 점수는 목표당 100%까지 반영돼요.
               </p>
+
+              {/* 목표 올리기 (0090, 사용자 결정 2026-08-31).
+                  ⚠️ 낮추는 길은 없다 — 시트가 규칙을 먼저 말하고, 서버
+                     트리거가 실제로 막는다. */}
+              {myGoals.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setRaisingGoals(true)}
+                  className="mt-2.5 h-10 w-full rounded-card-sm border border-line bg-surface-2 text-[12.5px] font-bold text-accent"
+                >
+                  목표 올리기
+                </button>
+              )}
             </section>
+          )}
+
+          {raisingGoals && (
+            <RaiseGoalSheet
+              goals={myGoals.map((g) => ({
+                id: g.id,
+                label: goalLabel(g.goal_type, g.qualifier),
+                // unit이 null인 목표가 있다(자유형). 빈 문자열로 두면
+                // "지금 12" 처럼 단위 없이 그려진다 — 틀린 말이 아니다.
+                unit: g.unit ?? "",
+                target: Number(g.target_value),
+              }))}
+              onClose={() => setRaisingGoals(false)}
+              onRaised={reloadAfterGoalRaise}
+            />
           )}
 
           {/* ⚠️ **한 줄은 접지 않는다** (2026-08-13). 이 배너는 "왜 남의 점수가

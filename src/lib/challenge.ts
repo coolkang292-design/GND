@@ -316,6 +316,32 @@ export async function saveMyGoals(input: {
   if (error) throw error;
 }
 
+/**
+ * 진행 중 챌린지에서 목표를 **올린다** (0090).
+ *
+ * ⚠️ `saveMyGoals`를 쓰면 안 된다. 그건 DELETE + INSERT인데, 두 정책 모두
+ *    setup에서만 열려 있다(`goals_insert_own_setup`·`goals_delete_own_setup`).
+ *    0090이 그 둘을 **일부러 안 넓혔다** — 지우고 다시 넣는 것이 "낮추기"의
+ *    우회로가 되기 때문이다. 그래서 여기는 UPDATE 한 줄이어야 한다.
+ *
+ * ⚠️ `.select("id")`를 빼지 마라. PostgREST가 return=minimal로 보내서 한 줄도
+ *    안 바뀌어도 error가 null이다 — 화면은 "올렸어요"라 말하고 DB는 그대로다
+ *    (0085에서 완료 세션 136개가 이렇게 조용히 실패했다).
+ */
+export async function raiseMyGoal(
+  goalId: string,
+  targetValue: number,
+): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("user_goals")
+    .update({ target_value: targetValue })
+    .eq("id", goalId)
+    .select("id");
+  if (error) throw error;
+  if (!data || data.length === 0) throw new Error("goal_not_saved");
+}
+
 /** 지난 챌린지 KPI 불러오기 (§5 loadPrevKPI) — 직전 챌린지의 내 목표 */
 export async function getMyPreviousGoals(
   userId: string,

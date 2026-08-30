@@ -20,6 +20,19 @@ import { timeAgo } from "@/lib/time-ago";
 
 export type People = Map<string, { nickname: string; avatarUrl: string | null }>;
 
+/**
+ * 댓글 작성자를 탭했을 때 넘길 값 (2026-08-31).
+ *
+ * ⚠️ 작성자는 **내 크루가 아닐 수 있다.** 0084가 세션 주인의 크루까지 이름을
+ *    주기 때문이고, 공개 모집으로 만난 사람이면 더 그렇다. 프로필 시트는
+ *    not_crew일 때 "크루 신청"으로 무너지도록 돼 있으니 그대로 넘기면 된다.
+ */
+export type CommentAuthor = {
+  userId: string;
+  nickname: string;
+  avatarUrl: string | null;
+};
+
 function commentErrorMessage(e: unknown): string {
   if (e instanceof SocialError) {
     if (e.code === "comment_cooldown") return "조금 천천히 남겨 주세요";
@@ -58,6 +71,7 @@ function CommentLine({
   onReply,
   /** 답글 줄은 들여쓰고 답글 버튼을 안 준다 — 2단계 고정이다 */
   isReply = false,
+  onAuthorTap,
 }: {
   comment: ThreadComment;
   people: People;
@@ -66,6 +80,7 @@ function CommentLine({
   onEdit: (body: string) => Promise<void>;
   onReply?: () => void;
   isReply?: boolean;
+  onAuthorTap?: (author: CommentAuthor) => void;
 }) {
   const who = people.get(comment.senderId);
   const [editing, setEditing] = useState(false);
@@ -122,15 +137,26 @@ function CommentLine({
 
   return (
     <div className={`flex items-start gap-2 ${isReply ? "pl-8" : ""}`}>
-      <Avatar
-        src={who?.avatarUrl ?? null}
-        className={`mt-0.5 flex flex-none items-center justify-center overflow-hidden rounded-full bg-surface-2 ${
-          isReply ? "h-5 w-5 text-[10px]" : "h-6 w-6 text-xs"
-        }`}
-      />
+      {/* 작성자 탭 → 프로필/크루 신청 (2026-08-31). 아바타와 이름 **둘 다** 누를
+          수 있다 — 6px 아바타 하나만 열어 두면 손가락으로 못 맞힌다. */}
+      <AuthorTap
+        who={who}
+        senderId={comment.senderId}
+        onAuthorTap={onAuthorTap}
+        className="mt-0.5 flex-none"
+      >
+        <Avatar
+          src={who?.avatarUrl ?? null}
+          className={`flex items-center justify-center overflow-hidden rounded-full bg-surface-2 ${
+            isReply ? "h-5 w-5 text-[10px]" : "h-6 w-6 text-xs"
+          }`}
+        />
+      </AuthorTap>
       <div className="min-w-0 flex-1">
         <p className="text-[13px] leading-snug break-words">
-          <span className="font-extrabold">{who?.nickname ?? "크루원"}</span>{" "}
+          <AuthorTap who={who} senderId={comment.senderId} onAuthorTap={onAuthorTap}>
+            <span className="font-extrabold">{who?.nickname ?? "크루원"}</span>
+          </AuthorTap>{" "}
           {/* 운동 중에 온 말은 그 순간에만 보낼 수 있던 것이라 표식을 남긴다 */}
           {comment.fromCheer && <span className="text-accent">📣 </span>}
           {comment.body}
@@ -185,12 +211,53 @@ function CommentLine({
  *    (`post_session_comment`의 `coalesce(parent_id, id)`). 그래서 답글 줄에는
  *    "답글 달기"를 주지 않고, 재귀로 그리지도 않는다.
  */
+/**
+ * 이름·아바타를 누를 수 있게 감싼다.
+ *
+ * ⚠️ 콜백이 없거나 사람 정보가 없으면 **버튼을 만들지 않는다.** 눌리는데 아무
+ *    일도 안 일어나는 자리는 "고장난 앱"으로 읽힌다.
+ */
+function AuthorTap({
+  who,
+  senderId,
+  onAuthorTap,
+  className,
+  children,
+}: {
+  who: { nickname: string; avatarUrl: string | null } | undefined;
+  senderId: string;
+  onAuthorTap?: (author: CommentAuthor) => void;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  if (!onAuthorTap || !who) {
+    return className ? <span className={className}>{children}</span> : <>{children}</>;
+  }
+  return (
+    <button
+      type="button"
+      onClick={() =>
+        onAuthorTap({
+          userId: senderId,
+          nickname: who.nickname,
+          avatarUrl: who.avatarUrl,
+        })
+      }
+      aria-label={`${who.nickname} 프로필 보기`}
+      className={className}
+    >
+      {children}
+    </button>
+  );
+}
+
 export function CommentThread({
   sessionId,
   viewerId,
   thread,
   people,
   onThreadChange,
+  onAuthorTap,
 }: {
   sessionId: string;
   viewerId: string;
@@ -198,6 +265,8 @@ export function CommentThread({
   people: People;
   /** 서버에서 다시 읽은 스레드 — 부모가 카드 상태를 갱신한다 */
   onThreadChange: (next: SessionThread) => void;
+  /** 작성자를 탭했다 (2026-08-31). 없으면 이름이 버튼이 되지 않는다 */
+  onAuthorTap?: (author: CommentAuthor) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -291,6 +360,7 @@ export function CommentThread({
             comment={c}
             people={people}
             isMine={c.senderId === viewerId}
+            onAuthorTap={onAuthorTap}
             onDelete={() => void remove(c.id)}
             onEdit={(body) => edit(c.id, body)}
             onReply={() => startReply(c)}
@@ -301,6 +371,7 @@ export function CommentThread({
               comment={reply}
               people={people}
               isMine={reply.senderId === viewerId}
+              onAuthorTap={onAuthorTap}
               onDelete={() => void remove(reply.id)}
               onEdit={(body) => edit(reply.id, body)}
               isReply
