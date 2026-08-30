@@ -7,7 +7,7 @@
 -- 쓰는 법: 함수·정책의 '현행' 정의가 필요할 때 마이그레이션 51개를
 -- 뒤지지 말고 이 파일을 검색하라. 마이그레이션을 적용한 뒤에는 다시 뽑아라.
 --
--- 함수 80개 · 정책 74개 · 인덱스 85개
+-- 함수 84개 · 정책 76개 · 인덱스 90개
 
 -- ════════════════════════════════════════════════════════════
 -- 함수
@@ -1519,6 +1519,61 @@ begin
 end;
 $function$;
 
+-- ── edit_session_comment ──
+CREATE OR REPLACE FUNCTION public.edit_session_comment(p_comment_id uuid, p_body text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  c      cheers;
+  v_body text;
+begin
+  if auth.uid() is null then
+    raise exception 'not_authenticated';
+  end if;
+
+  v_body := btrim(coalesce(p_body, ''));
+  if v_body = '' then
+    raise exception 'comment_empty';
+  end if;
+  if char_length(v_body) > 200 then
+    raise exception 'comment_too_long';
+  end if;
+
+  select * into c from cheers where id = p_comment_id;
+  if not found then
+    raise exception 'comment_not_found';
+  end if;
+
+  -- 본인 것만. `cheers_delete_own`과 같은 기준이다.
+  if c.sender_id <> auth.uid() then
+    raise exception 'not_author';
+  end if;
+
+  -- ⚠️ 말이 없는 이모지 응원은 고칠 몸통이 없다. 여기서 막지 않으면
+  --    "🔥 응원"이 갑자기 문장으로 바뀌어 머리줄 집계에서 사라진다.
+  if c.message is null then
+    raise exception 'comment_not_found';
+  end if;
+
+  -- ⚠️ 그 세션이 아직 보이는지 다시 본다. 크루가 끊긴 뒤에도 옛 댓글을 계속
+  --    고칠 수 있으면, 상대 화면에 내 새 문장이 꽂힌다.
+  if not public.workout_session_crew_visible(c.session_id) then
+    raise exception 'session_not_found';
+  end if;
+
+  update cheers
+     set message = v_body,
+         edited_at = now()
+   where id = p_comment_id
+  returning * into c;
+
+  -- 알림은 보내지 않는다. 고칠 때마다 알림이 가면 도배 경로가 된다.
+  return jsonb_build_object('id', c.id, 'edited_at', c.edited_at);
+end $function$;
+
 -- ── enforce_routine_slot_limit ──
 CREATE OR REPLACE FUNCTION public.enforce_routine_slot_limit()
  RETURNS trigger
@@ -1796,10 +1851,19 @@ AS $function$
 declare
   v_progress user_progress%rowtype;
   v_badges jsonb;
+  v_level_ups jsonb;
+  v_joined_at timestamptz;
+  v_tz text;
+  v_count int;
+  v_minutes int;
+  v_days int;
+  v_meters numeric;
 begin
   if auth.uid() is null then raise exception 'not_authenticated'; end if;
-  -- 0039: 그룹 → 크루 연결
-  if p_target_id <> auth.uid() and not public.is_crew_with(p_target_id) then
+  -- 0081: 크루 **또는** 같은 챌린지 (0039는 크루만이었다)
+  if p_target_id <> auth.uid()
+     and not public.is_crew_with(p_target_id)
+     and not public.shares_any_challenge_with(p_target_id) then
     raise exception 'not_crew';
   end if;
 
@@ -1817,11 +1881,82 @@ begin
   from user_badges b
   where b.user_id = p_target_id;
 
+  -- ── 가입일 · 타임존 ────────────────────────────────────────
+  select p.created_at, coalesce(nullif(p.timezone, ''), 'Asia/Seoul')
+    into v_joined_at, v_tz
+  from profiles p where p.id = p_target_id;
+
+  -- ── 레벨업 시점 ────────────────────────────────────────────
+  --
+  -- 전용 기록이 없다. `notifications(type='level_up')`이 있긴 한데 **알림은
+  -- 지워질 수 있어서** 진실로 쓸 수 없다. 대신 `xp_transactions`를 시간순으로
+  -- 되감아 각 레벨 임계를 **처음 넘은 순간**을 찾는다 — 원장이 남아 있는 한 같은
+  -- 답이 나온다.
+  --
+  -- ⚠ 누적합이 항상 오르지는 않는다(`reverse`는 음수다). 그래서 `min(created_at)`이다 —
+  --   "처음 넘은 때"가 레벨업한 때다. 나중에 깎여 내려가도 그 사건은 일어났다.
+  -- ⚠ level 1(required_total_xp = 0)은 뺀다. 그건 레벨업이 아니라 가입이다.
+  with running as (
+    select t.created_at,
+           sum(t.amount) over (
+             order by t.created_at, t.id
+             rows between unbounded preceding and current row
+           ) as total
+    from xp_transactions t
+    where t.user_id = p_target_id
+  )
+  select coalesce(
+           jsonb_agg(
+             jsonb_build_object('level', ld.level, 'at', f.at)
+             order by ld.level
+           ), '[]'::jsonb)
+    into v_level_ups
+  from level_definitions ld
+  cross join lateral (
+    select min(r.created_at) as at from running r
+    where r.total >= ld.required_total_xp
+  ) f
+  where ld.required_total_xp > 0 and f.at is not null;
+
+  -- ── 누적 성과 ──────────────────────────────────────────────
+  --
+  -- ⚠ 완료 판정은 앱의 `getCompletedSessions`와 **같은 세 조건**이다
+  --   (status='completed' · deleted_at is null · completed_at is not null).
+  --   하나라도 빠뜨리면 같은 사람의 숫자가 화면마다 갈린다.
+  select count(*),
+         coalesce(sum(s.duration_minutes), 0),
+         count(distinct (s.completed_at at time zone v_tz)::date)
+    into v_count, v_minutes, v_days
+  from workout_sessions s
+  where s.user_id = p_target_id
+    and s.status = 'completed'
+    and s.deleted_at is null
+    and s.completed_at is not null;
+
+  -- ⚠ 완료된 세트만 센다. 담아 놓고 안 한 세트의 거리는 뛴 것이 아니다.
+  select coalesce(sum(st.distance_meters), 0)
+    into v_meters
+  from workout_sessions s
+  join workout_exercises e on e.session_id = s.id
+  join workout_sets st on st.workout_exercise_id = e.id
+  where s.user_id = p_target_id
+    and s.status = 'completed'
+    and s.deleted_at is null
+    and s.completed_at is not null
+    and st.is_completed;
+
   return jsonb_build_object(
     'totalXp',      coalesce(v_progress.total_xp, 0),
     'currentLevel', coalesce(v_progress.current_level, 1),
     'currentStage', coalesce(v_progress.current_stage, 1),
-    'badges',       v_badges
+    'badges',       v_badges,
+    -- 0081부터
+    'joinedAt',       v_joined_at,
+    'levelUps',       v_level_ups,
+    'workoutCount',   coalesce(v_count, 0),
+    'totalMinutes',   coalesce(v_minutes, 0),
+    'workoutDays',    coalesce(v_days, 0),
+    'distanceMeters', coalesce(v_meters, 0)
   );
 end $function$;
 
@@ -1881,6 +2016,41 @@ AS $function$
   where n.type = 'poke'
     and n.actor_id = (select auth.uid())
     and n.created_at > now() - interval '24 hours'
+$function$;
+
+-- ── get_session_actor_profiles ──
+CREATE OR REPLACE FUNCTION public.get_session_actor_profiles(p_session_ids uuid[])
+ RETURNS TABLE(id uuid, nickname text, avatar_url text)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  -- 댓글·응원 중 **말이 있는 것**을 남긴 사람.
+  -- 말 없는 이모지 응원은 화면에서 `🔥3` 익명 집계라 이름이 필요 없다 —
+  -- 필요 없는 노출은 하지 않는다.
+  select distinct p.id, p.nickname, p.avatar_url
+  from cheers c
+  join profiles p on p.id = c.sender_id
+  where c.session_id = any(p_session_ids)
+    and c.message is not null
+    -- ⚠⚠ **이 줄이 문지기다.** SECURITY DEFINER라 RLS를 지나친다.
+    --    `cheers_select_related`가 쓰는 것과 **같은 함수**를 쓴다 →
+    --    규칙은 하나다: 댓글을 읽을 수 있으면 이름도 읽을 수 있다.
+    --    `auth.uid()`는 정의자가 아니라 **호출자**의 JWT를 본다.
+    and public.session_crew_shared(c.session_id)
+
+  union
+
+  -- 좋아요를 누른 사람 (0084).
+  select distinct p.id, p.nickname, p.avatar_url
+  from reactions rx
+  join profiles p on p.id = rx.user_id
+  where rx.session_id = any(p_session_ids)
+    -- 좋아요 읽기 정책(`reactions_select_visible`)이 쓰는 것과 **같은 함수**다.
+    -- cheers 쪽과 함수가 다른 이유: 정책이 원래 다른 것을 쓴다
+    -- (reactions는 `workout_session_crew_visible`, cheers는 `session_crew_shared`).
+    -- 각자 자기 정책과 맞춰야 "보이는데 이름은 안 나오는" 어긋남이 안 생긴다.
+    and public.workout_session_crew_visible(rx.session_id)
 $function$;
 
 -- ── invite_to_challenge ──
@@ -2722,6 +2892,121 @@ begin
   );
 end $function$;
 
+-- ── post_session_comment ──
+CREATE OR REPLACE FUNCTION public.post_session_comment(p_session_id uuid, p_body text, p_parent_id uuid DEFAULT NULL::uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  s        workout_sessions;
+  c        cheers;
+  v_owner  uuid;
+  v_parent uuid := null;
+  v_last   timestamptz;
+  v_nick   text;
+  v_body   text;
+  r        record;
+begin
+  if auth.uid() is null then
+    raise exception 'not_authenticated';
+  end if;
+
+  v_body := btrim(coalesce(p_body, ''));
+  if v_body = '' then
+    raise exception 'comment_empty';
+  end if;
+  if char_length(v_body) > 200 then
+    raise exception 'comment_too_long';
+  end if;
+
+  select * into s from workout_sessions where id = p_session_id;
+  if not found then
+    raise exception 'session_not_found';
+  end if;
+
+  -- 완료 · visibility='group' · deleted_at is null · (본인 또는 크루).
+  -- **피드가 보여주는 조건과 정확히 같다** — 보이는 것에만 댓글이 달린다.
+  if not public.workout_session_crew_visible(p_session_id) then
+    raise exception 'session_not_found';
+  end if;
+
+  v_owner := s.user_id;
+
+  -- ── 부모 댓글 정규화 (0084) ────────────────────────────────
+  if p_parent_id is not null then
+    -- ⚠️ **같은 세션인지 반드시 본다.** 안 보면 남의 글 댓글을 부모로 지정해
+    --    이 세션 스레드에 끼워 넣을 수 있다(스레드 오염).
+    -- ⚠️ 말이 있는 행만 부모가 될 수 있다 — 말 없는 이모지 응원은 화면에서
+    --    `🔥3` 익명 집계라 답글이 붙을 자리가 없다.
+    select coalesce(parent_id, id) into v_parent   -- ← 2단계 평탄화
+    from cheers
+    where id = p_parent_id
+      and session_id = p_session_id
+      and message is not null;
+
+    if v_parent is null then
+      raise exception 'parent_not_found';
+    end if;
+  end if;
+
+  -- 도배 방어. 응원의 3회 제한과 달리 총량은 안 막는다(대화니까).
+  select max(created_at) into v_last
+  from cheers
+  where session_id = p_session_id
+    and sender_id = auth.uid()
+    and cheer_type = 'comment';
+  if v_last is not null and v_last > now() - interval '10 seconds' then
+    raise exception 'comment_cooldown';
+  end if;
+
+  insert into cheers (session_id, sender_id, receiver_id, cheer_type, message, parent_id)
+  values (p_session_id, auth.uid(), v_owner, 'comment', v_body, v_parent)
+  returning * into c;
+
+  select nickname into v_nick from profiles where id = auth.uid();
+
+  -- 팬아웃: 세션 주인 + 앞선 댓글 작성자 전원. union이 중복을 접는다.
+  --
+  -- ⚠️ 주인에게만 보내면 안 된다. `cheers.receiver_id`가 세션 주인이라,
+  --    B가 A 글에 댓글 → A 알림 → **A가 답글 → receiver가 또 A라서 B는 영영
+  --    모른다.** 왕복이 안 닫힌다.
+  for r in
+    select v_owner as uid
+    union
+    select ch.sender_id
+    from cheers ch
+    where ch.session_id = p_session_id
+      and ch.cheer_type = 'comment'
+  loop
+    continue when r.uid = auth.uid();          -- 내가 쓴 글을 나에게 알리지 않는다
+    continue when r.uid is null;
+
+    -- 행이 없으면 true (0011 관례)
+    if coalesce(
+         (select ns.comments from notification_settings ns where ns.user_id = r.uid),
+         true
+       ) then
+      perform notify(
+        r.uid,
+        auth.uid(),
+        'comment_received',
+        p_session_id,                          -- ⚠ 세션 id다. 딥링크가 이걸 쓴다
+        coalesce(v_nick, '크루원') ||
+          case when v_parent is not null then '님이 답글을 남겼어요 💬'
+               when r.uid = v_owner       then '님이 내 운동에 댓글을 남겼어요 💬'
+               else                            '님도 이 운동에 댓글을 남겼어요 💬'
+          end,
+        left(v_body, 120)
+      );
+    end if;
+  end loop;
+
+  return jsonb_build_object('id', c.id, 'created_at', c.created_at,
+                            'parent_id', c.parent_id);
+end $function$;
+
 -- ── reject_crew_request ──
 CREATE OR REPLACE FUNCTION public.reject_crew_request(p_request_id uuid)
  RETURNS jsonb
@@ -3313,6 +3598,28 @@ begin
   return s;
 end $function$;
 
+-- ── shares_any_challenge_with ──
+CREATE OR REPLACE FUNCTION public.shares_any_challenge_with(p_other uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+  select exists (
+    select 1
+    from public.challenge_participants mine
+    join public.challenge_participants theirs
+      on theirs.challenge_id = mine.challenge_id
+    join public.challenges c
+      on c.id = mine.challenge_id
+    where mine.user_id = (select auth.uid())
+      and theirs.user_id = p_other
+      and mine.status in ('joined', 'dropped')
+      and theirs.status in ('joined', 'dropped')
+      and c.status <> 'cancelled'
+  )
+$function$;
+
 -- ── shares_challenge_with ──
 CREATE OR REPLACE FUNCTION public.shares_challenge_with(p_challenge_id uuid, p_other uuid)
  RETURNS boolean
@@ -3736,6 +4043,11 @@ $function$;
 -- ── point_transactions ──
 -- point_transactions_own_select  [SELECT]  roles=authenticated
 --   using  : (user_id = auth.uid())
+-- ── profile_views ──
+-- profile_views_insert_own  [INSERT]  roles=authenticated
+--   check  : (viewer_id = auth.uid())
+-- profile_views_select_own  [SELECT]  roles=authenticated
+--   using  : (viewer_id = auth.uid())
 -- ── profiles ──
 -- profiles_insert_own  [INSERT]  roles=public
 --   check  : (id = auth.uid())
@@ -3881,7 +4193,9 @@ $function$;
 -- CREATE UNIQUE INDEX challenge_peek_picks_pkey ON public.challenge_peek_picks USING btree (viewer_id, challenge_id, pick_date);
 -- CREATE UNIQUE INDEX challenges_invite_code_key ON public.challenges USING btree (invite_code) WHERE (invite_code IS NOT NULL);
 -- CREATE UNIQUE INDEX challenges_pkey ON public.challenges USING btree (id);
+-- CREATE INDEX cheers_parent_idx ON public.cheers USING btree (parent_id) WHERE (parent_id IS NOT NULL);
 -- CREATE UNIQUE INDEX cheers_pkey ON public.cheers USING btree (id);
+-- CREATE INDEX cheers_session_created_idx ON public.cheers USING btree (session_id, created_at);
 -- CREATE INDEX cheers_session_sender_idx ON public.cheers USING btree (session_id, sender_id, created_at DESC);
 -- CREATE INDEX crew_links_initiated_by_idx ON public.crew_links USING btree (initiated_by);
 -- CREATE INDEX crew_links_origin_idx ON public.crew_links USING btree (origin);
@@ -3908,6 +4222,9 @@ $function$;
 -- CREATE UNIQUE INDEX point_transactions_pkey ON public.point_transactions USING btree (id);
 -- CREATE UNIQUE INDEX point_transactions_source_unique ON public.point_transactions USING btree (user_id, reason, source_type, source_id) WHERE (transaction_type = 'earn'::text);
 -- CREATE INDEX point_transactions_user_recent ON public.point_transactions USING btree (user_id, created_at DESC);
+-- CREATE UNIQUE INDEX profile_views_pkey ON public.profile_views USING btree (id);
+-- CREATE INDEX profile_views_target_time_idx ON public.profile_views USING btree (target_id, created_at DESC);
+-- CREATE INDEX profile_views_time_idx ON public.profile_views USING btree (created_at DESC);
 -- CREATE UNIQUE INDEX profiles_invite_code_unique ON public.profiles USING btree (invite_code) WHERE (invite_code IS NOT NULL);
 -- CREATE INDEX profiles_invited_by_idx ON public.profiles USING btree (invited_by);
 -- CREATE UNIQUE INDEX profiles_nickname_unique ON public.profiles USING btree (lower(TRIM(BOTH FROM nickname)));
