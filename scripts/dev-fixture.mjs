@@ -127,9 +127,16 @@ async function status() {
       }`,
     );
   }
-  const other = profiles.filter(
-    (p) => !FIXTURES.some((f) => f.nickname === p.nickname),
+  // ⚠️ **닉네임으로 픽스처를 판정하지 마라** (2026-08-31에 겪었다).
+  //    닉네임은 사람이 앱에서 바꾸라고 있는 값이다. 사장님이 시연 영상을 찍으려고
+  //    `dev-테스터A` → `헬스장주주`로 바꾸자, 이 줄이 픽스처를 "픽스처가 아닌
+  //    프로필"로 세서 숫자가 틀렸다. 신원은 **이메일 → auth id**다.
+  const fixtureIds = new Set(
+    (await Promise.all(FIXTURES.map((f) => findAuthUserByEmail(f.email))))
+      .filter(Boolean)
+      .map((u) => u.id),
   );
+  const other = profiles.filter((p) => !fixtureIds.has(p.id));
   console.log(`  픽스처가 아닌 프로필 ${other.length}개: ${other.map((p) => p.nickname).join(", ")}`);
 }
 
@@ -373,10 +380,20 @@ async function destroy() {
       continue;
     }
     const profile = before.find((p) => p.id === user.id);
-    // 이메일과 닉네임을 **둘 다** 대조한다. 하나만 보면 실계정을 지울 수 있다.
-    if (profile && profile.nickname !== f.nickname) {
+    // ⚠️ 두 겹으로 대조한다. 하나만 보면 실계정을 지울 수 있다.
+    //    옛 판은 **닉네임**을 둘째 겹으로 썼는데, 닉네임은 사람이 바꾼다 —
+    //    시연용으로 바꾸자 지우지도 못하게 막혔다(2026-08-31).
+    //    이제 둘째 겹은 **id**다: 이메일로 찾은 auth 유저의 id와 프로필 id가
+    //    같은가. 닉네임보다 강한 신원이고, 사람이 바꿀 수 없다.
+    if (profile && profile.id !== user.id) {
       throw new Error(
-        `❌ ${f.email}의 닉네임이 "${profile.nickname}" — 기대 "${f.nickname}". 중단.`,
+        `❌ ${f.email}의 프로필 id가 auth id와 다르다 (${profile.id} vs ${user.id}). 중단.`,
+      );
+    }
+    if (profile && profile.nickname !== f.nickname) {
+      console.log(
+        `  ⚠️ ${f.email}의 닉네임이 "${profile.nickname}"다 (기대 "${f.nickname}"). ` +
+          `사람이 바꾼 것으로 보고 진행한다 — 신원은 이메일과 id로 이미 확인했다.`,
       );
     }
     targets.push({ ...f, id: user.id });

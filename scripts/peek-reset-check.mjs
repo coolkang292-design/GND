@@ -81,15 +81,30 @@ function tsUnlocks(dayKeys, todayKey, lastUsedDayKey) {
 const kstToday = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
 
 // ── 픽스처 A ────────────────────────────────────────────────────
-const [fixture] = await get(
-  "/rest/v1/profiles?select=id,nickname&nickname=eq.dev-%ED%85%8C%EC%8A%A4%ED%84%B0A",
-);
+//
+// ⚠️ **이메일로 찾는다. 닉네임으로 찾지 마라** (2026-08-31에 이걸로 막혔다).
+//    옛 코드는 `nickname=eq.dev-테스터A`로 찾았는데, 사장님이 시연 영상을
+//    찍으려고 픽스처 닉네임을 `헬스장주주`로 바꾸자 **못 찾고 0 passed / 0 failed**로
+//    끝났다. 러너는 그걸 REGRESS(단언이 사라졌다)로 잡았지만, 잡히지 않았다면
+//    "검사했는데 아무 문제 없음"과 구별이 안 됐다.
+//
+//    닉네임은 **사용자가 바꾸라고 있는 값**이고, 이메일은 로그인 신원이라 안 바뀐다.
+//    신원으로 찾을 때는 언제나 이메일이다.
+//
+// profiles 표에는 이메일이 없어서 auth 관리자 API로 id를 얻은 뒤 프로필을 읽는다.
+const FIXTURE_EMAIL = "dev-fixture-a@gnd.local";
+const authPage = await get(`/auth/v1/admin/users?page=1&per_page=200`);
+const authUser = (authPage?.users ?? []).find((u) => u.email === FIXTURE_EMAIL);
+const [fixture] = authUser
+  ? await get(`/rest/v1/profiles?select=id,nickname&id=eq.${authUser.id}`)
+  : [];
 if (!fixture) {
   console.error(
-    "픽스처 A가 없습니다. `node scripts/dev-fixture.mjs create` 후 다시 실행하세요.",
+    `픽스처 A(${FIXTURE_EMAIL})가 없습니다. \`node scripts/dev-fixture.mjs create\` 후 다시 실행하세요.`,
   );
   process.exitCode = 1;
 } else {
+  console.log(`픽스처 A: ${fixture.nickname} (${FIXTURE_EMAIL})`);
   const USER = fixture.id;
   const MARK = "peek-reset-check"; // 심은 세션을 알아보는 표식 (컬럼은 memo — notes가 아니다)
 
