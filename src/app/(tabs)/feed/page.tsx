@@ -11,7 +11,6 @@ import {
 import { useAuth } from "@/components/auth-provider";
 import { MemberProfileSheet } from "@/components/crew/member-profile-sheet";
 import type { CommentAuthor } from "@/components/feed/comment-thread";
-import { PhotoGrid } from "@/components/feed/photo-grid";
 import { StoryTray } from "@/components/feed/story-tray";
 import {
   DiscoverableChallengeList,
@@ -223,10 +222,6 @@ export default function FeedPage() {
 
       {tab === "recruit" ? (
         <DiscoverableChallengeList items={recruits} setItems={setRecruits} />
-      ) : tab === "photos" ? (
-        userId ? (
-          <PhotoGrid userId={userId} />
-        ) : null
       ) : (
         <>
       {/* Phase C: 진행 중 크루를 카드 대신 가로 한 줄로. 카드는 1명당 ~180px라

@@ -513,12 +513,18 @@ describe("FeedItemCard — 사진 탭 (Phase D)", () => {
     );
   }
 
-  it("사진 비율이 4/5다 — 세로 화면에서 스크롤당 게시물 하나", () => {
+  /**
+   * ⚠️ 계획서는 4/5(인스타 세로)를 적었지만 사용자가 화면을 보고 되돌렸다 —
+   *    *"이전게 더 나은거 같은데 너무 길쭉함"* (2026-08-31). GND 카드는 사진
+   *    아래에 종목·세트·캡션·액션 줄이 붙어서, 사진이 길어지면 그것들이 접힘선
+   *    밖으로 밀린다. 다시 4/5로 바꾸려면 화면을 보고 판단하라.
+   */
+  it("사진 비율이 4/3이다 — 4/5는 너무 길쭉하다(사용자 판단)", () => {
     const html = renderToStaticMarkup(
       <FeedItemCard item={feedItem(PHOTO)} userId="me" onProfileClick={() => {}} />,
     );
-    expect(html).toContain("aspect-[4/5]");
-    expect(html).not.toContain("aspect-[4/3]");
+    expect(html).toContain("aspect-[4/3]");
+    expect(html).not.toContain("aspect-[4/5]");
   });
 
   it("한 번 탭하면 잠깐 뒤에 라이트박스가 열린다", () => {

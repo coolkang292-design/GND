@@ -7,7 +7,7 @@
 -- 쓰는 법: 함수·정책의 '현행' 정의가 필요할 때 마이그레이션 51개를
 -- 뒤지지 말고 이 파일을 검색하라. 마이그레이션을 적용한 뒤에는 다시 뽑아라.
 --
--- 함수 87개 · 정책 76개 · 인덱스 91개
+-- 함수 95개 · 정책 78개 · 인덱스 97개
 
 -- ════════════════════════════════════════════════════════════
 -- 함수
@@ -629,6 +629,35 @@ begin
   return v;
 end $function$;
 
+-- ── block_user ──
+CREATE OR REPLACE FUNCTION public.block_user(p_target_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_me uuid := (select auth.uid());
+begin
+  if v_me is null then raise exception 'not_authenticated'; end if;
+  if p_target_id = v_me then raise exception 'self_block'; end if;
+  if not exists (select 1 from public.profiles where id = p_target_id) then
+    raise exception 'target_not_found';
+  end if;
+
+  insert into public.user_blocks (blocker_id, blocked_id)
+  values (v_me, p_target_id)
+  on conflict (blocker_id, blocked_id) do nothing;
+
+  -- 오가던 요청 정리. 양방향 모두.
+  delete from public.crew_requests
+  where status = 'pending'
+    and ((requester_id = v_me and addressee_id = p_target_id)
+      or (requester_id = p_target_id and addressee_id = v_me));
+
+  return jsonb_build_object('status', 'blocked');
+end $function$;
+
 -- ── cancel_challenge ──
 CREATE OR REPLACE FUNCTION public.cancel_challenge(p_challenge_id uuid)
  RETURNS challenges
@@ -807,6 +836,18 @@ CREATE OR REPLACE FUNCTION public.challenge_in_setup(cid uuid)
 AS $function$
   select exists (
     select 1 from challenges where id = cid and status = 'setup'
+  )
+$function$;
+
+-- ── challenge_is_active ──
+CREATE OR REPLACE FUNCTION public.challenge_is_active(cid uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select exists (
+    select 1 from challenges where id = cid and status = 'active'
   )
 $function$;
 
@@ -1602,6 +1643,48 @@ begin
   return jsonb_build_object('id', c.id, 'edited_at', c.edited_at);
 end $function$;
 
+-- ── enforce_goal_raise_only ──
+CREATE OR REPLACE FUNCTION public.enforce_goal_raise_only()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+begin
+  -- setup 단계에서는 지금까지처럼 무엇이든 고칠 수 있다. 아직 시작 전이라
+  -- 남과 비교되는 숫자가 없다.
+  if not public.challenge_is_active(new.challenge_id) then
+    return new;
+  end if;
+
+  -- 소속을 바꿔 다른 챌린지로 옮기는 길도 막는다.
+  if new.challenge_id is distinct from old.challenge_id
+     or new.group_id is distinct from old.group_id
+     or new.user_id is distinct from old.user_id then
+    raise exception 'goal_locked';
+  end if;
+
+  if new.goal_type is distinct from old.goal_type then
+    raise exception 'goal_type_locked';
+  end if;
+
+  if new.qualifier is distinct from old.qualifier then
+    raise exception 'goal_qualifier_locked';
+  end if;
+
+  -- 분모를 낮추는 길. 같거나 커야 한다.
+  if coalesce(new.planned_days, 0) < coalesce(old.planned_days, 0) then
+    raise exception 'goal_planned_days_lowered';
+  end if;
+
+  -- 본론. 같거나 커야 한다 — 같은 값 저장(멱등)은 통과시킨다.
+  if new.target_value < old.target_value then
+    raise exception 'goal_lowered';
+  end if;
+
+  return new;
+end $function$;
+
 -- ── enforce_routine_slot_limit ──
 CREATE OR REPLACE FUNCTION public.enforce_routine_slot_limit()
  RETURNS trigger
@@ -2039,6 +2122,7 @@ AS $function$
     on p.id = case when l.user_a = (select auth.uid()) then l.user_b else l.user_a end
   left join public.user_progress up on up.user_id = p.id
   where (select auth.uid()) in (l.user_a, l.user_b)
+    and not public.is_blocked_between((select auth.uid()), p.id)  -- 0089
   order by p.nickname
 $function$;
 
@@ -2148,6 +2232,20 @@ begin
   return jsonb_build_object('status', 'invited');
 end $function$;
 
+-- ── is_blocked_between ──
+CREATE OR REPLACE FUNCTION public.is_blocked_between(p_a uuid, p_b uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+  select exists (
+    select 1 from public.user_blocks
+    where (blocker_id = p_a and blocked_id = p_b)
+       or (blocker_id = p_b and blocked_id = p_a)
+  )
+$function$;
+
 -- ── is_challenge_participant ──
 CREATE OR REPLACE FUNCTION public.is_challenge_participant(cid uuid, uid uuid)
  RETURNS boolean
@@ -2173,6 +2271,7 @@ AS $function$
     where user_a = least((select auth.uid()), uid)
       and user_b = greatest((select auth.uid()), uid)
   )
+  and not public.is_blocked_between((select auth.uid()), uid)  -- 0089
 $function$;
 
 -- ── is_group_member ──
@@ -2615,6 +2714,20 @@ begin
   return jsonb_build_object('status', 'left', 'challengeId', p_challenge_id);
 end $function$;
 
+-- ── list_blocked_users ──
+CREATE OR REPLACE FUNCTION public.list_blocked_users()
+ RETURNS TABLE(id uuid, nickname text, avatar_url text, blocked_at timestamp with time zone)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select p.id, p.nickname, p.avatar_url, b.created_at
+  from public.user_blocks b
+  join public.profiles p on p.id = b.blocked_id
+  where b.blocker_id = (select auth.uid())
+  order by b.created_at desc
+$function$;
+
 -- ── list_discoverable_challenges ──
 CREATE OR REPLACE FUNCTION public.list_discoverable_challenges()
  RETURNS TABLE(id uuid, name text, recruit_note text, recruit_image_url text, start_date date, end_date date, photo_required boolean, participant_count integer, host_id uuid, host_nickname text, host_avatar_url text, already_joined boolean)
@@ -2645,6 +2758,10 @@ AS $function$
   where c.discoverable
     and c.status = 'setup'
     and (select auth.uid()) is not null
+    -- 0089: 7일 만료. recruit_opened_at이 없는 옛 행은 created_at으로 눈감아 준다.
+    and coalesce(c.recruit_opened_at, c.created_at) > now() - interval '7 days'
+    -- 0089: 차단한/차단당한 방장의 글은 안 보인다
+    and not public.is_blocked_between((select auth.uid()), c.created_by)
   order by c.start_date asc, c.created_at desc
   limit 12
 $function$;
@@ -3280,6 +3397,46 @@ begin
   return jsonb_build_object('status', 'removed');
 end $function$;
 
+-- ── report_user ──
+CREATE OR REPLACE FUNCTION public.report_user(p_target_id uuid, p_reason text, p_note text DEFAULT NULL::text, p_challenge_id uuid DEFAULT NULL::uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_me uuid := (select auth.uid());
+  v_id uuid;
+begin
+  if v_me is null then raise exception 'not_authenticated'; end if;
+  if p_target_id = v_me then raise exception 'self_report'; end if;
+  if not exists (select 1 from public.profiles where id = p_target_id) then
+    raise exception 'target_not_found';
+  end if;
+  if p_reason not in ('spam', 'harassment', 'inappropriate', 'fake', 'other') then
+    raise exception 'invalid_reason';
+  end if;
+  if p_note is not null and length(p_note) > 500 then
+    raise exception 'note_too_long';
+  end if;
+
+  -- 같은 상대에 대해 처리 안 된 신고가 이미 있으면 조용히 그것을 돌려준다.
+  -- 오류로 만들면 "이미 신고함"이 화면에 뜨는데, 신고자는 대개 그걸 실패로
+  -- 읽고 다시 누른다. 접수됐다고 말하는 편이 정확하고 덜 불안하다.
+  select id into v_id from public.user_reports
+  where reporter_id = v_me and target_id = p_target_id and status = 'open'
+  limit 1;
+  if found then
+    return jsonb_build_object('status', 'already_open', 'reportId', v_id);
+  end if;
+
+  insert into public.user_reports (reporter_id, target_id, challenge_id, reason, note)
+  values (v_me, p_target_id, p_challenge_id, p_reason, nullif(trim(coalesce(p_note, '')), ''))
+  returning id into v_id;
+
+  return jsonb_build_object('status', 'received', 'reportId', v_id);
+end $function$;
+
 -- ── reschedule_program_plans ──
 CREATE OR REPLACE FUNCTION public.reschedule_program_plans(p_enrollment_id uuid, p_moves jsonb)
  RETURNS void
@@ -3636,6 +3793,16 @@ begin
   if v_me is null then raise exception 'not_authenticated'; end if;
   if p_target_id = v_me then raise exception 'self_request'; end if;
 
+  -- 0089: 차단 관문. 아래 어떤 검사보다 먼저다.
+  if exists (select 1 from public.user_blocks
+             where blocker_id = v_me and blocked_id = p_target_id) then
+    raise exception 'blocked_by_me';
+  end if;
+  if exists (select 1 from public.user_blocks
+             where blocker_id = p_target_id and blocked_id = v_me) then
+    raise exception 'request_exists';  -- 일부러 숨긴다 (D7과 같은 결)
+  end if;
+
   -- 쌍 단위 직렬화. 이게 없으면 (a) 서로 동시에 수락할 때 락 순서가 엇갈려
   -- 40P01 데드락, (b) 서로 동시에 요청할 때 역방향을 못 봐서 자동수락이 불발,
   -- (c) 빠른 두 번 탭이 request_exists 대신 23505를 그대로 뱉는다.
@@ -3649,8 +3816,8 @@ begin
   if public.is_crew_with(p_target_id) then raise exception 'already_crew'; end if;
 
   -- 거절당한 뒤 7일은 같은 사람에게 다시 못 보낸다. 거절은 조용히 처리되고(D7)
-  -- 차단도 없어서(D11), 이 가드가 없으면 요청↔거절을 무한 반복하며 상대에게
-  -- 알림을 계속 꽂을 수 있다. 콕 찌르기의 24h 쿨다운(0011)과 같은 결의 장치다.
+  -- 이 가드가 없으면 요청↔거절을 무한 반복하며 상대에게 알림을 계속 꽂을 수 있다.
+  -- 콕 찌르기의 24h 쿨다운(0011)과 같은 결의 장치다.
   -- 에러 코드를 request_exists로 재사용하는 이유: 보내는 쪽에 "이미 요청을
   -- 보냈어요"로만 보여야 거절당했다는 사실이 드러나지 않는다(D7 유지).
   if exists (
@@ -3664,8 +3831,6 @@ begin
   end if;
 
   -- 역방향 pending이 있으면 양쪽이 서로를 원한 것이다 → 즉시 맺는다.
-  -- 이게 없으면 "둘 다 요청했는데 아무 일도 안 일어남"이 되고, 사용자는
-  -- 원인을 알 수 없다.
   select * into v_reverse from crew_requests
   where requester_id = p_target_id and addressee_id = v_me
     and status = 'pending'
@@ -3709,6 +3874,26 @@ AS $function$
            or public.is_crew_with(s.user_id)) -- 0039
   )
 $function$;
+
+-- ── set_recruit_opened_at ──
+CREATE OR REPLACE FUNCTION public.set_recruit_opened_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+begin
+  -- ⚠️ INSERT일 때 OLD는 없다. TG_OP로 명시적으로 가른다 — old.discoverable을
+  --    그냥 읽으면 구현에 기대는 코드가 된다.
+  if not coalesce(new.discoverable, false) then
+    new.recruit_opened_at := null;           -- 닫혀 있으면 항상 비운다
+                                             -- (다시 열면 새로 7일을 준다)
+  elsif tg_op = 'INSERT' then
+    new.recruit_opened_at := now();          -- 처음부터 공개로 만든 경우
+  elsif coalesce(old.discoverable, false) is distinct from true then
+    new.recruit_opened_at := now();          -- 닫힘 → 열림
+  end if;                                    -- 열림 → 열림은 그대로 둔다
+  return new;
+end $function$;
 
 -- ── set_updated_at ──
 CREATE OR REPLACE FUNCTION public.set_updated_at()
@@ -4066,6 +4251,23 @@ begin
   where challenge_id = p_challenge_id and approver_id = auth.uid();
 end $function$;
 
+-- ── unblock_user ──
+CREATE OR REPLACE FUNCTION public.unblock_user(p_target_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_me uuid := (select auth.uid());
+begin
+  if v_me is null then raise exception 'not_authenticated'; end if;
+  delete from public.user_blocks
+  where blocker_id = v_me and blocked_id = p_target_id;
+  -- 크루 링크는 지운 적이 없으므로, 해제하면 관계가 그대로 돌아온다.
+  return jsonb_build_object('status', 'unblocked');
+end $function$;
+
 -- ── view_record ──
 CREATE OR REPLACE FUNCTION public.view_record(p_target_id uuid)
  RETURNS void
@@ -4304,6 +4506,9 @@ $function$;
 -- ── user_badges ──
 -- user_badges_own_select  [SELECT]  roles=authenticated
 --   using  : (user_id = auth.uid())
+-- ── user_blocks ──
+-- user_blocks_select_own  [SELECT]  roles=authenticated
+--   using  : (blocker_id = ( SELECT auth.uid() AS uid))
 -- ── user_goals ──
 -- goals_delete_own_setup  [DELETE]  roles=public
 --   using  : ((user_id = auth.uid()) AND challenge_in_setup(challenge_id))
@@ -4314,11 +4519,14 @@ $function$;
 -- goals_select_member  [SELECT]  roles=public
 --   using  : (is_challenge_participant(challenge_id, auth.uid()) OR is_group_member(group_id, auth.uid()))
 -- goals_update_own_setup  [UPDATE]  roles=public
---   using  : ((user_id = auth.uid()) AND challenge_in_setup(challenge_id))
---   check  : ((user_id = auth.uid()) AND challenge_in_setup(challenge_id))
+--   using  : ((user_id = ( SELECT auth.uid() AS uid)) AND (challenge_in_setup(challenge_id) OR challenge_is_active(challenge_id)))
+--   check  : ((user_id = ( SELECT auth.uid() AS uid)) AND (challenge_in_setup(challenge_id) OR challenge_is_active(challenge_id)))
 -- ── user_progress ──
 -- user_progress_own_select  [SELECT]  roles=authenticated
 --   using  : (user_id = auth.uid())
+-- ── user_reports ──
+-- user_reports_select_own  [SELECT]  roles=authenticated
+--   using  : (reporter_id = ( SELECT auth.uid() AS uid))
 -- ── user_unlocks ──
 -- user_unlocks_own_select  [SELECT]  roles=authenticated
 --   using  : (user_id = auth.uid())
@@ -4411,6 +4619,7 @@ $function$;
 -- CREATE UNIQUE INDEX challenge_peek_picks_pkey ON public.challenge_peek_picks USING btree (viewer_id, challenge_id, pick_date);
 -- CREATE INDEX challenges_discoverable_idx ON public.challenges USING btree (start_date, created_at DESC) WHERE (discoverable AND (status = 'setup'::text));
 -- CREATE UNIQUE INDEX challenges_invite_code_key ON public.challenges USING btree (invite_code) WHERE (invite_code IS NOT NULL);
+-- CREATE UNIQUE INDEX challenges_one_open_recruit_per_host ON public.challenges USING btree (created_by) WHERE (discoverable AND (status = 'setup'::text));
 -- CREATE UNIQUE INDEX challenges_pkey ON public.challenges USING btree (id);
 -- CREATE INDEX cheers_parent_idx ON public.cheers USING btree (parent_id) WHERE (parent_id IS NOT NULL);
 -- CREATE UNIQUE INDEX cheers_pkey ON public.cheers USING btree (id);
@@ -4461,9 +4670,14 @@ $function$;
 -- CREATE UNIQUE INDEX streak_shield_source_unique ON public.streak_shield_transactions USING btree (user_id, reason, source_type, source_id);
 -- CREATE UNIQUE INDEX streak_shield_transactions_pkey ON public.streak_shield_transactions USING btree (id);
 -- CREATE UNIQUE INDEX user_badges_pkey ON public.user_badges USING btree (user_id, badge_key, period_key);
+-- CREATE INDEX user_blocks_blocked_idx ON public.user_blocks USING btree (blocked_id);
+-- CREATE UNIQUE INDEX user_blocks_pkey ON public.user_blocks USING btree (blocker_id, blocked_id);
 -- CREATE UNIQUE INDEX user_goals_pkey ON public.user_goals USING btree (id);
 -- CREATE UNIQUE INDEX user_goals_user_id_challenge_id_goal_type_key ON public.user_goals USING btree (user_id, challenge_id, goal_type);
 -- CREATE UNIQUE INDEX user_progress_pkey ON public.user_progress USING btree (user_id);
+-- CREATE UNIQUE INDEX user_reports_one_open_per_pair ON public.user_reports USING btree (reporter_id, target_id) WHERE (status = 'open'::text);
+-- CREATE INDEX user_reports_open_idx ON public.user_reports USING btree (created_at DESC) WHERE (status = 'open'::text);
+-- CREATE UNIQUE INDEX user_reports_pkey ON public.user_reports USING btree (id);
 -- CREATE UNIQUE INDEX user_unlocks_pkey ON public.user_unlocks USING btree (user_id, unlock_key);
 -- CREATE UNIQUE INDEX user_wallet_pkey ON public.user_wallet USING btree (user_id);
 -- CREATE UNIQUE INDEX workout_events_pkey ON public.workout_events USING btree (id);

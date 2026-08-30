@@ -324,9 +324,13 @@ export function FeedItemCard({
   if (item.photoUrl) {
     return (
       <article className="overflow-hidden rounded-card border border-line bg-surface shadow-card">
-        {/* Phase D: 4/3 → 4/5. 세로 화면에서 사진이 크게 보이고, 스크롤 한 번에
-            게시물 하나가 온다 — 인스타가 세로를 기본으로 두는 이유다. */}
-        <div className="relative aspect-[4/5] w-full">
+        {/* ⚠️ **4/3이다. 4/5로 바꾸지 마라.**
+            계획서(Phase D)는 인스타를 따라 4/5를 적었고 실제로 그렇게 바꿔 봤는데,
+            사용자가 화면을 보고 되돌렸다 — *"이전게 더 나은거 같은데 너무 길쭉함"*
+            (2026-08-31). 인스타는 사진이 주인공이라 세로가 길어도 되지만, GND의
+            카드는 사진 아래에 종목·세트·캡션·액션 줄이 붙는다. 사진이 길어지면
+            그것들이 접힘선 밖으로 밀린다. */}
+        <div className="relative aspect-[4/3] w-full">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={item.photoUrl}
