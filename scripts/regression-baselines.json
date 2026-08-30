@@ -20,7 +20,7 @@
     "  fixture  — dev-fixture.mjs create + challenge 가 먼저 있어야 한다.",
     "  accounts — 실행마다 익명 계정을 만든다. 연달아 돌리면 429(rate limit)에 걸린다."
   ],
-  "recordedAt": "2026-08-19",
+  "recordedAt": "2026-08-30",
   "scripts": {
     "rls-test": {
       "assertions": 128,
@@ -191,20 +191,18 @@
       "requires": "node scripts/dev-fixture.mjs create && node scripts/dev-fixture.mjs challenge"
     },
     "admin-dashboard-check": {
-      "assertions": 26,
-      "source": "observed",
+      "assertions": 21,
+      "source": "measured",
       "tier": "readonly",
       "core": false,
-      "what": "관리자 대시보드 집계 ↔ 원장 직접계산 대조. 실계정 읽기 전용.",
-      "knownFailure": "2026-08-19 현재 4건 실패 — ADMIN_USER_IDS 5개 중 4개가 auth에 없는 uuid(지워진 익명 세션 잔재)다. 유효한 1개와 ADMIN_ACCESS_KEY가 있어 /admin은 정상이다. .env.local에서 죽은 uuid 4개를 지우면 26/26이 된다."
+      "what": "관리자 대시보드 집계 ↔ 원장 직접계산 대조. 실계정 읽기 전용."
     },
     "challenge-aggregation-parity": {
-      "assertions": 10,
-      "source": "observed",
+      "assertions": 5,
+      "source": "measured",
       "tier": "readonly",
       "core": false,
-      "what": "챌린지 집계 SQL ↔ TS 대조. 읽기 전용.",
-      "knownFailure": "2026-08-19 현재 1건 실패 — 챌린지 Test11에서 dev-테스터B가 그룹에는 있는데 참가는 안 했다. 단언이 \"그룹원 전원이 참가한다\"를 전제하는데 크루원이 챌린지를 건너뛰는 것은 정상이다. 단언을 고치거나 Test11을 지워야 한다."
+      "what": "운영 집계 경로(get_challenge_period_sessions RPC)가 참가자 기준으로 맞는지 실 DB 대조. 읽기 전용."
     },
     "streak-parity-check": {
       "assertions": null,
