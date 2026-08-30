@@ -10,7 +10,7 @@ import { updateMyAvatar } from "@/lib/crew";
 import { avatarSource } from "@/lib/domain/avatar-source";
 import { linkLabel } from "@/lib/domain/profile-links";
 import { ProfileEditSheet } from "@/components/profile/profile-edit-sheet";
-import { ReportBlockSheet } from "@/components/moderation/report-block-sheet";
+import { BlockSheet } from "@/components/moderation/block-sheet";
 import { sendCrewRequest } from "@/lib/crew-link";
 import { SocialError } from "@/lib/social";
 import { badgeShelf, earnedBadgeCount, type BadgeMeta } from "@/lib/domain/badges";
@@ -711,21 +711,11 @@ export function MemberProfileSheet({
                 {requestError}
               </p>
             )}
-
-            {/* 모르는 사람을 만나는 자리라 신고·차단이 여기에도 있어야 한다.
-                작고 조용한 글씨다 — 크루 신청과 같은 무게로 두지 않는다. */}
-            <button
-              type="button"
-              onClick={() => setModerating(true)}
-              className="self-center text-[11.5px] font-bold text-faint underline underline-offset-2"
-            >
-              신고 · 차단
-            </button>
           </div>
         )}
 
         {moderating && (
-          <ReportBlockSheet
+          <BlockSheet
             targetId={userId}
             targetNickname={nickname}
             onClose={() => setModerating(false)}
@@ -765,6 +755,31 @@ export function MemberProfileSheet({
             streak={streak}
             editSlot={onAvatarChanged ? editSlot : undefined}
           />
+        )}
+
+        {/*
+          신고 · 차단 (2026-08-31 수정).
+
+          ⚠️ 처음엔 `failure === "not_crew"` 분기 **안에만** 뒀는데, 그러면
+             **크루인 사람은 신고할 방법이 아예 없다.** 사용자가 피드 게시물에서
+             찾다가 없어서 잡았다 — 정작 불편한 사람은 대개 이미 크루다.
+             모르는 사람보다 크루가 더 필요한 기능이었다.
+
+          ⚠️ "내 시트인가"는 `onAvatarChanged`로 판정한다. 그 콜백을 넘기는 곳은
+             `home-client.tsx`의 내 시트 하나뿐이다(위 주석). **새 판정을 만들지
+             마라** — 2026-08-28에 판정이 두 겹이 되어 한 겹을 부숴도 테스트가
+             통과한 적이 있다. 아바타 편집과 같은 신호를 쓴다.
+        */}
+        {!onAvatarChanged && (
+          <button
+            type="button"
+            onClick={() => setModerating(true)}
+            /* ⚠️ 시트 컨테이너가 flex가 아니라 block이다 — `self-center`는 안 먹는다.
+               `mx-auto`가 통하려면 block 요소여야 해서 `block`을 같이 준다. */
+            className="mx-auto mt-4 block text-[11.5px] font-bold text-faint underline underline-offset-2"
+          >
+            차단하기
+          </button>
         )}
 
         <button

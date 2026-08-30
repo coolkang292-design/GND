@@ -257,6 +257,12 @@ function CardFooter({
           people={item.people}
           viewerId={userId}
           onClose={() => setShowLikers(false)}
+          /* ⚠️ 명단을 먼저 닫는다. 안 닫으면 같은 z-50에 프로필 시트가 겹쳐
+             올라와 두 장이 포개진 채로 보인다. */
+          onAuthorTap={(author) => {
+            setShowLikers(false);
+            onAuthorTap?.(author);
+          }}
         />
       )}
     </>

@@ -213,7 +213,9 @@ describe("SocialErrorCode 유니온 ↔ SOCIAL_ERROR_CODES 배열", () => {
   });
 
   it("0089가 더한 코드가 제 이름으로 잡힌다", () => {
-    for (const code of ["self_block", "blocked_by_me", "self_report", "invalid_reason", "note_too_long"]) {
+    // 신고 관련 코드(self_report·invalid_reason·note_too_long)는 2026-08-31에
+    // 신고 기능을 걷어내면서 같이 지웠다 — report_user를 부르는 곳이 없다.
+    for (const code of ["self_block", "blocked_by_me"]) {
       expect(toSocialError({ message: `${code}` }).code, `${code}가 다른 코드로 잡힌다`).toBe(code);
     }
   });

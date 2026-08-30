@@ -1,13 +1,15 @@
 /**
- * 차단·신고 RPC 래퍼 (0089).
+ * 차단 RPC 래퍼 (0089).
  *
- * 왜 crew-link.ts에 안 넣었나: 차단은 크루 관계가 **없는** 사람에게도 건다
- * (공개 모집으로 만난 모르는 사람이 주 대상이다). 크루 파일에 두면 "크루한테만
- * 하는 것"으로 읽힌다.
+ * 왜 crew-link.ts에 안 넣었나: 차단은 크루 관계가 **없는** 사람에게도 건다.
+ * 크루 파일에 두면 "크루한테만 하는 것"으로 읽힌다.
+ *
+ * ⚠️ `reportUser`가 여기 있었는데 걷어냈다 (2026-08-31). 서버 RPC(`report_user`)는
+ *    0089에 남아 있지만 **아무도 부르지 않는다** — 신고를 받아도 조치할 수단이
+ *    GND에 하나도 없어서, 창구만 있고 뒤가 없는 상태였다.
  */
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { toSocialError } from "@/lib/social";
-import type { ReportReason } from "@/lib/domain/moderation";
 
 export type BlockedUser = {
   id: string;
@@ -57,30 +59,4 @@ export async function listBlockedUsers(): Promise<BlockedUser[]> {
     avatarUrl: r.avatar_url,
     blockedAt: new Date(r.blocked_at),
   }));
-}
-
-export type ReportOutcome = "received" | "already_open";
-
-/**
- * 신고. 자동 조치는 없다 — /admin에서 사람이 본다.
- *
- * 같은 상대에 대해 처리 안 된 신고가 이미 있으면 서버가 `already_open`을 준다.
- * **오류가 아니다.** 화면에서 실패로 다루면 사용자가 다시 누르는데, 서버는
- * 계속 같은 답을 준다. "접수됐어요"로 똑같이 보여주는 편이 정확하다.
- */
-export async function reportUser(input: {
-  targetId: string;
-  reason: ReportReason;
-  note?: string;
-  challengeId?: string;
-}): Promise<ReportOutcome> {
-  const supabase = getSupabaseBrowserClient();
-  const { data, error } = await supabase.rpc("report_user", {
-    p_target_id: input.targetId,
-    p_reason: input.reason,
-    p_note: input.note?.trim() ? input.note.trim() : null,
-    p_challenge_id: input.challengeId ?? null,
-  });
-  if (error) throw toSocialError(error);
-  return (data as { status: ReportOutcome }).status;
 }

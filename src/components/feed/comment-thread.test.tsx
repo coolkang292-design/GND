@@ -12,6 +12,7 @@ vi.mock("@/lib/social", async (importOriginal) => ({
 
 import type { SessionThread, ThreadComment } from "@/lib/domain/session-comments";
 import { CommentThread, type People } from "./comment-thread";
+import { LikersSheet } from "./likers-sheet";
 
 function comment(over: Partial<ThreadComment> = {}): ThreadComment {
   return {
@@ -131,6 +132,60 @@ describe("CommentThread — 작성자 탭", () => {
       />,
     );
     expect(screen.getByText("크루원")).toBeTruthy();
+    expect(screen.queryByLabelText(/프로필 보기/)).toBeNull();
+  });
+});
+
+/**
+ * 좋아요 명단에서 프로필 열기 (2026-08-31).
+ *
+ * ⚠️ 댓글 작성자는 눌리는데 **좋아요 누른 사람만 안 눌렸다** — 사용자가 잡았다.
+ *    같은 "이 사람 누구지?"인데 한쪽만 되면 고장으로 읽힌다.
+ */
+describe("LikersSheet — 좋아요 누른 사람 탭", () => {
+  const PEOPLE2: People = new Map([
+    ["u1", { nickname: "스칼레또", avatarUrl: null }],
+    ["me", { nickname: "나자신", avatarUrl: null }],
+  ]);
+
+  it("이름을 누르면 그 사람 정보를 넘긴다", () => {
+    const onTap = vi.fn();
+    render(
+      <LikersSheet
+        likers={["u1"]}
+        people={PEOPLE2}
+        viewerId="me"
+        onClose={() => {}}
+        onAuthorTap={onTap}
+      />,
+    );
+    fireEvent.click(screen.getByLabelText("스칼레또 프로필 보기"));
+    expect(onTap).toHaveBeenCalledWith({
+      userId: "u1",
+      nickname: "스칼레또",
+      avatarUrl: null,
+    });
+  });
+
+  // 열 프로필이 없는 자리는 버튼이 아니어야 한다 — 눌리는데 아무 일도
+  // 안 일어나면 "고장난 앱"으로 읽힌다.
+  it("나 자신과 이름 모르는 사람은 버튼이 아니다", () => {
+    render(
+      <LikersSheet
+        likers={["me", "모르는사람"]}
+        people={PEOPLE2}
+        viewerId="me"
+        onClose={() => {}}
+        onAuthorTap={vi.fn()}
+      />,
+    );
+    expect(screen.queryByLabelText(/프로필 보기/)).toBeNull();
+    expect(screen.getByText("나자신")).toBeTruthy();
+    expect(screen.getByText("크루원")).toBeTruthy();
+  });
+
+  it("콜백이 없으면 아무것도 버튼이 아니다", () => {
+    render(<LikersSheet likers={["u1"]} people={PEOPLE2} viewerId="me" onClose={() => {}} />);
     expect(screen.queryByLabelText(/프로필 보기/)).toBeNull();
   });
 });

@@ -92,10 +92,7 @@ export type SocialErrorCode =
   | "comment_not_found" // 0084 — 없거나 고칠 수 없는 댓글
   | "not_author" // 0084 — 내가 쓴 댓글이 아니다
   | "self_block" // 0089 — 자기 자신을 차단
-  | "blocked_by_me" // 0089 — 내가 차단한 상대에게 크루 요청
-  | "self_report" // 0089 — 자기 자신을 신고
-  | "invalid_reason" // 0089 — 목록에 없는 신고 사유
-  | "note_too_long"; // 0089 — 신고 설명 500자 초과
+  | "blocked_by_me"; // 0089 — 내가 차단한 상대에게 크루 요청
 
 // ⚠️ 0089에는 코드가 **하나 더 있는데 일부러 여기 없다**: 상대가 나를 차단한
 //    경우 서버는 `request_exists`를 던진다. 차단당했다는 사실이 드러나면 다른
@@ -136,12 +133,9 @@ const SOCIAL_ERROR_CODES: SocialErrorCode[] = [
   "comment_not_found",
   "not_author",
   // 0089 — 세 번째로 같은 함정. 유니온만 늘리면 타입은 통과하는데 코드가
-  // null로 떨어져 차단·신고 실패가 전부 "알 수 없는 오류"가 된다.
+  // null로 떨어져 차단 실패가 "알 수 없는 오류"가 된다.
   "self_block",
   "blocked_by_me",
-  "self_report",
-  "invalid_reason",
-  "note_too_long",
 ];
 
 export class SocialError extends Error {

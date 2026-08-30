@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Avatar } from "@/components/avatar";
 import { useAuth } from "@/components/auth-provider";
-import { ReportBlockSheet } from "@/components/moderation/report-block-sheet";
+import { BlockSheet } from "@/components/moderation/block-sheet";
 import {
   getDiscoverableChallenges,
   joinDiscoverableChallenge,
@@ -101,7 +101,7 @@ function RecruitDetailSheet({
   busy: boolean;
   onJoin: () => void;
   onClose: () => void;
-  /** 신고·차단 시트를 연다 (0089) */
+  /** 차단 시트를 연다 (0089) */
   onReport: () => void;
 }) {
   useEffect(() => {
@@ -197,15 +197,15 @@ function RecruitDetailSheet({
             닫기
           </button>
 
-          {/* 신고·차단 (0089). 참여 버튼과 **같은 무게로 두지 않는다** — 작고
-              조용한 글씨다. 대부분의 사람은 이걸 평생 안 누르고, 눈에 띄게
-              두면 목록 전체가 의심스러운 곳처럼 읽힌다. */}
+          {/* 차단 (0089). 참여 버튼과 **같은 무게로 두지 않는다** — 작고 조용한
+              글씨다. 대부분의 사람은 이걸 평생 안 누르고, 눈에 띄게 두면 목록
+              전체가 의심스러운 곳처럼 읽힌다. */}
           <button
             type="button"
             onClick={onReport}
             className="mt-1 self-center text-[11.5px] font-bold text-faint underline underline-offset-2"
           >
-            이 모집글 신고 · 차단
+            이 사람 차단하기
           </button>
         </div>
       </div>
@@ -350,10 +350,9 @@ export function DiscoverableChallengeList({
       )}
 
       {moderating && (
-        <ReportBlockSheet
+        <BlockSheet
           targetId={moderating.hostId}
           targetNickname={moderating.hostNickname}
-          challengeId={moderating.id}
           onClose={() => setModerating(null)}
           onBlocked={() => {
             // ⚠️ 그 모집글 하나가 아니라 **그 방장의 글 전부**를 뺀다. 한 방장이

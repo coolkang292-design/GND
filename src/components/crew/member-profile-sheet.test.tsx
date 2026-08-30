@@ -205,6 +205,45 @@ describe("MemberProfileSheet", () => {
     expect(html).toContain("닫기");
   });
 
+  /**
+   * 신고 · 차단 (2026-08-31).
+   *
+   * ⚠️ 처음엔 `failure === "not_crew"` 분기 **안에만** 넣었다. 그러면 크루인
+   *    사람은 차단할 방법이 아예 없다 — 사용자가 피드 게시물에서 찾다가 없어서
+   *    잡았다. **정작 불편한 사람은 대개 이미 크루다.** 조회 결과(크루냐 아니냐)와
+   *    무관하게, 남의 시트면 항상 있어야 한다.
+   */
+  it("남의 프로필이면 조회 전에도 차단하기가 보인다", () => {
+    const html = renderToStaticMarkup(
+      <MemberProfileSheet
+        userId="friend-1"
+        nickname="낭만송곳니"
+        avatarUrl="🐶"
+        viewerId="me"
+        onClose={() => {}}
+      />,
+    );
+    expect(html).toContain("차단하기");
+  });
+
+  /**
+   * ⚠️ 내 시트인지는 `onAvatarChanged`로만 판정한다 — 그 콜백을 넘기는 곳은
+   *    `home-client.tsx` 하나뿐이다. 판정을 두 겹으로 만들면 한 겹을 부숴도
+   *    테스트가 통과한다(2026-08-28에 실제로 그랬다).
+   */
+  it("내 프로필에는 차단하기가 없다", () => {
+    const html = renderToStaticMarkup(
+      <MemberProfileSheet
+        userId="me"
+        nickname="스칼레또"
+        avatarUrl="🙂"
+        onAvatarChanged={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    expect(html).not.toContain("차단하기");
+  });
+
   it("스트릭이 없으면 불꽃을 표시하지 않는다", () => {
     const html = renderToStaticMarkup(
       <MemberProfileSheet
