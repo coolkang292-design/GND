@@ -7,6 +7,13 @@ export type NotificationSettings = {
   pokes: boolean;
   ranks: boolean;
   record_views: boolean;
+  /**
+   * 게시물 댓글 알림 (0082).
+   *
+   * ⚠️ `cheers` 스위치를 재사용하지 않는다. 재사용하면 "응원 알림 끔"이
+   *    **댓글 알림까지** 끄는데, 사용자는 그걸 끈 적이 없다.
+   */
+  comments: boolean;
 };
 
 export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
@@ -15,6 +22,7 @@ export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
   pokes: true,
   ranks: true,
   record_views: true,
+  comments: true,
 };
 
 export async function getNotificationSettings(
@@ -23,7 +31,7 @@ export async function getNotificationSettings(
   const supabase = getSupabaseBrowserClient();
   const { data, error } = await supabase
     .from("notification_settings")
-    .select("morning_brief, cheers, pokes, ranks, record_views")
+    .select("morning_brief, cheers, pokes, ranks, record_views, comments")
     .eq("user_id", userId)
     .maybeSingle();
   if (error) throw error;

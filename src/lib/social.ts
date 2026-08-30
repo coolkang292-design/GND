@@ -11,6 +11,13 @@ import { DEFAULT_TIMEZONE, dayKey, dayRange } from "@/lib/domain/time";
 import { weekWorkoutDays } from "@/lib/domain/viewing-pass";
 import { getActiveChallengeRanking } from "@/lib/challenge";
 import { summarizeVolume, type VolumeSummary } from "@/lib/domain/volume";
+import {
+  EMPTY_SESSION_THREAD,
+  foldSessionThread,
+  type SessionCheerRow,
+  type SessionCheerType,
+  type SessionThread,
+} from "@/lib/domain/session-comments";
 import type { BreakdownExercise } from "@/components/workout/set-breakdown";
 import type { ExerciseType } from "@/lib/types";
 
@@ -45,7 +52,8 @@ export type NotificationRow = {
     | "challenge_peek_unlocked" // 0054 — 5일 연속으로 열린 2시간 열람창
     | "challenge_starting_soon" // 0077 — 시작 전날 예고
     | "challenge_dropped" // 0077 — 목표 미설정으로 이번 회차에서 빠짐
-    | "workout_suggestion"; // 0078 — 계획 없는 날 운동 제안
+    | "workout_suggestion" // 0078 — 계획 없는 날 운동 제안
+    | "comment_received"; // 0082 — 내 운동(또는 내가 댓글 단 운동)에 새 댓글
   reference_id: string | null;
   title: string;
   body: string | null;
@@ -75,7 +83,12 @@ export type SocialErrorCode =
   | "target_not_found" // 0038 — 그 닉네임의 사람이 없음
   | "not_addressee" // 0038 — 내가 받은 요청이 아님
   | "not_pending" // 0038 — 이미 처리된 요청
-  | "not_requester"; // 0038 — 내가 보낸 요청이 아님
+  | "not_requester" // 0038 — 내가 보낸 요청이 아님
+  | "comment_empty" // 0082 — 빈 댓글
+  | "comment_too_long" // 0082 — 200자 초과
+  | "comment_cooldown" // 0082 — 10초 안에 또 달았다
+  | "comment_not_found" // 0084 — 없거나 고칠 수 없는 댓글
+  | "not_author"; // 0084 — 내가 쓴 댓글이 아니다
 
 const SOCIAL_ERROR_CODES: SocialErrorCode[] = [
   "cheer_limit",
@@ -102,6 +115,14 @@ const SOCIAL_ERROR_CODES: SocialErrorCode[] = [
   "not_addressee",
   "not_pending",
   "not_requester",
+  // 0082 — ⚠️ 위 주석의 함정이 여기도 그대로 적용된다. 유니온만 늘리면
+  // 타입은 통과하는데 코드가 null로 떨어져 화면엔 "알 수 없는 오류"만 뜬다.
+  "comment_empty",
+  "comment_too_long",
+  "comment_cooldown",
+  // 0084 — 같은 함정. 배열에 안 넣으면 코드가 null로 떨어진다.
+  "comment_not_found",
+  "not_author",
 ];
 
 export class SocialError extends Error {
@@ -139,6 +160,26 @@ export type FeedItem = {
   breakdown: BreakdownExercise[];
   reactions: Record<ReactionType, number>;
   myReactions: Set<ReactionType>;
+  /**
+   * 댓글 + 말 없는 응원 집계 (0082).
+   *
+   * `cheers` 한 질의를 접은 것이다 — 카드마다 따로 부르지 않는다. 스레드를
+   * 펼칠 때도 새 조회가 없다(피드가 이미 손에 쥐고 있다). 새 댓글을 달았을
+   * 때만 그 세션 것을 다시 읽는다.
+   */
+  thread: SessionThread;
+  /**
+   * 좋아요를 누른 사람 (0084) — 누른 순서.
+   *
+   * 새 질의가 없다. `fetchReactions`가 이미 `user_id`별로 모아 두던 것을
+   * 버리지 않고 꺼낸 것뿐이다.
+   */
+  likers: string[];
+  /**
+   * 댓글 작성자 **와 좋아요 누른 사람**의 프로필 — 스레드·명단이 닉네임과
+   * 아바타를 그릴 재료 (0083 → 0084).
+   */
+  people: Map<string, { nickname: string; avatarUrl: string | null }>;
 };
 
 export const FEED_PAGE_SIZE = 20;
@@ -238,6 +279,13 @@ export async function getCrewFeed(
   myUserId: string,
   before?: string,
   photoOnly = false,
+  /**
+   * 이 세션 하나만 (2026-08-30). 알림에서 `/feed?session=<id>`로 들어올 때
+   * 그 게시물이 첫 페이지 20건 밖에 있을 수 있어서, **같은 질의에 id 조건만
+   * 더해** 집어 온다. 별도 조회 경로를 만들면 가시성 조건(완료·공개·미삭제·크루)이
+   * 두 곳으로 갈라지고, 갈라지면 언젠가 한쪽만 고쳐진다.
+   */
+  onlySessionId?: string,
 ): Promise<FeedItem[]> {
   const supabase = getSupabaseBrowserClient();
   // RLS가 이미 크루 기준이지만 클라 쿼리도 좁혀야 FEED_PAGE_SIZE가 정확하다.
@@ -262,6 +310,7 @@ export async function getCrewFeed(
     .order("completed_at", { ascending: false })
     .limit(FEED_PAGE_SIZE);
   if (before) query = query.lt("completed_at", before);
+  if (onlySessionId) query = query.eq("id", onlySessionId);
 
   const { data, error } = await query;
   if (error) throw error;
@@ -271,12 +320,44 @@ export async function getCrewFeed(
   const sessionIds = rows.map((r) => r.id);
   const userIds = [...new Set(rows.map((r) => r.user_id))];
 
-  const [profiles, reactions, streaks, photoUrls] = await Promise.all([
+  const [profiles, reactions, streaks, photoUrls, threads] = await Promise.all([
     fetchProfiles(userIds),
     fetchReactions(sessionIds),
     fetchStreaks(userIds),
     signFirstImages(rows),
+    fetchSessionThreads(sessionIds),
   ]);
+
+  // 댓글 작성자가 이 페이지의 게시물 주인이 아닐 수 있다. 모자란 사람만 한 번 더
+  // 부른다 — 대개 0명이라 왕복이 안 는다.
+  //
+  // ⚠️ `fetchProfiles`(테이블 직접 select)가 **아니다.** `profiles_select_own_or_crew`는
+  //    "내 크루 / 같은 그룹"까지만 열려서, 글 주인의 크루이지만 나와는 아닌 사람의
+  //    이름이 안 온다 — 화면에 **누가 한 말인지 모르는 댓글**이 남는다.
+  //    0083의 RPC가 `session_crew_shared`(댓글 읽기와 **같은 판정**)로 문을 열고
+  //    **닉네임·아바타만** 돌려준다. 테이블 정책을 넓히면 `invite_code`·유입 데이터까지
+  //    딸려 나가므로 그 길을 안 썼다.
+  const actorIds = new Set<string>();
+  for (const t of threads.values()) {
+    for (const c of t.comments) {
+      actorIds.add(c.senderId);
+      for (const reply of c.replies) actorIds.add(reply.senderId);
+    }
+  }
+  for (const agg of reactions.values()) {
+    for (const id of agg.mine.keys()) actorIds.add(id);
+  }
+  if ([...actorIds].some((id) => !profiles.has(id))) {
+    for (const [id, p] of await fetchActorProfiles(sessionIds)) {
+      if (!profiles.has(id)) profiles.set(id, p);
+    }
+  }
+  const people = new Map(
+    [...profiles].map(([id, p]) => [
+      id,
+      { nickname: p.nickname, avatarUrl: p.avatar_url },
+    ]),
+  );
 
   return rows.map((r) => {
     const sets = (r.workout_exercises ?? []).flatMap((ex) =>
@@ -310,8 +391,158 @@ export async function getCrewFeed(
       breakdown: toFeedBreakdown(r.workout_exercises),
       reactions: reaction?.counts ?? { fire: 0, clap: 0, like: 0 },
       myReactions: reaction?.mine.get(myUserId) ?? new Set<ReactionType>(),
+      thread: threads.get(r.id) ?? EMPTY_SESSION_THREAD,
+      likers: [...(reaction?.mine.keys() ?? [])],
+      people,
     };
   });
+}
+
+// ── 게시물 스레드: 댓글 + 응원 (0082) ────────────────────────
+
+/**
+ * 한 페이지치 세션의 `cheers` 행을 한 번에 읽어 세션별로 접는다.
+ *
+ * 읽기에 RPC를 쓰지 않는 이유 — `cheers_select_related` 정책이
+ * `session_crew_shared(session_id)`를 이미 허용한다. 즉 **크루원은 그 세션의
+ * 응원·댓글을 이미 다 읽을 수 있고**, 정책이 크루 밖을 알아서 자른다.
+ * 정의자 RPC를 새로 놓으면 같은 판정이 두 곳으로 갈라진다.
+ */
+const THREAD_FETCH_CAP = 500;
+
+async function fetchSessionThreads(
+  sessionIds: string[],
+): Promise<Map<string, SessionThread>> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("cheers")
+    .select("id, session_id, sender_id, cheer_type, message, created_at, parent_id, edited_at")
+    .in("session_id", sessionIds)
+    .order("created_at", { ascending: true })
+    // ⚠️ 한 페이지(세션 20건)의 응원·댓글 합계 상한이다. 크루가 한 자릿수인
+    //    이 앱에서는 닿을 일이 없다(응원은 보낸 사람당 3개 상한). 닿으면
+    //    **오래된 쪽부터 남고 최신 댓글이 잘린다** — 그때는 세션별 상한을
+    //    주는 RPC로 바꿔야지, 이 숫자만 올리지 마라.
+    .limit(THREAD_FETCH_CAP);
+  if (error) throw error;
+
+  const bySession = new Map<string, SessionCheerRow[]>();
+  for (const row of data ?? []) {
+    const r = row as {
+      id: string;
+      session_id: string;
+      sender_id: string;
+      cheer_type: string;
+      message: string | null;
+      created_at: string;
+      parent_id: string | null;
+      edited_at: string | null;
+    };
+    const list = bySession.get(r.session_id) ?? [];
+    list.push({
+      id: r.id,
+      sessionId: r.session_id,
+      senderId: r.sender_id,
+      cheerType: r.cheer_type as SessionCheerType,
+      message: r.message,
+      createdAt: new Date(r.created_at),
+      parentId: r.parent_id,
+      editedAt: r.edited_at ? new Date(r.edited_at) : null,
+    });
+    bySession.set(r.session_id, list);
+  }
+
+  return new Map(
+    [...bySession].map(([id, rows]) => [id, foldSessionThread(rows)]),
+  );
+}
+
+/**
+ * 댓글을 남기거나 **좋아요를 누른** 사람의 닉네임·아바타 (0083 → 0084).
+ *
+ * `profiles`를 직접 읽지 않는 이유 — `profiles_select_own_or_crew`는 "내 크루 /
+ * 같은 그룹"까지만 열려서, **글 주인의 크루이지만 나와는 아닌** 사람의 이름이
+ * 안 온다. 그러면 댓글 내용은 보이는데 작성자가 "크루원"으로 뜬다.
+ *
+ * RPC는 `session_crew_shared` — **댓글 읽기 정책과 같은 판정** — 으로 문을 열고
+ * 세 칸만 돌려준다. 실패해도 던지지 않는다: 이름이 없으면 화면이 "크루원"으로
+ * 떨어질 뿐이고, 그게 피드 전체가 안 뜨는 것보다 낫다.
+ */
+async function fetchActorProfiles(
+  sessionIds: string[],
+): Promise<Map<string, { nickname: string; avatar_url: string | null }>> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase.rpc("get_session_actor_profiles", {
+    p_session_ids: sessionIds,
+  });
+  if (error) return new Map();
+  return new Map(
+    ((data ?? []) as {
+      id: string;
+      nickname: string;
+      avatar_url: string | null;
+    }[]).map((p) => [p.id, { nickname: p.nickname, avatar_url: p.avatar_url }]),
+  );
+}
+
+/** 세션 하나의 스레드 — 댓글을 달거나 지운 뒤 그 카드만 갱신할 때 쓴다 */
+export async function getSessionThread(
+  sessionId: string,
+): Promise<SessionThread> {
+  const threads = await fetchSessionThreads([sessionId]);
+  return threads.get(sessionId) ?? EMPTY_SESSION_THREAD;
+}
+
+/**
+ * 댓글 달기 (0082).
+ *
+ * `send_cheer`와 **테이블은 같고 정책만 다르다** — 완료된 세션에, 본인 글에도,
+ * 횟수 제한 없이, 200자까지. 포인트는 주지 않는다(도배가 이득이 되면 안 된다).
+ * 알림은 **세션 주인 + 앞선 댓글 작성자 전원**에게 서버가 팬아웃한다.
+ */
+export async function postSessionComment(
+  sessionId: string,
+  body: string,
+  /** 답글이면 부모 댓글 id (0084). 서버가 2단계로 눕힌다 */
+  parentId?: string | null,
+): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  const { error } = await supabase.rpc("post_session_comment", {
+    p_session_id: sessionId,
+    p_body: body,
+    p_parent_id: parentId ?? null,
+  });
+  if (error) throw toSocialError(error);
+}
+
+/**
+ * 내 댓글 고치기 (0084).
+ *
+ * 직접 UPDATE가 아니라 RPC인 이유 — `cheers`에는 UPDATE 정책이 아예 없고,
+ * 열면 **RLS가 컬럼을 못 가려서** `session_id`·`parent_id`·`cheer_type`까지
+ * 바꿀 수 있게 된다(남의 스레드로 댓글을 옮기거나 응원을 댓글로 둔갑시키는 길).
+ * 정의자 함수는 `message`와 `edited_at`만 건드린다.
+ */
+export async function editMyComment(
+  commentId: string,
+  body: string,
+): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  const { error } = await supabase.rpc("edit_session_comment", {
+    p_comment_id: commentId,
+    p_body: body,
+  });
+  if (error) throw toSocialError(error);
+}
+
+/**
+ * 내 댓글 지우기. RPC가 아니라 직접 delete인 이유 — `cheers_delete_own`
+ * 정책(0011:145)이 `sender_id = auth.uid()`로 이미 본인 것만 연다.
+ */
+export async function deleteMyComment(commentId: string): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  const { error } = await supabase.from("cheers").delete().eq("id", commentId);
+  if (error) throw toSocialError(error);
 }
 
 async function fetchProfiles(

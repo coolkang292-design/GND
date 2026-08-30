@@ -1299,3 +1299,43 @@ export async function getLatestCrewWorkoutWithPhoto(
     completedAt: new Date(row.completed_at),
   };
 }
+
+// ── 게시물 캡션 (2026-08-30) ─────────────────────────────────
+
+/**
+ * 완료한 운동에 붙이는 **내 말**을 저장한다.
+ *
+ * 자리는 `workout_sessions.title` — 0004부터 있던 컬럼인데
+ * (`check (title is null or char_length(title) <= 60)`) 아무도 쓰지도 보여주지도
+ * 않고 있었다. 피드는 이미 이 값을 조회해서 `FeedItem.title`로 들고 있었다.
+ * 그래서 **마이그레이션이 필요 없다.**
+ *
+ * RPC가 아닌 이유 — `sessions_update_own` 정책(0004:234)이
+ * `user_id = auth.uid()`로 주인의 UPDATE를 이미 연다. 정의자 함수를 새로 놓으면
+ * 같은 판정이 두 곳으로 갈라진다.
+ *
+ * ⚠️ 길이 검사는 부르기 **전에** `isValidCaption`으로 한다. 60자를 넘기면
+ *    서버 CHECK에 걸려 UPDATE가 통째로 실패하는데, 화면에서 막지 않으면
+ *    사용자는 저장이 왜 안 되는지 알 길이 없다.
+ */
+export async function updateSessionCaption(
+  sessionId: string,
+  caption: string | null,
+): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("workout_sessions")
+    .update({ title: caption })
+    .eq("id", sessionId)
+    // ⚠️⚠️ **`.select()`를 빼지 마라 (2026-08-30에 이걸로 샜다).**
+    //    빼면 PostgREST가 `Prefer: return=minimal`로 보내고, 그러면
+    //    **한 줄도 안 바뀌어도 `error`가 null이다.** RLS에 막히든 id가 틀리든
+    //    화면은 "저장했어요"라고 말하고 피드에는 아무것도 안 뜬다 —
+    //    실제로 완료 세션 136개 전부 `title`이 null인 채로 조용히 실패했다.
+    //    바뀐 행을 돌려받아 **0행이면 실패로 취급한다.**
+    .select("id");
+  if (error) throw error;
+  if (!data || data.length === 0) {
+    throw new Error("caption_not_saved");
+  }
+}

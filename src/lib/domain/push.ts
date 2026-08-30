@@ -4,10 +4,31 @@ export type PushPayload = {
   url: string;
 };
 
+/**
+ * `reference_id`가 **세션 id**인 유형 (0082).
+ *
+ * 이 유형들만 `/feed?session=<id>`로 보낸다. 나머지는 목적지가 유형만으로
+ * 정해진다.
+ *
+ * ⚠️⚠️ **`cheer_received`를 여기 넣지 마라.** `send_cheer`는
+ * `notify(..., c.id, ...)`로 **cheers 행 id**를 넘긴다 — 세션 id가 아니다.
+ * 넣으면 존재하지 않는 게시물로 보내게 된다. 세션 id를 넘기는 것은
+ * `notify_reaction`(`new.session_id`) · `record_beaten`(`p_session_id`) ·
+ * `post_session_comment`(`p_session_id`) 셋뿐이다.
+ * (응원은 애초에 **진행 중** 세션이라 게시물이 아직 없다 — `/feed`가 맞다.)
+ */
+const SESSION_DEEP_LINK_TYPES = new Set([
+  "comment_received", // 0082
+  "reaction_received",
+  "record_beaten",
+]);
+
 // 알림 유형별 푸시 탭 이동 목적지 (설계 §3)
 const PUSH_URL_BY_TYPE: Record<string, string> = {
   reaction_received: "/feed",
   record_beaten: "/feed",
+  // 0082 — 댓글. reference_id가 있으면 아래에서 `?session=`이 붙는다.
+  comment_received: "/feed",
   // ⚠️ **2026-08-14 정정: `/record` → `/profile`.** 옛 주석은 "배지 진열대가
   //    기록 탭 달력에 있다(2026-07-21)"였는데, 그 뒤 진열대가 `GrowthHub`로
   //    들어가면서 **내 정보 탭으로 옮겨졌다.** 라우팅만 안 따라와서, 알림은
@@ -56,11 +77,24 @@ export function pushPayloadFor(notification: {
   type: string;
   title: string | null;
   body: string | null;
+  /**
+   * `notifications.reference_id` (0082). 넘기면 게시물 딥링크가 붙는다.
+   *
+   * 선택 인자인 이유 — 안 넘기면 예전과 똑같이 유형별 고정 주소로 떨어진다.
+   * 호출부(알림함·푸시 라우트)를 한 번에 다 고치지 않아도 안전하다.
+   */
+  referenceId?: string | null;
 }): PushPayload {
+  const base = PUSH_URL_BY_TYPE[notification.type] ?? DEFAULT_PUSH_URL;
+  const deepLink =
+    notification.referenceId && SESSION_DEEP_LINK_TYPES.has(notification.type)
+      ? `/feed?session=${notification.referenceId}`
+      : base;
+
   return {
     title: notification.title || "GND",
     body: notification.body ?? "",
-    url: PUSH_URL_BY_TYPE[notification.type] ?? DEFAULT_PUSH_URL,
+    url: deepLink,
   };
 }
 

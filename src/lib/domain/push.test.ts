@@ -142,3 +142,66 @@ describe("workout_suggestion — 계획 없는 날 제안", () => {
     expect(payload.url).not.toBe("/home");
   });
 });
+
+/**
+ * 0082 — 알림에서 **그 게시물**로 돌아오는 길.
+ *
+ * 이게 없으면 댓글 알림을 눌러도 피드 최상단으로 떨어져서, 누가 무엇에 댓글을
+ * 달았는지 사용자가 찾을 수 없다. 대화가 왕복하지 않는다.
+ */
+describe("게시물 딥링크 (reference_id)", () => {
+  it.each(["comment_received", "reaction_received", "record_beaten"])(
+    "%s는 그 세션으로 보낸다",
+    (type) => {
+      expect(
+        pushPayloadFor({
+          type,
+          title: "t",
+          body: "b",
+          referenceId: "11111111-2222-3333-4444-555555555555",
+        }).url,
+      ).toBe("/feed?session=11111111-2222-3333-4444-555555555555");
+    },
+  );
+
+  /**
+   * ⚠️⚠️ 회귀 방어. `send_cheer`는 `notify(..., c.id, ...)`로 **cheers 행 id**를
+   * 넘긴다 — 세션 id가 아니다. 응원을 딥링크 목록에 넣으면 **존재하지 않는
+   * 게시물**로 보내게 된다. 응원은 애초에 진행 중 세션이라 게시물이 없다.
+   */
+  it("cheer_received는 reference_id가 있어도 딥링크로 만들지 않는다", () => {
+    expect(
+      pushPayloadFor({
+        type: "cheer_received",
+        title: "t",
+        body: "b",
+        referenceId: "11111111-2222-3333-4444-555555555555",
+      }).url,
+    ).toBe("/home");
+  });
+
+  it("reference_id가 없으면 예전 그대로 유형별 고정 주소", () => {
+    expect(
+      pushPayloadFor({ type: "comment_received", title: "t", body: "b" }).url,
+    ).toBe("/feed");
+    expect(
+      pushPayloadFor({
+        type: "reaction_received",
+        title: "t",
+        body: "b",
+        referenceId: null,
+      }).url,
+    ).toBe("/feed");
+  });
+
+  it("딥링크 대상이 아닌 유형은 reference_id를 무시한다", () => {
+    expect(
+      pushPayloadFor({
+        type: "badge_earned",
+        title: "t",
+        body: "b",
+        referenceId: "11111111-2222-3333-4444-555555555555",
+      }).url,
+    ).toBe("/profile");
+  });
+});

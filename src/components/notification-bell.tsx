@@ -40,6 +40,7 @@ const TYPE_ICON: Record<NotificationRow["type"], string> = {
   challenge_starting_soon: "⏰", // 0077 — 내일 시작해요
   challenge_dropped: "💤", // 0077 — 목표가 없어 이번 회차에서 빠졌어요
   workout_suggestion: "🚶", // 0078 — 계획 없는 날 운동 제안
+  comment_received: "💬", // 0082 — 게시물에 댓글
 };
 
 /** 🔔 + 미읽음 뱃지 + 알림함 바텀시트 (§9 알림함 — durable 저장 원천) */
@@ -129,11 +130,15 @@ export function NotificationBell() {
                     type="button"
                     onClick={() => {
                       setOpen(false);
+                      // ⚠️ `reference_id`를 넘겨야 **그 게시물**로 간다 (0082).
+                      //    빼면 피드 최상단으로 떨어져서, 누가 무엇에 댓글을
+                      //    달았는지 사용자가 찾을 수 없다.
                       router.push(
                         pushPayloadFor({
                           type: n.type,
                           title: n.title,
                           body: n.body,
+                          referenceId: n.reference_id,
                         }).url,
                       );
                     }}

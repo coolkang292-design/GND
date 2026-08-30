@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it } from "vitest";
 import type { BreakdownExercise } from "@/components/workout/set-breakdown";
+import { EMPTY_SESSION_THREAD } from "@/lib/domain/session-comments";
 import type { FeedItem } from "@/lib/social";
 import { FeedItemCard } from "./feed-item";
 
@@ -58,6 +59,9 @@ function feedItem(
     tabataMinutes: null,
     reactions: { fire: 1, clap: 0, like: 0 },
     myReactions: new Set(),
+    thread: EMPTY_SESSION_THREAD,
+    likers: [],
+    people: new Map(),
   };
 }
 
@@ -202,5 +206,275 @@ describe("FeedItemCard — 전신 인터벌 배지", () => {
     );
 
     expect(screen.queryByText(/전신 인터벌/)).toBeNull();
+  });
+});
+
+/**
+ * 캡션 + 댓글 (2026-08-30, 0082).
+ *
+ * 캡션은 `workout_sessions.title`이다 — 0004부터 있던 컬럼인데 **렌더하는 곳이
+ * 한 군데도 없었다.** 피드는 이미 조회해서 손에 들고 있으면서 버리고 있었다.
+ */
+describe("FeedItemCard — 캡션", () => {
+  it("캡션이 있으면 닉네임과 함께 그린다 (인스타 캡션 형식)", () => {
+    const item = { ...feedItem(null), title: "💀 오늘 다 털렸다" };
+    const html = renderToStaticMarkup(
+      <FeedItemCard item={item} userId="me" onProfileClick={() => {}} />,
+    );
+    expect(html).toContain("💀 오늘 다 털렸다");
+  });
+
+  it("사진 카드에서도 같은 캡션이 나온다 — 두 변형이 같은 footer를 쓴다", () => {
+    const item = {
+      ...feedItem("https://example.com/workout.jpg"),
+      title: "🔥 컨디션 좋았다",
+    };
+    const html = renderToStaticMarkup(
+      <FeedItemCard item={item} userId="me" onProfileClick={() => {}} />,
+    );
+    expect(html).toContain("🔥 컨디션 좋았다");
+  });
+
+  /**
+   * ⚠️ 회귀 방어. 남의 게시물에 캡션 칩이 뜨면 **남의 운동에 내 말을 쓰려다
+   * 서버 RLS에 막힌다** — 사용자에게는 그냥 안 되는 버튼으로 보인다.
+   */
+  it("남의 게시물에는 캡션 칩을 내주지 않는다", () => {
+    const item = { ...feedItem(null), userId: "friend-1" };
+    const html = renderToStaticMarkup(
+      <FeedItemCard
+        item={item}
+        userId="me"
+        onProfileClick={() => {}}
+        onItemChange={() => {}}
+      />,
+    );
+    expect(html).not.toContain("직접 쓰기");
+  });
+
+  /**
+   * ⚠️⚠️ 회귀 방어 (사용자 결정 2026-08-30):
+   * > "표시된 기분은 피드에서 다 보여 주지 말고 선택한 기분만 표시하게 해줘"
+   *
+   * 피드 카드에서는 칩 6개가 **접혀 있어야** 한다. 펼쳐 두면 카드마다 가로
+   * 스크롤 편집 도구가 깔려서 게시물보다 도구가 더 커진다.
+   */
+  it("피드 카드에서는 기분 칩을 다 펼치지 않는다 — 버튼 하나만", () => {
+    const item = { ...feedItem(null), userId: "me", title: null };
+    const html = renderToStaticMarkup(
+      <FeedItemCard
+        item={item}
+        userId="me"
+        onProfileClick={() => {}}
+        onItemChange={() => {}}
+      />,
+    );
+    expect(html).toContain("오늘 기분 남기기");
+    expect(html).not.toContain("💀 오늘 다 털렸다"); // CAPTION_CHIPS[0]
+    expect(html).not.toContain("🧊 몸이 무거웠다"); // CAPTION_CHIPS[5]
+    expect(html).not.toContain("직접 쓰기");
+  });
+
+  it("버튼을 누르면 그때 칩이 펼쳐진다", () => {
+    const item = { ...feedItem(null), userId: "me", title: null };
+    render(
+      <FeedItemCard
+        item={item}
+        userId="me"
+        onProfileClick={() => {}}
+        onItemChange={() => {}}
+      />,
+    );
+    expect(screen.queryByText("💀 오늘 다 털렸다")).toBeNull();
+    fireEvent.click(screen.getByText("✍️ 오늘 기분 남기기"));
+    expect(screen.getByText("💀 오늘 다 털렸다")).toBeTruthy();
+  });
+
+  it("이미 고른 기분이 있으면 그것만 캡션 줄에 보이고 칩은 접혀 있다", () => {
+    const item = {
+      ...feedItem(null),
+      userId: "me",
+      title: "🔥 컨디션 좋았다",
+    };
+    const html = renderToStaticMarkup(
+      <FeedItemCard
+        item={item}
+        userId="me"
+        onProfileClick={() => {}}
+        onItemChange={() => {}}
+      />,
+    );
+    expect(html).toContain("🔥 컨디션 좋았다");
+    expect(html).not.toContain("💀 오늘 다 털렸다");
+    expect(html).toContain("기분 바꾸기");
+  });
+
+  /**
+   * ⚠️ `onItemChange`가 없으면 카드는 읽기 전용이다. 저장할 곳이 없는데 칩을
+   * 열어 두면 사용자가 누른 것이 다음 렌더에 조용히 사라진다.
+   */
+  it("onItemChange가 없으면 칩을 열지 않는다", () => {
+    const item = { ...feedItem(null), userId: "me", title: null };
+    const html = renderToStaticMarkup(
+      <FeedItemCard item={item} userId="me" onProfileClick={() => {}} />,
+    );
+    expect(html).not.toContain("직접 쓰기");
+  });
+});
+
+describe("FeedItemCard — 댓글", () => {
+  const withComments = (count: number): FeedItem => ({
+    ...feedItem(null),
+    thread: {
+      comments: Array.from({ length: count }, (_, i) => ({
+        id: `c${i}`,
+        senderId: "friend-1",
+        body: `댓글 ${i}`,
+        createdAt: new Date("2026-08-30T10:00:00Z"),
+        fromCheer: false,
+        parentId: null,
+        replies: [],
+        editedAt: null,
+      })),
+      cheerTally: [],
+      cheerTotal: 0,
+    },
+    likers: [],
+    people: new Map([["friend-1", { nickname: "오빙크", avatarUrl: null }]]),
+  });
+
+  it("댓글 수를 액션 줄에 표시한다", () => {
+    const html = renderToStaticMarkup(
+      <FeedItemCard
+        item={withComments(3)}
+        userId="me"
+        onProfileClick={() => {}}
+        onItemChange={() => {}}
+      />,
+    );
+    expect(html).toContain('aria-label="댓글 3개"');
+  });
+
+  it("접혀 있을 때는 스레드를 그리지 않는다", () => {
+    const html = renderToStaticMarkup(
+      <FeedItemCard
+        item={withComments(2)}
+        userId="me"
+        onProfileClick={() => {}}
+        onItemChange={() => {}}
+      />,
+    );
+    expect(html).not.toContain("댓글 남기기");
+  });
+
+  it("💬를 누르면 스레드와 입력창이 열린다", () => {
+    render(
+      <FeedItemCard
+        item={withComments(2)}
+        userId="me"
+        onProfileClick={() => {}}
+        onItemChange={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "댓글 2개" }));
+    expect(screen.getByLabelText("댓글 입력")).toBeTruthy();
+    expect(screen.getByText("댓글 0")).toBeTruthy();
+  });
+
+  /**
+   * ⚠️ 알림에서 들어온 게시물(`/feed?session=<id>`)은 **댓글이 펼쳐진 채로**
+   * 열려야 한다. 접혀 있으면 사용자가 알림을 누르고도 한 번 더 눌러야 한다 —
+   * 무엇 때문에 왔는지 못 찾는다.
+   */
+  it("openComments면 처음부터 펼쳐서 연다", () => {
+    render(
+      <FeedItemCard
+        item={withComments(1)}
+        userId="me"
+        onProfileClick={() => {}}
+        onItemChange={() => {}}
+        openComments
+      />,
+    );
+    expect(screen.getByLabelText("댓글 입력")).toBeTruthy();
+  });
+
+  it("댓글이 3개를 넘으면 '모두 보기'로 접는다", () => {
+    render(
+      <FeedItemCard
+        item={withComments(5)}
+        userId="me"
+        onProfileClick={() => {}}
+        onItemChange={() => {}}
+        openComments
+      />,
+    );
+    expect(screen.getByText("댓글 5개 모두 보기")).toBeTruthy();
+    // 최신 2개만 — 앞에서 자르면 가장 오래된 것이 남는다
+    expect(screen.queryByText("댓글 0")).toBeNull();
+    expect(screen.getByText("댓글 4")).toBeTruthy();
+  });
+});
+
+/**
+ * 액션 줄 (2026-08-30) — 인스타식 민무늬 아이콘.
+ *
+ * 사용자가 인스타 화면을 첨부하며 "감정을 남기는 것도 심플하게",
+ * "공유하기만 빼면 되겠네"라고 했다.
+ */
+describe("FeedItemCard — 액션 줄", () => {
+  it("공유·북마크 버튼을 두지 않는다", () => {
+    render(
+      <FeedItemCard
+        item={feedItem(null)}
+        userId="me"
+        onProfileClick={() => {}}
+        onItemChange={() => {}}
+      />,
+    );
+    const labels = screen
+      .getAllByRole("button")
+      .map((b) => b.getAttribute("aria-label") ?? b.textContent ?? "");
+    expect(labels.some((l) => /공유|share|저장|북마크/.test(l))).toBe(false);
+  });
+
+  /** 사용자 결정 2026-08-30: "감정을 하트와 코멘트만 남기고 나머지 제거" */
+  it("하트와 댓글 둘만 내준다 — 🔥·👏 버튼은 없다", () => {
+    render(
+      <FeedItemCard
+        item={feedItem(null)}
+        userId="me"
+        onProfileClick={() => {}}
+        onItemChange={() => {}}
+      />,
+    );
+    expect(screen.getByRole("button", { name: /좋아요/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /댓글/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /불태웠다/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /멋지다/ })).toBeNull();
+  });
+
+  /**
+   * ⚠️⚠️ 회귀 방어. 하트가 `like`만 세면 운영 DB에 쌓인 🔥 12건·👏 3건이
+   * 화면에서 사라진다 — 눌러 준 사람의 반응이 없어진 것이다.
+   */
+  it("옛 🔥·👏를 합산해서 하트 옆에 낸다", () => {
+    const item = {
+      ...feedItem(null),
+      reactions: { fire: 12, clap: 3, like: 1 },
+    };
+    render(
+      <FeedItemCard item={item} userId="me" onProfileClick={() => {}} />,
+    );
+    expect(screen.getByRole("button", { name: "좋아요 16" })).toBeTruthy();
+  });
+
+  /** 0을 그리면 안 누른 것이 `0`으로 줄을 채워 지저분해진다 */
+  it("0이면 숫자를 그리지 않는다", () => {
+    const item = { ...feedItem(null), reactions: { fire: 0, clap: 0, like: 0 } };
+    const html = renderToStaticMarkup(
+      <FeedItemCard item={item} userId="me" onProfileClick={() => {}} />,
+    );
+    expect(html).not.toContain(">0<");
   });
 });

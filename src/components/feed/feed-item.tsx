@@ -2,9 +2,17 @@
 
 import { Avatar } from "@/components/avatar";
 import { useState } from "react";
+import { CaptionPicker } from "@/components/feed/caption-picker";
+import { CommentThread } from "@/components/feed/comment-thread";
+import { LikersSheet } from "@/components/feed/likers-sheet";
 import { ReactionBar } from "@/components/feed/reaction-bar";
 import { PhotoStamp } from "@/components/photo-stamp";
 import { SetBreakdown } from "@/components/workout/set-breakdown";
+import { normalizeCaption } from "@/lib/domain/session-caption";
+import {
+  totalCommentCount,
+  type SessionThread,
+} from "@/lib/domain/session-comments";
 import type { FeedItem } from "@/lib/social";
 import { timeAgo } from "@/lib/time-ago";
 
@@ -20,6 +28,16 @@ type Props = {
   userId: string;
   /** 닉네임·아바타 탭 — 호출부가 프로필 시트를 연다 */
   onProfileClick: () => void;
+  /**
+   * 카드가 스스로 바꾼 것(캡션·댓글)을 목록에 되돌린다 (2026-08-30).
+   *
+   * 없으면 카드는 **읽기 전용**이 된다 — 캡션 칩과 댓글 입력이 사라진다.
+   * 호출부가 상태를 안 갖고 있는데 편집을 열어 두면, 사용자가 남긴 것이
+   * 다음 렌더에 조용히 사라진다.
+   */
+  onItemChange?: (next: FeedItem) => void;
+  /** 알림에서 들어온 게시물 — 댓글을 펼친 채로 연다 */
+  openComments?: boolean;
 };
 
 /**
@@ -69,8 +87,148 @@ function WorkoutSummary({ item, stats }: { item: FeedItem; stats: string[] }) {
   );
 }
 
+/**
+ * 캡션 — 게시물에 붙은 **주인의 말** (2026-08-30).
+ *
+ * `workout_sessions.title`을 그린다. 0004부터 있던 컬럼이고 피드가 이미
+ * 조회하고 있었는데 **렌더하는 곳이 한 군데도 없었다.**
+ *
+ * ⚠️ 댓글과 다른 것이다. 댓글은 대화(`cheers`), 캡션은 게시물의 말이다.
+ *    캡션이 없으면 게시물이 순수 운동 데이터라 **답할 거리가 없어 댓글도 안 달린다.**
+ *
+ * 본인 게시물이면 비어 있어도 칩을 내준다 — 옛 게시물에도 나중에 붙일 수 있어야
+ * 한다(`LatePhotoButton`과 같은 사상).
+ */
+function Caption({
+  item,
+  isMine,
+  onItemChange,
+}: {
+  item: FeedItem;
+  isMine: boolean;
+  onItemChange?: (next: FeedItem) => void;
+}) {
+  const caption = normalizeCaption(item.title);
+  const editable = isMine && onItemChange !== undefined;
+
+  if (!caption && !editable) return null;
+
+  return (
+    <div className="flex flex-col gap-2 px-4 pb-2">
+      {caption && (
+        <p className="text-[13.5px] leading-snug break-words">
+          <span className="font-extrabold">{item.nickname}</span> {caption}
+        </p>
+      )}
+      {editable && (
+        <CaptionPicker
+          sessionId={item.sessionId}
+          caption={item.title}
+          onSaved={(next) => onItemChange!({ ...item, title: next })}
+        />
+      )}
+    </div>
+  );
+}
+
+/** 액션 줄 + 캡션 + 댓글 — 사진 카드와 요약 카드가 **같은 것을 쓴다** */
+function CardFooter({
+  item,
+  userId,
+  onItemChange,
+  openComments,
+}: {
+  item: FeedItem;
+  userId: string;
+  onItemChange?: (next: FeedItem) => void;
+  openComments?: boolean;
+}) {
+  const [showComments, setShowComments] = useState(openComments ?? false);
+  const [showLikers, setShowLikers] = useState(false);
+  // 답글까지 센다 — 스레드에 5줄이 있는데 💬 2로 뜨면 안 맞는다
+  const commentCount = totalCommentCount(item.thread);
+
+  return (
+    <>
+      <Caption
+        item={item}
+        isMine={item.userId === userId}
+        onItemChange={onItemChange}
+      />
+
+      {/* 인스타식 액션 줄 — 민무늬 아이콘 둘(❤️ 💬).
+          🔥·👏 버튼과 공유(➤)·북마크(🔖)는 없다
+          (사용자 결정 2026-08-30, 근거는 `reaction-bar.tsx` 주석). */}
+      <div className="flex items-center gap-3.5 px-4 py-2.5">
+        <ReactionBar
+          sessionId={item.sessionId}
+          userId={userId}
+          counts={item.reactions}
+          myReactions={item.myReactions}
+        />
+        <button
+          type="button"
+          onClick={() => setShowComments((open) => !open)}
+          aria-expanded={showComments}
+          aria-label={`댓글 ${commentCount}개`}
+          className="flex items-center gap-1 py-1.5 text-[15px] leading-none"
+        >
+          <span className={showComments ? "" : "opacity-40 grayscale"}>💬</span>
+          {commentCount > 0 && (
+            <span
+              className={`text-[12.5px] font-bold ${
+                showComments ? "text-accent" : "text-muted"
+              }`}
+            >
+              {commentCount}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* 좋아요 명단 — 새 조회가 없다. 피드가 이미 들고 있는 것을 펼칠 뿐이다 */}
+      {item.likers.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setShowLikers(true)}
+          className="-mt-1 px-4 pb-2 text-left text-[12px] font-bold text-muted"
+        >
+          좋아요 {item.likers.length}개 모두 보기
+        </button>
+      )}
+
+      {showComments && onItemChange && (
+        <CommentThread
+          sessionId={item.sessionId}
+          viewerId={userId}
+          thread={item.thread}
+          people={item.people}
+          onThreadChange={(thread: SessionThread) =>
+            onItemChange({ ...item, thread })
+          }
+        />
+      )}
+
+      {showLikers && (
+        <LikersSheet
+          likers={item.likers}
+          people={item.people}
+          viewerId={userId}
+          onClose={() => setShowLikers(false)}
+        />
+      )}
+    </>
+  );
+}
+
 /** 사진 기록은 몰입형 카드, 일반 기록은 빠르게 읽는 요약 카드로 표시한다. */
-export function FeedItemCard({ item, userId, onProfileClick }: Props) {
+export function FeedItemCard({
+  item,
+  userId,
+  onProfileClick,
+  onItemChange,
+  openComments,
+}: Props) {
   const stats: string[] = [];
   if (item.durationMinutes > 0) stats.push(`${item.durationMinutes}분`);
   if (item.volume.weightVolumeKg > 0)
@@ -124,14 +282,12 @@ export function FeedItemCard({ item, userId, onProfileClick }: Props) {
         </div>
 
         <WorkoutSummary item={item} stats={stats} />
-        <div className="px-4 py-3">
-          <ReactionBar
-            sessionId={item.sessionId}
-            userId={userId}
-            counts={item.reactions}
-            myReactions={item.myReactions}
-          />
-        </div>
+        <CardFooter
+          item={item}
+          userId={userId}
+          onItemChange={onItemChange}
+          openComments={openComments}
+        />
       </article>
     );
   }
@@ -169,14 +325,12 @@ export function FeedItemCard({ item, userId, onProfileClick }: Props) {
       </div>
 
       <WorkoutSummary item={item} stats={stats} />
-      <div className="px-4 py-3">
-        <ReactionBar
-          sessionId={item.sessionId}
-          userId={userId}
-          counts={item.reactions}
-          myReactions={item.myReactions}
-        />
-      </div>
+      <CardFooter
+        item={item}
+        userId={userId}
+        onItemChange={onItemChange}
+        openComments={openComments}
+      />
     </article>
   );
 }

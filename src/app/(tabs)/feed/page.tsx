@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { useAuth } from "@/components/auth-provider";
 import { MemberProfileSheet } from "@/components/crew/member-profile-sheet";
 import { ActiveWorkoutCards } from "@/components/feed/active-workout-cards";
@@ -22,6 +28,40 @@ export default function FeedPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   // 시트는 화면당 1개만 띄운다 — 카드마다 두면 DOM이 항목 수만큼 늘어난다
   const [selected, setSelected] = useState<FeedItem | null>(null);
+
+  /**
+   * 알림에서 온 게시물 (0082) — `/feed?session=<id>`.
+   *
+   * 그 세션이 첫 페이지 20건 밖에 있을 수 있어서 **따로 한 건을 집어 와**
+   * 상단에 고정한다. 목록에도 있으면 아래에서 빼서 두 번 그리지 않는다.
+   *
+   * `null`은 "요청이 없었다", `"missing"`은 "요청은 있었는데 못 찾았다"다.
+   * 둘을 합치면 지워졌거나 크루가 끊긴 게시물로 들어왔을 때 **아무 말 없이
+   * 그냥 피드가 뜨고**, 사용자는 알림이 고장 났다고 생각한다.
+   */
+  const [pinned, setPinned] = useState<FeedItem | "missing" | null>(null);
+
+  /**
+   * ⚠️ `useSearchParams`를 쓰지 않는다 — Suspense 경계를 요구해 빌드가 깨진다.
+   *    이 저장소가 그 훅을 세 번 거부했다(`login/page.tsx:50`·`auth/callback`·
+   *    `record-view.ts`).
+   *
+   * ⚠️ `useEffect` + `setState`도 아니다. `react-hooks/set-state-in-effect`가
+   *    막고, 초기값을 `window`에서 읽으면 서버가 그린 것과 달라져 하이드레이션이
+   *    깨진다. `useSyncExternalStore`가 정확히 이 경우를 위한 것이다 —
+   *    서버 스냅샷은 null, 하이드레이션 뒤 클라이언트 값으로 한 번 다시 그린다.
+   *    (`login/page.tsx`의 `fromInstalled`와 같은 수법)
+   *
+   * ⚠️ **주소에서 파라미터를 지우지 않는다.** `history.replaceState`로 지우면
+   *    다음 렌더의 스냅샷이 달라져 고정 카드가 **스스로 사라진다.** 남겨 두면
+   *    그 게시물의 고정 링크가 되고, 탭바로 `/feed`에 다시 오면 알아서 풀린다.
+   */
+  const pinnedId = useSyncExternalStore(
+    () => () => {},
+    () => new URLSearchParams(window.location.search).get("session"),
+    () => null,
+  );
+
   useEffect(() => {
     if (!configured || loading || !userId) return;
     let cancelled = false;
@@ -47,6 +87,25 @@ export default function FeedPage() {
     };
   }, [configured, loading, userId]);
 
+  useEffect(() => {
+    if (!configured || loading || !userId || !pinnedId) return;
+    let cancelled = false;
+
+    async function load() {
+      try {
+        // 같은 질의에 id 조건만 더한 것이라 가시성 규칙이 갈라지지 않는다
+        const found = await getCrewFeed(userId!, undefined, false, pinnedId!);
+        if (!cancelled) setPinned(found[0] ?? "missing");
+      } catch {
+        if (!cancelled) setPinned("missing");
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [configured, loading, userId, pinnedId]);
+
   // 날짜별 히스토리 그룹 — 크루 운동을 날짜 단위로 훑어볼 수 있게 (2026-07-18)
   // 기준 시각은 마운트 시 1회 고정 (렌더 중 Date.now()는 purity 규칙 위반)
   const [dateRef] = useState(() => {
@@ -59,9 +118,26 @@ export default function FeedPage() {
     };
   });
   const dayGroups = useMemo(
-    () => groupByDay(items, dateRef.tz),
-    [items, dateRef],
+    () =>
+      groupByDay(
+        // 상단에 고정한 것은 목록에서 뺀다 — 안 그러면 같은 카드가 둘이다
+        pinnedId ? items.filter((i) => i.sessionId !== pinnedId) : items,
+        dateRef.tz,
+      ),
+    [items, dateRef, pinnedId],
   );
+
+  /** 카드가 스스로 바꾼 것(캡션·댓글)을 목록에 되돌린다 */
+  const updateItem = useCallback((next: FeedItem) => {
+    setItems((prev) =>
+      prev.map((i) => (i.sessionId === next.sessionId ? next : i)),
+    );
+    setPinned((prev) =>
+      prev && prev !== "missing" && prev.sessionId === next.sessionId
+        ? next
+        : prev,
+    );
+  }, []);
 
   const loadMore = useCallback(async () => {
     if (!userId || items.length === 0) return;
@@ -89,6 +165,29 @@ export default function FeedPage() {
       </header>
 
       <ActiveWorkoutCards />
+
+      {pinnedId && (
+        <section className="flex flex-col gap-2">
+          <p className="flex items-center gap-2 text-xs font-extrabold text-accent">
+            <span>🔔</span> 알림에서 열어 본 운동
+          </p>
+          {pinned === null ? (
+            <p className="py-4 text-center text-sm text-muted">불러오는 중…</p>
+          ) : pinned === "missing" ? (
+            <p className="rounded-card border border-line bg-surface p-4 text-center text-sm text-muted shadow-card">
+              지금은 볼 수 없는 운동이에요. 지워졌거나 크루가 아니게 됐어요.
+            </p>
+          ) : (
+            <FeedItemCard
+              item={pinned}
+              userId={userId!}
+              onProfileClick={() => setSelected(pinned)}
+              onItemChange={updateItem}
+              openComments
+            />
+          )}
+        </section>
+      )}
 
       {!ready ? (
         <p className="py-10 text-center text-sm text-muted">불러오는 중…</p>
@@ -119,6 +218,7 @@ export default function FeedPage() {
                   item={item}
                   userId={userId!}
                   onProfileClick={() => setSelected(item)}
+                  onItemChange={updateItem}
                 />
               ))}
             </section>

@@ -35,7 +35,10 @@ export async function POST(req: Request) {
 
   const { data: notification, error: readError } = await admin
     .from("notifications")
-    .select("id, user_id, type, title, body, created_at, pushed_at")
+    // ⚠️ `reference_id`가 여기 없으면 **잠금화면 푸시만** 피드 최상단으로
+    //    떨어진다 (0082). 앱 안 알림함은 게시물로 가는데 푸시는 안 가는
+    //    반쪽 상태가 되고, 그건 화면을 안 보면 안 잡힌다.
+    .select("id, user_id, type, title, body, reference_id, created_at, pushed_at")
     .eq("id", id)
     .maybeSingle();
   if (readError) {
@@ -88,6 +91,7 @@ export async function POST(req: Request) {
       type: notification.type as string,
       title: notification.title as string | null,
       body: notification.body as string | null,
+      referenceId: notification.reference_id as string | null,
     }),
   );
 

@@ -39,6 +39,7 @@ import {
 import { RestBar } from "@/components/record/rest-bar";
 import { ActiveSessionOverlay } from "@/components/record/active-session-overlay";
 import { VerificationPhoto } from "@/components/record/verification-photo";
+import { CaptionPicker } from "@/components/feed/caption-picker";
 import { useIdleGuard, type IdleGuardSnapshot } from "@/hooks/use-idle-guard";
 import { useRestCountdown } from "@/hooks/use-rest-countdown";
 import {
@@ -536,6 +537,13 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const [challengePhotoRequired, setChallengePhotoRequired] = useState(false);
   /** 완료 화면에서 인증사진을 올렸는가 — 기여 문구가 "쌓여요"→"쌓였어요"로 바뀐다 */
   const [resultPhotoDone, setResultPhotoDone] = useState(false);
+  /**
+   * 완료 화면에서 고른 오늘 한마디 (2026-08-30) — `workout_sessions.title`.
+   *
+   * 저장은 `CaptionPicker`가 즉시 한다. 여기 상태는 **칩이 눌린 것으로 보이게**
+   * 하는 용도다(낙관적 반영·롤백의 되돌릴 자리이기도 하다).
+   */
+  const [resultCaption, setResultCaption] = useState<string | null>(null);
   /** 0kg 되묻기 — 열려 있는 질문과, 종목별로 이미 물어봤는지 */
   const [zeroWeightAsk, setZeroWeightAsk] = useState<{
     exKey: string;
@@ -2449,6 +2457,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
       } catch {
         recordNote = null;
       }
+      // 새 결과 화면이니 지난 회차의 한마디 선택을 지운다 (2026-08-30)
+      setResultCaption(null);
       setResult({
         sessionId,
         completedAtMs,
@@ -2943,6 +2953,27 @@ function WorkoutScreen({ userId }: { userId: string }) {
               </section>
             );
           })()}
+
+        {/*
+          오늘 한마디 (2026-08-30) — 원탭 칩.
+
+          ⚠️ **자유 입력창을 첫 화면에 놓지 마라 (사용자 결정).** 여기는 방금
+          운동을 끝낸 사람이 보는 화면이다 — 땀나고 숨찬 상태다. 인스타는 캡션을
+          소파에서 쓰지만 여기는 아니다. 지친 사람이 지불할 수 있는 비용은
+          **탭 1회**다. 자유 입력은 `CaptionPicker` 안에 접혀 있다.
+
+          ⚠️ 사진보다 **위**다. 사진은 없어도 되지만 한마디는 크루가 답할 거리를
+          만든다 — 캡션이 비면 게시물이 순수 데이터라 댓글이 안 달린다.
+        */}
+        <section className="rounded-card border border-line bg-surface p-4 shadow-card">
+          <CaptionPicker
+            sessionId={result.sessionId}
+            caption={resultCaption}
+            onSaved={setResultCaption}
+            onToast={showToast}
+            variant="complete"
+          />
+        </section>
 
         {/* 인증사진 (§11) — 지금 촬영만 (앨범 선택은 2026-08-01에 제거) */}
         <VerificationPhoto
