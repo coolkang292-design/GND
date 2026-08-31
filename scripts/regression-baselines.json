@@ -44,11 +44,11 @@
       "what": "챌린지 방 생성·참가·시작·집계."
     },
     "challenge-invite-link-check": {
-      "assertions": 27,
-      "source": "measured",
+      "assertions": 28,
+      "source": "derived",
       "tier": "accounts",
       "core": true,
-      "what": "챌린지 초대 링크. ⚠️ '🎯 0051 회귀' 단언을 지우지 마라 — 기존 사용자가 챌린지 링크를 눌러도 방장 크루가 늘지 않는다는 2026-07-31 사고(D5) 재발 방지선이다."
+      "what": "챌린지 초대 링크. ⚠️ 0095에서 규칙이 바뀌었다 — 챌린지 링크는 **친구를 만들지 않는다**. crewLinked=0 · 방장 크루 0명 유지 · 단 invited_by는 남는다(계보 보존)를 단언한다. 옛 단언(crewLinked=1)으로 되돌리면 D5 사고가 되살아난다. 27→28 (invited_by 단언 추가, 실행 후 --record로 확정할 것)"
     },
     "workout-plan-test": {
       "assertions": 22,

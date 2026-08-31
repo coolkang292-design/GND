@@ -213,13 +213,23 @@ try {
     JSON.stringify(gm.json),
   );
 
-  // ══ 0063 — 신입만 방장과 친구가 된다 ═══════════════════════════
+  // ══ 0095 — 챌린지 링크는 **친구를 만들지 않는다** ═══════════════
   //
-  // ⚠️⚠️ 이 블록이 2026-07-31 사고(D5)의 재발 방지선이다. `D5`는 링크 참가자
-  //      **전원**을 crew_links로 묶었고, 사용자가 "다른 챌린지 멤버가 내 크루에
-  //      섞였다"고 신고해서 0051이 지웠다. 0063은 **신입만·방장 한 사람만** 묶는다.
-  //      아래 두 가드 단언 중 하나라도 지우면 그 순간 D5가 되살아난다.
-  //      `supabase/migrations/0063_newcomer_challenge_crew_link.sql` 헤더 참조.
+  // 규칙의 역사(그대로 남긴다 — 되돌리려는 사람이 이유를 알아야 한다):
+  //   D5(2026-07-31) 링크 참가자 **전원**을 crew_links로 묶었다 → 사용자가
+  //                  "다른 챌린지 멤버가 내 크루에 섞였다"고 신고 → 0051이 지움
+  //   0063          **신입만·방장 한 사람만** 묶도록 좁힘
+  //   0095(2026-09-01) **아무도 안 묶는다.** 같은 링크인데 신규만 친구가 되고
+  //                  기존 사용자는 안 되는 불일치가 있었다(join_challenge_with_code는
+  //                  원래 안 만들었다). "누가 데려왔나"(invited_by)와 "누구와
+  //                  영구 친구인가"(crew_links)는 다른 사실이다.
+  //
+  // ⚠️⚠️ 아래 단언들은 **친구가 안 생기는 것**을 지킨다. `crewLinked === 1`로
+  //      되돌리면 D5가 되살아난다. 영구 크루는 참가자 프로필 → 크루 신청 →
+  //      수락으로만 생긴다(challenge-social-check 시나리오 G가 그걸 지킨다).
+  //
+  // ⚠️ 신입 가드(not_newcomer) 두 개는 **그대로 둔다.** crew_links를 안 만들어도
+  //    invited_by는 첫 접촉만 기록하므로 경로가 갈려 있어야 한다.
 
   const crewCount = async (id) => {
     const r = await api(
@@ -238,9 +248,9 @@ try {
   users.push(newbie);
   const asNew = await rpc(newbie.token, "join_challenge_as_newcomer", { p_code: code });
   check(
-    "🎯 신입이 링크로 참가하면 방장과 친구가 된다 (crewLinked=1)",
+    "🎯 0095: 신입이 링크로 참가해도 **친구가 되지 않는다** (crewLinked=0)",
     asNew.status === 200 &&
-      asNew.json?.crewLinked === 1 &&
+      asNew.json?.crewLinked === 0 &&
       asNew.json?.hostId === host.id &&
       typeof asNew.json?.hostNickname === "string",
     `${asNew.status} ${JSON.stringify(asNew.json)}`,
@@ -248,12 +258,23 @@ try {
 
   const hostCrew = await rpc(host.token, "get_my_crew");
   check(
-    "방장의 get_my_crew에 그 신입이 1명으로 보인다 (0이 아니라 1)",
-    (hostCrew.json ?? []).filter((m) => m.id === newbie.id).length === 1,
+    "🎯 0095: 방장의 get_my_crew에 그 신입이 **안 보인다**",
+    (hostCrew.json ?? []).filter((m) => m.id === newbie.id).length === 0,
     JSON.stringify(hostCrew.json),
   );
   const hostCrewAfterNewbie = await crewCount(host.id);
-  check("방장 크루가 정확히 1명이 됐다", hostCrewAfterNewbie === 1, `${hostCrewAfterNewbie}`);
+  check("🎯 0095: 방장 크루는 0명 그대로다", hostCrewAfterNewbie === 0, `${hostCrewAfterNewbie}`);
+
+  // ⚠️ 친구는 안 만들지만 **계보는 남는다.** 이게 없으면 인플루언서 확산 분석이
+  //    챌린지 초대 지점에서 끊긴다(referral-tree-check와 같은 원장).
+  const newbieProf = await api(
+    SERVICE, "GET", `/rest/v1/profiles?select=invited_by&id=eq.${newbie.id}`,
+  );
+  check(
+    "🎯 0095: 친구는 안 되지만 invited_by는 방장으로 남는다 (계보 보존)",
+    (newbieProf.json ?? [])[0]?.invited_by === host.id,
+    JSON.stringify(newbieProf.json),
+  );
 
   // ② crew_links 가드 — 이미 친구가 있는 사람 = 기존 사용자.
   //    참가는 0건인 계정으로 잡아 **친구 가드 하나만** 재게 한다.
@@ -286,8 +307,8 @@ try {
   // ⚠️ 이 한 줄이 0051 회귀 단언이다. 가드가 무너지면 여기가 1이 아니라 2·3이 된다.
   const hostCrewAfterVets = await crewCount(host.id);
   check(
-    "🎯 0051 회귀: 기존 사용자가 링크를 눌러도 방장 크루는 신입 1명 그대로다",
-    hostCrewAfterVets === 1,
+    "🎯 0051+0095 회귀: 기존 사용자가 링크를 눌러도 방장 크루는 0명 그대로다",
+    hostCrewAfterVets === 0,
     `${hostCrewAfterVets} (신입 직후 ${hostCrewAfterNewbie})`,
   );
 
@@ -347,8 +368,8 @@ try {
   const otherCrew = await crewCount(other.id);
   const hostCrewFinal = await crewCount(host.id);
   check(
-    "🎯 참가가 실패했으면 친구 연결도 안 남는다 — 방장 크루는 신입 1명 그대로",
-    otherCrew === 0 && hostCrewFinal === 1,
+    "🎯 참가가 실패했으면 아무것도 안 남는다 — 방장 크루 0명 그대로",
+    otherCrew === 0 && hostCrewFinal === 0,
     `other=${otherCrew} host=${hostCrewFinal}`,
   );
 

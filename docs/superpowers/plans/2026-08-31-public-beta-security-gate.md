@@ -735,3 +735,67 @@ SELECT·UPDATE·DELETE는 정책이 막지만 TRUNCATE는 정책 평가를 거�
 새 테이블이 같은 상태로 태어나지 않도록 `revoke all` → `grant insert`
 순서로 내렸다. **적용 후 재조회로 확인**: `anon` 권한 없음 · `authenticated` INSERT만 ·
 `service_role`은 집계용으로 유지.
+
+---
+---
+
+# 계획 갱신 — 2026-09-01: 배포 B가 마지막 남은 항목
+
+A · D · 계보 · C · 0095가 **전부 코드·DB·CI·배포까지 끝났다.** 남은 것은 **B 하나**다.
+
+## 완료 현황
+
+| 배포 | 내용 | 코드 | DB 적용 | CI | Vercel | 마이그레이션 |
+|---|---|---|---|---|---|---|
+| **A** | search_path · CI · 회원 지표 · 문서 | ✅ | ✅ | ✅ | ✅ | 0092 |
+| **D** | 퍼널 계측 + 인플루언서 비교 | ✅ | ✅ | ✅ | ✅ | 0093 |
+| **계보** | 뿌리 캠페인 · 확산 성과 | ✅ | — (DB 변경 0) | ✅ | ✅ | — |
+| **C** | 익명 확산형 mutation 게이트 | ✅ | ✅ | ✅ | ✅ | 0094 |
+| **0095** | 영구 크루 vs 챌린지 임시 소셜 | ✅ | ✅ | ✅ | ✅ | 0095 |
+| **B** | SECURITY DEFINER · GRANT · TRUNCATE 감사 | ⬜ | ⬜ | ⬜ | ⬜ | 0096 예정 |
+
+⚠️ **C를 D·계보보다 먼저 배포했다.** 원래 순서(A→D→C→B)와 다른 이유: C의 DB(0094)가
+이미 운영에 적용된 상태에서 배포를 미루면 **"DB엔 게이트가 있는데 앱엔 JWT 갱신 수정이
+없는"** 상태가 유지되는데, 그게 사용자가 최우선 결함으로 꼽은 바로 그 상황이었다.
+
+## B의 범위 (2026-09-01 사용자 지시 반영)
+
+원래 계획의 B(“SECURITY DEFINER 전수 감사 + 최소 REVOKE”)에 **두 가지가 추가됐다.**
+
+### 추가 ① 테이블 GRANT / TRUNCATE 전수 감사
+D에서 발견한 것: `authenticated`가 **12개 테이블에 TRUNCATE**를 갖고 있다.
+TRUNCATE는 **RLS를 우회한다.** PostgREST에 TRUNCATE 동사가 없어 공개 API로는 도달
+불가라 실효 위험은 낮지만, **그건 공격 가능성을 낮추는 요소일 뿐 권한이 필요하다는
+근거가 아니다.** 앱 역할에 필요 없는 권한은 없애는 것이 원칙이다.
+
+### 추가 ② ⭐ ALTER DEFAULT PRIVILEGES 근본 원인
+**이미 증명했다 (2026-09-01 실측).**
+
+```
+postgres       / public / TABLE → anon=arwdDxtm , authenticated=arwdDxtm
+supabase_admin / public / TABLE → anon=arwdDxtm , authenticated=arwdDxtm
+postgres       / public / FUNC  → anon=X       , authenticated=X
+      a=INSERT r=SELECT w=UPDATE d=DELETE D=TRUNCATE x=REFERENCES t=TRIGGER m=MAINTAIN
+```
+
+→ **새 테이블을 만드는 순간 `anon`·`authenticated`가 TRUNCATE 포함 전 권한을 받는다.**
+새 함수도 `anon` EXECUTE를 자동으로 받는다. 0093에서 `analytics_events`를 만들 때
+실제로 그랬고 별도 REVOKE로 막았다.
+
+**기존 12개만 REVOKE하고 끝내면 다음 테이블에서 또 생긴다.** 뿌리를 고쳐야 하고,
+고쳤으면 **새 객체로 재발 테스트**까지 해야 한다.
+
+## B 완료 조건
+
+Advisor 숫자가 아니라 **네 질문에 증거로 답하는 것**이다.
+
+1. 일반 사용자가 관리자 RPC로 남의 데이터를 읽거나 바꿀 수 있는가?
+2. 익명 사용자가 정식 전용 작업을 우회 실행할 수 있는가?
+3. 테이블에 필요 이상의 권한이 직접 부여돼 있는가?
+4. **지금 고쳐도 새 테이블에서 또 생기는가?**
+
+산출물: `docs/security/public-beta-rpc-audit.md` (89개 SECURITY DEFINER 전수) ·
+A/B/C/D 4배우 매트릭스 · `scripts/cross-user-abuse-check.mjs` ·
+`scripts/default-privilege-check.mjs` · 마이그레이션 0096
+
+**상세 인수인계: `docs/superpowers/HANDOFF-2026-09-01-deploy-b-security-audit.md`**
