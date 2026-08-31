@@ -4,6 +4,10 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RaiseGoalSheet } from "@/components/challenge/raise-goal-sheet";
 import { UiIcon } from "@/components/ui-icon";
+import {
+  PERMANENT_ACCOUNT_REQUIRED,
+  permanentAccountMessage,
+} from "@/lib/domain/account-gate";
 import { useAuth } from "@/components/auth-provider";
 import { recordFunnelEvent } from "@/lib/analytics-events";
 import { Avatar } from "@/components/avatar";
@@ -96,6 +100,10 @@ export function errorMessage(e: unknown): string {
           typeof e.message === "string"
         ? e.message
         : "알 수 없는 오류";
+  // 0094: 익명 계정은 챌린지 방을 만들 수 없다. 다음 할 일까지 한 문장에 담는다.
+  if (msg.includes(PERMANENT_ACCOUNT_REQUIRED)) {
+    return permanentAccountMessage("challenge");
+  }
   if (msg.includes("kpi_incomplete")) {
     return `아직 KPI 미설정 참가자가 있어요 (${msg.split(":")[1] ?? ""}) 🔒`;
   }

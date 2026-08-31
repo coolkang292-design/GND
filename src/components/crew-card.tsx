@@ -46,6 +46,10 @@ export function CrewCard() {
       } catch {
         // 프로필이 아직 없으면(온보딩 직전) 서버가 no_profile을 던진다.
         // 카드를 안 그리고 조용히 넘긴다 — 홈은 곧 온보딩으로 이동한다.
+        //
+        // 0094부터 **익명 계정도 여기로 온다**(permanent_account_required).
+        // 그때도 카드를 안 그리는 것이 맞다 — 버튼이 보이는데 누르면 실패하는
+        // 상태를 만들지 않는다. 정식 계정 안내는 크루 화면과 챌린지 화면이 한다.
         if (!cancelled) setInviteCode(null);
       } finally {
         if (!cancelled) setReady(true);

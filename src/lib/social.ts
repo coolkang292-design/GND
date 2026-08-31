@@ -65,6 +65,8 @@ export type NotificationRow = {
 
 /** RPC가 raise하는 코드 문자열 → 클라이언트 분기용 (§스펙 결정 2·5) */
 export type SocialErrorCode =
+  /** 0094: 익명 계정이 초대 발행·크루 요청·챌린지 생성을 시도했다 */
+  | "permanent_account_required"
   | "cheer_limit"
   | "cheer_cooldown"
   | "own_session"
@@ -117,6 +119,9 @@ const SOCIAL_ERROR_CODES: SocialErrorCode[] = [
   // 0038 — 이 배열이 런타임 매칭의 원천이다. 유니온만 고치면 타입은 통과하는데
   // 코드가 null로 떨어져 화면엔 "알 수 없는 오류"만 뜬다.
   // not_crew는 위에 이미 있어 다시 넣지 않는다(remove_crew 실패 코드로 재사용).
+  // 0094 — 익명 계정이 확산형 mutation을 시도했다. 유니온에도 같이 넣어야 한다
+  //         (위 0038 주석 참조 — 배열만 빼먹으면 코드가 null로 떨어진다).
+  "permanent_account_required",
   "self_request",
   "already_crew",
   "request_exists",

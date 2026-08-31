@@ -12,6 +12,7 @@ import { linkLabel } from "@/lib/domain/profile-links";
 import { ProfileEditSheet } from "@/components/profile/profile-edit-sheet";
 import { BlockSheet } from "@/components/moderation/block-sheet";
 import { sendCrewRequest } from "@/lib/crew-link";
+import { permanentAccountMessage } from "@/lib/domain/account-gate";
 import { SocialError } from "@/lib/social";
 import { badgeShelf, earnedBadgeCount, type BadgeMeta } from "@/lib/domain/badges";
 import { getBadgeCatalog } from "@/lib/badges";
@@ -413,7 +414,10 @@ export function MemberProfileSheet({
     } catch (e) {
       const code = e instanceof SocialError ? e.code : null;
       setRequestError(
-        code === "already_crew"
+        // 0094: 익명 계정은 크루 요청을 보낼 수 없다 — 다음 할 일까지 말해 준다
+        code === "permanent_account_required"
+          ? permanentAccountMessage("crew")
+          : code === "already_crew"
           ? "이미 크루예요"
           : code === "request_exists"
             ? "이미 요청을 보냈어요"

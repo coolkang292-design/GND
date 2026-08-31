@@ -15,6 +15,7 @@ import {
   searchProfileByNickname,
   sendCrewRequest,
 } from "@/lib/crew-link";
+import { permanentAccountMessage } from "@/lib/domain/account-gate";
 import {
   isSearchable,
   type CrewMember,
@@ -116,7 +117,11 @@ export default function CrewPage() {
         const code = e instanceof SocialError ? e.code : null;
         // request_exists는 거절 후 7일 쿨다운에도 쓰인다(0038). 거절당한 사실이
         // 드러나지 않도록 문구를 나누지 않는다.
-        if (code === "already_crew") toast("이미 크루예요");
+        // 0094: 익명 계정은 크루 요청을 보낼 수 없다. "안 된다"로 끝내지 않고
+        //        다음에 뭘 하면 되는지까지 한 문장에 담는다.
+        if (code === "permanent_account_required")
+          toast(permanentAccountMessage("crew"));
+        else if (code === "already_crew") toast("이미 크루예요");
         else if (code === "request_exists") toast("이미 요청을 보냈어요");
         else if (code === "target_not_found") toast("그 사람을 찾을 수 없어요");
         else toast("요청을 보내지 못했어요");

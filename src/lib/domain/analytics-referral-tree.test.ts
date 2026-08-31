@@ -330,3 +330,114 @@ describe("referralKind — 초대 종류 구별", () => {
     ).toBe("출처 모름");
   });
 });
+
+describe("⚠️ attribution 충돌 — 초대자와 자기 유입이 다른 캠페인일 때", () => {
+  /*
+    사용자 지시 (2026-08-31). 외부 파일럿 전 필수 검증.
+
+      user1: acquisition_campaign = influencer_a
+      user2: acquisition_campaign = influencer_b
+      이후 user1이 user2를 초대해서 user2.invited_by = user1
+
+    이때 user2의 **직접 초대자는 user1**이지만 **뿌리는 influencer_b**여야 한다.
+    invited_by 사슬을 무조건 최상단까지 올라가 자기 first-touch를 덮으면 안 된다.
+
+    규칙:
+      1) 자기에게 유효한 first-touch campaign이 있으면 **그것이 뿌리다**
+      2) 없을 때만 invited_by를 따라 상위의 뿌리를 물려받는다
+  */
+  const conflict = [
+    u("user1", { profileCampaign: "influencer_a" }),
+    u("user2", {
+      profileCampaign: "influencer_b",
+      invitedBy: "user1",
+      inviteOrigin: "invite_link",
+    }),
+  ];
+
+  it("user2의 직접 초대자는 user1이다", () => {
+    expect(conflict[1].invitedBy).toBe("user1");
+  });
+
+  it("⚠️ user2의 뿌리는 influencer_b다 — 초대자 것으로 덮이지 않는다", () => {
+    const r = resolveRoot("user2", map(conflict));
+    expect(r.root).toBe("influencer_b");
+    expect(r.root).not.toBe("influencer_a");
+  });
+
+  it("user2는 0세대다 — 자기 링크로 직접 들어왔으므로", () => {
+    expect(resolveRoot("user2", map(conflict)).generation).toBe(0);
+  });
+
+  it("확산표에서 두 캠페인이 각각 1명씩이고 섞이지 않는다", () => {
+    const { rows } = campaignSpread(conflict);
+    const a = rows.find((r) => r.root === "influencer_a")!;
+    const b = rows.find((r) => r.root === "influencer_b")!;
+    expect(a.total).toBe(1);
+    expect(b.total).toBe(1);
+    expect(a.direct).toBe(1);
+    expect(b.direct).toBe(1);
+    // influencer_a가 user2를 자기 성과로 가져가지 않는다
+    expect(a.viral).toBe(0);
+  });
+
+  it("원본 값이 그대로 남는다 — 계산은 읽기만 한다", () => {
+    campaignSpread(conflict);
+    expect(conflict[1].profileCampaign).toBe("influencer_b");
+    expect(conflict[1].invitedBy).toBe("user1");
+  });
+
+  it("3단 사슬에서도 중간에 자기 캠페인이 있으면 거기서 끊긴다", () => {
+    // A → user1 → user2(자기 캠페인 B 있음) → user3
+    // user3는 user2를 물려받아야 하므로 뿌리가 B다. A가 아니다.
+    const chain = [
+      u("user1", { profileCampaign: "influencer_a" }),
+      u("user2", { profileCampaign: "influencer_b", invitedBy: "user1" }),
+      u("user3", { invitedBy: "user2", inviteOrigin: "challenge" }),
+    ];
+    const byId = map(chain);
+    expect(resolveRoot("user3", byId).root).toBe("influencer_b");
+    expect(resolveRoot("user3", byId).generation).toBe(1);
+    // influencer_a 계보에는 user1 한 명뿐이다
+    const { rows } = campaignSpread(chain);
+    expect(rows.find((r) => r.root === "influencer_a")!.total).toBe(1);
+    expect(rows.find((r) => r.root === "influencer_b")!.total).toBe(2);
+  });
+});
+
+describe("⚠️ referral kind는 '정확한 두 사람의 연결'을 쓴다", () => {
+  /*
+    사용자 지시 (2026-08-31). 임의의 crew_links 행이 아니라 **현재 사용자와
+    profiles.invited_by가 가리키는 그 쌍**의 origin이어야 한다.
+
+    실제 배선은 `queries.ts`가 한다:
+      inviteOrigin = originByPair.get(pairKey(내id, 내invited_by))
+    `crew_links`의 기본키가 (user_a, user_b)이고 삽입이 항상 least/greatest를
+    쓰므로 쌍당 행이 하나다(운영 실측: 중복 쌍 0건). 그래서 모호함이 없다.
+
+    여기서는 그 결과값이 종류 판정에 어떻게 쓰이는지를 고정한다.
+  */
+  it("초대자가 없으면 origin이 있어도 초대로 치지 않는다", () => {
+    // 크루는 맺어져 있지만(검색으로 만난 사이) 나를 데려온 사람은 아니다
+    expect(referralKind(u("x", { invitedBy: null, inviteOrigin: "invite_link" }))).toBe(
+      "출처 모름",
+    );
+  });
+
+  it("같은 초대자라도 연결 종류에 따라 친구/챌린지가 갈린다", () => {
+    expect(referralKind(u("f", { invitedBy: "inv", inviteOrigin: "invite_link" }))).toBe("친구 초대");
+    expect(referralKind(u("c", { invitedBy: "inv", inviteOrigin: "challenge" }))).toBe("챌린지 초대");
+  });
+
+  it("검색으로 맺은 연결은 초대가 아니다 — 친구 초대로 넘겨짚지 않는다", () => {
+    expect(referralKind(u("s", { invitedBy: "inv", inviteOrigin: "search" }))).toBe(
+      "출처 모름",
+    );
+  });
+
+  it("자기 캠페인이 있으면 초대 관계가 있어도 '외부 유입'이다", () => {
+    expect(
+      referralKind(u("e", { profileCampaign: "x", invitedBy: "inv", inviteOrigin: "invite_link" })),
+    ).toBe("외부 유입");
+  });
+});

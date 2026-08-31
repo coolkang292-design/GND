@@ -7,7 +7,7 @@
 -- 쓰는 법: 함수·정책의 '현행' 정의가 필요할 때 마이그레이션 51개를
 -- 뒤지지 말고 이 파일을 검색하라. 마이그레이션을 적용한 뒤에는 다시 뽑아라.
 --
--- 함수 95개 · 정책 79개 · 인덱스 101개
+-- 함수 96개 · 정책 79개 · 인덱스 101개
 
 -- ════════════════════════════════════════════════════════════
 -- 함수
@@ -1063,6 +1063,12 @@ declare
   c       challenges;
 begin
   if v_me is null then raise exception 'not_authenticated'; end if;
+
+  -- 0094: 익명 계정은 남을 끌어들이거나 새 관계를 만들 수 없다.
+  --        자기 기록·초대 수락·차단·신고는 그대로 열려 있다.
+  if public.is_anonymous_session() then
+    raise exception 'permanent_account_required';
+  end if;
   if p_start_date > p_end_date then raise exception 'invalid_period'; end if;
 
   -- ⚠ joined_at이다. created_at이 아니다 (0001:32). 0042가 여기서 틀렸다.
@@ -2233,6 +2239,16 @@ begin
   return jsonb_build_object('status', 'invited');
 end $function$;
 
+-- ── is_anonymous_session ──
+CREATE OR REPLACE FUNCTION public.is_anonymous_session()
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE
+ SET search_path TO ''
+AS $function$
+  select coalesce((auth.jwt() ->> 'is_anonymous')::boolean, false)
+$function$;
+
 -- ── is_blocked_between ──
 CREATE OR REPLACE FUNCTION public.is_blocked_between(p_a uuid, p_b uuid)
  RETURNS boolean
@@ -2380,6 +2396,12 @@ declare
   i      int;
 begin
   if v_me is null then raise exception 'not_authenticated'; end if;
+
+  -- 0094: 익명 계정은 남을 끌어들이거나 새 관계를 만들 수 없다.
+  --        자기 기록·초대 수락·차단·신고는 그대로 열려 있다.
+  if public.is_anonymous_session() then
+    raise exception 'permanent_account_required';
+  end if;
 
   select invite_code into v_code from public.profiles where id = v_me;
   if v_code is not null then return v_code; end if;
@@ -3808,6 +3830,12 @@ declare
   v_id uuid;
 begin
   if v_me is null then raise exception 'not_authenticated'; end if;
+
+  -- 0094: 익명 계정은 남을 끌어들이거나 새 관계를 만들 수 없다.
+  --        자기 기록·초대 수락·차단·신고는 그대로 열려 있다.
+  if public.is_anonymous_session() then
+    raise exception 'permanent_account_required';
+  end if;
   if p_target_id = v_me then raise exception 'self_request'; end if;
 
   -- 0089: 차단 관문. 아래 어떤 검사보다 먼저다.

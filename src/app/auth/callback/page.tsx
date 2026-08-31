@@ -102,6 +102,28 @@ export default function AuthCallbackPage() {
         }
       }
 
+      /*
+        ⚠️⚠️ **토큰을 반드시 새로 받는다** (0094, 2026-08-31).
+
+        GND는 익명 계정에 카카오·구글을 붙여 **그 자리에서** 승격시킨다.
+        그런데 JWT는 발급 시점에 굳는다 — 실측(`scripts/anon-upgrade-jwt-check.mjs`):
+          승격 직후 서버는 이미 is_anonymous=false인데
+          **갱신하지 않은 옛 토큰은 여전히 true를 들고 있다.**
+
+        0094가 그 클레임으로 익명을 막으므로, 토큰이 옛것이면 **방금 정식 가입한
+        사람이 크루 요청·챌린지 생성에서 거부당한다.** 가장 나쁜 순간에 나는 고장이다.
+
+        위 `if (!session && code)`는 supabase-js가 이미 코드를 교환했을 때 건너뛴다.
+        그 경로에서도 토큰이 확실히 새것이 되도록 여기서 한 번 더 갱신한다.
+        실패해도 진행한다 — 자동 갱신이 한 시간 안에 따라잡고, 여기서 막으면
+        사용자가 콜백 화면에 갇힌다.
+      */
+      try {
+        await supabase.auth.refreshSession();
+      } catch {
+        // 갱신 실패는 치명적이지 않다. 위 주석 참조.
+      }
+
       await leave();
     }
 
