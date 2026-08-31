@@ -181,30 +181,75 @@ PR CI와 분리한다.** 기본은 `--tier readonly`.
 
 ## 4. 배포 B — SECURITY DEFINER 전수 감사 *(브리프 2)*
 
-**산출물의 본체는 문서다. 변경은 최소로 한다.**
+> **상태 (2026-09-01): 조사·문서·회귀는 끝. DB 권한 변경은 승인 대기.**
+> 산출물 → `docs/security/public-beta-rpc-audit.md` (678줄)
+> 제안 SQL → `supabase/migrations/0096_permission_tightening_PROPOSAL.sql` (**미적용**)
 
-`docs/security/public-beta-rpc-audit.md` — 함수 95개 전수, 브리프가 요구한 12개 열.
-분류는 자동으로 만든다: `pg_proc` × `pg_policies` 본문 grep × `pg_tgrelid` ×
-코드의 `rpc("...")` grep → **호출자가 하나도 없는 함수만 변경 후보**.
+### 4-0. 계획 시점 숫자 정정 (실측 결과)
+
+| | 계획서(8/31 추정) | 실측(9/1) |
+|---|---|---|
+| public 함수 | 95 | **98** |
+| SECURITY DEFINER | 87 | **89** |
+| INVOKER | 8 | **9** |
+| 마이그레이션 번호 | `0093_...` | **0096** (0093~0095가 이미 나갔다) |
+
+### 4-1. 끝난 것
+
+- **함수 98개 전수표** — 요구한 14개 열 (인자·SD·search_path·anon/auth EXECUTE·
+  `auth.uid()` 검사·익명 게이트·소유권 검사·외부 user-id 인자·동적 SQL·사용처·위험도·판정)
+- **4배우 권한 매트릭스** — raw anon / 익명-auth / 정식 / service_role.
+  ⭐ **익명-auth와 정식은 DB 롤이 `authenticated`로 같다** — 권한 계층에서 구분 불가.
+  0094 게이트는 권한이 아니라 함수 본문 동작이다
+- **테이블 ACL 40개 · RLS 정책 79개 전수** — 실측 (카탈로그 없이 PostgREST로)
+- **cross-user 공격 테스트** — `scripts/cross-user-abuse-check.mjs` 신설, **40 통과 / 3 실패**
+- **회귀** — `challenge-invite-link-check` 28/28 · `challenge-room-check` 48/0 ·
+  `rls-test` 129/0 (0090 규칙에 맞춰 단언 수정, 기준선 128→129)
+
+### 4-2. 발견 3건 — 전부 한 패턴
 
 ```
-함수 95개 중 SECURITY DEFINER 87개 · INVOKER 8개
+SECURITY DEFINER + 남의 user_id 인자 + auth.uid() 검사 없음 + authenticated EXECUTE 열림
 ```
 
-**절대 건드리지 않는 것 — RLS 헬퍼 14개** (advisor가 anon 실행 가능으로 지목한 목록):
-`is_crew_with` · `is_challenge_participant` · `is_group_member` · `owns_workout_session` ·
-`owns_workout_exercise` · `workout_session_crew_visible` · `workout_exercise_crew_visible` ·
-`session_crew_shared` · `shares_group_with` · `challenge_in_setup` 등.
-EXECUTE를 빼면 정책 전체가 깨진다.
+| 함수 | 실측 결과 | 위험도 |
+|---|---|---|
+| `current_streak_days(p_user_id)` | A가 B의 스트릭 `3`을 읽었다 | High |
+| `notify_challenge_peek_unlock(p_user_id)` | A의 호출이 204로 성공 (알림 경로) | High |
+| `is_blocked_between(p_a, p_b)` | 남 둘의 차단 관계를 조회 | Medium |
 
-**변경 후보 (호출자 확인 후에만)**: 트리거 전용 `enforce_goal_raise_only` ·
-`notify_reaction` · `notify_bug_report_watchers`, cron 전용 `dispatch_push_notification`
-(cron/edge 호출 여부 확인 필수).
+⭐ **같은 부류 5개는 이미 잠겨 있다** (`award_points`·`apply_xp_and_progress`·
+`badge_metrics`·`evaluate_badges`·`notify`). 0077이 `remind_upcoming_challenges`를
+같은 이유로 service_role 전용으로 만들었다. **새 규칙이 아니라 빠뜨린 3개에 기존 규칙을 적용**한다.
 
-`supabase/migrations/0093_revoke_internal_function_execute.sql`
+### 4-3. 절대 건드리지 않는 것 — 계획서 예상과 달랐다
+
+**RLS 헬퍼 10개**는 계획대로 유지한다 (EXECUTE를 빼면 정책이 깨진다).
+
+**계획서가 몰랐던 것 — `autostart_due_challenges`·`autofinalize_due_challenges`.**
+`auth.uid()` 검사가 없는 SD라 패턴만 보면 회수 후보인데,
+`src/app/(tabs)/challenge/page.tsx:363-364`가 **클라이언트에서 직접 부른다.**
+회수했으면 챌린지 화면이 깨졌다. 악용해도 이미 기한이 지난 전이를 앞당기는 것뿐이라
+정상 UI와 결과가 같다 → **Medium, 유지·근거 기록**.
+
+**"호출자가 하나도 없는 함수만 변경 후보"는 쓸 수 없었다 — 고아 RPC가 0개다.**
+88개 전부 사용처가 있다(앱·정책·다른 함수·서버 라우트). 계획서가 후보로 적은
+`enforce_goal_raise_only`·`notify_reaction`·`dispatch_push_notification`은
+PostgREST에 노출조차 안 되는 트리거 함수라 회수할 이유가 없다.
+대신 **"권한은 있는데 정책이 0개라 RLS가 기본 거부하는 죽은 GRANT"** 를 근거로 삼았다.
+
+### 4-4. 남은 것 (승인 대기 / 수단 없음)
+
+- ⛔ **`REVOKE` · `ALTER DEFAULT PRIVILEGES` 적용** — 사용자 승인 후 (감사 문서 §8)
+- ⛔ **카탈로그 재조회** — 이 세션에 Supabase MCP가 없었다. `pg_default_acl`,
+  TRUNCATE 12개 목록, 함수 owner가 `[미검증]`
+- ⛔ **새 객체 재발 실증** (`scripts/default-privilege-check.mjs`) — DDL 수단 필요
+- `cross-user-abuse-check`는 **기준선에 등록하지 않았다** — 실패 3건이 아직 열린
+  발견이라 등록하면 회귀 전체가 빨개진다. 0096 STEP 1 적용 후 43/43을 확인하고 `--record`
 
 **검증:** REVOKE 후 `--tier readonly` **+ `accounts` 티어까지** 재실행.
 RLS 파손은 여기서만 잡힌다. ⚠️ accounts 티어는 익명 계정을 만들고 30분+ 걸린다.
+⚠️ 익명 가입은 시간당 rate limit이 있다 — 연달아 돌리면 429가 난다.
 
 ---
 

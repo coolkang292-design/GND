@@ -20,10 +20,10 @@
     "  fixture  — dev-fixture.mjs create + challenge 가 먼저 있어야 한다.",
     "  accounts — 실행마다 익명 계정을 만든다. 연달아 돌리면 429(rate limit)에 걸린다."
   ],
-  "recordedAt": "2026-08-30",
+  "recordedAt": "2026-08-31",
   "scripts": {
     "rls-test": {
-      "assertions": 128,
+      "assertions": 129,
       "source": "measured",
       "tier": "accounts",
       "core": true,

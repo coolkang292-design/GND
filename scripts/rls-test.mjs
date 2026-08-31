@@ -427,8 +427,35 @@ check("B가 목표에 동의", apprB.status < 300, JSON.stringify(apprB.json));
 const started2 = await api(B.token, "POST", "/rest/v1/rpc/start_challenge", { p_challenge_id: challenge.id });
 check("전원 KPI·동의 완료 후 크루원이 시작 가능 → active", started2.status === 200 && started2.json?.status === "active", JSON.stringify(started2.json));
 
-const goalEditAfter = await api(A.token, "PATCH", `/rest/v1/user_goals?id=eq.${goalA.json[0].id}`, { target_value: 1 });
-check("시작 후 KPI 수정 불가 (기록 보존)", goalEditAfter.status < 300 && (goalEditAfter.json ?? []).length === 0, JSON.stringify(goalEditAfter.json));
+/*
+  0090이 이 규칙을 바꿨다 — 되돌리지 마라.
+
+  옛 규칙: active가 되면 목표를 한 글자도 못 고친다. `goals_update_own_setup`의
+           `challenge_in_setup`이 막아서 PATCH가 **조용히 0행**이 됐다.
+  현 규칙: **올리기만** 허용한다. 정책은 active에서도 UPDATE를 열고,
+           BEFORE UPDATE 트리거(`enforce_goal_raise_only`)가 옛 값과 대조해
+           낮추기를 `goal_lowered`로 막는다.
+
+  왜 바뀌었나: 잘못 넣은 목표를 4주 내내 안고 가는 것이 문제였다. 그렇다고
+  자유롭게 열면 막판에 목표를 낮춰 100%를 만들 수 있다(랭킹의 분모가 된다).
+
+  ⚠️ 옛 단언은 "status<300 && 0행"이었다. 지금은 400 + `goal_lowered`가 나므로
+     그대로 두면 **제품이 멀쩡한데 빨개진다.** 2026-09-01에 실제로 그랬다.
+     차단 방식이 조용한 0행에서 명시적 예외로 **강해진** 것이지 약해진 게 아니다.
+*/
+const goalLower = await api(A.token, "PATCH", `/rest/v1/user_goals?id=eq.${goalA.json[0].id}`, { target_value: 1 });
+check(
+  "🎯 0090: 시작 후 목표 낮추기는 막힌다 (goal_lowered — 랭킹 분모 보호)",
+  goalLower.status >= 400 && JSON.stringify(goalLower.json).includes("goal_lowered"),
+  JSON.stringify(goalLower.json),
+);
+
+const goalRaise = await api(A.token, "PATCH", `/rest/v1/user_goals?id=eq.${goalA.json[0].id}`, { target_value: 6000 });
+check(
+  "🎯 0090: 시작 후 목표 올리기는 허용된다",
+  goalRaise.status < 300 && (goalRaise.json ?? []).length === 1 && goalRaise.json[0].target_value === 6000,
+  JSON.stringify(goalRaise.json),
+);
 
 const goalsSeen = await api(B.token, "GET", `/rest/v1/user_goals?challenge_id=eq.${challenge.id}`);
 check("크루원 B는 전체 KPI 조회 가능 (설정 현황·결과용)", goalsSeen.status === 200 && goalsSeen.json.length === 2);

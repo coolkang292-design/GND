@@ -1,5 +1,24 @@
 # 인수인계 — 배포 B: SECURITY DEFINER / GRANT / TRUNCATE 전수 감사
 
+> ## ✅ 이 인수인계서는 2026-09-01에 대부분 소진됐다
+>
+> **감사·공격 테스트·문서·회귀는 끝났다.** 결과는 여기가 아니라
+> **`docs/security/public-beta-rpc-audit.md`** 에 있다. 그쪽을 먼저 읽어라.
+>
+> | | |
+> |---|---|
+> | 함수 98개 전수표 · 4배우 매트릭스 · 테이블 ACL · 정책 79개 | ✅ 완료 |
+> | cross-user 공격 테스트 (`scripts/cross-user-abuse-check.mjs`) | ✅ **40 통과 / 3 실패** |
+> | 발견 | **3건** — 전부 "남의 id 인자 + `auth.uid()` 검사 없음 + SD" 패턴 |
+> | 회귀 미검증분 (`challenge-room-check` · `rls-test` · `challenge-invite-link-check`) | ✅ 전부 해소 (`rls-test`는 0090에 맞춰 단언 수정, 128→129) |
+> | **DB 권한 변경** | ⛔ **승인 대기.** `supabase/migrations/0096_permission_tightening_PROPOSAL.sql` (미적용) |
+> | 카탈로그 재조회 (`pg_default_acl`·TRUNCATE 목록·함수 owner) | ⛔ **`[미검증]`** — 그 세션에 Supabase MCP가 없었다 |
+> | 새 객체 재발 실증 (§2의 질문) | ⛔ **`[미검증]`** — DDL 수단 없음 |
+>
+> **아래 §1~§10은 그때의 출발점 기록이다.** §1의 숫자 중 `anon` EXECUTE 21은
+> 실측 11과 어긋난다(감사 문서 §2 참조). §6의 `bug_report_watchers` 항목은
+> **닫혔다** — service_role 전용이 확정됐다.
+
 **작성** 2026-09-01 · **기준 커밋** `9870eff` · **배포** `gnd-ndyijuofe-gnd4` → `gnd-one.vercel.app`
 **앞선 작업** 배포 A(0092) · D(0093 퍼널) · 계보 · C(0094 익명 경계) · 0095(크루/챌린지 소셜 분리) — **전부 코드·DB·CI·배포 완료**
 
