@@ -262,6 +262,13 @@
       "tier": "accounts",
       "core": false,
       "what": "익명 계정이 실제로 무엇을 할 수 있는지 REST로 전수 확인. 0094가 막는 3가지(초대 발행·크루 요청·챌린지 생성)와 막지 않는 것들, 그리고 승격 후 다시 되는지까지 본다."
+    },
+    "challenge-social-check": {
+      "assertions": 29,
+      "source": "measured",
+      "tier": "accounts",
+      "core": false,
+      "what": "영구 크루 vs 챌린지 임시 소셜(0095). 친구 링크는 crew_links를 만들고 챌린지 링크는 안 만든다 · active에서만 활동 피드·응원이 열리고 ended면 자동 종료 · 이미 보낸 응원은 남는다 · 계보(invited_by)는 crew_links 없이도 이어진다 · 챌린지 참가자에게 크루 신청은 여전히 가능."
     }
   },
   "notScripts": {

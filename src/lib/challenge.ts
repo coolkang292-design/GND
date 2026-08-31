@@ -1550,3 +1550,48 @@ export async function setChallengeDiscoverable(
   //    DB는 그대로다 (0085에서 완료 세션 136개가 이렇게 조용히 실패했다).
   if (!data || data.length === 0) throw new Error("discoverable_not_saved");
 }
+
+/* ── 챌린지 활동 (0095) ──────────────────────────────────────────────────── */
+
+/**
+ * active 챌린지의 임시 소셜 피드 한 줄.
+ *
+ * ⚠️ **개인정보 최소.** 서버가 닉네임·아바타까지만 준다 — 이메일·유입 데이터·
+ *    초대 코드는 애초에 반환하지 않는다(`get_challenge_activity`).
+ */
+export interface ChallengeActivityItem {
+  session_id: string;
+  user_id: string;
+  nickname: string | null;
+  avatar_url: string | null;
+  status: "active" | "completed";
+  title: string | null;
+  workout_type: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  has_photo: boolean;
+  cheer_count: number;
+  my_cheers: number;
+  is_mine: boolean;
+}
+
+/**
+ * 같은 챌린지 참가자들의 **챌린지 기간** 운동.
+ *
+ * ⚠️⚠️ **크루 피드와 다른 것이다.** `/feed`는 영구 크루의 피드이고 이건
+ *    "이 챌린지 안에서만" 열리는 임시 창이다. 챌린지가 `active`가 아니면
+ *    서버가 `challenge_not_found`로 막는다 — 끝나면 자동으로 닫힌다.
+ *
+ * ⚠️ 실패를 던지지 않고 빈 배열을 준다. 활동 피드가 안 열렸다고 챌린지 화면
+ *    전체가 죽으면 안 된다 — 순위·참가자는 그대로 보여야 한다.
+ */
+export async function getChallengeActivity(
+  challengeId: string,
+): Promise<ChallengeActivityItem[]> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase.rpc("get_challenge_activity", {
+    p_challenge_id: challengeId,
+  });
+  if (error) return [];
+  return Array.isArray(data) ? (data as ChallengeActivityItem[]) : [];
+}

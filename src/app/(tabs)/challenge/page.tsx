@@ -16,6 +16,7 @@ import {
   ChallengeSetupSheet,
   type SetupSubmit,
 } from "@/components/challenge/setup-sheet";
+import { ChallengeActivity } from "@/components/challenge/challenge-activity";
 import { ChallengeStartCard } from "@/components/challenge/start-card";
 import {
   challengeInviteUrl,
@@ -1393,6 +1394,15 @@ function ChallengeScreen({ userId }: { userId: string }) {
               </div>
             ))}
           </section>
+
+          {/*
+            챌린지 활동 (0095) — **active일 때만** 그린다.
+            같은 챌린지를 한다는 이유로 크루 피드를 넓히지 않고, 이 화면 안에만 둔다.
+            챌린지가 끝나면 서버가 막아 자동으로 닫힌다.
+          */}
+          {challenge.status === "active" && (
+            <ChallengeActivity challengeId={challenge.id} />
+          )}
 
           {endedByDate && (
             <button

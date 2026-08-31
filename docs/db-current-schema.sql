@@ -7,7 +7,7 @@
 -- 쓰는 법: 함수·정책의 '현행' 정의가 필요할 때 마이그레이션 51개를
 -- 뒤지지 말고 이 파일을 검색하라. 마이그레이션을 적용한 뒤에는 다시 뽑아라.
 --
--- 함수 96개 · 정책 79개 · 인덱스 101개
+-- 함수 98개 · 정책 79개 · 인덱스 101개
 
 -- ════════════════════════════════════════════════════════════
 -- 함수
@@ -1868,6 +1868,85 @@ begin
   return 'GND-' || code;
 end $function$;
 
+-- ── get_challenge_activity ──
+CREATE OR REPLACE FUNCTION public.get_challenge_activity(p_challenge_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+declare
+  c      public.challenges;
+  v_me   uuid := (select auth.uid());
+  v_rows jsonb;
+begin
+  if v_me is null then raise exception 'not_authenticated'; end if;
+
+  select * into c from public.challenges where id = p_challenge_id;
+  if not found then raise exception 'challenge_not_found'; end if;
+
+  /*
+    ⚠️⚠️ **active일 때만 연다.** 챌린지가 끝나면(ended·cancelled) 임시 소셜
+       권한이 상태 판정만으로 사라진다 — 행을 지워서 권한을 없애지 않는다.
+       최종 랭킹·결과는 다른 경로(get_challenge_period_sessions)가 계속 준다.
+
+    ⚠️ 요청자가 **지금 그 방의 유효 참가자**여야 한다. dropped는 제외다.
+       존재 자체를 숨기려고 'challenge_not_found'로 뭉갠다(기존 관례와 같다).
+  */
+  if c.status <> 'active' then raise exception 'challenge_not_found'; end if;
+  if not exists (
+    select 1 from public.challenge_participants
+    where challenge_id = p_challenge_id and user_id = v_me and status = 'joined'
+  ) then
+    raise exception 'challenge_not_found';
+  end if;
+
+  select coalesce(jsonb_agg(row order by ord desc), '[]'::jsonb) into v_rows
+  from (
+    select
+      coalesce(s.completed_at, s.started_at) as ord,
+      jsonb_build_object(
+        'session_id',   s.id,
+        'user_id',      s.user_id,
+        -- ⚠️ 개인정보 최소. 닉네임·아바타까지다. 이메일·유입·초대코드는 주지 않는다.
+        'nickname',     p.nickname,
+        'avatar_url',   p.avatar_url,
+        'status',       s.status,
+        'title',        s.title,
+        'workout_type', s.workout_type,
+        'started_at',   s.started_at,
+        'completed_at', s.completed_at,
+        'has_photo',    exists (select 1 from public.workout_images wi where wi.session_id = s.id),
+        'cheer_count',  (select count(*) from public.cheers ch where ch.session_id = s.id),
+        'my_cheers',    (select count(*) from public.cheers ch
+                          where ch.session_id = s.id and ch.sender_id = v_me),
+        'is_mine',      s.user_id = v_me
+      ) as row
+    from public.workout_sessions s
+    join public.challenge_participants cp
+      on cp.user_id = s.user_id
+     and cp.challenge_id = p_challenge_id
+     and cp.status = 'joined'
+    join public.profiles p on p.id = s.user_id
+    where s.deleted_at is null
+      -- ⚠️ 비공개 운동은 챌린지 참가자에게도 열지 않는다. 기존 visibility 의미 존중.
+      and s.visibility = 'group'
+      and s.status in ('active', 'completed')
+      /*
+        ⚠️ **챌린지 기간의 운동만.** 같은 챌린지를 한다고 상대의 3개월 전 기록까지
+           열면 안 된다. 집계 함수와 같은 창(시작 -1일 ~ 종료 +2일)을 쓴다 —
+           시간대 차이로 경계 하루가 잘리는 것을 막으려고 기존이 그렇게 잡았다.
+      */
+      and coalesce(s.completed_at, s.started_at) >= (c.start_date - 1)::timestamptz
+      and coalesce(s.completed_at, s.started_at) <  (c.end_date + 2)::timestamptz
+      -- ⚠️ 차단은 양방향으로 가린다. 기존 차단 정책과 같은 원칙.
+      and not public.is_blocked_between(v_me, s.user_id)
+    limit 200
+  ) t;
+
+  return v_rows;
+end $function$;
+
 -- ── get_challenge_participant_profiles ──
 CREATE OR REPLACE FUNCTION public.get_challenge_participant_profiles(p_challenge_id uuid)
  RETURNS TABLE(id uuid, nickname text, avatar_url text)
@@ -2454,11 +2533,12 @@ begin
   -- ── 신입 가드 ────────────────────────────────────────────
   --
   -- ⚠️ **참가 전에 센다.** 참가 뒤에 세면 challenge_participants가 1행이 되어
-  --    조건이 뒤집히고, 그러면 누구든 이 함수로 친구가 될 수 있다 = D5다.
+  --    조건이 뒤집힌다.
   --
-  -- ⚠️ 두 조건 중 하나라도 빼지 마라.
-  --    crew_links 0건  : 이미 친구가 있는 사람 = 기존 사용자
-  --    participants 0건: 다른 챌린지에 있는 사람 = 0051이 신고한 바로 그 경우
+  -- ⚠️ 0095부터 이 함수는 crew_links를 **만들지 않는다.** 그래도 이 가드는
+  --    남긴다 — "이미 관계가 있는 사람"은 신입 경로가 아니라 기존 경로
+  --    (join_challenge_with_code)로 가야 하고, invited_by는 첫 접촉만 기록하기
+  --    때문이다.
   if exists (
     select 1 from public.crew_links
     where user_a = v_me or user_b = v_me
@@ -2475,19 +2555,18 @@ begin
   -- ── 참가 ─────────────────────────────────────────────────
   --
   -- ⚠️ 참가 절차를 **베끼지 않는다.** advisory lock · status='setup' 검사 ·
-  --    upsert가 한 벌만 존재해야 한다. 이 저장소는 start_challenge를 세 곳에
-  --    복사해 두고 0045~0047로 세 번 고친 전례가 있다.
+  --    upsert가 한 벌만 존재해야 한다.
   v_result := public.join_challenge_with_code(p_code);
   v_challenge := (v_result ->> 'challengeId')::uuid;
 
-  -- ── 누구와 연결할 것인가 ─────────────────────────────────
+  -- ── 누가 데려왔는가 ──────────────────────────────────────
   select cp.user_id into v_host
   from public.challenge_participants cp
   where cp.challenge_id = v_challenge and cp.role = 'host'
   order by cp.joined_at nulls last
   limit 1;
 
-  -- 0091: 링크를 준 사람이 **그 방의 참가자로 확인되면** 그 사람과 잇는다.
+  -- 0091: 링크를 준 사람이 **그 방의 참가자로 확인되면** 그 사람이다.
   -- 확인 안 되면(위조·오타·옛 링크) 지금까지처럼 방장이다.
   v_link_to := null;
   v_via := 'host';
@@ -2506,23 +2585,27 @@ begin
     v_link_to := v_host;
   end if;
 
-  -- 방장도 초대자도 없는 방은 있을 수 없지만(create_challenge_room이 같은
-  -- 트랜잭션에서 넣는다), 없으면 챌린지 참가만 하고 조용히 끝낸다.
   if v_link_to is null or v_link_to = v_me then
     return v_result || jsonb_build_object('crewLinked', 0);
   end if;
 
-  perform pg_advisory_xact_lock(
-    hashtext(least(v_me, v_link_to)::text || greatest(v_me, v_link_to)::text)
-  );
+  /*
+    ⚠️⚠️ 0095: **여기서 crew_links를 만들지 않는다.** (제품 규칙 변경)
 
-  -- 0079: 출처는 '챌린지', 먼저 연 쪽은 링크를 준 사람이다.
-  insert into public.crew_links (user_a, user_b, origin, initiated_by)
-  values (least(v_me, v_link_to), greatest(v_me, v_link_to), 'challenge', v_link_to)
-  on conflict do nothing;
+      "누가 데려왔나"(invited_by)와 "누구와 영구 친구인가"(crew_links)는
+      **다른 사실이다.** 0079~0091은 챌린지 링크로 들어온 신규에게 영구 크루를
+      자동으로 만들어 줬는데, 같은 링크로 들어온 **기존 사용자는 안 만들었다**
+      (join_challenge_with_code). 신규/기존의 의미가 갈리는 버그성 불일치였다.
 
-  -- 0079: 위 신입 가드가 **crew_links 0건**을 이미 보장한다 —
-  -- 이 경로로 온 사람은 정의상 신규라 여기서 다시 재지 않는다.
+      이제 챌린지 링크는 신규·기존 모두 **챌린지 참가까지만** 한다.
+      영구 크루가 되려면 참가자 프로필에서 크루 신청 → 수락을 거쳐야 한다.
+
+      챌린지가 active인 동안의 임시 소셜은 shares_active_challenge_with()가 연다.
+
+    ⚠️ `invited_by`는 **그대로 기록한다.** 추천 계보(뿌리 캠페인·확산 성과)의
+       원장은 crew_links가 아니라 invited_by다. 이걸 빼면 인플루언서 계보가
+       챌린지 초대 지점에서 끊긴다.
+  */
   update public.profiles
      set invited_by = v_link_to
    where id = v_me and invited_by is null;
@@ -2530,21 +2613,26 @@ begin
   select nickname into v_link_nick from public.profiles where id = v_link_to;
   select nickname into v_my_nick   from public.profiles where id = v_me;
 
-  -- 알림 실패가 연결·참가까지 되돌리면 안 된다.
+  -- 알림 실패가 참가까지 되돌리면 안 된다.
+  --
+  -- ⚠️ 0095: 문구와 타입을 바꿨다. 예전에는 'crew_accepted'로 "친구가 됐어요"라고
+  --    알렸는데, 이제 친구가 되지 않으므로 **거짓말이 된다.** 'challenge_joined'로
+  --    사실만 말한다.
   begin
     perform public.notify(
-      v_link_to, v_me, 'crew_accepted', v_challenge,
-      coalesce(v_my_nick, '누군가') || '님이 챌린지에 들어오고 친구가 됐어요 🤝',
-      '초대 링크로 GND를 처음 시작했어요'
+      v_link_to, v_me, 'challenge_joined', v_challenge,
+      coalesce(v_my_nick, '누군가') || '님이 내 초대 링크로 챌린지에 들어왔어요 🎯',
+      '챌린지 참가자 목록에서 크루로 신청할 수 있어요'
     );
   exception when others then null;
   end;
 
   return v_result || jsonb_build_object(
-    'crewLinked', 1,
+    -- 0095: 영구 크루를 만들지 않으므로 항상 0이다. 화면이 "친구가 됐어요"라고
+    --       말하지 않게 하는 것이 이 값의 역할이다.
+    'crewLinked', 0,
     'hostId', v_link_to,
     'hostNickname', v_link_nick,
-    -- 화면이 "누구와" 친구가 됐는지 정확히 말할 수 있게 남긴다
     'linkedVia', v_via
   );
 end $function$;
@@ -3742,7 +3830,12 @@ begin
   if s.user_id = auth.uid() then
     raise exception 'own_session';
   end if;
-  if not public.is_crew_with(s.user_id) then
+  -- 0095: 영구 크루 **또는** 지금 같은 active 챌린지의 유효 참가자.
+  --       shares_active_challenge_with()가 ended/cancelled/dropped/차단/자기자신을
+  --       전부 걸러 낸다. ended 챌린지에도 true인 shares_challenge_with를
+  --       여기 쓰면 챌린지가 끝난 뒤에도 응원이 되어 규칙이 무너진다.
+  if not (public.is_crew_with(s.user_id)
+          or public.shares_active_challenge_with(s.user_id)) then
     raise exception 'session_not_found';
   end if;
   if s.status <> 'active' then
@@ -4016,6 +4109,31 @@ begin
 
   return s;
 end $function$;
+
+-- ── shares_active_challenge_with ──
+CREATE OR REPLACE FUNCTION public.shares_active_challenge_with(p_other uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+  select p_other is not null
+     and p_other <> (select auth.uid())
+     and not public.is_blocked_between((select auth.uid()), p_other)
+     and exists (
+       select 1
+       from public.challenge_participants mine
+       join public.challenge_participants theirs
+         on theirs.challenge_id = mine.challenge_id
+       join public.challenges c
+         on c.id = mine.challenge_id
+       where mine.user_id  = (select auth.uid())
+         and theirs.user_id = p_other
+         and mine.status   = 'joined'
+         and theirs.status = 'joined'
+         and c.status      = 'active'
+     )
+$function$;
 
 -- ── shares_any_challenge_with ──
 CREATE OR REPLACE FUNCTION public.shares_any_challenge_with(p_other uuid)

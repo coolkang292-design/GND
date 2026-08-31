@@ -2,6 +2,7 @@
 // 실행: node scripts/rls-test.mjs  (사전조건: 0001~0004 마이그레이션 적용됨)
 import { readFileSync } from "node:fs";
 import { createDeleteGuard } from "./_safe-delete.mjs";
+import { makePermanent } from "./_permanent-user.mjs";
 
 const env = Object.fromEntries(
   readFileSync(".env.local", "utf8")
@@ -61,6 +62,9 @@ async function anonUser() {
   });
   const json = await res.json();
   if (!json.access_token) throw new Error("익명 가입 실패: " + JSON.stringify(json));
+  // 0094: 익명은 크루 요청·초대 발행·챌린지 생성이 막힌다. 실사용자는 온보딩에서
+  //       카카오·구글을 먼저 거치므로 **정식 계정이 정상 상태**다.
+  json.access_token = await makePermanent(json);
   return { token: json.access_token, id: json.user.id };
 }
 
