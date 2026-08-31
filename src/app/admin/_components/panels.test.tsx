@@ -33,6 +33,10 @@ import {
   FUNNEL_STEPS,
   campaignCohorts,
 } from "@/lib/domain/analytics-funnel";
+import {
+  UNKNOWN_ROOT,
+  campaignSpread,
+} from "@/lib/domain/analytics-referral-tree";
 import { METRIC_HELP, type MetricHelpKey } from "@/lib/domain/metric-help";
 import { MetricHelp } from "./metric-help";
 import { AcquisitionPanel } from "./acquisition-panel";
@@ -44,6 +48,7 @@ import { GrowthPanel } from "./growth-panel";
 import { KpiCards } from "./kpi-cards";
 import { CampaignComparisonPanel } from "./campaign-comparison-panel";
 import { CampaignFunnelPanel } from "./campaign-funnel-panel";
+import { CampaignSpreadPanel } from "./campaign-spread-panel";
 import { MembershipPanel } from "./membership-panel";
 import { NotificationPanel } from "./notification-panel";
 import { ProgramPanel } from "./program-panel";
@@ -746,6 +751,8 @@ describe("CampaignComparisonPanel", () => {
         completedWorkouts: 3,
         joinedChallenge: true,
         reworkoutD7: false,
+        invitedBy: null,
+        inviteOrigin: null,
         profileCampaign: "influencer_a_pilot01",
       },
       {
@@ -756,6 +763,8 @@ describe("CampaignComparisonPanel", () => {
         completedWorkouts: 0,
         joinedChallenge: false,
         reworkoutD7: false,
+        invitedBy: null,
+        inviteOrigin: null,
         profileCampaign: null,
       },
     ],
@@ -815,6 +824,8 @@ describe("CampaignComparisonPanel", () => {
           completedWorkouts: 0,
           joinedChallenge: false,
           reworkoutD7: false,
+        invitedBy: null,
+        inviteOrigin: null,
           profileCampaign: "pilot02",
         },
       ],
@@ -878,6 +889,8 @@ describe("CampaignFunnelPanel", () => {
       completedWorkouts: 0,
       joinedChallenge: false,
       reworkoutD7: false,
+      invitedBy: null,
+      inviteOrigin: null,
       profileCampaign: null,
     })),
     Array.from({ length: 10 }, (_, i) => ({
@@ -920,6 +933,8 @@ describe("CampaignFunnelPanel", () => {
         completedWorkouts: 0,
         joinedChallenge: false,
         reworkoutD7: false,
+        invitedBy: null,
+        inviteOrigin: null,
         profileCampaign: null,
       })),
       Array.from({ length: 3 }, (_, i) => ({
@@ -942,5 +957,96 @@ describe("CampaignFunnelPanel", () => {
       <CampaignFunnelPanel row={bigCohort.rows[0]} campaigns={["pilot01"]} />,
     );
     expect(html).toContain("퍼널 단계에 넣지");
+  });
+});
+
+describe("CampaignSpreadPanel", () => {
+  const person = (id: string, over = {}) => ({
+    userId: id,
+    isAnonymous: false,
+    hasProfile: true,
+    startedWorkout: false,
+    completedWorkouts: 0,
+    joinedChallenge: false,
+    reworkoutD7: false,
+    profileCampaign: null as string | null,
+    invitedBy: null as string | null,
+    inviteOrigin: null as string | null,
+    ...over,
+  });
+
+  // 인플루언서 A → 철수 → 영희 → 민수
+  const chain = campaignSpread([
+    person("chulsoo", { profileCampaign: "influencer_a_pilot01" }),
+    person("younghee", { invitedBy: "chulsoo", inviteOrigin: "invite_link" }),
+    person("minsoo", { invitedBy: "younghee", inviteOrigin: "challenge" }),
+  ]);
+
+  it("직접 1명 · 추가 2명 · 총 3명 · 배수 3을 그린다", () => {
+    const html = renderToStaticMarkup(<CampaignSpreadPanel data={chain} />);
+    expect(html).toContain("influencer_a_pilot01");
+    expect(html).toContain("×3");
+  });
+
+  it("세대별 분포를 보여준다", () => {
+    const html = renderToStaticMarkup(<CampaignSpreadPanel data={chain} />);
+    expect(html).toContain("0세대 1");
+    expect(html).toContain("1세대 1");
+    expect(html).toContain("2세대 1");
+  });
+
+  it("초대 경로별 인원을 보여준다 — 친구/챌린지가 구별된다", () => {
+    const html = renderToStaticMarkup(<CampaignSpreadPanel data={chain} />);
+    expect(html).toContain("친구 초대 1명");
+    expect(html).toContain("챌린지 초대 1명");
+    expect(html).toContain("외부 유입 1명");
+  });
+
+  it("⚠️ 기존 비교표와 뜻이 다르다는 것을 화면이 말한다", () => {
+    const html = renderToStaticMarkup(<CampaignSpreadPanel data={chain} />);
+    expect(html).toContain("직접");
+    expect(html).toContain("두 숫자가 다른 것이");
+  });
+
+  it("이상이 없으면 초록 한 줄", () => {
+    const html = renderToStaticMarkup(<CampaignSpreadPanel data={chain} />);
+    expect(html).toContain("초대 계보 이상 0건");
+  });
+
+  it("⚠️ 계보가 깨져도 화면이 죽지 않고 이상 건수를 보여준다", () => {
+    const broken = campaignSpread([
+      person("a1", { profileCampaign: "campaign_a" }),
+      person("X", { invitedBy: "Y" }),
+      person("Y", { invitedBy: "X" }),
+    ]);
+    expect(() =>
+      renderToStaticMarkup(<CampaignSpreadPanel data={broken} />),
+    ).not.toThrow();
+    const html = renderToStaticMarkup(<CampaignSpreadPanel data={broken} />);
+    expect(html).toContain("초대 계보 이상 2건");
+    expect(html).toContain("서로를 초대자로 가리킴");
+    expect(html).toContain(UNKNOWN_ROOT);
+    // 깨진 사람이 campaign_a에 섞이지 않았다
+    expect(html).toContain("campaign_a");
+  });
+
+  it("⚠️ 개인정보를 그리지 않는다 — 숫자표다", () => {
+    const html = renderToStaticMarkup(<CampaignSpreadPanel data={chain} />);
+    expect(html).not.toContain("chulsoo");
+    expect(html).not.toContain("younghee");
+    expect(html).not.toContain("minsoo");
+    expect(html).not.toContain("@");
+  });
+
+  it("사람이 없으면 안내만 그리고 던지지 않는다", () => {
+    const empty = campaignSpread([]);
+    const html = renderToStaticMarkup(<CampaignSpreadPanel data={empty} />);
+    expect(html).toContain("아직 계보를 계산할 사람이 없습니다");
+  });
+
+  it("좁은 화면 대비 — minWidth:0과 가로 스크롤이 있다", () => {
+    const html = renderToStaticMarkup(<CampaignSpreadPanel data={chain} />);
+    expect(html).toContain("min-width:0");
+    expect(html).toContain("overflow-x:auto");
   });
 });

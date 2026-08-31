@@ -23,6 +23,8 @@ function user(id: string, over: Partial<FunnelUserRow> = {}): FunnelUserRow {
     joinedChallenge: false,
     reworkoutD7: false,
     profileCampaign: null,
+    invitedBy: null,
+    inviteOrigin: null,
     ...over,
   };
 }

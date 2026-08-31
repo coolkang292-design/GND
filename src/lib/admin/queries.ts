@@ -579,21 +579,30 @@ export async function fetchFunnelDataset(
 ): Promise<FunnelDataset> {
   const db = getSupabaseAdminClient();
 
-  const [eventRes, profileRes, sessionRes, participantRes, authRes] =
+  const [eventRes, profileRes, sessionRes, participantRes, linkRes, authRes] =
     await Promise.all([
       db
         .from("analytics_events")
         .select("user_id,event_name,source,medium,campaign"),
       // 0079의 유입 6칸 중 **medium·campaign을 여기서 처음 읽는다** — 인플루언서
       // 구분에 필요하다. 지금까지 컬럼은 채워지는데 화면이 안 읽고 있었다.
+      // 0079의 유입 6칸 중 medium·campaign, 그리고 **invited_by**를 읽는다.
+      // invited_by가 "바로 앞에서 데려온 한 명"이고, 이것을 거슬러 올라가면
+      // 뿌리 캠페인이 나온다 — 그래서 root_campaign 컬럼을 만들지 않았다.
       db
         .from("profiles")
-        .select("id,created_at,acquisition_medium,acquisition_campaign"),
+        .select(
+          "id,created_at,acquisition_medium,acquisition_campaign,invited_by",
+        ),
       db
         .from("workout_sessions")
         .select("user_id,status,started_at,completed_at")
         .is("deleted_at", null),
       db.from("challenge_participants").select("user_id"),
+      // 초대 **종류**(친구/챌린지)는 여기 이미 있다 — `accept_friend_invite`가
+      // 'invite_link'을, `join_challenge_as_newcomer`가 'challenge'를 넣는다.
+      // 그래서 referral_kind 컬럼을 새로 만들지 않았다.
+      db.from("crew_links").select("user_a,user_b,origin"),
       db.auth.admin.listUsers({ page: 1, perPage: 1000 }),
     ]);
 
@@ -602,6 +611,7 @@ export async function fetchFunnelDataset(
     ["profiles", profileRes],
     ["workout_sessions", sessionRes],
     ["challenge_participants", participantRes],
+    ["crew_links", linkRes],
   ] as const) {
     if (res.error) throw new Error(`${name} 조회 실패: ${res.error.message}`);
   }
@@ -619,9 +629,25 @@ export async function fetchFunnelDataset(
         {
           createdAt: new Date(p.created_at as string),
           campaign: (p.acquisition_campaign as string | null) ?? null,
+          invitedBy: (p.invited_by as string | null) ?? null,
         },
       ]),
   );
+
+  /*
+    두 사람 사이의 연결이 **어떤 경로로** 맺어졌는지. 키는 정렬한 쌍이다 —
+    `crew_links`가 (least, greatest)로 저장해서 방향이 없기 때문이다.
+  */
+  const pairKey = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
+  const originByPair = new Map<string, string>();
+  for (const l of linkRes.data ?? []) {
+    const origin = l.origin as string | null;
+    if (!origin) continue;
+    originByPair.set(
+      pairKey(l.user_a as string, l.user_b as string),
+      origin,
+    );
+  }
 
   const startedBy = new Set<string>();
   const completedCount = new Map<string, number>();
@@ -671,6 +697,11 @@ export async function fetchFunnelDataset(
         joinedChallenge: joined.has(u.id),
         reworkoutD7,
         profileCampaign: profile?.campaign ?? null,
+        invitedBy: profile?.invitedBy ?? null,
+        // 초대자와 나 사이의 연결이 친구 링크였나 챌린지였나
+        inviteOrigin: profile?.invitedBy
+          ? (originByPair.get(pairKey(u.id, profile.invitedBy)) ?? null)
+          : null,
       };
     });
 

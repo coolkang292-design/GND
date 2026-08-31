@@ -34,6 +34,7 @@ import {
   workoutDayKeysByUser,
 } from "@/lib/domain/analytics-engagement";
 import { campaignCohorts } from "@/lib/domain/analytics-funnel";
+import { campaignSpread } from "@/lib/domain/analytics-referral-tree";
 import { buildProgramMetrics } from "@/lib/domain/analytics-program";
 import { DEFAULT_TIMEZONE } from "@/lib/domain/time";
 import { AcquisitionPanel } from "./_components/acquisition-panel";
@@ -45,6 +46,7 @@ import { GrowthPanel } from "./_components/growth-panel";
 import { KpiCards } from "./_components/kpi-cards";
 import { CampaignComparisonPanel } from "./_components/campaign-comparison-panel";
 import { CampaignFunnelPanel } from "./_components/campaign-funnel-panel";
+import { CampaignSpreadPanel } from "./_components/campaign-spread-panel";
 import { MembershipPanel } from "./_components/membership-panel";
 import { NotificationPanel } from "./_components/notification-panel";
 import { ProgramPanel } from "./_components/program-panel";
@@ -93,6 +95,12 @@ export default async function AdminPage({
        (사용자 지시 2026-08-31). 불일치는 화면이 건수로 말한다.
   */
   const cohorts = campaignCohorts(funnelData.users, funnelData.events);
+  /*
+    확산 성과는 **위 비교표와 다른 질문**에 답한다 — 그 사람이 데려온 사람까지
+    센다. 기존 표의 뜻을 바꾸지 않으려고 별도 패널로 둔다.
+    계보가 깨져도 던지지 않는다(고리·자기참조·삭제된 초대자 전부 방어).
+  */
+  const spread = campaignSpread(funnelData.users);
   const selectedCampaign = sp.campaign ?? null;
   const selectedRow =
     cohorts.rows.find((r) => r.campaign === selectedCampaign) ?? null;
@@ -320,6 +328,9 @@ export default async function AdminPage({
             "어느 채널인가"보다 "어느 제안처가 좋은 사람을 데려왔나"가 먼저다. */}
         <section className="grid equal">
           <CampaignComparisonPanel data={cohorts} selected={selectedCampaign} />
+        </section>
+        <section className="grid equal">
+          <CampaignSpreadPanel data={spread} />
         </section>
         <section className="grid equal">
           <CampaignFunnelPanel

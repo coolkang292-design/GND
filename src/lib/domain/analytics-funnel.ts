@@ -56,8 +56,23 @@ export interface FunnelUserRow {
    *    화면도 두 지표를 다른 이름으로 부른다(§배포 D).
    */
   reworkoutD7: boolean;
-  /** `profiles.acquisition_campaign` — 불일치 진단에만 쓴다 */
+  /**
+   * `profiles.acquisition_campaign` — **이 사람이 직접 어떤 링크로 들어왔나.**
+   * 불일치 진단과 추천 계보의 뿌리 판정에 쓴다. 초대 때문에 덮어쓰지 않는다.
+   */
   profileCampaign: string | null;
+  /**
+   * `profiles.invited_by` — **바로 앞에서 이 사람을 데려온 한 명.**
+   * `accept_friend_invite`·`join_challenge_as_newcomer`가 첫 접촉 때만 채운다.
+   * ⚠️ `profileCampaign`과 **다른 개념이다.** 섞으면 계보가 무너진다.
+   */
+  invitedBy: string | null;
+  /**
+   * 이 사람이 초대를 통해 맺어진 `crew_links.origin` —
+   * `invite_link`(친구) · `challenge`(챌린지) · `search` · `unknown`.
+   * 초대 종류 구별에 쓴다. **새 컬럼을 만들지 않으려고 이걸 재사용한다.**
+   */
+  inviteOrigin: string | null;
 }
 
 /* ── 단계 정의 ───────────────────────────────────────────────────────────── */

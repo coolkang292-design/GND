@@ -241,6 +241,13 @@
       "tier": "fixture",
       "core": false,
       "what": "차단·신고·목표 상향(0089·0090) RPC 회귀. 차단은 is_crew_with 한 함수에 얹혀 있어 그 함수를 손대면 아홉 곳이 동시에 풀린다. 0090 트리거는 REST·스냅샷으로 안 보여 실제로 낮춰 봐야 한다. 운영 DB에 쓰고 되돌린다."
+    },
+    "referral-tree-check": {
+      "assertions": 12,
+      "source": "measured",
+      "tier": "accounts",
+      "core": false,
+      "what": "추천 계보(인플루언서 A → 철수 → 영희 → 민수). 뿌리 캠페인 계산·first-touch 동결·초대 종류 구별을 운영 DB 트리거를 통과한 실제 행으로 검증한다. ⚠️ freeze_profile_attribution은 acquisition_captured_at이 있을 때만 동결한다 — 그 경계도 단언에 넣었다."
     }
   },
   "notScripts": {
