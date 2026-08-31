@@ -252,7 +252,36 @@ git ls-remote --symref origin HEAD    # ref: refs/heads/main 이어야 한다
   - 👉 **`docs/db-current-schema.sql`을 보라.** 운영 DB의 현행 함수·정책·인덱스 전량 스냅샷이다. `pnpm db:snapshot`으로 다시 뽑는다(마이그레이션 적용 후 갱신할 것). 이게 "현행 정의"의 단일 답이다.
   - 고칠 함수가 있으면 **형제 함수도 같이 훑어라.** 2026-07-31에 `start_challenge`만 고치고 같은 전제를 공유하는 `approve_challenge_goals`를 놓쳐, 챌린지를 영영 시작할 수 없는 상태를 배포했다(0045 → 0046 → 0047로 세 번 고쳤다).
 - **컬럼명을 스키마에서 확인하고 써라.** `information_schema.columns`를 먼저 조회한다. 2026-07-30에 `gm.created_at`(실제는 `joined_at`)으로 검증 24건이 연쇄 실패했다.
-- **적용은 사용자가 한다.** 에이전트는 SQL을 실행할 수 없다. 파일을 만들고 "SQL Editor에 전체 붙여넣고 Run" 요청한다.
+- **⛔ 적용은 에이전트가 한다 — 사용자에게 넘기지 마라.** 사용자 지시 (2026-08-31).
+  운영 DB 변경이 필요하면 **Supabase MCP로 직접 실행하고, 실제로 반영됐는지까지 확인**한다.
+  "SQL 파일을 만들었으니 SQL Editor에 붙여넣고 Run 해 주세요"로 넘기지 않는다.
+  - **적용했다 = 명령이 성공했다가 아니다.** 실행 후 **객체를 다시 조회해서** 바뀐 것을
+    확인한다 (`pg_proc.proconfig` · `pg_policies` · `pg_get_functiondef` 등). 확인하지
+    않았으면 `[미검증]`이라고 쓴다
+  - 이 저장소는 `supabase_migrations` 이력을 쓰지 않는다(`list_migrations`가 빈 배열이다).
+    **"NNNN까지 반영됐는지"는 마이그레이션 목록으로 확인할 수 없고 객체 존재로 확인한다**
+  - 적용 후 **`pnpm db:snapshot`으로 `docs/db-current-schema.sql`을 갱신**한다.
+    0091에서 이 단계가 빠져 저장소 스냅샷이 운영 DB보다 뒤처져 있었다(2026-08-31 발견)
+
+- **⛔ 단, 파괴적 변경은 실행 전에 멈추고 보고한다.** 다음은 에이전트가 임의로 실행하지 않는다.
+  SQL과 영향 범위를 보여주고 **사용자 승인을 받은 뒤에** 실행한다.
+
+  | 멈춘다 | 그냥 실행한다 |
+  |---|---|
+  | `drop` (table·column·function·policy·trigger·index) | `create table` · `create index` · 새 함수·정책·트리거 |
+  | `delete` · `truncate` · **기존 행을 바꾸는 `update`** | `create or replace function` (본문이 검증된 경우) |
+  | `revoke` — RLS 헬퍼가 섞이면 정책 전체가 조용히 깨진다 | `grant` (권한을 넓히는 쪽) |
+  | `alter table ... drop/alter column` | `alter table ... add column` (nullable) |
+  | auth 스키마·`auth.users` 직접 조작 | 읽기 전용 조회 |
+
+  판단이 애매하면 **멈추는 쪽**이다. 스테이징 DB가 없어서 되돌릴 곳이 없다.
+
+- **실행 전에 `pg_temp`로 리허설할 수 있으면 한다.** 트리거 함수·순수 함수는 같은 본문을
+  `pg_temp`에 복제해 임시 테이블에 걸고 돌려 보면 **운영 스키마를 건드리지 않고** 동작을
+  확인할 수 있다. 2026-08-31 0092에서 이 방법으로 `search_path=''` 5개를 사전 검증했다.
+
+- **마이그레이션 파일은 여전히 만든다.** MCP로 적용하더라도 `supabase/migrations/`에
+  같은 SQL을 남긴다 — 파일이 없으면 다음 사람이 스키마의 유래를 못 읽는다.
 - **Run 시점이 다른 것을 한 파일에 담지 마라.** 스테이징 DB가 없어서 `pnpm dev`도 운영 DB에 붙는다 — 즉 **개발 확인을 하려면 운영 DB에 먼저 Run해야 한다.** 그래서 "지금 돌려도 안전한 것"과 "앱 배포 뒤에 돌려야 하는 것"은 파일을 나눈다.
   - 안전: 새 테이블·인덱스·트리거·새 RPC (운영에 떠 있는 앱이 참조하지 않는다)
   - 배포 뒤: **기존 행을 바꾸는 UPDATE**, 특히 `level_definitions`의 `reward_status`를 `coming_soon` → `active`로 미는 것. 먼저 돌리면 **아직 기능이 없는 운영 앱에 "해금됨"이 즉시 뜬다** (2026-08-02 루틴에서 0056/0057로 나눈 이유)

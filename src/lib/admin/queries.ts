@@ -9,9 +9,11 @@ import type {
   SessionStatus,
 } from "@/lib/domain/analytics";
 import {
+  membershipCounts,
   parseExcludedIds,
   testAccountReason,
   testUserIds,
+  type MembershipCounts,
   type TestAccountReason,
 } from "@/lib/domain/analytics-accounts";
 import {
@@ -63,6 +65,12 @@ export interface AdminDataset {
   excludedTestAccounts: ExcludedAccount[];
   /** 프로필을 만들지 않은 익명 auth 계정 수 — 퍼널에서 뺀 만큼 */
   anonymousWithoutProfile: number;
+  /**
+   * 회원 수의 실체 (2026-08-31). `auth.users` 총수를 "회원 수"로 읽으면 크게
+   * 틀린다 — 첫 방문자에게 익명 계정을 바로 발급하기 때문이다. 네 층으로 갈라
+   * 화면이 직접 말하게 한다. 계산은 `domain/analytics-accounts.ts`의 순수 함수.
+   */
+  membership: MembershipCounts;
   /** 프로그램·참여 조회가 같은 기준으로 거를 수 있게 넘긴다 */
   testUserIds: string[];
 }
@@ -202,6 +210,18 @@ export async function fetchAdminDataset(): Promise<AdminDataset> {
     anonymousWithoutProfile: authRes.data.users.filter(
       (u) => !profileIds.has(u.id),
     ).length,
+    // 익명/영구를 가르는 기준은 `is_anonymous`다. **role만 보면 안 된다** —
+    // Supabase에서는 익명 사용자도 `authenticated` role을 쓴다.
+    membership: membershipCounts(
+      authRes.data.users.map((u) => ({
+        userId: u.id,
+        isAnonymous: u.is_anonymous === true,
+        createdAt: new Date(u.created_at),
+      })),
+      profileIds,
+      testIds,
+      new Date(),
+    ),
     testUserIds: [...testIds],
   };
 }

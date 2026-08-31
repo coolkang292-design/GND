@@ -41,6 +41,7 @@ import { EngagementPanel } from "./_components/engagement-panel";
 import { FunnelPanel } from "./_components/funnel-panel";
 import { GrowthPanel } from "./_components/growth-panel";
 import { KpiCards } from "./_components/kpi-cards";
+import { MembershipPanel } from "./_components/membership-panel";
 import { NotificationPanel } from "./_components/notification-panel";
 import { ProgramPanel } from "./_components/program-panel";
 import { RetentionPanel } from "./_components/retention-panel";
@@ -261,6 +262,10 @@ export default async function AdminPage({
 
         <div id="overview" />
         <KpiCards kpi={kpi} />
+
+        <section className="grid equal">
+          <MembershipPanel m={data.membership} />
+        </section>
 
         <section className="grid" id="activity">
           <ActivityChart points={points} counts={counts} />

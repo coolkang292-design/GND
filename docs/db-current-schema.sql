@@ -855,6 +855,7 @@ $function$;
 CREATE OR REPLACE FUNCTION public.clear_profile_invited_by_on_insert()
  RETURNS trigger
  LANGUAGE plpgsql
+ SET search_path TO ''
 AS $function$
 begin
   new.invited_by := null;
@@ -1827,12 +1828,11 @@ end $function$;
 CREATE OR REPLACE FUNCTION public.freeze_profile_attribution()
  RETURNS trigger
  LANGUAGE plpgsql
+ SET search_path TO ''
 AS $function$
 begin
-  -- 초대자는 따로 논다. 유입 계측과 시점이 달라서다(위 주석 참고).
   new.invited_by := coalesce(old.invited_by, new.invited_by);
 
-  -- 유입 6칸은 한 벌이다. 한 번 잡혔으면 통째로 그때 것을 지킨다.
   if old.acquisition_captured_at is not null then
     new.acquisition_source      := old.acquisition_source;
     new.acquisition_medium      := old.acquisition_medium;
@@ -1849,6 +1849,7 @@ end $function$;
 CREATE OR REPLACE FUNCTION public.generate_invite_code()
  RETURNS text
  LANGUAGE plpgsql
+ SET search_path TO ''
 AS $function$
 declare
   alphabet constant text := '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
@@ -2346,12 +2347,9 @@ begin
     raise exception 'challenge_not_found';
   end if;
   if c.status <> 'setup' then raise exception 'invalid_status:%', c.status; end if;
-  if not exists (
-    select 1 from challenge_participants
-    where challenge_id = p_challenge_id and user_id = auth.uid() and role = 'host'
-  ) then
-    raise exception 'not_host';
-  end if;
+
+  -- 0091: 방장 전용 해제. 방에 들어온 사람은 누구나 링크를 나눌 수 있다
+  -- (카카오 단톡방·디스코드와 같은 방식, 사장님 결정 2026-08-31).
 
   if c.invite_code is not null then return c.invite_code; end if;
 
@@ -2413,7 +2411,7 @@ begin
 end $function$;
 
 -- ── join_challenge_as_newcomer ──
-CREATE OR REPLACE FUNCTION public.join_challenge_as_newcomer(p_code text)
+CREATE OR REPLACE FUNCTION public.join_challenge_as_newcomer(p_code text, p_inviter uuid DEFAULT NULL::uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -2424,11 +2422,13 @@ declare
   v_result    jsonb;
   v_challenge uuid;
   v_host      uuid;
-  v_host_nick text;
+  v_link_to   uuid;
+  v_link_nick text;
   v_my_nick   text;
+  v_via       text;
 begin
   if v_me is null then raise exception 'not_authenticated'; end if;
- 
+
   -- ── 신입 가드 ────────────────────────────────────────────
   --
   -- ⚠️ **참가 전에 센다.** 참가 뒤에 세면 challenge_participants가 1행이 되어
@@ -2443,70 +2443,87 @@ begin
   ) then
     raise exception 'not_newcomer';
   end if;
- 
+
   if exists (
     select 1 from public.challenge_participants where user_id = v_me
   ) then
     raise exception 'not_newcomer';
   end if;
- 
+
   -- ── 참가 ─────────────────────────────────────────────────
   --
   -- ⚠️ 참가 절차를 **베끼지 않는다.** advisory lock · status='setup' 검사 ·
   --    upsert가 한 벌만 존재해야 한다. 이 저장소는 start_challenge를 세 곳에
   --    복사해 두고 0045~0047로 세 번 고친 전례가 있다.
-  --
-  -- 여기서 예외가 나면(invalid_invite_code · invalid_status · already_joined)
-  -- 트랜잭션 전체가 롤백된다 — **챌린지에 못 들어갔는데 친구만 된 상태가 없다.**
   v_result := public.join_challenge_with_code(p_code);
   v_challenge := (v_result ->> 'challengeId')::uuid;
- 
-  -- ── 방장과 연결 ──────────────────────────────────────────
+
+  -- ── 누구와 연결할 것인가 ─────────────────────────────────
   select cp.user_id into v_host
   from public.challenge_participants cp
   where cp.challenge_id = v_challenge and cp.role = 'host'
   order by cp.joined_at nulls last
   limit 1;
- 
-  -- 방장이 없는 방은 있을 수 없지만(create_challenge_room이 같은 트랜잭션에서
-  -- 넣는다), 없으면 챌린지 참가만 하고 조용히 끝낸다. 친구 연결이 없다고 참가를
-  -- 되돌릴 이유는 없다.
-  if v_host is null or v_host = v_me then
+
+  -- 0091: 링크를 준 사람이 **그 방의 참가자로 확인되면** 그 사람과 잇는다.
+  -- 확인 안 되면(위조·오타·옛 링크) 지금까지처럼 방장이다.
+  v_link_to := null;
+  v_via := 'host';
+  if p_inviter is not null and p_inviter <> v_me then
+    if exists (
+      select 1 from public.challenge_participants
+      where challenge_id = v_challenge
+        and user_id = p_inviter
+        and status = 'joined'
+    ) then
+      v_link_to := p_inviter;
+      v_via := 'inviter';
+    end if;
+  end if;
+  if v_link_to is null then
+    v_link_to := v_host;
+  end if;
+
+  -- 방장도 초대자도 없는 방은 있을 수 없지만(create_challenge_room이 같은
+  -- 트랜잭션에서 넣는다), 없으면 챌린지 참가만 하고 조용히 끝낸다.
+  if v_link_to is null or v_link_to = v_me then
     return v_result || jsonb_build_object('crewLinked', 0);
   end if;
- 
+
   perform pg_advisory_xact_lock(
-    hashtext(least(v_me, v_host)::text || greatest(v_me, v_host)::text)
+    hashtext(least(v_me, v_link_to)::text || greatest(v_me, v_link_to)::text)
   );
- 
-  -- 0079: 출처는 '챌린지', 먼저 연 쪽은 방장이다.
+
+  -- 0079: 출처는 '챌린지', 먼저 연 쪽은 링크를 준 사람이다.
   insert into public.crew_links (user_a, user_b, origin, initiated_by)
-  values (least(v_me, v_host), greatest(v_me, v_host), 'challenge', v_host)
+  values (least(v_me, v_link_to), greatest(v_me, v_link_to), 'challenge', v_link_to)
   on conflict do nothing;
- 
+
   -- 0079: 위 신입 가드가 **crew_links 0건**을 이미 보장한다 —
   -- 이 경로로 온 사람은 정의상 신규라 여기서 다시 재지 않는다.
   update public.profiles
-     set invited_by = v_host
+     set invited_by = v_link_to
    where id = v_me and invited_by is null;
- 
-  select nickname into v_host_nick from public.profiles where id = v_host;
+
+  select nickname into v_link_nick from public.profiles where id = v_link_to;
   select nickname into v_my_nick   from public.profiles where id = v_me;
- 
+
   -- 알림 실패가 연결·참가까지 되돌리면 안 된다.
   begin
     perform public.notify(
-      v_host, v_me, 'crew_accepted', v_challenge,
+      v_link_to, v_me, 'crew_accepted', v_challenge,
       coalesce(v_my_nick, '누군가') || '님이 챌린지에 들어오고 친구가 됐어요 🤝',
       '초대 링크로 GND를 처음 시작했어요'
     );
   exception when others then null;
   end;
- 
+
   return v_result || jsonb_build_object(
     'crewLinked', 1,
-    'hostId', v_host,
-    'hostNickname', v_host_nick
+    'hostId', v_link_to,
+    'hostNickname', v_link_nick,
+    -- 화면이 "누구와" 친구가 됐는지 정확히 말할 수 있게 남긴다
+    'linkedVia', v_via
   );
 end $function$;
 
@@ -3899,6 +3916,7 @@ end $function$;
 CREATE OR REPLACE FUNCTION public.set_updated_at()
  RETURNS trigger
  LANGUAGE plpgsql
+ SET search_path TO ''
 AS $function$
 begin
   new.updated_at := now();
@@ -3909,6 +3927,7 @@ end $function$;
 CREATE OR REPLACE FUNCTION public.set_workout_set_completed_at()
  RETURNS trigger
  LANGUAGE plpgsql
+ SET search_path TO ''
 AS $function$
 begin
   if not new.is_completed then

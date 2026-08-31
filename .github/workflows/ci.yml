@@ -1,0 +1,71 @@
+# GND CI — PR과 main 푸시에서 정적 검증을 돌린다.
+#
+# ⚠️ 이 워크플로는 **배포하지 않는다.** GND는 GitHub 연동 배포를 쓰지 않는다
+#    (CLAUDE.md §배포). 배포는 검증한 로컬 main에서 사람이 `vercel --prod`로 한다.
+#    여기서 하는 일은 "깨진 코드가 main에 들어오는 것을 막는 것"뿐이다.
+#
+# ⚠️ **secret을 쓰지 않는다.** 2026-08-31 실측으로 확인했다 — `.env.local`이 없는
+#    깨끗한 워크트리에서 `pnpm install --frozen-lockfile`(23초)과 `pnpm build`가
+#    둘 다 exit 0이었다. Supabase 환경변수 없이 빌드된다.
+#    운영 DB 자격증명이 필요한 회귀 검증은 `db-regression.yml`로 분리했다.
+#
+# 버전은 임의로 정하지 않았다. 2026-08-31 개발 환경 실측값이다:
+#    node 24.13.0 · pnpm 11.13.0 · pnpm-lock.yaml lockfileVersion 9.0
+#    pnpm 버전은 package.json의 `packageManager` 필드에서 온다(중복 표기하지 않는다).
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# 같은 브랜치에 연달아 푸시하면 앞의 실행을 취소한다 — 러너 시간을 아낀다.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  verify:
+    name: typecheck · lint · test · build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # package.json의 packageManager("pnpm@11.13.0")를 그대로 따른다.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      # --frozen-lockfile: lockfile과 package.json이 어긋나면 여기서 멈춘다.
+      # 의존성을 몰래 올려 통과시키는 일을 막는다.
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # 넷 다 돌린다. 하나가 실패해도 나머지 결과를 보고 싶어서 if:always()를 쓴다 —
+      # 하나씩 고치고 다시 미는 왕복을 줄인다.
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        if: always()
+        run: pnpm lint
+
+      - name: Test
+        if: always()
+        run: pnpm test
+
+      - name: Build
+        if: always()
+        run: pnpm build

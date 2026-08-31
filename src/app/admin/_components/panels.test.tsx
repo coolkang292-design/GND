@@ -38,6 +38,7 @@ import { EngagementPanel } from "./engagement-panel";
 import { FunnelPanel } from "./funnel-panel";
 import { GrowthPanel } from "./growth-panel";
 import { KpiCards } from "./kpi-cards";
+import { MembershipPanel } from "./membership-panel";
 import { NotificationPanel } from "./notification-panel";
 import { ProgramPanel } from "./program-panel";
 import { RetentionPanel } from "./retention-panel";
@@ -657,5 +658,73 @@ describe("지표 설명", () => {
 
   it("빈 목록이면 아무것도 그리지 않는다", () => {
     expect(renderToStaticMarkup(<MetricHelp keys={[]} />)).toBe("");
+  });
+});
+
+describe("MembershipPanel", () => {
+  const m = {
+    authTotal: 124,
+    authAnonymous: 117,
+    authPermanent: 7,
+    profilesTotal: 8,
+    profilesExcluded: 4,
+    profilesReal: 4,
+    permanentSignups7d: 0,
+    permanentSignups30d: 2,
+  };
+
+  it("네 층을 모두 그린다 — 하나로 뭉치면 다시 오판한다", () => {
+    const html = renderToStaticMarkup(<MembershipPanel m={m} />);
+    expect(html).toContain("124개");
+    expect(html).toContain("7개");
+    expect(html).toContain("8개");
+    expect(html).toContain("4개");
+  });
+
+  it("각 층의 사유를 본문으로 그린다 — 폰에서 사라지면 안 된다", () => {
+    /*
+      2026-08-31 회귀. 처음엔 `.funnel`/`.frow`를 재사용했는데 375px에서
+      사유가 들어가는 `.loss`가 `display:none`이 되어 **폰에서 통째로
+      사라졌다**("익명 117개 제외"를 못 보면 층이 왜 줄었는지 알 수 없다).
+      그래서 `.loss`를 쓰지 않고 사유를 본문으로 그린다. 이 단언은 그 결정을
+      고정한다 — `.loss`로 되돌리면 여기서 걸린다.
+    */
+    const html = renderToStaticMarkup(<MembershipPanel m={m} />);
+    expect(html).toContain("익명 117개 제외");
+    expect(html).toContain("픽스처·테스트 4개");
+    expect(html).toContain("회원 수가 아닙니다");
+    expect(html).not.toContain('class="loss"');
+  });
+
+  it("최근 가입은 영구 계정 기준임을 화면이 말한다", () => {
+    const html = renderToStaticMarkup(<MembershipPanel m={m} />);
+    expect(html).toContain("최근 가입 7일 0명");
+    expect(html).toContain("30일 2명");
+    // 승격 시점이 아니라 계정 생성 시점이라는 한계를 숨기지 않는다
+    expect(html).toContain("승격한 날이 아닙니다");
+  });
+
+  it("제외한 테스트 계정이 없으면 그렇게 말한다", () => {
+    const html = renderToStaticMarkup(
+      <MembershipPanel m={{ ...m, profilesExcluded: 0, profilesReal: 8 }} />,
+    );
+    expect(html).toContain("제외한 테스트 계정 없음");
+  });
+
+  it("계정이 하나도 없어도 0으로 나누지 않는다", () => {
+    const empty = {
+      authTotal: 0,
+      authAnonymous: 0,
+      authPermanent: 0,
+      profilesTotal: 0,
+      profilesExcluded: 0,
+      profilesReal: 0,
+      permanentSignups7d: 0,
+      permanentSignups30d: 0,
+    };
+    const html = renderToStaticMarkup(<MembershipPanel m={empty} />);
+    expect(html).toContain("회원 수의 실체");
+    expect(html).not.toContain("NaN");
+    expect(html).not.toContain("Infinity");
   });
 });

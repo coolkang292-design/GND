@@ -1,0 +1,78 @@
+# GND 실 DB 회귀 — **수동 실행 전용.**
+#
+# ⛔ 왜 PR CI와 분리했나. 이 스크립트들은 **운영 Supabase에 직접 붙는다.**
+#    GND에는 스테이징 DB가 없다(CLAUDE.md §검증 스크립트). 그래서
+#      · PR마다 돌리면 포크에서 온 PR이 운영 자격증명에 닿는다
+#      · `accounts` 티어는 실행마다 **운영에 익명 계정을 만든다**
+#      · 연달아 돌리면 익명 가입 rate limit(429)에 걸린다
+#    `ci.yml`은 secret을 하나도 쓰지 않는다. 이 파일만 쓴다.
+#
+# ⚠️ 스크립트가 `process.env`가 아니라 **저장소 루트의 `.env.local` 파일을 직접 읽는다**
+#    (예: `scripts/admin-dashboard-check.mjs`가 `readFileSync(join(root, ".env.local"))`).
+#    그래서 env로 넘기지 않고 secret에서 파일을 만들어 준다.
+#
+# 기본은 `readonly` — 계정을 만들지 않는 5종이라 안전하고 빠르다.
+# `accounts`(23종)와 `all`은 30분 이상 걸리고 운영에 계정을 만든다. 배포 직전에만 쓴다.
+
+name: DB Regression (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tier:
+        description: "회귀 티어 (readonly=안전·빠름 / fixture=픽스처 필요 / accounts=운영에 계정 생성 ⚠️ / all=30분+ ⚠️)"
+        required: true
+        default: readonly
+        type: choice
+        options: [readonly, fixture, accounts, all]
+
+concurrency:
+  group: db-regression
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  regression:
+    name: verify:regression --tier ${{ inputs.tier }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    # 리포지터리 소유자만 돌릴 수 있게 한다. 운영 DB에 붙는 작업이다.
+    environment: production-db
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # 스크립트가 파일을 읽으므로 파일로 만들어 준다. 값은 로그에 찍히지 않는다.
+      - name: Write .env.local from secrets
+        run: |
+          umask 077
+          cat > .env.local <<'EOF'
+          NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ADMIN_USER_IDS=${{ secrets.ADMIN_USER_IDS }}
+          ANALYTICS_EXCLUDED_USER_IDS=${{ secrets.ANALYTICS_EXCLUDED_USER_IDS }}
+          DEV_FIXTURE_PASSWORD=${{ secrets.DEV_FIXTURE_PASSWORD }}
+          GND_ALLOW_DB_TESTS=1
+          EOF
+
+      - name: Run regression
+        run: pnpm verify:regression --tier ${{ inputs.tier }}
+
+      # 실패하든 성공하든 지운다. 러너는 일회용이지만 습관을 남긴다.
+      - name: Remove credentials
+        if: always()
+        run: rm -f .env.local
