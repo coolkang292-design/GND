@@ -530,6 +530,10 @@ export const CREW_ORIGIN_LABELS: readonly (readonly [string, string])[] = [
 2. `profiles.acquisition_*`은 **기존 패널(AcquisitionPanel·topInviters)이 계속 쓴다** — 건드리지 않는다
 3. 둘 다 있는 사용자에서 값이 갈리면 **테스트가 실패하게 한다** (조용히 한쪽을 고르지 않는다)
 
+> ⚠️ **이 3번은 §D-8 ②로 교체됐다.** 테스트는 계속 실패시키되, **운영에서는 던지지
+> 않고** `/admin`에 "campaign 귀속 불일치 N건"으로 표시한다 — 진단 하나 때문에
+> 대시보드 전체를 500으로 잃지 않기 위해서다 (2026-08-31 사용자 지시).
+
 ### 배선 경로 — 세 층을 실제로 잇는다
 
 명령문의 지적이 정확하다. 지금은 **DB에 값이 있는데 admin이 안 읽는다.**
@@ -563,3 +567,124 @@ export const CREW_ORIGIN_LABELS: readonly (readonly [string, string])[] = [
 뒤에야 채워진다. **화면이 그 사실을 스스로 말해야 한다** — 빈 표를 "기능이 안 된다"로
 읽지 않도록, 기존 `acquisitionCaptureRate`처럼 "언제부터 계측했는지·몇 명이 계측됐는지"를
 함께 보여준다.
+
+---
+
+## D-8. 보완 지시 2건 반영 (2026-08-31 사용자)
+
+### ① 온보딩 완료 — 코드 실측 결과 **프로필 생성과 같은 행위다**
+
+사용자 지시: *"온보딩 완료와 프로필 완료가 실제 제품 흐름에서 **별개의 단계라면** 각각
+독립 측정하라. 현재 DB에서 알 수 없다면 이벤트로 계측하라. 다만 **같은 사실로 중복
+표시해서 퍼널에 의미 없는 두 단계를 만들지 마라.**"*
+
+**조사했다. 결론: 별개가 아니다 — 지시의 두 번째 절이 적용된다.**
+
+```
+src/app/onboarding/page.tsx:54   type Step = "profile" | "done"
+                                 (crew·create·join 단계는 2026-08-08에 삭제됨)
+src/app/onboarding/page.tsx:335  mustAskNickname = providers.length === 0
+                            :336  showNicknameStep = mustAskNickname || linked === true
+                                 → 닉네임 칸은 카카오·구글 연결 뒤에만 뜬다
+src/app/onboarding/page.tsx:206  await upsertMyProfile({...})   ← 온보딩을 끝내는 유일한 행위
+                                 이후 코드는 전부 라우팅(홈·챌린지·done)일 뿐이다
+```
+
+`upsertMyProfile`을 부르는 곳은 온보딩과 `profile-edit-sheet`뿐이고 후자는 **수정**이라
+`created_at`을 바꾸지 않는다(`crew.ts:37` upsert). 즉 **`profiles.created_at`은 온보딩을
+끝낸 바로 그 호출이 남긴 정확한 기록**이다.
+
+→ **`onboarding_completed` 이벤트를 만들지 않는다.** 만들면 `profiles.created_at`과
+같은 사실을 두 곳에 저장하게 되고(§0 원칙 위반), 퍼널에 항상 숫자가 똑같은 두 줄이
+생긴다. 그건 정보가 아니라 잡음이다.
+
+### ①-b 그 대신 — **실제 제품 순서가 브리프와 다르다**
+
+같은 조사에서 더 중요한 것이 나왔다. 브리프의 기본 순서는
+`온보딩 완료 → 계정 연결 → 프로필`인데, **GND의 실제 순서는 반대다.**
+
+```
+외부 진입 → 익명 계정 발급 → 온보딩 화면(카카오·구글 버튼 2개)
+   → [버튼 누름]        ← ❌ 측정 안 됨   ← ⚠️ 진짜 공백이 여기다
+   → OAuth 왕복 복귀 = 정식 계정 전환     ← ✅ auth.identities / is_anonymous
+   → [닉네임 화면 노출]  ← ❌ 측정 안 됨
+   → 프로필 생성 = 온보딩 완료            ← ✅ profiles.created_at
+   → 홈 또는 챌린지
+```
+
+브리프가 *"프로필 완료 후 identity linking인 구조라면 위 순서를 억지로 적용하지 마라"*
+고 했으므로 **실제 순서를 따른다: 계정 전환이 프로필보다 앞이다.**
+
+그리고 **지금 안 보이는 진짜 이탈 지점은 "온보딩 화면을 봤지만 카카오/구글을 안 눌렀다"
+와 "눌렀는데 안 돌아왔다"** 두 곳이다. 여기가 외부 사용자가 가장 많이 빠질 곳인데
+현재 완전히 깜깜하다. `onboarding_completed`를 만드는 것보다 **이쪽을 계측하는 것이
+같은 노력으로 훨씬 큰 값**이다.
+
+**최종 이벤트 목록 (5종 — 개수는 그대로, 의미가 정확해졌다):**
+
+| 이벤트 | 왜 필요한가 |
+|---|---|
+| `landing_opened` | 유입. 프로필 없는 사람의 유일한 흔적 (§D-1) |
+| `onboarding_started` | 온보딩 화면을 실제로 봤다 |
+| `identity_link_started` | 카카오·구글을 **눌렀다** — 여기서 안 돌아오는 사람이 보인다 |
+| `identity_link_failed` | 안 하려고 안 한 것과 오류로 못 한 것을 가른다 (error code만) |
+| `challenge_viewed` | 챌린지 화면을 봤다 (참가는 `challenge_participants`가 안다) |
+
+**만들지 않는다:** `onboarding_completed`(=`profiles.created_at`) ·
+`identity_link_completed`(=`auth.identities`) · `profile_completed` ·
+`first_workout_started/completed` · `challenge_joined` · `three_workouts` · `D7`.
+
+### ② campaign 귀속 불일치 — 테스트는 실패, 운영은 계속 돈다
+
+사용자 지시: *"자동 테스트에서는 실패 조건으로 두되, production에서 불일치가 생겼다고
+앱이나 admin 전체가 실패하지 않게 하라. 조용히 한쪽을 고르지 말고 `/admin`에
+**'campaign 귀속 불일치 N건'** 처럼 관측 가능하게 표시하라."*
+
+D-7에 적었던 "둘이 갈리면 테스트가 실패하게 한다"만으로는 부족했다. **운영에서 던지면
+`/admin` 전체가 500이 된다** — 진단 하나 때문에 대시보드를 통째로 잃는 건 손해다.
+아래로 교체한다.
+
+**집계 함수는 절대 던지지 않는다.**
+
+```
+campaignCohort(events, profiles) →
+  { rows: CampaignRow[],
+    mismatches: { count: number, samples: {eventCampaign, profileCampaign, n}[] } }
+```
+
+- 배정은 **`landing_opened` 이벤트 값**을 쓴다 (프로필 없는 사람까지 덮는 유일한 기록).
+  이건 "조용한 선택"이 아니라 **문서화된 우선순위**이고, 고른 사실을 아래처럼 화면이 말한다
+- 불일치는 **버리지도 고치지도 않고 세어서 같이 낸다**
+- `samples`에 **사용자 id·이메일을 넣지 않는다** — campaign 문자열 쌍과 건수만.
+  개인 감시를 만들지 않는다는 §12 원칙 그대로다
+
+**`/admin` 표시.** 캠페인 비교표 아래에 진단 줄을 둔다.
+
+```
+✅ campaign 귀속 불일치 0건
+⚠️ campaign 귀속 불일치 3건 — 유입 기록과 프로필 기록의 캠페인이 다릅니다.
+   비교표는 유입 기록 기준으로 셌습니다.
+   influencer_a_pilot01 ↔ influencer_a_pilot02 (2건) · instagram_ad ↔ (없음) (1건)
+```
+
+0건이면 초록 한 줄로 조용히, 1건 이상이면 경고와 함께 **어떤 쌍이 몇 건인지** 보여준다.
+운영자가 SQL Editor를 열지 않고도 원인을 짚을 수 있어야 한다.
+
+**테스트 (양쪽 다 넣는다):**
+- 불일치를 만든 픽스처에서 `mismatches.count`가 **정확히 그 수**로 나온다 (실패 조건)
+- 불일치가 있어도 `campaignCohort`가 **던지지 않고 rows를 정상 반환**한다 (운영 보호)
+- 패널이 불일치 0건일 때와 N건일 때 **각각 렌더된다** — N건에서 화면이 죽지 않는다
+- `samples`에 uuid·이메일 형태 문자열이 **들어가지 않는다** (개인정보)
+
+### D의 완료 판정 (다시 못박는다)
+
+Supabase에 이벤트가 쌓이는 것은 완료가 **아니다.** `/admin`에서 실제 운영 데이터
+경로로 다음이 확인돼야 완료다.
+
+1. 제안처/캠페인별 성과 비교 (표)
+2. 특정 캠페인의 상세 퍼널
+3. 가장 큰 이탈 단계 (표본 충분할 때만)
+4. pilot01 vs pilot02 비교
+5. `source`가 같아도 인플루언서 A/B 분리
+
+**외부 파일럿은 D의 production 검증이 끝난 뒤에 시작한다.**
