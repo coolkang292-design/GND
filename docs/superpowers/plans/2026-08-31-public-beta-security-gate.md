@@ -284,3 +284,170 @@ DB 쪽은 `(auth.jwt() ->> 'is_anonymous')::boolean is not true`.
 - **`git push`는 배포가 아니다.** 완료 보고에서 "코드 완료 / DB Run 완료 / 배포 완료 /
   프로덕션 실물 확인 완료"를 분리해서 쓴다
 - 마이그레이션 적용 후 **`pnpm db:snapshot` 갱신** — 0091에서 누락됐던 단계다
+
+---
+---
+
+# 계획 갱신 — 2026-08-31 (배포 A 완료 후)
+
+배포 A가 끝난 뒤 사용자가 새 명령문 **2건**을 추가했다.
+
+1. **사용자 퍼널·이탈 계측** — 외부인이 어느 단계에서 막혀 나가는지 `/admin`에서 본다
+2. **인플루언서별 유입 성과 추적** — 캠페인/인플루언서별로 유입 품질을 비교한다 (완료 조건)
+
+아래는 그 둘을 실제 코드·운영 DB에 대조한 결과와, 그에 따라 바뀐 배포 순서다.
+
+---
+
+## D-1. 가장 중요한 발견 — 지금 구조로는 퍼널의 **윗부분을 아예 측정할 수 없다**
+
+실측(2026-08-31):
+
+```
+src/lib/acquisition.ts:19   const KEY = "gnd-acquisition"      ← 진입 즉시 localStorage에 재운다
+src/lib/acquisition.ts:74   acquisitionColumns()               ← profiles에 실어 보낼 모양
+src/lib/crew.ts:44          ...acquisitionColumns()            ← **프로필을 만들 때** 비로소 DB에 쓴다
+supabase 0080               freeze_profile_attribution         ← 한 번 잡히면 동결
+```
+
+즉 **유입 정보는 프로필이 생길 때까지 브라우저 localStorage에만 있다.**
+인플루언서 링크로 들어왔지만 온보딩을 끝내지 않은 사람은 **DB에 아무 흔적도 남지 않는다.**
+
+운영 DB가 그것을 그대로 보여준다:
+
+| | 값 |
+|---|---|
+| `profiles.acquisition_campaign`이 있는 행 | **1** |
+| `profiles.acquisition_source`가 있는 행 | **1** (`kakao`) |
+| `profiles.acquisition_captured_at`이 있는 행 | 3 |
+| `auth.users` 익명 | 116 (프로필 있는 것은 1) |
+
+### 이것이 새 명령문에 뜻하는 것
+
+인플루언서 명령문의 **질문 1번 "인플루언서 A 링크를 몇 명이 열었는가?"** 와
+퍼널 명령문의 **1~3단계(외부 진입 · 온보딩 시작 · 온보딩 완료)** 는
+**지금 구조로는 원리적으로 답할 수 없다.** 프로필이 생기기 전 구간이기 때문이다.
+
+그래서 새 명령문의 "이미 DB에 흔적이 남으면 이벤트를 만들지 마라"는 원칙을 지키더라도,
+**진입~프로필 이전 구간은 새 기록이 반드시 필요하다.** 이건 중복 저장이 아니라
+**현재 아무 데도 없는 사실**이다.
+
+반대로 **프로필 이후 구간은 새 이벤트가 필요 없다** (아래 표).
+
+---
+
+## D-2. 계측 가능 범위 실측 — 무엇이 이미 되고 무엇이 안 되나
+
+| 단계 | 지금 DB 흔적 | 근거 | 새 이벤트 필요? |
+|---|---|---|---|
+| 외부 링크 진입 | **없음** | localStorage에만 있다 | ✅ **필요** |
+| 익명 auth 생성 | 있음 | `auth.users.created_at`, `is_anonymous` | ❌ 불필요 |
+| 온보딩 시작 | **없음** | 아무 것도 안 남는다 | ✅ **필요** |
+| 온보딩 각 단계 | **없음** | 〃 | ✅ 필요(최소한으로) |
+| 온보딩 완료 = 프로필 생성 | 있음 | `profiles.created_at` | ❌ 불필요 |
+| identity linking 시작 | **없음** | OAuth 리다이렉트라 흔적 없음 | ✅ **필요**(실패 구분 위해) |
+| identity linking 완료 | 있음 | `auth.identities`, `is_anonymous=false` | ❌ 불필요 |
+| 프로필 완료 | 있음 | `profiles` | ❌ 불필요 |
+| 첫 운동 시작 | 있음 | `workout_sessions.started_at` · `workout_events`(313행, `event_type`) | ❌ 불필요 |
+| 첫 운동 완료 | 있음 | `workout_sessions.status/completed_at` | ❌ 불필요 |
+| 챌린지 **확인** | **없음** | 화면을 본 것은 안 남는다 | ✅ **필요** |
+| 챌린지 참가 | 있음 | `challenge_participants` | ❌ 불필요 |
+| 3회 운동 | 있음 | `workout_sessions` 집계 (`activationFunnel`이 이미 한다) | ❌ 불필요 |
+| D1/D7 재운동 | 있음 | `reworkoutRetention()` 이미 있다 | ❌ 불필요 |
+
+**결론: 새 이벤트는 5종이면 충분하다** — `landing_opened` · `onboarding_started` ·
+`onboarding_step` · `identity_link_started`/`_failed` · `challenge_viewed`.
+나머지는 전부 기존 테이블에서 계산한다. (명령문이 후보로 든 `profile_completed`·
+`first_workout_*`·`challenge_joined`·`three_workouts`·`D7`은 **만들지 않는다.**)
+
+---
+
+## D-3. 익명 → 영구 연결은 **이미 성립한다** (검증됨)
+
+새 명령문 §5가 요구한 것 — 익명 때 남긴 이벤트와 가입 후 행동이 같은 사람으로 이어질 것.
+
+**성립한다.** GND는 익명 계정에 identity를 붙여 그 자리에서 승격하므로 `auth.users.id`가
+바뀌지 않는다 (실측: `오뎅끼데스까` `identities=3` · `is_anonymous=false` · 같은 행).
+따라서 이벤트를 `auth.uid()`로만 키잉하면 **새 device fingerprint 없이** 연결이 유지된다.
+
+⚠️ **남은 검증 1개 [미검증]**: identity linking **직후 JWT가 갱신되어 `is_anonymous=false`가
+되는지.** 갱신이 늦으면 "UI는 영구인데 DB는 익명" 구간이 생긴다. 배포 C·D 공통 필수 항목.
+
+---
+
+## D-4. 인플루언서 추적 — 새 컬럼을 만들지 않는다
+
+| 명령문 요구 | 실측 | 판정 |
+|---|---|---|
+| 캠페인 구분 | `UTM_KEYS = ["utm_source","utm_medium","utm_campaign"]` 이미 파싱 | ✅ 재사용 |
+| `profiles.acquisition_campaign` | 컬럼 존재, `crew.ts:44`가 **쓰고 있다** | ✅ 재사용 |
+| admin이 campaign을 읽나 | **읽지 않는다** — `queries.ts`가 `acquisition_source,acquisition_referrer`만 select | ❌ **여기가 빠진 곳** |
+| creator/influencer 별도 dimension | `utm_medium=creator` + `utm_campaign=influencer_a_pilot01`로 충분 | ❌ **새 컬럼 만들지 않는다** |
+
+즉 인플루언서 추적에 **새 컬럼은 필요 없다.** 필요한 것은 두 가지뿐이다.
+① `queries.ts`의 select에 `acquisition_medium, acquisition_campaign`을 더한다
+② 캠페인별 퍼널 집계 함수와 `/admin` 필터를 만든다
+
+⚠️ 단 **유입 단계(질문 1번)만은 D-1 때문에 캠페인을 `landing_opened` 이벤트에도 실어야 한다.**
+프로필이 안 생긴 사람의 캠페인은 `profiles`에 영영 안 남기 때문이다.
+
+⚠️ **지금 데이터로는 아무 것도 비교할 수 없다** — campaign 값이 있는 행이 **1개**다.
+"인플루언서 A vs B" 비교는 **파일럿을 실제로 돌린 뒤에야** 숫자가 생긴다. 기능이 완성돼도
+당장 화면은 거의 비어 있는 것이 정상이고, 그것을 실패로 읽지 않도록 화면이 말해야 한다.
+
+---
+
+## D-5. 배포 C와 D의 충돌 — 먼저 알아야 한다 ⚠️
+
+**배포 C(익명 권한 경계)는 익명 사용자의 쓰기를 제한하려는 것이고,
+배포 D(퍼널 계측)는 익명 사용자가 이벤트를 써야 성립한다.**
+
+둘을 따로 설계하면 C가 D를 막거나, D 때문에 C가 뚫린다. 그래서:
+
+- `analytics_events`(가칭) INSERT는 **익명에게 명시적으로 허용**한다. 이건 "사회적 공개 변경"이
+  아니라 자기 행동 기록이므로 C의 제한 대상이 아니다
+- 정책은 `auth.uid() = user_id`로 **자기 것만** 쓰게 한다. 클라가 남의 `user_id`를 지정 못 한다
+- SELECT는 일반 사용자 전면 금지, `service_role`만
+- C의 auth matrix 문서에 이 항목을 **명시적으로 한 줄 넣는다**
+
+---
+
+## D-6. 갱신된 배포 순서
+
+| | 내용 | 상태 |
+|---|---|---|
+| **A** | search_path(0092) · CI · 회원 지표 · 문서 | ✅ **완료** (코드·DB·배포·CI 전부) |
+| **D** | 퍼널 계측 + 인플루언서/캠페인 성과 | ⬅️ **다음. B보다 먼저** |
+| **C** | 익명 권한 경계 | D 다음 (D와 같이 설계) |
+| **B** | SECURITY DEFINER 전수 감사 + 최소 REVOKE | 마지막 |
+
+### 왜 순서를 바꾸나
+
+원래 계획은 A → B → C였다. 바꾸는 근거:
+
+1. **D가 사업 목표에 직결된다.** 외부 베타의 목적은 "어디서 막히는지 찾아 고치는 것"이고,
+   계측이 없으면 파일럿을 돌려도 아무것도 배우지 못한다. B(Advisor 경고 93건)는 **지금
+   실제 사고를 내고 있지 않다**
+2. **D는 C의 입력이다.** 익명이 무엇을 하는지 데이터가 있어야 무엇을 막을지 정할 수 있다.
+   지금 익명 116명 중 프로필 보유자가 1명뿐이라는 사실도 D가 있으면 "몇 명이 들어와서
+   어디서 나갔나"로 바뀐다
+3. **B가 가장 위험하고 가장 안 급하다.** REVOKE는 RLS를 조용히 깨뜨릴 수 있고
+   (CLAUDE.md의 새 규칙상 **파괴적 변경 — 실행 전 보고 대상**), 미루어도 손해가 없다
+
+### D의 산출물 (예정)
+
+```
+docs/analytics/public-beta-funnel-audit.md      단계별 계측 가능 범위 전수 (D-2 확장)
+supabase/migrations/0093_analytics_events.sql   새 테이블 + RLS + 인덱스 (비파괴)
+src/lib/domain/analytics-funnel.ts              퍼널·캠페인 집계 순수 함수 + 테스트
+src/lib/admin/queries.ts                        acquisition_medium/campaign select 추가
+src/app/admin/_components/public-beta-funnel-panel.tsx
+```
+
+⚠️ **표본 규칙을 지킨다.** 지금 실사용자 4명이다. `MIN_RATIO_SAMPLE = 5` 원칙대로
+표본이 적으면 퍼센트 대신 원시 숫자를 보여주고, "가장 큰 마찰 구간"은
+**"표본 부족 — 판정 안 함"** 으로 둔다. 4명 데이터로 "32% 이탈이 문제"라는 가짜 확신을
+만들지 않는다.
+
+⚠️ **개인별 행동 timeline은 만들지 않는다.** metadata는 allowlist로 제한하고
+이메일·raw referrer URL·초대 코드 원문·토큰은 넣지 않는다.
