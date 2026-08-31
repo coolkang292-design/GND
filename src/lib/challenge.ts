@@ -1588,10 +1588,15 @@ export interface ChallengeActivityItem {
 export async function getChallengeActivity(
   challengeId: string,
 ): Promise<ChallengeActivityItem[]> {
-  const supabase = getSupabaseBrowserClient();
-  const { data, error } = await supabase.rpc("get_challenge_activity", {
-    p_challenge_id: challengeId,
-  });
-  if (error) return [];
-  return Array.isArray(data) ? (data as ChallengeActivityItem[]) : [];
+  try {
+    // ⚠️ `getSupabaseBrowserClient()`도 던진다(env 미설정). 같은 이유로 감싼다.
+    const supabase = getSupabaseBrowserClient();
+    const { data, error } = await supabase.rpc("get_challenge_activity", {
+      p_challenge_id: challengeId,
+    });
+    if (error) return [];
+    return Array.isArray(data) ? (data as ChallengeActivityItem[]) : [];
+  } catch {
+    return [];
+  }
 }

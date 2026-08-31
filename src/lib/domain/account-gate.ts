@@ -41,7 +41,9 @@ export function isPermanentAccountRequired(e: unknown): boolean {
  *    막다른 길처럼 보이면 사용자는 앱을 닫는다.
  */
 export function permanentAccountMessage(action: PermanentAction): string {
-  return `${ACTION_LABEL[action]}에는 카카오·구글 연결이 필요해요. 내 정보 → 계정에서 연결하면 바로 쓸 수 있어요 (기록은 그대로 유지돼요).`;
+  // ⚠️ 라벨이 이미 "-려면"으로 끝난다. 조사를 덧붙이면 "보내려면에는"이 된다
+  //    (2026-08-31 개발 서버 화면에서 잡았다).
+  return `${ACTION_LABEL[action]} 카카오·구글 연결이 필요해요. 내 정보 → 계정에서 연결하면 바로 쓸 수 있어요 (기록은 그대로 유지돼요).`;
 }
 
 export type PermanentAction = "invite" | "crew" | "challenge";

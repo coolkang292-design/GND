@@ -11,7 +11,7 @@ import { avatarSource } from "@/lib/domain/avatar-source";
 import { linkLabel } from "@/lib/domain/profile-links";
 import { ProfileEditSheet } from "@/components/profile/profile-edit-sheet";
 import { BlockSheet } from "@/components/moderation/block-sheet";
-import { sendCrewRequest } from "@/lib/crew-link";
+import { isCrewWith, sendCrewRequest } from "@/lib/crew-link";
 import { permanentAccountMessage } from "@/lib/domain/account-gate";
 import { SocialError } from "@/lib/social";
 import { badgeShelf, earnedBadgeCount, type BadgeMeta } from "@/lib/domain/badges";
@@ -354,6 +354,23 @@ export function MemberProfileSheet({
   const [profile, setProfile] = useState<CrewMemberProfile | null>(null);
   const [catalog, setCatalog] = useState<BadgeMeta[] | null>(null);
   const [failure, setFailure] = useState<"not_crew" | "failed" | null>(null);
+  /**
+   * 이 사람과 영구 크루인가. `null`은 **모른다**는 뜻이다 (0095).
+   *
+   * ⚠️ 조회 성공/실패로는 알 수 없다 — 챌린지 참가자는 `shares_challenge_with`
+   *    때문에 프로필 조회가 성공해서, 예전에는 크루 신청 버튼이 영영 안 나왔다.
+   */
+  /*
+    ⚠️ **누구에 대한 답인지 함께 들고 있는다.** 시트는 화면당 하나라
+       `userId`가 바뀌어도 컴포넌트가 살아 있다. 불리언만 두면 대상이 바뀐
+       직후 **옛 사람의 답**으로 버튼이 잠깐 그려진다 — 이미 크루인 사람에게
+       신청 버튼이 번쩍이는 종류의 사고다.
+  */
+  const [crewAnswer, setCrewAnswer] = useState<{
+    forUser: string;
+    isCrew: boolean;
+  } | null>(null);
+  const crewKnown = crewAnswer?.forUser === userId ? crewAnswer.isCrew : null;
   /** 크루가 아닌 사람에게 요청 보내기 (2026-08-31) */
   const [requestState, setRequestState] = useState<
     "idle" | "sending" | "sent" | "accepted"
@@ -472,6 +489,25 @@ export function MemberProfileSheet({
         const message = e instanceof Error ? e.message : String(e);
         setFailure(message.includes("not_crew") ? "not_crew" : "failed");
       });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, reloadKey]);
+
+  /*
+    0095: 영구 크루인지 따로 묻는다. 챌린지 참가자는 프로필 조회가 성공하므로
+    아래 "크루 신청" 블록을 그릴지 여기서만 알 수 있다.
+    ⚠️ 실패하면 null로 두고 **버튼을 그리지 않는다** — 이미 크루인 사람에게
+       신청 버튼이 뜨는 것이 안 뜨는 것보다 나쁘다.
+  */
+  useEffect(() => {
+    let cancelled = false;
+    void isCrewWith(userId).then((v) => {
+      // v가 null이면(조회 실패) 답을 남기지 않는다 — "모른다"로 둔다.
+      if (!cancelled && v !== null) {
+        setCrewAnswer({ forUser: userId, isCrew: v });
+      }
+    });
     return () => {
       cancelled = true;
     };
@@ -685,10 +721,26 @@ export function MemberProfileSheet({
              send_crew_request는 원래부터 크루 여부를 요구하지 않으므로
              (0038) 버튼만 붙이면 동작한다. 마이그레이션 0.
         */}
-        {failure === "not_crew" && (
+        {/*
+          크루 신청 (2026-08-31 신설 → 2026-08-31 조건 수정, 0095).
+
+          ⚠️⚠️ 처음엔 `failure === "not_crew"` 분기 **안에만** 뒀는데,
+             **챌린지 참가자에게는 영영 안 나왔다.** 같은 챌린지면
+             `shares_challenge_with` 덕분에 프로필 조회가 **성공해서** 그 분기를
+             안 타기 때문이다. 신고·차단이 같은 이유로 이미 밖으로 나와 있다(아래).
+
+          ⚠️ 그래서 조회 성공/실패가 아니라 **크루 여부를 직접 묻는다**
+             (`crewKnown`). `null`(모름)이면 그리지 않는다 — 이미 크루인 사람에게
+             신청 버튼이 뜨는 것이 안 뜨는 것보다 나쁘다.
+
+          ⚠️ 자기 시트에는 안 나온다. `onAvatarChanged`가 내 시트의 표식이고
+             (아래 신고·차단과 같은 신호), 서버도 self_request로 막는다.
+        */}
+        {crewKnown === false && !onAvatarChanged && (
           <div className="mt-4 flex flex-col gap-2.5">
             <p className="text-sm text-muted">
-              아직 크루가 아니에요. 크루가 되면 서로의 운동 소식을 받아볼 수 있어요.
+              아직 크루가 아니에요. 크루가 되면 챌린지가 끝나도 서로의 운동 소식을
+              받아볼 수 있어요.
             </p>
 
             {requestState === "sent" ? (

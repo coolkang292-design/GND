@@ -70,3 +70,14 @@ describe("accountGateMessage", () => {
     expect(accountGateMessage(new Error("already_crew"), "crew")).toBeNull();
   });
 });
+
+describe("문구가 자연스러운 한국어인가", () => {
+  it("⚠️ '보내려면에는' 같은 조사 중복이 없다 (2026-08-31 화면에서 잡았다)", () => {
+    for (const a of ["invite", "crew", "challenge"] as const) {
+      const m = permanentAccountMessage(a);
+      expect(m).not.toContain("려면에는");
+      expect(m).not.toContain("면에는");
+      expect(m).toMatch(/려면 카카오·구글 연결이 필요해요/);
+    }
+  });
+});

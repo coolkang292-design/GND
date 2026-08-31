@@ -123,3 +123,27 @@ export async function removeCrew(targetId: string): Promise<void> {
   });
   if (error) throw toSocialError(error);
 }
+
+/**
+ * 이 사람과 **영구 크루**인가 — `is_crew_with` RPC 한 번.
+ *
+ * ⚠️ 왜 필요한가 (0095). 챌린지 참가자는 `shares_challenge_with` 덕분에 프로필
+ *    조회가 **성공한다.** 그래서 프로필 시트의 "크루가 아니에요" 분기
+ *    (`failure === "not_crew"`)를 안 타고, **크루 신청 버튼이 영영 안 나왔다.**
+ *    조회 성공/실패로는 크루 여부를 알 수 없으므로 따로 묻는다.
+ *
+ * ⚠️ 실패하면 `null`을 준다 — "모른다"와 "크루가 아니다"는 다르다.
+ *    모를 때 버튼을 그리면 이미 크루인 사람에게도 신청 버튼이 뜬다.
+ */
+export async function isCrewWith(userId: string): Promise<boolean | null> {
+  try {
+    // ⚠️ `getSupabaseBrowserClient()`도 **던진다**(env 미설정). RPC 오류만
+    //    감싸면 테스트·미설정 환경에서 미처리 거부가 된다 — 2026-08-31에 겪었다.
+    const supabase = getSupabaseBrowserClient();
+    const { data, error } = await supabase.rpc("is_crew_with", { uid: userId });
+    if (error) return null;
+    return data === true;
+  } catch {
+    return null;
+  }
+}
