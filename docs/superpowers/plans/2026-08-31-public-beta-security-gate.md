@@ -440,9 +440,14 @@ supabase 0080               freeze_profile_attribution         ← 한 번 잡�
 docs/analytics/public-beta-funnel-audit.md      단계별 계측 가능 범위 전수 (D-2 확장)
 supabase/migrations/0093_analytics_events.sql   새 테이블 + RLS + 인덱스 (비파괴)
 src/lib/domain/analytics-funnel.ts              퍼널·캠페인 집계 순수 함수 + 테스트
+src/lib/domain/analytics-acquisition.ts         CAMPAIGN_LABELS 상수 추가 (D-7)
 src/lib/admin/queries.ts                        acquisition_medium/campaign select 추가
-src/app/admin/_components/public-beta-funnel-panel.tsx
+src/app/admin/_components/public-beta-funnel-panel.tsx      전체 퍼널
+src/app/admin/_components/campaign-comparison-panel.tsx     제안처 비교표 (D-7 ①)
+src/app/admin/_components/campaign-funnel-panel.tsx         캠페인 상세 퍼널 (D-7 ②)
 ```
+
+**완료 판정은 화면이다** — DB에 값이 있는 것으로는 완료가 아니다. 상세는 §D-7.
 
 ⚠️ **표본 규칙을 지킨다.** 지금 실사용자 4명이다. `MIN_RATIO_SAMPLE = 5` 원칙대로
 표본이 적으면 퍼센트 대신 원시 숫자를 보여주고, "가장 큰 마찰 구간"은
@@ -451,3 +456,110 @@ src/app/admin/_components/public-beta-funnel-panel.tsx
 
 ⚠️ **개인별 행동 timeline은 만들지 않는다.** metadata는 allowlist로 제한하고
 이메일·raw referrer URL·초대 코드 원문·토큰은 넣지 않는다.
+
+---
+
+## D-7. 추가 완료 조건 — `/admin` 화면 2개 (2026-08-31 사용자 추가 지시)
+
+**"DB에 저장했다"는 완료가 아니다.** 운영자가 Supabase SQL Editor를 열지 않고
+`/admin`만 보고 *"어느 인플루언서/커뮤니티가 가장 좋은 사용자를 데려왔는가?"* 에
+답할 수 있어야 완료다. 그리고 **`source=instagram`까지만 보여주는 것도 완료가 아니다** —
+같은 Instagram 안에서 인플루언서 A / B / pilot01 / pilot02가 분리돼야 한다.
+
+### 화면 ① 제안처·캠페인 비교표
+
+한 표에서 서로 비교할 수 있어야 한다 (예: 카카오 오픈채팅 A · 인스타 인플루언서 B · 유튜버 C).
+
+| 열 | 출처 |
+|---|---|
+| 채널 | `acquisitionChannel(source, referrer)` — 기존 함수 재사용 |
+| 제안처/인플루언서 식별명 | `acquisition_medium` + `CAMPAIGN_LABELS` (아래) |
+| campaign | `acquisition_campaign` |
+| **유입 사용자 수** | ⚠️ **`landing_opened` 이벤트만이 답할 수 있다** (D-1) |
+| 온보딩 완료 | `profiles.created_at` |
+| 정식 계정 전환 | `auth.users.is_anonymous = false` |
+| 첫 운동 시작 | `workout_sessions.started_at` |
+| 첫 운동 완료 | `workout_sessions.status/completed_at` |
+| 3회 운동 | `workout_sessions` 집계 (`activationFunnel` 재사용) |
+| challenge 참여 | `challenge_participants` |
+| D7 재운동 | `reworkoutRetention()` 재사용 |
+
+**유입 수만 새 이벤트에서 오고 나머지 8열은 전부 기존 테이블에서 나온다.**
+프로필이 없는 사람은 `profiles`에 행 자체가 없기 때문이다.
+
+### 화면 ② 캠페인 상세 퍼널
+
+특정 campaign을 고르면 **그 집단만** 대상으로:
+
+```
+유입 → 온보딩 → 계정 전환 → 프로필 → 첫 운동 → 3회 운동 → 챌린지 → D7 재운동
+```
+
+표본이 충분할 때만 **가장 큰 이탈 구간**을 표시한다. 부족하면
+**"표본 부족 — 마찰 구간 판정 안 함"**. 실사용자 4명 규모에서 "32% 이탈이 문제"라는
+가짜 확신을 만들지 않는다 (`MIN_RATIO_SAMPLE = 5`).
+
+### campaign registry — **테이블을 만들지 않는다**
+
+명령문이 "campaign key와 표시명을 분리하는 가벼운 registry를 검토하되 문자열로 충분하면
+테이블을 추가하지 마라"고 했다. **저장소에 이미 정확히 그 패턴이 있다:**
+
+```ts
+// src/lib/domain/analytics-acquisition.ts:17
+export const CREW_ORIGIN_LABELS: readonly (readonly [string, string])[] = [
+  ["invite_link", "친구 초대 링크"], ...
+];
+// 그리고 그 아래 주석:
+// ⚠️ 목록에 없는 값도 버리지 않고 그대로 낸다. 새 경로가 생겼는데 라벨을 안 붙이면
+//    그 줄이 화면에서 통째로 사라져 합이 안 맞는다 — 합이 안 맞는 것보다 라벨이 못생긴 편이 낫다.
+```
+
+→ **`CAMPAIGN_LABELS`를 같은 모양의 코드 상수로 만든다.** DB 테이블도, 새 컬럼도 없다.
+- `["influencer_a_pilot01", "인플루언서 A · 1차"]` 처럼 사람이 읽는 이름을 붙인다
+- **라벨이 없는 campaign도 원본 키를 그대로 표시한다** — 새 파일럿을 열 때 코드 배포를
+  기다리지 않아도 화면에 나온다. 이게 테이블이 필요 없는 진짜 이유다
+- 라벨 추가는 상수 한 줄이고, 그 줄이 없다고 데이터가 사라지지 않는다
+
+### ⚠️ campaign 값의 출처가 둘이 된다 — 우선순위를 한 곳에 고정한다
+
+`landing_opened` 이벤트와 `profiles.acquisition_campaign`이 **둘 다** campaign을 갖게 된다.
+둘은 같은 localStorage 캡처에서 나오므로 일치해야 하지만, 규칙을 안 정하면 숫자가 갈린다.
+
+**규칙 (한 함수에만 둔다):**
+1. 집단(cohort) 배정은 **`landing_opened` 이벤트**가 한다 — 프로필 없는 사람까지 덮는 유일한 기록
+2. `profiles.acquisition_*`은 **기존 패널(AcquisitionPanel·topInviters)이 계속 쓴다** — 건드리지 않는다
+3. 둘 다 있는 사용자에서 값이 갈리면 **테스트가 실패하게 한다** (조용히 한쪽을 고르지 않는다)
+
+### 배선 경로 — 세 층을 실제로 잇는다
+
+명령문의 지적이 정확하다. 지금은 **DB에 값이 있는데 admin이 안 읽는다.**
+
+```
+① queries.ts     select에 acquisition_medium, acquisition_campaign 추가
+                 (지금은 acquisition_source, acquisition_referrer 만 읽는다)
+② domain         analytics-funnel.ts — campaignFunnels() / campaignComparison() 순수 함수 + 테스트
+③ UI             campaign-comparison-panel.tsx (표) + campaign-funnel-panel.tsx (상세)
+                 캠페인 선택은 query parameter (?campaign=...) 로 받는다
+```
+
+### 자동 테스트 (완료 조건)
+
+**서로 다른 campaign 2개의 집계가 섞이지 않는 테스트를 반드시 넣는다.** 최소:
+- `influencer_a_pilot01`과 `influencer_b_pilot01`이 같은 `source=instagram`이어도 분리된다
+- 같은 인플루언서의 `pilot01`과 `pilot02`가 분리된다
+- 캠페인별 퍼널이 **앞 단계보다 뒤 단계가 커지지 않는다**(단조성)
+- 표본 5 미만이면 퍼센트 대신 원시 숫자
+- campaign이 `null`인 사람(직접 유입)이 **집계에서 빠지지 않는다** — 기존
+  `acquisitionBreakdown`의 "`direct`를 빼지 마라" 원칙과 같다
+
+### 개인정보
+
+캠페인별 **집단 행동**만 본다. 개별 사용자 목록·이메일·타임라인을 인플루언서에게
+노출하는 기능은 만들지 않는다. metadata는 allowlist로 제한한다.
+
+### ⚠️ 완성돼도 당분간 화면은 비어 있다
+
+현재 `acquisition_campaign` 값이 있는 행이 **1개**다. 비교표는 파일럿을 실제로 돌린
+뒤에야 채워진다. **화면이 그 사실을 스스로 말해야 한다** — 빈 표를 "기능이 안 된다"로
+읽지 않도록, 기존 `acquisitionCaptureRate`처럼 "언제부터 계측했는지·몇 명이 계측됐는지"를
+함께 보여준다.
