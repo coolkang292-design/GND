@@ -178,3 +178,28 @@ export function acquisitionCaptureRate(
   ).length;
   return ratio(captured, profiles.length);
 }
+
+/* ── 캠페인 표시명 (배포 D) ──────────────────────────────────────────────────
+   인플루언서·커뮤니티별 성과를 비교하려면 운영자가 `influencer_a_pilot01`을
+   보고 누구인지 알아야 한다. 그렇다고 **테이블을 만들지 않는다** —
+   `CREW_ORIGIN_LABELS`가 이미 같은 문제를 코드 상수로 풀고 있고, 그 방식이
+   여기서 더 낫다.
+
+   ⚠️⚠️ **목록에 없는 campaign도 버리지 않고 원본 키를 그대로 낸다.**
+      `CREW_ORIGIN_LABELS`의 규칙과 같다("합이 안 맞는 것보다 라벨이 못생긴 편이
+      낫다"). 이게 테이블이 필요 없는 진짜 이유다 — 새 파일럿 링크를 여는 데
+      코드 배포가 필요 없다. 라벨은 나중에 한 줄 추가하면 된다.
+
+   ⚠️ 유입 링크 규약: `?utm_source=<채널>&utm_medium=creator&utm_campaign=<이 키>`
+      `utm_medium=creator`가 "인플루언서가 공유한 링크"를 뜻한다. 같은 인스타
+      안에서도 인플루언서 A/B와 pilot01/02가 campaign으로 갈린다.
+*/
+export const CAMPAIGN_LABELS: readonly (readonly [string, string])[] = [
+  // 파일럿을 열 때 여기 한 줄씩 추가한다. 없어도 화면에는 나온다.
+];
+
+/** campaign 키 → 사람이 읽는 이름. 없으면 **키를 그대로** 돌려준다 */
+export function campaignLabel(campaign: string): string {
+  const found = CAMPAIGN_LABELS.find(([key]) => key === campaign);
+  return found ? found[1] : campaign;
+}

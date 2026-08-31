@@ -688,3 +688,50 @@ Supabase에 이벤트가 쌓이는 것은 완료가 **아니다.** `/admin`에�
 5. `source`가 같아도 인플루언서 A/B 분리
 
 **외부 파일럿은 D의 production 검증이 끝난 뒤에 시작한다.**
+
+---
+
+## B-추가. 배포 D 중 우연히 발견한 기존 권한 문제 (배포 B에서 처리)
+
+0093을 만들면서 드러났다. **이 프로젝트의 Supabase에는 새 테이블에 자동으로
+`grant all to anon, authenticated`가 붙는 default privileges가 걸려 있다.**
+`grant insert`만 줘도 이미 받은 7개 권한(`DELETE·INSERT·REFERENCES·SELECT·
+TRIGGER·TRUNCATE·UPDATE`)은 사라지지 않는다.
+
+### 실측 (2026-08-31)
+
+| 롤 | 권한 가진 테이블 | TRUNCATE | DELETE | SELECT |
+|---|---:|---:|---:|---:|
+| `anon` | 3 (0093 제외) | 3 | 3 | 3 |
+| `authenticated` | 39 | **12** | 18 | 39 |
+| `service_role` | 40 | 40 | 40 | 40 |
+
+`authenticated`가 TRUNCATE를 가진 12개: `profiles` · `workout_sessions` ·
+`workout_sets` · `workout_exercises` · `workout_images` · `challenges` ·
+`groups` · `group_members` · `user_goals` · `bug_reports` · `profile_views` ·
+`exercise_catalog`.
+`anon`이 권한을 가진 3개: `profiles` · `groups` · `group_members`.
+
+### 왜 중요한가 — **TRUNCATE는 RLS를 우회한다**
+
+SELECT·UPDATE·DELETE는 정책이 막지만 TRUNCATE는 정책 평가를 거치지 않는다.
+"RLS가 켜져 있으니 괜찮다"가 여기서는 **틀린다.**
+
+### 그런데 실효 위험은 낮다 — 과장하지 않는다
+
+- **PostgREST에 TRUNCATE 동사가 없다.** 공개 REST API로는 도달할 수 없다.
+  악용하려면 `anon`/`authenticated` 롤로 **직접 Postgres 연결**이 필요한데,
+  일반 사용자는 JWT만 갖고 롤 전환은 서버에서 일어난다
+- **읽기는 안전하다 (확인함).** `profiles`·`groups`·`group_members`의 SELECT 정책이
+  전부 `auth.uid()`에 의존하고, `anon`은 세션이 없어 `auth.uid()`가 null이라
+  한 행도 못 읽는다. 정책 자체는 제대로 서 있다
+
+→ **긴급하지 않다. 그러나 최소 권한이 아니다.** 배포 B의 감사 대상에 넣는다.
+**⛔ 기존 테이블의 REVOKE는 사용자 지시상 "실행 전 중단·보고" 대상이다** — 배포 B에서
+대상 목록과 근거를 먼저 보고하고 승인을 받은 뒤에 실행한다. 여기서 손대지 않았다.
+
+### 0093에서는 처음부터 안 만들었다
+
+새 테이블이 같은 상태로 태어나지 않도록 `revoke all` → `grant insert`
+순서로 내렸다. **적용 후 재조회로 확인**: `anon` 권한 없음 · `authenticated` INSERT만 ·
+`service_role`은 집계용으로 유지.

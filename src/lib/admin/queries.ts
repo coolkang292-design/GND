@@ -16,6 +16,10 @@ import {
   type MembershipCounts,
   type TestAccountReason,
 } from "@/lib/domain/analytics-accounts";
+import type {
+  FunnelEventRow,
+  FunnelUserRow,
+} from "@/lib/domain/analytics-funnel";
 import {
   CHALLENGE_PEEK_UNLOCKED_TYPE,
   ENGAGEMENT_NOTIFICATION_TYPES,
@@ -546,4 +550,139 @@ export async function fetchGrowthDataset(
       earned: earned.get(badgeKey) ?? 0,
     })),
   };
+}
+
+/* ── 공개 베타 퍼널 (배포 D) ─────────────────────────────────────────────── */
+
+export interface FunnelDataset {
+  users: FunnelUserRow[];
+  events: FunnelEventRow[];
+}
+
+/**
+ * 퍼널·캠페인 집계의 원본. **requireAdmin() 통과 뒤에만 호출할 것.**
+ *
+ * ⚠️ **`analytics_events`는 여기서만 읽는다.** 0093이 SELECT 정책을 일부러 안
+ *    만들어서 일반 사용자는 자기 것도 못 읽는다. `service_role`이 RLS를 우회한다.
+ *
+ * ⚠️ 여기서 세는 대부분은 **새 이벤트가 아니라 기존 테이블**이다 —
+ *    프로필·정식 전환·운동·챌린지 참가는 이미 DB가 알고 있었다.
+ *    `analytics_events`는 그것으로 알 수 없는 다섯 가지만 채운다.
+ *    전수 감사: `docs/analytics/public-beta-funnel-audit.md`
+ *
+ * @param testIds 집계에서 뺄 픽스처·테스트 계정 (`fetchAdminDataset`이 판정한 것과
+ *   **같은 목록을 넘겨야 한다** — 여기서 다시 판정하면 기준이 조용히 갈린다)
+ */
+export async function fetchFunnelDataset(
+  testIds: readonly string[],
+  now: Date = new Date(),
+): Promise<FunnelDataset> {
+  const db = getSupabaseAdminClient();
+
+  const [eventRes, profileRes, sessionRes, participantRes, authRes] =
+    await Promise.all([
+      db
+        .from("analytics_events")
+        .select("user_id,event_name,source,medium,campaign"),
+      // 0079의 유입 6칸 중 **medium·campaign을 여기서 처음 읽는다** — 인플루언서
+      // 구분에 필요하다. 지금까지 컬럼은 채워지는데 화면이 안 읽고 있었다.
+      db
+        .from("profiles")
+        .select("id,created_at,acquisition_medium,acquisition_campaign"),
+      db
+        .from("workout_sessions")
+        .select("user_id,status,started_at,completed_at")
+        .is("deleted_at", null),
+      db.from("challenge_participants").select("user_id"),
+      db.auth.admin.listUsers({ page: 1, perPage: 1000 }),
+    ]);
+
+  for (const [name, res] of [
+    ["analytics_events", eventRes],
+    ["profiles", profileRes],
+    ["workout_sessions", sessionRes],
+    ["challenge_participants", participantRes],
+  ] as const) {
+    if (res.error) throw new Error(`${name} 조회 실패: ${res.error.message}`);
+  }
+  if (authRes.error) {
+    throw new Error(`auth.users 조회 실패: ${authRes.error.message}`);
+  }
+
+  const excluded = new Set(testIds);
+
+  const profileById = new Map(
+    (profileRes.data ?? [])
+      .filter((p) => !excluded.has(p.id as string))
+      .map((p) => [
+        p.id as string,
+        {
+          createdAt: new Date(p.created_at as string),
+          campaign: (p.acquisition_campaign as string | null) ?? null,
+        },
+      ]),
+  );
+
+  const startedBy = new Set<string>();
+  const completedCount = new Map<string, number>();
+  const completedDates = new Map<string, Date[]>();
+  for (const s of sessionRes.data ?? []) {
+    const uid = s.user_id as string;
+    if (excluded.has(uid)) continue;
+    if (s.started_at) startedBy.add(uid);
+    if (s.status === "completed" && s.completed_at) {
+      completedCount.set(uid, (completedCount.get(uid) ?? 0) + 1);
+      const list = completedDates.get(uid) ?? [];
+      list.push(new Date(s.completed_at as string));
+      completedDates.set(uid, list);
+    }
+  }
+
+  const joined = new Set(
+    (participantRes.data ?? [])
+      .map((r) => r.user_id as string)
+      .filter((id) => !excluded.has(id)),
+  );
+
+  const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+
+  const users: FunnelUserRow[] = authRes.data.users
+    .filter((u) => !excluded.has(u.id))
+    .map((u) => {
+      const profile = profileById.get(u.id);
+      /*
+        ⚠️ **RETENTION 패널의 D7과 다르다.** 그쪽은 가입 7일째 **하루**만 본다.
+           퍼널의 마지막 칸은 "일주일 뒤에도 살아 있나"를 묻는 것이라 그 이후
+           아무 날이나 한 번이면 도달로 센다. 화면도 다른 이름으로 부른다.
+      */
+      const reworkoutD7 =
+        profile != null &&
+        (completedDates.get(u.id) ?? []).some(
+          (d) => d.getTime() >= profile.createdAt.getTime() + SEVEN_DAYS_MS,
+        ) &&
+        now.getTime() >= profile.createdAt.getTime() + SEVEN_DAYS_MS;
+
+      return {
+        userId: u.id,
+        isAnonymous: u.is_anonymous === true,
+        hasProfile: profile != null,
+        startedWorkout: startedBy.has(u.id),
+        completedWorkouts: completedCount.get(u.id) ?? 0,
+        joinedChallenge: joined.has(u.id),
+        reworkoutD7,
+        profileCampaign: profile?.campaign ?? null,
+      };
+    });
+
+  const events: FunnelEventRow[] = (eventRes.data ?? [])
+    .filter((e) => !excluded.has(e.user_id as string))
+    .map((e) => ({
+      userId: e.user_id as string,
+      eventName: e.event_name as string,
+      source: (e.source as string | null) ?? null,
+      medium: (e.medium as string | null) ?? null,
+      campaign: (e.campaign as string | null) ?? null,
+    }));
+
+  return { users, events };
 }

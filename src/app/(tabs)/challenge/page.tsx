@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RaiseGoalSheet } from "@/components/challenge/raise-goal-sheet";
 import { UiIcon } from "@/components/ui-icon";
 import { useAuth } from "@/components/auth-provider";
+import { recordFunnelEvent } from "@/lib/analytics-events";
 import { Avatar } from "@/components/avatar";
 import { MemberProfileSheet } from "@/components/crew/member-profile-sheet";
 import {
@@ -142,6 +143,18 @@ export default function ChallengePage() {
 }
 
 function ChallengeScreen({ userId }: { userId: string }) {
+  /*
+    챌린지 화면을 **봤다**는 기록 (배포 D). 참가는 `challenge_participants`가
+    이미 정확히 알고 있어서 여기서 기록하지 않는다 — 지금 안 보이는 것은
+    "보기는 봤는데 참가는 안 했다"뿐이다. 그게 사회적 전환 퍼널의 이탈 지점이다.
+
+    ⚠️ `ChallengeScreen`은 `userId`가 확정된 뒤에만 렌더된다(위 게이트).
+       그래서 여기서는 세션을 다시 기다리지 않아도 된다.
+  */
+  useEffect(() => {
+    void recordFunnelEvent("challenge_viewed", userId);
+  }, [userId]);
+
   /**
    * 참가자 프로필 시트 (2026-08-19 사용자 요청 — *"프로필 클릭하면 지난 히스토리
    * 성과 확인"*).

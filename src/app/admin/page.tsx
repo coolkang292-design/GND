@@ -2,6 +2,7 @@ import { requireAdmin } from "@/lib/admin/auth";
 import {
   fetchActiveChallenges,
   fetchAdminDataset,
+  fetchFunnelDataset,
   fetchEngagementDataset,
   fetchGrowthDataset,
   fetchProgramDataset,
@@ -32,6 +33,7 @@ import {
   viewingPassMetrics,
   workoutDayKeysByUser,
 } from "@/lib/domain/analytics-engagement";
+import { campaignCohorts } from "@/lib/domain/analytics-funnel";
 import { buildProgramMetrics } from "@/lib/domain/analytics-program";
 import { DEFAULT_TIMEZONE } from "@/lib/domain/time";
 import { AcquisitionPanel } from "./_components/acquisition-panel";
@@ -41,6 +43,8 @@ import { EngagementPanel } from "./_components/engagement-panel";
 import { FunnelPanel } from "./_components/funnel-panel";
 import { GrowthPanel } from "./_components/growth-panel";
 import { KpiCards } from "./_components/kpi-cards";
+import { CampaignComparisonPanel } from "./_components/campaign-comparison-panel";
+import { CampaignFunnelPanel } from "./_components/campaign-funnel-panel";
 import { MembershipPanel } from "./_components/membership-panel";
 import { NotificationPanel } from "./_components/notification-panel";
 import { ProgramPanel } from "./_components/program-panel";
@@ -57,12 +61,13 @@ function parsePeriod(raw: string | undefined): PeriodDays {
 export default async function AdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string }>;
+  searchParams: Promise<{ period?: string; campaign?: string }>;
 }) {
   // 유일한 관문. 이 줄 위에는 어떤 데이터 조회도 두지 말 것.
   await requireAdmin();
 
-  const days = parsePeriod((await searchParams).period);
+  const sp = await searchParams;
+  const days = parsePeriod(sp.period);
   const now = new Date();
   const period = buildPeriod(days, now);
 
@@ -71,12 +76,26 @@ export default async function AdminPage({
   // 각자 판정하면 패널마다 모수가 조용히 갈린다.
   const testIds = new Set(data.testUserIds);
   // 순차 await를 붙이면 페이지가 그만큼 느려진다 — 서로 의존이 없으니 같이 던진다
-  const [challenges, growth, program, engagement] = await Promise.all([
-    fetchActiveChallenges(now, testIds),
-    fetchGrowthDataset(data.totalXpByUser),
-    fetchProgramDataset(testIds),
-    fetchEngagementDataset(testIds),
-  ]);
+  const [challenges, growth, program, engagement, funnelData] =
+    await Promise.all([
+      fetchActiveChallenges(now, testIds),
+      fetchGrowthDataset(data.totalXpByUser),
+      fetchProgramDataset(testIds),
+      fetchEngagementDataset(testIds),
+      // 배포 D. 테스트 계정 기준은 위와 **같은 목록**을 넘긴다 —
+      // 여기서 다시 판정하면 퍼널만 모수가 달라진다.
+      fetchFunnelDataset(data.testUserIds, now),
+    ]);
+
+  /*
+    ⚠️ `campaignCohorts`는 campaign 귀속 불일치가 있어도 **던지지 않는다.**
+       진단 하나 때문에 /admin 전체가 500이 되면 대시보드를 통째로 잃는다
+       (사용자 지시 2026-08-31). 불일치는 화면이 건수로 말한다.
+  */
+  const cohorts = campaignCohorts(funnelData.users, funnelData.events);
+  const selectedCampaign = sp.campaign ?? null;
+  const selectedRow =
+    cohorts.rows.find((r) => r.campaign === selectedCampaign) ?? null;
 
   const kpi = buildKpi(data.sessions, data.profiles, period, now);
   const points = dailyActiveSeries(data.sessions, period, DEFAULT_TIMEZONE);
@@ -297,6 +316,18 @@ export default async function AdminPage({
         />
 
         <div id="acquisition" />
+        {/* 배포 D — 기존 AcquisitionPanel(채널 분포) 위에 둔다.
+            "어느 채널인가"보다 "어느 제안처가 좋은 사람을 데려왔나"가 먼저다. */}
+        <section className="grid equal">
+          <CampaignComparisonPanel data={cohorts} selected={selectedCampaign} />
+        </section>
+        <section className="grid equal">
+          <CampaignFunnelPanel
+            row={selectedRow}
+            campaigns={cohorts.rows.map((r) => r.campaign)}
+          />
+        </section>
+
         <AcquisitionPanel
           origins={origins}
           originKnown={originKnown}

@@ -207,3 +207,38 @@ export function identityError(e: unknown): string {
   }
   return `연결하지 못했어요 (${msg})`;
 }
+
+/**
+ * 연결 실패를 **짧은 분류 코드**로 바꾼다 — 퍼널 계측용 (배포 D).
+ *
+ * ⚠️ **`identityError`와 짝이다. 둘을 따로 고치지 마라.** 하나는 사람에게 보여줄
+ *    문장을, 하나는 집계할 코드를 낸다. 같은 판정을 두 벌 쓰지 않도록 정규식을
+ *    같은 순서·같은 조건으로 유지한다.
+ *
+ * ⚠️ **raw error를 그대로 내보내지 않는다.** 마지막 `unknown`이 그 이유다 —
+ *    모르는 오류의 메시지에는 주소·토큰·사용자 입력이 섞여 들어올 수 있고,
+ *    그건 `analytics_events`에 저장돼선 안 된다(0093은 자유 JSON 칸이 없다).
+ *
+ * 왜 필요한가: "가입이 싫어서 안 눌렀다"와 "카카오가 KOE205로 죽어서 못 들어왔다"는
+ * 고칠 것이 완전히 다르다. 2026-08-08에 카카오가 실제로 죽은 적이 있다.
+ */
+export function linkFailureCode(e: unknown): string {
+  const msg = e instanceof Error ? e.message : String(e);
+
+  if (/identity_already_exists|already.*linked|identity is already/i.test(msg)) {
+    return "identity_already_exists";
+  }
+  if (/manual_linking_disabled|manual linking/i.test(msg)) {
+    return "manual_linking_disabled";
+  }
+  if (/provider is not enabled|validation_failed/i.test(msg)) {
+    return "provider_unavailable";
+  }
+  if (/network|fetch failed|timeout|Failed to fetch/i.test(msg)) {
+    return "network";
+  }
+  if (/popup|closed by user|cancel/i.test(msg)) {
+    return "user_cancelled";
+  }
+  return "unknown";
+}

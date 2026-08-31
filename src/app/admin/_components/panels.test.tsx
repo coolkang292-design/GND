@@ -29,6 +29,10 @@ import {
   buildProgramMetrics,
   type ProgramEnrollmentRow,
 } from "@/lib/domain/analytics-program";
+import {
+  FUNNEL_STEPS,
+  campaignCohorts,
+} from "@/lib/domain/analytics-funnel";
 import { METRIC_HELP, type MetricHelpKey } from "@/lib/domain/metric-help";
 import { MetricHelp } from "./metric-help";
 import { AcquisitionPanel } from "./acquisition-panel";
@@ -38,6 +42,8 @@ import { EngagementPanel } from "./engagement-panel";
 import { FunnelPanel } from "./funnel-panel";
 import { GrowthPanel } from "./growth-panel";
 import { KpiCards } from "./kpi-cards";
+import { CampaignComparisonPanel } from "./campaign-comparison-panel";
+import { CampaignFunnelPanel } from "./campaign-funnel-panel";
 import { MembershipPanel } from "./membership-panel";
 import { NotificationPanel } from "./notification-panel";
 import { ProgramPanel } from "./program-panel";
@@ -726,5 +732,215 @@ describe("MembershipPanel", () => {
     expect(html).toContain("회원 수의 실체");
     expect(html).not.toContain("NaN");
     expect(html).not.toContain("Infinity");
+  });
+});
+
+describe("CampaignComparisonPanel", () => {
+  const cohorts = campaignCohorts(
+    [
+      {
+        userId: "a1",
+        isAnonymous: false,
+        hasProfile: true,
+        startedWorkout: true,
+        completedWorkouts: 3,
+        joinedChallenge: true,
+        reworkoutD7: false,
+        profileCampaign: "influencer_a_pilot01",
+      },
+      {
+        userId: "b1",
+        isAnonymous: true,
+        hasProfile: false,
+        startedWorkout: false,
+        completedWorkouts: 0,
+        joinedChallenge: false,
+        reworkoutD7: false,
+        profileCampaign: null,
+      },
+    ],
+    [
+      {
+        userId: "a1",
+        eventName: "landing_opened",
+        source: "instagram",
+        medium: "creator",
+        campaign: "influencer_a_pilot01",
+      },
+      {
+        userId: "b1",
+        eventName: "landing_opened",
+        source: "instagram",
+        medium: "creator",
+        campaign: "influencer_b_pilot01",
+      },
+    ],
+  );
+
+  it("같은 instagram 안에서 인플루언서 A와 B를 다른 줄로 그린다", () => {
+    const html = renderToStaticMarkup(
+      <CampaignComparisonPanel data={cohorts} selected={null} />,
+    );
+    expect(html).toContain("influencer_a_pilot01");
+    expect(html).toContain("influencer_b_pilot01");
+  });
+
+  it("캠페인 이름이 상세 퍼널 링크가 된다 — SQL Editor를 열 필요가 없다", () => {
+    const html = renderToStaticMarkup(
+      <CampaignComparisonPanel data={cohorts} selected={null} />,
+    );
+    expect(html).toContain("campaign=influencer_a_pilot01");
+  });
+
+  it("불일치가 0건이면 초록 한 줄로 조용히 말한다", () => {
+    const html = renderToStaticMarkup(
+      <CampaignComparisonPanel data={cohorts} selected={null} />,
+    );
+    expect(html).toContain("campaign 귀속 불일치 0건");
+  });
+
+  it("⚠️ 불일치가 있으면 화면이 죽지 않고 건수와 쌍을 보여준다", () => {
+    /*
+      운영에서 불일치가 나도 /admin이 500이 되면 안 된다(사용자 지시 2026-08-31).
+      운영 데이터에는 아직 불일치가 없어서 화면으로 확인할 수 없다 —
+      그래서 이 단언이 그 화면 상태를 대신 지킨다.
+    */
+    const withMismatch = campaignCohorts(
+      [
+        {
+          userId: "m1",
+          isAnonymous: false,
+          hasProfile: true,
+          startedWorkout: false,
+          completedWorkouts: 0,
+          joinedChallenge: false,
+          reworkoutD7: false,
+          profileCampaign: "pilot02",
+        },
+      ],
+      [
+        {
+          userId: "m1",
+          eventName: "landing_opened",
+          source: "instagram",
+          medium: "creator",
+          campaign: "pilot01",
+        },
+      ],
+    );
+    expect(() =>
+      renderToStaticMarkup(
+        <CampaignComparisonPanel data={withMismatch} selected={null} />,
+      ),
+    ).not.toThrow();
+    const html = renderToStaticMarkup(
+      <CampaignComparisonPanel data={withMismatch} selected={null} />,
+    );
+    expect(html).toContain("campaign 귀속 불일치 1건");
+    expect(html).toContain("pilot01");
+    expect(html).toContain("pilot02");
+    // 무엇을 기준으로 셌는지 화면이 말한다 — 조용히 한쪽을 고르지 않는다
+    expect(html).toContain("유입 기록 기준");
+    // 표는 그대로 그려진다
+    expect(html).toContain("pilot01");
+  });
+
+  it("계측된 유입이 없으면 '왜 비었는지'를 말한다", () => {
+    const empty = campaignCohorts([], []);
+    const html = renderToStaticMarkup(
+      <CampaignComparisonPanel data={empty} selected={null} />,
+    );
+    expect(html).toContain("아직 계측된 유입이 없습니다");
+    expect(html).toContain("utm_campaign");
+  });
+
+  it("⚠️ minWidth:0을 지운다 — 좁은 화면에서 표가 패널을 밀어냈다", () => {
+    /*
+      2026-08-31 개발 서버 375px에서 잡았다. `.panel`은 그리드 아이템이라
+      기본 `min-width: auto`로 내용보다 작아지기를 거부한다. 표의 minWidth(620)가
+      패널을 664px로 부풀려 오른쪽 열과 설명이 잘렸다.
+    */
+    const html = renderToStaticMarkup(
+      <CampaignComparisonPanel data={cohorts} selected={null} />,
+    );
+    expect(html).toContain("min-width:0");
+    expect(html).toContain("overflow-x:auto");
+  });
+});
+
+describe("CampaignFunnelPanel", () => {
+  const bigCohort = campaignCohorts(
+    Array.from({ length: 10 }, (_, i) => ({
+      userId: `u${i}`,
+      isAnonymous: i >= 3,
+      hasProfile: i < 2,
+      startedWorkout: false,
+      completedWorkouts: 0,
+      joinedChallenge: false,
+      reworkoutD7: false,
+      profileCampaign: null,
+    })),
+    Array.from({ length: 10 }, (_, i) => ({
+      userId: `u${i}`,
+      eventName: "landing_opened",
+      source: "youtube",
+      medium: "creator",
+      campaign: "pilot01",
+    })),
+  );
+
+  it("선택 전에는 고르라고 안내한다", () => {
+    const html = renderToStaticMarkup(
+      <CampaignFunnelPanel row={null} campaigns={["pilot01"]} />,
+    );
+    expect(html).toContain("캠페인을 고르면");
+  });
+
+  it("선택하면 그 집단의 단계를 전부 그린다", () => {
+    const html = renderToStaticMarkup(
+      <CampaignFunnelPanel row={bigCohort.rows[0]} campaigns={["pilot01"]} />,
+    );
+    for (const step of FUNNEL_STEPS) expect(html).toContain(step);
+  });
+
+  it("표본이 충분하면 가장 크게 빠진 구간을 말한다", () => {
+    const html = renderToStaticMarkup(
+      <CampaignFunnelPanel row={bigCohort.rows[0]} campaigns={["pilot01"]} />,
+    );
+    expect(html).toContain("가장 크게 빠진 구간");
+  });
+
+  it("⚠️ 표본이 적으면 판정하지 않는다 — 4명으로 32% 이탈이라 말하지 않는다", () => {
+    const small = campaignCohorts(
+      Array.from({ length: 3 }, (_, i) => ({
+        userId: `s${i}`,
+        isAnonymous: i > 0,
+        hasProfile: false,
+        startedWorkout: false,
+        completedWorkouts: 0,
+        joinedChallenge: false,
+        reworkoutD7: false,
+        profileCampaign: null,
+      })),
+      Array.from({ length: 3 }, (_, i) => ({
+        userId: `s${i}`,
+        eventName: "landing_opened",
+        source: null,
+        medium: null,
+        campaign: "tiny",
+      })),
+    );
+    const html = renderToStaticMarkup(
+      <CampaignFunnelPanel row={small.rows[0]} campaigns={["tiny"]} />,
+    );
+    expect(html).toContain("표본 부족");
+    expect(html).not.toContain("가장 크게 빠진 구간");
+  });
+
+  it("챌린지 참가는 퍼널 단계가 아니라고 화면이 말한다", () => {
+    const html = renderToStaticMarkup(
+      <CampaignFunnelPanel row={bigCohort.rows[0]} campaigns={["pilot01"]} />,
+    );
+    expect(html).toContain("퍼널 단계에 넣지");
   });
 });

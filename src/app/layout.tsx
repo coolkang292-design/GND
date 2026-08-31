@@ -3,6 +3,7 @@ import "./globals.css";
 import { AuthProvider } from "@/components/auth-provider";
 import { ServiceWorkerRegister } from "@/components/service-worker-register";
 import { AcquisitionTracker } from "@/components/acquisition-tracker";
+import { FunnelTracker } from "@/components/funnel-tracker";
 import { TrailTracker } from "@/components/trail-tracker";
 import { InstallGate } from "@/components/install/install-gate";
 
@@ -38,6 +39,9 @@ export default function RootLayout({
         <TrailTracker />
         <AcquisitionTracker />
         <AuthProvider>
+          {/* ⚠️ AuthProvider **안**이다 — 익명 계정을 여기서 발급하므로
+              밖에 두면 userId가 영원히 null이라 유입이 한 건도 안 잡힌다. */}
+          <FunnelTracker />
           <div className="w-full max-w-[430px] h-dvh flex flex-col relative bg-bg">
             {children}
             {/* ⚠️ `(tabs)` 안이 아니라 **여기**다 — 카톡 인앱 탈출 안내가

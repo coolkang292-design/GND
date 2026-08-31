@@ -7,7 +7,7 @@
 -- 쓰는 법: 함수·정책의 '현행' 정의가 필요할 때 마이그레이션 51개를
 -- 뒤지지 말고 이 파일을 검색하라. 마이그레이션을 적용한 뒤에는 다시 뽑아라.
 --
--- 함수 95개 · 정책 78개 · 인덱스 97개
+-- 함수 95개 · 정책 79개 · 인덱스 101개
 
 -- ════════════════════════════════════════════════════════════
 -- 함수
@@ -4400,6 +4400,9 @@ $function$;
 -- RLS 정책
 -- ════════════════════════════════════════════════════════════
 
+-- ── analytics_events ──
+-- analytics_events_insert_own  [INSERT]  roles=authenticated
+--   check  : (auth.uid() = user_id)
 -- ── badge_definitions ──
 -- badge_definitions_read  [SELECT]  roles=authenticated
 --   using  : true
@@ -4626,6 +4629,10 @@ $function$;
 -- 인덱스
 -- ════════════════════════════════════════════════════════════
 
+-- CREATE INDEX analytics_events_campaign_idx ON public.analytics_events USING btree (campaign) WHERE (campaign IS NOT NULL);
+-- CREATE INDEX analytics_events_name_created_idx ON public.analytics_events USING btree (event_name, created_at DESC);
+-- CREATE UNIQUE INDEX analytics_events_pkey ON public.analytics_events USING btree (id);
+-- CREATE UNIQUE INDEX analytics_events_user_event_uniq ON public.analytics_events USING btree (user_id, event_name);
 -- CREATE UNIQUE INDEX badge_definitions_pkey ON public.badge_definitions USING btree (badge_key);
 -- CREATE UNIQUE INDEX bug_report_watchers_pkey ON public.bug_report_watchers USING btree (user_id);
 -- CREATE UNIQUE INDEX bug_reports_pkey ON public.bug_reports USING btree (id);

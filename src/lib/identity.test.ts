@@ -24,6 +24,7 @@ import {
   getMyIdentities,
   hasLinkedIdentity,
   identityError,
+  linkFailureCode,
   linkProvider,
   signInWithProvider,
   takeAuthIntent,
@@ -309,5 +310,60 @@ describe("hasLinkedIdentity — 네트워크를 타지 않는다", () => {
     });
     await hasLinkedIdentity();
     expect(mocks.getUserIdentities).not.toHaveBeenCalled();
+  });
+});
+
+describe("linkFailureCode", () => {
+  it("이미 다른 계정에 붙은 신원을 분류한다", () => {
+    expect(linkFailureCode(new Error("identity_already_exists"))).toBe(
+      "identity_already_exists",
+    );
+  });
+
+  it("서버 설정 문제(manual linking)를 분류한다", () => {
+    expect(linkFailureCode(new Error("manual_linking_disabled"))).toBe(
+      "manual_linking_disabled",
+    );
+  });
+
+  it("제공자가 꺼진 경우를 분류한다 — 2026-08-08에 카카오가 실제로 죽었다", () => {
+    expect(linkFailureCode(new Error("provider is not enabled"))).toBe(
+      "provider_unavailable",
+    );
+  });
+
+  it("네트워크 실패와 사용자 취소를 가른다", () => {
+    expect(linkFailureCode(new Error("Failed to fetch"))).toBe("network");
+    expect(linkFailureCode(new Error("popup closed by user"))).toBe(
+      "user_cancelled",
+    );
+  });
+
+  it("⚠️ 모르는 오류의 원문을 절대 내보내지 않는다 (개인정보)", () => {
+    /*
+      계측이 저장하는 값이라 주소·토큰·사용자 입력이 섞여 나가면 안 된다.
+      `identityError`는 사람에게 보여줄 문장이라 원문을 붙이지만, 이쪽은
+      집계용 코드라 분류만 낸다.
+    */
+    const leaky = new Error(
+      "https://gnd.app/callback?access_token=eyJhbGciOi&email=a@b.com",
+    );
+    const code = linkFailureCode(leaky);
+    expect(code).toBe("unknown");
+    expect(code).not.toContain("@");
+    expect(code).not.toContain("eyJ");
+    expect(code).not.toContain("http");
+  });
+
+  it("⚠️ identityError와 같은 순서로 판정한다 — 둘이 갈리면 안 된다", () => {
+    // 사람 문장과 집계 코드가 같은 원인을 가리켜야 한다
+    const e = new Error("identity_already_exists");
+    expect(identityError(e)).toContain("이미 다른 GND 계정");
+    expect(linkFailureCode(e)).toBe("identity_already_exists");
+  });
+
+  it("Error가 아닌 값도 던지지 않는다", () => {
+    expect(linkFailureCode("그냥 문자열")).toBe("unknown");
+    expect(linkFailureCode(null)).toBe("unknown");
   });
 });

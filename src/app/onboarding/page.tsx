@@ -8,12 +8,14 @@ import { useAuth } from "@/components/auth-provider";
 import { UiIcon } from "@/components/ui-icon";
 import { ScreenArt, type ScreenArtKey } from "@/components/brand/hero-art";
 import { GOLD_TEXT, GoldCta } from "@/components/brand/gold";
+import { recordFunnelEvent } from "@/lib/analytics-events";
 import { DEFAULT_AVATAR, DEFAULT_WEEKLY_GOAL } from "@/lib/domain/avatars";
 import {
   PROVIDER_META,
   enabledProviders,
   getMyIdentities,
   identityError,
+  linkFailureCode,
   linkProvider,
   type OAuthProvider,
 } from "@/lib/identity";
@@ -135,6 +137,26 @@ export default function OnboardingPage() {
   }, [configured, loading, userId]);
 
   /**
+   * 온보딩 화면을 **실제로 봤다**는 기록 (배포 D).
+   *
+   * ⚠️ 신원 판정 중(`linked === null`)에는 기록하지 않는다. 그동안 화면은
+   *    `확인 중…`이라 아직 아무것도 안 보여준 상태이고, 거기서 나간 사람을
+   *    "온보딩을 봤다"로 세면 이탈률이 거짓이 된다.
+   *    (카카오·구글이 둘 다 꺼져 있으면 판정 없이 바로 닉네임 칸이 뜨므로 예외다.)
+   *
+   * ⚠️ `onboarding_completed`는 만들지 않는다 — 그건 `profiles.created_at`이
+   *    이미 정확히 안다(`upsertMyProfile` 한 번이 온보딩을 끝낸다).
+   *    같은 사실을 두 곳에 저장하지 않는다. 감사표:
+   *    docs/analytics/public-beta-funnel-audit.md
+   */
+  useEffect(() => {
+    if (!configured || loading || !userId) return;
+    const screenShown = providers.length === 0 || linked !== null;
+    if (!screenShown) return;
+    void recordFunnelEvent("onboarding_started", userId);
+  }, [configured, loading, userId, linked, providers.length]);
+
+  /**
    * ⚠️⚠️ **이미 가입한 사람은 이 화면에 머물지 않는다** (D8, 2026-08-09).
    *
    * 이 화면은 `(tabs)` 밖이라 `OnboardingGate`가 없다. 그래서 프로필이 있는
@@ -181,6 +203,13 @@ export default function OnboardingPage() {
     if (linking) return;
     setLinking(provider);
     setError(null);
+    /*
+      ⚠️ 퍼널에서 **가장 큰 공백이 여기다**(배포 D). "가입이 싫어서 안 눌렀다"와
+         "눌렀는데 카카오가 죽어서 못 들어왔다"는 고칠 것이 완전히 다른데,
+         지금까지 둘 다 똑같이 "정식 전환 안 됨"으로만 보였다.
+      ⚠️ `await`하지 않는다 — 계측이 OAuth 이동을 한 프레임도 늦추면 안 된다.
+    */
+    void recordFunnelEvent("identity_link_started", userId);
     try {
       // ⚠️ linkIdentity다. signInWithOAuth를 쓰면 AuthProvider가 방금 발급한
       //    익명 계정을 버리고 새 계정으로 갈아탄다(설계 §5.4).
@@ -188,6 +217,8 @@ export default function OnboardingPage() {
     } catch (e) {
       setError(identityError(e));
       setLinking(null);
+      // ⚠️ **분류 코드만 보낸다.** raw error 전문·스택·주소를 저장하지 않는다.
+      void recordFunnelEvent("identity_link_failed", userId, linkFailureCode(e));
     }
   }
 
