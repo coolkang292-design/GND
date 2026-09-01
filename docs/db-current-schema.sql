@@ -7,7 +7,7 @@
 -- 쓰는 법: 함수·정책의 '현행' 정의가 필요할 때 마이그레이션 51개를
 -- 뒤지지 말고 이 파일을 검색하라. 마이그레이션을 적용한 뒤에는 다시 뽑아라.
 --
--- 함수 98개 · 정책 79개 · 인덱스 101개
+-- 함수 99개 · 정책 79개 · 인덱스 101개
 
 -- ════════════════════════════════════════════════════════════
 -- 함수
@@ -3196,6 +3196,78 @@ CREATE OR REPLACE FUNCTION public.pending_bug_report_count()
  SET search_path TO 'public'
 AS $function$
   select count(*)::int from bug_reports where status = 'new';
+$function$;
+
+-- ── permission_audit_snapshot ──
+CREATE OR REPLACE FUNCTION public.permission_audit_snapshot()
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  select jsonb_build_object(
+    'measured_tables', (
+      select count(*) from pg_catalog.pg_class c
+      join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = 'public' and c.relkind in ('r','p')),
+
+    'default_acl', (
+      select coalesce(jsonb_object_agg(
+               pg_catalog.pg_get_userbyid(d.defaclrole) || ':' || d.defaclobjtype::text,
+               coalesce(d.defaclacl::text, '')), '{}'::jsonb)
+      from pg_catalog.pg_default_acl d
+      join pg_catalog.pg_namespace n on n.oid = d.defaclnamespace
+      where n.nspname = 'public'),
+
+    'risky_table_grants', (
+      select coalesce(jsonb_agg(distinct c.relname || ' / ' ||
+                                pg_catalog.pg_get_userbyid(a.grantee) || ' / ' || a.privilege_type),
+                      '[]'::jsonb)
+      from pg_catalog.pg_class c
+      join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+      cross join pg_catalog.aclexplode(c.relacl) a
+      where n.nspname = 'public' and c.relkind in ('r','p')
+        and pg_catalog.pg_get_userbyid(a.grantee) in ('anon','authenticated')
+        and a.privilege_type in ('TRUNCATE','REFERENCES','TRIGGER','MAINTAIN')),
+
+    'locked_functions', (
+      select coalesce(jsonb_object_agg(p.proname, coalesce(p.proacl::text, '(기본값)')), '{}'::jsonb)
+      from pg_catalog.pg_proc p
+      join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'public'
+        and p.proname in ('current_streak_days','notify_challenge_peek_unlock',
+                          'is_blocked_between','pending_bug_report_count',
+                          'permission_audit_snapshot')),
+
+    'anon_execute_functions', (
+      select count(*) from pg_catalog.pg_proc p
+      join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'public' and coalesce(p.proacl::text, '') like '%anon=X%'),
+
+    'live_policies', (select count(*) from pg_catalog.pg_policies where schemaname = 'public'),
+
+    -- 0098 — owner 드리프트 가드용. supabase_admin 기본권한을 못 좁히는 대신,
+    -- **postgres 아닌 소유자로 public 객체가 생기는 순간**을 잡는다.
+    -- 개인정보 없음: 객체명·소유자명·개수뿐이다.
+    'measured_functions', (
+      select count(*) from pg_catalog.pg_proc p
+      join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'public'),
+    'tables_not_postgres', (
+      select coalesce(jsonb_agg(c.relname || ' / ' || pg_catalog.pg_get_userbyid(c.relowner)
+                                order by c.relname), '[]'::jsonb)
+      from pg_catalog.pg_class c
+      join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = 'public' and c.relkind in ('r','p')
+        and pg_catalog.pg_get_userbyid(c.relowner) <> 'postgres'),
+    'functions_not_postgres', (
+      select coalesce(jsonb_agg(p.proname || ' / ' || pg_catalog.pg_get_userbyid(p.proowner)
+                                order by p.proname), '[]'::jsonb)
+      from pg_catalog.pg_proc p
+      join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'public'
+        and pg_catalog.pg_get_userbyid(p.proowner) <> 'postgres')
+  );
 $function$;
 
 -- ── pick_challenge_peek ──

@@ -19,7 +19,25 @@
  *
  * ⚠️ 읽기 전용이다. 계정도 안 만들고 아무것도 안 쓴다 (tier: readonly).
  *    카탈로그는 PostgREST로 못 읽으므로 `permission_audit_snapshot()` RPC를 쓴다
- *    (0097, SECURITY DEFINER · service_role 전용 · 읽기 전용).
+ *    (0097 + 0098, SECURITY DEFINER · service_role 전용 · 읽기 전용).
+ *
+ * ── 이 단언들이 진짜인지 확인했다 (2026-09-02, §테스트가 진짜 테스트인지 확인한다) ──
+ *
+ * ⚠️ [2]·[3]의 단언은 대부분 **"0이어야 한다"** 꼴이라, 측정이 통째로 비어도 통과한다.
+ *    그래서 `measured_tables`·`live_policies`·`measured_functions` 개수 가드가 앞에 있다.
+ *
+ *    DB를 건드리지 않고 **변이 테스트**로 확인했다 — `globalThis.fetch`를 갈아끼워
+ *    고장난 스냅샷을 먹이고, 각 변이가 **정확히 그 단언만** 빨갛게 만드는지 봤다:
+ *
+ *      기준선(변이 없음)                → 21 통과 / 0 실패
+ *      tables_not_postgres 에 1건       → 20 / 1
+ *      functions_not_postgres 에 1건    → 20 / 1
+ *      measured_functions = 0           → 20 / 1   ← 개수 가드가 잡는다
+ *      감사 RPC가 authenticated에 열림   → 20 / 1
+ *      감사 RPC가 목록에서 사라짐         → 19 / 2
+ *
+ *    ⚠️ 변이 테스트를 다시 만들 사람에게: 같은 소스를 `data:` URL로 여러 번
+ *       import하면 **모듈 캐시에 걸려 첫 번만 실행된다.** 매번 고유 주석을 붙여라.
  */
 import { readFileSync } from "node:fs";
 
@@ -144,15 +162,23 @@ console.log("\n[2] 지금 있는 객체");
   );
 }
 {
-  // 0096 STEP 1이 잠근 4개. SECURITY DEFINER + 인자 미검증 조합이라 열리면 남의 데이터가 샌다.
+  // 0096 STEP 1이 잠근 4개 + 0097의 감사 RPC 자신(0098이 목록에 넣었다).
+  // SECURITY DEFINER + 인자 미검증 조합이라 열리면 남의 데이터가 샌다.
+  // ⚠️ permission_audit_snapshot이 열리면 공격자가 "어디가 약한지"를 한 번에 읽는다 —
+  //    이 스크립트가 스스로의 통로를 지키는 셈이다.
   const locked = snap.locked_functions ?? {};
   const expected = [
     "current_streak_days",
     "notify_challenge_peek_unlock",
     "is_blocked_between",
     "pending_bug_report_count",
+    "permission_audit_snapshot",
   ];
-  check("잠근 함수 4개가 전부 존재한다", expected.every((f) => f in locked), Object.keys(locked).join(","));
+  check(
+    `잠근 함수 ${expected.length}개가 전부 존재한다`,
+    expected.every((f) => f in locked),
+    Object.keys(locked).join(","),
+  );
   for (const fn of expected) {
     const a = locked[fn] ?? "";
     check(
@@ -172,6 +198,40 @@ check(
   snap.anon_execute_functions <= 21,
   `${snap.anon_execute_functions}개 (2026-09-02 기준선 21). 늘었으면 새 함수가 anon에 열린 것이다`,
 );
+
+// ── 3. owner 드리프트 — 지금 안전한 "진짜 이유"가 유지되는가 (0098) ────
+//
+// ⚠️ 위 [1]의 기본권한이 우리를 지키는 게 아니다. `pg_default_acl`은 **객체를 만든 롤**의
+//    것이 걸리는데, `supabase_admin` 기본값은 못 좁힌다(42501). 그쪽은 지금도
+//    anon·authenticated에 arwdDxtm(**TRUNCATE 포함**)를 준다.
+//
+//    지금 안전한 이유는 **public의 소유자가 postgres 하나뿐**이라는 사실이다.
+//    postgres 아닌 소유자의 객체가 public에 하나라도 생기는 순간, 그 객체는
+//    넓은 기본값을 그대로 물려받는다. 여기가 그 전제를 지키는 자리다.
+console.log("\n[3] owner 드리프트 (0098)");
+check(
+  "잴 함수가 있다",
+  snap.measured_functions >= 99,
+  `함수 ${snap.measured_functions}개 (99 이상이어야 한다) — 비면 아래 둘이 공허하게 통과한다`,
+);
+{
+  const t = snap.tables_not_postgres ?? [];
+  check(
+    "public 테이블의 소유자가 전부 postgres다",
+    t.length === 0,
+    `${t.length}건 — ${t.slice(0, 6).join(" | ")}${t.length > 6 ? " …" : ""} · ` +
+      "postgres가 아닌 소유자의 테이블은 supabase_admin 기본권한(TRUNCATE 포함)을 물려받는다",
+  );
+}
+{
+  const f = snap.functions_not_postgres ?? [];
+  check(
+    "public 함수의 소유자가 전부 postgres다",
+    f.length === 0,
+    `${f.length}건 — ${f.slice(0, 6).join(" | ")}${f.length > 6 ? " …" : ""} · ` +
+      "postgres가 아닌 소유자의 함수는 anon EXECUTE 기본값을 물려받는다",
+  );
+}
 
 console.log(`\n${pass} 통과 / ${fail} 실패`);
 if (fail) {

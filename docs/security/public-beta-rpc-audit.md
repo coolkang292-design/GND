@@ -837,7 +837,7 @@ FUNCTION  authenticated = EXECUTE                          ← anon 없음
 지난 세션의 11/12는 **PostgREST로 도달 가능한 것만** 센 값이었다. 기존 21개는 그대로 남는다
 (default privileges는 미래 객체만 바꾼다).
 
-### 12-8. 감시 — `scripts/default-privilege-check.mjs` (신설, 17단언)
+### 12-8. 감시 — `scripts/default-privilege-check.mjs` (신설, 17단언 → 지금은 21단언, §13)
 
 `pnpm db:snapshot`이 GRANT를 안 담으므로(§12-4) 이 스크립트가 유일한 자동 감시자다.
 카탈로그를 PostgREST로 못 읽는 벽은 **0097 `permission_audit_snapshot()`**(SECURITY DEFINER ·
@@ -881,3 +881,99 @@ core 전량을 돌리다 `peek-reset-check`가 **2/8**로 나왔다. 제 변경 
 | `admin-dashboard-check` | **22/22** |
 | readonly 티어 6종 | 전부 통과 |
 | lint · typecheck · test · build | 0 error · 통과 · **2983/2983** · 성공 |
+
+
+---
+
+## 13. ✅ 마감 — 저장소와 운영 DB를 맞췄다 (2026-09-02 후속)
+
+§12를 적용한 세션이 **마이그레이션 파일을 못 만들고 중단**해서, 운영 DB의
+`permission_audit_snapshot()`이 저장소의 0097보다 필드 3개를 더 갖고 있었다.
+**저장소가 스키마의 유래를 못 말하는 상태**였다(CLAUDE.md §DB 마이그레이션).
+
+### 13-1. 선택: **유지하고 문서화**(A) — DB는 안 건드렸다
+
+되돌리기(B)는 `create or replace`를 한 번 더 쳐야 하고, 그 필드들은 §13-2의
+owner 가드가 **곧 다시 필요로 하는 것**이다. 파일을 쓰는 쪽이 안전하다.
+
+`supabase/migrations/0098_permission_audit_owner_fields.sql`을 만들었다.
+⚠️ **눈으로 베낀 것이 아니다** — 운영 DB의 `pg_get_functiondef` 본문을 받아,
+주석·공백을 지우고 **문자 단위로 대조해 동일함을 확인**한 뒤 적었다.
+
+| | 값 |
+|---|---|
+| 운영 DB 함수 수 | **99** (스냅샷 헤더도 98 → **99**로 갱신) |
+| `permission_audit_snapshot` ACL | `{postgres=X, service_role=X}` — anon·authenticated 없음 |
+| `tables_not_postgres` / `functions_not_postgres` | **[] / []** |
+| 보안 속성 | `SECURITY DEFINER` · `search_path=''` · `stable` — 0097과 동일 |
+
+### 13-2. owner 드리프트 가드 — **지금 안전한 진짜 이유를 지킨다**
+
+⚠️ **0096 STEP 3이 우리를 지키는 게 아니다.** `pg_default_acl`은 **객체를 만든 롤**의
+것이 걸리는데 `supabase_admin` 기본값은 못 좁힌다(`42501`, 플랫폼 제약). 그쪽은 지금도
+anon·authenticated에 `arwdDxtm`(**TRUNCATE 포함**)를 준다.
+
+**지금 안전한 이유는 `public`의 소유자가 `postgres` 하나뿐이라는 사실이다**
+(테이블 40 · 함수 99 전부). 그 전제가 깨지는 순간 — postgres 아닌 소유자의 객체가
+public에 하나라도 생기는 순간 — 그 객체는 넓은 기본값을 그대로 물려받는다.
+
+`default-privilege-check.mjs`에 `[3] owner 드리프트` 절을 넣었다. **17 → 21단언.**
+(owner 3건 + 감사 RPC 자신이 잠겨 있는지 1건. 0098이 `locked_functions` 목록에
+`permission_audit_snapshot`을 넣은 것이 이걸 위해서였다.)
+
+`supabase_admin` 기본권한이 넓다는 사실 **자체는 FAIL로 만들지 않았다** —
+고칠 수 없는 것을 매번 빨갛게 하면 진짜 회귀가 그 밑에 묻힌다. `[알고 있음]` 한 줄로 찍는다.
+
+> ⚠️ **이 단언이 진짜인지 확인했다** (CLAUDE.md §테스트가 진짜 테스트인지).
+> [3]의 단언은 전부 **"0이어야 한다"** 꼴이라 측정이 통째로 비어도 통과한다 —
+> 이 문서가 경고하는 바로 그 가짜 통과다. 그래서 **DB를 건드리지 않고 변이 테스트**를
+> 했다(`globalThis.fetch`를 갈아끼워 고장난 스냅샷을 먹인다):
+>
+> | 변이 | 결과 |
+> |---|---|
+> | 없음(기준선) | 21 / 0 |
+> | `tables_not_postgres`에 1건 | 20 / **1** |
+> | `functions_not_postgres`에 1건 | 20 / **1** |
+> | `measured_functions = 0` | 20 / **1** ← 개수 가드가 잡는다 |
+> | 감사 RPC가 authenticated에 열림 | 20 / **1** |
+> | 감사 RPC가 목록에서 사라짐 | 19 / **2** |
+
+### 13-3. ⚠️ 곁가지로 잡은 것 — 기준선이 **운영 데이터에 흔들리고 있었다**
+
+`admin-dashboard-check`가 22 → **23**으로 늘었다. 코드는 한 줄도 안 건드렸는데.
+원인은 **활성 챌린지마다 `check()`를 하나씩 걸고 있었던 것**이다 — 챌린지가 3개에서
+4개가 되어 단언이 늘었다.
+
+**이건 기준선에 심어 둔 시한폭탄이다.** 챌린지가 끝나 3개로 돌아가는 순간
+러너가 `passed < 기준선`을 보고 **"회귀"라고 신고한다** — 아무것도 안 망가졌는데.
+23으로 기록하는 것은 폭탄을 다른 숫자에 다시 심는 것일 뿐이다.
+
+**집계 1건 + 0건 가드**로 바꿨다(개별 결과는 메시지에 남긴다). **22 → 20단언**,
+이제 챌린지 수와 무관하게 고정이다. 활성 챌린지가 0이면 **실패로 친다**(공허한 통과 방지).
+`.eq("status","__nonexistent__")`로 실제로 0건을 만들어 **19/1로 빨개지는 것을 확인**했다.
+
+> ⚠️ **단언 개수를 운영 데이터에 연동하지 마라.** CLAUDE.md §회귀 기준선이
+> `passed < 기준선`을 회귀로 판정하기 때문에, 데이터가 줄면 그대로 거짓 경보가 된다.
+
+### 13-4. 회귀 (2026-09-02 후속)
+
+| 스크립트 | 결과 |
+|---|---|
+| `default-privilege-check` | **21/21** (17 → 21, `--record`) |
+| `admin-dashboard-check` | **20/20** (22 → 20, 데이터 비의존으로 전환) |
+| `cross-user-abuse-check` | **52/52** — [10-1] 감사 RPC 차단 포함 |
+| `challenge-aggregation-parity` | **5/5** |
+| readonly 티어 6종 | **전부 통과 · 0 실패** |
+| lint · typecheck · test · build | 0 error · 통과 · **2983/2983** · 성공 |
+| 프로필 수 | **8** (기준선과 같다 — 픽스처 누수 없음) |
+
+**`src/` 변경 0건 → 배포하지 않았다.** 사용자 화면에 바뀔 것이 없다.
+
+### 13-5. 남은 것
+
+- **픽스처 비밀번호** — `.env.local`의 `DEV_FIXTURE_PASSWORD`가 10자 미만이라
+  `dev-fixture.mjs create`가 길이 검증에서 죽는다. **로그인은 정상**이고(회귀 전부 통과)
+  스크립트 자체의 검증만 막는다. ⛔ **임의로 바꾸지 마라** — 그 계정을 쓰는 사람이
+  못 들어간다. 사용자에게 먼저 묻는다
+- `authenticated` EXECUTE 전면 회수 · SECURITY DEFINER 전면 리팩터링 ·
+  Advisor 경고 0 — **안 했다.** 범위 밖이다

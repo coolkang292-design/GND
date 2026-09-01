@@ -79,14 +79,31 @@ const participants = await db
 check("challenge_participants(challenge_id,status) status in joined,dropped",
   !participants.error, participants.error?.message ?? `${participants.data.length}행`);
 
-for (const challenge of challenges.data ?? []) {
-  const periodSessions = await db.rpc("get_challenge_period_sessions", {
-    p_challenge_id: challenge.id,
-  });
+// ⚠️ **단언 개수를 챌린지 수에 연동하지 마라.** 예전엔 활성 챌린지마다 check()를
+//    하나씩 걸었는데, 그러면 기준선이 **운영 데이터에 따라 흔들린다** — 챌린지가
+//    끝나 3개가 되는 순간 러너가 `passed < 기준선`을 보고 "회귀"라고 신고한다
+//    (아무것도 안 망가졌는데). 실제로 2026-09-02에 3 → 4가 되어 🟡가 떴다.
+//    그래서 **집계 1건**으로 바꿨다. 개별 결과는 메시지에 남긴다.
+{
+  const rows = [];
+  const broken = [];
+  for (const challenge of challenges.data ?? []) {
+    const periodSessions = await db.rpc("get_challenge_period_sessions", {
+      p_challenge_id: challenge.id,
+    });
+    const ok = !periodSessions.error && Array.isArray(periodSessions.data);
+    rows.push(`${challenge.id.slice(0, 8)}…=${ok ? `${periodSessions.data.length}행` : "실패"}`);
+    if (!ok) broken.push(`${challenge.id.slice(0, 8)}… ${periodSessions.error?.message ?? "배열이 아니다"}`);
+  }
+  // 개수 가드를 함께 건다 — 활성 챌린지가 0이면 이 단언은 공허하게 통과한다.
   check(
-    `get_challenge_period_sessions(${challenge.id.slice(0, 8)}…)`,
-    !periodSessions.error && Array.isArray(periodSessions.data),
-    periodSessions.error?.message ?? `${periodSessions.data.length}행`,
+    `get_challenge_period_sessions — 활성 챌린지 전부 응답한다`,
+    rows.length > 0 && broken.length === 0,
+    broken.length
+      ? `${broken.length}건 실패 — ${broken.join(" | ")}`
+      : rows.length === 0
+        ? "활성 챌린지 0건 — 잴 것이 없다(공허한 통과를 막으려고 실패로 친다)"
+        : `${rows.length}건 · ${rows.join(" ")}`,
   );
 }
 
