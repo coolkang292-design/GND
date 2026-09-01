@@ -281,12 +281,48 @@ async function challenge() {
   await ensureGroup(a, b);
 
   // 이미 진행 중인 게 있으면 그걸 쓴다 — 매번 새로 만들면 방이 쌓인다.
-  const { json: mine } = await api(
-    a.token,
+  //
+  // ⚠️⚠️ **참가자까지 봐야 한다.** 예전엔 `status in (setup,active)`인 아무 챌린지나
+  //    `[0]`으로 집었다. 그래서 **사람이 앱에서 만든 챌린지(A만 참가)** 가 걸리면
+  //    B가 없는 채로 "✅ 이미 active"라고 말하고 끝났다. 겉보기엔 성공인데
+  //    `peek-reset-check`가 "다른 참가자가 없어 ②~④를 건너뜁니다"로 **8/8 → 2/8**이 됐다
+  //    (2026-09-02에 core 회귀가 빨개져서 잡았다. 실제로 `Test11`이 그랬다).
+  //
+  //    이 픽스처의 목적은 **둘이 함께하는** 챌린지를 보장하는 것이다.
+  //    A만 있는 방은 목적에 맞지 않으므로 후보에서 뺀다.
+  const { json: joinedRows } = await api(
+    SERVICE_KEY,
     "GET",
-    "/rest/v1/challenges?select=id,name,status,start_date,end_date&status=in.(setup,active)",
+    `/rest/v1/challenge_participants?select=challenge_id,user_id&status=eq.joined` +
+      `&user_id=in.(${a.id},${b.id})`,
   );
+  const joinedBoth = new Map();
+  for (const row of Array.isArray(joinedRows) ? joinedRows : []) {
+    const set = joinedBoth.get(row.challenge_id) ?? new Set();
+    set.add(row.user_id);
+    joinedBoth.set(row.challenge_id, set);
+  }
+  const bothIds = [...joinedBoth.entries()]
+    .filter(([, set]) => set.has(a.id) && set.has(b.id))
+    .map(([id]) => id);
+
+  const { json: mine } = bothIds.length
+    ? await api(
+        a.token,
+        "GET",
+        `/rest/v1/challenges?select=id,name,status,start_date,end_date` +
+          `&status=in.(setup,active)&id=in.(${bothIds.join(",")})`,
+      )
+    : { json: [] };
   let ch = Array.isArray(mine) ? mine[0] : null;
+
+  if (!ch && joinedBoth.size) {
+    // A(또는 B)만 들어 있는 방이 있다는 뜻이다. 왜 그걸 안 쓰는지 말해 준다 —
+    // 말없이 새로 만들면 "왜 방이 또 생겼지?"가 된다.
+    console.log(
+      `… 진행 중인 방이 있지만 둘 다 참가한 것이 아니라 건너뜁니다 (후보 ${joinedBoth.size}개)`,
+    );
+  }
 
   if (!ch) {
     await ensureGroup(a, b);
@@ -307,7 +343,9 @@ async function challenge() {
   }
 
   if (ch.status === "active") {
-    console.log("✅ 이미 active — 그대로 씁니다");
+    // ⚠️ 여기 오는 ch는 **둘 다 joined인 것만** 골라진 상태다(위 참조).
+    //    그래도 한 번 더 말해 준다 — "active"만 보고 넘어가던 것이 2026-09-02의 버그였다.
+    console.log(`✅ 이미 active — 그대로 씁니다 (A·B 둘 다 참가 확인됨: "${ch.name}")`);
     return;
   }
 

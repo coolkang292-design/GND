@@ -800,12 +800,15 @@ A · D · 계보 · C · 0095가 **전부 코드·DB·CI·배포까지 끝났다
 | **계보** | 뿌리 캠페인 · 확산 성과 | ✅ | — (DB 변경 0) | ✅ | ✅ | — |
 | **C** | 익명 확산형 mutation 게이트 | ✅ | ✅ | ✅ | ✅ | 0094 |
 | **0095** | 영구 크루 vs 챌린지 임시 소셜 | ✅ | ✅ | ✅ | ✅ | 0095 |
-| **B** | SECURITY DEFINER · GRANT · TRUNCATE 감사 | ✅ | ✅ STEP 1·2 | ✅ | ⬜ 배포 대기 | 0096 |
+| **B** | SECURITY DEFINER · GRANT · TRUNCATE 감사 | ✅ | ✅ STEP 1·2·3 | ✅ | ⬜ 배포 대기 | 0096 · 0097 |
 
-⚠️ **B는 STEP 3이 남았다.** `ALTER DEFAULT PRIVILEGES`를 안 고쳤으므로 **다음에 만드는
-테이블은 여전히** anon·authenticated에 TRUNCATE 포함 전 권한을 자동으로 받는다.
-0093의 `analytics_events`가 그랬다. 별도 승인 대상이고, 짝이 되는
-`scripts/default-privilege-check.mjs`(재발 감시)도 함께 만들어야 한다.
+✅ **B는 STEP 3까지 끝났다.** 새 테이블·함수를 실제로 만들었다 rollback하며 재발이
+끊긴 것을 실증했다(감사 문서 §12-7). 감시는 `scripts/default-privilege-check.mjs`
+(17단언, core·readonly)가 맡고, 카탈로그를 읽는 통로는 0097의
+`permission_audit_snapshot()`(service_role 전용)이다.
+
+⚠️ 하나만 남았다 — `supabase_admin` 소유 기본권한은 `42501`로 **못 바꾼다**(플랫폼 제약).
+public 객체가 전부 postgres 소유라 실질 영향은 없고, 감시 스크립트가 상태를 매번 찍는다.
 
 ⚠️ **C를 D·계보보다 먼저 배포했다.** 원래 순서(A→D→C→B)와 다른 이유: C의 DB(0094)가
 이미 운영에 적용된 상태에서 배포를 미루면 **"DB엔 게이트가 있는데 앱엔 JWT 갱신 수정이

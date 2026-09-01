@@ -1,7 +1,8 @@
 -- 0096 : 과도한 GRANT / EXECUTE 회수 (배포 B)
 --
--- ✅ **STEP 1 · STEP 2 는 2026-09-02 운영 DB에 적용됐다** (Supabase MCP, 사용자 승인 후).
--- ⬜ **STEP 3 (ALTER DEFAULT PRIVILEGES) 은 아직 적용하지 않았다.** 맨 아래를 보라.
+-- ✅ **STEP 1 · 2 · 3 모두 2026-09-02 운영 DB에 적용됐다** (Supabase MCP, 사용자 승인 후).
+-- ⚠️ **단 STEP 3의 `supabase_admin` 소유분은 적용하지 못했다** — `42501 permission denied`.
+--    postgres에게 다른 롤의 기본 권한을 바꿀 권한이 없다. 자세한 것은 맨 아래 STEP 3.
 --
 --     "NNNN까지 반영됐는지"는 이 저장소에서 **객체 존재로** 확인한다
 --     (`list_migrations`가 빈 배열이다). 이 파일이 있다고 적용된 것이 아니다.
@@ -179,13 +180,14 @@ notify pgrst, 'reload schema';
 --   ⚠️ TRUNCATE·MAINTAIN은 되돌리지 마라. 그건 애초에 실수로 붙은 것이다.
 
 -- ════════════════════════════════════════════════════════════
--- STEP 3 — ALTER DEFAULT PRIVILEGES  ⛔ 아직 적용 안 함 · 별도 승인 필요
+-- STEP 3 — ALTER DEFAULT PRIVILEGES  ✅ 적용됨(postgres) / ⚠️ 거부됨(supabase_admin)
 -- ════════════════════════════════════════════════════════════
 --
 -- ⛔ **위 commit과 분리했다.** 영향 범위가 전역이고, 되돌리는 방법이 다르며,
 --    Supabase가 나중에 되돌려 놓을 수 있어 감시 테스트가 함께 필요하다.
 --
--- 근본 원인 — **2026-09-02에 카탈로그로 실측했다**(더는 [미검증]이 아니다):
+-- 근본 원인 — **2026-09-02에 카탈로그로 실측했다**(더는 [미검증]이 아니다).
+-- 아래는 **적용 전** 값이다:
 --
 --   postgres        · public · TABLE → anon=arwdDxtm, authenticated=arwdDxtm
 --   supabase_admin  · public · TABLE → anon=arwdDxtm, authenticated=arwdDxtm
@@ -208,29 +210,54 @@ notify pgrst, 'reload schema';
 --   FUNCTION anon           EXECUTE 뺀다 — 정책 헬퍼는 그때 명시적으로 준다
 --   SEQUENCE anon           전부 뺀다
 --
--- owner가 둘(postgres · supabase_admin)이라 **둘 다** 건다. 지금 객체는 전부 postgres
--- 소유지만 supabase_admin 항목이 살아 있어 어느 쪽이 미래 객체에 걸릴지 단정할 수 없다.
+-- owner가 둘(postgres · supabase_admin)이라 둘 다 걸려고 했지만 **supabase_admin 쪽은
+-- 거부됐다**(아래). 다행히 public의 객체는 전부 postgres 소유이고 마이그레이션도
+-- postgres로 돌기 때문에, 실제로 새 객체에 걸리는 것은 postgres 기본값이다 — 실증했다.
 
--- begin;
+-- ✅ 적용됨 (2026-09-02)
+begin;
+alter default privileges for role postgres in schema public
+  revoke truncate, references, trigger, maintain on tables from authenticated;
+alter default privileges for role postgres in schema public revoke all     on tables    from anon;
+alter default privileges for role postgres in schema public revoke all     on sequences from anon;
+alter default privileges for role postgres in schema public revoke execute on functions from anon;
+commit;
+
+-- ⚠️⚠️ **아래는 `42501 permission denied to change default privileges`로 거부됐다.**
+--    postgres는 supabase_admin의 기본 권한을 바꿀 수 없다(Supabase 플랫폼 제약).
+--    **실질 영향은 없다** — public의 객체 40개·함수 98개가 **전부 postgres 소유**이고,
+--    마이그레이션도 postgres로 돈다. 그래서 새 객체에는 postgres 기본값이 걸린다.
+--    실증(아래 §재발 실증)이 그걸 확인했다. 그래도 상태는 감시한다 —
+--    scripts/default-privilege-check.mjs 가 "[알고 있음]" 줄로 매번 찍는다.
 --
--- alter default privileges for role postgres       in schema public
---   revoke truncate, references, trigger, maintain on tables from authenticated;
 -- alter default privileges for role supabase_admin in schema public
 --   revoke truncate, references, trigger, maintain on tables from authenticated;
---
--- alter default privileges for role postgres       in schema public revoke all on tables    from anon;
--- alter default privileges for role supabase_admin in schema public revoke all on tables    from anon;
--- alter default privileges for role postgres       in schema public revoke all on sequences from anon;
--- alter default privileges for role postgres       in schema public revoke execute on functions from anon;
+-- alter default privileges for role supabase_admin in schema public revoke all on tables from anon;
 -- alter default privileges for role supabase_admin in schema public revoke execute on functions from anon;
+
+-- ── ✅ 재발 실증 (감사 문서 §9의 `[미검증]`을 닫았다) ─────────
 --
--- commit;
+-- public에 테이블·함수를 실제로 만들어 ACL을 재고, **rollback으로 되돌렸다**
+-- (운영에 객체를 하나도 남기지 않는다 — 확인: zz_acl_probe% 0건, 테이블 40개 유지):
 --
--- 적용 후 반드시:
---   1. pg_default_acl 재조회 → 의도한 대로 바뀌었는지 **객체로** 확인
---   2. scripts/default-privilege-check.mjs 신설 — 새 테이블을 만들었다 되돌리며
---      anon·authenticated에 TRUNCATE·DELETE가 자동으로 안 붙는지 단언
---      (⚠️ 이건 create table 이라 파괴적 목록은 아니지만 운영 DB에 쓴다.
---        block-report-goal-check 처럼 "되돌렸는지까지" 단언해야 한다)
---   3. scripts/regression-baselines.json 에 등록
---   4. pnpm db:snapshot 으로 docs/db-current-schema.sql 갱신
+--   begin;
+--     create table public.zz_acl_probe_0096 (id uuid primary key);
+--     create function public.zz_acl_probe_fn_0096() returns int language sql as $$ select 1 $$;
+--     -- ACL 조회 …
+--   rollback;
+--
+-- 결과 — **적용 전이라면 anon·authenticated가 arwdDxtm 를 받았을 자리다**:
+--   TABLE     authenticated = SELECT, INSERT, UPDATE, DELETE   (TRUNCATE·REFERENCES·TRIGGER·MAINTAIN 없음)
+--             anon          = (없음)
+--   FUNCTION  authenticated = EXECUTE                          (anon 없음)
+--
+-- 적용 후 한 것:
+--   1. ✅ pg_default_acl 재조회 — postgres:TABLE 이 `authenticated=arwd` (anon 없음)로 바뀜
+--   2. ✅ scripts/default-privilege-check.mjs 신설 (17단언, tier=readonly, core)
+--      ⚠️ 카탈로그를 PostgREST로 못 읽어 **0097의 permission_audit_snapshot() RPC**가 필요했다.
+--         `pnpm db:snapshot`은 GRANT를 한 줄도 안 담는다(grep -c → 0) — 즉 권한 회귀는
+--         저장소 diff로 **절대** 안 잡힌다. 감시자는 이 스크립트와 cross-user-abuse-check 둘뿐이다.
+--      ⚠️ 단언이 진짜인지도 확인했다: pending_bug_report_count 에 일부러 authenticated EXECUTE를
+--         걸었더니 17/0 → 16/1로 그 항목이 정확히 빨개졌고, 회수하니 17/0으로 돌아왔다
+--   3. ✅ scripts/regression-baselines.json 에 등록 (core, readonly)
+--   4. ✅ pnpm db:snapshot — 단, 위 이유로 diff는 0줄이다

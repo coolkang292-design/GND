@@ -804,3 +804,80 @@ A로 로그인한 뒤 localhost에서 나간 요청 중 2xx가 아닌 것은 이
   프로필 **8개**로 기준선 복구
 - ⬜ §10의 프로브 흔적 3건은 **아직 남아 있다** (사용자가 직접 정리하기로 한 건)
 - ℹ️ 개발 서버를 열면서 익명 계정 1개가 새로 생겼다. CLAUDE.md대로 **지우지 않는다**
+
+### 12-7. ✅ STEP 3 — `ALTER DEFAULT PRIVILEGES` (같은 날 이어서 적용)
+
+**근본 원인을 끊었다.** STEP 2는 *지금 있는* 테이블만 정리한다 — 기본값을 안 고치면
+**다음에 만드는 테이블에서 그대로 재발한다**(0093의 `analytics_events`가 그랬다).
+
+| grantor · 객체 | 적용 전 | 적용 후 |
+|---|---|---|
+| `postgres` · TABLE | `anon=arwdDxtm`, `authenticated=arwdDxtm` | **`anon` 없음**, `authenticated=arwd` |
+| `postgres` · FUNCTION | `anon=X`, `authenticated=X` | **`anon` 없음**, `authenticated=X` |
+| `postgres` · SEQUENCE | `anon=rwU`, … | **`anon` 없음** |
+| `supabase_admin` · 전부 | 넓음 | **못 바꿨다 — `42501 permission denied`** |
+
+⚠️ **`supabase_admin` 소유분은 바꿀 수 없다.** postgres에게 다른 롤의 기본 권한을
+변경할 권한이 없다(Supabase 플랫폼 제약). **실질 영향은 없다** — public의 테이블 40개·
+함수 98개가 **전부 postgres 소유**이고 마이그레이션도 postgres로 돌기 때문에, 새 객체에는
+postgres 기본값이 걸린다. 아래 실증이 그것을 확인했다. 상태는 감시 스크립트가 매번 찍는다.
+
+**재발 실증** — `[미검증]`이던 §9의 "새 객체 재발 실증"을 닫았다. 실제로 만들고 `rollback`했다
+(잔여 확인: `zz_acl_probe%` **0건**, 테이블 **40개** 유지):
+
+```
+TABLE     authenticated = SELECT, INSERT, UPDATE, DELETE   ← TRUNCATE·REFERENCES·TRIGGER·MAINTAIN 없음
+          anon          = (없음)
+FUNCTION  authenticated = EXECUTE                          ← anon 없음
+```
+
+**시퀀스 회수는 오늘 기준 무해하다** — public에 시퀀스 **0개**, serial 컬럼 **0개**(실측). 미래 대비다.
+
+**`anon` EXECUTE 21개**를 카탈로그로 확인했다 — §9의 "21 vs 11 불일치"가 닫혔다.
+지난 세션의 11/12는 **PostgREST로 도달 가능한 것만** 센 값이었다. 기존 21개는 그대로 남는다
+(default privileges는 미래 객체만 바꾼다).
+
+### 12-8. 감시 — `scripts/default-privilege-check.mjs` (신설, 17단언)
+
+`pnpm db:snapshot`이 GRANT를 안 담으므로(§12-4) 이 스크립트가 유일한 자동 감시자다.
+카탈로그를 PostgREST로 못 읽는 벽은 **0097 `permission_audit_snapshot()`**(SECURITY DEFINER ·
+읽기 전용 · service_role 전용)으로 넘었다. `cross-user-abuse-check` [10-1]이 그 RPC가
+일반 사용자에게 안 열려 있는지 매번 확인한다(52단언).
+
+> ⚠️ **이 단언이 진짜인지 확인했다** (CLAUDE.md §테스트가 진짜 테스트인지).
+> `pending_bug_report_count`(아무도 안 부르는 것이 코드로 증명된 함수)에 일부러
+> `grant execute … to authenticated`를 걸었더니 **17/0 → 16/1**로 정확히 그 항목만
+> 빨개졌고, 회수하니 17/0으로 돌아왔다.
+
+### 12-9. 회귀 도구 자체의 버그 두 개를 고쳤다
+
+core 전량을 돌리다 `peek-reset-check`가 **2/8**로 나왔다. 제 변경 탓이 아니었지만
+(그 스크립트는 `SUPABASE_SERVICE_ROLE_KEY` 전용이다) **둘 다 진짜 결함이었다.**
+
+| 파일 | 무엇이 틀렸나 |
+|---|---|
+| `scripts/dev-fixture.mjs` | `status in (setup,active)`인 **아무 챌린지나 `[0]`으로** 집었다. 사람이 앱에서 만든 **혼자짜리 방**(`Test11`)이 걸리면 B가 없는 채로 `"✅ 이미 active"`라고 말하고 끝났다. → **둘 다 `joined`인 방만** 후보로 삼고, 없으면 새로 만든다 |
+| `scripts/peek-reset-check.mjs` | 첫 active 챌린지를 집고, 다른 참가자가 없으면 **조용히 ②~④를 건너뛰고** `2 passed / 0 failed`로 초록처럼 보였다. → **전제를 만족하는 방을 고르고**, 그래도 없으면 **실패로 말한다** |
+
+**러너의 기준선 대조가 이걸 잡았다.** 종료 코드는 0이었고 "0 failed"였다 —
+`passed(2) < 기준선(8)`이 아니었으면 그냥 통과로 보였다.
+고친 뒤 **8/8**. (CLAUDE.md §회귀 기준선의 판정 규칙이 실제로 값을 한 것이다.)
+
+### 12-10. 최종 회귀 (2026-09-02)
+
+| 스크립트 | 결과 |
+|---|---|
+| `default-privilege-check` (신설) | **17/17** |
+| `cross-user-abuse-check` | **52/52** (적용 전 40/3) |
+| `rls-test` | **129/129** |
+| `crew-link-check` | **53/53** |
+| `challenge-room-check` | **48/48** |
+| `challenge-invite-link-check` | **28/28** |
+| `challenge-consent-test` | **22/22** |
+| `poke-levelup-check` | **14/14** |
+| `peek-reset-check` | **8/8** (도구 버그 수정 후) |
+| `block-report-goal-check` | **23/23** |
+| `bug-report-check` | **20/20** |
+| `admin-dashboard-check` | **22/22** |
+| readonly 티어 6종 | 전부 통과 |
+| lint · typecheck · test · build | 0 error · 통과 · **2983/2983** · 성공 |

@@ -353,7 +353,7 @@ node scripts/bug-reports.mjs --fix <id> --release <release-id> --send   # 신고
 표에 6종만 있어서 나머지 23종은 기대값이 아예 없었다. 기계가 읽고 기계가 갱신한다.
 
 ```bash
-pnpm verify:regression                  # core 7종 — 배포 전 기본 루틴
+pnpm verify:regression                  # core 8종 — 배포 전 기본 루틴
 pnpm verify:regression --tier readonly  # 계정 안 만드는 5종 — 빠르고 안전
 pnpm verify:regression --list           # 30종 전량 목록과 현재 기준선
 pnpm verify:regression --all            # 전량 ⚠️ 30분+ (익명 가입 대기 포함)

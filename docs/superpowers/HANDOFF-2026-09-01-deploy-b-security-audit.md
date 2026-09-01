@@ -26,7 +26,7 @@
 
 > # ⚠️ 2026-09-02 갱신 — 이 인수인계서의 절반은 이미 끝났다
 >
-> **STEP 1 · STEP 2가 운영 DB에 적용됐다** (사용자 승인 후 Supabase MCP).
+> **STEP 1 · 2 · 3이 모두 운영 DB에 적용됐다** (사용자 승인 후 Supabase MCP).
 > 아래 본문은 **적용 전** 시점에 쓴 것이다. 지금 상태는 다음을 보라:
 >
 > | 무엇 | 어디 |
@@ -39,12 +39,19 @@
 > `cross-user-abuse-check` 40/3 → **51/51** (기능 보존 단언 8건 추가) · core 기준선 등록 ·
 > 화면 확인(크루 스트릭 정상) · 잔여 계정 정리.
 >
-> **남은 것** — ⬜ **STEP 3 `ALTER DEFAULT PRIVILEGES`** (별도 승인 필요) ·
-> ⬜ `scripts/default-privilege-check.mjs` 신설 · ⬜ §10 프로브 흔적 3건 정리.
+> ✅ **STEP 3까지 끝났다** — `pg_default_acl`(postgres 소유분)을 좁혔고, 새 테이블·함수를
+> 실제로 만들었다 rollback하며 **재발이 끊긴 것을 실증**했다.
+> 감시는 `scripts/default-privilege-check.mjs`(17단언, core·readonly)가 맡는다.
+> 카탈로그를 PostgREST로 못 읽는 벽은 **0097 `permission_audit_snapshot()`**로 넘었다.
 >
-> ⚠️ **`pg_default_acl`은 그대로다.** STEP 2로 지금 있는 테이블은 정리됐지만,
-> **다음에 만드는 테이블은 여전히 anon·authenticated에 TRUNCATE 포함 전 권한을 받는다.**
-> 0093의 `analytics_events`가 그랬다. STEP 3을 해야 재발이 끊긴다.
+> **남은 것**
+> - ⚠️ `supabase_admin` 소유 기본권한은 **바꿀 수 없다** (`42501`, 플랫폼 제약).
+>   public 객체가 전부 postgres 소유라 실질 영향 없음. 감시 스크립트가 상태를 매번 찍는다
+> - ⬜ §10의 프로브 흔적 3건 정리 (사용자가 직접 하기로 한 건 — 2026-09-02에도 남아 있다)
+>
+> ⚠️ **앞으로 새 테이블을 만들 때**: anon은 이제 아무 권한도 자동으로 못 받는다.
+> 로그인 전 화면이 읽어야 하는 테이블이면 **명시적으로** `grant select … to anon`을 써라.
+> 새 RPC를 anon이 불러야 하면 `grant execute … to anon`도 명시해야 한다.
 
 ---
 

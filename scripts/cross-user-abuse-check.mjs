@@ -374,6 +374,18 @@ console.log("[10] RPC 인자 우회");
   check("A가 남 둘의 차단 관계를 못 캔다", rejected(ib), `status=${ib.status} 값=${ib.raw}`);
 }
 
+// ── 10-1. 관리 전용 RPC — 일반 사용자에게 열려 있으면 안 된다 ──────────
+{
+  // permission_audit_snapshot(0097)은 **권한 지도 전체**를 돌려준다. 공격자가 부르면
+  // 어디가 약한지 한 번에 읽는다. service_role 전용이어야 한다.
+  const audit = await rpc(A.token, "permission_audit_snapshot", {});
+  check(
+    "A가 permission_audit_snapshot으로 권한 지도를 못 읽는다",
+    rejected(audit),
+    `status=${audit.status} ${audit.raw}`,
+  );
+}
+
 // ── 11. 크루 스트릭 — 뒷문은 닫히고 기능은 살아 있는가 ──────────────────
 //
 // ⚠️⚠️ **이 절의 목적은 "숨기는 것"이 아니다.** 크루끼리 서로의 스트릭을 보는 것은

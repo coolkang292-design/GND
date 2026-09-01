@@ -108,13 +108,37 @@ if (!fixture) {
   const USER = fixture.id;
   const MARK = "peek-reset-check"; // 심은 세션을 알아보는 표식 (컬럼은 memo — notes가 아니다)
 
-  // 이 계정이 참가 중인 active 챌린지 — 없으면 SQL 함수가 항상 조용하다
+  // 이 계정이 참가 중인 active 챌린지 — 없으면 SQL 함수가 항상 조용하다.
+  //
+  // ⚠️⚠️ **아무 active 챌린지나 집으면 안 된다.** ②~④는 "나 아닌 참가자"가 있어야
+  //    성립한다(0040 체크 제약: 열람 대상이 나 자신이면 안 된다). 예전엔 첫 active를
+  //    그냥 집었는데, 사람이 앱에서 만든 **혼자짜리 챌린지**가 걸리면 조용히
+  //    ②~④를 건너뛰고 `2 passed / 0 failed`로 **초록처럼 보였다** (2026-09-02).
+  //    그래서 여기서 **전제를 만족하는 챌린지를 고른다** — 나 말고 user_goals가 있는 방.
   const parts = await get(
     `/rest/v1/challenge_participants?select=challenge_id,challenges(id,status)&user_id=eq.${USER}`,
   );
-  const challengeId = (parts ?? []).find(
-    (p) => p.challenges?.status === "active",
-  )?.challenge_id;
+  const activeIds = (parts ?? [])
+    .filter((p) => p.challenges?.status === "active")
+    .map((p) => p.challenge_id);
+
+  let challengeId = null;
+  for (const id of activeIds) {
+    const others = await get(
+      `/rest/v1/user_goals?select=user_id&challenge_id=eq.${id}&user_id=neq.${USER}&limit=1`,
+    );
+    if ((others ?? []).length) {
+      challengeId = id;
+      break;
+    }
+  }
+  if (!challengeId && activeIds.length) {
+    console.log(
+      `⚠️ active 챌린지 ${activeIds.length}개가 있지만 전부 나 혼자다 — ②~④를 못 돈다.
+` +
+        "   `node scripts/dev-fixture.mjs challenge`로 A·B가 함께하는 방을 만들어라.",
+    );
+  }
 
   async function cleanup() {
     await del(`/rest/v1/workout_sessions?user_id=eq.${USER}&memo=eq.${MARK}`);
@@ -208,7 +232,14 @@ if (!fixture) {
       const yesterday = dayBack(kstToday, 1);
       const target = await setLastUse(yesterday);
       if (target === null) {
-        console.log("⚠️ 다른 참가자가 없어 ②~④를 건너뜁니다");
+        // ⚠️ **조용히 건너뛰지 않는다.** 예전에는 로그만 찍고 지나가서 `2 passed /
+        //    0 failed`가 됐다 — 종료 코드로는 통과, 사람 눈에는 초록.
+        //    러너의 기준선(8)이 잡아 주긴 했지만, 여기서도 실패로 말해야 한다.
+        check(
+          "②~④를 돌 수 있다 (나 아닌 참가자에게 user_goals가 있다)",
+          false,
+          true,
+        );
       } else {
         check("어제 썼으면 5일 연속이어도 잠긴다 (SQL)", await sqlUnlocks(), false);
         check(
