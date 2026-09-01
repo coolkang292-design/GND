@@ -20,7 +20,7 @@
     "  fixture  — dev-fixture.mjs create + challenge 가 먼저 있어야 한다.",
     "  accounts — 실행마다 익명 계정을 만든다. 연달아 돌리면 429(rate limit)에 걸린다."
   ],
-  "recordedAt": "2026-08-31",
+  "recordedAt": "2026-09-02",
   "scripts": {
     "rls-test": {
       "assertions": 129,
@@ -191,7 +191,7 @@
       "requires": "node scripts/dev-fixture.mjs create && node scripts/dev-fixture.mjs challenge"
     },
     "admin-dashboard-check": {
-      "assertions": 21,
+      "assertions": 22,
       "source": "measured",
       "tier": "readonly",
       "core": false,
@@ -269,6 +269,14 @@
       "tier": "accounts",
       "core": false,
       "what": "영구 크루 vs 챌린지 임시 소셜(0095). 친구 링크는 crew_links를 만들고 챌린지 링크는 안 만든다 · active에서만 활동 피드·응원이 열리고 ended면 자동 종료 · 이미 보낸 응원은 남는다 · 계보(invited_by)는 crew_links 없이도 이어진다 · 챌린지 참가자에게 크루 신청은 여전히 가능."
+    },
+    "cross-user-abuse-check": {
+      "assertions": 51,
+      "source": "measured",
+      "tier": "fixture",
+      "core": true,
+      "what": "계정 A가 계정 B의 것을 읽거나 바꿀 수 있는가 — 10개 표면 + 크루 스트릭 양방향. 0096 STEP 1 이전에는 40/3이었다(current_streak_days · notify_challenge_peek_unlock · is_blocked_between 이 SECURITY DEFINER + 인자 미검증 + authenticated EXECUTE로 뚫려 있었다). ⚠️ [11]절은 막힌 것만 세지 않는다 — 크루가 서로의 스트릭을 보는 것은 GND 핵심 기능이라 'A가 B의 완료 세션을 정책 수만큼 본다'를 함께 단언한다. 한쪽만 세면 기능을 죽여도 초록이다.",
+      "requires": "node scripts/dev-fixture.mjs create"
     }
   },
   "notScripts": {

@@ -183,7 +183,8 @@ PR CI와 분리한다.** 기본은 `--tier readonly`.
 
 > **상태 (2026-09-01): 조사·문서·회귀는 끝. DB 권한 변경은 승인 대기.**
 > 산출물 → `docs/security/public-beta-rpc-audit.md` (678줄)
-> 제안 SQL → `supabase/migrations/0096_permission_tightening_PROPOSAL.sql` (**미적용**)
+> 적용된 SQL → `supabase/migrations/0096_permission_tightening.sql`
+> (**STEP 1·2 = 2026-09-02 적용됨 · STEP 3 = 미적용**). 결과는 감사 문서 §12.
 
 ### 4-0. 계획 시점 숫자 정정 (실측 결과)
 
@@ -246,6 +247,8 @@ PostgREST에 노출조차 안 되는 트리거 함수라 회수할 이유가 없
 - ⛔ **새 객체 재발 실증** (`scripts/default-privilege-check.mjs`) — DDL 수단 필요
 - `cross-user-abuse-check`는 **기준선에 등록하지 않았다** — 실패 3건이 아직 열린
   발견이라 등록하면 회귀 전체가 빨개진다. 0096 STEP 1 적용 후 43/43을 확인하고 `--record`
+  → **2026-09-02 완료.** 51/51로 `core`·`tier: fixture` 기준선에 등록했다
+  (기능 보존 단언 8건을 더해 43이 아니라 51이다)
 
 **검증:** REVOKE 후 `--tier readonly` **+ `accounts` 티어까지** 재실행.
 RLS 파손은 여기서만 잡힌다. ⚠️ accounts 티어는 익명 계정을 만들고 30분+ 걸린다.
@@ -797,7 +800,12 @@ A · D · 계보 · C · 0095가 **전부 코드·DB·CI·배포까지 끝났다
 | **계보** | 뿌리 캠페인 · 확산 성과 | ✅ | — (DB 변경 0) | ✅ | ✅ | — |
 | **C** | 익명 확산형 mutation 게이트 | ✅ | ✅ | ✅ | ✅ | 0094 |
 | **0095** | 영구 크루 vs 챌린지 임시 소셜 | ✅ | ✅ | ✅ | ✅ | 0095 |
-| **B** | SECURITY DEFINER · GRANT · TRUNCATE 감사 | ⬜ | ⬜ | ⬜ | ⬜ | 0096 예정 |
+| **B** | SECURITY DEFINER · GRANT · TRUNCATE 감사 | ✅ | ✅ STEP 1·2 | ✅ | ⬜ 배포 대기 | 0096 |
+
+⚠️ **B는 STEP 3이 남았다.** `ALTER DEFAULT PRIVILEGES`를 안 고쳤으므로 **다음에 만드는
+테이블은 여전히** anon·authenticated에 TRUNCATE 포함 전 권한을 자동으로 받는다.
+0093의 `analytics_events`가 그랬다. 별도 승인 대상이고, 짝이 되는
+`scripts/default-privilege-check.mjs`(재발 감시)도 함께 만들어야 한다.
 
 ⚠️ **C를 D·계보보다 먼저 배포했다.** 원래 순서(A→D→C→B)와 다른 이유: C의 DB(0094)가
 이미 운영에 적용된 상태에서 배포를 미루면 **"DB엔 게이트가 있는데 앱엔 JWT 갱신 수정이

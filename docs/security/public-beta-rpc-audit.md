@@ -595,11 +595,26 @@ alter default privileges for role supabase_admin in schema public grant execute 
 
 ---
 
-## 9. `[미검증]` — 이번 세션에서 닫지 못한 것
+## 9. `[미검증]` — 무엇이 닫혔고 무엇이 남았나
+
+> **2026-09-02 갱신.** Supabase MCP가 붙은 세션에서 카탈로그를 직접 조회해
+> 아래 ✅ 항목들이 닫혔다. 실측값은 §12에 있다.
+
+### 9-0. 2026-09-02에 닫힌 것
+
+| 항목 | 실측 결과 |
+|---|---|
+| ✅ `pg_default_acl` 현재 값 | `postgres`·`supabase_admin` **양쪽** `public`에 TABLE→`arwdDxtm`(anon·authenticated). 인수인계서 §2 추정이 **정확했다** |
+| ✅ `authenticated` TRUNCATE 12개 목록 | **정확히 12개** — bug_reports · challenges · exercise_catalog · group_members · groups · profile_views · profiles · user_goals · workout_exercises · workout_images · workout_sessions · workout_sets (anon은 3개: groups · group_members · profiles) |
+| ✅ `MAINTAIN`·`REFERENCES`·`TRIGGER` | PG **17.6** 이라 `MAINTAIN`이 실재. 셋 다 STEP 2에서 회수 |
+| ✅ 함수 owner | 98개 **전부 `postgres`** (≠postgres 0개) |
+| ✅ 정책이 회수 대상 4함수를 부르는가 | **0개** — 정책 79개 전수 정규식 검색 |
+| ✅ `pending_bug_report_count` 사용처 | **아무도 안 부른다.** `briefing/route.ts:29`가 안 쓰는 이유를 주석으로 적고 직접 센다 |
+
+### 9-1. 아직 남은 것
 
 | 항목 | 상태 | 왜 |
 |---|---|---|
-| `pg_default_acl` 현재 값 재확인 | **`[미검증]`** | 카탈로그 접근 없음. 인수인계서 §2 값을 전제로 §8-C를 썼다 |
 | **새 객체 재발 실증** (요구 §7) | **`[미검증]`** | 새 테이블을 만들어야 확인되는데 DDL 수단이 없다. `pg_temp`·`begin/rollback` 모두 임의 SQL이 필요하다 |
 | `authenticated` TRUNCATE 12개 목록 | **`[미검증]`** | PostgREST에 TRUNCATE 경로 없음 |
 | `MAINTAIN`·`REFERENCES`·`TRIGGER` 권한 | **`[미검증]`** | 〃 |
@@ -634,6 +649,9 @@ rollback;                                         -- 운영에 객체를 남기�
 
 프로브 과정에서 3건이 남았다. **전부 픽스처·프로브 산출물이고 실사용자 데이터가 아니다.**
 정리 명령이 auto 모드 분류기에 막혀 지우지 못했다.
+
+> ⚠️ **2026-09-02 확인 — 3건 모두 아직 남아 있다.** 사용자가 직접 정리하기로 했고(2026-09-01),
+> 그 세션에서는 손대지 않았다. 이번 세션에서도 삭제는 파괴적 변경이라 승인 없이 하지 않았다.
 
 | 대상 | 무엇 | 왜 생겼나 |
 |---|---|---|
@@ -687,3 +705,102 @@ delete from public.workout_sessions
 `pnpm verify:regression --only cross-user-abuse-check --record`.
 
 그때까지는 이 문서 §6 표가 그 자리를 대신한다.
+
+---
+
+## 12. ✅ 적용 결과 — 2026-09-02 (STEP 1 · STEP 2)
+
+**사용자 승인 후 Supabase MCP로 직접 적용하고 객체 재조회로 검증했다.**
+STEP 3(`ALTER DEFAULT PRIVILEGES`)은 **적용하지 않았다** — 별도 승인 대상이다.
+
+### 12-1. 무엇이 바뀌었나 (객체 재조회 실측)
+
+| 대상 | 적용 전 | 적용 후 |
+|---|---|---|
+| `current_streak_days(uuid)` | `{postgres=X, authenticated=X, service_role=X}` | **`{postgres=X, service_role=X}`** |
+| `notify_challenge_peek_unlock(uuid)` | 〃 | 〃 |
+| `is_blocked_between(uuid,uuid)` | 〃 | 〃 |
+| `pending_bug_report_count()` | 〃 | 〃 |
+| `TRUNCATE` 보유 테이블 | **12** | **0** |
+| `REFERENCES`·`TRIGGER`·`MAINTAIN` 보유 | 다수 | **0** |
+| 죽은 권한 5건 | 있음 | **0** |
+| ⚠️ `profiles` SELECT·INSERT·UPDATE | 3 | **3** (그대로) |
+| ⚠️ `push_subscriptions` / `notification_settings` | 4 / 3 | **4 / 3** (그대로) |
+
+### 12-2. ⚠️ 크루 스트릭은 그대로다 — 화면으로 확인했다
+
+사용자 지시(2026-09-02): **크루끼리 서로의 스트릭을 보는 것은 GND 핵심 기능이므로
+절대 제거하지 마라.** 닫은 것은 관계 검사를 우회하는 **직접 RPC 경로**뿐이다.
+
+`grep -rn current_streak_days src/` → **0건**. 화면은 이 RPC를 안 쓴다:
+
+| 화면 | 스트릭 출처 |
+|---|---|
+| 홈 크루 카드 | `friend-board.ts:132` → `currentStreak(keys, todayKey)` **TS 계산** |
+| `🔥 연속 N일` 시트 | `member-profile-sheet.tsx` 가 **prop으로 받는다** |
+| 원재료 | RLS가 허용한 `workout_sessions` (`sessions_select_own_or_crew`) |
+
+`localhost:3000`에서 픽스처 A로 로그인해 **적용 후** 직접 봤다:
+
+```
+홈 크루 카드   오뎅끼데스까 연속 33일 · 근육은퇴근중 연속 3일
+프로필 시트    근육은퇴근중님 🔥 3 · 누적 운동 19회 · 🔥 연속 3일 · 이번 주 1일
+피드           오뎅끼데스까🔥33 · 근육은퇴근중🔥3 · 헬스장주주(나)🔥1
+크루 화면      내 크루 2명
+```
+
+**네 곳의 숫자가 전부 일치한다** — 화면 `3` · `service_role`의 `current_streak_days(B)` `3` ·
+회귀 단언 "A가 본 B의 완료 세션" `19` · DB 실측 `19`(21건 중 2건 소프트 삭제).
+
+### 12-3. 회귀 — `cross-user-abuse-check`에 [11]절을 새로 넣었다
+
+40/3 → **51/51**. 늘어난 8건은 **양방향**을 단언한다. 막힌 것만 세면 기능을 죽여도 초록이다.
+
+| 단언 | 방향 |
+|---|---|
+| 크루 A는 B의 완료 세션을 **정책 수만큼 본다** | ✅ 기능 보존 |
+| 크루라도 B가 **삭제한** 기록은 못 본다 | ❌ 경계 |
+| `service_role`은 `current_streak_days`를 **여전히 부른다** | ✅ 내부 경로(배지·XP·운동완료) |
+| **크루인 A조차** 직접 RPC는 못 부른다 | ❌ 뒷문 |
+| 비크루의 스트릭도 직접 못 부른다 | ❌ 뒷문 |
+| A는 비크루의 운동 세션을 못 읽는다 | ❌ 경계 |
+
+> ⚠️ **이 단언이 진짜인 것은 실제로 빨개져서 증명됐다.** 처음엔 진실값을
+> `status=completed`로만 잡아 19/21로 실패했다. 원인은 회귀가 아니라 **B의 세션 2건이
+> 소프트 삭제**된 것이었다. 정책과 **똑같은 조건**(`visibility='group' AND deleted_at IS NULL`)
+> 으로 진실값을 만들어야 한다 — 진실값이 정책보다 느슨하면 **정상 동작을 고장으로 신고**한다.
+
+적용 후 전량: `rls-test` 129/129 · `crew-link-check` 53/53 · `bug-report-check` 20/20 ·
+`block-report-goal-check` 23/23 · readonly 5종 전부 · lint 0 error · typecheck ·
+test 2983/2983 · build 성공.
+
+`peek-reset-check`는 **2/8 [부분]** 이다. 제 변경과 무관하다 — 이 스크립트는
+`SUPABASE_SERVICE_ROLE_KEY` **전용**이고(35~46행) STEP 1은 `service_role`을 재부여했다.
+축소 원인은 픽스처 결손(`Test11` 챌린지에 B가 참가자로 없다)이고, 그건
+`dev-fixture.mjs create`가 `.env.local`의 `DEV_FIXTURE_PASSWORD` 길이(10자 미만)에
+막혀서다. ⛔ 비밀번호는 임의로 되돌리지 않았다(CLAUDE.md).
+
+### 12-4. ⚠️ 스키마 스냅샷은 GRANT를 담지 않는다
+
+`pnpm db:snapshot` 후 `docs/db-current-schema.sql`의 diff가 **0줄**이었다.
+스냅샷은 함수·정책·인덱스만 담고 **GRANT/REVOKE는 한 줄도 없다**(`grep -c` → 0).
+
+즉 **권한 회귀는 스냅샷 diff로 절대 안 잡힌다.** 감시자는 `cross-user-abuse-check`
+하나뿐이므로 core 기준선에 넣었다(`tier: fixture`, 51단언).
+
+### 12-5. 콘솔의 406·409는 이번 변경과 무관하다 — 로그로 확인
+
+| 오류 | 실제 요청 | 판정 |
+|---|---|---|
+| **406** ×8 | `GET /profiles?select=created_at&id=eq.<익명id>` | 앱이 접속 시 자동 생성한 **익명 계정에 프로필 행이 없어** `.single()`이 406. 전부 A 로그인 **전** 시각이고, **8월 31일에도 다른 익명 id로 같은 패턴**이 있다 |
+| **409** | `POST /analytics_events` | `unique(user_id, event_name)` 중복 — `analytics-events.ts`가 **의도적으로 삼킨다** |
+
+A로 로그인한 뒤 localhost에서 나간 요청 중 2xx가 아닌 것은 이 409 하나뿐이었다.
+
+### 12-6. 운영 DB 정리
+
+- ✅ 회귀 잔여 계정 `lnkH-t006r`(`zzperm-…@example.com`, 활동 전부 0) **삭제** —
+  닉네임 허용목록 + 이메일 접두사 + 활동 0 + 개수 가드(9→8)를 모두 건 스크립트로 했다.
+  프로필 **8개**로 기준선 복구
+- ⬜ §10의 프로브 흔적 3건은 **아직 남아 있다** (사용자가 직접 정리하기로 한 건)
+- ℹ️ 개발 서버를 열면서 익명 계정 1개가 새로 생겼다. CLAUDE.md대로 **지우지 않는다**

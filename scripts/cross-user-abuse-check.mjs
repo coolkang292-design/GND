@@ -374,6 +374,124 @@ console.log("[10] RPC 인자 우회");
   check("A가 남 둘의 차단 관계를 못 캔다", rejected(ib), `status=${ib.status} 값=${ib.raw}`);
 }
 
+// ── 11. 크루 스트릭 — 뒷문은 닫히고 기능은 살아 있는가 ──────────────────
+//
+// ⚠️⚠️ **이 절의 목적은 "숨기는 것"이 아니다.** 크루끼리 서로의 스트릭을 보는 것은
+//    GND의 핵심 기능이고 절대 없애면 안 된다 (사용자 지시 2026-09-02).
+//    0096 STEP 1이 닫은 것은 **관계 검사를 우회하는 직접 RPC 경로** 하나뿐이다:
+//
+//      authenticated A → current_streak_days(p_user_id = 아무 B) → 관계가 없어도 값 반환
+//
+//    화면이 그리는 스트릭은 이 RPC를 **한 번도 부르지 않는다.** 홈 크루 카드와
+//    MemberProfileSheet의 `🔥 연속 N일`은 RLS가 허용한 B의 workout_sessions 행을
+//    받아 src/lib/domain/streak.ts 의 currentStreak()로 **앱에서 계산**한다
+//    (friend-board.ts:132). `grep -rn current_streak_days src/` → 0건.
+//
+//    그래서 여기서는 **양방향**을 단언한다. 막힌 것만 세면 기능을 죽여도 초록이다.
+console.log("[11] 크루 스트릭 — 기능 보존 + 뒷문 차단");
+{
+  // A의 크루가 정말 누구인지 service_role로 먼저 확정한다(픽스처가 바뀌어도 안 흔들리게).
+  const links = await svcGet(
+    `crew_links?select=user_a,user_b&or=(user_a.eq.${A.id},user_b.eq.${A.id})`,
+  );
+  const crewOfA = new Set(links.map((l) => (l.user_a === A.id ? l.user_b : l.user_a)));
+  check("픽스처 전제 — A와 B는 크루다", crewOfA.has(B.id), `A의 크루 ${crewOfA.size}명`);
+
+  // 비크루이면서 완료 세션이 있는 사람. 없으면 아래 경계 단언이 무의미해진다.
+  let outsider = null;
+  for (const s of strangers) {
+    if (crewOfA.has(s.id)) continue;
+    const done = await svcGet(
+      `workout_sessions?select=id&user_id=eq.${s.id}&status=eq.completed&limit=1`,
+    );
+    if (done.length) {
+      outsider = s.id;
+      break;
+    }
+  }
+  check("픽스처 전제 — 완료 기록이 있는 비크루가 있다", outsider !== null, `outsider=${outsider}`);
+
+  // ① 기능 보존 — 크루의 스트릭 재료가 온전한가.
+  //    ⚠️ "0이어야 한다"가 아니라 **"service_role이 보는 수와 같아야 한다"** 로 단언한다.
+  //    0으로 두면 RLS가 통째로 막혀도 통과한다 (CLAUDE.md §테스트가 진짜 테스트인지).
+  // ⚠️ **정책과 똑같은 조건으로 진실값을 만든다.** 처음엔 status=completed만 걸었다가
+  //    19/21로 빨개졌는데, 원인은 회귀가 아니라 B의 세션 2개가 **소프트 삭제**된 것이었다
+  //    (sessions_select_own_or_crew = visibility='group' AND status='completed'
+  //     AND deleted_at IS NULL AND is_crew_with). 진실값이 정책보다 느슨하면
+  //    "정상 동작"을 고장으로 신고한다 — CLAUDE.md §회귀 스크립트를 고칠 때.
+  const truthRows = await svcGet(
+    `workout_sessions?select=id&user_id=eq.${B.id}&status=eq.completed` +
+      `&visibility=eq.group&deleted_at=is.null`,
+  );
+  const seenByA = await asUser(
+    A.token,
+    `workout_sessions?select=id&user_id=eq.${B.id}&status=eq.completed`,
+    "GET",
+  );
+  check(
+    "크루 A는 B의 완료 세션을 전부 본다 (홈 크루 카드·프로필 🔥 연속 N일의 재료)",
+    truthRows.length > 0 && rowsOf(seenByA) === truthRows.length,
+    `A가 본 것 ${rowsOf(seenByA)} / 실제 ${truthRows.length} — 어긋나면 스트릭이 화면에서 줄거나 사라진다`,
+  );
+
+  // 덤 — 삭제한 기록은 크루에게도 안 보여야 한다(위 19/21의 나머지 2개).
+  const deletedRows = await svcGet(
+    `workout_sessions?select=id&user_id=eq.${B.id}&deleted_at=not.is.null&limit=5`,
+  );
+  if (deletedRows.length) {
+    const peekDeleted = await asUser(
+      A.token,
+      `workout_sessions?select=id&id=eq.${deletedRows[0].id}`,
+      "GET",
+    );
+    check(
+      "크루라도 B가 삭제한 기록은 못 본다",
+      rejected(peekDeleted) || rowsOf(peekDeleted) === 0,
+      `status=${peekDeleted.status} rows=${rowsOf(peekDeleted)}`,
+    );
+  }
+
+  // ② 내부 경로 생존 — SECURITY DEFINER 안에서의 호출은 그대로여야 한다.
+  //    badge_metrics · complete_workout_v2 가 이걸 부른다 = 배지·XP·운동 완료가 여기 걸려 있다.
+  const svcStreak = await rpc(SVC, "current_streak_days", { p_user_id: B.id });
+  check(
+    "내부 경로 생존 — service_role은 current_streak_days를 여전히 부른다 (배지·XP·운동완료)",
+    svcStreak.ok && svcStreak.raw !== "" && svcStreak.raw !== "null",
+    `status=${svcStreak.status} 값=${svcStreak.raw}`,
+  );
+
+  // ③ 뒷문 차단 — 크루여도 직접 RPC는 막힌다. 회수가 롤 단위라 비크루는 자동 포함이다.
+  const backdoorCrew = await rpc(A.token, "current_streak_days", { p_user_id: B.id });
+  check(
+    "뒷문 차단 — 크루인 A조차 current_streak_days를 직접 못 부른다",
+    rejected(backdoorCrew),
+    `status=${backdoorCrew.status} ${backdoorCrew.raw}`,
+  );
+
+  const backdoorOutsider = await rpc(A.token, "current_streak_days", {
+    p_user_id: outsider ?? RANDOM_UUID,
+  });
+  check(
+    "뒷문 차단 — 비크루의 스트릭도 직접 못 부른다",
+    rejected(backdoorOutsider),
+    `status=${backdoorOutsider.status} ${backdoorOutsider.raw}`,
+  );
+
+  // ④ 경계 — 비크루의 운동 데이터는 애초에 안 보인다(앱 계산 경로로도 스트릭이 안 새어야 한다).
+  if (outsider) {
+    const peek = await asUser(
+      A.token,
+      `workout_sessions?select=id&user_id=eq.${outsider}&limit=5`,
+      "GET",
+    );
+    check(
+      "경계 — A는 비크루의 운동 세션을 못 읽는다",
+      rejected(peek) || rowsOf(peek) === 0,
+      `status=${peek.status} rows=${rowsOf(peek)}`,
+    );
+  }
+}
+
 console.log(`\n${pass} 통과 / ${fail} 실패`);
 if (fail) {
   console.log("\n■ 열린 경로 (= 이번 감사의 발견):");

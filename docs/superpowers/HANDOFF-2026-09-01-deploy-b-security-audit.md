@@ -24,6 +24,30 @@
 
 ---
 
+> # ⚠️ 2026-09-02 갱신 — 이 인수인계서의 절반은 이미 끝났다
+>
+> **STEP 1 · STEP 2가 운영 DB에 적용됐다** (사용자 승인 후 Supabase MCP).
+> 아래 본문은 **적용 전** 시점에 쓴 것이다. 지금 상태는 다음을 보라:
+>
+> | 무엇 | 어디 |
+> |---|---|
+> | 적용 결과·실측·화면 확인 | `docs/security/public-beta-rpc-audit.md` **§12** |
+> | 적용된 SQL과 검증 SQL | `supabase/migrations/0096_permission_tightening.sql` |
+>
+> **끝난 것** — 카탈로그 재조회(§6의 `[미검증]` 6건 해소) · 함수 EXECUTE 4개 회수 ·
+> 죽은 테이블 권한 5건 회수 · TRUNCATE/REFERENCES/TRIGGER/MAINTAIN 전량 회수 ·
+> `cross-user-abuse-check` 40/3 → **51/51** (기능 보존 단언 8건 추가) · core 기준선 등록 ·
+> 화면 확인(크루 스트릭 정상) · 잔여 계정 정리.
+>
+> **남은 것** — ⬜ **STEP 3 `ALTER DEFAULT PRIVILEGES`** (별도 승인 필요) ·
+> ⬜ `scripts/default-privilege-check.mjs` 신설 · ⬜ §10 프로브 흔적 3건 정리.
+>
+> ⚠️ **`pg_default_acl`은 그대로다.** STEP 2로 지금 있는 테이블은 정리됐지만,
+> **다음에 만드는 테이블은 여전히 anon·authenticated에 TRUNCATE 포함 전 권한을 받는다.**
+> 0093의 `analytics_events`가 그랬다. STEP 3을 해야 재발이 끊긴다.
+
+---
+
 ## 0. 지금 당장 알아야 할 것 세 가지
 
 1. **근본 원인을 이미 찾아 뒀다.** `pg_default_acl`이 새 테이블·새 함수에 `anon`/`authenticated`
