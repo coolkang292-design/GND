@@ -284,6 +284,13 @@
       "tier": "readonly",
       "core": true,
       "what": "0096이 좁힌 권한이 도로 넓어졌는지 본다. ⚠️ 스키마 스냅샷은 GRANT를 한 줄도 안 담아서(grep -c → 0) 권한 회귀는 diff로 절대 안 잡힌다 — 감시자가 이 스크립트와 cross-user-abuse-check 둘뿐이다. 기본권한(앞으로 만들 객체) + 현존 객체 + 잠근 함수 5개 + owner 드리프트를 본다. ⚠️ 지금 안전한 진짜 이유는 좁힌 기본값이 아니라 public 소유자가 postgres 하나뿐이라는 사실이다 — supabase_admin 기본권한은 42501로 못 좁히므로, postgres 아닌 소유자의 객체가 생기면 TRUNCATE 포함 넓은 기본값을 물려받는다. [3]이 그 전제를 지킨다(0098). 카탈로그는 PostgREST로 못 읽어 permission_audit_snapshot() RPC(0097+0098, service_role 전용)를 쓴다."
+    },
+    "storage-limits-check": {
+      "assertions": 16,
+      "source": "measured",
+      "tier": "accounts",
+      "core": true,
+      "what": "0099 버킷 상한 — 정상 JPEG 통과 + MIME 3종·크기 초과·남의 폴더 거부를 버킷별로. 익명 계정 1개를 만들고 올린 파일까지 지운다."
     }
   },
   "notScripts": {

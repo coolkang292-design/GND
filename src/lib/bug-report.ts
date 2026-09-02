@@ -83,3 +83,36 @@ export async function submitBugReport(
   clearTrail();
   return data as string;
 }
+
+/**
+ * 계정·데이터 삭제/열람 **요청** 접수 (2026-09-03 외부 파일럿 P0-1).
+ *
+ * ⚠️ **새 백엔드를 만들지 않는다.** 0052의 `submit_bug_report` RPC를 그대로 탄다 —
+ *    그 파이프라인은 이미 ① 인증을 요구하고(누가 요청했는지 확실하다) ② 레이트
+ *    리밋과 중복 흡수가 있고 ③ **관리자 폰으로 즉시 푸시**가 간다. 삭제 요청에
+ *    필요한 성질이 정확히 그것이라, 별도 테이블을 파는 것은 지킬 것만 늘린다.
+ *    운영자는 `scripts/bug-reports.mjs`에서 접두어로 골라낸다.
+ *
+ * ⚠️⚠️ **오류 신고와 다르게 `trail`(최근 동작)을 보내지 않는다.** 삭제를
+ *    요청하는 데 직전 화면 이동 기록은 필요 없고, 개인정보 처리방침이 trail을
+ *    **「오류 신고」 항목에서만** 수집한다고 적었다. 여기서 같이 보내면 그 문장이
+ *    거짓이 된다. 같은 이유로 `clearTrail()`도 부르지 않는다 — 남의 버퍼를
+ *    비워서 다음 진짜 오류 신고의 단서를 지우면 안 된다.
+ */
+export const ACCOUNT_REQUEST_PREFIX = "[계정·데이터 요청]";
+
+export async function submitAccountRequest(message: string): Promise<string> {
+  const supabase = getSupabaseBrowserClient();
+
+  const { data, error } = await supabase.rpc("submit_bug_report", {
+    p_message: `${ACCOUNT_REQUEST_PREFIX} ${message}`,
+    p_route: "/account",
+    p_context: { kind: "account_data_request", build: BUILD_TIME },
+    p_trail: [],
+  });
+
+  if (error) {
+    throw new BugReportError(messageForError(error.message), error.message);
+  }
+  return data as string;
+}

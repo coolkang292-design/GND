@@ -353,9 +353,9 @@ node scripts/bug-reports.mjs --fix <id> --release <release-id> --send   # 신고
 표에 6종만 있어서 나머지 23종은 기대값이 아예 없었다. 기계가 읽고 기계가 갱신한다.
 
 ```bash
-pnpm verify:regression                  # core 8종 — 배포 전 기본 루틴
-pnpm verify:regression --tier readonly  # 계정 안 만드는 5종 — 빠르고 안전
-pnpm verify:regression --list           # 30종 전량 목록과 현재 기준선
+pnpm verify:regression                  # core 9종 — 배포 전 기본 루틴
+pnpm verify:regression --tier readonly  # 계정 안 만드는 6종 — 빠르고 안전
+pnpm verify:regression --list           # 37종 전량 목록과 현재 기준선
 pnpm verify:regression --all            # 전량 ⚠️ 30분+ (익명 가입 대기 포함)
 pnpm verify:regression --only rls-test --record   # 측정값으로 기준선 갱신
 ```
@@ -372,10 +372,18 @@ pnpm verify:regression --only rls-test --record   # 측정값으로 기준선 �
 대조한다. 단언이 통째로 사라져 "0 failed"가 된 경우는 종료 코드로 안 잡히기 때문이다
 (§테스트가 진짜 테스트인지 확인한다).
 
-⚠️ `tier: accounts`인 23종은 실행마다 **운영 Supabase에 익명 계정을 만든다.**
+⚠️ `tier: accounts`인 28종은 실행마다 **운영 Supabase에 익명 계정을 만든다.**
 러너가 사이에 90초씩 대기한다(429 회피). 배포 직전이 아니면 `--tier readonly`로 충분하다.
 
-⚠️ `tier: fixture`가 2종이다(`peek-reset-check` · `block-report-goal-check`) — 먼저
+⚠️⚠️ **두 티어를 동시에 돌리지 마라 — `readonly`가 거짓 실패를 낸다** (2026-09-03에 겪었다).
+`readonly`의 정합성 검사(`streak-parity-check`·`badge-metrics-check`)는 **전체 프로필을
+훑는다.** 그 순간 `accounts` 티어가 만들어 둔 **작업 중인 픽스처**(`pkC-…` 등)가 같이
+잡히고, 아직 운동일이 절반만 심긴 상태라 `SQL 0 / TS 1` 같은 불일치로 **FAIL**이 뜬다.
+스크립트가 끝나면 그 계정은 지워져서 **나중에 조사하면 흔적도 없다** — 진짜 회귀로
+착각하기 딱 좋다. 순차로 돌려라.
+
+⚠️ `tier: fixture`가 3종이다(`peek-reset-check` · `cross-user-abuse-check` ·
+`block-report-goal-check`) — 먼저
 `node scripts/dev-fixture.mjs create && node scripts/dev-fixture.mjs challenge`.
 
 ⚠️ **`block-report-goal-check`는 운영 DB에 쓴다**(차단·신고·모집 토글). 전부

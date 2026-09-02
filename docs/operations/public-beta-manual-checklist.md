@@ -112,5 +112,5 @@ Ruleset을 지우지 말고 관리자 bypass를 쓰는 편이 흔적이 남아 �
 | 경고 | 왜 두는가 |
 |---|---|
 | `extension_in_public` (`pg_net`) | 스키마를 옮기면 cron·푸시 발송이 걸려 있어 위험 대비 이득이 없다. 공개 베타 범위 밖 |
-| `rls_enabled_no_policy` (`bug_report_watchers`) | 정책이 없어 아무도 못 읽는 상태 = `service_role` 전용으로 의도된 것일 가능성이 높다. **[미검증]** — 배포 B의 RPC 감사에서 확인한다 |
+| `rls_enabled_no_policy` (`bug_report_watchers`) | **검증 완료 (2026-09-03).** 의도된 `service_role` 전용이 맞다. 카탈로그를 직접 조회하니 GRANT 보유자가 `postgres`·`service_role` **둘뿐이고 `anon`·`authenticated`는 아무 권한도 없다** — 정책이 없는 것에 더해 권한 자체가 없으므로 **이중으로 닫혀 있다.** 고칠 것 없음 |
 | `auth_allow_anonymous_sign_ins` 41건 · SECURITY DEFINER 실행 권한 93건 | 배포 B·C의 본 과제다. Advisor 숫자를 줄이려고 일괄 REVOKE 하지 않는다 |

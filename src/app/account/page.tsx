@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { BlockedUsersSection } from "@/components/moderation/blocked-users-section";
+import { DataDeletionRequest } from "@/components/account/data-deletion-request";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   PROVIDER_META,
@@ -318,6 +319,11 @@ export default function AccountPage() {
         {/* 차단한 사람 (0089). 0명이면 스스로 아무것도 그리지 않는다 —
             대부분의 사람은 평생 0명이라 빈 카드를 상설로 두지 않는다. */}
         <BlockedUsersSection />
+
+        {/* 개인정보 처리방침 링크 + 삭제 요청 통로 (2026-09-03 외부 파일럿 P0-1).
+            ⚠️ 로그아웃 **위**에 둔다. 아래에 두면 로그아웃하려고 내려온 사람이
+            삭제 요청을 먼저 만나고, 그 둘은 되돌릴 수 있는 정도가 전혀 다르다. */}
+        <DataDeletionRequest />
 
         {/* ⚠️ 조건이 `email`이 아니라 `isProtected`다. 이메일로 되돌리면 카카오만
             붙인 사람이 영영 로그아웃하지 못한다. */}
