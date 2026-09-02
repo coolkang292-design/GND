@@ -55,7 +55,10 @@
       "source": "derived",
       "tier": "accounts",
       "core": false,
-      "what": "운동 계획 저장·이동·삭제. ⚠️ 루틴 단언의 순서를 바꾸지 마라 — 이름 중복(409)은 슬롯 한도(400)에 걸리기 전에 확인해야 한다."
+      "what": "운동 계획 저장·이동·삭제. ⚠️ 루틴 단언의 순서를 바꾸지 마라 — 이름 중복(409)은 슬롯 한도(400)에 걸리기 전에 확인해야 한다.",
+      "env": {
+        "GND_ALLOW_DB_TESTS": "workout-plan"
+      }
     },
     "challenge-consent-test": {
       "assertions": 22,
