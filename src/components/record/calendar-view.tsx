@@ -37,6 +37,7 @@ import {
   buildMissedSessionProposal,
   type ProgramPlanMove,
 } from "@/lib/domain/program-schedule";
+import { buildLadderMissedSessionProposal } from "@/lib/domain/ladder-schedule";
 import {
   cancelProgramEnrollment,
   getActiveProgramEnrollments,
@@ -479,20 +480,38 @@ export function CalendarView({
         .filter((plan) => plan.programEnrollmentId !== enrollmentId)
         .map((plan) => plan.planDate),
     );
+    const mineForProposal = mine.map((plan) => ({
+      id: plan.id,
+      date: plan.planDate,
+      completed: completedDateKeys.has(plan.planDate),
+    }));
     try {
       setProposal({
         date: selectedDate,
-        moves: buildMissedSessionProposal({
-          plans: mine.map((plan) => ({
-            id: plan.id,
-            date: plan.planDate,
-            completed: completedDateKeys.has(plan.planDate),
-          })),
-          todayKey,
-          preferredSlots: enrollment.preferredSlots,
-          timeZone: enrollment.timeZone || timeZone,
-          occupiedDates,
-        }),
+        /*
+          ⚠️ 사다리는 **다른 함수로** 다시 잡는다. 공용 함수는
+          `preferredSlots`의 요일로 다음 자리를 고르는데, 사다리의 슬롯은
+          날짜를 정하는 값이 아니라 첫 주기 5일의 요일일 뿐이라 6일 주기가
+          7일로 근사된다. 그러고도 RPC를 통과해서 **조용히 틀린 날짜가
+          깔린다** — `ladder-schedule.ts`의 함수 주석에 자세히 적어 뒀다.
+
+          시각은 슬롯 첫 칸에서 가져온다. 사다리는 모든 회차가 같은 시각이고
+          슬롯 전부가 그 시각을 담고 있다(`buildLadderSchedule`).
+        */
+        moves: isLadderPlan(plan)
+          ? buildLadderMissedSessionProposal({
+              plans: mineForProposal,
+              todayKey,
+              time: enrollment.preferredSlots[0].time,
+              timeZone: enrollment.timeZone || timeZone,
+            })
+          : buildMissedSessionProposal({
+              plans: mineForProposal,
+              todayKey,
+              preferredSlots: enrollment.preferredSlots,
+              timeZone: enrollment.timeZone || timeZone,
+              occupiedDates,
+            }),
       });
     } catch {
       setProposal({ date: selectedDate, moves: [] });

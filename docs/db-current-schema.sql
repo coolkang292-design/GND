@@ -7,7 +7,7 @@
 -- 쓰는 법: 함수·정책의 '현행' 정의가 필요할 때 마이그레이션 51개를
 -- 뒤지지 말고 이 파일을 검색하라. 마이그레이션을 적용한 뒤에는 다시 뽑아라.
 --
--- 함수 99개 · 정책 79개 · 인덱스 101개
+-- 함수 99개 · 정책 79개 · 인덱스 100개
 
 -- ════════════════════════════════════════════════════════════
 -- 함수
@@ -1527,13 +1527,17 @@ begin
     raise exception 'program_already_active';
   end if;
 
-  select min(plan_date) into v_conflict_date
-  from public.workout_plans
-  where user_id = v_user_id and plan_date = any(v_dates);
-  if v_conflict_date is not null then
-    raise exception 'program_plan_date_taken:%', v_conflict_date;
-  end if;
+  /*
+    0102: 등록하려는 날짜에 **다른 계획이 있어도 막지 않는다.**
 
+    이 검사 때문에 진행 중인 프로그램이나 손으로 만든 계획이 하나만 겹쳐도
+    등록 전체가 거절됐다. 오전 풀업 사다리와 저녁 근력 프로그램을 함께
+    돌리는 것이 이 변경의 목적이다.
+
+    ⚠️ **같은 등록 안**에서 날짜가 겹치는 것은 위에서 여전히 막는다
+       (`program_plan_date_duplicate`·`program_plan_date_order`). 한 프로그램의
+       두 회차가 같은 날 서는 것은 주 N회가 아니다.
+  */
   begin
     insert into public.program_enrollments (
       id, user_id, program_key, program_version, title_snapshot,
@@ -1573,6 +1577,8 @@ begin
         p_program_version
       );
     exception when unique_violation then
+      -- 0102로 (user_id, plan_date) unique가 사라져 이 길은 이제 안 온다.
+      -- 제약이 되살아나는 경우(복구·롤백)를 위해 남겨 둔다.
       raise exception 'program_plan_date_taken:%', v_plan->>'plan_date';
     end;
   end loop;
@@ -3017,8 +3023,6 @@ CREATE OR REPLACE FUNCTION public.move_workout_plan(p_plan_id uuid, p_target_dat
 AS $function$
 declare
   v_plan public.workout_plans%rowtype;
-  v_existing_id uuid;
-  v_existing_enrollment_id uuid;
   v_today date;
 begin
   if auth.uid() is null then
@@ -3047,25 +3051,20 @@ begin
     raise exception 'program_plan_use_reschedule';
   end if;
 
-  select id, program_enrollment_id
-    into v_existing_id, v_existing_enrollment_id
-  from public.workout_plans
-  where user_id = auth.uid()
-    and plan_date = p_target_date
-    and id <> p_plan_id
-  for update;
+  /*
+    0102: 옮겨 갈 날짜에 계획이 있어도 **그냥 옮긴다.**
 
-  if v_existing_id is not null and not coalesce(p_replace, false) then
-    raise exception 'plan_date_taken';
-  end if;
+    예전에는 그 날짜의 계획을 찾아 `plan_date_taken`으로 막거나,
+    `p_replace`면 **지웠다.** 하루에 계획을 하나만 둘 수 있었으니 둘 중
+    하나를 골라야 했다. 이제는 나란히 선다.
 
-  if v_existing_enrollment_id is not null then
-    raise exception 'program_plan_use_reschedule';
-  end if;
+    ⚠️ 위 `select ... into`는 지우기만 한 것이 아니라 **지워야만 했다.**
+       같은 날 계획이 둘이면 `select into`가 21000(more than one row)으로
+       터진다 — 제약을 푸는 순간 옮기기가 통째로 죽는 자리였다.
 
-  if v_existing_id is not null then
-    delete from public.workout_plans where id = v_existing_id;
-  end if;
+    ⚠️ `p_replace` 인자는 **남겨 둔다.** 서명을 바꾸면 배포 순서에 따라
+       옛 앱이 함수를 못 찾는다. 값은 이제 아무 일도 하지 않는다.
+  */
 
   update public.workout_plans
   set plan_date = p_target_date,
@@ -3823,11 +3822,18 @@ begin
     end if;
   end loop;
 
-  -- 옮기는 행 자신의 기존 날짜는 충돌에서 제외한다. 옮기지 않는 같은 프로그램
-  -- 회차와 다른 모든 계획은 그대로 충돌 대상이다.
+  /*
+    0102: 충돌 대상을 **같은 프로그램의 회차로만** 좁힌다.
+
+    예전에는 다른 프로그램과 일반 계획까지 전부 충돌로 봤다. 이제 다른 계획
+    옆에 나란히 설 수 있으므로 남의 계획을 피할 이유가 없다. 남는 규칙은
+    "한 프로그램의 두 회차가 같은 날 서지 않는다" 하나이고, 그것은 아래
+    `program_plan_date_order`가 최종 날짜로 다시 확인한다.
+  */
   select min(plan_date) into v_conflict_date
   from public.workout_plans
   where user_id = v_user_id
+    and program_enrollment_id = p_enrollment_id
     and plan_date = any(v_target_dates)
     and not (id = any(v_plan_ids));
   if v_conflict_date is not null then
@@ -5006,7 +5012,6 @@ $function$;
 -- CREATE UNIQUE INDEX workout_plans_pkey ON public.workout_plans USING btree (id);
 -- CREATE UNIQUE INDEX workout_plans_program_slot ON public.workout_plans USING btree (program_enrollment_id, program_week, program_session) WHERE (program_enrollment_id IS NOT NULL);
 -- CREATE INDEX workout_plans_user_date ON public.workout_plans USING btree (user_id, plan_date);
--- CREATE UNIQUE INDEX workout_plans_user_id_plan_date_key ON public.workout_plans USING btree (user_id, plan_date);
 -- CREATE UNIQUE INDEX workout_routines_pkey ON public.workout_routines USING btree (id);
 -- CREATE UNIQUE INDEX workout_routines_user_name ON public.workout_routines USING btree (user_id, name);
 -- CREATE INDEX workout_routines_user_updated ON public.workout_routines USING btree (user_id, updated_at DESC);

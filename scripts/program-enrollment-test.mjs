@@ -434,21 +434,75 @@ try {
   if (ordinaryPlan.status !== 201 || !ordinaryPlanId) {
     throw new Error(`일반 이동 예정표 준비 실패: ${JSON.stringify(ordinaryPlan)}`);
   }
-  const replaceProgramPlan = await api(
+  /*
+    0102: 프로그램 회차가 있는 날로 **일반 계획을 옮길 수 있다.**
+
+    옛 단언은 `program_plan_use_reschedule` 거부를 기대했다. 그 거부가 있던
+    이유는 "옮기면 그 날의 프로그램 회차를 지워야 한다"는 옛 구조였고, 이제는
+    나란히 선다 — 오전 사다리 + 저녁 가슴 루틴이 이 변경의 목적이다.
+
+    ⚠️ **반대 방향은 여전히 막힌다.** 프로그램 회차 **자신**을 이 RPC로 옮기는
+       것은 아직 `program_plan_use_reschedule`이다(전용 RPC를 써야 한다).
+       바로 아래에서 그것도 따로 단언한다 — 한쪽만 두면 나머지가 조용히 샌다.
+
+    ⚠️ `ordinaryPlan`을 옮기지 않고 **따로 만든 계획**을 옮긴다. 예전에는 이
+       이동이 거부돼서 `ordinaryPlan`이 제자리에 남았고, 뒤의 재배치 단언들이
+       그 자리를 쓴다. 옮겨 버리면 그 날짜가 비어 뒤가 통째로 무너진다.
+  */
+  const movableDate = dateKey(nextMonday(347));
+  const movablePlan = await api(userA.token, "POST", "/rest/v1/workout_plans", {
+    user_id: userA.id,
+    plan_date: movableDate,
+    exercises,
+  });
+  const movablePlanId = movablePlan.json?.[0]?.id;
+  if (movablePlan.status !== 201 || !movablePlanId) {
+    throw new Error(`프로그램일 이동용 예정표 준비 실패: ${JSON.stringify(movablePlan)}`);
+  }
+  const programDate = rowsA.json[2].plan_date;
+  const programDayPlanId = rowsA.json[2].id;
+  const movedOntoProgramDay = await api(
     userA.token,
     "POST",
     "/rest/v1/rpc/move_workout_plan",
     {
-      p_plan_id: ordinaryPlanId,
-      p_target_date: rowsA.json[2].plan_date,
+      p_plan_id: movablePlanId,
+      p_target_date: programDate,
       p_replace: true,
     },
   );
+  const programDayPlans = await api(
+    userA.token,
+    "GET",
+    `/rest/v1/workout_plans?user_id=eq.${userA.id}&plan_date=eq.${programDate}&select=id,program_enrollment_id`,
+  );
   check(
-    "일반 계획 이동 RPC가 프로그램 계획을 교체하지 못함",
-    replaceProgramPlan.status >= 400 &&
-      JSON.stringify(replaceProgramPlan.json).includes("program_plan_use_reschedule"),
-    JSON.stringify(replaceProgramPlan),
+    "0102 프로그램 회차가 있는 날로 일반 계획을 옮긴다 — 그날 계획이 2개, 회차가 안 지워진다",
+    movedOntoProgramDay.status === 200 &&
+      movedOntoProgramDay.json?.plan_date === programDate &&
+      movedOntoProgramDay.json?.program_enrollment_id === null &&
+      programDayPlans.json?.length === 2 &&
+      programDayPlans.json.some((row) => row.id === programDayPlanId) &&
+      programDayPlans.json.some((row) => row.id === movablePlanId),
+    JSON.stringify({ movedOntoProgramDay, programDayPlans }),
+  );
+
+  // 프로그램 회차 자신은 여전히 전용 RPC로만 옮긴다 (0102가 안 건드린 규칙).
+  const moveProgramPlanDirectly = await api(
+    userA.token,
+    "POST",
+    "/rest/v1/rpc/move_workout_plan",
+    {
+      p_plan_id: programDayPlanId,
+      p_target_date: dateKey(nextMonday(354)),
+      p_replace: false,
+    },
+  );
+  check(
+    "프로그램 회차 자신은 일반 이동 RPC로 못 옮긴다",
+    moveProgramPlanDirectly.status >= 400 &&
+      JSON.stringify(moveProgramPlanDirectly.json).includes("program_plan_use_reschedule"),
+    JSON.stringify(moveProgramPlanDirectly),
   );
 
   const duplicate = await api(
@@ -509,12 +563,25 @@ try {
     "/rest/v1/program_enrollments?select=id",
   );
   const afterPlans = await api(userB.token, "GET", "/rest/v1/workout_plans?select=id");
+  /*
+    0102: 등록하려는 날짜에 **다른 계획이 있어도 등록된다.**
+
+    옛 단언은 `program_plan_date_taken` 거부와 "0개 생성"이었다. 진행 중인
+    프로그램이나 손으로 만든 계획이 **하나만** 겹쳐도 등록 전체가 거절되던
+    것이 이 변경으로 없어졌다.
+
+    ⚠️ "200이 왔는가"만 보면 안 된다. **18개가 실제로 늘었는지 세고**, 씨앗으로
+       깔아 둔 기존 계획(`conflictSeed`)이 **안 지워졌는지**까지 본다. 등록이
+       남의 계획을 밀어내면 그게 진짜 사고다.
+  */
+  const conflictSeedId = conflictSeed.json?.[0]?.id;
   check(
-    "기존 계획 충돌이면 enrollment와 계획이 0개 생성",
-    conflict.status >= 400 &&
-      JSON.stringify(conflict.json).includes(`program_plan_date_taken:${plansB[4].plan_date}`) &&
-      afterEnrollments.json?.length === beforeEnrollments.json?.length &&
-      afterPlans.json?.length === beforePlans.json?.length,
+    "0102 기존 계획과 날짜가 겹쳐도 등록된다 — 회차 18개가 늘고 원래 계획은 그대로",
+    conflict.status === 200 &&
+      typeof conflict.json === "string" &&
+      afterEnrollments.json?.length === beforeEnrollments.json?.length + 1 &&
+      afterPlans.json?.length === beforePlans.json?.length + 18 &&
+      afterPlans.json.some((row) => row.id === conflictSeedId),
     JSON.stringify({ conflict, beforeEnrollments, afterEnrollments, beforePlans, afterPlans }),
   );
 
@@ -537,46 +604,114 @@ try {
       },
     ],
     watchedPlanIds: [swapLeft.id, swapRight.id],
-    errorText: "program_recovery_gap",
+    // 0069(2026-08-12)가 `program_recovery_gap`을 `program_plan_date_order`로
+    // 바꿨다. 옛 이름을 기대하던 이 단언은 그때부터 계속 실패하고 있었다 —
+    // 이 스크립트의 기준선이 `derived`(정적 추정)라 아무도 안 돌려 봐서
+    // 드러나지 않았다 (2026-09-04 발견). **거부되는 동작 자체는 정상이다.**
+    errorText: "program_plan_date_order",
   });
 
   const recoveryDate = dateKey(
     addDays(new Date(`${rowsA.json[14].plan_date}T00:00:00Z`), 1),
   );
-  await expectAtomicRescheduleFailure({
-    user: userA,
-    enrollmentId: enrollmentAId,
-    name: "48시간 회복 간격 위반",
-    moves: [{
-      plan_id: rowsA.json[15].id,
-      plan_date: recoveryDate,
-      scheduled_at: `${recoveryDate}T10:00:00.000Z`,
-    }],
-    watchedPlanIds: [rowsA.json[15].id],
-    errorText: "program_recovery_gap",
-  });
+  /*
+    0069(2026-08-12): **48시간 회복 간격 규칙을 없앴다.** 이제 막는 것은
+    "같은 날 두 회차"와 "날짜 역행"뿐이고, 하루 간격 연속 회차는 사용자가
+    고를 수 있다.
 
+    ⚠️ 옛 단언은 여기서 거부를 기대했다. 위 C와 같은 이유로 2026-08-12부터
+       계속 실패하고 있었다. **"거부되는가"를 "허용되고 실제로 옮겨지는가"로
+       뒤집는다** — 거부(0건)를 세는 단언은 서버가 통째로 죽어도 통과한다.
+  */
+  const recoveryMove = await api(
+    userA.token,
+    "POST",
+    "/rest/v1/rpc/reschedule_program_plans",
+    {
+      p_enrollment_id: enrollmentAId,
+      p_moves: [{
+        plan_id: rowsA.json[15].id,
+        plan_date: recoveryDate,
+        scheduled_at: `${recoveryDate}T10:00:00.000Z`,
+      }],
+    },
+  );
+  const afterRecovery = await planState(userA, [rowsA.json[15].id]);
+  check(
+    "0069 하루 간격 연속 회차는 허용된다 — 요청한 날짜로 실제로 옮겨진다",
+    recoveryMove.status < 400 && afterRecovery[0]?.plan_date === recoveryDate,
+    JSON.stringify({ recoveryMove, afterRecovery }),
+  );
+
+  /*
+    0102: 재배치의 충돌 대상을 **같은 프로그램의 회차로만** 좁혔다. 일반
+    계획이나 다른 프로그램의 회차가 그 날에 있어도 나란히 선다.
+
+    ⚠️ 두 단언 모두 "옮겨졌는가"가 아니라 **"그 자리에 있던 계획이 그대로
+       있는가"** 를 함께 본다. 재배치가 남의 계획을 밀어내면 그게 진짜 사고다.
+  */
+  const rescheduleOntoOrdinary = await api(
+    userA.token,
+    "POST",
+    "/rest/v1/rpc/reschedule_program_plans",
+    {
+      p_enrollment_id: enrollmentAId,
+      p_moves: [{
+        plan_id: swapRight.id,
+        plan_date: ordinaryDate,
+        scheduled_at: `${ordinaryDate}T10:00:00.000Z`,
+      }],
+    },
+  );
+  const ordinaryAfter = await planState(userA, [ordinaryPlanId, swapRight.id]);
+  check(
+    "0102 일반 계획이 있는 날로 회차를 재배치한다 — 그 일반 계획은 그대로 남는다",
+    rescheduleOntoOrdinary.status < 400 &&
+      ordinaryAfter.length === 2 &&
+      ordinaryAfter.every((row) => row.plan_date === ordinaryDate),
+    JSON.stringify({ rescheduleOntoOrdinary, ordinaryAfter }),
+  );
+
+  const otherProgramDate = secondProgramPlans[0].plan_date;
+  const rescheduleOntoOtherProgram = await api(
+    userA.token,
+    "POST",
+    "/rest/v1/rpc/reschedule_program_plans",
+    {
+      p_enrollment_id: enrollmentAId,
+      p_moves: [{
+        plan_id: swapRight.id,
+        plan_date: otherProgramDate,
+        scheduled_at: secondProgramPlans[0].scheduled_at,
+      }],
+    },
+  );
+  const otherProgramDayPlans = await api(
+    userA.token,
+    "GET",
+    `/rest/v1/workout_plans?user_id=eq.${userA.id}&plan_date=eq.${otherProgramDate}&select=id,program_enrollment_id`,
+  );
+  check(
+    "0102 다른 프로그램 회차가 있는 날로 재배치한다 — 그날 계획이 2개이고 등록이 서로 다르다",
+    rescheduleOntoOtherProgram.status < 400 &&
+      otherProgramDayPlans.json?.length === 2 &&
+      new Set(otherProgramDayPlans.json.map((row) => row.program_enrollment_id)).size === 2,
+    JSON.stringify({ rescheduleOntoOtherProgram, otherProgramDayPlans }),
+  );
+
+  /*
+    ⚠️⚠️ 0102는 충돌 검사를 **없앤 것이 아니라 좁힌 것**이다. 같은 프로그램의
+       두 회차가 같은 날 서는 것은 여전히 막는다. 이 단언이 없으면 "주 3회"가
+       조용히 "하루에 몰아서"가 되는 회귀를 아무도 못 잡는다.
+  */
   await expectAtomicRescheduleFailure({
     user: userA,
     enrollmentId: enrollmentAId,
-    name: "일반 계획 날짜 충돌",
+    name: "0102 같은 프로그램 회차끼리의 날짜 충돌은 여전히 막힌다",
     moves: [{
       plan_id: swapRight.id,
-      plan_date: ordinaryDate,
-      scheduled_at: `${ordinaryDate}T10:00:00.000Z`,
-    }],
-    watchedPlanIds: [swapRight.id],
-    errorText: "program_plan_date_taken",
-  });
-
-  await expectAtomicRescheduleFailure({
-    user: userA,
-    enrollmentId: enrollmentAId,
-    name: "다른 프로그램 계획 날짜 충돌",
-    moves: [{
-      plan_id: swapRight.id,
-      plan_date: secondProgramPlans[0].plan_date,
-      scheduled_at: secondProgramPlans[0].scheduled_at,
+      plan_date: swapLeft.plan_date,
+      scheduled_at: swapLeft.scheduled_at,
     }],
     watchedPlanIds: [swapRight.id],
     errorText: "program_plan_date_taken",

@@ -20,7 +20,7 @@
     "  fixture  — dev-fixture.mjs create + challenge 가 먼저 있어야 한다.",
     "  accounts — 실행마다 익명 계정을 만든다. 연달아 돌리면 429(rate limit)에 걸린다."
   ],
-  "recordedAt": "2026-09-01",
+  "recordedAt": "2026-09-03",
   "scripts": {
     "rls-test": {
       "assertions": 129,
@@ -52,7 +52,7 @@
     },
     "workout-plan-test": {
       "assertions": 22,
-      "source": "derived",
+      "source": "measured",
       "tier": "accounts",
       "core": false,
       "what": "운동 계획 저장·이동·삭제. ⚠️ 루틴 단언의 순서를 바꾸지 마라 — 이름 중복(409)은 슬롯 한도(400)에 걸리기 전에 확인해야 한다.",
@@ -103,8 +103,8 @@
       "what": "배지 획득 시 포인트 지급(반복 배지 포함)."
     },
     "program-interval-enrollment-test": {
-      "assertions": 14,
-      "source": "derived",
+      "assertions": 19,
+      "source": "measured",
       "tier": "accounts",
       "core": false,
       "what": "인터벌 프로그램 등록·일정 생성.",
@@ -113,8 +113,8 @@
       }
     },
     "program-enrollment-test": {
-      "assertions": 13,
-      "source": "derived",
+      "assertions": 29,
+      "source": "measured",
       "tier": "accounts",
       "core": false,
       "what": "공식 프로그램 등록·일정 생성.",

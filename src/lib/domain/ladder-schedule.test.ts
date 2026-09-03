@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { buildLadderSchedule } from "./ladder-schedule";
+import {
+  buildLadderMissedSessionProposal,
+  buildLadderSchedule,
+} from "./ladder-schedule";
 import {
   LADDER_SESSIONS,
   LADDER_SPAN_DAYS,
+  LADDER_TRAIN_DAYS,
   ladderDayOffset,
 } from "./pullup-ladder";
 
@@ -164,5 +168,172 @@ describe("buildLadderSchedule — 입력 검증", () => {
       }).format(new Date(plan.scheduledAt));
       expect(local).toBe("07:00");
     }
+  });
+});
+
+
+/*
+  §2-2 (인수인계서 2026-09-04): 사다리의 「남은 일정 다시 잡기」.
+
+  ⚠️ 이 자리는 **조용히 틀리던** 곳이다. 공용 `buildMissedSessionProposal`은
+     **요일 슬롯**으로 다시 잡는데, 사다리는 요일이 아니라 6일 주기다. 사다리의
+     `preferredSlots`는 첫 주기 5일의 요일을 담고 있을 뿐이라(RPC가 서로 다른
+     요일 2~5개를 요구해서 채워 보내는 값), 그것으로 다시 잡으면 **7일 주기로
+     근사**된다 — 5일 훈련 뒤 2일을 쉬게 된다.
+
+     그런데 RPC는 통과한다. 모든 회차가 같은 시각이고 슬롯이 그 시각을 담고
+     있어서 `program_scheduled_time_mismatch`에 안 걸리고, 날짜도 오름차순이라
+     `program_plan_date_order`에도 안 걸린다. **오류 없이 틀린 날짜가 깔린다.**
+
+  아래 테스트들은 전부 "주기가 유지되는가"를 **날짜 간격을 세어서** 본다.
+  "예외가 안 났다"로는 이 버그를 절대 못 잡는다.
+*/
+describe("buildLadderMissedSessionProposal — 요일이 아니라 주기로 다시 잡는다", () => {
+  /** 사다리 24회를 계획 목록으로. `completedSessions`는 1-based 회차 번호 */
+  function ladderPlans(input: {
+    startDate?: string;
+    completedSessions?: readonly number[];
+  } = {}) {
+    const startDate = input.startDate ?? "2026-09-07";
+    const completed = new Set(input.completedSessions ?? []);
+    return build(startDate).plans.map((plan, index) => ({
+      id: `plan-${index + 1}`,
+      date: plan.date,
+      completed: completed.has(index + 1),
+    }));
+  }
+
+  function propose(input: {
+    plans: ReturnType<typeof ladderPlans>;
+    todayKey: string;
+  }) {
+    return buildLadderMissedSessionProposal({
+      plans: input.plans,
+      todayKey: input.todayKey,
+      time: "07:00",
+      timeZone: TZ,
+    });
+  }
+
+  /** 제안을 반영한 뒤의 최종 날짜 목록 (회차 순서 그대로) */
+  function finalDates(
+    plans: ReturnType<typeof ladderPlans>,
+    moves: ReturnType<typeof propose>,
+  ) {
+    const byId = new Map(moves.map((move) => [move.planId, move.suggestedDate]));
+    return plans.map((plan) => byId.get(plan.id) ?? plan.date);
+  }
+
+  it("놓친 회차가 없으면 아무것도 제안하지 않는다", () => {
+    // 시작 전날 — 지난 회차가 하나도 없다
+    expect(propose({ plans: ladderPlans(), todayKey: "2026-09-06" })).toEqual([]);
+  });
+
+  it("이미 다 마쳤으면 아무것도 제안하지 않는다", () => {
+    const plans = ladderPlans({
+      completedSessions: Array.from({ length: LADDER_SESSIONS }, (_, i) => i + 1),
+    });
+    expect(propose({ plans, todayKey: "2026-12-31" })).toEqual([]);
+  });
+
+  /*
+    ⚠️ **이 테스트 하나가 §2-2 버그의 전부다.**
+    간격이 1·1·1·1·2 로 반복돼야 한다. 요일 기반이면 여기서 2가 아니라
+    3(주말 두 칸)이 섞여 들어온다.
+  */
+  it("다시 잡은 뒤에도 5일 훈련 1일 휴식이 유지된다", () => {
+    const plans = ladderPlans({ completedSessions: [1, 2] });
+    const moves = propose({ plans, todayKey: "2026-09-14" });
+    const remaining = finalDates(plans, moves).slice(2);
+    const gaps = remaining
+      .slice(1)
+      .map((date, index) => dayDiff(remaining[index], date));
+
+    expect(gaps.every((gap) => gap === 1 || gap === 2)).toBe(true);
+    // 남은 22회 → 사이 간격 21개. 5개마다 휴식 하나
+    expect(gaps).toHaveLength(LADDER_SESSIONS - 2 - 1);
+    for (const [index, gap] of gaps.entries()) {
+      // 다시 잡은 첫 회차부터 세어 5번째마다 하루를 쉰다
+      expect(gap).toBe(index % LADDER_TRAIN_DAYS === LADDER_TRAIN_DAYS - 1 ? 2 : 1);
+    }
+  });
+
+  it("남은 회차는 오늘부터 시작한다", () => {
+    const plans = ladderPlans({ completedSessions: [1, 2] });
+    const moves = propose({ plans, todayKey: "2026-09-14" });
+    expect(finalDates(plans, moves)[2]).toBe("2026-09-14");
+  });
+
+  it("마친 회차는 건드리지 않는다", () => {
+    const plans = ladderPlans({ completedSessions: [1, 2, 3] });
+    const moves = propose({ plans, todayKey: "2026-09-20" });
+    const movedIds = new Set(moves.map((move) => move.planId));
+    for (const id of ["plan-1", "plan-2", "plan-3"]) {
+      expect(movedIds.has(id)).toBe(false);
+    }
+  });
+
+  /*
+    오늘 이미 한 회차를 마쳤으면 남은 회차는 **내일부터**다. 오늘로 잡으면
+    RPC의 `program_plan_date_order`(같은 날 두 회차 금지)에 걸려 배치가
+    통째로 거부된다 — 화면에는 "일정을 다시 잡지 못했어요"만 뜨고 왜인지
+    알 수 없다.
+  */
+  it("오늘 마친 회차가 있으면 남은 회차는 내일부터 잡는다", () => {
+    const plans = ladderPlans().map((plan) =>
+      plan.date === "2026-09-14" ? { ...plan, completed: true } : plan,
+    );
+    // 9-14는 8회차(2주기 3일째). 앞의 1~7회차는 놓쳤다
+    const moves = propose({ plans, todayKey: "2026-09-14" });
+    expect(moves.length).toBeGreaterThan(0);
+    expect(moves.every((move) => move.suggestedDate > "2026-09-14")).toBe(true);
+  });
+
+  it("최종 날짜는 회차 순서대로 하루 이상씩 늘어난다", () => {
+    const plans = ladderPlans({ completedSessions: [1] });
+    const dates = finalDates(plans, propose({ plans, todayKey: "2026-09-30" }));
+    for (let index = 1; index < dates.length; index += 1) {
+      expect(dayDiff(dates[index - 1], dates[index])).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it("제안한 시각은 회차 시각을 그대로 지킨다", () => {
+    const plans = ladderPlans({ completedSessions: [1, 2] });
+    for (const move of propose({ plans, todayKey: "2026-09-14" })) {
+      const local = new Intl.DateTimeFormat("en-GB", {
+        timeZone: TZ,
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      }).format(new Date(move.scheduledAt));
+      expect(local).toBe("07:00");
+    }
+  });
+
+  it("제자리에 그대로 서는 회차는 제안에 넣지 않는다", () => {
+    const plans = ladderPlans({ completedSessions: [1, 2] });
+    for (const move of propose({ plans, todayKey: "2026-09-14" })) {
+      expect(move.suggestedDate).not.toBe(move.fromDate);
+    }
+  });
+
+  it("잘못된 입력은 던진다", () => {
+    const plans = ladderPlans();
+    expect(() =>
+      buildLadderMissedSessionProposal({
+        plans,
+        todayKey: "2026-9-14",
+        time: "07:00",
+        timeZone: TZ,
+      }),
+    ).toThrow();
+    expect(() =>
+      buildLadderMissedSessionProposal({
+        plans: [...plans, plans[0]],
+        todayKey: "2026-09-14",
+        time: "07:00",
+        timeZone: TZ,
+      }),
+    ).toThrow();
   });
 });

@@ -1,5 +1,7 @@
-// 0015+0066 검증: 예정표 본인 CRUD, 날짜 제약, 중복 교체, 타인 차단,
+// 0015+0066+0102 검증: 예정표 본인 CRUD, 날짜 제약, 타인 차단,
 // 프로그램 메타데이터 추가 뒤 기존 일반 예정표 회귀.
+// ⚠️ 0102로 "하루 한 계획" 제약이 사라졌다. 같은 날 여러 계획과
+//    "옮겨도 원래 계획이 안 지워진다"가 이제 이 파일의 핵심 단언이다.
 // 실행(PowerShell): $env:GND_ALLOW_DB_TESTS='workout-plan';
 //   node scripts/workout-plan-test.mjs; Remove-Item Env:GND_ALLOW_DB_TESTS
 // 사전조건: 0015와 0066 마이그레이션이 적용되어 있어야 한다.
@@ -207,12 +209,36 @@ try {
   });
   check("과거 날짜 생성 차단", past.status >= 400, JSON.stringify(past));
 
+  /*
+    0102: 하루 1계획 제약(`workout_plans_user_id_plan_date_key`, 0015)을 없앴다.
+
+    ⚠️ 옛 단언은 "같은 날 두 번째 계획은 409"였다. 그 길은 이제 없다 —
+       그대로 두면 **정상 동작을 회귀로 신고한다**(2026-09-04에 실제로 그랬다).
+
+    ⚠️ "201이 왔는가"만 보면 안 된다. 저장이 통째로 망가져 0행이 되어도
+       201은 올 수 있다. **그날 계획이 정확히 2개인지 센다** — 개수를 세는
+       단언만이 "제약이 되살아났다"와 "저장이 죽었다"를 둘 다 잡는다.
+  */
   const duplicate = await api(userA.token, "POST", "/rest/v1/workout_plans", {
     user_id: userA.id,
     plan_date: date1,
     exercises,
   });
-  check("같은 날짜 직접 중복 차단", duplicate.status === 409, JSON.stringify(duplicate));
+  const duplicateId = duplicate.json?.[0]?.id;
+  const sameDayPlans = await api(
+    userA.token,
+    "GET",
+    `/rest/v1/workout_plans?user_id=eq.${userA.id}&plan_date=eq.${date1}&select=id`,
+  );
+  check(
+    "0102 같은 날짜에 계획을 하나 더 담는다 — 그날 계획이 2개",
+    duplicate.status === 201 &&
+      sameDayPlans.status === 200 &&
+      sameDayPlans.json?.length === 2 &&
+      sameDayPlans.json.some((row) => row.id === planId) &&
+      sameDayPlans.json.some((row) => row.id === duplicateId),
+    JSON.stringify({ duplicate, sameDayPlans }),
+  );
 
   const foreignUpdate = await api(
     userB.token,
@@ -242,30 +268,66 @@ try {
     plan_date: date2,
     exercises,
   });
-  check("이동 충돌용 두 번째 예정표 생성", second.status === 201);
+  const secondId = second.json?.[0]?.id;
+  check(
+    "이동 충돌용 두 번째 예정표 생성",
+    second.status === 201 && typeof secondId === "string",
+    JSON.stringify(second),
+  );
 
-  const blockedMove = await api(
+  /*
+    0102: 옮겨 갈 날짜에 계획이 있어도 **막지 않고, 지우지도 않는다.**
+
+    옛 단언 셋(`plan_date_taken` 차단 · null도 차단 · replace면 교체)은 모두
+    "하루 한 계획"을 전제한 것이라 통째로 뒤집었다. `p_replace`는 인자만
+    남고 아무 일도 하지 않으므로 **false·null·true 셋의 결과가 같아야 한다.**
+
+    ⚠️ 여기서 진짜 지켜야 하는 것은 "옮겨졌는가"가 아니라 **"원래 있던
+       계획이 안 지워졌는가"** 다. 옛 함수는 `p_replace`면 대상 행을
+       `delete` 했다 — 그 삭제가 되살아나면 사용자의 다른 계획이 조용히
+       사라진다. 그래서 옮긴 행이 아니라 **피해자 행을 조회해서** 확인한다.
+  */
+  const movedOntoTaken = await api(
     userA.token,
     "POST",
     "/rest/v1/rpc/move_workout_plan",
     { p_plan_id: planId, p_target_date: date2, p_replace: false },
   );
+  const afterTakenMove = await api(
+    userA.token,
+    "GET",
+    `/rest/v1/workout_plans?user_id=eq.${userA.id}&plan_date=eq.${date2}&select=id`,
+  );
   check(
-    "기존 날짜로 확인 없는 이동 차단",
-    blockedMove.status >= 400 && JSON.stringify(blockedMove.json).includes("plan_date_taken"),
-    JSON.stringify(blockedMove),
+    "0102 확인 없이도 계획 있는 날짜로 옮긴다 — 그날 계획이 2개",
+    movedOntoTaken.status === 200 &&
+      movedOntoTaken.json?.plan_date === date2 &&
+      afterTakenMove.json?.length === 2 &&
+      afterTakenMove.json.some((row) => row.id === planId) &&
+      afterTakenMove.json.some((row) => row.id === secondId),
+    JSON.stringify({ movedOntoTaken, afterTakenMove }),
   );
 
+  // date1에는 위에서 만든 중복 계획이 아직 있다. 되돌려 놓으면 date1도 다시 2개다.
   const nullMove = await api(
     userA.token,
     "POST",
     "/rest/v1/rpc/move_workout_plan",
-    { p_plan_id: planId, p_target_date: date2, p_replace: null },
+    { p_plan_id: planId, p_target_date: date1, p_replace: null },
+  );
+  const afterNullMove = await api(
+    userA.token,
+    "GET",
+    `/rest/v1/workout_plans?user_id=eq.${userA.id}&plan_date=eq.${date1}&select=id`,
   );
   check(
-    "null 교체 값도 확인 없는 이동으로 차단",
-    nullMove.status >= 400 && JSON.stringify(nullMove.json).includes("plan_date_taken"),
-    JSON.stringify(nullMove),
+    "0102 p_replace=null도 똑같이 옮긴다 — 되돌아온 날 계획이 2개",
+    nullMove.status === 200 &&
+      nullMove.json?.plan_date === date1 &&
+      afterNullMove.json?.length === 2 &&
+      afterNullMove.json.some((row) => row.id === planId) &&
+      afterNullMove.json.some((row) => row.id === duplicateId),
+    JSON.stringify({ nullMove, afterNullMove }),
   );
 
   const replacedMove = await api(
@@ -274,13 +336,20 @@ try {
     "/rest/v1/rpc/move_workout_plan",
     { p_plan_id: planId, p_target_date: date2, p_replace: true },
   );
+  const victim = await api(
+    userA.token,
+    "GET",
+    `/rest/v1/workout_plans?id=eq.${secondId}&select=id,plan_date`,
+  );
   check(
-    "확인한 이동은 대상 예정표를 교체하고 날짜 종속 시각만 초기화",
+    "0102 p_replace=true가 더는 대상 계획을 지우지 않는다 — 원래 있던 계획이 그 날짜에 그대로",
     replacedMove.status === 200 &&
       replacedMove.json?.plan_date === date2 &&
       replacedMove.json?.title === "codex/dev 일반 예정표 회귀" &&
-      replacedMove.json?.scheduled_at === null,
-    JSON.stringify(replacedMove),
+      replacedMove.json?.scheduled_at === null &&
+      victim.json?.length === 1 &&
+      victim.json[0]?.plan_date === date2,
+    JSON.stringify({ replacedMove, victim }),
   );
 
   // ── 0059: 타바타 코스를 담은 예정표 ────────────────────────────

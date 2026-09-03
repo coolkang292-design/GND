@@ -1368,3 +1368,146 @@ describe("CalendarView — 계획한 운동 수정 (2026-08-28)", () => {
     expect(screen.queryByText(/예정표 고치기/)).toBeNull();
   });
 });
+
+/**
+ * 사다리의 「남은 일정 다시 잡기」 (인수인계서 2026-09-04 §2-2).
+ *
+ * ⚠️ 여기서 고정하는 것은 **배선**이다. `buildLadderMissedSessionProposal`이
+ *    파일에 있어도 화면이 공용 `buildMissedSessionProposal`을 계속 부르면
+ *    아무것도 고쳐진 게 아니다 — 그리고 그 경우 **오류가 안 난다.** 요일로
+ *    근사한 날짜도 RPC를 통과하기 때문이다.
+ *
+ * ⚠️ 그래서 "RPC가 불렸는가"가 아니라 **옮겨진 날짜의 간격을 직접 센다.**
+ *    공용 함수를 쓰면 주말을 건너뛰어 5회차 뒤 간격이 2가 아니라 3이 된다.
+ */
+const LADDER_ENROLLMENT = {
+  id: "44444444-4444-4444-8444-444444444444",
+  // 키에 18이 남아 있는 것은 옛 이름이다 — 회차는 24다 (0101)
+  programKey: "pullup-ladder-18",
+  programVersion: 1,
+  title: "풀업 사다리",
+  levelAtStart: "beginner" as const,
+  startDate: "2026-08-10",
+  timeZone: "Asia/Seoul",
+  /*
+    첫 주기 5일(08-10 월 ~ 08-14 금)의 요일. 등록 RPC가 서로 다른 요일 2~5개를
+    요구해서 채워 보내는 값이고 **날짜를 정하지 않는다.** 공용 함수는 바로 이
+    값을 날짜 결정에 써 버려서 주말을 건너뛴다 — 이 테스트가 잡는 것이 그것이다.
+  */
+  preferredSlots: [
+    { weekday: 1 as const, time: "07:00" },
+    { weekday: 2 as const, time: "07:00" },
+    { weekday: 3 as const, time: "07:00" },
+    { weekday: 4 as const, time: "07:00" },
+    { weekday: 5 as const, time: "07:00" },
+  ],
+  status: "active" as const,
+};
+
+/** 5일 훈련 1일 휴식으로 깔린 8회차 — 08-15(오늘)는 원래 휴식일이다 */
+const LADDER_DATES = [
+  "2026-08-10",
+  "2026-08-11",
+  "2026-08-12",
+  "2026-08-13",
+  "2026-08-14",
+  "2026-08-16",
+  "2026-08-17",
+  "2026-08-18",
+];
+
+function dayGap(from: string, to: string): number {
+  const [y1, m1, d1] = from.split("-").map(Number);
+  const [y2, m2, d2] = to.split("-").map(Number);
+  return (Date.UTC(y2, m2 - 1, d2) - Date.UTC(y1, m1 - 1, d1)) / 86_400_000;
+}
+
+describe("CalendarView — 사다리 재배치는 요일이 아니라 주기로 (2026-09-04)", () => {
+  const LADDER_PLANS = LADDER_DATES.map((planDate, index) => ({
+    ...programPlan({
+      id: `5555555${index}-5555-4555-8555-555555555555`,
+      planDate,
+      programWeek: Math.floor(index / 3) + 1,
+      programSession: (index % 3) + 1,
+    }),
+    title: LADDER_ENROLLMENT.title,
+    programEnrollmentId: LADDER_ENROLLMENT.id,
+  }));
+
+  beforeEach(() => {
+    mocks.getActiveProgramEnrollments.mockResolvedValue([LADDER_ENROLLMENT]);
+    mocks.getWorkoutPlans.mockResolvedValue(LADDER_PLANS);
+    mocks.getCompletedSessions.mockResolvedValue([]);
+  });
+
+  it("다시 잡은 날짜가 5일 훈련 1일 휴식을 지킨다", async () => {
+    await setup();
+    fireEvent.click(screen.getByRole("button", { name: "8월 10일" }));
+    fireEvent.click(screen.getByRole("button", { name: "남은 일정 다시 잡기" }));
+    fireEvent.click(await screen.findByRole("button", { name: "이대로 옮기기" }));
+
+    await waitFor(() =>
+      expect(mocks.rescheduleProgramPlans).toHaveBeenCalledTimes(1),
+    );
+    const { moves } = mocks.rescheduleProgramPlans.mock.calls[0][0] as {
+      moves: { planId: string; suggestedDate: string }[];
+    };
+    const byId = new Map(moves.map((move) => [move.planId, move.suggestedDate]));
+    const finalDates = LADDER_PLANS.map(
+      (plan) => byId.get(plan.id) ?? plan.planDate,
+    );
+    const gaps = finalDates
+      .slice(1)
+      .map((date, index) => dayGap(finalDates[index], date));
+
+    // 훈련 5일 뒤 하루 휴식 — 요일 기반으로 잡으면 여기가 3이 된다(주말 두 칸)
+    expect(gaps).toEqual([1, 1, 1, 1, 2, 1, 1]);
+  });
+
+  it("남은 회차를 오늘부터 다시 깐다 — 오늘이 원래 휴식일이어도", async () => {
+    await setup();
+    fireEvent.click(screen.getByRole("button", { name: "8월 10일" }));
+    fireEvent.click(screen.getByRole("button", { name: "남은 일정 다시 잡기" }));
+    fireEvent.click(await screen.findByRole("button", { name: "이대로 옮기기" }));
+
+    await waitFor(() =>
+      expect(mocks.rescheduleProgramPlans).toHaveBeenCalledTimes(1),
+    );
+    const { moves } = mocks.rescheduleProgramPlans.mock.calls[0][0] as {
+      moves: { planId: string; suggestedDate: string }[];
+    };
+    expect(
+      moves.find((move) => move.planId === LADDER_PLANS[0].id)?.suggestedDate,
+    ).toBe("2026-08-15");
+  });
+
+  it("근력 프로그램은 그대로 요일로 잡는다 — 회귀", async () => {
+    mocks.getActiveProgramEnrollments.mockResolvedValue([ENROLLMENT]);
+    mocks.getWorkoutPlans.mockResolvedValue([
+      programPlan({
+        id: "33333333-3333-4333-8333-333333333331",
+        planDate: "2026-08-10",
+        programWeek: 1,
+        programSession: 1,
+      }),
+    ]);
+    await setup();
+    fireEvent.click(screen.getByRole("button", { name: "8월 10일" }));
+    fireEvent.click(screen.getByRole("button", { name: "남은 일정 다시 잡기" }));
+    fireEvent.click(await screen.findByRole("button", { name: "이대로 옮기기" }));
+
+    await waitFor(() =>
+      expect(mocks.rescheduleProgramPlans).toHaveBeenCalledTimes(1),
+    );
+    const { moves } = mocks.rescheduleProgramPlans.mock.calls[0][0] as {
+      moves: { suggestedDate: string }[];
+    };
+    // 월·수·금 슬롯이므로 옮겨진 날은 반드시 그 요일 중 하나다
+    for (const move of moves) {
+      const [year, month, day] = move.suggestedDate.split("-").map(Number);
+      expect([1, 3, 5]).toContain(
+        new Date(Date.UTC(year, month - 1, day)).getUTCDay(),
+      );
+    }
+  });
+});
