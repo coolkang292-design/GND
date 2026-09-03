@@ -80,7 +80,16 @@ function fromRow(row: WorkoutPlanRow): WorkoutPlan {
     UUID.test(row.program_enrollment_id)
       ? row.program_enrollment_id
       : null;
-  const programWeek = boundedInteger(row.program_week, 1, 6);
+  /*
+    ⚠️ 상한이 **8**이다 (2026-09-04). 사다리 24회차는 3개씩 8묶음이라
+       7·8주차가 나온다. 여기가 6으로 남아 있으면 그 행을 읽는 순간
+       `invalid_workout_plan_program_metadata`를 던지고 **달력 전체가 안
+       뜬다** — 계획 하나가 아니라 화면이 통째로 죽는다.
+
+       DB(0101)의 `program_week` check와 **같은 범위**여야 한다. 한쪽만
+       넓히면 서버는 저장하는데 앱이 못 읽는 상태가 된다.
+  */
+  const programWeek = boundedInteger(row.program_week, 1, 8);
   const programSession = boundedInteger(row.program_session, 1, 3);
   const programTemplateVersion = boundedInteger(
     row.program_template_version,
@@ -122,38 +131,59 @@ export async function getWorkoutPlans(userId: string): Promise<WorkoutPlan[]> {
     .from("workout_plans")
     .select("*")
     .eq("user_id", userId)
-    .order("plan_date", { ascending: true });
+    /*
+      같은 날 계획이 여러 개일 수 있다 (0101). 날짜만으로 정렬하면 같은 날
+      안에서 순서가 조회할 때마다 달라져서, 달력 카드가 이유 없이 위아래로
+      바뀐다. 예정 시각 → 만든 순서로 **안정된 순서**를 만든다.
+    */
+    .order("plan_date", { ascending: true })
+    .order("scheduled_at", { ascending: true, nullsFirst: true })
+    .order("created_at", { ascending: true });
   if (error) throw error;
   return ((data ?? []) as WorkoutPlanRow[]).map(fromRow);
 }
 
 /**
- * 특정 날짜의 계획 하나 (없으면 `null`).
+ * 특정 날짜의 계획 **전부** (없으면 빈 배열).
  *
- * 기록 화면은 **오늘 계획 하나**만 쓰는데 예전에는 두 이펙트가 각자
- * `getWorkoutPlans`로 전 기간을 긁어와 `find`로 오늘을 골랐다 — 같은 조회가
- * 두 번 돌고, "오늘을 고르는 규칙"도 두 벌이라 한쪽만 고치면 갈라진다.
- * 날짜 필터를 DB에 맡기고 규칙을 여기 한 곳에 둔다.
+ * ⚠️ 2026-09-04까지 이 함수는 `getWorkoutPlanByDate`였고 `.maybeSingle()`로
+ *    한 줄만 받았다. 같은 날 계획이 둘 이상이면 `.maybeSingle()`은 값을 주는
+ *    대신 **에러를 던진다** — 하루 1계획 제약(0015)을 푸는 순간 기록 화면이
+ *    통째로 죽는 자리였다. 목록으로 바꾼 것은 취향이 아니라 필수였다.
  *
- * 달력과 프로그램 화면은 여전히 `getWorkoutPlans`로 전량을 받는다 — 그쪽은
- * 정말로 목록이 필요하다.
+ * 날짜 필터는 여전히 DB가 한다. 달력과 프로그램 화면은 `getWorkoutPlans`로
+ * 전량을 받는다 — 그쪽은 정말로 전 기간이 필요하다.
  */
-export async function getWorkoutPlanByDate(
+export async function getWorkoutPlansByDate(
   userId: string,
   planDate: string,
-): Promise<WorkoutPlan | null> {
+): Promise<WorkoutPlan[]> {
   const supabase = getSupabaseBrowserClient();
   const { data, error } = await supabase
     .from("workout_plans")
     .select("*")
     .eq("user_id", userId)
     .eq("plan_date", planDate)
-    .maybeSingle();
+    // `getWorkoutPlans`와 같은 순서 규칙 — 두 경로가 다른 순서를 주면
+    // 달력에서 본 첫 계획과 기록 화면이 집는 첫 계획이 달라진다
+    .order("scheduled_at", { ascending: true, nullsFirst: true })
+    .order("created_at", { ascending: true });
   if (error) throw error;
-  return data ? fromRow(data as WorkoutPlanRow) : null;
+  return ((data ?? []) as WorkoutPlanRow[]).map(fromRow);
 }
 
-export async function saveWorkoutPlan(input: {
+/**
+ * 새 계획 한 줄을 만든다.
+ *
+ * ⚠️ 2026-09-04까지는 `saveWorkoutPlan`이 `(user_id, plan_date)` **upsert**로
+ *    만들기와 고치기를 겸했다. 0101이 그 unique 제약을 없애면 upsert의
+ *    `onConflict` 대상이 사라져 Postgres가 42P10으로 거절한다 — 만들기와
+ *    고치기를 갈라 놓은 것은 그 때문이다.
+ *
+ * ⚠️ **0101 적용 전에는** 그날 이미 계획이 있으면 23505(unique_violation)가
+ *    난다. 부르는 쪽이 그 코드를 사람 말로 바꿔 준다(`planSaveErrorText`).
+ */
+export async function createWorkoutPlan(input: {
   userId: string;
   planDate: string;
   /** 지난 세션 복사면 세션 id, 새로 짠 계획이면 null (0015 RLS가 둘 다 허용) */
@@ -165,18 +195,42 @@ export async function saveWorkoutPlan(input: {
   const supabase = getSupabaseBrowserClient();
   const { data, error } = await supabase
     .from("workout_plans")
-    .upsert(
-      {
-        user_id: input.userId,
-        plan_date: input.planDate,
-        source_session_id: input.sourceSessionId,
-        exercises: input.exercises,
-        // 덮어쓰기(upsert)이므로 일반 계획일 때 null을 **명시해야** 한다.
-        // 생략하면 같은 날짜의 옛 타바타 표식이 그대로 남는다.
-        tabata_minutes: input.tabataMinutes ?? null,
-      },
-      { onConflict: "user_id,plan_date" },
-    )
+    .insert({
+      user_id: input.userId,
+      plan_date: input.planDate,
+      source_session_id: input.sourceSessionId,
+      exercises: input.exercises,
+      tabata_minutes: input.tabataMinutes ?? null,
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return fromRow(data as WorkoutPlanRow);
+}
+
+/**
+ * 기존 계획을 고친다 — **id로 잡는다**.
+ *
+ * 날짜로 잡던 예전 방식은 같은 날 계획이 둘이면 어느 것을 고칠지 말할 수 없다.
+ *
+ * ⚠️ `tabata_minutes`를 항상 명시한다. 생략하면 일반 계획으로 고쳤는데도 옛
+ *    타바타 표식이 남아 회차 종류가 갈린다 (upsert 시절과 같은 함정).
+ */
+export async function updateWorkoutPlan(input: {
+  planId: string;
+  sourceSessionId: string | null;
+  exercises: PlanExercise[];
+  tabataMinutes?: TabataMinutes | null;
+}): Promise<WorkoutPlan> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("workout_plans")
+    .update({
+      source_session_id: input.sourceSessionId,
+      exercises: input.exercises,
+      tabata_minutes: input.tabataMinutes ?? null,
+    })
+    .eq("id", input.planId)
     .select()
     .single();
   if (error) throw error;

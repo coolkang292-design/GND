@@ -8,15 +8,16 @@ import { resolveTimeZone } from "@/lib/domain/time";
 import {
   cancelProgramEnrollment,
   createIntervalProgramEnrollment,
+  createLadderProgramEnrollment,
   createProgramEnrollment,
   getActiveProgramEnrollments,
   type CreateIntervalEnrollmentInput,
   type CreateProgramEnrollmentInput,
   type ProgramEnrollment,
 } from "@/lib/programs";
+import { ladderLabel, ladderRepsForDay } from "@/lib/domain/pullup-ladder";
 import type { CatalogExercise } from "@/lib/types";
 import { getExerciseCatalog } from "@/lib/workout";
-import { getWorkoutPlans, type WorkoutPlan } from "@/lib/workout-plan";
 
 type PageReference = {
   today: string;
@@ -67,7 +68,6 @@ export default function ProgramsPage() {
     return { today: localDateKey(new Date(), timeZone), timeZone };
   });
   const [catalog, setCatalog] = useState<CatalogExercise[]>([]);
-  const [plans, setPlans] = useState<WorkoutPlan[]>([]);
   const [enrollments, setEnrollments] = useState<ProgramEnrollment[]>([]);
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -75,15 +75,15 @@ export default function ProgramsPage() {
   useEffect(() => {
     if (!configured || loading || !userId) return;
     let cancelled = false;
-    Promise.all([
-      getExerciseCatalog(),
-      getWorkoutPlans(userId),
-      getActiveProgramEnrollments(userId),
-    ])
-      .then(([nextCatalog, nextPlans, nextEnrollments]) => {
+    /*
+      계획 전량 조회를 뺐다 (0101). 일정을 짤 때 기존 계획을 **피해 다니던**
+      것이 없어져서, 이 화면이 계획 목록으로 하는 일이 하나도 남지 않았다.
+      들고만 있는 상태는 다음 사람에게 "무언가에 쓰이겠지"라고 거짓말을 한다.
+    */
+    Promise.all([getExerciseCatalog(), getActiveProgramEnrollments(userId)])
+      .then(([nextCatalog, nextEnrollments]) => {
         if (cancelled) return;
         setCatalog(nextCatalog);
-        setPlans(nextPlans);
         setEnrollments(nextEnrollments);
       })
       .catch(() => {
@@ -122,7 +122,6 @@ export default function ProgramsPage() {
       timeZone={pageRef.timeZone}
       programs={OFFICIAL_PROGRAMS}
       catalog={catalog}
-      occupiedPlans={plans}
       activeEnrollments={enrollments}
       onCreate={async (input) => ({
         enrollmentId: await createProgramEnrollment(input),
@@ -134,14 +133,20 @@ export default function ProgramsPage() {
         setEnrollments((current) =>
           current.filter((item) => item.id !== enrollmentId),
         );
-        setPlans((current) =>
-          current.filter((plan) => plan.programEnrollmentId !== enrollmentId),
-        );
         return removed;
       }}
       onCreateInterval={async (input) => ({
         enrollmentId: await createIntervalProgramEnrollment(input),
         nextPlan: firstPlanSummary(input),
+      })}
+      onCreateLadder={async (input) => ({
+        enrollmentId: await createLadderProgramEnrollment(input),
+        // 사다리는 회차 템플릿이 없다 — 첫 회차 제목은 1일차 사다리 그 자체다
+        nextPlan: {
+          date: input.schedule[0].date,
+          time: localTime(input.schedule[0].scheduledAt, input.timeZone),
+          title: `1일차 · ${ladderLabel([...ladderRepsForDay(input.maxReps, 1)])}`,
+        },
       })}
     />
   );

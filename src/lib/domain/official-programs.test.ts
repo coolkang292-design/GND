@@ -2,6 +2,7 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 import type { CatalogExercise } from "../types";
 import {
   INTERVAL_PROGRAM,
+  PULLUP_LADDER_PROGRAM,
   STRENGTH_PROGRAMS,
   PROGRAM_LEVELS,
   intervalExerciseName,
@@ -170,6 +171,9 @@ describe("GND 공식 프로그램 카탈로그", () => {
             PROGRAM_LEVELS.map((level) => intervalExerciseName(exercise, level)),
           ),
         ),
+        // 사다리는 종목이 하나뿐이다 (2026-09-04). 하나라서 더 위험하다 —
+        // 이름이 어긋나면 프로그램이 통째로 등록에 실패한다
+        PULLUP_LADDER_PROGRAM.exerciseName,
       ]),
     ];
 

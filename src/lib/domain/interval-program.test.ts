@@ -224,13 +224,16 @@ describe("주차별 회차 길이", () => {
 });
 
 describe("기존 5종 무영향", () => {
-  it("근력 목록은 5종 그대로고, 카탈로그는 인터벌을 더해 6종이다", () => {
+  it("근력 목록은 5종 그대로고, 카탈로그는 인터벌·사다리를 더해 7종이다", () => {
     expect(STRENGTH_PROGRAMS).toHaveLength(5);
     expect(STRENGTH_PROGRAMS.map((program) => program.key)).not.toContain(
       "interval-burn-6w",
     );
-    expect(OFFICIAL_PROGRAMS).toHaveLength(6);
-    expect(OFFICIAL_PROGRAMS.at(-1)?.key).toBe("interval-burn-6w");
+    // 2026-09-04에 사다리가 7번째로 붙었다. 인터벌은 **6번째 자리를 지킨다** —
+    // 뒤에 무엇이 붙어도 기존 카드 순서는 안 바뀐다는 것이 이 단언의 뜻이다.
+    expect(OFFICIAL_PROGRAMS).toHaveLength(7);
+    expect(OFFICIAL_PROGRAMS[5]?.key).toBe("interval-burn-6w");
+    expect(OFFICIAL_PROGRAMS.at(-1)?.key).toBe("pullup-ladder-18");
   });
 
   it("근력 5종은 인터벌이 아니다", () => {

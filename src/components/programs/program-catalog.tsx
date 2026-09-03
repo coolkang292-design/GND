@@ -5,13 +5,23 @@ import Link from "next/link";
 import { useState } from "react";
 import {
   intervalExerciseName,
+  isLadderProgram,
   programLevelOptions,
   type IntervalProgram,
+  type LadderProgram,
   type OfficialProgram,
   type OfficialProgramKey,
   type ProgramLevel,
   type StrengthProgram,
 } from "@/lib/domain/official-programs";
+import {
+  LADDER_MAX_REPS_MAX,
+  LADDER_MAX_REPS_MIN,
+  LADDER_SESSIONS,
+  isLadderMaxReps,
+  ladderLabel,
+  ladderRepsForDay,
+} from "@/lib/domain/pullup-ladder";
 import { guideForExercise } from "@/lib/domain/exercise-guides";
 import { EXERCISE_PREVIEW_NOTES } from "./exercise-preview-notes";
 
@@ -62,6 +72,11 @@ const AUDIENCE: Record<OfficialProgramKey, readonly [string, string, string]> = 
     "기구 없이 집에서 전신을 쓰고 싶은 사람",
     "숨이 차는 강도를 단계적으로 올리고 싶은 사람",
   ],
+  "pullup-ladder-18": [
+    "풀업 최대 개수를 늘리고 싶은 사람",
+    "매번 실패 지점까지 매달리다 지친 사람",
+    "철봉이 있고 짧게 자주 할 수 있는 사람",
+  ],
 };
 
 const COVER_POSITION: Record<OfficialProgramKey, string> = {
@@ -71,6 +86,8 @@ const COVER_POSITION: Record<OfficialProgramKey, string> = {
   "lower-balance-6w": "object-[center_44%]",
   "lean-body-6w": "object-[center_42%]",
   "interval-burn-6w": "object-[center_35%]",
+  // 사다리는 사진을 안 쓴다 — `ProgramCover`가 숫자 표지로 갈라진다
+  "pullup-ladder-18": "",
 };
 
 /** 안내 한 줄 — `시작 자세 · 발을 어깨너비로…` 꼴로 붙인다 */
@@ -110,6 +127,33 @@ function ProgramCover({
   featured?: boolean;
 }) {
   const [failed, setFailed] = useState(false);
+
+  /*
+    사다리는 **사진이 없다** (2026-09-04). 스톡 사진 한 장보다 5·4·3·2·1이 이
+    프로그램을 더 잘 설명한다 — 표지를 숫자로 세운다. 새 webp를 저장소에
+    넣지 않아도 되는 것은 덤이다.
+  */
+  if (isLadderProgram(program)) {
+    return (
+      <div
+        data-testid={
+          featured ? "program-cover-featured" : "program-cover-compact"
+        }
+        className={`relative flex items-center justify-center overflow-hidden bg-gradient-to-br from-accent/20 via-bg to-bg ${
+          featured ? "aspect-[16/9]" : "aspect-[4/3]"
+        }`}
+        aria-hidden="true"
+      >
+        <span
+          className={`font-black tracking-tight text-accent ${
+            featured ? "text-4xl sm:text-5xl" : "text-xl"
+          }`}
+        >
+          5·4·3·2·1
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -163,7 +207,9 @@ function ProgramCard({
           {program.title}
         </span>
         <span className="mt-auto block pt-3 text-[10px] font-extrabold leading-4 text-accent sm:text-[11px]">
-          총 18회 · 회당 {program.durationMinutes[0]}–{program.durationMinutes[1]}분
+          {/* 회차 수가 프로그램마다 다르다 — 사다리는 24회 (2026-09-04) */}
+          총 {isLadderProgram(program) ? LADDER_SESSIONS : 18}회 · 회당{" "}
+          {program.durationMinutes[0]}–{program.durationMinutes[1]}분
         </span>
       </span>
     </button>
@@ -196,10 +242,11 @@ export function ProgramCatalog({ programs, onPick }: ProgramCatalogProps) {
         GND 공식 프로그램
       </p>
       <h1 id="program-catalog-title" className="mt-1 text-2xl font-black leading-8 text-text">
-        목표를 고르면 18회 계획이 완성돼요
+        목표를 고르면 전체 계획이 완성돼요
       </h1>
       <p className="mt-1 text-xs leading-5 text-muted">
-        모든 프로그램은 총 18회예요. 주 2~5회 중에서 고를 수 있어요.
+        근력·인터벌은 총 18회, 주 2~5회 중에서 고를 수 있어요. 풀업 사다리는 24회
+        · 4주 고정이에요.
       </p>
 
       <div className="mt-5">
@@ -465,6 +512,184 @@ export function IntervalProgramDetail({
         <span className="font-bold text-text">안전 안내 · </span>
         숨이 심하게 차거나 통증이 느껴지면 멈추고 쉬세요. 관절에 부담이 되면 점프
         없는 난이도로 다시 등록할 수 있어요.
+      </aside>
+
+      {scheduleAvailable && (
+        <div
+          className="pointer-events-none fixed inset-x-0 z-30 px-4"
+          style={{ bottom: "calc(env(safe-area-inset-bottom) + 72px)" }}
+        >
+          <button
+            type="button"
+            onClick={onSchedule}
+            className="pointer-events-auto mx-auto block min-h-12 w-full max-w-3xl rounded-card bg-accent px-4 text-sm font-black text-accent-ink shadow-card"
+          >
+            요일과 시간 정하기
+          </button>
+        </div>
+      )}
+    </article>
+  );
+}
+
+/**
+ * 사다리 상세 — 근력·인터벌과 또 다른 화면이다 (2026-09-04).
+ *
+ * 보여 줄 것이 **종목 하나와 숫자의 변화**뿐이다. 근력의 종목 표(반복·휴식이
+ * 종목마다 다름)도, 인터벌의 난이도 표(난이도가 종목을 바꿈)도 여기서는 빈
+ * 표가 된다. 대신 근력·인터벌에 없는 것을 보여 준다 — **최대 개수를 넣으면
+ * 사다리가 어떻게 자라는지**.
+ *
+ * ⚠️ 여기 숫자 입력은 **미리보기용**이다. 실제로 등록에 쓰이는 값은 다음
+ *    화면(`ProgramScheduleSetup`)이 받는다. 두 화면에 같은 입력을 두는 것이
+ *    중복 같지만, 여기서 못 보면 사용자는 "내 숫자로 뭐가 나오는지" 모르는
+ *    채로 일정부터 잡아야 한다.
+ */
+export function LadderProgramDetail({
+  program,
+  onBack,
+  onSchedule,
+  scheduleAvailable = true,
+}: {
+  program: LadderProgram;
+  onBack: () => void;
+  onSchedule: () => void;
+  scheduleAvailable?: boolean;
+}) {
+  const [maxReps, setMaxReps] = useState(LADDER_MAX_REPS_MIN);
+  const valid = isLadderMaxReps(maxReps);
+  // 못 만드는 숫자를 넣는 동안에도 표가 사라지지 않게 하한으로 버틴다
+  const preview = valid ? maxReps : LADDER_MAX_REPS_MIN;
+
+  return (
+    <article className="mx-auto w-full max-w-3xl pb-28">
+      <button
+        type="button"
+        onClick={onBack}
+        className="mb-3 inline-flex min-h-11 items-center rounded-full pr-3 text-sm font-bold text-muted"
+      >
+        ← 프로그램 목록으로
+      </button>
+
+      <div className="overflow-hidden rounded-[28px] border border-line bg-surface shadow-card">
+        <ProgramCover program={program} featured />
+        <div className="p-5">
+          <p className="text-[11px] font-extrabold tracking-[0.08em] text-accent">
+            GND 공식 프로그램
+          </p>
+          <h1 className="mt-1.5 text-2xl font-black leading-8 text-text">
+            {program.eyebrow}
+          </h1>
+          <p className="mt-1 text-sm font-bold text-muted">{program.title}</p>
+          <p className="mt-3 text-xs leading-5 text-muted">
+            {program.description}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-4 gap-1.5" aria-label="프로그램 핵심 수치">
+        <ProgramStat label="종목" value={program.exerciseName} />
+        <ProgramStat
+          label="빈도"
+          value={`주 ${program.recommendedSessionsPerWeek}회`}
+        />
+        <ProgramStat label="전체" value={`${LADDER_SESSIONS}회 · 4주`} />
+        <ProgramStat
+          label="회당"
+          value={`${program.durationMinutes[0]}–${program.durationMinutes[1]}분`}
+        />
+      </div>
+
+      <section
+        data-testid="program-audience"
+        data-tone="highlight"
+        className="mt-6 rounded-r-card border-l-2 border-accent bg-accent/8 px-4 py-4"
+      >
+        <h2 className="text-sm font-black text-text">이런 사람에게 맞아요</h2>
+        <ul className="mt-3 space-y-2.5 text-xs leading-5 text-muted">
+          {AUDIENCE[program.key].map((item) => (
+            <li key={item} className="flex gap-2">
+              <span aria-hidden className="text-accent">✓</span>
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section className="mt-6 px-1">
+        <p className="text-[10px] font-extrabold tracking-[0.08em] text-accent">
+          내 숫자로 미리보기
+        </p>
+        <h2 className="mt-1 text-lg font-black text-text">
+          지금 최대 몇 개까지 되나요?
+        </h2>
+        <p className="mt-1 text-xs leading-5 text-muted">
+          그 숫자에서 1씩 내려오는 5세트로 시작해요.
+        </p>
+
+        <label
+          className="mt-3 flex items-center gap-3"
+          htmlFor="ladder-preview-max"
+        >
+          <input
+            id="ladder-preview-max"
+            type="number"
+            inputMode="numeric"
+            min={LADDER_MAX_REPS_MIN}
+            max={LADDER_MAX_REPS_MAX}
+            value={maxReps}
+            onChange={(event) => setMaxReps(Number(event.target.value))}
+            className="h-12 w-24 rounded-card-sm border border-line bg-surface px-3 text-center text-lg font-black text-text"
+          />
+          <span className="text-sm font-bold text-muted">개</span>
+        </label>
+        {!valid && (
+          <p role="alert" className="mt-2 text-xs font-bold text-warn">
+            {LADDER_MAX_REPS_MIN}~{LADDER_MAX_REPS_MAX} 사이 숫자를 넣어 주세요.
+            {maxReps < LADDER_MAX_REPS_MIN &&
+              ` 아직 ${LADDER_MAX_REPS_MIN}개가 안 되면 밴드나 인버티드 로우로 ${LADDER_MAX_REPS_MIN}개를 만든 뒤 시작하세요.`}
+          </p>
+        )}
+
+        <ol
+          className="mt-4 space-y-1.5"
+          aria-label="회차별 세트 미리보기"
+        >
+          {[1, 2, 3, 6, LADDER_SESSIONS].map((day) => (
+            <li
+              key={day}
+              data-testid="ladder-preview-row"
+              className="flex items-center justify-between rounded-card-sm border border-line/80 bg-surface-2 px-3 py-2.5"
+            >
+              <span className="text-xs font-bold text-muted">{day}일차</span>
+              <span className="text-sm font-black text-text">
+                {ladderLabel([...ladderRepsForDay(preview, day)])}
+              </span>
+            </li>
+          ))}
+        </ol>
+        <p className="mt-2 text-[11px] leading-5 text-muted">
+          4·5일차는 표에서 뺐어요 — 규칙은 같아요. 뒤쪽 세트부터 한 회씩 올라가서
+          6일차에 사다리 전체가 한 칸 올라가요.
+        </p>
+      </section>
+
+      <aside
+        role="note"
+        className="mt-6 rounded-card-sm border border-line/70 px-3 py-3 text-xs leading-5 text-muted"
+      >
+        <span className="font-bold text-text">진행 방법 · </span>
+        {program.sourceNote}
+      </aside>
+
+      <aside
+        role="note"
+        className="mt-2 rounded-card-sm border border-line/70 px-3 py-3 text-xs leading-5 text-muted"
+      >
+        <span className="font-bold text-text">안전 안내 · </span>
+        실패 지점까지 매달리지 않는 것이 이 루틴의 핵심이에요. 세트가 버거우면
+        다음 회차에 숫자를 낮춰 다시 등록하세요. 어깨나 팔꿈치에 통증이 있으면
+        멈추세요.
       </aside>
 
       {scheduleAvailable && (

@@ -1194,6 +1194,9 @@ declare
   v_tabata_minutes smallint;
   v_is_interval boolean;
   v_interval_plans int := 0;
+  -- 0100: 사다리 회차 (종목 1 · 세트 5 · 세트마다 목표 횟수)
+  v_kind text;
+  v_ladder_plans int := 0;
 begin
   if v_user_id is null then
     raise exception 'not_authenticated';
@@ -1263,9 +1266,14 @@ begin
   -- 0069: 요일 간격 제한 제거 (사용자 확정 2026-08-12).
   --       서로 다른 요일 3개 조건은 바로 위에서 이미 지킨다.
 
+  /*
+    0101: 회차 수가 프로그램마다 다르다 — 근력·인터벌 18 · **사다리 24**.
+    어느 쪽인지는 회차를 하나라도 읽어야(`plan_kind`) 알 수 있어서, 여기서는
+    **둘 중 하나**인지만 보고 종류별 정확한 수는 루프가 끝난 뒤 확인한다.
+  */
   if p_plans is null
     or jsonb_typeof(p_plans) <> 'array'
-    or jsonb_array_length(p_plans) <> 18
+    or jsonb_array_length(p_plans) not in (18, 24)
     or octet_length(p_plans::text) > 512000 then
     raise exception 'program_plans_count';
   end if;
@@ -1280,7 +1288,8 @@ begin
         'title', 'exercises'
       ])
       or jsonb_typeof(v_plan->'week') is distinct from 'number'
-      or (v_plan->>'week') !~ '^[1-6]$'
+      -- 0101: 24회 = 3개씩 8묶음. 컬럼 check도 1~8로 같이 넓혔다
+      or (v_plan->>'week') !~ '^[1-8]$'
       or jsonb_typeof(v_plan->'session') is distinct from 'number'
       or (v_plan->>'session') !~ '^[1-3]$' then
       raise exception 'program_invalid_slot_meta';
@@ -1349,18 +1358,50 @@ begin
       v_tabata_minutes := null;
     end if;
     v_is_interval := v_tabata_minutes is not null;
-    if v_is_interval then
+
+    /*
+      0100: 회차 종류를 payload가 직접 말한다.
+
+      `plan_kind`가 없으면 **예전 그대로** 판정한다(인터벌 아니면 근력) —
+      이미 배포된 앱이 보내는 payload가 한 글자도 안 바뀌고 통과해야 하기
+      때문이다. 사다리만 이 칸을 채워 보낸다.
+
+      ⚠️ 인터벌은 `tabata_minutes`와 **서로를 증명해야** 한다. 한쪽만 오면
+         회차 모양 검사와 실제 저장이 갈라진다.
+    */
+    /*
+      ⚠️ `coalesce`에 **스키마를 붙이지 마라.** COALESCE는 함수가 아니라 SQL
+         문법 구조라(CASE·NULLIF·GREATEST와 같은 부류) `pg_catalog.`를 붙이면
+         42883으로 죽는다. `search_path = ''`가 걸려 있어도 마찬가지다 —
+         search_path가 적용되는 것은 **함수 이름**이고 문법 구조는 아니다.
+         0100이 정확히 이걸로 죽었다.
+    */
+    v_kind := coalesce(
+      v_plan->>'plan_kind',
+      case when v_is_interval then 'interval' else 'strength' end
+    );
+    if v_kind not in ('strength', 'interval', 'ladder')
+      or (v_is_interval and v_kind <> 'interval')
+      or (v_kind = 'interval' and not v_is_interval) then
+      raise exception 'program_invalid_plan_kind';
+    end if;
+    if v_kind = 'interval' then
       v_interval_plans := v_interval_plans + 1;
+    elsif v_kind = 'ladder' then
+      v_ladder_plans := v_ladder_plans + 1;
     end if;
 
     if jsonb_typeof(v_plan->'title') is distinct from 'string'
       or char_length(btrim(v_plan->>'title')) not between 1 and 80 then
       raise exception 'program_invalid_plan_title';
     end if;
+    -- 0100: 사다리는 종목이 **하나**다 — 풀업만 하는 프로그램이다
     if jsonb_typeof(v_plan->'exercises') is distinct from 'array'
-      or (v_is_interval
+      or (v_kind = 'interval'
           and jsonb_array_length(v_plan->'exercises') <> 4)
-      or (not v_is_interval
+      or (v_kind = 'ladder'
+          and jsonb_array_length(v_plan->'exercises') <> 1)
+      or (v_kind = 'strength'
           and jsonb_array_length(v_plan->'exercises') not between 5 and 6)
       or octet_length((v_plan->'exercises')::text) > 200000 then
       raise exception 'program_invalid_exercises';
@@ -1372,7 +1413,7 @@ begin
         or not (v_exercise ?& array[
           'name', 'bodyPart', 'exerciseType', 'measure', 'isCustom', 'sets'
         ])
-        or (not v_is_interval and not (v_exercise ? 'prescription'))
+        or (v_kind <> 'interval' and not (v_exercise ? 'prescription'))
         or jsonb_typeof(v_exercise->'name') is distinct from 'string'
         or char_length(btrim(v_exercise->>'name')) not between 1 and 40
         or jsonb_typeof(v_exercise->'bodyPart') is distinct from 'string'
@@ -1387,11 +1428,14 @@ begin
         or jsonb_typeof(v_exercise->'isCustom') is distinct from 'boolean'
         or (v_exercise->>'isCustom')::boolean
         or jsonb_typeof(v_exercise->'sets') is distinct from 'array'
-        or (v_is_interval
+        or (v_kind = 'interval'
             and jsonb_array_length(v_exercise->'sets') <> 1)
-        or (not v_is_interval
+        -- 0100: 원문이 "하루 5세트를 나누어"라고 세트 수까지 정한다
+        or (v_kind = 'ladder'
+            and jsonb_array_length(v_exercise->'sets') <> 5)
+        or (v_kind = 'strength'
             and jsonb_array_length(v_exercise->'sets') not between 1 and 4)
-        or (not v_is_interval
+        or (v_kind <> 'interval'
             and jsonb_typeof(v_exercise->'prescription')
                 is distinct from 'object') then
         raise exception 'program_invalid_exercise_shape';
@@ -1413,10 +1457,22 @@ begin
           or (v_set->>'durationMin')::numeric < 0 then
           raise exception 'program_invalid_set_shape';
         end if;
+
+        /*
+          0100: 사다리는 **세트의 횟수가 곧 처방**이다(5·4·3·2·1). 다른
+          종류는 빈 세트(0회)를 깔고 처방이 범위를 주지만, 사다리에서 0회는
+          "그날 아무것도 안 한다"는 뜻이 된다.
+        */
+        if v_kind = 'ladder'
+          and ((v_set->>'reps')::numeric < 1
+               or (v_set->>'reps')::numeric > 100) then
+          raise exception 'program_invalid_ladder_set';
+        end if;
       end loop;
 
-      -- 인터벌은 20초/10초를 음원이 정한다 — 처방을 요구하지 않는다
-      if not v_is_interval then
+      -- 인터벌은 20초/10초를 음원이 정한다 — 처방을 요구하지 않는다.
+      -- 사다리는 요구한다 (0100) — 휴식·반복 범위를 기록 화면이 읽는다.
+      if v_kind <> 'interval' then
         v_prescription := v_exercise->'prescription';
         if not (v_prescription ?& array[
             'repsMin', 'repsMax', 'targetRir', 'restSeconds', 'loadStepKg'
@@ -1441,9 +1497,24 @@ begin
     end loop;
   end loop;
 
-  -- 한 등록 안에 두 모양이 섞이면 진행률·재배치·무게 추천이 회차마다 갈라진다
-  if v_interval_plans not in (0, 18) then
+  /*
+    한 등록 안에 두 모양이 섞이면 진행률·재배치·무게 추천이 회차마다 갈라진다.
+    "0 아니면 전부"로 본다 — 전체 개수가 18일 수도 24일 수도 있으므로
+    상수와 비교하지 않고 **전체와** 비교한다.
+  */
+  if v_interval_plans not in (0, jsonb_array_length(p_plans))
+    or v_ladder_plans not in (0, jsonb_array_length(p_plans)) then
     raise exception 'program_mixed_plan_kinds';
+  end if;
+
+  /*
+    0101: 종류별 회차 수. 위 개수 검사는 18·24 둘 다 통과시키므로 여기서
+    못 박는다. 사다리 24는 원문의 "5일 훈련 1일 휴식 × 4주"를 훈련일로 센
+    값이고, 28일에 정확히 떨어진다.
+  */
+  if (v_ladder_plans > 0 and jsonb_array_length(p_plans) <> 24)
+    or (v_ladder_plans = 0 and jsonb_array_length(p_plans) <> 18) then
+    raise exception 'program_plans_count';
   end if;
 
   if exists (
@@ -3666,7 +3737,8 @@ begin
   end if;
   if p_moves is null
     or jsonb_typeof(p_moves) <> 'array'
-    or jsonb_array_length(p_moves) not between 1 and 18
+    -- 0101: 사다리가 24회라 상한을 24로 넓힌다 (근력·인터벌 18은 그대로 통과)
+    or jsonb_array_length(p_moves) not between 1 and 24
     or octet_length(p_moves::text) > 100000 then
     raise exception 'program_invalid_moves';
   end if;

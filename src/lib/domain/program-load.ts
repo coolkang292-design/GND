@@ -50,8 +50,28 @@ function roundKg(value: number): number {
  * ⚠️ 문구를 화면에 박지 마라. 처방(`repsMin`·`repsMax`·`targetRir`)이 프로그램마다
  * 다르고, 두 곳에 두면 반드시 갈라진다. 카드·오버레이·시트가 전부 이 함수를 쓴다.
  */
-export function programWeightGuide(prescription: ExercisePrescription): string {
+export function programWeightGuide(
+  prescription: ExercisePrescription,
+  /**
+   * 종목 유형 (2026-09-04). 없으면 예전처럼 **무게** 안내를 준다.
+   *
+   * ⚠️ `bodyweight`가 필요해진 이유. 풀업 사다리는 프로그램 전체가 맨몸 종목
+   *    하나인데, 화면이 "5~5회를 수행할 수 있는 **무게**를 선택하세요"라고
+   *    띄우고 있었다. 고를 무게가 없는 종목에 무게를 고르라고 하는 것도
+   *    문제지만 더 나쁜 것은 다음 줄이다 — "마치고도 3회 더 할 수 있는 무게"는
+   *    강도를 **올리라는** 말인데, 이 루틴의 핵심은 정확히 그 반대다
+   *    ("실패 지점까지 근육을 쥐어짜는 대신").
+   */
+  exerciseType?: "weight" | "bodyweight" | "cardio",
+): string {
   const { repsMin, repsMax, targetRir } = prescription;
+  if (exerciseType === "bodyweight") {
+    return (
+      `${repsMin}~${repsMax}회를 안정된 자세로 수행하세요.\n` +
+      `${repsMax}회를 마치고도 ${targetRir}회 정도 더 남는 강도가 적당합니다. ` +
+      `버거우면 밴드나 쉬운 동작으로 강도를 낮추세요.`
+    );
+  }
   return (
     `${repsMin}~${repsMax}회를 안정된 자세로 수행할 수 있는 무게를 선택하세요.\n` +
     `${repsMax}회를 마치고도 ${targetRir}회 정도 더 할 수 있는 무게가 적당합니다.`

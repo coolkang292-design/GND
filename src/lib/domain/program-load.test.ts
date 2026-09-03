@@ -116,6 +116,28 @@ describe("programWeightGuide — 처방 값을 그대로 읽는 안내", () => {
         "15회를 마치고도 3회 정도 더 할 수 있는 무게가 적당합니다.",
     );
   });
+
+  /*
+    맨몸 종목 (2026-09-04 · 풀업 사다리).
+
+    ⚠️ 여기서 잡으려는 것은 어색한 말투가 아니라 **틀린 처방**이다. 풀업에
+       "무게를 선택하세요"는 고를 것이 없는 지시이고, 이어지는 "더 할 수 있는
+       무게"는 강도를 올리라는 말이다 — 실패 지점까지 가지 않는 것이 핵심인
+       루틴에서 정반대를 시킨다.
+  */
+  it("맨몸이면 무게 대신 강도로 말한다", () => {
+    const guide = programWeightGuide(
+      { ...rx, repsMin: 2, repsMax: 5, targetRir: 3 },
+      "bodyweight",
+    );
+    expect(guide).toContain("2~5회를 안정된 자세로 수행하세요.");
+    expect(guide).not.toContain("무게");
+  });
+
+  it("종목 유형을 안 주면 예전 무게 안내 그대로다", () => {
+    // 근력 5종은 이 인자를 안 넘기는 곳이 남아 있어도 문구가 안 바뀌어야 한다
+    expect(programWeightGuide(rx)).toBe(programWeightGuide(rx, "weight"));
+  });
 });
 
 /**

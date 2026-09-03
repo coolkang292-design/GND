@@ -13,7 +13,6 @@ import {
   INTERVAL_PROGRAM,
   STRENGTH_PROGRAMS,
 } from "@/lib/domain/official-programs";
-import type { WorkoutPlan } from "@/lib/workout-plan";
 import { ProgramScheduleSetup } from "./program-schedule-setup";
 
 afterEach(cleanup);
@@ -33,25 +32,6 @@ function openPreview() {
   fireEvent.click(screen.getByRole("button", { name: "일정 미리보기" }));
 }
 
-function occupiedPlan(date: string): WorkoutPlan {
-  return {
-    id: `plan-${date}`,
-    userId: "user-1",
-    planDate: date,
-    sourceSessionId: null,
-    exercises: [],
-    tabataMinutes: null,
-    title: "기존 운동 계획",
-    scheduledAt: null,
-    programEnrollmentId: null,
-    programWeek: null,
-    programSession: null,
-    programTemplateVersion: null,
-    createdAt: "2026-08-12T00:00:00.000Z",
-    updatedAt: "2026-08-12T00:00:00.000Z",
-  };
-}
-
 describe("ProgramScheduleSetup", () => {
   it("세 단계 진행 상태와 선택한 추천 요일을 분명히 표시한다", () => {
     render(
@@ -59,7 +39,6 @@ describe("ProgramScheduleSetup", () => {
         today="2026-08-12"
         timeZone="Asia/Seoul"
         program={program}
-        occupiedPlans={[]}
         onConfirm={vi.fn()}
       />,
     );
@@ -96,7 +75,6 @@ describe("ProgramScheduleSetup", () => {
         today="2026-08-12"
         timeZone="Asia/Seoul"
         program={program}
-        occupiedPlans={[]}
         onConfirm={vi.fn()}
       />,
     );
@@ -119,7 +97,6 @@ describe("ProgramScheduleSetup", () => {
         today="2026-08-12"
         timeZone="Asia/Seoul"
         program={program}
-        occupiedPlans={[]}
         onConfirm={onConfirm}
       />,
     );
@@ -156,7 +133,6 @@ describe("ProgramScheduleSetup", () => {
         today="2026-08-12"
         timeZone="Asia/Seoul"
         program={program}
-        occupiedPlans={[]}
         onConfirm={vi.fn()}
       />,
     );
@@ -171,7 +147,6 @@ describe("ProgramScheduleSetup", () => {
         today="2026-08-12"
         timeZone="Asia/Seoul"
         program={INTERVAL_PROGRAM}
-        occupiedPlans={[]}
         onConfirm={vi.fn()}
       />,
     );
@@ -190,7 +165,6 @@ describe("ProgramScheduleSetup", () => {
         today="2026-08-12"
         timeZone="Asia/Seoul"
         program={INTERVAL_PROGRAM}
-        occupiedPlans={[]}
         onConfirm={onConfirm}
       />,
     );
@@ -213,7 +187,6 @@ describe("ProgramScheduleSetup", () => {
         today="2026-08-12"
         timeZone="Asia/Seoul"
         program={program}
-        occupiedPlans={[]}
         onConfirm={vi.fn()}
       />,
     );
@@ -236,7 +209,6 @@ describe("ProgramScheduleSetup", () => {
         today="2026-08-12"
         timeZone="Asia/Seoul"
         program={program}
-        occupiedPlans={[]}
         onConfirm={vi.fn()}
       />,
     );
@@ -248,20 +220,32 @@ describe("ProgramScheduleSetup", () => {
     expect(screen.queryByText("3/3 · 18회 미리보기")).toBeNull();
   });
 
-  it("기존 계획 날짜는 유지하고 가까운 빈 날짜를 제안한다", () => {
+  /*
+    2026-09-04(0101)에 **동작이 뒤집혔다.**
+
+    예전에는 그날 계획이 있으면 프로그램 회차를 가까운 빈 날로 밀고 "기존 계획
+    유지 · 8월 17일 대신 …"이라고 알렸다. 하루에 계획을 하나만 담을 수 있었으니
+    그럴 수밖에 없었다. 이제는 나란히 선다.
+
+    ⚠️ 이 테스트는 **없어진 것을 확인한다.** 새 문구만 보면 옛 동작이 남아
+       있어도 통과한다 — 밀어내기가 되살아나면 고른 요일이 조용히 어긋난다.
+  */
+  it("기존 계획이 있어도 피해 가지 않는다 — 옛 '기존 계획 유지'가 없어졌다", () => {
     render(
       <ProgramScheduleSetup
         today="2026-08-12"
         timeZone="Asia/Seoul"
         program={program}
-        occupiedPlans={[occupiedPlan("2026-08-17")]}
         onConfirm={vi.fn()}
       />,
     );
     openPreview();
 
-    expect(screen.getByText(/기존 계획 유지/)).toBeTruthy();
-    expect(screen.getByText(/8월 17일.*대신/)).toBeTruthy();
+    expect(screen.queryByText(/기존 계획 유지/)).toBeNull();
+    expect(screen.queryByText(/대신.*프로그램을 배치/)).toBeNull();
+    expect(
+      screen.getByText(/그날 이미 계획이 있어도 지우지 않고 나란히 담아요/),
+    ).toBeTruthy();
   });
 
   it("저장 중에는 이중 클릭을 막는다", async () => {
@@ -274,7 +258,6 @@ describe("ProgramScheduleSetup", () => {
         today="2026-08-12"
         timeZone="Asia/Seoul"
         program={program}
-        occupiedPlans={[]}
         onConfirm={onConfirm}
       />,
     );
@@ -294,7 +277,6 @@ describe("ProgramScheduleSetup", () => {
         today="2026-08-12"
         timeZone="Asia/Seoul"
         program={program}
-        occupiedPlans={[]}
         onConfirm={vi.fn().mockRejectedValue(new Error("network"))}
       />,
     );
@@ -330,7 +312,6 @@ describe("ProgramScheduleSetup", () => {
         today="2026-08-12"
         timeZone="Asia/Seoul"
         program={program}
-        occupiedPlans={[]}
         onConfirm={vi.fn().mockRejectedValue(rejection)}
       />,
     );
@@ -343,7 +324,7 @@ describe("ProgramScheduleSetup", () => {
 
     expect(
       screen.getByText(
-        "8월 17일에 이미 다른 계획이 있어요. 시작일이나 요일을 바꿔 주세요.",
+        "8월 17일에 이미 다른 계획이 있어요. 그 계획을 지우거나 시작일을 바꿔 주세요.",
       ),
     ).toBeTruthy();
     expect(consoleError).toHaveBeenCalledWith(

@@ -3,12 +3,22 @@ import {
   PROGRAM_LEVELS,
   intervalExerciseName,
   intervalMinutesForWeek,
+  ladderDayOfSession,
+  ladderLevelForMaxReps,
   type IntervalProgram,
+  type LadderProgram,
   type ProgramLevel,
   type ResolvedIntervalExercise,
   type ResolvedProgramExercise,
   type StrengthProgram,
 } from "@/lib/domain/official-programs";
+import {
+  LADDER_SESSIONS,
+  isLadderMaxReps,
+  ladderLabel,
+  ladderRepsForDay,
+} from "@/lib/domain/pullup-ladder";
+import { buildLadderSchedule } from "@/lib/domain/ladder-schedule";
 import { tabataRepsForMinutes, type TabataMinutes } from "@/lib/domain/tabata";
 import {
   MAX_SESSIONS_PER_WEEK,
@@ -18,6 +28,7 @@ import {
   type ProgramScheduleItem,
 } from "@/lib/domain/program-schedule";
 import type { PlanExercise, PlanSet } from "@/lib/domain/workout-plan";
+import type { CatalogExercise } from "@/lib/types";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export type ProgramEnrollment = {
@@ -72,6 +83,14 @@ type ProgramPlanPayload = {
   exercises: PlanExercise[];
   /** 인터벌 회차에만 실린다 (0070). 이 한 칸이 회차 종류를 가른다 */
   tabata_minutes?: TabataMinutes;
+  /**
+   * 회차 종류 (0100).
+   *
+   * ⚠️ **근력·인터벌은 이 칸을 안 보낸다.** RPC가 없으면 예전 규칙으로
+   *    (인터벌 아니면 근력) 판정하기 때문이다 — 보내기 시작하면 마이그레이션
+   *    적용 전 배포에서 등록이 통째로 막힌다. 사다리만 채운다.
+   */
+  plan_kind?: "ladder";
 };
 
 /**
@@ -293,9 +312,19 @@ function validateSchedule(
     timeZone: string;
   },
   slots: readonly PreferredSlot[],
+  /**
+   * 이 프로그램의 회차 수 (2026-09-04).
+   *
+   * 예전에는 18이 여기 박혀 있었다. 사다리가 24회가 되면서 프로그램마다
+   * 달라졌다 — DB의 회차 수 검사(0101)와 **같은 값**이어야 하고, 갈라지면
+   * 화면은 통과시키는데 서버가 거절한다.
+   */
+  totalSessions = 18,
 ): void {
   const keys = ["A", "B", "C"] as const;
-  if (input.schedule.length !== 18) throw new Error("program_plans_count");
+  if (input.schedule.length !== totalSessions) {
+    throw new Error("program_plans_count");
+  }
   const dates = new Set<string>();
   const allowedTimes = new Set(slots.map((slot) => slot.time));
   let previousDate: string | null = null;
@@ -577,6 +606,163 @@ export function buildCreateIntervalEnrollmentRpcArgs(
     p_preferred_slots: input.preferredSlots.map((slot) => ({ ...slot })),
     p_plans: plans,
   };
+}
+
+/**
+ * 사다리 등록 입력 (2026-09-04).
+ *
+ * 근력·인터벌과 **합치지 않았다** — 앞의 둘과 같은 이유다. 사다리는 회차
+ * 템플릿이 없고(회차 번호가 곧 사다리다) 대신 **최대 개수 하나**를 받는다.
+ * 한 타입에 담으면 모든 검증이 "이 회차는 어느 종류인가"로 갈라진다.
+ * 날짜·요일 규칙(`validateSchedule`)만 셋이 함께 쓴다.
+ */
+export type CreateLadderEnrollmentInput = {
+  program: LadderProgram;
+  /** `resolveLadderProgram`이 카탈로그에서 찾아 준 공식 시드 행 */
+  item: CatalogExercise;
+  /** 사용자가 화면에서 입력한 지금 최대 개수 */
+  maxReps: number;
+  schedule: readonly ProgramScheduleItem[];
+  startDate: string;
+  timeZone: string;
+  preferredSlots: readonly PreferredSlot[];
+};
+
+function validateLadderEnrollmentInput(
+  input: CreateLadderEnrollmentInput,
+): void {
+  if (!isDateKey(input.startDate)) throw new Error("program_invalid_start_date");
+  if (!isTimeZone(input.timeZone)) throw new Error("program_invalid_timezone");
+  if (
+    input.preferredSlots.length < MIN_SESSIONS_PER_WEEK ||
+    input.preferredSlots.length > MAX_SESSIONS_PER_WEEK
+  ) {
+    throw new Error("program_slots_count");
+  }
+  const slots = parsePreferredSlots(input.preferredSlots);
+  if (!slots) throw new Error("program_invalid_slots");
+
+  // 사다리를 못 만드는 숫자면 여기서 멈춘다 — `ladderRepsForDay`가 회차마다
+  // 같은 검사를 하지만, 18번 만들다 중간에 터지는 것보다 낫다
+  if (!isLadderMaxReps(input.maxReps)) {
+    throw new Error("program_invalid_max_reps");
+  }
+
+  /*
+    동명 커스텀 종목이 골라지면 **남의 종목에 18회 계획을 심는다.**
+    `resolveLadderProgram`이 이미 막지만, 화면을 거치지 않고 이 함수를
+    부르는 길이 생겨도 뚫리지 않도록 여기서 한 번 더 잠근다
+    (근력의 `program_catalog_item_invalid`와 같은 규칙).
+  */
+  if (
+    input.item.name !== input.program.exerciseName ||
+    input.item.created_by !== null ||
+    input.item.is_custom !== false
+  ) {
+    throw new Error(`program_catalog_item_invalid:${input.item.name}`);
+  }
+
+  validateSchedule(input, slots, LADDER_SESSIONS);
+
+  /*
+    사다리는 **휴식일까지 프로그램이 정한다** (사장님 지시 2026-09-04).
+    날짜가 5일 훈련 / 1일 휴식 주기에서 벗어나면 원문의 루틴이 아니다 —
+    `validateSchedule`은 "날짜가 오름차순인가"까지만 보므로 여기서 주기를
+    직접 확인한다.
+  */
+  const expected = buildLadderSchedule({
+    startDate: input.startDate,
+    time: input.preferredSlots[0].time,
+    timeZone: input.timeZone,
+  }).plans;
+  input.schedule.forEach((slot, index) => {
+    if (slot.date !== expected[index].date) {
+      throw new Error(`program_invalid_plan_date:${slot.date}`);
+    }
+  });
+}
+
+/** UI와 RPC가 서로 다른 JSON을 조립하지 않도록 등록 스냅샷을 한 곳에서 만든다. */
+export function buildCreateLadderEnrollmentRpcArgs(
+  input: CreateLadderEnrollmentInput,
+): CreateProgramEnrollmentRpcArgs {
+  validateLadderEnrollmentInput(input);
+  const { item, maxReps, program } = input;
+
+  const plans = input.schedule.map((slot): ProgramPlanPayload => {
+    /*
+      며칠째인지는 **회차 번호가 말해 준다.** 배열 인덱스를 쓰지 않는 이유:
+      계획 행에 남는 것은 `program_week`·`program_session`뿐이라, 나중에
+      계획을 읽어 사다리를 되짚을 때 쓸 수 있는 열쇠가 그 둘이다. 만들 때와
+      읽을 때가 같은 함수를 쓰게 해 둔다.
+    */
+    const day = ladderDayOfSession(slot.week, slot.session);
+    const reps = ladderRepsForDay(maxReps, day);
+
+    return {
+      plan_date: slot.date,
+      scheduled_at: slot.scheduledAt,
+      week: slot.week,
+      session: slot.session,
+      // 사다리에서 A·B·C는 아무 뜻이 없다 — RPC가 위치로 요구해서 채운다
+      template_key: slot.templateKey,
+      // 0100이 이 한 칸으로 종목 1개·세트 5개를 허용한다
+      plan_kind: "ladder",
+      title: `풀업 사다리 ${day}일차 · ${ladderLabel(reps)}`,
+      exercises: [
+        {
+          name: item.name,
+          // 부위·유형·measure는 **카탈로그 행에서 읽는다**. 상수에 베끼면
+          // 시드가 바뀔 때 두 곳이 갈라진다 (`preset-routines.ts`와 같은 규칙)
+          bodyPart: item.body_part,
+          exerciseType: item.exercise_type,
+          measure: item.measure,
+          isCustom: false,
+          // 세트마다 목표 횟수가 **다르다**. 근력 프로그램은 빈 세트를 세트
+          // 수만큼 깔고 처방이 범위를 주지만, 사다리는 숫자가 곧 처방이다
+          sets: reps.map((count) => ({ ...ZERO_SET, reps: count })),
+          prescription: {
+            repsMin: Math.min(...reps),
+            repsMax: Math.max(...reps),
+            /*
+              3 = 허용 최댓값. 원문이 "실패 지점까지 근육을 쥐어짜는 대신"
+              이라고 못 박은 것을 처방으로 옮길 수 있는 유일한 칸이다.
+            */
+            targetRir: 3,
+            restSeconds: program.restSeconds,
+            // 맨몸이라 증량 단위가 뜻이 없다. RPC가 1·2.5·5만 받아 최솟값
+            loadStepKg: 1,
+          },
+        },
+      ],
+    };
+  });
+
+  return {
+    p_program_key: program.key,
+    p_program_version: program.version,
+    p_title_snapshot: program.title,
+    p_level_at_start: ladderLevelForMaxReps(maxReps),
+    p_start_date: input.startDate,
+    p_timezone: input.timeZone,
+    p_preferred_slots: input.preferredSlots.map((slot) => ({ ...slot })),
+    p_plans: plans,
+  };
+}
+
+export async function createLadderProgramEnrollment(
+  input: CreateLadderEnrollmentInput,
+): Promise<string> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase.rpc(
+    "create_program_enrollment",
+    buildCreateLadderEnrollmentRpcArgs(input),
+  );
+  if (error) throw error;
+  if (typeof data !== "string" || !UUID.test(data)) {
+    throw new Error("program_invalid_enrollment_id");
+  }
+  return data;
 }
 
 export async function createIntervalProgramEnrollment(

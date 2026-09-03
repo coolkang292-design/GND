@@ -2,11 +2,20 @@
 
 import { useMemo, useState } from "react";
 import {
+  isLadderProgram,
+  ladderLevelForMaxReps,
   programLevelLegend,
   programLevelOptions,
   type OfficialProgram,
   type ProgramLevel,
 } from "@/lib/domain/official-programs";
+import {
+  LADDER_MAX_REPS_MAX,
+  LADDER_MAX_REPS_MIN,
+  isLadderMaxReps,
+  ladderLabel,
+  ladderRepsForDay,
+} from "@/lib/domain/pullup-ladder";
 import { programSaveErrorText } from "@/lib/domain/program-error-text";
 import {
   buildProgramSchedule,
@@ -15,8 +24,8 @@ import {
   type PreferredSlot,
   type ProgramScheduleItem,
 } from "@/lib/domain/program-schedule";
+import { buildLadderSchedule, ladderCalendarRows } from "@/lib/domain/ladder-schedule";
 import { addDaysToDateKey } from "@/lib/domain/workout-plan";
-import type { WorkoutPlan } from "@/lib/workout-plan";
 
 type ScheduleStep = "start" | "slots" | "preview";
 type TimeMode = "same" | "per-day";
@@ -34,13 +43,20 @@ export type ProgramScheduleChoice = {
   startDate: string;
   timeZone: string;
   preferredSlots: readonly PreferredSlot[];
+  /**
+   * 사다리 전용 — 사용자가 입력한 지금 최대 개수 (2026-09-04).
+   *
+   * 사다리는 난이도를 묻지 않는다. `levelAtStart`에는 이 숫자를 세 칸으로
+   * 접은 값이 들어가고(`ladderLevelForMaxReps`), 회차별 세트를 만드는 데
+   * 실제로 쓰이는 것은 **이 값**이다.
+   */
+  maxReps?: number;
 };
 
 type ProgramScheduleSetupProps = {
   today: string;
   timeZone: string;
   program: OfficialProgram;
-  occupiedPlans: readonly WorkoutPlan[];
   onConfirm: (choice: ProgramScheduleChoice) => Promise<void>;
 };
 
@@ -137,15 +153,30 @@ export function ProgramScheduleSetup({
   today,
   timeZone,
   program,
-  occupiedPlans,
   onConfirm,
 }: ProgramScheduleSetupProps) {
   const levelOptions = programLevelOptions(program);
+  /*
+    사다리는 난이도 대신 **숫자 한 칸**을 받는다 (2026-09-04). 화면 흐름
+    (시작일 → 요일·시간 → 미리보기)은 셋이 똑같아서, 갈라지는 곳은
+    난이도 자리 하나뿐이다 — 화면을 두 벌로 만들지 않는다.
+  */
+  const ladder = isLadderProgram(program) ? program : null;
   const nextMonday = addDaysToDateKey(startOfWeek(today), 7);
   const [step, setStep] = useState<ScheduleStep>("start");
   const [startDate, setStartDate] = useState(nextMonday);
-  const [selectedDays, setSelectedDays] = useState<number[]>([1, 3, 5]);
-  const [customMode, setCustomMode] = useState(false);
+  // 사다리는 원문의 "5일 훈련 1일 휴식"에 가장 가까운 월~금으로 시작한다
+  const [selectedDays, setSelectedDays] = useState<number[]>(
+    ladder ? [1, 2, 3, 4, 5] : [1, 3, 5],
+  );
+  /*
+    사다리는 **직접 선택 화면으로 연다** (2026-09-04).
+
+    기본값 월~금은 프리셋 두 개(월·수·금 / 화·목·토) 중 어느 것도 아니다.
+    접힌 채로 두면 화면에는 아무것도 안 골라진 것처럼 보이고, 「직접 선택」을
+    누르는 순간 고른 요일이 **비워진다** — 기본값이 있으나 마나가 된다.
+  */
+  const [customMode, setCustomMode] = useState(Boolean(ladder));
   const [timeMode, setTimeMode] = useState<TimeMode>("same");
   const [sameTime, setSameTime] = useState("19:00");
   const [times, setTimes] = useState<Record<number, string>>({
@@ -158,11 +189,29 @@ export function ProgramScheduleSetup({
     6: "19:00",
   });
   const [levelAtStart, setLevelAtStart] = useState<ProgramLevel>("beginner");
+  const [maxReps, setMaxReps] = useState(LADDER_MAX_REPS_MIN);
   const [validation, setValidation] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const preferredSlots = useMemo<PreferredSlot[]>(
+  /**
+   * 사다리 일정 — 요일이 아니라 **주기**로 잡는다 (2026-09-04).
+   *
+   * 요일 목록은 7일마다 반복해서 "5일 훈련 1일 휴식"(6일 주기)을 표현할 수
+   * 없다. 그래서 사다리는 아래 요일 UI를 아예 쓰지 않고, 시작일과 시각만으로
+   * 24회차를 만든다. 슬롯도 그 함수가 만들어 준다 — RPC가 요구해서 채울 뿐
+   * 날짜를 정하지는 않는다.
+   */
+  const ladderBuild = useMemo(() => {
+    if (!ladder) return null;
+    try {
+      return buildLadderSchedule({ startDate, time: sameTime, timeZone });
+    } catch {
+      return null;
+    }
+  }, [ladder, startDate, sameTime, timeZone]);
+
+  const weekdaySlots = useMemo<PreferredSlot[]>(
     () =>
       [...selectedDays]
         .sort((a, b) => a - b)
@@ -172,11 +221,28 @@ export function ProgramScheduleSetup({
         })),
     [sameTime, selectedDays, timeMode, times],
   );
-  const occupiedDates = useMemo(
-    () => new Set(occupiedPlans.map((plan) => plan.planDate)),
-    [occupiedPlans],
-  );
+  const preferredSlots = ladderBuild?.preferredSlots ?? weekdaySlots;
+  /**
+   * 프로그램은 이제 **기존 계획을 피해 다니지 않는다** (0101).
+   *
+   * 예전에는 그날 계획이 있으면 프로그램 회차를 가까운 빈 날로 밀었다. 하루에
+   * 계획을 하나만 담을 수 있었으니 그럴 수밖에 없었다. 이제는 나란히 선다 —
+   * 오전 풀업 회차와 오후 가슴 루틴이 같은 날에 있는 것이 바로 이 기능의
+   * 목적이라, 피해 다니면 고른 요일이 지켜지지 않는다.
+   *
+   * ⚠️ 빈 집합이라고 `buildProgramSchedule`의 인자를 지우지는 않았다. 같은
+   *    프로그램의 두 회차가 같은 날 겹치는 것은 여전히 막아야 하고
+   *    (`fixedProgramDates`), 그 규칙은 이 인자와 별개다.
+   *
+   * ⚠️ **0101을 Run하기 전에는** 겹치는 날짜가 있으면 RPC가
+   *    `program_plan_date_taken`으로 등록을 거절한다. 배포와 Run 사이의 짧은
+   *    동안만이고, `programSaveErrorText`가 그대로 사람 말로 알린다.
+   */
+  const occupiedDates = useMemo(() => new Set<string>(), []);
   const schedule = useMemo(() => {
+    if (ladder) {
+      return ladderBuild ? { plans: ladderBuild.plans, conflicts: [] } : null;
+    }
     if (!hasEnoughDistinctDays(selectedDays)) return null;
     try {
       return buildProgramSchedule({
@@ -188,7 +254,15 @@ export function ProgramScheduleSetup({
     } catch {
       return null;
     }
-  }, [occupiedDates, preferredSlots, selectedDays, startDate, timeZone]);
+  }, [
+    ladder,
+    ladderBuild,
+    occupiedDates,
+    preferredSlots,
+    selectedDays,
+    startDate,
+    timeZone,
+  ]);
 
   function choosePreset(days: readonly number[]) {
     setCustomMode(false);
@@ -208,7 +282,14 @@ export function ProgramScheduleSetup({
   }
 
   function showPreview() {
-    if (!hasEnoughDistinctDays(selectedDays)) {
+    if (ladder && !isLadderMaxReps(maxReps)) {
+      setValidation(
+        `지금 최대 개수를 ${LADDER_MAX_REPS_MIN}~${LADDER_MAX_REPS_MAX} 사이로 넣어 주세요.`,
+      );
+      return;
+    }
+    // 사다리는 요일을 고르지 않는다 — 날짜는 주기가 정한다
+    if (!ladder && !hasEnoughDistinctDays(selectedDays)) {
       setValidation(
         `서로 다른 요일을 ${MIN_SESSIONS_PER_WEEK}~${MAX_SESSIONS_PER_WEEK}개 골라 주세요.`,
       );
@@ -229,10 +310,12 @@ export function ProgramScheduleSetup({
     try {
       await onConfirm({
         schedule: schedule.plans,
-        levelAtStart,
+        // 사다리는 라디오를 안 그린다 — 숫자에서 난이도를 만든다
+        levelAtStart: ladder ? ladderLevelForMaxReps(maxReps) : levelAtStart,
         startDate,
         timeZone,
         preferredSlots,
+        maxReps: ladder ? maxReps : undefined,
       });
     } catch (error) {
       // ⚠️ `catch {}`로 되돌리지 마라. 오류를 삼키면 연속 3일 등록이 왜 실패하는지
@@ -300,10 +383,25 @@ export function ProgramScheduleSetup({
     return (
       <section className="mx-auto w-full max-w-2xl pb-4">
         <ScheduleProgress step={step} />
-        <p className="text-xs font-extrabold text-accent">2/3 · 요일과 시간</p>
-        <h1 className="mt-2 text-xl font-black text-text">주 3회 시간을 정하세요</h1>
-        <p className="mt-1 text-xs leading-5 text-muted">원하는 요일 3개를 고르세요. 연속으로 몰아서 해도 됩니다.</p>
+        <p className="text-xs font-extrabold text-accent">
+          2/3 · {ladder ? "시간" : "요일과 시간"}
+        </p>
+        <h1 className="mt-2 text-xl font-black text-text">
+          {ladder ? "몇 시에 할까요?" : "주 3회 시간을 정하세요"}
+        </h1>
+        <p className="mt-1 text-xs leading-5 text-muted">
+          {ladder
+            ? "요일은 고르지 않아요. 5일 하고 하루 쉬는 주기라서 날짜가 매주 밀려요."
+            : "원하는 요일 3개를 고르세요. 연속으로 몰아서 해도 됩니다."}
+        </p>
 
+        {/*
+          요일 고르기는 사다리에 **없다** (2026-09-04). 요일은 7일마다 돌아와서
+          6일 주기를 못 담는다 — 여기서 요일을 고르게 두면 사용자가 고른 것과
+          실제 배치가 갈라진다.
+        */}
+        {!ladder && (
+        <div>
         <p className="mt-5 text-xs font-black text-text">추천 요일</p>
         <div className="mt-2 grid grid-cols-2 gap-2">
           {Object.entries(PRESETS).map(([label, days]) => (
@@ -333,7 +431,10 @@ export function ProgramScheduleSetup({
 
         {customMode && (
           <fieldset className="mt-3">
-            <legend className="text-xs font-bold text-muted">운동할 요일 3개</legend>
+            {/* 사다리는 이 블록 자체가 안 그려진다 — 요일을 안 고른다 */}
+            <legend className="text-xs font-bold text-muted">
+              운동할 요일 {MIN_SESSIONS_PER_WEEK}~{MAX_SESSIONS_PER_WEEK}개
+            </legend>
             <div className="mt-2 grid grid-cols-7 gap-1">
               {WEEKDAYS.map((day) => (
                 <label key={day.value} className="text-center text-xs text-muted">
@@ -353,7 +454,11 @@ export function ProgramScheduleSetup({
           </fieldset>
         )}
 
+        </div>
+        )}
+
         <p className="mt-5 text-xs font-black text-text">운동 시간</p>
+        {!ladder && (
         <div className="mt-2 flex gap-1 rounded-card-sm border border-line bg-surface p-1">
           <button
             type="button"
@@ -370,10 +475,11 @@ export function ProgramScheduleSetup({
             요일별 시간
           </button>
         </div>
+        )}
 
-        {timeMode === "same" ? (
+        {ladder || timeMode === "same" ? (
           <label className="mt-3 block text-xs font-bold text-muted">
-            세 요일 모두 같은 시간
+            {ladder ? "매 회차 같은 시간" : "세 요일 모두 같은 시간"}
             <input
               type="time"
               value={sameTime}
@@ -398,6 +504,50 @@ export function ProgramScheduleSetup({
           </div>
         )}
 
+        {/*
+          사다리는 여기서 **등록에 실제로 쓰이는 숫자**를 받는다. 상세 화면의
+          같은 입력은 미리보기였다 — 그 화면을 건너뛰고 올 수도 있고, 일정을
+          정하는 동안 마음이 바뀔 수도 있어서 정하는 자리는 여기 하나다.
+        */}
+        {ladder && (
+          <fieldset className="mt-5">
+            <legend className="text-xs font-bold text-muted">
+              {programLevelLegend(program)}
+            </legend>
+            <label
+              className="mt-2 flex items-center gap-3"
+              htmlFor="ladder-max-reps"
+            >
+              <input
+                id="ladder-max-reps"
+                type="number"
+                inputMode="numeric"
+                min={LADDER_MAX_REPS_MIN}
+                max={LADDER_MAX_REPS_MAX}
+                value={maxReps}
+                onChange={(event) => {
+                  setMaxReps(Number(event.target.value));
+                  setValidation(null);
+                }}
+                className="h-12 w-24 rounded-card-sm border border-line bg-surface px-3 text-center text-lg font-black text-text"
+              />
+              <span className="text-sm font-bold text-muted">
+                개까지 할 수 있어요
+              </span>
+            </label>
+            {isLadderMaxReps(maxReps) && (
+              <p className="mt-2 text-xs leading-5 text-muted">
+                1일차는{" "}
+                <span className="font-black text-text">
+                  {ladderLabel([...ladderRepsForDay(maxReps, 1)])}
+                </span>
+                로 시작해서 회차마다 한 회씩 올라가요.
+              </p>
+            )}
+          </fieldset>
+        )}
+
+        {!ladder && (
         <fieldset className="mt-5">
           <legend className="text-xs font-bold text-muted">
             {programLevelLegend(program)}
@@ -423,6 +573,7 @@ export function ProgramScheduleSetup({
             ))}
           </div>
         </fieldset>
+        )}
 
         {validation && <p role="alert" className="mt-3 text-xs font-bold text-warn">{validation}</p>}
         <button
@@ -439,9 +590,23 @@ export function ProgramScheduleSetup({
   return (
     <section className="mx-auto w-full max-w-2xl pb-4">
       <ScheduleProgress step={step} />
-      <p className="text-xs font-extrabold text-accent">3/3 · 18회 미리보기</p>
-      <h1 className="mt-2 text-xl font-black text-text">6주 계획을 확인하세요</h1>
-      <p className="mt-1 text-xs leading-5 text-muted">기존 계획은 지우지 않고 가까운 빈 날짜로 옮겨 담습니다.</p>
+      {/*
+        ⚠️ "18회"·"6주"를 박아 두지 마라 (2026-09-04에 실제로 거짓말이 됐다).
+           사다리는 24회 · 4주이고, 근력·인터벌은 18회에 기간이 주당 횟수에
+           따라 4~9주로 달라진다. 회차 수는 **만들어진 일정에서 세고**, 기간은
+           프로그램이 정한 것을 말한다.
+      */}
+      <p className="text-xs font-extrabold text-accent">
+        3/3 · {schedule?.plans.length ?? 0}회 미리보기
+      </p>
+      <h1 className="mt-2 text-xl font-black text-text">
+        {ladder ? "4주 일정을 확인하세요" : "6주 계획을 확인하세요"}
+      </h1>
+      <p className="mt-1 text-xs leading-5 text-muted">
+        {ladder
+          ? "5일 하고 하루 쉬어요. 쉬는 날은 달력에 아무것도 안 담겨요."
+          : "그날 이미 계획이 있어도 지우지 않고 나란히 담아요."}
+      </p>
 
       {schedule && schedule.conflicts.length > 0 && (
         <div className="mt-3 rounded-card border border-accent/45 bg-accent/10 p-3 text-xs leading-5 text-muted">
@@ -454,6 +619,41 @@ export function ProgramScheduleSetup({
         </div>
       )}
 
+      {/*
+        사다리는 **쉬는 날을 같이 보여 준다** (사장님 지시 2026-09-04).
+        훈련일만 나열하면 "왜 하루가 비지?"를 화면이 설명하지 못한다.
+      */}
+      {ladder && schedule ? (
+        <ol className="mt-5 space-y-1" aria-label="회차와 휴식일">
+          {ladderCalendarRows(schedule.plans).map((row) =>
+            row.kind === "session" ? (
+              <li
+                key={`s${row.session}`}
+                data-testid="ladder-row-session"
+                className="flex items-center justify-between rounded-card-sm border border-line bg-surface px-3 py-2"
+              >
+                <span className="text-[11px] font-bold text-accent">
+                  {row.session}일차
+                </span>
+                <span className="text-xs font-bold text-text">
+                  {dateLabel(row.date)}
+                </span>
+              </li>
+            ) : (
+              <li
+                key={`r${row.date}`}
+                data-testid="ladder-row-rest"
+                className="flex items-center justify-between rounded-card-sm border border-dashed border-line px-3 py-2"
+              >
+                <span className="text-[11px] font-bold text-muted">휴식</span>
+                <span className="text-xs font-bold text-muted">
+                  {dateLabel(row.date)}
+                </span>
+              </li>
+            ),
+          )}
+        </ol>
+      ) : (
       <div className="mt-5 space-y-2.5">
         {Array.from({ length: 6 }, (_, weekIndex) => (
           <div
@@ -471,6 +671,7 @@ export function ProgramScheduleSetup({
           </div>
         ))}
       </div>
+      )}
 
       {saveError && <p role="alert" className="mt-3 text-xs font-bold text-warn">{saveError}</p>}
       <button
@@ -479,7 +680,9 @@ export function ProgramScheduleSetup({
         onClick={confirmSchedule}
         className="mt-4 min-h-12 w-full rounded-card bg-accent text-sm font-black text-accent-ink disabled:opacity-50"
       >
-        {pending ? "달력에 담는 중..." : "18회 계획을 달력에 담기"}
+        {pending
+          ? "달력에 담는 중..."
+          : `${schedule?.plans.length ?? 0}회 계획을 달력에 담기`}
       </button>
       <button
         type="button"
@@ -487,7 +690,7 @@ export function ProgramScheduleSetup({
         onClick={() => setStep("slots")}
         className="mt-2 min-h-11 w-full text-xs font-bold text-muted"
       >
-        요일과 시간 다시 정하기
+        {ladder ? "시간 다시 정하기" : "요일과 시간 다시 정하기"}
       </button>
     </section>
   );

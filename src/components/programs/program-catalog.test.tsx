@@ -20,7 +20,10 @@ describe("ProgramCatalog", () => {
     const onPick = vi.fn();
     render(<ProgramCatalog programs={OFFICIAL_PROGRAMS} onPick={onPick} />);
 
-    expect(screen.getAllByRole("button")).toHaveLength(6);
+    // 대표 1 + 나머지 6 (근력 5 · 인터벌 1 · 사다리 1)
+    expect(screen.getAllByRole("button")).toHaveLength(
+      OFFICIAL_PROGRAMS.length,
+    );
     expect(
       screen
         .getByText("시선이 머무는 어깨")
@@ -30,7 +33,9 @@ describe("ProgramCatalog", () => {
     expect(screen.getByTestId("program-cover-featured").className).toContain(
       "aspect-[16/9]",
     );
-    expect(screen.getAllByTestId("program-cover-compact")).toHaveLength(5);
+    expect(screen.getAllByTestId("program-cover-compact")).toHaveLength(
+      OFFICIAL_PROGRAMS.length - 1,
+    );
     for (const cover of screen.getAllByTestId("program-cover-compact")) {
       expect(cover.className).toContain("aspect-[4/3]");
     }
@@ -82,8 +87,9 @@ describe("ProgramCatalog", () => {
     const onPick = vi.fn();
     render(<ProgramCatalog programs={OFFICIAL_PROGRAMS} onPick={onPick} />);
 
-    expect(screen.getAllByRole("button")).toHaveLength(6);
-    expect(screen.getAllByTestId("program-cover-compact")).toHaveLength(5);
+    expect(screen.getAllByRole("button")).toHaveLength(
+      OFFICIAL_PROGRAMS.length,
+    );
     fireEvent.click(screen.getByText(INTERVAL_PROGRAM.eyebrow));
     expect(onPick).toHaveBeenCalledWith("interval-burn-6w");
   });

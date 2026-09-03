@@ -8,7 +8,8 @@ export type OfficialProgramKey =
   | "arm-outline-6w"
   | "lower-balance-6w"
   | "lean-body-6w"
-  | "interval-burn-6w";
+  | "interval-burn-6w"
+  | "pullup-ladder-18";
 
 /**
  * 난이도 3단계 (설계 2026-08-12 §3.2).
@@ -61,18 +62,28 @@ const ex = ({
   loadStepKg,
 });
 
-type ProgramMeta = {
+/**
+ * 어느 종류든 카탈로그 카드에 서려면 있어야 하는 것.
+ *
+ * `coverImage`·`weeks`·`sessionsPerWeek`는 **여기 없다.** 사다리(2026-09-04)는
+ * 사진 대신 숫자를 표지로 쓰고, 6주 A/B/C 구조가 아니다. 그 셋을 공통으로
+ * 두면 사다리가 쓰지 않는 값을 지어내서 채워야 한다.
+ */
+type ProgramMetaBase = {
   key: OfficialProgramKey;
   version: 1;
   eyebrow: string;
   title: string;
   description: string;
   durationMinutes: readonly [number, number];
+  /** 난이도 라벨 — 없으면 근력 기본값(`초보`·`운동 경험 있음`) */
+  levelLabels?: Partial<Record<ProgramLevel, string>>;
+};
+
+type ProgramMeta = ProgramMetaBase & {
   coverImage: string;
   weeks: 6;
   sessionsPerWeek: 3;
-  /** 난이도 라벨 — 없으면 근력 기본값(`초보`·`운동 경험 있음`) */
-  levelLabels?: Partial<Record<ProgramLevel, string>>;
 };
 
 /** 근력 프로그램 — 기존 5종. `kind`가 없으면 이것이다. */
@@ -123,12 +134,51 @@ export type IntervalProgram = ProgramMeta & {
   }[];
 };
 
-export type OfficialProgram = StrengthProgram | IntervalProgram;
+/**
+ * 사다리 회차 (2026-09-04) — 세 번째 종류.
+ *
+ * 근력·인터벌과 셋 다 다른 점이 회차 **모양**에 있다.
+ *
+ * | | 근력 | 인터벌 | 사다리 |
+ * |---|---|---|---|
+ * | 회차당 종목 | 5~6 | 4 | **1** |
+ * | 종목당 세트 | 1~4 | 1 | **5** |
+ * | 세트별 목표 | 없음(처방이 범위를 준다) | 없음 | **세트마다 다른 횟수** |
+ * | 회차를 정하는 것 | 템플릿 A·B·C | 난이도 + 주차 | **회차 번호(며칠째)** |
+ *
+ * 마지막 줄이 핵심이다. 근력은 템플릿 3개를 18회차에 돌려쓰지만 사다리는
+ * **18회차가 전부 다르다** — 그래서 템플릿을 들고 있지 않고, 회차 번호에서
+ * `ladderRepsForDay`로 즉석에서 만든다.
+ *
+ * ⚠️ 그래도 DB에는 `template_key`가 A·B·C로 돌아간다. 등록 RPC가 위치로
+ *    강제하기 때문이다(0066). 사다리에서 그 값은 **아무 뜻이 없고 아무도 안
+ *    읽는다.** 며칠째인지는 `program_week`·`program_session`이 말해 준다
+ *    (`ladderDayOfSession`).
+ */
+export type LadderProgram = ProgramMetaBase & {
+  kind: "ladder";
+  /** 카탈로그 시드 이름과 **글자까지** 같아야 한다 */
+  exerciseName: string;
+  /** 세트 사이 휴식. 원문은 값을 주지 않는다 — 아래 프로그램 주석 참조 */
+  restSeconds: OfficialProgramRestSeconds;
+  /** 화면이 권하는 주당 횟수. 원문의 "5일 훈련 1일 휴식"에 가장 가깝다 */
+  recommendedSessionsPerWeek: 5;
+  /** 진행 규칙을 사람 말로 — 화면과 출처를 잇는 한 줄 */
+  sourceNote: string;
+};
+
+export type OfficialProgram = StrengthProgram | IntervalProgram | LadderProgram;
 
 export function isIntervalProgram(
   program: OfficialProgram,
 ): program is IntervalProgram {
   return program.kind === "interval";
+}
+
+export function isLadderProgram(
+  program: OfficialProgram,
+): program is LadderProgram {
+  return program.kind === "ladder";
 }
 
 export type ResolvedProgramExercise = ProgramExerciseTemplate & {
@@ -183,6 +233,12 @@ export function resolveProgram(
 export function programLevelOptions(
   program: OfficialProgram,
 ): readonly { value: ProgramLevel; label: string }[] {
+  /*
+    사다리는 난이도를 **묻지 않는다** — 최대 개수를 숫자로 받는다
+    (2026-09-04). 빈 목록을 주면 화면이 라디오를 아예 안 그린다. 여기서
+    한 칸이라도 돌려주면 아무 뜻 없는 선택지가 화면에 선다.
+  */
+  if (isLadderProgram(program)) return [];
   const values: readonly ProgramLevel[] = isIntervalProgram(program)
     ? PROGRAM_LEVELS
     : ["beginner", "experienced"];
@@ -199,6 +255,7 @@ export function programLevelOptions(
 
 /** 난이도 묶음의 제목 — 인터벌은 강도를, 근력은 경험을 묻는다 */
 export function programLevelLegend(program: OfficialProgram): string {
+  if (isLadderProgram(program)) return "지금 최대 개수";
   return isIntervalProgram(program) ? "난이도" : "운동 경험";
 }
 
@@ -1103,8 +1160,106 @@ export const STRENGTH_PROGRAMS = [
   },
 ] as const satisfies readonly StrengthProgram[];
 
-/** 카탈로그에 서는 전체 목록 — 근력 5종 + 인터벌 1종 */
+/**
+ * 풀업 사다리 18회 (사장님 지시 2026-09-04).
+ *
+ * 횟수 계산과 출처 원문은 `pullup-ladder.ts`에 있다. 여기는 **일정과 문구**만
+ * 정한다.
+ *
+ * ⚠️ **일정을 요일로 잡지 않는다** — 이 프로그램만 그렇다. 원문의 "5일 훈련
+ *    1일 휴식"은 6일 주기라 요일 목록(7일 주기)으로는 표현할 수 없다.
+ *    `ladder-schedule.ts`가 시작일에서 주기로 날짜를 만든다. 24회차가 정확히
+ *    28일 = 4주에 떨어진다.
+ *
+ *    ⚠️ 처음(2026-09-04 오전)에는 주 5회 요일 근사로 18회차를 깔았다. 그러면
+ *       5일 훈련 뒤 **2일**을 쉬게 되어 원문의 루틴이 아니었다. 사장님 지적으로
+ *       주기 기반으로 바꿨다.
+ *
+ * ⚠️ **휴식 90초는 원문에 없다.** 원문은 세트 사이 휴식을 말하지 않는다.
+ *    그런데 등록 RPC가 처방에 `restSeconds`(60~300)를 **요구**해서 비워 둘 수가
+ *    없다. "실패 지점까지 가지 않는다"는 원문의 취지에 맞춰 승인된 5값 중
+ *    가운데를 골랐다 — 처방이 아니라 **기본값**이고, 사용자가 화면에서 바꾼다.
+ *
+ * ⚠️ 표지 사진이 없다. 사다리는 사진 대신 **숫자**를 표지로 쓴다
+ *    (`ProgramCover`) — 스톡 사진 한 장보다 5·4·3·2·1이 이 프로그램을 더 잘
+ *    설명한다.
+ */
+export const PULLUP_LADDER_PROGRAM: LadderProgram = {
+  key: "pullup-ladder-18",
+  version: 1,
+  kind: "ladder",
+  eyebrow: "실패 지점까지 가지 않는 풀업",
+  title: "최대 개수를 올리는 18회 사다리",
+  description:
+    "파벨 차졸린의 러시안 파이터 풀업 루틴이에요. 지금 할 수 있는 최대 개수를 넣으면 5·4·3·2·1로 시작하는 사다리를 만들고, 회차마다 뒤쪽 세트를 1회씩 올려 18회를 미리 계획해요.",
+  durationMinutes: [10, 20],
+  exerciseName: "풀업",
+  restSeconds: 90,
+  recommendedSessionsPerWeek: 5,
+  sourceNote:
+    "5일 훈련하고 하루 쉬는 걸 4주 반복해요. 쉬는 날은 프로그램이 정해서 달력에 그대로 담겨요 — 24회차, 정확히 4주예요.",
+};
+
+/**
+ * 회차 번호(`program_week`·`program_session`)를 며칠째 사다리인지로 바꾼다.
+ *
+ * 등록 RPC가 18칸을 `week = ⌊i/3⌋+1`, `session = i%3+1`로 **위치까지 강제**하기
+ * 때문에 이 둘만 있으면 몇 번째 회차인지 되돌릴 수 있다. 사다리는 회차마다
+ * 숫자가 다르므로 이 함수가 계획 행과 사다리를 잇는 유일한 열쇠다.
+ */
+export function ladderDayOfSession(week: number, session: number): number {
+  // 24회차 = 8묶음. 근력·인터벌(18회 = 6묶음)보다 넓다 — 0101이 컬럼 제약도
+  // 1~8로 넓혔다. 여기와 DB가 갈라지면 등록이 통째로 거절된다.
+  if (!Number.isInteger(week) || week < 1 || week > 8) {
+    throw new Error(`program_invalid_week:${week}`);
+  }
+  if (!Number.isInteger(session) || session < 1 || session > 3) {
+    throw new Error(`program_invalid_session:${session}`);
+  }
+  return (week - 1) * 3 + session;
+}
+
+/**
+ * 사다리 종목을 카탈로그 행과 잇는다.
+ *
+ * 근력·인터벌의 `resolveProgram`·`resolveIntervalProgram`과 같은 규칙이다 —
+ * **공식 시드만**(`created_by === null`) 쓰고, 없으면 이름을 담아 던진다.
+ * 동명 커스텀 종목이 골라지면 남의 종목에 계획을 심게 된다.
+ */
+export function resolveLadderProgram(
+  program: LadderProgram,
+  catalog: readonly CatalogExercise[],
+): CatalogExercise {
+  const item = catalog.find(
+    (candidate) =>
+      candidate.created_by === null && candidate.name === program.exerciseName,
+  );
+  if (!item) {
+    throw new Error(`program_exercise_missing:${program.exerciseName}`);
+  }
+  return item;
+}
+
+/**
+ * 등록 행에 남길 난이도.
+ *
+ * 사다리는 난이도를 **묻지 않는다** — 최대 개수를 숫자로 받는다. 그런데
+ * `program_enrollments.level_at_start`는 세 값만 받는 not-null 컬럼이라
+ * (0066) 무언가는 넣어야 한다. 최대 개수를 세 칸으로 접어 넣는다.
+ *
+ * ⚠️ **이 값으로 사다리를 되돌릴 수 없다.** 되돌릴 필요도 없다 — 계획 행이
+ *    세트별 횟수를 그대로 들고 있다. 통계에서 "몇 개 하던 사람이 등록했나"를
+ *    거칠게 보는 용도다.
+ */
+export function ladderLevelForMaxReps(maxReps: number): ProgramLevel {
+  if (maxReps <= 6) return "beginner";
+  if (maxReps <= 9) return "moderate";
+  return "experienced";
+}
+
+/** 카탈로그에 서는 전체 목록 — 근력 5종 + 인터벌 1종 + 사다리 1종 */
 export const OFFICIAL_PROGRAMS: readonly OfficialProgram[] = [
   ...STRENGTH_PROGRAMS,
   INTERVAL_PROGRAM,
+  PULLUP_LADDER_PROGRAM,
 ];

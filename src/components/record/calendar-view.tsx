@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   computeDayStamps,
   sessionsInMonth,
@@ -62,11 +62,17 @@ import {
   type LocalExercise,
   type LocalSet,
 } from "@/lib/workout";
+import { planSaveErrorText } from "@/lib/domain/plan-save-error";
 import {
+  PULLUP_LADDER_PROGRAM,
+  ladderDayOfSession,
+} from "@/lib/domain/official-programs";
+import {
+  createWorkoutPlan,
   deleteWorkoutPlan,
   getWorkoutPlans,
   moveWorkoutPlan,
-  saveWorkoutPlan,
+  updateWorkoutPlan,
   type WorkoutPlan,
 } from "@/lib/workout-plan";
 import type { WorkoutRoutine } from "@/lib/routines";
@@ -131,15 +137,26 @@ const PROGRAM_SESSION_KEYS = ["A", "B", "C"] as const;
  * `program_enrollment_id`만 null이 되고 메타는 남을 수 있어(0066 ON DELETE SET
  * NULL) 반쪽짜리 라벨이 나올 수 있다.
  */
-function programSlotLabel(plan: {
-  programWeek: number | null;
-  programSession: number | null;
-}): string | null {
-  const key =
-    plan.programSession === null
-      ? undefined
-      : PROGRAM_SESSION_KEYS[plan.programSession - 1];
-  if (plan.programWeek === null || !key) return null;
+/**
+ * 계획 카드의 회차 배지.
+ *
+ * ⚠️ 사다리는 **"N주차 · A"가 뜻이 없다** (2026-09-04). 주차도 템플릿 키도
+ *    등록 RPC가 위치로 요구해서 채운 값일 뿐이고, 사용자가 아는 것은
+ *    "며칠째"뿐이다. 그 둘로 일차를 되짚어(`ladderDayOfSession`) 보여 준다.
+ */
+function programSlotLabel(
+  plan: {
+    programWeek: number | null;
+    programSession: number | null;
+  },
+  isLadder = false,
+): string | null {
+  if (plan.programWeek === null || plan.programSession === null) return null;
+  if (isLadder) {
+    return `${ladderDayOfSession(plan.programWeek, plan.programSession)}일차`;
+  }
+  const key = PROGRAM_SESSION_KEYS[plan.programSession - 1];
+  if (!key) return null;
   return `${plan.programWeek}주차 · ${key}`;
 }
 
@@ -239,7 +256,17 @@ export function CalendarView({
    * 만들 수 없었다 — 종목만 담으면 3세트 10회짜리 일반 계획이 됐다.
    * 인터벌 시트의 **고르는 화면을 그대로 빌려** 저장만 다르게 한다.
    */
-  const [intervalPlanDate, setIntervalPlanDate] = useState<string | null>(null);
+  /**
+   * 인터벌 시트를 계획 모드로 열 때의 대상 (0101).
+   *
+   * 날짜 하나였던 것을 **날짜 + 계획 id**로 바꿨다. `planId`가 null이면 새로
+   * 만드는 것이고, 있으면 그 계획을 고치는 것이다 — 같은 날 인터벌 계획이
+   * 둘이어도 어느 것을 고치는지 어긋나지 않는다.
+   */
+  const [intervalPlanTarget, setIntervalPlanTarget] = useState<{
+    date: string;
+    planId: string | null;
+  } | null>(null);
   /**
    * 고치는 중인 예정표 (사용자 지시 2026-08-28).
    *
@@ -297,7 +324,16 @@ export function CalendarView({
         setSessions(list);
         setPlans(savedPlans);
         setEnrollments(activePrograms);
-      } catch {
+      } catch (error) {
+        /*
+          ⚠️ `catch {}`로 되돌리지 마라 (2026-09-04에 실제로 물렸다).
+
+          달력이 안 뜨는데 화면에도 콘솔에도 이유가 한 글자도 안 남아서,
+          어느 조회가 죽었는지 알 방법이 없었다. 이 화면은 조회를 넷 붙여
+          쓰기 때문에 원문 없이는 좁힐 수가 없다.
+          (`program-schedule-setup.tsx`가 같은 이유로 이미 이렇게 한다.)
+        */
+        console.error("[calendar] 달력 데이터 조회 실패", error);
         if (!cancelled) setLoadError(true);
       } finally {
         if (!cancelled) setLoading(false);
@@ -329,17 +365,33 @@ export function CalendarView({
     return map;
   }, [sessions, timeZone, view]);
 
-  const planByDate = useMemo(
-    () => new Map(plans.map((plan) => [plan.planDate, plan])),
-    [plans],
-  );
+  /**
+   * 날짜 → 그날의 계획 **전부** (0101).
+   *
+   * ⚠️ 2026-09-04까지 이것은 `Map<날짜, 계획 하나>`였다. 하루 1계획 제약을
+   *    푸는 순간 같은 날 두 번째 계획이 **조용히 사라지는** 자리였다 —
+   *    Map이 같은 키를 덮어쓰기 때문에 화면에는 마지막 하나만 남는다.
+   *    오류도 안 나고 로그도 안 남는다. 목록으로 바꾼 이유가 이것이다.
+   */
+  const plansByDate = useMemo(() => {
+    const map = new Map<string, WorkoutPlan[]>();
+    for (const plan of plans) {
+      const list = map.get(plan.planDate);
+      if (list) list.push(plan);
+      else map.set(plan.planDate, [plan]);
+    }
+    return map;
+  }, [plans]);
 
   const selectedSessions = useMemo(
     () =>
       selectedDate ? sessionsOnDay(sessions, timeZone, selectedDate) : [],
     [selectedDate, sessions, timeZone],
   );
-  const selectedPlan = selectedDate ? planByDate.get(selectedDate) : undefined;
+  const selectedPlans = useMemo(
+    () => (selectedDate ? (plansByDate.get(selectedDate) ?? []) : []),
+    [plansByDate, selectedDate],
+  );
 
   // ── 공식 프로그램 계획 (0066·0067) ──────────────────────────
   //
@@ -362,7 +414,9 @@ export function CalendarView({
    * `tabataResumeFromSession`이 null을 주고 시트는 빈 채로 열린다.
    */
   const intervalPrefill = useMemo(() => {
-    const plan = intervalPlanDate ? planByDate.get(intervalPlanDate) : undefined;
+    const plan = intervalPlanTarget
+      ? plans.find((item) => item.id === intervalPlanTarget.planId)
+      : undefined;
     return tabataResumeFromSession({
       session: plan
         ? {
@@ -372,22 +426,37 @@ export function CalendarView({
         : undefined,
       catalog,
     });
-  }, [intervalPlanDate, planByDate, catalog]);
+  }, [intervalPlanTarget, plans, catalog]);
 
-  const selectedEnrollment = useMemo(
-    () =>
-      selectedPlan?.programEnrollmentId
-        ? (enrollments.find(
-            (item) => item.id === selectedPlan.programEnrollmentId,
-          ) ?? null)
+  /**
+   * 계획이 속한 프로그램 등록. 계획**마다** 다를 수 있다 (0101) — 같은 날에
+   * 서로 다른 프로그램의 회차가 나란히 설 수 있기 때문이다.
+   */
+  const enrollmentOfPlan = useCallback(
+    (plan: WorkoutPlan): ProgramEnrollment | null =>
+      plan.programEnrollmentId
+        ? (enrollments.find((item) => item.id === plan.programEnrollmentId) ??
+          null)
         : null,
-    [selectedPlan, enrollments],
+    [enrollments],
   );
 
-  const selectedPlanMissed = Boolean(
-    selectedPlan?.programEnrollmentId &&
-      selectedPlan.planDate < todayKey &&
-      !completedDateKeys.has(selectedPlan.planDate),
+  /** 이 계획이 사다리 프로그램의 회차인가 — 배지 문구가 갈린다 */
+  const isLadderPlan = useCallback(
+    (plan: WorkoutPlan): boolean =>
+      enrollmentOfPlan(plan)?.programKey === PULLUP_LADDER_PROGRAM.key,
+    [enrollmentOfPlan],
+  );
+
+  /** 지난 프로그램 회차인데 그날 완료 기록이 없으면 놓친 것이다 */
+  const planMissed = useCallback(
+    (plan: WorkoutPlan): boolean =>
+      Boolean(
+        plan.programEnrollmentId &&
+          plan.planDate < todayKey &&
+          !completedDateKeys.has(plan.planDate),
+      ),
+    [completedDateKeys, todayKey],
   );
 
   /** 지금 열린 날짜에서 만든 제안만 보여준다 — 앞 날짜 것이 따라다니지 않게 */
@@ -397,10 +466,10 @@ export function CalendarView({
       : null;
 
   /** 제안을 만든다 — **읽기만 한다.** 실제 이동은 확인 뒤 한 번뿐이다. */
-  function openRescheduleProposal() {
-    if (!selectedDate || !selectedPlan?.programEnrollmentId || !selectedEnrollment)
-      return;
-    const enrollmentId = selectedPlan.programEnrollmentId;
+  function openRescheduleProposal(plan: WorkoutPlan) {
+    const enrollment = enrollmentOfPlan(plan);
+    if (!selectedDate || !plan.programEnrollmentId || !enrollment) return;
+    const enrollmentId = plan.programEnrollmentId;
     const mine = plans.filter(
       (plan) => plan.programEnrollmentId === enrollmentId,
     );
@@ -420,8 +489,8 @@ export function CalendarView({
             completed: completedDateKeys.has(plan.planDate),
           })),
           todayKey,
-          preferredSlots: selectedEnrollment.preferredSlots,
-          timeZone: selectedEnrollment.timeZone || timeZone,
+          preferredSlots: enrollment.preferredSlots,
+          timeZone: enrollment.timeZone || timeZone,
           occupiedDates,
         }),
       });
@@ -431,16 +500,16 @@ export function CalendarView({
     }
   }
 
-  async function handleReschedule() {
+  async function handleReschedule(plan: WorkoutPlan) {
     if (
-      !selectedPlan?.programEnrollmentId ||
+      !plan.programEnrollmentId ||
       !activeProposal ||
       activeProposal.length === 0
     ) {
       return;
     }
     const moves = activeProposal;
-    const enrollmentId = selectedPlan.programEnrollmentId;
+    const enrollmentId = plan.programEnrollmentId;
     setPlanBusy(true);
     try {
       await rescheduleProgramPlans({ enrollmentId, moves });
@@ -550,13 +619,11 @@ export function CalendarView({
 
   async function handleSaveCopy() {
     if (!copySource || !isPlanDateAllowed(copyDate, todayKey)) return;
-    const existing = planByDate.get(copyDate);
-    if (
-      existing &&
-      !window.confirm("이 날짜의 기존 예정표를 새 운동으로 교체할까요?")
-    ) {
-      return;
-    }
+    /*
+      예전에는 그날 계획이 있으면 "교체할까요?"를 물었다. 이제 **하나 더
+      붙는다** (0101) — 오전 풀업 옆에 오후 가슴을 담는 것이 이 기능의 목적이라
+      교체를 물을 이유가 없다.
+    */
     setPlanBusy(true);
     try {
       const saved = await onScheduleSession(
@@ -565,7 +632,7 @@ export function CalendarView({
         copySource.tabataMinutes,
       );
       setPlans((current) => [
-        ...current.filter((plan) => plan.planDate !== saved.planDate),
+        ...current.filter((plan) => plan.id !== saved.id),
         saved,
       ]);
       setCopySource(null);
@@ -576,27 +643,28 @@ export function CalendarView({
     }
   }
 
-  async function handleMovePlan() {
-    if (!selectedPlan || !isPlanDateAllowed(moveDate, todayKey)) return;
-    if (moveDate === selectedPlan.planDate) return;
-    const existing = planByDate.get(moveDate);
-    const replace = Boolean(existing && existing.id !== selectedPlan.id);
-    if (replace && !window.confirm("이 날짜의 기존 예정표를 교체할까요?")) {
-      return;
-    }
+  async function handleMovePlan(plan: WorkoutPlan) {
+    if (!isPlanDateAllowed(moveDate, todayKey)) return;
+    if (moveDate === plan.planDate) return;
     setPlanBusy(true);
     try {
-      const moved = await moveWorkoutPlan(selectedPlan.id, moveDate, replace);
+      /*
+        `replace`는 **언제나 false**다 (0101). 옮겨 갈 날짜에 계획이 있어도
+        비켜 주거나 지울 필요가 없다 — 나란히 선다. 옛 true 경로는 그 날짜의
+        계획을 **지웠다**.
+
+        ⚠️ 0101을 Run하기 전에는 RPC가 `plan_date_taken`으로 막는다.
+           `planSaveErrorText`가 그 잠깐을 사람 말로 알린다.
+      */
+      const moved = await moveWorkoutPlan(plan.id, moveDate, false);
       setPlans((current) => [
-        ...current.filter(
-          (plan) => plan.id !== moved.id && plan.planDate !== moved.planDate,
-        ),
+        ...current.filter((item) => item.id !== moved.id),
         moved,
       ]);
       setSelectedDate(moveDate);
       showPlanToast("예정 날짜를 옮겼어요");
-    } catch {
-      showPlanToast("예정 날짜를 옮기지 못했어요");
+    } catch (error) {
+      showPlanToast(planSaveErrorText(error, "예정 날짜를 옮기지 못했어요"));
     } finally {
       setPlanBusy(false);
     }
@@ -611,10 +679,10 @@ export function CalendarView({
    * ⚠️ 지우는 것은 **달력에 남은 회차**뿐이다. 완료한 운동은 마칠 때 계획 행이
    *    이미 지워져서 여기 없고, 기록은 `workout_sessions`에 그대로 남는다.
    */
-  async function handleQuitProgram() {
-    const enrollmentId = selectedPlan?.programEnrollmentId;
+  async function handleQuitProgram(plan: WorkoutPlan) {
+    const enrollmentId = plan.programEnrollmentId;
     if (!enrollmentId || planBusy) return;
-    const title = selectedEnrollment?.title ?? "이 프로그램";
+    const title = enrollmentOfPlan(plan)?.title ?? "이 프로그램";
     const remaining = plans.filter(
       (plan) => plan.programEnrollmentId === enrollmentId,
     ).length;
@@ -644,13 +712,17 @@ export function CalendarView({
     }
   }
 
-  async function handleDeletePlan() {
-    if (!selectedPlan || !window.confirm("이 운동 예정표를 삭제할까요?")) return;
+  async function handleDeletePlan(plan: WorkoutPlan) {
+    if (!window.confirm("이 운동 예정표를 삭제할까요?")) return;
     setPlanBusy(true);
     try {
-      await deleteWorkoutPlan(selectedPlan.id);
-      setPlans((current) => current.filter((plan) => plan.id !== selectedPlan.id));
-      if (selectedSessions.length === 0) setSelectedDate(null);
+      await deleteWorkoutPlan(plan.id);
+      setPlans((current) => current.filter((item) => item.id !== plan.id));
+      // 그날 계획이 **더 있으면** 패널을 닫지 않는다 (0101) — 하나 지웠다고
+      // 나머지가 화면에서 같이 사라지면 지운 사람이 놀란다
+      if (selectedSessions.length === 0 && selectedPlans.length <= 1) {
+        setSelectedDate(null);
+      }
       showPlanToast("예정표를 삭제했어요");
     } catch {
       showPlanToast("예정표를 삭제하지 못했어요");
@@ -674,16 +746,18 @@ export function CalendarView({
    * 목록은 `toDraftExercises`로 만든다. 기록 화면이 예정표를 불러올 때 쓰는
    * 바로 그 함수이고, 되돌리는 `toPlanExercises`도 짝으로 이미 있다.
    */
-  function openPlanEdit() {
-    if (!selectedPlan || planBusy) return;
-    if (selectedPlan.tabataMinutes) {
-      setIntervalPlanDate(selectedPlan.planDate);
+  function openPlanEdit(plan: WorkoutPlan) {
+    if (planBusy) return;
+    if (plan.tabataMinutes) {
+      // 어느 계획을 고치는지 **id로** 잡는다 — 날짜로 잡으면 같은 날 인터벌이
+      // 둘일 때 어느 것을 고칠지 말할 수 없다 (0101)
+      setIntervalPlanTarget({ date: plan.planDate, planId: plan.id });
       setSelectedDate(null);
       return;
     }
     setEditing({
-      plan: selectedPlan,
-      exercises: toDraftExercises(selectedPlan.exercises, localId),
+      plan,
+      exercises: toDraftExercises(plan.exercises, localId),
     });
     setSelectedDate(null);
   }
@@ -865,11 +939,11 @@ export function CalendarView({
   }
 
   /**
-   * 고친 결과를 그 날짜에 덮어쓴다.
+   * 고친 결과를 그 계획 행에 덮어쓴다.
    *
-   * `saveWorkoutPlan`은 `(user_id, plan_date)` upsert라 **같은 행을 UPDATE**한다
-   * — id·created_at이 유지되고 마이그레이션도 필요 없다(0066의
-   * `workout_plans_update_own`이 이미 허용).
+   * ⚠️ **id로 잡는다** (0101). 예전에는 `(user_id, plan_date)` upsert라 날짜만
+   *    알면 됐지만, 같은 날 계획이 둘이면 날짜는 어느 행인지 말해 주지 못한다.
+   *    0066의 `workout_plans_update_own`이 이미 UPDATE를 허용한다.
    */
   async function handleSavePlanEdit() {
     if (!editing || planBusy) return;
@@ -891,10 +965,9 @@ export function CalendarView({
     }
     setPlanBusy(true);
     try {
-      const saved = await saveWorkoutPlan({
-        userId,
-        planDate: editing.plan.planDate,
-        // upsert라 넘기지 않으면 null로 덮인다 — 원본 세션 연결을 잃지 않는다
+      const saved = await updateWorkoutPlan({
+        planId: editing.plan.id,
+        // 넘기지 않으면 null로 덮인다 — 원본 세션 연결을 잃지 않는다
         sourceSessionId: editing.plan.sourceSessionId,
         exercises,
         tabataMinutes: editing.plan.tabataMinutes,
@@ -914,9 +987,17 @@ export function CalendarView({
     }
   }
 
+  /**
+   * 저장된 계획을 목록에 반영한다.
+   *
+   * ⚠️ **날짜가 아니라 id로** 갈아 끼운다 (0101). 예전에는 같은 날짜의 계획을
+   *    전부 걷어내고 새것을 넣었다 — 하루 1계획일 때는 그것이 곧 "그 행을
+   *    갱신"이었지만, 이제는 방금 만든 계획이 **그날의 다른 계획을 화면에서
+   *    지워 버린다.**
+   */
   function applySavedPlan(saved: WorkoutPlan) {
     setPlans((current) => [
-      ...current.filter((plan) => plan.planDate !== saved.planDate),
+      ...current.filter((plan) => plan.id !== saved.id),
       saved,
     ]);
     setPlanPickerDate(null);
@@ -936,24 +1017,36 @@ export function CalendarView({
     picked: CatalogExercise[],
     minutes: TabataMinutes,
   ): Promise<boolean> {
-    if (!intervalPlanDate || planBusy) return false;
+    if (!intervalPlanTarget || planBusy) return false;
+    const target = intervalPlanTarget;
     setPlanBusy(true);
     try {
-      applySavedPlan(
-        await saveWorkoutPlan({
-          userId,
-          planDate: intervalPlanDate,
-          sourceSessionId: null,
-          exercises: toPlanExercises(
-            tabataDraftExercises(picked, localId, minutes),
-          ),
-          tabataMinutes: minutes,
-        }),
+      const exercises = toPlanExercises(
+        tabataDraftExercises(picked, localId, minutes),
       );
-      setIntervalPlanDate(null);
+      applySavedPlan(
+        // 고치는 중이면 그 행을, 새로 만드는 중이면 새 행을 (0101)
+        target.planId
+          ? await updateWorkoutPlan({
+              planId: target.planId,
+              sourceSessionId: null,
+              exercises,
+              tabataMinutes: minutes,
+            })
+          : await createWorkoutPlan({
+              userId,
+              planDate: target.date,
+              sourceSessionId: null,
+              exercises,
+              tabataMinutes: minutes,
+            }),
+      );
+      setIntervalPlanTarget(null);
       return true;
-    } catch {
-      showPlanToast("인터벌 계획을 저장하지 못했어요");
+    } catch (error) {
+      showPlanToast(
+        planSaveErrorText(error, "인터벌 계획을 저장하지 못했어요"),
+      );
       return false;
     } finally {
       setPlanBusy(false);
@@ -971,15 +1064,15 @@ export function CalendarView({
     setPlanBusy(true);
     try {
       applySavedPlan(
-        await saveWorkoutPlan({
+        await createWorkoutPlan({
           userId,
           planDate: planPickerDate,
           sourceSessionId: null,
           exercises: newPlanExercises(items),
         }),
       );
-    } catch {
-      showPlanToast("운동 계획을 저장하지 못했어요");
+    } catch (error) {
+      showPlanToast(planSaveErrorText(error));
     } finally {
       setPlanBusy(false);
     }
@@ -1002,15 +1095,15 @@ export function CalendarView({
     setPlanBusy(true);
     try {
       applySavedPlan(
-        await saveWorkoutPlan({
+        await createWorkoutPlan({
           userId,
           planDate: planPickerDate,
           sourceSessionId: null,
           exercises: planExercisesFromPicks(picks),
         }),
       );
-    } catch {
-      showPlanToast("운동 계획을 저장하지 못했어요");
+    } catch (error) {
+      showPlanToast(planSaveErrorText(error));
     } finally {
       setPlanBusy(false);
     }
@@ -1028,7 +1121,7 @@ export function CalendarView({
     setPlanBusy(true);
     try {
       applySavedPlan(
-        await saveWorkoutPlan({
+        await createWorkoutPlan({
           userId,
           planDate: planPickerDate,
           sourceSessionId: null,
@@ -1036,8 +1129,8 @@ export function CalendarView({
         }),
       );
       return true;
-    } catch {
-      showPlanToast("운동 계획을 저장하지 못했어요");
+    } catch (error) {
+      showPlanToast(planSaveErrorText(error));
       return false;
     } finally {
       setPlanBusy(false);
@@ -1170,7 +1263,8 @@ export function CalendarView({
             if (day === null) return <div key={`e${i}`} className="aspect-square" />;
             const dateKey = `${view.year}-${pad(view.month)}-${pad(day)}`;
             const stamp = stampByDate.get(dateKey);
-            const plan = planByDate.get(dateKey);
+            const dayPlans = plansByDate.get(dateKey) ?? [];
+            const plan = dayPlans[0];
             const meta = stamp ? VERIFICATION_META[stamp.verification] : null;
             const isToday = dateKey === todayKey;
             /**
@@ -1274,13 +1368,18 @@ export function CalendarView({
               </button>
             </div>
             <div className="flex flex-col gap-2">
-              {!selectedPlan && selectedSessions.length === 0 && (
+              {selectedPlans.length === 0 && selectedSessions.length === 0 && (
                 <p className="text-[12.5px] text-muted">
                   아직 이 날의 계획이 없어요. 종목을 담아 두면 그날 바로 시작할 수
                   있어요.
                 </p>
               )}
-              {!selectedPlan && isPlanDateAllowed(selectedDate, todayKey) && (
+              {/*
+                계획이 **이미 있어도** 이 버튼을 낸다 (0101). 예전에는 그날
+                계획이 하나라도 있으면 사라져서, 오전 풀업을 담은 사람은 오후
+                가슴을 담을 길이 화면에 없었다.
+              */}
+              {isPlanDateAllowed(selectedDate, todayKey) && (
                 <button
                   onClick={() => {
                     setPlanPickerDate(selectedDate);
@@ -1291,8 +1390,11 @@ export function CalendarView({
                   ➕ 새 운동 계획 만들기
                 </button>
               )}
-              {selectedPlan && (
-                <div className="rounded-card border border-good/40 bg-good-weak p-3">
+              {selectedPlans.map((selectedPlan) => (
+                <div
+                  key={selectedPlan.id}
+                  className="rounded-card border border-good/40 bg-good-weak p-3"
+                >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="text-[11px] font-extrabold text-good">
@@ -1309,14 +1411,17 @@ export function CalendarView({
                               {selectedPlan.title}
                             </span>
                           )}
-                          {programSlotLabel(selectedPlan) && (
+                          {programSlotLabel(selectedPlan, isLadderPlan(selectedPlan)) && (
                             <span className="rounded-full bg-surface px-2 py-0.5 text-[10.5px] font-bold text-muted">
-                              {programSlotLabel(selectedPlan)}
+                              {programSlotLabel(
+                                selectedPlan,
+                                isLadderPlan(selectedPlan),
+                              )}
                             </span>
                           )}
                           {/* `--warn-weak` 토큰은 없다. 배지 하나 때문에 팔레트를
                               늘리지 않고 기존 --warn을 옅게 깐다 */}
-                          {selectedPlanMissed && (
+                          {planMissed(selectedPlan) && (
                             <span className="rounded-full bg-warn/15 px-2 py-0.5 text-[10.5px] font-extrabold text-warn">
                               놓친 운동
                             </span>
@@ -1358,7 +1463,7 @@ export function CalendarView({
                       {!selectedPlan.programEnrollmentId &&
                         isPlanDateAllowed(selectedPlan.planDate, todayKey) && (
                           <button
-                            onClick={openPlanEdit}
+                            onClick={() => openPlanEdit(selectedPlan)}
                             disabled={planBusy}
                             className="h-8 rounded-card-sm border border-accent/50 bg-surface px-3 text-xs font-bold text-accent disabled:opacity-50"
                           >
@@ -1366,7 +1471,7 @@ export function CalendarView({
                           </button>
                         )}
                       <button
-                        onClick={handleDeletePlan}
+                        onClick={() => handleDeletePlan(selectedPlan)}
                         disabled={planBusy}
                         className="h-8 rounded-card-sm border border-line bg-surface px-3 text-xs font-bold text-warn disabled:opacity-50"
                       >
@@ -1374,7 +1479,7 @@ export function CalendarView({
                       </button>
                       {selectedPlan.programEnrollmentId && (
                         <button
-                          onClick={handleQuitProgram}
+                          onClick={() => handleQuitProgram(selectedPlan)}
                           disabled={planBusy}
                           className="text-[11px] font-bold text-muted underline decoration-line underline-offset-4 disabled:opacity-50"
                         >
@@ -1424,12 +1529,12 @@ export function CalendarView({
                     18회는 최소 2일 회복 간격으로 짜인 한 덩어리라, 한 장만 밀면
                     나머지와 간격이 깨진다. 남은 회차를 통째로 다시 잡는다.
                   */}
-                  {selectedPlan.programEnrollmentId && selectedPlanMissed ? (
+                  {selectedPlan.programEnrollmentId && planMissed(selectedPlan) ? (
                     <div className="mt-2">
                       {activeProposal === null ? (
                         <button
-                          onClick={openRescheduleProposal}
-                          disabled={planBusy || !selectedEnrollment}
+                          onClick={() => openRescheduleProposal(selectedPlan)}
+                          disabled={planBusy || !enrollmentOfPlan(selectedPlan)}
                           className="h-10 w-full rounded-card-sm border border-line bg-surface px-3 text-xs font-bold text-accent disabled:opacity-40"
                         >
                           남은 일정 다시 잡기
@@ -1476,7 +1581,7 @@ export function CalendarView({
                               취소
                             </button>
                             <button
-                              onClick={handleReschedule}
+                              onClick={() => handleReschedule(selectedPlan)}
                               disabled={planBusy}
                               className="h-9 flex-1 rounded-card-sm bg-accent text-xs font-extrabold text-white disabled:opacity-40"
                             >
@@ -1496,7 +1601,7 @@ export function CalendarView({
                         className="h-10 min-w-0 flex-1 rounded-card-sm border border-line bg-surface px-2 text-xs"
                       />
                       <button
-                        onClick={handleMovePlan}
+                        onClick={() => handleMovePlan(selectedPlan)}
                         disabled={
                           planBusy ||
                           moveDate === selectedPlan.planDate ||
@@ -1509,7 +1614,7 @@ export function CalendarView({
                     </div>
                   ) : null}
                 </div>
-              )}
+              ))}
               {selectedSessions.map((s) => {
                 const meta = VERIFICATION_META[s.verification];
                 const time = timeLabel(s.completedAt, timeZone);
@@ -1678,9 +1783,11 @@ export function CalendarView({
               onChange={(event) => setCopyDate(event.target.value)}
               className="mt-1 h-11 w-full rounded-card-sm border border-line bg-surface-2 px-3 text-sm font-bold"
             />
-            {planByDate.has(copyDate) && (
-              <p className="mt-2 text-[11px] font-bold text-warn">
-                이 날짜에는 이미 예정표가 있어요. 저장할 때 교체 확인을 받습니다.
+            {(plansByDate.get(copyDate)?.length ?? 0) > 0 && (
+              <p className="mt-2 text-[11px] font-bold text-muted">
+                이 날짜에는 이미 예정표가{" "}
+                {plansByDate.get(copyDate)?.length}개 있어요. 지우지 않고 하나 더
+                담아요.
               </p>
             )}
             <button
@@ -1744,7 +1851,10 @@ export function CalendarView({
           addPickerOpen
             ? undefined
             : () => {
-                setIntervalPlanDate(planPickerDate);
+                if (planPickerDate) {
+                  // 새로 만드는 길이라 고칠 대상이 없다
+                  setIntervalPlanTarget({ date: planPickerDate, planId: null });
+                }
                 setPlanPickerDate(null);
               }
         }
@@ -1756,23 +1866,25 @@ export function CalendarView({
         `onPlan`을 넘기면 음원·세션에 손대지 않고 예정표로 저장한다.
       */}
       <TabataSheet
-        open={intervalPlanDate !== null}
+        open={intervalPlanTarget !== null}
         catalog={catalog}
         pastSessions={sessions}
         pastLoading={false}
         routines={routines}
         routinesLoading={routinesLoading}
-        onClose={() => setIntervalPlanDate(null)}
+        onClose={() => setIntervalPlanTarget(null)}
         onCreateCustom={onCreateCustom}
         onBegin={async () => false}
         onComplete={async () => undefined}
         onCancelWorkout={async () => undefined}
         onPlan={saveIntervalPlan}
-        planDateLabel={intervalPlanDate ? dateKeyLabel(intervalPlanDate) : ""}
+        planDateLabel={
+          intervalPlanTarget ? dateKeyLabel(intervalPlanTarget.date) : ""
+        }
         /*
           고치기로 들어왔으면 계획한 종목·코스를 채운 채 연다 (2026-08-28).
-          새로 만드는 경로는 그 날짜에 계획이 없으므로 둘 다 undefined다 —
-          상태를 하나 더 두지 않고 계획에서 바로 읽는다.
+          새로 만드는 경로는 `planId`가 null이라 둘 다 undefined다 —
+          상태를 하나 더 두지 않고 대상 계획에서 바로 읽는다 (0101).
         */
         initialPicked={intervalPrefill?.picked}
         initialMinutes={intervalPrefill?.minutes}

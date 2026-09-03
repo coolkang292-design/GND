@@ -8,7 +8,7 @@ describe("programSaveErrorText", () => {
         message: "program_plan_date_taken:2026-08-14",
         code: "P0001",
       }),
-    ).toBe("8월 14일에 이미 다른 계획이 있어요. 시작일이나 요일을 바꿔 주세요.");
+    ).toBe("8월 14일에 이미 다른 계획이 있어요. 그 계획을 지우거나 시작일을 바꿔 주세요.");
   });
 
   it("진행 중인 프로그램이 있으면 그렇게 말한다", () => {

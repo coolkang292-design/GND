@@ -5,7 +5,9 @@ import { useState } from "react";
 import { UiIcon } from "@/components/ui-icon";
 import {
   isIntervalProgram,
+  isLadderProgram,
   resolveIntervalProgram,
+  resolveLadderProgram,
   resolveProgram,
   PROGRAM_LEVELS,
   type OfficialProgram,
@@ -13,6 +15,7 @@ import {
 } from "@/lib/domain/official-programs";
 import type {
   CreateIntervalEnrollmentInput,
+  CreateLadderEnrollmentInput,
   CreateProgramEnrollmentInput,
   ProgramEnrollment,
   ResolvedProgramSession,
@@ -20,9 +23,9 @@ import type {
 import type { CatalogExercise } from "@/lib/types";
 import { programSaveErrorText } from "@/lib/domain/program-error-text";
 import { requestCalendarView } from "@/lib/record-view";
-import type { WorkoutPlan } from "@/lib/workout-plan";
 import {
   IntervalProgramDetail,
+  LadderProgramDetail,
   ProgramCatalog,
   ProgramDetail,
 } from "./program-catalog";
@@ -40,13 +43,14 @@ type ProgramFlowProps = {
   timeZone: string;
   programs: readonly OfficialProgram[];
   catalog: readonly CatalogExercise[];
-  occupiedPlans: readonly WorkoutPlan[];
   activeEnrollments?: readonly ProgramEnrollment[];
   onCreate: (input: CreateProgramEnrollmentInput) => Promise<CreateResult>;
   /** 인터벌 등록은 회차 모양이 달라 RPC payload도 다르다 (0070) */
   onCreateInterval: (
     input: CreateIntervalEnrollmentInput,
   ) => Promise<CreateResult>;
+  /** 사다리 등록도 마찬가지 — 종목 1개·세트 5개·세트마다 목표 (2026-09-04) */
+  onCreateLadder: (input: CreateLadderEnrollmentInput) => Promise<CreateResult>;
   /** 진행 중인 프로그램 그만두기 (0071). 지운 계획 수를 돌려준다 */
   onCancel?: (enrollmentId: string) => Promise<number>;
 };
@@ -68,10 +72,10 @@ export function ProgramFlow({
   timeZone,
   programs,
   catalog,
-  occupiedPlans,
   activeEnrollments = [],
   onCreate,
   onCreateInterval,
+  onCreateLadder,
   onCancel,
 }: ProgramFlowProps) {
   const [step, setStep] = useState<ProgramFlowStep>("catalog");
@@ -138,6 +142,11 @@ export function ProgramFlow({
         for (const level of PROGRAM_LEVELS) {
           resolveIntervalProgram(selected, level, catalog);
         }
+        setResolvedSessions(null);
+      } else if (isLadderProgram(selected)) {
+        // 종목이 하나뿐이라 회차 템플릿이 없다. 여기서는 그 하나가 카탈로그에
+        // 있는지만 확인한다 — 실제 회차는 최대 개수를 받은 뒤 만든다.
+        resolveLadderProgram(selected, catalog);
         setResolvedSessions(null);
       } else {
         setResolvedSessions(resolveProgram(selected, catalog));
@@ -206,6 +215,13 @@ export function ProgramFlow({
               onSchedule={() => {}}
               scheduleAvailable={false}
             />
+          ) : isLadderProgram(selected) ? (
+            <LadderProgramDetail
+              program={selected}
+              onBack={() => setStep("catalog")}
+              onSchedule={() => {}}
+              scheduleAvailable={false}
+            />
           ) : (
             <ProgramDetail
               program={selected}
@@ -257,6 +273,12 @@ export function ProgramFlow({
             onBack={() => setStep("catalog")}
             onSchedule={openSchedule}
           />
+        ) : isLadderProgram(selected) ? (
+          <LadderProgramDetail
+            program={selected}
+            onBack={() => setStep("catalog")}
+            onSchedule={openSchedule}
+          />
         ) : (
           <ProgramDetail
             program={selected}
@@ -276,7 +298,11 @@ export function ProgramFlow({
     );
   }
 
-  if (!isIntervalProgram(selected) && !resolvedSessions) {
+  if (
+    !isIntervalProgram(selected) &&
+    !isLadderProgram(selected) &&
+    !resolvedSessions
+  ) {
     return (
       <p role="alert" className="rounded-card border border-line bg-surface p-4 text-sm text-warn">
         프로그램 운동 정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.
@@ -289,7 +315,6 @@ export function ProgramFlow({
       today={today}
       timeZone={timeZone}
       program={selected}
-      occupiedPlans={occupiedPlans}
       onConfirm={async (choice) => {
         /*
           회차 종목은 **여기서** 합친다.
@@ -297,6 +322,28 @@ export function ProgramFlow({
           인터벌은 난이도가 종목을 정한다(설계 §3.3). 상세 화면에서 미리
           합쳐 두면 사용자가 다음 화면에서 난이도를 바꿔도 종목이 안 바뀐다.
         */
+        if (isLadderProgram(selected)) {
+          /*
+            사다리는 **최대 개수 하나**로 18회차를 만든다. 화면이 그 숫자를
+            안 주면(있을 수 없지만) 5·4·3·2·1을 지어내는 대신 멈춘다 —
+            지어낸 숫자로 한 달치 계획이 깔리는 편이 훨씬 나쁘다.
+          */
+          if (choice.maxReps === undefined) {
+            throw new Error("program_invalid_max_reps");
+          }
+          const ladderResult = await onCreateLadder({
+            program: selected,
+            item: resolveLadderProgram(selected, catalog),
+            maxReps: choice.maxReps,
+            schedule: choice.schedule,
+            startDate: choice.startDate,
+            timeZone: choice.timeZone,
+            preferredSlots: choice.preferredSlots,
+          });
+          setCreated(ladderResult);
+          setStep("done");
+          return;
+        }
         const result = isIntervalProgram(selected)
           ? await onCreateInterval({
               program: selected,

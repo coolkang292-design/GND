@@ -185,9 +185,9 @@ import type {
   UserGoal,
 } from "@/lib/types";
 import {
+  createWorkoutPlan,
   deleteWorkoutPlan,
-  getWorkoutPlanByDate,
-  saveWorkoutPlan,
+  getWorkoutPlansByDate,
   type WorkoutPlan,
 } from "@/lib/workout-plan";
 import {
@@ -837,12 +837,19 @@ function WorkoutScreen({ userId }: { userId: string }) {
     let cancelled = false;
     void (async () => {
       try {
-        const todayPlan = await getWorkoutPlanByDate(
+        /*
+          같은 날 계획이 여러 개일 수 있다 (0101). 인터벌 시작 버튼은 하나만
+          세우므로 **그날의 첫 인터벌 계획**을 고른다 — 순서는
+          `getWorkoutPlansByDate`가 예정 시각으로 안정시켜 준다.
+        */
+        const todayPlans = await getWorkoutPlansByDate(
           userId,
           dayKey(new Date(), resolveTimeZone()),
         );
         if (cancelled) return;
-        setTodayIntervalPlan(todayPlan?.tabataMinutes ? todayPlan : null);
+        setTodayIntervalPlan(
+          todayPlans.find((plan) => plan.tabataMinutes) ?? null,
+        );
       } catch {
         // 못 읽으면 버튼만 안 뜬다 — 달력에서 시작하면 된다
       }
@@ -860,16 +867,27 @@ function WorkoutScreen({ userId }: { userId: string }) {
     (async () => {
       try {
         const todayKey = dayKey(new Date(), resolveTimeZone());
+        const todayPlans = await getWorkoutPlansByDate(userId, todayKey);
+        /*
+          자동으로 담는 것은 **한 개**다 (0101 뒤에도 그렇다). 여러 개를 한
+          세션에 합치면 오전 풀업과 오후 가슴이 한 기록이 되어, 애초에 계획을
+          나눈 이유가 없어진다. 나머지는 달력에서 골라 시작한다.
+
+          ⚠️ 인터벌이 아닌 것을 먼저 찾는다. 첫 계획이 인터벌이면 아래 판정이
+             false를 줘서 일반 계획이 있어도 아무것도 안 담기던 자리다.
+        */
         const todayPlan =
-          (await getWorkoutPlanByDate(userId, todayKey)) ?? undefined;
+          todayPlans.find((plan) => !plan.tabataMinutes) ?? todayPlans[0];
         if (cancelled) return;
         const current = draftRef.current;
-        setTodayPlanExists(todayPlan !== undefined);
+        setTodayPlanExists(todayPlans.length > 0);
         // 이 이펙트는 catalog가 온 뒤에만 돈다 — 그래서 이 플래그가 서면
         // `applySuggestion`이 종목을 고를 수 있다는 뜻이기도 하다.
         setPlansReady(true);
         // 인터벌이면 담지 않고 버튼만 세운다 — 아래 판정이 false를 준다
-        setTodayIntervalPlan(todayPlan?.tabataMinutes ? todayPlan : null);
+        setTodayIntervalPlan(
+          todayPlans.find((plan) => plan.tabataMinutes) ?? null,
+        );
         if (
           !shouldAutoLoadTodayPlan({
             plan: todayPlan,
@@ -2151,7 +2169,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
         }
         exercises = tabataDraftExercises(picked, localId, course);
       }
-      const plan = await saveWorkoutPlan({
+      const plan = await createWorkoutPlan({
         userId,
         planDate,
         sourceSessionId: sessionId,

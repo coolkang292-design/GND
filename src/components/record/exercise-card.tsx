@@ -152,7 +152,7 @@ export function ExerciseCard({
             {restClock(exercise.prescription.restSeconds)}
           </p>
           <p className="mt-1 text-[11px] leading-relaxed whitespace-pre-line text-muted">
-            {programWeightGuide(exercise.prescription)}
+            {programWeightGuide(exercise.prescription, exercise.exerciseType)}
           </p>
         </div>
       )}

@@ -16,7 +16,16 @@ export function programSaveErrorText(error: unknown): string {
 
   const taken = /program_plan_date_taken:(\d{4})-(\d{2})-(\d{2})/.exec(raw);
   if (taken) {
-    return `${Number(taken[2])}월 ${Number(taken[3])}일에 이미 다른 계획이 있어요. 시작일이나 요일을 바꿔 주세요.`;
+    /*
+      ⚠️ "요일을 바꿔 주세요"라고 하지 않는다 (2026-09-04에 사장님이 화면에서
+         잡았다). 사다리는 **요일을 고르는 화면이 없다** — 날짜를 6일 주기가
+         정한다. 고칠 수 없는 것을 고치라고 하면 사용자는 화면을 뒤지다 만다.
+
+      ⚠️ 이 오류 자체가 0102를 Run하면 **영영 안 난다.** 그때부터 프로그램은
+         남의 계획이 있는 날에도 나란히 선다. 그렇다고 지우지 마라 — 문구가
+         남아 있어야 제약이 되살아났을 때(복구·롤백) 말이 통한다.
+    */
+    return `${Number(taken[2])}월 ${Number(taken[3])}일에 이미 다른 계획이 있어요. 그 계획을 지우거나 시작일을 바꿔 주세요.`;
   }
   if (raw.includes("program_already_active")) {
     return "이미 진행 중인 프로그램이에요. 기존 프로그램을 마친 뒤에 등록할 수 있어요.";

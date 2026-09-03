@@ -75,9 +75,9 @@ describe("ProgramFlow", () => {
         timeZone="Asia/Seoul"
         programs={OFFICIAL_PROGRAMS}
         catalog={catalog}
-        occupiedPlans={[]}
         onCreate={onCreate}
         onCreateInterval={vi.fn()}
+        onCreateLadder={vi.fn()}
       />,
     );
 
@@ -125,10 +125,10 @@ describe("ProgramFlow", () => {
         timeZone="Asia/Seoul"
         programs={OFFICIAL_PROGRAMS}
         catalog={catalog}
-        occupiedPlans={[]}
         activeEnrollments={[activeEnrollment]}
         onCreate={vi.fn()}
         onCreateInterval={vi.fn()}
+        onCreateLadder={vi.fn()}
       />,
     );
 
@@ -160,10 +160,10 @@ describe("ProgramFlow", () => {
         timeZone="Asia/Seoul"
         programs={OFFICIAL_PROGRAMS}
         catalog={catalog}
-        occupiedPlans={[]}
         activeEnrollments={[activeShoulderEnrollment]}
         onCreate={vi.fn()}
         onCreateInterval={vi.fn()}
+        onCreateLadder={vi.fn()}
         onCancel={onCancel}
       />,
     );
@@ -179,7 +179,7 @@ describe("ProgramFlow", () => {
     await act(async () => fireEvent.click(quit));
     expect(onCancel).toHaveBeenCalledWith(activeShoulderEnrollment.id);
     expect(
-      screen.getByRole("heading", { name: "목표를 고르면 18회 계획이 완성돼요" }),
+      screen.getByRole("heading", { name: "목표를 고르면 전체 계획이 완성돼요" }),
     ).toBeTruthy();
 
     confirmSpy.mockRestore();
@@ -194,10 +194,10 @@ describe("ProgramFlow", () => {
         timeZone="Asia/Seoul"
         programs={OFFICIAL_PROGRAMS}
         catalog={catalog}
-        occupiedPlans={[]}
         activeEnrollments={[activeShoulderEnrollment]}
         onCreate={vi.fn()}
         onCreateInterval={vi.fn()}
+        onCreateLadder={vi.fn()}
         onCancel={vi.fn().mockRejectedValue({ message: "program_not_active" })}
       />,
     );
@@ -222,10 +222,10 @@ describe("ProgramFlow", () => {
         timeZone="Asia/Seoul"
         programs={OFFICIAL_PROGRAMS}
         catalog={catalog}
-        occupiedPlans={[]}
         activeEnrollments={[activeShoulderEnrollment]}
         onCreate={vi.fn()}
         onCreateInterval={vi.fn()}
+        onCreateLadder={vi.fn()}
       />,
     );
 
@@ -242,9 +242,9 @@ describe("ProgramFlow", () => {
         timeZone="Asia/Seoul"
         programs={OFFICIAL_PROGRAMS}
         catalog={catalog}
-        occupiedPlans={[]}
         onCreate={vi.fn().mockRejectedValue(new Error("rpc failed"))}
         onCreateInterval={vi.fn()}
+        onCreateLadder={vi.fn()}
       />,
     );
 
@@ -269,9 +269,9 @@ describe("ProgramFlow", () => {
         timeZone="Asia/Seoul"
         programs={OFFICIAL_PROGRAMS}
         catalog={[]}
-        occupiedPlans={[]}
         onCreate={vi.fn()}
         onCreateInterval={vi.fn()}
+        onCreateLadder={vi.fn()}
       />,
     );
 

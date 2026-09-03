@@ -59,6 +59,8 @@ export const requiredNames = [
   "슈퍼맨 로우",
   "레그 레이즈",
   "플러터 킥",
+  // 사다리 (2026-09-04) — 종목이 이 하나뿐이라 이름이 어긋나면 프로그램이 통째로 못 선다
+  "풀업",
 ];
 
 const scriptPath = fileURLToPath(import.meta.url);

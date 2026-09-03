@@ -4,6 +4,7 @@ import {
   PROGRAM_LEVELS,
   intervalExerciseName,
   isIntervalProgram,
+  isLadderProgram,
 } from "./official-programs";
 import {
   EXERCISE_GUIDES,
@@ -73,9 +74,12 @@ describe("EXERCISE_GUIDES — GND 핵심 안내", () => {
                 ),
               ),
             )
-          : program.sessions.flatMap((session) =>
-              session.exercises.map((exercise) => exercise.exerciseName),
-            ),
+          : isLadderProgram(program)
+            // 사다리는 회차 템플릿이 없다 — 종목이 처음부터 하나다 (2026-09-04)
+            ? [program.exerciseName]
+            : program.sessions.flatMap((session) =>
+                session.exercises.map((exercise) => exercise.exerciseName),
+              ),
       ),
     );
     expect(programNames.size).toBeGreaterThanOrEqual(15);
