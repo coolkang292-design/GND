@@ -16,6 +16,11 @@ import type {
   RecommendPart,
   SituationKey,
 } from "@/lib/domain/recommended-exercises";
+import type { PlanExercise } from "@/lib/domain/workout-plan";
+import {
+  buildPresetRoutineExercises,
+  visiblePresetRoutines,
+} from "@/lib/domain/preset-routines";
 import type { WorkoutRoutine } from "@/lib/routines";
 import type { BodyPart, CatalogExercise, ExerciseType } from "@/lib/types";
 import type { CalendarSession, LocalSet } from "@/lib/workout";
@@ -62,7 +67,17 @@ type PickerMode =
   | "setup"
   | "search"
   | "past"
-  | "routine";
+  | "routine"
+  /**
+   * 추천 루틴 (2026-09-03) — 앱이 미리 만들어 둔 루틴.
+   *
+   * ⚠️ **허브(`hub`)가 아니라 '운동 직접 고르기' 안의 '빠르게 찾기'에 둔다.**
+   *    허브는 "네 개만 둔다"가 사용자 지시로 고정돼 있다
+   *    (`exercise-entry-hub.tsx` 주석, 2026-08-12). 또 `내 루틴`은
+   *    `routines?.length`가 0이면 입구가 숨는데, 추천 루틴이 가장 필요한
+   *    사람이 바로 **루틴 0개인 신규 사용자**라 거기 두면 볼 사람이 못 본다.
+   */
+  | "preset";
 
 /** 고른 종목 + 정해진 세트 — 기록 draft로도, 예정표로도 갈 수 있는 모양 */
 export type ConfiguredPick = { item: CatalogExercise; sets: LocalSet[] };
@@ -104,6 +119,16 @@ type PickerProps = {
   routinesLoading?: boolean;
   /** 루틴 하나를 불러온다 — true면 시트를 닫는다 */
   onPickRoutine?: (routine: WorkoutRoutine) => Promise<boolean>;
+  /**
+   * 추천 루틴 담기 (2026-09-03). `onPickRoutine`과 **같은 핸들러**를 받는다 —
+   * 기록 페이지의 `addRoutine`이 `name`·`exercises`·`tabataMinutes`만 읽도록
+   * 좁혀져 있어서 DB 행이 아닌 추천 루틴도 그대로 통과한다.
+   */
+  onPickPreset?: (routine: {
+    name: string;
+    exercises: PlanExercise[];
+    tabataMinutes: number | null;
+  }) => Promise<boolean>;
   onRenameRoutine?: (routineId: string, name: string) => Promise<boolean>;
   onDeleteRoutine?: (routine: WorkoutRoutine) => Promise<void>;
   /**
@@ -145,6 +170,7 @@ function PickerSheet({
   routines,
   routinesLoading = false,
   onPickRoutine,
+  onPickPreset,
   onRenameRoutine,
   onDeleteRoutine,
 }: PickerProps) {
@@ -157,6 +183,25 @@ function PickerSheet({
    * 지킨다. **고를 것이 없는 진입 카드**는 처음 온 사람에게 막다른 길일 뿐이다.
    */
   const routinesEnabled = Boolean(routines?.length && onPickRoutine);
+  /** 카탈로그에 종목이 있는 추천 루틴만 (없으면 카드를 아예 안 낸다) */
+  const presetRoutines = useMemo(() => visiblePresetRoutines(catalog), [catalog]);
+  const [presetBusyKey, setPresetBusyKey] = useState<string | null>(null);
+
+  async function pickPreset(key: string) {
+    const preset = presetRoutines.find((p) => p.key === key);
+    if (!preset || !onPickPreset) return;
+    const exercises = buildPresetRoutineExercises(preset, catalog);
+    if (!exercises) return;
+    setPresetBusyKey(key);
+    try {
+      // ⚠️ tabataMinutes는 **null**이다. 값을 넣으면 `addRoutine`이 인터벌로
+      //    되살려 사다리가 통째로 사라진다(그 분기가 먼저 걸린다).
+      if (await onPickPreset({ name: preset.name, exercises, tabataMinutes: null }))
+        onClose();
+    } finally {
+      setPresetBusyKey(null);
+    }
+  }
   const [mode, setMode] = useState<PickerMode>(initialMode);
   const [routineBusyId, setRoutineBusyId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -482,6 +527,23 @@ function PickerSheet({
                   부위별 추천
                 </button>
               </div>
+
+              {/* 추천 루틴 (2026-09-03) — 세트까지 정해진 루틴을 통째로 담는다.
+                  ⚠️ 위 두 칸과 하는 일이 다르다: 상황별·부위별은 **종목만**
+                     고르게 하고 세트는 기본값(3세트 10회)이 붙는다. 이쪽은
+                     세트별 횟수가 다른 사다리라 그 기본값으로는 표현이 안 된다.
+                  ⚠️ 담을 곳이 없는 화면(달력 예정표)에서는 `onPickPreset`을
+                     안 넘기므로 버튼 자체가 안 나온다. */}
+              {onPickPreset && presetRoutines.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setMode("preset")}
+                  className="mt-2 flex min-h-11 w-full items-center justify-center gap-2 rounded-card-sm border border-line bg-surface-2 px-3 text-sm font-bold text-text"
+                >
+                  <span aria-hidden>🪜</span>
+                  추천 루틴
+                </button>
+              )}
             </div>
 
             {/* ⭐ 자주 한 운동 — 검색·부위 필터 중에는 숨긴다 (설계 2026-08-02).
@@ -736,6 +798,39 @@ function PickerSheet({
                 onRename={renameRoutine}
                 onDelete={(routine) => void removeRoutine(routine)}
               />
+            </div>
+          </>
+        ) : mode === "preset" ? (
+          <>
+            {backHeader("추천 루틴")}
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <ul className="flex flex-col gap-2 pb-2">
+                {presetRoutines.map((preset) => (
+                  <li
+                    key={preset.key}
+                    className="rounded-card border border-line bg-surface p-4 shadow-card"
+                  >
+                    <p className="text-sm font-extrabold">{preset.name}</p>
+                    <p className="mt-0.5 text-[11px] text-faint">{preset.sub}</p>
+                    <p className="mt-2 text-[12.5px] font-bold text-text">
+                      {preset.summary}
+                    </p>
+                    {/* 앱이 매일 자동으로 올려 주지 않는다는 사실을 여기서 밝힌다 —
+                        안 밝히면 사용자가 진행을 앱이 해 줄 거라고 믿는다. */}
+                    <p className="mt-1 text-[11px] leading-relaxed text-muted">
+                      {preset.howTo}
+                    </p>
+                    <button
+                      type="button"
+                      disabled={presetBusyKey !== null}
+                      onClick={() => void pickPreset(preset.key)}
+                      className="mt-3 h-11 w-full rounded-full bg-accent text-sm font-extrabold text-accent-ink disabled:opacity-50"
+                    >
+                      {presetBusyKey === preset.key ? "담는 중…" : "담기"}
+                    </button>
+                  </li>
+                ))}
+              </ul>
             </div>
           </>
         ) : (

@@ -64,6 +64,7 @@ import {
   toDraftExercises,
   toPlanExercises,
   shouldAutoLoadTodayPlan,
+  type PlanExercise,
 } from "@/lib/domain/workout-plan";
 import {
   exerciseImprovementNote,
@@ -1499,7 +1500,19 @@ function WorkoutScreen({ userId }: { userId: string }) {
    * (예정표의 `handleLoadPlan`은 "지우고 바꿀까요?"를 묻지만 그건 그날의 계획을
    * 통째로 여는 별개 흐름이다.)
    */
-  async function addRoutine(routine: WorkoutRoutine): Promise<boolean> {
+  /**
+   * ⚠️ 매개변수 타입이 `WorkoutRoutine`이 아니라 **그보다 좁은 구조**다
+   * (2026-09-03). 이 함수는 `name`·`exercises`·`tabataMinutes` 셋만 읽고
+   * `id`·`userId`·타임스탬프를 한 번도 안 쓴다. 좁혀 두면 **DB에 없는 추천
+   * 루틴**(`domain/preset-routines.ts`)도 가짜 id를 지어내지 않고 그대로
+   * 태울 수 있다. `WorkoutRoutine`은 구조적으로 이 타입을 만족하므로
+   * `onPickRoutine={addRoutine}`은 그대로 통과한다.
+   */
+  async function addRoutine(routine: {
+    name: string;
+    exercises: PlanExercise[];
+    tabataMinutes: number | null;
+  }): Promise<boolean> {
     /*
       인터벌 루틴은 **인터벌로 되살린다** (0074, 사용자 지시 2026-08-13).
       지난 기록 경로(`handleScheduleFromPast`)와 같은 규칙이다 — 같은 운동을
@@ -3673,6 +3686,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
             routines={routines ?? undefined}
             routinesLoading={routinesLoading}
             onPickRoutine={addRoutine}
+            onPickPreset={addRoutine}
             onRenameRoutine={handleRenameRoutine}
             onDeleteRoutine={handleDeleteRoutine}
           />
