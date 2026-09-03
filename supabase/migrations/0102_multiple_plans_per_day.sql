@@ -522,6 +522,8 @@ begin
 
     ⚠️ `p_replace` 인자는 **남겨 둔다.** 서명을 바꾸면 배포 순서에 따라
        옛 앱이 함수를 못 찾는다. 값은 이제 아무 일도 하지 않는다.
+  */
+
   update public.workout_plans
   set plan_date = p_target_date,
       scheduled_at = null
