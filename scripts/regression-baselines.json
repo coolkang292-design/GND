@@ -20,14 +20,14 @@
     "  fixture  — dev-fixture.mjs create + challenge 가 먼저 있어야 한다.",
     "  accounts — 실행마다 익명 계정을 만든다. 연달아 돌리면 429(rate limit)에 걸린다."
   ],
-  "recordedAt": "2026-09-03",
+  "recordedAt": "2026-09-09",
   "scripts": {
     "rls-test": {
-      "assertions": 129,
+      "assertions": 147,
       "source": "measured",
       "tier": "accounts",
       "core": true,
-      "what": "RLS 정책 전량. 0056 루틴 +10, 0064 루틴 종목 교체 +3으로 115→128이 됐다."
+      "what": "RLS 정책 전량. 0056 루틴 +10, 0064 루틴 종목 교체 +3으로 115→128이 됐다. 0103~0106 다중 사진 +18로 129→147 (Phase 4b): 슬롯 0..4 상한·중복 슬롯 차단·sort_order 직접 PATCH 차단·재정렬 RPC 소유권/전량/중복 검사·행과 스토리지 삭제 소유권·인증 해제 RPC·⚠️행이 살아 있는 파일은 주인도 못 지운다(0106 — 행만 남기고 파일을 지우면 사진 없이 photo_required 크레딧을 받는다). ⚠️ storage.objects 정책은 pnpm db:snapshot 이 한 줄도 안 담는다(기존 upload/read 정책도 0건) — 스토리지 정책 회귀는 스키마 diff 로 절대 안 잡히고 이 스크립트가 유일한 감시자다."
     },
     "crew-link-check": {
       "assertions": 53,

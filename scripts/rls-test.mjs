@@ -279,6 +279,21 @@ async function storageGet(token, path) {
   });
   return res.status;
 }
+/**
+ * 0104의 `workout_images_delete_own` 정책을 실측한다.
+ *
+ * ⚠️⚠️ **이 단언들이 유일한 감시자다.** `pnpm db:snapshot`은 `storage.objects`
+ * 정책을 한 줄도 담지 않는다 — 새 DELETE 정책뿐 아니라 기존 upload/read 정책도
+ * 스냅샷에 0건이다(2026-09-10 확인). 즉 **스토리지 정책 회귀는 스키마 diff로
+ * 절대 안 잡힌다.** 여기서 빠지면 아무도 안 본다.
+ */
+async function storageDelete(token, path) {
+  const res = await fetch(`${URL_}/storage/v1/object/workout-images/${path}`, {
+    method: "DELETE",
+    headers: { apikey: KEY, Authorization: `Bearer ${token}` },
+  });
+  return res.status;
+}
 
 // 인증 없는 세션엔 RPC 거부 (image_not_found)
 const noImg = await api(A.token, "POST", "/rest/v1/rpc/set_workout_verification", {
@@ -335,6 +350,150 @@ check("A가 private 세션 이미지 행 생성", privRow.status === 201);
 const bPrivRow = await api(B.token, "GET", `/rest/v1/workout_images?session_id=eq.${session2.id}`);
 check("B는 private 세션 이미지 행 조회 불가", bPrivRow.status === 200 && bPrivRow.json.length === 0);
 check("B는 private 세션 사진 다운로드 불가", (await storageGet(B.token, privPath)) >= 400);
+
+// ── Phase 4b: 다중 사진 (0103·0104·0105) ────────────────────────
+//
+// 0103 이전에는 unique(session_id)가 세션당 1장을 강제했다. 지금은 슬롯
+// 0..4 × unique(session_id, sort_order)가 **6장째를 물리적으로 막는다.**
+// 아래는 그 상한과 소유권이 실제로 서는지 HTTP 계층에서 본다.
+console.log("\n── Phase 4b: 다중 사진 슬롯·소유권 (0103~0105) ──");
+
+const slotPaths = [];
+for (let slot = 1; slot <= 4; slot++) {
+  const p = `${A.id}/${session.id}/slot${slot}.jpg`;
+  slotPaths.push(p);
+  await storagePut(A.token, p);
+  const row = await api(A.token, "POST", "/rest/v1/workout_images", {
+    session_id: session.id, user_id: A.id, image_path: p, source: "album", sort_order: slot,
+  });
+  if (slot === 1) check("A가 같은 세션에 2번째 사진 추가 (0103 이전엔 409였다)", row.status === 201, JSON.stringify(row.json));
+}
+const fiveRows = await api(A.token, "GET", `/rest/v1/workout_images?session_id=eq.${session.id}&select=id,sort_order&order=sort_order`);
+check("세션당 5장까지 들어간다", fiveRows.status === 200 && fiveRows.json.length === 5, JSON.stringify(fiveRows.json));
+check(
+  "슬롯이 0,1,2,3,4로 매겨진다",
+  fiveRows.json.map((r) => r.sort_order).join(",") === "0,1,2,3,4",
+  JSON.stringify(fiveRows.json),
+);
+
+// 6번째 — CHECK(0..4)가 막아야 한다
+const sixthPath = `${A.id}/${session.id}/slot5.jpg`;
+await storagePut(A.token, sixthPath);
+const sixth = await api(A.token, "POST", "/rest/v1/workout_images", {
+  session_id: session.id, user_id: A.id, image_path: sixthPath, source: "album", sort_order: 5,
+});
+check("6번째 사진(sort_order=5) 차단 — DB가 상한을 지킨다", sixth.status >= 400, JSON.stringify(sixth.json));
+
+// 이미 찬 슬롯 — UNIQUE(session_id, sort_order)가 막아야 한다
+const dupSlot = await api(A.token, "POST", "/rest/v1/workout_images", {
+  session_id: session.id, user_id: A.id, image_path: sixthPath, source: "album", sort_order: 2,
+});
+check("이미 찬 슬롯에 겹쳐 넣기 차단", dupSlot.status >= 400, JSON.stringify(dupSlot.json));
+
+// ⚠️ sort_order를 **고칠** 수는 없어야 한다. 0096이 UPDATE grant를 안 줬고
+//    UPDATE 정책도 없다 — 순서 변경은 RPC만 통한다.
+const patchSlot = await api(
+  A.token, "PATCH",
+  `/rest/v1/workout_images?id=eq.${fiveRows.json[0].id}`,
+  { sort_order: 3 },
+);
+check("클라가 sort_order를 직접 PATCH 못 한다 (재정렬은 RPC만)", patchSlot.status >= 400, `${patchSlot.status}`);
+
+// 재정렬 RPC — 소유자만, 전량만
+const ids = fiveRows.json.map((r) => r.id);
+const reorderB = await api(B.token, "POST", "/rest/v1/rpc/reorder_workout_images", {
+  p_session_id: session.id, p_image_ids: ids,
+});
+check("B는 A 세션의 사진 순서를 못 바꾼다", reorderB.status >= 400, JSON.stringify(reorderB.json));
+
+const reorderPartial = await api(A.token, "POST", "/rest/v1/rpc/reorder_workout_images", {
+  p_session_id: session.id, p_image_ids: ids.slice(0, 3),
+});
+check("부분 목록 재정렬 거부 (안 보낸 사진이 옛 슬롯에 남는다)", reorderPartial.status >= 400, JSON.stringify(reorderPartial.json));
+
+const reorderDup = await api(A.token, "POST", "/rest/v1/rpc/reorder_workout_images", {
+  p_session_id: session.id, p_image_ids: [ids[0], ids[0], ids[1], ids[2], ids[3]],
+});
+check("같은 id를 두 번 보낸 재정렬 거부", reorderDup.status >= 400, JSON.stringify(reorderDup.json));
+
+const reversed = [...ids].reverse();
+const reorderOk = await api(A.token, "POST", "/rest/v1/rpc/reorder_workout_images", {
+  p_session_id: session.id, p_image_ids: reversed,
+});
+// ⚠️ 204다. `reorder_workout_images`는 void를 돌려줘서 PostgREST가 No Content로
+//    답한다 — 200만 통과로 두면 성공을 실패로 신고한다(2026-09-10에 실제로 그랬다).
+check("A는 자기 사진 순서를 뒤집을 수 있다", reorderOk.status < 300, `${reorderOk.status}`);
+const afterReorder = await api(A.token, "GET", `/rest/v1/workout_images?session_id=eq.${session.id}&select=id,sort_order&order=sort_order`);
+check(
+  "뒤집힌 순서가 실제로 저장됐다",
+  afterReorder.json.map((r) => r.id).join(",") === reversed.join(","),
+  JSON.stringify(afterReorder.json),
+);
+
+// 삭제 — 행과 스토리지 모두 소유자만
+const victim = afterReorder.json[0];
+const bDeleteRow = await api(B.token, "DELETE", `/rest/v1/workout_images?id=eq.${victim.id}`);
+const stillThere = await api(A.token, "GET", `/rest/v1/workout_images?id=eq.${victim.id}`);
+check("B는 A의 사진 행을 못 지운다", stillThere.status === 200 && stillThere.json.length === 1, `${bDeleteRow.status}`);
+check("B는 A의 스토리지 객체를 못 지운다", (await storageDelete(B.token, imgPath)) >= 400);
+
+/*
+  ⚠️⚠️ **행이 살아 있는 파일은 주인도 못 지운다** (0106).
+
+  0104는 "자기 폴더면 지울 수 있다"로 너무 넓게 열었고, 그러면 **행은 남기고
+  파일만 지우는** 길이 생긴다. `get_challenge_period_sessions`가
+  `exists(workout_images)`만 보므로 **사진 없이 photo_required 인증 크레딧**을
+  받게 된다. `challenge-photo-test.mjs`의 옛 단언이 이걸 잡았다.
+
+  그래서 앱의 삭제 순서가 **행 → 파일**이다(`deleteWorkoutImage`). 아래 두
+  단언이 그 순서를 지킨다 — 뒤집으면 첫 번째가 깨진다.
+*/
+check(
+  "행이 살아 있는 파일은 주인도 못 지운다 (0106 — 사진 없는 인증 크레딧 방지)",
+  (await storageDelete(A.token, slotPaths[0])) >= 400,
+);
+const rowForSlot0 = await api(A.token, "GET", `/rest/v1/workout_images?image_path=eq.${encodeURIComponent(slotPaths[0])}&select=id`);
+await api(A.token, "DELETE", `/rest/v1/workout_images?id=eq.${rowForSlot0.json?.[0]?.id}`);
+check(
+  "행을 먼저 지우면 파일도 지울 수 있다 (앱의 삭제 순서)",
+  (await storageDelete(A.token, slotPaths[0])) < 400,
+);
+
+// 인증 해제 RPC (0105) — 사진이 남아 있으면 거절해야 한다
+const clearWhileFull = await api(A.token, "POST", "/rest/v1/rpc/clear_workout_verification", {
+  p_session_id: session.id,
+});
+check("사진이 남아 있으면 인증 해제 거부 (내려가기만 하는 함수)", clearWhileFull.status >= 400, JSON.stringify(clearWhileFull.json));
+const clearByB = await api(B.token, "POST", "/rest/v1/rpc/clear_workout_verification", {
+  p_session_id: session.id,
+});
+check("B는 A 세션의 인증을 못 푼다", clearByB.status >= 400, JSON.stringify(clearByB.json));
+
+await api(A.token, "DELETE", `/rest/v1/workout_images?session_id=eq.${session.id}`);
+const clearEmpty = await api(A.token, "POST", "/rest/v1/rpc/clear_workout_verification", {
+  p_session_id: session.id,
+});
+check(
+  "사진을 다 지우면 인증이 none으로 풀린다",
+  clearEmpty.status === 200 && clearEmpty.json?.verification_status === "none",
+  JSON.stringify(clearEmpty.json),
+);
+
+/*
+  ⚠️ 이 스크립트가 만든 스토리지 객체를 치운다.
+
+  **운영 버킷에 고아 객체가 95개 쌓여 있는 이유가 이것이다** (2026-09-10 조사:
+  객체 178개 / workout_images 행 83개). 계정은 정리해도 스토리지는 아무도 안
+  지웠는데, 0104 전에는 **DELETE 정책이 아예 없어서 지울 수단도 없었다.**
+  이제 지울 수 있으므로 돌 때마다 자기 뒷정리를 한다.
+  (이미 쌓인 95개는 이번 범위가 아니다 — 별도 과제)
+*/
+// ⚠️ **행 → 파일 순서다.** 0106 정책이 행 있는 파일의 삭제를 막으므로,
+//    private 세션(session2)의 행도 먼저 지워야 그 파일이 정리된다.
+await api(A.token, "DELETE", `/rest/v1/workout_images?session_id=eq.${session2.id}`);
+for (const p of [imgPath, privPath, sixthPath, ...slotPaths]) {
+  await storageDelete(A.token, p).catch(() => {});
+}
 
 console.log("\n── Phase 5: 챌린지 (KPI 게이트·비공개·기록 보존) ──");
 C = await anonUser(); // 비크루 외부인

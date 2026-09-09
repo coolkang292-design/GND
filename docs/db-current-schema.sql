@@ -7,7 +7,7 @@
 -- 쓰는 법: 함수·정책의 '현행' 정의가 필요할 때 마이그레이션 51개를
 -- 뒤지지 말고 이 파일을 검색하라. 마이그레이션을 적용한 뒤에는 다시 뽑아라.
 --
--- 함수 100개 · 정책 79개 · 인덱스 100개
+-- 함수 101개 · 정책 79개 · 인덱스 100개
 
 -- ════════════════════════════════════════════════════════════
 -- 함수
@@ -861,6 +861,46 @@ begin
   new.invited_by := null;
   return new;
 end $function$;
+
+-- ── clear_workout_verification ──
+CREATE OR REPLACE FUNCTION public.clear_workout_verification(p_session_id uuid)
+ RETURNS workout_sessions
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+declare
+  s public.workout_sessions;
+begin
+  if (select auth.uid()) is null then
+    raise exception 'not_authenticated';
+  end if;
+
+  select * into s from public.workout_sessions
+   where id = p_session_id and user_id = (select auth.uid())
+   for update;
+  if not found then
+    raise exception 'session_not_found';
+  end if;
+
+  if exists (
+    select 1 from public.workout_images
+     where session_id = p_session_id and user_id = (select auth.uid())
+  ) then
+    raise exception 'photo_still_exists';
+  end if;
+
+  update public.workout_sessions
+     set verification_status = 'none',
+         verification_source = null,
+         server_uploaded_at  = null,
+         client_captured_at  = null
+   where id = p_session_id
+   returning * into s;
+
+  return s;
+end
+$function$;
 
 -- ── complete_workout ──
 CREATE OR REPLACE FUNCTION public.complete_workout(p_session_id uuid)
