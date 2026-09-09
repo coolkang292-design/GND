@@ -38,6 +38,8 @@ import {
 } from "@/lib/domain/program-load";
 import { RestBar } from "@/components/record/rest-bar";
 import { ActiveSessionOverlay } from "@/components/record/active-session-overlay";
+import { ActivePhotoButton } from "@/components/record/active-photo-button";
+import { SessionPhotoManager } from "@/components/record/session-photo-manager";
 import { VerificationPhoto } from "@/components/record/verification-photo";
 import { CaptionPicker } from "@/components/feed/caption-picker";
 import {
@@ -193,6 +195,8 @@ import {
 import {
   cancelWorkout,
   clearDraft,
+  finalizeWorkoutVerification,
+  listSessionPhotoRows,
   finishWorkout,
   createCustomExercise,
   createDraftSession,
@@ -545,6 +549,11 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const [challengePhotoRequired, setChallengePhotoRequired] = useState(false);
   /** 완료 화면에서 인증사진을 올렸는가 — 기여 문구가 "쌓여요"→"쌓였어요"로 바뀐다 */
   const [resultPhotoDone, setResultPhotoDone] = useState(false);
+  /**
+   * 완료 화면이 든 사진 수 (0103). 0이면 예전 `VerificationPhoto`,
+   * 1장 이상이면 `SessionPhotoManager`(추가·삭제·순서)로 그린다.
+   */
+  const [resultPhotoCount, setResultPhotoCount] = useState(0);
   /**
    * 완료 화면에서 고른 오늘 한마디 (2026-08-30) — `workout_sessions.title`.
    *
@@ -2507,6 +2516,32 @@ function WorkoutScreen({ userId }: { userId: string }) {
       const completedAtMs = s?.completed_at
         ? new Date(s.completed_at).getTime()
         : Date.now();
+      /*
+        운동 **중**에 찍은 사진이 있으면 여기서 인증을 확정한다 (0103, 계획 §8).
+
+        ⚠️ 저장은 이미 끝나 있다(`ActivePhotoButton`). 여기서 하는 일은
+           `set_workout_verification`을 **한 번** 불러 등급을 굳히는 것뿐이다 —
+           그 RPC는 `status = 'completed'`만 받으므로 **완료 직후인 지금**이
+           가장 이른 시점이다. 사진이 0장이면 아무 일도 안 한다(아래 화면의
+           `VerificationPhoto` 흐름이 그대로 살아 있다).
+        ⚠️ 실패해도 완료 흐름을 막지 않는다 — 기록·XP·챌린지 결과가 사진 하나
+           때문에 통째로 사라지면 안 된다. 사진은 이미 저장돼 있고, 완료 화면의
+           사진 관리에서 다시 확정할 수 있다.
+        ⓘ 사진 XP는 여기서 청구하지 않는다. `award_workout_photo_xp`는 세션
+          기준 멱등이고, 완료 화면이 제 자리에서 청구한다.
+      */
+      try {
+        const rows = await listSessionPhotoRows(sessionId);
+        // 완료 화면이 어떤 모습으로 열릴지 정한다 — 0장이면 예전 VerificationPhoto,
+        // 1장 이상이면 썸네일 관리 화면.
+        setResultPhotoCount(rows.length);
+        setResultPhotoDone(rows.length > 0);
+        if (rows.length > 0) await finalizeWorkoutVerification(sessionId);
+      } catch {
+        // 조용히 넘긴다 — 완료 화면에서 되살릴 수 있다
+        setResultPhotoCount(0);
+        setResultPhotoDone(false);
+      }
       let planCleanupFailed = false;
       if (draft.scheduledPlanId) {
         try {
@@ -3129,15 +3164,39 @@ function WorkoutScreen({ userId }: { userId: string }) {
           />
         </section>
 
-        {/* 인증사진 (§11) — 지금 촬영만 (앨범 선택은 2026-08-01에 제거) */}
-        <VerificationPhoto
-          userId={userId}
-          sessionId={result.sessionId}
-          durationMinutes={result.durationMinutes}
-          completedAtMs={result.completedAtMs}
-          onToast={showToast}
-          onUploaded={() => setResultPhotoDone(true)}
-        />
+        {/*
+          인증사진 (§11 → 0103 다중 사진).
+
+          ⚠️ **사진이 0장일 때는 예전 화면 그대로다.** `VerificationPhoto`의 큰
+             미리보기와 두 버튼은 "아직 아무것도 안 올린 사람"에게 가장 좋은
+             화면이고, 그 흐름을 바꾸지 않기로 했다 (계획 §8).
+             한 장이라도 있으면 — 운동 중에 찍었든 여기서 올렸든 — 썸네일 목록으로
+             바뀌어 **추가·삭제·순서**를 할 수 있다 (계획 §9).
+        */}
+        {resultPhotoCount > 0 ? (
+          <SessionPhotoManager
+            userId={userId}
+            sessionId={result.sessionId}
+            onToast={showToast}
+            onPhotosChange={(list) => {
+              setResultPhotoCount(list.length);
+              setResultPhotoDone(list.length > 0);
+            }}
+          />
+        ) : (
+          <VerificationPhoto
+            userId={userId}
+            sessionId={result.sessionId}
+            durationMinutes={result.durationMinutes}
+            completedAtMs={result.completedAtMs}
+            onToast={showToast}
+            onUploaded={() => {
+              setResultPhotoDone(true);
+              // 0장 → 1장이 되면 관리 화면으로 넘어간다
+              setResultPhotoCount(1);
+            }}
+          />
+        )}
         <p className="text-center text-xs text-muted">
           &lsquo;달력&rsquo; 탭에서 오늘 스탬프를 확인할 수 있어요. 카메라
           인증은 🔥, 업로드는 ●로 찍혀요.
@@ -3752,6 +3811,25 @@ function WorkoutScreen({ userId }: { userId: string }) {
         탭바는 덮지 않는다 — 달력·피드로 바로 갈 수 있어야 한다(사용자 결정).
       */}
       <ActiveSessionOverlay
+        /*
+          운동 중 사진 (0103, 계획 §7).
+
+          ⚠️ `draft.sessionId`가 있을 때만 그린다 — 세션 행이 없으면 붙일 곳이
+             없다. 오버레이는 세션이 시작된 뒤에만 열리므로 사실상 늘 있지만,
+             타입이 `string | null`이라 여기서 가른다.
+          ⚠️ 여기서 인증을 확정하지 않는다. 확정은 완료 처리에서 한 번 한다
+             (`finalizeWorkoutVerification`) — `set_workout_verification`이
+             completed 세션만 받기 때문이다.
+        */
+        photoSlot={
+          draft.sessionId ? (
+            <ActivePhotoButton
+              userId={userId}
+              sessionId={draft.sessionId}
+              onToast={showToast}
+            />
+          ) : null
+        }
         open={overlayOpen}
         mode={overlayMode({
           resting: restRemaining !== null,

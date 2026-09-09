@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { UiIcon } from "@/components/ui-icon";
 import { guideForExercise } from "@/lib/domain/exercise-guides";
 import { repRangeLabel, restClock } from "@/lib/domain/program-load";
@@ -250,6 +251,7 @@ export function ActiveSessionOverlay({
   onFinish,
   onOpenGuide,
   prescription,
+  photoSlot,
 }: {
   open: boolean;
   mode: "input" | "rest";
@@ -356,6 +358,14 @@ export function ActiveSessionOverlay({
    * 준비 카드에만 두면 운동을 시작한 뒤에는 목표 범위를 볼 수 없다.
    */
   prescription?: ExercisePrescription;
+  /**
+   * 상태 배지 옆에 붙는 작은 자리 — 운동 중 사진 버튼(`ActivePhotoButton`)이 온다.
+   *
+   * ⚠️ 이 컴포넌트는 사진에 대해 **아무것도 모른다.** 업로드·장수·상한은 전부
+   *    넘어온 노드가 갖는다. 951줄짜리 오버레이에 사진 상태를 심으면 운동 입력
+   *    로직과 뒤엉킨다.
+   */
+  photoSlot?: ReactNode;
 }) {
   if (!open) return null;
 
@@ -404,17 +414,29 @@ export function ActiveSessionOverlay({
         </div>
 
         <section className="rounded-[20px] border border-line bg-surface p-5 text-center shadow-card">
-          <span
-            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11.5px] font-extrabold ${
-              paused
-                ? "bg-warn/15 text-warn"
-                : resting
-                  ? "bg-accent-weak text-accent"
-                  : "bg-accent-weak text-accent"
-            }`}
-          >
-            ● {paused ? "정지됨 — 무동작" : resting ? "휴식 중" : "지금 운동 중"}
-          </span>
+          {/*
+            상태 배지 줄 (0103에서 사진 버튼이 오른쪽에 붙었다).
+
+            ⚠️ **취소 버튼 옆에 두지 않았다.** 위 줄의 `취소`는 운동을 통째로
+               버리는 문이라, 그 옆에 자주 누르는 카메라를 두면 오터치가 난다.
+               여기는 "이 운동의 상태"를 말하는 줄이라 문맥도 맞다.
+            ⚠️ 입력·휴식 **양쪽**에 뜬다. 휴식 중에만 두면 종목의 첫 세트 앞에는
+               휴식이 없어서(같은 파일의 다른 주석 참조) 찍을 자리가 사라진다.
+          */}
+          <div className="flex items-center justify-center gap-2">
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11.5px] font-extrabold ${
+                paused
+                  ? "bg-warn/15 text-warn"
+                  : resting
+                    ? "bg-accent-weak text-accent"
+                    : "bg-accent-weak text-accent"
+              }`}
+            >
+              ● {paused ? "정지됨 — 무동작" : resting ? "휴식 중" : "지금 운동 중"}
+            </span>
+            {photoSlot}
+          </div>
 
           {/*
             전체 진행률 (2026-08-07, 사용자 목업).
