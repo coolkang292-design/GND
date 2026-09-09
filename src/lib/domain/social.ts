@@ -13,13 +13,40 @@ export type WorkoutImageRelation =
   | { image_path: string }[]
   | null;
 
+/**
+ * PostgREST 임베드(객체 | 배열 | null) → 항상 배열.
+ *
+ * 0103 이전에는 `unique(session_id)` 때문에 세션당 1장이라 임베드가 객체로
+ * 올 때도 배열로 올 때도 답이 하나였다. 이제 최대 5장이므로 **모든 호출부가
+ * 같은 모양으로 받아야** 한다 — 그 정규화를 한 곳에 모은다.
+ */
+export function workoutImageList<T>(
+  relation: T | T[] | null | undefined,
+): T[] {
+  if (relation === null || relation === undefined) return [];
+  return Array.isArray(relation) ? relation : [relation];
+}
+
+/**
+ * 대표 사진 한 장 — **`sort_order`가 가장 앞선 것.**
+ *
+ * ⚠️ 예전에는 그냥 `[0]`을 집었다. 세션당 1장일 때는 정답이 하나뿐이라 안
+ *    보이던 문제인데, 2장이 되는 순간 **PostgREST 반환 순서에 좌우된다** —
+ *    홈 화면 크루 카드에 아무 사진이나 뜬다(2026-09-10 조사에서 발견).
+ *    `sort_order`가 없는 옛 모양으로 불리면 전부 0으로 봐서 **원래 순서가
+ *    그대로 유지된다** — 옛 호출부의 동작이 안 바뀐다.
+ */
 export function firstWorkoutImagePath(
   relation: WorkoutImageRelation,
 ): string | null {
-  if (relation === null) return null;
-  return Array.isArray(relation)
-    ? relation[0]?.image_path ?? null
-    : relation.image_path;
+  const rows = workoutImageList(relation) as ({
+    image_path: string;
+  } & { sort_order?: number })[];
+  if (rows.length === 0) return null;
+  const sorted = [...rows].sort(
+    (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0),
+  );
+  return sorted[0]?.image_path ?? null;
 }
 
 /** 유령 세션 컷오프: 시작 후 6시간 지나면 진행 중으로 안 본다 */

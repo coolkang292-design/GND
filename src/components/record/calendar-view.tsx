@@ -1705,7 +1705,10 @@ export function CalendarView({
                       신고 4805090f는 사진을 붙이려 같은 운동을 다시 기록했다.
                     */}
                     {missingRequiredPhoto({
-                      hasPhoto: s.verification !== "none",
+                      // 0103: 인증 상태 대용이 아니라 **실제 사진 수**를 본다.
+                      // 챌린지 집계(`get_challenge_period_sessions`)도
+                      // `exists(workout_images)`를 보므로 이쪽이 서버와 같은 기준이다.
+                      hasPhoto: s.photoCount > 0,
                       photoRequired,
                     }) && (
                       <p className="mt-2 rounded-card-sm border border-warn/40 bg-surface px-2.5 py-1.5 text-[11px] font-bold text-warn">
@@ -1717,16 +1720,25 @@ export function CalendarView({
                       completedAt: s.completedAt,
                       now: new Date(),
                       timeZone,
-                      hasPhoto: s.verification !== "none",
+                      photoCount: s.photoCount,
                     }) && (
                       <LatePhotoButton
                         userId={userId}
                         sessionId={s.id}
+                        photoCount={s.photoCount}
                         onDone={(verification) =>
                           setSessions((current) =>
                             current.map((item) =>
                               item.id === s.id
-                                ? { ...item, verification }
+                                ? {
+                                    ...item,
+                                    verification,
+                                    // ⚠️ 수를 같이 올린다. 안 올리면 5장을 채워도
+                                    //    버튼이 계속 남아 6번째를 시도하게 되고,
+                                    //    그건 DB가 23505로 막는다 — 사용자에게는
+                                    //    이유 없는 실패로 보인다.
+                                    photoCount: item.photoCount + 1,
+                                  }
                                 : item,
                             ),
                           )

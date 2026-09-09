@@ -61,7 +61,10 @@ function feedItem(
       cardioDurationSeconds: 0,
       completedSetCount: 3,
     },
-    photoUrl,
+    // 0103 다중사진 — 픽스처는 아직 0장/1장만 만든다. 2장 이상 캐러셀은 Phase 5.
+    photos: photoUrl
+      ? [{ id: "img-1", url: photoUrl, source: "camera" as const, sortOrder: 0 }]
+      : [],
     streak: 3,
     recordNote: null,
     tabataMinutes: null,

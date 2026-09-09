@@ -1,10 +1,15 @@
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   activeSessionIds,
-  firstWorkoutImagePath,
+  workoutImageList,
   type SocialEvent,
-  type WorkoutImageRelation,
 } from "@/lib/domain/social";
+import {
+  MAX_WORKOUT_PHOTOS,
+  sortWorkoutPhotos,
+  type SessionPhoto,
+  type WorkoutPhotoRow,
+} from "@/lib/domain/workout-photos";
 import { pointsAwardedFrom } from "@/lib/domain/cheer-points";
 import { currentStreak, workoutDayKeys } from "@/lib/domain/streak";
 import { DEFAULT_TIMEZONE, dayKey, dayRange } from "@/lib/domain/time";
@@ -170,7 +175,14 @@ export type FeedItem = {
   durationMinutes: number;
   exerciseNames: string[];
   volume: VolumeSummary;
-  photoUrl: string | null;
+  /**
+   * 이 운동의 사진 묶음 (0103, 최대 5장) — **`sortOrder` 오름차순**.
+   *
+   * ⚠️ 사진마다 게시물이 생기는 게 아니다. 좋아요·댓글·캡션·운동 데이터는
+   *    전부 같은 `sessionId`에 붙는다. 0장이면 빈 배열이라 사진 없는 카드가
+   *    예전 그대로 그려지고, 1장이면 캐러셀 없이 예전 마크업을 탄다.
+   */
+  photos: SessionPhoto[];
   streak: number;
   recordNote: string | null; // 🏅 기록 갱신 문구 (0018)
   tabataMinutes: number | null; // 🔥 타바타 코스 분수 (0019)
@@ -212,7 +224,7 @@ type FeedSessionRow = {
   tabata_minutes?: number | null; // 0019
 
   workout_exercises: FeedExerciseRow[] | null;
-  workout_images: WorkoutImageRelation;
+  workout_images: WorkoutPhotoRow[] | WorkoutPhotoRow | null;
 };
 
 /**
@@ -309,11 +321,18 @@ export async function getCrewFeed(
   // RLS가 이미 크루 기준이지만 클라 쿼리도 좁혀야 FEED_PAGE_SIZE가 정확하다.
   const visibleIds = [myUserId, ...(await fetchCrewIds(myUserId))];
 
-  // photoOnly: workout_images!inner = 인증사진 있는 세션만 (세션당 1장
-  // unique(0005)라 join 중복 없음). 정렬·커서는 전체 피드와 동일.
+  // photoOnly: workout_images!inner = 인증사진이 **한 장이라도** 있는 세션만.
+  //
+  // ⚠️ 0103으로 세션당 최대 5장이 됐지만 **부모 행은 겹치지 않는다** —
+  //    PostgREST는 조인 곱을 펴지 않고 자식을 배열로 중첩한다. 그래서
+  //    FEED_PAGE_SIZE(부모 20건)가 예전 그대로 정확하다.
+  // ⚠️ `order`를 임베드에 건다. 안 걸면 반환 순서가 보장되지 않아 캐러셀
+  //    첫 장이 매번 달라진다(`firstWorkoutImagePath` 주석 참조).
+  const imageCols =
+    "id, image_path, source, sort_order, client_captured_at";
   const imagesEmbed = photoOnly
-    ? "workout_images!inner(image_path)"
-    : "workout_images(image_path)";
+    ? `workout_images!inner(${imageCols})`
+    : `workout_images(${imageCols})`;
 
   let query = supabase
     .from("workout_sessions")
@@ -326,6 +345,12 @@ export async function getCrewFeed(
     .is("deleted_at", null)
     .not("completed_at", "is", null)
     .order("completed_at", { ascending: false })
+    // 임베드 정렬 — 캐러셀 첫 장이 매번 달라지지 않게 서버에서 굳힌다.
+    // (클라에서 `sortWorkoutPhotos`로 한 번 더 정렬한다 — 방어)
+    .order("sort_order", {
+      referencedTable: "workout_images",
+      ascending: true,
+    })
     .limit(FEED_PAGE_SIZE);
   if (before) query = query.lt("completed_at", before);
   if (onlySessionId) query = query.eq("id", onlySessionId);
@@ -338,11 +363,11 @@ export async function getCrewFeed(
   const sessionIds = rows.map((r) => r.id);
   const userIds = [...new Set(rows.map((r) => r.user_id))];
 
-  const [profiles, reactions, streaks, photoUrls, threads] = await Promise.all([
+  const [profiles, reactions, streaks, photosBySession, threads] = await Promise.all([
     fetchProfiles(userIds),
     fetchReactions(sessionIds),
     fetchStreaks(userIds),
-    signFirstImages(rows),
+    signSessionPhotos(rows),
     fetchSessionThreads(sessionIds),
   ]);
 
@@ -402,7 +427,7 @@ export async function getCrewFeed(
         .sort((a, b) => a.sort_order - b.sort_order)
         .map((e) => e.exercise_name),
       volume: summarizeVolume(sets),
-      photoUrl: photoUrls.get(r.id) ?? null,
+      photos: photosBySession.get(r.id) ?? [],
       streak: streaks.get(r.user_id) ?? 0,
       recordNote: r.record_note ?? null,
       tabataMinutes: r.tabata_minutes ?? null,
@@ -638,28 +663,57 @@ async function fetchStreaks(userIds: string[]): Promise<Map<string, number>> {
   return result;
 }
 
-/** 세션별 첫 인증사진 서명 URL (1h) — 사진 없는 세션은 제외 */
-async function signFirstImages(
+/**
+ * 세션별 사진 묶음 서명 URL (1h) — `sortOrder` 오름차순, 사진 없는 세션은 제외.
+ *
+ * ⚠️⚠️ **왕복은 여전히 한 번이다. 카드마다 부르지 마라.**
+ * `createSignedUrls`가 원래 배치 API라, 세션당 1장이던 시절과 달라지는 것은
+ * **넘기는 경로 배열의 길이뿐**이다(20개 → 최대 20×5 = 100개). 사진마다
+ * `createSignedUrl`을 부르면 첫 피드에 왕복 100번이 붙는다 — 그게 N+1이다.
+ *
+ * ⚠️ 서명이 실패한 장은 **그 장만 빠진다.** 한 장 때문에 게시물 전체가 사진
+ *    없는 카드로 바뀌면, 5장 중 1장이 만료됐을 때 나머지 4장이 사라진다.
+ */
+async function signSessionPhotos(
   rows: FeedSessionRow[],
-): Promise<Map<string, string>> {
+): Promise<Map<string, SessionPhoto[]>> {
   const supabase = getSupabaseBrowserClient();
-  const withImage = rows
-    .map((r) => ({ id: r.id, path: firstWorkoutImagePath(r.workout_images) }))
-    .filter((r): r is { id: string; path: string } => !!r.path);
-  if (withImage.length === 0) return new Map();
+
+  // 세션별로 슬롯 순 정렬 + 상한 자르기. 상한은 DB가 이미 막지만, 옛 데이터나
+  // 미래의 상한 변경에 화면이 휘둘리지 않게 여기서도 자른다.
+  const bySession = new Map<string, WorkoutPhotoRow[]>();
+  for (const r of rows) {
+    const photos = sortWorkoutPhotos(
+      workoutImageList<WorkoutPhotoRow>(r.workout_images),
+    ).slice(0, MAX_WORKOUT_PHOTOS);
+    if (photos.length > 0) bySession.set(r.id, photos);
+  }
+
+  const flat = [...bySession.entries()].flatMap(([sessionId, photos]) =>
+    photos.map((photo) => ({ sessionId, photo })),
+  );
+  if (flat.length === 0) return new Map();
 
   const { data, error } = await supabase.storage
     .from("workout-images")
     .createSignedUrls(
-      withImage.map((r) => r.path),
+      flat.map((f) => f.photo.image_path),
       3600,
     );
   if (error || !data) return new Map();
 
-  const map = new Map<string, string>();
-  withImage.forEach((r, i) => {
+  const map = new Map<string, SessionPhoto[]>();
+  flat.forEach((f, i) => {
     const signed = data[i];
-    if (signed?.signedUrl && !signed.error) map.set(r.id, signed.signedUrl);
+    if (!signed?.signedUrl || signed.error) return;
+    const list = map.get(f.sessionId) ?? [];
+    list.push({
+      id: f.photo.id,
+      url: signed.signedUrl,
+      source: f.photo.source,
+      sortOrder: f.photo.sort_order,
+    });
+    map.set(f.sessionId, list);
   });
   return map;
 }

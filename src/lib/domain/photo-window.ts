@@ -1,4 +1,5 @@
 import { dayKey } from "@/lib/domain/time";
+import { canAddWorkoutPhoto } from "@/lib/domain/workout-photos";
 
 /**
  * 인증사진을 나중에 붙일 수 있는 창 (2026-08-04, 사용자 결정).
@@ -27,10 +28,20 @@ export function canAttachPhotoLater(input: {
   completedAt: Date;
   now: Date;
   timeZone: string;
-  /** 이미 사진이 있으면 못 붙인다 — workout_images는 세션당 1장(0005 unique) */
-  hasPhoto: boolean;
+  /**
+   * 이 세션에 **지금 붙어 있는 사진 수** (0103).
+   *
+   * ⚠️ 2026-09-10 이전에는 `hasPhoto: boolean`이었다 — `workout_images`가
+   *    세션당 1장이라 "있으면 끝"이었기 때문이다. 상한이 5가 된 지금 그 규칙을
+   *    그대로 두면 **기존 사용자의 사진 1장 때문에 버튼이 사라진다.**
+   *
+   * ⚠️⚠️ 호출부가 넘기던 값도 바뀌었다. 예전엔 `verification !== "none"`이라는
+   *    **인증 상태 대용값**을 넘겼는데, 그건 장수를 모른다. 실제 사진 수를 세서
+   *    넘겨야 한다(`CalendarSession.photoCount`).
+   */
+  photoCount: number;
 }): boolean {
-  if (input.hasPhoto) return false;
+  if (!canAddWorkoutPhoto(input.photoCount)) return false;
   return (
     dayKey(input.completedAt, input.timeZone) ===
     dayKey(input.now, input.timeZone)

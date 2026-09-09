@@ -55,10 +55,23 @@
 
 **(d) 마지막 사진을 지웠을 때 인증을 되돌릴 서버 경로가 없다.**
 `set_workout_verification` 은 **설정만** 하고 해제를 못 한다(`p_source` 가 camera/album 만 받는다).
-다만 `workout_sessions` 에 `sessions_update_own`(USING·WITH CHECK 둘 다 `user_id = auth.uid()`)이
-있고 `verification_status` 를 막는 트리거가 없다 —
-**클라가 직접 `update ... set verification_status = 'none'` 할 수 있다.**
-→ 새 RPC 를 만들지 않는다(§4-3).
+
+> ⚠️⚠️ **이 항목은 2026-09-10 Phase 3에서 한 번 틀렸다가 고쳤다. 기록을 남긴다.**
+> 처음에는 "`workout_sessions` 에 `sessions_update_own` 정책이 있으니 클라가 직접
+> `verification_status` 를 되돌릴 수 있다 → 새 RPC 불필요"로 적었다. **정책만 보고
+> 컬럼 grant 를 안 본 것이 오류였다.** 0096 이 `authenticated` 의 UPDATE 를
+> `deleted_at · group_id · intensity · memo · timezone · title · visibility · workout_type`
+> **여덟 칸으로 좁혀 놨고** `verification_status` 는 거기 없다. RLS 를 통과해도
+> grant 에서 막힌다.
+> **교훈: `pg_policies` 만으로 "클라가 쓸 수 있다"를 판정하면 안 된다.
+> `information_schema.column_privileges` 를 같이 봐야 한다.**
+
+⛔ **grant 를 넓히는 선택지는 없다.** `verification_status` 를 클라가 쓸 수 있게 되면
+사진 한 장 없이 `camera_verified` 를 박아 넣을 수 있다 — 인증이라는 말이 무의미해진다.
+→ **`0105`** 로 `clear_workout_verification(p_session_id)` 를 만들었다.
+**사진이 0장일 때만** 동작한다(한 장이라도 남아 있으면 `photo_still_exists` 로 거절) —
+즉 **내려가기만 하는** 함수라 악용할 여지가 없고, 실수로 불러도 멀쩡한 인증을 못 지운다.
+`set_workout_verification` 이 `image_not_found` 로 **올라가는 것**을 막는 것과 대칭이다.
 
 ### 1-3. 손댈 필요가 **없다**고 확인된 것 (스펙이 걱정한 것들)
 
@@ -222,11 +235,19 @@ grant insert (sort_order) on public.workout_images to authenticated;
 - `storage.objects` 에 `workout_images_delete_own` DELETE 정책 —
   `bucket_id='workout-images' and folder[1] = auth.uid()::text` (upload 정책과 동일 범위).
 
+### 4-2b. `0105_clear_workout_verification.sql` — 인증 해제 (Phase 3에서 추가)
+
+`clear_workout_verification(p_session_id uuid) returns workout_sessions` —
+SECURITY DEFINER · `search_path` 고정 · `auth.uid()` · 소유권 · **사진 0장 검사**.
+비파괴 변경(새 함수 + grant)이라 CLAUDE.md 의 "그냥 실행한다" 칸에 해당한다.
+추가 경위는 §1-2(d) 의 경고 상자 참조.
+
 ### 4-3. 새로 만들지 **않는** 것
 
-- ❌ 새 테이블 · ❌ 트리거 · ❌ 인증 해제 RPC(클라 UPDATE 로 충분 — §1-2(d))
+- ❌ 새 테이블 · ❌ 트리거
 - ❌ `set_workout_verification` 수정 · ❌ `award_workout_photo_xp` 수정
-- ❌ `workout_images` UPDATE grant/정책 · ❌ 새 버킷 · ❌ public 버킷 전환
+- ❌ `workout_images` UPDATE grant/정책 · ❌ `workout_sessions` 의 `verification_*` grant
+- ❌ 새 버킷 · ❌ public 버킷 전환
 
 ### 4-4. 위험과 되돌리기
 

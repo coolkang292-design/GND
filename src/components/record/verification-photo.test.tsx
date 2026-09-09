@@ -7,12 +7,14 @@ import { VerificationPhoto } from "./verification-photo";
 // vi.mock은 호이스팅되므로 모의 함수도 hoisted로 만들어야 참조 시점이 맞는다.
 const mocks = vi.hoisted(() => ({
   uploadWorkoutImage: vi.fn(),
+  finalizeWorkoutVerification: vi.fn(),
   awardWorkoutPhotoXp: vi.fn(),
   compressImage: vi.fn(),
 }));
 
 vi.mock("@/lib/workout", () => ({
   uploadWorkoutImage: mocks.uploadWorkoutImage,
+  finalizeWorkoutVerification: mocks.finalizeWorkoutVerification,
   awardWorkoutPhotoXp: mocks.awardWorkoutPhotoXp,
 }));
 vi.mock("@/lib/image", () => ({ compressImage: mocks.compressImage }));
@@ -44,6 +46,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.compressImage.mockImplementation(async (file: Blob) => file);
   mocks.uploadWorkoutImage.mockResolvedValue({});
+  mocks.finalizeWorkoutVerification.mockResolvedValue({});
   mocks.awardWorkoutPhotoXp.mockResolvedValue({ awarded: true, xpAwarded: 10 });
   // jsdom에는 objectURL이 없다
   URL.createObjectURL = vi.fn(() => "blob:preview");
@@ -91,6 +94,31 @@ describe("VerificationPhoto — 사진 XP 후등록", () => {
     await waitFor(() =>
       expect(onToast).toHaveBeenCalledWith(expect.stringContaining("인증 완료")),
     );
+  });
+
+  /**
+   * ⚠️ 이 단언이 0103의 가장 조용한 회귀를 지킨다. `uploadWorkoutImage`는 이제
+   *    **저장만** 한다 — 확정을 따로 부르지 않으면 사진은 올라가는데 달력·피드
+   *    스탬프가 영영 안 찍힌다. 화면에는 "업로드 완료"가 떠서 아무도 모른다.
+   */
+  it("업로드 뒤 인증을 따로 확정한다 (저장과 확정은 다른 일)", async () => {
+    const { cameraInput } = setup();
+    pickPhoto(cameraInput);
+
+    await waitFor(() =>
+      expect(mocks.finalizeWorkoutVerification).toHaveBeenCalledWith(
+        "session-1",
+      ),
+    );
+  });
+
+  it("업로드가 실패하면 인증을 확정하지 않는다", async () => {
+    mocks.uploadWorkoutImage.mockRejectedValue(new Error("업로드 실패"));
+    const { cameraInput } = setup();
+    pickPhoto(cameraInput);
+
+    await waitFor(() => expect(mocks.uploadWorkoutImage).toHaveBeenCalled());
+    expect(mocks.finalizeWorkoutVerification).not.toHaveBeenCalled();
   });
 
   it("업로드가 실패하면 XP를 청구하지 않는다", async () => {

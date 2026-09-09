@@ -18,7 +18,7 @@ describe("canAttachPhotoLater — 나중에 사진 붙이기 창 (2026-08-04)", 
         completedAt: kst("2026-08-03T21:54:00"),
         now: kst("2026-08-03T23:59:00"),
         timeZone: KST,
-        hasPhoto: false,
+        photoCount: 0,
       }),
     ).toBe(true);
   });
@@ -31,7 +31,7 @@ describe("canAttachPhotoLater — 나중에 사진 붙이기 창 (2026-08-04)", 
         completedAt: kst("2026-08-03T21:54:00"),
         now: kst("2026-08-04T00:01:00"),
         timeZone: KST,
-        hasPhoto: false,
+        photoCount: 0,
       }),
     ).toBe(false);
   });
@@ -43,19 +43,57 @@ describe("canAttachPhotoLater — 나중에 사진 붙이기 창 (2026-08-04)", 
         completedAt: kst("2026-08-03T23:58:00"),
         now: kst("2026-08-04T00:03:00"),
         timeZone: KST,
-        hasPhoto: false,
+        photoCount: 0,
       }),
     ).toBe(false);
   });
 
-  it("이미 사진이 있으면 같은 날이어도 못 붙인다", () => {
-    // workout_images는 세션당 1장(0005 unique) — 두 번째 insert는 어차피 409다
+  it("5장을 다 채웠으면 같은 날이어도 못 붙인다", () => {
+    // 0103 이전에는 "1장이라도 있으면 끝"이었다(세션당 unique). 지금은 상한이 5다.
     expect(
       canAttachPhotoLater({
         completedAt: kst("2026-08-03T21:54:00"),
         now: kst("2026-08-03T22:00:00"),
         timeZone: KST,
-        hasPhoto: true,
+        photoCount: 5,
+      }),
+    ).toBe(false);
+  });
+
+  /**
+   * ⚠️⚠️ **이 단언이 계획 §10의 요구를 지킨다.** 0103 이전 규칙은
+   *    "사진이 있으면 더 못 붙인다"였다. 그대로 두면 **기존 사용자의 사진 1장
+   *    때문에 버튼이 사라져** 다중 사진 기능이 옛 사용자에게만 없는 것이 된다.
+   */
+  it("이미 1장 있어도 같은 날이면 더 붙일 수 있다 (옛 규칙의 회귀 방지)", () => {
+    expect(
+      canAttachPhotoLater({
+        completedAt: kst("2026-08-03T21:54:00"),
+        now: kst("2026-08-03T22:00:00"),
+        timeZone: KST,
+        photoCount: 1,
+      }),
+    ).toBe(true);
+  });
+
+  it("4장까지는 붙일 수 있다 (경계)", () => {
+    expect(
+      canAttachPhotoLater({
+        completedAt: kst("2026-08-03T21:54:00"),
+        now: kst("2026-08-03T22:00:00"),
+        timeZone: KST,
+        photoCount: 4,
+      }),
+    ).toBe(true);
+  });
+
+  it("5장을 채웠으면 날짜와 무관하게 못 붙인다", () => {
+    expect(
+      canAttachPhotoLater({
+        completedAt: kst("2026-08-03T21:54:00"),
+        now: kst("2026-08-04T09:00:00"),
+        timeZone: KST,
+        photoCount: 5,
       }),
     ).toBe(false);
   });
@@ -66,7 +104,7 @@ describe("canAttachPhotoLater — 나중에 사진 붙이기 창 (2026-08-04)", 
         completedAt: kst("2026-08-02T12:05:00"),
         now: kst("2026-08-03T12:05:00"),
         timeZone: KST,
-        hasPhoto: false,
+        photoCount: 0,
       }),
     ).toBe(false);
   });

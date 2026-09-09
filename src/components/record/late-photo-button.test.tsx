@@ -7,12 +7,14 @@ import { LatePhotoButton } from "./late-photo-button";
 // vi.mock은 호이스팅되므로 모의 함수도 hoisted로 만들어야 참조 시점이 맞는다.
 const mocks = vi.hoisted(() => ({
   uploadWorkoutImage: vi.fn(),
+  finalizeWorkoutVerification: vi.fn(),
   awardWorkoutPhotoXp: vi.fn(),
   compressImage: vi.fn(),
 }));
 
 vi.mock("@/lib/workout", () => ({
   uploadWorkoutImage: mocks.uploadWorkoutImage,
+  finalizeWorkoutVerification: mocks.finalizeWorkoutVerification,
   awardWorkoutPhotoXp: mocks.awardWorkoutPhotoXp,
 }));
 vi.mock("@/lib/image", () => ({ compressImage: mocks.compressImage }));
@@ -21,6 +23,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.compressImage.mockImplementation(async (file: Blob) => file);
   mocks.uploadWorkoutImage.mockResolvedValue({});
+  mocks.finalizeWorkoutVerification.mockResolvedValue({});
   mocks.awardWorkoutPhotoXp.mockResolvedValue({ awarded: true, xpAwarded: 10 });
 });
 

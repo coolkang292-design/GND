@@ -347,7 +347,10 @@ export function FeedItemCard({
     setTimeout(() => setBurst(false), 700);
   }
 
-  if (item.photoUrl) {
+  // Phase 5에서 캐러셀이 들어올 자리. 지금은 대표 한 장만 그린다 —
+  // 사진 0장 카드는 아래 분기로 내려가 예전 그대로다.
+  const cover = item.photos[0];
+  if (cover) {
     return (
       <article className="overflow-hidden rounded-card border border-line bg-surface shadow-card">
         {/* ⚠️ **4/3이다. 4/5로 바꾸지 마라.**
@@ -359,7 +362,7 @@ export function FeedItemCard({
         <div className="relative aspect-[4/3] w-full">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={item.photoUrl}
+            src={cover.url}
             alt={`${item.nickname}님의 운동 인증`}
             className="h-full w-full object-cover"
             loading="lazy"
@@ -434,7 +437,7 @@ export function FeedItemCard({
             사진을 크게 볼 곳이 없으면 인증사진을 올릴 이유가 반쯤 사라진다. */}
         {lightbox && (
           <ImageLightbox
-            src={item.photoUrl}
+            src={cover.url}
             alt={`${item.nickname}님의 운동 인증`}
             onClose={() => setLightbox(false)}
           />

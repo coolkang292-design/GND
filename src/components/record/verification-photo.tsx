@@ -2,8 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { compressImage } from "@/lib/image";
+import { MAX_WORKOUT_PHOTOS } from "@/lib/domain/workout-photos";
 import {
   awardWorkoutPhotoXp,
+  finalizeWorkoutVerification,
   uploadWorkoutImage,
   type VerificationSource,
 } from "@/lib/workout";
@@ -79,6 +81,11 @@ export function VerificationPhoto({
         // (제거 전 코드가 정확히 그 값을 쓰고 있었다).
         clientCapturedAt: source === "camera" ? new Date() : null,
       });
+      // ⚠️ 저장과 인증 확정은 **다른 일이다** (0103). `uploadWorkoutImage`는 이제
+      //    파일과 행만 만든다 — 확정을 여기서 따로 부르지 않으면 인증 스탬프가
+      //    영영 안 찍힌다. 완료 화면이라 바로 확정해도 되고, 운동 중 촬영은
+      //    완료 시점에 `record/page.tsx`가 한 번 확정한다.
+      await finalizeWorkoutVerification(sessionId);
       setState("done");
       setUploadedSource(source);
       onUploaded?.();
@@ -97,8 +104,13 @@ export function VerificationPhoto({
     } catch (e) {
       setState("idle");
       const msg = e instanceof Error ? e.message : String(e);
-      if (msg.includes("duplicate") || msg.includes("Duplicate")) {
-        onToast("이미 인증사진이 등록된 운동이에요");
+      // 0103 이후 "이미 등록됨"은 틀린 말이다 — 상한은 1장이 아니라 5장이다.
+      if (
+        msg.includes("photo_limit_reached") ||
+        msg.includes("duplicate") ||
+        msg.includes("Duplicate")
+      ) {
+        onToast(`사진은 운동 하나에 ${MAX_WORKOUT_PHOTOS}장까지예요`);
       } else {
         onToast(`사진 업로드 실패: ${msg}`);
       }

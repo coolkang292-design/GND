@@ -38,6 +38,7 @@ function session(daysAgo: number, ...exerciseNames: string[]): CalendarSession {
     exerciseNames,
     recordNote: null,
     tabataMinutes: null,
+    photoCount: 0,
   };
 }
 

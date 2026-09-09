@@ -3,8 +3,10 @@
 import { useRef, useState } from "react";
 import { UiIcon } from "@/components/ui-icon";
 import { compressImage } from "@/lib/image";
+import { MAX_WORKOUT_PHOTOS } from "@/lib/domain/workout-photos";
 import {
   awardWorkoutPhotoXp,
+  finalizeWorkoutVerification,
   uploadWorkoutImage,
   type VerificationSource,
 } from "@/lib/workout";
@@ -28,12 +30,18 @@ import {
 export function LatePhotoButton({
   userId,
   sessionId,
+  photoCount = 0,
   onDone,
   onToast,
 }: {
   userId: string;
   sessionId: string;
-  /** 업로드 성공 — 부모가 그 세션의 인증 상태를 갱신한다 */
+  /**
+   * 지금 붙어 있는 사진 수 (0103) — 문구에 `N/5`를 적기 위한 것.
+   * 버튼을 **그릴지 말지**는 부모가 `canAttachPhotoLater`로 이미 정했다.
+   */
+  photoCount?: number;
+  /** 업로드 성공 — 부모가 그 세션의 인증 상태와 사진 수를 갱신한다 */
   onDone: (verification: "camera_verified" | "photo_uploaded") => void;
   onToast: (message: string) => void;
 }) {
@@ -53,6 +61,9 @@ export function LatePhotoButton({
         // 앨범은 촬영 시각을 모른다. 파일 시각은 촬영일이 아니라서 넣지 않는다.
         clientCapturedAt: source === "camera" ? new Date() : null,
       });
+      // ⚠️ 0103 이후 `uploadWorkoutImage`는 저장만 한다. 확정을 따로 부르지
+      //    않으면 달력 스탬프가 안 찍힌다 (`verification-photo.tsx`와 같은 규약).
+      await finalizeWorkoutVerification(sessionId);
       onDone(source === "camera" ? "camera_verified" : "photo_uploaded");
       // 사진 XP는 완료 RPC가 못 준다. 실패해도 사진은 이미 저장됐으므로
       // 인증 자체는 성공으로 둔다 (verification-photo.tsx와 같은 규약).
@@ -70,9 +81,14 @@ export function LatePhotoButton({
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
+      // 0103 이후 "이미 등록됨"은 틀린 말이다 — 상한은 1장이 아니라 5장이다.
+      // 슬롯 충돌(23505)은 `uploadWorkoutImage`가 한 번 재시도해서 여기까지
+      // 오면 진짜로 꽉 찬 것이다.
       onToast(
-        msg.includes("duplicate") || msg.includes("Duplicate")
-          ? "이미 인증사진이 등록된 운동이에요"
+        msg.includes("photo_limit_reached") ||
+          msg.includes("duplicate") ||
+          msg.includes("Duplicate")
+          ? `사진은 운동 하나에 ${MAX_WORKOUT_PHOTOS}장까지예요`
           : `사진 업로드 실패: ${msg}`,
       );
     } finally {
@@ -94,7 +110,10 @@ export function LatePhotoButton({
           <>
             {/* 옛 표기는 `📷`였다 (2026-08-07 2차 시안으로 교체) */}
             <UiIcon name="camera" size={15} />
-            지금 촬영해서 인증하기
+            {/* 0장이면 예전 문구 그대로다 — 사진 없던 사람의 화면을 안 흔든다 */}
+            {photoCount > 0
+              ? `사진 더 붙이기 (${photoCount}/${MAX_WORKOUT_PHOTOS})`
+              : "지금 촬영해서 인증하기"}
           </>
         )}
       </button>

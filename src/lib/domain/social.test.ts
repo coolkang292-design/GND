@@ -4,6 +4,7 @@ import {
   feedDateLabel,
   firstWorkoutImagePath,
   groupByDay,
+  workoutImageList,
   unreadCount,
   type SocialEvent,
 } from "./social";
@@ -27,6 +28,47 @@ describe("firstWorkoutImagePath", () => {
   it("null 또는 빈 배열이면 null을 반환한다", () => {
     expect(firstWorkoutImagePath(null)).toBeNull();
     expect(firstWorkoutImagePath([])).toBeNull();
+  });
+
+  /**
+   * ⚠️ 이 단언이 2026-09-10에 잡은 버그를 지킨다. 다중 사진(0103) 전에는
+   *    `[0]`을 집어도 정답이 하나뿐이라 안 보였다. 지금은 임베드 순서가
+   *    보장되지 않으므로 **슬롯이 앞선 것**을 집어야 한다.
+   */
+  it("sort_order가 있으면 반환 순서와 무관하게 슬롯이 앞선 사진을 고른다", () => {
+    expect(
+      firstWorkoutImagePath([
+        { image_path: "photos/third.jpg", sort_order: 2 },
+        { image_path: "photos/first.jpg", sort_order: 0 },
+        { image_path: "photos/second.jpg", sort_order: 1 },
+      ] as never),
+    ).toBe("photos/first.jpg");
+  });
+
+  it("삭제로 슬롯에 구멍이 나도 앞선 것을 고른다", () => {
+    expect(
+      firstWorkoutImagePath([
+        { image_path: "photos/late.jpg", sort_order: 4 },
+        { image_path: "photos/early.jpg", sort_order: 1 },
+      ] as never),
+    ).toBe("photos/early.jpg");
+  });
+});
+
+describe("workoutImageList — 임베드 정규화", () => {
+  it("객체 하나면 1개짜리 배열", () => {
+    expect(workoutImageList({ image_path: "a.jpg" })).toEqual([
+      { image_path: "a.jpg" },
+    ]);
+  });
+
+  it("배열이면 그대로", () => {
+    expect(workoutImageList([{ image_path: "a.jpg" }, { image_path: "b.jpg" }])).toHaveLength(2);
+  });
+
+  it("null·undefined면 빈 배열 — 사진 없는 세션이 여기로 온다", () => {
+    expect(workoutImageList(null)).toEqual([]);
+    expect(workoutImageList(undefined)).toEqual([]);
   });
 });
 

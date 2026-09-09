@@ -8,6 +8,16 @@ import {
   durationSecondsOf,
 } from "@/lib/domain/set-timer";
 import { dayKey, resolveTimeZone } from "@/lib/domain/time";
+import { firstWorkoutImagePath, workoutImageList } from "@/lib/domain/social";
+import {
+  capturedAtForPhotos,
+  nextPhotoSlot,
+  sortWorkoutPhotos,
+  verificationSourceForPhotos,
+  type SessionPhoto,
+  type VerificationSource,
+  type WorkoutPhotoRow,
+} from "@/lib/domain/workout-photos";
 import type { CompletedSession } from "@/lib/domain/calendar";
 import type { VolumeSet } from "@/lib/domain/volume";
 import type { LogExercise } from "@/lib/domain/workout-log";
@@ -883,11 +893,76 @@ export async function getLastRecordedSets(
 
 // ── 인증사진 (§11) ───────────────────────────────────────────────
 
-export type VerificationSource = "camera" | "album";
+export type { VerificationSource };
+
+/** 사진 행 조회용 컬럼 — 목록·확정·삭제가 같은 모양을 본다 */
+const PHOTO_COLS = "id, image_path, source, sort_order, client_captured_at";
 
 /**
- * 압축된 사진을 비공개 버킷에 올리고 세션 인증 상태를 기록.
- * verification_status/server_uploaded_at은 RPC(서버시간)만 쓴다.
+ * 이 세션의 사진들 — `sort_order` 오름차순, 경로 그대로(서명 전).
+ *
+ * ⓘ RLS `images_select_own_or_crew`가 이미 "내 것 또는 크루 공개"로 좁힌다.
+ *   여기서는 `session_id`만 걸면 된다.
+ */
+export async function listSessionPhotoRows(
+  sessionId: string,
+): Promise<WorkoutPhotoRow[]> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("workout_images")
+    .select(PHOTO_COLS)
+    .eq("session_id", sessionId)
+    .order("sort_order", { ascending: true });
+  if (error) throw error;
+  return sortWorkoutPhotos((data ?? []) as unknown as WorkoutPhotoRow[]);
+}
+
+/** 이 세션의 사진들 + 서명 URL (1h) — 화면이 바로 쓰는 모양 */
+export async function listSessionPhotos(
+  sessionId: string,
+): Promise<SessionPhoto[]> {
+  const rows = await listSessionPhotoRows(sessionId);
+  if (rows.length === 0) return [];
+
+  const supabase = getSupabaseBrowserClient();
+  // 한 번의 배치 서명 — 장수만큼 왕복하지 않는다 (`social.ts`와 같은 규약)
+  const { data, error } = await supabase.storage
+    .from("workout-images")
+    .createSignedUrls(
+      rows.map((r) => r.image_path),
+      3600,
+    );
+  if (error || !data) return [];
+
+  const photos: SessionPhoto[] = [];
+  rows.forEach((row, i) => {
+    const signed = data[i];
+    // 한 장이 실패해도 나머지는 살린다 — 5장 중 1장 때문에 전부 사라지면 안 된다
+    if (!signed?.signedUrl || signed.error) return;
+    photos.push({
+      id: row.id,
+      url: signed.signedUrl,
+      source: row.source,
+      sortOrder: row.sort_order,
+    });
+  });
+  return photos;
+}
+
+/**
+ * 압축된 사진 한 장을 비공개 버킷에 올리고 `workout_images` 행을 만든다.
+ *
+ * ⚠️⚠️ **여기서 인증을 확정하지 않는다 (2026-09-10, 0103).** 예전에는 이 함수가
+ * 끝에서 `set_workout_verification`까지 불렀는데, 그 RPC는 `status = 'completed'`
+ * 인 세션만 받는다. **운동 중(active)에 사진을 찍으려면** 저장과 확정이 갈려야 한다.
+ *
+ * ⛔ 그렇다고 RPC가 active를 받도록 고치지 마라. 사진을 저장하는 것과 운동을
+ *    인증하는 것은 **다른 사건**이다. 확정은 완료 뒤 `finalizeWorkoutVerification`이
+ *    한 번 한다.
+ *
+ * ⓘ 슬롯은 `nextPhotoSlot`이 정한다. 두 장을 동시에 올리면 같은 슬롯을 계산할 수
+ *   있는데, 그때 DB가 23505로 거절하는 것이 **맞다** — 다시 읽어 한 번 재시도한다.
+ *   진실은 DB에 있고 클라의 낙관적 계산이 아니다.
  */
 export async function uploadWorkoutImage(input: {
   userId: string;
@@ -895,31 +970,141 @@ export async function uploadWorkoutImage(input: {
   blob: Blob;
   source: VerificationSource;
   clientCapturedAt: Date | null;
-}): Promise<WorkoutSession> {
+}): Promise<WorkoutPhotoRow> {
   const supabase = getSupabaseBrowserClient();
   const path = `${input.userId}/${input.sessionId}/${Date.now()}.jpg`;
 
+  const existing = await listSessionPhotoRows(input.sessionId);
+  let slot = nextPhotoSlot(existing);
+  if (slot === null) throw new Error("photo_limit_reached");
+
+  // ⚠️ 업로드가 먼저다. `images_insert_own` 정책이 **스토리지 객체의 존재**를
+  //    조건으로 걸고 있어서, 행을 먼저 넣으면 정책에 막힌다.
   const { error: upError } = await supabase.storage
     .from("workout-images")
     .upload(path, input.blob, { contentType: "image/jpeg" });
   if (upError) throw upError;
 
-  const { error: rowError } = await supabase.from("workout_images").insert({
-    session_id: input.sessionId,
-    user_id: input.userId,
-    image_path: path,
-    source: input.source,
-    client_captured_at: input.clientCapturedAt?.toISOString() ?? null,
-  });
-  if (rowError) throw rowError;
+  const insertAt = (at: number) =>
+    supabase
+      .from("workout_images")
+      .insert({
+        session_id: input.sessionId,
+        user_id: input.userId,
+        image_path: path,
+        source: input.source,
+        sort_order: at,
+        client_captured_at: input.clientCapturedAt?.toISOString() ?? null,
+      })
+      .select(PHOTO_COLS)
+      .single();
 
+  let { data, error } = await insertAt(slot);
+
+  // 23505 = 그 슬롯을 내 다른 탭·동시 촬영이 먼저 가져갔다. 다시 읽고 한 번만.
+  if (error?.code === "23505") {
+    slot = nextPhotoSlot(await listSessionPhotoRows(input.sessionId));
+    if (slot === null) throw new Error("photo_limit_reached");
+    ({ data, error } = await insertAt(slot));
+  }
+  if (error) throw error;
+  return data as unknown as WorkoutPhotoRow;
+}
+
+/**
+ * 완료된 세션의 인증 상태를 **한 번** 확정한다 (§8).
+ *
+ * 사진이 0장이면 아무것도 하지 않고 `null`을 돌려준다.
+ * 등급은 `verificationSourceForPhotos`가 정한다 — **camera가 하나라도 있으면
+ * `camera_verified`, 전부 album이면 `photo_uploaded`.**
+ *
+ * ⚠️ `client_captured_at`은 **camera 사진에 실제로 저장된 값** 중 가장 이른 것을
+ *    쓴다. 없으면 `null`이다 — 지어내지 않는다.
+ * ⚠️ 사진 XP는 여기서 청구하지 않는다. `award_workout_photo_xp`는 세션 기준
+ *    멱등이라 5장을 올려도 한 번뿐이고, 호출 시점은 화면이 정한다.
+ */
+export async function finalizeWorkoutVerification(
+  sessionId: string,
+): Promise<WorkoutSession | null> {
+  const rows = await listSessionPhotoRows(sessionId);
+  const source = verificationSourceForPhotos(rows);
+  if (source === null) return null;
+
+  const supabase = getSupabaseBrowserClient();
   const { data, error } = await supabase.rpc("set_workout_verification", {
-    p_session_id: input.sessionId,
-    p_source: input.source,
-    p_client_captured_at: input.clientCapturedAt?.toISOString() ?? null,
+    p_session_id: sessionId,
+    p_source: source,
+    p_client_captured_at: capturedAtForPhotos(rows),
   });
   if (error) throw error;
   return data as WorkoutSession;
+}
+
+/**
+ * 사진 순서 바꾸기 — `imageIds`가 **그 세션 사진 전량**이어야 한다.
+ *
+ * ⚠️ 테이블을 PATCH 하지 않는다. `workout_images`에는 UPDATE grant도 정책도
+ *    없고(0096), 슬롯 맞바꾸기는 두 번에 나누면 23505로 깨진다. RPC가 한
+ *    트랜잭션에서 전량을 다시 매긴다 (0104).
+ */
+export async function reorderWorkoutImages(
+  sessionId: string,
+  imageIds: string[],
+): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  const { error } = await supabase.rpc("reorder_workout_images", {
+    p_session_id: sessionId,
+    p_image_ids: imageIds,
+  });
+  if (error) throw error;
+}
+
+/**
+ * 사진 한 장 삭제 — 행 · 스토리지 객체 · 슬롯 · 인증 상태를 **같이** 정리한다.
+ *
+ * 순서가 중요하다:
+ *  1. `workout_images` 행 (RLS `images_delete_own`: 내 것만)
+ *  2. 스토리지 객체 (0104의 `workout_images_delete_own` 정책이 있어야 지워진다)
+ *  3. 남은 사진이 있으면 슬롯을 다시 매긴다 — **구멍을 남기면 안 된다**
+ *  4. 하나도 안 남으면 인증을 해제한다 (0105)
+ *
+ * ⚠️ 행을 먼저 지운다. 스토리지를 먼저 지우면 실패했을 때 **없는 파일을 가리키는
+ *    행**이 남아 카드에 깨진 이미지가 뜬다. 반대 순서의 실패는 고아 객체 하나로
+ *    끝난다(운영에 이미 95개 있고 화면에 아무 영향이 없다).
+ *
+ * ⚠️ 3번을 빼먹으면 0·1·2를 지운 뒤 남은 3·4에서 다음 슬롯이 5가 되어
+ *    **2장뿐인데 추가가 막힌다** (`nextPhotoSlot` 주석 참조).
+ */
+export async function deleteWorkoutImage(input: {
+  sessionId: string;
+  imageId: string;
+  imagePath: string;
+}): Promise<{ remaining: number; verificationCleared: boolean }> {
+  const supabase = getSupabaseBrowserClient();
+
+  const { error: rowError } = await supabase
+    .from("workout_images")
+    .delete()
+    .eq("id", input.imageId);
+  if (rowError) throw rowError;
+
+  await supabase.storage.from("workout-images").remove([input.imagePath]);
+
+  const rest = await listSessionPhotoRows(input.sessionId);
+  if (rest.length > 0) {
+    await reorderWorkoutImages(
+      input.sessionId,
+      rest.map((r) => r.id),
+    );
+    return { remaining: rest.length, verificationCleared: false };
+  }
+
+  const { error: clearError } = await supabase.rpc(
+    "clear_workout_verification",
+    { p_session_id: input.sessionId },
+  );
+  if (clearError) throw clearError;
+  return { remaining: 0, verificationCleared: true };
 }
 
 export type PhotoXpResult = {
@@ -1080,6 +1265,15 @@ export type CalendarSession = CompletedSession & {
   exerciseNames: string[];
   recordNote: string | null; // 🏅 기록 갱신 문구 (0018)
   tabataMinutes: number | null; // 🔥 타바타 코스 분수 (0019)
+  /**
+   * 이 세션에 붙은 사진 수 (0103) — `LatePhotoButton`을 그릴지 정한다.
+   *
+   * ⚠️ **`verification`으로 대신하지 마라.** 예전 호출부가 `verification !== "none"`을
+   *    "사진이 있다"로 썼는데, 그 값은 **장수를 모른다** — 1장이든 5장이든 같다.
+   *    상한이 5가 된 지금은 실제 수가 있어야 "더 붙일 수 있는가"를 답할 수 있다.
+   * ⓘ 왕복은 안 는다. 이미 부르던 질의에 `workout_images(id)` 임베드만 더한 것이다.
+   */
+  photoCount: number;
 };
 
 /** 내 completed 세션 전체 (달력 스탬프·월간요약·상세시트·복사용) */
@@ -1188,7 +1382,9 @@ export async function getCompletedSessions(
   const { data, error } = await supabase
     .from("workout_sessions")
     .select(
-      "id, completed_at, duration_minutes, verification_status, record_note, tabata_minutes, workout_exercises(exercise_name, sort_order)",
+      // workout_images(id) — 사진 **수**만 세려고 붙인다 (0103). 별도 질의를
+      // 만들지 않는다. `!inner`가 아니므로 사진 없는 세션도 그대로 온다.
+      "id, completed_at, duration_minutes, verification_status, record_note, tabata_minutes, workout_exercises(exercise_name, sort_order), workout_images(id)",
     )
     .eq("user_id", userId)
     .eq("status", "completed")
@@ -1205,6 +1401,7 @@ export async function getCompletedSessions(
     record_note?: string | null; // 0018 적용 전에는 컬럼이 없을 수 있음
     tabata_minutes?: number | null; // 0019
     workout_exercises: { exercise_name: string; sort_order: number }[] | null;
+    workout_images: { id: string }[] | { id: string } | null;
   };
 
   return ((data ?? []) as Row[]).map((r) => ({
@@ -1217,6 +1414,7 @@ export async function getCompletedSessions(
       .map((e) => e.exercise_name),
     recordNote: r.record_note ?? null,
     tabataMinutes: r.tabata_minutes ?? null,
+    photoCount: workoutImageList(r.workout_images).length,
   }));
 }
 
@@ -1254,7 +1452,9 @@ export async function getLatestCrewWorkoutWithPhoto(
 
   const { data, error } = await supabase
     .from("workout_sessions")
-    .select("id, user_id, completed_at, workout_images!inner(image_path)")
+    .select(
+      "id, user_id, completed_at, workout_images!inner(image_path, sort_order)",
+    )
     .in("user_id", visibleIds)
     .eq("status", "completed")
     .eq("visibility", "group")
@@ -1274,10 +1474,14 @@ export async function getLatestCrewWorkoutWithPhoto(
   const row = (data ?? [])[0] as Row | undefined;
   if (!row) return null;
 
-  const image = Array.isArray(row.workout_images)
-    ? row.workout_images[0]
-    : row.workout_images;
-  if (!image) return null;
+  /**
+   * ⚠️ 예전에는 `Array.isArray(...)[0]`으로 아무거나 집었다. 세션당 1장이던
+   *    시절에는 정답이 하나뿐이라 안 보이던 버그인데, 0103으로 최대 5장이 되면서
+   *    **홈 크루 카드에 아무 사진이나 뜨게 된다** — 임베드 반환 순서는 보장되지
+   *    않는다. `firstWorkoutImagePath`가 `sort_order`로 대표 한 장을 정한다.
+   */
+  const imagePath = firstWorkoutImagePath(row.workout_images);
+  if (!imagePath) return null;
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -1287,7 +1491,7 @@ export async function getLatestCrewWorkoutWithPhoto(
 
   const { data: signed, error: signErr } = await supabase.storage
     .from("workout-images")
-    .createSignedUrl(image.image_path, 3600);
+    .createSignedUrl(imagePath, 3600);
   if (signErr || !signed) return null;
 
   return {
