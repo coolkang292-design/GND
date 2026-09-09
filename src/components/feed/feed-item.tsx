@@ -11,6 +11,7 @@ import {
 import { LikersSheet } from "@/components/feed/likers-sheet";
 import { ReactionBar } from "@/components/feed/reaction-bar";
 import { ImageLightbox } from "@/components/image-lightbox";
+import { PhotoCarousel } from "@/components/feed/photo-carousel";
 import { PhotoStamp } from "@/components/photo-stamp";
 import { SetBreakdown } from "@/components/workout/set-breakdown";
 import { normalizeCaption } from "@/lib/domain/session-caption";
@@ -299,16 +300,23 @@ export function FeedItemCard({
   onAuthorTap,
 }: Props) {
   // Phase D — 사진 상호작용. 사진이 없는 기록에서는 전부 놀고 있다.
-  const [lightbox, setLightbox] = useState(false);
+  /**
+   * 라이트박스로 연 사진의 index — `null`이면 닫힘 (0103).
+   *
+   * ⚠️ 예전에는 `boolean`이었다(사진이 한 장뿐이라 어느 것인지 물을 필요가
+   *    없었다). 캐러셀에서는 **지금 보고 있는 장**을 열어야 하므로 index 를 든다.
+   */
+  const [lightboxAt, setLightboxAt] = useState<number | null>(null);
   const [burst, setBurst] = useState(false);
   const [likeTrigger, setLikeTrigger] = useState(0);
-  const tapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const burstTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 카드가 화면에서 사라진 뒤 타이머가 살아 있으면 언마운트된 컴포넌트에
   // setState가 걸린다. 피드는 스크롤로 계속 바뀌는 목록이라 실제로 일어난다.
+  // (탭 판정 타이머는 0103에서 `PhotoCarousel`로 옮겼다 — 거기서 정리한다.)
   useEffect(
     () => () => {
-      if (tapTimer.current) clearTimeout(tapTimer.current);
+      if (burstTimer.current) clearTimeout(burstTimer.current);
     },
     [],
   );
@@ -323,34 +331,34 @@ export function FeedItemCard({
     stats.push(`${(item.volume.cardioDistanceMeters / 1000).toFixed(1)}km`);
 
   /**
-   * 사진 탭 (Phase D).
+   * 사진 탭 (Phase D → 0103).
    *
-   * ⚠️ 한 번 탭과 두 번 탭이 같은 자리에 있다. 터치에서 더블탭은 click을 **두 번**
-   *    쏘므로, 첫 click을 곧바로 처리하면 라이트박스가 열린 뒤에 좋아요가 붙는다.
-   *    그래서 첫 click을 잠깐 재워 두고, 그 사이에 두 번째가 오면 취소한다.
+   * ⚠️⚠️ **여기서 지연을 걸지 마라.** 한 번 탭과 두 번 탭을 가르는 260ms 지연은
+   * `PhotoCarousel`이 갖고 있다(탭 판과 스와이프 가드가 거기 있으므로 한 곳에
+   * 모은다). 여기서 한 번 더 재우면 **지연이 두 겹(520ms)**이 되어 라이트박스가
+   * 눈에 띄게 굼떠진다 — 2026-09-10에 실제로 그렇게 만들었다가 테스트가 잡았다.
    */
-  function handlePhotoTap() {
-    if (tapTimer.current) return;
-    tapTimer.current = setTimeout(() => {
-      tapTimer.current = null;
-      setLightbox(true);
-    }, 260);
+  function handlePhotoTap(index: number) {
+    // ⚠️ **지금 보고 있는 장**을 연다. 늘 0번을 열면 3번째 사진을 탭했는데
+    //    첫 장이 커지는 꼴이 된다 (계획 §13).
+    setLightboxAt(index);
   }
 
   function handlePhotoDoubleTap() {
-    if (tapTimer.current) {
-      clearTimeout(tapTimer.current);
-      tapTimer.current = null;
-    }
     setLikeTrigger((n) => n + 1);
     setBurst(true);
-    setTimeout(() => setBurst(false), 700);
+    burstTimer.current = setTimeout(() => setBurst(false), 700);
   }
 
-  // Phase 5에서 캐러셀이 들어올 자리. 지금은 대표 한 장만 그린다 —
-  // 사진 0장 카드는 아래 분기로 내려가 예전 그대로다.
-  const cover = item.photos[0];
-  if (cover) {
+  /**
+   * 사진이 있으면 몰입형 카드 (0103부터 최대 5장).
+   *
+   * ⚠️ **사진마다 게시물이 생기는 게 아니다.** 아래 `WorkoutSummary`·`CardFooter`가
+   *    그리는 운동 데이터·캡션·좋아요·댓글은 전부 같은 `item.sessionId`에 붙는다.
+   */
+  const photos = item.photos;
+  const openPhoto = lightboxAt === null ? null : photos[lightboxAt];
+  if (photos.length > 0) {
     return (
       <article className="overflow-hidden rounded-card border border-line bg-surface shadow-card">
         {/* ⚠️ **4/3이다. 4/5로 바꾸지 마라.**
@@ -358,27 +366,15 @@ export function FeedItemCard({
             사용자가 화면을 보고 되돌렸다 — *"이전게 더 나은거 같은데 너무 길쭉함"*
             (2026-08-31). 인스타는 사진이 주인공이라 세로가 길어도 되지만, GND의
             카드는 사진 아래에 종목·세트·캡션·액션 줄이 붙는다. 사진이 길어지면
-            그것들이 접힘선 밖으로 밀린다. */}
-        <div className="relative aspect-[4/3] w-full">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={cover.url}
-            alt={`${item.nickname}님의 운동 인증`}
-            className="h-full w-full object-cover"
-            loading="lazy"
-          />
-
-          {/* 사진 탭 판. 한 번 = 크게 보기, 두 번 = 좋아요.
-              ⚠️ 아래 PhotoStamp·프로필 오버레이보다 **먼저** 그린다 — 그래야
-                 그 둘이 위에 남아 자기 탭을 그대로 받는다. */}
-          <button
-            type="button"
-            aria-label={`${item.nickname}님의 인증사진 크게 보기 (두 번 탭하면 좋아요)`}
-            onClick={handlePhotoTap}
-            onDoubleClick={handlePhotoDoubleTap}
-            className="absolute inset-0 h-full w-full"
-          />
-
+            그것들이 접힘선 밖으로 밀린다.
+            ⚠️ **사진이 여러 장이라고 카드가 길어지지 않는다** — 비율은 `PhotoCarousel`
+               안에 있고 장수와 무관하다. */}
+        <PhotoCarousel
+          photos={photos}
+          alt={`${item.nickname}님의 인증사진`}
+          onTap={handlePhotoTap}
+          onDoubleTap={handlePhotoDoubleTap}
+        >
           {/* 더블탭 하트. 위에 떠서 잠깐 커졌다 사라진다. 눌린 것이 눈에 보이지
               않으면 사용자는 한 번 더 두드린다. */}
           {burst && (
@@ -421,7 +417,7 @@ export function FeedItemCard({
               {timeAgo(item.completedAt)} 운동 완료
             </p>
           </div>
-        </div>
+        </PhotoCarousel>
 
         <WorkoutSummary item={item} stats={stats} isMine={item.userId === userId} />
         <CardFooter
@@ -434,12 +430,18 @@ export function FeedItemCard({
         />
 
         {/* Phase D: 라이트박스는 **이미 만들어져 있었고** 아무도 안 부르고 있었다.
-            사진을 크게 볼 곳이 없으면 인증사진을 올릴 이유가 반쯤 사라진다. */}
-        {lightbox && (
+            사진을 크게 볼 곳이 없으면 인증사진을 올릴 이유가 반쯤 사라진다.
+            ⓘ 0103: 여러 장이면 **탭한 그 장**이 열린다. 라이트박스 안에서 좌우로
+              넘기는 것은 이번 범위가 아니다 — 피드 캐러셀이 우선이다 (계획 §13). */}
+        {openPhoto && (
           <ImageLightbox
-            src={cover.url}
-            alt={`${item.nickname}님의 운동 인증`}
-            onClose={() => setLightbox(false)}
+            src={openPhoto.url}
+            alt={
+              photos.length > 1
+                ? `${item.nickname}님의 운동 인증 (${(lightboxAt ?? 0) + 1}/${photos.length})`
+                : `${item.nickname}님의 운동 인증`
+            }
+            onClose={() => setLightboxAt(null)}
           />
         )}
       </article>

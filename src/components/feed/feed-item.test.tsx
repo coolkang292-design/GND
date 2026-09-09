@@ -580,6 +580,75 @@ describe("FeedItemCard — 사진 탭 (Phase D)", () => {
     );
     expect(html).not.toContain("인증사진 크게 보기");
   });
+
+  // ── 다중 사진 (0103) ────────────────────────────────────────────
+  //
+  // ⚠️ 사진마다 게시물이 생기는 게 아니다. 아래 단언들은 전부 **한 카드** 안의
+  //    이야기다 — 좋아요·댓글·운동 데이터는 같은 sessionId 하나에 붙어 있다.
+
+  /** 사진 N장짜리 아이템 (픽스처는 1장까지만 만들어서 여기서 늘린다) */
+  function withPhotos(n: number): FeedItem {
+    return {
+      ...feedItem(PHOTO),
+      photos: Array.from({ length: n }, (_, i) => ({
+        id: `img-${i}`,
+        url: `https://example.com/w${i}.jpg`,
+        source: "camera" as const,
+        sortOrder: i,
+      })),
+    };
+  }
+
+  /**
+   * ⚠️⚠️ **부정 확인이다.** 사진 1장인 기존 사용자의 화면이 안 바뀌어야 한다는
+   *    요구(계획 §12)를 지킨다. 점·카운터가 새로 생기면 여기서 걸린다.
+   */
+  it("사진 1장이면 캐러셀 장치가 안 붙는다 (점·카운터 없음)", () => {
+    renderPhotoCard(withPhotos(1));
+    expect(screen.queryByRole("tablist")).toBeNull();
+    expect(screen.queryByText(/^\d+ \/ \d+$/)).toBeNull();
+  });
+
+  it("사진 2장 이상이면 캐러셀이 된다 — 카운터와 점이 붙는다", () => {
+    renderPhotoCard(withPhotos(3));
+    expect(screen.getByText("1 / 3")).toBeTruthy();
+    expect(screen.getAllByRole("tab")).toHaveLength(3);
+  });
+
+  it("사진이 5장이어도 카드 비율은 4/3 그대로다", () => {
+    const html = renderToStaticMarkup(
+      <FeedItemCard item={withPhotos(5)} userId="me" onProfileClick={() => {}} />,
+    );
+    expect(html).toContain("aspect-[4/3]");
+    expect(html).not.toContain("aspect-[4/5]");
+  });
+
+  it("탭한 그 사진이 라이트박스에 열린다 (늘 첫 장이 아니다)", () => {
+    renderPhotoCard(withPhotos(4));
+    fireEvent.click(screen.getAllByLabelText(/크게 보기/)[2]);
+    act(() => vi.advanceTimersByTime(300));
+
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.getAttribute("aria-label")).toContain("3/4");
+    expect(dialog.querySelector("img")?.getAttribute("src")).toBe(
+      "https://example.com/w2.jpg",
+    );
+  });
+
+  it("여러 장이어도 더블탭 좋아요는 같은 세션 하나에 붙는다", async () => {
+    renderPhotoCard(withPhotos(3));
+    fireEvent.doubleClick(screen.getAllByLabelText(/크게 보기/)[1]);
+    act(() => vi.advanceTimersByTime(500));
+
+    await vi.waitFor(() =>
+      expect(mocks.toggleReaction).toHaveBeenCalledWith(
+        "session-1",
+        expect.anything(),
+        expect.anything(),
+        expect.anything(),
+      ),
+    );
+  });
 });
 
 
