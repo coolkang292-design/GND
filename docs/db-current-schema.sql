@@ -7,7 +7,7 @@
 -- 쓰는 법: 함수·정책의 '현행' 정의가 필요할 때 마이그레이션 51개를
 -- 뒤지지 말고 이 파일을 검색하라. 마이그레이션을 적용한 뒤에는 다시 뽑아라.
 --
--- 함수 99개 · 정책 79개 · 인덱스 100개
+-- 함수 100개 · 정책 79개 · 인덱스 100개
 
 -- ════════════════════════════════════════════════════════════
 -- 함수
@@ -3666,6 +3666,58 @@ begin
   return jsonb_build_object('status', 'removed');
 end $function$;
 
+-- ── reorder_workout_images ──
+CREATE OR REPLACE FUNCTION public.reorder_workout_images(p_session_id uuid, p_image_ids uuid[])
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+declare
+  v_len   int := coalesce(array_length(p_image_ids, 1), 0);
+  v_count int;
+begin
+  if (select auth.uid()) is null then
+    raise exception 'not_authenticated';
+  end if;
+
+  if not public.owns_workout_session(p_session_id) then
+    raise exception 'session_not_found';
+  end if;
+
+  if (select count(distinct t.id) from unnest(p_image_ids) as t(id)) <> v_len then
+    raise exception 'duplicate_image_id';
+  end if;
+
+  select count(*) into v_count
+    from public.workout_images
+   where session_id = p_session_id;
+  if v_count <> v_len then
+    raise exception 'photo_set_mismatch:%/%', v_len, v_count;
+  end if;
+
+  if exists (
+    select 1 from unnest(p_image_ids) as t(id)
+     where not exists (
+       select 1 from public.workout_images wi
+        where wi.id = t.id
+          and wi.session_id = p_session_id
+          and wi.user_id = (select auth.uid())
+     )
+  ) then
+    raise exception 'photo_not_found';
+  end if;
+
+  set constraints public.workout_images_session_slot_key deferred;
+
+  update public.workout_images wi
+     set sort_order = (t.ord - 1)::smallint
+    from unnest(p_image_ids) with ordinality as t(id, ord)
+   where wi.id = t.id
+     and wi.session_id = p_session_id;
+end
+$function$;
+
 -- ── report_user ──
 CREATE OR REPLACE FUNCTION public.report_user(p_target_id uuid, p_reason text, p_note text DEFAULT NULL::text, p_challenge_id uuid DEFAULT NULL::uuid)
  RETURNS jsonb
@@ -5008,7 +5060,7 @@ $function$;
 -- CREATE UNIQUE INDEX workout_exercises_pkey ON public.workout_exercises USING btree (id);
 -- CREATE INDEX workout_exercises_session ON public.workout_exercises USING btree (session_id, sort_order);
 -- CREATE UNIQUE INDEX workout_images_pkey ON public.workout_images USING btree (id);
--- CREATE UNIQUE INDEX workout_images_session_id_key ON public.workout_images USING btree (session_id);
+-- CREATE UNIQUE INDEX workout_images_session_slot_key ON public.workout_images USING btree (session_id, sort_order);
 -- CREATE UNIQUE INDEX workout_plans_pkey ON public.workout_plans USING btree (id);
 -- CREATE UNIQUE INDEX workout_plans_program_slot ON public.workout_plans USING btree (program_enrollment_id, program_week, program_session) WHERE (program_enrollment_id IS NOT NULL);
 -- CREATE INDEX workout_plans_user_date ON public.workout_plans USING btree (user_id, plan_date);
