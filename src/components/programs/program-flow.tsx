@@ -167,13 +167,22 @@ export function ProgramFlow({
   }
 
   if (step === "done" && created) {
+    // 등록을 마친 프로그램이 사다리인가 — 아래 문구 두 곳이 갈린다
+    const ladderDone = selected !== null && isLadderProgram(selected);
     return (
       <section className="mx-auto w-full max-w-2xl pt-8 text-center">
         <div className="mx-auto grid h-20 w-20 place-items-center rounded-full border border-accent/55 bg-accent/10">
           <UiIcon name="finish" size={64} />
         </div>
         <p className="mt-5 text-[11px] font-extrabold tracking-[0.08em] text-accent">등록 완료</p>
-        <h1 className="mt-1 text-2xl font-black leading-8 text-text">6주 계획이 준비됐어요</h1>
+        {/*
+          ⚠️ 사다리는 **4주 24회**다. 여기가 "6주"로 굳어 있어서 등록을 마치면
+             화면이 마지막에 거짓말을 했다 (2026-09-04 오후에 눌러 보고 잡았다).
+             바로 앞 미리보기가 "4주 일정을 확인하세요"라고 말한 직후라 더 어긋난다.
+        */}
+        <h1 className="mt-1 text-2xl font-black leading-8 text-text">
+          {ladderDone ? "4주 계획이 준비됐어요" : "6주 계획이 준비됐어요"}
+        </h1>
         <p className="mt-2 text-sm leading-6 text-muted">이제 첫 운동만 시작하면 됩니다.</p>
 
         <div className="mt-6 rounded-[22px] border border-accent/45 bg-gradient-to-br from-accent/15 to-surface p-5 text-left shadow-card">
@@ -181,14 +190,21 @@ export function ProgramFlow({
           <p className="mt-2 text-lg font-black text-text">
             {dateLabel(created.nextPlan.date)} · {timeLabel(created.nextPlan.time)}
           </p>
+          {/*
+            ⚠️ 사다리에는 `1주차 A회`가 뜻이 없다 — 회차마다 숫자가 달라서
+               주차·템플릿으로 부르지 않고 `N일차`로 부른다(달력 배지도 같다).
+               게다가 `title`이 이미 "1일차 · 5·4·3·2·1"이라 접두사를 붙이면
+               "1주차 A회 · 1일차 · …"가 된다.
+          */}
           <p className="mt-1 text-sm font-bold text-muted">
-            1주차 A회 · {created.nextPlan.title}
+            {ladderDone ? "" : "1주차 A회 · "}
+            {created.nextPlan.title}
           </p>
         </div>
         <Link
           href="/record"
-          // 기록 화면은 항상 운동 탭으로 열린다 — 방금 담은 18회를 보러
-          // 가는 길이므로 달력으로 착지시킨다
+          // 기록 화면은 항상 운동 탭으로 열린다 — 방금 담은 회차(근력·인터벌
+          // 18회 · 사다리 24회)를 보러 가는 길이므로 달력으로 착지시킨다
           onClick={() => requestCalendarView()}
           className="mt-4 flex min-h-12 w-full items-center justify-center rounded-card bg-accent text-sm font-black text-accent-ink shadow-card"
         >

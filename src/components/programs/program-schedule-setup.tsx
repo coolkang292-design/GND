@@ -333,7 +333,17 @@ export function ProgramScheduleSetup({
         <ScheduleProgress step={step} />
         <p className="text-xs font-extrabold text-accent">1/3 · 시작일</p>
         <h1 className="mt-2 text-xl font-black text-text">언제 시작할까요?</h1>
-        <p className="mt-1 text-xs leading-5 text-muted">첫 주부터 주 3회가 순서대로 배치됩니다.</p>
+        {/*
+          ⚠️ 사다리는 **주 3회가 아니다.** 5일 훈련 1일 휴식이고 휴식일까지
+             프로그램이 정한다. 근력 문구를 그대로 두면 화면이 거짓말을 한다
+             — 2026-09-04 오후에 화면을 열어 보고 잡았다. 이 컴포넌트는 이미
+             `ladder`를 알고 있으니 문구도 갈라야 한다.
+        */}
+        <p className="mt-1 text-xs leading-5 text-muted">
+          {ladder
+            ? "5일 훈련하고 하루 쉬는 24회가 순서대로 배치됩니다. 휴식일도 달력에 담겨요."
+            : "첫 주부터 주 3회가 순서대로 배치됩니다."}
+        </p>
 
         <div className="mt-5 grid grid-cols-2 gap-2.5">
           <button

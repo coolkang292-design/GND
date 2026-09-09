@@ -304,3 +304,41 @@ PLAIN_VALUE=plain
     ).toMatchSnapshot();
   });
 });
+
+
+/*
+  사다리 문구의 회차 수 — **데이터를 직접 훑는다.**
+
+  ⚠️ 화면 단위로 "옛 문구가 없다"를 확인하는 테스트가 이미 있었는데
+     (`ladder-program.test.tsx`), 그것은 **설정 화면만** 렌더해서 카탈로그
+     카드의 `title`·`description`을 못 봤다. 그 결과 "최대 개수를 올리는
+     18회 사다리"가 "총 24회" 바로 위에 찍힌 채로 운영에 나갔다
+     (2026-09-04 오후에 화면을 열어 보고 발견).
+
+  화면이 늘어날 때마다 단언을 하나씩 붙이는 대신 **원천 데이터**를 본다.
+  새 화면이 이 문구를 어디에 쓰든 여기서 먼저 걸린다.
+
+  ⚠️ `key`는 제외한다. `pullup-ladder-18`은 DB에 박힌 식별자라 바꾸면 이미
+     등록된 사람의 `program_enrollments` 행이 고아가 된다.
+*/
+describe("사다리 문구에 18회가 없다 — 24회 프로그램이다", () => {
+  const COPY_FIELDS = [
+    "eyebrow",
+    "title",
+    "description",
+    "sourceNote",
+  ] as const;
+
+  for (const field of COPY_FIELDS) {
+    it(`${field}에 옛 회차 수가 없다`, () => {
+      const value = PULLUP_LADDER_PROGRAM[field];
+      expect(typeof value).toBe("string");
+      expect(value).not.toMatch(/18\s*회/);
+      expect(value).not.toMatch(/6\s*주/);
+    });
+  }
+
+  it("key만은 옛 이름을 그대로 지킨다 — 바꾸면 기존 등록이 고아가 된다", () => {
+    expect(PULLUP_LADDER_PROGRAM.key).toBe("pullup-ladder-18");
+  });
+});

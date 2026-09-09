@@ -1178,8 +1178,18 @@ describe("CalendarView — 계획한 운동 수정 (2026-08-28)", () => {
 
     expect(screen.getByText("벤치프레스")).toBeTruthy();
     expect(screen.getByText("랫풀다운")).toBeTruthy();
-    // 기록 화면 카드가 쓰는 요약 줄이 그대로 온다
-    expect(screen.getByText("3세트 · 10회 · 60kg")).toBeTruthy();
+    /*
+      기록 화면 카드가 쓰는 요약 줄이 그대로 온다.
+
+      ⚠️ 2026-09-04에 `10회` → `10·10·8회`로 바뀌었다. 이 픽스처의 세트는
+         원래부터 10·10·8이라 옛 문구가 **첫 세트만 말하고 있었다** —
+         풀업 사다리(5·4·3·2·1)에서 같은 거짓말이 눈에 띄어 규칙을 고쳤고,
+         여기도 같이 정확해졌다 (`recommended-sets.ts`의 `amounts`).
+
+      ⚠️ 무게는 여전히 첫 세트만 말한다(60·65·70인데 `60kg`). 요구에 없어서
+         손대지 않았다 — 같은 종류의 근사가 남아 있다는 뜻이다.
+    */
+    expect(screen.getByText("3세트 · 10·10·8회 · 60kg")).toBeTruthy();
     // 세트 추가·삭제·직전 기록 불러오기도 카드에 딸려 온다
     expect(screen.getAllByRole("button", { name: "+ 세트" })).toHaveLength(2);
     expect(
@@ -1291,7 +1301,8 @@ describe("CalendarView — 계획한 운동 수정 (2026-08-28)", () => {
     );
 
     await screen.findByText("아직 불러올 직전 기록이 없어요");
-    expect(screen.getByText("3세트 · 10회 · 60kg")).toBeTruthy();
+    // 위 주석 참조 — 픽스처 세트가 10·10·8이라 전부 보여준다 (2026-09-04)
+    expect(screen.getByText("3세트 · 10·10·8회 · 60kg")).toBeTruthy();
   });
 
   it("종목을 빼고 저장하면 남은 종목만 그 날짜에 덮어쓴다", async () => {

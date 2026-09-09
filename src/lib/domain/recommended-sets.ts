@@ -23,6 +23,16 @@ export type SetupPlan = {
    * 유산소는 쓰지 않는다(거리·시간 모두 운동 중 입력).
    */
   amount: number;
+  /**
+   * 세트마다 목표가 **다를 때만** 채워지는 전체 목록 (2026-09-04).
+   *
+   * ⚠️ 풀업 사다리(5·4·3·2·1) 때문에 생겼다. `amount` 하나로는 첫 세트밖에
+   *    못 말해서 카드가 "5세트 · 5회"라고 **거짓말을 했다.**
+   *
+   * ⚠️ 모두 같으면 `undefined`로 둔다. 그래야 근력·인터벌과 설정 시트의
+   *    표시가 한 글자도 안 바뀐다 — 새 값이 옛 화면을 흔들지 않게 한다.
+   */
+  amounts?: readonly number[];
   /** 무게(kg). `0`이면 **운동 중 입력** — 새 필드를 만들지 않는다 */
   weightKg: number;
 };
@@ -94,9 +104,14 @@ export function planToSets(
 /**
  * 이미 담긴 세트들 → 요약용 설정값 (2026-08-06).
  *
- * 첫 세트를 대표로 읽는다. 세트마다 값이 다를 수 있지만 이 줄은 **시작 전
- * 목록에서 "무엇을 얼마나 할 예정인가"** 를 한 줄로 보여주는 것이고, 세트별
- * 실제 값은 바로 아래 입력 행에 그대로 보인다.
+ * 이 줄은 **시작 전 목록에서 "무엇을 얼마나 할 예정인가"** 를 한 줄로 보여준다.
+ * 세트별 실제 값은 바로 아래 입력 행에 그대로 보인다.
+ *
+ * ⚠️ 예전에는 **첫 세트만** 대표로 읽었다. 근력·인터벌은 모든 세트의 목표가
+ *    같아서 문제가 없었지만, 풀업 사다리(5·4·3·2·1)에서 카드가 "5세트 · 5회"로
+ *    **거짓말을 했다** (2026-09-04에 화면을 열어 보고 잡았다). 지금은 값이
+ *    갈릴 때만 `amounts`에 전부 싣는다 — 같을 때는 싣지 않아서 옛 표시가
+ *    한 글자도 안 바뀐다.
  */
 export function planFromSets(
   sets: readonly {
@@ -108,9 +123,15 @@ export function planFromSets(
   timed: boolean,
 ): SetupPlan {
   const first = sets[0];
+  const amounts = sets.map((set) =>
+    timed ? durationSecondsOf(set) : set.reps,
+  );
+  // 다 같으면 싣지 않는다 — 옛 표시를 그대로 두기 위해서다 (`amounts` 주석)
+  const varied = amounts.some((amount) => amount !== amounts[0]);
   return {
     sets: sets.length,
     amount: first ? (timed ? durationSecondsOf(first) : first.reps) : 0,
+    ...(varied ? { amounts } : {}),
     weightKg: first?.weightKg ?? 0,
   };
 }
@@ -122,9 +143,19 @@ export function summarizePlan(
   plan: SetupPlan,
 ): string {
   if (isCardio(type)) return `${plan.sets}세트 · 거리·시간 운동 중 입력`;
-  const amount = isTimeMeasured(type, measure)
-    ? formatDurationAmount(plan.amount)
-    : `${plan.amount}회`;
+  const timed = isTimeMeasured(type, measure);
+  /*
+    세트마다 목표가 다르면 **전부** 보여준다. 사다리가 `5·4·3·2·1`인데
+    "5회"라고만 쓰면 5세트를 전부 5회 하는 운동으로 읽힌다.
+    단위는 뒤에 한 번만 붙인다 — `5·4·3·2·1회`.
+  */
+  const amount = plan.amounts
+    ? timed
+      ? plan.amounts.map(formatDurationAmount).join("·")
+      : `${plan.amounts.join("·")}회`
+    : timed
+      ? formatDurationAmount(plan.amount)
+      : `${plan.amount}회`;
   if (type !== "weight") return `${plan.sets}세트 · ${amount}`;
   const weight = plan.weightKg > 0 ? `${plan.weightKg}kg` : "무게 운동 중 입력";
   return `${plan.sets}세트 · ${amount} · ${weight}`;

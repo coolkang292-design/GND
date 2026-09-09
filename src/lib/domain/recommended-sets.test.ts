@@ -199,3 +199,56 @@ describe("isTimeMeasured", () => {
     expect(isTimeMeasured("cardio", null)).toBe(false);
   });
 });
+
+
+/*
+  세트마다 목표가 다른 계획의 한 줄 요약 (2026-09-04).
+
+  ⚠️ `planFromSets`는 **첫 세트만** 보고 요약을 만든다. 근력·인터벌은 모든
+     세트의 목표가 같아서 그것으로 충분했지만, **풀업 사다리는 5·4·3·2·1로
+     세트마다 다르다** — 첫 값만 쓰면 카드가 "5세트 · 5회"라고 말한다.
+     5세트를 전부 5회 하는 운동이 아니므로 **화면이 거짓말을 한다.**
+
+  2026-09-04 오후에 사다리 1일차를 실제로 열어 보고 잡았다. 단위 테스트도
+  빌드도 이걸 못 잡는다 — 값이 "있는지"는 맞고 "무엇인지"가 틀렸다.
+*/
+describe("사다리처럼 세트마다 목표가 다르면 요약이 전부를 보여준다", () => {
+  const ladderSets = [5, 4, 3, 2, 1].map((reps) => ({
+    weightKg: 0,
+    reps,
+    durationMin: 0,
+  }));
+
+  it("planFromSets가 세트별 목표를 모두 싣는다", () => {
+    const plan = planFromSets(ladderSets, false);
+    expect(plan.sets).toBe(5);
+    expect(plan.amounts).toEqual([5, 4, 3, 2, 1]);
+    // 첫 값은 그대로 둔다 — 옛 소비자가 amount만 읽어도 안 깨진다
+    expect(plan.amount).toBe(5);
+  });
+
+  it("목표가 모두 같으면 amounts를 싣지 않는다 — 옛 표시 그대로", () => {
+    const plan = planFromSets(
+      [10, 10, 10].map((reps) => ({ weightKg: 20, reps, durationMin: 0 })),
+      false,
+    );
+    expect(plan.amounts).toBeUndefined();
+    expect(summarizePlan("weight", null, plan)).toBe("3세트 · 10회 · 20kg");
+  });
+
+  it("요약이 5·4·3·2·1을 그대로 보여준다", () => {
+    expect(
+      summarizePlan("bodyweight", "reps", planFromSets(ladderSets, false)),
+    ).toBe("5세트 · 5·4·3·2·1회");
+  });
+
+  /*
+    ⚠️ 이 단언이 이 묶음의 핵심이다. 옛 동작(첫 값만)이 돌아오면 여기서
+       "5세트 · 5회"가 되어 실패한다.
+  */
+  it("옛 동작처럼 첫 세트만 말하지 않는다", () => {
+    expect(
+      summarizePlan("bodyweight", "reps", planFromSets(ladderSets, false)),
+    ).not.toBe("5세트 · 5회");
+  });
+});
