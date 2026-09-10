@@ -114,14 +114,22 @@ export function ActivePhotoButton({
             ? `사진을 다 채웠어요 (${used}/${MAX_WORKOUT_PHOTOS})`
             : `지금 사진 찍기 (${used}/${MAX_WORKOUT_PHOTOS})`
         }
-        className="flex h-9 items-center gap-1.5 rounded-full border border-line bg-surface-2 px-3 text-[12px] font-bold text-accent disabled:opacity-45"
+        /*
+          ⚠️ **테두리만 있는 알약으로 두지 마라** (2026-09-10 사용자 지적:
+             *"사진 찍는 화면이 안나오고… 사진 찍기는 운동중에 버튼을 만들어야
+             하는거 아님?"*). 실제로 있었는데 **아이콘과 숫자뿐이라 무슨 버튼인지
+             안 보였다.** 운동 중 화면은 큰 숫자(타이머·세트)가 시선을 다 가져가서,
+             옅은 알약은 배경으로 읽힌다. 골드 배경 + `사진` 글자로 못을 박는다.
+        */
+        className="flex h-9 items-center gap-1.5 rounded-full bg-accent px-3 text-[12px] font-extrabold text-accent-ink disabled:opacity-45"
       >
-        <UiIcon name="camera" size={15} />
+        {/* 골드 배경 위라 아이콘을 검게 눕힌다 — `verification-photo.tsx`와 같은 이유 */}
+        <UiIcon name="camera" size={15} className="brightness-0" />
         {inFlight > 0 ? (
-          <span className="text-muted">올리는 중…</span>
+          <span>올리는 중…</span>
         ) : (
           <span>
-            {used}/{MAX_WORKOUT_PHOTOS}
+            사진 {used}/{MAX_WORKOUT_PHOTOS}
           </span>
         )}
       </button>

@@ -55,13 +55,13 @@ describe("ActivePhotoButton — 운동 중 촬영", () => {
 
   it("사진 수를 `0/5` 로 보여준다", async () => {
     setup();
-    await waitFor(() => expect(screen.getByText("0/5")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/사진 0\/5/)).toBeTruthy());
   });
 
   it("이미 올라간 사진이 있으면 그 수로 시작한다 (새로고침 복구)", async () => {
     mocks.listSessionPhotoRows.mockResolvedValue([{ id: "a" }, { id: "b" }]);
     setup();
-    await waitFor(() => expect(screen.getByText("2/5")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/사진 2\/5/)).toBeTruthy());
   });
 
   it("촬영하면 저장을 부른다 — source 는 camera", async () => {
@@ -90,7 +90,7 @@ describe("ActivePhotoButton — 운동 중 촬영", () => {
   it("올리면 수가 늘고 부모에게 알린다", async () => {
     const { input, onCountChange } = setup();
     pick(input);
-    await waitFor(() => expect(screen.getByText("1/5")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/사진 1\/5/)).toBeTruthy());
     expect(onCountChange).toHaveBeenCalledWith(1);
   });
 
@@ -134,13 +134,13 @@ describe("ActivePhotoButton — 운동 중 촬영", () => {
     await waitFor(() =>
       expect(onToast).toHaveBeenCalledWith(expect.stringContaining("사진")),
     );
-    expect(screen.getByText("0/5")).toBeTruthy();
+    expect(screen.getByText(/사진 0\/5/)).toBeTruthy();
   });
 
   it("5장을 채우면 버튼이 잠긴다", async () => {
     mocks.listSessionPhotoRows.mockResolvedValue([1, 2, 3, 4, 5].map((n) => ({ id: `p${n}` })));
     setup();
-    await waitFor(() => expect(screen.getByText("5/5")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/사진 5\/5/)).toBeTruthy());
     expect(screen.getByRole("button").hasAttribute("disabled")).toBe(true);
   });
 
@@ -158,7 +158,7 @@ describe("ActivePhotoButton — 운동 중 촬영", () => {
       }),
     );
     const { input } = setup();
-    await waitFor(() => expect(screen.getByText("4/5")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/사진 4\/5/)).toBeTruthy());
 
     pick(input);
     await waitFor(() => expect(screen.getByRole("button").hasAttribute("disabled")).toBe(true));
@@ -171,6 +171,6 @@ describe("ActivePhotoButton — 운동 중 촬영", () => {
     await waitFor(() => expect(mocks.uploadWorkoutImage).toHaveBeenCalled());
     // finalizeWorkoutVerification 은 목에 아예 없다. 부르면 TypeError 로 죽는다.
     // (set_workout_verification 은 completed 세션만 받으므로 여기서 부르면 안 된다)
-    expect(screen.getByText("1/5")).toBeTruthy();
+    expect(screen.getByText(/사진 1\/5/)).toBeTruthy();
   });
 });

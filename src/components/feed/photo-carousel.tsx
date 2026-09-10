@@ -147,12 +147,41 @@ export function PhotoCarousel({
         </span>
       )}
 
+      {/*
+        좌우 넘김 버튼 (2026-09-10, 사용자 지적: *"사진 넘기는 버튼도 없음"*).
+
+        ⚠️ **스와이프만으로는 부족하다.** 점 6px은 누를 수 있는 것처럼 안 보이고,
+           **마우스에는 스와이프가 아예 없다** — PC·태블릿에서는 넘길 방법이
+           없는 카드가 된다. 끝에서는 그리지 않는다(`movePhoto`가 테두리를
+           감싸지 않는 것과 같은 이유 — 마지막에서 첫 장으로 튀면 놀란다).
+      */}
+      {many && index > 0 && (
+        <button
+          type="button"
+          aria-label="이전 사진"
+          onClick={() => goTo(index - 1)}
+          className="absolute left-1.5 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-[17px] font-bold text-white backdrop-blur"
+        >
+          ‹
+        </button>
+      )}
+      {many && index < photos.length - 1 && (
+        <button
+          type="button"
+          aria-label="다음 사진"
+          onClick={() => goTo(index + 1)}
+          className="absolute right-1.5 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-[17px] font-bold text-white backdrop-blur"
+        >
+          ›
+        </button>
+      )}
+
       {/* 점. ⚠️ 프로필 줄이 bottom-0 을 차지하므로 그 **위**에 띄운다 */}
       {many && (
         <div
           role="tablist"
           aria-label="사진 넘기기"
-          className="absolute inset-x-0 bottom-14 z-10 flex items-center justify-center gap-1.5"
+          className="absolute inset-x-0 bottom-12 z-10 flex items-center justify-center"
         >
           {photos.map((photo, i) => (
             <button
@@ -162,12 +191,20 @@ export function PhotoCarousel({
               aria-selected={i === index}
               aria-label={`${i + 1}번째 사진 보기`}
               onClick={() => goTo(i)}
-              className={
-                i === index
-                  ? "h-1.5 w-1.5 rounded-full bg-white shadow"
-                  : "h-1.5 w-1.5 rounded-full bg-white/45"
-              }
-            />
+              // ⚠️ 보이는 점은 6px이지만 **누르는 판은 24×32px**이다. 6px짜리
+              //    터치 타깃은 폰에서 못 맞춘다(iOS HIG 최소는 44px이고, 점이
+              //    다닥다닥 붙는 자리라 그만큼은 못 주되 최대한 넓힌다).
+              className="flex h-8 w-6 items-center justify-center"
+            >
+              <span
+                aria-hidden
+                className={
+                  i === index
+                    ? "h-1.5 w-1.5 rounded-full bg-white shadow"
+                    : "h-1.5 w-1.5 rounded-full bg-white/45"
+                }
+              />
+            </button>
           ))}
         </div>
       )}

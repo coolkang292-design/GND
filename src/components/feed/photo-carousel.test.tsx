@@ -109,6 +109,62 @@ describe("PhotoCarousel — 2장 이상", () => {
   });
 });
 
+/**
+ * ⚠️⚠️ 2026-09-10 사용자 지적: *"사진 넘기는 버튼도 없음"*.
+ *
+ * 스와이프와 6px 점만으로는 부족했다. **마우스에는 스와이프가 아예 없어서**
+ * PC·태블릿에서는 넘길 방법이 없는 카드였고, 점은 누를 수 있는 것처럼 보이지도
+ * 않았다. 이 단언들이 그 회귀를 지킨다.
+ */
+describe("PhotoCarousel — 좌우 넘김 버튼", () => {
+  it("2장 이상이면 다음 버튼이 있다", () => {
+    setup(3);
+    expect(screen.getByRole("button", { name: "다음 사진" })).toBeTruthy();
+  });
+
+  it("첫 장에서는 이전 버튼이 없다", () => {
+    setup(3);
+    expect(screen.queryByRole("button", { name: "이전 사진" })).toBeNull();
+  });
+
+  it("다음을 누르면 카운터가 따라간다", () => {
+    const { track } = setup(3);
+    track!.scrollTo = vi.fn() as unknown as HTMLElement["scrollTo"];
+    fireEvent.click(screen.getByRole("button", { name: "다음 사진" }));
+    expect(screen.getByText("2 / 3")).toBeTruthy();
+  });
+
+  it("가운데에서는 이전·다음이 둘 다 있다", () => {
+    const { track } = setup(3);
+    track!.scrollTo = vi.fn() as unknown as HTMLElement["scrollTo"];
+    fireEvent.click(screen.getByRole("button", { name: "다음 사진" }));
+    expect(screen.getByRole("button", { name: "이전 사진" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "다음 사진" })).toBeTruthy();
+  });
+
+  it("마지막 장에서는 다음 버튼이 사라진다 (끝에서 첫 장으로 튀지 않는다)", () => {
+    const { track } = setup(2);
+    track!.scrollTo = vi.fn() as unknown as HTMLElement["scrollTo"];
+    fireEvent.click(screen.getByRole("button", { name: "다음 사진" }));
+    expect(screen.getByText("2 / 2")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "다음 사진" })).toBeNull();
+  });
+
+  it("1장뿐이면 넘김 버튼이 아예 없다 (예전 화면 그대로)", () => {
+    setup(1);
+    expect(screen.queryByRole("button", { name: "다음 사진" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "이전 사진" })).toBeNull();
+  });
+
+  /** 6px 점을 그대로 두면 폰에서 못 맞춘다 — 누르는 판은 그보다 훨씬 커야 한다 */
+  it("점의 누르는 판이 점 자체보다 크다", () => {
+    setup(3);
+    const dot = screen.getAllByRole("tab")[0];
+    expect(dot.className).toMatch(/h-8/);
+    expect(dot.className).not.toMatch(/h-1\.5/);
+  });
+});
+
 describe("PhotoCarousel — swipe", () => {
   it("swipe 하면 카운터가 따라간다", () => {
     const { track } = setup(4);
