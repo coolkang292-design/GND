@@ -3,6 +3,58 @@
 > 새 세션은 저장소 루트 `AGENTS.md` → `CLAUDE.md` → 이 파일 → 가장 최근의 관련 `docs/superpowers/HANDOFF-*.md` 순서로 읽는다.
 > 이 파일은 전체 흐름의 요약이고, 작업별 세부 사실과 남은 확인은 최신 인수인계서가 기준이다.
 
+## ⚠️ 2026-09-10 운동 다중 사진 + 피드 캐러셀 — **0103~0106 적용 · 구현 끝 · 화면 확인 일부 · 버그 1건 남음 · 배포 금지**
+
+**인수인계서: `docs/superpowers/HANDOFF-2026-09-10-workout-multi-photo-carousel.md`**
+**계획서: `docs/superpowers/plans/2026-09-10-workout-multi-photo-carousel.md`**
+(이 절은 요약이다. 함정과 남은 일은 인수인계서가 기준.)
+
+- **운동 1회 = 게시물 1개**를 지킨 채 사진을 **최대 5장**까지. 새 테이블 0개
+- `workout_images`: `UNIQUE(session_id)` 제거 → `sort_order` 슬롯 0..4 +
+  `UNIQUE(session_id, sort_order)`. 이 둘이 짝을 이뤄 **6장째를 트리거 없이** 막는다
+- 저장(`uploadWorkoutImage`)과 인증 확정(`finalizeWorkoutVerification`)을 **분리**했다 —
+  `set_workout_verification`은 `completed`만 받으므로 운동 중에는 저장만 한다.
+  **그 RPC를 active도 받게 고치지 마라**
+- 피드는 1장이면 예전 그대로, 2~5장이면 **4:3 캐러셀**(스와이프 · ‹ › · 점 · `N/M`)
+- **기존 사진 83장 무손상** — 전량 지문 `91310e6b…`가 작업 전과 동일
+
+### ✅ 0103·0104·0105·0106 전부 적용·객체 재조회 검증
+
+| | 무엇 |
+|---|---|
+| 0103 | 다중화(슬롯·상한·grant). `default 0`이 backfill을 겸해 **UPDATE 문 0줄** |
+| 0104 | 재정렬 RPC + storage.objects의 **첫 DELETE 정책** |
+| 0105 | `clear_workout_verification()` — 사진 0장일 때만 동작 |
+| 0106 | 삭제 정책을 "행이 가리키지 않는 객체만"으로 **축소** |
+
+### ⚠️⚠️ 0104가 구멍을 냈고 기존 회귀 단언이 잡았다 → 0106
+
+`challenge-photo-test`의 *"사진 행이 연결된 Storage 파일 삭제는 거부"*가 깨졌다.
+0104 이전엔 DELETE 정책이 **아예 없어서** 통과하던 단언이다.
+**단언을 고치면 안 되는 것이었다** — 행은 남기고 파일만 지우면
+`get_challenge_period_sessions`가 `exists(workout_images)`만 보므로
+**사진 없이 `photo_required` 크레딧**을 받는다. 0106으로 정책을 좁혔다.
+⚠️ `deleteWorkoutImage`의 **행 → 파일** 순서를 뒤집지 마라 — 뒤집으면 삭제가 막힌다.
+
+### ⚠️ 남은 버그 1건 (다음 사람 첫 일)
+
+완료 직후 *"잠시 후 결과 화면으로 넘어가요"* 구간에서 찍은 사진은 저장되지만
+`verification_status`가 `none`으로 남는다(실측 확인). 완료 핸들러가 이미 지나갔기
+때문이다. → `SessionPhotoManager` 마운트 시 사진이 1장 이상이면
+`finalizeWorkoutVerification`을 한 번 부르면 된다. 자세한 것은 인수인계서 §3.
+
+### ⚠️ 스토리지 정책은 스냅샷에 안 담긴다
+
+`pnpm db:snapshot`은 `storage.objects` 정책을 **한 줄도** 안 담는다(기존 3개도 0건).
+스토리지 정책 회귀는 스키마 diff로 **절대 안 잡히고** `rls-test.mjs`가 유일한 감시자다.
+회귀 기준선 `rls-test` 129 → **147**.
+
+검증: typecheck ✅ · lint 0 errors · 전체 **3509건** 통과 · build ✅ ·
+`rls-test` 147/147 · `challenge-photo-test` 8/8 · readonly 6종 전부 통과.
+**배포는 하지 않았다** (사용자 지시).
+
+---
+
 ## ⚠️ 2026-09-04 풀업 사다리 24회 + 같은 날 계획 여러 개 — **0102 적용 · 화면 확인 끝 · 배포 남음**
 
 **인수인계서: `docs/superpowers/HANDOFF-2026-09-04-pullup-ladder-and-multi-plan.md`**
