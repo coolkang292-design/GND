@@ -3023,6 +3023,52 @@ function WorkoutScreen({ userId }: { userId: string }) {
     playRestCountdownBeep(beep);
   }, [timerRunning, timer, timerSeconds]);
 
+  /*
+    결과 화면에 들어오면 **사진 수를 서버에서 한 번 다시 읽는다** — `handleComplete`
+    가 스스로 실패했을 때를 위한 그물이다 (2026-09-10).
+
+    ⚠️ 늦게 끝난 업로드를 이어받는 것은 **여기가 아니다.** 그건 `ActivePhotoButton`
+       의 `onCountChange` 가 한다(아래 `photoSlot` 참조). 실측에서 확인했다:
+       완료 RPC 3.7초 → 사진 수 읽기 **0행** → 20.1초에 업로드가 끝나 행이 생겼고,
+       화면을 고친 것은 `onCountChange` 였다. 이 효과는 그때 이미 0을 읽고 끝나 있었다.
+
+    그런데도 남겨 두는 이유: `handleComplete` 는 사진 수 읽기가 **실패하면**
+    `catch` 에서 `setResultPhotoCount(0)` 으로 되돌린다. 운동 중에 `onCountChange`
+    가 이미 옳은 수를 넣어 뒀더라도 그 값이 0으로 덮인다. 그 경우 결과 화면은
+    사진이 있는데도 옛 `VerificationPhoto` 를 그리게 되는데, 여기서 한 번 다시
+    읽어 되살린다. (`handleComplete` 의 "완료 화면에서 되살릴 수 있다"가 이것이다.)
+
+    ⓘ 세션이 바뀔 때만 돈다. 삭제·추가로 장수가 변하는 것은 `onPhotosChange` 가
+      이미 따라간다 — 여기서 또 읽으면 그 값을 덮어쓴다.
+    ⓘ 확정(`finalizeWorkoutVerification`)은 여기서 하지 않는다. 수를 맞춰 주면
+      `SessionPhotoManager` 가 마운트되면서 제 자리에서 한다.
+  */
+  const resultPhotosSyncedFor = useRef<string | null>(null);
+  useEffect(() => {
+    const sessionId = result?.sessionId;
+    if (!sessionId || resultPhotosSyncedFor.current === sessionId) return;
+    resultPhotosSyncedFor.current = sessionId;
+    let alive = true;
+    void listSessionPhotoRows(sessionId)
+      .then((rows) => {
+        if (!alive) return;
+        // ⚠️ 0행이면 건드리지 않는다. 이 시점에 아직 안 올라온 사진이 있을 수
+        //    있고(위 실측), 그걸 0으로 덮으면 `onCountChange` 가 넣어 둔 값을
+        //    도로 지운다.
+        if (rows.length === 0) return;
+        setResultPhotoCount(rows.length);
+        setResultPhotoDone(true);
+      })
+      .catch(() => {
+        // 못 읽어도 결과 화면을 막지 않는다. 다음에 이 세션 화면을 다시 열면
+        // 또 시도할 수 있게 표시를 지운다.
+        resultPhotosSyncedFor.current = null;
+      });
+    return () => {
+      alive = false;
+    };
+  }, [result?.sessionId]);
+
 
   // 멈춰 있던 시간은 경과 시간에서 뺀다. 정지 중에는 정지 시작 시점에 멈춰 있다.
   const elapsedSec =
@@ -3827,6 +3873,26 @@ function WorkoutScreen({ userId }: { userId: string }) {
               userId={userId}
               sessionId={draft.sessionId}
               onToast={showToast}
+              /*
+                ⚠️⚠️ 이 선을 지우지 마라 (2026-09-10).
+
+                `ActivePhotoButton`은 업로드를 **기다리지 않는다** — 땀나는 손이
+                버튼에 묶이면 안 되기 때문이다. 그래서 완료를 누른 순간 아직
+                올라가는 중인 사진이 있을 수 있고, `handleComplete`가 세는
+                `listSessionPhotoRows`에는 그 행이 아직 없다.
+
+                그러면 사진이 실제로는 있는데 결과 화면이 `resultPhotoCount = 0`
+                으로 열려 **옛 `VerificationPhoto`**(아직 아무것도 없는 사람용)를
+                그리고, `SessionPhotoManager`가 안 붙으니 인증도 확정되지 않는다.
+
+                업로드가 늦게 끝나도 이 콜백은 살아 있다 — 버튼이 언마운트된
+                뒤에도 그 비동기 체인은 계속 돌기 때문이다. 결과 화면이 그걸
+                이어받는 자리가 여기다.
+              */
+              onCountChange={(count) => {
+                setResultPhotoCount(count);
+                setResultPhotoDone(count > 0);
+              }}
             />
           ) : null
         }

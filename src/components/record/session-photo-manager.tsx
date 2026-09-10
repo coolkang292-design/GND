@@ -68,11 +68,40 @@ export function SessionPhotoManager({
     return next;
   }, [sessionId, apply]);
 
+  /**
+   * 결과 화면에 닿으면 **서버 인증 상태를 한 번 맞춘다** (2026-09-10 실측 버그).
+   *
+   * 완료 핸들러는 완료 그 순간에 **한 번만** 확정한다. 그런데 `"잠시 후 결과
+   * 화면으로 넘어가요…"` 구간에서도 운동 중 사진 버튼이 살아 있어서, 그 뒤에
+   * 찍은 사진은 확정될 기회가 없었다 — 사진이 2장인데 `verification_status`가
+   * `none`으로 남아 달력·피드 스탬프가 안 찍혔다.
+   *
+   * 사진이 어떤 경로로 생겼든(운동 중 · 완료 직후 · 나중 붙이기) 결과 화면은
+   * 반드시 지난다. 그러니 여기가 맞추기에 옳은 자리다.
+   *
+   * ⚠️ `ActivePhotoButton`에서 부르는 것으로 고치지 마라 — 그쪽은 `active`
+   *    세션에서도 도는데 `set_workout_verification`은 `completed`만 받는다.
+   * ⚠️ 0장이면 부르지 않는다. `set_workout_verification`은 멱등이라 불러도
+   *    해롭진 않지만, 사진 없는 운동마다 헛 RPC를 쏘게 된다.
+   */
+  const finalizedFor = useRef<string | null>(null);
+
   useEffect(() => {
     let alive = true;
     void listSessionPhotos(sessionId)
-      .then((next) => {
-        if (alive) apply(next);
+      .then(async (next) => {
+        if (!alive) return;
+        apply(next);
+        // 세션당 한 번. StrictMode의 이중 마운트에서도 두 번 쏘지 않는다
+        if (next.length === 0 || finalizedFor.current === sessionId) return;
+        finalizedFor.current = sessionId;
+        try {
+          await finalizeWorkoutVerification(sessionId);
+        } catch {
+          // 확정이 실패해도 사진 관리는 그대로 쓸 수 있어야 한다.
+          // 다음에 이 화면을 다시 열면 또 시도한다.
+          finalizedFor.current = null;
+        }
       })
       .catch(() => {
         // 못 읽어도 화면을 막지 않는다 — 아래 추가 버튼은 그대로 쓸 수 있다

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { useState } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ActivePhotoButton } from "./active-photo-button";
@@ -172,5 +173,59 @@ describe("ActivePhotoButton — 운동 중 촬영", () => {
     // finalizeWorkoutVerification 은 목에 아예 없다. 부르면 TypeError 로 죽는다.
     // (set_workout_verification 은 completed 세션만 받으므로 여기서 부르면 안 된다)
     expect(screen.getByText(/사진 1\/5/)).toBeTruthy();
+  });
+});
+
+/**
+ * ⚠️⚠️ 2026-09-10. `onCountChange` 는 **부모의 setState 를 그대로 받는 자리**다
+ *    (`record/page.tsx` 가 `setResultPhotoCount` 를 넘긴다). 그래서 이걸
+ *    `setSaved` 의 **업데이터 함수 안**에서 부르면 안 된다 — React 는 업데이터를
+ *    렌더 중에 실행하고, 그러면 "Cannot update a component while rendering a
+ *    different component" 가 난다.
+ *
+ * ⚠️ 부모를 `vi.fn()` 으로 두면 이 버그가 **안 잡힌다** — setState 를 안 하니까.
+ *    그래서 여기서는 진짜로 상태를 바꾸는 부모를 세운다.
+ */
+describe("ActivePhotoButton — 부모에게 알리기", () => {
+  function Parent() {
+    const [count, setCount] = useState(-1);
+    return (
+      <>
+        <span data-testid="parent-count">{count}</span>
+        <ActivePhotoButton
+          userId="user-1"
+          sessionId="session-1"
+          onToast={() => {}}
+          onCountChange={setCount}
+        />
+      </>
+    );
+  }
+
+  it("부모가 onCountChange 안에서 setState 해도 렌더 중 갱신 경고가 안 난다", async () => {
+    const seen: string[] = [];
+    const spy = vi
+      .spyOn(console, "error")
+      .mockImplementation((...args: unknown[]) => {
+        seen.push(args.map(String).join(" "));
+      });
+    try {
+      const { container } = render(<Parent />);
+      await waitFor(() =>
+        expect(screen.getByTestId("parent-count").textContent).toBe("0"),
+      );
+
+      const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+      pick(input);
+      await waitFor(() =>
+        expect(screen.getByTestId("parent-count").textContent).toBe("1"),
+      );
+
+      expect(
+        seen.filter((m) => /while rendering a different component/.test(m)),
+      ).toEqual([]);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

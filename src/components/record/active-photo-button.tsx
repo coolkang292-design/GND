@@ -40,6 +40,16 @@ export function ActivePhotoButton({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [saved, setSaved] = useState(0);
+  /**
+   * ⚠️⚠️ 저장된 장수를 **ref 로도** 들고 있는다 (2026-09-10).
+   *
+   * `onCountChange` 는 부모의 setState 를 그대로 받는다(`record/page.tsx`).
+   * 그래서 `setSaved(n => { onCountChange(n + 1); return n + 1; })` 처럼
+   * **업데이터 함수 안**에서 부르면 안 된다 — React 는 업데이터를 렌더 중에
+   * 실행하고, 그러면 "Cannot update a component while rendering a different
+   * component" 가 난다. 다음 값은 ref 로 미리 알아내서 렌더 밖에서 알린다.
+   */
+  const savedRef = useRef(0);
   /** 올라가는 중인 장수 — **자리를 차지한다** (아래 주석 참조) */
   const [inFlight, setInFlight] = useState(0);
 
@@ -50,6 +60,7 @@ export function ActivePhotoButton({
     void listSessionPhotoRows(sessionId)
       .then((rows) => {
         if (!alive) return;
+        savedRef.current = rows.length;
         setSaved(rows.length);
         onCountChange?.(rows.length);
       })
@@ -85,11 +96,13 @@ export function ActivePhotoButton({
           // 운동 중 촬영은 그 순간이 곧 촬영 시각이다 (앨범과 달리 지어내는 게 아니다)
           clientCapturedAt: new Date(),
         });
-        setSaved((n) => {
-          const next = n + 1;
-          onCountChange?.(next);
-          return next;
-        });
+        // ⚠️ 업데이터 안에서 부모에게 알리지 마라 (위 `savedRef` 주석).
+        //    버튼이 이미 언마운트됐어도(완료 화면으로 넘어간 뒤에 업로드가
+        //    끝난 경우) 이 알림은 살아 있어야 한다 — 결과 화면이 그걸로
+        //    사진 수를 이어받는다.
+        savedRef.current += 1;
+        setSaved(savedRef.current);
+        onCountChange?.(savedRef.current);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         onToast(

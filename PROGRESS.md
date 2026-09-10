@@ -3,7 +3,7 @@
 > 새 세션은 저장소 루트 `AGENTS.md` → `CLAUDE.md` → 이 파일 → 가장 최근의 관련 `docs/superpowers/HANDOFF-*.md` 순서로 읽는다.
 > 이 파일은 전체 흐름의 요약이고, 작업별 세부 사실과 남은 확인은 최신 인수인계서가 기준이다.
 
-## ⚠️ 2026-09-10 운동 다중 사진 + 피드 캐러셀 — **0103~0106 적용 · 구현 끝 · 화면 확인 일부 · 버그 1건 남음 · 배포 금지**
+## ⚠️ 2026-09-10 운동 다중 사진 + 피드 캐러셀 — **0103~0106 적용 · 구현 끝 · 화면 실측 완료 · 버그 2건 고침 · 배포 안 함**
 
 **인수인계서: `docs/superpowers/HANDOFF-2026-09-10-workout-multi-photo-carousel.md`**
 **계획서: `docs/superpowers/plans/2026-09-10-workout-multi-photo-carousel.md`**
@@ -36,12 +36,52 @@
 **사진 없이 `photo_required` 크레딧**을 받는다. 0106으로 정책을 좁혔다.
 ⚠️ `deleteWorkoutImage`의 **행 → 파일** 순서를 뒤집지 마라 — 뒤집으면 삭제가 막힌다.
 
-### ⚠️ 남은 버그 1건 (다음 사람 첫 일)
+### ✅ 인수인계서 §3 버그 — 원인이 달랐다. 고치고 **실화면으로 재현·확인**했다
 
-완료 직후 *"잠시 후 결과 화면으로 넘어가요"* 구간에서 찍은 사진은 저장되지만
-`verification_status`가 `none`으로 남는다(실측 확인). 완료 핸들러가 이미 지나갔기
-때문이다. → `SessionPhotoManager` 마운트 시 사진이 1장 이상이면
-`finalizeWorkoutVerification`을 한 번 부르면 된다. 자세한 것은 인수인계서 §3.
+인수인계서는 *"완료 직후 '잠시 후 결과 화면으로 넘어가요' 구간에 사진 버튼이
+남아 있어서"* 라고 적었는데, 화면을 100ms 간격으로 재 보니 **`ActivePhotoButton`은
+완료와 동시에 사라진다**. 진짜 원인은 다른 것이었다:
+
+> `ActivePhotoButton`은 업로드를 **기다리지 않는다**(그게 설계다). 그래서 완료를
+> 누른 순간 아직 올라가는 중인 사진이 있을 수 있고, `handleComplete`가 세는
+> `listSessionPhotoRows`에는 그 행이 **아직 없다**.
+
+그러면 두 겹으로 틀어진다 — ① 결과 화면이 `resultPhotoCount = 0`으로 열려
+**옛 `VerificationPhoto`**(아직 아무것도 없는 사람용)를 그리고 ② `SessionPhotoManager`
+가 안 붙으니 **인증도 확정되지 않는다**.
+
+**고친 곳 3군데**
+
+| 파일 | 무엇 | 왜 |
+|---|---|---|
+| `record/page.tsx` | `ActivePhotoButton`에 **`onCountChange` 배선** | prop과 주석은 있었는데 **아무도 안 넘기고 있었다.** 늦게 끝난 업로드를 결과 화면이 이어받는 유일한 길 |
+| `record/page.tsx` | 결과 화면 진입 시 사진 수 **1회 재조회** | `handleComplete`가 사진 수 읽기에 실패하면 `catch`가 0으로 덮는다. 그때의 그물. **0행이면 건드리지 않는다** |
+| `session-photo-manager.tsx` | 마운트 때 사진 ≥1이면 `finalizeWorkoutVerification` 1회 | 사진이 어떤 경로로 생겼든 결과 화면은 반드시 지난다 |
+
+**실측 증거** (업로드를 18초 지연시켜 경합을 결정적으로 만든 뒤 측정):
+
+```
+   16ms  완료 클릭 (업로드 진행 중)
+ 3694ms  complete_workout_v2 200
+ 3884ms  GET workout_images → 0행 · set_workout_verification 안 불림   ← 버그
+ 4524ms  화면이 빈 상태('사진을 올리면 여기에 표시돼요')로 열림          ← 버그
+20153ms  업로드 끝 → POST workout_images 201
+20304ms  POST rpc/set_workout_verification 200                        ← 마운트 확정
+20524ms  화면 '오늘의 사진 1/5'                                        ← 스스로 나음
+```
+
+### ⚠️⚠️ 덤으로 잡힌 진짜 버그 — `onCountChange`를 setState 업데이터 안에서 불렀다
+
+배선을 잇자마자 개발 서버가 **"Cannot update a component (`WorkoutScreen`) while
+rendering a different component (`ActivePhotoButton`)"** 를 띄웠다.
+`setSaved(n => { onCountChange(n+1); return n+1; })` — React는 업데이터를 **렌더 중에**
+실행한다. 다음 값은 `savedRef`로 미리 알아내고 렌더 밖에서 알리도록 고쳤다.
+
+⚠️ **부모를 `vi.fn()`으로 둔 기존 테스트는 이걸 못 잡았다** — setState를 안 하니까.
+회귀 테스트는 **진짜로 상태를 바꾸는 부모**를 세우고 `console.error`를 감시한다.
+`active-photo-button.test.tsx`의 *"부모에게 알리기"*.
+
+⚠️ 테스트 3509건·타입체크·빌드가 전부 초록인 상태에서 **개발 서버 화면이 잡은 오류**다.
 
 ### ⚠️ 스토리지 정책은 스냅샷에 안 담긴다
 

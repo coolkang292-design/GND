@@ -215,3 +215,52 @@ describe("SessionPhotoManager — 추가", () => {
     expect(onToast.mock.calls.every((c) => !String(c[0]).includes("XP"))).toBe(true);
   });
 });
+
+/**
+ * ⚠️⚠️ 2026-09-10 실측 버그. 운동 완료 직후 `"잠시 후 결과 화면으로 넘어가요"`
+ *    구간에서 찍은 사진은 저장은 되는데 `verification_status`가 `none`으로 남았다.
+ *    완료 핸들러가 사진 0장일 때 이미 한 번 돌아 버렸기 때문이다.
+ *
+ *    그래서 **결과 화면에 닿는 순간** 서버 상태를 한 번 맞춘다. 사진이 어떤
+ *    경로로 생겼든(운동 중 · 완료 직후 · 나중 붙이기) 여기를 지난다.
+ *
+ * ⚠️ `ActivePhotoButton`에서 부르는 것으로 고치면 안 된다 — 그쪽은 `active`
+ *    세션에서도 도는데 `set_workout_verification`은 `completed`만 받는다.
+ */
+describe("SessionPhotoManager — 마운트 인증 확정", () => {
+  it("사진이 있으면 마운트 때 인증을 한 번 확정한다", async () => {
+    setup();
+    await waitFor(() =>
+      expect(mocks.finalizeWorkoutVerification).toHaveBeenCalledWith("session-1"),
+    );
+    expect(mocks.finalizeWorkoutVerification).toHaveBeenCalledTimes(1);
+  });
+
+  it("사진이 0장이면 부르지 않는다", async () => {
+    // 0장에 확정을 부르면 서버는 아무것도 안 하지만(멱등), 인증이 없는 운동에
+    // 매번 헛 RPC를 쏘는 것이라 하지 않는다.
+    mocks.listSessionPhotos.mockResolvedValue([]);
+    setup();
+    await waitFor(() => expect(mocks.listSessionPhotos).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByText(/0\/5/)).toBeTruthy());
+    expect(mocks.finalizeWorkoutVerification).not.toHaveBeenCalled();
+  });
+
+  /** 확정이 실패해도 화면은 살아 있어야 한다 — 사진 관리는 그대로 쓸 수 있다 */
+  it("확정이 실패해도 썸네일은 그린다", async () => {
+    mocks.finalizeWorkoutVerification.mockRejectedValue(new Error("boom"));
+    setup();
+    await waitFor(() =>
+      expect(screen.getAllByAltText(/번째 사진$/)).toHaveLength(3),
+    );
+  });
+
+  /** 목록을 다시 읽는 일(삭제·추가)마다 확정이 또 돌면 RPC가 눈덩이가 된다 */
+  it("삭제로 목록을 다시 읽어도 마운트 확정이 다시 돌지는 않는다", async () => {
+    setup();
+    await waitFor(() => expect(mocks.finalizeWorkoutVerification).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getAllByRole("button", { name: /삭제/ })[0]);
+    await waitFor(() => expect(mocks.listSessionPhotos).toHaveBeenCalledTimes(2));
+    expect(mocks.finalizeWorkoutVerification).toHaveBeenCalledTimes(1);
+  });
+});
