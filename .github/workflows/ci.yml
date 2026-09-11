@@ -10,7 +10,7 @@
 #    운영 DB 자격증명이 필요한 회귀 검증은 `db-regression.yml`로 분리했다.
 #
 # 버전은 임의로 정하지 않았다. 2026-08-31 개발 환경 실측값이다:
-#    node 24.13.0 · pnpm 11.13.0 · pnpm-lock.yaml lockfileVersion 9.0
+#    node 24.13.0 · pnpm 11.26.0 · pnpm-lock.yaml lockfileVersion 9.0
 #    pnpm 버전은 package.json의 `packageManager` 필드에서 온다(중복 표기하지 않는다).
 
 name: CI
@@ -40,7 +40,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # package.json의 packageManager("pnpm@11.13.0")를 그대로 따른다.
+      # package.json의 packageManager("pnpm@11.26.0")를 그대로 따른다.
+      # ⚠️ 11.13.0으로 되돌리지 마라 — @pnpm/exe가 바이너리 없이 배포된
+      #    깨진 릴리스라 Vercel 빌드가 "pnpm v11.13.0 is a broken release"로
+      #    죽는다 (2026-09-11 배포에서 겪었다).
       - uses: pnpm/action-setup@v4
 
       - uses: actions/setup-node@v4
