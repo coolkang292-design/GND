@@ -1,0 +1,61 @@
+{
+  "_설명": "쉬운 판 (사용자 지시 2026-09-14 '너무 빨라서 처음 보는 사람이 이해 못 한다 · 초등학생도 알 수 있게 · 자막은 아래에, 글자 색을 다르게'). 앱 화면을 86%로 줄여 위에 두고 아래 띠에 단계 자막(노란 제목 + 흰 설명). 큰 단계 9개로 묶는다 — 번호가 20개 가까우면 오히려 헷갈린다. hold = 클립 끝 화면을 N초 멈춤. 이모지·체크 기호는 자막 글꼴이 못 그려서 쓰지 않는다. 같은 녹화(final-20260914)를 쓴다.",
+  "name": "gnd-influencer-demo-easy",
+  "layout": "band",
+  "clips": [
+    { "acct": "A", "from": "c02-a-add-tap", "offset": -0.3, "dur": 2.4,
+      "caption": "① 친구와 할 챌린지를 만들어요", "sub": "챌린지 탭 → 챌린지 추가하기" },
+    { "acct": "A", "from": "c02-a-sheet", "offset": 11.6, "dur": 3.4, "hold": 0.4,
+      "caption": "① 친구와 할 챌린지를 만들어요", "sub": "챌린지 이름을 적고" },
+    { "acct": "A", "from": "c03-a-goal", "offset": -0.2, "dur": 3.0, "hold": 0.6,
+      "caption": "① 친구와 할 챌린지를 만들어요", "sub": "목표를 골라요 · 일주일에 3일 운동" },
+    { "acct": "A", "from": "c04-a-create-tap", "offset": -0.6, "dur": 3.8, "hold": 0.8,
+      "caption": "① 친구와 할 챌린지를 만들어요", "sub": "만들기 누르면 완성!" },
+
+    { "acct": "A", "from": "c05-a-link-tap", "offset": -0.3, "dur": 2.8, "hold": 1.8,
+      "caption": "② 초대 링크를 친구에게 보내요", "sub": "카톡이나 DM으로 링크만 보내면 돼요" },
+    { "acct": "B", "from": "c06-b-open-link", "offset": 0.6, "dur": 3.2, "hold": 1.4,
+      "caption": "② 친구가 링크를 누르면 바로 참가", "sub": "지금부터는 친구의 휴대폰 화면이에요" },
+    { "acct": "A", "from": "c11-a-consent-tap", "offset": -0.6, "dur": 3.2, "hold": 1.4,
+      "caption": "② 둘 다 목표를 정하면 준비 끝", "sub": "참여자 2명 · 목표 설정 완료 · 동의 완료" },
+
+    { "acct": "B", "from": "m01-home", "offset": 0.5, "dur": 5.0,
+      "caption": "③ 오늘은 아직 운동을 안 했어요", "sub": "연속 기록이 끊길 위기인데, 친구는 벌써 완료!" },
+    { "acct": "B", "from": "m02-feed-tap", "offset": -0.1, "dur": 5.9, "skip": [[0.5, 2.9]], "hold": 0.8,
+      "caption": "③ 친구가 운동한 기록을 봐요", "sub": "인증 사진 · 트레드밀 3.6km · 33분" },
+
+    { "acct": "B", "from": "m03-record-tap", "offset": -0.1, "dur": 5.4, "hold": 0.4,
+      "caption": "④ 나도 운동 시작!", "sub": "기록 탭 → 운동 시작" },
+    { "acct": "B", "from": "m04-set1", "offset": 0.3, "dur": 4.6, "hold": 1.0,
+      "caption": "④ 무게와 횟수를 기록해요", "sub": "벤치프레스 60kg × 10회 · 세트 완료하면 휴식 시간" },
+
+    { "acct": "A", "from": "m05-a-ready", "offset": -0.4, "dur": 3.6, "hold": 1.2,
+      "caption": "⑤ 친구가 응원을 보내요", "sub": "운동 중인 친구에게 '힘내'" },
+    { "acct": "B", "from": "m06-banner", "offset": -0.6, "dur": 3.4, "hold": 0.4,
+      "caption": "⑤ 운동하는 내 화면에 응원 도착!", "sub": "헬스장주주님의 응원" },
+
+    { "acct": "B", "from": "m07-photo", "offset": 0.1, "dur": 3.6, "hold": 1.0,
+      "caption": "⑥ 운동 중에 사진으로 인증해요", "sub": "사진 0/5 → 1/5" },
+    { "acct": "B", "from": "m08-done-tap", "offset": -0.3, "dur": 3.0, "hold": 1.0,
+      "caption": "⑥ 마지막 세트까지 완료!", "sub": "오늘 계획한 운동을 다 했어요" },
+    { "acct": "B", "from": "m09-result", "offset": -0.1, "dur": 2.4, "hold": 2.0,
+      "caption": "⑥ 오늘 운동 완료 · 기록 갱신!", "sub": "지난번보다 벤치프레스 40kg 더 무겁게" },
+    { "acct": "B", "from": "m09-result-top", "offset": 2.5, "dur": 2.0, "hold": 1.0,
+      "caption": "⑥ 인증 사진도 함께 저장돼요", "sub": "오늘의 사진 1/5" },
+
+    { "acct": "A", "from": "m10-a-feed", "offset": 1.1, "dur": 3.4, "hold": 1.2,
+      "caption": "⑦ 친구가 내 운동에 좋아요!", "sub": "친구 피드에 내 운동이 올라가요" },
+    { "acct": "B", "from": "m11-notif-tap", "offset": -0.1, "dur": 3.4, "hold": 1.2,
+      "caption": "⑦ 알림으로 친구 반응을 확인해요", "sub": "좋아요 · 응원 · 운동 시작 알림" },
+
+    { "acct": "B", "from": "m12-challenge", "offset": -0.3, "dur": 3.8, "hold": 2.2,
+      "caption": "⑧ 운동하면 챌린지 달성률이 올라가요", "sub": "48% → 58%", "capSize": 54 },
+    { "acct": "B", "from": "m12-activity", "offset": 0.3, "dur": 2.8, "hold": 1.6,
+      "caption": "⑨ 친구와 함께 운동이 쌓여요", "sub": "누가 언제 운동했는지 한눈에" }
+  ],
+  "ending": {
+    "text": "혼자였다면 안 했을 운동을,\n같이 하니까 하게 된다.",
+    "sub": "GND Beta",
+    "dur": 4.0
+  }
+}

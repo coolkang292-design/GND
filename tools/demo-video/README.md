@@ -12,6 +12,8 @@
 
 | 파일 | 길이 | 내용 |
 |---|---|---|
+| **`gnd-influencer-demo-easy.mp4`** | 97.1초 | **쉬운 판** — 앱 화면 86% + 아래 자막 띠(노란 제목·흰 설명), 9단계, 핵심 순간 멈춤 (`edit-plan-easy.json`) |
+| `gnd-influencer-demo-easy-nocaption.mp4` | 93.1초 | 쉬운 판 배치·템포, 자막 없음 |
 | `gnd-influencer-demo-60s.mp4` | 59.4초 | 자막 + 마지막 문구 |
 | `gnd-influencer-demo-60s-nocaption.mp4` | 55.9초 | 자막·문구 없음(화면만) |
 | `gnd-influencer-demo-raw-B.mp4` | 약 27분 | B 화면 원본(자르지 않음, 대기 시간 포함) |
@@ -121,6 +123,7 @@ node bursts.mjs work/rec/<시각> B m01-home m02-feed-tap ...   # 장면별 화�
 node thumbs.mjs work/rec/<시각> B "m01-home+1,m12-challenge+1" work/sheet.png   # 대표 프레임 확인
 node edit.mjs work/rec/<시각>              # 본편 2개 + 원본 2개 (원본은 수십 분 걸린다)
 node edit.mjs work/rec/<시각> --no-raw     # 본편만
+node edit.mjs work/rec/<시각> --no-raw --plan edit-plan-easy.json   # 쉬운 판 (아래 자막 띠·느린 템포)
 ```
 
 ⚠️ **`record.mjs`는 [미검증]이다.** 2026-09-14 영상은 `driver.mjs`(브라우저를 띄워 둔 채 한 단계씩 명령)로
@@ -136,6 +139,21 @@ node drive.mjs A '[{"rec":"start"},{"goto":"/challenge"},{"mark":"c02-a-add-tap"
 - **B가 그날 운동하지 않았는지**(XP 창은 첫 유효 운동에만), 새 챌린지 이름이 이미 있지 않은지.
 - 진행률 장면용 챌린지(`DEMO_PROGRESS_CHALLENGE`, 기본 "9월 4주 챌린지")가 아직 진행 중인지 — 9월 26일에 끝난다.
 - 피드 맨 아래·크루 목록에 실사용자가 비치지 않는지(`thumbs.mjs`로 전 장면 확인).
+
+## 편집 계획 파일에서 쓸 수 있는 것
+
+| 키 | 뜻 |
+|---|---|
+| `name` | 산출물 이름 (`artifacts/<name>.mp4`, `<name>-nocaption.mp4`) |
+| `layout: "band"` | 앱 화면을 86%(928×1650)로 줄여 위에 두고 아래 띠에 자막 — **앱 UI를 가리지 않는다** |
+| `from`/`to`/`offset`/`toOffset`/`dur` | 장면 표시 기준 구간(초) |
+| `skip: [[s,e]]` | 클립 시작 기준 구간을 잘라 냄(로딩 화면) |
+| `speed` | 0.5 = 두 배 느리게 |
+| `hold` | 클립 끝 화면을 N초 멈춤(결과 숫자 읽을 시간) |
+| `caption` / `sub` / `capSize` | 띠 배치: 노란 제목 / 흰 설명 / 제목 글자 크기 |
+
+⚠️ 자막 글꼴(Noto Sans KR)은 **이모지와 ✓를 못 그린다**(네모로 나온다). ①~⑳·→·×·%는 된다.
+⚠️ 처음 보는 사람 기준으로 만든다 — 사용자 지시 "너무 빨라서 한 번에 이해 못 한다, 초등학생도 알 수 있게"(2026-09-14).
 
 ## 만들면서 겪은 함정 (다시 밟지 말 것)
 

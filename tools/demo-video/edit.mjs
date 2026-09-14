@@ -17,10 +17,26 @@ import { join, resolve } from "node:path";
 import { ROOT, ensureDir } from "./lib.mjs";
 import { resampledList } from "./screencast.mjs";
 
+const argValue = (flag, fallback) => {
+  const i = process.argv.indexOf(flag);
+  return i > 0 ? process.argv[i + 1] : fallback;
+};
 const runDir = resolve(process.argv[2] ?? "");
-const plan = JSON.parse(readFileSync(join(ROOT, "edit-plan.json"), "utf8"));
+const PLAN_FILE = resolve(ROOT, argValue("--plan", "edit-plan.json"));
+const plan = JSON.parse(readFileSync(PLAN_FILE, "utf8"));
+/** 산출물 이름 — 계획 파일의 name, 없으면 60초판 이름 */
+const NAME = plan.name ?? "gnd-influencer-demo-60s";
 const OUT = ensureDir(join(ROOT, "..", "..", "artifacts"));
-const TMP = ensureDir(join(runDir, "edit"));
+const TMP = ensureDir(join(runDir, "edit", NAME));
+
+/**
+ * layout "band": 앱 화면을 86%로 줄여 위에 두고, 맨 아래 띠에 자막을 쓴다 (사용자 지시 2026-09-14
+ * "자막을 아래에, 글자 색을 다르게"). 화면 위에 자막을 얹으면 앱 UI(아래쪽 버튼 등)를 가린다.
+ */
+const BAND = plan.layout === "band";
+const SCREEN = { w: 928, h: 1650, x: 76, y: 28 };
+const BAND_TOP = SCREEN.y + SCREEN.h; // 1678
+const ACCENT = "0xFFD34D";
 
 const FONT = "C\\:/Windows/Fonts/NotoSansKR-Bold.ttf";
 const FONT_REG = "C\\:/Windows/Fonts/NotoSansKR-Medium.ttf";
@@ -73,24 +89,51 @@ function renderClip(i, clip, withCaption) {
   const list = resampledList(join(track.dir, "frames"), track.frames, pieces, FPS / speed);
   const listFile = join(TMP, `clip-${i}.txt`);
   writeFileSync(listFile, list.text.replace(/^duration ([\d.]+)$/gm, (_, d) => `duration ${(Number(d) / speed).toFixed(6)}`));
-  const frameCount = list.frames;
+  // hold: 클립 끝 화면을 N초 멈춰 보여 준다(결과 숫자 등 — 처음 보는 사람이 읽을 시간)
+  const frameCount = list.frames + Math.round((clip.hold ?? 0) * FPS);
   const seconds = frameCount / FPS;
 
   // ⚠️ tpad: 마지막 프레임이 오래 멈춰 있으면 fps 필터가 스트림 끝을 채워 주지 않아
   //    클립이 짧아진다(챌린지 장면 5.6초 → 2.87초). 복제로 채우고 -frames:v로 자른다.
-  const filters = [`fps=${FPS}`, "tpad=stop_mode=clone:stop=-1", "scale=1080:1920:flags=lanczos", "format=yuv420p"];
-  if (withCaption && clip.caption) {
-    const capFile = join(TMP, `cap-${i}.txt`);
-    writeFileSync(capFile, clip.caption);
-    const y = clip.capPos === "bottom" ? "h-th-300" : "150";
-    filters.splice(
-      2,
-      0,
-      `drawtext=fontfile='${FONT}':textfile='${capFile.replace(/\\/g, "/").replace(":", "\\:")}':` +
-        `fontsize=58:fontcolor=white:box=1:boxcolor=black@0.62:boxborderw=26:` +
-        `x=(w-tw)/2:y=${y}`,
+  //    hold도 이 복제로 만든다.
+  const filters = [`fps=${FPS}`, "tpad=stop_mode=clone:stop=-1"];
+  const esc = (p) => p.replace(/\\/g, "/").replace(":", "\\:");
+  if (BAND) {
+    filters.push(
+      `scale=${SCREEN.w}:${SCREEN.h}:flags=lanczos`,
+      `pad=1080:1920:${SCREEN.x}:${SCREEN.y}:color=0x0d0d0f`,
     );
+    if (withCaption && clip.caption) {
+      const capFile = join(TMP, `cap-${i}.txt`);
+      writeFileSync(capFile, clip.caption);
+      const hasSub = Boolean(clip.sub);
+      filters.push(
+        `drawtext=fontfile='${FONT}':textfile='${esc(capFile)}':expansion=none:` +
+          `fontsize=${clip.capSize ?? 58}:fontcolor=${ACCENT}:x=(w-tw)/2:y=${hasSub ? BAND_TOP + 30 : BAND_TOP + 80}`,
+      );
+      if (hasSub) {
+        const subFile = join(TMP, `sub-${i}.txt`);
+        writeFileSync(subFile, clip.sub);
+        filters.push(
+          `drawtext=fontfile='${FONT_REG}':textfile='${esc(subFile)}':expansion=none:` +
+            `fontsize=40:fontcolor=white:x=(w-tw)/2:y=${BAND_TOP + 128}`,
+        );
+      }
+    }
+  } else {
+    filters.push("scale=1080:1920:flags=lanczos");
+    if (withCaption && clip.caption) {
+      const capFile = join(TMP, `cap-${i}.txt`);
+      writeFileSync(capFile, clip.caption);
+      const y = clip.capPos === "bottom" ? "h-th-300" : "150";
+      filters.push(
+        `drawtext=fontfile='${FONT}':textfile='${esc(capFile)}':expansion=none:` +
+          `fontsize=58:fontcolor=white:box=1:boxcolor=black@0.62:boxborderw=26:` +
+          `x=(w-tw)/2:y=${y}`,
+      );
+    }
   }
+  filters.push("format=yuv420p");
   const out = join(TMP, `clip-${i}${withCaption ? "-c" : ""}.mp4`);
   ff(["-f", "concat", "-safe", "0", "-i", listFile, "-vf", filters.join(","), "-an",
     "-frames:v", String(frameCount),
@@ -112,6 +155,8 @@ function renderEnding(lastClip) {
   ff(["-loop", "1", "-t", String(plan.ending.dur), "-i", still, "-vf",
     [
       "drawbox=x=0:y=0:w=iw:h=ih:color=black@0.78:t=fill",
+      // 띠 배치면 직전 장면 자막이 비치지 않게 띠를 완전히 덮는다
+      ...(BAND ? [`drawbox=x=0:y=${BAND_TOP}:w=iw:h=${1920 - BAND_TOP}:color=0x0d0d0f:t=fill`] : []),
       `drawtext=fontfile='${FONT}':textfile='${esc(t1)}':fontsize=62:line_spacing=22:fontcolor=white:x=(w-tw)/2:y=(h-th)/2-60`,
       `drawtext=fontfile='${FONT_REG}':textfile='${esc(t2)}':fontsize=40:fontcolor=white@0.7:x=(w-tw)/2:y=h/2+170`,
       `fps=${FPS}`, "format=yuv420p",
@@ -138,7 +183,7 @@ for (const withCaption of [true, false]) {
     if (withCaption) report.push(`${String(i + 1).padStart(2)}. [${clip.acct}] ${clip.from} ${seconds.toFixed(1)}s ${clip.caption ?? ""}`);
   });
   if (withCaption && plan.ending) files.push(renderEnding(files[files.length - 1]));
-  const name = withCaption ? "gnd-influencer-demo-60s.mp4" : "gnd-influencer-demo-60s-nocaption.mp4";
+  const name = withCaption ? `${NAME}.mp4` : `${NAME}-nocaption.mp4`;
   const secs = joinClips(files, join(OUT, name));
   report.push(`→ ${name} ${secs.toFixed(1)}초`);
 }
@@ -158,6 +203,5 @@ for (const acct of process.argv.includes("--no-raw") ? [] : ["B", "A"]) {
   report.push(`→ gnd-influencer-demo-raw-${acct}.mp4 ${duration(out).toFixed(1)}초`);
 }
 
-const planCopy = join(runDir, "edit-plan.used.json");
-if (existsSync(join(ROOT, "edit-plan.json"))) copyFileSync(join(ROOT, "edit-plan.json"), planCopy);
+if (existsSync(PLAN_FILE)) copyFileSync(PLAN_FILE, join(TMP, "plan.used.json"));
 console.log(report.join("\n"));
