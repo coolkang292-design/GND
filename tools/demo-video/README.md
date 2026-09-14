@@ -12,8 +12,9 @@
 
 | 파일 | 길이 | 내용 |
 |---|---|---|
-| **`gnd-influencer-first-contact-50s.mp4`** | 50.0초 | **첫 접촉용** — 결과 먼저(친구 운동·응원·58%) → 만드는 법(2배속) → 초대·참여 → 운동 → 응원 → 인증 → 완료 → 달성률 → CTA. 앱 화면 90% + 작은 알약 자막, 첫 6초 헤드라인, 손가락, 작은 배경음 + 효과음 3종 (`edit-plan-first-contact.json`) |
-| **`gnd-influencer-demo-easy.mp4`** | 97.1초 | **쉬운 판 (보존)** — 둥근 앱 화면 + 아래 흰 카드 자막(골드 테두리·그림자), ①~⑨ 단계, 핵심 순간 멈춤, 손가락 18개, 배경음 (`edit-plan-easy.json`). SHA-1 `4406e5f2562a52a18cbc564c02ef6f86736954f9` — **덮어쓰지 않는다** |
+| **`gnd-influencer-first-contact-50s-v2.mp4`** | 50.0초 | **첫 접촉용 v2 (2026-09-15)** — v1과 장면·길이·효과음·손가락이 같고, 자막만 쉬운 판과 같은 **흰 카드(큰 제목 + 작은 설명)** 로 바꿨다(사용자: "50초 자막이 잘 안 보인다"). 단계 번호 없음, 첫 6초는 헤드라인이 카드 제목. 마지막 화면 "팔로워와 첫 GND 챌린지를 함께 테스트해보세요" (`edit-plan-first-contact-v2.json`) |
+| `gnd-influencer-first-contact-50s.mp4` | 50.0초 | 첫 접촉용 v1 (보존) — 앱 화면 90% + 작은 알약 자막, 마지막 "혼자였다면…/GND Beta/CTA" (`edit-plan-first-contact.json`) |
+| **`gnd-influencer-demo-easy.mp4`** | 97.1초 | **쉬운 판** — 둥근 앱 화면 + 아래 흰 카드 자막(골드 테두리·그림자), ①~⑨ 단계, 핵심 순간 멈춤, 손가락 18개, 배경음 (`edit-plan-easy.json`). 2026-09-15 사용자 지시로 다시 만듦: 마지막 문구 → "팔로워와 첫 GND 챌린지를 함께 테스트해보세요", 사진 자막 "사진 한 장으로" → "⑥ 운동하면서 사진으로 인증 / 세트 사이에 탭 한 번 · 최대 5장"(운동 중 최대 5장, `MAX_WORKOUT_PHOTOS`). SHA-1 `763e116a…`. 이전 판(`4406e5f2…`)은 `artifacts/backup-2026-09-15/` |
 | `gnd-influencer-demo-easy-nocaption.mp4` | 93.1초 | 쉬운 판 이전 배치(자막 띠)의 자막 없는 판 — 카드·손가락·음악 적용 전 |
 | `gnd-influencer-demo-60s.mp4` | 59.4초 | 자막 + 마지막 문구 |
 | `gnd-influencer-demo-60s-nocaption.mp4` | 55.9초 | 자막·문구 없음(화면만) |
@@ -54,7 +55,7 @@
 | 13 | A | 피드 맨 위 B의 기록에 ❤️ 좋아요 | 친구가 반응하고 |
 | 14 | B | 알림함: 반응 · 응원 · 운동 시작 알림 | 〃 |
 | 15 | B | 챌린지 탭: 9월 4주 챌린지 **48% → 58%**, 종합점수 45.9 → 56.4, 챌린지 활동 | 챌린지는 계속된다 |
-| 끝 | — | 마지막 컷을 어둡게 깔고 "혼자였다면 안 했을 운동을, 같이 하니까 하게 된다." · GND Beta | |
+| 끝 | — | 마지막 컷을 어둡게 깔고 "혼자였다면 안 했을 운동을, 같이 하니까 하게 된다." · GND Beta (60초판·첫 접촉 v1). 쉬운 판·첫 접촉 v2는 "팔로워와 첫 GND 챌린지를 함께 테스트해보세요" | |
 
 **자막을 기획안에서 바꾼 곳 두 군데**
 - 1~3번 장면의 "친구와 챌린지를 만들고": 챌린지 만들기 장면을 추가하면서 넣었다.
@@ -130,7 +131,8 @@ node edit.mjs work/rec/<시각> --no-raw --plan edit-plan-easy.json   # 쉬운 �
 node finger.mjs                                   # work/finger.png (윈도우 컬러 이모지 👆, 다운로드 없음)
 node sfx.mjs                                      # work/sfx/{chime,complete,rise}.wav (ffmpeg 합성)
 node taps.mjs work/rec/<시각> edit-plan-first-contact.json      # (저장소 루트에서) 탭 위치 → taps-first-contact.json
-node edit.mjs work/rec/<시각> --no-raw --plan edit-plan-first-contact.json   # 첫 접촉용 50초
+node edit.mjs work/rec/<시각> --no-raw --plan edit-plan-first-contact.json   # 첫 접촉용 50초 v1 (알약 자막)
+node edit.mjs work/rec/<시각> --no-raw --plan edit-plan-first-contact-v2.json   # 첫 접촉용 50초 v2 (카드 자막, 같은 탭 파일)
 ```
 
 ⚠️ **`record.mjs`는 [미검증]이다.** 2026-09-14 영상은 `driver.mjs`(브라우저를 띄워 둔 채 한 단계씩 명령)로
@@ -160,7 +162,9 @@ node drive.mjs A '[{"rec":"start"},{"goto":"/challenge"},{"mark":"c02-a-add-tap"
 | `sfx: [{at, type, volume}]` | 클립 시작 기준 at초에 효과음(`chime`·`complete`·`rise`) |
 | `music: {file, volume, fadeIn, fadeOut}` | 배경음. 첫 접촉판은 0.28(음악만 구간 평균 약 -34dB) |
 | `nocaption: false` | 자막 없는 판을 만들지 않는다 |
-| `ending.cta` | clean: GND Beta 아래 한 줄 |
+| `ending.cta` | GND Beta 아래 한 줄 (clean, 또는 cta가 있는 card) |
+| `ending.text`만 (sub·cta 없음) | 문구만 줄마다 가운데 정렬(`\n`으로 줄 나눔, `ending.size` 기본 60) — 쉬운 판·첫 접촉 v2 |
+| `capSize` / `subSize` | card: 제목(기본 54)·설명(기본 38) 글자 크기 — 긴 제목은 44로 줄인다 |
 
 ⚠️ **완성본 보호:** `artifacts/<name>.mp4`가 이미 있으면 `edit.mjs`가 멈춘다. 새 버전은 계획의 `name`을 바꿔 만든다(덮어쓰기는 `--overwrite`).
 ⚠️ 배경음 `work/music/mixkit-i-do-1001.mp3` — Mixkit "I Do!"(Michael Ramir C.), Mixkit Stock Music Free License(상업 영상 사용·출처 표기 불필요, 음원 단독 재배포 금지). 사용자 승인 후 다운로드, `work/music/LICENSE-NOTE.txt`. YouTube Content ID 여부는 공식 문서에 없어 [미검증].

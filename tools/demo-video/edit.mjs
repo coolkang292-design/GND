@@ -299,11 +299,34 @@ function renderEnding(lastClip) {
   const t1 = join(TMP, "end-1.txt");
   const t2 = join(TMP, "end-2.txt");
   writeFileSync(t1, plan.ending.text);
-  writeFileSync(t2, plan.ending.sub);
+  writeFileSync(t2, plan.ending.sub ?? "");
   const esc = (p) => p.replace(/\\/g, "/").replace(":", "\\:");
   const out = join(TMP, "ending.mp4");
-  if (CLEAN) {
-    // 첫 접촉용 마지막 화면: 문구 + GND Beta + CTA 한 줄 (편집 지침 2026-09-14)
+  // 문구 한 문장만 (사용자 지시 2026-09-15 "마지막 문구를 '팔로워와 첫 GND 챌린지를 함께 테스트해보세요'로")
+  if (!plan.ending.sub && !plan.ending.cta) {
+    // 줄마다 따로 가운데 정렬한다 — drawtext 여러 줄은 블록만 가운데고 줄은 왼쪽에 붙는다(2026-09-15 실측)
+    const lines = plan.ending.text.split("\n");
+    const size = plan.ending.size ?? 60;
+    const gap = Math.round(size * 1.5);
+    const top = 960 - 80 - Math.round((gap * (lines.length - 1) + size) / 2);
+    const lineDraws = lines.map((line, k) => {
+      const lf = join(TMP, `end-line-${k}.txt`);
+      writeFileSync(lf, line);
+      return `drawtext=fontfile='${FONT}':textfile='${esc(lf)}':expansion=none:fontsize=${size}:fontcolor=white:x=(w-tw)/2:y=${top + gap * k}`;
+    });
+    ff(["-loop", "1", "-t", String(plan.ending.dur), "-i", still, "-vf",
+      [
+        // 자막 카드 자리를 배경색으로 먼저 덮고 전체를 어둡게 — 아래 칸만 밝게 뜨지 않게
+        ...(CARD ? [`drawbox=x=0:y=${CS.y + CS.h + 5}:w=iw:h=${1920 - CS.y - CS.h - 5}:color=0x${CARD_BG.map((v) => v.toString(16).padStart(2, "0")).join("")}:t=fill`] : []),
+        "drawbox=x=0:y=0:w=iw:h=ih:color=black@0.8:t=fill",
+        ...lineDraws,
+        `fps=${FPS}`, "format=yuv420p",
+      ].join(","),
+      "-c:v", "libx264", "-preset", "slow", "-crf", "17", "-r", String(FPS), out]);
+    return out;
+  }
+  if (CLEAN || plan.ending.cta) {
+    // 첫 접촉용 마지막 화면: 문구 + GND Beta + CTA 한 줄 (편집 지침 2026-09-14). card 배치여도 cta가 있으면 이 모양
     const t3 = join(TMP, "end-3.txt");
     writeFileSync(t3, plan.ending.cta ?? "");
     const bgHex = `0x${CARD_BG.map((v) => v.toString(16).padStart(2, "0")).join("")}`;
