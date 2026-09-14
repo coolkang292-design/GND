@@ -12,6 +12,7 @@
 
 | 파일 | 길이 | 내용 |
 |---|---|---|
+| **`gnd-influencer-first-contact-shorts.mp4`** | 59.3초 | **유튜브 쇼츠용 (2026-09-15)** — v2 장면 + 운동 완료 뒤 **피드 댓글 3컷**(A가 B 게시물에 댓글 → B 알림 → B 답글, 1.75배속). `layout: "shorts"`: 자막 카드를 위(290~480), 앱 화면 790 폭을 그 아래에. 사용자 스크린샷에서 잰 유튜브 UI(위 0~280 · 아래 1480~ · 오른쪽 x900~/y950~1480)를 자막이 피한다. 앱 화면 아래 약 30%는 유튜브 제목에 가린다(사용자가 고른 안 B — 화면을 줄이면 글자가 너무 작다). 댓글 장면은 `work/rec/comment-20260915` (`edit-plan-first-contact-shorts.json`) |
 | **`gnd-influencer-first-contact-50s-v2.mp4`** | 50.0초 | **첫 접촉용 v2 (2026-09-15)** — v1과 장면·길이·효과음·손가락이 같고, 자막만 쉬운 판과 같은 **흰 카드(큰 제목 + 작은 설명)** 로 바꿨다(사용자: "50초 자막이 잘 안 보인다"). 단계 번호 없음, 첫 6초는 헤드라인이 카드 제목. 마지막 화면 "팔로워와 첫 GND 챌린지를 함께 테스트해보세요" (`edit-plan-first-contact-v2.json`) |
 | `gnd-influencer-first-contact-50s.mp4` | 50.0초 | 첫 접촉용 v1 (보존) — 앱 화면 90% + 작은 알약 자막, 마지막 "혼자였다면…/GND Beta/CTA" (`edit-plan-first-contact.json`) |
 | **`gnd-influencer-demo-easy.mp4`** | 97.1초 | **쉬운 판** — 둥근 앱 화면 + 아래 흰 카드 자막(골드 테두리·그림자), ①~⑨ 단계, 핵심 순간 멈춤, 손가락 18개, 배경음 (`edit-plan-easy.json`). 2026-09-15 사용자 지시로 다시 만듦: 마지막 문구 → "팔로워와 첫 GND 챌린지를 함께 테스트해보세요", 사진 자막 "사진 한 장으로" → "⑥ 운동하면서 사진으로 인증 / 세트 사이에 탭 한 번 · 최대 5장"(운동 중 최대 5장, `MAX_WORKOUT_PHOTOS`). SHA-1 `763e116a…`. 이전 판(`4406e5f2…`)은 `artifacts/backup-2026-09-15/` |
@@ -82,6 +83,7 @@
 | 응원 | B→A 🔥 1회(리허설), A→B 💪 1회 |
 | 좋아요 | B→A 1(리허설), A→B 1 |
 | 기분 | A "🔥 컨디션 좋았다" |
+| 댓글 (2026-09-15) | B의 9/14 운동에 A 댓글 "60kg 성공 축하해요" · B 답글 "덕분에 끝까지 했어요" + 댓글·답글 알림(픽스처끼리) |
 | 알림 (픽스처끼리) | 응원·반응·운동 시작·기록 갱신 |
 | ⚠️ **알림 (픽스처가 아닌 계정)** | **오뎅끼데스까(운영자 본인)**: 운동 시작 2 · 기록 갱신 1 / **test**: 운동 시작 1 · 기록 갱신 1 — A·B와 크루로 연결돼 있어 앱이 자동으로 보냈다. 푸시도 갔을 수 있다. 지우지 않았다(삭제는 승인 필요) |
 | 분석 이벤트 | `analytics_events` 등 트래커 행 — `@gnd.local`이라 통계에서 빠진다 |
@@ -133,7 +135,14 @@ node sfx.mjs                                      # work/sfx/{chime,complete,ris
 node taps.mjs work/rec/<시각> edit-plan-first-contact.json      # (저장소 루트에서) 탭 위치 → taps-first-contact.json
 node edit.mjs work/rec/<시각> --no-raw --plan edit-plan-first-contact.json   # 첫 접촉용 50초 v1 (알약 자막)
 node edit.mjs work/rec/<시각> --no-raw --plan edit-plan-first-contact-v2.json   # 첫 접촉용 50초 v2 (카드 자막, 같은 탭 파일)
+node taps.mjs tools/demo-video/work/rec/comment-20260915 taps-plan-comment.json   # (저장소 루트에서) 댓글 녹화 탭
+node edit.mjs work/rec/final-20260914 --no-raw --plan edit-plan-first-contact-shorts.json   # 쇼츠판 (댓글 녹화를 runs로 함께 씀)
 ```
+
+**댓글 녹화 (2026-09-15, `comment-20260915`)** — `RUN=comment-20260915 node driver.mjs`로 A·B를 띄우고 한 단계씩:
+A 피드 → B의 9/14 게시물 💬 → 스크롤 → "60kg 성공 축하해요" 입력 → 등록 / B 🔔 → "헬스장주주님이 내 운동에 댓글을 남겼어요" → 게시물(댓글 펼침) → 답글 달기 → "덕분에 끝까지 했어요" → 등록.
+운영 DB에 생긴 것: 픽스처 A의 댓글 1 · 픽스처 B의 답글 1 · 그에 따른 B·A 알림(픽스처끼리). 게시물 시각은 "9시간 전"으로 보인다.
+⚠️ 알림 목록에 기존 이슈(반응·응원 알림 본문이 `like`·`power` 코드로 보임)가 잠깐 비친다.
 
 ⚠️ **`record.mjs`는 [미검증]이다.** 2026-09-14 영상은 `driver.mjs`(브라우저를 띄워 둔 채 한 단계씩 명령)로
 화면을 확인하며 찍었고, `record.mjs`는 그때 통과한 선택자·순서를 옮겨 적은 것이다. 한 번에 끝까지 돌려 본
@@ -157,6 +166,8 @@ node drive.mjs A '[{"rec":"start"},{"goto":"/challenge"},{"mark":"c02-a-add-tap"
 | `layout: "band"` | 앱 화면을 86%(928×1650)로 줄여 위에 두고 아래 띠에 자막 — **앱 UI를 가리지 않는다** |
 | `layout: "card"` | 둥근 앱 화면(81%) + 아래 **흰 카드**(골드 테두리·그림자)에 검은 자막 — band는 "자막인지 화면인지 구분이 안 간다"(사용자) |
 | `layout: "clean"` | 둥근 앱 화면 **90%** + 아래 작은 **알약 자막**(흰 바탕·골드 테두리·그림자) — 첫 접촉용, 흰 설명판이 "사용 설명 영상 같다"는 지침 |
+| `layout: "shorts"` | 유튜브 쇼츠 UI를 피한 배치 — 자막 카드 위(290~480), 앱 화면 790×1404 아래(505~). 마지막 문구도 가운데보다 위 |
+| `runs: {이름: {dir, tapsFile}}` + 클립 `run` | 다른 녹화 폴더의 장면을 섞는다 (댓글 장면). 탭 파일도 그 폴더 것을 쓴다 |
 | `headline` | clean: 알약 위 작은 골드 한 줄 (첫 6초 "팔로워가 혼자 운동하지 않게 만드는 챌린지") |
 | `finger` / `tapsFile` / `taps[]` | 탭 위치에 👆 손가락(누르기 0.45초 전 다가와 살짝 누름). 탭은 `taps.mjs`가 계획의 창에서 찾아 계획별 파일에 쓴다 |
 | `sfx: [{at, type, volume}]` | 클립 시작 기준 at초에 효과음(`chime`·`complete`·`rise`) |

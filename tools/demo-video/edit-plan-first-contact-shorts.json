@@ -1,0 +1,303 @@
+{
+  "_설명": "첫 접촉용 쇼츠판 v3 (사용자 지시 2026-09-15: '피드 게시물에 댓글 작성 장면이 빠졌다 → 50초판에만' · '쇼츠에 올리니 아래 자막이 유튜브 메뉴와 겹친다 → 레이아웃 수정, 안 B(큰 화면 + 위 자막)'). v2 장면 + 운동 완료 뒤에 댓글 3컷(A 댓글 → B 알림 → B 답글). 댓글 장면은 2026-09-15 픽스처 A·B로 따로 찍은 녹화(comment-20260915)에서 가져온다. 댓글 컷은 스크롤 구간을 잘라 내고 1.75배속 — 전체 60초 이내.",
+  "name": "gnd-influencer-first-contact-shorts",
+  "layout": "shorts",
+  "nocaption": false,
+  "finger": true,
+  "tapsFile": "taps-first-contact.json",
+  "music": {
+    "file": "work/music/mixkit-i-do-1001.mp3",
+    "_라이선스": "Mixkit Stock Music Free License — work/music/LICENSE-NOTE.txt",
+    "start": 0,
+    "volume": 0.28,
+    "fadeIn": 1,
+    "fadeOut": 2.5
+  },
+  "clips": [
+    {
+      "_편집표": "0:00~0:02 친구가 완료한 운동 피드",
+      "acct": "B",
+      "from": "m02-feed",
+      "offset": 0.6,
+      "dur": 2,
+      "caption": "팔로워가 혼자 운동하지 않게 만드는 챌린지",
+      "capSize": 44,
+      "sub": "친구가 운동하고"
+    },
+    {
+      "_편집표": "0:02~0:04 운동 중 실시간 응원 도착",
+      "acct": "B",
+      "from": "m06-banner",
+      "offset": -0.2,
+      "dur": 2,
+      "caption": "팔로워가 혼자 운동하지 않게 만드는 챌린지",
+      "capSize": 44,
+      "sub": "서로 밀어주고",
+      "sfx": [
+        {
+          "at": 0.05,
+          "type": "chime",
+          "volume": 0.7
+        }
+      ]
+    },
+    {
+      "_편집표": "0:04~0:06 챌린지 달성률 58%",
+      "acct": "B",
+      "from": "m12-challenge",
+      "offset": 0,
+      "dur": 2,
+      "caption": "팔로워가 혼자 운동하지 않게 만드는 챌린지",
+      "capSize": 44,
+      "sub": "챌린지는 앞으로 간다",
+      "sfx": [
+        {
+          "at": 0.15,
+          "type": "rise",
+          "volume": 0.7
+        }
+      ]
+    },
+    {
+      "_편집표": "0:06~0:11 챌린지 이름·목표 → 생성 (2배속)",
+      "acct": "A",
+      "from": "c02-a-add-tap",
+      "offset": -0.2,
+      "dur": 3.4,
+      "speed": 2,
+      "caption": "챌린지는 1분이면 만들고",
+      "sub": "챌린지 이름을 짓고"
+    },
+    {
+      "acct": "A",
+      "from": "c03-a-goal",
+      "offset": -0.1,
+      "dur": 2.8,
+      "speed": 2,
+      "caption": "챌린지는 1분이면 만들고",
+      "sub": "목표는 '주 3일 운동'처럼 쉽게"
+    },
+    {
+      "acct": "A",
+      "from": "c04-a-create-tap",
+      "offset": -0.6,
+      "dur": 3.8,
+      "speed": 2,
+      "caption": "챌린지는 1분이면 만들고",
+      "sub": "만들기 한 번이면 끝"
+    },
+    {
+      "_편집표": "0:11~0:15 링크 복사 → 친구 초대",
+      "acct": "A",
+      "from": "c05-a-link-tap",
+      "offset": -0.2,
+      "dur": 2.6,
+      "speed": 1.5,
+      "caption": "링크 하나로 초대",
+      "sub": "카톡·인스타 DM에 붙여넣기만 하면 OK"
+    },
+    {
+      "acct": "B",
+      "from": "c06-b-open-link",
+      "offset": 0.6,
+      "dur": 3.4,
+      "speed": 1.5,
+      "caption": "링크 하나로 초대",
+      "sub": "누르면 바로 챌린지 참가"
+    },
+    {
+      "_편집표": "0:15~0:18 친구가 참가하고 목표 준비",
+      "acct": "B",
+      "from": "c08-b-save-tap",
+      "offset": -0.4,
+      "dur": 2.8,
+      "speed": 1.75,
+      "caption": "팔로워는 바로 참여",
+      "sub": "목표만 정하면 준비 끝"
+    },
+    {
+      "acct": "A",
+      "from": "c11-a-consented",
+      "offset": -0.3,
+      "dur": 2.45,
+      "speed": 1.75,
+      "caption": "팔로워는 바로 참여",
+      "sub": "누가 함께하는지 한눈에"
+    },
+    {
+      "_편집표": "0:18~0:22 친구의 운동 기록/사진 피드",
+      "acct": "B",
+      "from": "m02-feed-tap",
+      "offset": -0.1,
+      "dur": 5.9,
+      "skip": [
+        [
+          0.5,
+          2.9
+        ]
+      ],
+      "hold": 0.5,
+      "caption": "친구가 운동한 걸 보고",
+      "sub": "사진으로 인증된 진짜 운동 기록"
+    },
+    {
+      "_편집표": "0:22~0:26 운동 기록 화면 → 운동 시작",
+      "acct": "B",
+      "from": "m03-record-tap",
+      "offset": -0.1,
+      "dur": 5,
+      "skip": [
+        [
+          1.6,
+          2.6
+        ]
+      ],
+      "caption": "나도 시작",
+      "sub": "기록 탭 → 운동 시작"
+    },
+    {
+      "_편집표": "0:26~0:31 벤치프레스 55→60kg, 세트 완료",
+      "acct": "B",
+      "from": "m04-set1",
+      "offset": 0.3,
+      "dur": 4.6,
+      "hold": 0.4,
+      "caption": "세트마다 바로 기록",
+      "sub": "벤치프레스 60kg × 10회 완료"
+    },
+    {
+      "_편집표": "0:31~0:35 친구가 💪 힘내 응원 전송",
+      "acct": "A",
+      "from": "m05-a-ready",
+      "offset": -0.4,
+      "dur": 3.6,
+      "hold": 0.4,
+      "caption": "친구는 바로 응원하고",
+      "sub": "버튼 한 번으로 '힘내'"
+    },
+    {
+      "_편집표": "0:35~0:38 운동 중 응원 배너",
+      "acct": "B",
+      "from": "m06-banner",
+      "offset": -0.4,
+      "dur": 3,
+      "caption": "응원이 실시간으로 도착",
+      "sub": "혼자 하는 운동이 아니에요",
+      "sfx": [
+        {
+          "at": 0.15,
+          "type": "chime",
+          "volume": 0.8
+        }
+      ]
+    },
+    {
+      "_편집표": "0:38~0:41 운동 사진 인증",
+      "_사진": "운동 중 '사진 N/5' 버튼 — 한 운동에 최대 5장, 세트 사이에 계속 추가(MAX_WORKOUT_PHOTOS=5, active-photo-button.tsx). '한 장'이라고 쓰지 않는다(사용자 지적 2026-09-15)",
+      "acct": "B",
+      "from": "m07-photo",
+      "offset": 0.1,
+      "dur": 3,
+      "caption": "운동하면서 사진으로 인증",
+      "sub": "세트 사이에 탭 한 번 · 한 운동에 최대 5장"
+    },
+    {
+      "_편집표": "0:41~0:44 마지막 세트 완료 → 운동 완료",
+      "acct": "B",
+      "from": "m08-done-tap",
+      "offset": -0.3,
+      "dur": 5.7,
+      "skip": [
+        [
+          1.8,
+          4.5
+        ]
+      ],
+      "caption": "결국 오늘 운동 완료",
+      "sub": "마지막 세트까지 해냈다",
+      "sfx": [
+        {
+          "at": 1.8,
+          "type": "complete",
+          "volume": 0.8
+        }
+      ]
+    },
+    {
+      "_편집표": "운동 완료 뒤 — 친구가 피드 게시물에 댓글",
+      "run": "comment",
+      "acct": "A",
+      "from": "a02-comment-tap",
+      "offset": -0.3,
+      "dur": 31,
+      "skip": [
+        [
+          1.4,
+          26.6
+        ]
+      ],
+      "speed": 1.75,
+      "hold": 0.4,
+      "caption": "친구는 댓글로 축하하고",
+      "sub": "피드 게시물에 바로 댓글 한 줄"
+    },
+    {
+      "run": "comment",
+      "acct": "B",
+      "from": "b02-bell-tap",
+      "offset": 2.25,
+      "dur": 14.75,
+      "skip": [
+        [
+          1.15,
+          12.95
+        ]
+      ],
+      "speed": 1.75,
+      "hold": 0.3,
+      "caption": "댓글은 바로 알림으로",
+      "sub": "누가 내 운동을 챙겨 봤는지 한눈에"
+    },
+    {
+      "run": "comment",
+      "acct": "B",
+      "from": "b06-reply-tap",
+      "offset": -0.5,
+      "dur": 5.3,
+      "speed": 1.75,
+      "hold": 0.6,
+      "caption": "나도 답글로 화답",
+      "sub": "운동이 끝나도 이어지는 대화"
+    },
+    {
+      "_편집표": "0:44~0:47 챌린지 달성률 상승",
+      "acct": "B",
+      "from": "m12-challenge",
+      "offset": -0.3,
+      "dur": 3,
+      "caption": "운동할수록 달성률 UP",
+      "sub": "48% → 58%",
+      "sfx": [
+        {
+          "at": 0.35,
+          "type": "rise",
+          "volume": 0.8
+        }
+      ]
+    }
+  ],
+  "_taps": "v1과 같은 탭 파일(taps-first-contact.json)을 쓴다 — 탭 좌표는 앱 CSS px라 배치가 바뀌어도 그대로 맞는다.",
+  "ending": {
+    "_편집표": "0:47~0:50 마지막 문구 + CTA",
+    "_문구": "사용자 지시 2026-09-15 — 이전 '혼자였다면… / GND Beta' + CTA 줄을 이 한 문장으로 대체(두 줄로 나눔)",
+    "text": "팔로워와 첫 GND 챌린지를\n함께 테스트해보세요",
+    "dur": 3
+  },
+  "runs": {
+    "comment": {
+      "dir": "work/rec/comment-20260915",
+      "tapsFile": "taps-comment.json",
+      "_탭창": "taps-plan-comment.json (taps.mjs 입력)"
+    }
+  }
+}

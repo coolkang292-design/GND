@@ -1,0 +1,71 @@
+{
+  "_설명": "댓글 녹화(comment-20260915) 탭 창 — taps.mjs 입력용",
+  "tapsFile": "taps-comment.json",
+  "clips": [],
+  "taps": [
+    {
+      "acct": "A",
+      "mark": "a02-comment-tap",
+      "within": [
+        0,
+        0.7
+      ]
+    },
+    {
+      "acct": "A",
+      "mark": "a04-input-tap",
+      "within": [
+        0,
+        0.6
+      ]
+    },
+    {
+      "acct": "A",
+      "mark": "a06-submit-tap",
+      "at": 0.05,
+      "x": 343,
+      "y": 433,
+      "_note": "노란 등록 버튼 — 좌표 직접"
+    },
+    {
+      "acct": "B",
+      "mark": "b02-bell-tap",
+      "within": [
+        0,
+        0.7
+      ]
+    },
+    {
+      "acct": "B",
+      "mark": "b03-notif-tap",
+      "at": 0.05,
+      "x": 202,
+      "y": 320,
+      "_note": "알림 행 가운데 — 원 검출이 화면 전환과 섞여 틀림(좌표 직접)"
+    },
+    {
+      "acct": "B",
+      "mark": "b06-reply-tap",
+      "within": [
+        0,
+        0.7
+      ]
+    },
+    {
+      "acct": "B",
+      "mark": "b07-input-tap",
+      "within": [
+        0,
+        0.6
+      ]
+    },
+    {
+      "acct": "B",
+      "mark": "b09-submit-tap",
+      "at": 0.05,
+      "x": 343,
+      "y": 493,
+      "_note": "노란 등록 버튼 — 좌표 직접"
+    }
+  ]
+}

@@ -55,11 +55,23 @@ const ACCENT = "0xFFD34D";
  * card와 같은 틀(둥근 화면·테두리·회색 배경)을 쓰되 흰 카드는 없다.
  */
 const CLEAN = plan.layout === "clean";
-const CARD = plan.layout === "card" || CLEAN;
+/**
+ * layout "shorts": 유튜브 쇼츠용 (사용자 지시 2026-09-15 "아래 자막이 유튜브 메뉴와 겹쳐 안 보인다").
+ * 쇼츠 화면의 유튜브 UI(사용자 스크린샷 실측, 1080×1920 기준): 위 0~280 상단 메뉴,
+ * 아래 1480~1920 채널명·제목·공유, 오른쪽 x 900~ · y 950~1480 좋아요·댓글 버튼.
+ * 사용자가 고른 안 B: 자막 카드를 **위 메뉴 바로 아래(290~480)**, 앱 화면은 크게(790 폭) 그 아래.
+ * 앱 화면 아래 30%는 유튜브 제목에 가리는 것을 감수했다(안 A는 전부 안전하지만 화면이 절반 폭).
+ */
+const SHORTS = plan.layout === "shorts";
+const CARD = plan.layout === "card" || CLEAN || SHORTS;
 const CS = CLEAN
   ? { x: 54, y: 24, w: 972, h: 1728, r: 36 } // 앱 화면 (405:720 비율 유지)
-  : { x: 100, y: 40, w: 880, h: 1564, r: 40 };
-const CC = { x: 48, y: 1644, w: 984, h: 240, r: 36 }; // 자막 카드 (card 전용)
+  : SHORTS
+    ? { x: 145, y: 505, w: 790, h: 1404, r: 34 }
+    : { x: 100, y: 40, w: 880, h: 1564, r: 40 };
+const CC = SHORTS
+  ? { x: 48, y: 290, w: 984, h: 190, r: 32 }
+  : { x: 48, y: 1644, w: 984, h: 240, r: 36 }; // 자막 카드 (card·shorts)
 const CARD_BG = [46, 46, 54];
 const GOLD = "0xE8B84A";
 
@@ -101,13 +113,27 @@ const FONT = "C\\:/Windows/Fonts/NotoSansKR-Bold.ttf";
 const FONT_REG = "C\\:/Windows/Fonts/NotoSansKR-Medium.ttf";
 const FPS = 30;
 
-const load = (acct) => {
-  const dir = join(runDir, acct);
+const load = (acct, base = runDir) => {
+  const dir = join(base, acct);
   const { frames, end } = JSON.parse(readFileSync(join(dir, "frames.json"), "utf8"));
   const marks = JSON.parse(readFileSync(join(dir, "marks.json"), "utf8"));
   return { dir, frames, end, marks };
 };
 const tracks = { A: load("A"), B: load("B") };
+
+/**
+ * 다른 녹화에서 가져오는 클립 (2026-09-15 댓글 장면 — 9/14 녹화에 없어 따로 찍었다).
+ *   "runs": { "comment": { "dir": "work/rec/comment-20260915", "tapsFile": "taps-comment.json" } }
+ *   클립에 "run": "comment"
+ */
+const RUNS = Object.fromEntries(Object.entries(plan.runs ?? {}).map(([k, v]) => [k, { ...v, dir: resolve(ROOT, v.dir) }]));
+const runTracks = {};
+function trackOf(clip) {
+  if (!clip.run) return tracks[clip.acct];
+  const r = RUNS[clip.run];
+  if (!r) throw new Error(`계획의 runs에 없음: ${clip.run}`);
+  return (runTracks[`${clip.run}/${clip.acct}`] ??= load(clip.acct, r.dir));
+}
 
 function ff(args) {
   execFileSync("ffmpeg", ["-v", "error", "-y", ...args], { stdio: ["ignore", "inherit", "inherit"] });
@@ -121,7 +147,13 @@ function duration(file) {
 }
 
 /** taps.mjs가 찾은 탭 (plan.finger일 때만 필요) */
-const TAPS = plan.finger ? JSON.parse(readFileSync(join(runDir, plan.tapsFile ?? "taps.json"), "utf8")) : [];
+const TAPS = plan.finger
+  ? [
+    ...JSON.parse(readFileSync(join(runDir, plan.tapsFile ?? "taps.json"), "utf8")),
+    ...Object.entries(RUNS).flatMap(([run, r]) =>
+      JSON.parse(readFileSync(join(r.dir, r.tapsFile ?? "taps.json"), "utf8")).map((tp) => ({ ...tp, run }))),
+  ]
+  : [];
 
 /**
  * 손가락 아이콘 — `finger.mjs`가 미리 만든 PNG(윈도우 컬러 이모지 👆, 다운로드 없음)와 손끝 좌표.
@@ -144,7 +176,7 @@ function markTime(track, name, acct) {
 
 /** 한 구간 → 정규화된 mp4 (1080×1920, 30fps, H.264). skip 구간은 잘라 낸다 */
 function renderClip(i, clip, withCaption) {
-  const track = tracks[clip.acct];
+  const track = trackOf(clip);
   const from = markTime(track, clip.from, clip.acct) + (clip.offset ?? 0);
   const to = clip.to
     ? markTime(track, clip.to, clip.acct) + (clip.toOffset ?? 0)
@@ -202,14 +234,15 @@ function renderClip(i, clip, withCaption) {
       const hasSub = Boolean(clip.sub);
       texts.push(
         `drawtext=fontfile='${FONT}':textfile='${esc(capFile)}':expansion=none:` +
-          `fontsize=${clip.capSize ?? 54}:fontcolor=0x111111:x=(w-tw)/2:y=${hasSub ? CC.y + 46 : CC.y + 92}`,
+          `fontsize=${clip.capSize ?? 54}:fontcolor=0x111111:x=(w-tw)/2:y=${
+            SHORTS ? (hasSub ? CC.y + 24 + Math.round((54 - (clip.capSize ?? 54)) / 2) : CC.y + 64) : hasSub ? CC.y + 46 : CC.y + 92}`,
       );
       if (hasSub) {
         const subFile = join(TMP, `sub-${i}.txt`);
         writeFileSync(subFile, clip.sub);
         texts.push(
           `drawtext=fontfile='${FONT_REG}':textfile='${esc(subFile)}':expansion=none:` +
-            `fontsize=${clip.subSize ?? 38}:fontcolor=0x5a5a5a:x=(w-tw)/2:y=${CC.y + 134}`,
+            `fontsize=${clip.subSize ?? 38}:fontcolor=0x5a5a5a:x=(w-tw)/2:y=${SHORTS ? CC.y + 112 : CC.y + 134}`,
         );
       }
     }
@@ -218,7 +251,7 @@ function renderClip(i, clip, withCaption) {
     //    글씨만 남았다. 밝기 검사(카드 영역 YAVG)로 잡았다 — 밀착 인화 몇 칸만 어둡게 보였다.
     // 손가락: 이 클립의 실제 시간 조각 안에 든 탭 → 출력 시각 T로 옮긴다(skip·speed 반영)
     const fingers = [];
-    for (const tp of plan.finger ? TAPS.filter((x) => x.acct === clip.acct) : []) {
+    for (const tp of plan.finger ? TAPS.filter((x) => x.acct === clip.acct && (x.run ?? null) === (clip.run ?? null)) : []) {
       let acc = 0;
       for (const [a, b] of pieces) {
         if (tp.t >= a && tp.t <= b) {
@@ -308,7 +341,8 @@ function renderEnding(lastClip) {
     const lines = plan.ending.text.split("\n");
     const size = plan.ending.size ?? 60;
     const gap = Math.round(size * 1.5);
-    const top = 960 - 80 - Math.round((gap * (lines.length - 1) + size) / 2);
+    // shorts: 유튜브 UI를 피해 가운데보다 위(오른쪽 버튼이 y 950부터)
+    const top = (SHORTS ? 780 : 880) - Math.round((gap * (lines.length - 1) + size) / 2);
     const lineDraws = lines.map((line, k) => {
       const lf = join(TMP, `end-line-${k}.txt`);
       writeFileSync(lf, line);
@@ -317,7 +351,9 @@ function renderEnding(lastClip) {
     ff(["-loop", "1", "-t", String(plan.ending.dur), "-i", still, "-vf",
       [
         // 자막 카드 자리를 배경색으로 먼저 덮고 전체를 어둡게 — 아래 칸만 밝게 뜨지 않게
-        ...(CARD ? [`drawbox=x=0:y=${CS.y + CS.h + 5}:w=iw:h=${1920 - CS.y - CS.h - 5}:color=0x${CARD_BG.map((v) => v.toString(16).padStart(2, "0")).join("")}:t=fill`] : []),
+        ...(SHORTS
+          ? [`drawbox=x=0:y=0:w=iw:h=${CS.y - 5}:color=0x${CARD_BG.map((v) => v.toString(16).padStart(2, "0")).join("")}:t=fill`]
+          : CARD ? [`drawbox=x=0:y=${CS.y + CS.h + 5}:w=iw:h=${1920 - CS.y - CS.h - 5}:color=0x${CARD_BG.map((v) => v.toString(16).padStart(2, "0")).join("")}:t=fill`] : []),
         "drawbox=x=0:y=0:w=iw:h=ih:color=black@0.8:t=fill",
         ...lineDraws,
         `fps=${FPS}`, "format=yuv420p",
