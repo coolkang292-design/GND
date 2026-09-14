@@ -12,8 +12,9 @@
 
 | 파일 | 길이 | 내용 |
 |---|---|---|
-| **`gnd-influencer-demo-easy.mp4`** | 97.1초 | **쉬운 판** — 앱 화면 86% + 아래 자막 띠(노란 제목·흰 설명), 9단계, 핵심 순간 멈춤 (`edit-plan-easy.json`) |
-| `gnd-influencer-demo-easy-nocaption.mp4` | 93.1초 | 쉬운 판 배치·템포, 자막 없음 |
+| **`gnd-influencer-first-contact-50s.mp4`** | 50.0초 | **첫 접촉용** — 결과 먼저(친구 운동·응원·58%) → 만드는 법(2배속) → 초대·참여 → 운동 → 응원 → 인증 → 완료 → 달성률 → CTA. 앱 화면 90% + 작은 알약 자막, 첫 6초 헤드라인, 손가락, 작은 배경음 + 효과음 3종 (`edit-plan-first-contact.json`) |
+| **`gnd-influencer-demo-easy.mp4`** | 97.1초 | **쉬운 판 (보존)** — 둥근 앱 화면 + 아래 흰 카드 자막(골드 테두리·그림자), ①~⑨ 단계, 핵심 순간 멈춤, 손가락 18개, 배경음 (`edit-plan-easy.json`). SHA-1 `4406e5f2562a52a18cbc564c02ef6f86736954f9` — **덮어쓰지 않는다** |
+| `gnd-influencer-demo-easy-nocaption.mp4` | 93.1초 | 쉬운 판 이전 배치(자막 띠)의 자막 없는 판 — 카드·손가락·음악 적용 전 |
 | `gnd-influencer-demo-60s.mp4` | 59.4초 | 자막 + 마지막 문구 |
 | `gnd-influencer-demo-60s-nocaption.mp4` | 55.9초 | 자막·문구 없음(화면만) |
 | `gnd-influencer-demo-raw-B.mp4` | 약 27분 | B 화면 원본(자르지 않음, 대기 시간 포함) |
@@ -123,7 +124,13 @@ node bursts.mjs work/rec/<시각> B m01-home m02-feed-tap ...   # 장면별 화�
 node thumbs.mjs work/rec/<시각> B "m01-home+1,m12-challenge+1" work/sheet.png   # 대표 프레임 확인
 node edit.mjs work/rec/<시각>              # 본편 2개 + 원본 2개 (원본은 수십 분 걸린다)
 node edit.mjs work/rec/<시각> --no-raw     # 본편만
-node edit.mjs work/rec/<시각> --no-raw --plan edit-plan-easy.json   # 쉬운 판 (아래 자막 띠·느린 템포)
+node edit.mjs work/rec/<시각> --no-raw --plan edit-plan-easy.json   # 쉬운 판 (카드 자막·느린 템포)
+
+# 손가락·효과음을 쓰는 계획은 먼저
+node finger.mjs                                   # work/finger.png (윈도우 컬러 이모지 👆, 다운로드 없음)
+node sfx.mjs                                      # work/sfx/{chime,complete,rise}.wav (ffmpeg 합성)
+node taps.mjs work/rec/<시각> edit-plan-first-contact.json      # (저장소 루트에서) 탭 위치 → taps-first-contact.json
+node edit.mjs work/rec/<시각> --no-raw --plan edit-plan-first-contact.json   # 첫 접촉용 50초
 ```
 
 ⚠️ **`record.mjs`는 [미검증]이다.** 2026-09-14 영상은 `driver.mjs`(브라우저를 띄워 둔 채 한 단계씩 명령)로
@@ -146,6 +153,17 @@ node drive.mjs A '[{"rec":"start"},{"goto":"/challenge"},{"mark":"c02-a-add-tap"
 |---|---|
 | `name` | 산출물 이름 (`artifacts/<name>.mp4`, `<name>-nocaption.mp4`) |
 | `layout: "band"` | 앱 화면을 86%(928×1650)로 줄여 위에 두고 아래 띠에 자막 — **앱 UI를 가리지 않는다** |
+| `layout: "card"` | 둥근 앱 화면(81%) + 아래 **흰 카드**(골드 테두리·그림자)에 검은 자막 — band는 "자막인지 화면인지 구분이 안 간다"(사용자) |
+| `layout: "clean"` | 둥근 앱 화면 **90%** + 아래 작은 **알약 자막**(흰 바탕·골드 테두리·그림자) — 첫 접촉용, 흰 설명판이 "사용 설명 영상 같다"는 지침 |
+| `headline` | clean: 알약 위 작은 골드 한 줄 (첫 6초 "팔로워가 혼자 운동하지 않게 만드는 챌린지") |
+| `finger` / `tapsFile` / `taps[]` | 탭 위치에 👆 손가락(누르기 0.45초 전 다가와 살짝 누름). 탭은 `taps.mjs`가 계획의 창에서 찾아 계획별 파일에 쓴다 |
+| `sfx: [{at, type, volume}]` | 클립 시작 기준 at초에 효과음(`chime`·`complete`·`rise`) |
+| `music: {file, volume, fadeIn, fadeOut}` | 배경음. 첫 접촉판은 0.28(음악만 구간 평균 약 -34dB) |
+| `nocaption: false` | 자막 없는 판을 만들지 않는다 |
+| `ending.cta` | clean: GND Beta 아래 한 줄 |
+
+⚠️ **완성본 보호:** `artifacts/<name>.mp4`가 이미 있으면 `edit.mjs`가 멈춘다. 새 버전은 계획의 `name`을 바꿔 만든다(덮어쓰기는 `--overwrite`).
+⚠️ 배경음 `work/music/mixkit-i-do-1001.mp3` — Mixkit "I Do!"(Michael Ramir C.), Mixkit Stock Music Free License(상업 영상 사용·출처 표기 불필요, 음원 단독 재배포 금지). 사용자 승인 후 다운로드, `work/music/LICENSE-NOTE.txt`. YouTube Content ID 여부는 공식 문서에 없어 [미검증].
 | `from`/`to`/`offset`/`toOffset`/`dur` | 장면 표시 기준 구간(초) |
 | `skip: [[s,e]]` | 클립 시작 기준 구간을 잘라 냄(로딩 화면) |
 | `speed` | 0.5 = 두 배 느리게 |
