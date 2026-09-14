@@ -1,0 +1,34 @@
+{
+  "_설명": "clips는 순서대로 이어 붙인다. from/to는 녹화 장면 표시, offset·toOffset·dur은 초. skip은 clip 시작 기준 [시작,끝] 초 구간을 잘라 낸다(로딩 대기). 구간은 work/bursts.mjs의 화면 변화 구간을 보고 잡았다(2026-09-14 녹화 final-20260914).",
+  "_자막": "기획안 §5 문구. 예외 2개 — ① 챌린지 만들기 장면을 추가하면서 '친구와 챌린지를 만들고'를 넣었다 ② B가 2세트만 해 XP가 지급되지 않아(완료 세트 3개 미만은 무효) '운동하면 XP가 쌓이고'를 '운동하면 기록이 쌓이고'로 바꿨다.",
+  "clips": [
+    { "acct": "A", "from": "c02-a-add-tap", "offset": -0.3, "dur": 3.6, "caption": "친구와 챌린지를 만들고" },
+    { "acct": "A", "from": "c04-a-create-tap", "offset": -0.6, "dur": 3.6, "caption": "친구와 챌린지를 만들고" },
+    { "acct": "A", "from": "c05-a-link-tap", "offset": -0.2, "dur": 2.4, "caption": "친구와 챌린지를 만들고" },
+    { "acct": "B", "from": "c06-b-open-link", "offset": 0.6, "dur": 2.6, "caption": "친구와 챌린지를 만들고" },
+
+    { "acct": "B", "from": "m01-home", "offset": 1.2, "dur": 3.8, "caption": "혼자였으면 오늘도 미뤘을 운동" },
+    { "acct": "B", "from": "m02-feed-tap", "offset": -0.1, "dur": 5.1, "skip": [[0.8, 2.3]], "caption": "친구가 운동한 걸 보고" },
+    { "acct": "B", "from": "m03-record-tap", "offset": -0.1, "dur": 4.4, "skip": [[0.8, 1.6]], "caption": "나도 시작" },
+    { "acct": "B", "from": "m04-set1", "offset": 0.5, "dur": 3.7, "caption": "운동 기록 + 사진 인증" },
+
+    { "acct": "A", "from": "m05-a-ready", "offset": -0.2, "dur": 3.0, "caption": "친구가 반응하고" },
+    { "acct": "B", "from": "m06-banner", "offset": -0.5, "dur": 2.7, "caption": "친구가 반응하고" },
+
+    { "acct": "B", "from": "m07-photo", "offset": 0.1, "dur": 3.1, "caption": "운동 기록 + 사진 인증" },
+    { "acct": "B", "from": "m08-set2", "offset": -0.1, "dur": 1.7 },
+    { "acct": "B", "from": "m08-done-tap", "offset": -0.3, "dur": 2.5 },
+    { "acct": "B", "from": "m09-result", "offset": -0.1, "dur": 2.3, "caption": "운동하면 기록이 쌓이고" },
+    { "acct": "B", "from": "m09-result-top", "offset": 2.5, "dur": 1.9, "caption": "운동하면 기록이 쌓이고" },
+
+    { "acct": "A", "from": "m10-a-feed", "offset": 1.1, "dur": 3.3, "caption": "친구가 반응하고" },
+    { "acct": "B", "from": "m11-notif-tap", "offset": -0.1, "dur": 2.9, "caption": "친구가 반응하고" },
+
+    { "acct": "B", "from": "m12-challenge", "offset": -0.3, "dur": 5.6, "caption": "챌린지는 계속된다" }
+  ],
+  "ending": {
+    "text": "혼자였다면 안 했을 운동을,\n같이 하니까 하게 된다.",
+    "sub": "GND Beta",
+    "dur": 3.5
+  }
+}

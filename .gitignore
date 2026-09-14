@@ -78,3 +78,12 @@ docs/design-sources/install-guide/*.png
 
 # 앱스토어 제출용 스크린샷 원본 (로컬 보관, 저장소에 넣지 않는다)
 어플 설치이미지/
+
+# 인플루언서 데모 영상 도구 (tools/demo-video/README.md)
+# 브라우저 프로필에는 로그인 세션이 들어 있다 — 절대 커밋하지 않는다.
+# ⚠️ 여기서 빠지면 Tailwind가 프로필·프레임 파일을 소스로 훑어 CSS가 깨지고
+#    (2026-09-14 `.next` 백업 폴더로 실제로 겪었다), Vercel CLI가 통째로 올린다.
+/tools/demo-video/node_modules/
+/tools/demo-video/.profiles/
+/tools/demo-video/work/
+/artifacts/

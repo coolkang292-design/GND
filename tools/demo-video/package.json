@@ -1,0 +1,14 @@
+{
+  "name": "gnd-demo-video",
+  "private": true,
+  "type": "module",
+  "description": "인플루언서 제안용 GND 실제 화면 데모 영상 녹화 도구 — 앱 코드와 분리",
+  "scripts": {
+    "browsers": "node browsers.mjs",
+    "record": "node record.mjs",
+    "edit": "node edit.mjs"
+  },
+  "dependencies": {
+    "playwright-core": "1.62.1"
+  }
+}
