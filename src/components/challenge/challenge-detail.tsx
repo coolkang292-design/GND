@@ -17,6 +17,7 @@ import {
   type MyChallenge,
   type PeriodStats,
 } from "@/lib/challenge";
+import { detailArtFor } from "@/lib/domain/challenge-art";
 import { isLocalOnlyUrl, type ShareResult } from "@/lib/challenge-share";
 import { inviteShareMessage } from "@/lib/domain/challenge-invite";
 import {
@@ -238,14 +239,14 @@ export function ChallengeDetail({
         )}
       </header>
 
-      {challenge.recruit_image_url && (
-        /* eslint-disable-next-line @next/next/no-img-element */
-        <img
-          src={challenge.recruit_image_url}
-          alt=""
-          className="aspect-[16/9] w-full rounded-card object-cover"
-        />
-      )}
+      {/* 시안 ④는 상세가 언제나 사진으로 연다. 사진을 안 넣은 방은 대체 그림으로.
+          ⚠️ 사용자 사진이 언제나 이긴다(`detailArtFor`). */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={detailArtFor(challenge.recruit_image_url)}
+        alt=""
+        className="aspect-[16/9] w-full rounded-card object-cover"
+      />
 
       <div>
         <h1 className="text-[21px] leading-snug font-extrabold tracking-tight">

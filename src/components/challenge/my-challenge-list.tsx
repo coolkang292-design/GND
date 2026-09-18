@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { MyChallenge } from "@/lib/challenge";
+import { cardArtFor } from "@/lib/domain/challenge-art";
 import { formatMonthDay } from "@/lib/domain/challenge-time";
 import {
   SECTION_LABEL,
@@ -119,21 +120,27 @@ function ChallengeCard({
         aria-label={`${c.name} 열기`}
         className="flex-none"
       >
-        {c.recruit_image_url ? (
-          /* eslint-disable-next-line @next/next/no-img-element */
-          <img
-            src={c.recruit_image_url}
-            alt=""
-            loading="lazy"
-            className="h-[92px] w-[80px] rounded-card-sm object-cover"
-          />
-        ) : (
+        {/*
+          사진을 안 넣은 방도 시안처럼 보이게 대체 그림을 쓴다 (2026-09-18).
+          ⚠️ 사용자 사진이 언제나 이긴다 · 같은 방은 언제나 같은 그림(`cardArtFor`).
+          ⚠️ 종료한 방은 그대로 🏆다 — 끝난 방에 운동 사진을 붙이면 아직 도는
+             방처럼 보인다. 목록에서 그 둘을 가르는 것이 이 자리의 일이다.
+        */}
+        {section === "ended" && !c.recruit_image_url ? (
           <span
             aria-hidden
             className="grid h-[92px] w-[80px] place-items-center rounded-card-sm bg-gradient-to-br from-accent/35 to-surface-2 text-3xl"
           >
-            {section === "ended" ? "🏆" : "🏁"}
+            🏆
           </span>
+        ) : (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src={cardArtFor(c.id, c.recruit_image_url)}
+            alt=""
+            loading="lazy"
+            className="h-[92px] w-[80px] rounded-card-sm object-cover"
+          />
         )}
       </button>
       <div className="flex min-w-0 flex-1 flex-col">

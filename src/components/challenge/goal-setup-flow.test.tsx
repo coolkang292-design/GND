@@ -19,6 +19,7 @@
  */
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { MAX_DETAIL_GOALS } from "@/lib/domain/challenge-simple-goal";
 import type { UserGoal } from "@/lib/types";
 
 const mocks = vi.hoisted(() => ({ recordFunnelEvent: vi.fn() }));
@@ -148,21 +149,43 @@ describe("세부 목표 — 완전히 선택이다", () => {
     fireEvent.click(screen.getByRole("button", { name: "목표 추가하기" }));
   }
 
-  it("주 3회 + 유산소 거리(주 10km) → workout_days 12일 + cardio_distance 40km", () => {
+  it("주 3회 + 유산소 거리(하루 3km) → workout_days 12일 + cardio_distance 36km", () => {
+    // 유산소는 **하루 기준**으로 열린다 (사용자 지시 2026-09-18).
+    // 하루 3km × 주 3회 × 4주 = 36km.
     const { onSubmit } = renderFlow();
     addCardioDistance();
-    // 확인 화면
     expect(screen.getByText("주 3회 운동")).toBeTruthy();
     expect(screen.getByText("유산소 거리")).toBeTruthy();
-    expect(screen.getByText("주 10km")).toBeTruthy();
+    expect(screen.getByText("하루 3km")).toBeTruthy();
     fireEvent.click(cta());
     expect(onSubmit).toHaveBeenCalledWith({
       goals: [
         { type: "workout_days", target: 12, qualifier: null },
-        { type: "cardio_distance", target: 40, qualifier: null },
+        { type: "cardio_distance", target: 36, qualifier: null },
       ],
       plannedDays: 3,
     });
+  });
+
+  it("유산소는 하루 기준으로 열리고, 주로 바꾸면 숫자도 같이 환산된다", () => {
+    renderFlow();
+    fireEvent.click(screen.getByRole("button", { name: /세부 목표 추가/ }));
+    fireEvent.click(screen.getByRole("radio", { name: /유산소/ }));
+    fireEvent.click(screen.getByRole("button", { name: "다음" }));
+    expect((screen.getByLabelText("하루 목표") as HTMLInputElement).value).toBe("3");
+    expect(screen.getByText(/주 3회면 한 주에 약 9km/)).toBeTruthy();
+    // ⚠️ 단위만 바꿨는데 목표가 3배로 뛰면 안 된다 — 숫자를 같이 환산한다
+    fireEvent.click(screen.getByRole("radio", { name: "주" }));
+    expect((screen.getByLabelText("주간 목표") as HTMLInputElement).value).toBe("9");
+  });
+
+  it("⚠️ 일수형은 하루 기준을 못 고른다 — '하루에 몇 일'은 말이 안 된다", () => {
+    renderFlow();
+    fireEvent.click(screen.getByRole("button", { name: /세부 목표 추가/ }));
+    fireEvent.click(screen.getByRole("radio", { name: /웨이트/ }));
+    fireEvent.click(screen.getByRole("button", { name: "다음" }));
+    fireEvent.click(screen.getByRole("radio", { name: "운동 일수" }));
+    expect(screen.queryByRole("radiogroup", { name: "목표 기준 단위" })).toBeNull();
   });
 
   it("웨이트 총 운동량 — 주 12,000kg를 1회 기준으로도 알려준다", () => {
@@ -178,14 +201,15 @@ describe("세부 목표 — 완전히 선택이다", () => {
     expect(screen.getByText(/주 3회 기준 1회 약 4,000kg/)).toBeTruthy();
   });
 
-  it("세부 목표는 2개까지 — 기본 1 + 세부 2 = 완료 보너스 상한 3", () => {
+  it(`세부 목표는 ${MAX_DETAIL_GOALS}개까지 — 다 차면 추가 줄이 사라진다`, () => {
     renderFlow();
     addCardioDistance();
-    fireEvent.click(screen.getByRole("button", { name: /세부 목표 추가/ }));
-    fireEvent.click(screen.getByRole("radio", { name: /웨이트/ }));
-    fireEvent.click(screen.getByRole("button", { name: "다음" }));
-    fireEvent.click(screen.getByRole("button", { name: "목표 추가하기" }));
-    // 두 개가 차면 추가 줄이 사라진다(확인 화면)
+    for (const cat of ["웨이트", "맨몸운동"]) {
+      fireEvent.click(screen.getByRole("button", { name: /세부 목표 추가/ }));
+      fireEvent.click(screen.getByRole("radio", { name: new RegExp(cat) }));
+      fireEvent.click(screen.getByRole("button", { name: "다음" }));
+      fireEvent.click(screen.getByRole("button", { name: "목표 추가하기" }));
+    }
     expect(screen.queryByRole("button", { name: /세부 목표 추가/ })).toBeNull();
   });
 
@@ -250,8 +274,26 @@ describe("편집 — 저장된 목표를 그대로 보여준다", () => {
     });
   });
 
-  it("지난 챌린지 목표를 불러올 수 있다 — 세부는 2개까지만, 그 사실을 말한다", () => {
+  it(`지난 챌린지 목표를 불러올 수 있다 — 세부는 ${MAX_DETAIL_GOALS}개까지만, 그 사실을 말한다`, () => {
     const { onSubmit } = renderFlow({
+      prevGoals: [
+        goal({ goal_type: "weight_reps", target_value: 400, unit: "회", planned_days: 4 }),
+        goal({ goal_type: "cardio_distance", target_value: 40, unit: "km", planned_days: 4 }),
+        goal({ goal_type: "bodyweight_reps", target_value: 400, unit: "회", planned_days: 4 }),
+        goal({ goal_type: "tabata_count", target_value: 12, unit: "회", planned_days: 4 }),
+      ],
+    });
+    fireEvent.click(screen.getByRole("button", { name: /지난 챌린지 목표 불러오기/ }));
+    // 말없이 버리면 "내 목표가 하나 사라졌다"가 된다
+    expect(screen.getByRole("alert").textContent).toContain(`${MAX_DETAIL_GOALS}개만`);
+    fireEvent.click(cta());
+    expect(onSubmit.mock.calls[0][0].plannedDays).toBe(4);
+    // 기본 1 + 세부 3
+    expect(onSubmit.mock.calls[0][0].goals).toHaveLength(MAX_DETAIL_GOALS + 1);
+  });
+
+  it(`세부가 ${MAX_DETAIL_GOALS}개 이하면 그대로 불러온다 — 잘렸다고 말하지 않는다`, () => {
+    renderFlow({
       prevGoals: [
         goal({ goal_type: "weight_reps", target_value: 400, unit: "회", planned_days: 4 }),
         goal({ goal_type: "cardio_distance", target_value: 40, unit: "km", planned_days: 4 }),
@@ -259,10 +301,7 @@ describe("편집 — 저장된 목표를 그대로 보여준다", () => {
       ],
     });
     fireEvent.click(screen.getByRole("button", { name: /지난 챌린지 목표 불러오기/ }));
-    expect(screen.getByRole("alert").textContent).toContain("2개만");
-    fireEvent.click(cta());
-    expect(onSubmit.mock.calls[0][0].plannedDays).toBe(4);
-    expect(onSubmit.mock.calls[0][0].goals).toHaveLength(3);
+    expect(screen.getByRole("alert").textContent).toBe("지난 챌린지 목표를 불러왔어요");
   });
 });
 

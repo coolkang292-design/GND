@@ -10,6 +10,7 @@ import {
   joinDiscoverableChallenge,
   type DiscoverableChallenge,
 } from "@/lib/challenge";
+import { cardArtFor } from "@/lib/domain/challenge-art";
 
 /** `2026-09-01` → `9/1` */
 function shortDate(iso: string): string {
@@ -351,22 +352,15 @@ export function DiscoverableChallengeList({
             key={c.id}
             className="flex gap-3 rounded-card border border-line bg-surface p-2.5 shadow-card"
           >
-            {c.recruitImageUrl ? (
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img
-                src={c.recruitImageUrl}
-                alt=""
-                loading="lazy"
-                className="h-[108px] w-[92px] flex-none rounded-card-sm object-cover"
-              />
-            ) : (
-              <div
-                aria-hidden
-                className="grid h-[108px] w-[92px] flex-none place-items-center rounded-card-sm bg-gradient-to-br from-accent/35 to-surface-2 text-3xl"
-              >
-                🏁
-              </div>
-            )}
+            {/* 사진을 안 넣은 방도 시안처럼 보이게 대체 그림을 쓴다 (2026-09-18).
+                ⚠️ 사용자 사진이 언제나 이긴다 · 같은 방은 언제나 같은 그림 */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={cardArtFor(c.id, c.recruitImageUrl)}
+              alt=""
+              loading="lazy"
+              className="h-[108px] w-[92px] flex-none rounded-card-sm object-cover"
+            />
             <div className="flex min-w-0 flex-1 flex-col">
               <p className="truncate text-[15px] leading-snug font-extrabold">{c.name}</p>
               {c.recruitNote && (

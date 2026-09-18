@@ -19,9 +19,12 @@
  */
 import { GOAL_TYPE_META, type GoalDraft } from "@/lib/challenge";
 import {
+  perDayFromTotal,
   perWeekFromTotal,
   perWeekFromTotalDays,
+  roundTarget,
   totalDaysFromPerWeek,
+  totalFromPerDay,
   totalFromPerWeek,
 } from "./challenge-goal-calc";
 import { plannedDaysForPeriod, type GoalType } from "./goal-score";
@@ -35,12 +38,16 @@ export const MIN_WEEKLY_DAYS = 1;
 export const MAX_WEEKLY_DAYS = 7;
 
 /**
- * 세부 목표 개수 상한.
+ * 세부 목표 개수 상한 — **사용자 결정 2026-09-18: 기본 목표 빼고 3개.**
  *
- * 기본 1 + 세부 2 = 3 — 완료 목표 보너스 상한(`COMPLETED_GOAL_BONUS_MAX`)과 같다
- * (사용자 결정 D1, 2026-09-18). 옛 시트의 `MAX_GOALS = 3`과 같은 이유다.
+ * ⚠️ 완료 목표 보너스는 **3개까지만** 인정된다(`COMPLETED_GOAL_BONUS_MAX`).
+ *    기본 1 + 세부 3 = 4라서 **네 번째 완료 목표는 보너스를 못 받는다.**
+ * ⚠️ 더 중요한 것 — 달성률은 목표들의 **평균**이다(`achievementScore`).
+ *    목표를 더 걸수록 못 채운 줄이 평균을 끌어내려 **점수가 낮아질 수 있다.**
+ *    "많이 걸면 유리하다"가 아니다. 이 두 가지는 사용자에게 설명했고, 그 위에서
+ *    3개로 정해졌다. 숫자를 다시 만지려면 두 성질부터 다시 보라.
  */
-export const MAX_DETAIL_GOALS = 2;
+export const MAX_DETAIL_GOALS = 3;
 
 /**
  * 일수형 세부 목표의 "하루 최소 종목 수" 기본값 (사용자 결정 D5).
@@ -112,33 +119,124 @@ export function isDaysMetric(type: DetailGoalType): boolean {
   return type === "weight_days" || type === "bodyweight_days";
 }
 
-const DETAIL_DEFAULTS: Record<DetailGoalType, { perWeek: number; step: number }> = {
+/**
+ * 처음 고를 때의 기본값.
+ *
+ * ⚠️ `perDay`가 있는 지표는 **하루 기준으로 열릴 때 그 값을 쓴다.** 주간 기본값을
+ *    주 N회로 나누면 `3.3km`처럼 어중간한 수가 첫 화면에 뜬다(2026-09-18 화면 확인).
+ *    사람이 고르는 자리에는 사람이 고를 법한 수가 있어야 한다.
+ */
+const DETAIL_DEFAULTS: Record<
+  DetailGoalType,
+  { perWeek: number; step: number; perDay?: number; dayStep?: number }
+> = {
   weight_reps: { perWeek: 100, step: 10 },
   volume: { perWeek: 10000, step: 1000 },
   weight_days: { perWeek: 2, step: 1 },
-  cardio_distance: { perWeek: 10, step: 1 },
-  cardio_time: { perWeek: 120, step: 10 },
+  cardio_distance: { perWeek: 10, step: 1, perDay: 3, dayStep: 0.5 },
+  cardio_time: { perWeek: 120, step: 10, perDay: 30, dayStep: 5 },
   bodyweight_reps: { perWeek: 100, step: 10 },
   bodyweight_time: { perWeek: 30, step: 5 },
   bodyweight_days: { perWeek: 2, step: 1 },
   tabata_count: { perWeek: 3, step: 1 },
 };
 
-/** 세부 지표를 처음 고를 때의 주간 값과 +/− 단위 */
-export function detailDefaults(type: DetailGoalType): {
+/** 세부 지표를 처음 고를 때의 값과 +/− 단위. `basis`에 맞춰 돌려준다 */
+export function detailDefaults(
+  type: DetailGoalType,
+  basis: GoalBasis = "week",
+): {
   perWeek: number;
   step: number;
   unit: string;
 } {
-  return { ...DETAIL_DEFAULTS[type], unit: GOAL_TYPE_META[type].unit };
+  const d = DETAIL_DEFAULTS[type];
+  const unit = GOAL_TYPE_META[type].unit;
+  if (basis === "day" && d.perDay !== undefined) {
+    return { perWeek: d.perDay, step: d.dayStep ?? d.step, unit };
+  }
+  return { perWeek: d.perWeek, step: d.step, unit };
 }
 
-/** 세부 목표 한 줄 — 화면은 "주 N"으로 다룬다 */
+/**
+ * 세부 목표를 **무엇 단위로 입력받나** (2026-09-18 사용자 지시 — "유산소는 하루
+ * 기준으로 목표를 세팅할 수 있게").
+ *
+ * 러닝은 "주 10km"보다 "한 번에 2.5km"로 생각한다. 저장은 어느 쪽이든 **기간
+ * 총량** 그대로다 — `user_goals.target_value`의 뜻을 바꾸지 않아야 옛 챌린지와
+ * 점수 계산이 그대로 간다.
+ *
+ * ⚠️ 일수형(`*_days`)에는 `day`를 쓰지 마라. "하루에 몇 일"은 말이 안 된다.
+ *    `basisChoicesFor`가 그 경우 `week` 하나만 돌려준다.
+ */
+export type GoalBasis = "week" | "day";
+
+/** 세부 목표 한 줄. `value`의 뜻은 `basis`가 정한다 */
 export type DetailGoalInput = {
   type: DetailGoalType;
+  /** `basis === "week"`면 주간 값, `"day"`면 1회(하루) 값 */
   perWeek: number;
+  /** 없으면 `"week"` — 옛 상태·테스트가 그대로 돈다 */
+  basis?: GoalBasis;
+  /**
+   * 편집으로 열었을 때의 **원래 기간 총량**. 숫자를 건드리지 않았다면 이 값을
+   * 그대로 저장한다.
+   *
+   * ⚠️⚠️ 없으면 **편집만 해도 목표가 바뀐다.** 화면은 주간·하루 값을 소수 첫째
+   *    자리까지만 쓰는데, 총량을 그 값으로 되돌렸다 다시 곱하면 딱 떨어지지
+   *    않는 조합이 있다 — 30일 챌린지의 40km는 주 9.3km로 보였다가 39.9km로
+   *    저장된다. 사용자는 아무것도 안 건드렸는데 목표가 깎인 것을 나중에야 안다.
+   *    2026-09-18 전수 왕복 테스트가 찾았다(그전부터 있던 성질이다).
+   * ⚠️ 숫자를 한 번이라도 고치면 **반드시 지운다**(`goal-setup-flow.tsx`의 `setGoal`).
+   *    안 지우면 이번엔 반대로 사용자가 바꾼 값이 무시된다.
+   */
+  lockedTotal?: number;
   /** 일수형만. 없으면 `DEFAULT_DAYS_QUALIFIER` */
   qualifier?: number | null;
+};
+
+/** 이 지표가 고를 수 있는 기준. 일수형은 주간뿐이다 */
+export function basisChoicesFor(type: DetailGoalType): readonly GoalBasis[] {
+  return isDaysMetric(type) ? ["week"] : ["week", "day"];
+}
+
+/** 유산소는 **하루**로 연다(사용자 지시). 그 밖은 주간 그대로 */
+export function defaultBasisFor(type: DetailGoalType): GoalBasis {
+  return detailCategoryOf(type) === "cardio" ? "day" : "week";
+}
+
+/**
+ * 저장된 목표를 **편집으로 다시 열 때** 어떤 기준으로 보여줄까.
+ *
+ * ⚠️⚠️ 기본 기준(유산소=하루)을 무조건 쓰면 **목표가 조용히 줄어든다.**
+ *    4주·주 3회에 총 40km를 하루로 되돌리면 3.333…인데 화면은 소수 첫째 자리까지만
+ *    쓴다(3.3). 그대로 다시 저장하면 3.3 × 3 × 4주 = **39.6km** — 사용자는 아무것도
+ *    안 건드렸는데 목표가 깎인다. 2026-09-18에 왕복 테스트가 이걸 잡았다.
+ *
+ * 그래서 **되돌린 값이 같은 총량으로 되돌아오는 경우에만** 하루로 연다.
+ * 하루 기준으로 만든 목표는 언제나 여기에 해당한다(그렇게 만들어진 값이므로).
+ * 주간으로 만든 목표는 주간으로 열린다 — 그게 원래 사용자가 생각한 단위이기도 하다.
+ */
+export function prefillBasisFor(input: {
+  type: DetailGoalType;
+  total: number;
+  weeklyDays: number;
+  periodDays: number;
+}): GoalBasis {
+  const { type, total, weeklyDays, periodDays } = input;
+  if (isDaysMetric(type)) return "week";
+  if (defaultBasisFor(type) !== "day") return "week";
+  if (!(total > 0) || weeklyDays <= 0 || periodDays <= 0) return "week";
+  const unit = GOAL_TYPE_META[type].unit;
+  const perDay = perDayFromTotal(total, weeklyDays, periodDays);
+  if (!(perDay > 0)) return "week";
+  const back = roundTarget(totalFromPerDay(perDay, weeklyDays, periodDays), unit);
+  return back === roundTarget(total, unit) ? "day" : "week";
+}
+
+export const BASIS_LABEL: Record<GoalBasis, string> = {
+  week: "주",
+  day: "하루",
 };
 
 export type BuildGoalDraftsResult =
@@ -188,11 +286,19 @@ export function buildGoalDrafts(input: {
   ];
   for (const d of details) {
     const days = isDaysMetric(d.type);
+    const unit = GOAL_TYPE_META[d.type].unit;
+    // ⚠️ 저장은 **언제나 기간 총량**이다. 기준(주/하루)은 입력 단위일 뿐이고
+    //    `user_goals.target_value`의 뜻을 바꾸지 않는다 — 바꾸면 옛 챌린지 점수가 갈린다.
     const target = days
       ? d.perWeek > 0
         ? totalDaysFromPerWeek(d.perWeek, periodDays)
         : 0
-      : totalFromPerWeek(d.perWeek, periodDays, GOAL_TYPE_META[d.type].unit);
+      : // 손대지 않은 목표는 원래 총량 그대로 — 위 `lockedTotal` 주석 참조
+        typeof d.lockedTotal === "number" && d.lockedTotal > 0
+        ? d.lockedTotal
+        : (d.basis ?? "week") === "day"
+          ? roundTarget(totalFromPerDay(d.perWeek, weeklyDays, periodDays), unit)
+          : totalFromPerWeek(d.perWeek, periodDays, unit);
     if (!(target > 0)) return { ok: false, reason: "non_positive_target" };
     goals.push({
       type: d.type,
@@ -235,11 +341,22 @@ export function splitGoalsForEdit(
     }
     const type = g.goal_type;
     const total = Number(g.target_value);
+    /*
+      ⚠️ DB에는 **총량만** 남아서 사용자가 어느 기준으로 넣었는지 알 수 없다.
+         그래서 지표의 기본 기준(`defaultBasisFor`)으로 되돌린다 — 유산소는 하루.
+         총량은 그대로라 되돌린 값으로 다시 저장해도 목표가 안 바뀐다.
+    */
+    const basis = prefillBasisFor({ type, total, weeklyDays, periodDays });
     details.push({
       type,
+      basis,
+      // 숫자를 안 건드리면 이 값이 그대로 저장된다 (왕복 보존)
+      lockedTotal: isDaysMetric(type) ? undefined : total,
       perWeek: isDaysMetric(type)
         ? perWeekFromTotalDays(total, periodDays)
-        : perWeekFromTotal(total, periodDays, GOAL_TYPE_META[type].unit),
+        : basis === "day"
+          ? perDayFromTotal(total, weeklyDays, periodDays)
+          : perWeekFromTotal(total, periodDays, GOAL_TYPE_META[type].unit),
       qualifier: g.qualifier,
     });
   }
@@ -260,19 +377,34 @@ export function detailGoalText(d: DetailGoalInput): { title: string; value: stri
     const q = d.qualifier ?? DEFAULT_DAYS_QUALIFIER;
     return { title, value: `주 ${d.perWeek}일 · 하루 ${q}종목 이상` };
   }
-  return { title, value: `주 ${d.perWeek.toLocaleString("ko-KR")}${GOAL_TYPE_META[d.type].unit}` };
+  // 기준을 같이 적는다 — "10km"만 있으면 주간인지 1회인지 알 수 없다
+  const basis = BASIS_LABEL[d.basis ?? "week"];
+  return {
+    title,
+    value: `${basis} ${d.perWeek.toLocaleString("ko-KR")}${GOAL_TYPE_META[d.type].unit}`,
+  };
 }
 
-/** "주 3회 기준 1회 약 4,000kg" — 세부 목표를 한 번에 얼마인지로 바꿔 보여준다 */
+/**
+ * 입력한 기준의 **반대쪽**을 알려 준다 — 주간으로 넣으면 1회가 얼마인지,
+ * 하루로 넣으면 주 합계가 얼마인지.
+ *
+ * 한쪽만 보이면 "주 10km"가 버거운 목표인지 감이 안 온다. 2026-09-18에 유산소를
+ * 하루 기준으로 열면서, 하루로 넣는 사람에게는 이 힌트가 **주간 합계**여야
+ * 의미가 생겼다(1회 값을 넣고 1회 값을 다시 보여 주면 아무 말도 아니다).
+ */
 export function perSessionHint(
   d: DetailGoalInput,
   weeklyDays: number,
 ): string | null {
   if (isDaysMetric(d.type) || weeklyDays <= 0 || d.perWeek <= 0) return null;
   const unit = GOAL_TYPE_META[d.type].unit;
-  const per = d.perWeek / weeklyDays;
-  const shown = unit === "km" ? Math.round(per * 10) / 10 : Math.round(per);
-  return `주 ${weeklyDays}회 기준 1회 약 ${shown.toLocaleString("ko-KR")}${unit}`;
+  const show = (n: number) =>
+    (unit === "km" ? Math.round(n * 10) / 10 : Math.round(n)).toLocaleString("ko-KR");
+  if ((d.basis ?? "week") === "day") {
+    return `주 ${weeklyDays}회면 한 주에 약 ${show(d.perWeek * weeklyDays)}${unit}`;
+  }
+  return `주 ${weeklyDays}회 기준 1회 약 ${show(d.perWeek / weeklyDays)}${unit}`;
 }
 
 /**

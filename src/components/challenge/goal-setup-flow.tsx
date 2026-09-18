@@ -22,6 +22,9 @@ import {
   WEEKLY_DAY_CHOICES,
   buildGoalDrafts,
   detailCategoryOf,
+  BASIS_LABEL,
+  basisChoicesFor,
+  defaultBasisFor,
   detailDefaults,
   detailGoalText,
   isDaysMetric,
@@ -32,6 +35,7 @@ import {
   type DetailCategoryKey,
   type DetailGoalInput,
   type DetailGoalType,
+  type GoalBasis,
 } from "@/lib/domain/challenge-simple-goal";
 import type { UserGoal } from "@/lib/types";
 
@@ -302,8 +306,10 @@ export function GoalSetupFlow({
     if (!category) return;
     const first = DETAIL_METRICS[category].find((m) => !usedTypes.has(m.type));
     if (!first) return;
-    const d = detailDefaults(first.type);
-    setDraft({ index: null, goal: { type: first.type, perWeek: d.perWeek } });
+    const basis = defaultBasisFor(first.type);
+    // 기본값은 기준에 맞는 것으로 받는다 — 하루면 "3km"처럼 고를 법한 수다
+    const d = detailDefaults(first.type, basis);
+    setDraft({ index: null, goal: { type: first.type, basis, perWeek: d.perWeek } });
     setStep("metric");
   }
 
@@ -638,10 +644,43 @@ export function GoalSetupFlow({
     const catLabel = DETAIL_CATEGORIES.find((c) => c.key === category)?.label ?? "";
     const g = draft.goal;
     const days = isDaysMetric(g.type);
-    const def = detailDefaults(g.type);
+    const def = detailDefaults(g.type, g.basis ?? "week");
+    /*
+      ⚠️ 숫자를 건드리면 `lockedTotal`을 **반드시 지운다.** 그 값은 "편집으로 열었을
+         뿐 안 고쳤다"는 표시라서, 남겨 두면 사용자가 바꾼 값이 무시되고 옛 총량이
+         저장된다. 지우는 조건은 `perWeek`가 patch에 있는 것 하나다 — 기준(주/하루)
+         전환도 `perWeek`를 같이 바꾸므로 여기서 함께 걸린다.
+    */
     const setGoal = (patch: Partial<DetailGoalInput>) =>
-      setDraft((d) => (d ? { ...d, goal: { ...d.goal, ...patch } } : d));
+      setDraft((d) =>
+        d
+          ? {
+              ...d,
+              goal: {
+                ...d.goal,
+                ...patch,
+                ...("perWeek" in patch ? { lockedTotal: undefined } : {}),
+              },
+            }
+          : d,
+      );
     const hint = perSessionHint(g, weeklyDays);
+    const basis: GoalBasis = g.basis ?? "week";
+    const basisChoices = basisChoicesFor(g.type);
+
+    /*
+      기준을 바꿀 때 **숫자도 같이 환산한다** (2026-09-18).
+      "주 10km"에서 하루로 바꿨는데 10이 그대로면 주 40km가 된다 — 사용자는
+      단위만 바꿨다고 생각하므로 목표가 네 배로 뛴 걸 눈치채지 못한다.
+    */
+    function switchBasis(next: GoalBasis) {
+      if (next === basis || weeklyDays <= 0) return;
+      const factor = next === "day" ? 1 / weeklyDays : weeklyDays;
+      setGoal({
+        basis: next,
+        perWeek: Math.max(0.1, Math.round(g.perWeek * factor * 10) / 10),
+      });
+    }
 
     return (
       <BottomSheet
@@ -676,8 +715,10 @@ export function GoalSetupFlow({
                 aria-checked={on}
                 disabled={taken}
                 onClick={() => {
-                  const d = detailDefaults(m.type);
-                  setGoal({ type: m.type as DetailGoalType, perWeek: d.perWeek, qualifier: null });
+                  const t = m.type as DetailGoalType;
+                  const basis = defaultBasisFor(t);
+                  const d = detailDefaults(t, basis);
+                  setGoal({ type: t, basis, perWeek: d.perWeek, qualifier: null });
                 }}
                 className={`h-10 flex-1 rounded-card-sm border text-[13px] font-bold disabled:opacity-40 ${
                   on ? "border-accent bg-accent/15 text-accent" : "border-line bg-surface-2"
@@ -690,7 +731,33 @@ export function GoalSetupFlow({
         </div>
 
         <div className="mt-4 rounded-card border border-line bg-surface-2 p-3">
-          <p className="text-[12px] font-bold text-muted">목표</p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[12px] font-bold text-muted">목표</p>
+            {/* 유산소는 "주 10km"보다 "한 번에 2.5km"로 생각한다 (사용자 지시 2026-09-18).
+                일수형은 "하루에 몇 일"이 말이 안 돼서 `basisChoicesFor`가 막는다. */}
+            {basisChoices.length > 1 && (
+              <span
+                className="flex gap-1 rounded-full border border-line bg-surface p-0.5"
+                role="radiogroup"
+                aria-label="목표 기준 단위"
+              >
+                {basisChoices.map((b) => (
+                  <button
+                    key={b}
+                    type="button"
+                    role="radio"
+                    aria-checked={basis === b}
+                    onClick={() => switchBasis(b)}
+                    className={`rounded-full px-2.5 py-1 text-[11.5px] font-bold ${
+                      basis === b ? "bg-accent text-accent-ink" : "text-muted"
+                    }`}
+                  >
+                    {BASIS_LABEL[b]}
+                  </button>
+                ))}
+              </span>
+            )}
+          </div>
           <div className="mt-2 flex items-center gap-2">
             <button
               type="button"
@@ -707,11 +774,13 @@ export function GoalSetupFlow({
               –
             </button>
             <div className="flex min-w-0 flex-1 items-center gap-1.5">
-              <span className="flex-none text-[14px] font-bold text-muted">주</span>
+              <span className="flex-none text-[14px] font-bold text-muted">
+                {BASIS_LABEL[basis]}
+              </span>
               <NumberField
                 value={g.perWeek}
                 onValue={(v) => setGoal({ perWeek: days ? Math.min(7, Math.max(0, Math.round(v))) : v })}
-                ariaLabel="주간 목표"
+                ariaLabel={basis === "day" ? "하루 목표" : "주간 목표"}
                 className="text-center text-[16px]"
               />
               <span className="flex-none text-[14px] font-bold text-muted">
