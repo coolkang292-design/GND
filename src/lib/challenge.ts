@@ -34,6 +34,8 @@ export const GOAL_TYPE_META: Record<
   weight_days: { label: "웨이트 운동일", unit: "일", defaultTarget: 12, category: "weight" },
   cardio_distance: { label: "유산소 거리", unit: "km", defaultTarget: 20, category: "cardio" },
   cardio_time: { label: "유산소 시간", unit: "분", defaultTarget: 600, category: "cardio" },
+  // 0111 — "유산소 주 N회". 유산소만 일수형이 없어서 그 목표를 못 세웠다
+  cardio_days: { label: "유산소 운동일", unit: "일", defaultTarget: 12, category: "cardio" },
   bodyweight_reps: { label: "맨몸 횟수", unit: "회", defaultTarget: 300, category: "bodyweight" },
   bodyweight_time: { label: "맨몸 시간", unit: "분", defaultTarget: 100, category: "bodyweight" },
   bodyweight_days: { label: "맨몸 운동일", unit: "일", defaultTarget: 12, category: "bodyweight" },
@@ -819,6 +821,13 @@ export type PeriodStats = {
   weightKindsByDay: Record<string, number>;
   /** 날짜별 맨몸 완료 종목 수 — bodyweight_days 판정 */
   bodyweightKindsByDay: Record<string, number>;
+  /**
+   * 날짜별 유산소 완료 종목 수 — `cardio_days` 판정 (2026-09-18).
+   *
+   * 웨이트·맨몸과 **같은 규칙**이다(부위가 아니라 종목명, 완료 세트가 하나라도
+   * 있는 종목만). 유산소만 이 칸이 없어서 "유산소 주 N회" 목표를 만들 수 없었다.
+   */
+  cardioKindsByDay: Record<string, number>;
 };
 
 export const EMPTY_STATS: PeriodStats = {
@@ -833,6 +842,7 @@ export const EMPTY_STATS: PeriodStats = {
   tabataCount: 0,
   weightKindsByDay: {},
   bodyweightKindsByDay: {},
+  cardioKindsByDay: {},
 };
 
 /** foldPeriodStats 입력 — DB 조회를 정규화한 순수 표현 */
@@ -1026,6 +1036,7 @@ export function foldPeriodStats(
     days: Set<string>;
     weightKinds: Map<string, Set<string>>;
     bodyweightKinds: Map<string, Set<string>>;
+    cardioKinds: Map<string, Set<string>>;
   };
   const byUser = new Map<string, Acc>();
 
@@ -1037,9 +1048,11 @@ export function foldPeriodStats(
       ...EMPTY_STATS,
       weightKindsByDay: {},
       bodyweightKindsByDay: {},
+      cardioKindsByDay: {},
       days: new Set<string>(),
       weightKinds: new Map<string, Set<string>>(),
       bodyweightKinds: new Map<string, Set<string>>(),
+      cardioKinds: new Map<string, Set<string>>(),
     };
     entry.days.add(key);
     if (row.tabataMinutes) {
@@ -1077,6 +1090,11 @@ export function foldPeriodStats(
         const kinds = entry.bodyweightKinds.get(key) ?? new Set<string>();
         kinds.add(ex.exerciseName);
         entry.bodyweightKinds.set(key, kinds);
+      } else {
+        // 위 두 갈래와 **같은 기준**이다 — 완료 세트가 있는 종목만, 종목명으로.
+        const kinds = entry.cardioKinds.get(key) ?? new Set<string>();
+        kinds.add(ex.exerciseName);
+        entry.cardioKinds.set(key, kinds);
       }
     }
     byUser.set(row.userId, entry);
@@ -1088,6 +1106,8 @@ export function foldPeriodStats(
     for (const [day, kinds] of e.weightKinds) weightKindsByDay[day] = kinds.size;
     const bodyweightKindsByDay: Record<string, number> = {};
     for (const [day, kinds] of e.bodyweightKinds) bodyweightKindsByDay[day] = kinds.size;
+    const cardioKindsByDay: Record<string, number> = {};
+    for (const [day, kinds] of e.cardioKinds) cardioKindsByDay[day] = kinds.size;
     result.set(userId, {
       workoutDays: e.days.size,
       workoutDayKeys: [...e.days].sort(),
@@ -1100,6 +1120,7 @@ export function foldPeriodStats(
       tabataCount: e.tabataCount,
       weightKindsByDay,
       bodyweightKindsByDay,
+      cardioKindsByDay,
     });
   }
   return result;
@@ -1130,6 +1151,9 @@ export function actualForGoal(
       return stats.bodyweightTimeMin;
     case "bodyweight_days":
       return daysAtLeast(stats.bodyweightKindsByDay);
+    case "cardio_days":
+      // 0111 — "유산소 주 N회". 웨이트·맨몸의 일수형과 같은 규칙이다
+      return daysAtLeast(stats.cardioKindsByDay);
     case "tabata_count":
       return stats.tabataCount;
     case "volume":

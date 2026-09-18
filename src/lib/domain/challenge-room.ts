@@ -54,6 +54,7 @@ const FLOOR_STEP: Record<GoalType, number> = {
   weight_days: 1,
   bodyweight_reps: 1,
   bodyweight_days: 1,
+  cardio_days: 1, // 0111 — 일수형이라 1일 단위
   tabata_count: 1,
   cardio_distance: 0.1,
   cardio_time: 0.1,

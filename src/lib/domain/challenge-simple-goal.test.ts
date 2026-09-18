@@ -517,3 +517,50 @@ describe("세부 목표 개수 — 기본 빼고 3개 (사용자 결정 2026-09-
     expect(r).toEqual({ ok: false, reason: "too_many_details" });
   });
 });
+
+
+describe("유산소 주간 횟수 — cardio_days (0111, 사용자 지시 2026-09-18)", () => {
+  it("유산소 지표가 거리·시간·주간 횟수 셋이다", () => {
+    expect(DETAIL_METRICS.cardio.map((m) => [m.type, m.label])).toEqual([
+      ["cardio_distance", "거리"],
+      ["cardio_time", "시간"],
+      ["cardio_days", "주간 횟수"],
+    ]);
+  });
+
+  it("일수형이라 주 N일로 저장된다 — 주 2회 · 4주 = 8일", () => {
+    const r = buildGoalDrafts({
+      weeklyDays: 3,
+      periodDays: FOUR_WEEKS,
+      details: [{ type: "cardio_days", perWeek: 2, qualifier: 1 }],
+    });
+    expect(r.ok && r.goals[1]).toEqual({ type: "cardio_days", target: 8, qualifier: 1 });
+  });
+
+  it("⚠️ 일수형이므로 하루 기준을 못 고른다 — '하루에 몇 일'은 말이 안 된다", () => {
+    expect(basisChoicesFor("cardio_days")).toEqual(["week"]);
+    // ⚠️ 분류만 보고 정하면 유산소라서 "하루"가 된다 — 화면에 "하루 2일"이 뜬다
+    expect(defaultBasisFor("cardio_days")).toBe("week");
+    expect(prefillBasisFor({
+      type: "cardio_days", total: 8, weeklyDays: 3, periodDays: FOUR_WEEKS,
+    })).toBe("week");
+  });
+
+  it("거리·시간과 함께 걸 수 있다 — 지표가 달라 유일 제약에 안 걸린다", () => {
+    const r = buildGoalDrafts({
+      weeklyDays: 3,
+      periodDays: FOUR_WEEKS,
+      details: [
+        { type: "cardio_days", perWeek: 2 },
+        { type: "cardio_distance", perWeek: 3, basis: "day" },
+      ],
+    });
+    expect(r.ok).toBe(true);
+  });
+
+  it("화면 글자는 '유산소 주간 횟수'와 하루 최소 종목을 같이 말한다", () => {
+    const t = detailGoalText({ type: "cardio_days", perWeek: 2, qualifier: 1 });
+    expect(t.title).toBe("유산소 주간 횟수");
+    expect(t.value).toBe("주 2일 · 하루 1종목 이상");
+  });
+});

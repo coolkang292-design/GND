@@ -13,6 +13,7 @@ export type GoalType =
   | "bodyweight_reps" // 맨몸 횟수형 총 반복
   | "bodyweight_time" // 맨몸 시간형 지속 분
   | "bodyweight_days" // 맨몸 운동일 (하루 N종목+)
+  | "cardio_days" // 유산소 운동일 (하루 N종목+) — 0111
   | "tabata_count" // 타바타 세션 수 (0019)
   | "volume" // 웨이트 총 운동량 kg (2026-09-18 세부 목표로 다시 연다. 옛 이름 '총볼륨')
   | "workout_days"; // 종목 무관 운동한 날 (0108) — "주 N회" 기본 목표

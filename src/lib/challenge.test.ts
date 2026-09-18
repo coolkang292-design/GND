@@ -34,6 +34,7 @@ const STATS: PeriodStats = {
   tabataCount: 0,
   weightKindsByDay: { "2026-07-01": 3, "2026-07-02": 1, "2026-07-03": 4 },
   bodyweightKindsByDay: { "2026-07-01": 2, "2026-07-04": 3 },
+  cardioKindsByDay: { "2026-07-02": 1, "2026-07-05": 2 },
 };
 
 describe("goalLabel", () => {
@@ -85,6 +86,17 @@ describe("actualForGoal", () => {
   });
   it("bodyweight_days는 N종목+ 인 날만 센다", () => {
     expect(actualForGoal(STATS, "bodyweight_days", 3)).toBe(1); // 3종목인 날 1개
+  });
+  it("cardio_days는 유산소 N종목+ 인 날만 센다 (0111)", () => {
+    // cardioKindsByDay = { 07-02: 1, 07-05: 2 }
+    expect(actualForGoal(STATS, "cardio_days", 1)).toBe(2);
+    expect(actualForGoal(STATS, "cardio_days", 2)).toBe(1);
+    // qualifier가 없으면 1로 본다 — 웨이트·맨몸과 같은 규칙
+    expect(actualForGoal(STATS, "cardio_days")).toBe(2);
+  });
+  it("⚠️ cardio_days는 유산소만 센다 — 웨이트·맨몸만 한 날은 0일이다", () => {
+    const onlyWeight = { ...STATS, cardioKindsByDay: {} };
+    expect(actualForGoal(onlyWeight, "cardio_days", 1)).toBe(0);
   });
   it("volume은 레거시 볼륨", () =>
     expect(actualForGoal(STATS, "volume")).toBe(3000));

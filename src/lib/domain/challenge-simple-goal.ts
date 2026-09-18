@@ -96,6 +96,9 @@ export const DETAIL_METRICS: Record<
   cardio: [
     { type: "cardio_distance", label: "거리" },
     { type: "cardio_time", label: "시간" },
+    // 0111 — 사용자 지시 2026-09-18 "유산소 주간 횟수도 선택할 수 있게".
+    // 웨이트·맨몸에만 있던 일수형을 유산소에도 연다.
+    { type: "cardio_days", label: "주간 횟수" },
   ],
   bodyweight: [
     { type: "bodyweight_reps", label: "운동 횟수" },
@@ -116,7 +119,11 @@ export function detailCategoryOf(type: DetailGoalType): DetailCategoryKey {
 
 /** 일수형 — 목표값이 "주 N일"이고 하루 최소 종목 수가 붙는다 */
 export function isDaysMetric(type: DetailGoalType): boolean {
-  return type === "weight_days" || type === "bodyweight_days";
+  return (
+    type === "weight_days" ||
+    type === "bodyweight_days" ||
+    type === "cardio_days" // 0111 — "유산소 주 N회"
+  );
 }
 
 /**
@@ -135,6 +142,7 @@ const DETAIL_DEFAULTS: Record<
   weight_days: { perWeek: 2, step: 1 },
   cardio_distance: { perWeek: 10, step: 1, perDay: 3, dayStep: 0.5 },
   cardio_time: { perWeek: 120, step: 10, perDay: 30, dayStep: 5 },
+  cardio_days: { perWeek: 2, step: 1 },
   bodyweight_reps: { perWeek: 100, step: 10 },
   bodyweight_time: { perWeek: 30, step: 5 },
   bodyweight_days: { perWeek: 2, step: 1 },
@@ -200,8 +208,15 @@ export function basisChoicesFor(type: DetailGoalType): readonly GoalBasis[] {
   return isDaysMetric(type) ? ["week"] : ["week", "day"];
 }
 
-/** 유산소는 **하루**로 연다(사용자 지시). 그 밖은 주간 그대로 */
+/**
+ * 유산소는 **하루**로 연다(사용자 지시). 그 밖은 주간 그대로.
+ *
+ * ⚠️ 일수형은 유산소라도 **주간**이다. `cardio_days`(0111)가 여기 걸린다 —
+ *    분류만 보고 정하면 "하루 2일"이 뜬다(2026-09-18 화면 확인에서 잡았다).
+ *    `basisChoicesFor`와 **같은 기준**을 봐야 한다.
+ */
 export function defaultBasisFor(type: DetailGoalType): GoalBasis {
+  if (isDaysMetric(type)) return "week";
   return detailCategoryOf(type) === "cardio" ? "day" : "week";
 }
 
