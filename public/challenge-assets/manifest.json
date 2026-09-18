@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "purpose": "GND challenge and goal UI visual assets generated for the 2026-09-18 redesign",
+  "assets": {
+    "challenge-morning-run.webp": {
+      "usage": "discover/my challenge card fallback",
+      "aspect": "4:5"
+    },
+    "challenge-strength-gym.webp": {
+      "usage": "strength challenge card fallback",
+      "aspect": "4:5"
+    },
+    "challenge-walking.webp": {
+      "usage": "walking/cardio challenge card fallback",
+      "aspect": "4:5"
+    },
+    "challenge-detail-sunrise.webp": {
+      "usage": "challenge detail hero fallback",
+      "aspect": "16:9"
+    },
+    "goal-basic-hero.webp": {
+      "usage": "goal setup hero alternative",
+      "aspect": "16:9"
+    },
+    "goal-weight-hero.webp": {
+      "usage": "weight goal hero alternative",
+      "aspect": "16:9"
+    }
+  },
+  "priority": "User-provided recruit_image_url or real user avatar must take precedence over fallback assets."
+}
