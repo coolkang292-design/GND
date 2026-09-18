@@ -309,9 +309,13 @@ export function CreateChallengeFlow({
         placeholder="예: 30일 아침 운동"
         className="mt-1.5 h-12 w-full rounded-card-sm border border-line bg-surface-2 px-3.5 text-[15px] font-bold outline-none focus:border-accent"
       />
-      <p className="mt-1 text-right font-mono text-[11px] text-faint">
-        {name.length}/{NAME_MAX}
-      </p>
+      {/* 시안 ③ — 왼쪽 안내 · 오른쪽 글자 수. 이름만 보고는 어떤 챌린지인지 모른다 */}
+      <div className="mt-1 flex items-baseline justify-between gap-2">
+        <span className="text-[11px] text-faint">어떤 챌린지인가요?</span>
+        <span className="font-mono text-[11px] text-faint">
+          {name.length}/{NAME_MAX}
+        </span>
+      </div>
 
       <p className="mt-2 text-[13px] font-bold text-muted">챌린지 기간</p>
       <div className="mt-1.5 flex gap-2" role="radiogroup" aria-label="챌린지 기간">
@@ -421,8 +425,12 @@ export function CreateChallengeFlow({
         )}
       </div>
 
-      <p className="mt-4 text-[13px] font-bold text-muted">누구와 같이 할까요?</p>
-      <div className="mt-1.5 flex flex-col gap-2" role="radiogroup" aria-label="누구와 같이 할까요">
+      <p className="mt-4 text-[13px] font-bold text-muted">누구를 위한 챌린지인가요?</p>
+      <div
+        className="mt-1.5 flex flex-col gap-2"
+        role="radiogroup"
+        aria-label="누구를 위한 챌린지인가요"
+      >
         {AUDIENCES.map((a) => {
           const on = audience === a.key;
           return (

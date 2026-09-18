@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import {
   BottomSheet,
@@ -7,6 +8,7 @@ import {
   SheetHeader,
 } from "@/components/challenge/bottom-sheet";
 import { NumberField } from "@/components/challenge/number-field";
+import { UiIcon } from "@/components/ui-icon";
 import { recordFunnelEvent } from "@/lib/analytics-events";
 import type { GoalDraft } from "@/lib/challenge";
 import { formatMonthDay, inclusiveDays } from "@/lib/domain/challenge-time";
@@ -36,6 +38,87 @@ import type { UserGoal } from "@/lib/types";
 type Step = "basic" | "category" | "metric" | "review";
 
 const TITLE_ID = "goal-setup-title";
+
+/**
+ * 시안의 배경 사진 (2026-09-18 사용자 제공 — `이미지 꾸미기/`, 저장소에 원본은 안 넣는다).
+ *
+ * ⚠️ **글자를 사진에 굽지 마라.** 시안은 손글씨가 이미지에 박혀 있지만, 그러면
+ *    문구를 못 고치고 화면 낭독에서 사라진다. 사진은 배경, 글자는 DOM이다.
+ * ⚠️ 사진이 밝아서 그 위 글자가 묻힌다 — **어두운 그라데이션을 빼지 마라.**
+ * ⚠️ `align`은 장식이 아니다. 사진마다 **주제가 있는 쪽이 다르다** —
+ *    `review`는 사람이 왼쪽이라 글자가 오른쪽이어야 얼굴을 안 가린다.
+ *    사진을 바꾸면 이 값도 같이 보라.
+ */
+const HEROES = {
+  basic: { src: "/challenge/goal-hero-basic.webp", align: "left" },
+  weight: { src: "/challenge/goal-hero-weight.webp", align: "left" },
+  cardio: { src: "/challenge/goal-hero-cardio.webp", align: "left" },
+  bodyweight: { src: "/challenge/goal-hero-basic.webp", align: "left" },
+  interval: { src: "/challenge/goal-hero-basic.webp", align: "left" },
+  review: { src: "/challenge/goal-hero-review.webp", align: "right" },
+} as const satisfies Record<string, { src: string; align: "left" | "right" }>;
+
+type HeroKey = keyof typeof HEROES;
+
+function GoalHero({
+  hero,
+  line1,
+  line2,
+}: {
+  hero: HeroKey;
+  line1: string;
+  line2: string;
+}) {
+  const { src, align } = HEROES[hero];
+  const right = align === "right";
+  return (
+    <div className="relative mb-3 aspect-[2.6/1] w-full overflow-hidden rounded-card">
+      <Image
+        src={src}
+        alt=""
+        fill
+        sizes="(max-width: 480px) 100vw, 480px"
+        className="object-cover"
+      />
+      {/* ⚠️ 이 두 겹을 빼지 마라. 사진이 밝은 쪽(하늘·해)에 글자가 오면 흰 글자가
+          묻힌다 — 2026-09-18 화면 확인에서 ④가 실제로 그랬다. 그라데이션 한 겹으로는
+          모자라서 글자에 그림자를 같이 준다. */}
+      <div
+        className={`absolute inset-0 bg-gradient-to-${right ? "l" : "r"} from-black/80 via-black/45 to-black/10`}
+      />
+      <p
+        className={`absolute inset-y-0 flex flex-col justify-center font-serif text-[13px] italic leading-[1.5] text-white [text-shadow:0_1px_6px_rgba(0,0,0,0.95)] ${
+          right ? "right-3.5 text-right" : "left-3.5"
+        }`}
+      >
+        <span>{line1}</span>
+        <span>{line2}</span>
+      </p>
+    </div>
+  );
+}
+
+/**
+ * 분류별 아이콘 — `public/ui-icons`에 **이미 있는 것**만 쓴다.
+ *
+ * 시안은 덤벨·러너·워커 선 아이콘이지만 우리 세트(2026-08-07 사용자 제공 시트)에는
+ * 그 세 개가 없다. 새로 그리면 이 세트의 금색 입체 스타일과 따로 논다 —
+ * 새 시트를 받으면 여기 이름만 바꾸면 된다.
+ */
+const CATEGORY_ICON: Record<DetailCategoryKey, string> = {
+  weight: "part-arms",
+  cardio: "situ-cardio",
+  bodyweight: "situ-beginner",
+  interval: "hub-tabata",
+};
+
+/** 시안 ③ — 분류마다 사진과 문구가 다르다 */
+const CATEGORY_HERO_LINES: Record<DetailCategoryKey, [string, string]> = {
+  weight: ["꾸준함이", "변화를 만듭니다"],
+  cardio: ["한 걸음이", "멀리 데려갑니다"],
+  bodyweight: ["내 몸 하나로", "충분합니다"],
+  interval: ["짧고 굵게,", "오늘도 한 번"],
+};
 
 function reasonMessage(
   reason: Extract<BuildGoalDraftsResult, { ok: false }>["reason"],
@@ -226,9 +309,13 @@ export function GoalSetupFlow({
             <button
               type="button"
               onClick={() => editDetail(i)}
-              className="flex min-w-0 flex-1 items-baseline justify-between gap-2 text-left"
+              className="flex min-w-0 flex-1 items-center justify-between gap-2 text-left"
             >
-              <span className="truncate text-[13px] font-bold">{t.title}</span>
+              <span className="flex min-w-0 items-center gap-1.5">
+                {/* 옆에 이름이 있으므로 alt는 비운다 — 안 그러면 두 번 읽는다 */}
+                <UiIcon name={CATEGORY_ICON[detailCategoryOf(d.type)]} size={15} />
+                <span className="truncate text-[13px] font-bold">{t.title}</span>
+              </span>
               <span className="flex-none font-mono text-[13px] font-extrabold">
                 {t.value}
               </span>
@@ -283,7 +370,10 @@ export function GoalSetupFlow({
   const weekPreviewCard = (
     <section className="mt-4 rounded-card border border-line bg-surface-2 px-3.5 py-3">
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-[12px] font-extrabold text-muted">진행 예시</span>
+        <span className="flex items-center gap-1.5 text-[12px] font-extrabold text-muted">
+          <UiIcon name="finish" size={14} />
+          진행 예시
+        </span>
         <span className="text-[12px] font-extrabold">
           {preview.done} / {preview.target} 완료
         </span>
@@ -348,6 +438,8 @@ export function GoalSetupFlow({
             </p>
           </div>
         )}
+
+        <GoalHero hero="basic" line1="오늘의 작은 목표가" line2="더 좋은 나를 만듭니다" />
 
         <p className="text-[18px] leading-snug font-extrabold">
           이번 챌린지에서
@@ -483,6 +575,7 @@ export function GoalSetupFlow({
                   on ? "border-accent bg-accent/15 text-accent" : "border-line bg-surface-2"
                 }`}
               >
+                <UiIcon name={CATEGORY_ICON[c.key]} size={30} className="mb-1" />
                 <span>{c.label}</span>
                 {c.sub && <span className="text-[11px] font-bold text-muted">{c.sub}</span>}
               </button>
@@ -518,6 +611,12 @@ export function GoalSetupFlow({
         }
         footer={footer(draft.index === null ? "목표 추가하기" : "목표 바꾸기", saveDraft)}
       >
+        <GoalHero
+          hero={category}
+          line1={CATEGORY_HERO_LINES[category][0]}
+          line2={CATEGORY_HERO_LINES[category][1]}
+        />
+
         <p className="text-[16px] font-extrabold">무엇을 기준으로 할까요?</p>
         <div className="mt-2 flex gap-1.5" role="radiogroup" aria-label="목표 기준">
           {metrics.map((m) => {
@@ -635,11 +734,14 @@ export function GoalSetupFlow({
       header={<SheetHeader titleId={TITLE_ID} title="내 목표 확인" onClose={onClose} />}
       footer={footer("이 목표로 시작하기", submit, false, startLine)}
     >
+      <GoalHero hero="review" line1="좋은 오늘이" line2="더 나은 내일을 만듭니다" />
+
       <button
         type="button"
         onClick={() => setStep("basic")}
         className="flex w-full items-center gap-3 rounded-card border border-line bg-surface-2 px-3.5 py-3 text-left"
       >
+        <UiIcon name="goal" size={20} className="self-start" />
         <span className="min-w-0 flex-1">
           <span className="block text-[11.5px] font-bold text-muted">기본 목표</span>
           <span className="block text-[20px] font-extrabold">주 {weeklyDays}회 운동</span>
@@ -647,7 +749,10 @@ export function GoalSetupFlow({
         <span className="flex-none text-muted">›</span>
       </button>
 
-      <p className="mt-4 text-[13px] font-extrabold">세부 목표</p>
+      <p className="mt-4 flex items-center gap-1.5 text-[13px] font-extrabold">
+        <UiIcon name="hub-routine" size={14} />
+        세부 목표
+      </p>
       {details.length === 0 ? (
         <p className="mt-1 text-[12px] text-muted">세부 목표 없이도 참여할 수 있어요</p>
       ) : (

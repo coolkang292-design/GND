@@ -370,7 +370,8 @@ export function DiscoverableChallengeList({
             <div className="flex min-w-0 flex-1 flex-col">
               <p className="truncate text-[15px] leading-snug font-extrabold">{c.name}</p>
               {c.recruitNote && (
-                <p className="mt-0.5 line-clamp-1 text-[12px] break-words text-muted">
+                /* 시안 ①은 설명이 두 줄이다 — 한 줄이면 "어떤 사람을 찾는지"가 잘린다 */
+                <p className="mt-0.5 line-clamp-2 text-[12px] leading-snug break-words text-muted">
                   {c.recruitNote}
                 </p>
               )}
