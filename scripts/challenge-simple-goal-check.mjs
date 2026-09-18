@@ -215,6 +215,20 @@ try {
     JSON.stringify(kinds.json),
   );
 
+  // ⚠️ D12: `cardio_days`는 **유산소 전체에 한 줄뿐**이다. 거리와 시간을 둘 다
+  //    걸어도 하나여야 한다 — (사람·챌린지·지표)가 유일해서 두 줄이면 DB가 거부한다.
+  //    화면은 `buildGoalDrafts`가 한 번만 붙여서 막지만, 그 규칙이 풀리면
+  //    여기서 저장이 통째로 실패한다. 실패를 **먼저** 보게 해 둔다.
+  const dupDays = await api(member.token, "POST", "/rest/v1/user_goals", {
+    user_id: member.id, challenge_id: chId, group_id: groupId,
+    goal_type: "cardio_days", target_value: 4, planned_days: WEEKLY, qualifier: 1,
+  });
+  check(
+    "🎯 cardio_days 두 줄은 DB가 막는다 (한 사람·한 챌린지에 하나)",
+    dupDays.status >= 400 && JSON.stringify(dupDays.json).includes("23505"),
+    `${dupDays.status} ${JSON.stringify(dupDays.json)}`,
+  );
+
   // ── 4) workout_days 한 줄만으로 start_challenge가 통과한다 ─────────────
   const noConsent = await rpc(host.token, "start_challenge", { p_challenge_id: chId });
   check(

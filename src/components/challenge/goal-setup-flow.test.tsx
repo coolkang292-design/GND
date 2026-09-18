@@ -149,22 +149,60 @@ describe("세부 목표 — 완전히 선택이다", () => {
     fireEvent.click(screen.getByRole("button", { name: "목표 추가하기" }));
   }
 
-  it("주 3회 + 유산소 거리(하루 3km) → workout_days 12일 + cardio_distance 36km", () => {
-    // 유산소는 **하루 기준**으로 열린다 (사용자 지시 2026-09-18).
-    // 하루 3km × 주 3회 × 4주 = 36km.
+  it("주 3회 + 유산소 거리(하루 3km · 주 3회) → 거리 36km + 유산소 주 3회 (D12)", () => {
+    // 유산소는 **하루 기준**으로 열리고, "주 몇 회"를 같은 화면에서 받는다.
+    // 처음 값은 기본 목표의 주 N회(3) — 하루 3km × 주 3회 × 4주 = 36km.
+    // 그 횟수는 `cardio_days` 목표 한 줄로도 저장된다(사용자 결정 D12).
     const { onSubmit } = renderFlow();
     addCardioDistance();
     expect(screen.getByText("주 3회 운동")).toBeTruthy();
     expect(screen.getByText("유산소 거리")).toBeTruthy();
-    expect(screen.getByText("하루 3km")).toBeTruthy();
+    expect(screen.getByText("하루 3km · 주 3회")).toBeTruthy();
     fireEvent.click(cta());
     expect(onSubmit).toHaveBeenCalledWith({
       goals: [
         { type: "workout_days", target: 12, qualifier: null },
         { type: "cardio_distance", target: 36, qualifier: null },
+        { type: "cardio_days", target: 12, qualifier: 1 },
       ],
       plannedDays: 3,
     });
+  });
+
+  it("유산소 '주 몇 회'를 올리면 총량도 같이 오른다 (기본 목표는 그대로)", () => {
+    const { onSubmit } = renderFlow();
+    fireEvent.click(screen.getByRole("button", { name: /세부 목표 추가/ }));
+    fireEvent.click(screen.getByRole("radio", { name: /유산소/ }));
+    fireEvent.click(screen.getByRole("button", { name: "다음" }));
+    fireEvent.click(screen.getByRole("button", { name: "주 횟수 늘리기" }));
+    expect(screen.getByText("주 4회")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "목표 추가하기" }));
+    fireEvent.click(cta());
+    expect(onSubmit.mock.calls[0][0].goals).toEqual([
+      { type: "workout_days", target: 12, qualifier: null }, // 기본은 주 3회 그대로
+      { type: "cardio_distance", target: 48, qualifier: null }, // 하루 3km × 주 4회 × 4주
+      { type: "cardio_days", target: 16, qualifier: 1 },
+    ]);
+  });
+
+  it("⛔ 따로 고르는 '주간 횟수' 지표는 없다 — 사용자가 물렀다", () => {
+    renderFlow();
+    fireEvent.click(screen.getByRole("button", { name: /세부 목표 추가/ }));
+    fireEvent.click(screen.getByRole("radio", { name: /유산소/ }));
+    fireEvent.click(screen.getByRole("button", { name: "다음" }));
+    expect(screen.queryByRole("radio", { name: "주간 횟수" })).toBeNull();
+    expect(screen.getByRole("radio", { name: "거리" })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: "시간" })).toBeTruthy();
+    // 대신 같은 화면에 "주 몇 회" 칸이 있다
+    expect(screen.getByText("주 몇 회 할까요?")).toBeTruthy();
+  });
+
+  it("웨이트·맨몸에는 '주 몇 회' 칸이 없다 — 유산소 전용이다", () => {
+    renderFlow();
+    fireEvent.click(screen.getByRole("button", { name: /세부 목표 추가/ }));
+    fireEvent.click(screen.getByRole("radio", { name: /웨이트/ }));
+    fireEvent.click(screen.getByRole("button", { name: "다음" }));
+    expect(screen.queryByText("주 몇 회 할까요?")).toBeNull();
   });
 
   it("유산소는 하루 기준으로 열리고, 주로 바꾸면 숫자도 같이 환산된다", () => {

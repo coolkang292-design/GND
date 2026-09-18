@@ -34,11 +34,15 @@ export const GOAL_TYPE_META: Record<
   weight_days: { label: "웨이트 운동일", unit: "일", defaultTarget: 12, category: "weight" },
   cardio_distance: { label: "유산소 거리", unit: "km", defaultTarget: 20, category: "cardio" },
   cardio_time: { label: "유산소 시간", unit: "분", defaultTarget: 600, category: "cardio" },
-  // 0111 — "유산소 주 N회". 유산소만 일수형이 없어서 그 목표를 못 세웠다.
-  // ⚠️ 라벨은 설정 화면의 지표 이름("주간 횟수")과 **같아야 한다.** 2026-09-18에
-  //    설정은 "주간 횟수", 상세는 "유산소 운동일"로 갈려 있었다 — 같은 목표를 두
-  //    이름으로 부르면 사용자가 다른 목표로 읽는다(`volume`에서 한 번 겪었다).
-  cardio_days: { label: "유산소 주간 횟수", unit: "일", defaultTarget: 12, category: "cardio" },
+  // 0111 — "유산소를 주 몇 회". 유산소만 일수형이 없어서 그 목표를 못 세웠다.
+  //
+  // ⚠️ 라벨은 **값과 맞아야 한다.** `target_value`는 기간 전체의 **날 수**다
+  //    (주 4회 × 2주 = 8일). 한때 "유산소 주간 횟수"로 뒀더니 상세가
+  //    `유산소 주간 횟수 8일`이 돼 "주간 횟수가 8?"로 읽혔다. 형제들과 같은
+  //    `운동일`이 맞다 — 웨이트 운동일 · 맨몸 운동일.
+  // ⚠️ D12 이후 이 이름은 **설정 화면의 지표 탭과 짝을 맞출 필요가 없다.**
+  //    유산소 탭은 거리·시간뿐이고, 이 줄은 "주 몇 회" 스테퍼가 만들어 낸다.
+  cardio_days: { label: "유산소 운동일", unit: "일", defaultTarget: 12, category: "cardio" },
   bodyweight_reps: { label: "맨몸 횟수", unit: "회", defaultTarget: 300, category: "bodyweight" },
   bodyweight_time: { label: "맨몸 시간", unit: "분", defaultTarget: 100, category: "bodyweight" },
   bodyweight_days: { label: "맨몸 운동일", unit: "일", defaultTarget: 12, category: "bodyweight" },

@@ -172,11 +172,11 @@
       "what": "일부 참가자만 준비됐을 때 챌린지 시작 판정."
     },
     "challenge-simple-goal-check": {
-      "assertions": 16,
+      "assertions": 17,
       "source": "measured",
       "tier": "accounts",
       "core": false,
-      "what": "\"주 N회\" 기본 목표(workout_days, 0108)만으로 참가·시작이 되는가 · 0108·0111 CHECK 제약(스냅샷에 안 담긴다) · cardio_days의 qualifier가 남는가(일수형 목록이 두 벌이면 null이 된다) · 0110 알림이 1행이고 재호출은 0행 · 시작 뒤에는 not_setup · 비참가자는 challenge_not_found · workout_days + cardio_distance + cardio_days 공존."
+      "what": "\"주 N회\" 기본 목표(workout_days, 0108)만으로 참가·시작이 되는가 · 0108·0111 CHECK 제약(스냅샷에 안 담긴다) · cardio_days의 qualifier가 남는가(일수형 목록이 두 벌이면 null이 된다) · cardio_days는 한 사람·한 챌린지에 한 줄뿐(D12) · 0110 알림이 1행이고 재호출은 0행 · 시작 뒤에는 not_setup · 비참가자는 challenge_not_found."
     },
     "briefing-integration-test": {
       "assertions": 8,

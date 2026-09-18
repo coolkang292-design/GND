@@ -14,6 +14,7 @@ import {
   perSessionHint,
   basisChoicesFor,
   defaultBasisFor,
+  hasWeeklyCount,
   prefillBasisFor,
   splitGoalsForEdit,
   weekPreview,
@@ -520,53 +521,155 @@ describe("세부 목표 개수 — 기본 빼고 3개 (사용자 결정 2026-09-
 });
 
 
-describe("유산소 주간 횟수 — cardio_days (0111, 사용자 지시 2026-09-18)", () => {
-  it("유산소 지표가 거리·시간·주간 횟수 셋이다", () => {
+describe("유산소 주 몇 회 — cardio_days는 거리·시간에 딸려 온다 (D12)", () => {
+  it("⛔ 따로 고르는 지표가 아니다 — 유산소 탭은 거리·시간 둘뿐", () => {
     expect(DETAIL_METRICS.cardio.map((m) => [m.type, m.label])).toEqual([
       ["cardio_distance", "거리"],
       ["cardio_time", "시간"],
-      ["cardio_days", "주간 횟수"],
     ]);
+    expect(Object.values(DETAIL_METRICS).flat().map((m) => m.type)).not.toContain(
+      "cardio_days",
+    );
   });
 
-  it("일수형이라 주 N일로 저장된다 — 주 2회 · 4주 = 8일", () => {
+  it("거리·시간에만 '주 몇 회' 칸이 붙는다", () => {
+    expect(hasWeeklyCount("cardio_distance")).toBe(true);
+    expect(hasWeeklyCount("cardio_time")).toBe(true);
+    expect(hasWeeklyCount("weight_reps")).toBe(false);
+    expect(hasWeeklyCount("weight_days")).toBe(false);
+  });
+
+  it("하루 3km · 주 4회 · 4주 → 거리 48km + 유산소 주 4회 두 줄", () => {
     const r = buildGoalDrafts({
+      weeklyDays: 3, // 기본 목표는 주 3회지만 러닝은 주 4회다
+      periodDays: FOUR_WEEKS,
+      details: [{ type: "cardio_distance", perWeek: 3, basis: "day", weeklyCount: 4 }],
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.goals.map((g) => [g.type, g.target])).toEqual([
+      ["workout_days", 12],
+      ["cardio_distance", 48],
+      ["cardio_days", 16],
+    ]);
+    // 참여율 분모는 여전히 기본 목표 하나다
+    expect(r.plannedDays).toBe(3);
+  });
+
+  it("⚠️ 자기 주 N회로 곱한다 — 기본 목표의 주 N회가 아니다", () => {
+    const four = buildGoalDrafts({
       weeklyDays: 3,
       periodDays: FOUR_WEEKS,
-      details: [{ type: "cardio_days", perWeek: 2, qualifier: 1 }],
+      details: [{ type: "cardio_distance", perWeek: 3, basis: "day", weeklyCount: 4 }],
     });
-    expect(r.ok && r.goals[1]).toEqual({ type: "cardio_days", target: 8, qualifier: 1 });
+    const three = buildGoalDrafts({
+      weeklyDays: 3,
+      periodDays: FOUR_WEEKS,
+      details: [{ type: "cardio_distance", perWeek: 3, basis: "day", weeklyCount: 3 }],
+    });
+    expect(four.ok && four.goals[1].target).toBe(48);
+    expect(three.ok && three.goals[1].target).toBe(36);
   });
 
-  it("⚠️ 일수형이므로 하루 기준을 못 고른다 — '하루에 몇 일'은 말이 안 된다", () => {
-    expect(basisChoicesFor("cardio_days")).toEqual(["week"]);
-    // ⚠️ 분류만 보고 정하면 유산소라서 "하루"가 된다 — 화면에 "하루 2일"이 뜬다
-    expect(defaultBasisFor("cardio_days")).toBe("week");
-    expect(prefillBasisFor({
-      type: "cardio_days", total: 8, weeklyDays: 3, periodDays: FOUR_WEEKS,
-    })).toBe("week");
-  });
-
-  it("거리·시간과 함께 걸 수 있다 — 지표가 달라 유일 제약에 안 걸린다", () => {
+  it("⚠️⚠️ 거리와 시간을 둘 다 걸어도 cardio_days는 **한 줄**이다 (유일 제약)", () => {
     const r = buildGoalDrafts({
       weeklyDays: 3,
       periodDays: FOUR_WEEKS,
       details: [
-        { type: "cardio_days", perWeek: 2 },
-        { type: "cardio_distance", perWeek: 3, basis: "day" },
+        { type: "cardio_distance", perWeek: 3, basis: "day", weeklyCount: 4 },
+        { type: "cardio_time", perWeek: 30, basis: "day", weeklyCount: 2 },
       ],
     });
     expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const days = r.goals.filter((g) => g.type === "cardio_days");
+    expect(days).toHaveLength(1);
+    // 값이 다르면 **큰 쪽** — 적은 쪽으로 맞추면 목표가 몰래 낮아진다
+    expect(days[0].target).toBe(16);
   });
 
-  it("화면 글자는 '유산소 주간 횟수'와 하루 최소 종목을 같이 말한다", () => {
-    const t = detailGoalText({ type: "cardio_days", perWeek: 2, qualifier: 1 });
-    expect(t.title).toBe("유산소 주간 횟수");
-    expect(t.value).toBe("주 2일 · 하루 1종목 이상");
+  it("주 몇 회를 안 건드리면 cardio_days 줄이 안 생긴다", () => {
+    const r = buildGoalDrafts({
+      weeklyDays: 3,
+      periodDays: FOUR_WEEKS,
+      details: [{ type: "cardio_distance", perWeek: 10, basis: "week" }],
+    });
+    expect(r.ok && r.goals.map((g) => g.type)).toEqual(["workout_days", "cardio_distance"]);
   });
 
-  it("⚠️ 설정 화면 이름과 상세 이름이 같아야 한다 — 두 이름이면 다른 목표로 읽힌다", () => {
-    // `volume`에서 한 번 겪었다(설정 "총 운동량" · 상세 "총볼륨").
-    expect(GOAL_TYPE_META.cardio_days.label).toBe("유산소 주간 횟수");
+  it("범위를 벗어난 값은 무시한다 (주 1~7회)", () => {
+    for (const n of [0, -2, 8, 99, Number.NaN]) {
+      const r = buildGoalDrafts({
+        weeklyDays: 3,
+        periodDays: FOUR_WEEKS,
+        details: [{ type: "cardio_distance", perWeek: 10, basis: "week", weeklyCount: n }],
+      });
+      expect(r.ok && r.goals.some((g) => g.type === "cardio_days")).toBe(false);
+    }
+  });
+
+  it("편집으로 열면 '하루 3km · 주 4회'가 그대로 돌아온다", () => {
+    const stored = [
+      { goal_type: "workout_days" as const, target_value: 12, planned_days: 3, qualifier: null },
+      { goal_type: "cardio_distance" as const, target_value: 48, planned_days: 3, qualifier: null },
+      { goal_type: "cardio_days" as const, target_value: 16, planned_days: 3, qualifier: 1 },
+    ];
+    const s = splitGoalsForEdit(stored, FOUR_WEEKS);
+    // 주간 횟수는 **칸이 아니다** — 거리 칸에 붙어서 온다
+    expect(s.details).toHaveLength(1);
+    expect(s.details[0].type).toBe("cardio_distance");
+    expect(s.details[0].weeklyCount).toBe(4);
+    expect(s.details[0].perWeek).toBe(3);
+    expect(s.details[0].basis).toBe("day");
+    // 그대로 다시 저장해도 목표가 안 바뀐다
+    const again = buildGoalDrafts({ weeklyDays: s.weeklyDays, periodDays: FOUR_WEEKS, details: s.details });
+    expect(again.ok && again.goals.map((g) => [g.type, g.target])).toEqual([
+      ["workout_days", 12],
+      ["cardio_distance", 48],
+      ["cardio_days", 16],
+    ]);
+  });
+
+  it("⚠️⚠️ cardio_days가 없던 옛 목표는 열었다 저장해도 줄이 안 늘어난다", () => {
+    // `?? weeklyDays`로 채우면 사용자가 아무것도 안 건드렸는데 목표가 하나 늘고
+    // 달성률 평균이 바뀐다. 2026-09-18 왕복 테스트가 잡았다.
+    const stored = [
+      { goal_type: "workout_days" as const, target_value: 12, planned_days: 3, qualifier: null },
+      { goal_type: "cardio_distance" as const, target_value: 40, planned_days: 3, qualifier: null },
+    ];
+    const s = splitGoalsForEdit(stored, FOUR_WEEKS);
+    expect(s.details[0].weeklyCount).toBeUndefined();
+    const again = buildGoalDrafts({ weeklyDays: s.weeklyDays, periodDays: FOUR_WEEKS, details: s.details });
+    expect(again.ok && again.goals.map((g) => g.type)).toEqual([
+      "workout_days",
+      "cardio_distance",
+    ]);
+  });
+
+  it("화면 글자가 '주 몇 회'까지 말한다", () => {
+    expect(
+      detailGoalText({ type: "cardio_distance", perWeek: 3, basis: "day", weeklyCount: 4 }).value,
+    ).toBe("하루 3km · 주 4회");
+    // 안 정했으면 안 붙는다
+    expect(
+      detailGoalText({ type: "cardio_distance", perWeek: 3, basis: "day" }).value,
+    ).toBe("하루 3km");
+  });
+
+  it("⚠️ cardio_days 라벨은 값과 맞아야 한다 — target은 기간 전체의 날 수다", () => {
+    // "유산소 주간 횟수 8일"은 "주간 횟수가 8?"로 읽힌다(2026-09-18 화면에서 봤다).
+    // 형제들(웨이트 운동일 · 맨몸 운동일)과 같은 말이 맞다.
+    expect(GOAL_TYPE_META.cardio_days.label).toBe("유산소 운동일");
+    expect(GOAL_TYPE_META.cardio_days.unit).toBe("일");
+  });
+
+  it("힌트가 한 주 합계와 기간 총량을 같이 말한다", () => {
+    expect(
+      perSessionHint(
+        { type: "cardio_distance", perWeek: 3, basis: "day", weeklyCount: 4 },
+        3,
+        FOUR_WEEKS,
+      ),
+    ).toBe("주 4회면 한 주에 약 12km · 4주 동안 48km");
   });
 });

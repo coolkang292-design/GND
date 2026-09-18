@@ -93,12 +93,12 @@ export const DETAIL_METRICS: Record<
     { type: "volume", label: "총 운동량" },
     { type: "weight_days", label: "운동 일수" },
   ],
+  // ⛔ `cardio_days`를 여기 **지표로 넣지 마라** (2026-09-18에 한 번 그렇게 했다가
+  //    사용자가 물렀다). 횟수만 따로 고르는 칸이 아니라, 거리·시간을 정하면서
+  //    "그걸 주 몇 회 할지"를 같은 화면에서 받는다 — `DetailGoalInput.weeklyCount`.
   cardio: [
     { type: "cardio_distance", label: "거리" },
     { type: "cardio_time", label: "시간" },
-    // 0111 — 사용자 지시 2026-09-18 "유산소 주간 횟수도 선택할 수 있게".
-    // 웨이트·맨몸에만 있던 일수형을 유산소에도 연다.
-    { type: "cardio_days", label: "주간 횟수" },
   ],
   bodyweight: [
     { type: "bodyweight_reps", label: "운동 횟수" },
@@ -202,7 +202,30 @@ export type DetailGoalInput = {
   lockedTotal?: number;
   /** 일수형만. 없으면 `DEFAULT_DAYS_QUALIFIER` */
   qualifier?: number | null;
+  /**
+   * **유산소 전용** — "이걸 주 몇 회 할 것인가" (사용자 결정 D12, 2026-09-18).
+   *
+   * 거리·시간을 정하면서 같은 화면에서 받는다. 두 가지 일을 한다:
+   *   ① `basis === "day"`면 기간 총량을 계산하는 **곱수**다
+   *      (하루 3km × 주 4회 × 4주 = 48km)
+   *   ② `cardio_days` 목표 **한 줄로도 저장된다** — 사용자가 "주 4회"도 채점에
+   *      들어가기를 골랐다. 그래서 다시 열 때 쓴 그대로 복원된다.
+   *
+   * ⚠️⚠️ **유산소 전체에 하나뿐이다.** 거리와 시간을 둘 다 걸어도 `cardio_days`는
+   *    한 줄이다 — (사람·챌린지·지표)가 유일하라서 두 줄을 넣으면 DB가 거부한다.
+   *    그래서 `buildGoalDrafts`가 마지막에 **한 번만** 붙인다.
+   */
+  weeklyCount?: number;
 };
+
+/** 유산소 "주 몇 회"의 범위 — 기본 목표의 주 N회와 같은 칸이다 */
+export const MIN_CARDIO_WEEKLY = 1;
+export const MAX_CARDIO_WEEKLY = 7;
+
+/** 이 지표에 "주 몇 회" 칸이 붙나 — 유산소의 거리·시간만 */
+export function hasWeeklyCount(type: DetailGoalType): boolean {
+  return detailCategoryOf(type) === "cardio" && !isDaysMetric(type);
+}
 
 /** 이 지표가 고를 수 있는 기준. 일수형은 주간뿐이다 */
 export function basisChoicesFor(type: DetailGoalType): readonly GoalBasis[] {
@@ -272,6 +295,15 @@ export type BuildGoalDraftsResult =
  * `workout_days`가 **항상 첫 줄**이다. 세부 목표가 0개여도 이 한 줄로
  * `start_challenge`의 `kpi_incomplete`와 autostart의 `dropped`를 통과한다.
  */
+/** 유산소 줄의 "주 몇 회" — 범위를 벗어난 값은 버린다 */
+function cardioWeeklyOf(d: DetailGoalInput): number | null {
+  if (!hasWeeklyCount(d.type)) return null;
+  const n = d.weeklyCount;
+  if (typeof n !== "number" || !Number.isFinite(n)) return null;
+  const r = Math.round(n);
+  return r >= MIN_CARDIO_WEEKLY && r <= MAX_CARDIO_WEEKLY ? r : null;
+}
+
 export function buildGoalDrafts(input: {
   weeklyDays: number;
   periodDays: number;
@@ -313,7 +345,12 @@ export function buildGoalDrafts(input: {
         typeof d.lockedTotal === "number" && d.lockedTotal > 0
         ? d.lockedTotal
         : (d.basis ?? "week") === "day"
-          ? roundTarget(totalFromPerDay(d.perWeek, weeklyDays, periodDays), unit)
+          ? // ⚠️ 유산소는 **자기 주 N회**로 곱한다(D12). 기본 목표의 주 N회가
+            //    아니다 — "주 3회 운동하지만 러닝은 주 4회"가 가능해야 한다.
+            roundTarget(
+              totalFromPerDay(d.perWeek, cardioWeeklyOf(d) ?? weeklyDays, periodDays),
+              unit,
+            )
           : totalFromPerWeek(d.perWeek, periodDays, unit);
     if (!(target > 0)) return { ok: false, reason: "non_positive_target" };
     goals.push({
@@ -322,6 +359,27 @@ export function buildGoalDrafts(input: {
       qualifier: days ? (d.qualifier ?? DEFAULT_DAYS_QUALIFIER) : null,
     });
   }
+
+  /*
+    유산소 "주 몇 회"를 목표 한 줄로도 남긴다 (사용자 결정 D12).
+
+    ⚠️⚠️ **한 줄뿐이다.** 거리와 시간을 둘 다 걸어도 `cardio_days`는 하나다 —
+       (사람·챌린지·지표)가 유일해서 두 줄이면 DB가 거부한다. 값이 서로 다르면
+       **큰 쪽**을 쓴다(적은 쪽으로 맞추면 사용자가 세운 목표가 몰래 낮아진다).
+    ⚠️ `MAX_DETAIL_GOALS`는 **화면의 세부 목표 칸 수**를 센다. 이 줄은 칸이 아니라
+       유산소 칸에 딸려 오는 것이라 개수 제한과 무관하다.
+  */
+  const cardioWeekly = details
+    .map(cardioWeeklyOf)
+    .filter((n): n is number => n !== null);
+  if (cardioWeekly.length > 0) {
+    goals.push({
+      type: "cardio_days",
+      target: totalDaysFromPerWeek(Math.max(...cardioWeekly), periodDays),
+      qualifier: DEFAULT_DAYS_QUALIFIER,
+    });
+  }
+
   return { ok: true, goals, plannedDays: weeklyDays };
 }
 
@@ -348,6 +406,19 @@ export function splitGoalsForEdit(
     MAX_WEEKLY_DAYS,
     Math.max(MIN_WEEKLY_DAYS, Math.round(Number(goals[0].planned_days) || DEFAULT_WEEKLY_DAYS)),
   );
+  /*
+    유산소 "주 몇 회"(`cardio_days`)는 **세부 목표 칸이 아니다** (D12).
+    거리·시간 칸에 딸려 오는 값이라, 칸으로 되돌리지 않고 `weeklyCount`로 붙인다.
+    ⛔ 이걸 `details`에 넣으면 화면에 "유산소 주간 횟수" 칸이 따로 생긴다 —
+       사용자가 무른 바로 그 모양이다.
+  */
+  const cardioWeekly = (() => {
+    const row = goals.find((g) => g.goal_type === "cardio_days");
+    if (!row) return null;
+    const n = perWeekFromTotalDays(Number(row.target_value), periodDays);
+    return n >= MIN_CARDIO_WEEKLY && n <= MAX_CARDIO_WEEKLY ? n : null;
+  })();
+
   const details: DetailGoalInput[] = [];
   let hasBasic = false;
   for (const g of goals) {
@@ -355,14 +426,18 @@ export function splitGoalsForEdit(
       hasBasic = true;
       continue;
     }
+    if (g.goal_type === "cardio_days") continue; // 위에서 weeklyCount로 뽑았다
     const type = g.goal_type;
     const total = Number(g.target_value);
+    const weekly = hasWeeklyCount(type) ? (cardioWeekly ?? weeklyDays) : weeklyDays;
     /*
       ⚠️ DB에는 **총량만** 남아서 사용자가 어느 기준으로 넣었는지 알 수 없다.
          그래서 지표의 기본 기준(`defaultBasisFor`)으로 되돌린다 — 유산소는 하루.
          총량은 그대로라 되돌린 값으로 다시 저장해도 목표가 안 바뀐다.
+      ⚠️ 유산소는 **자기 주 N회**로 나눈다. 기본 목표의 주 N회로 나누면
+         "주 3회 운동 · 러닝은 주 4회"인 사람의 1회 거리가 틀리게 복원된다.
     */
-    const basis = prefillBasisFor({ type, total, weeklyDays, periodDays });
+    const basis = prefillBasisFor({ type, total, weeklyDays: weekly, periodDays });
     details.push({
       type,
       basis,
@@ -371,8 +446,19 @@ export function splitGoalsForEdit(
       perWeek: isDaysMetric(type)
         ? perWeekFromTotalDays(total, periodDays)
         : basis === "day"
-          ? perDayFromTotal(total, weeklyDays, periodDays)
+          ? perDayFromTotal(total, weekly, periodDays)
           : perWeekFromTotal(total, periodDays, GOAL_TYPE_META[type].unit),
+      /*
+        ⚠️⚠️ **저장돼 있을 때만 붙인다.** `?? weeklyDays`로 채우면, `cardio_days`가
+           없던 옛 유산소 목표를 **열었다 그대로 저장만 해도 목표 한 줄이 새로 생긴다**
+           (2026-09-18 왕복 테스트가 잡았다). 사용자는 아무것도 안 건드렸는데
+           달성률 평균에 줄이 하나 더 들어가 점수가 바뀐다.
+           화면은 값이 없으면 기본 목표의 주 N회를 **보여주기만** 한다 —
+           스테퍼를 건드려야 비로소 값이 생기고 그때 줄이 붙는다.
+      */
+      ...(hasWeeklyCount(type) && cardioWeekly !== null
+        ? { weeklyCount: cardioWeekly }
+        : {}),
       qualifier: g.qualifier,
     });
   }
@@ -395,10 +481,10 @@ export function detailGoalText(d: DetailGoalInput): { title: string; value: stri
   }
   // 기준을 같이 적는다 — "10km"만 있으면 주간인지 1회인지 알 수 없다
   const basis = BASIS_LABEL[d.basis ?? "week"];
-  return {
-    title,
-    value: `${basis} ${d.perWeek.toLocaleString("ko-KR")}${GOAL_TYPE_META[d.type].unit}`,
-  };
+  const amount = `${basis} ${d.perWeek.toLocaleString("ko-KR")}${GOAL_TYPE_META[d.type].unit}`;
+  // 유산소는 "주 몇 회"까지 적어야 사용자가 세운 목표 그대로다 (D12)
+  const weekly = cardioWeeklyOf(d);
+  return { title, value: weekly === null ? amount : `${amount} · 주 ${weekly}회` };
 }
 
 /**
@@ -412,15 +498,25 @@ export function detailGoalText(d: DetailGoalInput): { title: string; value: stri
 export function perSessionHint(
   d: DetailGoalInput,
   weeklyDays: number,
+  periodDays?: number,
 ): string | null {
   if (isDaysMetric(d.type) || weeklyDays <= 0 || d.perWeek <= 0) return null;
   const unit = GOAL_TYPE_META[d.type].unit;
   const show = (n: number) =>
     (unit === "km" ? Math.round(n * 10) / 10 : Math.round(n)).toLocaleString("ko-KR");
+  // 유산소는 자기 주 N회로 센다 (D12). 없으면 기본 목표의 주 N회.
+  const weekly = cardioWeeklyOf(d) ?? weeklyDays;
   if ((d.basis ?? "week") === "day") {
-    return `주 ${weeklyDays}회면 한 주에 약 ${show(d.perWeek * weeklyDays)}${unit}`;
+    const perWeekTotal = d.perWeek * weekly;
+    // 기간 전체가 얼마인지까지 말해 준다 — "주 몇 회"를 같이 정하는 화면이라
+    // 주간 합계만으로는 최종 목표가 얼마인지 감이 안 온다.
+    const tail =
+      periodDays && periodDays > 0
+        ? ` · ${Math.round(periodDays / 7)}주 동안 ${show((perWeekTotal * periodDays) / 7)}${unit}`
+        : "";
+    return `주 ${weekly}회면 한 주에 약 ${show(perWeekTotal)}${unit}${tail}`;
   }
-  return `주 ${weeklyDays}회 기준 1회 약 ${show(d.perWeek / weeklyDays)}${unit}`;
+  return `주 ${weekly}회 기준 1회 약 ${show(d.perWeek / weekly)}${unit}`;
 }
 
 /**

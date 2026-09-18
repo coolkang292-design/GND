@@ -23,10 +23,13 @@ import {
   buildGoalDrafts,
   detailCategoryOf,
   BASIS_LABEL,
+  MAX_CARDIO_WEEKLY,
+  MIN_CARDIO_WEEKLY,
   basisChoicesFor,
   defaultBasisFor,
   detailDefaults,
   detailGoalText,
+  hasWeeklyCount,
   isDaysMetric,
   perSessionHint,
   splitGoalsForEdit,
@@ -309,7 +312,16 @@ export function GoalSetupFlow({
     const basis = defaultBasisFor(first.type);
     // 기본값은 기준에 맞는 것으로 받는다 — 하루면 "3km"처럼 고를 법한 수다
     const d = detailDefaults(first.type, basis);
-    setDraft({ index: null, goal: { type: first.type, basis, perWeek: d.perWeek } });
+    setDraft({
+      index: null,
+      goal: {
+        type: first.type,
+        basis,
+        perWeek: d.perWeek,
+        // 유산소는 "주 몇 회"를 같이 받는다 (D12) — 처음 값은 기본 목표의 주 N회
+        weeklyCount: hasWeeklyCount(first.type) ? weeklyDays : undefined,
+      },
+    });
     setStep("metric");
   }
 
@@ -664,7 +676,7 @@ export function GoalSetupFlow({
             }
           : d,
       );
-    const hint = perSessionHint(g, weeklyDays);
+    const hint = perSessionHint(g, weeklyDays, periodDays);
     const basis: GoalBasis = g.basis ?? "week";
     const basisChoices = basisChoicesFor(g.type);
 
@@ -718,7 +730,15 @@ export function GoalSetupFlow({
                   const t = m.type as DetailGoalType;
                   const basis = defaultBasisFor(t);
                   const d = detailDefaults(t, basis);
-                  setGoal({ type: t, basis, perWeek: d.perWeek, qualifier: null });
+                  setGoal({
+                    type: t,
+                    basis,
+                    perWeek: d.perWeek,
+                    qualifier: null,
+                    // 유산소는 "주 몇 회"를 같이 받는다 (D12).
+                    // 처음 값은 기본 목표의 주 N회 — 대부분 그대로 쓴다.
+                    weeklyCount: hasWeeklyCount(t) ? weeklyDays : undefined,
+                  });
                 }}
                 className={`h-10 flex-1 rounded-card-sm border text-[13px] font-bold disabled:opacity-40 ${
                   on ? "border-accent bg-accent/15 text-accent" : "border-line bg-surface-2"
@@ -802,6 +822,50 @@ export function GoalSetupFlow({
               +
             </button>
           </div>
+
+          {/* 유산소는 "이걸 주 몇 회 할지"를 같은 화면에서 받는다 (사용자 결정 D12).
+              ⛔ 따로 고르는 `주간 횟수` 지표를 다시 만들지 마라 — 사용자가 물렀다.
+              이 값은 총량의 곱수이면서 `cardio_days` 목표 한 줄로도 저장된다. */}
+          {hasWeeklyCount(g.type) && (
+            <div className="mt-3 flex items-center justify-between gap-2 border-t border-line pt-3">
+              <span className="text-[12.5px] font-bold text-muted">주 몇 회 할까요?</span>
+              <span className="flex items-center gap-2">
+                <button
+                  type="button"
+                  aria-label="주 횟수 줄이기"
+                  onClick={() =>
+                    setGoal({
+                      weeklyCount: Math.max(
+                        MIN_CARDIO_WEEKLY,
+                        (g.weeklyCount ?? weeklyDays) - 1,
+                      ),
+                    })
+                  }
+                  className="h-8 w-8 rounded-full border border-line bg-surface font-bold"
+                >
+                  –
+                </button>
+                <span className="w-14 text-center font-mono text-[14px] font-extrabold">
+                  주 {g.weeklyCount ?? weeklyDays}회
+                </span>
+                <button
+                  type="button"
+                  aria-label="주 횟수 늘리기"
+                  onClick={() =>
+                    setGoal({
+                      weeklyCount: Math.min(
+                        MAX_CARDIO_WEEKLY,
+                        (g.weeklyCount ?? weeklyDays) + 1,
+                      ),
+                    })
+                  }
+                  className="h-8 w-8 rounded-full border border-line bg-surface font-bold"
+                >
+                  +
+                </button>
+              </span>
+            </div>
+          )}
 
           {days && (
             <div className="mt-3 flex items-center justify-between gap-2 border-t border-line pt-3">
