@@ -274,3 +274,47 @@ export function perSessionHint(
   const shown = unit === "km" ? Math.round(per * 10) / 10 : Math.round(per);
   return `주 ${weeklyDays}회 기준 1회 약 ${shown.toLocaleString("ko-KR")}${unit}`;
 }
+
+/**
+ * 시안 ④ `내 목표 확인`의 **진행 예시** — "주 N회가 어떤 모습인지" 한 주로 보여준다.
+ *
+ * ⚠️⚠️ **실적이 아니다.** 목표를 세우는 자리라 아직 이번 챌린지 기록이 없다.
+ *    그래서 채워진 칸 수는 `주 N회 - 1`로 **고정**한다 — 그러면 아래 문구가
+ *    항상 "한 번만 더 하면 목표 달성"으로 참이 되고, 사용자가 "내가 2번 했다"로
+ *    읽을 여지를 문구(`진행 예시`)와 함께 줄인다.
+ *    ⛔ 여기에 실제 세션 수를 끌어오지 마라. 그러려면 챌린지 기간 조회가 필요하고,
+ *      목표 설정 시트가 네트워크를 한 번 더 때리게 된다(시트는 저장 전 화면이다).
+ *
+ * 주는 **월요일 시작**이다(시안 그대로). 채우는 칸도 앞에서부터다 — 특정 요일을
+ * 지목하지 않으려고 굳이 흩뿌리지 않는다. 예시라는 걸 아는 편이 낫다.
+ */
+export type WeekPreview = {
+  /** 월~일 7칸. `true`면 채워진 동그라미 */
+  days: readonly boolean[];
+  /** 채워진 칸 수 */
+  done: number;
+  /** 주 N회 */
+  target: number;
+  /** 카드 아래 한 줄 */
+  caption: string;
+};
+
+/** 월요일 시작 — 시안과 같은 순서 */
+export const WEEK_LABELS = ["월", "화", "수", "목", "금", "토", "일"] as const;
+
+export function weekPreview(weeklyDays: number): WeekPreview {
+  const target = Math.min(
+    MAX_WEEKLY_DAYS,
+    Math.max(MIN_WEEKLY_DAYS, Math.round(weeklyDays)),
+  );
+  const done = target - 1;
+  return {
+    days: WEEK_LABELS.map((_, i) => i < done),
+    done,
+    target,
+    caption:
+      done === 0
+        ? "한 번만 하면 이번 주 목표 달성!"
+        : "한 번만 더 하면 이번 주 목표 달성!",
+  };
+}

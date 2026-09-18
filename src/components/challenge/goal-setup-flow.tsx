@@ -16,6 +16,7 @@ import {
   MAX_DETAIL_GOALS,
   MAX_WEEKLY_DAYS,
   MIN_WEEKLY_DAYS,
+  WEEK_LABELS,
   WEEKLY_DAY_CHOICES,
   buildGoalDrafts,
   detailCategoryOf,
@@ -24,6 +25,7 @@ import {
   isDaysMetric,
   perSessionHint,
   splitGoalsForEdit,
+  weekPreview,
   type BuildGoalDraftsResult,
   type DetailCategoryKey,
   type DetailGoalInput,
@@ -265,6 +267,47 @@ export function GoalSetupFlow({
       </span>
       <span className="flex-none text-muted">›</span>
     </button>
+  );
+
+  /*
+    시안 ④의 **진행 예시** 카드 (2026-09-18 사용자 결정으로 추가).
+
+    ⚠️⚠️ **실적이 아니다.** 여기는 목표를 세우는 자리라 이번 챌린지 기록이 아직
+       없다. 채워진 칸은 `weekPreview`가 `주 N회 - 1`로 고정한 **예시**다.
+       ⛔ 실제 세션 수를 끌어오지 마라 — 시트가 저장 전에 네트워크를 한 번 더
+         때리게 되고, 그 조회가 늦으면 카드가 빈 채로 깜빡인다.
+    그래서 제목을 `진행 예시`로 두고 `aria-hidden`으로 동그라미를 읽지 않게 한다 —
+    스크린 리더에는 옆의 `2 / 3 완료`와 아래 한 줄이면 충분하다.
+  */
+  const preview = weekPreview(weeklyDays);
+  const weekPreviewCard = (
+    <section className="mt-4 rounded-card border border-line bg-surface-2 px-3.5 py-3">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-[12px] font-extrabold text-muted">진행 예시</span>
+        <span className="text-[12px] font-extrabold">
+          {preview.done} / {preview.target} 완료
+        </span>
+      </div>
+      <ul aria-hidden className="mt-2.5 flex items-center justify-between gap-1">
+        {preview.days.map((done, i) => (
+          <li key={WEEK_LABELS[i]} className="flex flex-1 flex-col items-center gap-1">
+            <span
+              className={`grid h-7 w-7 place-items-center rounded-full text-[13px] font-extrabold ${
+                done
+                  ? "bg-accent text-accent-ink"
+                  : "border border-line text-transparent"
+              }`}
+            >
+              ✓
+            </span>
+            <span className="text-[10.5px] text-faint">{WEEK_LABELS[i]}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-2 text-center text-[11.5px] font-bold text-accent">
+        {preview.caption}
+      </p>
+    </section>
   );
 
   const footer = (label: string, onClick: () => void, disabled = false, sub?: string) => (
@@ -611,6 +654,7 @@ export function GoalSetupFlow({
         detailList
       )}
       {!atMax && addDetailRow}
+      {weekPreviewCard}
       {infoLines}
     </BottomSheet>
   );

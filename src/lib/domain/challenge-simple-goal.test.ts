@@ -4,12 +4,14 @@ import {
   DETAIL_CATEGORIES,
   DETAIL_METRICS,
   MAX_DETAIL_GOALS,
+  WEEK_LABELS,
   WEEKLY_DAY_CHOICES,
   buildGoalDrafts,
   detailDefaults,
   detailGoalText,
   perSessionHint,
   splitGoalsForEdit,
+  weekPreview,
 } from "./challenge-simple-goal";
 
 const FOUR_WEEKS = 28;
@@ -262,5 +264,50 @@ describe("detailGoalText · perSessionHint — 화면 글자", () => {
       "주 3회 기준 1회 약 3.3km",
     );
     expect(perSessionHint({ type: "weight_days", perWeek: 2 }, 3)).toBeNull();
+  });
+});
+
+describe("weekPreview — 시안 ④ 진행 예시", () => {
+  it("주 3회는 시안 그대로 2 / 3 · 월·화가 채워진다", () => {
+    const p = weekPreview(3);
+    expect(p.done).toBe(2);
+    expect(p.target).toBe(3);
+    expect(p.days).toEqual([true, true, false, false, false, false, false]);
+  });
+
+  it("칸은 항상 7개다 — 주 N회가 몇이든 한 주를 그린다", () => {
+    for (const n of [1, 2, 3, 4, 5, 6, 7]) {
+      expect(weekPreview(n).days).toHaveLength(7);
+    }
+  });
+
+  it("채워진 칸은 항상 목표보다 하나 적다 — 문구가 참이어야 한다", () => {
+    for (const n of [1, 2, 3, 4, 7]) {
+      const p = weekPreview(n);
+      expect(p.done).toBe(n - 1);
+      expect(p.days.filter(Boolean)).toHaveLength(n - 1);
+    }
+  });
+
+  it("주 1회는 0 / 1이고 '한 번만 하면'으로 말한다 ('더'가 붙으면 거짓말이다)", () => {
+    const p = weekPreview(1);
+    expect(p.done).toBe(0);
+    expect(p.caption).toBe("한 번만 하면 이번 주 목표 달성!");
+    expect(p.days.some(Boolean)).toBe(false);
+  });
+
+  it("그 밖에는 '한 번만 더 하면'", () => {
+    expect(weekPreview(3).caption).toBe("한 번만 더 하면 이번 주 목표 달성!");
+  });
+
+  it("범위를 벗어난 값도 1~7로 눕힌다 (직접 설정이 새는 것을 막는다)", () => {
+    expect(weekPreview(0).target).toBe(1);
+    expect(weekPreview(-5).target).toBe(1);
+    expect(weekPreview(99).target).toBe(7);
+    expect(weekPreview(99).days.filter(Boolean)).toHaveLength(6);
+  });
+
+  it("요일 이름은 월요일부터다 (시안 순서)", () => {
+    expect(WEEK_LABELS).toEqual(["월", "화", "수", "목", "금", "토", "일"]);
   });
 });

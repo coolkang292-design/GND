@@ -312,3 +312,63 @@ describe("경고문은 버튼 옆, 스크롤 밖 (2026-08-17 옛 시트에서 �
     expect(notice.parentElement).toBe(button.parentElement);
   });
 });
+
+describe("진행 예시 — 시안 ④ (2026-09-18 추가)", () => {
+  /** 시안대로 **확인 화면(④)에만** 있다. ①은 주 N회를 고르는 자리다. */
+  function openReview(weekly: number) {
+    renderFlow({
+      myGoals: [
+        goal({ goal_type: "workout_days", target_value: weekly * 4, planned_days: weekly }),
+        goal({ goal_type: "cardio_distance", target_value: 40, unit: "km", planned_days: weekly }),
+      ],
+    });
+  }
+
+  it("확인 화면에 주 N회가 한 주로 보인다 — 주 3회면 2 / 3 완료", () => {
+    openReview(3);
+    expect(screen.getByText("진행 예시")).toBeTruthy();
+    expect(screen.getByText("2 / 3 완료")).toBeTruthy();
+  });
+
+  it("세부 목표를 더해 확인 화면으로 와도 보인다", () => {
+    renderFlow();
+    expect(screen.queryByText("진행 예시")).toBeNull(); // ①에는 없다 (시안 그대로)
+    fireEvent.click(screen.getByRole("button", { name: /세부 목표 추가/ }));
+    fireEvent.click(screen.getByRole("radio", { name: /유산소/ }));
+    fireEvent.click(screen.getByRole("button", { name: "다음" }));
+    fireEvent.click(screen.getByRole("button", { name: "목표 추가하기" }));
+    expect(screen.getByText("2 / 3 완료")).toBeTruthy();
+  });
+
+  it("주 N회가 다르면 같이 달라진다", () => {
+    openReview(4);
+    expect(screen.getByText("3 / 4 완료")).toBeTruthy();
+  });
+
+  it("주 1회는 0 / 1이고 '한 번만 하면' — '더'가 붙으면 거짓말이다", () => {
+    openReview(1);
+    expect(screen.getByText("0 / 1 완료")).toBeTruthy();
+    expect(screen.getByText("한 번만 하면 이번 주 목표 달성!")).toBeTruthy();
+  });
+
+  it("그 밖에는 '한 번만 더 하면'", () => {
+    openReview(3);
+    expect(screen.getByText("한 번만 더 하면 이번 주 목표 달성!")).toBeTruthy();
+  });
+
+  it("⚠️ 실적이 아니라 예시다 — 이번 챌린지 기록을 끌어오지 않는다", () => {
+    // 여기는 목표를 **세우는** 자리라 이번 챌린지 기록이 아직 없다. 실적을 끌어오면
+    // 시트가 저장 전에 네트워크를 한 번 더 때리고, 늦으면 카드가 빈 채로 깜빡인다.
+    // 이 단언을 지우려면 그 조회를 어디서 할지부터 정하라.
+    openReview(3);
+    expect(screen.getByText("진행 예시")).toBeTruthy();
+    expect(screen.queryByText(/이번 주 내 기록|내 진행률|지금까지/)).toBeNull();
+  });
+
+  it("동그라미는 스크린 리더가 읽지 않는다 — '2 / 3 완료'와 아래 한 줄이면 된다", () => {
+    openReview(3);
+    const card = screen.getByText("진행 예시").closest("section");
+    expect(card?.querySelector("ul")?.getAttribute("aria-hidden")).toBe("true");
+    expect(card?.querySelectorAll("li")).toHaveLength(7);
+  });
+});
