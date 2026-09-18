@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { GOAL_TYPE_META } from "@/lib/challenge";
 import {
   DEFAULT_WEEKLY_DAYS,
   DETAIL_CATEGORIES,
@@ -562,5 +563,10 @@ describe("유산소 주간 횟수 — cardio_days (0111, 사용자 지시 2026-0
     const t = detailGoalText({ type: "cardio_days", perWeek: 2, qualifier: 1 });
     expect(t.title).toBe("유산소 주간 횟수");
     expect(t.value).toBe("주 2일 · 하루 1종목 이상");
+  });
+
+  it("⚠️ 설정 화면 이름과 상세 이름이 같아야 한다 — 두 이름이면 다른 목표로 읽힌다", () => {
+    // `volume`에서 한 번 겪었다(설정 "총 운동량" · 상세 "총볼륨").
+    expect(GOAL_TYPE_META.cardio_days.label).toBe("유산소 주간 횟수");
   });
 });

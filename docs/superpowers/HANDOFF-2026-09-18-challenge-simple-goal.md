@@ -527,6 +527,29 @@ active 챌린지가 **하나뿐인** 계정이 필요하다. `dev-fixture-c@gnd.
 "하루"가 되어 화면에 **"하루 2일"**이 뜬다 — 2026-09-18 화면 확인에서 잡았고
 단언으로 막아 뒀다.
 
+#### ⚠️⚠️ 적용 뒤 화면·DB 확인에서 잡은 것 둘 — 둘 다 "목록이 두 벌"이라서 났다
+
+제약이 열린 뒤 **실제로 화면에서 저장해 보고** DB를 열어 보니 두 가지가 틀려 있었다.
+제약만 확인하고 넘어갔으면 둘 다 못 잡았다.
+
+**1) `qualifier`가 통째로 `null`로 저장됐다.**
+`saveMyGoals`가 일수형 목록을 **손으로 따로 적고** 있었다
+(`g.type === "weight_days" || g.type === "bodyweight_days"`). `cardio_days`를 더했을 때
+거기만 안 고쳐져서, 목표값(4일)은 맞는데 **하루 최소 종목 수가 사라졌다** —
+화면에는 `하루 1종목+`이 떠 있는데 DB에는 조건이 없다. 유산소를 한 종목만 한 날도
+세게 된다. 실측: `cardio_days target=4 planned=4 **qualifier=null**`.
+→ 판정을 `challenge.ts`의 **`isDaysGoal`/`DAYS_GOAL_TYPES` 한 곳**으로 모으고,
+`challenge-simple-goal.ts`의 `isDaysMetric`이 그걸 지나게 했다.
+고친 뒤 재저장 실측: `qualifier=1` ✅
+⛔ **이 목록을 다른 데서 또 적지 마라.** `challenge.test.ts`가 단언으로 막는다.
+⚠️ 겸사겸사 그 자리의 기본값도 `?? 3` → `?? 1`로 맞췄다(D5가 1로 정했다).
+
+**2) 같은 목표를 두 이름으로 불렀다.** 설정 화면은 `주간 횟수`, 상세·참가자 줄은
+`유산소 운동일`. `GOAL_TYPE_META.cardio_days.label`을 **`유산소 주간 횟수`** 로 통일했다.
+`volume`에서 이미 한 번 겪은 것과 **같은 실수**다(§6-1) — 새 goal_type을 더할 때
+`DETAIL_METRICS`의 지표 이름과 `GOAL_TYPE_META`의 라벨을 같이 보라.
+화면 실측: 상세가 `유산소 주간 횟수 4일` ✅
+
 ### 6-8. 사진 없는 카드의 대체 그림
 
 `public/challenge-assets/`(다른 세션이 2026-09-18 15:46에 푸시)를 목록 카드·상세에 연결했다.

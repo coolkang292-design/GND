@@ -17,7 +17,7 @@
  *    지킨 경계(달성률 재료와 참여율 재료를 섞지 않는다)를 그대로 잇는다.
  *    기본 목표만 둘 다에 쓰이는데, 그건 뜻이 같아서다(주 N회 = 운동한 날 목표 = 계획일).
  */
-import { GOAL_TYPE_META, type GoalDraft } from "@/lib/challenge";
+import { GOAL_TYPE_META, isDaysGoal, type GoalDraft } from "@/lib/challenge";
 import {
   perDayFromTotal,
   perWeekFromTotal,
@@ -117,13 +117,14 @@ export function detailCategoryOf(type: DetailGoalType): DetailCategoryKey {
   return "weight";
 }
 
-/** 일수형 — 목표값이 "주 N일"이고 하루 최소 종목 수가 붙는다 */
+/**
+ * 일수형 — 목표값이 "주 N일"이고 하루 최소 종목 수가 붙는다.
+ *
+ * ⚠️ 목록을 여기 다시 적지 않는다. `challenge.ts`의 `isDaysGoal` 하나만 본다 —
+ *    2026-09-18에 목록이 두 벌이어서 `cardio_days`의 qualifier가 null로 저장됐다.
+ */
 export function isDaysMetric(type: DetailGoalType): boolean {
-  return (
-    type === "weight_days" ||
-    type === "bodyweight_days" ||
-    type === "cardio_days" // 0111 — "유산소 주 N회"
-  );
+  return isDaysGoal(type);
 }
 
 /**

@@ -34,8 +34,11 @@ export const GOAL_TYPE_META: Record<
   weight_days: { label: "웨이트 운동일", unit: "일", defaultTarget: 12, category: "weight" },
   cardio_distance: { label: "유산소 거리", unit: "km", defaultTarget: 20, category: "cardio" },
   cardio_time: { label: "유산소 시간", unit: "분", defaultTarget: 600, category: "cardio" },
-  // 0111 — "유산소 주 N회". 유산소만 일수형이 없어서 그 목표를 못 세웠다
-  cardio_days: { label: "유산소 운동일", unit: "일", defaultTarget: 12, category: "cardio" },
+  // 0111 — "유산소 주 N회". 유산소만 일수형이 없어서 그 목표를 못 세웠다.
+  // ⚠️ 라벨은 설정 화면의 지표 이름("주간 횟수")과 **같아야 한다.** 2026-09-18에
+  //    설정은 "주간 횟수", 상세는 "유산소 운동일"로 갈려 있었다 — 같은 목표를 두
+  //    이름으로 부르면 사용자가 다른 목표로 읽는다(`volume`에서 한 번 겪었다).
+  cardio_days: { label: "유산소 주간 횟수", unit: "일", defaultTarget: 12, category: "cardio" },
   bodyweight_reps: { label: "맨몸 횟수", unit: "회", defaultTarget: 300, category: "bodyweight" },
   bodyweight_time: { label: "맨몸 시간", unit: "분", defaultTarget: 100, category: "bodyweight" },
   bodyweight_days: { label: "맨몸 운동일", unit: "일", defaultTarget: 12, category: "bodyweight" },
@@ -50,6 +53,28 @@ export const GOAL_TYPE_META: Record<
 };
 
 const ALL_CATEGORIES: readonly GoalCategory[] = ["weight", "cardio", "bodyweight"];
+
+/**
+ * 일수형 목표 — 목표값이 **날 수**이고 `qualifier`(하루 최소 종목 수)가 붙는다.
+ *
+ * ⚠️⚠️ **이 목록을 여기 말고 다른 데서 또 적지 마라.** 2026-09-18에 `saveMyGoals`가
+ *    `weight_days`·`bodyweight_days` 두 개를 손으로 적고 있었고, `cardio_days`(0111)를
+ *    더했을 때 **거기만 안 고쳐져서 qualifier가 통째로 null로 저장됐다.**
+ *    목표값(4일)은 맞는데 "하루 몇 종목 이상"이 사라져, 유산소를 한 종목만 한 날도
+ *    센다 — 화면에는 `하루 1종목+`라고 떠 있는데 DB는 아무 조건이 없다.
+ *    `challenge-simple-goal.ts`의 `isDaysMetric`도 이 함수를 지난다.
+ *
+ * ⚠️ `workout_days`는 **여기 없다.** 종목 무관이라 하루 최소 종목 수가 없다(0108).
+ */
+export const DAYS_GOAL_TYPES: readonly GoalType[] = [
+  "weight_days",
+  "bodyweight_days",
+  "cardio_days",
+];
+
+export function isDaysGoal(type: GoalType): boolean {
+  return DAYS_GOAL_TYPES.includes(type);
+}
 
 export type GoalDraft = {
   type: GoalType;
@@ -335,10 +360,9 @@ export async function saveMyGoals(input: {
       target_value: g.target,
       unit: GOAL_TYPE_META[g.type].unit,
       planned_days: input.plannedDays,
-      qualifier:
-        g.type === "weight_days" || g.type === "bodyweight_days"
-          ? (g.qualifier ?? 3)
-          : null,
+      // 일수형 판정은 `isDaysGoal` 한 곳만 본다 — 위 ⚠️ 참조.
+      // 기본값 1은 사용자 결정 D5다(옛 기본 3). 새 목표에만 적용된다.
+      qualifier: isDaysGoal(g.type) ? (g.qualifier ?? 1) : null,
     })),
   );
   if (error) throw error;

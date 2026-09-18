@@ -11,6 +11,9 @@
 //      `workout_days` 한 줄만 가진 사람이 `kpi_incomplete`로 막힌다.
 //   3) `notify_challenge_goal_ready`(0110)의 dedupe가 풀리면 목표를 고칠 때마다
 //      "시작돼요" 알림이 다시 간다 — 화면에는 안 보이고 알림함만 더러워진다.
+//   4) `cardio_days`(0111)가 제약에서 빠지거나, 저장 경로가 일수형 목록을 따로
+//      적어서 **qualifier를 버리면** "하루 몇 종목 이상"이 사라진다. 목표값은
+//      맞고 화면에도 `하루 1종목+`이 떠 있어서 **화면만 봐서는 안 잡힌다.**
 //
 // 그리고 세부 목표와의 공존: 같은 사람이 `workout_days` + `cardio_distance`를
 // 동시에 가질 수 있어야 한다((사람·챌린지·지표) 유일 제약에 걸리지 않는다).
@@ -179,6 +182,37 @@ try {
     "🎯 workout_days + cardio_distance 동시 저장 (유일 제약은 지표별)",
     detail.status === 201,
     `${detail.status} ${JSON.stringify(detail.json)}`,
+  );
+
+  // ── 3-2) 0111 `cardio_days` — 제약과 **qualifier**까지 ────────────────
+  // ⚠️ 2026-09-18: 제약(0111)만 열고 넘어갔더니 `saveMyGoals`가 일수형 목록을
+  //    따로 적고 있어 **qualifier가 null로 저장**됐다. 목표값은 맞는데 "하루 몇
+  //    종목 이상"이 사라져, 유산소를 한 종목만 한 날도 세게 된다. 화면에는
+  //    `하루 1종목+`이 떠 있어서 **화면만 봐서는 안 잡힌다.** 그래서 여기서 본다.
+  const cdays = await api(member.token, "POST", "/rest/v1/user_goals", {
+    user_id: member.id, challenge_id: chId, group_id: groupId,
+    goal_type: "cardio_days", target_value: 8, planned_days: WEEKLY, qualifier: 1,
+  });
+  check(
+    "🎯 cardio_days 저장 성공 (0111 CHECK 제약 — 스냅샷에 안 담기는 것)",
+    cdays.status === 201,
+    `${cdays.status} ${JSON.stringify(cdays.json)}`,
+  );
+  const cdaysRow = await api(SERVICE, "GET",
+    `/rest/v1/user_goals?select=goal_type,target_value,planned_days,qualifier&challenge_id=eq.${chId}&goal_type=eq.cardio_days`);
+  const cd = (cdaysRow.json ?? [])[0];
+  check(
+    "🎯 cardio_days의 qualifier가 남는다 (일수형 목록이 두 벌이면 null이 된다)",
+    cd?.qualifier === 1 && Number(cd?.target_value) === 8 && cd?.planned_days === WEEKLY,
+    JSON.stringify(cdaysRow.json),
+  );
+  const kinds = await api(SERVICE, "GET",
+    `/rest/v1/user_goals?select=goal_type&challenge_id=eq.${chId}&user_id=eq.${member.id}`);
+  check(
+    "유산소 거리 · 유산소 주간 횟수 · 기본 목표가 한 사람에게 공존한다",
+    ["workout_days", "cardio_distance", "cardio_days"].every((t) =>
+      (kinds.json ?? []).some((r) => r.goal_type === t)),
+    JSON.stringify(kinds.json),
   );
 
   // ── 4) workout_days 한 줄만으로 start_challenge가 통과한다 ─────────────

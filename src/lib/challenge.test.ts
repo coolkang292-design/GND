@@ -11,6 +11,8 @@ import {
   goalLabel,
   normalizeChallengeParticipantProfiles,
   normalizeChallengePeriodSessions,
+  DAYS_GOAL_TYPES,
+  isDaysGoal,
   toPeriodSessionRow,
   type PeriodSessionRow,
   type PeriodStats,
@@ -97,6 +99,15 @@ describe("actualForGoal", () => {
   it("⚠️ cardio_days는 유산소만 센다 — 웨이트·맨몸만 한 날은 0일이다", () => {
     const onlyWeight = { ...STATS, cardioKindsByDay: {} };
     expect(actualForGoal(onlyWeight, "cardio_days", 1)).toBe(0);
+  });
+  it("⚠️ 일수형 목록은 한 곳만 본다 — 두 벌이면 qualifier가 조용히 사라진다", () => {
+    // 2026-09-18: `saveMyGoals`가 목록을 따로 적고 있어서 `cardio_days`의
+    // qualifier가 null로 저장됐다. 화면엔 "하루 1종목+"이 떠 있는데 DB엔 조건이 없다.
+    expect(DAYS_GOAL_TYPES).toEqual(["weight_days", "bodyweight_days", "cardio_days"]);
+    for (const t of DAYS_GOAL_TYPES) expect(isDaysGoal(t)).toBe(true);
+    // 종목 무관이라 하루 최소 종목 수가 없다 (0108)
+    expect(isDaysGoal("workout_days")).toBe(false);
+    expect(isDaysGoal("cardio_distance")).toBe(false);
   });
   it("volume은 레거시 볼륨", () =>
     expect(actualForGoal(STATS, "volume")).toBe(3000));
