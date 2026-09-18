@@ -148,7 +148,14 @@ describe("DiscoverableChallenges", () => {
     expect(mocks.joinDiscoverableChallenge).not.toHaveBeenCalled();
   });
 
-  it("참여하면 그 챌린지 화면으로 보낸다", async () => {
+  /**
+   * 2026-09-18 변경: 새로 참가하면 `&goal=joined`를 붙여 **목표 설정을 바로 연다.**
+   * 옛 단언은 `/challenge?open=c1`이었다 — 그때는 챌린지 화면이 목표 카드를 같은
+   * 화면에 늘어놨지만, 새 화면은 상세를 따로 열고 목표는 시트로 받는다.
+   * "참여 → 주 몇 번 → 운동"이 끊기지 않게 하는 게 이 개편의 핵심이라 뜻이 바뀌었다.
+   * 이미 참가한 방(`참가 중 · 보기`)은 위 테스트대로 `goal` 없이 연다.
+   */
+  it("참여하면 그 챌린지 화면으로 보내고 목표 설정을 연다", async () => {
     mocks.getDiscoverableChallenges.mockResolvedValue([challenge()]);
     mocks.joinDiscoverableChallenge.mockResolvedValue({
       challengeId: "c1",
@@ -161,7 +168,7 @@ describe("DiscoverableChallenges", () => {
       expect(mocks.joinDiscoverableChallenge).toHaveBeenCalledWith("c1"),
     );
     await waitFor(() =>
-      expect(mocks.push).toHaveBeenCalledWith("/challenge?open=c1"),
+      expect(mocks.push).toHaveBeenCalledWith("/challenge?open=c1&goal=joined"),
     );
   });
 

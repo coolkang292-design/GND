@@ -7,7 +7,7 @@
 -- 쓰는 법: 함수·정책의 '현행' 정의가 필요할 때 마이그레이션 51개를
 -- 뒤지지 말고 이 파일을 검색하라. 마이그레이션을 적용한 뒤에는 다시 뽑아라.
 --
--- 함수 101개 · 정책 79개 · 인덱스 100개
+-- 함수 102개 · 정책 79개 · 인덱스 100개
 
 -- ════════════════════════════════════════════════════════════
 -- 함수
@@ -3167,6 +3167,71 @@ begin
 
   return new;
 end $function$;
+
+-- ── notify_challenge_goal_ready ──
+CREATE OR REPLACE FUNCTION public.notify_challenge_goal_ready(p_challenge_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+declare
+  v_me    uuid := (select auth.uid());
+  v_today date := (now() at time zone 'Asia/Seoul')::date;
+  c       public.challenges;
+  v_title text;
+  v_n     int;
+begin
+  if v_me is null then raise exception 'not_authenticated'; end if;
+
+  select * into c from public.challenges where id = p_challenge_id;
+
+  -- 참가(joined)한 사람만. invited·dropped·남의 챌린지는 존재 자체를 숨긴다.
+  if not found or not exists (
+    select 1 from public.challenge_participants cp
+     where cp.challenge_id = p_challenge_id
+       and cp.user_id = v_me
+       and cp.status = 'joined'
+  ) then
+    raise exception 'challenge_not_found';
+  end if;
+
+  -- 모집 기간(setup)에만. 시작한 뒤에 "며칠부터 시작해요"는 거짓말이다.
+  -- 오류가 아니라 '안 보냄'으로 돌려준다 — 저장은 이미 성공했다.
+  if c.status <> 'setup' then
+    return jsonb_build_object('sent', false, 'reason', 'not_setup');
+  end if;
+
+  -- 목표가 실제로 있어야 "목표 설정 완료"다. 화면을 믿지 않는다.
+  if not exists (
+    select 1 from public.user_goals ug
+     where ug.challenge_id = p_challenge_id and ug.user_id = v_me
+  ) then
+    raise exception 'no_goals';
+  end if;
+
+  -- 시작일이 오늘 이전이어도 setup일 수 있다(크론 전). 그때는 '오늘'이라 말한다 —
+  -- 다음 화면 진입이나 09시 크론이 곧 시작시킨다.
+  v_title := case
+    when c.start_date <= v_today     then '오늘 챌린지가 시작돼요 🏁'
+    when c.start_date = v_today + 1  then '내일부터 챌린지가 시작돼요 🏁'
+    else to_char(c.start_date, 'FMMM/FMDD') || '부터 챌린지가 시작돼요 🏁'
+  end;
+
+  insert into public.notifications
+    (user_id, actor_id, type, reference_id, title, body, dedupe_key)
+  values (
+    v_me, null, 'challenge_starting_soon', c.id,
+    v_title,
+    c.name || ' · 목표 설정 완료! 시작하면 다시 알려드릴게요',
+    'challenge_goal_ready:' || c.id::text || ':' || v_me::text
+  )
+  on conflict (dedupe_key) do nothing;
+  get diagnostics v_n = row_count;
+
+  return jsonb_build_object('sent', v_n > 0, 'startDate', c.start_date);
+end
+$function$;
 
 -- ── notify_challenge_peek_unlock ──
 CREATE OR REPLACE FUNCTION public.notify_challenge_peek_unlock(p_user_id uuid)

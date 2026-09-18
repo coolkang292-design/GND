@@ -177,6 +177,23 @@ describe("challengeStartHint — 자동 시작이 주인공이다", () => {
       expect(hint.canStartNow).toBe(false);
     });
 
+    /**
+     * 2026-09-18 목표 단순화 — 화면에 "동의"·"KPI" 같은 내부 용어를 쓰지 않는다.
+     * 서버 게이트(`consent_incomplete`)는 그대로고 이름만 "목표 확인"이다.
+     */
+    it("어느 상태에서도 '동의'·'KPI'라고 쓰지 않는다", () => {
+      for (const over of [
+        {},
+        { allSet: true, approvedCount: 2 },
+        { allSet: true, allApproved: true, approvedCount: 4 },
+      ]) {
+        const hint = challengeStartHint({ ...base, ...over });
+        expect(hint.buttonLabel).not.toContain("동의");
+        expect(hint.buttonLabel).not.toContain("KPI");
+        expect(hint.notice).not.toContain("동의");
+      }
+    });
+
     it("전원이 마치면 누를 수 있다", () => {
       const hint = challengeStartHint({
         ...base,

@@ -5,6 +5,8 @@ import {
   roundTarget,
   totalDaysFromPerWeek,
   totalFromPerDay,
+  totalFromPerWeek,
+  perWeekFromTotal,
 } from "./challenge-goal-calc";
 
 describe("roundTarget — 목표값 반올림", () => {
@@ -95,5 +97,29 @@ describe("perWeekFromTotalDays — 일수형 목표: 기간 총 운동일 → �
 
   it("기간이 0이면 1 (0 나눗셈 방지)", () => {
     expect(perWeekFromTotalDays(12, 0)).toBe(1);
+  });
+});
+
+describe("totalFromPerWeek · perWeekFromTotal — 주 단위 입력 (2026-09-18)", () => {
+  it("4주 × 주 12,000kg = 48,000kg", () => {
+    expect(totalFromPerWeek(12000, 28, "kg")).toBe(48000);
+  });
+
+  it("거리는 소수 첫째 자리까지 — 30일 × 주 10km = 42.9km", () => {
+    expect(totalFromPerWeek(10, 30, "km")).toBe(42.9);
+  });
+
+  it("횟수는 정수로 — 30일 × 주 100회 = 429회", () => {
+    expect(totalFromPerWeek(100, 30, "회")).toBe(429);
+  });
+
+  it("0 이하나 기간 0이면 0", () => {
+    expect(totalFromPerWeek(0, 28, "kg")).toBe(0);
+    expect(totalFromPerWeek(10, 0, "km")).toBe(0);
+  });
+
+  it("되돌리면 주간 값이 나온다 — 편집 화면이 저장한 값을 그대로 보여준다", () => {
+    expect(perWeekFromTotal(48000, 28, "kg")).toBe(12000);
+    expect(perWeekFromTotal(40, 28, "km")).toBe(10);
   });
 });

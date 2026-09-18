@@ -26,6 +26,11 @@ export const FUNNEL_EVENTS = [
   "identity_link_started",
   "identity_link_failed",
   "challenge_viewed",
+  // 0109 — 눌렀지만 끝내지 않은 것. 끝낸 것(생성·참가·목표 저장·첫 운동)은
+  // challenges·challenge_participants·user_goals·workout_sessions가 이미 안다.
+  "challenge_create_started",
+  "challenge_share_started",
+  "challenge_goal_started",
 ] as const;
 
 export type FunnelEvent = (typeof FUNNEL_EVENTS)[number];

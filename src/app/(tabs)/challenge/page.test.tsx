@@ -7,6 +7,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MyChallenge } from "@/lib/challenge";
@@ -25,6 +26,11 @@ const mocks = vi.hoisted(() => ({
   clearPendingChallengeInvite: vi.fn(),
   getCompletedSessions: vi.fn(),
   rpc: vi.fn(),
+}));
+
+// 둘러보기(피드 모집 목록 재사용)가 `useRouter`를 부른다 — 테스트에는 앱 라우터가 없다
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
 }));
 
 vi.mock("@/components/auth-provider", () => ({
@@ -71,17 +77,25 @@ vi.mock("@/lib/workout", () => ({
   getCompletedSessions: mocks.getCompletedSessions,
 }));
 
-vi.mock("@/components/challenge/setup-sheet", () => ({
-  ChallengeSetupSheet: ({
+/*
+  2026-09-18: 옛 `ChallengeSetupSheet`(만들기+목표 한 시트)를 목표 설정 흐름
+  (`GoalSetupFlow`)과 만들기 흐름(`CreateChallengeFlow`)으로 나눴다. 이 파일은
+  **페이지가 무엇을 넘기는지**만 본다 — 시트 안쪽은 각자의 테스트가 본다.
+*/
+vi.mock("@/components/challenge/goal-setup-flow", () => ({
+  GoalSetupFlow: ({
     prevGoals,
-    defaults,
+    justJoined,
+    challengeName,
   }: {
     prevGoals: unknown;
-    defaults: { name: string };
+    justJoined: boolean;
+    challengeName: string;
   }) => (
     <>
       <output data-testid="previous-goals">{JSON.stringify(prevGoals)}</output>
-      <output data-testid="setup-name">{defaults.name}</output>
+      <output data-testid="goal-just-joined">{String(justJoined)}</output>
+      <output data-testid="goal-challenge">{challengeName}</output>
     </>
   ),
 }));
@@ -345,73 +359,139 @@ describe("ChallengePage 신규 사용자 초대 링크", () => {
   });
 });
 
-describe("ChallengePage 챌린지 추가", () => {
-  it("짧은 버튼 이름을 쓰고 새 챌린지 이름을 빈칸으로 연다", async () => {
+/**
+ * 목록 ↔ 상세 (2026-09-18 챌린지 탭 개편).
+ *
+ * 옛 화면은 대표 챌린지 상세를 바로 열고 가로 칩(`ChallengePicker`)으로 바꿨다.
+ * 새 화면은 **목록이 먼저**고 `?open=<id>`가 상세다. 옛 "칩을 누르면 …" 단언은
+ * "목록에서 다른 카드를 열면 …"으로 옮겼다 — 지키는 것(이전 챌린지 정보가 새
+ * 제목 아래 남지 않는다)은 같다.
+ */
+describe("ChallengePage 목록", () => {
+  it("챌린지가 있으면 '내 챌린지'가 먼저 열리고 전부 보인다 — 칩으로 고르지 않는다", async () => {
+    render(<ChallengePage />);
+
+    const setup = await screen.findByRole("region", { name: "준비 중" });
+    expect(within(setup).getAllByRole("article")).toHaveLength(2);
+    expect(
+      screen.getByRole("tab", { name: "내 챌린지" }).getAttribute("aria-selected"),
+    ).toBe("true");
+    // 옛 칩(`새 챌린지준비 중`)이 없다 — 제거는 부정 확인이 증거다
+    expect(screen.queryByRole("button", { name: /새 챌린지준비 중/ })).toBeNull();
+  });
+
+  it("챌린지가 하나도 없으면 '둘러보기'부터 — 만들기도 바로 보인다", async () => {
+    mocks.getMyChallenges.mockResolvedValue([]);
+    render(<ChallengePage />);
+
+    expect(await screen.findByText("지금은 모집 중인 챌린지가 없어요")).toBeTruthy();
+    expect(
+      screen.getByRole("tab", { name: "둘러보기" }).getAttribute("aria-selected"),
+    ).toBe("true");
+    expect(screen.getByRole("button", { name: "＋ 만들기" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "＋ 챌린지 만들기" })).toBeTruthy();
+  });
+
+  it("＋ 만들기는 목록 위에 늘 있고, 이름칸이 빈 만들기 화면을 연다", async () => {
+    render(<ChallengePage />);
+    await screen.findByRole("region", { name: "준비 중" });
+
+    fireEvent.click(screen.getByRole("button", { name: "＋ 만들기" }));
+
+    const name = screen.getByLabelText("챌린지 이름") as HTMLInputElement;
+    expect(name.value).toBe("");
+    // 만들기 화면은 목표를 묻지 않는다
+    expect(screen.queryByTestId("previous-goals")).toBeNull();
+  });
+
+  it("카드를 누르면 상세(?open=)가 열리고, ←로 목록에 돌아온다", async () => {
+    render(<ChallengePage />);
+    fireEvent.click(await screen.findByRole("button", { name: "예전 챌린지 열기" }));
+
+    expect(window.location.search).toBe("?open=challenge-old");
+    expect(await screen.findByText("예전 참가자")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "챌린지 목록으로" }));
+    await screen.findByRole("region", { name: "준비 중" });
+    expect(window.location.search).toBe("");
+  });
+});
+
+describe("ChallengePage 목표 설정 열기", () => {
+  it("?goal=joined면 상세와 함께 목표 시트를 '참여 완료'로 연다 — 참여 → 주 몇 번", async () => {
+    mocks.getChallengeParticipantProfiles.mockResolvedValue([
+      { id: "old-user", nickname: "새 참가자", avatar_url: null },
+    ]);
+    mocks.getChallengeGoals.mockResolvedValue([]);
+    window.history.replaceState({}, "", "/challenge?open=challenge-new&goal=joined");
+
+    render(<ChallengePage />);
+
+    expect((await screen.findByTestId("goal-just-joined")).textContent).toBe("true");
+    expect(screen.getByTestId("goal-challenge").textContent).toBe("새 챌린지");
+    // 한 번 쓰면 주소에서 뗀다 — 새로고침마다 다시 뜨지 않게
+    expect(window.location.search).toBe("?open=challenge-new");
+  });
+
+  it("목표가 이미 있으면 ?goal=이 와도 시트를 억지로 띄우지 않는다", async () => {
+    window.history.replaceState({}, "", "/challenge?open=challenge-old&goal=1");
     render(<ChallengePage />);
 
     await screen.findByText("예전 참가자");
-    fireEvent.click(
-      screen.getByRole("button", { name: "＋ 챌린지 추가하기" }),
-    );
+    await waitFor(() => expect(window.location.search).toBe("?open=challenge-old"));
+    expect(screen.queryByTestId("goal-just-joined")).toBeNull();
+  });
 
-    expect(screen.getByTestId("setup-name").textContent).toBe("");
+  it("초대 링크로 참가하면 그 방을 목표 설정과 함께 연다", async () => {
+    window.history.replaceState({}, "", "/challenge?join=GND-ABCDE");
+    render(<ChallengePage />);
+
+    await waitFor(() =>
+      expect(window.location.search).toContain("open=challenge-invite"),
+    );
   });
 });
 
 describe("ChallengePage 챌린지 전환", () => {
-  it("새 챌린지를 고르면 새 조회가 끝나기 전에 이전 상세 정보를 즉시 비운다", async () => {
+  it("다른 챌린지를 열면 새 조회가 끝나기 전에 이전 상세 정보를 즉시 비운다", async () => {
+    window.history.replaceState({}, "", "/challenge?open=challenge-old");
     render(<ChallengePage />);
 
     await screen.findByText("예전 참가자");
     fireEvent.click(screen.getByRole("button", { name: "수정" }));
     await waitFor(() =>
       expect(screen.getByTestId("previous-goals").textContent).toContain(
-        '"target":12',
+        '"target_value":12',
       ),
     );
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /새 챌린지준비 중/ }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "챌린지 목록으로" }));
+    fireEvent.click(await screen.findByRole("button", { name: "새 챌린지 열기" }));
 
-    expect(screen.getByText(/새 챌린지 ·/)).not.toBeNull();
+    expect(screen.getByRole("heading", { name: "새 챌린지" })).not.toBeNull();
     expect(screen.queryByText("예전 참가자")).toBeNull();
-    expect(screen.getByTestId("previous-goals").textContent).toBe("null");
+    // 목표 시트는 목록으로 나갈 때 닫혔다 — 이전 챌린지의 지난 목표가 남지 않는다
+    expect(screen.queryByTestId("previous-goals")).toBeNull();
   });
 
   it("새 챌린지 조회가 실패해도 이전 상세 정보를 다시 보여주지 않는다", async () => {
     mocks.getChallengeParticipantProfiles.mockImplementation(
       async (challengeId: string) => {
         if (challengeId === oldChallenge.id) {
-          return [
-            {
-              id: "old-user",
-              nickname: "예전 참가자",
-              avatar_url: null,
-            },
-          ];
+          return [{ id: "old-user", nickname: "예전 참가자", avatar_url: null }];
         }
         throw new Error("새 챌린지 조회 실패");
       },
     );
-
+    window.history.replaceState({}, "", "/challenge?open=challenge-old");
     render(<ChallengePage />);
 
     await screen.findByText("예전 참가자");
-    fireEvent.click(screen.getByRole("button", { name: "수정" }));
-    await waitFor(() =>
-      expect(screen.getByTestId("previous-goals").textContent).toContain(
-        '"target":12',
-      ),
-    );
-
-    fireEvent.click(
-      screen.getByRole("button", { name: /새 챌린지준비 중/ }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "챌린지 목록으로" }));
+    fireEvent.click(await screen.findByRole("button", { name: "새 챌린지 열기" }));
     await screen.findByText("챌린지 정보를 불러오지 못했어요");
 
     expect(screen.queryByText("예전 참가자")).toBeNull();
-    expect(screen.getByTestId("previous-goals").textContent).toBe("null");
   });
 
   it("진행 중 챌린지는 점수 조회를 기다리는 동안 상세 정보와 0점을 열지 않는다", async () => {
@@ -422,12 +502,12 @@ describe("ChallengePage 챌린지 전환", () => {
           finishStats = resolve;
         }),
     );
+    window.history.replaceState({}, "", "/challenge?open=challenge-old");
     render(<ChallengePage />);
 
     await screen.findByText("예전 참가자");
-    fireEvent.click(
-      screen.getByRole("button", { name: /새 챌린지진행 중/ }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "챌린지 목록으로" }));
+    fireEvent.click(await screen.findByRole("button", { name: "새 챌린지 열기" }));
     await waitFor(() =>
       expect(mocks.getPeriodStatsByUser).toHaveBeenCalledWith(
         newChallenge.id,
@@ -449,12 +529,12 @@ describe("ChallengePage 챌린지 전환", () => {
 
   it("진행 중 챌린지 점수 조회가 실패해도 새 상세 정보를 완료된 것처럼 열지 않는다", async () => {
     arrangeActiveTransition(() => Promise.reject(new Error("점수 조회 실패")));
+    window.history.replaceState({}, "", "/challenge?open=challenge-old");
     render(<ChallengePage />);
 
     await screen.findByText("예전 참가자");
-    fireEvent.click(
-      screen.getByRole("button", { name: /새 챌린지진행 중/ }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "챌린지 목록으로" }));
+    fireEvent.click(await screen.findByRole("button", { name: "새 챌린지 열기" }));
     await screen.findByText("챌린지 정보를 불러오지 못했어요");
 
     expect(screen.queryByText("예전 참가자")).toBeNull();
@@ -479,6 +559,8 @@ describe("ChallengePage 진행 중 — 오늘 운동하기 · 공정성 안내",
       ...over,
     };
     mocks.getMyChallenges.mockResolvedValue([ch]);
+    // 2026-09-18: 목록이 먼저다. 상세는 `?open=`으로 연다.
+    window.history.replaceState({}, "", `/challenge?open=${ch.id}`);
     mocks.getChallengeParticipantProfiles.mockResolvedValue([
       { id: "old-user", nickname: "예전 참가자", avatar_url: null },
     ]);
@@ -599,6 +681,8 @@ describe("ChallengePage setup — 자동 시작을 말한다", () => {
       ...over,
     };
     mocks.getMyChallenges.mockResolvedValue([ch]);
+    // 2026-09-18: 목록이 먼저다. 상세는 `?open=`으로 연다.
+    window.history.replaceState({}, "", `/challenge?open=${ch.id}`);
     mocks.getChallengeParticipantProfiles.mockResolvedValue([
       { id: "old-user", nickname: "예전 참가자", avatar_url: null },
     ]);

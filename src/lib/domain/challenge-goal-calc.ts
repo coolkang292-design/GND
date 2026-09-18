@@ -72,3 +72,31 @@ export function perWeekFromTotalDays(
   if (periodDays <= 0) return 1;
   return Math.min(7, Math.max(1, Math.round((totalDays * 7) / periodDays)));
 }
+
+/**
+ * 주간 목표 → 기간 총 목표 (2026-09-18 목표 단순화).
+ *
+ * 새 목표 화면은 세부 목표를 **"주 12,000kg"·"주 10km"처럼 주 단위로** 받는다
+ * (시안). 저장은 지금처럼 **기간 총량**이다 — `user_goals.target_value`의 뜻을
+ * 바꾸지 않아야 옛 챌린지와 점수 계산이 그대로 간다.
+ *
+ * ⚠️ 일수형(`*_days`)에는 쓰지 마라. 그쪽은 `totalDaysFromPerWeek`다(반올림·최소 1).
+ */
+export function totalFromPerWeek(
+  perWeek: number,
+  periodDays: number,
+  unit: string,
+): number {
+  if (perWeek <= 0 || periodDays <= 0) return 0;
+  return roundTarget((perWeek * periodDays) / 7, unit);
+}
+
+/** 기간 총 목표 → 주간 목표 (편집 화면 프리필용). 반올림 규칙은 `roundTarget`과 같다 */
+export function perWeekFromTotal(
+  total: number,
+  periodDays: number,
+  unit: string,
+): number {
+  if (total <= 0 || periodDays <= 0) return 0;
+  return roundTarget((total * 7) / periodDays, unit);
+}

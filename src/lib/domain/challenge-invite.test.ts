@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_CHALLENGE_DAYS,
+  DEFAULT_START_OFFSET,
+  DEFAULT_WEEKS,
+  START_OFFSET_CHOICES,
+  challengePeriodFor,
+  startOffsetLabel,
   challengeInviteUrl,
   defaultChallengeName,
   defaultChallengePeriod,
   earliestStartDate,
+  inviteShareMessage,
   inviteSharePayload,
   shareOutcomeMessage,
   startsTooSoon,
@@ -152,6 +158,66 @@ describe("shareOutcomeMessage", () => {
   it("어떤 결과도 실패처럼 읽히지 않는다 — 챌린지는 이미 만들어졌다", () => {
     for (const o of ["shared", "copied", "manual"] as const) {
       expect(shareOutcomeMessage(o)).not.toContain("실패");
+    }
+  });
+});
+
+describe("challengePeriodFor — 만들기 화면의 기간 (2026-09-18)", () => {
+  it("기본: 3일 뒤 시작, 4주(28일)", () => {
+    expect(DEFAULT_START_OFFSET).toBe(3);
+    expect(DEFAULT_WEEKS).toBe(4);
+    expect(challengePeriodFor("2026-09-18", DEFAULT_START_OFFSET, DEFAULT_WEEKS)).toEqual({
+      startDate: "2026-09-21",
+      endDate: "2026-10-18",
+    });
+  });
+
+  it("2주·8주도 양끝 포함으로 센다", () => {
+    expect(challengePeriodFor("2026-09-18", 1, 2)).toEqual({
+      startDate: "2026-09-19",
+      endDate: "2026-10-02",
+    });
+    expect(challengePeriodFor("2026-09-18", 7, 8).endDate).toBe("2026-11-19");
+  });
+
+  it("오늘 시작은 만들 수 없다 — 모집 기간은 최소 1일(내일)", () => {
+    const p = challengePeriodFor("2026-09-18", 0, 4);
+    expect(p.startDate).toBe(earliestStartDate("2026-09-18"));
+    expect(startsTooSoon(p.startDate, "2026-09-18")).toBe(false);
+  });
+
+  it("모집 기간 선택지는 7일을 넘지 않는다 — 피드 모집이 7일에 만료되기 때문", () => {
+    expect(Math.max(...START_OFFSET_CHOICES)).toBeLessThanOrEqual(7);
+    expect(START_OFFSET_CHOICES.map(startOffsetLabel)).toEqual(["내일", "3일 뒤", "1주 뒤"]);
+  });
+
+  it("월말을 넘겨도 날짜가 맞다", () => {
+    expect(challengePeriodFor("2026-09-29", 3, 2)).toEqual({
+      startDate: "2026-10-02",
+      endDate: "2026-10-15",
+    });
+  });
+});
+
+describe("challengeInviteUrl — 링크를 준 사람 (0091)", () => {
+  it("초대자를 `by`로 싣는다 — 신입이 그 사람과 친구가 된다", () => {
+    expect(challengeInviteUrl("https://x.app", "GND-ABCDE", "user-1")).toBe(
+      "https://x.app/challenge?join=GND-ABCDE&by=user-1",
+    );
+  });
+
+  it("초대자가 없으면 예전 주소 그대로", () => {
+    expect(challengeInviteUrl("https://x.app", "GND-ABCDE", null)).toBe(
+      "https://x.app/challenge?join=GND-ABCDE",
+    );
+  });
+});
+
+describe("inviteShareMessage — 이미 있는 방의 링크 공유", () => {
+  it("방을 만들었다고 말하지 않는다 — 며칠 뒤 다시 보낼 때도 참이어야 한다", () => {
+    for (const o of ["shared", "copied", "manual"] as const) {
+      expect(inviteShareMessage(o)).not.toContain("만들었어요");
+      expect(inviteShareMessage(o)).not.toContain("실패");
     }
   });
 });

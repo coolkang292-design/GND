@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Avatar } from "@/components/avatar";
 import { useAuth } from "@/components/auth-provider";
@@ -35,7 +35,13 @@ function joinErrorMessage(e: unknown): string {
  * 실패해도 던지지 않는다(`getDiscoverableChallenges`가 빈 배열을 준다) —
  * 모집은 부가 정보라 피드 화면 전체를 막으면 손해가 더 크다.
  */
-export function useDiscoverableChallenges() {
+export function useDiscoverableChallenges(
+  /**
+   * 바뀌면 다시 읽는다 (2026-09-18). 챌린지 탭의 둘러보기가 방을 만든 **직후**
+   * 새 모집 카드를 보여줘야 해서 생겼다. 피드는 넘기지 않는다(한 번만 읽는다).
+   */
+  refreshKey = 0,
+) {
   const { userId, loading, configured } = useAuth();
   const [items, setItems] = useState<DiscoverableChallenge[]>([]);
 
@@ -49,7 +55,7 @@ export function useDiscoverableChallenges() {
     return () => {
       cancelled = true;
     };
-  }, [configured, loading, userId]);
+  }, [configured, loading, userId, refreshKey]);
 
   return { items, setItems };
 }
@@ -226,11 +232,28 @@ function RecruitDetailSheet({
 export function DiscoverableChallengeList({
   items,
   setItems,
+  variant = "feed",
+  onOpen,
+  emptyAction,
 }: {
   items: DiscoverableChallenge[];
   setItems: (
     update: (prev: DiscoverableChallenge[]) => DiscoverableChallenge[],
   ) => void;
+  /**
+   * `feed` — 피드의 큰 카드, 카드에서 바로 `참여하기`.
+   * `compact` — 챌린지 탭 둘러보기(2026-09-18). 작은 썸네일 카드에 `자세히 보기`
+   *   하나만 두고, 참여는 상세에서 한다(한 화면에 대표 버튼 하나).
+   *   **데이터·상세 시트·참가 규칙은 같다** — 같은 모집을 두 번 짜지 않는다.
+   */
+  variant?: "feed" | "compact";
+  /**
+   * 참가(또는 이미 참가 중인 방 열기) 뒤 어디로 갈지. 없으면 `/challenge?open=`으로
+   * 보낸다(피드). 챌린지 탭은 같은 화면 안에서 상세를 연다.
+   */
+  onOpen?: (challengeId: string, joined: "now" | "already") => void;
+  /** 모집이 0개일 때 안내 아래에 둘 행동 (챌린지 탭의 `+ 챌린지 만들기`) */
+  emptyAction?: ReactNode;
 }) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -238,18 +261,32 @@ export function DiscoverableChallengeList({
   const [detail, setDetail] = useState<DiscoverableChallenge | null>(null);
   const [moderating, setModerating] = useState<DiscoverableChallenge | null>(null);
 
+  function open(challengeId: string, joined: "now" | "already") {
+    if (onOpen) {
+      onOpen(challengeId, joined);
+      return;
+    }
+    // 새로 참가했으면 목표 설정을 바로 연다(`goal=joined`, 2026-09-18) —
+    // "참여 → 주 몇 번 → 운동"이 한 흐름이어야 한다.
+    router.push(
+      joined === "now"
+        ? `/challenge?open=${challengeId}&goal=joined`
+        : `/challenge?open=${challengeId}`,
+    );
+  }
+
   async function join(challenge: DiscoverableChallenge) {
     if (busyId) return;
     if (challenge.alreadyJoined) {
-      router.push(`/challenge?open=${challenge.id}`);
+      open(challenge.id, "already");
       return;
     }
     setBusyId(challenge.id);
     setError(null);
     try {
       await joinDiscoverableChallenge(challenge.id);
-      // 참가 뒤에는 기존 챌린지 화면으로 — 목표 설정·시작 흐름이 거기 있다
-      router.push(`/challenge?open=${challenge.id}`);
+      setDetail(null);
+      open(challenge.id, "now");
     } catch (e) {
       setError(joinErrorMessage(e));
       setDetail(null);
@@ -264,10 +301,107 @@ export function DiscoverableChallengeList({
     return (
       <section className="rounded-card border border-line bg-surface p-5 text-center shadow-card">
         <p className="text-sm font-bold">지금은 모집 중인 챌린지가 없어요</p>
+        {/* 2026-09-18: 모집을 켜는 곳이 둘이 됐다 — 만들 때 `누구나 참여`, 만든 뒤
+            챌린지 관리(⋯)의 `피드에서 참가자 구하기`. */}
         <p className="mt-1 text-xs text-muted">
-          챌린지 탭에서 방을 만들고 <b className="text-text">챌린지 초대</b> 안의{" "}
-          <b className="text-text">피드에서 참가자 구하기</b>를 켜면 여기 올라와요.
+          챌린지를 만들 때 <b className="text-text">누구나 참여</b>를 고르거나, 챌린지
+          관리(⋯)에서 <b className="text-text">피드에서 참가자 구하기</b>를 켜면 여기
+          올라와요.
         </p>
+        {emptyAction && <div className="mt-3">{emptyAction}</div>}
+      </section>
+    );
+  }
+
+  const sheets = (
+    <>
+      {detail && (
+        <RecruitDetailSheet
+          challenge={detail}
+          busy={busyId === detail.id}
+          onJoin={() => void join(detail)}
+          onClose={() => setDetail(null)}
+          onReport={() => setModerating(detail)}
+        />
+      )}
+
+      {moderating && (
+        <BlockSheet
+          targetId={moderating.hostId}
+          targetNickname={moderating.hostNickname}
+          onClose={() => setModerating(null)}
+          onBlocked={() => {
+            // ⚠️ 그 모집글 하나가 아니라 **그 방장의 글 전부**를 뺀다. 한 방장이
+            //    여러 방을 갖고 있을 수 있고(옛 글은 만료 전까지 남는다), 하나만
+            //    빼면 차단했는데 같은 사람 카드가 그대로 남아 있다.
+            setItems((prev) => prev.filter((c) => c.hostId !== moderating.hostId));
+            setDetail(null);
+            setModerating(null);
+          }}
+        />
+      )}
+    </>
+  );
+
+  if (variant === "compact") {
+    return (
+      <section className="flex flex-col gap-2.5">
+        {items.map((c) => (
+          <article
+            key={c.id}
+            className="flex gap-3 rounded-card border border-line bg-surface p-2.5 shadow-card"
+          >
+            {c.recruitImageUrl ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={c.recruitImageUrl}
+                alt=""
+                loading="lazy"
+                className="h-[108px] w-[92px] flex-none rounded-card-sm object-cover"
+              />
+            ) : (
+              <div
+                aria-hidden
+                className="grid h-[108px] w-[92px] flex-none place-items-center rounded-card-sm bg-gradient-to-br from-accent/35 to-surface-2 text-3xl"
+              >
+                🏁
+              </div>
+            )}
+            <div className="flex min-w-0 flex-1 flex-col">
+              <p className="truncate text-[15px] leading-snug font-extrabold">{c.name}</p>
+              {c.recruitNote && (
+                <p className="mt-0.5 line-clamp-1 text-[12px] break-words text-muted">
+                  {c.recruitNote}
+                </p>
+              )}
+              <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11.5px] text-muted">
+                <Avatar
+                  src={c.hostAvatarUrl}
+                  className="flex h-5 w-5 flex-none items-center justify-center overflow-hidden rounded-full bg-surface-2 text-[10px]"
+                />
+                <span className="truncate font-bold">{c.hostNickname}</span>
+                <span className="flex-none">
+                  · {shortDate(c.startDate)} ~ {shortDate(c.endDate)}
+                </span>
+              </div>
+              <p className="mt-0.5 text-[11.5px] font-bold text-accent">
+                {c.participantCount}명 참여 중
+                {c.photoRequired && <span className="ml-1 text-muted">· 📷 인증</span>}
+              </p>
+              <button
+                type="button"
+                onClick={() => setDetail(c)}
+                aria-label={`${c.name} 자세히 보기`}
+                className="mt-auto h-9 rounded-card-sm border border-accent/50 bg-accent/10 text-[12.5px] font-extrabold text-accent"
+              >
+                {c.alreadyJoined ? "참가 중 · 자세히 보기" : "자세히 보기"}
+              </button>
+            </div>
+          </article>
+        ))}
+
+        {error && <p className="text-[12px] font-bold text-accent">{error}</p>}
+        {sheets}
       </section>
     );
   }
@@ -338,32 +472,7 @@ export function DiscoverableChallengeList({
       ))}
 
       {error && <p className="text-[12px] font-bold text-accent">{error}</p>}
-
-      {detail && (
-        <RecruitDetailSheet
-          challenge={detail}
-          busy={busyId === detail.id}
-          onJoin={() => void join(detail)}
-          onClose={() => setDetail(null)}
-          onReport={() => setModerating(detail)}
-        />
-      )}
-
-      {moderating && (
-        <BlockSheet
-          targetId={moderating.hostId}
-          targetNickname={moderating.hostNickname}
-          onClose={() => setModerating(null)}
-          onBlocked={() => {
-            // ⚠️ 그 모집글 하나가 아니라 **그 방장의 글 전부**를 뺀다. 한 방장이
-            //    여러 방을 갖고 있을 수 있고(옛 글은 만료 전까지 남는다), 하나만
-            //    빼면 차단했는데 같은 사람 카드가 그대로 남아 있다.
-            setItems((prev) => prev.filter((c) => c.hostId !== moderating.hostId));
-            setDetail(null);
-            setModerating(null);
-          }}
-        />
-      )}
+      {sheets}
     </section>
   );
 }

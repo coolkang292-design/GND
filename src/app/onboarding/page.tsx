@@ -290,7 +290,9 @@ export default function OnboardingPage() {
         clearPendingChallengeInvite();
         // 링크를 만든 **그 챌린지**로 데려간다. 여러 개를 만들 수 있게 된 뒤로
         // `/challenge`만 열면 대표 챌린지가 잡혀 엉뚱한 방이 보일 수 있다.
-        router.replace(`/challenge?open=${challengeId}`);
+        // `goal=joined`(2026-09-18): 방금 참가했으니 목표 설정을 바로 연다 —
+        // "참여 → 주 몇 번 → 운동". 목표가 이미 있으면 챌린지 화면이 무시한다.
+        router.replace(`/challenge?open=${challengeId}&goal=joined`);
         return;
       }
 

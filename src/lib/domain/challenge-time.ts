@@ -108,10 +108,12 @@ export function challengeStartHint(input: {
       ? `${formatMonthDay(startDateKey)}에 자동으로 시작돼요 · 그때까지 목표를 세우지 않으면 이번 챌린지에선 빠져요`
       : "시작일이 됐어요 · 곧 자동으로 시작돼요";
 
+  // 2026-09-18: 화면에서 "동의"라는 내부 용어를 뺐다(목표 단순화). 서버의 상호 동의
+  // (`challenge_goal_approvals`, 0025)는 그대로고, 화면은 "목표 확인"이라 부른다.
   const buttonLabel = !allSet
-    ? "지금 바로 시작하기 (전원 목표 설정 필요)"
+    ? "지금 바로 시작하기 (모두 목표를 정해야 해요)"
     : !allApproved
-      ? `지금 바로 시작하기 (동의 ${input.approvedCount}/${input.memberCount})`
+      ? `지금 바로 시작하기 (목표 확인 ${input.approvedCount}/${input.memberCount})`
       : "지금 바로 시작하기";
 
   return { notice, buttonLabel, canStartNow: allSet && allApproved };

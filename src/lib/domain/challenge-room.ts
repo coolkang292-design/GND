@@ -59,6 +59,7 @@ const FLOOR_STEP: Record<GoalType, number> = {
   cardio_time: 0.1,
   bodyweight_time: 0.1,
   volume: 0, // 하한 없음
+  workout_days: 1, // 0108
 };
 
 /**

@@ -42,9 +42,18 @@ function toKey(utcMs: number): string {
  * ⚠️ 코드를 인코딩한다. 지금 형식은 `GND-XXXXX`라 인코딩이 필요 없지만, 서버가
  * 형식을 바꾸는 날 링크가 조용히 깨지는 쪽이 훨씬 비싸다.
  */
-export function challengeInviteUrl(origin: string, code: string): string {
+export function challengeInviteUrl(
+  origin: string,
+  code: string,
+  /**
+   * 링크를 준 사람 (0091). 참가자도 링크를 뿌릴 수 있어서 **신입이 누구와 친구가
+   * 되는지**가 여기서 정해진다. 서버가 "그 방의 참가자인가"를 다시 확인한다.
+   */
+  invitedBy?: string | null,
+): string {
   const base = origin.replace(/\/+$/, "");
-  return `${base}/challenge?join=${encodeURIComponent(code)}`;
+  const by = invitedBy ? `&by=${encodeURIComponent(invitedBy)}` : "";
+  return `${base}/challenge?join=${encodeURIComponent(code)}${by}`;
 }
 
 /**
@@ -156,5 +165,74 @@ export function shareOutcomeMessage(outcome: ShareOutcome): string {
       return "초대 링크를 복사했어요 — 카톡에 붙여넣기 하세요 🔗";
     case "manual":
       return "챌린지를 만들었어요 — 아래 초대 링크를 길게 눌러 복사하세요";
+  }
+}
+
+/* ── 만들기 화면의 기간 선택 (2026-09-18 챌린지 탭 개편) ──────────────────── */
+
+/** 기간 칩 — 시안 그대로. 기본 4주(`DEFAULT_CHALLENGE_DAYS`와 같다) */
+export const WEEK_CHOICES = [2, 4, 8] as const;
+export const DEFAULT_WEEKS = DEFAULT_CHALLENGE_DAYS / 7;
+
+/**
+ * 모집 기간 = 시작일까지 남은 날 (사용자 결정 D4, 2026-09-18).
+ *
+ * 모집 기간 안에 목표를 다 세운 사람은 "M/D부터 시작해요" 알림을 받고
+ * (`notify_challenge_goal_ready`, 0110), 시작일에 알림과 함께 자동으로 시작한다
+ * (`autostart_due_challenges`). 목표가 없는 사람은 그때 빠진다.
+ *
+ * ⚠️ **최댓값 7일은 공개 모집의 만료와 맞춘 것이다.** 피드 모집은
+ *    `recruit_opened_at + 7일`에 목록에서 사라진다(`list_discoverable_challenges`,
+ *    0089). 모집 기간이 그보다 길면 시작도 안 했는데 모집 글이 먼저 사라진다.
+ *
+ * ⚠️ **최솟값 1일(내일)은 `earliestStartDate`의 규칙이다.** 오늘 시작하는 방은
+ *    탭을 한 번 더 여는 것만으로 autostart가 시작시켜 초대가 닫힌다.
+ *
+ * 기본값 3일 — 옛 기본값(내일)은 모집이 하루뿐이라 공개 모집이 목록에 뜨자마자
+ * 시작해 버렸다(운영 2026-09-18 실측: 모집 중인 챌린지 0개).
+ */
+export const START_OFFSET_CHOICES = [1, 3, 7] as const;
+export const DEFAULT_START_OFFSET = 3;
+
+export function startOffsetLabel(days: number): string {
+  if (days === 1) return "내일";
+  if (days === 7) return "1주 뒤";
+  return `${days}일 뒤`;
+}
+
+/**
+ * 만들기 화면의 기간 — 시작일은 `오늘 + 모집 기간`, 종료일은 `시작일 + 주수×7 − 1`.
+ *
+ * 모집 기간은 1 미만이면 1로 올린다(`earliestStartDate`와 같은 하한).
+ */
+export function challengePeriodFor(
+  todayKey: string,
+  startOffsetDays: number,
+  weeks: number,
+): { startDate: string; endDate: string } {
+  const offset = Math.max(1, Math.floor(startOffsetDays));
+  const startDate = toKey(toUtc(todayKey) + offset * 86_400_000);
+  const days = Math.max(1, Math.round(weeks * 7));
+  return {
+    startDate,
+    endDate: toKey(toUtc(startDate) + (days - 1) * 86_400_000),
+  };
+}
+
+/**
+ * 상세 화면·만들기 완료 화면에서 **이미 있는 방**의 링크를 보냈을 때의 안내.
+ *
+ * `shareOutcomeMessage`는 "방을 방금 만들었다"를 전제로 말한다. 며칠 뒤 상세에서
+ * 다시 공유했는데 "챌린지를 만들었어요"가 뜨면 틀린 말이다.
+ * 마찬가지로 어느 것도 실패로 쓰지 않는다.
+ */
+export function inviteShareMessage(outcome: ShareOutcome): string {
+  switch (outcome) {
+    case "shared":
+      return "초대 링크를 보냈어요 — 친구가 들어오면 알려드릴게요 🙌";
+    case "copied":
+      return "초대 링크를 복사했어요 — 카톡에 붙여넣기 하세요 🔗";
+    case "manual":
+      return "아래 초대 링크를 길게 눌러 복사하세요";
   }
 }

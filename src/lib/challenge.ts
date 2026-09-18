@@ -16,9 +16,19 @@ import type { Challenge, Profile, UserGoal } from "@/lib/types";
 
 export type GoalCategory = "weight" | "cardio" | "bodyweight";
 
+/**
+ * 목표가 덮는 분류. `"any"`는 `workout_days`(0108) 하나뿐이다 — 종목과 무관하게
+ * 운동한 날을 세므로 어느 분류의 운동이든 실적이 된다.
+ *
+ * ⚠️ `GoalCategory`에 `"any"`를 섞지 마라. 그 타입은 운동 종목(`exercise_type`)과
+ *    같은 세 값이라 `countsTowardChallenge`가 그대로 맞춰 본다. 섞으면 종목 쪽에
+ *    존재하지 않는 값이 생긴다. `"any"`는 `goalCategories`가 세 분류로 펼친다.
+ */
+export type GoalCoverage = GoalCategory | "any";
+
 export const GOAL_TYPE_META: Record<
   GoalType,
-  { label: string; unit: string; defaultTarget: number; category: GoalCategory }
+  { label: string; unit: string; defaultTarget: number; category: GoalCoverage }
 > = {
   weight_reps: { label: "웨이트 횟수", unit: "회", defaultTarget: 300, category: "weight" },
   weight_days: { label: "웨이트 운동일", unit: "일", defaultTarget: 12, category: "weight" },
@@ -28,8 +38,16 @@ export const GOAL_TYPE_META: Record<
   bodyweight_time: { label: "맨몸 시간", unit: "분", defaultTarget: 100, category: "bodyweight" },
   bodyweight_days: { label: "맨몸 운동일", unit: "일", defaultTarget: 12, category: "bodyweight" },
   tabata_count: { label: "인터벌 운동 횟수", unit: "회", defaultTarget: 12, category: "bodyweight" },
-  volume: { label: "웨이트 총볼륨", unit: "kg", defaultTarget: 5000, category: "weight" }, // 레거시
+  // 라벨은 세부 목표 흐름(`challenge-simple-goal.ts`)의 "총 운동량"과 **같아야 한다**.
+  // 2026-09-18 화면 확인에서 설정은 "총 운동량", 상세는 "총볼륨"으로 갈려 있었다 —
+  // 같은 목표를 두 이름으로 부르면 사용자가 다른 목표로 읽는다. 옛 이름이 박힌
+  // 데이터는 없다(운영 `volume` 목표 0건, 시안 문구가 "총 운동량"이다).
+  volume: { label: "웨이트 총 운동량", unit: "kg", defaultTarget: 5000, category: "weight" },
+  // 0108 — "주 N회" 기본 목표. 목표값은 `plannedDaysForPeriod(주 N회, 기간)`이다.
+  workout_days: { label: "운동한 날", unit: "일", defaultTarget: 12, category: "any" },
 };
+
+const ALL_CATEGORIES: readonly GoalCategory[] = ["weight", "cardio", "bodyweight"];
 
 export type GoalDraft = {
   type: GoalType;
@@ -56,7 +74,15 @@ export function goalLabel(type: GoalType, qualifier?: number | null): string {
 export function goalCategories(
   goals: readonly { goal_type: GoalType }[],
 ): Set<GoalCategory> {
-  return new Set(goals.map((g) => GOAL_TYPE_META[g.goal_type].category));
+  const out = new Set<GoalCategory>();
+  for (const g of goals) {
+    const c = GOAL_TYPE_META[g.goal_type].category;
+    // `workout_days`는 어떤 운동이든 센다 — 세부 목표와 섞여 있어도 좁히지 않는다.
+    // 좁히면 "주 3회"를 걸어 둔 사람의 러닝에 "챌린지 미반영" 경고가 뜬다.
+    if (c === "any") return new Set(ALL_CATEGORIES);
+    out.add(c);
+  }
+  return out;
 }
 
 /**
@@ -314,6 +340,52 @@ export async function saveMyGoals(input: {
     })),
   );
   if (error) throw error;
+
+  // 0110 — 모집 기간에 목표를 다 세웠으면 "M/D부터 시작해요" 알림 (사용자 결정 D4).
+  // 저장은 이미 끝났다. 알림이 실패했다고 저장을 실패로 보고하면 사용자는
+  // 목표를 다시 세우려 든다 — 그래서 여기서 삼킨다. 중복은 서버가 막는다.
+  await notifyGoalReady(input.challengeId);
+}
+
+/**
+ * "M/D부터 챌린지가 시작돼요" 알림 (0110, 사용자 결정 D4).
+ *
+ * 서버가 참가(joined)·모집 기간(setup)·목표 존재를 다시 확인하고, 챌린지당
+ * **한 번만** 보낸다(`dedupe_key`). 목표를 고쳐 다시 저장해도 또 가지 않는다.
+ * 시작일이 되면 `autostart_due_challenges`가 "챌린지가 시작됐어요"를 따로 보낸다.
+ *
+ * ⚠️ 던지지 않는다 — 알림은 부가 효과다. 실패하면 `false`.
+ */
+export async function notifyGoalReady(challengeId: string): Promise<boolean> {
+  try {
+    const supabase = getSupabaseBrowserClient();
+    const { data, error } = await supabase.rpc("notify_challenge_goal_ready", {
+      p_challenge_id: challengeId,
+    });
+    if (error) return false;
+    return Boolean((data as { sent?: boolean } | null)?.sent);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 내가 목표를 세운 챌린지 id 목록 — "내 챌린지" 카드의 대표 버튼
+ * (`내 목표 정하기` / `시작 준비 보기`)을 가르는 재료다.
+ *
+ * ⚠️ 챌린지마다 `getChallengeGoals`를 부르지 마라. 목록 한 번에 한 줄이면 된다.
+ */
+export async function getMyGoalChallengeIds(
+  userId: string,
+  client?: SupabaseClient,
+): Promise<Set<string>> {
+  const supabase = client ?? getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("user_goals")
+    .select("challenge_id")
+    .eq("user_id", userId);
+  if (error) throw error;
+  return new Set((data ?? []).map((r) => r.challenge_id as string));
 }
 
 /**
@@ -1062,6 +1134,10 @@ export function actualForGoal(
       return stats.tabataCount;
     case "volume":
       return stats.volumeKg;
+    case "workout_days":
+      // ⚠️ 새로 세지 마라. 참여율 분자와 **같은 값**이다 — 종목 무관, 같은 날
+      //    여러 세션은 1일, 사진 인증 필터는 서버가 이미 걸었다(0108).
+      return stats.workoutDays;
   }
 }
 

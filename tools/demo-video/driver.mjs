@@ -9,6 +9,8 @@
  *   {goto:"/path"} {tap:"css/playwright selector"} {tapText:"문구", exact?:true}
  *   {tapRole:"button", name:"문구"} {fill:selector, value} {type:"문자열"}
  *   {press:"Enter"} {scroll:px} {wait:ms} {shot:"이름"} {snap:true} {text:true}
+ *   {back:true}  // 기기 뒤로가기(브라우저 히스토리)
+ *   {viewport:{width,height}} {overflow:true}  // 폭 바꾸기 · 가로 넘침 검사
  *   {file:selector, path:"파일"} {url:true}
  *
  * ⚠️ 운영 DB에 붙는다. 픽스처 계정 A·B 전용이다.
@@ -104,6 +106,45 @@ async function run(key, steps) {
     if (st.press) await page.keyboard.press(st.press);
     if (st.scroll) await page.mouse.wheel(0, st.scroll);
     if (st.file) await page.locator(st.file).first().setInputFiles(st.path);
+    if (st.viewport) {
+      // 폭 확인용 — 저장소 규칙이 375px·390px을 요구한다(CLAUDE.md §화면 확인)
+      await page.setViewportSize({
+        width: st.viewport.width ?? 375,
+        height: st.viewport.height ?? 720,
+      });
+      await sleep(600);
+      out.push(`📐 ${st.viewport.width ?? 375}×${st.viewport.height ?? 720}`);
+    }
+    if (st.overflow) {
+      // 가로 스크롤이 생겼는지와, 생겼다면 **무엇이 넘쳤는지**까지 본다.
+      // "가로 스크롤 없음"만 눈으로 보면 한 칸 넘친 카드를 놓친다.
+      const o = await page.evaluate(() => {
+        const de = document.documentElement;
+        const over = [];
+        for (const el of document.querySelectorAll("body *")) {
+          const r = el.getBoundingClientRect();
+          if (r.width > 0 && r.right > de.clientWidth + 1) {
+            over.push(`${el.tagName.toLowerCase()}.${(el.className || "").toString().slice(0, 50)} right=${Math.round(r.right)}`);
+          }
+        }
+        return {
+          scrollWidth: de.scrollWidth,
+          clientWidth: de.clientWidth,
+          over: over.slice(0, 8),
+        };
+      });
+      out.push(
+        `↔ scrollWidth=${o.scrollWidth} clientWidth=${o.clientWidth} ` +
+          (o.scrollWidth > o.clientWidth
+            ? `⚠️ 가로 스크롤 — ${o.over.join(" | ")}`
+            : "가로 스크롤 없음"),
+      );
+    }
+    if (st.back) {
+      // 기기 뒤로가기 — 앱의 ← 버튼이 아니라 브라우저 히스토리를 직접 되돌린다.
+      // `?open=` 상세가 popstate로 목록으로 돌아오는지 보려면 이것이어야 한다.
+      await page.goBack({ waitUntil: "domcontentloaded" }).catch(() => {});
+    }
     if (st.wait) await sleep(st.wait);
     if (st.shot) {
       const file = join(dir, `${key}-${String(++s.n).padStart(3, "0")}-${st.shot}.png`);

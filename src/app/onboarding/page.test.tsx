@@ -356,7 +356,8 @@ describe("OnboardingPage 챌린지 초대 모드", () => {
     // ⚠️ 링크를 만든 **그 챌린지**로 보낸다. `/challenge`만 열면 대표 챌린지가
     //    잡혀 초대받은 사람이 엉뚱한 방을 본다(챌린지를 여러 개 만들 수 있다).
     //    ⚠️ `?join=`으로 넘기지 마라 — 챌린지 화면이 참가를 한 번 더 시도한다.
-    expect(mocks.replace).toHaveBeenCalledWith("/challenge?open=challenge-1");
+    //    `&goal=joined`(2026-09-18) — 참가 직후 목표 설정을 바로 연다.
+    expect(mocks.replace).toHaveBeenCalledWith("/challenge?open=challenge-1&goal=joined");
     expect(
       mocks.upsertMyProfile.mock.invocationCallOrder[0],
     ).toBeLessThan(
@@ -377,7 +378,7 @@ describe("OnboardingPage 챌린지 초대 모드", () => {
         "GND-ABCDE",
       ),
     );
-    expect(mocks.replace).toHaveBeenCalledWith("/challenge?open=challenge-1");
+    expect(mocks.replace).toHaveBeenCalledWith("/challenge?open=challenge-1&goal=joined");
     // 친구를 안 맺었으므로 방장 이름을 말하면 거짓말이 된다.
     const notice = mocks.saveOnboardingNotice.mock.calls[0]?.[0] as string;
     expect(notice).toContain("테스트 챌린지");
