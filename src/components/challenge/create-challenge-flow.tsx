@@ -1,16 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   BottomSheet,
   PrimaryButton,
   SheetHeader,
 } from "@/components/challenge/bottom-sheet";
 import { UiIcon } from "@/components/ui-icon";
+import { uploadRecruitPhoto } from "@/lib/avatar";
 import { recordFunnelEvent } from "@/lib/analytics-events";
 import {
   createChallengeRoom,
   setChallengeDiscoverable,
+  setChallengeRecruitImage,
 } from "@/lib/challenge";
 import { errorMessage } from "@/lib/challenge-errors";
 import {
@@ -95,12 +97,30 @@ export function CreateChallengeFlow({
   const [showStart, setShowStart] = useState(false);
   const [customDates, setCustomDates] = useState<{ start: string; end: string } | null>(null);
   const [audience, setAudience] = useState<Audience>("public");
+  /*
+    챌린지 사진 (2026-09-18 사용자 지시 — "챌린지 만들 때도 사진을 추가하게 해야지").
+
+    시안은 목록 카드·상세가 **전부 사진**인데, 그 사진을 넣을 자리가 `⋯ 관리`
+    안에만 있었다. 만들고 나서 따로 들어가야 하니 실제로는 아무도 안 넣는다.
+
+    ⚠️ **고르는 즉시 올린다.** 방이 아직 없어서 DB에는 못 적지만, 업로드는
+       방과 무관하다(`avatars` 버킷 · 경로 첫 칸이 uid). 올라간 실제 URL만
+       미리보기로 그린다 — `URL.createObjectURL`로 앞당기면 업로드가 실패했는데
+       성공한 것처럼 보인다(`invite-sheet.tsx`와 같은 규약).
+    ⚠️ 방을 만든 **뒤에** `setChallengeRecruitImage`로 적는다. 그 호출이 실패해도
+       방은 이미 만들어졌다 — 되돌리지 말고 이유만 말한다(모집 켜기와 같은 규칙).
+  */
+  const [image, setImage] = useState<string | null>(null);
+  const [imageBusy, setImageBusy] = useState(false);
+  const imageFileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [created, setCreated] = useState<{
     challenge: Challenge;
     audience: Audience;
     recruit: RecruitState;
+    /** 사진을 골랐는데 못 적었다 — 완료 화면에서 말한다 */
+    imageFailed: boolean;
   } | null>(null);
   const [share, setShare] = useState<ShareResult | null>(null);
   const [shareBusy, setShareBusy] = useState(false);
@@ -115,6 +135,21 @@ export function CreateChallengeFlow({
     ? { startDate: customDates.start, endDate: customDates.end }
     : challengePeriodFor(todayKey, startOffset, weeks);
   const periodDays = inclusiveDays(period.startDate, period.endDate);
+
+  async function pickImage(file: File | undefined) {
+    if (!file || imageBusy) return;
+    setImageBusy(true);
+    setNotice(null);
+    try {
+      setImage(await uploadRecruitPhoto(userId, file));
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "사진을 올리지 못했어요");
+    } finally {
+      setImageBusy(false);
+      // 같은 파일을 다시 고를 수 있게 비운다 — 안 비우면 onChange가 안 뜬다
+      if (imageFileRef.current) imageFileRef.current.value = "";
+    }
+  }
 
   async function create() {
     if (busy) return;
@@ -147,6 +182,23 @@ export function CreateChallengeFlow({
         startDate: period.startDate,
         endDate: period.endDate,
       });
+      /*
+        방이 생긴 뒤에야 적을 수 있다. 실패해도 **방은 되돌리지 않는다** —
+        공개 모집 켜기와 같은 규칙이다(§3).
+
+        ⚠️ 여기서 `setNotice`를 쓰면 안 된다. 곧바로 완료 화면으로 넘어가고
+           그 화면은 `notice`를 그리지 않아서 **아무 말도 안 한 것이 된다**
+           (2026-09-18 테스트에서 잡았다). 완료 화면이 읽는 상태로 넘긴다.
+      */
+      let imageFailed = false;
+      if (image) {
+        try {
+          await setChallengeRecruitImage(ch.id, image);
+          ch.recruit_image_url = image;
+        } catch {
+          imageFailed = true;
+        }
+      }
       let recruit: RecruitState = "none";
       if (audience === "public") {
         try {
@@ -163,6 +215,7 @@ export function CreateChallengeFlow({
         challenge: { ...ch, discoverable: recruit === "open" },
         audience,
         recruit,
+        imageFailed,
       });
       onCreated(ch);
     } catch (e) {
@@ -247,6 +300,11 @@ export function CreateChallengeFlow({
             상세 화면의 관리(⋯)에서 바꿀 수 있어요.
           </p>
         )}
+        {created.imageFailed && (
+          <p role="alert" className="mt-4 rounded-card-sm border border-warn/40 bg-surface-2 px-3 py-2 text-[12.5px] font-bold text-warn">
+            사진은 저장하지 못했어요. 상세 화면의 관리(⋯)에서 다시 넣을 수 있어요.
+          </p>
+        )}
         {created.recruit === "failed" && (
           <p role="alert" className="mt-4 rounded-card-sm border border-warn/40 bg-surface-2 px-3 py-2 text-[12.5px] font-bold text-warn">
             공개 모집을 켜지 못했어요. 상세 화면의 관리(⋯)에서 다시 켤 수 있어요.
@@ -297,7 +355,57 @@ export function CreateChallengeFlow({
         </>
       }
     >
-      <label htmlFor="challenge-name" className="text-[13px] font-bold text-muted">
+      {/*
+        챌린지 사진 — 시안의 목록 카드·상세가 전부 사진이라 **여기서** 받는다.
+        비율은 둘러보기 카드(세로로 긴 썸네일)가 아니라 **상세 히어로(16:9)**에 맞춘다.
+        카드는 이 사진을 잘라 쓰고, 상세는 통째로 쓴다.
+      */}
+      <button
+        type="button"
+        onClick={() => imageFileRef.current?.click()}
+        disabled={imageBusy}
+        className="relative block aspect-[16/9] w-full overflow-hidden rounded-card border border-line bg-surface-2 disabled:opacity-60"
+      >
+        {image ? (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img src={image} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <span className="flex h-full w-full flex-col items-center justify-center gap-1 text-muted">
+            <UiIcon name="camera" size={26} />
+            <span className="text-[12.5px] font-bold">챌린지 사진 넣기</span>
+            <span className="text-[11px] text-faint">목록과 상세에 이 사진이 보여요 · 선택</span>
+          </span>
+        )}
+        {image && (
+          <span className="absolute right-2 bottom-2 rounded-full bg-black/65 px-2.5 py-1 text-[11px] font-bold text-white">
+            {imageBusy ? "올리는 중…" : "사진 바꾸기"}
+          </span>
+        )}
+        {imageBusy && !image && (
+          <span className="absolute inset-0 grid place-items-center bg-black/50 text-[12.5px] font-bold text-white">
+            올리는 중…
+          </span>
+        )}
+      </button>
+      {image && (
+        <button
+          type="button"
+          onClick={() => setImage(null)}
+          disabled={imageBusy}
+          className="mt-1 text-[11.5px] font-bold text-faint underline disabled:opacity-50"
+        >
+          사진 빼기
+        </button>
+      )}
+      <input
+        ref={imageFileRef}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(e) => void pickImage(e.target.files?.[0])}
+      />
+
+      <label htmlFor="challenge-name" className="mt-4 block text-[13px] font-bold text-muted">
         챌린지 이름
       </label>
       <input

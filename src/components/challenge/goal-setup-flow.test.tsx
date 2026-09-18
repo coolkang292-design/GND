@@ -111,9 +111,25 @@ describe("기본 목표 — 주 N회만으로 참여", () => {
     expect(screen.getByText(/9월 21일에 자동으로 시작해요/)).toBeTruthy();
   });
 
-  it("방금 참가했으면 '참여 완료!'로 연다 (시안 5번)", () => {
+  it("방금 참가했으면 '참여 완료!'로 연다 (시안 ⑤)", () => {
     renderFlow({ justJoined: true });
-    expect(screen.getByText("참여 완료! 🎉")).toBeTruthy();
+    expect(screen.getByText("참여 완료!")).toBeTruthy();
+    expect(screen.getByText(/좋은 선택이에요/)).toBeTruthy();
+  });
+
+  it("색종이는 낭독하지 않는다 — 읽을 것은 '참여 완료!' 한 줄이다", () => {
+    renderFlow({ justJoined: true });
+    const banner = screen.getByText("참여 완료!").closest("div");
+    const confetti = banner?.querySelector('[aria-hidden="true"].pointer-events-none');
+    expect(confetti).toBeTruthy();
+    // ⚠️ 조각 위치는 고정이다. Math.random으로 뿌리면 리렌더마다 튀고
+    //    서버·클라이언트 마크업이 갈려 hydration 경고가 난다.
+    expect(confetti?.children.length).toBe(8);
+  });
+
+  it("참가하지 않았으면 축하가 없다", () => {
+    renderFlow();
+    expect(screen.queryByText("참여 완료!")).toBeNull();
   });
 
   it("목표 화면을 열었다는 퍼널 이벤트를 남긴다 (0109)", () => {

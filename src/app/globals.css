@@ -131,3 +131,37 @@ body {
     }
   }
 }
+
+/* 챌린지 참여 완료 색종이 (2026-09-18 시안 ⑤).
+   ⚠️ 라이브러리를 넣지 않는다 — 조각 열몇 개를 떨어뜨리는 게 전부다.
+   ⚠️ 축하는 **한 번만** 흐른다(`forwards`). 무한 반복은 목표를 고르는 자리에서
+      눈을 계속 끌어서 방해가 된다. */
+@keyframes gnd-confetti-fall {
+  0% {
+    opacity: 0;
+    transform: translateY(-120%) rotate(0deg);
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(420%) rotate(320deg);
+  }
+}
+
+/* 흔들림에 약한 사람에게는 떨어뜨리지 않고 잠깐 떠 있다 사라진다. */
+@media (prefers-reduced-motion: reduce) {
+  @keyframes gnd-confetti-fall {
+    0%,
+    100% {
+      opacity: 0;
+      transform: none;
+    }
+    20%,
+    70% {
+      opacity: 0.9;
+      transform: none;
+    }
+  }
+}

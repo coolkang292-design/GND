@@ -21,6 +21,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   createChallengeRoom: vi.fn(),
   setChallengeDiscoverable: vi.fn(),
+  setChallengeRecruitImage: vi.fn(),
+  uploadRecruitPhoto: vi.fn(),
   recordFunnelEvent: vi.fn(),
   shareChallengeInvite: vi.fn(),
 }));
@@ -31,8 +33,10 @@ vi.mock("@/lib/challenge", async (importOriginal) => {
     ...actual,
     createChallengeRoom: mocks.createChallengeRoom,
     setChallengeDiscoverable: mocks.setChallengeDiscoverable,
+    setChallengeRecruitImage: mocks.setChallengeRecruitImage,
   };
 });
+vi.mock("@/lib/avatar", () => ({ uploadRecruitPhoto: mocks.uploadRecruitPhoto }));
 vi.mock("@/lib/analytics-events", () => ({ recordFunnelEvent: mocks.recordFunnelEvent }));
 vi.mock("@/lib/challenge-share", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/challenge-share")>();
@@ -62,6 +66,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.createChallengeRoom.mockResolvedValue(ROOM);
   mocks.setChallengeDiscoverable.mockResolvedValue(undefined);
+  mocks.setChallengeRecruitImage.mockResolvedValue(undefined);
+  mocks.uploadRecruitPhoto.mockResolvedValue("https://cdn.test/me/1.jpg");
   mocks.shareChallengeInvite.mockResolvedValue({ outcome: "copied", url: "https://x.app/challenge?join=GND-ABCDE&by=me" });
 });
 
@@ -235,5 +241,96 @@ describe("만드는 중", () => {
     expect(mocks.createChallengeRoom).toHaveBeenCalledTimes(1);
     await act(async () => finish(ROOM));
     await waitFor(() => expect(screen.getByText("챌린지가 만들어졌어요")).toBeTruthy());
+  });
+});
+
+
+/*
+  챌린지 사진 (2026-09-18 사용자 지시 — "챌린지 만들 때도 사진을 추가하게 해야지").
+
+  시안은 목록 카드·상세가 전부 사진인데, 넣을 자리가 `⋯ 관리` 안에만 있었다.
+*/
+describe("챌린지 사진 — 만들 때 넣는다", () => {
+  const photoInput = () =>
+    document.querySelector('input[type="file"]') as HTMLInputElement;
+
+  function pick() {
+    const file = new File(["x"], "hero.jpg", { type: "image/jpeg" });
+    Object.defineProperty(photoInput(), "files", { value: [file], configurable: true });
+    fireEvent.change(photoInput());
+  }
+
+  it("사진 칸이 있고, 안 넣어도 만들 수 있다 — 선택이다", async () => {
+    renderFlow();
+    expect(screen.getByText("챌린지 사진 넣기")).toBeTruthy();
+    expect(photoInput()).toBeTruthy();
+    fillName();
+    await act(async () => {
+      fireEvent.click(createButton());
+    });
+    expect(mocks.createChallengeRoom).toHaveBeenCalledTimes(1);
+    expect(mocks.setChallengeRecruitImage).not.toHaveBeenCalled();
+  });
+
+  it("고르면 **그 자리에서 올린다** — 저장 버튼을 기다리지 않는다", async () => {
+    renderFlow();
+    await act(async () => {
+      pick();
+    });
+    expect(mocks.uploadRecruitPhoto).toHaveBeenCalledTimes(1);
+    // 올라간 실제 URL만 그린다. createObjectURL로 앞당기면 업로드가 실패했는데
+    // 성공한 것처럼 보인다.
+    await waitFor(() => {
+      expect(document.querySelector('img[src="https://cdn.test/me/1.jpg"]')).toBeTruthy();
+    });
+  });
+
+  it("방을 만든 **뒤에** 사진을 적는다 — 그 전에는 챌린지 id가 없다", async () => {
+    renderFlow();
+    await act(async () => {
+      pick();
+    });
+    fillName();
+    await act(async () => {
+      fireEvent.click(createButton());
+    });
+    expect(mocks.setChallengeRecruitImage).toHaveBeenCalledWith(
+      ROOM.id,
+      "https://cdn.test/me/1.jpg",
+    );
+    expect(mocks.createChallengeRoom.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.setChallengeRecruitImage.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("⚠️ 사진 저장이 실패해도 방은 되돌리지 않는다 — 이유만 말한다", async () => {
+    mocks.setChallengeRecruitImage.mockRejectedValue(new Error("42501"));
+    const props = renderFlow();
+    await act(async () => {
+      pick();
+    });
+    fillName();
+    await act(async () => {
+      fireEvent.click(createButton());
+    });
+    expect(props.onCreated).toHaveBeenCalledTimes(1);
+    // ⚠️ `notice`가 아니라 **완료 화면**에서 말해야 한다 — 만들자마자 화면이
+    //    넘어가고 그 화면은 notice를 그리지 않는다.
+    expect(screen.getByText(/사진은 저장하지 못했어요/)).toBeTruthy();
+  });
+
+  it("업로드가 실패하면 말하고, 사진 없이 계속 갈 수 있다", async () => {
+    mocks.uploadRecruitPhoto.mockRejectedValue(new Error("사진이 너무 커요 (20MB 이하)"));
+    renderFlow();
+    await act(async () => {
+      pick();
+    });
+    expect(screen.getByText(/사진이 너무 커요/)).toBeTruthy();
+    fillName();
+    await act(async () => {
+      fireEvent.click(createButton());
+    });
+    expect(mocks.createChallengeRoom).toHaveBeenCalledTimes(1);
+    expect(mocks.setChallengeRecruitImage).not.toHaveBeenCalled();
   });
 });

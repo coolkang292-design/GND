@@ -120,6 +120,59 @@ const CATEGORY_HERO_LINES: Record<DetailCategoryKey, [string, string]> = {
   interval: ["짧고 굵게,", "오늘도 한 번"],
 };
 
+/**
+ * 참여 완료 축하 (시안 ⑤).
+ *
+ * ⚠️ 조각 위치를 `Math.random()`으로 뿌리지 마라. 리렌더마다 튀고, 서버·클라이언트
+ *    마크업이 달라져 hydration 경고가 난다. 고정 배열이면 둘 다 없다.
+ * ⚠️ `aria-hidden` — 낭독할 것은 아래 "참여 완료!" 한 줄이지 조각이 아니다.
+ */
+const CONFETTI = [
+  { left: "8%", delay: "0ms", dur: "1500ms", w: 6, h: 10, rot: "12deg" },
+  { left: "20%", delay: "160ms", dur: "1750ms", w: 5, h: 9, rot: "-20deg" },
+  { left: "32%", delay: "60ms", dur: "1400ms", w: 7, h: 7, rot: "35deg" },
+  { left: "45%", delay: "260ms", dur: "1650ms", w: 5, h: 11, rot: "-8deg" },
+  { left: "57%", delay: "110ms", dur: "1550ms", w: 6, h: 8, rot: "24deg" },
+  { left: "69%", delay: "310ms", dur: "1800ms", w: 5, h: 10, rot: "-30deg" },
+  { left: "80%", delay: "40ms", dur: "1450ms", w: 7, h: 9, rot: "16deg" },
+  { left: "91%", delay: "210ms", dur: "1700ms", w: 5, h: 8, rot: "-14deg" },
+] as const;
+
+function JoinedBanner({ challengeName }: { challengeName: string }) {
+  return (
+    <div className="relative mb-3 overflow-hidden rounded-card border border-accent/40 bg-accent/10 px-4 py-5 text-center">
+      <div aria-hidden className="pointer-events-none absolute inset-0">
+        {CONFETTI.map((c) => (
+          <span
+            key={c.left}
+            className="absolute top-0 rounded-[1px] bg-accent"
+            style={{
+              left: c.left,
+              width: c.w,
+              height: c.h,
+              transform: `rotate(${c.rot})`,
+              animation: `gnd-confetti-fall ${c.dur} ease-in ${c.delay} forwards`,
+            }}
+          />
+        ))}
+      </div>
+      <span
+        aria-hidden
+        className="relative mx-auto grid h-12 w-12 place-items-center rounded-full border-2 border-accent text-[22px] font-extrabold text-accent"
+      >
+        ✓
+      </span>
+      <p className="relative mt-2 text-[19px] font-extrabold text-accent">참여 완료!</p>
+      <p className="relative mt-0.5 text-[12.5px] text-muted">
+        좋은 선택이에요! 함께라면 더 꾸준히 할 수 있어요
+      </p>
+      <p className="relative mt-0.5 truncate text-[12px] font-bold text-faint">
+        {challengeName}
+      </p>
+    </div>
+  );
+}
+
 function reasonMessage(
   reason: Extract<BuildGoalDraftsResult, { ok: false }>["reason"],
 ): string {
@@ -430,14 +483,7 @@ export function GoalSetupFlow({
         }
         footer={footer("이 목표로 시작하기", submit, false, startLine)}
       >
-        {justJoined && (
-          <div className="mb-3 rounded-card border border-accent/40 bg-accent/10 px-4 py-3 text-center">
-            <p className="text-[17px] font-extrabold text-accent">참여 완료! 🎉</p>
-            <p className="mt-0.5 text-[12.5px] text-muted">
-              {challengeName} · 함께라면 더 꾸준히 할 수 있어요
-            </p>
-          </div>
-        )}
+        {justJoined && <JoinedBanner challengeName={challengeName} />}
 
         <GoalHero hero="basic" line1="오늘의 작은 목표가" line2="더 좋은 나를 만듭니다" />
 
