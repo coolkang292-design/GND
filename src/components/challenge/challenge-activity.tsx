@@ -2,10 +2,20 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Avatar } from "@/components/avatar";
+import { UiIcon } from "@/components/ui-icon";
 import {
   getChallengeActivity,
   type ChallengeActivityItem,
 } from "@/lib/challenge";
+import {
+  ACTIVITY_PREVIEW_COUNT,
+  ACTIVITY_ROW_LIMIT,
+  activityLeaders,
+  canExpandActivity,
+  isActivityTruncated,
+  visibleActivity,
+  type ActivityLeader,
+} from "@/lib/domain/challenge-activity";
 import { sendCheer } from "@/lib/social";
 
 /**
@@ -19,11 +29,17 @@ import { sendCheer } from "@/lib/social";
  * ⚠️ 여기 보이는 운동은 **그 챌린지 기간의, 공개된, 삭제되지 않은** 것뿐이다.
  *    서버가 자른다(`get_challenge_activity`). 클라이언트가 challengeId를 보냈다고
  *    믿고 열어 주는 구조가 아니다.
+ *
+ * 최근 5개만 보여주고 나머지는 '더 보기'로 펼친다. 활동 TOP 3는 받은 목록으로
+ * 센다 — 둘 다 **추가 조회가 없다** (2026-09-18, `lib/domain/challenge-activity.ts`).
  */
 export function ChallengeActivity({ challengeId }: { challengeId: string }) {
   const [items, setItems] = useState<ChallengeActivityItem[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  // ⚠️ 응원 뒤 `load()`는 items만 갈아 끼운다. 펼친 상태는 그대로 둔다 —
+  //    펼쳐서 아래쪽 사람을 응원했는데 목록이 접히면 방금 누른 줄이 사라진다.
+  const [expanded, setExpanded] = useState(false);
 
   const load = useCallback(async () => {
     setItems(await getChallengeActivity(challengeId));
@@ -68,6 +84,8 @@ export function ChallengeActivity({ challengeId }: { challengeId: string }) {
   // 아직 안 불러온 동안은 자리만 잡는다. 챌린지 화면의 다른 카드가 밀리지 않게.
   if (items === null) return null;
 
+  const leaders = activityLeaders(items);
+
   return (
     <section className="rounded-card border border-line bg-surface p-4 shadow-card">
       <div className="mb-1 flex items-center justify-between">
@@ -75,13 +93,20 @@ export function ChallengeActivity({ challengeId }: { challengeId: string }) {
         <span className="text-xs text-muted">챌린지 기간 · 진행 중에만</span>
       </div>
 
+      {leaders.length > 0 && (
+        <ActivityLeaders
+          leaders={leaders}
+          truncated={isActivityTruncated(items)}
+        />
+      )}
+
       {items.length === 0 ? (
         <p className="py-3 text-[13px] text-muted">
           아직 이 챌린지에서 올라온 운동이 없어요. 먼저 시작해 보세요 💪
         </p>
       ) : (
         <ul className="mt-1">
-          {items.map((it) => (
+          {visibleActivity(items, expanded).map((it) => (
             <li
               key={it.session_id}
               className="flex items-center gap-2.5 border-t border-line/60 py-2 first:border-t-0"
@@ -127,6 +152,20 @@ export function ChallengeActivity({ challengeId }: { challengeId: string }) {
         </ul>
       )}
 
+      {/* ⚠️ 누를 게 없는데 버튼만 있는 상태를 만들지 않는다(5개 이하면 아예 없다). */}
+      {canExpandActivity(items) && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          className="mt-1 flex h-9 w-full items-center justify-center text-xs font-bold text-accent"
+        >
+          {expanded
+            ? "접기 ▲"
+            : `활동 ${items.length - ACTIVITY_PREVIEW_COUNT}개 더 보기 ▼`}
+        </button>
+      )}
+
       {note && <p className="mt-2 text-[12px] text-muted">{note}</p>}
 
       <p className="mt-3 text-[11.5px] leading-relaxed text-muted">
@@ -135,5 +174,67 @@ export function ChallengeActivity({ challengeId }: { challengeId: string }) {
         <b>크루로 신청</b>하세요.
       </p>
     </section>
+  );
+}
+
+/**
+ * 활동 TOP 3 — 챌린지 기간에 공개한 완료 운동이 많은 참가자.
+ *
+ * ⚠️ **목표 점수 순위가 아니다.** 점수·달성률은 종료일까지 잠겨 있고(공정성
+ *    안내 카드), 여기 숫자는 아래 목록에서 그 사람 줄을 세면 나오는 값이다.
+ *    그래서 제목을 '순위'가 아니라 '활동'으로 부른다.
+ */
+function ActivityLeaders({
+  leaders,
+  truncated,
+}: {
+  leaders: ActivityLeader[];
+  truncated: boolean;
+}) {
+  return (
+    <div className="mb-2 mt-2 rounded-card-sm bg-surface-2 p-3">
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <h4 className="text-[12.5px] font-extrabold">활동 TOP 3</h4>
+        <span className="text-[11px] text-muted">공개한 완료 운동 기준</span>
+      </div>
+      <ol>
+        {leaders.map((l) => {
+          const tied = leaders.filter((x) => x.rank === l.rank).length > 1;
+          return (
+            <li key={l.userId} className="flex items-center gap-2 py-1">
+              <span
+                className={`flex w-[4.5rem] flex-none items-center gap-0.5 text-[12px] font-extrabold ${
+                  l.rank === 1 ? "text-accent" : "text-muted"
+                }`}
+              >
+                {/* 옆에 '1위'가 있으니 alt는 비운다 (UiIcon 규칙) */}
+                {l.rank === 1 && <UiIcon name="crown" size={14} />}
+                {tied ? `공동 ${l.rank}위` : `${l.rank}위`}
+              </span>
+              <Avatar
+                src={l.avatarUrl}
+                className="grid h-7 w-7 flex-none place-items-center overflow-hidden rounded-full bg-surface text-sm"
+              />
+              <span className="min-w-0 flex-1 truncate text-[13px] font-bold">
+                {l.nickname ?? "참가자"}
+                {l.isMine && (
+                  <span className="ml-1 text-[11px] font-normal text-muted">
+                    나
+                  </span>
+                )}
+              </span>
+              <span className="flex-none font-mono text-[13px] font-extrabold">
+                {l.count}회
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+      {truncated && (
+        <p className="mt-1 text-[11px] text-muted">
+          기록이 많아 최근 {ACTIVITY_ROW_LIMIT}개 안에서 셌어요
+        </p>
+      )}
+    </div>
   );
 }

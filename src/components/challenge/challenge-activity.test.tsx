@@ -1,6 +1,13 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChallengeActivityItem } from "@/lib/challenge";
 
@@ -99,5 +106,157 @@ describe("ChallengeActivity", () => {
     // 클라이언트 래퍼가 그걸 빈 배열로 눕힌다 — 챌린지 화면 전체가 죽으면 안 된다.
     mocks.getChallengeActivity.mockResolvedValue([]);
     expect(() => render(<ChallengeActivity challengeId="c1" />)).not.toThrow();
+  });
+});
+
+/** n명의 운동 중 행 — 응원 버튼이 있어 펼침 상태 테스트에 쓴다 */
+function activeRows(n: number): ChallengeActivityItem[] {
+  return Array.from({ length: n }, (_, i) =>
+    item({ session_id: `s${i + 1}`, user_id: `u${i + 1}`, nickname: `사람${i + 1}` }),
+  );
+}
+
+/** 한 사람의 완료 운동 n개 */
+function doneRows(
+  n: number,
+  over: Partial<ChallengeActivityItem>,
+): ChallengeActivityItem[] {
+  return Array.from({ length: n }, (_, i) =>
+    item({
+      session_id: `${over.user_id}-${i}`,
+      // 아바타 목(mock)이 src를 글자로 그린다 — 줄 글자 비교가 흐려지지 않게 비운다
+      avatar_url: null,
+      status: "completed",
+      completed_at: new Date().toISOString(),
+      ...over,
+    }),
+  );
+}
+
+/** 활동 목록(ul)의 줄 수 — TOP 3(ol)의 줄은 세지 않는다 */
+function listRows(container: HTMLElement) {
+  return container.querySelectorAll("ul > li").length;
+}
+
+describe("ChallengeActivity — 최근 5개 + 펼쳐보기", () => {
+  it("7개면 5개만 보이고, 더 보기로 전부 펼치고, 접기로 다시 5개가 된다", async () => {
+    mocks.getChallengeActivity.mockResolvedValue(activeRows(7));
+    const { container } = render(<ChallengeActivity challengeId="c1" />);
+
+    const more = await screen.findByRole("button", { name: "활동 2개 더 보기 ▼" });
+    expect(listRows(container)).toBe(5);
+    expect(screen.queryByText("사람6")).toBeNull();
+    expect(more.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(more);
+    expect(listRows(container)).toBe(7);
+    expect(screen.getByText("사람7")).toBeTruthy();
+    const fold = screen.getByRole("button", { name: "접기 ▲" });
+    expect(fold.getAttribute("aria-expanded")).toBe("true");
+
+    fireEvent.click(fold);
+    expect(listRows(container)).toBe(5);
+  });
+
+  it("5개 이하면 전부 보이고 '더 보기'가 없다", async () => {
+    mocks.getChallengeActivity.mockResolvedValue(activeRows(5));
+    const { container } = render(<ChallengeActivity challengeId="c1" />);
+    expect(await screen.findByText("사람5")).toBeTruthy();
+    expect(listRows(container)).toBe(5);
+    expect(screen.queryByText(/더 보기/)).toBeNull();
+  });
+
+  it("⚠️ 펼친 채 응원을 보내면 목록이 다시 접히지 않는다", async () => {
+    mocks.getChallengeActivity.mockResolvedValue(activeRows(7));
+    mocks.sendCheer.mockResolvedValue(undefined);
+    const { container } = render(<ChallengeActivity challengeId="c1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /더 보기/ }));
+    // 펼쳐야만 보이는 7번째 줄을 응원한다
+    fireEvent.click(screen.getByLabelText("사람7님 응원하기"));
+
+    expect(await screen.findByText(/사람7님에게 응원을 보냈어요/)).toBeTruthy();
+    // 초기 조회 1번 + 응원 뒤 재조회 1번
+    await waitFor(() => expect(mocks.getChallengeActivity).toHaveBeenCalledTimes(2));
+    expect(listRows(container)).toBe(7);
+    expect(screen.getByRole("button", { name: "접기 ▲" })).toBeTruthy();
+  });
+});
+
+describe("ChallengeActivity — 활동 TOP 3", () => {
+  async function top3() {
+    const heading = await screen.findByText("활동 TOP 3");
+    return within(heading.closest("div")!.parentElement!);
+  }
+
+  it("등수와 완료 운동 횟수를 같이 보여준다", async () => {
+    mocks.getChallengeActivity.mockResolvedValue([
+      ...doneRows(1, { user_id: "c", nickname: "민수" }),
+      ...doneRows(3, { user_id: "a", nickname: "철수" }),
+      ...doneRows(2, { user_id: "b", nickname: "영희", is_mine: true }),
+    ]);
+    render(<ChallengeActivity challengeId="c1" />);
+    const box = await top3();
+
+    const rows = box.getAllByRole("listitem").map((li) => li.textContent);
+    expect(rows).toEqual(["1위철수3회", "2위영희나2회", "3위민수1회"]);
+    expect(box.getByText("공개한 완료 운동 기준")).toBeTruthy();
+  });
+
+  it("⚠️ 접힌 목록이 아니라 받은 목록 전체로 센다", async () => {
+    // 철수 완료 6개 → 접으면 목록엔 5줄뿐이지만 횟수는 6이어야 한다
+    mocks.getChallengeActivity.mockResolvedValue(
+      doneRows(6, { user_id: "a", nickname: "철수" }),
+    );
+    const { container } = render(<ChallengeActivity challengeId="c1" />);
+    const box = await top3();
+    expect(listRows(container)).toBe(5);
+    expect(box.getByText("6회")).toBeTruthy();
+  });
+
+  it("⚠️ 운동 중인 행은 세지 않는다", async () => {
+    mocks.getChallengeActivity.mockResolvedValue([
+      ...doneRows(1, { user_id: "a", nickname: "철수" }),
+      item({ session_id: "live", user_id: "a", nickname: "철수" }),
+    ]);
+    render(<ChallengeActivity challengeId="c1" />);
+    const box = await top3();
+    expect(box.getByText("1회")).toBeTruthy();
+    expect(box.queryByText("2회")).toBeNull();
+  });
+
+  it("횟수가 같으면 '공동 N위'로 적는다", async () => {
+    mocks.getChallengeActivity.mockResolvedValue([
+      ...doneRows(2, { user_id: "a", nickname: "철수" }),
+      ...doneRows(2, { user_id: "b", nickname: "영희" }),
+    ]);
+    render(<ChallengeActivity challengeId="c1" />);
+    const box = await top3();
+    expect(box.getAllByText("공동 1위")).toHaveLength(2);
+  });
+
+  it("완료한 운동이 없으면 TOP 3를 그리지 않는다", async () => {
+    mocks.getChallengeActivity.mockResolvedValue([item()]);
+    render(<ChallengeActivity challengeId="c1" />);
+    expect(await screen.findByText("철수")).toBeTruthy();
+    expect(screen.queryByText("활동 TOP 3")).toBeNull();
+  });
+
+  it("서버 상한(200개)에 닿으면 최근 200개 안에서 셌다고 말한다", async () => {
+    mocks.getChallengeActivity.mockResolvedValue(
+      doneRows(200, { user_id: "a", nickname: "철수" }),
+    );
+    render(<ChallengeActivity challengeId="c1" />);
+    const box = await top3();
+    expect(box.getByText(/최근 200개 안에서 셌어요/)).toBeTruthy();
+  });
+
+  it("200개 미만이면 그 말을 하지 않는다", async () => {
+    mocks.getChallengeActivity.mockResolvedValue(
+      doneRows(199, { user_id: "a", nickname: "철수" }),
+    );
+    render(<ChallengeActivity challengeId="c1" />);
+    await top3();
+    expect(screen.queryByText(/안에서 셌어요/)).toBeNull();
   });
 });

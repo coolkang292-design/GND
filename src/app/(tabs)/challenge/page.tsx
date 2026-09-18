@@ -1314,7 +1314,11 @@ function ChallengeScreen({ userId }: { userId: string }) {
               안 보이나"의 답이라, 통째로 접으면 그 질문이 다시 생긴다. `CrewCard`가
               쓰는 접힘 규약과 같다 — 한 줄은 남기고 상세만 펼친다.
               ⚠️ 상세의 5일·2시간은 `viewing-pass.ts`의 `CHALLENGE_PASS_HOURS`와
-              열람권 규칙에서 온 실제 값이다. 규칙이 바뀌면 이 문구도 같이 고쳐라. */}
+              열람권 규칙에서 온 실제 값이다. 규칙이 바뀌면 이 문구도 같이 고쳐라.
+              ⚠️ **잠기는 것은 목표 점수뿐이다** (사용자 결정 2026-09-18). 아래
+              `ChallengeActivity`가 활동 TOP 3(완료 운동 횟수)를 기간 중에도 보여준다 —
+              목록에 이미 한 줄씩 올라오는 것의 합계라 새로 여는 정보가 아니다.
+              이 문구와 저 카드가 어긋나면 사용자는 둘 중 하나를 거짓말로 읽는다. */}
           <div className="rounded-card border border-line bg-surface-2 p-3 text-[12px] font-bold text-muted">
             <div className="flex items-center justify-between gap-2">
               <span>
@@ -1333,13 +1337,18 @@ function ChallengeScreen({ userId }: { userId: string }) {
             {showFairness && (
               <div className="mt-2 flex flex-col gap-1 border-t border-line pt-2 text-left text-[11.5px] leading-relaxed font-normal">
                 <p>
-                  다른 참가자의 점수와 순위는 <b>종료일에 한꺼번에</b> 공개돼요.
-                  중간 순위를 보면 앞선 사람은 느슨해지고 뒤처진 사람은 포기하기
-                  쉬워서예요.
+                  다른 참가자의 <b>목표 점수</b>와 순위는{" "}
+                  <b>종료일에 한꺼번에</b> 공개돼요. 중간 순위를 보면 앞선 사람은
+                  느슨해지고 뒤처진 사람은 포기하기 쉬워서예요.
                 </p>
                 <p>
                   <b>5일 연속</b> 운동하면 아래 참가자 성과가{" "}
                   <b>2시간 동안</b> 열려요.
+                </p>
+                <p>
+                  다만 <b>누가 몇 번 운동했는지</b>는 아래 <b>챌린지 활동</b>에서
+                  기간 중에도 보여요. 목록에 한 줄씩 올라오는 것을 센 숫자라
+                  목표 점수와는 다른 값이에요.
                 </p>
               </div>
             )}

@@ -2058,6 +2058,8 @@ begin
       and coalesce(s.completed_at, s.started_at) <  (c.end_date + 2)::timestamptz
       -- ⚠️ 차단은 양방향으로 가린다. 기존 차단 정책과 같은 원칙.
       and not public.is_blocked_between(v_me, s.user_id)
+    -- ⚠️ (0107) 자르기 전에 정렬한다. 이 줄이 없으면 200개를 넘는 순간 "아무 200개"가 된다.
+    order by coalesce(s.completed_at, s.started_at) desc
     limit 200
   ) t;
 

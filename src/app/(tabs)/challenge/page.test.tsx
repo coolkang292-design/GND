@@ -566,6 +566,21 @@ describe("ChallengePage 진행 중 — 오늘 운동하기 · 공정성 안내",
     expect(screen.queryByText("종료일에 한꺼번에")).toBeNull();
     expect(screen.getByText("기간 중에는 내 진행률만")).toBeTruthy();
   });
+
+  /**
+   * ⚠️ 활동 TOP 3(2026-09-18)가 기간 중에 횟수를 보여주므로, 이 안내가 "순위는
+   * 전부 잠긴다"로 읽히면 화면 둘 중 하나가 거짓말이 된다. 잠기는 대상이
+   * **목표 점수**라고 말하는지 확인한다.
+   */
+  it("잠기는 것이 목표 점수이고 활동 횟수는 기간 중에도 보인다고 말한다", async () => {
+    arrange();
+    render(<ChallengePage />);
+    await screen.findByText("기간 중에는 내 진행률만");
+
+    fireEvent.click(screen.getByText("자세히"));
+    expect(screen.getAllByText("목표 점수").length).toBeGreaterThan(0);
+    expect(screen.getByText("누가 몇 번 운동했는지")).toBeTruthy();
+  });
 });
 
 /**
