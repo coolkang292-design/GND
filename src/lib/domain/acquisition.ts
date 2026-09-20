@@ -76,6 +76,9 @@ export function landingShape(pathname: string | null | undefined): string | null
   if (!raw) return null;
   return raw
     .replace(/^\/invite\/[^/]+/, "/invite/:code")
+    // ⚠️ 2026-09-20부터 챌린지 초대 링크가 `/c/<코드>`다(`challenge-invite.ts`).
+    //    이 줄이 없으면 **남의 초대 코드가 통계에 그대로 눕는다** — 위 규칙 2다.
+    .replace(/^\/c\/[^/]+/, "/c/:code")
     .replace(/^\/challenge\/[^/]+/, "/challenge/:id")
     .slice(0, ACQUISITION_VALUE_MAX);
 }

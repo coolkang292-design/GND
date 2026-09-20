@@ -6,8 +6,18 @@ import { AcquisitionTracker } from "@/components/acquisition-tracker";
 import { FunnelTracker } from "@/components/funnel-tracker";
 import { TrailTracker } from "@/components/trail-tracker";
 import { InstallGate } from "@/components/install/install-gate";
+import {
+  DEFAULT_SHARE,
+  OG_IMAGE_HEIGHT,
+  OG_IMAGE_WIDTH,
+} from "@/lib/domain/share-meta";
+import { siteUrl } from "@/lib/site-url";
 
 export const metadata: Metadata = {
+  // ⚠️⚠️ **`metadataBase`를 지우지 마라** (2026-09-20). 이게 없으면 아래
+  //    `images`의 상대 경로가 절대 URL로 안 바뀌고, 카카오톡이 `og:image`를
+  //    못 가져와 **태그는 있는데 그림만 없는** 카드가 된다.
+  metadataBase: new URL(siteUrl()),
   title: "GND",
   description: "친구 운동 챌린지 — GND 탈출하자",
   manifest: "/manifest.webmanifest",
@@ -15,6 +25,31 @@ export const metadata: Metadata = {
     capable: true,
     statusBarStyle: "black-translucent",
     title: "GND",
+  },
+  // ⚠️ 카카오톡은 **`og:*`만 읽는다.** 위 `description`(= `<meta name=...>`)은
+  //    안 본다 — 그게 있는데도 카카오 기본 문구 "여기를 눌러 링크를 확인하세요"가
+  //    떴던 이유다(2026-09-20 운영 실측). 문구는 `domain/share-meta.ts`가 한곳에서
+  //    정하고, 초대 링크(`/c/[code]`·`/invite/[code]`)가 각자 덮어쓴다.
+  openGraph: {
+    type: "website",
+    siteName: "GND",
+    locale: "ko_KR",
+    title: DEFAULT_SHARE.title,
+    description: DEFAULT_SHARE.description,
+    images: [
+      {
+        url: DEFAULT_SHARE.image,
+        width: OG_IMAGE_WIDTH,
+        height: OG_IMAGE_HEIGHT,
+        alt: "GND — 친구 운동 챌린지",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: DEFAULT_SHARE.title,
+    description: DEFAULT_SHARE.description,
+    images: [DEFAULT_SHARE.image],
   },
 };
 

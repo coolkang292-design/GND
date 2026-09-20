@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 
-import { Suspense } from "react";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -29,29 +28,19 @@ vi.mock("@/lib/crew", () => ({
   savePendingInvite: mocks.savePendingInvite,
 }));
 
-import InvitePage from "./page";
+import { InviteClient } from "./invite-client";
 
 /**
- * Next 16은 `params`를 Promise로 주고 페이지가 `use()`로 푼다.
+ * ⚠️ 2026-09-20부터 `page.tsx`는 **서버 컴포넌트**다 — 카카오톡 공유 카드를
+ *    만드는 `generateMetadata`를 내보내야 해서다. 화면 로직은 전부
+ *    `invite-client.tsx`로 옮겼고, 이 테스트가 검사하는 것도 그쪽이다.
  *
- * 테스트에서는 **이미 이행된 thenable**을 넘긴다. React의 `use`는 `status`가
- * `fulfilled`면 서스펜드 없이 값을 바로 읽으므로, 서스펜스 재시도 타이밍에
- * 기대지 않고 첫 렌더에서 코드가 확정된다.
+ *    옛 판은 `params` Promise를 `use()`로 푸느라 이행된 thenable을 만들어
+ *    `<Suspense>`로 감싸야 했다. 이제 서버가 풀어서 문자열로 넘기므로 그 장치가
+ *    통째로 필요 없다 — **단언은 한 줄도 안 바뀌었다.**
  */
-function resolvedParams(code: string) {
-  const value = { code };
-  return Object.assign(Promise.resolve(value), {
-    status: "fulfilled" as const,
-    value,
-  });
-}
-
 function renderInvite(code: string) {
-  return render(
-    <Suspense fallback={null}>
-      <InvitePage params={resolvedParams(code)} />
-    </Suspense>,
-  );
+  return render(<InviteClient code={code} />);
 }
 
 describe("/invite/[code]", () => {

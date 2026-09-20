@@ -33,14 +33,44 @@ function toKey(utcMs: number): string {
 }
 
 /**
- * 초대 링크 주소.
+ * **챌린지 탭이 읽는 참가 주소** (경로만).
  *
  * ⚠️ 경로는 `/challenge?join=`이어야 한다. `?open=`은 "참가가 이미 끝났으니 이 방을
  * 열어라"이고 `?join=`이 "이 코드로 참가시켜라"다(`challenge/page.tsx` 주석).
  * 바꾸면 링크를 받은 사람이 참가 없이 빈 화면만 본다.
  *
+ * ⚠️ **이 주소를 없애지 마라.** 2026-09-20부터 *공유하는* 주소는 `/c/[code]`로
+ * 바뀌었지만(`challengeInviteUrl`), 참가시키는 곳은 여전히 여기 하나다.
+ * `/c/[code]`도, 온보딩을 마치고 돌아오는 경로(`pendingChallengeInvitePath`)도
+ * 결국 이 주소로 온다. 그리고 카카오톡에 **이미 뿌려진 옛 링크**가 이 모양이다.
+ */
+export function challengeJoinPath(
+  code: string,
+  invitedBy?: string | null,
+): string {
+  const by = invitedBy ? `&by=${encodeURIComponent(invitedBy)}` : "";
+  return `/challenge?join=${encodeURIComponent(code)}${by}`;
+}
+
+/**
+ * 초대 링크 주소 — **밖으로 내보내는 것**(카톡·공유 시트·클립보드).
+ *
+ * ⚠️⚠️ **경로가 `/c/[code]`다. `/challenge?join=`이 아니다** (2026-09-20).
+ *
+ * 왜 바꿨나. 카카오톡 공유 카드(`og:*` 태그)는 **서버가 뱉는 HTML**에 있어야
+ * 하는데, `/challenge`는 `"use client"` 페이지라 `generateMetadata`를 내보낼 수
+ * 없고 `(tabs)/layout.tsx`의 `generateMetadata`는 `searchParams`를 못 받는다.
+ * 즉 그 주소에는 초대별 카드를 붙일 길이 **구조적으로 없다.** 2026-09-20 운영
+ * 실측에서 초대 링크가 이미지도 문구도 없는 회색 줄 하나로 떠 있었다.
+ *
+ * `/c/[code]`는 서버 컴포넌트라 카드를 만들 수 있고, 사람은 거기서 곧바로
+ * `challengeJoinPath`로 옮겨진다 — **참가 로직은 한 벌 그대로다.**
+ *
  * ⚠️ 코드를 인코딩한다. 지금 형식은 `GND-XXXXX`라 인코딩이 필요 없지만, 서버가
  * 형식을 바꾸는 날 링크가 조용히 깨지는 쪽이 훨씬 비싸다.
+ *
+ * ⚠️ `by`는 **쿼리의 첫 파라미터**가 됐다(`?by=`). 옛 주소에서는 `join` 뒤라
+ * `&by=`였다 — 그대로 옮겨 붙이면 `/c/CODE&by=...`가 되어 코드에 들러붙는다.
  */
 export function challengeInviteUrl(
   origin: string,
@@ -52,8 +82,8 @@ export function challengeInviteUrl(
   invitedBy?: string | null,
 ): string {
   const base = origin.replace(/\/+$/, "");
-  const by = invitedBy ? `&by=${encodeURIComponent(invitedBy)}` : "";
-  return `${base}/challenge?join=${encodeURIComponent(code)}${by}`;
+  const by = invitedBy ? `?by=${encodeURIComponent(invitedBy)}` : "";
+  return `${base}/c/${encodeURIComponent(code)}${by}`;
 }
 
 /**

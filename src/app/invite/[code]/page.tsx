@@ -1,100 +1,75 @@
-"use client";
+import type { Metadata } from "next";
 
-import { use, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import { useAuth } from "@/components/auth-provider";
-import { ScreenError } from "@/components/screen-error";
 import { normalizeInviteCode } from "@/lib/domain/invite-code";
-import { getMyProfile, redeemInviteCode, savePendingInvite } from "@/lib/crew";
+import {
+  friendInviteShareMeta,
+  OG_IMAGE_HEIGHT,
+  OG_IMAGE_WIDTH,
+} from "@/lib/domain/share-meta";
+import { lookupInviteOwner } from "@/lib/share-lookup";
+
+import { InviteClient } from "./invite-client";
 
 /**
- * 초대 링크 탭 → 자동 합류.
- * 프로필이 없으면(신규) 코드를 저장해두고 온보딩으로 보낸다.
+ * 친구 초대 링크 — **카카오톡 공유 카드를 만들기 위한 서버 껍데기** (2026-09-20).
  *
- * ⚠️ 2026-08-08부터 이 링크는 **친구 연결**이 먼저다(0061). 옛 그룹 코드는
- * `redeemInviteCode`가 하위 호환으로 받는다 — 카카오톡에 이미 뿌려진 링크가
- * 죽지 않게 하는 장치다. 그 2단계 로직을 여기 복사하지 마라(설계 §3.3).
+ * 화면을 그리는 일은 `InviteClient`가 그대로 한다. 이 파일이 서버 컴포넌트인
+ * 이유는 하나뿐이다: **`generateMetadata`는 서버 컴포넌트에서만 내보낼 수 있다.**
+ *
+ * ⚠️ 카카오 스크래퍼는 자바스크립트를 안 돌린다. 클라이언트에서 `document.title`을
+ *    바꾸는 식으로는 **절대 안 된다** — 서버가 뱉는 HTML에 태그가 있어야 한다.
  */
-export default function InvitePage({
-  params,
-}: {
-  params: Promise<{ code: string }>;
-}) {
-  const { code: rawCode } = use(params);
-  const router = useRouter();
-  const { userId, loading, configured } = useAuth();
-  const [error, setError] = useState<string | null>(null);
-  const started = useRef(false);
 
-  useEffect(() => {
-    if (loading || !configured || started.current) return;
-    started.current = true;
+/**
+ * ⚠️ 초대 코드마다 카드가 달라야 하므로 정적 생성을 하지 않는다.
+ *    (`generateMetadata`가 DB를 읽는 것만으로도 동적이 되지만, 의도를 못 박는다.)
+ */
+export const dynamic = "force-dynamic";
 
-    async function run() {
-      const code = normalizeInviteCode(decodeURIComponent(rawCode));
-      if (!code) {
-        setError("잘못된 초대 링크예요");
-        return;
-      }
-      if (!userId) {
-        setError("익명 인증에 실패했어요. 새로고침해 보세요.");
-        return;
-      }
-      // ⚠️⚠️ **이 조회를 try 밖에 두지 마라** (D6, 2026-08-09에 고쳤다).
-      //    `getMyProfile`은 오류를 던진다(`crew.ts:12`). 밖에 있으면 네트워크가
-      //    한 번 흔들렸을 때 `void run()`이 rejection을 삼키고 화면이
-      //    **`친구를 맺는 중…`에서 영원히 멈춘다** — 오류도, 재시도도, 나갈 문도
-      //    없다. 실패를 "안 보이는 멈춤"으로 바꾸는 것이 가장 나쁜 실패다.
-      let profile;
-      try {
-        profile = await getMyProfile(userId);
-      } catch {
-        setError(
-          "지금 연결이 불안정해요. 잠시 뒤 링크를 다시 눌러 주세요.",
-        );
-        return;
-      }
+type Props = { params: Promise<{ code: string }> };
 
-      if (!profile) {
-        savePendingInvite(code);
-        router.replace("/onboarding");
-        return;
-      }
-      try {
-        await redeemInviteCode(code);
-        router.replace("/home");
-      } catch (e) {
-        // 자기 자신의 링크를 누른 경우는 따로 말해 준다. "존재하지 않는 코드"로
-        // 뭉개면 사용자가 링크가 깨진 줄 알고 다시 만든다.
-        const msg = e instanceof Error ? e.message : String(e);
-        setError(
-          msg.includes("self_invite")
-            ? "내 초대 링크예요. 친구에게 보내 주세요 🙂"
-            : "존재하지 않는 초대 링크예요",
-        );
-      }
-    }
-    void run();
-  }, [loading, configured, userId, rawCode, router]);
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { code: raw } = await params;
 
-  // ⚠️ 오류일 때는 `ScreenError`를 쓴다 — **나갈 문이 딸려 오기 때문이다**(D7).
-  //    옛 코드는 오류를 네 가지나 그리면서 링크가 0개였다. PWA로 홈 화면에서
-  //    열면 주소창이 없어 나갈 수단이 아예 없다.
-  if (error) {
-    return (
-      <ScreenError
-        icon="👥"
-        message={error}
-        exitHref="/home"
-        exitLabel="홈으로 가기"
-      />
-    );
-  }
+  // ⚠️ **여기서 던지면 안 된다.** `generateMetadata`가 예외를 내면 페이지가
+  //    500이 되고 스크래퍼는 카드를 통째로 안 만든다. `lookupInviteOwner`는
+  //    무슨 일이 있어도 null을 주고, 그때는 이름 없는 기본 문구가 나간다.
+  const code = normalizeInviteCode(decodeURIComponent(raw)) ?? "";
+  const owner = code ? await lookupInviteOwner(code) : null;
 
-  return (
-    <main className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
-      <div className="text-4xl">👥</div>
-      <p className="text-sm text-muted">친구를 맺는 중…</p>
-    </main>
-  );
+  const share = friendInviteShareMeta({
+    inviterNickname: owner?.nickname,
+    groupName: owner?.groupName,
+  });
+
+  return {
+    title: share.title,
+    description: share.description,
+    openGraph: {
+      type: "website",
+      siteName: "GND",
+      locale: "ko_KR",
+      title: share.title,
+      description: share.description,
+      images: [
+        {
+          url: share.image,
+          width: OG_IMAGE_WIDTH,
+          height: OG_IMAGE_HEIGHT,
+          alt: share.title,
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: share.title,
+      description: share.description,
+      images: [share.image],
+    },
+  };
+}
+
+export default async function InvitePage({ params }: Props) {
+  const { code } = await params;
+  return <InviteClient code={code} />;
 }

@@ -41,6 +41,15 @@ describe("landingShape", () => {
     expect(landingShape("/challenge/8f1c2d3e")).toBe("/challenge/:id");
   });
 
+  /**
+   * 2026-09-20부터 챌린지 초대 링크가 `/c/<코드>`다(`challenge-invite.ts`).
+   * 카카오톡 카드를 만들려고 생긴 경로라 **유입의 상당수가 여기로 떨어진다** —
+   * 마스킹을 빠뜨리면 초대 코드가 그대로 쌓인다.
+   */
+  it("챌린지 공유 경로(`/c/:code`)도 마스킹한다", () => {
+    expect(landingShape("/c/GND-TDQUN")).toBe("/c/:code");
+  });
+
   it("정적 경로는 그대로 둔다", () => {
     expect(landingShape("/home")).toBe("/home");
     expect(landingShape("/")).toBe("/");

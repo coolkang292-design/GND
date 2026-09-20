@@ -12,6 +12,7 @@ import {
 // 0038이 만든 닉네임 정확 일치 검색. 단일 결과 또는 null을 돌려준다(배열 아님).
 // isSearchable 게이트가 있어 빈 입력은 조회 없이 null이 된다.
 import { searchProfileByNickname } from "@/lib/crew-link";
+import { challengeInviteUrl } from "@/lib/domain/challenge-invite";
 
 /** invite_to_challenge의 오류 코드를 사람 말로 */
 export function inviteError(e: unknown): string {
@@ -248,11 +249,15 @@ export function InviteSheet({
       // 0091: 링크를 준 사람을 실어 보낸다. 참가자도 링크를 뿌릴 수 있게 되면서
       // **신입이 누구와 친구가 되는지**가 여기서 정해진다. 서버가 "그 방의
       // 참가자인가"를 확인하므로 위조해도 방 밖 사람과는 못 이어진다.
-      const url =
-        `${window.location.origin}/challenge?join=${code}` +
-        // ⚠️ `useAuth()`의 userId를 쓴다. prop으로 또 받지 않는다 — 같은 값을
-        //    두 곳에서 받으면 언젠가 한쪽만 갱신된다.
-        (userId ? `&by=${encodeURIComponent(userId)}` : "");
+      // ⚠️⚠️ **주소를 여기서 손으로 조립하지 마라** (2026-09-20에 이걸로 한 번
+      //    샜다). 공유 주소가 `/challenge?join=`에서 `/c/[code]`로 바뀌었는데
+      //    (카카오톡 카드를 붙이려고 — `domain/challenge-invite.ts` 주석) 이 줄만
+      //    옛 모양으로 남아 있어서, **이 시트로 만든 링크만 미리보기가 없었다.**
+      //    `challengeInviteUrl`이 유일한 조립처다.
+      //
+      // ⚠️ `useAuth()`의 userId를 쓴다. prop으로 또 받지 않는다 — 같은 값을
+      //    두 곳에서 받으면 언젠가 한쪽만 갱신된다.
+      const url = challengeInviteUrl(window.location.origin, code, userId);
       setLink(url);
       // 개발 서버에서 만든 링크는 **다른 기기에서 안 열린다** — `localhost`는
       // "그 기기 자신"이라 폰에서 열면 폰을 찾는다. 2026-08-31에 사장님이

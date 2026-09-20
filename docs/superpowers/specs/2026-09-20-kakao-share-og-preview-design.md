@@ -183,11 +183,15 @@ src/app/c/[code]/join-redirect.tsx  <- "use client", 사람은 즉시 /challenge
 | 크기 | **1200 × 630** (1.91:1) — 카카오·페이스북·트위터 큰 카드 공통 안전값 |
 | 형식 | PNG 또는 JPG (**WebP는 쓰지 않는다** — 스크래퍼 호환) |
 | 용량 | **300KB 이하** 권장 (스크래퍼 타임아웃 대비) |
-| 파일 | `public/og/default.png` · `public/og/challenge.png` · `public/og/invite.png` |
+| 파일 | `public/og/default.jpg` · `public/og/challenge.jpg` · `public/og/invite.jpg` |
 | 문구 | 두 번째 이미지처럼 **이미지에 구워 넣는다** |
 
-제작은 사용자와 협의한다. 기존 `public/challenge-assets/*.webp`를 OG 규격으로
-재가공하는 길도 있다.
+**✅ 사용자가 직접 디자인해 주었다 (2026-09-20).** 원본 폴더 `카톡 공유 이미지/`는
+다른 디자인 원본과 같이 `.gitignore` 대상이고, `public/og/`에 가공 결과만 들어간다.
+실측 157·172·163KB로 상한 안이다.
+
+⚠️ 교체할 때 **파일 이름과 확장자를 그대로 유지하라.** 바꾸면 `share-meta.ts`의
+`OG_IMAGES`도 같이 고쳐야 하고, 한쪽만 고치면 카드에서 그림만 사라진다.
 
 ---
 
@@ -213,6 +217,14 @@ src/app/c/[code]/join-redirect.tsx  <- "use client", 사람은 즉시 /challenge
    (TTF/OTF — WOFF2 불가)을 넘기지 않으면 전부 두부로 나온다.**
 7. **`whats-new`·`privacy` 등 다른 페이지**는 Phase 0의 기본 OG를 그대로 물려받는다.
    개별 지정은 이번 범위 밖.
+8. ⚠️⚠️ **주소를 조립하는 자리가 한 곳이 아니었다 — 구현 중에 실제로 물렸다.**
+   `challengeInviteUrl`을 `/c/[code]`로 바꿔 놓고도 `invite-sheet.tsx:252`가
+   주소를 **따로 조립하고 있었다.** 그대로 나갔으면 "초대 링크 복사하기"로 만든
+   링크만 미리보기가 없었을 것이고, 그건 **참가자가 쓰는 유일한 초대 경로**다(0091).
+   lint·typecheck·테스트 3711건이 전부 초록인 채로 지나갔다 — **옛 주소가 여전히
+   동작하기 때문이다.** 깨지는 것은 미리보기뿐이라 화면으로도 안 보인다.
+   → `src/lib/invite-url-usage.test.ts`가 소스를 훑어 막는다(되돌려서 잡히는 것을
+   확인했다).
 
 ---
 

@@ -12,27 +12,56 @@ import {
   earliestStartDate,
   inviteShareMessage,
   inviteSharePayload,
+  challengeJoinPath,
   shareOutcomeMessage,
   startsTooSoon,
 } from "./challenge-invite";
 
 describe("challengeInviteUrl", () => {
-  it("챌린지 탭이 읽는 `?join=` 주소를 만든다", () => {
+  /**
+   * ⚠️ 2026-09-20부터 **공유하는 주소는 `/c/[code]`다.** `/challenge?join=`은
+   *    `"use client"` 페이지라 `generateMetadata`를 못 달아서 카카오톡 카드를
+   *    만들 수 없다. 참가는 여전히 `challengeJoinPath`가 맡는다(아래 describe).
+   */
+  it("카카오톡 카드를 만들 수 있는 `/c/[code]` 주소를 만든다", () => {
     expect(challengeInviteUrl("https://gnd-one.vercel.app", "GND-ABCDE")).toBe(
-      "https://gnd-one.vercel.app/challenge?join=GND-ABCDE",
+      "https://gnd-one.vercel.app/c/GND-ABCDE",
     );
   });
 
   it("코드를 URL 인코딩한다", () => {
     // 지금 코드 형식은 영숫자지만, 서버가 형식을 바꿔도 링크가 깨지지 않아야 한다.
     expect(challengeInviteUrl("https://x.app", "A B&C")).toBe(
-      "https://x.app/challenge?join=A%20B%26C",
+      "https://x.app/c/A%20B%26C",
     );
   });
 
   it("origin 끝의 슬래시를 겹치지 않는다", () => {
     expect(challengeInviteUrl("https://x.app/", "C1")).toBe(
-      "https://x.app/challenge?join=C1",
+      "https://x.app/c/C1",
+    );
+  });
+});
+
+describe("challengeJoinPath — 참가시키는 주소는 그대로다", () => {
+  /**
+   * ⚠️ 공유 주소가 바뀌어도 **참가 경로는 한 벌이어야 한다.** 카카오톡에 이미
+   *    뿌려진 옛 링크(`/challenge?join=`)가 이 모양이라, 여기가 바뀌면 그 링크가
+   *    전부 죽는다.
+   */
+  it("챌린지 탭이 읽는 `?join=` 경로를 만든다", () => {
+    expect(challengeJoinPath("GND-ABCDE")).toBe("/challenge?join=GND-ABCDE");
+  });
+
+  it("초대자를 `&by=`로 싣는다", () => {
+    expect(challengeJoinPath("GND-ABCDE", "user-1")).toBe(
+      "/challenge?join=GND-ABCDE&by=user-1",
+    );
+  });
+
+  it("코드와 초대자를 URL 인코딩한다", () => {
+    expect(challengeJoinPath("A&B=C", "u/1")).toBe(
+      "/challenge?join=A%26B%3DC&by=u%2F1",
     );
   });
 });
@@ -200,15 +229,19 @@ describe("challengePeriodFor — 만들기 화면의 기간 (2026-09-18)", () =>
 });
 
 describe("challengeInviteUrl — 링크를 준 사람 (0091)", () => {
-  it("초대자를 `by`로 싣는다 — 신입이 그 사람과 친구가 된다", () => {
+  /**
+   * ⚠️ `/c/[code]`에서는 `by`가 **쿼리의 첫 파라미터**라 `?by=`다. 옛 주소에서는
+   *    `join` 뒤라 `&by=`였다 — 그대로 옮기면 `/c/CODE&by=`가 되어 코드에 들러붙는다.
+   */
+  it("초대자를 `?by=`로 싣는다 — 신입이 그 사람과 친구가 된다", () => {
     expect(challengeInviteUrl("https://x.app", "GND-ABCDE", "user-1")).toBe(
-      "https://x.app/challenge?join=GND-ABCDE&by=user-1",
+      "https://x.app/c/GND-ABCDE?by=user-1",
     );
   });
 
-  it("초대자가 없으면 예전 주소 그대로", () => {
+  it("초대자가 없으면 쿼리 없이 깔끔한 주소", () => {
     expect(challengeInviteUrl("https://x.app", "GND-ABCDE", null)).toBe(
-      "https://x.app/challenge?join=GND-ABCDE",
+      "https://x.app/c/GND-ABCDE",
     );
   });
 });

@@ -10,6 +10,7 @@ import {
   type RankedParticipant,
 } from "@/lib/domain/goal-score";
 import { inclusiveDays } from "@/lib/domain/challenge-time";
+import { challengeJoinPath } from "@/lib/domain/challenge-invite";
 import type { Challenge, Profile, UserGoal } from "@/lib/types";
 
 // ── 목표 유형 메타 (§5) ──────────────────────────────────────────
@@ -805,10 +806,11 @@ export function peekPendingChallengeInviteDetail():
 export function pendingChallengeInvitePath(): string | null {
   const pending = peekPendingChallengeInviteDetail();
   if (!pending) return null;
-  return (
-    `/challenge?join=${encodeURIComponent(pending.code)}` +
-    (pending.by ? `&by=${encodeURIComponent(pending.by)}` : "")
-  );
+  // ⚠️ 조립은 `challengeJoinPath` 한 곳에서 한다 (2026-09-20에 모았다). 위
+  //    주석이 경고하는 "세 벌" 문제가 여기서도 났다 — 공유 주소가 `/c/[code]`로
+  //    바뀔 때 이 줄이 옛 모양인지 새 모양인지 매번 따져야 했다. 참가 경로는
+  //    `/challenge?join=` 그대로이고, 그 사실이 이제 한 군데에만 적혀 있다.
+  return challengeJoinPath(pending.code, pending.by);
 }
 
 export function clearPendingChallengeInvite(): void {
