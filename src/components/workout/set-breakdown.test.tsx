@@ -158,4 +158,43 @@ describe("SetBreakdown", () => {
       expect(html).not.toContain("목표");
     });
   });
+
+  /**
+   * 러닝 페이스 (2026-09-23) — 잰 시간 ÷ 넣은 거리.
+   *
+   * 피드(친구가 보는 곳)와 달력 기록 상세가 이 컴포넌트를 같이 쓴다.
+   * **한 기록**에만 붙인다 — 계획(`done` 없음)의 페이스는 아직 뛴 것이 아니다.
+   */
+  describe("러닝 페이스", () => {
+    // renderToStaticMarkup은 따옴표를 엔티티로 바꾼다
+    const text = (html: string) =>
+      html.replace(/&#x27;/g, "'").replace(/&quot;/g, '"');
+    const run = (
+      name: string,
+      done: boolean | undefined,
+    ): BreakdownExercise => ({
+      name,
+      exerciseType: "cardio",
+      measure: null,
+      sets: [
+        { weightKg: 0, reps: 0, distanceKm: 5.2, durationMin: 33, durationSec: 1_960, done },
+      ],
+    });
+
+    it("완료한 트레드밀 세트 옆에 1km당 시간을 붙인다", () => {
+      expect(text(render([run("트레드밀", true)]))).toContain(`6'17"/km`);
+    });
+
+    it("계획에는 붙이지 않는다", () => {
+      expect(text(render([run("트레드밀", undefined)]))).not.toContain("/km");
+    });
+
+    it("못 한 세트에는 붙이지 않는다", () => {
+      expect(text(render([run("트레드밀", false)]))).not.toContain("/km");
+    });
+
+    it("사이클에는 붙이지 않는다 — 분/km는 사이클의 단위가 아니다", () => {
+      expect(text(render([run("사이클", true)]))).not.toContain("/km");
+    });
+  });
 });

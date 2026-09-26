@@ -138,6 +138,11 @@ import {
   stopFinishesSet,
 } from "@/lib/domain/set-timer";
 import {
+  restoreSetTimer,
+  setTimerFocusKey,
+} from "@/lib/domain/set-timer-restore";
+import { cardioPaceLabel } from "@/lib/domain/cardio-pace";
+import {
   buildSpreadOffer,
   type SpreadOffer,
 } from "@/lib/domain/set-spread";
@@ -195,6 +200,7 @@ import {
 import {
   cancelWorkout,
   clearDraft,
+  clearSetTimer,
   finalizeWorkoutVerification,
   listSessionPhotoRows,
   finishWorkout,
@@ -217,10 +223,12 @@ import {
   getSuggestionFacts,
   hasCompletedHistory,
   loadDraft,
+  loadSetTimer,
   localId,
   markRecordBeaten,
   newSet,
   saveDraft,
+  saveSetTimer,
   getSessionExerciseNames,
   saveSessionExercises,
   startWorkout,
@@ -309,6 +317,14 @@ function errorMessage(e: unknown): string {
   if (msg.includes("session_not_found")) return "세션을 찾을 수 없어요";
   if (msg.includes("duplicate key")) return "이미 같은 이름의 운동이 있어요";
   return `오류: ${msg}`;
+}
+
+/**
+ * 목표 비프를 "이 시계에서 냈다"고 적는 이름표. 울리는 자리와 되살리는 자리가
+ * **같은 모양**을 써야 한다 — 갈라지면 되살린 직후 한 번 더 운다.
+ */
+function goalBeepKey(focusKey: string, startedAtMs: number): string {
+  return `${focusKey}:${startedAtMs}`;
 }
 
 function WorkoutScreen({ userId }: { userId: string }) {
@@ -422,9 +438,44 @@ function WorkoutScreen({ userId }: { userId: string }) {
    * 파생하지 않고 상태로 든다 — "미완료 첫 세트가 있는 종목"으로 매번 계산하면
    * 뒤 종목으로 옮겨 기록하는 순간 앞 종목에 미완료가 남아 화면이 튕겨 돌아간다.
    */
-  const [focusIndex, setFocusIndex] = useState(0);
+  /*
+    새로고침·앱 재시작 전에 돌던 세트 시계 (2026-09-23).
+
+    아이폰은 화면이 꺼진 채 오래 두면 페이지를 버렸다가 다시 연다. 시작 시각이
+    React 상태에만 있으면 그때 30분 잰 트레드밀이 통째로 사라진다.
+
+    ⚠️ **이펙트로 되살리지 않는다** — `react-hooks/set-state-in-effect`. draft와
+       같은 lazy 초기화로 **첫 렌더에서 한 번** 판정한다.
+    ⚠️ **초점도 같이 옮긴다.** 시계 주인은 `종목 순번:세트 순번:진행 중`이라,
+       초점이 0으로 돌아간 채면 두 번째 종목의 시계는 되살려도 화면에 안 붙는다.
+  */
+  const [restoredTimer] = useState(() =>
+    restoreSetTimer({
+      saved: loadSetTimer(userId),
+      sessionId: draft.sessionId,
+      sessionActive: draft.sessionId !== null && draft.startedAtMs !== null,
+      exercises: draft.exercises,
+      nowMs: Date.now(),
+    }),
+  );
+  /*
+    첫 초점 — 돌던 시계가 있으면 그 세트, 없으면 **안 끝낸 첫 세트** (2026-09-23).
+
+    예전엔 새로고침하면 무조건 `0:0`이었다. 첫 종목을 이미 끝냈으면 끝난 세트가
+    뜨고 `✓ 운동 완료`가 눌러도 아무 일이 없다 — `refocusPending` 주석의 그
+    증상이다. 트레드밀을 뛰다 페이지가 다시 열리면 정확히 이 자리에 떨어졌다.
+  */
+  const [initialFocus] = useState(() =>
+    restoredTimer
+      ? {
+          exerciseIndex: restoredTimer.exerciseIndex,
+          setIndex: restoredTimer.setIndex,
+        }
+      : ensurePendingFocus(draft.exercises, { exerciseIndex: 0, setIndex: 0 }),
+  );
+  const [focusIndex, setFocusIndex] = useState(initialFocus.exerciseIndex);
   /** 팝업이 보여줄 세트 번호 — 목업의 `현재 세트 1 / 5` */
-  const [focusSetIndex, setFocusSetIndex] = useState(0);
+  const [focusSetIndex, setFocusSetIndex] = useState(initialFocus.setIndex);
   /**
    * 세트 시계가 시작된 시각 — 안 돌면 `null` (사장님 지시 2026-08-28
    * *"시작 하면 운동시간이 카운팅되고 마침 하면 그 시간이 기록"*).
@@ -445,7 +496,19 @@ function WorkoutScreen({ userId }: { userId: string }) {
      * 따라다녀서 **영영 도달하지 않는다.**
      */
     targetSec: number;
-  } | null>(null);
+  } | null>(() =>
+    restoredTimer
+      ? {
+          startedAtMs: restoredTimer.startedAtMs,
+          focusKey: setTimerFocusKey(
+            restoredTimer.exerciseIndex,
+            restoredTimer.setIndex,
+            true,
+          ),
+          targetSec: restoredTimer.targetSec,
+        }
+      : null,
+  );
   const [tabataOpen, setTabataOpen] = useState(false);
   /** 인터벌 음원이 도는 중인가 — 그동안 근력 오버레이를 내린다 */
   const [intervalPlaying, setIntervalPlaying] = useState(false);
@@ -602,9 +665,25 @@ function WorkoutScreen({ userId }: { userId: string }) {
     안 그러면 1세트를 37초 버티고 넘어간 뒤 2세트 화면이 `00:37`부터 세기
     시작해서, 20초 버틴 2세트가 57초로 기록된다.
   */
-  const timerFocusKey = `${focusIndex}:${focusSetIndex}:${active}`;
-  /** 이 시계에서 목표 비프를 이미 냈는가 — 안 두면 목표를 넘긴 뒤 매 초 운다 */
-  const goalBeepedRef = useRef<string | null>(null);
+  const timerFocusKey = setTimerFocusKey(focusIndex, focusSetIndex, active);
+  /**
+   * 이 시계에서 목표 비프를 이미 냈는가 — 안 두면 목표를 넘긴 뒤 매 초 운다.
+   *
+   * 되살린 시계가 이미 목표를 지났으면 **낸 것으로 치고 시작한다** (2026-09-23).
+   * 화면을 켰을 뿐인데 "삐"가 나면 방금 목표에 닿은 것으로 오해한다.
+   */
+  const goalBeepedRef = useRef<string | null>(
+    restoredTimer?.goalAlreadyPassed
+      ? goalBeepKey(
+          setTimerFocusKey(
+            restoredTimer.exerciseIndex,
+            restoredTimer.setIndex,
+            true,
+          ),
+          restoredTimer.startedAtMs,
+        )
+      : null,
+  );
   /*
     지금 세션의 제안만 살아 있는 것으로 본다 (설계 2026-08-24 §2.4).
 
@@ -1825,6 +1904,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
       });
     }
     setTimer(null);
+    // 잰 값은 이제 draft에 있다. 운동을 끝내거나 취소하는 경로에서는 지우지
+    // 않는다 — 남아 있어도 세션 id가 달라 되살아나지 않는다(`restoreSetTimer`).
+    clearSetTimer(userId);
 
     // 유산소는 거리가 남아 있다 — 정지가 곧 완료면 넣을 기회가 사라진다.
     // 이때는 시간만 굳히고 화면에 머문다(하단 `✓ 운동 완료`가 마무리한다).
@@ -2997,6 +3079,16 @@ function WorkoutScreen({ userId }: { userId: string }) {
         : 0;
   /** 멈춰 있을 때의 목표 = 세트에 담긴 값 자체 (돌 때는 시작 시점 값을 쓴다) */
   const timerTargetSeconds = focusedSet ? durationSecondsOf(focusedSet) : 0;
+  /** 러닝 페이스 (2026-09-23) — 러닝 계열이 아니거나 값이 말이 안 되면 `null` */
+  const focusedPaceLabel =
+    focusedExercise && focusedSet
+      ? cardioPaceLabel({
+          name: focusedExercise.name,
+          exerciseType: focusedExercise.exerciseType,
+          durationSec: timerSeconds,
+          distanceKm: focusedSet.distanceKm,
+        })
+      : null;
 
   /*
     목표 시간에 닿으면 **한 번 삐** (사장님 결정 2026-08-28, B안).
@@ -3012,7 +3104,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
   */
   useEffect(() => {
     if (!timerRunning || timer === null) return;
-    const key = `${timer.focusKey}:${timer.startedAtMs}`;
+    const key = goalBeepKey(timer.focusKey, timer.startedAtMs);
     const beep = goalReachedBeep({
       seconds: timerSeconds,
       targetSeconds: timer.targetSec,
@@ -3971,16 +4063,26 @@ function WorkoutScreen({ userId }: { userId: string }) {
             처음 부르면 그때는 제스처가 없어 아무 소리도 안 난다.
           */
           prepareRestCountdownAudio();
-          setTimer({
-            startedAtMs: Date.now(),
-            focusKey: timerFocusKey,
-            targetSec: focusedSet ? durationSecondsOf(focusedSet) : 0,
-          });
+          const startedAtMs = Date.now();
+          const targetSec = focusedSet ? durationSecondsOf(focusedSet) : 0;
+          setTimer({ startedAtMs, focusKey: timerFocusKey, targetSec });
+          // 새로고침·앱 재시작에도 살아남게 (2026-09-23). 순번이 아니라
+          // 종목 key로 적는다 — 되살릴 때 순서가 바뀌어 있어도 찾아간다.
+          if (focusedExercise && draft.sessionId) {
+            saveSetTimer(userId, {
+              sessionId: draft.sessionId,
+              exerciseKey: focusedExercise.key,
+              setIndex: setFocus.setIndex,
+              startedAtMs,
+              targetSec,
+            });
+          }
         }}
         onStopTimer={() => {
           if (!focusedExercise || !focusedSet) return;
           finishTimedSet(focusedExercise, setFocus.setIndex);
         }}
+        paceLabel={focusedPaceLabel}
         canReplaceExercise={canReplaceExercise(focusedExercise)}
         onReplaceExercise={() => {
           if (!focusedExercise) return;

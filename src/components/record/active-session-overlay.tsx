@@ -241,6 +241,7 @@ export function ActiveSessionOverlay({
   timerTargetSeconds,
   onStartTimer,
   onStopTimer,
+  paceLabel,
   onReplaceExercise,
   onSkipExercise,
   onAdjustRest,
@@ -327,6 +328,14 @@ export function ActiveSessionOverlay({
   onStartTimer: () => void;
   /** 멈춘다. 홀드(시간 칸 하나뿐)면 부모가 세트 완료까지 같이 한다 */
   onStopTimer: () => void;
+  /**
+   * 러닝 페이스 `6'17"/km` (2026-09-23) — 보여 줄 것이 없으면 `null`.
+   *
+   * 러닝 계열인지·말이 되는 값인지는 부모가 `cardioPaceLabel`로 정한다. 여기서는
+   * **시계가 도는 동안만 숨긴다** — 그때 거리 칸은 아직 계획값이라, 잰 시간과
+   * 나누면 매 초 바뀌는 엉뚱한 숫자가 된다.
+   */
+  paceLabel: string | null;
   /*
     ⚠️ **`onLoadLast`를 되살리지 마라** (2026-08-24 제거).
 
@@ -853,6 +862,12 @@ export function ActiveSessionOverlay({
                   ),
                 )}
               </div>
+
+              {paceLabel && !timerRunning && (
+                <p className="mt-2 text-center text-[13px] font-extrabold tabular-nums text-accent">
+                  페이스 {paceLabel}
+                </p>
+              )}
 
               {/*
                 빠른 칩 — **돌고 있는 시계의 칸은 뺀다** (2026-08-28).

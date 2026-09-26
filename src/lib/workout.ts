@@ -7,6 +7,10 @@ import {
   DEFAULT_HOLD_SECONDS,
   durationSecondsOf,
 } from "@/lib/domain/set-timer";
+import {
+  parseSavedSetTimer,
+  type SavedSetTimer,
+} from "@/lib/domain/set-timer-restore";
 import { dayKey, resolveTimeZone } from "@/lib/domain/time";
 import { firstWorkoutImagePath, workoutImageList } from "@/lib/domain/social";
 import {
@@ -274,6 +278,37 @@ export function saveDraft(userId: string, draft: WorkoutDraft): void {
 export function clearDraft(userId: string): void {
   try {
     localStorage.removeItem(draftKey(userId));
+  } catch {
+    /* noop */
+  }
+}
+
+// ── 세트 시계 (2026-09-23) ─────────────────────────────────────
+// draft와 **다른 키**다 — 이유는 `set-timer-restore.ts` 머리 주석.
+// 되살릴지 말지(세션 대조·6시간)는 `restoreSetTimer`가 정한다. 여기는 넣고 빼기만.
+
+const setTimerKey = (userId: string) => `gnd-set-timer:${userId}`;
+
+export function loadSetTimer(userId: string): SavedSetTimer | null {
+  try {
+    const raw = localStorage.getItem(setTimerKey(userId));
+    return raw ? parseSavedSetTimer(JSON.parse(raw)) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveSetTimer(userId: string, timer: SavedSetTimer): void {
+  try {
+    localStorage.setItem(setTimerKey(userId), JSON.stringify(timer));
+  } catch {
+    // 저장 실패는 치명적이지 않다 — 새로고침만 안 하면 시계는 그대로 돈다
+  }
+}
+
+export function clearSetTimer(userId: string): void {
+  try {
+    localStorage.removeItem(setTimerKey(userId));
   } catch {
     /* noop */
   }

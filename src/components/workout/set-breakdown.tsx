@@ -1,3 +1,4 @@
+import { cardioPaceLabel } from "@/lib/domain/cardio-pace";
 import { formatSetAmount } from "@/lib/domain/set-display";
 import { durationSecondsOf } from "@/lib/domain/set-timer";
 import type { ExercisePrescription } from "@/lib/domain/workout-plan";
@@ -84,6 +85,17 @@ export function SetBreakdown({
             <ul className="mt-1.5 flex flex-col gap-1">
               {exercise.sets.map((set, setIndex) => {
                 const number = setIndex + 1;
+                // 러닝 페이스 (2026-09-23) — **완료한 기록에만.** 계획의 페이스는
+                // 아직 뛴 것이 아니고, 못 한 세트의 페이스는 뜻이 없다.
+                const pace =
+                  set.done === true
+                    ? cardioPaceLabel({
+                        name: exercise.name,
+                        exerciseType: exercise.exerciseType,
+                        durationSec: durationSecondsOf(set),
+                        distanceKm: set.distanceKm,
+                      })
+                    : null;
                 return (
                   <li
                     key={setIndex}
@@ -114,6 +126,11 @@ export function SetBreakdown({
                           durationMin: set.durationMin,
                           durationSec: set.durationSec,
                         })
+                      )}
+                      {pace && (
+                        <span className="ml-1.5 font-bold text-accent">
+                          · {pace}
+                        </span>
                       )}
                     </span>
                     {set.done !== undefined && (

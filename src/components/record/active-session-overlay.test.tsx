@@ -49,6 +49,8 @@ const base = {
   timerTargetSeconds: 0,
   onStartTimer: vi.fn(),
   onStopTimer: vi.fn(),
+  // 러닝 페이스 — 기본은 없음(러닝 계열이 아니거나 거리가 아직 없다) (2026-09-23)
+  paceLabel: null as string | null,
   canReplaceExercise: true,
   onReplaceExercise: vi.fn(),
   onSkipExercise: vi.fn(),
@@ -190,6 +192,46 @@ describe("ActiveSessionOverlay — 세트 시계", () => {
     expect(screen.queryByText(/마침/)).toBeNull();
     // 거리 스테퍼는 그대로 있어야 한다
     expect(screen.getByLabelText("거리 늘리기")).toBeTruthy();
+  });
+
+  /**
+   * 러닝 페이스 (2026-09-23). 멈춘 뒤 계기판 거리를 넣으면 그 자리에서 보인다.
+   * 무엇을 보여 줄지(러닝 계열인가·말이 되는 값인가)는 부모가 `cardioPaceLabel`로
+   * 정해서 넘긴다.
+   */
+  it("멈춘 뒤에는 1km당 시간을 보여준다", () => {
+    renderInput({
+      fields: cardioFields,
+      values: { ...holdValues, distanceKm: 5.2, durationSec: 1_960 },
+      timerRunning: false,
+      timerSeconds: 1_960,
+      paceLabel: `6'17"/km`,
+    });
+
+    expect(screen.getByText(`페이스 6'17"/km`)).toBeTruthy();
+  });
+
+  it("뛰는 동안에는 페이스를 숨긴다 — 거리는 아직 계획값이다", () => {
+    renderInput({
+      fields: cardioFields,
+      values: { ...holdValues, distanceKm: 5, durationSec: 600 },
+      timerRunning: true,
+      timerSeconds: 600,
+      paceLabel: `2'00"/km`,
+    });
+
+    expect(screen.queryByText(/페이스/)).toBeNull();
+  });
+
+  it("넘겨받은 것이 없으면 그리지 않는다", () => {
+    renderInput({
+      fields: cardioFields,
+      values: { ...holdValues, durationSec: 1_960 },
+      timerRunning: false,
+      timerSeconds: 1_960,
+    });
+
+    expect(screen.queryByText(/페이스/)).toBeNull();
   });
 
   it("32분 40초를 `32분 40초`로 읽는다 — 초를 잃지 않는다", () => {
