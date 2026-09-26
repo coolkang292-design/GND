@@ -1,6 +1,7 @@
 # 인수인계 — 세트 시계 복원 + 러닝 페이스 (2026-09-23 ~ 09-26)
 
-브랜치 `feat/set-timer-restore-pace` · **마이그레이션 없음** · **배포 안 함**
+`main` 반영(`6693f86` 코드 · `f0a1545` 릴리스 노트) · **마이그레이션 없음** ·
+**운영 배포 완료** `gnd-4mkirn858-gnd4.vercel.app` → `https://gnd-one.vercel.app` (2026-09-26)
 
 ## 1. 왜
 
@@ -63,7 +64,19 @@
 2. 복원 직후 **목표 비프가 안 울리는지** — 로직은 단위 테스트, 브라우저에서 소리는 못 들었다
 3. iOS "입력 취소"가 설정을 끄면 사라지는지 — 사용자 기기 확인 필요
 
-## 5. 다음 할 일
+## 5. 배포 (2026-09-26)
 
-- 배포하려면: 릴리스 노트 항목 추가(**배포 전에**) → `main` 반영 → 사용자 승인 → `CLAUDE.md` §배포 절차
+- 릴리스 노트 `2026-09-26-set-timer-restore-pace`를 **배포 전에** 넣고 개발 서버 `/whats-new`에서
+  4줄·코드 표기·가로 스크롤 0 확인. `broadcast-release.mjs`는 **DRY RUN만**(대상 8명, 제외 test) — 발송 안 함
+- `git archive main`으로 `.git` 없는 복사본 → `pnpm install --frozen-lockfile` · `pnpm build` 통과 →
+  `vercel --prod --yes --scope gnd4` → `inspect`: `target production` · `● Ready` · 별칭 `gnd-one.vercel.app`
+- 운영 실물: `/whats-new`에 새 제목 · `/record` 청크에 `gnd-set-timer:`·러닝 판정 정규식·`페이스 ` ·
+  `/feed` 청크에 러닝 판정 정규식. 운영 피드를 픽스처 A로 열어 `3.5km 32분 47초 · 9'22"/km` 등 7건 표시,
+  `3.6km 17초`·`3.3km 39초`는 숨김. 운영 `/record` 페이지 오류 없음
+- 배포용 복사본(`.env.local` 사본 포함)은 지웠다
+
+## 6. 다음 할 일
+
+- 사용자 폰에서 확인: 트레드밀 `▶ 시작` → 화면 끄고 수 분 → 켜기 → 시계가 이어지는가, `■ 정지` 후 거리 입력 시 페이스
+- 발송은 사용자가 지시할 때만: `node scripts/broadcast-release.mjs --send`
 - 선택: 아이폰에서 처음 시계를 시작할 때 "입력 취소" 안내 한 번 띄우기(이번 범위 밖)
