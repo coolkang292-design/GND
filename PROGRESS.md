@@ -3,12 +3,13 @@
 > 새 세션은 저장소 루트 `AGENTS.md` → `CLAUDE.md` → 이 파일 → 가장 최근의 관련 `docs/superpowers/HANDOFF-*.md` 순서로 읽는다.
 > 이 파일은 전체 흐름의 요약이고, 작업별 세부 사실과 남은 확인은 최신 인수인계서가 기준이다.
 
-## 🟡 2026-09-28 완료 카드 "오늘도 해냈다" — **개발 서버 확인 · 커밋 · 배포 승인 대기**
+## ✅ 2026-09-28 완료 카드 "오늘도 해냈다" — **운영 배포 완료 · 운영 실물 검증 완료**
 
 - 완료 화면 맨 위 🎉 카드 → 사용자 제작 이미지(`public/record-assets/workout-complete-hero.webp`, 원본 `어플 UI 이미지/운동완료 사진.png` 1.8MB → 1200px WebP 72KB)
 - 마케팅 문구는 **이미지 안에** 있다 — 글자로 다시 얹지 않는다. 이미지 아래는 실제 누적일("운동한 날 N일째")·수치·기록 갱신만 (`completionHero`, `CompletionHeroCard`)
 - 누적일은 완료 전 `sessionMinutes` + 방금 끝낸 운동을 합쳐 날 수로 센다. 픽스처 A 화면 20일 = DB KST 날 수 20 (세션 65)
 - 게이트: lint 0 errors · typecheck · 테스트 3872 · build · 새 소식 한 줄 추가
+- 운영 배포 `8993968` (`gnd-24tcsg7de-gnd4`, Ready, gnd-one 별칭) · 운영 실물: 이미지 200 image/webp 72,468B · `/record` 번들에 이미지 경로 · `/whats-new` 새 줄. 알림 발송 없음(사용자 지시)
 
 ## ✅ 2026-09-28 AI 코치 V1 (운동 직후 피드백) — **운영 배포 완료 · 운영 실물 검증 완료**
 
