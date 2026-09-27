@@ -58,14 +58,17 @@ describe("시간 단위 규칙 (2026-08-28)", () => {
    * 이 단언이 실패해야 한다.
    */
   it("세트를 저장할 때 `durationSecondsOf`로 초를 읽는다", () => {
-    const source = readFileSync("src/lib/workout.ts", "utf8");
-    const saveBlock = source.slice(
-      source.indexOf("const setRows = exercises.flatMap"),
-    );
-    const insertIndex = saveBlock.indexOf('from("workout_sets").insert');
-    expect(insertIndex).toBeGreaterThan(0);
+    // 윈도우 체크아웃은 CRLF다 — 줄 경계로 함수 끝을 찾으므로 먼저 맞춘다
+    const source = readFileSync("src/lib/workout.ts", "utf8").replace(/\r\n/g, "\n");
+    // 2026-09-28: 행 만들기가 `toSetRows()`로 빠졌다(0112). 저장 함수는 그걸 부르고,
+    // 동작 테스트는 `workout-set-rows.test.ts`에 있다. 여기서는 원본 규칙만 본다.
+    expect(source).toContain("const setRows = toSetRows(");
+    const start = source.indexOf("export function toSetRows");
+    expect(start).toBeGreaterThan(0);
+    const end = source.indexOf("\n}\n", start);
+    expect(end).toBeGreaterThan(start);
 
-    const rows = stripComments(saveBlock.slice(0, insertIndex));
+    const rows = stripComments(source.slice(start, end));
     expect(rows).toContain("duration_seconds");
     expect(rows).toContain("durationSecondsOf(s)");
     // 분을 곱해 초를 만드는 옛 경로가 남아 있으면 안 된다

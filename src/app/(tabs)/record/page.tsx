@@ -13,6 +13,7 @@ import { AFTER_WORKOUT_PATH } from "@/lib/domain/landing";
 import { useAuth } from "@/components/auth-provider";
 import { UiIcon } from "@/components/ui-icon";
 import { CalendarView } from "@/components/record/calendar-view";
+import { CoachCard } from "@/components/record/coach-card";
 import { ExerciseCard } from "@/components/record/exercise-card";
 import {
   ExercisePicker,
@@ -1928,7 +1929,11 @@ function WorkoutScreen({ userId }: { userId: string }) {
     const sourceKey = `${exKey}:${set.key}`;
     const restPlan = getRestCountdownTogglePlan(ex.exerciseType, willDone);
     if (restPlan.prepareAudio) prepareRestCountdownAudio();
-    updateSet(exKey, si, { done: willDone });
+    // 기기 완료 시각 (0112) — AI 코치가 세트 간격을 읽는다. 완료를 풀면 지운다
+    updateSet(exKey, si, {
+      done: willDone,
+      doneAtMs: willDone ? Date.now() : null,
+    });
     /*
       "남은 세트도 이렇게 할까요?" 제안을 **여기서 굳힌다** (설계 2026-08-24 §2.4).
 
@@ -3280,6 +3285,16 @@ function WorkoutScreen({ userId }: { userId: string }) {
               </section>
             );
           })()}
+
+        {/*
+          AI 코치 (0112, 설계 2026-09-28).
+
+          ⚠️ 완료·XP·배지는 이미 끝났다. 이 칸은 그 **뒤에** 따로 분석을 부르고,
+             무엇에 실패해도 위아래 칸을 막지 않는다 — 실패하면 자기 칸만 바꾸고,
+             테이블이 없으면(0112 미적용) 칸 자체를 숨긴다.
+          ⚠️ 챌린지 기여 **아래**다. 챌린지 참가자에게 가장 급한 정보는 그쪽이다.
+        */}
+        <CoachCard userId={userId} sessionId={result.sessionId} />
 
         {/*
           오늘 한마디 (2026-08-30) — 원탭 칩.

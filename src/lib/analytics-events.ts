@@ -31,6 +31,9 @@ export const FUNNEL_EVENTS = [
   "challenge_create_started",
   "challenge_share_started",
   "challenge_goal_started",
+  // 0112 — AI 코치 목표 설정을 열었다. 끝냈는지는 training_profiles.created_at이 안다.
+  // 생성·열람·체감 응답은 workout_ai_feedback·workout_session_feedback이 센다.
+  "ai_coach_onboarding_started",
 ] as const;
 
 export type FunnelEvent = (typeof FUNNEL_EVENTS)[number];

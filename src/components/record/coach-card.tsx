@@ -1,0 +1,394 @@
+"use client";
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import { recordFunnelEvent } from "@/lib/analytics-events";
+import {
+  loadSessionFeedback,
+  loadTrainingProfile,
+  requestCoachFeedback,
+  saveSessionFeedback,
+  saveTrainingProfile,
+  type CoachResponse,
+} from "@/lib/coach";
+import type { CoachFeedback, CoachItem } from "@/lib/domain/coach-feedback";
+import { pickHighlights, type Highlight } from "@/lib/domain/coach-highlights";
+import type { TrainingProfile } from "@/lib/domain/training-profile";
+import type {
+  EffortLevel,
+  SessionFlag,
+  Signal,
+  WorkoutAnalysis,
+} from "@/lib/domain/workout-analysis";
+import { TrainingProfileSheet } from "./training-profile-sheet";
+
+/**
+ * 운동 완료 화면의 AI 코치 칸 (0112, 명령문 §26~§29·§43).
+ *
+ * ⚠️⚠️ 완료·XP·배지는 **이미 끝난 뒤**에 그려진다. 이 칸이 무엇에 실패해도
+ *    위의 완료 카드·챌린지 기여·사진은 그대로다. 그래서 이 컴포넌트는 던지지 않고,
+ *    테이블이 아직 없으면(0112 미적용) 칸 자체를 숨긴다.
+ *
+ * ⚠️ 체감을 **먼저** 받는다. 명령문 예시(§20·§45-D)가 이번 세션의 체감을 AI 입력에
+ *    쓰기 때문이다. 이모지 한 탭이 곧 "분석 시작"이라 추가 비용은 탭 1회다.
+ */
+
+const EFFORT_CHOICES: readonly { value: EffortLevel; emoji: string; label: string }[] = [
+  { value: "too_light", emoji: "😴", label: "너무 쉬움" },
+  { value: "light", emoji: "🙂", label: "쉬움" },
+  { value: "on_target", emoji: "👍", label: "적당" },
+  { value: "heavy", emoji: "🥵", label: "힘듦" },
+  { value: "too_heavy", emoji: "💀", label: "너무 힘듦" },
+];
+
+const FLAG_CHOICES: readonly { value: SessionFlag; label: string }[] = [
+  { value: "pain", label: "통증 있었음" },
+  { value: "low_condition", label: "컨디션 안 좋음" },
+  { value: "short_time", label: "시간 부족" },
+  { value: "equipment_unavailable", label: "기구 사용 불가" },
+];
+
+const SIGNAL_LABEL: Record<Signal, string> = {
+  progress: "성장 신호",
+  stable: "유지",
+  fatigue_signal: "피로 신호",
+  baseline: "첫 기준 기록",
+};
+
+/** 다른 요청이 생성 중(202)이면 이 간격으로 다시 묻는다 */
+export const POLL_MS = 3_000;
+export const MAX_POLLS = 20;
+
+type Phase =
+  | "checking"
+  | "needs_profile"
+  | "needs_effort"
+  | "loading"
+  | "completed"
+  | "failed"
+  | "dismissed"
+  | "unavailable";
+
+function toneClass(tone: Highlight["tone"]): string {
+  if (tone === "up") return "text-accent";
+  if (tone === "down") return "text-warn";
+  return "text-muted";
+}
+
+function Performance({ metrics }: { metrics: WorkoutAnalysis }) {
+  const highlights = pickHighlights(metrics.exercises);
+  const pct = metrics.session.comparableVolumeDeltaPct;
+  if (highlights.length === 0 && pct === null) return null;
+  return (
+    <div className="mt-3 rounded-card-sm bg-surface-2 p-3">
+      <p className="text-[11px] font-bold text-faint">오늘의 성과</p>
+      {pct !== null && (
+        <p className="mt-1 text-sm font-extrabold">
+          같은 종목 볼륨{" "}
+          <span className={pct > 0 ? "text-accent" : pct < 0 ? "text-warn" : ""}>
+            {pct > 0 ? "+" : ""}
+            {pct}%
+          </span>
+          <span className="ml-1 text-[11px] font-bold text-muted">지난번 대비</span>
+        </p>
+      )}
+      <ul className="mt-1.5 flex flex-col gap-1">
+        {highlights.map((h) => (
+          <li key={h.name} className="text-[12.5px] leading-snug">
+            <span className="font-extrabold">{h.name}</span>{" "}
+            <span className={`font-bold ${toneClass(h.tone)}`}>{h.detail}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ItemList({ title, mark, items }: {
+  title: string;
+  mark: string;
+  items: readonly CoachItem[];
+}) {
+  if (items.length === 0) return null;
+  return (
+    <div className="mt-2.5">
+      <p className="text-[11px] font-bold text-faint">{title}</p>
+      <ul className="mt-1 flex flex-col gap-1">
+        {items.map((item, i) => (
+          <li key={i} className="flex gap-1.5 text-[13px] leading-snug">
+            <span aria-hidden className="flex-none font-extrabold text-accent">
+              {mark}
+            </span>
+            <span>
+              {item.exercise && <span className="font-extrabold">{item.exercise} · </span>}
+              {item.message}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function FeedbackView({ feedback }: { feedback: CoachFeedback }) {
+  const primary = feedback.primary_result;
+  return (
+    <div className="mt-3">
+      <span className="inline-block rounded-full bg-accent-weak px-2 py-0.5 text-[11px] font-extrabold text-accent">
+        {SIGNAL_LABEL[primary.type]}
+      </span>
+      <p className="mt-1.5 text-[15px] font-extrabold leading-snug">{feedback.summary}</p>
+      {primary.message !== feedback.summary && (
+        <p className="mt-1 text-[13px] text-muted">{primary.message}</p>
+      )}
+      <ItemList title="잘한 점" mark="✓" items={feedback.wins} />
+      <ItemList title="주의할 점" mark="!" items={feedback.cautions} />
+      <ItemList title="다음 운동에서" mark="→" items={feedback.next_actions} />
+      <p className="mt-3 text-[13px] leading-relaxed text-muted">{feedback.coach_message}</p>
+      <p className="mt-2 text-[10.5px] text-faint">
+        내 지난 기록만 비교해 만든 참고용 코칭이에요. 계획은 자동으로 바뀌지 않아요.
+      </p>
+    </div>
+  );
+}
+
+function Skeleton({ label }: { label: string }) {
+  return (
+    <div className="mt-3" role="status" aria-live="polite">
+      <p className="text-[13px] font-bold text-muted">{label}</p>
+      <div className="mt-2 h-3 w-4/5 animate-pulse rounded bg-surface-2" />
+      <div className="mt-1.5 h-3 w-3/5 animate-pulse rounded bg-surface-2" />
+    </div>
+  );
+}
+
+export function CoachCard({
+  userId,
+  sessionId,
+}: {
+  userId: string;
+  sessionId: string;
+}) {
+  const [phase, setPhase] = useState<Phase>("checking");
+  const [metrics, setMetrics] = useState<WorkoutAnalysis | null>(null);
+  const [feedback, setFeedback] = useState<CoachFeedback | null>(null);
+  const [failure, setFailure] = useState<{ code: string; retryable: boolean } | null>(null);
+  const [flags, setFlags] = useState<SessionFlag[]>([]);
+  const [hasSessionFeedback, setHasSessionFeedback] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const aliveRef = useRef(true);
+
+  const run = useCallback(
+    async (retry: boolean): Promise<void> => {
+      setPhase("loading");
+      let res: CoachResponse = await requestCoachFeedback(sessionId, retry);
+      // 다른 요청(새로고침·중복 마운트)이 생성 중이면 기다렸다 다시 묻는다.
+      // 다시 묻는 것은 재시도가 아니다 — 서버가 끝난 결과를 돌려줄 뿐이다.
+      for (let polls = 0; res.status === "pending" && polls < MAX_POLLS; polls++) {
+        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+        if (!aliveRef.current) return;
+        res = await requestCoachFeedback(sessionId, false);
+      }
+      if (!aliveRef.current) return;
+      switch (res.status) {
+        case "completed":
+          setMetrics(res.metrics);
+          setFeedback(res.feedback);
+          setPhase("completed");
+          return;
+        case "pending":
+          setFailure({ code: "timeout", retryable: true });
+          setPhase("failed");
+          return;
+        case "failed":
+          setMetrics(res.metrics);
+          setFailure({ code: res.errorCode, retryable: res.retryable });
+          setPhase("failed");
+          return;
+        case "profile_required":
+          setPhase("needs_profile");
+          return;
+        case "error":
+          setFailure({ code: res.errorCode, retryable: res.errorCode !== "unauthorized" });
+          setPhase("failed");
+      }
+    },
+    [sessionId],
+  );
+
+  useEffect(() => {
+    aliveRef.current = true;
+    let cancelled = false;
+    (async () => {
+      try {
+        const [profile, sessionFeedback] = await Promise.all([
+          loadTrainingProfile(userId),
+          loadSessionFeedback(sessionId),
+        ]);
+        if (cancelled) return;
+        setHasSessionFeedback(sessionFeedback !== null);
+        if (sessionFeedback) setFlags(sessionFeedback.flags);
+        if (!profile) setPhase("needs_profile");
+        else if (!sessionFeedback) setPhase("needs_effort");
+        else void run(false);
+      } catch {
+        // 0112 미적용·오프라인 — 칸을 숨긴다. 완료 화면의 나머지는 멀쩡하다
+        if (!cancelled) setPhase("unavailable");
+      }
+    })();
+    return () => {
+      cancelled = true;
+      aliveRef.current = false;
+    };
+  }, [userId, sessionId, run]);
+
+  async function submitEffort(effort: EffortLevel | null) {
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      await saveSessionFeedback(userId, sessionId, { effort, flags });
+      setHasSessionFeedback(true);
+    } catch {
+      // 체감 저장이 실패해도 분석은 받는다 — 체감 없이 분석할 뿐이다
+    }
+    setSubmitting(false);
+    void run(false);
+  }
+
+  async function saveProfile(profile: TrainingProfile) {
+    await saveTrainingProfile(userId, profile);
+    setSheetOpen(false);
+    if (hasSessionFeedback) void run(false);
+    else setPhase("needs_effort");
+  }
+
+  function openSheet() {
+    setSheetOpen(true);
+    void recordFunnelEvent("ai_coach_onboarding_started", userId);
+  }
+
+  function toggleFlag(flag: SessionFlag) {
+    setFlags((current) =>
+      current.includes(flag) ? current.filter((f) => f !== flag) : [...current, flag],
+    );
+  }
+
+  if (phase === "unavailable" || phase === "dismissed") return null;
+
+  return (
+    <section
+      aria-labelledby="coach-card-title"
+      className="rounded-card border border-line bg-surface p-4 shadow-card"
+    >
+      <p id="coach-card-title" className="flex items-center gap-1.5 text-xs font-extrabold text-accent">
+        <span aria-hidden>🤖</span> GND AI 코치
+      </p>
+
+      {metrics && <Performance metrics={metrics} />}
+
+      {phase === "checking" && <Skeleton label="코치를 부르는 중…" />}
+
+      {phase === "needs_profile" && (
+        <div className="mt-2">
+          <p className="text-sm font-extrabold">지난 기록과 비교해 오늘 운동을 분석해 드려요</p>
+          <p className="mt-0.5 text-[11.5px] text-muted">목표를 한 번만 알려 주면 시작해요 · 30초</p>
+          <button
+            type="button"
+            onClick={openSheet}
+            className="mt-3 h-11 w-full rounded-card bg-accent text-sm font-extrabold text-accent-ink"
+          >
+            목표 설정하고 분석 받기
+          </button>
+          <button
+            type="button"
+            onClick={() => setPhase("dismissed")}
+            className="mt-1 h-9 w-full text-[11.5px] font-bold text-faint"
+          >
+            다음에
+          </button>
+        </div>
+      )}
+
+      {phase === "needs_effort" && (
+        <div className="mt-2">
+          <p className="text-sm font-extrabold">오늘 운동 강도는 어땠나요?</p>
+          <p className="mt-0.5 text-[11.5px] text-muted">
+            해당하는 게 있으면 먼저 고르고, 강도를 누르면 바로 분석해요
+          </p>
+          <div className="mt-2.5 flex flex-wrap gap-1.5">
+            {FLAG_CHOICES.map((choice) => (
+              <button
+                key={choice.value}
+                type="button"
+                aria-pressed={flags.includes(choice.value)}
+                onClick={() => toggleFlag(choice.value)}
+                className={`h-8 rounded-full border px-3 text-[12px] font-bold ${
+                  flags.includes(choice.value)
+                    ? "border-warn bg-surface-2 text-warn"
+                    : "border-line bg-surface-2 text-muted"
+                }`}
+              >
+                {choice.label}
+              </button>
+            ))}
+          </div>
+          <div className="mt-2.5 grid grid-cols-5 gap-1.5">
+            {EFFORT_CHOICES.map((choice) => (
+              <button
+                key={choice.value}
+                type="button"
+                disabled={submitting}
+                onClick={() => void submitEffort(choice.value)}
+                className="flex h-16 flex-col items-center justify-center gap-0.5 rounded-card border border-line bg-surface-2 disabled:opacity-50"
+              >
+                <span aria-hidden className="text-2xl leading-none">{choice.emoji}</span>
+                <span className="text-[10.5px] font-bold">{choice.label}</span>
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            disabled={submitting}
+            onClick={() => void submitEffort(null)}
+            className="mt-1.5 h-9 w-full text-[11.5px] font-bold text-faint"
+          >
+            건너뛰고 분석
+          </button>
+        </div>
+      )}
+
+      {phase === "loading" && <Skeleton label="오늘 운동을 분석하고 있어요…" />}
+
+      {phase === "completed" && feedback && <FeedbackView feedback={feedback} />}
+
+      {phase === "failed" && (
+        <div className="mt-3">
+          <p className="text-[13px] font-bold text-muted">
+            {failure?.code === "not_configured"
+              ? "AI 코치를 준비하고 있어요. 위의 기록은 그대로 저장됐어요."
+              : "AI 분석을 불러오지 못했어요. 운동 기록은 그대로 저장됐어요."}
+          </p>
+          {failure?.retryable && failure.code !== "not_configured" && (
+            <button
+              type="button"
+              onClick={() => void run(true)}
+              className="mt-2 h-10 rounded-card border border-line bg-surface-2 px-4 text-[13px] font-extrabold"
+            >
+              다시 분석
+            </button>
+          )}
+        </div>
+      )}
+
+      {flags.includes("pain") && (
+        <p className="mt-3 rounded-card-sm border border-warn/40 px-3 py-2 text-[12px] font-bold text-warn">
+          통증이 있었다면 무리하지 마세요. 심하거나 계속되면 운동을 멈추고 전문가와 상담하세요.
+        </p>
+      )}
+
+      {sheetOpen && (
+        <TrainingProfileSheet onSave={saveProfile} onClose={() => setSheetOpen(false)} />
+      )}
+    </section>
+  );
+}

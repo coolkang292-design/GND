@@ -78,6 +78,16 @@ export type LocalSet = {
    * 코드가 구분하지 않으므로(둘 다 "안 받음") 저장할 때 `?? null`로 좁힌다.
    */
   effortFeedback?: EffortFeedback | null;
+  /**
+   * 기기에서 이 세트를 **완료로 누른 시각** (0112, AI 코치 V1).
+   *
+   * 서버 `completed_at`은 트리거가 종료 저장 시각으로 덮어써서 세트 간격을 잴 수
+   * 없다. 그래서 여기서 잰 값을 `client_completed_at`으로 보낸다. 완료를 풀면 지운다.
+   *
+   * 선택 필드인 이유: `effortFeedback`과 같다 — 옛 draft·계획에서 온 세트에는 없고,
+   * 없으면 분석이 `missing`으로 처리한다. 그래서 **draft 버전을 올리지 않았다.**
+   */
+  doneAtMs?: number | null;
 };
 
 export function newSet(partial: Partial<Omit<LocalSet, "key">> = {}): LocalSet {
@@ -748,11 +758,58 @@ export async function saveSessionExercises(
     throw new Error("운동 저장 결과가 요청과 다릅니다");
   }
 
-  const setRows = exercises.flatMap((ex, i) => {
+  const setRows = toSetRows(
+    inserted.map((row) => row.id as string),
+    exercises,
+  );
+  if (setRows.length === 0) return;
+
+  const { error: setError } = await supabase.from("workout_sets").insert(setRows);
+  if (!setError) return;
+  /*
+    ⚠️ 0112가 적용되기 전에 이 코드가 나가면 `client_completed_at` 칸이 없어
+       **운동 종료 저장이 통째로 실패한다** — 사용자는 운동을 못 끝낸다.
+       그 경우에만 그 칸을 빼고 한 번 더 넣는다. 순서(마이그레이션 → 배포)를
+       어겨도 되는 게 아니라, 어겼을 때 사용자가 갇히지 않게 하는 안전망이다.
+  */
+  if (!isMissingClientCompletedAtColumn(setError)) throw setError;
+  const { error: retryError } = await supabase
+    .from("workout_sets")
+    .insert(
+      setRows.map((row) => {
+        const { client_completed_at, ...rest } = row;
+        void client_completed_at;
+        return rest;
+      }),
+    );
+  if (retryError) throw retryError;
+}
+
+/** PostgREST가 "그런 칸 없음"(PGRST204)으로 `client_completed_at`을 거부했나 */
+export function isMissingClientCompletedAtColumn(error: {
+  code?: string;
+  message?: string;
+}): boolean {
+  return (
+    error.code === "PGRST204" &&
+    (error.message ?? "").includes("client_completed_at")
+  );
+}
+
+/**
+ * 로컬 세트 → `workout_sets` insert 행.
+ *
+ * `workoutExerciseIds[i]`는 `exercises[i]`가 저장된 행 id다(같은 순서).
+ */
+export function toSetRows(
+  workoutExerciseIds: readonly string[],
+  exercises: readonly LocalExercise[],
+) {
+  return exercises.flatMap((ex, i) => {
     const isCardio = ex.exerciseType === "cardio";
     const isTime = ex.exerciseType === "bodyweight" && ex.measure === "time";
     return ex.sets.map((s, si) => ({
-      workout_exercise_id: inserted[i].id,
+      workout_exercise_id: workoutExerciseIds[i],
       set_number: si + 1,
       weight_kg: ex.exerciseType === "weight" ? s.weightKg : null,
       reps: isCardio || isTime ? null : s.reps,
@@ -769,12 +826,13 @@ export async function saveSessionExercises(
       // 0067. 안 물어본 세트는 undefined라 `?? null`로 좁힌다 — undefined를 그대로
       // 보내면 PostgREST가 키를 빼서 열마다 행 모양이 달라진다.
       effort_feedback: s.effortFeedback ?? null,
+      // 0112. 완료가 아닌 세트의 시각은 보내지 않는다 — 풀었다 다시 누르기 전의 값이다
+      client_completed_at:
+        s.done && typeof s.doneAtMs === "number" && Number.isFinite(s.doneAtMs)
+          ? new Date(s.doneAtMs).toISOString()
+          : null,
     }));
   });
-  if (setRows.length === 0) return;
-
-  const { error: setError } = await supabase.from("workout_sets").insert(setRows);
-  if (setError) throw setError;
 }
 
 /** 직전 완료 세션의 웨이트 완료 볼륨(kg) — 헤더 '이전 대비' 표시용 (§10) */

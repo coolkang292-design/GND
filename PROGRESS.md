@@ -3,6 +3,20 @@
 > 새 세션은 저장소 루트 `AGENTS.md` → `CLAUDE.md` → 이 파일 → 가장 최근의 관련 `docs/superpowers/HANDOFF-*.md` 순서로 읽는다.
 > 이 파일은 전체 흐름의 요약이고, 작업별 세부 사실과 남은 확인은 최신 인수인계서가 기준이다.
 
+## 🟡 2026-09-28 AI 코치 V1 (운동 직후 피드백) — **0112 적용 · 화면 확인 완료 · 커밋 · ⛔ Vercel 키 등록 대기(배포 전)**
+
+**인수인계서: `docs/superpowers/HANDOFF-2026-09-28-ai-coach-v1.md`** (설계: `specs/2026-09-28-ai-coach-v1-design.md`)
+
+- 완료 화면에 AI 코치 칸: 목표 설정(칩 6개) → 체감 이모지 → 코드가 직전 기록과 비교·판정 → DeepSeek(OpenRouter 경유)가 문장으로
+- 사용자 결정: 제공사 **DeepSeek**(CLI 모델은 운영 불가 판정) · **Next.js 라우트** · 세트 타이밍은 **완료 시각만**
+- `complete_workout_v2`·XP·배지 무변경. AI 실패해도 완료 화면은 그대로
+- 게이트: lint 0 errors · typecheck · **테스트 3864건 통과** · build · 번들에 키 0건
+- 0112 적용(사용자 Run) · 권한 실측 35/0 · 개발 서버 화면 확인(성장·통증 두 흐름, AI 1회 생성)
+- 0112 전 안전망 실측: 운동 완료 정상(칸 없음 → 재시도), AI 칸 숨김
+- ⛔ 다음: **Vercel에 `OPENROUTER_API_KEY` 등록(사용자)** → 배포 → 운영 실물 확인. 완료 카드 사진 개편은 별도
+
+---
+
 ## ✅ 2026-09-26 세트 시계 복원 + 러닝 페이스 — **운영 배포 완료 · 운영 실물 검증 완료**
 
 > 배포: `gnd-4mkirn858-gnd4.vercel.app` → `https://gnd-one.vercel.app` (2026-09-26, `f0a1545`)

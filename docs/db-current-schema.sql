@@ -7,7 +7,7 @@
 -- 쓰는 법: 함수·정책의 '현행' 정의가 필요할 때 마이그레이션 51개를
 -- 뒤지지 말고 이 파일을 검색하라. 마이그레이션을 적용한 뒤에는 다시 뽑아라.
 --
--- 함수 102개 · 정책 79개 · 인덱스 100개
+-- 함수 102개 · 정책 86개 · 인덱스 105개
 
 -- ════════════════════════════════════════════════════════════
 -- 함수
@@ -4980,6 +4980,14 @@ $function$;
 -- ── streak_shield_transactions ──
 -- streak_shield_own_select  [SELECT]  roles=authenticated
 --   using  : (user_id = auth.uid())
+-- ── training_profiles ──
+-- training_profiles_insert_own  [INSERT]  roles=authenticated
+--   check  : (user_id = auth.uid())
+-- training_profiles_select_own  [SELECT]  roles=authenticated
+--   using  : (user_id = auth.uid())
+-- training_profiles_update_own  [UPDATE]  roles=authenticated
+--   using  : (user_id = auth.uid())
+--   check  : (user_id = auth.uid())
 -- ── user_badges ──
 -- user_badges_own_select  [SELECT]  roles=authenticated
 --   using  : (user_id = auth.uid())
@@ -5009,6 +5017,9 @@ $function$;
 --   using  : (user_id = auth.uid())
 -- ── user_wallet ──
 -- user_wallet_own_select  [SELECT]  roles=authenticated
+--   using  : (user_id = auth.uid())
+-- ── workout_ai_feedback ──
+-- workout_ai_feedback_select_own  [SELECT]  roles=authenticated
 --   using  : (user_id = auth.uid())
 -- ── workout_events ──
 -- events_select_own_or_crew  [SELECT]  roles=authenticated
@@ -5054,6 +5065,16 @@ $function$;
 -- workout_routines_select_own  [SELECT]  roles=public
 --   using  : (user_id = auth.uid())
 -- workout_routines_update_own  [UPDATE]  roles=public
+--   using  : (user_id = auth.uid())
+--   check  : (user_id = auth.uid())
+-- ── workout_session_feedback ──
+-- workout_session_feedback_insert_own  [INSERT]  roles=authenticated
+--   check  : ((user_id = auth.uid()) AND (EXISTS ( SELECT 1
+   FROM workout_sessions s
+  WHERE ((s.id = workout_session_feedback.session_id) AND (s.user_id = auth.uid()) AND (s.status = 'completed'::text)))))
+-- workout_session_feedback_select_own  [SELECT]  roles=authenticated
+--   using  : (user_id = auth.uid())
+-- workout_session_feedback_update_own  [UPDATE]  roles=authenticated
 --   using  : (user_id = auth.uid())
 --   check  : (user_id = auth.uid())
 -- ── workout_sessions ──
@@ -5150,6 +5171,7 @@ $function$;
 -- CREATE UNIQUE INDEX record_views_pkey ON public.record_views USING btree (id);
 -- CREATE UNIQUE INDEX streak_shield_source_unique ON public.streak_shield_transactions USING btree (user_id, reason, source_type, source_id);
 -- CREATE UNIQUE INDEX streak_shield_transactions_pkey ON public.streak_shield_transactions USING btree (id);
+-- CREATE UNIQUE INDEX training_profiles_pkey ON public.training_profiles USING btree (user_id);
 -- CREATE UNIQUE INDEX user_badges_pkey ON public.user_badges USING btree (user_id, badge_key, period_key);
 -- CREATE INDEX user_blocks_blocked_idx ON public.user_blocks USING btree (blocked_id);
 -- CREATE UNIQUE INDEX user_blocks_pkey ON public.user_blocks USING btree (blocker_id, blocked_id);
@@ -5161,6 +5183,8 @@ $function$;
 -- CREATE UNIQUE INDEX user_reports_pkey ON public.user_reports USING btree (id);
 -- CREATE UNIQUE INDEX user_unlocks_pkey ON public.user_unlocks USING btree (user_id, unlock_key);
 -- CREATE UNIQUE INDEX user_wallet_pkey ON public.user_wallet USING btree (user_id);
+-- CREATE UNIQUE INDEX workout_ai_feedback_pkey ON public.workout_ai_feedback USING btree (session_id);
+-- CREATE INDEX workout_ai_feedback_user_recent ON public.workout_ai_feedback USING btree (user_id, created_at DESC);
 -- CREATE UNIQUE INDEX workout_events_pkey ON public.workout_events USING btree (id);
 -- CREATE INDEX workout_events_session_idx ON public.workout_events USING btree (session_id);
 -- CREATE INDEX workout_events_user_time_idx ON public.workout_events USING btree (user_id, created_at DESC);
@@ -5174,6 +5198,8 @@ $function$;
 -- CREATE UNIQUE INDEX workout_routines_pkey ON public.workout_routines USING btree (id);
 -- CREATE UNIQUE INDEX workout_routines_user_name ON public.workout_routines USING btree (user_id, name);
 -- CREATE INDEX workout_routines_user_updated ON public.workout_routines USING btree (user_id, updated_at DESC);
+-- CREATE UNIQUE INDEX workout_session_feedback_pkey ON public.workout_session_feedback USING btree (session_id);
+-- CREATE INDEX workout_session_feedback_user_recent ON public.workout_session_feedback USING btree (user_id, created_at DESC);
 -- CREATE UNIQUE INDEX workout_sessions_one_active ON public.workout_sessions USING btree (user_id) WHERE (status = 'active'::text);
 -- CREATE UNIQUE INDEX workout_sessions_pkey ON public.workout_sessions USING btree (id);
 -- CREATE INDEX workout_sessions_program_progress ON public.workout_sessions USING btree (program_enrollment_id, program_week, program_session) WHERE (program_enrollment_id IS NOT NULL);
