@@ -66,3 +66,38 @@ const LAST_SET_CHEERS = [
 export function lastSetCheer(input: { todayKey: string }): string {
   return pickByDay(LAST_SET_CHEERS, input.todayKey);
 }
+
+/**
+ * 운동 완료 카드 (2026-09-28 사용자 요청 — "성취감이 느껴지게 사진 자산과
+ * '오늘도 해냈다'는 느낌, 기록이 쌓여서 실력이 된다는 느낌의 마케팅 문구").
+ *
+ * ⚠️ 마케팅 문구("오늘도 해냈다", "오늘의 기록이 쌓여 내일의 실력이 된다")는
+ *    **사용자가 만든 이미지 안에 박혀 있다.** 같은 문구를 글자로 또 얹지 마라 —
+ *    두 벌이 되어 산만해진다. 이미지를 바꾸면 `alt`도 같이 고친다.
+ * - `progressLine`은 이미지가 못 하는 것, **실제 운동한 날 수**를 말한다.
+ *   "기록이 쌓인다"의 근거가 숫자다. 모르면(null) 지어내지 않고 숨긴다
+ */
+export type CompletionHero = {
+  image: string;
+  alt: string;
+  progressLine: string | null;
+};
+
+export function completionHero(input: {
+  /** 오늘을 포함한 누적 운동일 수. 아직 모르면 null */
+  workoutDays: number | null;
+}): CompletionHero {
+  const days = input.workoutDays;
+  let progressLine: string | null = null;
+  if (days !== null && days >= 1) {
+    progressLine =
+      days === 1
+        ? "오늘이 첫 기록이에요. 여기서부터 쌓입니다"
+        : `운동한 날 ${days}일째, 기록이 쌓이고 있어요`;
+  }
+  return {
+    image: "/record-assets/workout-complete-hero.webp",
+    alt: "오늘도 해냈다 — 오늘의 기록이 쌓여 내일의 실력이 된다",
+    progressLine,
+  };
+}

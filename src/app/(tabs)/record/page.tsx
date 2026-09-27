@@ -154,6 +154,7 @@ import {
 } from "@/lib/domain/previous-set";
 import { bottomOffset, MINIMIZED_BAR } from "@/lib/domain/floating-bars";
 import {
+  completionHero,
   lastSetCheer,
   workoutCompletionMessage,
 } from "@/lib/domain/workout-complete-message";
@@ -169,6 +170,7 @@ import {
 import { dayKey, resolveTimeZone } from "@/lib/domain/time";
 import { getMyBadgeMetrics } from "@/lib/badges";
 import { TodayStatusCard } from "@/components/record/today-status-card";
+import { CompletionHeroCard } from "@/components/record/completion-hero-card";
 import { CumulativeStatsCard } from "@/components/record/cumulative-stats-card";
 import { weeklyBars } from "@/lib/domain/today-status";
 import {
@@ -3199,20 +3201,23 @@ function WorkoutScreen({ userId }: { userId: string }) {
             운동 기록
           </h1>
         </header>
-        <section className="rounded-card border border-good bg-surface p-6 text-center shadow-card">
-          <div className="text-4xl">🎉</div>
-          <h2 className="mt-1 text-lg font-extrabold">오늘 운동 완료!</h2>
-          <p className="mt-1 text-sm text-muted">
-            {result.durationMinutes}분 · 볼륨{" "}
-            {result.summary.weightVolumeKg.toLocaleString()}kg · 완료 세트{" "}
-            {result.summary.completedSetCount}개
-          </p>
-          {result.recordNote && (
-            <p className="mt-2 rounded-card-sm bg-accent-weak px-3 py-2 text-sm font-extrabold text-accent">
-              🏅 기록 갱신! 지난번보다 {result.recordNote}
-            </p>
-          )}
-        </section>
+        <CompletionHeroCard
+          hero={completionHero({
+            // ⚠️ 방금 끝낸 운동을 **합쳐서** 센다. `sessionMinutes`는 완료 전에 읽은
+            //    값이라 오늘 첫 운동이면 오늘이 빠져 있다. 같은 날 두 번째면 하루로 합쳐진다
+            workoutDays: sessionMinutes
+              ? workoutDayKeys(
+                  [
+                    ...sessionMinutes.map((r) => r.completedAt),
+                    new Date(result.completedAtMs),
+                  ],
+                  resolveTimeZone(),
+                ).length
+              : null,
+          })}
+          statsLine={`${result.durationMinutes}분 · 볼륨 ${result.summary.weightVolumeKg.toLocaleString()}kg · 완료 세트 ${result.summary.completedSetCount}개`}
+          recordNote={result.recordNote}
+        />
         {/*
           이번 운동이 챌린지 목표에 얼마나 보탰는지 (2026-08-04, 사용자 요청).
           사진 필수 챌린지인데 아직 사진이 없으면 "쌓여요"(미래형)로 말하고,

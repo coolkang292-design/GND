@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  completionHero,
   lastSetCheer,
   workoutCompletionMessage,
 } from "./workout-complete-message";
@@ -111,5 +112,35 @@ describe("lastSetCheer — 마지막 세트 직전", () => {
 
   it("빈 날짜에도 문구가 있다 — 화면이 비지 않아야 한다", () => {
     expect(lastSetCheer({ todayKey: "" }).length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * ③ 운동 완료 카드 (2026-09-28 사용자 요청 — "성취감이 느껴지게 사진 자산과
+ * '오늘도 해냈다'는 느낌, 기록이 쌓여서 실력이 된다는 느낌의 마케팅 문구").
+ * 문구는 **사용자가 만든 이미지 안에 이미 있다.** 여기는 이미지가 못 하는 것 —
+ * 실제 쌓인 날 수 — 만 말한다.
+ */
+describe("completionHero", () => {
+  it("사용자 이미지를 쓰고, 이미지 속 문구를 대체 텍스트로 준다", () => {
+    const hero = completionHero({ workoutDays: 20 });
+    expect(hero.image).toBe("/record-assets/workout-complete-hero.webp");
+    expect(hero.alt).toContain("오늘도 해냈다");
+    expect(hero.alt).toContain("실력");
+  });
+
+  it("쌓인 날 수를 실제 숫자로 말한다 — 기록이 쌓인다는 근거", () => {
+    expect(completionHero({ workoutDays: 21 }).progressLine).toContain("21일째");
+  });
+
+  it("첫날은 '첫 기록'으로 말한다 — '1일째'보다 시작의 의미가 산다", () => {
+    const line = completionHero({ workoutDays: 1 }).progressLine;
+    expect(line).toContain("첫 기록");
+    expect(line).not.toContain("1일째");
+  });
+
+  it("날 수를 모르면 숫자를 지어내지 않는다", () => {
+    expect(completionHero({ workoutDays: null }).progressLine).toBeNull();
+    expect(completionHero({ workoutDays: 0 }).progressLine).toBeNull();
   });
 });
