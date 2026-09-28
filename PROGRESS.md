@@ -3,6 +3,14 @@
 > 새 세션은 저장소 루트 `AGENTS.md` → `CLAUDE.md` → 이 파일 → 가장 최근의 관련 `docs/superpowers/HANDOFF-*.md` 순서로 읽는다.
 > 이 파일은 전체 흐름의 요약이고, 작업별 세부 사실과 남은 확인은 최신 인수인계서가 기준이다.
 
+## 🟡 2026-09-29 완료 카드 사진 무작위 — **개발 서버 확인 · 커밋 · 배포 승인 대기**
+
+- 사용자 사진 `어플 UI 이미지/운동완료 사진/` 9장 중 중복 1장(05_04_26 ≈ 05_00_40, 평균 차 2.4/255) 제외 + 기존 `workout-complete-hero` = **9장** (`workout-complete-01~08.webp`, 60~93KB)
+- 완료 순간 한 번 뽑아 `CompletedResult.heroImageIndex`에 저장(렌더마다 안 바뀜). **직전 사진은 빼고** 뽑는다 — 직전 번호는 localStorage `gnd:completion-hero:last`, 막혀 있으면 그냥 무작위 (`pickCompletionHeroIndex`, `pickNextCompletionHero`)
+- alt는 사진마다 그 사진 속 문구
+- 개발 서버(픽스처 A): 1회차 08번 → 2회차 06번, 누적 21일째(같은 날 두 번째도 21). 9장 모두 200
+- 게이트: lint 0 errors · typecheck · 테스트 3884 · build
+
 ## ✅ 2026-09-28 완료 카드 "오늘도 해냈다" — **운영 배포 완료 · 운영 실물 검증 완료**
 
 - 완료 화면 맨 위 🎉 카드 → 사용자 제작 이미지(`public/record-assets/workout-complete-hero.webp`, 원본 `어플 UI 이미지/운동완료 사진.png` 1.8MB → 1200px WebP 72KB)

@@ -83,10 +83,83 @@ export type CompletionHero = {
   progressLine: string | null;
 };
 
+/**
+ * 완료 카드 사진 풀 — 운동할 때마다 무작위로 하나 (2026-09-29 사용자 요청).
+ * 원본: `어플 UI 이미지/운동완료 사진/` (1672×941 PNG → 1200px WebP).
+ *
+ * ⚠️ `alt`는 **그 사진 안에 박힌 문구**다. 사진을 바꾸면 alt도 같이 고친다.
+ * ⚠️ 원본 `05_04_26`은 `05_00_40`과 사실상 같은 사진(평균 차 2.4/255)이라 뺐다.
+ */
+export const COMPLETION_HERO_IMAGES: readonly { src: string; alt: string }[] = [
+  {
+    src: "/record-assets/workout-complete-hero.webp",
+    alt: "오늘도 해냈다 — 오늘의 기록이 쌓여 내일의 실력이 된다",
+  },
+  {
+    src: "/record-assets/workout-complete-01.webp",
+    alt: "오늘도 해냈다 — 기록은 쌓이고, 실력은 남는다",
+  },
+  {
+    src: "/record-assets/workout-complete-02.webp",
+    alt: "오늘도 해냈다 — 무게를 견딘 시간이 결국 몸을 만든다",
+  },
+  {
+    src: "/record-assets/workout-complete-03.webp",
+    alt: "오늘도 해냈다 — 버틴 시간이 결국 체력을 만든다",
+  },
+  {
+    src: "/record-assets/workout-complete-04.webp",
+    alt: "오늘도 해냈다 — 기록은 쌓이고, 실력은 남는다. 오늘 운동 완료",
+  },
+  {
+    src: "/record-assets/workout-complete-05.webp",
+    alt: "오늘도 해냈다 — 기록은 쌓이고, 실력은 남는다. 오늘 운동 완료",
+  },
+  {
+    src: "/record-assets/workout-complete-06.webp",
+    alt: "오늘도 해냈다 — 기록은 쌓이고, 실력은 남는다. 오늘 운동 완료",
+  },
+  {
+    src: "/record-assets/workout-complete-07.webp",
+    alt: "기록이 실력이 된다 — 오늘의 완료가 내일의 기준이 된다. 기록 저장 완료",
+  },
+  {
+    src: "/record-assets/workout-complete-08.webp",
+    alt: "오늘도 해냈다 — 오늘의 한 번이 내일의 변화를 만든다",
+  },
+];
+
+/**
+ * 사진 번호를 뽑는다. `random`은 [0, 1) 난수 — 밖에서 받아야 테스트할 수 있다.
+ *
+ * **직전에 본 사진은 빼고** 뽑는다. 무작위여도 같은 사진이 연달아 나오면
+ * "랜덤이 안 되나?"로 보인다. `previous`가 목록 밖 값이면 없는 것으로 친다.
+ *
+ * ⚠️ 렌더 중에 부르지 않는다(위 `pickByDay` 이유와 같다). 완료하는 순간
+ *    **한 번** 뽑아 결과에 저장한다.
+ */
+export function pickCompletionHeroIndex(
+  random: number,
+  previous: number | null,
+): number {
+  const n = COMPLETION_HERO_IMAGES.length;
+  const r = Math.min(Math.max(Number.isFinite(random) ? random : 0, 0), 0.999999);
+  const hasPrevious =
+    previous !== null && Number.isInteger(previous) && previous >= 0 && previous < n;
+  if (!hasPrevious || n < 2) return Math.floor(r * n);
+  // 직전을 뺀 n-1장 중에서 고르고, 직전 번호 이상이면 한 칸 민다
+  const picked = Math.floor(r * (n - 1));
+  return picked >= previous ? picked + 1 : picked;
+}
+
 export function completionHero(input: {
   /** 오늘을 포함한 누적 운동일 수. 아직 모르면 null */
   workoutDays: number | null;
+  /** `pickCompletionHeroIndex`로 뽑은 번호 */
+  imageIndex: number;
 }): CompletionHero {
+  const n = COMPLETION_HERO_IMAGES.length;
+  const image = COMPLETION_HERO_IMAGES[((input.imageIndex % n) + n) % n];
   const days = input.workoutDays;
   let progressLine: string | null = null;
   if (days !== null && days >= 1) {
@@ -95,9 +168,5 @@ export function completionHero(input: {
         ? "오늘이 첫 기록이에요. 여기서부터 쌓입니다"
         : `운동한 날 ${days}일째, 기록이 쌓이고 있어요`;
   }
-  return {
-    image: "/record-assets/workout-complete-hero.webp",
-    alt: "오늘도 해냈다 — 오늘의 기록이 쌓여 내일의 실력이 된다",
-    progressLine,
-  };
+  return { image: image.src, alt: image.alt, progressLine };
 }

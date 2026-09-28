@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  COMPLETION_HERO_IMAGES,
   completionHero,
   lastSetCheer,
+  pickCompletionHeroIndex,
   workoutCompletionMessage,
 } from "./workout-complete-message";
 
@@ -122,25 +124,93 @@ describe("lastSetCheer — 마지막 세트 직전", () => {
  * 실제 쌓인 날 수 — 만 말한다.
  */
 describe("completionHero", () => {
-  it("사용자 이미지를 쓰고, 이미지 속 문구를 대체 텍스트로 준다", () => {
-    const hero = completionHero({ workoutDays: 20 });
-    expect(hero.image).toBe("/record-assets/workout-complete-hero.webp");
+  it("고른 번호의 사진과 그 사진 속 문구(대체 텍스트)를 준다", () => {
+    const hero = completionHero({ workoutDays: 20, imageIndex: 0 });
+    expect(hero.image).toBe(COMPLETION_HERO_IMAGES[0].src);
+    expect(hero.alt).toBe(COMPLETION_HERO_IMAGES[0].alt);
     expect(hero.alt).toContain("오늘도 해냈다");
-    expect(hero.alt).toContain("실력");
+  });
+
+  it("범위를 벗어난 번호도 목록 안의 사진으로 떨어진다 — 사진이 빠지면 안 된다", () => {
+    const n = COMPLETION_HERO_IMAGES.length;
+    expect(completionHero({ workoutDays: 3, imageIndex: n }).image).toBe(
+      COMPLETION_HERO_IMAGES[0].src,
+    );
+    expect(completionHero({ workoutDays: 3, imageIndex: -1 }).image).toBe(
+      COMPLETION_HERO_IMAGES[n - 1].src,
+    );
   });
 
   it("쌓인 날 수를 실제 숫자로 말한다 — 기록이 쌓인다는 근거", () => {
-    expect(completionHero({ workoutDays: 21 }).progressLine).toContain("21일째");
+    expect(completionHero({ workoutDays: 21, imageIndex: 0 }).progressLine).toContain(
+      "21일째",
+    );
   });
 
   it("첫날은 '첫 기록'으로 말한다 — '1일째'보다 시작의 의미가 산다", () => {
-    const line = completionHero({ workoutDays: 1 }).progressLine;
+    const line = completionHero({ workoutDays: 1, imageIndex: 0 }).progressLine;
     expect(line).toContain("첫 기록");
     expect(line).not.toContain("1일째");
   });
 
   it("날 수를 모르면 숫자를 지어내지 않는다", () => {
-    expect(completionHero({ workoutDays: null }).progressLine).toBeNull();
-    expect(completionHero({ workoutDays: 0 }).progressLine).toBeNull();
+    expect(completionHero({ workoutDays: null, imageIndex: 0 }).progressLine).toBeNull();
+    expect(completionHero({ workoutDays: 0, imageIndex: 0 }).progressLine).toBeNull();
+  });
+});
+
+/** 운동할 때마다 무작위 사진 (2026-09-29 사용자 요청) */
+describe("COMPLETION_HERO_IMAGES", () => {
+  it("사진이 여러 장이고, 경로가 겹치지 않는다", () => {
+    expect(COMPLETION_HERO_IMAGES.length).toBeGreaterThanOrEqual(8);
+    const srcs = COMPLETION_HERO_IMAGES.map((i) => i.src);
+    expect(new Set(srcs).size).toBe(srcs.length);
+  });
+
+  it("모든 사진에 경로 규칙과 대체 텍스트가 있다", () => {
+    for (const image of COMPLETION_HERO_IMAGES) {
+      expect(image.src).toMatch(/^\/record-assets\/workout-complete-.+\.webp$/);
+      expect(image.alt.length).toBeGreaterThan(5);
+    }
+  });
+});
+
+describe("pickCompletionHeroIndex", () => {
+  const n = COMPLETION_HERO_IMAGES.length;
+
+  it("난수에 따라 모든 사진이 나올 수 있다", () => {
+    const seen = new Set<number>();
+    for (let k = 0; k < n; k++) seen.add(pickCompletionHeroIndex((k + 0.5) / n, null));
+    expect(seen.size).toBe(n);
+  });
+
+  it("직전에 본 사진은 바로 다시 나오지 않는다", () => {
+    for (let prev = 0; prev < n; prev++) {
+      for (let k = 0; k < 50; k++) {
+        const picked = pickCompletionHeroIndex(k / 50, prev);
+        expect(picked).not.toBe(prev);
+        expect(picked).toBeGreaterThanOrEqual(0);
+        expect(picked).toBeLessThan(n);
+      }
+    }
+  });
+
+  it("직전을 빼도 나머지 사진은 전부 나올 수 있다", () => {
+    const seen = new Set<number>();
+    for (let k = 0; k < 200; k++) seen.add(pickCompletionHeroIndex(k / 200, 0));
+    expect(seen.size).toBe(n - 1);
+  });
+
+  it("직전 번호가 이상한 값이면 무시하고 목록 안에서 고른다", () => {
+    for (const bad of [-1, n, 999, Number.NaN]) {
+      const picked = pickCompletionHeroIndex(0.99, bad);
+      expect(picked).toBeGreaterThanOrEqual(0);
+      expect(picked).toBeLessThan(n);
+    }
+  });
+
+  it("난수가 1이어도 범위를 넘지 않는다", () => {
+    expect(pickCompletionHeroIndex(1, null)).toBeLessThan(n);
+    expect(pickCompletionHeroIndex(1, n - 1)).toBeLessThan(n);
   });
 });

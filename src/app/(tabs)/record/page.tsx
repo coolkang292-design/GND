@@ -171,6 +171,7 @@ import { dayKey, resolveTimeZone } from "@/lib/domain/time";
 import { getMyBadgeMetrics } from "@/lib/badges";
 import { TodayStatusCard } from "@/components/record/today-status-card";
 import { CompletionHeroCard } from "@/components/record/completion-hero-card";
+import { pickNextCompletionHero } from "@/lib/completion-hero-pick";
 import { CumulativeStatsCard } from "@/components/record/cumulative-stats-card";
 import { weeklyBars } from "@/lib/domain/today-status";
 import {
@@ -293,6 +294,8 @@ type CompletedResult = {
   recordNote: string | null; // 기록 갱신 문구 (원본 세션 초과 시)
   /** 이번 운동이 챌린지 목표에 보탠 양 (2026-08-04) — draft가 비워지기 전에 계산한다 */
   challengeGains: GoalContribution[];
+  /** 완료 카드 사진 번호 — 완료 순간 한 번 뽑는다. 렌더마다 뽑으면 사진이 바뀐다 (2026-09-29) */
+  heroImageIndex: number;
 };
 
 /** 예정표에서 연 타바타의 미리 채움 (0059) */
@@ -2695,6 +2698,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
           draft.exercises,
         ),
         recordNote,
+        heroImageIndex: pickNextCompletionHero(),
         // draft를 비우기 전에 계산한다 — 아래 setDraft(emptyDraft())가 지운다
         challengeGains:
           challengeGoals && challengeGoals.length > 0
@@ -3214,6 +3218,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
                   resolveTimeZone(),
                 ).length
               : null,
+            imageIndex: result.heroImageIndex,
           })}
           statsLine={`${result.durationMinutes}분 · 볼륨 ${result.summary.weightVolumeKg.toLocaleString()}kg · 완료 세트 ${result.summary.completedSetCount}개`}
           recordNote={result.recordNote}
