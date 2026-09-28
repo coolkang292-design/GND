@@ -83,3 +83,33 @@ export function toggleChip(
 ): string | null {
   return isChipSelected(caption, chip) ? null : chip;
 }
+
+/**
+ * AI 코치의 **강도 한 번**으로 크루 피드 한마디까지 채운다 (2026-09-29 사용자 결정).
+ *
+ * 완료 화면에 "오늘 운동 강도는?"(AI용, 나만 봄)과 "오늘 어땠어요?"(피드용, 크루가 봄)가
+ * 나란히 있었다 — 둘 다 "얼마나 힘들었나"라서 사용자에게는 같은 질문 두 번이었다.
+ *
+ * ⚠️ **기존 칩 문구 중에서만 고른다.** 새 문구를 만들면 피드에서 칩으로 다시 고를 때
+ *    선택 표시가 안 맞는다(`isChipSelected`는 문자열 비교다).
+ * ⚠️ 강도는 비공개였고 한마디는 공개다. 그래서 화면이 **무엇이 크루에게 보이는지**
+ *    같이 보여 주고, 바꾸거나 지울 수 있게 한다. 이미 고른 한마디는 덮어쓰지 않는다.
+ */
+export function captionForEffort(
+  effort: "too_light" | "light" | "on_target" | "heavy" | "too_heavy" | null,
+): string | null {
+  switch (effort) {
+    case "too_light":
+      return "💪 가볍게 몸풀기";
+    case "light":
+      return "🔥 컨디션 좋았다";
+    case "on_target":
+      return "🎯 목표 채웠다";
+    case "heavy":
+      return "😮‍💨 겨우 해냈다";
+    case "too_heavy":
+      return "💀 오늘 다 털렸다";
+    default:
+      return null;
+  }
+}

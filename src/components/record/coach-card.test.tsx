@@ -96,7 +96,7 @@ describe("CoachCard", () => {
   it("목표 프로필이 없으면 AI를 부르지 않고 목표 설정을 먼저 보여 준다", async () => {
     coach.loadTrainingProfile.mockResolvedValue(null);
     renderCard();
-    expect(await screen.findByText("목표 설정하고 분석 받기")).toBeTruthy();
+    expect(await screen.findByText("목표 알려 주고 분석 받기")).toBeTruthy();
     expect(coach.requestCoachFeedback).not.toHaveBeenCalled();
   });
 
@@ -114,11 +114,56 @@ describe("CoachCard", () => {
     expect(screen.getByText(/전문가와 상담하세요/)).toBeTruthy();
   });
 
+  it("강도를 누르면 페이지에 알린다 — 크루 피드 한마디를 채우는 데 쓴다 (2026-09-29)", async () => {
+    coach.loadSessionFeedback.mockResolvedValue(null);
+    const onEffortChosen = vi.fn();
+    render(<CoachCard userId="u1" sessionId="s1" onEffortChosen={onEffortChosen} />);
+    fireEvent.click(await screen.findByText("너무 힘듦"));
+    await screen.findByText("같은 무게에서 반복이 2회 늘었어요.");
+    expect(onEffortChosen).toHaveBeenCalledWith("too_heavy");
+  });
+
+  it("체감 없이 분석하면 null로 알린다 — 한마디를 지어내지 않는다", async () => {
+    coach.loadSessionFeedback.mockResolvedValue(null);
+    const onEffortChosen = vi.fn();
+    render(<CoachCard userId="u1" sessionId="s1" onEffortChosen={onEffortChosen} />);
+    fireEvent.click(await screen.findByText("체감 없이 기록만으로 분석"));
+    await screen.findByText("같은 무게에서 반복이 2회 늘었어요.");
+    expect(onEffortChosen).toHaveBeenCalledWith(null);
+  });
+
+  it("한마디 줄은 강도를 고른 뒤에만 보인다", async () => {
+    coach.loadSessionFeedback.mockResolvedValue(null);
+    render(
+      <CoachCard userId="u1" sessionId="s1" captionSlot={<p>한마디줄</p>} />,
+    );
+    await screen.findByText("적당");
+    expect(screen.queryByText("한마디줄")).toBeNull();
+    fireEvent.click(screen.getByText("적당"));
+    await screen.findByText("같은 무게에서 반복이 2회 늘었어요.");
+    expect(screen.getByText("한마디줄")).toBeTruthy();
+  });
+
+  it("\"다음에\"로 닫으면 사라졌다고 알린다 — 페이지가 한마디 칸을 되살린다", async () => {
+    coach.loadTrainingProfile.mockResolvedValue(null);
+    const onHidden = vi.fn();
+    render(<CoachCard userId="u1" sessionId="s1" onHidden={onHidden} />);
+    fireEvent.click(await screen.findByText("다음에"));
+    await waitFor(() => expect(onHidden).toHaveBeenCalled());
+  });
+
+  it("테이블이 없어 칸을 숨겨도 사라졌다고 알린다", async () => {
+    coach.loadTrainingProfile.mockRejectedValue(new Error("42P01"));
+    const onHidden = vi.fn();
+    render(<CoachCard userId="u1" sessionId="s1" onHidden={onHidden} />);
+    await waitFor(() => expect(onHidden).toHaveBeenCalled());
+  });
+
   it("체감 저장이 실패해도 분석은 받는다", async () => {
     coach.loadSessionFeedback.mockResolvedValue(null);
     coach.saveSessionFeedback.mockRejectedValue(new Error("x"));
     renderCard();
-    fireEvent.click(await screen.findByText("건너뛰고 분석"));
+    fireEvent.click(await screen.findByText("체감 없이 기록만으로 분석"));
     expect(await screen.findByText("같은 무게에서 반복이 2회 늘었어요.")).toBeTruthy();
   });
 

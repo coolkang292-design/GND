@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   CAPTION_CHIPS,
   CAPTION_MAX_LENGTH,
+  captionForEffort,
   isChipSelected,
   isValidCaption,
   normalizeCaption,
@@ -79,5 +80,27 @@ describe("isChipSelected / toggleChip", () => {
 
   it("앞뒤 공백이 붙어 저장돼 있어도 같은 칩으로 본다", () => {
     expect(isChipSelected(`  ${chip} `, chip)).toBe(true);
+  });
+});
+
+/**
+ * 강도 한 번 = AI 분석 + 크루 피드 한마디 (2026-09-29 사용자 결정 —
+ * 완료 화면의 "강도"와 "오늘 어땠어요?"가 같은 질문이라 하나로 합쳤다).
+ */
+describe("captionForEffort", () => {
+  it("강도마다 기존 칩 문구 중 하나를 준다 — 새 문구를 만들지 않는다", () => {
+    for (const effort of ["too_light", "light", "on_target", "heavy", "too_heavy"] as const) {
+      expect(CAPTION_CHIPS).toContain(captionForEffort(effort));
+    }
+  });
+
+  it("가장 힘든 날은 '다 털렸다', 가장 가벼운 날은 '가볍게 몸풀기'", () => {
+    expect(captionForEffort("too_heavy")).toBe("💀 오늘 다 털렸다");
+    expect(captionForEffort("too_light")).toBe("💪 가볍게 몸풀기");
+    expect(captionForEffort("on_target")).toBe("🎯 목표 채웠다");
+  });
+
+  it("강도를 건너뛰면 한마디도 정하지 않는다", () => {
+    expect(captionForEffort(null)).toBeNull();
   });
 });

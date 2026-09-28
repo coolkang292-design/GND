@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { recordFunnelEvent } from "@/lib/analytics-events";
 import {
   loadSessionFeedback,
@@ -164,9 +164,24 @@ function Skeleton({ label }: { label: string }) {
 export function CoachCard({
   userId,
   sessionId,
+  onEffortChosen,
+  captionSlot,
+  onHidden,
 }: {
   userId: string;
   sessionId: string;
+  /**
+   * 강도를 골랐다(건너뛰면 null) — 페이지가 이걸로 크루 피드 한마디를 채운다
+   * (2026-09-29 사용자 결정: "강도 한 번 = AI 분석 + 한마디").
+   */
+  onEffortChosen?: (effort: EffortLevel | null) => void;
+  /** 강도 이후(분석 중·결과·실패)에 보이는 크루 피드 한마디 줄 */
+  captionSlot?: ReactNode;
+  /**
+   * 이 칸이 사라졌다(0112 미적용·오류·"다음에"). 페이지는 한마디 칸을 따로 되살린다 —
+   * 코치가 없다고 한마디를 남길 길까지 없어지면 안 된다.
+   */
+  onHidden?: () => void;
 }) {
   const [phase, setPhase] = useState<Phase>("checking");
   const [metrics, setMetrics] = useState<WorkoutAnalysis | null>(null);
@@ -252,6 +267,7 @@ export function CoachCard({
       // 체감 저장이 실패해도 분석은 받는다 — 체감 없이 분석할 뿐이다
     }
     setSubmitting(false);
+    onEffortChosen?.(effort);
     void run(false);
   }
 
@@ -273,31 +289,46 @@ export function CoachCard({
     );
   }
 
-  if (phase === "unavailable" || phase === "dismissed") return null;
+  const hidden = phase === "unavailable" || phase === "dismissed";
+  useEffect(() => {
+    if (hidden) onHidden?.();
+  }, [hidden, onHidden]);
+
+  if (hidden) return null;
 
   return (
     <section
       aria-labelledby="coach-card-title"
       className="rounded-card border border-line bg-surface p-4 shadow-card"
     >
+      {/*
+        문구 (2026-09-29 사용자 요청 — "운동을 분석하는 거니까 목적에 맞는 퀄리티 있는
+        마케팅 문구로"). 축은 **"기록은 숫자로, 체감은 당신이 — 둘을 겹쳐 읽는다"**다.
+      */}
       <p id="coach-card-title" className="flex items-center gap-1.5 text-xs font-extrabold text-accent">
         <span aria-hidden>🤖</span> GND AI 코치
+        <span className="font-bold text-faint">· 오늘의 운동 리포트</span>
       </p>
 
       {metrics && <Performance metrics={metrics} />}
 
-      {phase === "checking" && <Skeleton label="코치를 부르는 중…" />}
+      {phase === "checking" && <Skeleton label="지난 기록을 불러오는 중…" />}
 
       {phase === "needs_profile" && (
         <div className="mt-2">
-          <p className="text-sm font-extrabold">지난 기록과 비교해 오늘 운동을 분석해 드려요</p>
-          <p className="mt-0.5 text-[11.5px] text-muted">목표를 한 번만 알려 주면 시작해요 · 30초</p>
+          <p className="text-[15px] font-extrabold leading-snug">
+            쌓인 기록, 이제 읽어 드릴게요
+          </p>
+          <p className="mt-1 text-[12px] leading-relaxed text-muted">
+            지난 기록과 오늘을 겹쳐 보고 성장·유지·피로 신호를 짚어 드려요.
+            목표만 한 번 알려 주세요 · 30초
+          </p>
           <button
             type="button"
             onClick={openSheet}
             className="mt-3 h-11 w-full rounded-card bg-accent text-sm font-extrabold text-accent-ink"
           >
-            목표 설정하고 분석 받기
+            목표 알려 주고 분석 받기
           </button>
           <button
             type="button"
@@ -311,11 +342,15 @@ export function CoachCard({
 
       {phase === "needs_effort" && (
         <div className="mt-2">
-          <p className="text-sm font-extrabold">오늘 운동 강도는 어땠나요?</p>
-          <p className="mt-0.5 text-[11.5px] text-muted">
-            해당하는 게 있으면 먼저 고르고, 강도를 누르면 바로 분석해요
+          <p className="text-[15px] font-extrabold leading-snug">
+            기록은 숫자로 남았어요. 체감은요?
           </p>
-          <div className="mt-2.5 flex flex-wrap gap-1.5">
+          <p className="mt-1 text-[12px] leading-relaxed text-muted">
+            숫자와 체감을 겹쳐 봐야 진짜 컨디션이 보여요. 강도를 누르면 바로 분석하고,
+            크루 피드에도 한마디로 남겨요.
+          </p>
+          <p className="mt-3 text-[11px] font-bold text-faint">해당되면 먼저 체크</p>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
             {FLAG_CHOICES.map((choice) => (
               <button
                 key={choice.value}
@@ -352,12 +387,12 @@ export function CoachCard({
             onClick={() => void submitEffort(null)}
             className="mt-1.5 h-9 w-full text-[11.5px] font-bold text-faint"
           >
-            건너뛰고 분석
+            체감 없이 기록만으로 분석
           </button>
         </div>
       )}
 
-      {phase === "loading" && <Skeleton label="오늘 운동을 분석하고 있어요…" />}
+      {phase === "loading" && <Skeleton label="지난 기록과 오늘을 겹쳐 보는 중…" />}
 
       {phase === "completed" && feedback && <FeedbackView feedback={feedback} />}
 
@@ -378,6 +413,11 @@ export function CoachCard({
             </button>
           )}
         </div>
+      )}
+
+      {/* 강도를 지난 뒤에만 — 강도가 곧 한마디를 정하므로 그 전엔 보여줄 게 없다 */}
+      {captionSlot && (phase === "loading" || phase === "completed" || phase === "failed") && (
+        <div className="mt-3 border-t border-line pt-3">{captionSlot}</div>
       )}
 
       {flags.includes("pain") && (

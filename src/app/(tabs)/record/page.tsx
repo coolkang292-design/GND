@@ -172,6 +172,8 @@ import { getMyBadgeMetrics } from "@/lib/badges";
 import { TodayStatusCard } from "@/components/record/today-status-card";
 import { CompletionHeroCard } from "@/components/record/completion-hero-card";
 import { pickNextCompletionHero } from "@/lib/completion-hero-pick";
+import { captionForEffort } from "@/lib/domain/session-caption";
+import type { EffortLevel } from "@/lib/domain/workout-analysis";
 import { CumulativeStatsCard } from "@/components/record/cumulative-stats-card";
 import { weeklyBars } from "@/lib/domain/today-status";
 import {
@@ -241,6 +243,7 @@ import {
   type LocalExercise,
   type LocalSet,
   type WorkoutDraft,
+  updateSessionCaption,
 } from "@/lib/workout";
 
 /**
@@ -630,6 +633,24 @@ function WorkoutScreen({ userId }: { userId: string }) {
    * 하는 용도다(낙관적 반영·롤백의 되돌릴 자리이기도 하다).
    */
   const [resultCaption, setResultCaption] = useState<string | null>(null);
+  /** AI 코치 칸이 사라졌나 — 그러면 한마디 칸을 따로 보여 준다 (2026-09-29) */
+  const [coachHidden, setCoachHidden] = useState(false);
+
+  /**
+   * 강도 한 번으로 크루 피드 한마디까지 (2026-09-29 사용자 결정).
+   * ⚠️ 이미 고른 한마디는 덮어쓰지 않는다. 건너뛰면(null) 아무것도 안 한다.
+   * ⚠️ 저장 실패는 조용히 되돌린다 — 한마디 줄의 "기분 남기기"로 다시 고를 수 있다.
+   */
+  async function fillCaptionFromEffort(sessionId: string, effort: EffortLevel | null) {
+    const next = captionForEffort(effort);
+    if (next === null || resultCaption !== null) return;
+    setResultCaption(next);
+    try {
+      await updateSessionCaption(sessionId, next);
+    } catch {
+      setResultCaption(null);
+    }
+  }
   /**
    * 따라하기로 담았을 때 **원본(친구)이 든 무게** — 참고 표시 전용 (2026-08-31).
    *
@@ -2688,6 +2709,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
       }
       // 새 결과 화면이니 지난 회차의 한마디 선택을 지운다 (2026-08-30)
       setResultCaption(null);
+      setCoachHidden(false);
       setResult({
         sessionId,
         completedAtMs,
@@ -3223,6 +3245,45 @@ function WorkoutScreen({ userId }: { userId: string }) {
           statsLine={`${result.durationMinutes}분 · 볼륨 ${result.summary.weightVolumeKg.toLocaleString()}kg · 완료 세트 ${result.summary.completedSetCount}개`}
           recordNote={result.recordNote}
         />
+        {/* ⚠️ 완료 카드 **바로 아래**다 (2026-09-29 사용자 지시 — "사진 먼저 찍고
+            입력·분석을 받는 게 좋다"). 순서: 완료 카드 → 사진 → 챌린지 기여 → AI 코치. */}
+        {/*
+          인증사진 (§11 → 0103 다중 사진).
+
+          ⚠️ **사진이 0장일 때는 예전 화면 그대로다.** `VerificationPhoto`의 큰
+             미리보기와 두 버튼은 "아직 아무것도 안 올린 사람"에게 가장 좋은
+             화면이고, 그 흐름을 바꾸지 않기로 했다 (계획 §8).
+             한 장이라도 있으면 — 운동 중에 찍었든 여기서 올렸든 — 썸네일 목록으로
+             바뀌어 **추가·삭제·순서**를 할 수 있다 (계획 §9).
+        */}
+        {resultPhotoCount > 0 ? (
+          <SessionPhotoManager
+            userId={userId}
+            sessionId={result.sessionId}
+            onToast={showToast}
+            onPhotosChange={(list) => {
+              setResultPhotoCount(list.length);
+              setResultPhotoDone(list.length > 0);
+            }}
+          />
+        ) : (
+          <VerificationPhoto
+            userId={userId}
+            sessionId={result.sessionId}
+            durationMinutes={result.durationMinutes}
+            completedAtMs={result.completedAtMs}
+            onToast={showToast}
+            onUploaded={() => {
+              setResultPhotoDone(true);
+              // 0장 → 1장이 되면 관리 화면으로 넘어간다
+              setResultPhotoCount(1);
+            }}
+          />
+        )}
+        <p className="text-center text-xs text-muted">
+          &lsquo;달력&rsquo; 탭에서 오늘 스탬프를 확인할 수 있어요. 카메라
+          인증은 🔥, 업로드는 ●로 찍혀요.
+        </p>
         {/*
           이번 운동이 챌린지 목표에 얼마나 보탰는지 (2026-08-04, 사용자 요청).
           사진 필수 챌린지인데 아직 사진이 없으면 "쌓여요"(미래형)로 말하고,
@@ -3289,7 +3350,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
                 {challengePhotoRequired && !resultPhotoDone && (
                   <p className="mt-2.5 flex items-center gap-1.5 text-[11.5px] font-bold text-warn">
                     <UiIcon name="camera" size={14} />
-                    아래에서 인증 사진을 올려야 챌린지 성과에 반영돼요.
+                    위에서 인증 사진을 올려야 챌린지 성과에 반영돼요.
                   </p>
                 )}
               </section>
@@ -3304,7 +3365,29 @@ function WorkoutScreen({ userId }: { userId: string }) {
              테이블이 없으면(0112 미적용) 칸 자체를 숨긴다.
           ⚠️ 챌린지 기여 **아래**다. 챌린지 참가자에게 가장 급한 정보는 그쪽이다.
         */}
-        <CoachCard userId={userId} sessionId={result.sessionId} />
+        <CoachCard
+          userId={userId}
+          sessionId={result.sessionId}
+          onEffortChosen={(effort) => void fillCaptionFromEffort(result.sessionId, effort)}
+          onHidden={() => setCoachHidden(true)}
+          captionSlot={
+            <div>
+              <p className="text-[11px] font-bold text-faint">👥 크루 피드 한마디</p>
+              <p className="mt-0.5 text-[13.5px] font-extrabold">
+                {resultCaption ?? "아직 남긴 한마디가 없어요"}
+              </p>
+              <div className="mt-1.5">
+                <CaptionPicker
+                  sessionId={result.sessionId}
+                  caption={resultCaption}
+                  onSaved={setResultCaption}
+                  onToast={showToast}
+                  variant="card"
+                />
+              </div>
+            </div>
+          }
+        />
 
         {/*
           오늘 한마디 (2026-08-30) — 원탭 칩.
@@ -3314,9 +3397,11 @@ function WorkoutScreen({ userId }: { userId: string }) {
           소파에서 쓰지만 여기는 아니다. 지친 사람이 지불할 수 있는 비용은
           **탭 1회**다. 자유 입력은 `CaptionPicker` 안에 접혀 있다.
 
-          ⚠️ 사진보다 **위**다. 사진은 없어도 되지만 한마디는 크루가 답할 거리를
-          만든다 — 캡션이 비면 게시물이 순수 데이터라 댓글이 안 달린다.
+          ⚠️ (2026-09-29) 평소에는 **AI 코치 칸 안**에 있다 — 강도 한 번이 분석과
+          한마디를 같이 정한다. 이 칸은 코치가 사라졌을 때(0112 미적용·오류·"다음에")만
+          보인다. 코치가 없다고 한마디를 남길 길까지 없어지면 안 된다.
         */}
+        {coachHidden && (
         <section className="rounded-card border border-line bg-surface p-4 shadow-card">
           <CaptionPicker
             sessionId={result.sessionId}
@@ -3326,44 +3411,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
             variant="complete"
           />
         </section>
-
-        {/*
-          인증사진 (§11 → 0103 다중 사진).
-
-          ⚠️ **사진이 0장일 때는 예전 화면 그대로다.** `VerificationPhoto`의 큰
-             미리보기와 두 버튼은 "아직 아무것도 안 올린 사람"에게 가장 좋은
-             화면이고, 그 흐름을 바꾸지 않기로 했다 (계획 §8).
-             한 장이라도 있으면 — 운동 중에 찍었든 여기서 올렸든 — 썸네일 목록으로
-             바뀌어 **추가·삭제·순서**를 할 수 있다 (계획 §9).
-        */}
-        {resultPhotoCount > 0 ? (
-          <SessionPhotoManager
-            userId={userId}
-            sessionId={result.sessionId}
-            onToast={showToast}
-            onPhotosChange={(list) => {
-              setResultPhotoCount(list.length);
-              setResultPhotoDone(list.length > 0);
-            }}
-          />
-        ) : (
-          <VerificationPhoto
-            userId={userId}
-            sessionId={result.sessionId}
-            durationMinutes={result.durationMinutes}
-            completedAtMs={result.completedAtMs}
-            onToast={showToast}
-            onUploaded={() => {
-              setResultPhotoDone(true);
-              // 0장 → 1장이 되면 관리 화면으로 넘어간다
-              setResultPhotoCount(1);
-            }}
-          />
         )}
-        <p className="text-center text-xs text-muted">
-          &lsquo;달력&rsquo; 탭에서 오늘 스탬프를 확인할 수 있어요. 카메라
-          인증은 🔥, 업로드는 ●로 찍혀요.
-        </p>
+
         <button
           onClick={async () => {
             const msg = shareResultToast(await shareOrCopyText(result.logText));
