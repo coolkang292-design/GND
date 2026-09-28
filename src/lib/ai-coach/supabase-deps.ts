@@ -11,6 +11,11 @@ import {
   type SessionFlag,
 } from "@/lib/domain/workout-analysis";
 import { HISTORY_SESSION_LIMIT } from "@/lib/domain/coach-config";
+import {
+  coachSessionRows,
+  isIntervalBlockIndex,
+  mergeRecentSessions,
+} from "@/lib/domain/tabata";
 import type { ExerciseType } from "@/lib/types";
 import type { GenerateText } from "./deepseek";
 import type { FeedbackDeps, FeedbackRow, SessionRow } from "./feedback-service";
@@ -128,32 +133,63 @@ export function createSupabaseFeedbackDeps(input: {
     },
 
     async readSessionExercises(sessionId) {
-      const { data, error } = await user
-        .from("workout_exercises")
-        .select(EXERCISE_SELECT)
-        .eq("session_id", sessionId);
-      if (error) throw error;
-      return ((data ?? []) as unknown as ExerciseRow[])
+      // 인터벌 뒤 이어하기가 있는 세션이면 블록을 분석에서 뺀다 (2026-09-29,
+      // `coachSessionRows` 주석). 그래서 세션의 인터벌 표시도 같이 읽는다.
+      const [exercises, session] = await Promise.all([
+        user.from("workout_exercises").select(EXERCISE_SELECT).eq("session_id", sessionId),
+        user.from("workout_sessions").select("tabata_minutes").eq("id", sessionId).maybeSingle(),
+      ]);
+      if (exercises.error) throw exercises.error;
+      if (session.error) throw session.error;
+      const tabataMinutes =
+        (session.data as { tabata_minutes: number | null } | null)?.tabata_minutes ?? null;
+      return coachSessionRows(
+        tabataMinutes,
+        (exercises.data ?? []) as unknown as ExerciseRow[],
+      )
         .sort(bySortOrder)
         .map(toAnalysisExercise);
     },
 
     async readHistory(excludeSessionId, sinceMs) {
-      const { data: sessions, error } = await user
-        .from("workout_sessions")
-        .select("id, completed_at")
-        .eq("user_id", userId)
-        .eq("status", "completed")
-        .is("deleted_at", null)
-        // 타바타는 세트 실적이 0이라 정상 기록을 가린다 (getPreviousExerciseRecords와 같은 규칙)
-        .is("tabata_minutes", null)
-        .neq("id", excludeSessionId)
-        .gte("completed_at", new Date(sinceMs).toISOString())
-        .order("completed_at", { ascending: false })
-        .limit(HISTORY_SESSION_LIMIT);
-      if (error) throw error;
-      const rows = (sessions ?? []) as { id: string; completed_at: string }[];
+      /*
+        일반·인터벌 세션을 **따로** 조회한다 (2026-09-29, getPreviousExerciseRecords와
+        같은 규칙). 인터벌 세션에서는 블록(0~3번)을 빼고 이어하기(4번~)만 쓴다 —
+        블록의 반복은 라운드 수라 정상 기록을 가린다.
+        블록만 있던 순수 인터벌 세션은 남는 종목이 없으므로 **통째로 뺀다** —
+        예전과 같은 입력이 되게 한다(빈 세션이 끼면 빈도 계산이 달라진다).
+      */
+      type RecentSessionRow = {
+        id: string;
+        completed_at: string;
+        tabata_minutes: number | null;
+      };
+      const recent = (interval: boolean) => {
+        const query = user
+          .from("workout_sessions")
+          .select("id, completed_at, tabata_minutes")
+          .eq("user_id", userId)
+          .eq("status", "completed")
+          .is("deleted_at", null)
+          .neq("id", excludeSessionId)
+          .gte("completed_at", new Date(sinceMs).toISOString());
+        return (
+          interval
+            ? query.not("tabata_minutes", "is", null)
+            : query.is("tabata_minutes", null)
+        )
+          .order("completed_at", { ascending: false })
+          .limit(HISTORY_SESSION_LIMIT);
+      };
+      const [regular, interval] = await Promise.all([recent(false), recent(true)]);
+      if (regular.error) throw regular.error;
+      if (interval.error) throw interval.error;
+      const rows = mergeRecentSessions(
+        (regular.data ?? []) as RecentSessionRow[],
+        (interval.data ?? []) as RecentSessionRow[],
+      );
       if (rows.length === 0) return [];
+      const tabataOf = new Map(rows.map((r) => [r.id, r.tabata_minutes]));
 
       const { data: exercises, error: exError } = await user
         .from("workout_exercises")
@@ -166,18 +202,23 @@ export function createSupabaseFeedbackDeps(input: {
 
       const bySession = new Map<string, ExerciseRow[]>();
       for (const row of (exercises ?? []) as unknown as ExerciseRow[]) {
+        if (isIntervalBlockIndex(tabataOf.get(row.session_id!), row.sort_order)) {
+          continue;
+        }
         const list = bySession.get(row.session_id!) ?? [];
         list.push(row);
         bySession.set(row.session_id!, list);
       }
-      return rows.map(
-        (r): HistorySession => ({
-          completedAtMs: Date.parse(r.completed_at),
-          exercises: (bySession.get(r.id) ?? [])
-            .sort(bySortOrder)
-            .map(toAnalysisExercise),
-        }),
-      );
+      return rows
+        .filter((r) => r.tabata_minutes === null || bySession.has(r.id))
+        .map(
+          (r): HistorySession => ({
+            completedAtMs: Date.parse(r.completed_at),
+            exercises: (bySession.get(r.id) ?? [])
+              .sort(bySortOrder)
+              .map(toAnalysisExercise),
+          }),
+        );
     },
 
     async readSessionFeedback(sessionId) {

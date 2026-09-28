@@ -98,9 +98,18 @@ import { getLevelRewards, getProgressSummary } from "@/lib/progression";
 import {
   INTERVAL_COPY,
   asTabataMinutes,
+  completeIntervalBlock,
+  hasIntervalFollowUps,
+  intervalBlockNames,
+  intervalBlockPending,
+  intervalPlanLine,
+  isIntervalBlockExercise,
+  isIntervalBlockIndex,
+  splitIntervalPlan,
   tabataDraftExercises,
   tabataPickFromNames,
   tabataResumeFromSession,
+  withoutIntervalBlock,
   type TabataMinutes,
 } from "@/lib/domain/tabata";
 import { SITUATIONS } from "@/lib/domain/recommended-exercises";
@@ -312,6 +321,11 @@ type TabataPrefill = {
   planId?: string;
   /** 열자마자 종목 고르기 화면을 편다 (상황별 추천에서 옴) */
   openPicker?: boolean;
+  /**
+   * 인터벌이 끝난 뒤 같은 세션에서 이어서 할 종목 (설계 2026-09-29).
+   * 계획의 5번째부터다(`splitIntervalPlan`). 없으면 순수 인터벌.
+   */
+  followUps?: PlanExercise[];
 };
 
 function errorMessage(e: unknown): string {
@@ -883,7 +897,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
       active,
       guarded: shouldGuardIdle({
         exercises: draft.exercises,
-        isTabata: draft.tabataMinutes !== null,
+        // 인터벌 **블록이 남아 있는 동안만** 끈다 (2026-09-29). 예전에는 인터벌
+        // 세션 내내 껐는데, 이어하기는 사람이 세트를 누르는 일반 운동이다.
+        isTabata: intervalBlockPending(draft),
       }),
       lastRestEndsAtMs,
       snapshot: {
@@ -1251,6 +1267,11 @@ function WorkoutScreen({ userId }: { userId: string }) {
   function handleSkipExercise(exKey: string) {
     const target = draftRef.current.exercises.find((ex) => ex.key === exKey);
     if (!target) return;
+    // 인터벌 블록은 빼지 않는다 — `removeExercise`와 같은 이유 (2026-09-29)
+    if (isIntervalBlockExercise(draftRef.current, exKey)) {
+      showToast(INTERVAL_COPY.blockLocked);
+      return;
+    }
     const name = target.name;
     const doneCount = target.sets.filter((set) => set.done).length;
 
@@ -2208,6 +2229,11 @@ function WorkoutScreen({ userId }: { userId: string }) {
   }
 
   function removeExercise(exKey: string) {
+    // 블록이 빠지면 저장 순서가 밀려 이어하기가 0~3번(= 인터벌)으로 기록된다
+    if (isIntervalBlockExercise(draftRef.current, exKey)) {
+      showToast(INTERVAL_COPY.blockLocked);
+      return;
+    }
     markActivity();
     const next = draftRef.current.exercises.filter((ex) => ex.key !== exKey);
     setDraft((d) => ({
@@ -2285,7 +2311,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
       if (course) {
         // 이름만 있으면 코스가 세트를 만든다 — 위 주석 참조
         const logged = await getSessionExerciseNames(sessionId);
-        const picked = tabataPickFromNames(logged, catalog);
+        // 섞인 세션의 5번째부터는 이어하기다 — 복사는 인터벌만 옮긴다 (설계 §10 한계)
+        const picked = tabataPickFromNames(intervalBlockNames(logged), catalog);
         if (picked.length === 0) {
           throw new Error("복사할 종목이 없어요");
         }
@@ -2330,11 +2357,15 @@ function WorkoutScreen({ userId }: { userId: string }) {
     // 예정표에서 연 타바타면 그 계획 id를 이어받는다 (2026-08-05). emptyDraft로
     // 갈아엎으면서 버리면 타바타를 완료해도 예정표가 그대로 남는다.
     const scheduledPlanId = tabataPrefill?.planId ?? null;
+    // 인터벌 뒤 이어하기 (2026-09-29) — 블록 뒤에 붙인다. 순서가 곧 규칙이다
+    // (`saveSessionExercises`가 이 순서로 sort_order를 넣는다).
+    const followUps = toDraftExercises(tabataPrefill?.followUps ?? [], localId);
     setDraft((d) => ({
       ...emptyDraft(d.restSeconds),
-      exercises: tabataDraftExercises(picked, localId, minutes),
+      exercises: [...tabataDraftExercises(picked, localId, minutes), ...followUps],
       scheduledPlanId,
-      // 타바타는 무동작 감지 대상이 아니다 — 음원을 따라 하는 동안 앱을 만지지 않는다.
+      // 인터벌 블록이 도는 동안은 무동작 감지 대상이 아니다 — 음원을 따라 하는
+      // 동안 앱을 만지지 않는다. 이어하기 동안은 켜진다(`intervalBlockPending`).
       tabataMinutes: minutes,
     }));
     tabataMinutesRef.current = minutes;
@@ -2356,6 +2387,36 @@ function WorkoutScreen({ userId }: { userId: string }) {
   }
 
   async function completeTabata() {
+    const current = draftRef.current;
+    if (hasIntervalFollowUps(current)) {
+      /*
+        인터벌 뒤 이어하기 (설계 2026-09-29 §5) — 음원이 끝나도 운동을 끝내지 않는다.
+
+        ① 블록 4종만 ✓
+        ② 활동 시각을 새로 찍는다. 안 찍으면 음원 8분 동안 화면을 안 만진 것이
+           곧바로 '무동작 정지'로 잡힌다 — 무동작 감지는 블록이 끝나는 이 순간 켜진다
+        ③ 세트를 끝냈을 때와 **같은** 휴식 1회 — 같은 `startRest`, 같은 시간 규칙
+           (처방이 없으면 평소 휴식 시간)
+        ④ 초점을 첫 이어하기 종목으로
+
+        시트는 `handleEnded`가 이 뒤에 닫는다. `onPlayingChange(false)`가 먼저
+        불려 `intervalPlaying`이 false라 운동중 화면이 바로 뜬다.
+      */
+      const exercises = completeIntervalBlock(current.exercises);
+      setDraft((d) => ({ ...d, exercises: completeIntervalBlock(d.exercises) }));
+      markActivity();
+      const lastBlock = splitIntervalPlan(exercises).block.at(-1);
+      const lastSet = lastBlock?.sets.at(-1);
+      if (lastBlock && lastSet) {
+        startRest(
+          `${lastBlock.key}:${lastSet.key}`,
+          restSecondsForExercise(undefined, current.restSeconds),
+        );
+      }
+      refocusPending(exercises);
+      showToast(INTERVAL_COPY.followUpStart);
+      return;
+    }
     setDraft((d) => ({
       ...d,
       exercises: d.exercises.map((ex) => ({
@@ -2413,8 +2474,14 @@ function WorkoutScreen({ userId }: { userId: string }) {
       draft에 종목만 부어 넣으면 음원도 코스도 없는 맨몸 운동 4개가 될 뿐이다.
     */
     if (plan.tabataMinutes) {
+      /*
+        앞 4개 = 인터벌, 5번째부터 = 이어하기 (설계 2026-09-29).
+        ⚠️ 카탈로그 대조는 **앞 4개만** 한다. 예전에는 목록 전체에서 4개를
+           골라서, 없는 이름을 뒤 종목(YTW 덤벨)으로 채웠다.
+      */
+      const { block, followUps } = splitIntervalPlan(plan.exercises);
       const picked = tabataPickFromNames(
-        plan.exercises.map((exercise) => exercise.name),
+        block.map((exercise) => exercise.name),
         catalog,
       );
       if (picked.length === 0) {
@@ -2426,6 +2493,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
         picked,
         minutes: plan.tabataMinutes,
         planId: plan.id,
+        followUps,
       });
       return true;
     }
@@ -2667,7 +2735,13 @@ function WorkoutScreen({ userId }: { userId: string }) {
       // 달라도 성립한다. 판정·RPC 실패는 완료 흐름을 막지 않는다.
       let recordNote: string | null = null;
       try {
-        const names = draft.exercises.map((ex) => ex.name);
+        /*
+          인터벌 블록은 비교하지 않는다 (설계 2026-09-29). 블록의 "반복"은 라운드
+          수(8분 = 각 4)라, 지난 일반 기록이 그보다 작으면 가짜 갱신이 뜬다.
+          순수 인터벌이면 비교할 것이 없어 아래가 빈손으로 끝난다.
+        */
+        const comparable = withoutIntervalBlock(draft.tabataMinutes, draft.exercises);
+        const names = comparable.map((ex) => ex.name);
         const previousByName = await getPreviousExerciseRecords(
           userId,
           names,
@@ -2675,7 +2749,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
         );
 
         const improvements: ExerciseImprovement[] = [];
-        for (const ex of draft.exercises) {
+        for (const ex of comparable) {
           const previous = previousByName.get(ex.name);
           if (!previous) continue;
 
@@ -3616,10 +3690,11 @@ function WorkoutScreen({ userId }: { userId: string }) {
                 <span className="block text-sm font-black text-text">
                   🔥 오늘은 전신 인터벌이에요
                 </span>
-                <span className="mt-0.5 block text-[11.5px] leading-4 text-muted">
-                  {todayIntervalPlan.exercises
-                    .map((item) => item.name)
-                    .join(" · ")}
+                {/* break-keep: 375px에서 "이 / 어서 2종목"처럼 단어 중간이 끊겼다 (2026-09-29) */}
+                <span className="mt-0.5 block break-keep text-[11.5px] leading-4 text-muted">
+                  {intervalPlanLine(
+                    todayIntervalPlan.exercises.map((item) => item.name),
+                  )}
                 </span>
               </span>
               <span className="flex-none text-xs font-extrabold text-accent">
@@ -3774,12 +3849,21 @@ function WorkoutScreen({ userId }: { userId: string }) {
           {reorderOpen && (
             <ExerciseReorderSheet
               exercises={draft.exercises}
-              onMove={(from, to) =>
+              onMove={(from, to) => {
+                // 인터벌 블록은 자리를 옮기지 않는다 — 앞 4개가 곧 인터벌이다 (2026-09-29)
+                const tabata = draftRef.current.tabataMinutes;
+                if (
+                  isIntervalBlockIndex(tabata, from) ||
+                  isIntervalBlockIndex(tabata, to)
+                ) {
+                  showToast(INTERVAL_COPY.blockLocked);
+                  return;
+                }
                 setDraft((d) => ({
                   ...d,
                   exercises: moveItem(d.exercises, from, to),
-                }))
-              }
+                }));
+              }}
               onRemove={removeExercise}
               onClose={() => setReorderOpen(false)}
             />
@@ -3920,6 +4004,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
             routinesLoading={routinesLoading}
             initialPicked={tabataPrefill?.picked}
             initialMinutes={tabataPrefill?.minutes}
+            followUpNames={tabataPrefill?.followUps?.map((exercise) => exercise.name)}
           />
 
           {/*

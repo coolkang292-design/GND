@@ -29,6 +29,7 @@ import {
 } from "@/lib/domain/workout-log";
 import {
   INTERVAL_COPY,
+  splitIntervalPlan,
   tabataDraftExercises,
   tabataResumeFromSession,
   type TabataMinutes,
@@ -428,6 +429,16 @@ export function CalendarView({
       catalog,
     });
   }, [intervalPlanTarget, plans, catalog]);
+
+  /** 고치는 인터벌 계획의 이어하기 이름 — 시트가 "보존된다"를 보여 준다 (2026-09-29) */
+  const intervalFollowUpNames = useMemo(() => {
+    const plan = intervalPlanTarget
+      ? plans.find((item) => item.id === intervalPlanTarget.planId)
+      : undefined;
+    return plan
+      ? splitIntervalPlan(plan.exercises).followUps.map((exercise) => exercise.name)
+      : [];
+  }, [intervalPlanTarget, plans]);
 
   /**
    * 계획이 속한 프로그램 등록. 계획**마다** 다를 수 있다 (0101) — 같은 날에
@@ -1040,9 +1051,17 @@ export function CalendarView({
     const target = intervalPlanTarget;
     setPlanBusy(true);
     try {
-      const exercises = toPlanExercises(
-        tabataDraftExercises(picked, localId, minutes),
-      );
+      /*
+        인터벌 뒤 이어하기는 이 시트가 고치지 않는다 — **뒤에 그대로 붙여** 보존한다
+        (설계 2026-09-29 §6). 예전에는 4종만 저장해 이어하기가 사라졌다.
+      */
+      const existing = target.planId
+        ? plans.find((item) => item.id === target.planId)
+        : undefined;
+      const exercises = [
+        ...toPlanExercises(tabataDraftExercises(picked, localId, minutes)),
+        ...(existing ? splitIntervalPlan(existing.exercises).followUps : []),
+      ];
       applySavedPlan(
         // 고치는 중이면 그 행을, 새로 만드는 중이면 새 행을 (0101)
         target.planId
@@ -1447,9 +1466,31 @@ export function CalendarView({
                           )}
                         </div>
                       )}
-                      <p className="mt-0.5 break-words text-sm font-bold">
-                        {selectedPlan.exercises.map((exercise) => exercise.name).join(" · ")}
+                      {/*
+                        인터벌 계획은 앞 4개가 인터벌, 5번째부터가 이어하기다
+                        (설계 2026-09-29). 한 줄로 이으면 8종목이 다 인터벌처럼 보인다.
+                      */}
+                      <p className="mt-0.5 break-words break-keep text-sm font-bold">
+                        {(selectedPlan.tabataMinutes
+                          ? splitIntervalPlan(selectedPlan.exercises).block
+                          : selectedPlan.exercises
+                        )
+                          .map((exercise) => exercise.name)
+                          .join(" · ")}
                       </p>
+                      {selectedPlan.tabataMinutes &&
+                        splitIntervalPlan(selectedPlan.exercises).followUps.length > 0 && (
+                          <p
+                            data-testid="plan-follow-ups"
+                            className="mt-0.5 break-words break-keep text-[12.5px] font-bold text-muted"
+                          >
+                            {`${INTERVAL_COPY.followUpLead}: ${splitIntervalPlan(
+                              selectedPlan.exercises,
+                            )
+                              .followUps.map((exercise) => exercise.name)
+                              .join(" · ")}`}
+                          </p>
+                        )}
                       <p className="mt-0.5 text-[11px] text-muted">
                         {selectedPlan.exercises.length}종목 · 완료 전에는 통계에 포함되지 않아요
                       </p>
@@ -1919,6 +1960,7 @@ export function CalendarView({
         */
         initialPicked={intervalPrefill?.picked}
         initialMinutes={intervalPrefill?.minutes}
+        followUpNames={intervalFollowUpNames}
       />
 
       {planToast && (

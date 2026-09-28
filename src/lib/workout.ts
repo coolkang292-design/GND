@@ -12,6 +12,7 @@ import {
   type SavedSetTimer,
 } from "@/lib/domain/set-timer-restore";
 import { dayKey, resolveTimeZone } from "@/lib/domain/time";
+import { isIntervalBlockIndex, mergeRecentSessions } from "@/lib/domain/tabata";
 import { firstWorkoutImagePath, workoutImageList } from "@/lib/domain/social";
 import {
   capturedAtForPhotos,
@@ -616,8 +617,12 @@ export type PreviousExerciseRecord = ComparableExercise & {
 
 /**
  * 오늘 한 종목들의 **직전 기록**을 한 번에 가져온다 (설계 2026-07-21).
- * 쿼리 2회로 끝낸다. 방금 완료한 세션과 타바타 세션은 후보에서 뺀다 —
- * 타바타는 세트 실적이 0이라 정상 기록을 가린다.
+ * 방금 완료한 세션은 후보에서 뺀다.
+ *
+ * 인터벌 세션 (2026-09-29): 예전에는 통째로 뺐다. 이제 **블록(0~3번)만** 뺀다.
+ * 블록의 반복은 라운드 수라 정상 기록을 가리지만, 음원 뒤 이어하기 종목(4번~)은
+ * 진짜 기록이다. 일반·인터벌을 **따로** 조회한다 — 한 조회로 합치면 인터벌이
+ * 한도를 먹어 일반 기록이 밀려난다. 일반 쪽 결과는 예전과 같다.
  */
 export async function getPreviousExerciseRecords(
   userId: string,
@@ -629,24 +634,44 @@ export async function getPreviousExerciseRecords(
 
   const supabase = getSupabaseBrowserClient();
 
-  const { data: sessions, error: sErr } = await supabase
-    .from("workout_sessions")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("status", "completed")
-    .is("deleted_at", null)
-    .is("tabata_minutes", null)
-    .neq("id", excludeSessionId)
-    .order("completed_at", { ascending: false })
-    .limit(PREVIOUS_RECORD_SESSION_LIMIT);
-  if (sErr) throw sErr;
+  type RecentSessionRow = {
+    id: string;
+    completed_at: string;
+    tabata_minutes: number | null;
+  };
+  const recent = (interval: boolean) => {
+    const query = supabase
+      .from("workout_sessions")
+      .select("id, completed_at, tabata_minutes")
+      .eq("user_id", userId)
+      .eq("status", "completed")
+      .is("deleted_at", null)
+      .neq("id", excludeSessionId);
+    return (
+      interval
+        ? query.not("tabata_minutes", "is", null)
+        : query.is("tabata_minutes", null)
+    )
+      .order("completed_at", { ascending: false })
+      .limit(PREVIOUS_RECORD_SESSION_LIMIT);
+  };
+  const [regular, interval] = await Promise.all([recent(false), recent(true)]);
+  if (regular.error) throw regular.error;
+  if (interval.error) throw interval.error;
+  const sessions = mergeRecentSessions(
+    (regular.data ?? []) as RecentSessionRow[],
+    (interval.data ?? []) as RecentSessionRow[],
+  );
 
-  const sessionIds = (sessions ?? []).map((s) => s.id);
+  const sessionIds = sessions.map((s) => s.id);
   if (sessionIds.length === 0) return result;
+  const tabataOf = new Map(sessions.map((s) => [s.id, s.tabata_minutes]));
 
   const { data: exercises, error: eErr } = await supabase
     .from("workout_exercises")
-    .select("session_id, exercise_name, exercise_type, measure, workout_sets(*)")
+    .select(
+      "session_id, exercise_name, exercise_type, measure, sort_order, workout_sets(*)",
+    )
     .in("session_id", sessionIds)
     .in("exercise_name", exerciseNames);
   if (eErr) throw eErr;
@@ -656,6 +681,7 @@ export async function getPreviousExerciseRecords(
     exercise_name: string;
     exercise_type: ExerciseType;
     measure: "reps" | "time" | null;
+    sort_order: number | null;
     workout_sets: WorkoutSet[] | null;
   };
 
@@ -663,6 +689,8 @@ export async function getPreviousExerciseRecords(
   const recencyOf = new Map(sessionIds.map((id, index) => [id, index]));
 
   for (const row of (exercises ?? []) as Row[]) {
+    // 인터벌 블록 행은 라운드 수라 비교하지 않는다 — 이어하기(4번~)만 쓴다
+    if (isIntervalBlockIndex(tabataOf.get(row.session_id), row.sort_order)) continue;
     const rank = recencyOf.get(row.session_id);
     if (rank === undefined) continue;
 

@@ -16,6 +16,12 @@ export const INTERVAL_COPY = {
   start: "전신 인터벌 시작",
   stopConfirm: "전신 인터벌을 중단할까요? 운동은 기록되지 않아요.",
   session: (minutes: TabataMinutes) => `전신 인터벌 ${minutes}분`,
+  // ── 인터벌 뒤 이어하기 (설계 2026-09-29) ──
+  followUpLead: "인터벌 뒤에 이어서",
+  followUpCount: (count: number) => `이어서 ${count}종목`,
+  followUpAfterEnd: (count: number) => `음원이 끝나면 이어서 ${count}종목을 해요.`,
+  followUpStart: "인터벌 끝! 숨 고르고 이어서 해요 💪",
+  blockLocked: "인터벌 종목은 운동 중에 빼거나 옮길 수 없어요",
 } as const;
 
 export type TabataTrack = {
@@ -79,7 +85,11 @@ export function tabataResumeFromSession(input: {
 }): { minutes: TabataMinutes; picked: CatalogExercise[] } | null {
   const minutes = asTabataMinutes(input.session?.tabataMinutes);
   if (!minutes || !input.session) return null;
-  const picked = tabataPickFromNames(input.session.exerciseNames, input.catalog);
+  // 인터벌 세션의 5번째부터는 이어하기 종목이다 — 블록만 대조한다 (2026-09-29)
+  const picked = tabataPickFromNames(
+    intervalBlockNames(input.session.exerciseNames),
+    input.catalog,
+  );
   return picked.length > 0 ? { minutes, picked } : null;
 }
 
@@ -171,4 +181,157 @@ export function tabataPickFromNames(
     picked.push(item);
   }
   return picked;
+}
+
+// ── 인터벌 뒤 이어하기 (설계 2026-09-29 §4) ─────────────────────────
+//
+// `tabata_minutes`가 있는 계획·draft·세션에서 **0~3번 = 인터벌 블록**,
+// 4번~ = 음원이 끝난 뒤 같은 세션에서 이어서 하는 일반 종목이다.
+// 계획은 ChatGPT가 DB에 직접 쓰고(`docs/chatgpt-plan-rules.md`), draft·세션은
+// 앱이 쓴다. 세션은 `saveSessionExercises`가 draft 순서대로 `sort_order: i`를
+// 넣으므로 이 규칙이 저장까지 이어진다.
+//
+// ⚠️ 숫자 4를 다른 파일에 쓰지 마라. 여기 함수들을 거친다.
+
+/** 인터벌 계획·세션의 종목 이름 중 **블록만** — 카탈로그 대조는 이것만 한다 */
+export function intervalBlockNames(names: readonly string[]): string[] {
+  return names.slice(0, TABATA_EXERCISE_COUNT);
+}
+
+/** 인터벌 계획을 블록과 이어하기로 가른다. 4개 이하면 이어하기가 없다 */
+export function splitIntervalPlan<T>(exercises: readonly T[]): {
+  block: T[];
+  followUps: T[];
+} {
+  return {
+    block: exercises.slice(0, TABATA_EXERCISE_COUNT),
+    followUps: exercises.slice(TABATA_EXERCISE_COUNT),
+  };
+}
+
+/**
+ * 이 자리가 인터벌 블록인가.
+ *
+ * 인터벌 세션에서 자리(`sort_order`)를 모르면 **블록으로 본다.** 블록의
+ * "반복"은 실제 횟수가 아니라 라운드 수라서, 모르는 행을 기록 비교에 넣으면
+ * 가짜 기록 갱신이 뜬다. 모르면 빼는 쪽이 안전하다.
+ * (2026-09-29 실측: 운영의 인터벌 세션 종목 116행은 전부 sort_order 0~3이다.)
+ */
+export function isIntervalBlockIndex(
+  tabataMinutes: number | null | undefined,
+  index: number | null | undefined,
+): boolean {
+  if (tabataMinutes === null || tabataMinutes === undefined) return false;
+  if (index === null || index === undefined) return true;
+  return index < TABATA_EXERCISE_COUNT;
+}
+
+/**
+ * 세트 기록 비교에 쓸 종목 — 인터벌 블록을 뺀다.
+ *
+ * 원칙: **인터벌 블록은 세트 기록 비교의 양쪽 어디에도 쓰지 않는다.** 8분
+ * 코스의 "4회"는 라운드 수라, 지난 일반 기록이 3회면 "1회 더 하셨어요"가 뜬다.
+ */
+export function withoutIntervalBlock<T>(
+  tabataMinutes: number | null | undefined,
+  exercises: readonly T[],
+): T[] {
+  return exercises.filter(
+    (_, index) => !isIntervalBlockIndex(tabataMinutes, index),
+  );
+}
+
+type IntervalDraftLike = {
+  tabataMinutes: number | null;
+  exercises: readonly { key: string; sets: readonly { done: boolean }[] }[];
+};
+
+/** 음원이 끝난 뒤 이어서 할 종목이 있는가 */
+export function hasIntervalFollowUps(draft: IntervalDraftLike): boolean {
+  return (
+    draft.tabataMinutes !== null &&
+    draft.exercises.length > TABATA_EXERCISE_COUNT
+  );
+}
+
+/**
+ * 인터벌 블록이 아직 안 끝났는가 — 무동작 감지를 끄는 조건이다.
+ *
+ * 예전에는 "인터벌 세션이면" 세션 **내내** 껐다. 이어하기는 사람이 세트를
+ * 누르는 일반 운동이라 그동안은 감지가 켜져 있어야 한다.
+ */
+export function intervalBlockPending(draft: IntervalDraftLike): boolean {
+  if (draft.tabataMinutes === null) return false;
+  return draft.exercises
+    .slice(0, TABATA_EXERCISE_COUNT)
+    .some((exercise) => exercise.sets.some((set) => !set.done));
+}
+
+/** 음원이 끝났다 — 블록 4종의 세트만 완료로. 이어하기는 건드리지 않는다 */
+export function completeIntervalBlock(
+  exercises: readonly LocalExercise[],
+): LocalExercise[] {
+  return exercises.map((exercise, index) =>
+    index < TABATA_EXERCISE_COUNT
+      ? { ...exercise, sets: exercise.sets.map((set) => ({ ...set, done: true })) }
+      : exercise,
+  );
+}
+
+/**
+ * 운동 중 이 종목이 인터벌 블록인가 — 빼기·건너뛰기·옮기기를 막는 데 쓴다.
+ *
+ * 블록이 빠지거나 자리를 바꾸면 저장되는 `sort_order`가 밀려서 이어하기
+ * 종목이 0~3번에 들어가고, 그 기록은 영영 "인터벌"로 취급된다.
+ */
+export function isIntervalBlockExercise(
+  draft: { tabataMinutes: number | null; exercises: readonly { key: string }[] },
+  exKey: string,
+): boolean {
+  const index = draft.exercises.findIndex((exercise) => exercise.key === exKey);
+  return index >= 0 && isIntervalBlockIndex(draft.tabataMinutes, index);
+}
+
+/** 배너·카드의 한 줄 — `푸시업 · 버드독 · 데드버그 · 크런치 · 이어서 4종목` */
+export function intervalPlanLine(names: readonly string[]): string {
+  const { block, followUps } = splitIntervalPlan(names);
+  const head = block.join(" · ");
+  return followUps.length > 0
+    ? `${head} · ${INTERVAL_COPY.followUpCount(followUps.length)}`
+    : head;
+}
+
+/**
+ * 일반 세션 조회와 인터벌 세션 조회를 최신순 하나로 (2026-09-29).
+ *
+ * 둘을 **따로** 조회하는 이유: 한 조회로 합치면 인터벌 세션이 한도(20·40)를
+ * 먹어 일반 기록이 밀려난다. 따로 가져오면 일반 쪽 결과는 예전과 같다.
+ */
+export function mergeRecentSessions<S extends { completed_at: string }>(
+  regular: readonly S[],
+  interval: readonly S[],
+): S[] {
+  return [...regular, ...interval].sort(
+    (a, b) => Date.parse(b.completed_at) - Date.parse(a.completed_at),
+  );
+}
+
+/**
+ * AI 코치가 분석할 **이번 세션** 종목 (2026-09-29, 개발 서버 확인에서 발견).
+ *
+ * 이어하기가 있는 인터벌 세션이면 블록을 뺀다. 블록의 반복은 라운드 수라,
+ * 넣으면 "푸시업 30회 → 2회, 크게 줄었다 · 이전 수준으로 회복하세요" 같은
+ * 틀린 주의가 **인터벌을 한 날마다** 뜬다(픽스처 A에서 실제로 떴다).
+ *
+ * 순수 인터벌(블록만 있음)은 **예전 그대로** 둔다. 빼면 분석할 종목이 하나도
+ * 남지 않는데, 그때 코치가 무엇을 말해야 하는지는 이번 범위가 아니다.
+ */
+export function coachSessionRows<R extends { sort_order: number | null }>(
+  tabataMinutes: number | null | undefined,
+  rows: readonly R[],
+): R[] {
+  const kept = rows.filter(
+    (row) => !isIntervalBlockIndex(tabataMinutes, row.sort_order),
+  );
+  return kept.length > 0 ? kept : [...rows];
 }

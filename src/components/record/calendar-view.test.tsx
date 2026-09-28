@@ -1114,6 +1114,23 @@ const INTERVAL_PLAN_PICKED = {
   })),
 };
 
+/** 인터벌 뒤 이어하기가 붙은 계획 (2026-09-29, ChatGPT가 넣는 모양) */
+const INTERVAL_PLAN_WITH_FOLLOW_UPS = {
+  ...INTERVAL_PLAN_PICKED,
+  id: "plan-interval-follow-ups",
+  exercises: [
+    ...INTERVAL_PLAN_PICKED.exercises,
+    {
+      name: "흉추 익스텐션",
+      bodyPart: "등" as const,
+      exerciseType: "bodyweight" as const,
+      measure: "reps" as const,
+      isCustom: true,
+      sets: [{ weightKg: 0, reps: 10, distanceKm: 0, durationMin: 0 }],
+    },
+  ],
+};
+
 async function openEditSheet() {
   fireEvent.click(screen.getByRole("button", { name: "8월 16일" }));
   fireEvent.click(screen.getByRole("button", { name: "수정" }));
@@ -1377,6 +1394,38 @@ describe("CalendarView — 계획한 운동 수정 (2026-08-28)", () => {
     })) as HTMLButtonElement;
     expect(save.disabled).toBe(false);
     expect(screen.queryByText(/예정표 고치기/)).toBeNull();
+  });
+
+  it("인터벌 예정표 카드는 이어하기를 따로 보여 주고, 고쳐 저장해도 이어하기가 남는다 (2026-09-29)", async () => {
+    mocks.getWorkoutPlans.mockResolvedValue([INTERVAL_PLAN_WITH_FOLLOW_UPS]);
+    await setup(BODYWEIGHT_CATALOG);
+
+    fireEvent.click(screen.getByRole("button", { name: "8월 15일" }));
+    expect(screen.getByTestId("plan-follow-ups").textContent).toBe(
+      "인터벌 뒤에 이어서: 흉추 익스텐션",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "수정" }));
+    // 시트에도 보존된다는 것을 보여 준다
+    expect((await screen.findByTestId("interval-follow-ups")).textContent).toContain(
+      "흉추 익스텐션",
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "8월 15일 예정표로 저장" }),
+    );
+
+    await waitFor(() => expect(mocks.updateWorkoutPlan).toHaveBeenCalled());
+    const saved = mocks.updateWorkoutPlan.mock.calls[0][0].exercises as Array<{
+      name: string;
+      sets: unknown[];
+    }>;
+    expect(saved.map((e) => e.name)).toEqual([
+      ...BODYWEIGHT_CATALOG.map((c) => c.name),
+      "흉추 익스텐션",
+    ]);
+    expect(saved[4].sets).toEqual([
+      { weightKg: 0, reps: 10, distanceKm: 0, durationMin: 0 },
+    ]);
   });
 });
 

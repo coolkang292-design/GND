@@ -68,6 +68,7 @@ function setup(
     pastSessions?: CalendarSession[];
     initialPicked?: CatalogExercise[];
     initialMinutes?: TabataMinutes;
+    followUpNames?: readonly string[];
     onBegin?: (
       picked: CatalogExercise[],
       minutes: TabataMinutes,
@@ -82,6 +83,7 @@ function setup(
       pastLoading={false}
       initialPicked={over.initialPicked}
       initialMinutes={over.initialMinutes}
+      followUpNames={over.followUpNames}
       onClose={vi.fn()}
       onCreateCustom={vi.fn()}
       onBegin={over.onBegin ?? vi.fn()}
@@ -219,5 +221,34 @@ describe("TabataSheet — 운동 고르기 배선 (2026-08-06)", () => {
     fireEvent.click(getByText("선택한 4개 운동 추가"));
 
     expect(getByText("+ 운동 고르기 (4/4)")).toBeTruthy();
+  });
+});
+
+describe("TabataSheet — 인터벌 뒤 이어하기 (2026-09-29)", () => {
+  it("계획에 이어하기가 있으면 준비 화면에 이름과 안내를 보여 준다", () => {
+    setup({
+      initialPicked: FOUR,
+      initialMinutes: 8,
+      followUpNames: ["흉추 익스텐션", "도어웨이 가슴 스트레칭", "Wall Slide", "YTW"],
+    });
+    const box = screen.getByTestId("interval-follow-ups");
+    expect(box.textContent).toContain("인터벌 뒤에 이어서");
+    expect(box.textContent).toContain("흉추 익스텐션 · 도어웨이 가슴 스트레칭 · Wall Slide · YTW");
+    expect(screen.getByText(/음원이 끝나면 이어서 4종목을 해요/)).toBeTruthy();
+    expect(screen.queryByText(/자동으로 기록되고/)).toBeNull();
+  });
+
+  it("이어하기가 없으면 예전 안내 그대로", () => {
+    setup({ initialPicked: FOUR, initialMinutes: 8 });
+    expect(screen.queryByTestId("interval-follow-ups")).toBeNull();
+    expect(screen.getByText(/자동으로 기록되고/)).toBeTruthy();
+  });
+
+  it("이어하기가 있어도 시작 조건은 인터벌 4개 그대로다", async () => {
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
+    const onBegin = vi.fn().mockResolvedValue(true);
+    setup({ initialPicked: FOUR, initialMinutes: 8, followUpNames: ["흉추 익스텐션"], onBegin });
+    fireEvent.click(screen.getByRole("button", { name: "전신 인터벌 시작" }));
+    await waitFor(() => expect(onBegin).toHaveBeenCalledWith(FOUR, 8));
   });
 });

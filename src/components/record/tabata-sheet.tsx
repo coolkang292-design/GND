@@ -68,6 +68,11 @@ type TabataProps = {
   /** 예정표에서 연 타바타 — 종목·코스를 미리 채운 채 연다 (0059) */
   initialPicked?: CatalogExercise[];
   initialMinutes?: TabataMinutes;
+  /**
+   * 인터벌이 끝난 뒤 같은 세션에서 이어서 할 종목 이름 (설계 2026-09-29).
+   * 계획의 5번째부터다. 여기서는 **보여 주기만** 한다 — 고르는 것은 인터벌 4종뿐이다.
+   */
+  followUpNames?: readonly string[];
   /*
     ⚠️ **`autoStart`를 되살리지 마라** (사용자 지시 2026-08-25).
 
@@ -114,6 +119,7 @@ function TabataSheetBody({
   routinesLoading,
   initialPicked,
   initialMinutes,
+  followUpNames = [],
   openPickerOnMount,
   onPlan,
   planDateLabel = "",
@@ -366,7 +372,9 @@ function TabataSheetBody({
               {onPlan ? "저장하세요" : "시작하세요"}.
               {onPlan
                 ? " 그날 기록 화면에서 바로 시작할 수 있어요."
-                : " 음원이 끝나면 자동으로 기록되고, 인증샷만 찍으면 돼요."}
+                : followUpNames.length > 0
+                  ? ` ${INTERVAL_COPY.followUpAfterEnd(followUpNames.length)}`
+                  : " 음원이 끝나면 자동으로 기록되고, 인증샷만 찍으면 돼요."}
               <b className="text-accent">
                 {" "}
                 종목마다 {tabataRepsForMinutes(minutes)}회로 기록돼요.
@@ -420,6 +428,20 @@ function TabataSheetBody({
                 </div>
               ))}
             </div>
+
+            {followUpNames.length > 0 && (
+              <div
+                data-testid="interval-follow-ups"
+                className="mt-2 rounded-card-sm border border-line bg-surface-2 px-3 py-2"
+              >
+                <p className="text-[11px] font-extrabold text-muted">
+                  {INTERVAL_COPY.followUpLead}
+                </p>
+                <p className="mt-0.5 break-words text-sm font-bold">
+                  {followUpNames.join(" · ")}
+                </p>
+              </div>
+            )}
 
             <button
               onClick={() => setPickerOpen(true)}
