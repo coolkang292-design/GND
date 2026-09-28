@@ -52,7 +52,7 @@ export function shareResultToast(result: ShareResult): string | null {
     case "canceled":
       return null;
     case "copied":
-      return "운동 일지를 복사했어요 — AI 코치에게 붙여넣어 보세요 📋";
+      return "운동 일지를 복사했어요 — 카톡이나 메모에 붙여넣어 보세요 📋";
     case "failed":
       return "공유에 실패했어요. 다시 시도해주세요";
   }

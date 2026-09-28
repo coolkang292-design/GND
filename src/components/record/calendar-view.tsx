@@ -1767,7 +1767,7 @@ export function CalendarView({
                 disabled={!readyLogText}
                 className="mt-3 h-11 w-full rounded-card bg-accent text-sm font-extrabold text-accent-ink disabled:opacity-60"
               >
-                📤 AI 코치에게 공유
+                📋 운동 일지 공유하기
               </button>
             )}
             {selectedSessions.length > 0 && (

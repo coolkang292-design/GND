@@ -3420,7 +3420,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
           }}
           className="h-12 rounded-card border border-line bg-surface-2 text-sm font-bold"
         >
-          📤 AI 코치에게 공유
+          📋 운동 일지 공유하기
         </button>
         {/*
           운동을 마치면 **홈으로 보낸다** (2026-08-19 사장님 결정).
