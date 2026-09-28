@@ -175,7 +175,7 @@ describe("CoachCard", () => {
       retryable: true,
     });
     renderCard();
-    expect(await screen.findByText(/AI 분석을 불러오지 못했어요/)).toBeTruthy();
+    expect(await screen.findByText(/리포트를 불러오지 못했어요/)).toBeTruthy();
     expect(screen.getByText("오늘의 성과")).toBeTruthy();
     fireEvent.click(screen.getByText("다시 분석"));
     await screen.findByText("같은 무게에서 반복이 2회 늘었어요.");
@@ -190,7 +190,7 @@ describe("CoachCard", () => {
       retryable: false,
     });
     renderCard();
-    await screen.findByText(/AI 분석을 불러오지 못했어요/);
+    await screen.findByText(/리포트를 불러오지 못했어요/);
     expect(screen.queryByText("다시 분석")).toBeNull();
   });
 
@@ -222,7 +222,7 @@ describe("CoachCard", () => {
       retryable: true,
     });
     renderCard();
-    expect(await screen.findByText(/AI 코치를 준비하고 있어요/)).toBeTruthy();
+    expect(await screen.findByText(/리포트를 준비하고 있어요/)).toBeTruthy();
     expect(screen.queryByText("다시 분석")).toBeNull();
   });
 });

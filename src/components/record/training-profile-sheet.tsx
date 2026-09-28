@@ -133,7 +133,7 @@ export function TrainingProfileSheet({
         <div className="flex-none px-4 pt-4">
           <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
           <h3 id="training-profile-title" className="text-center text-base font-extrabold">
-            AI 코치에게 목표를 알려주세요
+            내게 맞는 리포트를 위해 목표를 알려주세요
           </h3>
           <p className="mt-1 text-center text-[11.5px] text-muted">
             같은 기록도 목표에 따라 다르게 읽어요. 한 번만 정하면 돼요.

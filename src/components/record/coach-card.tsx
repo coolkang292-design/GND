@@ -145,7 +145,8 @@ function FeedbackView({ feedback }: { feedback: CoachFeedback }) {
       <ItemList title="다음 운동에서" mark="→" items={feedback.next_actions} />
       <p className="mt-3 text-[13px] leading-relaxed text-muted">{feedback.coach_message}</p>
       <p className="mt-2 text-[10.5px] text-faint">
-        내 지난 기록만 비교해 만든 참고용 코칭이에요. 계획은 자동으로 바뀌지 않아요.
+        내 지난 기록을 같은 기준으로 비교하고, AI가 문장으로 정리한 참고용 분석이에요.
+        계획은 자동으로 바뀌지 않아요.
       </p>
     </div>
   );
@@ -304,10 +305,16 @@ export function CoachCard({
       {/*
         문구 (2026-09-29 사용자 요청 — "운동을 분석하는 거니까 목적에 맞는 퀄리티 있는
         마케팅 문구로"). 축은 **"기록은 숫자로, 체감은 당신이 — 둘을 겹쳐 읽는다"**다.
+
+        ⚠️ 이름은 "GND 퍼포먼스 리포트"다 (2026-09-29 사용자 결정 — "AI 코치" 워딩 삭제).
+        ⚠️ **"전문가가 분석했다"로 쓰지 마라.** 사람이 보지 않는다 — 코드 판정 + AI
+           문장화다. 전문성은 방법(내 기록·같은 기준·숫자 근거)으로 말한다.
+        ⚠️ 맨 아래 안내문의 **"AI가 문장으로 정리"는 지우지 마라.** 인공지능기본법
+           (2026-01 시행)의 생성형 AI 결과물 고지다. 머리글에서 뺀 대신 여기 남긴다.
       */}
       <p id="coach-card-title" className="flex items-center gap-1.5 text-xs font-extrabold text-accent">
-        <span aria-hidden>🤖</span> GND AI 코치
-        <span className="font-bold text-faint">· 오늘의 운동 리포트</span>
+        <span aria-hidden>📊</span> GND 퍼포먼스 리포트
+        <span className="font-bold text-faint">· 내 기록 기준</span>
       </p>
 
       {metrics && <Performance metrics={metrics} />}
@@ -400,8 +407,8 @@ export function CoachCard({
         <div className="mt-3">
           <p className="text-[13px] font-bold text-muted">
             {failure?.code === "not_configured"
-              ? "AI 코치를 준비하고 있어요. 위의 기록은 그대로 저장됐어요."
-              : "AI 분석을 불러오지 못했어요. 운동 기록은 그대로 저장됐어요."}
+              ? "리포트를 준비하고 있어요. 위의 기록은 그대로 저장됐어요."
+              : "리포트를 불러오지 못했어요. 운동 기록은 그대로 저장됐어요."}
           </p>
           {failure?.retryable && failure.code !== "not_configured" && (
             <button
