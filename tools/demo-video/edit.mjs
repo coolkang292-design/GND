@@ -174,6 +174,23 @@ function markTime(track, name, acct) {
   return m.t;
 }
 
+/**
+ * blur: [[x, y, w, h, 시작초?, 끝초?], ...] — 앱 화면(CSS 405×720) 좌표의 영역을 흐린다.
+ * 실사용자(닉네임·프로필 사진)가 비치는 줄을 가리는 용도 (2026-10-02 기능별 소스 녹화).
+ * 시각은 출력 클립 기준(skip·speed 반영 뒤)이며, 없으면 클립 전체.
+ * 돌려주는 것: filter_complex 앞부분. 뒤에 이어 쓸 필터를 바로 붙이면 된다("...[rN]scale=...").
+ */
+function blurPrefix(clip, filters) {
+  const chain = (clip.blur ?? []).map(([x, y, w, h, a, b], k) => {
+    const en = a === undefined ? "" : `:enable='between(t,${a},${b ?? 9999})'`;
+    return `[r${k}]split[r${k}a][r${k}b];[r${k}b]crop=iw*${w}/405:ih*${h}/720:iw*${x}/405:ih*${y}/720,boxblur=28:3[r${k}c];` +
+      `[r${k}a][r${k}c]overlay=W*${x}/405:H*${y}/720${en}[r${k + 1}]`;
+  });
+  return chain.length
+    ? `[0]${filters.join(",")}[r0];${chain.join(";")};[r${chain.length}]`
+    : `[0]${filters.join(",")},`;
+}
+
 /** 한 구간 → 정규화된 mp4 (1080×1920, 30fps, H.264). skip 구간은 잘라 낸다 */
 function renderClip(i, clip, withCaption) {
   const track = trackOf(clip);
@@ -271,8 +288,9 @@ function renderClip(i, clip, withCaption) {
       return `[c${k}][f${k}]overlay=x='${X}+70*${p}':y='${Y}+110*${p}+8*between(t,${T},${T}+0.18)':` +
         `enable='between(t,${T}-0.5,${T}+0.5)':eval=frame:shortest=0[c${k + 1}]`;
     });
+    const blurIn = blurPrefix(clip, filters);
     const graph =
-      `[0]${filters.join(",")},scale=${CS.w}:${CS.h}:flags=lanczos,pad=1080:1920:${CS.x}:${CS.y}:color=black[s];` +
+      `${blurIn}scale=${CS.w}:${CS.h}:flags=lanczos,pad=1080:1920:${CS.x}:${CS.y}:color=black[s];` +
       `[s][1]overlay=shortest=0[c0];` +
       (fingers.length ? `[2]split=${fingers.length}${fingers.map((_, k) => `[f${k}]`).join("")};${fingerChain.join(";")};` : "") +
       `[c${fingers.length}]${texts.length ? texts.join(",") + "," : ""}format=yuv420p[v]`;
@@ -318,7 +336,9 @@ function renderClip(i, clip, withCaption) {
     }
   }
   filters.push("format=yuv420p");
-  ff(["-f", "concat", "-safe", "0", "-i", listFile, "-vf", filters.join(","), "-an",
+  // blur는 앞 두 필터(fps·tpad) 뒤에 건다 — 화면 좌표가 원본 프레임 기준이라 scale 전이어야 한다
+  const [fpsF, tpadF, ...rest] = filters;
+  ff(["-f", "concat", "-safe", "0", "-i", listFile, "-filter_complex", `${blurPrefix(clip, [fpsF, tpadF])}${rest.join(",")}[v]`, "-map", "[v]", "-an",
     "-frames:v", String(frameCount),
     "-c:v", "libx264", "-preset", "slow", "-crf", "17", "-r", String(FPS), out]);
   return { out, seconds };

@@ -1,0 +1,415 @@
+{
+  "_설명": "기능별 소스 클립 (2026-10-02 녹화 features-20261002). 인스타·쇼츠 편집 소스용 — 기능마다 ① 자막 없는 전체 화면판(raw) ② 카드 자막판(card, 손가락 포함). 문구는 앱이 실제로 하는 것만. blur = 실사용자(오뎅끼데스까)가 비치는 줄을 흐림 [x,y,w,h(CSS 405x720), 시작초, 끝초]. 실행: node features.mjs",
+  "run": "work/rec/features-20261002",
+  "features": [
+    {
+      "key": "01-challenge-invite",
+      "clips": [
+        {
+          "acct": "A",
+          "from": "c5-start",
+          "offset": 0.5,
+          "to": "c5-create-tap",
+          "toOffset": 3,
+          "caption": "친구와 챌린지 만들기",
+          "sub": "이름 · 기간 · 아는 사람끼리만 고르면 끝"
+        },
+        {
+          "acct": "A",
+          "from": "c5-invite-tap",
+          "offset": -0.5,
+          "dur": 4.5,
+          "hold": 0.5,
+          "caption": "초대 링크로 친구 부르기",
+          "sub": "링크 하나만 보내면 돼요"
+        },
+        {
+          "acct": "B",
+          "from": "c5-b-open",
+          "offset": 3.3,
+          "to": "c5-b-goal",
+          "toOffset": 4,
+          "skip": [
+            [
+              3,
+              17.3
+            ]
+          ],
+          "caption": "링크를 열면 바로 참가",
+          "sub": "주 몇 번 운동할지만 정해요"
+        },
+        {
+          "acct": "B",
+          "from": "c5-b-ready2",
+          "offset": -1.5,
+          "dur": 4,
+          "hold": 1,
+          "caption": "둘 다 준비 완료",
+          "sub": "시작일이 되면 자동으로 시작해요"
+        }
+      ]
+    },
+    {
+      "key": "02-interval-followup",
+      "clips": [
+        {
+          "acct": "B",
+          "from": "w-interval-banner",
+          "offset": -2,
+          "to": "w-interval-start",
+          "toOffset": 6,
+          "skip": [
+            [
+              6.5,
+              15.5
+            ]
+          ],
+          "caption": "오늘 계획이 기록 탭에 떠요",
+          "sub": "전신 인터벌 4분 · 이어서 벤치프레스"
+        },
+        {
+          "acct": "B",
+          "from": "w-interval-start",
+          "offset": 6,
+          "to": "w-interval-start",
+          "toOffset": 255,
+          "speed": 15,
+          "caption": "음악에 맞춰 20초 운동 · 10초 휴식",
+          "sub": "4분 인터벌을 빠르게 보여 드려요"
+        },
+        {
+          "acct": "B",
+          "from": "w-interval-start",
+          "offset": 255,
+          "dur": 9,
+          "hold": 0.5,
+          "caption": "음악이 끝나면 그대로 이어서",
+          "sub": "한 번 쉬고 다음 종목 벤치프레스로"
+        }
+      ]
+    },
+    {
+      "key": "03-cheer",
+      "clips": [
+        {
+          "acct": "A",
+          "from": "cheer-a-tap",
+          "offset": -4,
+          "dur": 6.5,
+          "hold": 0.5,
+          "blur": [
+            [
+              0,
+              40,
+              405,
+              85
+            ]
+          ],
+          "caption": "친구가 운동 중이면 응원 한 번",
+          "sub": "힘내를 누르면 응원 포인트 +10"
+        },
+        {
+          "acct": "B",
+          "from": "cheer-b-banner",
+          "offset": -1.5,
+          "dur": 5,
+          "hold": 0.5,
+          "caption": "운동하는 친구 화면에 바로 떠요",
+          "sub": "쉬는 시간에 도착한 응원"
+        }
+      ]
+    },
+    {
+      "key": "04-workout-photo",
+      "clips": [
+        {
+          "acct": "B",
+          "from": "bench-start",
+          "offset": -0.5,
+          "to": "bench-set1",
+          "toOffset": 3,
+          "skip": [
+            [
+              4,
+              24.3
+            ]
+          ],
+          "caption": "세트를 끝내면 체크 한 번",
+          "sub": "계획한 무게 · 횟수가 미리 들어가 있어요"
+        },
+        {
+          "acct": "B",
+          "from": "bench-set1",
+          "offset": 8.9,
+          "dur": 4.5,
+          "hold": 0.5,
+          "caption": "쉬는 동안 사진으로 인증",
+          "sub": "세트 사이에 탭 한 번 · 최대 5장"
+        },
+        {
+          "acct": "B",
+          "from": "bench-set2",
+          "offset": -0.5,
+          "to": "bench-set3",
+          "toOffset": 8,
+          "caption": "계획한 세트를 다 채우면",
+          "sub": "알아서 결과 화면으로 넘어가요"
+        }
+      ]
+    },
+    {
+      "key": "05-evolution",
+      "clips": [
+        {
+          "acct": "B",
+          "from": "xp-wait",
+          "offset": 1,
+          "dur": 5,
+          "caption": "운동을 마치면 XP",
+          "sub": "운동 완료 +100 · 인증 사진 +10"
+        },
+        {
+          "acct": "B",
+          "from": "xp-3",
+          "offset": -4.6,
+          "to": "xp-4",
+          "toOffset": 0.2,
+          "caption": "포인트 받고 레벨 업",
+          "sub": "Lv.10 → Lv.11"
+        },
+        {
+          "acct": "B",
+          "from": "xp-4",
+          "offset": 0.2,
+          "to": "xp-5",
+          "toOffset": -0.3,
+          "speed": 0.6,
+          "hold": 1.2,
+          "caption": "캐릭터가 진화해요",
+          "sub": "눈떴개 → 일단하개"
+        },
+        {
+          "acct": "B",
+          "from": "xp-5",
+          "offset": 0,
+          "dur": 3,
+          "hold": 0.6,
+          "caption": "새 단계 보상이 열려요",
+          "sub": "일단하개 캐릭터 진화"
+        },
+        {
+          "acct": "A",
+          "from": "evo-a-bell",
+          "offset": 0.3,
+          "dur": 7,
+          "hold": 0.8,
+          "blur": [
+            [
+              0,
+              640,
+              405,
+              42,
+              0,
+              3.2
+            ],
+            [
+              0,
+              585,
+              405,
+              135,
+              2.8
+            ]
+          ],
+          "caption": "크루에게도 진화 소식이 가요",
+          "sub": "근육은퇴근중님이 진화했어요!"
+        }
+      ]
+    },
+    {
+      "key": "06-report",
+      "clips": [
+        {
+          "acct": "B",
+          "from": "xp-close",
+          "offset": 0.5,
+          "to": "report-tap",
+          "toOffset": -0.5,
+          "caption": "운동이 끝나면 결과 화면",
+          "sub": "오늘의 사진 · 챌린지 목표 · 리포트",
+          "skip": [
+            [
+              3,
+              12.5
+            ]
+          ]
+        },
+        {
+          "acct": "B",
+          "from": "report-tap",
+          "offset": -0.5,
+          "dur": 3,
+          "caption": "GND 퍼포먼스 리포트",
+          "sub": "목표를 한 번만 알려 주면"
+        },
+        {
+          "acct": "B",
+          "from": "report-submit",
+          "offset": -11.5,
+          "dur": 13.5,
+          "caption": "GND 퍼포먼스 리포트",
+          "sub": "목표 · 경험 · 횟수 · 시간 · 장소를 고르고"
+        },
+        {
+          "acct": "B",
+          "from": "report-feel",
+          "offset": -1.5,
+          "dur": 30.5,
+          "skip": [
+            [
+              4.5,
+              26
+            ]
+          ],
+          "caption": "오늘 체감까지 누르면",
+          "sub": "지난 기록과 겹쳐서 분석해요"
+        },
+        {
+          "acct": "B",
+          "from": "report-view",
+          "offset": -0.5,
+          "dur": 8.5,
+          "hold": 0.8,
+          "caption": "성장 신호와 다음 목표까지",
+          "sub": "같은 종목 볼륨 +27.5% · 다음엔 총 30회"
+        }
+      ]
+    },
+    {
+      "key": "07-feed-comment",
+      "clips": [
+        {
+          "acct": "A",
+          "from": "feed-a",
+          "offset": 0.5,
+          "to": "feed-comment-send",
+          "toOffset": 2,
+          "blur": [
+            [
+              0,
+              420,
+              405,
+              260,
+              17.5
+            ]
+          ],
+          "caption": "친구 운동에 좋아요 · 댓글",
+          "sub": "피드에서 바로 반응해요",
+          "skip": [
+            [
+              1.5,
+              8.2
+            ]
+          ]
+        },
+        {
+          "acct": "B",
+          "from": "feed-b-bell",
+          "offset": -0.5,
+          "to": "feed-b-open",
+          "toOffset": 3.5,
+          "blur": [
+            [
+              0,
+              530,
+              405,
+              58
+            ]
+          ],
+          "caption": "댓글이 오면 알림으로",
+          "sub": "누르면 그 운동으로 바로 이동"
+        },
+        {
+          "acct": "B",
+          "from": "feed-b-reply",
+          "offset": -0.5,
+          "to": "feed-end",
+          "toOffset": 0,
+          "hold": 0.8,
+          "blur": [
+            [
+              0,
+              455,
+              405,
+              225
+            ]
+          ],
+          "caption": "답글로 대화가 이어져요",
+          "sub": "고마워요! 다음엔 같이 해요"
+        }
+      ]
+    },
+    {
+      "key": "08-growth",
+      "clips": [
+        {
+          "acct": "B",
+          "from": "growth-profile",
+          "offset": 0.3,
+          "to": "growth-profile",
+          "toOffset": 6.8,
+          "hold": 0.8,
+          "caption": "운동할수록 캐릭터가 자라요",
+          "sub": "개노답 → 눈떴개 → 일단하개 … 7단계",
+          "speed": 0.75
+        }
+      ]
+    },
+    {
+      "key": "09-photo-upload",
+      "run": "work/rec/photo-20261002",
+      "clips": [
+        {
+          "acct": "A",
+          "from": "p-start",
+          "offset": -1.5,
+          "to": "p-photo",
+          "toOffset": 4,
+          "skip": [
+            [
+              4,
+              25.6
+            ]
+          ],
+          "caption": "운동 중에 사진으로 인증",
+          "sub": "사진 버튼을 누르고 고르면 바로 올라가요"
+        },
+        {
+          "acct": "A",
+          "from": "p-done-tap",
+          "offset": -0.5,
+          "to": "p-xp-close",
+          "toOffset": 3.5,
+          "skip": [
+            [
+              6,
+              20.2
+            ]
+          ],
+          "hold": 0.6,
+          "caption": "운동을 마치면",
+          "sub": "올린 사진이 오늘의 사진에 담겨요"
+        },
+        {
+          "acct": "A",
+          "from": "p-feed",
+          "offset": -0.5,
+          "to": "p-end",
+          "toOffset": 0,
+          "hold": 0.8,
+          "caption": "피드에 인증 글로 올라가요",
+          "sub": "크루가 바로 보고 반응할 수 있어요"
+        }
+      ]
+    }
+  ]
+}
