@@ -3,6 +3,18 @@
 > 새 세션은 저장소 루트 `AGENTS.md` → `CLAUDE.md` → 이 파일 → 가장 최근의 관련 `docs/superpowers/HANDOFF-*.md` 순서로 읽는다.
 > 이 파일은 전체 흐름의 요약이고, 작업별 세부 사실과 남은 확인은 최신 인수인계서가 기준이다.
 
+## ⏸ 2026-10-05 운동 이미지 2x2 재시험 — **원본 해상도 실패 · 추가 생성 중단 · 로컬만**
+
+인수인계: `docs/superpowers/HANDOFF-2026-10-05-exercise-image-trial-002.md`.
+
+- 사용자 지시로5x2신규생성 중단. 기존335개 manifest·분류·batch·기존QA는 SHA/Gitdiff로 변경없음을 확인.
+- 별도시험 GND-TRIAL-002: 체스트프레스 머신·덤벨 레터럴 레이즈·바벨 로우·사이클, 내장생성1회만 실행.
+- 요청2048x2048PNG, 실제1254x1254/셀627x627. 확대 없이512x512sRGBPNG4장으로축소. 최소768px셀 기준실패.
+- 운동일치4PASS, 실제48px비교대지식별4PASS, 최종0PASS/4FAIL. 독립전문가/앱내렌더링검수는미수행.
+- 새검사15passed/0failed·기존22passed/0failed, lint0errors/기존경고4개·typecheck·전체227파일3930테스트·build통과.
+- 추가생성·Storage·운영DB·앱적용·배포없음. 생성물약3.14MB는로컬만, 이번텍스트커밋과이전커밋의푸시는승인대기.
+- 다음할일1개: 출력해상도를제어할수있는생성경로의추가시험승인.
+
 ## ⏸ 2026-10-05 운동 이미지 관리표·시험 — **시험 실패 · 대량 생성 중단 · 로컬만**
 
 인수인계: `docs/superpowers/HANDOFF-2026-10-05-exercise-image-trial.md`.

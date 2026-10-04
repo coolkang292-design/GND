@@ -1,8 +1,36 @@
 # GND 운동 이미지 시험 파이프라인
 
 2026-10-05. 기본 운동335개만 포함. 사용자 운동13개는 제외.
-실제 생성은 GND-TRIAL-001 한 장만 승인됐으며 이미 실행했다.
-최종 QA0 PASS/10 FAIL이므로 추가 생성/Storage/DB/앱 적용을 실행하지 않는다.
+기존 GND-TRIAL-001(5x2)은 실패 기록으로 보존한다. **5x2 방식의 신규 생성은 중단했다.**
+추가 승인받은 GND-TRIAL-002(2x2) 한 장만 생성했다. 실제1254x1254/셀627px로768px최소 기준을 충족하지 못했다.
+운동형태/48px식별4PASS지만 최종0PASS/4FAIL이다. 추가 생성/Storage/DB/앱 적용은 미승인이다.
+
+## 2x2 시험 결과와 재현
+
+기존335개 manifest/분류/batch/기존이미지QA는 수정하지 않았다.
+`data/exercise-image-trial-002.json`은 기존UUID4개를 참조하는 별도 시험 배치다.
+체스트프레스 머신·덤벨 레터럴 레이즈·바벨 로우·사이클을 선택하여 유사 변형을 함께 넣지 않았다.
+`data/exercise-image-generation-policy.json`이 현재 승인범위와5x2중단을 명시한다.
+
+- `data/exercise-image-trial-002-prompt.txt`: 요청2048x2048PNG,2x2,최소셀768px.
+- `data/exercise-image-trial-002-qa.json`: 실제1254x1254,셀627x627,축소율512/627,확대0개.
+- `output/exercise-images/trial-002/`: 원본/512pxPNG4장/48px비교대지,로컬보관/Git제외.
+- `docs/superpowers/HANDOFF-2026-10-05-exercise-image-trial-002.md`: 두번째시험 인수인계.
+
+PowerShell,프로젝트루트에서:
+
+```powershell
+python scripts/exercise-images/verify-trial-002.py
+python scripts/exercise-images/verify.py
+```
+
+정상결과: 새검사15passed/0failed, 기존검사22passed/0failed. 이미지품질은0PASS/4FAIL이다.
+검사는 원본768px미달을실패로남기고 확대/비율왜곡을거부하는지를 확인한다.
+자동종료하며 Ctrl+C로중단할수있다. DB/Storage/앱변경은없다.
+원본을다시잘라야할때만 `python scripts/exercise-images/crop-trial-002.py --source output/exercise-images/trial-002/sheets/GND-TRIAL-002.png`.
+이명령은생성하지않으며,다른원본덮어쓰기와512px미만확대를거절한다. 재crop하면의미QA는NOT_RUN으로돌아가므로다시검토해야한다.
+
+아래는 **첫번째시험의역사적재현기록**이며신규5x2생성승인이아니다.
 
 ## 데이터와 판정
 

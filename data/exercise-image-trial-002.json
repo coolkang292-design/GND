@@ -1,0 +1,79 @@
+{
+  "batch_no": "GND-TRIAL-002",
+  "scope": "trial only",
+  "generation_authorized": true,
+  "generation_calls_allowed": 1,
+  "grid": [
+    2,
+    2
+  ],
+  "requested_resolution": [
+    2048,
+    2048
+  ],
+  "minimum_native_cell": [
+    768,
+    768
+  ],
+  "output_resolution": [
+    512,
+    512
+  ],
+  "upscaling_allowed": false,
+  "parent_manifest_sha256": "b9bc91354445eae419182418c53e76a08e38540e1c1323e6a34d36084bab5dff",
+  "exercises": [
+    {
+      "exercise_id": "486fa05a-f354-45c9-a3c9-934b38f91f9c",
+      "name": "체스트프레스 머신",
+      "slot_no": 1,
+      "visual_family": "chest_press_machine",
+      "pose_description": "Seated upright against a back pad, feet on floor, pressing two MACHINE handles forward at chest level. Show the seated chest press machine, not a bench or free weights.",
+      "equipment": [
+        "seated chest press machine"
+      ],
+      "target_muscles": [
+        "pectoralis major"
+      ]
+    },
+    {
+      "exercise_id": "e1c75ef2-12bb-4fce-8435-e617618f1d37",
+      "name": "덤벨 레터럴 레이즈",
+      "slot_no": 2,
+      "visual_family": "lateral_raise",
+      "pose_description": "Standing upright, one dumbbell in each hand, lifting arms sideways to shoulder height with slightly bent elbows; weights travel sideways, not forward. Front three-quarter view.",
+      "equipment": [
+        "two dumbbells"
+      ],
+      "target_muscles": [
+        "lateral deltoids"
+      ]
+    },
+    {
+      "exercise_id": "d0862f4a-f9f1-4411-ad3c-15e904085afc",
+      "name": "바벨 로우",
+      "slot_no": 3,
+      "visual_family": "row",
+      "pose_description": "Standing with hips hinged and knees slightly bent, torso leaning forward about 45 degrees, both hands pulling a BARBELL toward the lower ribs. No bench or machine. Side three-quarter view.",
+      "equipment": [
+        "barbell"
+      ],
+      "target_muscles": [
+        "latissimus dorsi",
+        "rhomboids"
+      ]
+    },
+    {
+      "exercise_id": "84acc89a-ee72-40a8-8d64-93fcc410904b",
+      "name": "사이클",
+      "slot_no": 4,
+      "visual_family": "cardio_bike",
+      "pose_description": "Riding a stationary exercise bicycle, seated on the saddle, feet on pedals, hands on handlebars. Show both wheels or stationary flywheel housing and entire bicycle.",
+      "equipment": [
+        "stationary exercise bicycle"
+      ],
+      "target_muscles": [
+        "quadriceps"
+      ]
+    }
+  ]
+}
