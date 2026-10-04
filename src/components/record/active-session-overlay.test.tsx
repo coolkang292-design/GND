@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { amountFields } from "@/lib/domain/set-input";
+import { amountFields, type AmountField } from "@/lib/domain/set-input";
 import type { SpreadOffer } from "@/lib/domain/set-spread";
 import type { PreviousHint } from "@/lib/domain/previous-set";
 import type { ExercisePrescription } from "@/lib/domain/workout-plan";
@@ -100,16 +100,17 @@ const renderInput = (o: Partial<typeof inputProps> = {}) =>
 const renderRest = (o: Partial<typeof restProps> = {}) =>
   render(<ActiveSessionOverlay {...restProps} {...o} />);
 
-describe("유산소 수동 기록 — 측정 시작 없이 입력", () => {
-  function ManualCardio({ onComplete, onStart = vi.fn() }: {
+describe("시간 수동 기록 — 측정 시작 없이 입력", () => {
+  function ManualTimed({ onComplete, onStart = vi.fn(), fields = amountFields("cardio", null) }: {
     onComplete: (values: SetValues) => void;
     onStart?: () => void;
+    fields?: AmountField[];
   }) {
     const [values, setValues] = useState(inputProps.values);
     return <ActiveSessionOverlay
       {...inputProps}
       exerciseName="트레드밀"
-      fields={amountFields("cardio", null)}
+      fields={fields}
       values={values}
       timerSeconds={values.durationSec}
       timerTargetSeconds={values.durationSec}
@@ -122,7 +123,7 @@ describe("유산소 수동 기록 — 측정 시작 없이 입력", () => {
   it("미시작 상태에서 32분 40초·5.2km를 입력하고 바로 완료한다", () => {
     const onComplete = vi.fn();
     const onStart = vi.fn();
-    render(<ManualCardio onComplete={onComplete} onStart={onStart} />);
+    render(<ManualTimed onComplete={onComplete} onStart={onStart} />);
     fireEvent.change(screen.getByLabelText("운동 시간 분"), { target: { value: "32" } });
     fireEvent.change(screen.getByLabelText("운동 시간 초"), { target: { value: "40" } });
     const distance = screen.getByLabelText("운동 거리 km");
@@ -140,7 +141,7 @@ describe("유산소 수동 기록 — 측정 시작 없이 입력", () => {
 
   it.each(["time", "distance"])("%s 한 항목만 알아도 입력값을 완료 경로에 보낸다", (kind) => {
     const onComplete = vi.fn();
-    render(<ManualCardio onComplete={onComplete} />);
+    render(<ManualTimed onComplete={onComplete} />);
     fireEvent.change(screen.getByLabelText(kind === "time" ? "운동 시간 분" : "운동 거리 km"), {
       target: { value: kind === "time" ? "30" : "3.5" },
     });
@@ -153,7 +154,7 @@ describe("유산소 수동 기록 — 측정 시작 없이 입력", () => {
 
   it("음수·잘못된 숫자·60초 이상은 저장 값에 넣지 않는다", () => {
     const onComplete = vi.fn();
-    render(<ManualCardio onComplete={onComplete} />);
+    render(<ManualTimed onComplete={onComplete} />);
     fireEvent.change(screen.getByLabelText("운동 시간 초"), { target: { value: "60" } });
     expect(screen.getByText("0~59 사이로 입력해 주세요")).toBeTruthy();
     fireEvent.change(screen.getByLabelText("운동 거리 km"), { target: { value: "-1" } });
@@ -175,13 +176,42 @@ describe("유산소 수동 기록 — 측정 시작 없이 입력", () => {
 
   it("수동 입력은 자동 완료하지 않고, 지우면 0으로 전달한다", () => {
     const onComplete = vi.fn();
-    render(<ManualCardio onComplete={onComplete} />);
+    render(<ManualTimed onComplete={onComplete} />);
     const minutes = screen.getByLabelText("운동 시간 분");
     fireEvent.change(minutes, { target: { value: "30" } });
     fireEvent.change(minutes, { target: { value: "" } });
     expect(onComplete).not.toHaveBeenCalled();
     fireEvent.click(screen.getByText("✓ 운동 완료"));
     expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ durationSec: 0 }));
+  });
+
+  it("시간형 맨몸도 시계 시작 없이 초 단위로 기록하고 완료한다", () => {
+    const onComplete = vi.fn();
+    const onStart = vi.fn();
+    render(<ManualTimed fields={amountFields("bodyweight", "time")} onComplete={onComplete} onStart={onStart} />);
+    expect(screen.queryByLabelText("운동 거리 km")).toBeNull();
+    expect(screen.getByText("시간을 재지 않았어도 직접 입력하고 완료할 수 있어요")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("운동 시간 초"), { target: { value: "37" } });
+    expect(screen.getByText("00:37")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("운동 시간 분"), { target: { value: "2" } });
+    expect(screen.getByText("02:37")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("운동 시간 초"), { target: { value: "15" } });
+    expect(onComplete).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText("✓ 운동 완료"));
+    expect(onStart).not.toHaveBeenCalled();
+    expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ durationSec: 135 }));
+  });
+
+  it("시간형 맨몸을 재는 동안에는 입력을 숨기고 다음 세트에는 그 세트 값을 표시한다", () => {
+    const props = { ...inputProps, fields: amountFields("bodyweight", "time"), timerSeconds: 37 };
+    const { rerender } = render(<ActiveSessionOverlay {...props} timerRunning />);
+    expect(screen.queryByLabelText("운동 시간 초")).toBeNull();
+    rerender(<ActiveSessionOverlay {...props} timerRunning={false} />);
+    const seconds = screen.getByLabelText("운동 시간 초");
+    fireEvent.focus(seconds);
+    fireEvent.change(seconds, { target: { value: "42" } });
+    rerender(<ActiveSessionOverlay {...props} setPosition={{ index: 1, total: 5 }} timerSeconds={45} />);
+    expect((screen.getByLabelText("운동 시간 초") as HTMLInputElement).value).toBe("45");
   });
 });
 
@@ -218,20 +248,21 @@ describe("ActiveSessionOverlay — 세트 시계", () => {
     expect(screen.queryByTestId("set-timer-card")).toBeNull();
   });
 
-  it("매달리기는 스테퍼 대신 `▶ 시작`이 뜬다", () => {
+  it("매달리기는 직접 시간 입력과 `▶ 시간 재기`가 뜬다", () => {
     renderInput({ fields: holdFields, values: holdValues });
 
     expect(screen.getByTestId("set-timer-card")).toBeTruthy();
-    expect(screen.getByText("▶ 시작")).toBeTruthy();
+    expect(screen.getByText("▶ 시간 재기")).toBeTruthy();
+    expect(screen.getByLabelText("운동 시간 초")).toBeTruthy();
     // ⚠️ `분` 스테퍼가 남아 있으면 안 된다 — 그게 37초를 막던 것이다
     expect(screen.queryByLabelText("시간 늘리기")).toBeNull();
   });
 
-  it("`▶ 시작`을 누르면 부모에게 알린다", () => {
+  it("`▶ 시간 재기`를 누르면 부모에게 알린다", () => {
     const onStartTimer = vi.fn();
     renderInput({ fields: holdFields, values: holdValues, onStartTimer });
 
-    fireEvent.click(screen.getByText("▶ 시작"));
+    fireEvent.click(screen.getByText("▶ 시간 재기"));
     expect(onStartTimer).toHaveBeenCalledTimes(1);
   });
 

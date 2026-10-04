@@ -878,9 +878,7 @@ export function ActiveSessionOverlay({
                       busy={busy}
                       onStart={onStartTimer}
                       onStop={onStopTimer}
-                      onChangeSeconds={fields.some((item) => item.key === "distanceKm")
-                        ? (seconds) => onChangeAmount(field.key, seconds)
-                        : undefined}
+                      onChangeSeconds={(seconds) => onChangeAmount(field.key, seconds)}
                     />
                   ) : (
                     <div
@@ -937,7 +935,7 @@ export function ActiveSessionOverlay({
                 )}
               </div>
 
-              {!timerRunning && fields.some((field) => field.key === "distanceKm") && (
+              {!timerRunning && fields.some((field) => field.timed) && (
                 <p className="mt-2 text-[11px] font-bold text-muted">
                   시간을 재지 않았어도 직접 입력하고 완료할 수 있어요
                 </p>
