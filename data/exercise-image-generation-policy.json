@@ -1,12 +1,24 @@
 {
-  "revision": "2026-10-05-trial-002",
-  "retired_generation_layout": [5, 2],
+  "revision": "2026-10-05-local-app-qa",
+  "retired_generation_layout": [
+    5,
+    2
+  ],
   "historical_manifest_and_batches": "preserved; not authorization to generate",
   "active_trial": "GND-TRIAL-002",
-  "layout": [2, 2],
-  "minimum_native_cell_size": [768, 768],
-  "preferred_sheet_size": [2048, 2048],
-  "output_size": [512, 512],
+  "layout": [
+    2,
+    2
+  ],
+  "minimum_native_cell_size": null,
+  "preferred_sheet_size": [
+    2048,
+    2048
+  ],
+  "output_size": [
+    512,
+    512
+  ],
   "upscaling_allowed": false,
   "generation_calls_allowed": 1,
   "generation_calls_completed": 1,
@@ -14,5 +26,15 @@
   "upload_authorized": false,
   "production_db_change_authorized": false,
   "app_integration_authorized": false,
-  "outcome": "FAIL: actual native cells 627x627 below 768x768"
+  "outcome": "CANDIDATE_APPROVED: 4/4 actual ExercisePicker local UI PASS; further generation and production integration await approval",
+  "historical_minimum_native_cell_size": [
+    768,
+    768
+  ],
+  "minimum_768_gate_suspended": true,
+  "minimum_input_for_no_upscale": [
+    512,
+    512
+  ],
+  "local_app_test_authorized": true
 }

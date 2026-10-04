@@ -2,8 +2,9 @@
 
 2026-10-05. 기본 운동335개만 포함. 사용자 운동13개는 제외.
 기존 GND-TRIAL-001(5x2)은 실패 기록으로 보존한다. **5x2 방식의 신규 생성은 중단했다.**
-추가 승인받은 GND-TRIAL-002(2x2) 한 장만 생성했다. 실제1254x1254/셀627px로768px최소 기준을 충족하지 못했다.
-운동형태/48px식별4PASS지만 최종0PASS/4FAIL이다. 추가 생성/Storage/DB/앱 적용은 미승인이다.
+추가 승인받은 GND-TRIAL-002(2x2) 한 장만 생성했다. 실제1254x1254/셀627px →512px 축소이며 확대가 아니다.
+사용자가768px최소셀 기준을 잠정해제했다. 실제 ExercisePicker 로컬 앱 검수4PASS/0FAIL로 **2x2→512PNG 축소 방식은 후보 승인**이다.
+대량 생성/Storage/운영DB/운영 앱 적용은 승인 대기다. 원래335개 manifest·분류·batch는 유지한다.
 
 ## 2x2 시험 결과와 재현
 
@@ -24,11 +25,20 @@ python scripts/exercise-images/verify-trial-002.py
 python scripts/exercise-images/verify.py
 ```
 
-정상결과: 새검사15passed/0failed, 기존검사22passed/0failed. 이미지품질은0PASS/4FAIL이다.
-검사는 원본768px미달을실패로남기고 확대/비율왜곡을거부하는지를 확인한다.
+정상결과: 새검사16passed/0failed, 기존검사22passed/0failed. 두번째 시험 이미지품질은4PASS/0FAIL이다.
+검사는768px기준 잠정해제, 확대/비율왜곡 거부, 실제 앱 QA 기록과 증거 파일의 해시를 확인한다.
 자동종료하며 Ctrl+C로중단할수있다. DB/Storage/앱변경은없다.
 원본을다시잘라야할때만 `python scripts/exercise-images/crop-trial-002.py --source output/exercise-images/trial-002/sheets/GND-TRIAL-002.png`.
 이명령은생성하지않으며,다른원본덮어쓰기와512px미만확대를거절한다. 재crop하면의미QA는NOT_RUN으로돌아가므로다시검토해야한다.
+
+## 로컬 실제 앱 QA
+
+`data/exercise-image-local-ui-qa.json` 및 `docs/superpowers/HANDOFF-2026-10-05-exercise-image-local-ui-qa.md` 참조.
+로컬 소스 연결은 기존 사용자 미추적 `exercise-thumb.tsx`와 수정 중인 picker를 포함하므로 커밋/푸시에 섞지 않았다.
+로컬 개발 서버에서만 `NEXT_PUBLIC_EXERCISE_IMAGE_LOCAL_QA=1`로 활성화한다. production에서는 같은 플래그를 줘도 비활성이다.
+`/image-local-qa`는 실제335개 운동 선택 컴포넌트, `?trial=1`은 시험4종목 비교, `&broken=1`은404 대체 아이콘 시험이다.
+인증/익명가입/유입추적을 제외하는 로컬 전용 layout 분기로 운영DB 쓰기를 방지하고, 선택 결과는 메모리에서만 바꾼다.
+PNG4개는 `public/exercise-image-local-trial/`에 복사했으며 Git 제외. 소스/자산은 로컬에만 남고 운영 적용을 뜻하지 않는다.
 
 아래는 **첫번째시험의역사적재현기록**이며신규5x2생성승인이아니다.
 

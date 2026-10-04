@@ -10,10 +10,7 @@
     2048,
     2048
   ],
-  "minimum_native_cell": [
-    768,
-    768
-  ],
+  "minimum_native_cell": null,
   "generation_calls": 1,
   "upscaling_allowed": false,
   "images": [
@@ -40,12 +37,14 @@
       "scale_factor": 0.8165869218500797,
       "upscaled": false,
       "format_qa": "PASS",
-      "native_resolution_qa": "FAIL",
+      "native_resolution_qa": "PASS",
       "semantic_qa": "PASS",
       "thumbnail_qa": "PASS",
-      "overall_qa": "FAIL",
-      "qa_notes": "등받이와 기계 레버를 잡고 앞으로 미는 체스트프레스 형태 확인. 이전 케이블 플라이 오생성 해결. 원본 셀627px로768px최소 기준 미충족.",
-      "reviewer": "Codex direct visual review of native sheet,160px and48px contact sheets; not independent expert review"
+      "overall_qa": "PASS",
+      "qa_notes": "등받이와 기계 레버를 잡고 앞으로 미는 체스트프레스 형태 확인. 이전 케이블 플라이 오생성 해결. 사용자 지시로768px최소셀 기준 잠정해제.627→512축소, 실제앱48px/실패fallback PASS.",
+      "reviewer": "Codex native sheet and actual GND ExercisePicker local dev UI review; not independent expert or physical-device review",
+      "previous_native_resolution_qa": "FAIL",
+      "app_qa": "PASS"
     },
     {
       "exercise_id": "e1c75ef2-12bb-4fce-8435-e617618f1d37",
@@ -70,12 +69,14 @@
       "scale_factor": 0.8165869218500797,
       "upscaled": false,
       "format_qa": "PASS",
-      "native_resolution_qa": "FAIL",
+      "native_resolution_qa": "PASS",
       "semantic_qa": "PASS",
       "thumbnail_qa": "PASS",
-      "overall_qa": "FAIL",
-      "qa_notes": "서서 양팔을 옆으로 드는 덤벨 레터럴 레이즈 확인. 원본 셀627px로768px최소 기준 미충족.",
-      "reviewer": "Codex direct visual review of native sheet,160px and48px contact sheets; not independent expert review"
+      "overall_qa": "PASS",
+      "qa_notes": "서서 양팔을 옆으로 드는 덤벨 레터럴 레이즈 확인. 사용자 지시로768px최소셀 기준 잠정해제.627→512축소, 실제앱48px/실패fallback PASS.",
+      "reviewer": "Codex native sheet and actual GND ExercisePicker local dev UI review; not independent expert or physical-device review",
+      "previous_native_resolution_qa": "FAIL",
+      "app_qa": "PASS"
     },
     {
       "exercise_id": "d0862f4a-f9f1-4411-ad3c-15e904085afc",
@@ -100,12 +101,14 @@
       "scale_factor": 0.8165869218500797,
       "upscaled": false,
       "format_qa": "PASS",
-      "native_resolution_qa": "FAIL",
+      "native_resolution_qa": "PASS",
       "semantic_qa": "PASS",
       "thumbnail_qa": "PASS",
-      "overall_qa": "FAIL",
-      "qa_notes": "상체를 숙인 양손 바벨 로우와 덤벨/머신 구별 확인. 원본 셀627px로768px최소 기준 미충족.",
-      "reviewer": "Codex direct visual review of native sheet,160px and48px contact sheets; not independent expert review"
+      "overall_qa": "PASS",
+      "qa_notes": "상체를 숙인 양손 바벨 로우와 덤벨/머신 구별 확인. 사용자 지시로768px최소셀 기준 잠정해제.627→512축소, 실제앱48px/실패fallback PASS.",
+      "reviewer": "Codex native sheet and actual GND ExercisePicker local dev UI review; not independent expert or physical-device review",
+      "previous_native_resolution_qa": "FAIL",
+      "app_qa": "PASS"
     },
     {
       "exercise_id": "84acc89a-ee72-40a8-8d64-93fcc410904b",
@@ -130,18 +133,26 @@
       "scale_factor": 0.8165869218500797,
       "upscaled": false,
       "format_qa": "PASS",
-      "native_resolution_qa": "FAIL",
+      "native_resolution_qa": "PASS",
       "semantic_qa": "PASS",
       "thumbnail_qa": "PASS",
-      "overall_qa": "FAIL",
-      "qa_notes": "고정식 사이클과 페달·플라이휠 형태 확인. 원본 셀627px로768px최소 기준 미충족.",
-      "reviewer": "Codex direct visual review of native sheet,160px and48px contact sheets; not independent expert review"
+      "overall_qa": "PASS",
+      "qa_notes": "고정식 사이클과 페달·플라이휠 형태 확인. 사용자 지시로768px최소셀 기준 잠정해제.627→512축소, 실제앱48px/실패fallback PASS.",
+      "reviewer": "Codex native sheet and actual GND ExercisePicker local dev UI review; not independent expert or physical-device review",
+      "previous_native_resolution_qa": "FAIL",
+      "app_qa": "PASS"
     }
   ],
   "semantic_pass": 4,
   "thumbnail_pass": 4,
-  "qa_pass": 0,
-  "qa_fail": 4,
+  "qa_pass": 4,
+  "qa_fail": 0,
   "has_text": false,
-  "recommendation": "STOP: all native cells627px below768px minimum. No additional generation authorized."
+  "recommendation": "CANDIDATE APPROVED: 2x2 native sheet ->512PNG downscale; await user approval before any further generation or production application.",
+  "historical_minimum_native_cell": [
+    768,
+    768
+  ],
+  "minimum_768_gate_suspended_by_user": true,
+  "app_pass": 4
 }

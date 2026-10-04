@@ -1,4 +1,4 @@
-"""Trial002 only: 2x2 native grid ->512PNG, no upscaling, explicit768px gate.
+"""Trial002 only: 2x2 native grid ->512PNG, no upscaling; user suspended768 gate.
 Never edits the original manifest/batch plan or invokes generation/providers.
 """
 import argparse
@@ -29,11 +29,11 @@ def main():
     with Image.open(dest) as image:
         assert image.format=='PNG'; image.load(); sheet=image.convert('RGB')
     report={'batch_no':b['batch_no'],'source_file':str(dest.relative_to(ROOT)),'source_sha256':sha(dest),'source_resolution':sheet.size,
-            'requested_resolution':[2048,2048],'minimum_native_cell':[768,768],'generation_calls':1,'upscaling_allowed':False,'images':[]}
+            'requested_resolution':[2048,2048],'historical_minimum_native_cell':[768,768],'minimum_native_cell':None,'minimum_768_gate_suspended_by_user':True,'generation_calls':1,'upscaling_allowed':False,'images':[]}
     profile=ImageCms.ImageCmsProfile(ImageCms.createProfile('sRGB')).tobytes()
     for row,box in zip(b['exercises'],boxes(*sheet.size)):
         cell=sheet.crop(box); target=OUT/'cropped'/f"{row['exercise_id']}.png"; png=scale_cell(cell); png.save(target,icc_profile=profile)
-        sufficient=min(cell.size)>=768
+        sufficient=min(cell.size)>=512
         report['images'].append({'exercise_id':row['exercise_id'],'name':row['name'],'slot_no':row['slot_no'],'crop_box':box,
             'native_cell_resolution':cell.size,'file':str(target.relative_to(ROOT)),'sha256':sha(target),'output_resolution':[512,512],
             'scale_factor':512/cell.width,'upscaled':False,'format_qa':'PASS','native_resolution_qa':'PASS' if sufficient else 'FAIL',

@@ -1,0 +1,113 @@
+{
+  "date": "2026-10-05",
+  "route": "http://localhost:3000/image-local-qa",
+  "scope": "Actual GND ExercisePicker mounted in offline dev-only harness,335 seed catalog snapshot; no auth/telemetry/DB saving",
+  "viewports": [
+    [
+      375,
+      812
+    ],
+    [
+      430,
+      932
+    ]
+  ],
+  "source_sheet": [
+    1254,
+    1254
+  ],
+  "native_cell": [
+    627,
+    627
+  ],
+  "png": [
+    512,
+    512
+  ],
+  "actual_css_thumbnail": [
+    48,
+    48
+  ],
+  "fallback_icon": [
+    30,
+    30
+  ],
+  "tile": [
+    48,
+    48
+  ],
+  "row_height_px": 69,
+  "row_width_px": [
+    343,
+    398
+  ],
+  "horizontal_overflow": false,
+  "normal_selection_added": 4,
+  "failure_selection_added": 4,
+  "fault_injection": "missing UUID file returns404 ->next/image error ->same body-part fallback; wait until loaded",
+  "candidate_method_approved": true,
+  "production_changes": false,
+  "new_generation_calls": 0,
+  "images": [
+    {
+      "exercise_id": "486fa05a-f354-45c9-a3c9-934b38f91f9c",
+      "name": "체스트프레스 머신",
+      "sha256": "d11adde28c6941af1999ce91bd9342e919e90685b588fb01355868016fcb25bf",
+      "clarity": "PASS",
+      "identity": "PASS",
+      "layout": "PASS",
+      "fallback": "PASS",
+      "selection": "PASS",
+      "overall": "PASS"
+    },
+    {
+      "exercise_id": "e1c75ef2-12bb-4fce-8435-e617618f1d37",
+      "name": "덤벨 레터럴 레이즈",
+      "sha256": "f04a48051ed3b43852bbcdd473a069da014560966dab189085684ef0bc6ec9c6",
+      "clarity": "PASS",
+      "identity": "PASS",
+      "layout": "PASS",
+      "fallback": "PASS",
+      "selection": "PASS",
+      "overall": "PASS"
+    },
+    {
+      "exercise_id": "d0862f4a-f9f1-4411-ad3c-15e904085afc",
+      "name": "바벨 로우",
+      "sha256": "0bdc60db228a9b0ebb38a92d014a9c071c341250a6d1471e3978f020262f03e1",
+      "clarity": "PASS",
+      "identity": "PASS",
+      "layout": "PASS",
+      "fallback": "PASS",
+      "selection": "PASS",
+      "overall": "PASS"
+    },
+    {
+      "exercise_id": "84acc89a-ee72-40a8-8d64-93fcc410904b",
+      "name": "사이클",
+      "sha256": "07c27c8123495d7ab97645edc3e154f1dbefe188d1cae9151a4a9caab7a888ae",
+      "clarity": "PASS",
+      "identity": "PASS",
+      "layout": "PASS",
+      "fallback": "PASS",
+      "selection": "PASS",
+      "overall": "PASS"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "output/exercise-images/trial-002/reports/app-48-normal.jpg",
+      "sha256": "eee9019bb847aba4849f84ddaf21cbaa5cdc96de7b4222681cc6fbfd2c85888c"
+    },
+    {
+      "path": "output/exercise-images/trial-002/reports/app-48-fallback.jpg",
+      "sha256": "184272f66c2769caa592e85b1e4dae86d84552ccd4d2ffaae7440d93120511a5"
+    }
+  ],
+  "limitations": [
+    "Physical iPhone/device not tested",
+    "Authenticated /record outer flow and persistence not tested; actual picker component tested offline",
+    "Independent exercise professional review not performed"
+  ],
+  "resolved_issue": "Failure-injection initial server/client src hydration mismatch fixed by passing server searchParams through React context; clean reload verified"
+}
