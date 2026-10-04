@@ -1,0 +1,16 @@
+Use case: scientific-educational
+Create ONE production trial sprite sheet for the GND workout app, PNG, requested exact resolution 2560 x 1024 pixels (aspect 5:2). Precisely FIVE equal columns and TWO equal rows, exactly TEN square cells. Read left to right top row then bottom row. Each cell is exactly one distinct exercise, complete athlete AND complete equipment fit inside the cell with ample empty margin. No drawn grid lines, borders, text, numbers, letters, captions, logos, watermarks, arrows, or labels anywhere. Never place labels or numbers from this prompt in image.
+Match the supplied GND reference's semi-realistic 3D silver/light gray anatomical athletic human with black shorts, dark gray/black gym equipment, very dark navy charcoal background. Highlight ONLY the specified primary muscles vivid electric blue. Same lighting/material/proportions across cells. Keep enough contrast for equipment at 48px thumbnails. No merging or repeating neighboring exercises. Equipment may not be cropped.
+TOP ROW cells in exact order:
+1 Incline BARBELL bench press: bench backrest about35deg; lying head higher than hips; feet on floor; pressing horizontal BARBELL over upper chest; show bench clearly. Pectoral blue only. Side 3/4 view.
+2 FLAT dumbbell fly: bench strictly horizontal; lying; arms OPEN WIDE with slightly bent elbows, one dumbbell each hand, not a press. Pectoral blue only. Side 3/4 view.
+3 Seated chest press MACHINE: upright seated against back pad, knees bent feet floor, two machine handles pushed straight FORWARD at chest height; entire distinct frame visible; no barbell. Pectoral blue only.
+4 STANDARD push-up: palms beneath shoulders on FLOOR, toes floor, straight body, elbows bent. Side3/4 so normal hand spacing visible. Pectoral blue only.
+5 WIDE push-up: palms on FLOOR visibly far wider than shoulders, toes floor, straight body, elbows bent. Front3/4 so wide hand spacing visibly differs from cell4. Pectoral blue only.
+BOTTOM ROW cells in exact order:
+6 Standing dumbbell LATERAL raise: standing straight, arms out sideways at shoulder height, one dumbbell each hand, slight elbow bend. Lateral shoulders blue only. Front view.
+7 SEATED dumbbell shoulder press: seated on upright BACK-SUPPORT BENCH, feet floor, TWO DUMBBELLS above shoulders, pressing upward. Shoulder muscles blue only. Front3/4 view; complete seat/backrest visible.
+8 Bent-over BARBELL row: STANDING hinged hips, torso leaning forward about45deg, knees slightly bent, both hands pulling BARBELL toward lower ribs, no bench. Latissimus/rhomboids blue only. Side3/4 view.
+9 Leg extension MACHINE: seated against back pad, padded roller across front of shins near ankles, BOTH legs extend forward by straightening knees, machine pivot aligned knees. Quadriceps blue only. Entire machine visible side3/4.
+10 Stationary exercise BICYCLE: upright seated on bike saddle, hands handlebars, feet pedals, full stationary bike/flywheel base visible. Quadriceps blue only. Side3/4 view.
+Produce exactly these ten unmistakable exercise illustrations. Even empty margin all sides, no equipment extending into another cell. Wide5:2 image, not3:2. PNG.

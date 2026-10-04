@@ -1,0 +1,337 @@
+{
+  "batch_no": "GND-TRIAL-001",
+  "source_file": "output\\exercise-images\\sheets\\GND-TRIAL-001.png",
+  "source_sha256": "efd37d59584bba386ec8d16a27409106d378577c2a35fb60502b4715a0fb40b0",
+  "source_resolution": [
+    1983,
+    793
+  ],
+  "requested_resolution": [
+    2560,
+    1024
+  ],
+  "crop_policy": "round normalized grid boundaries; no semantic recentering; pad/resample to 512",
+  "has_text": false,
+  "images": [
+    {
+      "exercise_id": "cc78448a-a580-4e8d-85ef-108281d37409",
+      "name": "인클라인 벤치프레스",
+      "slot_no": 1,
+      "crop_box": [
+        0,
+        0,
+        397,
+        396
+      ],
+      "source_cell_resolution": [
+        397,
+        396
+      ],
+      "file": "output\\exercise-images\\cropped\\cc78448a-a580-4e8d-85ef-108281d37409.png",
+      "resolution": [
+        512,
+        512
+      ],
+      "bytes": 277734,
+      "sha256": "a5fd24858fd18a19847439d3099aa17dbac537552abd1c13b7ca588afbafbfc4",
+      "format_qa": "PASS",
+      "source_resolution_qa": "FAIL",
+      "upscaled": true,
+      "scale_factor": 1.2897,
+      "semantic_qa": "PASS",
+      "thumbnail_qa": "PASS",
+      "overall_qa": "FAIL",
+      "qa_notes": "Inclined bench and barbell distinguish movement; blue spills onto non-primary muscles.",
+      "reviewer": "Codex visual inspection; not an independent exercise expert"
+    },
+    {
+      "exercise_id": "95d76fa3-9cfd-4afd-ace5-67428e878c9a",
+      "name": "덤벨 플라이",
+      "slot_no": 2,
+      "crop_box": [
+        397,
+        0,
+        793,
+        396
+      ],
+      "source_cell_resolution": [
+        396,
+        396
+      ],
+      "file": "output\\exercise-images\\cropped\\95d76fa3-9cfd-4afd-ace5-67428e878c9a.png",
+      "resolution": [
+        512,
+        512
+      ],
+      "bytes": 232291,
+      "sha256": "224d61a315f723db8e8750176eb47303a4f8d98b54fe6a172586cfc124341876",
+      "format_qa": "PASS",
+      "source_resolution_qa": "FAIL",
+      "upscaled": true,
+      "scale_factor": 1.2929,
+      "semantic_qa": "PASS",
+      "thumbnail_qa": "PASS",
+      "overall_qa": "FAIL",
+      "qa_notes": "Flat bench and opened dumbbell arms recognizable.",
+      "reviewer": "Codex visual inspection; not an independent exercise expert"
+    },
+    {
+      "exercise_id": "486fa05a-f354-45c9-a3c9-934b38f91f9c",
+      "name": "체스트프레스 머신",
+      "slot_no": 3,
+      "crop_box": [
+        793,
+        0,
+        1190,
+        396
+      ],
+      "source_cell_resolution": [
+        397,
+        396
+      ],
+      "file": "output\\exercise-images\\cropped\\486fa05a-f354-45c9-a3c9-934b38f91f9c.png",
+      "resolution": [
+        512,
+        512
+      ],
+      "bytes": 272703,
+      "sha256": "ff598b806d8af586b40a1ce7216311ed2249819edf0633aaa8fd54ce97c34551",
+      "format_qa": "PASS",
+      "source_resolution_qa": "FAIL",
+      "upscaled": true,
+      "scale_factor": 1.2897,
+      "semantic_qa": "FAIL",
+      "thumbnail_qa": "FAIL",
+      "overall_qa": "FAIL",
+      "qa_notes": "Tall cable columns and open cable handles depict cable fly, not forward machine chest press.",
+      "reviewer": "Codex visual inspection; not an independent exercise expert"
+    },
+    {
+      "exercise_id": "21211d6e-b1c9-4200-807c-ddb8b5ee89aa",
+      "name": "푸시업",
+      "slot_no": 4,
+      "crop_box": [
+        1190,
+        0,
+        1586,
+        396
+      ],
+      "source_cell_resolution": [
+        396,
+        396
+      ],
+      "file": "output\\exercise-images\\cropped\\21211d6e-b1c9-4200-807c-ddb8b5ee89aa.png",
+      "resolution": [
+        512,
+        512
+      ],
+      "bytes": 212922,
+      "sha256": "1a406e1e28e20857d5e04cc941677302365513f0e9fd8bf7b24fd2ee88d0e4b0",
+      "format_qa": "PASS",
+      "source_resolution_qa": "FAIL",
+      "upscaled": true,
+      "scale_factor": 1.2929,
+      "semantic_qa": "PASS",
+      "thumbnail_qa": "FAIL",
+      "overall_qa": "FAIL",
+      "qa_notes": "Push-up recognizable, but normal versus wide hand spacing is not sufficiently clear at48px.",
+      "reviewer": "Codex visual inspection; not an independent exercise expert"
+    },
+    {
+      "exercise_id": "ed65b5e8-b999-44e4-98aa-3a60f5a2ccd7",
+      "name": "와이드 푸시업",
+      "slot_no": 5,
+      "crop_box": [
+        1586,
+        0,
+        1983,
+        396
+      ],
+      "source_cell_resolution": [
+        397,
+        396
+      ],
+      "file": "output\\exercise-images\\cropped\\ed65b5e8-b999-44e4-98aa-3a60f5a2ccd7.png",
+      "resolution": [
+        512,
+        512
+      ],
+      "bytes": 205271,
+      "sha256": "5ce13b386a7f3aae36f0dd831f58985bfe1c955697aa63e3a7c14b4a4cd1873a",
+      "format_qa": "PASS",
+      "source_resolution_qa": "FAIL",
+      "upscaled": true,
+      "scale_factor": 1.2897,
+      "semantic_qa": "PASS",
+      "thumbnail_qa": "FAIL",
+      "overall_qa": "FAIL",
+      "qa_notes": "Wide hands visible at full size; distinction from standard push-up weak at48px.",
+      "reviewer": "Codex visual inspection; not an independent exercise expert"
+    },
+    {
+      "exercise_id": "e1c75ef2-12bb-4fce-8435-e617618f1d37",
+      "name": "덤벨 레터럴 레이즈",
+      "slot_no": 6,
+      "crop_box": [
+        0,
+        396,
+        397,
+        793
+      ],
+      "source_cell_resolution": [
+        397,
+        397
+      ],
+      "file": "output\\exercise-images\\cropped\\e1c75ef2-12bb-4fce-8435-e617618f1d37.png",
+      "resolution": [
+        512,
+        512
+      ],
+      "bytes": 227174,
+      "sha256": "d0724c31596d0a71673483ef6bcb17a35d9088e596083be8aab0f0c2b21d5027",
+      "format_qa": "PASS",
+      "source_resolution_qa": "FAIL",
+      "upscaled": true,
+      "scale_factor": 1.2897,
+      "semantic_qa": "PASS",
+      "thumbnail_qa": "PASS",
+      "overall_qa": "FAIL",
+      "qa_notes": "Standing lateral raise and two dumbbells recognizable.",
+      "reviewer": "Codex visual inspection; not an independent exercise expert"
+    },
+    {
+      "exercise_id": "616e417a-8600-41f7-9c98-93ac4f3f68bc",
+      "name": "시티드 덤벨 숄더 프레스",
+      "slot_no": 7,
+      "crop_box": [
+        397,
+        396,
+        793,
+        793
+      ],
+      "source_cell_resolution": [
+        396,
+        397
+      ],
+      "file": "output\\exercise-images\\cropped\\616e417a-8600-41f7-9c98-93ac4f3f68bc.png",
+      "resolution": [
+        512,
+        512
+      ],
+      "bytes": 256724,
+      "sha256": "b84239dbaf575429145a4c2843919907fe49fbc204e7935c432b47aab6e66af1",
+      "format_qa": "PASS",
+      "source_resolution_qa": "FAIL",
+      "upscaled": true,
+      "scale_factor": 1.2897,
+      "semantic_qa": "PASS",
+      "thumbnail_qa": "PASS",
+      "overall_qa": "FAIL",
+      "qa_notes": "Seated press, upright back support and dumbbells recognizable.",
+      "reviewer": "Codex visual inspection; not an independent exercise expert"
+    },
+    {
+      "exercise_id": "d0862f4a-f9f1-4411-ad3c-15e904085afc",
+      "name": "바벨 로우",
+      "slot_no": 8,
+      "crop_box": [
+        793,
+        396,
+        1190,
+        793
+      ],
+      "source_cell_resolution": [
+        397,
+        397
+      ],
+      "file": "output\\exercise-images\\cropped\\d0862f4a-f9f1-4411-ad3c-15e904085afc.png",
+      "resolution": [
+        512,
+        512
+      ],
+      "bytes": 249946,
+      "sha256": "9821ea1ff550733a1c39cdb3e6acef628c0de3c2df30f1e17b4aa2e410b630db",
+      "format_qa": "PASS",
+      "source_resolution_qa": "FAIL",
+      "upscaled": true,
+      "scale_factor": 1.2897,
+      "semantic_qa": "PASS",
+      "thumbnail_qa": "PASS",
+      "overall_qa": "FAIL",
+      "qa_notes": "Hinged standing barbell row recognizable.",
+      "reviewer": "Codex visual inspection; not an independent exercise expert"
+    },
+    {
+      "exercise_id": "ef6000b6-4322-4bee-8918-6318c30dd902",
+      "name": "레그 익스텐션",
+      "slot_no": 9,
+      "crop_box": [
+        1190,
+        396,
+        1586,
+        793
+      ],
+      "source_cell_resolution": [
+        396,
+        397
+      ],
+      "file": "output\\exercise-images\\cropped\\ef6000b6-4322-4bee-8918-6318c30dd902.png",
+      "resolution": [
+        512,
+        512
+      ],
+      "bytes": 268738,
+      "sha256": "525615778aaf72526883765f9f88f553cc84b63a92583b53fca40a3b9ea7e256",
+      "format_qa": "PASS",
+      "source_resolution_qa": "FAIL",
+      "upscaled": true,
+      "scale_factor": 1.2897,
+      "semantic_qa": "PASS",
+      "thumbnail_qa": "PASS",
+      "overall_qa": "FAIL",
+      "qa_notes": "Seated knee extension and shin roller recognizable; machine geometry needs specialist final review.",
+      "reviewer": "Codex visual inspection; not an independent exercise expert"
+    },
+    {
+      "exercise_id": "84acc89a-ee72-40a8-8d64-93fcc410904b",
+      "name": "사이클",
+      "slot_no": 10,
+      "crop_box": [
+        1586,
+        396,
+        1983,
+        793
+      ],
+      "source_cell_resolution": [
+        397,
+        397
+      ],
+      "file": "output\\exercise-images\\cropped\\84acc89a-ee72-40a8-8d64-93fcc410904b.png",
+      "resolution": [
+        512,
+        512
+      ],
+      "bytes": 259620,
+      "sha256": "97faae44c8a4e8af55904bb28bc684fb4c146c0c5bd1ae6c8fa7bab63576f9f7",
+      "format_qa": "PASS",
+      "source_resolution_qa": "FAIL",
+      "upscaled": true,
+      "scale_factor": 1.2897,
+      "semantic_qa": "PASS",
+      "thumbnail_qa": "PASS",
+      "overall_qa": "FAIL",
+      "qa_notes": "Stationary bicycle recognizable.",
+      "reviewer": "Codex visual inspection; not an independent exercise expert"
+    }
+  ],
+  "duplicate_sha256_count": 0,
+  "qa_pass": 0,
+  "qa_fail": 10,
+  "semantic_pass": 9,
+  "semantic_fail": 1,
+  "thumbnail_pass": 7,
+  "thumbnail_fail": 3,
+  "recommendation": "STOP: native cell resolution fails all10, machine chest press incorrect, standard/wide push-ups weak at48px.",
+  "generation_calls": 1,
+  "style_notes": "Style broadly consistent; primary-only muscle highlighting not consistently respected."
+}

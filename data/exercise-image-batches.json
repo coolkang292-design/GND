@@ -1,0 +1,745 @@
+{
+  "grid": {
+    "columns": 5,
+    "rows": 2,
+    "requested_width": 2560,
+    "requested_height": 1024,
+    "cell_size": 512
+  },
+  "batches": [
+    {
+      "batch_no": "GND-TRIAL-001",
+      "generation_authorized": true,
+      "kind": "trial",
+      "exercises": [
+        "cc78448a-a580-4e8d-85ef-108281d37409",
+        "95d76fa3-9cfd-4afd-ace5-67428e878c9a",
+        "486fa05a-f354-45c9-a3c9-934b38f91f9c",
+        "21211d6e-b1c9-4200-807c-ddb8b5ee89aa",
+        "ed65b5e8-b999-44e4-98aa-3a60f5a2ccd7",
+        "e1c75ef2-12bb-4fce-8435-e617618f1d37",
+        "616e417a-8600-41f7-9c98-93ac4f3f68bc",
+        "d0862f4a-f9f1-4411-ad3c-15e904085afc",
+        "ef6000b6-4322-4bee-8918-6318c30dd902",
+        "84acc89a-ee72-40a8-8d64-93fcc410904b"
+      ]
+    },
+    {
+      "batch_no": "GND-001",
+      "generation_authorized": false,
+      "kind": "planned",
+      "body_part": "가슴",
+      "exercises": [
+        "b81d2cde-c33d-4c43-827e-cb84c8e76388",
+        "de1c3255-4056-42f7-9ee4-ee932530231e",
+        "dc4295d7-3d91-4cd9-922a-dd9399bf4045",
+        "caa65e0d-05ee-4fe0-b934-3178b03b53ef",
+        "be2a2460-c20c-4327-a092-0d4dbaa5b5a6",
+        "19e6fd00-af2d-4eb7-b8a0-d66f10dd455e",
+        "2e52fbb2-497a-4bd5-8213-cf62f3199131",
+        "225633ce-e69d-4a2e-8b28-4394f3423723",
+        "1c0251d1-54ca-45f6-ace2-4cb8bebab7a6",
+        "5816c49f-6021-4de2-bd10-bca4d00587f7"
+      ]
+    },
+    {
+      "batch_no": "GND-002",
+      "generation_authorized": false,
+      "kind": "planned",
+      "body_part": "가슴",
+      "exercises": [
+        "ef8292ff-da18-48e3-92a0-0a1dbecf4738",
+        "d782db99-4ad9-4e73-9376-8974896f1b5c",
+        "04ba20b1-68f6-4a43-b853-3f23eb23fa05",
+        "c164c5be-b792-4ac2-8b85-ba7a9470eee4",
+        "197fb122-f10f-431f-8f54-88d1ec8becd0",
+        "573fae91-c180-4c8d-8328-3465a5af7253",
+        "6660fcd0-012a-4785-a956-ab3aa5d8cf48",
+        "da6544dc-60da-4a88-8f15-f95aa0c1b542",
+        "b5fc1f18-ea7c-49dd-9b29-42a6dddfe5c9",
+        "f34bfcaa-1c46-439f-9ffe-287f45670ef2"
+      ]
+    },
+    {
+      "batch_no": "GND-003",
+      "generation_authorized": false,
+      "kind": "planned",
+      "body_part": "가슴",
+      "exercises": [
+        "3d95c8df-65c3-4be0-a349-3fc805cc8da8",
+        "4f1cce7d-4ed1-46b7-ac6e-44f00952a2f1",
+        "c7db43ca-025f-4f7e-9da6-2ccda4c76150",
+        "6b1013d6-5f25-4665-9782-9419db996443",
+        "81b42a17-af19-4664-91f3-e65c4b1792ae",
+        "ca028f1c-1646-4419-a27c-2c03d74f8e4f",
+        "9fb956e7-1376-4607-b244-6e647b01dbe9",
+        "a89a4f0c-f339-4db4-8902-6547992b02a4"
+      ]
+    },
+    {
+      "batch_no": "GND-004",
+      "generation_authorized": false,
+      "kind": "planned",
+      "body_part": "등",
+      "exercises": [
+        "4eb0f324-780f-4945-a37f-5be3c6f5b585",
+        "2058f26d-3a03-414f-ad3d-11b79cd5d8b7",
+        "5f00e9f0-8b12-4746-b59b-df6e7529f94f",
+        "b85fb5dd-eb2a-4492-ba93-a68d2bbebec8",
+        "83acbd5d-9359-4619-b359-2013e3d3b402",
+        "09259ecd-49ae-41e4-9efa-c30edab2a6cd",
+        "71220804-54f1-4e40-88aa-84663495dc2d",
+        "64d460a4-f41c-4c95-9beb-a78f2c7d6ea2"
+      ]
+    },
+    {
+      "batch_no": "GND-005",
+      "generation_authorized": false,
+      "kind": "planned",
+      "body_part": "어깨",
+      "exercises": [
+        "8cc9270d-c335-4d59-b4d9-a265cc5e1c65",
+        "3f4dcd4c-028d-4430-867b-a59f4ab6bf71",
+        "d693578a-b655-4dd7-b4a7-fd07316464d6",
+        "b627c38a-79f9-48bf-9833-35c8c4ff600f",
+        "bdf7c55f-9885-4d16-acd7-df95e63bc44c",
+        "42b87485-31aa-496a-bc2b-4463d74067a5",
+        "ee995d50-e96c-4d9b-86fc-d3c56f1f21c8",
+        "2bc56eb4-cbf3-4b31-bbbd-75f4baa452f2",
+        "86d9a7c5-8a05-4af7-974e-350610917fc5",
+        "30fffd17-72b8-4fde-95de-3ff62a57ab49"
+      ]
+    },
+    {
+      "batch_no": "GND-006",
+      "generation_authorized": false,
+      "kind": "planned",
+      "body_part": "어깨",
+      "exercises": [
+        "b452ccad-10da-4f25-8915-3a9045b51e95",
+        "14ca58a0-47e4-44e2-9c16-8cd20613a581",
+        "1c56bc55-d633-4725-accd-351b3355eaf9",
+        "c91a0c5f-d770-4c3f-a909-3a3fd0cbd813",
+        "a3390101-d4ed-46a2-8fbb-2205688f1836",
+        "8784cfc1-7b5b-4088-8f17-f5115a1adece",
+        "b8702da2-e5e9-4974-b7d0-f4a8167998f0",
+        "4de57986-2076-4476-9b01-a8f2c70a6ee0",
+        "8ae05401-d085-49ab-a5fd-6c594f020a6d",
+        "7dcf3022-91ca-42c8-b257-372a6067696e"
+      ]
+    },
+    {
+      "batch_no": "GND-007",
+      "generation_authorized": false,
+      "kind": "planned",
+      "body_part": "어깨",
+      "exercises": [
+        "07ecbb16-3adf-4ee3-893c-9b3bb12cdd8b",
+        "49edb349-6ce1-4f33-babb-9ab48106fc3d",
+        "4b6aabd5-e39b-4f28-9451-ad5588489b4b",
+        "b823cca3-5545-4b06-8e0d-1786dbb5b2fe",
+        "25cdabee-8e91-4dd9-8a36-00bf65ab889d",
+        "7dcb673c-adf7-477a-81bf-6f455d798622",
+        "ced2f6b3-a728-42f4-8208-b4f3a5cf2d11",
+        "8b3a47c0-3744-4029-94fa-2736e99df0d9",
+        "d3c1a643-5452-4f47-af95-c2e2d5374e23",
+        "9afb8dcb-80a2-455a-9ab1-1cc65e99cfd3"
+      ]
+    },
+    {
+      "batch_no": "GND-008",
+      "generation_authorized": false,
+      "kind": "planned",
+      "body_part": "어깨",
+      "exercises": [
+        "9e88831c-6048-4c71-9236-3ca3bb2e2297",
+        "4bb6052c-478c-46a2-8329-b62b0aa29a14"
+      ]
+    },
+    {
+      "batch_no": "GND-009",
+      "generation_authorized": false,
+      "kind": "planned",
+      "body_part": "유산소",
+      "exercises": [
+        "5ae60799-7446-4937-b75a-dbd742ea38b8",
+        "7f28c50b-fcff-4654-99cb-e9af890ab104",
+        "b0c305d6-338e-400f-9dfd-5ae6efb63d9a",
+        "63c19460-6906-442e-9fb9-ed3ddba1c049",
+        "8dcee3fb-2bc4-4639-8c5a-c587cefb394a"
+      ]
+    },
+    {
+      "batch_no": "GND-010",
+      "generation_authorized": false,
+      "kind": "planned",
+      "body_part": "코어",
+      "exercises": [
+        "ce13b66b-733a-4c07-8a0b-bc6249846671",
+        "986d2557-1508-44a7-878d-96044656cc90",
+        "41f61b10-8f87-4f3d-8d31-bc4fc0eac08a",
+        "d2010613-2257-4ef6-9063-2e7d00ec608d",
+        "99c9282a-0f22-49ce-a8f9-314dfc24ba6a",
+        "1565a3d5-7bfa-438d-af7c-cf577d8af599",
+        "fc1c62be-1510-4d36-8a92-d89c15167456",
+        "edb26b13-e26f-4b6e-925a-cf4dfeda06c2",
+        "a0fd751b-b6c2-407e-b030-ded97a96deb4",
+        "c5c92985-c48e-4c84-a8d7-04fcab930906"
+      ]
+    },
+    {
+      "batch_no": "GND-011",
+      "generation_authorized": false,
+      "kind": "planned",
+      "body_part": "코어",
+      "exercises": [
+        "be8d2e74-62fa-4f25-89fe-087412bb045b",
+        "a11b7914-c1aa-4f32-9bd0-bc66b1a6a488",
+        "23fbe474-4cb5-475e-86f4-b35be55f572e",
+        "4895739b-e114-457d-a94c-09413782fb5f",
+        "e11ac1ba-837f-4e3a-b719-71d095ff4c2e",
+        "b0877bf9-21a7-4554-ba09-1029d4e013c7",
+        "943ab2d4-e1a1-48f1-ab0e-93c800722649",
+        "d2f489aa-fe95-4ee6-8b96-514161591f5a",
+        "021145a7-de02-4e90-b5a5-c44a1ad5f34b",
+        "db8e8862-321e-4ecf-b178-15c8848feb7a"
+      ]
+    },
+    {
+      "batch_no": "GND-012",
+      "generation_authorized": false,
+      "kind": "planned",
+      "body_part": "코어",
+      "exercises": [
+        "30a994a8-4cf3-4905-9c05-cddb3afa9997",
+        "85cd5fe7-27e6-4386-a451-a74859dc98af",
+        "db480bba-6629-4db8-9592-09acd0bdc022",
+        "33403b43-b80a-4822-bcf7-c13dad0daf72",
+        "ae910018-c384-4e47-a2c1-a467a7dd2ee8",
+        "47e6ccc0-e87f-4645-b44a-634678e99fbd",
+        "4af3f632-e3f7-49b7-a232-86ba82a8e21f",
+        "01c4253d-bc8a-4433-9183-d267470742d8",
+        "639ad98b-b4a1-47f7-a382-8dd9e98035b0",
+        "0780c074-69d7-4d25-9a09-c6af6ec757e5"
+      ]
+    },
+    {
+      "batch_no": "GND-013",
+      "generation_authorized": false,
+      "kind": "planned",
+      "body_part": "코어",
+      "exercises": [
+        "078b9e1c-6b0a-4591-98f5-d75ddcf99be5",
+        "f74f365f-52e1-4033-a1bd-b0c34c7cc5dc",
+        "71b9882d-c0d4-4725-92d6-f956996136d9",
+        "0a779a2c-b8a4-43d1-a98a-4c166b0eb33d",
+        "17984d0a-c846-4a09-b35d-9b2cac1ad35c",
+        "cf62b3f2-3f91-437b-8450-ea128c0888ac"
+      ]
+    },
+    {
+      "batch_no": "GND-014",
+      "generation_authorized": false,
+      "kind": "planned",
+      "body_part": "팔",
+      "exercises": [
+        "1bb7dd06-0b58-4a60-8a5f-dce07d91c664",
+        "4d583651-c1f8-476f-95c5-27633d7a8618",
+        "13c36ce9-c80b-498a-b201-34910a157da2",
+        "1fbc7045-1bcc-4d85-80ce-c5506a66d973",
+        "1b556520-526d-4a06-9a9b-deec7cd05841",
+        "de75ab09-2e8f-4be8-b9ae-8bb675fedcbf",
+        "7d3c1850-d4b6-42d2-8bf8-41c7093fbd31",
+        "e8f0c354-f481-41f3-b32b-ad11b37a5abe",
+        "963dbb03-8804-4353-b0de-e56b80826693",
+        "b2f1e508-fcbf-4e70-8e53-23c1c0bcaf30"
+      ]
+    },
+    {
+      "batch_no": "GND-015",
+      "generation_authorized": false,
+      "kind": "planned",
+      "body_part": "팔",
+      "exercises": [
+        "3d59b2dd-a9f7-40d4-8d55-349aafa92c0b",
+        "0a41caea-d901-4528-8227-2aa2ddf33b14",
+        "fed25eab-0208-4899-9282-81a71d73c172",
+        "a6e5d1b5-d82f-4fbb-ba74-9afcc5a54f3c",
+        "31513de3-f888-49e3-9ce6-86a9eb2db005",
+        "607c7fc6-7fbf-48db-9a43-c9982447e72f",
+        "b62f5018-f2af-42a6-844d-5a6862654eba",
+        "bb2eba45-853d-4f0f-99bb-04c6a07978ef",
+        "4931688a-e4e6-46cf-a0dd-ae30f297d711",
+        "0216e833-34b5-4a93-a6c0-45f061e35ccd"
+      ]
+    },
+    {
+      "batch_no": "GND-016",
+      "generation_authorized": false,
+      "kind": "planned",
+      "body_part": "팔",
+      "exercises": [
+        "77a4e6bc-5cbb-4d27-bbe9-f460e70f157d",
+        "3329915a-10e1-436a-ab3d-4f9aeb753498",
+        "dbf925f6-aaa5-4423-9de7-74b608bc39a5",
+        "4b9ef3ce-5ece-4b25-8702-e206d056ceee",
+        "c42a14c1-fd6b-4e23-ba6f-6ee218ddc8da",
+        "916b99cc-7329-4e1d-bd4d-e4a9ef61fb98",
+        "d1ad82b1-fe7f-485d-a9d1-a5e42bdf6eff",
+        "237b62da-06ea-47d4-896c-c08d57f0c4f9",
+        "d0d07a10-dffb-4b78-a724-01835fa347a3",
+        "173e8566-0464-443b-89d0-4b50e001aec5"
+      ]
+    },
+    {
+      "batch_no": "GND-017",
+      "generation_authorized": false,
+      "kind": "planned",
+      "body_part": "팔",
+      "exercises": [
+        "32c20403-dc94-454c-b8aa-13a5f74f59ec",
+        "efd3c05b-ddec-481b-bbdf-238b71a57cbb",
+        "0a1e5d29-2712-4afb-8083-1035af2c21ce",
+        "a1cd1dc9-5b53-4f38-b917-d0713e0424a1",
+        "8ce3a381-c45d-4849-a0f6-58e479322558",
+        "0fd789d0-bc9c-44f9-b146-14933a7a6143",
+        "62bf15d9-5f1b-48f0-8078-f25bd7dc7c3b",
+        "7cf98bfd-6eb2-4162-8f49-4de59fa30672",
+        "11905ce1-70e4-4556-a0c6-015e448a7b75",
+        "db8accfa-7bba-4e73-88f7-ef6beb3fe83a"
+      ]
+    },
+    {
+      "batch_no": "GND-018",
+      "generation_authorized": false,
+      "kind": "planned",
+      "body_part": "팔",
+      "exercises": [
+        "37a2f9cb-7111-4105-8255-9f27049bff42",
+        "d40e1e72-997f-47e0-a14f-5caed643bc10",
+        "922536e6-b837-41b2-8be5-d6d573834a50",
+        "d2df5917-0678-434b-bd2f-d0a20216cd46",
+        "f6d55308-f5d4-40e0-acfe-05a6fbad3b2a",
+        "60e98517-335b-49b4-9c26-92fb33816391",
+        "efab18a7-7ffe-495a-97b3-261b1c41c607",
+        "817e92ba-4498-4b0e-99f4-378543b1e651",
+        "5601e654-b439-4776-8143-c2b5fa9b257e",
+        "187292d3-3b5b-49fd-a113-f255686cebe1"
+      ]
+    },
+    {
+      "batch_no": "GND-019",
+      "generation_authorized": false,
+      "kind": "planned",
+      "body_part": "팔",
+      "exercises": [
+        "dea597dc-6214-462e-8e43-f4f86b6f9b82",
+        "a84db3a2-30f3-4fc1-a335-4ed2e5efd050",
+        "35d04434-c41b-4860-97de-7036f2a754db"
+      ]
+    },
+    {
+      "batch_no": "GND-020",
+      "generation_authorized": false,
+      "kind": "planned",
+      "body_part": "하체",
+      "exercises": [
+        "689a7a84-48f6-4ce4-be16-7dbb94b9ada3",
+        "304e6337-ebdd-47a2-9010-bbb928e8494b",
+        "b54cc899-b893-481b-ba19-9db0e508892f",
+        "1424dff5-a705-4db9-869d-5201a86e4b6c",
+        "8fade715-13eb-457d-b48e-6f1ce0a9e597",
+        "5d094859-8765-44bb-ac00-bd416bb10247",
+        "6c1dd5d1-aacf-4983-a104-d5d74217b171",
+        "2b8cd968-c224-4851-888d-6f7a39debd57",
+        "abb14782-e90c-44c7-b50d-99733ca8b5b1",
+        "2c38f171-8877-4dd1-bb20-3b95697fa175"
+      ]
+    },
+    {
+      "batch_no": "GND-021",
+      "generation_authorized": false,
+      "kind": "planned",
+      "body_part": "하체",
+      "exercises": [
+        "92841dad-03c0-47d8-a75c-7a8d936bd905",
+        "792e574a-1dd9-4d2f-a0eb-429a60deb304",
+        "b3f5f8c1-a347-4769-bdd5-cd7d7695eead",
+        "f82c063a-d57d-4a43-a121-bbe7d41ec259",
+        "9b1d9f54-d969-480e-ac3a-f9a92e63fbf5",
+        "4dfc7f15-f41f-4e2a-a60d-b7f99f4be4fc",
+        "cabb25ea-2bf3-4d57-a593-30b7d0fe37be",
+        "55ea844e-56f6-4453-8ed2-78d265d6cd6d",
+        "f9e47391-f12c-4535-8e30-c73d2900cc41",
+        "920583b1-006e-4b6c-864a-fcdffc839694"
+      ]
+    },
+    {
+      "batch_no": "GND-022",
+      "generation_authorized": false,
+      "kind": "planned",
+      "body_part": "하체",
+      "exercises": [
+        "bb7e1e51-a7de-4edd-8b50-2c68acc8c5cb",
+        "1ce6e6f1-9f35-46fe-9ea0-16b0567d43d5",
+        "ea6bd276-e7bc-4061-a14c-c7106f280704",
+        "432b2697-6012-4f88-86c0-81281f58a5d8",
+        "656ae2ea-7b1f-45a3-b563-16a5ba436efa",
+        "b36af1fe-a51f-4a52-8b34-2bd8e3472901",
+        "f242d169-3e47-44d1-96c8-0a6f51fce13c",
+        "572150f9-e64a-40b5-9fb0-cdc288ed19f7",
+        "089d8dbe-168b-473a-bd96-b7b1655f69ed",
+        "7669d541-f446-4887-bbd9-f5c0fbd7bbf1"
+      ]
+    },
+    {
+      "batch_no": "GND-023",
+      "generation_authorized": false,
+      "kind": "planned",
+      "body_part": "하체",
+      "exercises": [
+        "e14b8625-377e-4a99-a613-93d62f1fdc2c",
+        "4ea5b8a7-1f1c-4bf1-987c-5291a83a4604",
+        "35ca6b8b-57ff-47f5-acda-5db7d39995e7",
+        "7874f28b-6b4a-4b4f-85c7-b94a5e5e905f",
+        "6d22712f-01fb-4a09-9f52-91159733e6dc",
+        "2d4b66e0-6355-4b1c-9e52-21ac8c61ea92",
+        "13543780-2372-4b5e-87c3-0995b8352f79",
+        "c259d4ca-b7ef-482a-bf7d-604196be4864",
+        "4f5222fc-3c56-4f2b-9d31-190826a428b6",
+        "4342ad12-e150-4159-814f-005ac5841d7f"
+      ]
+    },
+    {
+      "batch_no": "GND-024",
+      "generation_authorized": false,
+      "kind": "planned",
+      "body_part": "하체",
+      "exercises": [
+        "ae3400f7-edec-4123-aac6-bfc14120612f",
+        "b35136ae-9d4c-42db-a7ed-c6e17e97e4c6",
+        "ce90ab46-1ace-4493-b691-cb0f82400c84",
+        "92253305-7504-4dc6-ab24-2cd15ffc05fe",
+        "ae6e62fa-4f4e-41aa-9256-4dd4e01d3ed5",
+        "e5fec7fd-111d-4c75-9d93-60fb89293853",
+        "fff2bb1f-6df3-40b5-b481-1a627ed2903c",
+        "63c9cf92-80bd-4d62-9c10-4b442bd44689",
+        "50f60c1b-db40-46c3-afe5-efd22eeeca89",
+        "0422cd3e-2c03-4aaa-aa1f-d1eda7199b0e"
+      ]
+    },
+    {
+      "batch_no": "GND-025",
+      "generation_authorized": false,
+      "kind": "planned",
+      "body_part": "하체",
+      "exercises": [
+        "75520373-5583-4afe-a849-ef8441da641a",
+        "3751d625-ab5a-429f-95a8-09dad36bb391",
+        "706f7747-59c2-483d-a11d-205651baf634",
+        "811f57a5-6968-47f5-a586-f9d20a50facf",
+        "89f804fc-0027-462c-817e-f278ef93c546",
+        "4ae3d576-780e-42d2-bd7e-d3147d8212b5",
+        "f0e199c4-44f2-42c5-af13-053b9be5e025",
+        "76619e56-9f0c-42f0-bb0a-34893d63e212",
+        "0e9ff359-8aed-4509-87e1-1e966118cb30",
+        "f56bb27c-393e-4c04-83cb-c9c9ac8f278d"
+      ]
+    },
+    {
+      "batch_no": "GND-026",
+      "generation_authorized": false,
+      "kind": "planned",
+      "body_part": "하체",
+      "exercises": [
+        "45ecb917-61a7-4987-b239-3c6c25639ed2",
+        "6a78eed0-b7b3-44f7-a8d2-ee7417938154",
+        "1067b351-09fb-491d-b869-eef45a822e19",
+        "ea4664d3-174c-4fb7-b1e5-ff6ce8b56284",
+        "9da2df56-bfd6-47f9-91e1-55b4fc55c563",
+        "34ad9d6d-82d1-45c8-a493-148462097bde",
+        "502a19a7-20c5-4432-b25b-6bbcc66390e5",
+        "13a1addf-3649-46c8-bef1-a19cc45870a9",
+        "0a39b280-c943-4f3e-b7f7-c3d96a143009",
+        "beb901cb-bb0f-4931-a8b5-ed78551db010"
+      ]
+    },
+    {
+      "batch_no": "GND-027",
+      "generation_authorized": false,
+      "kind": "planned",
+      "body_part": "하체",
+      "exercises": [
+        "e4847527-3bc1-4efd-9d4e-dcae6d0a6c09",
+        "b6b870d3-c3cb-4c19-8274-b3dea91fbfdb",
+        "b8d90fc4-9b3d-4835-8154-eaf740e24af3",
+        "4c3abd61-c415-4d29-ae91-931c99cbf631",
+        "ce96693f-39c8-45ab-bef1-089a6f24a22e",
+        "68c43953-ab2a-4548-9169-3d6e0895aecf",
+        "8459b0cc-6924-4027-9794-4b9f87819b5d",
+        "f8af8821-457b-4083-8875-b14685623457",
+        "d3887e12-d386-4fe4-b41f-219a8c0ab141",
+        "d3ad03bf-5594-49c2-96d7-3ba04cb54e6d"
+      ]
+    },
+    {
+      "batch_no": "GND-028",
+      "generation_authorized": false,
+      "kind": "planned",
+      "body_part": "하체",
+      "exercises": [
+        "7e956b4a-f312-4c24-9e5d-9030f77447b1",
+        "4a3b7d1b-f899-4b19-8f45-220acdee0b4a",
+        "e204ba43-3b0b-4c94-949a-7642d21d9dd0",
+        "10b075ad-e37a-4200-8253-5ad8dd37c2c2",
+        "ae81bdea-781c-4ed2-836f-9d17181ad16f",
+        "349208cd-975c-447b-b488-5373e5c3878a",
+        "b60cc90b-204d-4ffb-acf0-8cdf10504df5",
+        "66af6e45-aef2-466a-8a3e-b90505c2a0e6",
+        "87c03be8-bf94-4e7a-aeb8-bb78fa9057af"
+      ]
+    }
+  ],
+  "held_batches": [
+    {
+      "batch_no": "GND-HOLD-001",
+      "generation_authorized": false,
+      "kind": "NEEDS_REVIEW",
+      "body_part": "가슴",
+      "exercises": [
+        "9191f601-2b98-43d9-a3a7-df8614d08f52",
+        "17daf6a2-0287-452c-9cad-d66d87147c15",
+        "4750b6da-0a3f-40d4-89a7-ccf4560e83a5",
+        "9371e57e-7e33-4f08-8c5a-ad414ce7c7a4",
+        "e0e00655-0876-4693-b3bb-b56f2435ff2a",
+        "08aad5ac-8a93-4c98-8a19-0b3fb5aa3702"
+      ],
+      "note": "Reserved planning group only. Definitions must be approved and prompt/order frozen before generation."
+    },
+    {
+      "batch_no": "GND-HOLD-002",
+      "generation_authorized": false,
+      "kind": "NEEDS_REVIEW",
+      "body_part": "등",
+      "exercises": [
+        "50aa51d7-6b63-4b88-a117-76a635d447ee",
+        "89a8c6e1-9ba9-423e-ba69-56f13885caa2",
+        "69fe67ed-dbb6-4b5a-8d56-a83ab1d9a726"
+      ],
+      "note": "Reserved planning group only. Definitions must be approved and prompt/order frozen before generation."
+    },
+    {
+      "batch_no": "GND-HOLD-003",
+      "generation_authorized": false,
+      "kind": "NEEDS_REVIEW",
+      "body_part": "어깨",
+      "exercises": [
+        "33161c50-988e-4654-a3f7-adc6c33bc216",
+        "1f469c8f-fa82-46f8-a8f1-4e96603c850a",
+        "7b7d7326-de3f-4748-ab5c-3c63f991ae63",
+        "f42e4491-c9fa-4088-9498-d66cc631aa69",
+        "e7bf3724-4afe-4fd3-858b-04fc17ef43dd",
+        "5c360aa5-0c6a-4d7a-b6d3-22c8ec34e532",
+        "6ba4df00-55a1-4c62-a5a5-a13e7bb4a0de"
+      ],
+      "note": "Reserved planning group only. Definitions must be approved and prompt/order frozen before generation."
+    },
+    {
+      "batch_no": "GND-HOLD-004",
+      "generation_authorized": false,
+      "kind": "NEEDS_REVIEW",
+      "body_part": "코어",
+      "exercises": [
+        "68693365-2a34-4dc4-ab91-ddf01435f3e6",
+        "3b9ae97c-bc90-4899-8f86-eb19f53773a9",
+        "02514cb1-d085-4538-b67a-0f199fc3c635",
+        "8f708419-872e-4406-bfac-89e7f970c7c1",
+        "25ae2a76-f91f-49e6-9f64-56a26619747f",
+        "8cfc41c3-d060-4a6f-9d91-87aa3c998024",
+        "e4c772b6-ac0a-4e11-9413-a5ee1f17f9a5",
+        "c4878b8f-9736-4931-a1ec-56c985f6653c"
+      ],
+      "note": "Reserved planning group only. Definitions must be approved and prompt/order frozen before generation."
+    },
+    {
+      "batch_no": "GND-HOLD-005",
+      "generation_authorized": false,
+      "kind": "NEEDS_REVIEW",
+      "body_part": "팔",
+      "exercises": [
+        "009cd78f-d2b1-4b5e-8a8a-1828019cef84",
+        "ebf248bd-6f6c-4046-a320-231fba344937",
+        "9bd0fad6-ae6a-4299-9861-88e975f0304d",
+        "66b61000-4245-43de-a591-be97cd5d440d",
+        "2830b3e7-6aba-40bb-9a44-dc6569d4901c",
+        "779bc503-21c4-46e2-8a6f-715e8ecb2a9a",
+        "dbf1346d-609b-44cd-a3e4-f98caa874cff",
+        "2c847ee6-adad-4c1c-9059-9cebe0663a06",
+        "e7b5bfba-f128-4404-9898-6e34cd2859fe",
+        "6789fea8-244f-458a-8ddb-5a4307751140"
+      ],
+      "note": "Reserved planning group only. Definitions must be approved and prompt/order frozen before generation."
+    },
+    {
+      "batch_no": "GND-HOLD-006",
+      "generation_authorized": false,
+      "kind": "NEEDS_REVIEW",
+      "body_part": "팔",
+      "exercises": [
+        "e947a048-e5e7-4b91-a209-bf06f2dcfe32",
+        "af467ef3-388f-4010-96b4-1683337e7020"
+      ],
+      "note": "Reserved planning group only. Definitions must be approved and prompt/order frozen before generation."
+    },
+    {
+      "batch_no": "GND-HOLD-007",
+      "generation_authorized": false,
+      "kind": "NEEDS_REVIEW",
+      "body_part": "하체",
+      "exercises": [
+        "c8547ce4-907f-4016-9c4c-0325d285c244",
+        "8ab89502-bd17-4a3d-91a8-d308a3151274",
+        "89631752-f7bd-4136-8217-77b3200042e8",
+        "a3c0dcd7-bb89-4a85-a270-375d972b063a",
+        "e581495c-1793-496e-9a31-adda5eec222d",
+        "3d9ff4da-4592-44a0-8030-dfea0a903eb2",
+        "58dc962b-c1e4-43a3-a873-fb90f09d4883",
+        "4be31412-d983-4676-a11b-7742212996f5",
+        "7f6df343-dd8c-4f66-b3b4-55b70bb04562",
+        "6e59798c-523c-4a15-9f89-6fdcc27b8c6e"
+      ],
+      "note": "Reserved planning group only. Definitions must be approved and prompt/order frozen before generation."
+    },
+    {
+      "batch_no": "GND-HOLD-008",
+      "generation_authorized": false,
+      "kind": "NEEDS_REVIEW",
+      "body_part": "하체",
+      "exercises": [
+        "405f9f1d-471a-4f37-958e-339f915d134f",
+        "daec30ae-4cbb-49a1-94c9-f79629952a3f",
+        "6e26446d-c48a-45b2-bd25-37ec40d2c9eb",
+        "92b9295b-e21a-46da-81c8-22cf4408e76b",
+        "ee2b8fce-130f-4f30-bb8d-525314e9ff87",
+        "8c1f4982-d949-48df-ba11-b0fc027159c7",
+        "866720eb-0bba-4329-a4f1-4f5433bcf231",
+        "bec29238-dc5b-4187-ac75-6c5ad0cb2223",
+        "e70c0de0-e520-4999-bbb2-ae4ae92b5b90",
+        "608f1343-dbd3-44d3-9407-a6a443c4d0a2"
+      ],
+      "note": "Reserved planning group only. Definitions must be approved and prompt/order frozen before generation."
+    },
+    {
+      "batch_no": "GND-HOLD-009",
+      "generation_authorized": false,
+      "kind": "NEEDS_REVIEW",
+      "body_part": "하체",
+      "exercises": [
+        "90e5a736-81c3-491f-9210-6ac3e23c844c",
+        "93937e1b-1705-43f6-ad64-1de1c4918a6e",
+        "bfe7288b-4287-4720-afd8-30ac5da3d0af",
+        "b8308341-075a-4ca8-9ba8-f4b08f340de4",
+        "8c6990b9-35fc-40a6-b397-22c1cd1bb545",
+        "148dcbc2-1a80-4c3a-af08-11827edf4b8c",
+        "a7778165-ae05-43a4-a649-d7ace39ea27f",
+        "5ae5b212-2d08-40fb-a9b0-236c934c97f1",
+        "6afd3211-51be-452d-b35a-92b0d874ff45",
+        "3dad5479-7d84-4beb-9b3b-40f836da22a1"
+      ],
+      "note": "Reserved planning group only. Definitions must be approved and prompt/order frozen before generation."
+    },
+    {
+      "batch_no": "GND-HOLD-010",
+      "generation_authorized": false,
+      "kind": "NEEDS_REVIEW",
+      "body_part": "하체",
+      "exercises": [
+        "b01126bd-9e9e-4ace-8624-d0f5fc9fd7e4",
+        "93d89f36-15e2-419c-a59c-e80faa238374",
+        "c757a862-5402-4797-9391-767b02920a52",
+        "c0370bb4-3f5c-45c4-9984-c8f7c3bf0688",
+        "db046055-a511-41f2-9c45-563bf0ca2132",
+        "d187322d-0171-4b4a-98b4-b731afcc9830",
+        "8d498e12-32e2-4580-86ac-66194291ad95",
+        "5f6ed03f-05b0-4eb3-86d9-82ba7a28e48a"
+      ],
+      "note": "Reserved planning group only. Definitions must be approved and prompt/order frozen before generation."
+    }
+  ],
+  "held_for_review": [
+    "9191f601-2b98-43d9-a3a7-df8614d08f52",
+    "17daf6a2-0287-452c-9cad-d66d87147c15",
+    "4750b6da-0a3f-40d4-89a7-ccf4560e83a5",
+    "9371e57e-7e33-4f08-8c5a-ad414ce7c7a4",
+    "e0e00655-0876-4693-b3bb-b56f2435ff2a",
+    "08aad5ac-8a93-4c98-8a19-0b3fb5aa3702",
+    "50aa51d7-6b63-4b88-a117-76a635d447ee",
+    "89a8c6e1-9ba9-423e-ba69-56f13885caa2",
+    "69fe67ed-dbb6-4b5a-8d56-a83ab1d9a726",
+    "33161c50-988e-4654-a3f7-adc6c33bc216",
+    "1f469c8f-fa82-46f8-a8f1-4e96603c850a",
+    "7b7d7326-de3f-4748-ab5c-3c63f991ae63",
+    "f42e4491-c9fa-4088-9498-d66cc631aa69",
+    "e7bf3724-4afe-4fd3-858b-04fc17ef43dd",
+    "5c360aa5-0c6a-4d7a-b6d3-22c8ec34e532",
+    "6ba4df00-55a1-4c62-a5a5-a13e7bb4a0de",
+    "68693365-2a34-4dc4-ab91-ddf01435f3e6",
+    "3b9ae97c-bc90-4899-8f86-eb19f53773a9",
+    "02514cb1-d085-4538-b67a-0f199fc3c635",
+    "8f708419-872e-4406-bfac-89e7f970c7c1",
+    "25ae2a76-f91f-49e6-9f64-56a26619747f",
+    "8cfc41c3-d060-4a6f-9d91-87aa3c998024",
+    "e4c772b6-ac0a-4e11-9413-a5ee1f17f9a5",
+    "c4878b8f-9736-4931-a1ec-56c985f6653c",
+    "009cd78f-d2b1-4b5e-8a8a-1828019cef84",
+    "ebf248bd-6f6c-4046-a320-231fba344937",
+    "9bd0fad6-ae6a-4299-9861-88e975f0304d",
+    "66b61000-4245-43de-a591-be97cd5d440d",
+    "2830b3e7-6aba-40bb-9a44-dc6569d4901c",
+    "779bc503-21c4-46e2-8a6f-715e8ecb2a9a",
+    "dbf1346d-609b-44cd-a3e4-f98caa874cff",
+    "2c847ee6-adad-4c1c-9059-9cebe0663a06",
+    "e7b5bfba-f128-4404-9898-6e34cd2859fe",
+    "6789fea8-244f-458a-8ddb-5a4307751140",
+    "e947a048-e5e7-4b91-a209-bf06f2dcfe32",
+    "af467ef3-388f-4010-96b4-1683337e7020",
+    "c8547ce4-907f-4016-9c4c-0325d285c244",
+    "8ab89502-bd17-4a3d-91a8-d308a3151274",
+    "89631752-f7bd-4136-8217-77b3200042e8",
+    "a3c0dcd7-bb89-4a85-a270-375d972b063a",
+    "e581495c-1793-496e-9a31-adda5eec222d",
+    "3d9ff4da-4592-44a0-8030-dfea0a903eb2",
+    "58dc962b-c1e4-43a3-a873-fb90f09d4883",
+    "4be31412-d983-4676-a11b-7742212996f5",
+    "7f6df343-dd8c-4f66-b3b4-55b70bb04562",
+    "6e59798c-523c-4a15-9f89-6fdcc27b8c6e",
+    "405f9f1d-471a-4f37-958e-339f915d134f",
+    "daec30ae-4cbb-49a1-94c9-f79629952a3f",
+    "6e26446d-c48a-45b2-bd25-37ec40d2c9eb",
+    "92b9295b-e21a-46da-81c8-22cf4408e76b",
+    "ee2b8fce-130f-4f30-bb8d-525314e9ff87",
+    "8c1f4982-d949-48df-ba11-b0fc027159c7",
+    "866720eb-0bba-4329-a4f1-4f5433bcf231",
+    "bec29238-dc5b-4187-ac75-6c5ad0cb2223",
+    "e70c0de0-e520-4999-bbb2-ae4ae92b5b90",
+    "608f1343-dbd3-44d3-9407-a6a443c4d0a2",
+    "90e5a736-81c3-491f-9210-6ac3e23c844c",
+    "93937e1b-1705-43f6-ad64-1de1c4918a6e",
+    "bfe7288b-4287-4720-afd8-30ac5da3d0af",
+    "b8308341-075a-4ca8-9ba8-f4b08f340de4",
+    "8c6990b9-35fc-40a6-b397-22c1cd1bb545",
+    "148dcbc2-1a80-4c3a-af08-11827edf4b8c",
+    "a7778165-ae05-43a4-a649-d7ace39ea27f",
+    "5ae5b212-2d08-40fb-a9b0-236c934c97f1",
+    "6afd3211-51be-452d-b35a-92b0d874ff45",
+    "3dad5479-7d84-4beb-9b3b-40f836da22a1",
+    "b01126bd-9e9e-4ace-8624-d0f5fc9fd7e4",
+    "93d89f36-15e2-419c-a59c-e80faa238374",
+    "c757a862-5402-4797-9391-767b02920a52",
+    "c0370bb4-3f5c-45c4-9984-c8f7c3bf0688",
+    "db046055-a511-41f2-9c45-563bf0ca2132",
+    "d187322d-0171-4b4a-98b4-b731afcc9830",
+    "8d498e12-32e2-4580-86ac-66194291ad95",
+    "5f6ed03f-05b0-4eb3-86d9-82ba7a28e48a"
+  ]
+}
