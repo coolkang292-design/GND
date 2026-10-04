@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { UiIcon } from "@/components/ui-icon";
 import { guideForExercise } from "@/lib/domain/exercise-guides";
 import { repRangeLabel, restClock } from "@/lib/domain/program-load";
@@ -57,6 +57,54 @@ function clock(seconds: number): string {
   return `${mm}:${ss}`;
 }
 
+/** 소수점 입력 중의 `5.`는 유지하되, 기록 값은 입력 즉시 부모에 전달한다. */
+function RecordNumberInput({
+  label, unit, value, decimal = false, max, busy, onChange,
+}: {
+  label: string;
+  unit: string;
+  value: number;
+  decimal?: boolean;
+  max?: number;
+  busy: boolean;
+  onChange: (value: number) => void;
+}) {
+  const [focused, setFocused] = useState(false);
+  const [text, setText] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const display = value === 0 ? "" : String(value);
+  return (
+    <label className="min-w-0 flex-1 text-left">
+      <span className="text-[11px] font-bold text-muted">{unit}</span>
+      <input
+        type="text"
+        inputMode={decimal ? "decimal" : "numeric"}
+        aria-label={label}
+        aria-invalid={error !== null}
+        value={focused ? text : display}
+        placeholder="0"
+        disabled={busy}
+        onFocus={() => { setText(display); setFocused(true); }}
+        onBlur={() => setFocused(false)}
+        onChange={(event) => {
+          const next = event.target.value;
+          const valid = decimal ? /^\d*(?:\.\d*)?$/.test(next) : /^\d*$/.test(next);
+          const number = Number(next || 0);
+          if (!valid || !Number.isFinite(number) || (max !== undefined && number > max)) {
+            setError(max === undefined ? "0 이상 숫자를 입력해 주세요" : `0~${max} 사이로 입력해 주세요`);
+            return;
+          }
+          setError(null);
+          setText(next);
+          onChange(number);
+        }}
+        className="mt-1 h-11 w-full min-w-0 rounded-card-sm border border-line bg-bg px-2 text-center font-mono text-lg font-extrabold outline-none focus:border-accent disabled:opacity-60"
+      />
+      {error && <span role="alert" className="mt-1 block text-[10px] text-warn">{error}</span>}
+    </label>
+  );
+}
+
 /**
  * 세트 시계 — **시작하면 세고, 마치면 그 값이 기록된다** (사장님 지시 2026-08-28).
  *
@@ -86,6 +134,7 @@ function SetTimerCard({
   busy,
   onStart,
   onStop,
+  onChangeSeconds,
 }: {
   field: AmountField;
   seconds: number;
@@ -97,6 +146,8 @@ function SetTimerCard({
   busy: boolean;
   onStart: () => void;
   onStop: () => void;
+  /** 유산소의 수동 입력만 연결한다. 시간형 맨몸의 기존 측정 카드는 유지한다. */
+  onChangeSeconds?: (seconds: number) => void;
 }) {
   const amount = field.format ? field.format(seconds) : `${seconds}${field.unit}`;
   /*
@@ -115,7 +166,7 @@ function SetTimerCard({
   return (
     <div
       data-testid="set-timer-card"
-      className={`flex-1 rounded-card border p-3 ${
+      className={`min-w-0 flex-1 rounded-card border p-3 ${
         running ? "border-accent bg-accent-weak" : "border-line bg-surface-2"
       }`}
     >
@@ -138,6 +189,18 @@ function SetTimerCard({
       >
         {formatSetClock(seconds)}
       </p>
+      {!running && onChangeSeconds && (
+        <div className="mt-2 flex gap-1.5">
+          <RecordNumberInput
+            label="운동 시간 분" unit="분" value={Math.floor(seconds / 60)} busy={busy}
+            onChange={(minutes) => onChangeSeconds(minutes * 60 + seconds % 60)}
+          />
+          <RecordNumberInput
+            label="운동 시간 초" unit="초" value={seconds % 60} max={59} busy={busy}
+            onChange={(remainder) => onChangeSeconds(Math.floor(seconds / 60) * 60 + remainder)}
+          />
+        </div>
+      )}
       {running ? (
         <button
           type="button"
@@ -154,7 +217,7 @@ function SetTimerCard({
           disabled={busy}
           className="mt-2 h-13 w-full rounded-card-sm border-2 border-accent bg-transparent py-3 text-[13px] font-extrabold text-accent disabled:opacity-60"
         >
-          ▶ 시작
+          {onChangeSeconds ? "▶ 시간 재기" : "▶ 시작"}
         </button>
       )}
     </div>
@@ -806,7 +869,7 @@ export function ActiveSessionOverlay({
                 {fields.map((field) =>
                   field.timed ? (
                     <SetTimerCard
-                      key={field.key}
+                      key={`${exerciseName}:${setPosition.index}:${field.key}`}
                       field={field}
                       seconds={timerSeconds}
                       targetSeconds={timerTargetSeconds}
@@ -815,15 +878,26 @@ export function ActiveSessionOverlay({
                       busy={busy}
                       onStart={onStartTimer}
                       onStop={onStopTimer}
+                      onChangeSeconds={fields.some((item) => item.key === "distanceKm")
+                        ? (seconds) => onChangeAmount(field.key, seconds)
+                        : undefined}
                     />
                   ) : (
                     <div
-                      key={field.key}
-                      className="flex-1 rounded-card border border-line bg-surface-2 p-3"
+                      key={`${exerciseName}:${setPosition.index}:${field.key}`}
+                      className="min-w-0 flex-1 rounded-card border border-line bg-surface-2 p-3"
                     >
                       <p className="text-[11.5px] font-bold text-muted">
                         {field.label}
                       </p>
+                      {field.key === "distanceKm" && !timerRunning && (
+                        <div className="mt-2 flex">
+                          <RecordNumberInput
+                            label="운동 거리 km" unit="km" value={values[field.key]} decimal busy={busy}
+                            onChange={(distance) => onChangeAmount(field.key, distance)}
+                          />
+                        </div>
+                      )}
                       <p className="mt-1 font-mono text-[30px] leading-none font-extrabold">
                         {values[field.key]}
                         <span className="ml-1 text-[12px] font-bold text-muted">
@@ -862,6 +936,12 @@ export function ActiveSessionOverlay({
                   ),
                 )}
               </div>
+
+              {!timerRunning && fields.some((field) => field.key === "distanceKm") && (
+                <p className="mt-2 text-[11px] font-bold text-muted">
+                  시간을 재지 않았어도 직접 입력하고 완료할 수 있어요
+                </p>
+              )}
 
               {paceLabel && !timerRunning && (
                 <p className="mt-2 text-center text-[13px] font-extrabold tabular-nums text-accent">

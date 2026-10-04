@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { amountFields } from "@/lib/domain/set-input";
 import type { SpreadOffer } from "@/lib/domain/set-spread";
 import type { PreviousHint } from "@/lib/domain/previous-set";
 import type { ExercisePrescription } from "@/lib/domain/workout-plan";
-import { ActiveSessionOverlay } from "./active-session-overlay";
+import { ActiveSessionOverlay, type SetValues } from "./active-session-overlay";
 
 afterEach(cleanup);
 
@@ -98,6 +99,91 @@ const renderInput = (o: Partial<typeof inputProps> = {}) =>
   render(<ActiveSessionOverlay {...inputProps} {...o} />);
 const renderRest = (o: Partial<typeof restProps> = {}) =>
   render(<ActiveSessionOverlay {...restProps} {...o} />);
+
+describe("유산소 수동 기록 — 측정 시작 없이 입력", () => {
+  function ManualCardio({ onComplete, onStart = vi.fn() }: {
+    onComplete: (values: SetValues) => void;
+    onStart?: () => void;
+  }) {
+    const [values, setValues] = useState(inputProps.values);
+    return <ActiveSessionOverlay
+      {...inputProps}
+      exerciseName="트레드밀"
+      fields={amountFields("cardio", null)}
+      values={values}
+      timerSeconds={values.durationSec}
+      timerTargetSeconds={values.durationSec}
+      onChangeAmount={(key, value) => setValues((current) => ({ ...current, [key]: value }))}
+      onStartTimer={onStart}
+      onCompleteSet={() => onComplete(values)}
+    />;
+  }
+
+  it("미시작 상태에서 32분 40초·5.2km를 입력하고 바로 완료한다", () => {
+    const onComplete = vi.fn();
+    const onStart = vi.fn();
+    render(<ManualCardio onComplete={onComplete} onStart={onStart} />);
+    fireEvent.change(screen.getByLabelText("운동 시간 분"), { target: { value: "32" } });
+    fireEvent.change(screen.getByLabelText("운동 시간 초"), { target: { value: "40" } });
+    const distance = screen.getByLabelText("운동 거리 km");
+    fireEvent.focus(distance);
+    fireEvent.change(distance, { target: { value: "5" } });
+    fireEvent.change(distance, { target: { value: "5." } });
+    expect((distance as HTMLInputElement).value).toBe("5.");
+    fireEvent.change(distance, { target: { value: "5.2" } });
+    // blur 없이 완료해도 마지막 입력이 포함돼야 한다.
+    fireEvent.click(screen.getByText("✓ 운동 완료"));
+    expect(onStart).not.toHaveBeenCalled();
+    expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ durationSec: 1960, distanceKm: 5.2 }));
+    expect(screen.getByText("32:40")).toBeTruthy();
+  });
+
+  it.each(["time", "distance"])("%s 한 항목만 알아도 입력값을 완료 경로에 보낸다", (kind) => {
+    const onComplete = vi.fn();
+    render(<ManualCardio onComplete={onComplete} />);
+    fireEvent.change(screen.getByLabelText(kind === "time" ? "운동 시간 분" : "운동 거리 km"), {
+      target: { value: kind === "time" ? "30" : "3.5" },
+    });
+    fireEvent.click(screen.getByText("✓ 운동 완료"));
+    expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({
+      durationSec: kind === "time" ? 1800 : 0,
+      distanceKm: kind === "distance" ? 3.5 : 0,
+    }));
+  });
+
+  it("음수·잘못된 숫자·60초 이상은 저장 값에 넣지 않는다", () => {
+    const onComplete = vi.fn();
+    render(<ManualCardio onComplete={onComplete} />);
+    fireEvent.change(screen.getByLabelText("운동 시간 초"), { target: { value: "60" } });
+    expect(screen.getByText("0~59 사이로 입력해 주세요")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("운동 거리 km"), { target: { value: "-1" } });
+    fireEvent.change(screen.getByLabelText("운동 시간 분"), { target: { value: "abc" } });
+    fireEvent.click(screen.getByText("✓ 운동 완료"));
+    expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ durationSec: 0, distanceKm: 0 }));
+  });
+
+  it("측정 중에는 직접 입력을 숨기고, 정지 후 잰 초를 그대로 편집한다", () => {
+    const props = { ...inputProps, fields: amountFields("cardio", null), timerSeconds: 1960 };
+    const { rerender } = render(<ActiveSessionOverlay {...props} timerRunning />);
+    expect(screen.queryByLabelText("운동 시간 분")).toBeNull();
+    expect(screen.queryByLabelText("운동 거리 km")).toBeNull();
+    rerender(<ActiveSessionOverlay {...props} timerRunning={false} />);
+    expect((screen.getByLabelText("운동 시간 분") as HTMLInputElement).value).toBe("32");
+    expect((screen.getByLabelText("운동 시간 초") as HTMLInputElement).value).toBe("40");
+    expect(screen.getByText("▶ 시간 재기")).toBeTruthy();
+  });
+
+  it("수동 입력은 자동 완료하지 않고, 지우면 0으로 전달한다", () => {
+    const onComplete = vi.fn();
+    render(<ManualCardio onComplete={onComplete} />);
+    const minutes = screen.getByLabelText("운동 시간 분");
+    fireEvent.change(minutes, { target: { value: "30" } });
+    fireEvent.change(minutes, { target: { value: "" } });
+    expect(onComplete).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText("✓ 운동 완료"));
+    expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ durationSec: 0 }));
+  });
+});
 
 /**
  * 세트 시계 (사장님 지시 2026-08-28 — *"시작 하면 운동시간이 카운팅되고 마침
