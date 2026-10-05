@@ -1377,7 +1377,29 @@ describe("CalendarView — 계획한 운동 수정 (2026-08-28)", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "＋ 종목 추가" }));
 
-    expect(screen.getByText("운동 추가")).toBeTruthy();
+    // 같은 피커지만 제목은 '계획에 더하기'다 (2026-10-05) — 저장이 아니라 편집 목록에 붙는다
+    expect(screen.getByText("계획에 운동 더하기")).toBeTruthy();
+    expect(screen.getByText("운동 직접 고르기")).toBeTruthy();
+  });
+
+  it("새 계획 피커는 날짜를 말하고, 담는 버튼도 그 날짜 계획에 담는다 (2026-10-05)", async () => {
+    await setup(BODYWEIGHT_CATALOG);
+
+    fireEvent.click(screen.getByRole("button", { name: "8월 16일" }));
+    fireEvent.click(screen.getByText("➕ 새 운동 계획 만들기"));
+    expect(screen.getByText("8월 16일 계획 만들기")).toBeTruthy();
+    // 옛 제목은 없어야 한다 (부정 확인)
+    expect(screen.queryByText("오늘 운동을 어떻게 시작할까요?")).toBeNull();
+
+    fireEvent.click(screen.getByText("운동 직접 고르기"));
+    fireEvent.click(screen.getByText(BODYWEIGHT_CATALOG[0].name));
+    fireEvent.click(screen.getByText("8월 16일 계획에 1개 담기"));
+
+    await waitFor(() => expect(mocks.createWorkoutPlan).toHaveBeenCalled());
+    const sent = mocks.createWorkoutPlan.mock.calls[0][0];
+    expect(sent.planDate).toBe("2026-08-16");
+    // '바로 추가'는 기본 3세트·10회 (사용자 결정 2026-10-05)
+    expect(sent.exercises[0].sets).toHaveLength(3);
   });
 
   it("인터벌 예정표의 수정은 계획한 종목·코스를 채운 인터벌 시트를 연다", async () => {

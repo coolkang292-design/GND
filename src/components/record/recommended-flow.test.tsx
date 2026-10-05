@@ -527,3 +527,115 @@ describe("검색 모드 — 직접 만들기는 결과가 없을 때만 (사용�
     expect(blank.querySelector("[aria-hidden].h-12.w-12")).not.toBeNull();
   });
 });
+
+describe("2단계 (2026-10-05)", () => {
+  function picker(over: Partial<Parameters<typeof ExercisePicker>[0]> = {}) {
+    const onPickConfigured = vi.fn();
+    const utils = render(
+      <ExercisePicker
+        open
+        initialMode="search"
+        catalog={CATALOG}
+        pastSessions={[]}
+        pastLoading={false}
+        onClose={vi.fn()}
+        onPickMany={vi.fn()}
+        onPickConfigured={onPickConfigured}
+        onPickPast={vi.fn()}
+        onCreateCustom={vi.fn()}
+        {...over}
+      />,
+    );
+    return { ...utils, onPickConfigured };
+  }
+
+  it("바꾸기에서는 하나만 고른다 — 새로 고르면 앞의 것을 놓는다", () => {
+    const { getByText, queryByText, onPickConfigured } = picker({
+      replacing: "벤치프레스",
+    });
+    expect(getByText("'벤치프레스' 바꾸기")).toBeTruthy();
+
+    fireEvent.click(getByText("레그프레스"));
+    fireEvent.click(getByText("숄더프레스"));
+    // 세트 수는 원래 것을 유지하므로 세트 조절이 없다
+    expect(queryByText("세트 조절")).toBeNull();
+    fireEvent.click(getByText("이 운동으로 바꾸기"));
+
+    const picks: ConfiguredPick[] = onPickConfigured.mock.calls[0][0];
+    expect(picks.map((p) => p.item.name)).toEqual(["숄더프레스"]);
+  });
+
+  it("바꾸기에서는 담거나 시작하는 입구를 숨긴다", () => {
+    const { queryByText, getByLabelText } = picker({
+      replacing: "벤치프레스",
+      onPickPreset: vi.fn(),
+      onOpenPrograms: vi.fn(),
+      pastSessions: [
+        {
+          id: "s1",
+          completedAt: new Date(),
+          durationSeconds: 600,
+          exerciseNames: ["레그프레스"],
+          tabataMinutes: null,
+        } as never,
+      ],
+    });
+    expect(queryByText("추천 루틴")).toBeNull();
+    fireEvent.click(getByLabelText("진입 화면으로 돌아가기"));
+    expect(queryByText("프로그램으로 시작하기")).toBeNull();
+    expect(queryByText("지난 운동")).toBeNull();
+  });
+
+  it("바꾸기가 아니면 여러 개를 고른다 (부정 확인)", () => {
+    const { getByText } = picker();
+    fireEvent.click(getByText("레그프레스"));
+    fireEvent.click(getByText("숄더프레스"));
+    expect(getByText("운동 2개 바로 추가")).toBeTruthy();
+  });
+
+  it("검색어를 치면 빠르게 찾기가 접히고, 지우면 다시 나온다", () => {
+    const { getByPlaceholderText, queryByText } = picker();
+    const input = getByPlaceholderText("🔍 운동 검색 (예: 스쿼트, 벤치)");
+    expect(queryByText("빠르게 찾기")).toBeTruthy();
+
+    fireEvent.change(input, { target: { value: "레그" } });
+    expect(queryByText("빠르게 찾기")).toBeNull();
+    expect(queryByText("상황별 추천")).toBeNull();
+
+    fireEvent.change(input, { target: { value: "" } });
+    expect(queryByText("빠르게 찾기")).toBeTruthy();
+  });
+
+  it("저장 중에는 두 버튼이 잠기고 '저장하는 중…'이다", () => {
+    const { getByText, rerender } = picker();
+    fireEvent.click(getByText("레그프레스"));
+    rerender(
+      <ExercisePicker
+        open
+        initialMode="search"
+        catalog={CATALOG}
+        pastSessions={[]}
+        pastLoading={false}
+        onClose={vi.fn()}
+        onPickMany={vi.fn()}
+        onPickConfigured={vi.fn()}
+        onPickPast={vi.fn()}
+        onCreateCustom={vi.fn()}
+        busy
+      />,
+    );
+    expect((getByText("저장하는 중…") as HTMLButtonElement).disabled).toBe(true);
+    expect((getByText("세트 조절") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("담는 버튼과 설정 확정 버튼이 넘겨받은 문구를 쓴다", () => {
+    const { getByText } = picker({
+      addLabel: (n) => `8월 17일 계획에 ${n}개 담기`,
+      confirmLabel: (n) => `8월 17일 계획에 ${n}개 담기`,
+    });
+    fireEvent.click(getByText("레그프레스"));
+    expect(getByText("8월 17일 계획에 1개 담기")).toBeTruthy();
+    fireEvent.click(getByText("세트 조절"));
+    expect(getByText("8월 17일 계획에 1개 담기")).toBeTruthy();
+  });
+});

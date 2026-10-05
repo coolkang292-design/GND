@@ -107,6 +107,25 @@ type PickerProps = {
    * 여기서 정한 값을 버린다. 정하게 해 놓고 버리면 그 화면이 거짓말을 한다.
    */
   setupAdjustable?: boolean;
+  /**
+   * 운동 중 '바꾸기'로 열었으면 **바꿀 운동 이름** (2026-10-05 2단계).
+   *
+   * 바꾸기는 한 종목을 한 종목으로 바꾸는 일이라:
+   * - **하나만** 고르게 한다 — 새로 고르면 앞의 것을 놓는다. 예전엔 여러 개를 고를 수
+   *   있었고 첫 번째만 쓰여 나머지가 말없이 버려졌다(`replaceFocusedExercise` 주석)
+   * - 담는 버튼은 `이 운동으로 바꾸기`, `세트 조절`은 없다(세트 수는 원래 것을 유지)
+   * - 프로그램·지난 운동·내 루틴·추천 루틴·인터벌 입구를 숨긴다 — 그 길들은
+   *   **목록을 통째로 담거나 시작해서** 바꾸기가 아니라 추가가 된다
+   */
+  replacing?: string | null;
+  /** 진입 화면 제목 — 달력은 "8월 17일 계획 만들기" (없으면 `운동 추가`) */
+  heading?: { title: string; sub: string };
+  /** 담는 버튼 문구 (개수 → 문구) — `PickActions` 참조 */
+  addLabel?: (count: number) => string;
+  /** 설정 화면 확정 버튼 문구 */
+  confirmLabel?: (count: number) => string;
+  /** 저장 중 — 달력은 담는 즉시 DB에 쓰므로 그동안 버튼을 잠근다 */
+  busy?: boolean;
   /** 지난 완료 기록 하나를 현재 준비 목록 뒤에 중복 없이 추가 */
   onPickPast: (sessionId: string) => Promise<boolean>;
   /** 열자마자 보여줄 화면. 빈 기록 화면의 '최근 운동 불러오기'가 `past`로 연다 */
@@ -177,6 +196,11 @@ function PickerSheet({
   onPickMany,
   onPickConfigured,
   setupAdjustable = true,
+  replacing = null,
+  heading,
+  addLabel,
+  confirmLabel,
+  busy = false,
   onPickPast,
   onCreateCustom,
   onStartInterval,
@@ -199,21 +223,29 @@ function PickerSheet({
    * 않는 것 — 은 기록 페이지의 루틴 저장 버튼(`routines !== null`)이 그대로
    * 지킨다. **고를 것이 없는 진입 카드**는 처음 온 사람에게 막다른 길일 뿐이다.
    */
-  const routinesEnabled = Boolean(routines?.length && onPickRoutine);
+  const replaceMode = replacing !== null;
+  const routinesEnabled = Boolean(
+    !replaceMode && routines?.length && onPickRoutine,
+  );
+  // 바꾸기에서는 '담거나 시작하는' 입구를 숨긴다 (`replacing` 주석)
+  const programsEntry = replaceMode ? undefined : onOpenPrograms;
+  const intervalEntry = replaceMode ? undefined : onStartInterval;
+  const presetEntry = replaceMode ? undefined : onPickPreset;
+  const pickLabel = replaceMode ? () => "이 운동으로 바꾸기" : addLabel;
   /** 카탈로그에 종목이 있는 추천 루틴만 (없으면 카드를 아예 안 낸다) */
   const presetRoutines = useMemo(() => visiblePresetRoutines(catalog), [catalog]);
   const [presetBusyKey, setPresetBusyKey] = useState<string | null>(null);
 
   async function pickPreset(key: string) {
     const preset = presetRoutines.find((p) => p.key === key);
-    if (!preset || !onPickPreset) return;
+    if (!preset || !presetEntry) return;
     const exercises = buildPresetRoutineExercises(preset, catalog);
     if (!exercises) return;
     setPresetBusyKey(key);
     try {
       // ⚠️ tabataMinutes는 **null**이다. 값을 넣으면 `addRoutine`이 인터벌로
       //    되살려 사다리가 통째로 사라진다(그 분기가 먼저 걸린다).
-      if (await onPickPreset({ name: preset.name, exercises, tabataMinutes: null }))
+      if (await presetEntry({ name: preset.name, exercises, tabataMinutes: null }))
         onClose();
     } finally {
       setPresetBusyKey(null);
@@ -336,6 +368,8 @@ function PickerSheet({
     setSelected((prev) => {
       const next = new Map(prev);
       if (next.has(item.id)) next.delete(item.id);
+      // 바꾸기는 하나만 — 새로 고르면 앞의 것을 놓는다
+      else if (replaceMode) return new Map([[item.id, item]]);
       else next.set(item.id, item);
       return next;
     });
@@ -392,7 +426,8 @@ function PickerSheet({
   }
 
   /** 세트를 정할 수 있는 화면에서만 `세트 조절`을 낸다 */
-  const adjustSets = onPickConfigured && setupAdjustable ? goToSetup : undefined;
+  const adjustSets =
+    onPickConfigured && setupAdjustable && !replaceMode ? goToSetup : undefined;
 
   /**
    * 시트 바깥을 눌러 닫을 때 — 고른 것이 있으면 한 번 묻는다 (2026-10-05).
@@ -420,7 +455,11 @@ function PickerSheet({
       });
       // 만들면 곧바로 선택 목록에 담고 폼을 닫는다 — 기존 선택 유지
       if (created) {
-        setSelected((prev) => new Map(prev).set(created.id, created));
+        setSelected((prev) =>
+          replaceMode
+            ? new Map([[created.id, created]])
+            : new Map(prev).set(created.id, created),
+        );
         setCustomOpen(false);
         if (nameRef.current) nameRef.current.value = "";
       }
@@ -501,14 +540,16 @@ function PickerSheet({
 
         {mode === "hub" ? (
           <>
-            <h3 className="text-base font-extrabold">운동 추가</h3>
+            <h3 className="text-base font-extrabold">
+              {heading?.title ?? "운동 추가"}
+            </h3>
             <p className="mt-0.5 mb-3 text-[12.5px] text-muted">
-              오늘 운동을 어떻게 시작할까요?
+              {heading?.sub ?? "오늘 운동을 어떻게 시작할까요?"}
             </p>
             <ExerciseEntryHub
-              hasPast={pastSessions.length > 0}
+              hasPast={!replaceMode && pastSessions.length > 0}
               routineCount={routinesEnabled ? (routines?.length ?? 0) : 0}
-              onPrograms={onOpenPrograms}
+              onPrograms={programsEntry}
               onSearch={() => setMode("search")}
               onPast={() => setMode("past")}
               onRoutine={() => setMode("routine")}
@@ -523,7 +564,7 @@ function PickerSheet({
             onPart={setRecommendPart}
             situation={situation}
             onSituation={setSituation}
-            onStartInterval={onStartInterval}
+            onStartInterval={intervalEntry}
             intervalCta={intervalCta}
             selected={new Set(selected.keys())}
             onToggle={toggleSelect}
@@ -531,6 +572,8 @@ function PickerSheet({
             onSearch={() => setMode("search")}
             onAdd={addSelected}
             onAdjust={adjustSets}
+            addLabel={pickLabel}
+            busy={busy}
           />
         ) : mode === "setup" ? (
           <ExerciseSetupSheet
@@ -542,10 +585,14 @@ function PickerSheet({
             }
             onBack={() => setMode(setupReturnMode)}
             onConfirm={confirmSetup}
+            confirmLabel={confirmLabel}
+            busy={busy}
           />
         ) : mode === "search" ? (
           <>
-            {backHeader("운동 이름 검색")}
+            {backHeader(
+              replaceMode ? `'${replacing}' 바꾸기` : "운동 이름 검색",
+            )}
             <input
               ref={searchRef}
               autoFocus
@@ -555,7 +602,21 @@ function PickerSheet({
               className="h-16 w-full flex-none rounded-card border-2 border-line bg-bg px-4 text-base outline-none focus:border-accent"
             />
 
-            <div className="mt-3 flex-none">
+            {/*
+              ⚠️ 검색창 아래는 **한 스크롤 영역**이다 (2026-10-05 2단계).
+
+              예전에는 빠르게 찾기·자주 한 운동·부위 칩이 고정으로 쌓이고 목록만
+              스크롤됐다. 375×667 기록 탭에서 실측하니 목록 자리가 **43px**(한 줄도
+              안 됨)였다 — 카탈로그를 보려고 열었는데 목록이 거의 안 보였다. 이제
+              위 묶음을 밀어 올리면 목록이 시트를 거의 다 쓴다. 부위 칩은 `sticky`라
+              내려가도 위에 붙어 있다.
+
+              검색어를 치는 동안에는 빠르게 찾기를 아예 접는다 — 찾는 이름이 있으면
+              결과가 먼저고, 폰 키보드가 올라오면 자리가 더 줄어든다.
+            */}
+            <div className="mt-1 min-h-0 flex-1 overflow-y-auto">
+            {!q && (
+            <div className="mt-2">
               <p className="mb-1.5 text-xs font-bold text-muted">
                 빠르게 찾기
               </p>
@@ -585,7 +646,7 @@ function PickerSheet({
                      세트별 횟수가 다른 사다리라 그 기본값으로는 표현이 안 된다.
                   ⚠️ 담을 곳이 없는 화면(달력 예정표)에서는 `onPickPreset`을
                      안 넘기므로 버튼 자체가 안 나온다. */}
-              {onPickPreset && presetRoutines.length > 0 && (
+              {presetEntry && presetRoutines.length > 0 && (
                 <QuickFindCard
                   label="추천 루틴"
                   icon="routine"
@@ -595,12 +656,13 @@ function PickerSheet({
                 />
               )}
             </div>
+            )}
 
             {/* ⭐ 자주 한 운동 — 검색·부위 필터 중에는 숨긴다 (설계 2026-08-02).
                 세로 목록이 아니라 가로 칩 한 줄이다: 시트가 max-h-[82dvh]라
                 5행짜리 섹션은 카탈로그 목록을 화면 밖으로 밀어낸다. */}
             {frequent.length > 0 && !q && part === "전체" && (
-              <div className="mt-3 flex-none">
+              <div className="mt-3">
                 <p className="mb-1.5 text-[11px] font-bold text-muted">
                   ⭐ 자주 한 운동
                 </p>
@@ -645,7 +707,7 @@ function PickerSheet({
               </div>
             )}
 
-            <div className="my-3 flex flex-none gap-1.5 overflow-x-auto">
+            <div className="sticky top-0 z-10 mt-1 mb-2 flex gap-1.5 overflow-x-auto bg-surface py-2">
           {FILTERS.map((p) => (
             <button
               key={p}
@@ -677,7 +739,7 @@ function PickerSheet({
               </p>
             ) : null}
 
-            <div className="min-h-0 flex-1 overflow-y-auto">
+            <div>
           {list.length > 0 ? (
             list.map((e) => {
               const isSelected = selected.has(e.id);
@@ -826,11 +888,14 @@ function PickerSheet({
             ＋ {query.trim() ? `'${query.trim()}' ` : ""}직접 만들기
           </button>
               ))}
+            </div>
 
             <PickActions
               count={selected.size}
               onAdd={addSelected}
               onAdjust={adjustSets}
+              addLabel={pickLabel}
+              busy={busy}
             />
           </>
         ) : mode === "routine" ? (

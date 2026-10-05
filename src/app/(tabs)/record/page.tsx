@@ -610,7 +610,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
   /** 오늘 계획 조회가 끝났는가. 이게 true면 종목 목록(catalog)도 이미 와 있다 */
   const [plansReady, setPlansReady] = useState(false);
   /** 피커를 어느 화면으로 열지 — 기본은 진입 허브 */
-  const [pickerMode, setPickerMode] = useState<"hub" | "past" | "routine">(
+  const [pickerMode, setPickerMode] = useState<
+    "hub" | "past" | "routine" | "search"
+  >(
     "hub",
   );
   // ── 나만의 루틴 (0056) ────────────────────────────────────────────
@@ -1456,7 +1458,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
    *   **항상 명시적으로 덮어쓴다** — 기본값 `null`이라 옛 값이 남을 수 없다.
    */
   async function openExercisePicker(
-    mode: "hub" | "past" | "routine" = "hub",
+    mode: "hub" | "past" | "routine" | "search" = "hub",
     replaceKey: string | null = null,
   ) {
     setPickerMode(mode);
@@ -4055,6 +4057,12 @@ function WorkoutScreen({ userId }: { userId: string }) {
             onClose={() => closePicker()}
             onPickMany={addExercises}
             onPickConfigured={addConfiguredExercises}
+            replacing={
+              replaceTargetKey
+                ? (draft.exercises.find((ex) => ex.key === replaceTargetKey)
+                    ?.name ?? "")
+                : null
+            }
             onPickPast={addPastSession}
             onOpenPrograms={() => {
               closePicker();
@@ -4266,7 +4274,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
         canReplaceExercise={canReplaceExercise(focusedExercise)}
         onReplaceExercise={() => {
           if (!focusedExercise) return;
-          void openExercisePicker("hub", focusedExercise.key);
+          // 바꾸기는 검색으로 바로 연다 — 허브의 입구(프로그램·지난 운동·루틴)는
+          // 바꾸기에서 숨겨서 허브에 남는 것이 '운동 직접 고르기' 하나뿐이다
+          void openExercisePicker("search", focusedExercise.key);
         }}
         onSkipExercise={() => {
           if (focusedExercise) handleSkipExercise(focusedExercise.key);

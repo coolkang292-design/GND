@@ -1911,6 +1911,37 @@ export function CalendarView({
         }}
         onPickMany={(items) => void handleNewPlanPick(items)}
         onPickConfigured={(picks) => void handleNewPlanConfigured(picks)}
+        /*
+          계획이라는 것과 어느 날짜인지를 말한다 (2026-10-05 2단계). 예전엔 기록 탭과
+          같은 "운동 추가 · 오늘 운동을…", "운동 N개 추가하기"가 떠서 어느 날짜에
+          무엇을 하는지 알 수 없었다. 고치는 중이면 편집 목록에 붙일 뿐 저장하지 않는다.
+        */
+        heading={
+          addPickerOpen
+            ? { title: "계획에 운동 더하기", sub: "고른 운동을 편집 중인 계획에 붙여요" }
+            : planPickerDate
+              ? {
+                  title: `${dateKeyLabel(planPickerDate)} 계획 만들기`,
+                  sub: "이 날 할 운동을 골라 주세요",
+                }
+              : undefined
+        }
+        addLabel={(n) =>
+          addPickerOpen
+            ? `계획에 ${n}개 더하기`
+            : planPickerDate
+              ? `${dateKeyLabel(planPickerDate)} 계획에 ${n}개 담기`
+              : `운동 ${n}개 바로 추가`
+        }
+        confirmLabel={(n) =>
+          addPickerOpen
+            ? `계획에 ${n}개 더하기`
+            : planPickerDate
+              ? `${dateKeyLabel(planPickerDate)} 계획에 ${n}개 담기`
+              : `운동 ${n}개 추가하기`
+        }
+        // 저장 중에 다시 누르면 `planBusy`로 조용히 무시됐다 — 잠그고 '저장하는 중…'
+        busy={planBusy}
         onPickPast={handleNewPlanFromPast}
         onCreateCustom={onCreateCustom}
         routines={routines}

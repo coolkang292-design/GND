@@ -56,6 +56,8 @@ export function RecommendedPicker({
   onSearch,
   onAdd,
   onAdjust,
+  addLabel,
+  busy,
   onStartInterval,
   intervalCta,
 }: {
@@ -76,6 +78,9 @@ export function RecommendedPicker({
   onAdd: () => void;
   /** 세트 설정 화면으로 — 없으면 버튼이 안 나온다 (`PickActions`) */
   onAdjust?: () => void;
+  /** 담는 버튼 문구 — `PickActions` 참조 */
+  addLabel?: (count: number) => string;
+  busy?: boolean;
   /**
    * 전신 인터벌을 연다 (사용자 지시 2026-08-13).
    *
@@ -404,7 +409,13 @@ export function RecommendedPicker({
         </p>
       </div>
 
-      <PickActions count={selected.size} onAdd={onAdd} onAdjust={onAdjust} />
+      <PickActions
+        count={selected.size}
+        onAdd={onAdd}
+        onAdjust={onAdjust}
+        addLabel={addLabel}
+        busy={busy}
+      />
     </div>
   );
 }

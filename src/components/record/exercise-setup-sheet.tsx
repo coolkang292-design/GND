@@ -40,12 +40,15 @@ export function ExerciseSetupSheet({
   onBack,
   onConfirm,
   busy = false,
+  confirmLabel,
 }: {
   entries: SetupEntry[];
   onChange: (index: number, plan: SetupPlan) => void;
   onBack: () => void;
   onConfirm: () => void;
   busy?: boolean;
+  /** 확정 버튼 문구 (개수 → 문구). 없으면 `운동 N개 추가하기` — 달력은 계획에 담는다 */
+  confirmLabel?: (count: number) => string;
 }) {
   // 펼쳐서 조절 중인 행 — 기본은 전부 접혀 있다(값이 이미 맞으면 안 눌러도 된다)
   const [openIndex, setOpenIndex] = useState<number | null>(null);
@@ -58,7 +61,9 @@ export function ExerciseSetupSheet({
           onClick={onBack}
           /* 검색에서도 들어온다 (2026-10-05) — '추천'이라고 못 박지 않는다 */
           aria-label="고르던 화면으로 돌아가기"
-          className="flex h-8 w-8 items-center justify-center rounded-full text-lg text-muted"
+          /* 44px 원 — 다른 화면의 ←와 같은 모양 (2026-08-07 "뒤로가기도 잘보이게",
+             이 화면만 32px 글리프로 남아 있었다 · 2026-10-05) */
+          className="flex h-11 w-11 flex-none items-center justify-center rounded-full border border-line bg-surface-2 text-lg text-text"
         >
           ←
         </button>
@@ -196,7 +201,11 @@ export function ExerciseSetupSheet({
         disabled={busy || entries.length === 0}
         className="mt-2 h-12 w-full flex-none rounded-card-sm bg-accent text-sm font-extrabold text-accent-ink disabled:opacity-40"
       >
-        {busy ? "추가하는 중…" : `운동 ${entries.length}개 추가하기`}
+        {busy
+          ? "저장하는 중…"
+          : confirmLabel
+            ? confirmLabel(entries.length)
+            : `운동 ${entries.length}개 추가하기`}
       </button>
     </div>
   );
