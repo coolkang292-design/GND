@@ -3154,7 +3154,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
   function overlayImageOf(
     exercise: LocalExercise | null | undefined,
   ): OverlayExerciseImage | null {
-    const id = exercise ? imageIdForAddedExercise(exercise) : undefined;
+    const id = exercise ? imageIdForAddedExercise(exercise, catalog) : undefined;
     return exercise && id ? { id, bodyPart: exercise.bodyPart } : null;
   }
   const focusedSet = focusedExercise?.sets[setFocus.setIndex] ?? null;
@@ -3162,6 +3162,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
     <ExerciseCard
       key={ex.key}
       exercise={ex}
+      imageId={imageIdForAddedExercise(ex, catalog)}
       index={i}
       active={active}
       loadingLast={loadingExerciseKey === ex.key}

@@ -53,6 +53,18 @@
     "source": "gnd",
     "origin": "codex-pilot"
   },
+  "e1c75ef2-12bb-4fce-8435-e617618f1d37": {
+    "name": "덤벨 레터럴 레이즈",
+    "file": "e1c75ef2-12bb-4fce-8435-e617618f1d37",
+    "source": "gnd",
+    "origin": "codex-기록누락_2026-10-05"
+  },
+  "89a8c6e1-9ba9-423e-ba69-56f13885caa2": {
+    "name": "덤벨 로우",
+    "file": "89a8c6e1-9ba9-423e-ba69-56f13885caa2",
+    "source": "gnd",
+    "origin": "codex-기록누락_2026-10-05"
+  },
   "60e98517-335b-49b4-9c26-92fb33816391": {
     "name": "덤벨 리스트 컬",
     "file": "60e98517-335b-49b4-9c26-92fb33816391",
@@ -76,6 +88,12 @@
     "file": "71b9882d-c0d4-4725-92d6-f956996136d9",
     "source": "gnd",
     "origin": "codex-pilot"
+  },
+  "33161c50-988e-4654-a3f7-adc6c33bc216": {
+    "name": "덤벨 숄더 프레스",
+    "file": "33161c50-988e-4654-a3f7-adc6c33bc216",
+    "source": "gnd",
+    "origin": "codex-기록누락_2026-10-05"
   },
   "7dcb673c-adf7-477a-81bf-6f455d798622": {
     "name": "덤벨 슈러그",
@@ -263,6 +281,12 @@
     "source": "gnd",
     "origin": "codex-pilot"
   },
+  "e581495c-1793-496e-9a31-adda5eec222d": {
+    "name": "레그프레스",
+    "file": "e581495c-1793-496e-9a31-adda5eec222d",
+    "source": "gnd",
+    "origin": "codex-기록누락_2026-10-05"
+  },
   "42b87485-31aa-496a-bc2b-4463d74067a5": {
     "name": "레터럴 레이즈 머신",
     "file": "42b87485-31aa-496a-bc2b-4463d74067a5",
@@ -347,6 +371,12 @@
     "source": "gnd",
     "origin": "codex-pilot"
   },
+  "d0862f4a-f9f1-4411-ad3c-15e904085afc": {
+    "name": "바벨 로우",
+    "file": "d0862f4a-f9f1-4411-ad3c-15e904085afc",
+    "source": "gnd",
+    "origin": "codex-기록누락_2026-10-05"
+  },
   "187292d3-3b5b-49fd-a113-f255686cebe1": {
     "name": "바벨 리스트 컬",
     "file": "187292d3-3b5b-49fd-a113-f255686cebe1",
@@ -400,6 +430,12 @@
     "file": "ce13b66b-733a-4c07-8a0b-bc6249846671",
     "source": "gnd",
     "origin": "codex-pilot"
+  },
+  "986d2557-1508-44a7-878d-96044656cc90": {
+    "name": "버피",
+    "file": "986d2557-1508-44a7-878d-96044656cc90",
+    "source": "gnd",
+    "origin": "codex-인터벌누락_2026-10-05"
   },
   "237b62da-06ea-47d4-896c-c08d57f0c4f9": {
     "name": "벤치 딥스",
@@ -461,6 +497,12 @@
     "source": "gnd",
     "origin": "codex-pilot"
   },
+  "7b7d7326-de3f-4748-ab5c-3c63f991ae63": {
+    "name": "사이드 레터럴 레이즈",
+    "file": "7b7d7326-de3f-4748-ab5c-3c63f991ae63",
+    "source": "gnd",
+    "origin": "codex-기록누락_2026-10-05"
+  },
   "639ad98b-b4a1-47f7-a382-8dd9e98035b0": {
     "name": "사이드 플랭크",
     "file": "639ad98b-b4a1-47f7-a382-8dd9e98035b0",
@@ -472,6 +514,12 @@
     "file": "25cdabee-8e91-4dd9-8a36-00bf65ab889d",
     "source": "gnd",
     "origin": "codex-pilot"
+  },
+  "f42e4491-c9fa-4088-9498-d66cc631aa69": {
+    "name": "숄더프레스",
+    "file": "f42e4491-c9fa-4088-9498-d66cc631aa69",
+    "source": "gnd",
+    "origin": "codex-기록누락_2026-10-05"
   },
   "e5fec7fd-111d-4c75-9d93-60fb89293853": {
     "name": "수평 레그 프레스",
@@ -605,6 +653,12 @@
     "source": "gnd",
     "origin": "codex-pilot"
   },
+  "d3ad03bf-5594-49c2-96d7-3ba04cb54e6d": {
+    "name": "와이드 스쿼트",
+    "file": "d3ad03bf-5594-49c2-96d7-3ba04cb54e6d",
+    "source": "gnd",
+    "origin": "codex-인터벌누락_2026-10-05"
+  },
   "ed65b5e8-b999-44e4-98aa-3a60f5a2ccd7": {
     "name": "와이드 푸시업",
     "file": "ed65b5e8-b999-44e4-98aa-3a60f5a2ccd7",
@@ -653,6 +707,12 @@
     "source": "gnd",
     "origin": "codex-pilot"
   },
+  "81b42a17-af19-4664-91f3-e65c4b1792ae": {
+    "name": "인치웜 푸시업",
+    "file": "81b42a17-af19-4664-91f3-e65c4b1792ae",
+    "source": "gnd",
+    "origin": "codex-인터벌누락_2026-10-05"
+  },
   "1c0251d1-54ca-45f6-ace2-4cb8bebab7a6": {
     "name": "인클라인 덤벨 벤치프레스",
     "file": "1c0251d1-54ca-45f6-ace2-4cb8bebab7a6",
@@ -695,6 +755,12 @@
     "source": "gnd",
     "origin": "codex-pilot"
   },
+  "4a3b7d1b-f899-4b19-8f45-220acdee0b4a": {
+    "name": "점프 스쿼트",
+    "file": "4a3b7d1b-f899-4b19-8f45-220acdee0b4a",
+    "source": "gnd",
+    "origin": "codex-인터벌누락_2026-10-05"
+  },
   "4f5222fc-3c56-4f2b-9d31-190826a428b6": {
     "name": "점핑잭",
     "file": "4f5222fc-3c56-4f2b-9d31-190826a428b6",
@@ -706,6 +772,12 @@
     "file": "b0c305d6-338e-400f-9dfd-5ae6efb63d9a",
     "source": "gnd",
     "origin": "codex-pilot"
+  },
+  "486fa05a-f354-45c9-a3c9-934b38f91f9c": {
+    "name": "체스트프레스 머신",
+    "file": "486fa05a-f354-45c9-a3c9-934b38f91f9c",
+    "source": "gnd",
+    "origin": "codex-기록누락_2026-10-05"
   },
   "b85fb5dd-eb2a-4492-ba93-a68d2bbebec8": {
     "name": "친업",
@@ -773,6 +845,12 @@
     "source": "gnd",
     "origin": "codex-pilot"
   },
+  "af467ef3-388f-4010-96b4-1683337e7020": {
+    "name": "케이블 트라이셉 익스텐션",
+    "file": "af467ef3-388f-4010-96b4-1683337e7020",
+    "source": "gnd",
+    "origin": "codex-기록누락_2026-10-05"
+  },
   "a0fd751b-b6c2-407e-b030-ded97a96deb4": {
     "name": "케이블 트위스트",
     "file": "a0fd751b-b6c2-407e-b030-ded97a96deb4",
@@ -820,6 +898,12 @@
     "file": "9fb956e7-1376-4607-b244-6e647b01dbe9",
     "source": "gnd",
     "origin": "codex-pilot"
+  },
+  "9371e57e-7e33-4f08-8c5a-ad414ce7c7a4": {
+    "name": "타이슨 푸시업",
+    "file": "9371e57e-7e33-4f08-8c5a-ad414ce7c7a4",
+    "source": "gnd",
+    "origin": "codex-인터벌누락_2026-10-05"
   },
   "c5c92985-c48e-4c84-a8d7-04fcab930906": {
     "name": "토르소 로테이션 머신",
@@ -905,6 +989,18 @@
     "source": "gnd",
     "origin": "codex-pilot"
   },
+  "b60cc90b-204d-4ffb-acf0-8cdf10504df5": {
+    "name": "피스톨 스쿼트",
+    "file": "b60cc90b-204d-4ffb-acf0-8cdf10504df5",
+    "source": "gnd",
+    "origin": "codex-인터벌누락_2026-10-05"
+  },
+  "1ce6e6f1-9f35-46fe-9ea0-16b0567d43d5": {
+    "name": "하이 니",
+    "file": "1ce6e6f1-9f35-46fe-9ea0-16b0567d43d5",
+    "source": "gnd",
+    "origin": "codex-인터벌누락_2026-10-05"
+  },
   "1565a3d5-7bfa-438d-af7c-cf577d8af599": {
     "name": "할로우 포지션",
     "file": "1565a3d5-7bfa-438d-af7c-cf577d8af599",
@@ -946,5 +1042,47 @@
     "file": "572150f9-e64a-40b5-9fb0-cdc288ed19f7",
     "source": "gnd",
     "origin": "codex-pilot"
+  },
+  "3d9264b3-b67c-40ee-9385-fad0d8fb786b": {
+    "name": "",
+    "file": "3d9264b3-b67c-40ee-9385-fad0d8fb786b",
+    "source": "gnd",
+    "origin": "codex-기록누락_2026-10-05",
+    "custom": true
+  },
+  "b79eef2a-2e72-4d00-836a-c5559de8669d": {
+    "name": "",
+    "file": "b79eef2a-2e72-4d00-836a-c5559de8669d",
+    "source": "gnd",
+    "origin": "codex-기록누락_2026-10-05",
+    "custom": true
+  },
+  "ba21558a-58db-4e58-a055-12309b9a438b": {
+    "name": "",
+    "file": "ba21558a-58db-4e58-a055-12309b9a438b",
+    "source": "gnd",
+    "origin": "codex-기록누락_2026-10-05",
+    "custom": true
+  },
+  "bc0e833c-985d-4cf3-8a01-024a071bcfcd": {
+    "name": "",
+    "file": "bc0e833c-985d-4cf3-8a01-024a071bcfcd",
+    "source": "gnd",
+    "origin": "codex-기록누락_2026-10-05",
+    "custom": true
+  },
+  "e62f53c9-bb53-4f0d-b89a-9e7ad6fe77b9": {
+    "name": "",
+    "file": "e62f53c9-bb53-4f0d-b89a-9e7ad6fe77b9",
+    "source": "gnd",
+    "origin": "codex-기록누락_2026-10-05",
+    "custom": true
+  },
+  "e6a6598d-8597-4d22-8d81-ef2265e0c168": {
+    "name": "",
+    "file": "e6a6598d-8597-4d22-8d81-ef2265e0c168",
+    "source": "gnd",
+    "origin": "codex-기록누락_2026-10-05",
+    "custom": true
   }
 }

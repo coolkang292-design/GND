@@ -22,6 +22,7 @@ PASS가 4장 있었다(푸시업·사이드 런지·마운틴 클라이머·덤�
 주 그림과 빈 띠로 떨어져 **가장자리에 붙은 작은 덩어리**만 배경색으로 덮는다.
 원본 파일은 건드리지 않는다.
 """
+import hashlib
 import json
 import os
 
@@ -73,6 +74,16 @@ PREFER_SHEET = {
     # 레터럴이다. 리어 레터럴은 상체를 숙이고 뒤 어깨를 써야 한다(시트판이 그 자세).
     "시티드 덤벨 리어 레터럴 레이즈": "upright seated lateral, not bent-over rear",
 }
+
+#: 누적 매핑 밖에서 온 Codex 묶음 (폴더, 매핑 파일). 행의 `file`은 그 폴더 기준 상대 경로이고
+#: `\`가 섞여 있다. FAIL·file 없음은 건너뛴다. `final_qa`가 비어 있는 행은 `status`로 본다
+#: (REUSE_READY = 사용자가 같은 동작이라고 확인한 기존 그림 재사용, NEW_PASS = 새 생성 통과).
+#: 2026-10-05: 기록누락(과거 기록에 나온 운동 18개 — 직접 만든 운동 6개 포함, 사용자 확인 범위)
+#:             인터벌누락(공식 인터벌 종목 7개 — 하이 니는 여기 PASS가 최신 후보)
+EXTRA_BATCHES = [
+    ("기록누락_2026-10-05", "적용가능_UUID_파일매핑.json"),
+    ("인터벌누락_2026-10-05", "적용가능_UUID_파일매핑.json"),
+]
 
 #: Codex 그림을 같은 운동의 다른 이름에도 붙인다 (원래 이름 → 별칭들)
 ALIASES = {
@@ -158,6 +169,35 @@ def main():
         for alias in ALIASES.get(r["name"], []):
             data[id_by_name[alias]] = {"name": alias, "file": uid, "source": "gnd", "origin": "codex-pilot"}
 
+    # 1-b) 누적 매핑 밖의 Codex 묶음 — 기본 운동은 매니페스트 이름과, 직접 만든 운동은
+    #      '시드에 없는 ID'인지 대조한다. 직접 만든 운동의 이름은 남의 데이터라 연결표에 적지 않는다.
+    for folder, mapping in EXTRA_BATCHES:
+        base = os.path.join(CODEX, folder)
+        for r in json.load(open(os.path.join(base, mapping), encoding="utf8")):
+            ok = r.get("final_qa") == "PASS" or r.get("status") in ("NEW_PASS", "REUSE_READY")
+            if not ok or r.get("final_qa") == "FAIL" or not r.get("file"):
+                continue
+            uid = r["exercise_id"]
+            custom = uid not in name_by_id
+            if not custom and name_by_id[uid] != r["name"]:
+                raise SystemExit(f"{folder}: ID·이름이 매니페스트와 다르다: {uid} {r['name']}")
+            path = os.path.join(base, r["file"].replace("\\", "/"))
+            if r.get("sha256"):
+                digest = hashlib.sha256(open(path, "rb").read()).hexdigest()
+                if digest != r["sha256"]:
+                    raise SystemExit(f"{folder}: 해시가 다르다 {r['name']} {path}")
+            img, erased = erase_edge_fragments(Image.open(path).convert("RGB"))
+            if erased:
+                print(f"가장자리 조각 지움  {r['name']}: {erased}")
+            save(img, uid)
+            data[uid] = {
+                "name": "" if custom else r["name"],
+                "file": uid,
+                "source": "gnd",
+                "origin": f"codex-{folder}",
+                **({"custom": True} if custom else {}),
+            }
+
     # 2) 사용자 시트 — Codex에 없는 운동만
     for slug, names in SLICED.items():
         ids = [id_by_name[n] for n in names]
@@ -179,7 +219,7 @@ def main():
         if f not in keep:
             os.remove(os.path.join(OUT, f))
 
-    ordered = dict(sorted(data.items(), key=lambda kv: kv[1]["name"]))
+    ordered = dict(sorted(data.items(), key=lambda kv: (kv[1].get("custom", False), kv[1]["name"], kv[0])))
     with open(DATA, "w", encoding="utf8") as fh:
         json.dump(ordered, fh, ensure_ascii=False, indent=2)
         fh.write("\n")

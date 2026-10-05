@@ -31,6 +31,7 @@ export function ExerciseCard({
   onLongPress,
   onOpenGuide,
   planning = false,
+  imageId,
 }: {
   exercise: LocalExercise;
   index: number;
@@ -64,6 +65,11 @@ export function ExerciseCard({
    * 만들지 않기 위해서다.
    */
   onOpenGuide?: (name: string) => void;
+  /**
+   * 부모가 찾은 그림 ID (기록 화면은 본인 카탈로그로 직접 만든 운동까지 찾는다).
+   * 넘기지 않으면 기본 운동 이름으로만 찾는다(계획 편집 시트 등).
+   */
+  imageId?: string;
 }) {
   // 제목 줄을 약 0.5초 길게 누르면 순서 이동 시트 (설계 2026-07-19).
   // 시트를 열 수 없는 화면에서는 넘기지 않으므로 아무 일도 하지 않는다.
@@ -71,7 +77,7 @@ export function ExerciseCard({
   // 안내가 **있는 종목에만** 버튼을 낸다. 없는데 내면 눌러도 아무 일 없는
   // 죽은 버튼이 된다 (커스텀 종목이 대부분 여기 해당).
   const hasGuide = onOpenGuide ? guideForExercise(exercise.name) !== null : false;
-  const thumbId = imageIdForAddedExercise(exercise);
+  const thumbId = imageId ?? imageIdForAddedExercise(exercise);
   const isWeight = exercise.exerciseType === "weight";
   const isCardio = exercise.exerciseType === "cardio";
   const isTimeBodyweight =

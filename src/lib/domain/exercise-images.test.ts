@@ -3,7 +3,14 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import manifest from "../../../data/exercise-image-manifest.json";
 import type { BodyPart } from "@/lib/types";
-import { EXERCISE_IMAGES, exerciseImageSrc, imagesFirst, partIconSrc } from "./exercise-images";
+import {
+  EXERCISE_IMAGES,
+  exerciseImageSrc,
+  imageIdForAddedExercise,
+  imagesFirst,
+  partIconSrc,
+  seedExerciseIdByName,
+} from "./exercise-images";
 
 const ROOT = join(__dirname, "..", "..", "..");
 const publicPath = (src: string) => join(ROOT, "public", src);
@@ -25,9 +32,15 @@ describe("exercise-images", () => {
     expect(Object.keys(EXERCISE_IMAGES).length).toBeGreaterThanOrEqual(50);
   });
 
-  it("연결표의 키는 전부 시드 운동 ID이고, 적힌 이름이 그 ID의 실제 이름과 같다", () => {
+  it("기본 운동 키는 시드 ID이고 이름이 같다 · 직접 만든 운동 키는 시드가 아니고 이름이 비어 있다", () => {
     for (const [id, entry] of Object.entries(EXERCISE_IMAGES)) {
-      expect(SEED_NAME_BY_ID.get(id), `${id} ${entry.name}`).toBe(entry.name);
+      if (entry.custom) {
+        // 남의 직접 운동 이름을 앱에 싣지 않는다 (2026-10-05 기록누락 묶음)
+        expect(SEED_NAME_BY_ID.has(id), id).toBe(false);
+        expect(entry.name, id).toBe("");
+      } else {
+        expect(SEED_NAME_BY_ID.get(id), `${id} ${entry.name}`).toBe(entry.name);
+      }
     }
   });
 
@@ -76,5 +89,40 @@ describe("imagesFirst — 그림 있는 운동을 위로 (사용자 지시 2026-
 
   it("빠지거나 늘어나는 항목이 없다", () => {
     expect(imagesFirst(items, (i) => i.id)).toHaveLength(items.length);
+  });
+});
+
+describe("imageIdForAddedExercise — 담은 운동의 그림 ID", () => {
+  const customId = Object.entries(EXERCISE_IMAGES).find(([, e]) => e.custom)?.[0];
+
+  it("전제 — 직접 만든 운동 그림이 연결표에 하나 이상 있다", () => {
+    expect(customId).toBeTruthy();
+  });
+
+  it("기본 운동은 이름으로 찾는다", () => {
+    expect(imageIdForAddedExercise({ name: "벤치프레스", isCustom: false })).toBe(
+      seedExerciseIdByName("벤치프레스"),
+    );
+  });
+
+  it("직접 만든 운동은 본인 카탈로그의 같은 이름 직접 운동 ID로 찾는다", () => {
+    const own = [{ id: customId!, name: "내 운동", is_custom: true }];
+    expect(imageIdForAddedExercise({ name: "내 운동", isCustom: true }, own)).toBe(customId);
+  });
+
+  it("직접 만든 운동은 기본 운동과 이름이 같아도 기본 운동 그림을 쓰지 않는다", () => {
+    const own = [{ id: "someone-custom", name: "벤치프레스", is_custom: true }];
+    expect(imageIdForAddedExercise({ name: "벤치프레스", isCustom: true }, own)).toBeUndefined();
+    expect(imageIdForAddedExercise({ name: "벤치프레스", isCustom: true })).toBeUndefined();
+  });
+
+  it("본인 카탈로그의 기본 운동 행으로는 직접 운동을 찾지 않는다", () => {
+    const seedId = seedExerciseIdByName("벤치프레스")!;
+    const own = [{ id: seedId, name: "벤치프레스", is_custom: false }];
+    expect(imageIdForAddedExercise({ name: "벤치프레스", isCustom: true }, own)).toBeUndefined();
+  });
+
+  it("직접 운동 이름은 기본 운동 이름표에 섞이지 않는다", () => {
+    expect(seedExerciseIdByName("")).toBeUndefined();
   });
 });

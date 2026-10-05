@@ -25,10 +25,16 @@ import data from "./exercise-images.data.json";
 export type ExerciseImageSource = "gnd" | "wger" | "free-exercise-db";
 
 export type ExerciseImageEntry = {
+  /** 기본 운동 이름. 직접 만든 운동은 남의 데이터라 비워 둔다("") */
   name: string;
   file: string;
   source: ExerciseImageSource;
   origin: string;
+  /**
+   * 사용자가 직접 만든 운동(그 사용자의 카탈로그 행 ID). 2026-10-05 기록누락 묶음에서
+   * 사용자가 범위를 확인한 6개. 그 행은 RLS상 만든 사람에게만 보이므로 남에게 붙을 일이 없다.
+   */
+  custom?: boolean;
 };
 
 export const EXERCISE_IMAGES = data as Readonly<Record<string, ExerciseImageEntry>>;
@@ -42,7 +48,9 @@ export const EXERCISE_IMAGES = data as Readonly<Record<string, ExerciseImageEntr
  * 운동과 같은 이름으로 만들 수 있어서(유일성은 사용자별) 엉뚱한 그림이 붙는다.
  */
 const ID_BY_SEED_NAME = new Map(
-  Object.entries(EXERCISE_IMAGES).map(([id, entry]) => [entry.name, id]),
+  Object.entries(EXERCISE_IMAGES)
+    .filter(([, entry]) => !entry.custom)
+    .map(([id, entry]) => [entry.name, id]),
 );
 
 export function seedExerciseIdByName(name: string): string | undefined {
@@ -51,13 +59,21 @@ export function seedExerciseIdByName(name: string): string | undefined {
 
 /**
  * 담은 운동(이름 + 직접 여부)의 그림 ID. 운동 카드·운동 중 화면이 같이 쓴다.
- * 직접 만든 운동은 기본 운동과 이름이 같아도 undefined다(위 주석).
+ *
+ * - 기본 운동: 기본 운동 이름 → ID (이름은 DB가 유일하게 막는다)
+ * - 직접 만든 운동: **본인 카탈로그**(`ownCatalog` — 기본 + 내가 만든 것만 RLS로 받은 목록)
+ *   안에서 같은 이름의 직접 운동 ID를 찾는다. 직접 운동 이름은 사용자별로 유일해서 남의
+ *   운동과 섞이지 않는다. 카탈로그를 안 넘기면(계획 편집 시트 등) 직접 운동은 undefined다.
+ *
+ * ⚠️ 직접 운동 이름으로 **기본 운동 그림을 찾지 마라** — 이름만 같고 다른 동작일 수 있다.
  */
-export function imageIdForAddedExercise(exercise: {
-  name: string;
-  isCustom: boolean;
-}): string | undefined {
-  return exercise.isCustom ? undefined : seedExerciseIdByName(exercise.name);
+export function imageIdForAddedExercise(
+  exercise: { name: string; isCustom: boolean },
+  ownCatalog?: readonly { id: string; name: string; is_custom: boolean }[],
+): string | undefined {
+  if (!exercise.isCustom) return seedExerciseIdByName(exercise.name);
+  const own = ownCatalog?.find((item) => item.is_custom && item.name === exercise.name);
+  return own && EXERCISE_IMAGES[own.id] ? own.id : undefined;
 }
 
 /**
