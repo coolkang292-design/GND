@@ -5,6 +5,7 @@ import {
   launchSplashGate,
   type LaunchSplashStorage,
 } from "@/lib/domain/launch-splash";
+import { BrandWordmark } from "@/components/brand/entry";
 import { BRAND_ENTRY_COPY as COPY } from "@/lib/domain/brand-copy";
 
 /**
@@ -190,24 +191,9 @@ export function LaunchMotivationSplash() {
               진한 그라데이션으로 그 구간을 가린다. 줄이면 그 부분이 다시 드러난다. */}
           <span aria-hidden className="absolute inset-x-0 bottom-0 h-[68%] bg-gradient-to-t from-bg via-bg/92 via-55% to-transparent" />
 
-          {/* 위: 워드마크 + 오른쪽 슬로건 */}
-          <span className="relative flex items-start justify-between px-6">
-            <span className="block">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/gnd/brand/logo.png" alt="GND" width={240} height={80} className="h-[52px] w-auto" />
-              <span className="mt-2 block text-[11px] font-semibold tracking-[0.42em] text-text/85">
-                {COPY.wordmarkSub}
-              </span>
-            </span>
-            <span aria-hidden className="mt-1 block -rotate-6 text-right">
-              {COPY.slogan.map((word) => (
-                <span key={word} className="block text-[15px] leading-[1.15] font-light italic tracking-wide text-text/80">
-                  {word}
-                </span>
-              ))}
-              <span className="mt-1.5 ml-auto block h-[3px] w-14 -skew-x-12 rounded-full bg-accent" />
-              <span className="mt-1 ml-auto block h-[2px] w-10 -skew-x-12 rounded-full bg-accent/70" />
-            </span>
+          {/* 위: 워드마크 + 오른쪽 슬로건 — 온보딩·로그인과 한 벌(`brand/entry.tsx`) */}
+          <span className="relative block px-6">
+            <BrandWordmark slogan />
           </span>
 
           {/* 아래: 헤드라인 3줄(마지막 라임) + 보조 문구 2줄 */}

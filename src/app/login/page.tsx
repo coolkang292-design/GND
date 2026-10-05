@@ -2,8 +2,16 @@
 
 import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
-import { ScreenArt } from "@/components/brand/hero-art";
-import { GoldCta, GoldLine } from "@/components/brand/gold";
+import { Icon } from "@/components/ui/icon";
+import {
+  BrandWordmark,
+  EntryFade,
+  EntryPhoto,
+  EntryTopShade,
+  LimeCta,
+  ProviderButton,
+} from "@/components/brand/entry";
+import { LOGIN_COPY as COPY } from "@/lib/domain/brand-copy";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { pendingChallengeInvitePath } from "@/lib/challenge";
 import { APP_LANDING_PATH } from "@/lib/domain/landing";
@@ -116,131 +124,169 @@ export default function LoginPage() {
   }
 
   return (
-    /* ⚠️ 온보딩과 **같은 히어로·같은 금색**을 쓴다 (사용자 지시 2026-08-08 —
-       "이 화면도 온보딩 히어로 화면으로 적용해줘"). 옛 화면은 텍스트 로고
-       `🏋️ GND`라 두 화면이 딴 앱처럼 보였다. 조각은 `components/brand/`에
-       한 벌만 두므로, 한쪽만 고쳐 다시 갈라지게 하지 마라. */
-    /* ⚠️ 그림은 흐름 밖(`fill`), 글자는 **아래에 붙인다**(`mt-auto`).
-       옛 구조는 그림을 블록으로 두고 글자를 그 뒤에 이어 붙였는데, 그러면 글자
-       위치를 *그림 높이*가 정하고 그 높이는 flex-shrink로 흔들린다 — 이 화면이
-       제일 심해서 아트의 45%가 잘리고 있었다(`hero-art.tsx` 주석).
-       `relative`가 둘 다에 필요하다: main은 `fill`의 기준, 글자 쪽은 그림 위로
-       올리기 위해서다(음수 z-index는 조상 배경 뒤로 내려간다). */
-    <main className="relative flex flex-1 flex-col overflow-y-auto pb-8 text-center">
-      <ScreenArt screen="login" />
+    /* 시안: `original-extracts/login-original-approved.png` (2026-10-06 사용자 결정 — 온보딩·닉네임·
+       로그인 세 화면을 한 벌로). 사진·로고·버튼은 온보딩과 같은 `brand/entry.tsx`를 쓴다 —
+       2026-08-08에 로그인만 옛 텍스트 로고로 남아 두 화면이 딴 앱처럼 보였던 적이 있다.
 
-      <div className="relative mx-auto mt-auto w-full max-w-sm px-6">
-        {/* ⚠️ 옛 문구는 `계정을 연결해 둔 방법으로 돌아옵니다.`였다 (2026-08-10
-            사용자 지시로 교체 — "직관적인 마케팅 문구로"). 그 문장은 **수단**을
-            설명했다("어떤 방법으로 연결했었는지 떠올려라") — 돌아온 사람이 알고
-            싶은 건 방법이 아니라 **내 기록이 무사한가**다. 이 화면이 존재하는
-            이유가 정확히 그거다(익명 계정은 저장소를 비우면 기록이 사라진다,
-            `page.tsx` 상단 주석).
+       ⚠️ 시안의 `비밀번호 찾기`는 **넣지 않았다.** GND에는 비밀번호 재설정 기능이 없다
+          (`resetPasswordForEmail`을 부르는 곳이 없다). 누를 수 없는 글자를 두면 화면이 거짓말을 한다.
+       ⚠️ 글자는 **아래에 붙인다**(`mt-auto`). 폰이 짧으면 머리말 바로 밑에서 시작하고 화면이 스크롤된다. */
+    <main className="relative flex flex-1 flex-col overflow-y-auto text-left">
+      {/* 남자 선수 사진은 위 30%에 인물이 있고 아래는 원래 어둡다 — 화면 맨 위에 붙인다 */}
+      <EntryPhoto src={LOGIN_PHOTO} top="0px" lift="0px" />
+      <header
+        className="relative z-10 px-6"
+        style={{ paddingTop: "max(2rem, calc(env(safe-area-inset-top) + 1rem))" }}
+      >
+        <EntryTopShade />
+        <BrandWordmark />
+      </header>
 
-            ⚠️ 19px에서 **한 줄에 들어가는 길이**로 유지하라. 넘치면 텍스트 블록이
-            27.5px 자라 그림의 아트 존 계산이 틀어진다
-            (`docs/design-sources/onboarding-canvas-spec.md` §4-3). */}
-        <GoldLine big>
-          {fromInstalled
-            ? "한 번만 다시 로그인해요"
-            : "돌아오셨군요! 기록은 그대로예요"}
-        </GoldLine>
+      <div
+        className="relative mt-auto w-full px-6 pt-16"
+        style={{ paddingBottom: "max(1.5rem, calc(env(safe-area-inset-bottom) + 0.75rem))" }}
+      >
+        <EntryFade reach="top-0" />
+        {/* ⚠️ 옛 문구는 `돌아오셨군요! 기록은 그대로예요`였다(2026-08-10). 새 시안 문구로 바꿨다.
+            설치 직후(`fromInstalled`)에는 여전히 다른 말을 한다 — 아래 주석. */}
+        {/* ⚠️ 설치 직후 문구(`한 번만 다시 로그인해요`)는 더 길어서 같은 크기면 `해/요`로 쪼개졌다
+            (2026-10-06 실측). 그 경우만 작게 하고, 한국어 낱말이 중간에서 끊기지 않게 `break-keep`. */}
+        <h1
+          className={`relative break-keep leading-[1.15] font-black tracking-[-0.03em] ${
+            fromInstalled ? "text-[clamp(1.6rem,7.4vw,2rem)]" : "text-[clamp(2rem,9vw,2.5rem)]"
+          }`}
+        >
+          {fromInstalled ? "한 번만 다시 로그인해요" : COPY.heading}
+        </h1>
+        {!fromInstalled && (
+          <p className="relative mt-2 text-[16px] text-text/85">{COPY.subcopy}</p>
+        )}
 
         {/* ⚠️ 설치 직후에만 나온다. "새로 가입하지 마세요"를 말하지 않으면
-            사람들이 아래 "처음이신가요? 시작하기"를 누르고 기록이 갈린다. */}
+            사람들이 아래 "처음이신가요? 회원가입하기"를 누르고 기록이 갈린다. */}
         {fromInstalled && (
-          <p className="mt-2 rounded-card-sm border border-accent-weak bg-accent-weak/40 px-3 py-2 text-[11.5px] leading-relaxed text-muted">
-            💡 기록은 그대로 있어요. 아까 사파리에서 쓰던{" "}
-            <b className="text-text">같은 버튼</b>을 누르세요 — 새로 가입하면{" "}
-            <b className="text-text">기록이 따로 생겨요.</b>
+          <p className="relative mt-3 flex gap-2 rounded-2xl border border-accent/40 bg-accent-weak/60 px-3.5 py-2.5 text-[12.5px] leading-relaxed text-text/85">
+            <Icon name="shield" size={16} className="mt-0.5 text-accent" />
+            <span>
+              기록은 그대로 있어요. 아까 사파리에서 쓰던{" "}
+              <b className="text-text">같은 버튼</b>을 누르세요 — 새로 가입하면{" "}
+              <b className="text-text">기록이 따로 생겨요.</b>
+            </span>
           </p>
         )}
 
         {providers.length > 0 && (
-          <div className="mt-5 flex flex-col gap-2.5">
-            {providers.map((p, i) => (
-              <GoldCta
+          <div className="relative mt-6 flex flex-col gap-3">
+            {providers.map((p) => (
+              <ProviderButton
                 key={p}
+                provider={p}
                 onClick={() => void handleOAuth(p)}
-                busy={oauthBusy !== null}
-                variant={i === 0 ? "solid" : "outline"}
-                flush
-              >
-                {oauthBusy === p
-                  ? "이동 중…"
-                  : `${PROVIDER_META[p].short}로 로그인`}
-              </GoldCta>
+                disabled={oauthBusy !== null}
+                label={
+                  oauthBusy === p
+                    ? "이동 중…"
+                    : `${PROVIDER_META[p].short}${COPY.providerSuffix}`
+                }
+              />
             ))}
             {/* 이메일 폼을 없애지 않는다. 카카오·구글이 둘 다 없는 사용자의
                 탈출구이고, 이미 이메일로 붙은 계정이 있다(설계 §5.6). */}
-            <p className="mt-3 text-[11px] text-faint">또는 이메일로</p>
+            <div className="mt-3 flex items-center gap-3 text-[13px] text-muted">
+              <span aria-hidden className="h-px flex-1 bg-line-strong" />
+              {COPY.divider}
+              <span aria-hidden className="h-px flex-1 bg-line-strong" />
+            </div>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="mt-2 w-full">
-        <label className="mt-3 block text-left text-[11px] font-bold text-muted">
-          이메일
-        </label>
-        {/* autoCapitalize·autoCorrect가 없으면 iOS가 첫 글자를 대문자로 바꿔
-            "Atty2@..."로 보내고, 사용자는 이유를 모른 채 실패만 본다 */}
-        <input
-          type="email"
-          inputMode="email"
-          autoComplete="email"
-          autoCapitalize="none"
-          autoCorrect="off"
-          spellCheck={false}
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="you@example.com"
-          className="mt-1 w-full rounded-xl border border-line bg-surface px-4 py-3 text-[15px] outline-none focus:border-accent"
-        />
+        <form onSubmit={handleSubmit} className="relative mt-4 flex w-full flex-col gap-3">
+          {/* ⚠️ 칸 위 글자 라벨은 시안에 없어서 뺐지만 **화면 낭독용 라벨은 남긴다**(`sr-only`).
+              무엇을 넣는 칸인지는 왼쪽 아이콘(봉투·자물쇠)이 보여 준다. */}
+          <div className="flex h-14 items-center gap-3 rounded-2xl border border-line-strong bg-surface/90 px-4 focus-within:border-accent">
+            <Icon name="mail" size={20} className="text-muted" />
+            <label htmlFor="login-email" className="sr-only">
+              이메일
+            </label>
+            {/* autoCapitalize·autoCorrect가 없으면 iOS가 첫 글자를 대문자로 바꿔
+                "Atty2@..."로 보내고, 사용자는 이유를 모른 채 실패만 본다 */}
+            <input
+              id="login-email"
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder={COPY.emailPlaceholder}
+              className="min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-faint"
+            />
+          </div>
 
-        <div className="mt-4 flex items-baseline justify-between">
-          <label className="text-left text-[11px] font-bold text-muted">
-            비밀번호
-          </label>
-          {/* 임시 비밀번호는 대소문자가 섞여 폰에서 틀리기 쉽다.
-              무엇을 쳤는지 볼 수 있어야 스스로 고칠 수 있다. */}
-          <button
-            type="button"
-            onClick={() => setShowPassword((v) => !v)}
-            className="text-[11px] text-muted underline"
-          >
-            {showPassword ? "숨기기" : "보기"}
-          </button>
-        </div>
-        <input
-          type={showPassword ? "text" : "password"}
-          autoComplete="current-password"
-          autoCapitalize="none"
-          autoCorrect="off"
-          spellCheck={false}
-          required
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="mt-1 w-full rounded-xl border border-line bg-surface px-4 py-3 text-[15px] outline-none focus:border-accent"
-        />
+          {/* ⚠️ `<label>`로 감싸지 마라 — 안에 보기 버튼이 있어서, 라벨이 입력칸 말고 다른
+              조작 요소를 품게 된다(HTML 규칙 위반, 라벨을 누르면 엉뚱한 쪽이 반응할 수 있다). */}
+          <div className="flex h-14 items-center gap-3 rounded-2xl border border-line-strong bg-surface/90 px-4 focus-within:border-accent">
+            <Icon name="lock" size={20} className="text-muted" />
+            <label htmlFor="login-password" className="sr-only">
+              비밀번호
+            </label>
+            <input
+              id="login-password"
+              type={showPassword ? "text" : "password"}
+              autoComplete="current-password"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder={COPY.passwordPlaceholder}
+              className="min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-faint"
+            />
+            {/* 임시 비밀번호는 대소문자가 섞여 폰에서 틀리기 쉽다.
+                무엇을 쳤는지 볼 수 있어야 스스로 고칠 수 있다. */}
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? "비밀번호 숨기기" : "비밀번호 보기"}
+              aria-pressed={showPassword}
+              className="-mr-2 flex h-10 w-10 flex-none items-center justify-center text-muted"
+            >
+              <Icon name={showPassword ? "hide" : "eye"} size={20} />
+            </button>
+          </div>
 
-        {error && (
-          <p className="mt-3 text-[13px] text-red-400" role="alert">
-            {error}
-          </p>
-        )}
+          {error && (
+            <p className="text-[13px] text-danger" role="alert">
+              {error}
+            </p>
+          )}
 
-          <GoldCta type="submit" busy={busy}>
-            {busy ? "로그인 중…" : "로그인"}
-          </GoldCta>
+          <div className="mt-2">
+            <LimeCta type="submit" busy={busy}>
+              {busy ? "로그인 중…" : COPY.primary}
+            </LimeCta>
+          </div>
         </form>
 
         <Link
           href="/onboarding"
-          className="mt-5 block text-[13px] text-muted underline"
+          aria-label={`${COPY.signupLead} ${COPY.signup}`}
+          className="relative mx-auto mt-5 flex w-fit items-center gap-1.5 py-1 text-[14px] text-muted"
         >
-          처음이신가요? 시작하기
+          {COPY.signupLead}
+          <span className="font-extrabold text-text underline decoration-2 underline-offset-[5px]">
+            {COPY.signup}
+          </span>
+          <Icon name="arrow" size={16} strokeWidth={2.2} className="text-text" />
         </Link>
       </div>
     </main>
   );
 }
+
+/** 시안 2번(로그인)의 남자 선수 사진 — 글자 없는 판 */
+const LOGIN_PHOTO = "/gnd/photos/login-sweat-860.webp";

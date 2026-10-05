@@ -271,7 +271,10 @@ describe("OnboardingPage 챌린지 초대 모드", () => {
     expect(screen.queryByPlaceholderText("예: 스칼레또")).toBeNull();
     // ⚠️ 로그인 문을 숨기지 마라. 기존 사용자가 새 기기에서 챌린지 링크를 타면
     //    카카오를 눌러도 `identity_already_exists`로 막히므로 여기가 유일한 길이다.
-    expect(screen.getByText("이미 계정이 있나요? 로그인")).not.toBeNull();
+    expect(screen.getByRole("link", { name: "이미 계정이 있나요? 로그인" })).not.toBeNull();
+    // 2026-10-06 새 디자인(시안 1번) — 두 줄 제목, 옛 금색 포털 문구는 없다
+    expect(screen.getByRole("heading", { name: /지금 이 도전이\s*더 나은 나를 만든다/ })).not.toBeNull();
+    expect(screen.queryByText("게임에 참가하시겠습니까?")).toBeNull();
   });
 
   it("제공자에서 돌아오면 닉네임과 챌린지 참가 버튼을 보여준다", async () => {

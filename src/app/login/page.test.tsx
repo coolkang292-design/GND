@@ -39,8 +39,8 @@ afterEach(() => {
 describe("로그인 화면", () => {
   it("켜져 있는 제공자 버튼이 뜬다", () => {
     render(<LoginPage />);
-    expect(screen.getByRole("button", { name: "카카오로 로그인" })).not.toBeNull();
-    expect(screen.getByRole("button", { name: "구글로 로그인" })).not.toBeNull();
+    expect(screen.getByRole("button", { name: "카카오로 계속하기" })).not.toBeNull();
+    expect(screen.getByRole("button", { name: "구글로 계속하기" })).not.toBeNull();
   });
 
   /**
@@ -50,7 +50,7 @@ describe("로그인 화면", () => {
    */
   it("signInWithOAuth를 부른다 — linkIdentity가 아니다", async () => {
     render(<LoginPage />);
-    fireEvent.click(screen.getByRole("button", { name: "카카오로 로그인" }));
+    fireEvent.click(screen.getByRole("button", { name: "카카오로 계속하기" }));
 
     await waitFor(() => expect(mocks.signInWithOAuth).toHaveBeenCalledTimes(1));
     expect(mocks.signInWithOAuth.mock.calls[0][0].provider).toBe("kakao");
@@ -63,15 +63,33 @@ describe("로그인 화면", () => {
    */
   it("제공자 버튼이 있어도 이메일 폼은 남아 있다", () => {
     render(<LoginPage />);
-    expect(screen.getByPlaceholderText("you@example.com")).not.toBeNull();
+    expect(screen.getByLabelText("이메일")).not.toBeNull();
     expect(screen.getByRole("button", { name: "로그인" })).not.toBeNull();
+  });
+
+  /**
+   * 2026-10-06 새 디자인 — 시안 문구(사용자 교정본)가 보이고, 없는 기능(`비밀번호 찾기`)은 없다.
+   * 보기 버튼이 입력칸 종류를 실제로 바꾸는지도 본다(라벨 안에 버튼을 넣지 않게 구조를 바꿨다).
+   */
+  it("새 시안 문구와 비밀번호 보기 버튼", () => {
+    render(<LoginPage />);
+    expect(screen.getByRole("heading", { name: "돌아오셨군요" })).not.toBeNull();
+    expect(screen.getByText("오늘도 더 나은 내가 되는 하루")).not.toBeNull();
+    expect(screen.queryByText("비밀번호 찾기")).toBeNull();
+    expect(screen.getByRole("link", { name: "처음이신가요? 회원가입하기" }).getAttribute("href")).toBe("/onboarding");
+
+    const password = screen.getByLabelText("비밀번호") as HTMLInputElement;
+    expect(password.type).toBe("password");
+    fireEvent.click(screen.getByRole("button", { name: "비밀번호 보기" }));
+    expect(password.type).toBe("text");
+    expect(screen.getByRole("button", { name: "비밀번호 숨기기" })).not.toBeNull();
   });
 
   it("플래그가 비면 제공자 버튼이 사라지고 이메일 폼만 남는다", () => {
     process.env.NEXT_PUBLIC_OAUTH_PROVIDERS = "";
     render(<LoginPage />);
-    expect(screen.queryByRole("button", { name: "카카오로 로그인" })).toBeNull();
-    expect(screen.getByPlaceholderText("you@example.com")).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "카카오로 계속하기" })).toBeNull();
+    expect(screen.getByLabelText("이메일")).not.toBeNull();
   });
 
   it("제공자 로그인이 실패하면 이유를 보여준다", async () => {
@@ -80,7 +98,7 @@ describe("로그인 화면", () => {
       error: new Error("provider is not enabled"),
     });
     render(<LoginPage />);
-    fireEvent.click(screen.getByRole("button", { name: "구글로 로그인" }));
+    fireEvent.click(screen.getByRole("button", { name: "구글로 계속하기" }));
 
     await screen.findByText(/지금은 이 방법으로 연결할 수 없어요/);
   });

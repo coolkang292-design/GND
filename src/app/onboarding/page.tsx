@@ -5,9 +5,17 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { APP_LANDING_PATH } from "@/lib/domain/landing";
 import { useAuth } from "@/components/auth-provider";
-import { UiIcon } from "@/components/ui-icon";
-import { ScreenArt, type ScreenArtKey } from "@/components/brand/hero-art";
-import { GOLD_TEXT, GoldCta } from "@/components/brand/gold";
+import { Icon } from "@/components/ui/icon";
+import {
+  BrandWordmark,
+  EntryFade,
+  EntryPhoto,
+  EntryShadow,
+  EntryTopShade,
+  LimeCta,
+  ProviderButton,
+} from "@/components/brand/entry";
+import { ONBOARDING_COPY as COPY } from "@/lib/domain/brand-copy";
 import { recordFunnelEvent } from "@/lib/analytics-events";
 import { DEFAULT_AVATAR, DEFAULT_WEEKLY_GOAL } from "@/lib/domain/avatars";
 import {
@@ -370,34 +378,28 @@ export default function OnboardingPage() {
   const waiting = !mustAskNickname && linked === null;
 
   return (
-    <Shell
-      hero={step === "profile"}
-      // 판정 전(`waiting`)에는 넣지 않는다 — 위 Shell 주석 참조
-      screen={waiting ? undefined : showNicknameStep ? "nickname" : "onboarding"}
-    >
+    <Shell hero={step === "profile"}>
       {step === "profile" && (
         <>
           {waiting ? (
-            <p className="mt-6 text-sm text-muted">확인 중…</p>
+            <p className="relative mt-6 text-sm text-muted">확인 중…</p>
           ) : showNicknameStep ? (
             <>
-              <Tagline>운동 안 하면 GND 확정. 친구들과 함께 탈출해요.</Tagline>
               {/* ⚠️ 옛 문구는 `반가워요!` / `이름만 정하면 시작해요`였다
                   (2026-08-10 사용자 지시로 교체 — "게임에서 사용할 닉네임
                   정하세요라는 의미의 마케팅 요소를 가미해서"). 첫 화면이
-                  `게임에 참가하시겠습니까?`로 묻고 끝나서, 돌아온 사람에게는
-                  **그 게임이 시작됐다는 답**이 먼저 와야 한다.
+                  들어올지를 묻고 끝나서, 돌아온 사람에게는 **시작됐다는 답**이
+                  먼저 와야 한다. 문구는 그대로 두고 옷만 새 디자인으로 바꿨다(2026-10-06).
 
-                  ⚠️ 두 줄 모두 **26px에서 한 줄에 들어가는 길이**로 유지하라.
-                  넘치면 제목이 3줄이 되면서 아래 블록이 통째로 밀리고, 히어로가
-                  flex-shrink로 더 눌려 그림이 더 잘린다
-                  (`docs/design-sources/onboarding-canvas-spec.md` §2). */}
+                  ⚠️ 두 줄 모두 **한 줄에 들어가는 길이**로 유지하라. 넘치면 제목이
+                  3줄이 되면서 사진 위 인물을 덮는다. */}
               <Title
-                white={challengeCode ? "챌린지에 초대받았어요 🏆" : "GND 탈출 게임 시작!"}
-                gold={
-                  challengeCode ? "닉네임만 정하면 참가해요" : "닉네임부터 정하세요"
-                }
+                white={challengeCode ? "챌린지에 초대받았어요" : "GND 탈출 게임 시작!"}
+                lime={challengeCode ? "닉네임만 정하면 참가해요" : "닉네임부터 정하세요"}
               />
+              <p className="relative mt-3 text-[14px] text-text/85">
+                운동 안 하면 GND 확정. 친구들과 함께 탈출해요.
+              </p>
               <ShieldLine>
                 GND에서 친구들에게 보여질 이름이에요.
                 <br />
@@ -406,41 +408,42 @@ export default function OnboardingPage() {
 
               <NicknameField value={nickname} onChange={setNickname} />
 
-              <GoldCta onClick={submitProfile} busy={busy}>
-                {challengeCode ? "챌린지 참가하기" : "GND 시작하기"}
-              </GoldCta>
+              <div className="relative mt-4">
+                <LimeCta onClick={submitProfile} busy={busy}>
+                  {busy ? "처리 중…" : challengeCode ? "챌린지 참가하기" : "GND 시작하기"}
+                </LimeCta>
+              </div>
             </>
           ) : (
             <>
-              {/* ⚠️ 옛 문구는 `닉네임만 정하면 바로 시작해요`였다. 3차 결정으로 이
-                  화면에서 닉네임 칸이 빠졌는데 문구만 남아 **화면이 거짓말을 했다**
-                  (2026-08-08 사용자 지적). 여기서 하는 일은 "계정을 고르는 것"이고,
-                  닉네임은 돌아온 뒤(모드 2)에 묻는다. */}
-              {/* ⚠️ 여기에 글줄을 더 넣지 마라. 2026-08-08에 사용자 지시로 두 줄을
-                  뺐다 — 큰 제목(`탭 한 번으로 / 바로 시작해요`)과 방패 줄
-                  (`기록·배지가 안전하게 지켜져요`). 그림이 이미 할 말을 다 하고
-                  있어서, 글자를 얹을수록 포털을 가리기만 한다. 태그라인 한 줄이면
-                  충분하다. */}
-              {/* 옛 문구는 `운동 안 하면 GND 확정. / 친구들과 함께 탈출해요.`였다
-                  (2026-08-08 사용자 지시로 교체). 첫 화면에서 하는 일은 "들어올지
-                  고르는 것"이라 초대하는 말이 맞다. */}
-              <Tagline big>게임에 참가하시겠습니까?</Tagline>
+              {/* 시안 1번(`onboarding-original-approved.png`) — 두 줄 제목(둘째 줄 라임) +
+                  보조 두 줄 + 카카오·구글. 시안의 페이지 점 3개는 **뺐다**(사용자 결정
+                  2026-10-06 — 넘길 장이 없는데 점을 두면 누를 수 없는 가짜 장치가 된다).
 
-              <div className="mt-5 flex flex-col gap-2.5">
-                {providers.map((p, i) => (
-                  <GoldCta
+                  ⚠️ 옛 화면은 `게임에 참가하시겠습니까?` 한 줄 + 금색 버튼이었다(블랙 골드 포털). */}
+              <Title white={COPY.headline[0]} lime={COPY.headline[1]} />
+              <p className="relative mt-3.5 text-[15px] leading-[1.6] text-text/85">
+                {COPY.subcopy.map((line) => (
+                  <span key={line} className="block">
+                    {line}
+                  </span>
+                ))}
+              </p>
+
+              <div className="relative mt-7 flex flex-col gap-3">
+                {/* 순서는 `ALL_PROVIDERS`가 정한다. 색은 각 회사 가이드(`ProviderButton`) */}
+                {providers.map((p) => (
+                  <ProviderButton
                     key={p}
+                    provider={p}
                     onClick={() => void startWithProvider(p)}
-                    busy={linking !== null}
-                    // 첫 번째만 채운 금색, 나머지는 테두리 — 둘 다 채우면 무엇을
-                    // 먼저 눌러야 할지 안 보인다. 순서는 `ALL_PROVIDERS`가 정한다.
-                    variant={i === 0 ? "solid" : "outline"}
-                    flush
-                  >
-                    {linking === p
-                      ? "이동 중…"
-                      : `${PROVIDER_META[p].short}로 시작하기`}
-                  </GoldCta>
+                    disabled={linking !== null}
+                    label={
+                      linking === p
+                        ? "이동 중…"
+                        : `${PROVIDER_META[p].short}${COPY.providerSuffix}`
+                    }
+                  />
                 ))}
               </div>
             </>
@@ -455,184 +458,81 @@ export default function OnboardingPage() {
               챌린지 링크를 타면 카카오를 눌러도 `identity_already_exists`로
               막히고(그 카카오는 본인 계정에 이미 붙어 있다) 나갈 문이 없다.
               로그인하면 `/login`이 보관된 코드를 보고 챌린지로 데려간다. */}
+          <div className="relative mt-6 flex items-center gap-3 text-[13px] text-muted">
+            <span aria-hidden className="h-px flex-1 bg-line-strong" />
+            <span aria-hidden>{COPY.haveAccount}</span>
+            <span aria-hidden className="h-px flex-1 bg-line-strong" />
+          </div>
           <Link
             href="/login"
-            className="mt-5 block text-[13px] text-muted underline"
+            aria-label={`${COPY.haveAccount} ${COPY.login}`}
+            className="relative mx-auto mt-2.5 flex w-fit items-center gap-1.5 py-1 text-[16px] font-extrabold underline decoration-2 underline-offset-[6px]"
           >
-            이미 계정이 있나요? 로그인
+            {COPY.login}
+            <Icon name="arrow" size={18} strokeWidth={2.2} />
           </Link>
         </>
       )}
 
       {step === "done" && doneInfo && (
         <>
-          <div className="text-5xl">
-            {doneInfo.mode === "friend" ? "🤝" : "🎉"}
-          </div>
+          <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-accent/50 bg-accent-weak text-accent">
+            <Icon name={doneInfo.mode === "friend" ? "handshake" : "success"} size={32} strokeWidth={2} />
+          </span>
           {/* ⚠️ `friend`를 "크루 참여 완료"로 뭉개지 마라 (0061). 초대 링크는 이제
               그룹이 아니라 **친구**를 맺으므로, 그렇게 쓰면 화면이 거짓말을 한다.
               같은 이유로 크루 이름을 말하지 않는다 — 그룹에 들어간 게 아니다. */}
-          <h1 className="mt-3 text-xl font-extrabold">
+          <h1 className="mt-4 text-[24px] font-black tracking-tight">
             {doneInfo.mode === "friend"
               ? doneInfo.alreadyFriends
                 ? "이미 친구예요"
                 : "친구가 됐어요!"
               : "크루 참여 완료!"}
           </h1>
-          <p className="mt-1 text-[13px] text-muted">
+          <p className="mt-1.5 text-[14px] text-muted">
             {doneInfo.mode === "friend"
               ? `${doneInfo.nickname}님과 서로의 기록을 보고 콕 찌를 수 있어요.`
               : `이제 "${doneInfo.crewName}"의 GND 챌린지에 함께해요. 각자 목표를 세우면 시작!`}
           </p>
 
-          <div className="mt-6">
-            <Primary onClick={() => router.replace(APP_LANDING_PATH)}>
-              GND 시작하기
-            </Primary>
+          <div className="mt-7">
+            <LimeCta onClick={() => router.replace(APP_LANDING_PATH)}>GND 시작하기</LimeCta>
           </div>
         </>
       )}
 
-      {error && <p className="mt-3 text-sm font-semibold text-warn">{error}</p>}
+      {error && <p className="relative mt-3 text-sm font-semibold text-danger">{error}</p>}
     </Shell>
   );
 }
 
 /**
- * 시안의 히어로 아트 (`어플 UI 이미지/온보딩 히어로.png` → `scripts/make-onboarding-assets.py`).
+ * 두 줄 제목 — 첫 줄 흰색, 둘째 줄 라임 (시안 1번).
  *
- * ⚠️ 문구가 **없는** 그림이다. 시안에는 글자가 박힌 버전도 있는데 그건 쓰지 않는다 —
- * 글자를 그림에 구우면 문구를 고칠 때마다 이미지를 다시 만들어야 하고, 화면 낭독기가
- * 읽지 못하며, 번역도 못 한다. 문구는 HTML로 얹는다.
- *
- * ⚠️ **작은 카드로 띄우지 마라** (2026-08-08 사용자 지적 — "너무 부자연스러운데?").
- * 처음엔 `max-w-[240px]` + 둥근 모서리로 넣었더니, 검은 화면 한가운데 사진이
- * 한 장 떠 있는 꼴이 됐다. 시안은 **화면 전체를 채우는 포털 그림**이다.
- * 그래서 컨테이너 폭을 꽉 채우고, 아래쪽을 배경색으로 녹여 그림이 끝나는 선을
- * 지운다 — 그래야 "붙인 사진"이 아니라 "화면"으로 읽힌다.
- *
- * ⚠️ 세로를 그림 비율(1:1.78) 그대로 두면 데스크톱에서 버튼이 접혀 스크롤이 생긴다.
- * `max-h`로 잘라내고 `object-cover`로 가운데(포털)를 남긴다.
- *
- * `priority`가 있어야 첫 화면에서 늦게 뜨지 않는다.
+ * ⚠️ 한 줄 고정(`whitespace-nowrap`) + 폭 비례 크기. 시작 화면에서 `날에도`의 `도`가 다음 줄로
+ *    떨어졌던 것과 같은 이유다 — 가장 긴 줄(`더 나은 나를 만든다`)이 360px 폭에서도 들어간다.
  */
-/**
- * 전체 화면 배경 아트 (2026-08-08 사용자 제안).
- *
- * *"불독·황금문·GND는 그대로 두고 나머지를 공백으로 남기고 그 위에 텍스트를
- * 추가하면 되지 않아?"* — 그렇게 한다. 자산이 **9:16 한 장**이고 아트는 위 55%,
- * 아래 45%는 빈 검정이다. 그 빈 자리에 문구·입력칸·버튼이 HTML로 올라간다.
- *
- * ⚠️ 그래서 이건 "위에 붙인 사진"이 아니라 **화면 배경**이다. 문서 흐름에서 빼고
- * (`absolute inset-0`) 내용은 그 위에 얹는다. 예전처럼 블록으로 두면 아래 45%
- * 검정이 내용을 밀어내 화면이 두 배로 길어진다.
- *
- * ⚠️ `object-top`이어야 한다. 화면이 짧으면 **아래 검정만 잘리고** 아트는 그대로
- * 남는다. `object-center`면 골드 문이 잘린다 — 사용자가 지적했던 그 문제다.
- *
- * 규격은 `docs/design-sources/onboarding-hero-prompt.md`의 "전체 화면 한 장".
- */
-
-/**
- * 아래는 시안(`어플 UI 이미지/블랙 골드 GND 탈출 포털 로그인 화면.png`)의 조각들이다.
- *
- * ⚠️ **시안의 글자를 그림에서 가져오지 않고 HTML로 얹는다** (사용자 확인 2026-08-08 —
- * "이미지 위에 HTML로 넣고 색상도 동일하게"). 그림에 글자를 구우면 문구를 고칠
- * 때마다 이미지를 다시 만들어야 하고, 화면 낭독기가 못 읽고, 줄바꿈이 기기 폭에
- * 맞춰지지 않는다. 색만 시안과 맞춘다 — 금색은 `--accent`(#e8b84b)다.
- */
-
-/**
- * ⚠️ 이 화면의 금색은 앱 공용 `--accent`(#e8b84b)가 **아니다.**
- *
- * 2026-08-08 사용자 지적: *"글자색도 너무 노란색이 아니라 고급진 골드색이잖아.
- * 뭔가 초기 화면에 뭔가 고급지고 신비로운 느낌이 나야 함."* 맞는 지적이라
- * 시안 원본(`블랙 골드 GND 탈출 포털 로그인 화면.png`)에서 **화소를 직접 떠서**
- * 맞췄다. 눈으로 고른 값이 아니다.
- *
- * | 자리 | 시안 실측 | 공용 accent |
- * |---|---|---|
- * | 태그라인 | `#d8ab74` | `#e8b84b` (더 노랗다) |
- * | 제목 금색 | `#f5e6b0`→`#b1843f` 금속 그라데이션 | 단색 |
- * | CTA | `#c9965b`→`#7a5329` 앤티크 골드 | 밝은 노랑 |
- *
- * ⚠️ 공용 `--accent`를 이 값으로 바꾸지 마라. 앱 전체(버튼·배지·차트)가 그걸 쓰고
- * 있어서, 이 화면 하나 때문에 나머지가 전부 어두워진다. 여기서만 지역적으로 쓴다.
- */
-
-/** 시안 맨 윗줄 — 금색 작은 글씨 */
-function Tagline({
-  children,
-  big,
-}: {
-  children: React.ReactNode;
-  big?: boolean;
-}) {
-  // 아트 아래끝과 첫 줄 사이 숨 쉴 자리. 붙으면 발판 글로우에 글자가 묻힌다.
-  //
-  // `big`은 첫 화면(모드 1) 전용이다. 거기서는 큰 제목과 방패 줄을 뺐으므로
-  // (2026-08-08 사용자 지시) 이 한 줄이 화면의 유일한 문구다 — 작으면 그림에
-  // 묻힌다. 나머지 화면은 위에 제목이 따로 있어서 작게 둔다.
+function Title({ white, lime }: { white: string; lime: string }) {
   return (
-    <p
-      className={
-        big
-          ? "mt-4 text-[19px] leading-[1.45] font-bold"
-          : "mt-3 text-[12.5px]"
-      }
-      style={{ color: GOLD_TEXT }}
-    >
-      {children}
-    </p>
-  );
-}
-
-/**
- * 시안의 두 줄 제목 — 첫 줄 흰색, 둘째 줄 **금속 금색**.
- *
- * 단색으로 칠하면 그냥 노란 글씨가 된다. 위에서 아래로 밝은 금 → 짙은 금으로
- * 흐르게 해야 금속으로 읽힌다(`bg-clip-text`). 뒤에 은은한 후광을 한 겹 깔아
- * 포털에서 빛이 새어 나오는 느낌을 잇는다.
- */
-function Title({ white, gold }: { white: string; gold: string }) {
-  return (
-    <div className="relative mt-2">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 -top-6 h-32 opacity-70"
-        style={{
-          background:
-            "radial-gradient(ellipse 60% 50% at 50% 50%, rgba(216,171,116,0.16), transparent 70%)",
-        }}
-      />
-      <h1 className="relative text-[26px] leading-[1.25] font-extrabold tracking-tight">
-        <span className="block">{white}</span>
-        <span
-          className="block bg-clip-text text-transparent"
-          style={{
-            backgroundImage:
-              "linear-gradient(180deg, #f7e9c0 0%, #dcb877 45%, #b1843f 100%)",
-          }}
-        >
-          {gold}
-        </span>
-      </h1>
-    </div>
+    <h1 className="relative text-[clamp(2.05rem,9.6vw,2.6rem)] leading-[1.12] font-black italic tracking-[-0.05em]">
+      <span className="block whitespace-nowrap">{white}</span>
+      <span className="block whitespace-nowrap text-accent">{lime}</span>
+    </h1>
   );
 }
 
 /** 방패 아이콘 + 설명 두 줄 */
 function ShieldLine({ children }: { children: React.ReactNode }) {
   return (
-    <p className="mt-4 flex items-start justify-center gap-2 text-[12.5px] leading-relaxed text-muted">
-      <UiIcon name="shield-check" size={18} className="mt-0.5" />
-      <span className="text-left">{children}</span>
+    <p className="relative mt-4 flex items-start gap-2 text-[13px] leading-relaxed text-muted">
+      <Icon name="shield" size={18} className="mt-0.5 text-accent" />
+      <span>{children}</span>
     </p>
   );
 }
 
 /**
- * 시안의 금테 입력칸 — 칸 안 왼쪽 위에 라벨이 뜬다.
+ * 닉네임 칸 — 칸 안 왼쪽 위에 라벨이 뜬다.
  *
  * ⚠️ 라벨을 placeholder로만 두지 마라. 입력을 시작하면 placeholder가 사라져서
  * **무엇을 넣는 칸인지 알 수 없게 된다.** 시안이 라벨을 칸 안에 넣은 이유다.
@@ -645,18 +545,8 @@ function NicknameField({
   onChange: (v: string) => void;
 }) {
   return (
-    <div
-      className="mt-5 rounded-2xl border px-4 pt-3 pb-1 text-left"
-      style={{
-        borderColor: "rgba(201,150,91,0.45)",
-        backgroundColor: "rgba(201,150,91,0.05)",
-      }}
-    >
-      <label
-        htmlFor="onboarding-nickname"
-        className="text-[11.5px] font-bold"
-        style={{ color: GOLD_TEXT }}
-      >
+    <div className="relative mt-5 rounded-2xl border border-line-strong bg-surface/90 px-4 pt-3 pb-1 focus-within:border-accent">
+      <label htmlFor="onboarding-nickname" className="text-[12px] font-extrabold text-accent">
         닉네임
       </label>
       <input
@@ -665,70 +555,59 @@ function NicknameField({
         onChange={(e) => onChange(e.target.value)}
         placeholder="예: 스칼레또"
         maxLength={20}
-        style={{ borderColor: "rgba(201,150,91,0.3)" }}
-        className="mt-1.5 w-full border-b bg-transparent pb-2.5 text-[15px] outline-none placeholder:text-faint"
+        className="mt-1 w-full bg-transparent pb-2.5 text-[16px] outline-none placeholder:text-faint"
       />
     </div>
   );
 }
 
-
 /**
- * ⚠️ 이 화면은 **그림이 두 장**이다. 모드 1(제공자 버튼)과 닉네임 단계는 글자 양이
- * 달라서(텍스트 블록 220px vs 374px) 아트에 남는 세로가 1.52u와 1.09u로 다르다.
- * 한 장을 둘 다에 쓰면 짧은 쪽에서 글자가 그림을 덮는다
- * (`docs/design-sources/onboarding-canvas-spec.md` §5-2).
+ * 화면 틀. `hero`면 위에 사진을 깔고 글자 블록을 **아래에 붙인다**(`mt-auto`).
  *
- * ⚠️ `screen`과 `hero`가 따로인 이유: 신원을 조회하는 동안(`waiting`)에는 **어느
- * 쪽인지 아직 모른다.** 그때 아무 그림이나 깔면 곧바로 다른 그림으로 바뀌어
- * 번쩍인다 — 레이아웃만 잡고 그림은 판정된 뒤에 넣는다.
- *
- * ⚠️ 글자 쪽 `relative`를 빼지 마라. 음수 z-index로 그림을 내리면 조상의 `bg-bg`
- * 뒤로 들어가 **그림이 통째로 사라진다**(`hero-art.tsx` 주석).
+ * ⚠️ 제공자 단계와 닉네임 단계가 **같은 사진**이다(옛 화면은 글자 양에 맞춘 그림이 두 장이라
+ *    신원 판정 전에는 그림을 못 깔았다). 이제 판정 중에도 사진을 깔아 둔다 — 번쩍일 것이 없다.
+ * ⚠️ 글자 쪽 `relative`를 빼지 마라. 사진은 `absolute`라 DOM 순서로 덮어야 글자가 위에 온다
+ *    (음수 z-index는 조상의 `bg-bg` 뒤로 내려가 사진이 통째로 사라진다).
  */
 function Shell({
   children,
   hero,
-  screen,
 }: {
   children: React.ReactNode;
   hero?: boolean;
-  screen?: ScreenArtKey;
 }) {
+  if (!hero) {
+    return (
+      <main className="relative flex flex-1 flex-col justify-center overflow-y-auto px-6 pb-10 text-center">
+        <div className="mx-auto w-full max-w-sm">{children}</div>
+      </main>
+    );
+  }
   return (
-    <main
-      className={`relative flex flex-1 flex-col overflow-y-auto text-center ${
-        hero ? "pb-8" : "justify-center pb-10"
-      }`}
-    >
-      {hero && screen && <ScreenArt screen={screen} />}
-      <div
-        className={`relative mx-auto w-full max-w-sm px-6 ${hero ? "mt-auto" : ""}`}
+    <main className="relative flex flex-1 flex-col overflow-y-auto text-left">
+      <header
+        className="relative z-10 px-6"
+        style={{ paddingTop: "max(2rem, calc(env(safe-area-inset-top) + 1rem))" }}
       >
+        <EntryTopShade />
+        <BrandWordmark slogan />
+      </header>
+      <div
+        className="relative mt-auto w-full px-6 pt-10"
+        style={{ paddingBottom: "max(1.5rem, calc(env(safe-area-inset-bottom) + 0.75rem))" }}
+      >
+        {/* 사진 속 손·밧줄(폭의 약 135% 지점)이 블록 윗변 아래 9.5rem — **보조 문구 뒤** — 에 오게 놓는다.
+            ⚠️ 6.5rem이던 때는 아래팔·밧줄이 제목 **위로** 드러났다(2026-10-06 사용자 지적 "어색하니까
+            글자를 키우고 위치를 올리고 어색한 부분을 검정 그림자로"). 그래서 ① 사진을 내려 제목이
+            아래팔을 덮게 하고 ② 제목을 키우고 ③ 제목 위 띠를 `EntryShadow`로 검게 누른다. */}
+        <EntryPhoto src={ONBOARDING_PHOTO} top="9.5rem" lift="-135%" />
+        <EntryFade reach="-top-40" />
+        <EntryShadow />
         {children}
       </div>
     </main>
   );
 }
 
-
-function Primary({
-  children,
-  onClick,
-  busy,
-}: {
-  children: React.ReactNode;
-  onClick: () => void;
-  busy?: boolean;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={busy}
-      className="mt-4 w-full rounded-full bg-accent px-4 py-3.5 text-[15px] font-bold text-accent-ink disabled:opacity-60"
-    >
-      {busy ? "처리 중…" : children}
-    </button>
-  );
-}
-
+/** 시작 화면과 같은 사진(글자 없는 판). 시안 1번의 인물 사진이다. */
+const ONBOARDING_PHOTO = "/gnd/photos/onboarding-sweat-860.webp";
