@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { getStageGroups } from "@/lib/domain/progression";
 import type { LevelReward } from "@/lib/progression";
+import { Icon } from "@/components/ui/icon";
 
 /**
  * 레벨 혜택 — 해금/잠금 표시.
@@ -63,9 +64,19 @@ export function LevelRewards({
             >
               <span
                 aria-hidden
-                className={`flex-none text-sm ${reached && !pending ? "" : "opacity-60"}`}
+                className={`flex h-6 w-6 flex-none items-center justify-center rounded-full ${
+                  pending
+                    ? "border border-line text-faint"
+                    : reached
+                      ? "bg-accent text-accent-ink"
+                      : "border border-line text-faint"
+                }`}
               >
-                {pending ? "🛠" : reached ? "✅" : "🔒"}
+                <Icon
+                  name={pending ? "settings" : reached ? "check" : "lock"}
+                  size={13}
+                  strokeWidth={reached && !pending ? 2.6 : 1.8}
+                />
               </span>
               <div className="min-w-0 flex-1">
                 <p

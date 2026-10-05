@@ -127,7 +127,7 @@ async function fetchFriendSessions(
  * 개수 정의는 `earnedBadgeCount`를 그대로 쓴다. 프로필 시트의 "보유 배지 N / M"과
  * 같은 함수라 두 화면의 숫자가 어긋날 수 없다.
  *
- * ⚠️ **키는 카탈로그에 있는 것만 남긴다.** `/badges/<key>.png`를 그대로 그리므로
+ * ⚠️ **키는 카탈로그에 있는 것만 남긴다.** `badgeImageSrc(key)`로 그대로 그리므로
  * 카탈로그에 없는 키가 섞이면 화면에 **깨진 이미지**가 뜬다(RPC는 `user_badges`
  * 행을 그대로 준다 — 카탈로그에서 내린 배지도 올 수 있다).
  */
@@ -160,7 +160,7 @@ export async function getFriendBadges(
     */
     const best = new Map<string, { key: string; earnedAt: Date }>();
     for (const badge of badges) {
-      // 카탈로그에 없는 키는 버린다 — `/badges/<key>.png`가 깨진 이미지로 뜬다.
+      // 카탈로그에 없는 키는 버린다 — `badgeImageSrc(key)`가 깨진 이미지로 뜬다.
       if (!metaByKey.has(badge.badgeKey)) continue;
       const prev = best.get(badge.badgeKey);
       if (!prev || badge.earnedAt > prev.earnedAt) {

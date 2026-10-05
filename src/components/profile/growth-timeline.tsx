@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { LEVEL_DEFS } from "@/lib/domain/progression";
+import { Icon } from "@/components/ui/icon";
 
 const WINDOW_BEFORE = 3;
 const WINDOW_AFTER = 4;
@@ -53,20 +54,25 @@ export function GrowthTimeline({
               <div className="flex flex-none flex-col items-center">
                 <span
                   aria-hidden
-                  className={`flex h-6 w-6 items-center justify-center rounded-full text-[11px] ${
+                  className={`flex h-6 w-6 items-center justify-center rounded-full ${
                     current
                       ? "bg-accent text-accent-ink"
                       : done
-                        ? "bg-good-weak text-good"
-                        : "bg-surface-2 text-faint"
+                        ? "border border-accent/60 text-accent"
+                        : "border border-line text-faint"
                   }`}
                 >
-                  {current ? "★" : done ? "✓" : "🔒"}
+                  <Icon
+                    name={current ? "spark" : done ? "check" : "lock"}
+                    size={12}
+                    strokeWidth={current || done ? 2.4 : 1.8}
+                    filled={current}
+                  />
                 </span>
                 {i < visible.length - 1 && (
                   <span
                     aria-hidden
-                    className={`w-px flex-1 ${done ? "bg-good-weak" : "bg-line"}`}
+                    className={`w-px flex-1 ${done ? "bg-accent/40" : "bg-line"}`}
                   />
                 )}
               </div>

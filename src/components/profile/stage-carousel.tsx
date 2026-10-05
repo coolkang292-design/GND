@@ -49,8 +49,8 @@ export function StageCarousel({
                 } · 안내 보기`}
                 className={`block w-[76px] rounded-card-sm border p-1.5 text-center transition-colors ${
                   current
-                    ? "border-accent bg-accent-weak"
-                    : "border-line bg-surface-2"
+                    ? "border-accent bg-surface-2"
+                    : "border-line bg-surface-2/60"
                 }`}
               >
                 <div className="relative overflow-hidden rounded-[9px]">

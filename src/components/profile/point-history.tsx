@@ -43,7 +43,7 @@ export function PointHistoryList({ rows }: { rows: PointTransactionRow[] }) {
                 {dayKst(r.createdAt)}
                 {/* 불꽃 배수는 운동 포인트에만 붙는다 (0032 point_multiplier) */}
                 {r.multiplier !== null && r.multiplier > 1 && (
-                  <> · 🔥 ×{r.multiplier}</>
+                  <> · 불꽃 배수 ×{r.multiplier}</>
                 )}
               </p>
             </div>

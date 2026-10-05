@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getStageGroups, STAGE_DESCRIPTIONS } from "@/lib/domain/progression";
 import type { XpEvent } from "@/lib/domain/xp-events";
+import { badgeImageSrc } from "@/lib/domain/badge-art";
 
 const FADE_MS = 300;
 
@@ -214,7 +215,7 @@ function EventBody({ event }: { event: XpEvent }) {
           {event.badges.map((b) => (
             <li key={b.badgeKey} className="flex items-center gap-2.5">
               <Image
-                src={`/badges/${b.badgeKey}.png`}
+                src={badgeImageSrc(b.badgeKey)}
                 alt=""
                 width={40}
                 height={40}

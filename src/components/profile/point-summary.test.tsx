@@ -30,7 +30,8 @@ describe("PointSummary", () => {
       const html = renderToStaticMarkup(
         <PointSummary balance={0} streakDays={streak} />,
       );
-      expect(html, `불꽃 ${streak}일`).toContain(`⚡${label}`);
+      // 2026-10-05: ⚡ 이모지 → SVG 아이콘. 배수 글자만 본다
+      expect(html, `불꽃 ${streak}일`).toContain(`>${label}<`);
     }
   });
 

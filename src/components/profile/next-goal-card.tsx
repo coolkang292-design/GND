@@ -5,6 +5,7 @@ import {
   type Achievement,
 } from "@/lib/domain/achievements";
 import { ProgressBar } from "./progress-bar";
+import { badgeImageSrc } from "@/lib/domain/badge-art";
 
 /** 최상단 "다음 목표" 카드 — 열자마자 한 번 더 하게 만드는 핵심. */
 export function NextGoalCard({ goal }: { goal: Achievement | null }) {
@@ -12,7 +13,7 @@ export function NextGoalCard({ goal }: { goal: Achievement | null }) {
     return (
       <section className="rounded-card border border-line bg-surface p-4 shadow-card">
         <p className="text-[11px] font-extrabold text-accent">다음 목표</p>
-        <p className="mt-1 text-sm font-bold">모든 목표를 달성했어요 🎉</p>
+        <p className="mt-1 text-sm font-bold">모든 목표를 달성했어요</p>
       </section>
     );
   }
@@ -20,10 +21,10 @@ export function NextGoalCard({ goal }: { goal: Achievement | null }) {
   const tgt = toDisplayUnit(goal.metricKey, goal.targetValue);
   const rem = toRemainingDisplay(goal.metricKey, goal.remainingValue);
   return (
-    <section className="rounded-card border border-accent/40 bg-accent-weak p-4 shadow-card">
+    <section className="rounded-card border border-line-strong bg-surface p-4 shadow-card">
       <p className="text-[11px] font-extrabold text-accent">다음 목표</p>
       <div className="mt-2 flex items-center gap-3">
-        <Image src={`/badges/${goal.key}.png`} alt="" width={48} height={48} sizes="48px" className="flex-none opacity-40 grayscale" />
+        <Image src={badgeImageSrc(goal.key)} alt="" width={48} height={48} sizes="48px" className="flex-none opacity-40 grayscale" />
         <div className="min-w-0 flex-1">
           <p className="text-base font-extrabold">{goal.title}</p>
           <p className="text-[11.5px] text-muted">{goal.description}</p>
@@ -42,7 +43,8 @@ export function NextGoalCard({ goal }: { goal: Achievement | null }) {
       </div>
       <div className="mt-3 flex items-center justify-between border-t border-line/60 pt-2.5">
         <span className="text-[11px] text-muted">획득 보상</span>
-        <span className="text-sm font-extrabold text-accent">+{goal.rewardPoint} P</span>
+        {/* 보상은 금색(사용자 색상 표: Reward Gold) */}
+        <span className="text-sm font-extrabold text-gold">+{goal.rewardPoint} P</span>
       </div>
     </section>
   );

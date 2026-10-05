@@ -17,6 +17,7 @@ import { formatMonthDay } from "@/lib/domain/challenge-time";
 import { dayKey } from "@/lib/domain/time";
 import { ProgressBar } from "./progress-bar";
 import { RarityPill } from "./rarity-pill";
+import { badgeImageSrc } from "@/lib/domain/badge-art";
 
 const METRIC_LABEL: Record<BadgeMetricKey, string> = {
   workout_count: "운동 횟수",
@@ -36,7 +37,7 @@ function AchievementRow({ a }: { a: Achievement }) {
     <li className="rounded-card-sm border border-line bg-surface-2 p-3">
       <div className="flex items-center gap-3">
         <Image
-          src={`/badges/${a.key}.png`}
+          src={badgeImageSrc(a.key)}
           alt=""
           width={44}
           height={44}
@@ -71,7 +72,7 @@ function AchievementRow({ a }: { a: Achievement }) {
                   {formatMonthDay(dayKey(a.earnedAt, "Asia/Seoul"))} 획득
                 </span>
               )}
-              <span className="font-extrabold text-accent">+{a.rewardPoint} P</span>
+              <span className="font-extrabold text-gold">+{a.rewardPoint} P</span>
             </span>
           ) : (
             <span className="inline-flex items-center gap-1 text-[11px] text-muted">

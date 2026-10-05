@@ -19,6 +19,7 @@ import {
   normalizeText,
 } from "@/lib/domain/profile-links";
 import { isPhotoAvatar } from "@/lib/domain/avatar-source";
+import { Icon } from "@/components/ui/icon";
 
 /**
  * 프로필 편집 — 닉네임 · 프로필 사진(사진 업로드 또는 이모지) (설계 §4.3).
@@ -231,9 +232,9 @@ export function ProfileEditSheet({
           type="button"
           onClick={() => setOpen(false)}
           aria-label="닫기"
-          className="flex h-8 w-8 items-center justify-center rounded-full border border-line text-sm"
+          className="flex h-8 w-8 items-center justify-center rounded-full border border-line text-muted"
         >
-          ✕
+          <Icon name="close" size={15} />
         </button>
       </div>
 
@@ -266,7 +267,7 @@ export function ProfileEditSheet({
                 type="button"
                 onClick={() => fileRef.current?.click()}
                 disabled={uploading}
-                className="h-10 rounded-card-sm border border-accent bg-accent-weak text-[13px] font-extrabold text-accent disabled:opacity-60"
+                className="h-10 rounded-card-sm border border-accent bg-transparent text-[13px] font-extrabold text-accent disabled:opacity-60"
               >
                 {uploading ? "올리는 중…" : "사진 올리기"}
               </button>
@@ -300,7 +301,7 @@ export function ProfileEditSheet({
                 aria-pressed={avatar === a}
                 className={`flex h-11 w-11 items-center justify-center rounded-full border text-2xl ${
                   avatar === a
-                    ? "border-accent bg-accent-weak"
+                    ? "border-accent bg-surface-2"
                     : "border-line bg-surface-2"
                 }`}
               >

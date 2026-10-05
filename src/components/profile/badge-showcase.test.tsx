@@ -34,9 +34,9 @@ describe("BadgeShowcase", () => {
     const html = renderToStaticMarkup(
       <BadgeShowcase shelf={badgeShelf(CATALOG, EARNED)} onOpenAll={() => {}} />,
     );
-    expect(html).toContain("workout_1.png");
-    expect(html).toContain("streak_5.png");
-    expect(html).not.toContain("workout_10.png");
+    expect(html).toContain("workout_1.webp");
+    expect(html).toContain("streak_5.webp");
+    expect(html).not.toContain("workout_10.webp");
   });
 
   it("반복 배지는 개수를 붙인다", () => {

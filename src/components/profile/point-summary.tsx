@@ -1,4 +1,5 @@
 "use client";
+import { Icon } from "@/components/ui/icon";
 
 /**
  * 포인트 요약 3칸 — 잔액 · 불꽃 배수 · 불꽃 일수.
@@ -38,20 +39,23 @@ export function PointSummary({
 
   return (
     <section className="rounded-card border border-line bg-surface p-4 shadow-card">
-      <div className="grid grid-cols-3 gap-2 text-center">
-        <div>
-          <p className="text-lg font-extrabold text-accent">
-            {balance.toLocaleString()}
-          </p>
-          <p className="mt-0.5 text-[11px] text-muted">GND 포인트</p>
+      {/* 시안의 숫자 3칸 톤 — 라임 아이콘 · 흰 큰 숫자 · 회색 라벨. 포인트는 보상이라 금색 아이콘 */}
+      <div className="grid grid-cols-3 divide-x divide-line text-center">
+        <div className="flex flex-col items-center gap-1">
+          <Icon name="award" size={20} className="text-gold" />
+          <p className="text-[19px] font-black tabular-nums">{balance.toLocaleString()}</p>
+          <p className="text-[11px] text-muted">GND 포인트</p>
         </div>
-        <div className="border-x border-line">
-          <p className="text-lg font-extrabold text-accent">⚡{label}</p>
-          <p className="mt-0.5 text-[11px] text-muted">포인트 배수</p>
+        <div className="flex flex-col items-center gap-1">
+          <Icon name="spark" size={20} className="text-accent" />
+          <p className="text-[19px] font-black tabular-nums">{label}</p>
+          <p className="text-[11px] text-muted">포인트 배수</p>
         </div>
-        <div>
-          <p className="text-lg font-extrabold text-accent">🔥{streakDays}일</p>
-          <p className="mt-0.5 text-[11px] text-muted">연속</p>
+        <div className="flex flex-col items-center gap-1">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/gnd/decorations/flame-32.webp" alt="" width={20} height={20} className="h-5 w-5" />
+          <p className="text-[19px] font-black tabular-nums">{streakDays}일</p>
+          <p className="text-[11px] text-muted">연속</p>
         </div>
       </div>
 

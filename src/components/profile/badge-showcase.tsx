@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import type { BadgeShelfItem } from "@/lib/domain/badges";
+import { badgeImageSrc } from "@/lib/domain/badge-art";
 
 /** 프로필 보유 배지 — 최근 획득 6개까지. 전체는 시트에서 본다. */
 export function BadgeShowcase({
@@ -19,7 +20,7 @@ export function BadgeShowcase({
   return (
     <section className="rounded-card border border-line bg-surface p-4 shadow-card">
       <div className="flex items-baseline justify-between">
-        <h3 className="text-sm font-extrabold">보유 배지</h3>
+        <h3 className="text-[15px] font-extrabold">보유 배지</h3>
         <button
           type="button"
           onClick={onOpenAll}
@@ -34,18 +35,19 @@ export function BadgeShowcase({
           아직 획득한 배지가 없어요. 오늘 운동을 완료하면 첫 배지를 받아요.
         </p>
       ) : (
-        <ul className="mt-3 flex flex-wrap gap-2.5">
+        <ul className="mt-3 flex flex-wrap gap-3">
           {recent.map((b) => (
             <li key={b.key} className="relative">
               <Image
-                src={`/badges/${b.key}.png`}
+                src={badgeImageSrc(b.key)}
                 alt={b.name}
-                width={48}
-                height={48}
-                sizes="48px"
+                width={52}
+                height={52}
+                sizes="52px"
+                unoptimized
               />
               {b.count > 1 && (
-                <span className="absolute -right-1 -bottom-1 rounded-full bg-accent px-1.5 text-[10px] font-extrabold text-accent-ink">
+                <span className="absolute -right-1 -bottom-1 rounded-full border border-gold/50 bg-bg px-1.5 text-[10px] font-extrabold text-gold">
                   ×{b.count}
                 </span>
               )}

@@ -29,6 +29,7 @@ import {
   recordProfileView,
   type ProfileViewSource,
 } from "@/lib/profile-views";
+import { badgeImageSrc } from "@/lib/domain/badge-art";
 
 /**
  * 성과 요약 (2026-08-07) — 홈 친구 목록이 **이미 계산해 둔 값**을 넘겨준다.
@@ -275,7 +276,7 @@ export function MemberProfileBody({
                 className="flex items-center gap-2.5 rounded-card-sm border border-line bg-surface-2 px-3 py-2"
               >
                 <Image
-                  src={`/badges/${badge.key}.png`}
+                  src={badgeImageSrc(badge.key)}
                   alt=""
                   width={36}
                   height={36}

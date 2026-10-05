@@ -9,7 +9,6 @@ import { GrowthHub } from "@/components/profile/growth-hub";
 import { ProfileEditSheet } from "@/components/profile/profile-edit-sheet";
 import { PushSettings } from "@/components/push-settings";
 import { InstallAppRow } from "@/components/install/install-app-row";
-import { UiIcon } from "@/components/ui-icon";
 import { getIncomingCrewRequests } from "@/lib/crew-link";
 import {
   DEFAULT_NOTIFICATION_SETTINGS,
@@ -17,6 +16,8 @@ import {
   updateNotificationSettings,
   type NotificationSettings,
 } from "@/lib/notification-settings";
+import { Icon } from "@/components/ui/icon";
+import { ProfileHeader } from "@/components/profile/profile-header";
 
 const TOGGLES: {
   key: keyof NotificationSettings;
@@ -36,6 +37,8 @@ export default function ProfilePage() {
   const [showSettings, setShowSettings] = useState(false);
   /** 프로필을 저장하면 올린다 — GrowthHub가 이 값으로 리마운트돼 새 이모지를 읽는다 */
   const [profileKey, setProfileKey] = useState(0);
+  /** 프로필 편집 열림 — 머리 카드의 `프로필 편집` 버튼이 연다 (2026-10-05) */
+  const [editOpen, setEditOpen] = useState(false);
   const [settings, setSettings] = useState<NotificationSettings>(
     DEFAULT_NOTIFICATION_SETTINGS,
   );
@@ -101,10 +104,10 @@ export default function ProfilePage() {
     <div className="flex flex-col gap-3">
       <header className="flex items-start justify-between gap-2 pt-2 pb-1">
         <div>
-          <h1 className="text-[19px] font-extrabold tracking-tight">
+          <h1 className="text-[28px] font-black tracking-tight">
             {showSettings ? "설정" : "내 정보"}
           </h1>
-          <p className="mt-0.5 text-[12.5px] text-muted">
+          <p className="mt-0.5 text-[13px] text-muted">
             {showSettings ? "알림 · 계정 · 문의" : "나의 캐릭터 성장"}
           </p>
         </div>
@@ -113,13 +116,13 @@ export default function ProfilePage() {
           onClick={() => setShowSettings((v) => !v)}
           aria-expanded={showSettings}
           aria-label={showSettings ? "설정 닫기" : "설정"}
-          className={`flex h-10 w-10 flex-none items-center justify-center rounded-card-sm border text-base ${
+          className={`flex h-10 w-10 flex-none items-center justify-center rounded-full border ${
             showSettings
-              ? "border-accent bg-accent-weak"
-              : "border-line bg-surface"
+              ? "border-accent text-accent"
+              : "border-line bg-surface text-text"
           }`}
         >
-          {showSettings ? "✕" : "⚙️"}
+          <Icon name={showSettings ? "close" : "settings"} size={20} />
         </button>
       </header>
 
@@ -213,7 +216,14 @@ export default function ProfilePage() {
               GrowthHub는 `profiles`를 아예 읽지 않는다(2026-08-08 실측). 바꾼 값이
               보이는 곳은 **홈 크루 카드·챌린지 참가자 목록·피드**다.
               리마운트는 저장 뒤 XP·배지를 다시 읽어 주는 것뿐이다. */}
-          <ProfileEditSheet onSaved={() => setProfileKey((k) => k + 1)} />
+          {/* 2026-10-05: 입구가 한 줄 버튼에서 **프로필 카드**로 바뀌었다(시안). 편집 화면은 그대로다 */}
+          <ProfileHeader key={`header-${profileKey}`} onEdit={() => setEditOpen(true)} />
+          <ProfileEditSheet
+            open={editOpen}
+            onOpenChange={setEditOpen}
+            hideTrigger
+            onSaved={() => setProfileKey((k) => k + 1)}
+          />
 
           <GrowthHub key={profileKey} />
 
@@ -222,8 +232,7 @@ export default function ProfilePage() {
             className="flex items-center justify-between rounded-card border border-line bg-surface px-3.5 py-3.5 shadow-card"
           >
             <span className="flex items-center gap-2 text-[14px] font-extrabold">
-              {/* 옛 표기는 `🤝`였다 (2026-08-07 2차 시안으로 교체) */}
-              <UiIcon name="handshake" size={19} />
+              <Icon name="users" size={19} className="text-accent" />
               크루
               {requestCount > 0 && (
                 <span className="rounded-full bg-accent px-2 py-0.5 text-[11px] font-extrabold text-accent-ink">

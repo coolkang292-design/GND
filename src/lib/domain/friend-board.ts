@@ -86,7 +86,7 @@ export type FriendRow = FriendActivity & {
    * ⚠️ **최신순이 아니라 등급순이다** (2026-08-09 사용자 지시 "배지 퀄리티 좋은거
    * 먼저"). 희귀도 → 티어 → 최신 — `compareBadgeShowcase`가 정한다.
    *
-   * 이미지 경로는 `/badges/<key>.png`다. **카탈로그에 있는 키만** 담긴다 —
+   * 이미지 경로는 `badgeImageSrc(key)`(`/gnd/badges/<key>.webp`)다. **카탈로그에 있는 키만** 담긴다 —
    * 없는 키가 섞이면 화면에 깨진 이미지가 뜬다.
    */
   badgeKeys: string[];

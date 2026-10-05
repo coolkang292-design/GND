@@ -66,7 +66,7 @@ export function StageGuideSheet({
               <li
                 key={g.stageKey}
                 className={`flex gap-3 border-t border-line py-3 first:border-t-0 first:pt-0 ${
-                  current ? "rounded-card-sm bg-accent-weak px-2.5" : ""
+                  current ? "rounded-card-sm border border-accent/50 px-2.5" : ""
                 }`}
               >
                 <div className="relative flex-none overflow-hidden rounded-card-sm">

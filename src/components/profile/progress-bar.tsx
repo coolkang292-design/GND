@@ -2,7 +2,7 @@ type BarState = "locked" | "active" | "earned";
 
 const FILL: Record<BarState, string> = {
   locked: "bg-line",
-  active: "bg-amber-400",
+  active: "bg-accent",
   earned: "bg-accent",
 };
 

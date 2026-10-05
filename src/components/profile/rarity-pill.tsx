@@ -5,7 +5,7 @@ const PILL: Record<BadgeRarity, string> = {
   common: "bg-surface-2 text-faint border-line",
   rare: "bg-blue-500/15 text-blue-400 border-blue-500/30",
   epic: "bg-purple-500/15 text-purple-400 border-purple-500/30",
-  legend: "bg-amber-500/15 text-amber-500 border-amber-500/30",
+  legend: "bg-gold-weak text-gold border-gold/40",
   mythic: "bg-rose-500/15 text-rose-400 border-rose-500/30",
 };
 
