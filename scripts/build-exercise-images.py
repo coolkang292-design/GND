@@ -4,7 +4,8 @@
     python scripts/build-exercise-images.py
 
 두 출처를 합친다.
-1. **Codex 파일럿 PASS** — `운동 이미지/GPT 생성된 이미지/운동_UUID_파일매핑.json`에서
+1. **Codex 파일럿 PASS** — `운동 이미지/GPT 생성된 이미지/전체80_UUID_파일매핑.json`(누적 80개,
+   2026-10-05 두 번째 묶음부터. 그 전엔 `운동_UUID_파일매핑.json` 40개)에서
    `final_qa == "PASS"`이고 file이 있는 행만. 인수인계서 지시대로 **운동 ID(UUID)로** 잇는다.
 2. **사용자 시트에서 자른 것** — `scripts/slice-exercise-images.py`가 만든
    `운동 이미지/_sliced/{slug}.png`. 아래 `SLICED`가 slug → 카탈로그 이름을 잇는다.
@@ -34,6 +35,8 @@ SLICED_DIR = os.path.join(SRC, "_sliced")
 OUT = os.path.join(ROOT, "public", "exercise-images")
 DATA = os.path.join(ROOT, "src", "lib", "domain", "exercise-images.data.json")
 MANIFEST = os.path.join(ROOT, "data", "exercise-image-manifest.json")
+#: Codex 누적 매핑. 행의 `file`은 CODEX 폴더 기준 상대 경로다(묶음별 하위 폴더 포함).
+CODEX_MAPPING = "전체80_UUID_파일매핑.json"
 
 #: 목록에서 48px로 그린다. 3배 밀도까지 선명하게.
 SIZE = 160
@@ -128,7 +131,7 @@ def main():
     data = {}
 
     # 1) Codex PASS
-    rows = json.load(open(os.path.join(CODEX, "운동_UUID_파일매핑.json"), encoding="utf8"))
+    rows = json.load(open(os.path.join(CODEX, CODEX_MAPPING), encoding="utf8"))
     for r in rows:
         if r.get("final_qa") != "PASS" or not r.get("file"):
             continue
@@ -139,9 +142,9 @@ def main():
         if erased:
             print(f"가장자리 조각 지움  {r['name']}: {erased}")
         save(img, uid)
-        data[uid] = {"name": r["name"], "file": uid, "source": "gnd", "origin": "codex-pilot040"}
+        data[uid] = {"name": r["name"], "file": uid, "source": "gnd", "origin": "codex-pilot"}
         for alias in ALIASES.get(r["name"], []):
-            data[id_by_name[alias]] = {"name": alias, "file": uid, "source": "gnd", "origin": "codex-pilot040"}
+            data[id_by_name[alias]] = {"name": alias, "file": uid, "source": "gnd", "origin": "codex-pilot"}
 
     # 2) 사용자 시트 — Codex에 없는 운동만
     for slug, names in SLICED.items():
