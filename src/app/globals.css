@@ -165,3 +165,27 @@ body {
     }
   }
 }
+
+/* 탭 첫 화면 배경 사진 위의 반투명 카드 (2026-10-05 사용자 지시 — "배경이 살짝 보이게").
+   배경 사진(TabBackdrop)이 깔린 화면에서만 카드가 비친다. 카드 색 토큰 자체는 그대로다.
+   ⚠️ `:not(.fixed, .fixed *)`처럼 복잡한 :not은 CSS 변환기(Lightning CSS)가 규칙째 버린다
+      (2026-10-05 실측 — 결과 CSS에 아무것도 안 남았다). 그래서 "비치게" 한 뒤 화면 위에
+      떠 있는 창(.fixed — 운동 추가 시트·운동 중 화면·모달)과 그 안을 원래 색으로 되돌린다.
+      그 창들이 비치면 뒤의 페이지 글자와 겹쳐 읽을 수 없다.
+   ⚠️⚠️ **backdrop-filter(블러)를 걸지 마라.** 블러를 건 요소는 그 안의 position:fixed 창의
+      기준점이 된다 — 카드 안에서 그려지는 운동 추가 시트가 화면이 아니라 카드에 붙어
+      하단 탭과 겹쳤다(2026-10-05 실측). 배경색만 반투명하게 한다. */
+main:has(> [data-testid="tab-backdrop"]) .bg-surface {
+  background-color: color-mix(in oklab, var(--surface) 68%, transparent);
+}
+main:has(> [data-testid="tab-backdrop"]) .bg-surface-2 {
+  background-color: color-mix(in oklab, var(--surface-2) 62%, transparent);
+}
+main:has(> [data-testid="tab-backdrop"]) .fixed.bg-surface,
+main:has(> [data-testid="tab-backdrop"]) .fixed .bg-surface {
+  background-color: var(--surface);
+}
+main:has(> [data-testid="tab-backdrop"]) .fixed.bg-surface-2,
+main:has(> [data-testid="tab-backdrop"]) .fixed .bg-surface-2 {
+  background-color: var(--surface-2);
+}

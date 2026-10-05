@@ -55,7 +55,11 @@ describe("UI 아이콘 자산 — 경로가 실제 파일을 가리킨다", () =
     //    `hub-search.webp`(운동 직접 고르기가 사진 카드가 되면서).
     //    아이콘 파일이 죽은 게 아니다. `tabata-sheet.tsx`·`recommended-picker.tsx`가
     //    아직 `<UiIcon name=...>`로 쓰고, 그건 아래 테스트가 본다.
-    expect(referenced.size).toBe(14);
+    //
+    // ⚠️ 2026-10-05: 14 → 12. 빠르게 찾기 카드(상황별·부위별)가 금색 webp 대신
+    //    `GndIcon`(아이보리 윤곽선 SVG, `components/ui/gnd-icon.tsx`)을 쓰면서
+    //    `hub-situation.webp`·`hub-part.webp` 리터럴이 빠졌다. SVG라 파일 경로가 없다.
+    expect(referenced.size).toBe(12);
 
     const missing = [...referenced].filter(
       (src) => !existsSync(join(process.cwd(), "public", src)),

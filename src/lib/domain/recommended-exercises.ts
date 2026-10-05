@@ -1,4 +1,5 @@
 import { countsTowardChallenge, type GoalCategory } from "@/lib/challenge";
+import type { GndIconName } from "@/components/ui/gnd-icon";
 import type { BodyPart, CatalogExercise } from "@/lib/types";
 import { exerciseImageSrc } from "./exercise-images";
 
@@ -136,6 +137,13 @@ export type Situation = {
   /** ⚠️ 이모지가 아니라 **이미지 경로**다 — 이유는 `PART_META` 주석 참조 */
   iconSrc: string;
   /**
+   * 카드 아이콘 (2026-10-05 GND 아이콘 2.0 — 아이보리 윤곽선 + 선택 시 골드 포인트).
+   * 화면은 이걸 그린다. `iconSrc`(금색 webp)는 다른 화면이 같은 파일을 써서 남겨 둔다.
+   */
+  icon: GndIconName;
+  /** 카드 배경 사진 (2026-10-05 사용자 지시 — 프로그램 표지 사진을 어둡게 깐다) */
+  photo: string;
+  /**
    * 이 상황의 종목. `challenge`만 비어 있다 — 그건 고정 목록이 아니라
    * **내 챌린지 목표에서 계산한다**(`resolveSituation`).
    */
@@ -154,6 +162,8 @@ export const SITUATIONS: readonly Situation[] = [
     label: "처음 운동해요",
     sub: "기본부터 천천히",
     iconSrc: "/ui-icons/situ-beginner.webp",
+    icon: "situ-beginner",
+    photo: "/program-assets/lean.webp",
     /*
       ⚠️ **옛 목록은 넷 다 헬스장 기구였다** (2026-08-14 사용자 지적):
       `체스트프레스 머신 · 랫풀다운 · 레그프레스 · 숄더프레스`.
@@ -176,6 +186,8 @@ export const SITUATIONS: readonly Situation[] = [
     label: "챌린지 목표에 맞게",
     sub: "목표 달성 우선으로",
     iconSrc: "/ui-icons/situ-challenge.webp",
+    icon: "situ-challenge",
+    photo: "/program-assets/chest.webp",
     names: [],
   },
   {
@@ -183,6 +195,8 @@ export const SITUATIONS: readonly Situation[] = [
     label: "기구를 잘 몰라요",
     sub: "기구 사용이 낯설어요",
     iconSrc: "/ui-icons/situ-no-machines.webp",
+    icon: "situ-no-machines",
+    photo: "/record-assets/pick-exercises.webp",
     names: ["맨몸 스쿼트", "푸시업", "덤벨 컬", "플랭크"],
   },
   {
@@ -200,6 +214,8 @@ export const SITUATIONS: readonly Situation[] = [
     label: "전신 인터벌 할래요",
     sub: "20초 운동 · 10초 휴식",
     iconSrc: "/ui-icons/situ-home.webp",
+    icon: "situ-interval",
+    photo: "/program-assets/interval.webp",
     names: ["맨몸 스쿼트", "니 푸시업", "데드버그", "마운틴 클라이머"],
   },
   {
@@ -207,6 +223,8 @@ export const SITUATIONS: readonly Situation[] = [
     label: "30분만 운동할래요",
     sub: "짧고 효과적으로",
     iconSrc: "/ui-icons/situ-short.webp",
+    icon: "situ-short",
+    photo: "/program-assets/lean-v2.webp",
     names: ["레그프레스", "랫풀다운", "체스트프레스 머신"],
   },
   {
@@ -214,6 +232,8 @@ export const SITUATIONS: readonly Situation[] = [
     label: "유산소만 할래요",
     sub: "걷기·러닝 위주로",
     iconSrc: "/ui-icons/situ-cardio.webp",
+    icon: "situ-cardio",
+    photo: "/program-assets/lower.webp",
     names: ["걷기", "트레드밀", "사이클", "로잉"],
   },
 ];

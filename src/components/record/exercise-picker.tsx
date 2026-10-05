@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useMemo, useRef, useState } from "react";
 import {
   exerciseFrequencyMap,
@@ -33,6 +34,7 @@ import {
 } from "./exercise-setup-sheet";
 import { ExerciseEntryHub } from "./exercise-entry-hub";
 import { ExerciseThumbTile } from "./exercise-thumb";
+import { GndIcon, type GndIconName } from "@/components/ui/gnd-icon";
 import { imagesFirst } from "@/lib/domain/exercise-images";
 
 const PARTS: readonly (BodyPart | "전체")[] = [
@@ -506,35 +508,24 @@ function PickerSheet({
               <p className="mb-1.5 text-xs font-bold text-muted">
                 빠르게 찾기
               </p>
+              {/*
+                메뉴 카드 (2026-10-05 사용자 지시 — '프로그램으로 시작하기'처럼 사진 배경,
+                GND 아이콘 2.0). 높이는 56px로만 키운다 — 시트가 max-h-[82dvh]라 더 키우면
+                아래 카탈로그 목록이 화면 밖으로 밀린다.
+              */}
               <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
+                <QuickFindCard
+                  label="상황별 추천"
+                  icon="hub-situation"
+                  photo="/program-assets/lower-v2.webp"
                   onClick={() => openRecommendation("situation")}
-                  className="flex min-h-11 items-center justify-center gap-2 rounded-card-sm border border-line bg-surface-2 px-3 text-sm font-bold text-text"
-                >
-                  <span
-                    aria-hidden
-                    data-icon="hub-situation"
-                    className="h-6 w-6 flex-none bg-contain bg-center bg-no-repeat"
-                    style={{
-                      backgroundImage: "url('/ui-icons/hub-situation.webp')",
-                    }}
-                  />
-                  상황별 추천
-                </button>
-                <button
-                  type="button"
+                />
+                <QuickFindCard
+                  label="부위별 추천"
+                  icon="hub-part"
+                  photo="/program-assets/arms.webp"
                   onClick={() => openRecommendation("part")}
-                  className="flex min-h-11 items-center justify-center gap-2 rounded-card-sm border border-line bg-surface-2 px-3 text-sm font-bold text-text"
-                >
-                  <span
-                    aria-hidden
-                    data-icon="hub-part"
-                    className="h-6 w-6 flex-none bg-contain bg-center bg-no-repeat"
-                    style={{ backgroundImage: "url('/ui-icons/hub-part.webp')" }}
-                  />
-                  부위별 추천
-                </button>
+                />
               </div>
 
               {/* 추천 루틴 (2026-09-03) — 세트까지 정해진 루틴을 통째로 담는다.
@@ -544,14 +535,13 @@ function PickerSheet({
                   ⚠️ 담을 곳이 없는 화면(달력 예정표)에서는 `onPickPreset`을
                      안 넘기므로 버튼 자체가 안 나온다. */}
               {onPickPreset && presetRoutines.length > 0 && (
-                <button
-                  type="button"
+                <QuickFindCard
+                  label="추천 루틴"
+                  icon="routine"
+                  photo="/program-assets/chest.webp"
                   onClick={() => setMode("preset")}
-                  className="mt-2 flex min-h-11 w-full items-center justify-center gap-2 rounded-card-sm border border-line bg-surface-2 px-3 text-sm font-bold text-text"
-                >
-                  <span aria-hidden>🪜</span>
-                  추천 루틴
-                </button>
+                  className="mt-2 w-full"
+                />
               )}
             </div>
 
@@ -921,5 +911,46 @@ function PickerSheet({
         )}
       </div>
     </>
+  );
+}
+
+/**
+ * '빠르게 찾기' 메뉴 카드 — 사진 배경 + GND 아이콘 2.0 (2026-10-05 사용자 지시).
+ *
+ * '프로그램으로 시작하기' 카드처럼 프로그램 표지 사진을 어둡게 깔고, 왼쪽(아이콘·글자
+ * 자리)은 시트 색으로 덮는다. 사진이 안 떠도 아이콘·글자·동작은 그대로다.
+ */
+function QuickFindCard({
+  label,
+  icon,
+  photo,
+  onClick,
+  className = "",
+}: {
+  label: string;
+  icon: GndIconName;
+  photo: string;
+  onClick: () => void;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`relative isolate flex min-h-14 items-center justify-center gap-2 overflow-hidden rounded-card-sm border border-white/10 bg-surface-2 px-3 text-sm font-bold text-text transition-[border-color,transform] duration-150 active:scale-[0.98] active:border-accent ${className}`}
+    >
+      <span aria-hidden className="pointer-events-none absolute inset-0 -z-10">
+        <Image
+          src={photo}
+          alt=""
+          fill
+          sizes="240px"
+          className="object-cover object-[50%_30%] opacity-50"
+        />
+        <span className="absolute inset-0 bg-gradient-to-r from-surface-2/90 via-surface-2/60 to-surface-2/30" />
+      </span>
+      <GndIcon name={icon} size={26} className="flex-none" />
+      {label}
+    </button>
   );
 }

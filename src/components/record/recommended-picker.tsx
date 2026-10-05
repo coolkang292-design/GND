@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { UiIcon } from "@/components/ui-icon";
+import { GndIcon, type GndIconName } from "@/components/ui/gnd-icon";
 import { type GoalCategory } from "@/lib/challenge";
 import {
   PART_META,
@@ -17,7 +18,16 @@ import type { CatalogExercise } from "@/lib/types";
 
 /** 그리드 한 칸 — 부위와 상황이 같은 모양을 쓴다 */
 /** ⚠️ `iconSrc`는 이모지가 아니라 이미지 경로다 (`PART_META` 주석 참조) */
-type Choice = { key: string; label: string; sub: string; iconSrc: string };
+type Choice = {
+  key: string;
+  label: string;
+  sub: string;
+  iconSrc: string;
+  /** 상황 카드만 — GND 아이콘 2.0(아이보리 윤곽선). 있으면 `iconSrc` 대신 그린다 */
+  icon?: GndIconName;
+  /** 상황 카드만 — 배경 사진 (2026-10-05 사용자 지시) */
+  photo?: string;
+};
 
 /**
  * 추천 운동 — 부위별·상황별 (사용자 디자인 2026-08-06).
@@ -94,6 +104,8 @@ export function RecommendedPicker({
         label: s.label,
         sub: s.sub,
         iconSrc: s.iconSrc,
+        icon: s.icon,
+        photo: s.photo,
       }));
 
   const activeKey = byPart ? part : (activeSituation?.key ?? "beginner");
@@ -110,7 +122,26 @@ export function RecommendedPicker({
       );
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="relative isolate flex min-h-0 flex-1 flex-col">
+      {/*
+        머리글 배경 사진 (2026-10-05 사용자 지시 — 시안처럼 제목 뒤에 사진을 어둡게).
+        아래로 갈수록 시트 색(surface)으로 사라져 글자와 카드가 그대로 읽힌다.
+        ⚠️ 시트 안쪽 여백(p-4)까지 덮으려고 -mx-4 -mt-4로 편다.
+      */}
+      <div
+        aria-hidden
+        data-testid="recommend-header-photo"
+        className="pointer-events-none absolute -top-4 -right-4 -left-4 -z-10 h-56 overflow-hidden rounded-t-[22px]"
+      >
+        <Image
+          src={byPart ? "/program-assets/arms.webp" : "/program-assets/shoulder.webp"}
+          alt=""
+          fill
+          sizes="(max-width: 480px) 100vw, 480px"
+          className="object-cover object-[50%_30%] opacity-45"
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-surface/30 via-surface/75 to-surface" />
+      </div>
       <button
         type="button"
         onClick={onBack}
@@ -132,7 +163,7 @@ export function RecommendedPicker({
         <br />
         {byPart ? "운동할 부위를" : "오늘 상황을"} 먼저 골라보세요
       </p>
-      <p className="mt-2.5 flex-none self-start rounded-full border border-accent/40 bg-accent-weak px-3 py-1.5 text-[11px] font-bold text-accent">
+      <p className="mt-2.5 flex-none self-start rounded-full border border-accent/50 bg-accent/[0.08] px-2.5 py-1 text-[11px] font-bold text-accent">
         ✨ {byPart ? "부위를" : "상황을"} 고르면 추천 운동을 먼저 보여드려요
       </p>
 
@@ -153,28 +184,60 @@ export function RecommendedPicker({
                     : onSituation(choice.key as SituationKey)
                 }
                 aria-pressed={isActive}
-                className={`relative flex items-center gap-2 rounded-card border p-3 text-left ${
+                /*
+                  GND 아이콘 2.0 카드 (2026-10-05 제안서 §4). 선택은 색 하나로만 보이지
+                  않게 테두리·배경·✓ 셋을 함께 바꾼다(§14). 골드 면적은 테두리·✓·제목·
+                  아이콘 포인트로만 제한한다.
+                */
+                className={`relative isolate flex min-h-16 items-center gap-2.5 overflow-hidden rounded-[20px] border p-3 text-left transition-[border-color,background-color,transform] duration-150 active:scale-[0.98] ${
                   isActive
-                    ? "border-accent bg-accent-weak"
-                    : "border-line bg-surface-2"
+                    ? "border-accent bg-[#1c1a12]"
+                    : "border-white/10 bg-surface-2"
                 }`}
               >
+                {choice.photo && (
+                  /* 배경 사진 — 왼쪽(아이콘·글자 자리)은 덮고 오른쪽으로 갈수록 비친다 */
+                  <span aria-hidden className="pointer-events-none absolute inset-0 -z-10">
+                    <Image
+                      src={choice.photo}
+                      alt=""
+                      fill
+                      sizes="240px"
+                      className={`object-cover object-[70%_35%] ${isActive ? "opacity-45" : "opacity-35"}`}
+                    />
+                    <span
+                      className={`absolute inset-0 bg-gradient-to-r ${
+                        isActive
+                          ? "from-[#1c1a12] via-[#1c1a12]/80 to-[#1c1a12]/20"
+                          : "from-surface-2 via-surface-2/80 to-surface-2/20"
+                      }`}
+                    />
+                  </span>
+                )}
                 {/* ⚠️ `alt=""`가 맞다 — 바로 옆에 같은 뜻의 글자(`choice.label`)가
                     있어서, alt를 채우면 스크린리더가 부위 이름을 두 번 읽는다.
                     이미지가 안 떠도 글자·선택 상태·다음 이동은 그대로다(설계 §5). */}
-                <Image
-                  src={choice.iconSrc}
-                  alt=""
-                  width={40}
-                  height={40}
-                  /* 부위 아이콘은 남색 정사각형이라 모서리를 둥글린다 (2026-10-05).
-                     상황 아이콘(투명 금색)에는 보이는 차이가 없다 */
-                  className="h-10 w-10 flex-none rounded-lg"
-                />
+                {choice.icon ? (
+                  <GndIcon
+                    name={choice.icon}
+                    size={30}
+                    selected={isActive}
+                    className="flex-none"
+                  />
+                ) : (
+                  <Image
+                    src={choice.iconSrc}
+                    alt=""
+                    width={40}
+                    height={40}
+                    /* 부위 아이콘은 남색 정사각형이라 모서리를 둥글린다 (2026-10-05) */
+                    className="h-10 w-10 flex-none rounded-lg"
+                  />
+                )}
                 <span className="min-w-0 flex-1">
                   <span
-                    className={`block text-[13px] font-extrabold ${
-                      isActive ? "text-accent" : ""
+                    className={`block text-[13px] font-bold ${
+                      isActive ? "text-accent" : "text-text"
                     }`}
                   >
                     {choice.label}
@@ -184,7 +247,7 @@ export function RecommendedPicker({
                   </span>
                 </span>
                 {isActive && (
-                  <span className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-accent-ink">
+                  <span className="absolute top-1.5 right-1.5 flex h-[18px] w-[18px] items-center justify-center rounded-full bg-accent text-[10px] font-bold text-accent-ink">
                     ✓
                   </span>
                 )}

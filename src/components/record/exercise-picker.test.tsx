@@ -220,8 +220,9 @@ describe("ExercisePicker — 진입 허브 (2026-08-06)", () => {
     expect(document.activeElement).toBe(search);
     const situation = getByRole("button", { name: "상황별 추천" });
     const part = getByRole("button", { name: "부위별 추천" });
-    expect(situation.className).toContain("min-h-11");
-    expect(part.className).toContain("min-h-11");
+    // 손가락 표적 44px 이상 — 2026-10-05 사진 배경 카드로 바꾸며 56px(min-h-14)로 키웠다
+    expect(situation.className).toContain("min-h-14");
+    expect(part.className).toContain("min-h-14");
     expect(
       container.querySelector('[data-icon="hub-situation"][aria-hidden]'),
     ).toBeTruthy();
