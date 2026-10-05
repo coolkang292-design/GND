@@ -24,6 +24,7 @@ import {
 } from "@/lib/domain/pullup-ladder";
 import { guideForExercise } from "@/lib/domain/exercise-guides";
 import { EXERCISE_PREVIEW_NOTES } from "./exercise-preview-notes";
+import { SeedExerciseThumb } from "@/components/record/exercise-thumb";
 
 type ProgramCatalogProps = {
   programs: readonly OfficialProgram[];
@@ -418,20 +419,22 @@ export function IntervalProgramDetail({
                             aria-expanded={open}
                             aria-label={`${name} 설명 보기`}
                             onClick={() => setOpenKey(open ? null : cellKey)}
-                            className={`w-full rounded-card-sm px-2.5 py-2 text-left text-[11.5px] font-bold leading-4 ${
+                            className={`flex w-full items-center gap-2 rounded-card-sm px-2.5 py-2 text-left text-[11.5px] font-bold leading-4 ${
                               open
                                 ? "bg-accent/15 text-accent"
                                 : "bg-surface-2 text-text"
                             }`}
                           >
-                            {name}
+                            <SeedExerciseThumb name={name} />
+                            <span className="min-w-0 flex-1">{name}</span>
                             <span aria-hidden className="ml-1 text-[10px] text-muted">
                               {open ? "▲" : "▾"}
                             </span>
                           </button>
                         ) : (
-                          <span className="block rounded-card-sm bg-surface-2 px-2.5 py-2 text-[11.5px] font-bold leading-4 text-text">
-                            {name}
+                          <span className="flex items-center gap-2 rounded-card-sm bg-surface-2 px-2.5 py-2 text-[11.5px] font-bold leading-4 text-text">
+                            <SeedExerciseThumb name={name} />
+                            <span className="min-w-0 flex-1">{name}</span>
                           </span>
                         )}
                         {open && guide && (
@@ -881,7 +884,9 @@ export function ProgramDetail({
                   }
                   className="flex min-h-11 min-w-0 items-center justify-between gap-2 text-left"
                 >
-                  <span className="min-w-0">
+                  {/* 종목 그림 (사용자 지시 2026-10-05). 그림이 없는 종목은 칸 없이 이름만 */}
+                  <SeedExerciseThumb name={exercise.exerciseName} />
+                  <span className="min-w-0 flex-1">
                     <span className="block font-bold leading-5 text-text">
                       {exercise.exerciseName}
                     </span>

@@ -49,6 +49,29 @@ export function seedExerciseIdByName(name: string): string | undefined {
   return ID_BY_SEED_NAME.get(name);
 }
 
+/**
+ * 담은 운동(이름 + 직접 여부)의 그림 ID. 운동 카드·운동 중 화면이 같이 쓴다.
+ * 직접 만든 운동은 기본 운동과 이름이 같아도 undefined다(위 주석).
+ */
+export function imageIdForAddedExercise(exercise: {
+  name: string;
+  isCustom: boolean;
+}): string | undefined {
+  return exercise.isCustom ? undefined : seedExerciseIdByName(exercise.name);
+}
+
+/**
+ * 그림 있는 운동을 위로, 없는 운동을 아래로 (사용자 지시 2026-10-05).
+ *
+ * **안정 정렬이다** — 각 무리 안에서는 들어온 순서(사용 횟수순)를 그대로 둔다.
+ * 운동 선택 목록에만 쓴다. 공식 프로그램 종목(처방 순서)과 추천 카드(추천 순위)는
+ * 순서 자체가 뜻이라 쓰지 않는다.
+ */
+export function imagesFirst<T>(items: readonly T[], getId: (item: T) => string): T[] {
+  const has = (item: T) => EXERCISE_IMAGES[getId(item)] !== undefined;
+  return [...items.filter(has), ...items.filter((item) => !has(item))];
+}
+
 /** 운동 그림이 있으면 경로, 없으면 undefined */
 export function exerciseImageSrc(exerciseId: string): string | undefined {
   const hit = EXERCISE_IMAGES[exerciseId];

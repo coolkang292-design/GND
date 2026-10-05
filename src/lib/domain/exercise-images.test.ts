@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import manifest from "../../../data/exercise-image-manifest.json";
 import type { BodyPart } from "@/lib/types";
-import { EXERCISE_IMAGES, exerciseImageSrc, partIconSrc } from "./exercise-images";
+import { EXERCISE_IMAGES, exerciseImageSrc, imagesFirst, partIconSrc } from "./exercise-images";
 
 const ROOT = join(__dirname, "..", "..", "..");
 const publicPath = (src: string) => join(ROOT, "public", src);
@@ -53,5 +53,28 @@ describe("exercise-images", () => {
 
   it("로딩 실패용 부위 아이콘 파일이 부위마다 있다", () => {
     for (const part of PARTS) expect(existsSync(publicPath(partIconSrc(part))), part).toBe(true);
+  });
+});
+
+describe("imagesFirst — 그림 있는 운동을 위로 (사용자 지시 2026-10-05)", () => {
+  const withImg = Object.keys(EXERCISE_IMAGES);
+  const items = [
+    { id: "no-1", n: 5 },
+    { id: withImg[0], n: 4 },
+    { id: "no-2", n: 3 },
+    { id: withImg[1], n: 2 },
+  ];
+
+  it("그림 있는 것이 먼저, 각 무리 안에서는 들어온 순서를 그대로 둔다(안정)", () => {
+    expect(imagesFirst(items, (i) => i.id).map((i) => i.id)).toEqual([
+      withImg[0],
+      withImg[1],
+      "no-1",
+      "no-2",
+    ]);
+  });
+
+  it("빠지거나 늘어나는 항목이 없다", () => {
+    expect(imagesFirst(items, (i) => i.id)).toHaveLength(items.length);
   });
 });

@@ -18,6 +18,8 @@ import type {
   ExerciseSetProgress,
   WorkoutProgress,
 } from "@/lib/domain/workout-progress";
+import type { BodyPart } from "@/lib/types";
+import { ExerciseThumbTile } from "./exercise-thumb";
 
 /**
  * 운동 중 큰 팝업 (2026-08-04, 설계 ② · 사용자 목업).
@@ -271,11 +273,15 @@ function PreviousLine({
   );
 }
 
+/** 운동 중 화면에 보일 그림 — 운동 ID(그림 연결표 키)와 부위 */
+export type OverlayExerciseImage = { id: string; bodyPart: BodyPart };
+
 export function ActiveSessionOverlay({
   open,
   mode,
   elapsedLabel,
   exerciseName,
+  exerciseImage = null,
   progress,
   setProgress,
   setPosition,
@@ -321,6 +327,12 @@ export function ActiveSessionOverlay({
   mode: "input" | "rest";
   elapsedLabel: string;
   exerciseName: string | null;
+  /**
+   * 지금 운동의 그림 (사용자 지시 2026-10-05 — 운동 중 화면 ① 제목·③ 다음 운동).
+   * 그림이 없거나 직접 만든 운동이면 null — 그때는 칸도 그리지 않는다.
+   * 부위는 그림을 못 불러왔을 때의 부위 아이콘용이다.
+   */
+  exerciseImage?: OverlayExerciseImage | null;
   /** 오늘 담은 세트 기준 전체 진행률 (`workoutProgress`) */
   progress: WorkoutProgress;
   /** 지금 종목의 세트 진행 — 휴식 화면의 `3세트 / 4세트` (`exerciseSetProgress`) */
@@ -332,7 +344,12 @@ export function ActiveSessionOverlay({
   restSeconds: number;
   /** 지금 설정된 휴식 기본값 — 프리셋 칩 표시용 */
   restPresetSeconds: number;
-  nextUp: { exerciseName: string; amount: string } | null;
+  nextUp: {
+    exerciseName: string;
+    amount: string;
+    /** 다음 운동의 그림 (없으면 null·생략) */
+    image?: OverlayExerciseImage | null;
+  } | null;
   /** 지금 보여주는 세트가 오늘 남은 마지막 세트인가 — 입력 화면 안내용 */
   isLastPendingSet: boolean;
   /**
@@ -556,9 +573,19 @@ export function ActiveSessionOverlay({
           </div>
 
           {!resting && (
-            <h2 className="mt-3 text-[26px] leading-tight font-extrabold">
-              {exerciseName ?? "운동"}
-            </h2>
+            <div className="mt-3 flex items-center gap-3">
+              {exerciseImage && exerciseName && (
+                <ExerciseThumbTile
+                  id={exerciseImage.id}
+                  name={exerciseName}
+                  bodyPart={exerciseImage.bodyPart}
+                  size={72}
+                />
+              )}
+              <h2 className="min-w-0 text-[26px] leading-tight font-extrabold">
+                {exerciseName ?? "운동"}
+              </h2>
+            </div>
           )}
           {!resting && guideName && (
             <button
@@ -773,9 +800,19 @@ export function ActiveSessionOverlay({
                   <p className="mt-5 text-[12.5px] font-bold text-muted">
                     다음 운동
                   </p>
-                  <p className="mt-1 text-[22px] leading-tight font-extrabold">
-                    {nextUp.exerciseName}
-                  </p>
+                  <div className="mt-1 flex items-center gap-3">
+                    {nextUp.image && (
+                      <ExerciseThumbTile
+                        id={nextUp.image.id}
+                        name={nextUp.exerciseName}
+                        bodyPart={nextUp.image.bodyPart}
+                        size={72}
+                      />
+                    )}
+                    <p className="min-w-0 text-[22px] leading-tight font-extrabold">
+                      {nextUp.exerciseName}
+                    </p>
+                  </div>
                   {/*
                     지난번 ↔ 오늘 (설계 2026-08-24 §3.4, 사용자 목업).
 

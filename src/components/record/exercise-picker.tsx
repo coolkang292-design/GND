@@ -33,6 +33,7 @@ import {
 } from "./exercise-setup-sheet";
 import { ExerciseEntryHub } from "./exercise-entry-hub";
 import { ExerciseThumbTile } from "./exercise-thumb";
+import { imagesFirst } from "@/lib/domain/exercise-images";
 
 const PARTS: readonly (BodyPart | "전체")[] = [
   "전체",
@@ -270,18 +271,25 @@ function PickerSheet({
    *
    * 동수·0회는 원래 순서를 유지한다 — 카탈로그가 부위별로 묶인 시드
    * 순서라 이름순으로 흩뜨리면 안 쓰던 종목 찾기가 오히려 어려워진다.
+   *
+   * 그 위에 **그림 있는 운동을 먼저** 올린다 (사용자 지시 2026-10-05). 각 무리
+   * 안의 순서(사용 횟수순)는 그대로다 — 그래서 자주 하는 운동이라도 그림이 없으면
+   * 그림 있는 운동들 아래로 내려간다. 그림이 늘수록 이 차이는 줄어든다.
    */
-  const list = sortByFrequency(
-    catalog.filter(
-      (e) =>
-        (part === "전체" ||
-          (part === "맨몸"
-            ? e.exercise_type === "bodyweight"
-            : e.body_part === part)) &&
-        (!q || e.name.toLowerCase().includes(q)),
+  const list = imagesFirst(
+    sortByFrequency(
+      catalog.filter(
+        (e) =>
+          (part === "전체" ||
+            (part === "맨몸"
+              ? e.exercise_type === "bodyweight"
+              : e.body_part === part)) &&
+          (!q || e.name.toLowerCase().includes(q)),
+      ),
+      frequency,
+      (item) => item.name,
     ),
-    frequency,
-    (item) => item.name,
+    (item) => item.id,
   );
 
   /**

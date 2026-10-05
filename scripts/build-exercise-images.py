@@ -38,8 +38,9 @@ MANIFEST = os.path.join(ROOT, "data", "exercise-image-manifest.json")
 #: Codex 누적 매핑. 행의 `file`은 CODEX 폴더 기준 상대 경로다(묶음별 하위 폴더 포함).
 CODEX_MAPPING = "전체120_UUID_파일매핑.json"
 
-#: 목록에서 48px로 그린다. 3배 밀도까지 선명하게.
-SIZE = 160
+#: 가장 크게 그리는 곳은 운동 중 화면 72px(2026-10-05 추가)다. 폰 3배 밀도에서도 흐리지
+#: 않게 320px로 둔다(이전 160px은 48px 목록 기준이었다). 목록·카드는 next/image가 줄여 보낸다.
+SIZE = 320
 INK = 60
 
 #: 사용자 시트 slug → 카탈로그 이름들 (같은 운동의 다른 이름은 같은 그림)

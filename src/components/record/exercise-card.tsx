@@ -8,7 +8,7 @@ import {
   restClock,
 } from "@/lib/domain/program-load";
 import { planFromSets, summarizePlan } from "@/lib/domain/recommended-sets";
-import { seedExerciseIdByName } from "@/lib/domain/exercise-images";
+import { imageIdForAddedExercise } from "@/lib/domain/exercise-images";
 import { durationSecondsOf } from "@/lib/domain/set-timer";
 import { setVolumeKg } from "@/lib/domain/volume";
 import type { LocalExercise, LocalSet } from "@/lib/workout";
@@ -71,7 +71,7 @@ export function ExerciseCard({
   // 안내가 **있는 종목에만** 버튼을 낸다. 없는데 내면 눌러도 아무 일 없는
   // 죽은 버튼이 된다 (커스텀 종목이 대부분 여기 해당).
   const hasGuide = onOpenGuide ? guideForExercise(exercise.name) !== null : false;
-  const thumbId = exercise.isCustom ? undefined : seedExerciseIdByName(exercise.name);
+  const thumbId = imageIdForAddedExercise(exercise);
   const isWeight = exercise.exerciseType === "weight";
   const isCardio = exercise.exerciseType === "cardio";
   const isTimeBodyweight =

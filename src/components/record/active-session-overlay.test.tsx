@@ -1315,3 +1315,51 @@ describe("ActiveSessionOverlay — 프로그램 목표 범위", () => {
     expect(screen.getByText(/목표 8~10회/)).toBeTruthy();
   });
 });
+
+// 운동 중 화면 ①제목·③다음 운동에 그림 (사용자 지시 2026-10-05).
+// 그림이 없거나 직접 만든 운동이면 null이 넘어오고, 그때는 칸도 그리지 않는다.
+describe("운동 중 화면 그림", () => {
+  const DEADLIFT = { id: "2058f26d-3a03-414f-ad3d-11b79cd5d8b7", bodyPart: "등" as const };
+  const srcs = (c: HTMLElement) =>
+    [...c.querySelectorAll("img")].map((i) => decodeURIComponent(i.getAttribute("src") ?? ""));
+
+  it("① 세트 입력 중 제목 앞에 지금 운동의 그림이 72px로 보인다", () => {
+    const { container } = render(
+      <ActiveSessionOverlay {...inputProps} exerciseImage={DEADLIFT} />,
+    );
+    const img = container.querySelector(`img[src*="${DEADLIFT.id}"]`);
+    expect(img).not.toBeNull();
+    expect(img!.parentElement!.className).toContain("h-[72px]");
+    // 그림 바로 옆이 제목이다
+    expect(img!.closest("div")!.textContent).toContain("데드리프트");
+  });
+
+  it("① 그림이 없으면(null) 칸도 그리지 않는다", () => {
+    const { container } = render(<ActiveSessionOverlay {...inputProps} exerciseImage={null} />);
+    expect(srcs(container).some((s) => s.includes("/exercise-images/"))).toBe(false);
+    expect(container.querySelector('[class*="h-[72px]"]')).toBeNull();
+  });
+
+  it("휴식 중에는 지금 운동(②)의 그림을 그리지 않는다 — 다음 운동(③)만", () => {
+    const { container } = render(
+      <ActiveSessionOverlay
+        {...restProps}
+        exerciseImage={DEADLIFT}
+        nextUp={{ exerciseName: "레그프레스", amount: "260kg 15회", image: null }}
+      />,
+    );
+    expect(srcs(container).some((s) => s.includes("/exercise-images/"))).toBe(false);
+  });
+
+  it("③ 다음 운동 그림은 연결표에 있는 ID면 그 그림을 그린다", () => {
+    const { container } = render(
+      <ActiveSessionOverlay
+        {...restProps}
+        nextUp={{ exerciseName: "데드리프트", amount: "60kg 8회", image: DEADLIFT }}
+      />,
+    );
+    const img = container.querySelector(`img[src*="${DEADLIFT.id}"]`);
+    expect(img).not.toBeNull();
+    expect(img!.closest("div")!.textContent).toContain("데드리프트");
+  });
+});

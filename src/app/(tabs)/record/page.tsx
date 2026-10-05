@@ -38,7 +38,11 @@ import {
   type EffortFeedback,
 } from "@/lib/domain/program-load";
 import { RestBar } from "@/components/record/rest-bar";
-import { ActiveSessionOverlay } from "@/components/record/active-session-overlay";
+import {
+  ActiveSessionOverlay,
+  type OverlayExerciseImage,
+} from "@/components/record/active-session-overlay";
+import { imageIdForAddedExercise } from "@/lib/domain/exercise-images";
 import { ActivePhotoButton } from "@/components/record/active-photo-button";
 import { SessionPhotoManager } from "@/components/record/session-photo-manager";
 import { VerificationPhoto } from "@/components/record/verification-photo";
@@ -3146,6 +3150,13 @@ function WorkoutScreen({ userId }: { userId: string }) {
     : null;
   const focus = setFocus.exerciseIndex;
   const focusedExercise = draft.exercises[focus] ?? null;
+  /** 운동 중 화면 ①제목·③다음 운동의 그림 (2026-10-05). 직접 만든 운동·그림 없는 운동은 null */
+  function overlayImageOf(
+    exercise: LocalExercise | null | undefined,
+  ): OverlayExerciseImage | null {
+    const id = exercise ? imageIdForAddedExercise(exercise) : undefined;
+    return exercise && id ? { id, bodyPart: exercise.bodyPart } : null;
+  }
   const focusedSet = focusedExercise?.sets[setFocus.setIndex] ?? null;
   const exerciseCards = draft.exercises.map((ex, i) => (
     <ExerciseCard
@@ -4154,6 +4165,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
         })}
         elapsedLabel={`${hh}:${mm}:${ss}`}
         exerciseName={focusedExercise?.name ?? null}
+        exerciseImage={overlayImageOf(focusedExercise)}
         progress={workoutProgress(draft.exercises)}
         setProgress={exerciseSetProgress(focusedExercise)}
         setPosition={{
@@ -4173,7 +4185,11 @@ function WorkoutScreen({ userId }: { userId: string }) {
         restPresetSeconds={draft.restSeconds}
         nextUp={
           nextUp
-            ? { exerciseName: nextUp.exerciseName, amount: nextUp.amount }
+            ? {
+                exerciseName: nextUp.exerciseName,
+                amount: nextUp.amount,
+                image: overlayImageOf(draft.exercises[nextUp.exerciseIndex]),
+              }
             : null
         }
         isLastPendingSet={pendingSetCount === 1 && !focusedSet?.done}
