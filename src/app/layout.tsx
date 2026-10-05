@@ -22,6 +22,7 @@ export const metadata: Metadata = {
   title: "GND",
   description: "친구 운동 챌린지 — GND 탈출하자",
   manifest: "/manifest.webmanifest",
+  icons: { apple: [{ url: "/icons/gnd-monogram-180.png", sizes: "180x180", type: "image/png" }] },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",

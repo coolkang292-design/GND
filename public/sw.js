@@ -30,8 +30,8 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(payload.title, {
       body: payload.body,
-      icon: "/icons/icon-192.png",
-      badge: "/icons/icon-192.png",
+      icon: "/icons/gnd-monogram-192.png",
+      badge: "/icons/gnd-monogram-badge-96.png",
       data: { url: payload.url },
     }),
   );
