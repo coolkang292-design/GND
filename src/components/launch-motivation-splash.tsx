@@ -143,23 +143,34 @@ export function LaunchMotivationSplash() {
       }`}
     >
       {phase !== "checking" && (
-        /* ⚠️ `next/image`가 아니라 기본 `<img>`다 (2026-10-06 개발 서버 실측). `next/image`로는
-           사진이 다 받아져도(complete) `onLoad`가 오지 않아 2초 안전장치까지 검은 화면이었다.
-           변환 서버를 안 쓰는(unoptimized) 단일 사진이라 `next/image`로 얻는 것이 없다. */
-        /* eslint-disable-next-line @next/next/no-img-element */
-        <img
-          data-testid="launch-splash-image"
-          src={SPLASH_PHOTO}
-          alt=""
-          decoding="async"
-          fetchPriority="high"
-          onLoad={() => startDisplay("showing")}
-          onError={() => startDisplay("fallback")}
-          // 인물(여성 얼굴·뒤 남성)이 잘리지 않게 위쪽 40% 지점을 기준으로 채운다
-          className={`absolute inset-0 h-full w-full object-cover object-[42%_30%] transition-opacity duration-200 ${
-            imageVisible ? "opacity-100" : "opacity-0"
-          }`}
-        />
+        /*
+          ⚠️ 사진은 **375:667 상자 안**에 넣어 화면 **아래에 붙인다** (2026-10-06 사용자 지시
+          "두 번째 사진(375×667)으로 통일"). 화면을 꽉 채우면 길쭉한 폰(390×844)에서는 사진이
+          통째로 들어가 인물이 작아지고, 어색한 손·밧줄이 문구 위로 드러났다. 상자 비율을 고정하면
+          어떤 폰에서도 인물 크기와 문구 위치가 같고, 남는 위쪽은 로고가 놓이는 어두운 바탕이 된다.
+          화면이 상자보다 짧으면 상자 위쪽이 잘린다(인물은 `object-[42%_30%]`라 남는다).
+        */
+        <span aria-hidden className="absolute inset-x-0 bottom-0 block aspect-[375/667] w-full">
+          {/* ⚠️ `next/image`가 아니라 기본 `<img>`다 (2026-10-06 개발 서버 실측). `next/image`로는
+              사진이 다 받아져도(complete) `onLoad`가 오지 않아 2초 안전장치까지 검은 화면이었다.
+              변환 서버를 안 쓰는(unoptimized) 단일 사진이라 `next/image`로 얻는 것이 없다. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            data-testid="launch-splash-image"
+            src={SPLASH_PHOTO}
+            alt=""
+            decoding="async"
+            fetchPriority="high"
+            onLoad={() => startDisplay("showing")}
+            onError={() => startDisplay("fallback")}
+            // 인물(여성 얼굴·뒤 남성)이 잘리지 않게 위쪽 30% 지점을 기준으로 채운다
+            className={`absolute inset-0 h-full w-full object-cover object-[42%_30%] transition-opacity duration-200 ${
+              imageVisible ? "opacity-100" : "opacity-0"
+            }`}
+          />
+          {/* 상자 윗변이 칼같이 끊기지 않게 바탕색으로 녹인다(길쭉한 폰에서만 보인다) */}
+          <span className="absolute inset-x-0 top-0 block h-28 bg-gradient-to-b from-bg to-transparent" />
+        </span>
       )}
 
       {/* 로고 자리·문구 자리의 대비 — 사진 위아래를 어둡게 누른다(지침 §온보딩) */}

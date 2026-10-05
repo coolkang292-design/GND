@@ -75,6 +75,8 @@ describe("LaunchMotivationSplash", () => {
     // 위아래 검은 띠가 생기지 않게 꽉 채운다
     expect(image.className).toContain("object-cover");
     expect(image.className).not.toContain("object-contain");
+    // 2026-10-06 "두 번째 사진(375×667)으로 통일" — 사진 상자 비율을 고정해 길쭉한 폰에서도 같은 구도
+    expect(image.parentElement?.className).toContain("aspect-[375/667]");
     // 사진이 오기 전에는 글자도 없다(빈 화면 위 글자만 번쩍이지 않게)
     expect(screen.queryByTestId("launch-splash-copy")).toBeNull();
     fireEvent.load(image);
