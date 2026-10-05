@@ -24,35 +24,39 @@ export function ExerciseThumbTile({
   id,
   name,
   bodyPart,
+  size = 48,
 }: {
   /** 카탈로그 운동 ID. 없으면(로컬 QA) 그림 없음으로 본다 */
   id?: string;
   name: string;
   bodyPart: BodyPart;
+  /** 목록 48px(기본) · 기록 화면 운동 카드 40px */
+  size?: 48 | 40;
 }) {
   const broken = useContext(LocalTrialFailureContext);
   const src = localTrialImage(name, broken) ?? (id ? exerciseImageSrc(id) : undefined);
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const box = size === 48 ? "h-12 w-12" : "h-10 w-10";
 
   if (!src) {
-    return <span aria-hidden className="h-12 w-12 flex-none rounded-lg bg-surface-2" />;
+    return <span aria-hidden className={`${box} flex-none rounded-lg bg-surface-2`} />;
   }
   if (failedSrc !== src) {
     return (
-      <span className="h-12 w-12 flex-none overflow-hidden rounded-lg bg-[#1e2429]">
+      <span className={`${box} flex-none overflow-hidden rounded-lg bg-[#1e2429]`}>
         <Image
           src={src}
           alt=""
-          width={48}
-          height={48}
-          className="h-12 w-12"
+          width={size}
+          height={size}
+          className={box}
           onError={() => setFailedSrc(src)}
         />
       </span>
     );
   }
   return (
-    <span className="flex h-12 w-12 flex-none items-center justify-center rounded-lg bg-surface-2">
+    <span className={`flex ${box} flex-none items-center justify-center rounded-lg bg-surface-2`}>
       <Image
         src={partIconSrc(bodyPart)}
         alt=""

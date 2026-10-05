@@ -33,6 +33,22 @@ export type ExerciseImageEntry = {
 
 export const EXERCISE_IMAGES = data as Readonly<Record<string, ExerciseImageEntry>>;
 
+/**
+ * 기본 운동 이름 → 운동 ID (그림이 있는 것만).
+ *
+ * 기록 화면의 운동 카드는 `workout_exercises`에서 와서 **이름만** 있고 카탈로그 ID가
+ * 없다. 기본 운동 이름은 DB가 유일하게 막아 두므로(`exercise_catalog_seed_name`)
+ * 이름으로 ID를 되찾을 수 있다. ⚠️ **직접 만든 운동에는 쓰지 마라** — 사용자가 기본
+ * 운동과 같은 이름으로 만들 수 있어서(유일성은 사용자별) 엉뚱한 그림이 붙는다.
+ */
+const ID_BY_SEED_NAME = new Map(
+  Object.entries(EXERCISE_IMAGES).map(([id, entry]) => [entry.name, id]),
+);
+
+export function seedExerciseIdByName(name: string): string | undefined {
+  return ID_BY_SEED_NAME.get(name);
+}
+
 /** 운동 그림이 있으면 경로, 없으면 undefined */
 export function exerciseImageSrc(exerciseId: string): string | undefined {
   const hit = EXERCISE_IMAGES[exerciseId];

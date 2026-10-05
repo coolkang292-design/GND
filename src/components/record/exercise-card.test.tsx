@@ -246,3 +246,29 @@ describe("ExerciseCard — 프로그램 처방 안내", () => {
     expect(html).not.toContain("정도 더 할 수 있는 무게");
   });
 });
+
+// 운동을 담은 뒤의 카드에도 그림 (사용자 지시 2026-10-05). 카드는 이름만 갖고 있어
+// 기본 운동 이름 → 운동 ID로 되찾는다. 직접 만든 운동에는 붙이지 않는다.
+describe("운동 카드 그림", () => {
+  const imgSrcOf = (item: LocalExercise) => {
+    const { container } = render(cardElement({ item }));
+    const src = container.querySelector("img")?.getAttribute("src");
+    return src ? decodeURIComponent(src) : null;
+  };
+
+  it("그림이 있는 기본 운동은 제목 앞에 그 그림을 보인다", () => {
+    expect(imgSrcOf({ ...exercise, name: "벤치프레스" })).toContain(
+      "/exercise-images/be2a2460-c20c-4327-a092-0d4dbaa5b5a6.webp",
+    );
+  });
+
+  it("직접 만든 운동은 기본 운동과 이름이 같아도 그림이 없다", () => {
+    expect(imgSrcOf({ ...exercise, name: "벤치프레스", isCustom: true })).toBeNull();
+  });
+
+  it("그림이 없는 운동은 빈 칸도 그리지 않는다 (카드는 줄 맞춤이 필요 없다)", () => {
+    const { container } = render(cardElement({ item: { ...exercise, name: "그림 없는 운동(테스트)" } }));
+    expect(container.querySelector("img")).toBeNull();
+    expect(container.querySelector("[aria-hidden].h-10")).toBeNull();
+  });
+});

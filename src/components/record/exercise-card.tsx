@@ -8,10 +8,12 @@ import {
   restClock,
 } from "@/lib/domain/program-load";
 import { planFromSets, summarizePlan } from "@/lib/domain/recommended-sets";
+import { seedExerciseIdByName } from "@/lib/domain/exercise-images";
 import { durationSecondsOf } from "@/lib/domain/set-timer";
 import { setVolumeKg } from "@/lib/domain/volume";
 import type { LocalExercise, LocalSet } from "@/lib/workout";
 import { TYPE_LABEL } from "./exercise-picker";
+import { ExerciseThumbTile } from "./exercise-thumb";
 
 /** 세트 입력 카드 — 번호·중량·횟수·완료 체크, 유형별 입력 (§10) */
 export function ExerciseCard({
@@ -69,6 +71,7 @@ export function ExerciseCard({
   // 안내가 **있는 종목에만** 버튼을 낸다. 없는데 내면 눌러도 아무 일 없는
   // 죽은 버튼이 된다 (커스텀 종목이 대부분 여기 해당).
   const hasGuide = onOpenGuide ? guideForExercise(exercise.name) !== null : false;
+  const thumbId = exercise.isCustom ? undefined : seedExerciseIdByName(exercise.name);
   const isWeight = exercise.exerciseType === "weight";
   const isCardio = exercise.exerciseType === "cardio";
   const isTimeBodyweight =
@@ -106,6 +109,17 @@ export function ExerciseCard({
         <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-accent-weak text-xs font-extrabold text-accent">
           {index + 1}
         </span>
+        {/* 운동을 담은 뒤의 카드에도 그림을 보인다(사용자 지시 2026-10-05).
+            카드는 서로 떨어져 있어 줄 맞춤용 빈 칸이 필요 없다 — 그림이 있을 때만 그린다.
+            직접 만든 운동은 기본 운동과 이름이 같아도 그림을 붙이지 않는다 */}
+        {thumbId && (
+          <ExerciseThumbTile
+            id={thumbId}
+            name={exercise.name}
+            bodyPart={exercise.bodyPart}
+            size={40}
+          />
+        )}
         <span className="text-sm font-extrabold">{exercise.name}</span>
         {exercise.isCustom && (
           <span className="rounded bg-accent-weak px-1.5 py-0.5 text-[10px] font-bold text-accent">

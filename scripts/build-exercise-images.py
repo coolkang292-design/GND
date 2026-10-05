@@ -4,8 +4,8 @@
     python scripts/build-exercise-images.py
 
 두 출처를 합친다.
-1. **Codex 파일럿 PASS** — `운동 이미지/GPT 생성된 이미지/전체80_UUID_파일매핑.json`(누적 80개,
-   2026-10-05 두 번째 묶음부터. 그 전엔 `운동_UUID_파일매핑.json` 40개)에서
+1. **Codex 파일럿 PASS** — `운동 이미지/GPT 생성된 이미지/전체NN_UUID_파일매핑.json`(누적,
+   2026-10-05 두 번째 묶음부터 누적 파일을 쓴다 — 80 → 120. 첫 묶음은 `운동_UUID_파일매핑.json`)에서
    `final_qa == "PASS"`이고 file이 있는 행만. 인수인계서 지시대로 **운동 ID(UUID)로** 잇는다.
 2. **사용자 시트에서 자른 것** — `scripts/slice-exercise-images.py`가 만든
    `운동 이미지/_sliced/{slug}.png`. 아래 `SLICED`가 slug → 카탈로그 이름을 잇는다.
@@ -36,7 +36,7 @@ OUT = os.path.join(ROOT, "public", "exercise-images")
 DATA = os.path.join(ROOT, "src", "lib", "domain", "exercise-images.data.json")
 MANIFEST = os.path.join(ROOT, "data", "exercise-image-manifest.json")
 #: Codex 누적 매핑. 행의 `file`은 CODEX 폴더 기준 상대 경로다(묶음별 하위 폴더 포함).
-CODEX_MAPPING = "전체80_UUID_파일매핑.json"
+CODEX_MAPPING = "전체120_UUID_파일매핑.json"
 
 #: 목록에서 48px로 그린다. 3배 밀도까지 선명하게.
 SIZE = 160
@@ -63,6 +63,14 @@ SLICED = {
     "incline-bench-press-machine": ["인클라인 벤치프레스 머신"],
     "decline-push-up": ["디클라인 푸시업"],
     "standing-cable-fly": ["스탠딩 케이블 플라이"],
+}
+
+#: Codex PASS인데 동작이 틀려 **사용자 시트판을 대신 쓰는** 운동 (이름 → 이유).
+#: 여기 있는 이름은 Codex 쪽을 건너뛴다. 이유를 반드시 적는다.
+PREFER_SHEET = {
+    # 2026-10-05 Codex 081-120: 상체를 세운 정면 자세 + 앞·옆 어깨 강조 → 앉은 사이드
+    # 레터럴이다. 리어 레터럴은 상체를 숙이고 뒤 어깨를 써야 한다(시트판이 그 자세).
+    "시티드 덤벨 리어 레터럴 레이즈": "upright seated lateral, not bent-over rear",
 }
 
 #: Codex 그림을 같은 운동의 다른 이름에도 붙인다 (원래 이름 → 별칭들)
@@ -134,6 +142,9 @@ def main():
     rows = json.load(open(os.path.join(CODEX, CODEX_MAPPING), encoding="utf8"))
     for r in rows:
         if r.get("final_qa") != "PASS" or not r.get("file"):
+            continue
+        if r["name"] in PREFER_SHEET:
+            print(f"Codex 판 건너뜀(시트판 우선)  {r['name']}: {PREFER_SHEET[r['name']]}")
             continue
         uid = r["exercise_id"]
         if name_by_id.get(uid) != r["name"]:
