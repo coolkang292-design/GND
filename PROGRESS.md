@@ -3,11 +3,12 @@
 > 새 세션은 저장소 루트 `AGENTS.md` → `CLAUDE.md` → 이 파일 → 가장 최근의 관련 `docs/superpowers/HANDOFF-*.md` 순서로 읽는다.
 > 이 파일은 전체 흐름의 요약이고, 작업별 세부 사실과 남은 확인은 최신 인수인계서가 기준이다.
 
-## ✅ 2026-10-06 GND 바탕화면·알림 G Monogram — **로컬 수정 · 미배포**
+## ✅ 2026-10-06 GND 바탕화면·알림 G Monogram — **운영 배포 완료**
 
-- 사용자: 첨부 OPTION1을 홈 화면과 푸시 알림에 적용. 원본 크롭으로 180/192/512/maskable·단색알림96·favicon, 기존 경로 호환. metadata/manifest/sw 연결. 내부 UI는 Claude 담당, Codex의 임시 화면 수정은 되돌림.
-- 인수인계: docs/superpowers/HANDOFF-2026-10-06-gnd-home-notification-icon.md. 개발서버 아이콘 로딩·원형 미리보기·apple 링크·manifest3종 확인, 실제sw handler 옵션VM검증. 실제 사용자 알림 미발송/폰 미검증.
-- 전체4,038테스트 PASS. 독립 복사본 lint오류0/경고4. build/typecheck는 기존challenge/page errorMessage export 오류로 실패. 원본 검사는 ignored 자산/output 실험 파일도 검사하여 별도 실패. 운영 배포 없음.
+- 첨부 OPTION1 원본 G를 설치180/192/512/maskable·알림단색96·favicon으로 연결. metadata/manifest/sw·기존경로 호환. 내부 UI는 Claude 담당, Codex 임시 화면수정은 되돌림.
+- 배포코드30a4fad: 아이콘09ac912 + Claude 기록그림e567f91 + challenge 페이지 테스트용export빌드오류수정/새소식. 전체4,038·관련16테스트 PASS, lint0오류4기존경고, typecheck/build PASS(독립검증복사본).
+- 개발localhost:3000 아이콘·새소식 직접확인 후 깨끗한 로컬main archive로 Vercel production READY. https://gnd-one.vercel.app → gnd-ae4vdrrh7-gnd4.vercel.app. GitHub push/fetch0 0. 운영아이콘5종SHA동일·manifest/sw/apple경로·비밀번호보기·새소식실물 확인.
+- 인수인계: docs/superpowers/HANDOFF-2026-10-06-gnd-home-notification-icon.md. DB/실사용자알림발송없음, 실제폰 설치아이콘갱신·OS푸시수신미검증. 다음: 실제폰에서 확인.
 
 ## ✅ 2026-10-06 Performance Social 원본 온보딩·앱 시작 — **로컬 수정 · 미배포**
 

@@ -17,3 +17,10 @@
 - 운영 배포/실기기 설치/OS 푸시 아이콘 수신 미검증. 기존 설치본은 OS가 아이콘을 보관하므로 갱신 여부를 실기기에서 확인해야 한다. 아이콘만 바꾸기 위해 인증 저장소를 초기화하지 않는다.
 
 다음 하나: 기존 챌린지 export 오류 해결 뒤 운영 배포 승인 및 실제 폰 설치·알림 수신 확인.
+
+## 운영 배포 완료
+- 사용자 2026-10-06 푸쉬배포 승인. 배포 코드30a4fad(아이콘09ac912 + 기록그림e567f91 + 빌드수정/릴리스노트). challenge page의 테스트용errorMessage 재내보내기를 없애고 테스트는 lib/challenge-errors에서 직접 가져옴; 기능동작변경없음.
+- 개발localhost:3000 새소식·아이콘미리보기 직접확인. 독립 복사본 최종검증: 전체233파일4,038테스트/추가커밋 관련2파일16테스트 PASS, ESLint0오류4기존경고, typecheck PASS, webpack build PASS. 기록그림 커밋 추가로 관련 검사·빌드 재실시.
+- 검증한 로컬main30a4fad git archive의 깨끗한 폴더에서 npx vercel@latest --prod --yes --scope gnd4. READY/production. https://gnd-ae4vdrrh7-gnd4.vercel.app → https://gnd-one.vercel.app . 배포ID dpl_2Li6HWZxixiMeVCDAuDdEVNxfSA4.
+- 운영 아이콘5종 HTTP200 및 SHA256 로컬과 일치, manifest3종 새경로, sw icon/badge 새경로, 실제/login apple-touch-icon180 새경로·비밀번호보기 클릭(text) 확인, /whats-new 새항목 실제표시 확인. 운영 아이콘 증빙 자산폴더 app-icon/production-icon.png.
+- GitHub push후 fetch origin/main...main 0 0 확인. 운영DB변경/실사용자 공지·알림발송없음. 실제폰 설치아이콘갱신/OS푸시수신은 미검증. 다음 하나: 같은 연결계정으로 실제폰 아이콘 갱신과 알림 수신을 확인.
