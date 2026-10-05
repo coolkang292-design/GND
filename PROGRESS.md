@@ -3,7 +3,17 @@
 > 새 세션은 저장소 루트 `AGENTS.md` → `CLAUDE.md` → 이 파일 → 가장 최근의 관련 `docs/superpowers/HANDOFF-*.md` 순서로 읽는다.
 > 이 파일은 전체 흐름의 요약이고, 작업별 세부 사실과 남은 확인은 최신 인수인계서가 기준이다.
 
-## ⏸ 2026-10-05 Performance Social 자산 — **Codex 제작 · Claude 적용 대기**
+## ✅ 2026-10-05 Performance Social 적용 1차 (탭바·홈·피드·챌린지) — **배포**
+
+- 사용자 결정: 강조색 전체 라임(#C8FF3D) + 금색(#DDB85C)은 XP·배지·1위 전용(`--gold`), 색상 표(Canvas #090A0C · Success #50DC88 · Danger #FF5C65 · 눌림 #90C800)는 `globals.css` 토큰. 이모지는 5개 탭 첫 화면 위주로 SVG/장식으로 교체, 피드 큰 제목은 캡션만, 부족 자산은 SVG 직접 제작.
+- 아이콘: `components/ui/icon.tsx`(패키지 43종 + timer/sets/level/ranking/pr/success, currentColor). `UiIcon`은 이름 대응표로 **SVG를 그린다**(part-*/situ-* 일러스트만 비트맵). 공용 알약 `components/ui/chip.tsx`(높이 20px 고정 — 홀수 높이면 점이 반 픽셀에 걸린다).
+- 홈: 사용자 시안대로 인사말·스트릭 배너·오늘의 목표(이번 주 고유 운동일 / 챌린지 주간 목표, 목표 없으면 정하기, 조회 실패면 다시 시도)·오늘 MIN/SETS/KG(`getTodayWorkoutTotals` 신규 읽기 조회)·YOUR CREW·ACTIVE CHALLENGE(진행 중 순위 없음 — 부정 테스트).
+- 피드: 머리·라임 탭·사진 위 이름/캡션·3칸 숫자(`domain/feed-card.ts`)·번호 목록(`4세트 × 100kg`, 다르면 최고/총)·접기·세트 상세 새 톤·하트 SVG·응원 명단 줄. 하단 고정 크루 배너(`(tabs)/layout.tsx`, 피드만) → `/challenge?create=1`로 만들기 바로 열림.
+- 챌린지: 목록 첫 진행 중 큰 카드 + 한 줄 행, 상세 사진 히어로·내 진행·4칸 정보줄·마일스톤(7/14일 연속·완주 — **지급 없는 진행 표시**, `domain/challenge-milestones.ts`), 종료 시상대 `RankingPodium`(금/은/동·왕관·월계수·받침대·YOU).
+- **DB 0115 `challenges.live_ranking`**(기본 false · 칼럼 UPDATE 권한 · 시작 후 변경 막는 트리거). 만들 때 스위치 + 시작 전 방장 ⋯에서 변경. 켠 방은 진행 중 종합점수 TOP 3·내 순위 공개. pg_temp 리허설 후 MCP 적용·재조회, 기존 47건 false, 스냅샷 갱신.
+- 남은 일: 기록 탭·프로필(배지 catalog 30종) 적용, ✓/🔒 등 남은 이모지(record·profile·programs), 실시간 랭킹 실제 방(새로 만든 방)·B 계정 화면 확인.
+
+## ⏸ 2026-10-05 Performance Social 자산 — **Codex 제작 · 1차 적용됨(위)**
 
 - 인수인계: docs/superpowers/HANDOFF-2026-10-05-performance-social-assets.md. 로컬 Git제외 패키지: 어플 UI 이미지/Performance-Social-2026-10-05/. 상세 CLAUDE-적용지침.md/미리보기/manifest 포함.
 - 기능아이콘43종×3상태(SVG·24/48PNG), 사진5종, 금속장식6종, 기존배지키30종, 7/14/30장식, 순위패널/로고/문자. 파일599개(마스터·여러크기·실패본2 포함) 약66.7MiB. 하단5탭의24px/1.8px/회색·선택라임 통일.

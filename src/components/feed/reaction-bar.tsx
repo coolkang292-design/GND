@@ -7,6 +7,7 @@ import {
   type ReactionCounts,
 } from "@/lib/domain/reaction-fold";
 import { toggleReaction, type ReactionType } from "@/lib/social";
+import { Icon } from "@/components/ui/icon";
 
 type Props = {
   sessionId: string;
@@ -134,19 +135,14 @@ export function ReactionBar({
       aria-pressed={liked}
       aria-label={`좋아요 ${total}`}
       /* 아이콘이 작아도 손가락이 닿아야 한다 — 세로 패딩으로 높이를 만든다 */
-      className="flex items-center gap-1 py-1.5 text-[15px] leading-none"
+      className={`flex items-center gap-1.5 py-1.5 leading-none ${
+        liked ? "text-accent" : "text-muted"
+      }`}
     >
-      {/* 상태를 테두리가 아니라 **투명도**로 말한다 — 탭바 아이콘과 같은 수법 */}
-      <span className={liked ? "" : "opacity-40 grayscale"}>❤️</span>
-      {total > 0 && (
-        <span
-          className={`text-[12.5px] font-bold ${
-            liked ? "text-accent" : "text-muted"
-          }`}
-        >
-          {total}
-        </span>
-      )}
+      {/* 이모지 ❤️ → SVG 하트 (2026-10-05 기획안 17-A). 누른 상태는 **채움 + 라임**,
+          안 누른 상태는 회색 윤곽선이다 — 색 하나가 아니라 모양(채움)으로도 말한다. */}
+      <Icon name="heart" size={22} filled={liked} />
+      {total > 0 && <span className="text-[13px] font-bold">{total}</span>}
     </button>
   );
 }

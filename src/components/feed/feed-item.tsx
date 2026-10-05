@@ -14,6 +14,8 @@ import { ImageLightbox } from "@/components/image-lightbox";
 import { PhotoCarousel } from "@/components/feed/photo-carousel";
 import { PhotoStamp } from "@/components/photo-stamp";
 import { SetBreakdown } from "@/components/workout/set-breakdown";
+import { Icon } from "@/components/ui/icon";
+import { exerciseSetSummary, feedStatCells } from "@/lib/domain/feed-card";
 import { normalizeCaption } from "@/lib/domain/session-caption";
 import {
   totalCommentCount,
@@ -22,11 +24,30 @@ import {
 import type { FeedItem } from "@/lib/social";
 import { timeAgo } from "@/lib/time-ago";
 
-/** 종목 요약 — 최대 3개 + "외 n종" */
-function exerciseSummary(names: string[]): string {
-  if (names.length === 0) return "운동 완료";
-  const head = names.slice(0, 3).join(" · ");
-  return names.length > 3 ? `${head} 외 ${names.length - 3}종` : head;
+/** `지훈님, 서연님 외 3명이 응원했어요` — 이름은 피드가 들고 있는 `people`에서만 꺼낸다 */
+function likersSentence(item: FeedItem): string {
+  const names = item.likers
+    .map((id) => item.people.get(id)?.nickname)
+    .filter((n): n is string => Boolean(n))
+    .slice(0, 2);
+  if (names.length === 0) return `${item.likers.length}명이 응원했어요`;
+  const rest = item.likers.length - names.length;
+  const head = names.map((n) => `${n}님`).join(", ");
+  return rest > 0 ? `${head} 외 ${rest}명이 응원했어요` : `${head}이 응원했어요`;
+}
+
+/** 접힌 목록에 보이는 운동 수 — 나머지는 `+N종 더 보기` (시안은 3줄) */
+const VISIBLE_EXERCISES = 3;
+
+/** 닉네임 옆 연속일 — 이모지 🔥 대신 패키지 불꽃 (기획안 17-A) */
+function StreakMark({ streak }: { streak: number }) {
+  return (
+    <span className="ml-0.5 inline-flex flex-none items-center gap-0.5 text-[12px] font-extrabold text-warn">
+      {/* eslint-disable-next-line @next/next/no-img-element -- 16px 장식, 변환 서버를 거칠 이유가 없다 */}
+      <img src="/gnd/decorations/flame-32.webp" alt="" width={14} height={14} className="h-3.5 w-3.5" />
+      <span aria-label={`연속 ${streak}일`}>{streak}</span>
+    </span>
+  );
 }
 
 type Props = {
@@ -62,78 +83,149 @@ type Props = {
  */
 function WorkoutSummary({
   item,
-  stats,
   isMine,
 }: {
   item: FeedItem;
-  stats: string[];
   /** 내 기록이면 따라하기를 안 그린다 (2026-08-31 사용자 지시) */
   isMine: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const listRef = useRef<HTMLButtonElement>(null);
+  const cells = feedStatCells(item);
+  const rows = item.breakdown;
+  const hidden = Math.max(0, rows.length - VISIBLE_EXERCISES);
 
   return (
-    <div className="px-4 pt-3 pb-2">
+    <div className="px-3.5 pt-3 pb-1">
+      {/*
+        숫자 줄 — 시안의 `52 MIN 운동 시간 · 18 SETS 전체 세트 · 6,840 KG 전체 볼륨`
+        (2026-10-05 Performance Social). 0인 칸은 만들지 않는다(`feedStatCells`).
+      */}
+      {cells.length > 0 && (
+        <div
+          className="grid divide-x divide-line rounded-card-sm border border-line bg-surface-2/60 py-2.5"
+          style={{ gridTemplateColumns: `repeat(${cells.length}, minmax(0, 1fr))` }}
+        >
+          {cells.map((c) => (
+            <div key={c.key} className="flex min-w-0 items-center justify-center gap-2 px-1.5">
+              <Icon name={c.icon} size={20} className="flex-none text-accent" />
+              <div className="min-w-0 leading-none">
+                <p className="flex items-baseline gap-1 whitespace-nowrap">
+                  <strong className="text-[19px] font-black tracking-tight">{c.value}</strong>
+                  <span className="text-[10.5px] font-extrabold">{c.unit}</span>
+                </p>
+                <p className="mt-1 truncate text-[10.5px] text-muted">{c.label}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 인터벌·기록 갱신 줄 (2026-10-05 사용자 지시 "색상 팔레트에 맞게").
+          금색·라임 테두리 알약을 걷고 숫자 줄·운동 목록과 **같은 상자 톤**(어두운 바탕 +
+          얇은 회색 테두리 + 흰 글자)으로 맞췄다. 색은 아이콘 하나에만 — 라임. */}
+      {(item.tabataMinutes || item.recordNote) && (
+        <div className="mt-2 flex flex-col gap-1.5">
+          {item.tabataMinutes && (
+            <p className="flex items-center gap-2 rounded-card-sm border border-line bg-surface-2/60 px-3 py-2 text-[12.5px]">
+              <Icon name="interval" size={16} className="flex-none text-accent" />
+              <span className="font-extrabold">전신 인터벌 {item.tabataMinutes}분</span>
+            </p>
+          )}
+          {item.recordNote && (
+            <p className="flex items-start gap-2 rounded-card-sm border border-line bg-surface-2/60 px-3 py-2 text-[12.5px] leading-snug">
+              <Icon name="pr" size={16} className="mt-px flex-none text-accent" />
+              <span className="min-w-0">
+                <span className="font-extrabold">기록 갱신</span>
+                <span className="text-muted"> · {item.recordNote}</span>
+              </span>
+            </p>
+          )}
+        </div>
+      )}
+
+      {/*
+        운동 목록 — 시안의 `1 벤치프레스 … 4세트 × 100kg ›` (2026-10-05).
+
+        ⚠️ **목록 전체가 하나의 상세 토글이다** (2026-08-04 규약 유지). 사진 카드와 일반
+           카드가 같은 블록을 쓰고, 세트는 `getCrewFeed`가 이미 받은 것이라 새 질의가 없다.
+        ⚠️ 이름과 접근 이름 `… 운동 상세`를 바꾸지 마라 — 테스트와 화면 낭독이 그 이름으로 찾는다.
+      */}
       <button
+        ref={listRef}
         type="button"
         aria-label={`${item.nickname} 운동 상세`}
         aria-expanded={expanded}
         onClick={() => setExpanded((open) => !open)}
-        className="w-full text-left"
+        className="mt-2 block w-full overflow-hidden rounded-card-sm border border-line bg-surface-2/60 text-left"
       >
-        <span className="block text-sm font-bold">
-          {exerciseSummary(item.exerciseNames)}
-        </span>
-        <span className="mt-0.5 block text-xs font-bold text-muted">
-          {stats.length > 0 && <>{stats.join(" · ")} · </>}
-          <span className="text-accent">
-            {expanded ? "접기 ▲" : "상세 ▼"}
+        {rows.length === 0 ? (
+          <span className="flex items-center justify-between px-3 py-2.5 text-[13px] font-bold">
+            {item.exerciseNames.length > 0 ? item.exerciseNames.join(" · ") : "운동 완료"}
+            <Icon name="chevron" size={16} className={`text-faint transition-transform ${expanded ? "rotate-90" : ""}`} />
           </span>
-        </span>
+        ) : (
+          <ol className="divide-y divide-line">
+            {(expanded ? rows : rows.slice(0, VISIBLE_EXERCISES)).map((ex, i) => (
+              <li key={`${ex.name}-${i}`} className="flex items-center gap-2.5 px-3 py-2">
+                <span className="flex h-5 w-5 flex-none items-center justify-center rounded-[6px] bg-surface-3 text-[11px] font-extrabold text-muted">
+                  {i + 1}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-[13.5px] font-bold">{ex.name}</span>
+                <span className="flex-none text-[12.5px] text-muted">{exerciseSetSummary(ex)}</span>
+                <Icon
+                  name="chevron"
+                  size={15}
+                  className={`flex-none text-faint transition-transform ${expanded ? "rotate-90" : ""}`}
+                />
+              </li>
+            ))}
+            {!expanded && hidden > 0 && (
+              <li className="px-3 py-2 text-center text-[12px] font-bold text-accent">
+                +{hidden}종 더 보기
+              </li>
+            )}
+            {/* 펼친 뒤에는 접는 길이 보여야 한다 (2026-10-05 사용자 지적 "펼친 다음에 접기가 없네") */}
+            {expanded && (
+              <li className="flex items-center justify-center gap-1 px-3 py-2 text-[12px] font-bold text-muted">
+                접기
+                <Icon name="chevron" size={13} className="-rotate-90" />
+              </li>
+            )}
+          </ol>
+        )}
       </button>
-      {item.tabataMinutes && (
-        <p className="mt-1.5 mr-1 inline-block rounded-full bg-accent-weak px-2.5 py-1 text-[11px] font-extrabold text-accent">
-          🔥 전신 인터벌 {item.tabataMinutes}분
-        </p>
-      )}
-      {item.recordNote && (
-        <p className="mt-1.5 inline-block rounded-full bg-accent-weak px-2.5 py-1 text-[11px] font-extrabold text-accent">
-          🏅 기록 갱신 · {item.recordNote}
-        </p>
-      )}
+
       {/*
-        이 운동 따라하기 (2026-08-31).
-
-        ⚠️ **❤️ 💬 액션 줄에 두지 마라.** 그 줄은 "사람과 소통하는" 버튼만 남기려고
-           공유·북마크까지 일부러 뺀 자리다(`reaction-bar.tsx` 주석). 따라하기는
-           **운동을 실행하는** 버튼이라 성격이 다르다 — 종목·세트 옆이 제자리다.
-
-        ⚠️ **상세를 펼쳐야 보인다** (2026-08-31 사용자 지시). 접힌 카드에 항상
-           띄웠더니 게시물마다 큰 버튼이 하나씩 붙어 목록이 버튼 목록처럼 읽혔다.
-           그리고 종목 이름만 보고 따라할지 정하지도 않는다 — **무게·세트를 봐야**
-           결정한다. 그 정보가 열리는 순간에 함께 나오는 것이 순서에 맞다.
-
-        ⚠️ **내 기록에는 안 그린다** (같은 지시). 내가 한 운동을 내가 따라하는
-           것은 말이 안 되고, `getSessionCopySource`가 남의 세션을 전제로 만든
-           경로다(§인수인계서 함정 ⑦ — `source_session_id`에 남의 id를 넣으면
-           INSERT가 통째로 거부된다).
-
-        ⚠️ URL에 운동 JSON을 싣지 않는다. **session id 하나만** 넘기고 기록 화면이
-           조회한다. 실어 보내면 RLS를 우회한 두 번째 진실이 생긴다.
-
-        ⚠️ 누르는 순간 운동이 시작되지 않는다. 기록 화면 draft에 담기고,
-           사용자가 무게를 확인한 뒤 기존 `운동 시작`을 누른다 — 친구가 든 무게가
-           나에게 맞으리라는 보장이 없다.
+        이 운동 따라하기 (2026-08-31) — 규칙은 그대로다.
+        ⚠️ 액션 줄(하트·댓글)에 두지 않는다 — 그 줄은 사람과 소통하는 버튼만.
+        ⚠️ **상세를 펼쳐야 보인다**, **내 기록에는 안 그린다**, URL엔 session id 하나만.
+        ⚠️ 누르는 순간 운동이 시작되지 않는다 — 기록 화면 draft에 담길 뿐이다.
       */}
       {expanded && (
         <div className="mt-2.5">
           <SetBreakdown exercises={item.breakdown} />
+          {/* 세트 상세가 길면 위 목록의 `접기`가 화면 밖에 있다 — 끝에서도 접을 수 있게 */}
+          <button
+            type="button"
+            onClick={() => {
+              setExpanded(false);
+              // 아래에서 접으면 내용이 줄며 화면이 다른 카드로 튄다 — 이 목록으로 되돌린다
+              requestAnimationFrame(() =>
+                listRef.current?.scrollIntoView?.({ block: "nearest" }),
+              );
+            }}
+            className="mt-2 flex min-h-[40px] w-full items-center justify-center gap-1 rounded-card-sm border border-line text-[12.5px] font-bold text-muted"
+          >
+            세트 상세 접기
+            <Icon name="chevron" size={13} className="-rotate-90" />
+          </button>
           {!isMine && (
             <Link
               href={`/record?copy=${item.sessionId}`}
-              className="mt-2.5 flex min-h-[38px] w-full items-center justify-center gap-1.5 rounded-card-sm border border-accent/50 bg-accent-weak text-[12.5px] font-extrabold text-accent"
+              className="mt-2.5 flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-card-sm border border-accent/50 bg-black/30 text-[12.5px] font-extrabold text-accent"
             >
-              <span>🏋️</span> 이 운동 따라하기
+              <Icon name="repeat" size={15} />이 운동 따라하기
             </Link>
           )}
         </div>
@@ -163,18 +255,15 @@ function Caption({
   isMine: boolean;
   onItemChange?: (next: FeedItem) => void;
 }) {
-  const caption = normalizeCaption(item.title);
   const editable = isMine && onItemChange !== undefined;
 
-  if (!caption && !editable) return null;
+  /* 2026-10-05: 캡션 **글자**는 카드가 직접 그린다 — 사진 카드는 사진 위 시안의
+     `오늘도 한계를 넘었다.` 자리, 일반 카드는 머리 아래 제목 자리(`CaptionText`).
+     여기는 **편집 칩**만 남는다. 같은 문장을 두 번 그리지 않는다. */
+  if (!editable) return null;
 
   return (
     <div className="flex flex-col gap-2 px-4 pb-2">
-      {caption && (
-        <p className="text-[13.5px] leading-snug break-words">
-          <span className="font-extrabold">{item.nickname}</span> {caption}
-        </p>
-      )}
       {editable && (
         <CaptionPicker
           sessionId={item.sessionId}
@@ -183,6 +272,24 @@ function Caption({
         />
       )}
     </div>
+  );
+}
+
+/**
+ * 캡션 글자 — 시안의 사진 위 문구/일반 카드 제목 자리 (2026-10-05).
+ * ⚠️ 시안의 큰 제목 `PUSH DAY ✓`는 만들지 않는다 — 피드 데이터에 운동 이름이 없다
+ *    (사용자 결정 2026-10-05 "캡션만 표시"). 캡션이 없으면 아무것도 그리지 않는다.
+ */
+function CaptionText({ item, onPhoto }: { item: FeedItem; onPhoto?: boolean }) {
+  const caption = normalizeCaption(item.title);
+  if (!caption) return null;
+  return onPhoto ? (
+    /* 인증 도장(날짜·시각·WORKOUT COMPLETED 세 줄, 약 64px) 위에 놓는다 */
+    <p className="pointer-events-none absolute inset-x-0 bottom-[78px] line-clamp-2 px-3.5 text-[19px] font-black leading-tight break-words text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)]">
+      {caption}
+    </p>
+  ) : (
+    <p className="px-3.5 pt-2 text-[16px] font-extrabold leading-snug break-words">{caption}</p>
   );
 }
 
@@ -220,7 +327,7 @@ function CardFooter({
       {/* 인스타식 액션 줄 — 민무늬 아이콘 둘(❤️ 💬).
           🔥·👏 버튼과 공유(➤)·북마크(🔖)는 없다
           (사용자 결정 2026-08-30, 근거는 `reaction-bar.tsx` 주석). */}
-      <div className="flex items-center gap-3.5 px-4 py-2.5">
+      <div className="flex items-center gap-5 px-4 py-2">
         <ReactionBar
           sessionId={item.sessionId}
           userId={userId}
@@ -233,29 +340,40 @@ function CardFooter({
           onClick={() => setShowComments((open) => !open)}
           aria-expanded={showComments}
           aria-label={`댓글 ${commentCount}개`}
-          className="flex items-center gap-1 py-1.5 text-[15px] leading-none"
+          className={`flex items-center gap-1.5 py-1.5 leading-none ${
+            showComments ? "text-accent" : "text-muted"
+          }`}
         >
-          <span className={showComments ? "" : "opacity-40 grayscale"}>💬</span>
+          <Icon name="comment" size={22} />
           {commentCount > 0 && (
-            <span
-              className={`text-[12.5px] font-bold ${
-                showComments ? "text-accent" : "text-muted"
-              }`}
-            >
-              {commentCount}
-            </span>
+            <span className="text-[13px] font-bold">{commentCount}</span>
           )}
         </button>
       </div>
 
       {/* 좋아요 명단 — 새 조회가 없다. 피드가 이미 들고 있는 것을 펼칠 뿐이다 */}
+      {/* 시안의 `지훈님, 서연님 외 30명이 응원했어요 ›` (2026-10-05).
+          ⚠️ 새 조회가 없다 — `likers`·`people`은 피드가 이미 들고 있다. 누르면 같은 명단 시트. */}
       {item.likers.length > 0 && (
         <button
           type="button"
           onClick={() => setShowLikers(true)}
-          className="-mt-1 px-4 pb-2 text-left text-[12px] font-bold text-muted"
+          aria-label={`좋아요 ${item.likers.length}개 모두 보기`}
+          className="mx-3.5 mb-2.5 flex w-[calc(100%-1.75rem)] items-center gap-2 rounded-full border border-line bg-surface-2/60 py-1.5 pr-3 pl-1.5 text-left"
         >
-          좋아요 {item.likers.length}개 모두 보기
+          <span className="flex flex-none -space-x-2">
+            {item.likers.slice(0, 3).map((id) => (
+              <Avatar
+                key={id}
+                src={item.people.get(id)?.avatarUrl ?? null}
+                className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full border-2 border-surface bg-surface-3 text-[11px]"
+              />
+            ))}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-[12px] text-muted">
+            {likersSentence(item)}
+          </span>
+          <Icon name="chevron" size={14} className="flex-none text-faint" />
         </button>
       )}
 
@@ -321,14 +439,6 @@ export function FeedItemCard({
     [],
   );
 
-  const stats: string[] = [];
-  if (item.durationMinutes > 0) stats.push(`${item.durationMinutes}분`);
-  if (item.volume.weightVolumeKg > 0)
-    stats.push(`${Math.round(item.volume.weightVolumeKg).toLocaleString()}kg`);
-  if (item.volume.bodyweightReps > 0)
-    stats.push(`${item.volume.bodyweightReps}회`);
-  if (item.volume.cardioDistanceMeters > 0)
-    stats.push(`${(item.volume.cardioDistanceMeters / 1000).toFixed(1)}km`);
 
   /**
    * 사진 탭 (Phase D → 0103).
@@ -360,7 +470,7 @@ export function FeedItemCard({
   const openPhoto = lightboxAt === null ? null : photos[lightboxAt];
   if (photos.length > 0) {
     return (
-      <article className="overflow-hidden rounded-card border border-line bg-surface shadow-card">
+      <article className="overflow-hidden rounded-card border border-line-strong bg-surface shadow-card">
         {/* ⚠️ **4/3이다. 4/5로 바꾸지 마라.**
             계획서(Phase D)는 인스타를 따라 4/5를 적었고 실제로 그렇게 바꿔 봤는데,
             사용자가 화면을 보고 되돌렸다 — *"이전게 더 나은거 같은데 너무 길쭉함"*
@@ -383,43 +493,45 @@ export function FeedItemCard({
               className="pointer-events-none absolute inset-0 flex items-center justify-center text-[88px] drop-shadow-lg"
               style={{ animation: "gnd-heart-burst 700ms ease-out forwards" }}
             >
-              ❤️
+              <Icon name="heart" size={88} filled className="text-accent" />
             </span>
           )}
 
-          <PhotoStamp
-            completedAt={item.completedAt}
-            durationMinutes={item.durationMinutes}
-            position="top"
-          />
-          <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 bg-gradient-to-t from-black/75 to-transparent px-3.5 pt-10 pb-3 text-white">
+          {/* 2026-10-05 Performance Social — 시안대로 **사람이 위, 인증 도장이 아래**.
+              (예전엔 도장이 위, 사람이 아래였다.) 인증 도장은 지우지 않는다 — 언제 찍은
+              운동인지 말해 주는 증거다. */}
+          <div className="absolute inset-x-0 top-0 flex items-center gap-2.5 bg-gradient-to-b from-black/75 via-black/35 to-transparent px-3.5 pt-3 pb-8 text-white">
             <button
               type="button"
               onClick={onProfileClick}
               aria-label={`${item.nickname} 프로필 보기`}
-              className="flex min-w-0 items-center gap-2 text-left"
+              className="flex min-w-0 items-center gap-2.5 text-left"
             >
               <Avatar
                 src={item.avatarUrl}
-                className="flex h-8 w-8 flex-none items-center justify-center overflow-hidden rounded-full bg-white/20 text-base backdrop-blur"
+                className="flex h-10 w-10 flex-none items-center justify-center overflow-hidden rounded-full border-2 border-white/25 bg-white/15 text-lg"
               />
-              <p className="truncate text-sm font-extrabold">
-                {item.nickname}
-                {item.userId === userId && (
-                  <span className="ml-1 opacity-75">(나)</span>
-                )}
-                {item.streak > 0 && (
-                  <span className="ml-1.5 text-xs">🔥{item.streak}</span>
-                )}
-              </p>
+              <span className="min-w-0">
+                <span className="flex items-center gap-1 truncate text-[15px] font-extrabold">
+                  {item.nickname}
+                  {item.userId === userId && <span className="opacity-75">(나)</span>}
+                  {item.streak > 0 && <StreakMark streak={item.streak} />}
+                </span>
+                <span className="block text-[12px] text-white/75">
+                  {timeAgo(item.completedAt)} 운동 완료
+                </span>
+              </span>
             </button>
-            <p className="flex-none text-right text-xs font-bold text-white/85">
-              {timeAgo(item.completedAt)} 운동 완료
-            </p>
           </div>
+          <PhotoStamp
+            completedAt={item.completedAt}
+            durationMinutes={item.durationMinutes}
+            position="bottom"
+          />
+          <CaptionText item={item} onPhoto />
         </PhotoCarousel>
 
-        <WorkoutSummary item={item} stats={stats} isMine={item.userId === userId} />
+        <WorkoutSummary item={item} isMine={item.userId === userId} />
         <CardFooter
           item={item}
           userId={userId}
@@ -449,8 +561,8 @@ export function FeedItemCard({
   }
 
   return (
-    <article className="rounded-card border border-line bg-surface shadow-card">
-      <div className="flex items-center gap-2.5 px-4 pt-3.5">
+    <article className="rounded-card border border-line-strong bg-surface shadow-card">
+      <div className="flex items-center gap-2.5 px-3.5 pt-3.5">
         <button
           type="button"
           onClick={onProfileClick}
@@ -459,28 +571,23 @@ export function FeedItemCard({
         >
           <Avatar
             src={item.avatarUrl}
-            className="flex h-9 w-9 flex-none items-center justify-center overflow-hidden rounded-full bg-surface-2 text-lg"
+            className="flex h-10 w-10 flex-none items-center justify-center overflow-hidden rounded-full border-2 border-line-strong bg-surface-2 text-lg"
           />
           <div className="min-w-0">
-            <p className="truncate text-sm font-extrabold">
+            <p className="flex items-center gap-1 truncate text-[15px] font-extrabold">
               {item.nickname}
-              {item.userId === userId && (
-                <span className="ml-1 text-faint">(나)</span>
-              )}
-              {item.streak > 0 && (
-                <span className="ml-1.5 text-xs font-bold text-accent">
-                  🔥{item.streak}
-                </span>
-              )}
+              {item.userId === userId && <span className="text-faint">(나)</span>}
+              {item.streak > 0 && <StreakMark streak={item.streak} />}
             </p>
-            <p className="text-xs text-muted">
+            <p className="text-[12px] text-muted">
               {timeAgo(item.completedAt)} 운동 완료
             </p>
           </div>
         </button>
       </div>
 
-      <WorkoutSummary item={item} stats={stats} isMine={item.userId === userId} />
+      <CaptionText item={item} />
+      <WorkoutSummary item={item} isMine={item.userId === userId} />
       <CardFooter
         item={item}
         userId={userId}

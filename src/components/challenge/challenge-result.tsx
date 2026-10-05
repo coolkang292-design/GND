@@ -1,7 +1,7 @@
 "use client";
 
-import { Avatar } from "@/components/avatar";
-import { UiIcon } from "@/components/ui-icon";
+import { Icon } from "@/components/ui/icon";
+import { RankingPodium } from "@/components/challenge/ranking-podium";
 import { goalLabel, type ChallengeParticipantProfile } from "@/lib/challenge";
 import {
   gndLabel,
@@ -37,63 +37,26 @@ export function ResultView({
 }) {
   const ranked = rankParticipants(participants);
   const total = ranked.length;
-  const podiumOrder = [ranked[1], ranked[0], ranked[2]].filter(
-    (r): r is (typeof ranked)[number] => Boolean(r),
-  );
-  const heights: Record<number, string> = { 1: "h-20", 2: "h-14", 3: "h-10" };
 
   return (
     <>
-      <section className="rounded-card border border-line bg-surface p-4 shadow-card">
-        <h3 className="text-center text-base font-extrabold">
-          <UiIcon name="trophy" /> 최종 순위 발표
+      {/* 시상대 — 진행 중 실시간 랭킹과 **같은 부품**(`RankingPodium`, 2026-10-05) */}
+      <section className="rounded-card border border-line-strong bg-surface p-4 shadow-card">
+        <h3 className="mb-2 flex items-center justify-center gap-1.5 text-[16px] font-extrabold">
+          <Icon name="trophy" size={18} className="text-gold" /> 최종 순위 발표
         </h3>
-        <div className="mt-4 flex items-end justify-center gap-2">
-          {podiumOrder.map((r) => {
-            const p = profileOf(r.userId);
-            const h = heights[Math.min(r.rank, 3)];
-            return (
-              <div key={r.userId} className="flex w-20 flex-col items-center">
-                {r.rank === 1 && <UiIcon name="crown" size={20} />}
-                {/* ⚠️ 프로필을 못 찾으면(`p` 없음) 누를 수 없다 — 누구인지 모르는
-                    대상의 시트를 열면 조회가 `not_crew`로 떨어진다. */}
-                <button
-                  type="button"
-                  disabled={!p}
-                  onClick={() => p && onProfileClick(p)}
-                  aria-label={p ? `${p.nickname} 프로필 보기` : undefined}
-                  className="flex w-full flex-col items-center disabled:cursor-default"
-                >
-                  <Avatar
-                    src={p?.avatar_url}
-                    className="grid h-10 w-10 place-items-center overflow-hidden rounded-full bg-surface-2 text-xl"
-                  />
-                  <span className="mt-1 w-full truncate text-center text-xs font-extrabold">
-                    {p?.nickname ?? "?"}
-                  </span>
-                </button>
-                <span className="font-mono text-[11px] text-muted">
-                  {r.overall.toFixed(1)}점
-                </span>
-                <span
-                  className={`mt-0.5 rounded-full px-1.5 py-0.5 text-[9.5px] font-extrabold ${
-                    r.rank === 1
-                      ? "bg-good-weak text-good"
-                      : r.rank === total
-                        ? "bg-surface-2 text-warn"
-                        : "bg-surface-2 text-muted"
-                  }`}
-                >
-                  {gndLabel(r.rank, total)}
-                </span>
-                <div
-                  className={`mt-1.5 w-full rounded-t-lg bg-accent-weak text-center font-mono text-sm font-extrabold text-accent ${h}`}
-                >
-                  {r.rank}
-                </div>
-              </div>
-            );
-          })}
+        <RankingPodium
+          ranked={ranked}
+          profileOf={profileOf}
+          myUserId={myUserId}
+          onProfileClick={onProfileClick}
+        />
+        <div className="mt-2 flex flex-wrap justify-center gap-1.5">
+          {ranked.slice(0, 3).map((r) => (
+            <span key={r.userId} className="text-[10.5px] font-bold text-muted">
+              {r.rank}위 {gndLabel(r.rank, total)}
+            </span>
+          ))}
         </div>
       </section>
 
@@ -112,8 +75,8 @@ export function ResultView({
               <span
                 className={`grid h-8 w-8 place-items-center rounded-full font-mono text-sm font-extrabold ${
                   r.rank === 1
-                    ? "bg-accent text-accent-ink"
-                    : "bg-surface-2 text-muted"
+                    ? "bg-gold text-accent-ink"
+                    : "bg-surface-3 text-muted"
                 }`}
               >
                 {r.rank}
@@ -122,7 +85,7 @@ export function ResultView({
                 <p className="text-sm font-extrabold">
                   {p?.nickname ?? "?"}
                   {r.userId === myUserId && (
-                    <span className="ml-1 rounded-full bg-accent-weak px-1.5 text-[10px] text-accent">
+                    <span className="ml-1 rounded-full border border-accent/60 px-1.5 text-[10px] text-accent">
                       나
                     </span>
                   )}{" "}

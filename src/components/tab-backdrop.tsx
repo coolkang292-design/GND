@@ -87,12 +87,25 @@ export function TabBackdrop() {
   }, [src]);
 
   if (!src) return null;
+  /**
+   * 홈은 Performance Social 시안대로 **헤더 뒤 오른쪽 위**에만 운동선수 사진을 둔다
+   * (2026-10-05 사용자 지시 "공유한 사진의 UI와 최대한 유사하게"). 인물은 오른쪽에
+   * 남기고 왼쪽·아래를 어둡게 눌러 인사말·로고가 읽히게 한다(적용 지침 §디자인 규칙).
+   * 사진은 `어플 UI 이미지/Performance-Social-2026-10-05/photos/header-1280.webp`를
+   * 잘라 만든 것이다 — `scripts/build-tab-backdrops.py`의 `home` 항목 주석 참조.
+   */
+  // 피드도 같은 짧은 배치를 쓴다(2026-10-05) — 예전 갈색 톤 사진이 시안의 무채색과
+  // 어긋났다. 사진은 패키지 크루 사진(`photos/crew-1280.webp`)을 같은 방식으로 잘랐다.
+  const isShort =
+    pathname === "/home" || pathname === "/feed" || pathname === "/challenge";
   return (
     <div
       aria-hidden
       data-testid="tab-backdrop"
       data-src={src}
-      className="pointer-events-none absolute -inset-x-4 -top-4 h-[560px] overflow-hidden"
+      className={`pointer-events-none absolute -inset-x-4 -top-4 overflow-hidden ${
+        isShort ? "h-[330px]" : "h-[560px]"
+      }`}
     >
       {/*
         화면 맨 위에 깔리는 사진이라 지연 로딩(lazy)이면 안 된다 — 배치가 끝난 뒤에야
@@ -107,8 +120,15 @@ export function TabBackdrop() {
         fill
         unoptimized
         loading="eager"
-        className="object-cover object-[50%_25%] opacity-70"
+        className={
+          isShort
+            ? "object-cover object-[80%_20%] opacity-90"
+            : "object-cover object-[50%_25%] opacity-70"
+        }
       />
+      {isShort && (
+        <div className="absolute inset-0 bg-gradient-to-r from-bg via-bg/55 to-bg/0" />
+      )}
       <div className="absolute inset-0 bg-gradient-to-b from-bg/0 via-bg/40 to-bg" />
     </div>
   );

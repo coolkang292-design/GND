@@ -22,11 +22,12 @@ SRC = os.path.join(ROOT, "public", "program-assets")
 OUT = os.path.join(ROOT, "public", "tab-backdrops")
 
 # 탭 → 원본 (tab-backdrop.tsx의 BACKDROPS와 같은 짝)
+# ⚠️ `home`은 여기서 만들지 않는다 (2026-10-05 Performance Social). 시안의 헤더 운동선수
+#    사진(`어플 UI 이미지/Performance-Social-2026-10-05/photos/header-1280.webp`)을 오른쪽
+#    기준 430:330으로 잘라 780×599, 품질 62로 따로 만들었다. 이 스크립트를 돌리면
+#    덮어쓰므로 목록에서 뺐다. `feed`(패키지 `photos/crew-1280.webp`)·`challenge`(`photos/challenge-1280.webp`)도 같다.
 SOURCES = {
-    "home": "lower-v2.webp",
-    "feed": "shoulder.webp",
     "record": "interval.webp",
-    "challenge": "lean-v2.webp",
     "profile": "chest.webp",
 }
 

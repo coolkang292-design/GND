@@ -40,6 +40,13 @@ export type Challenge = {
    */
   discoverable: boolean;
   /**
+   * 진행 중 실시간 랭킹(TOP 3) 공개 (0115, 2026-10-05 사용자 지시).
+   * 기본 false — 진행 중엔 내 진행률만, 종료 후 시상대(옛 규칙 그대로).
+   * true면 진행 중에도 **종합점수** 기준 순위를 보여 준다. setup 동안만 방장이 바꾼다
+   * (서버 트리거 `guard_challenge_live_ranking`이 시작 후 변경을 막는다).
+   */
+  live_ranking: boolean;
+  /**
    * 모집글 (0087). 피드 모집 카드에 이름 아래로 들어간다.
    *
    * ⚠️ DB CHECK가 150자다. 카드 한 장에 두세 줄로 들어가는 길이 — 길어지면

@@ -3,6 +3,7 @@ import { OnboardingGate } from "@/components/onboarding-gate";
 import { CheerBanner } from "@/components/cheer-banner";
 import { LaunchMotivationSplash } from "@/components/launch-motivation-splash";
 import { TabBackdrop } from "@/components/tab-backdrop";
+import { CrewBanner } from "@/components/feed/crew-banner";
 
 export default function TabsLayout({
   children,
@@ -32,6 +33,9 @@ export default function TabsLayout({
           <div className="relative">{children}</div>
         </div>
       </main>
+      {/* 피드 하단 고정 배너 (2026-10-05) — 스크롤 영역 밖, 탭바 바로 위. 피드에서만 그린다.
+          ⚠️ 위치·층을 주지 않는 흐름 요소다(위 `main` 주석과 같은 이유). */}
+      <CrewBanner />
       <TabBar />
     </>
   );

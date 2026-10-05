@@ -1,3 +1,4 @@
+import { Icon } from "@/components/ui/icon";
 import { cardioPaceLabel } from "@/lib/domain/cardio-pace";
 import { formatSetAmount } from "@/lib/domain/set-display";
 import { durationSecondsOf } from "@/lib/domain/set-timer";
@@ -72,17 +73,33 @@ export function SetBreakdown({
   }
 
   return (
-    <div className="flex flex-col gap-2.5">
-      {exercises.map((exercise, index) => (
+    /* 2026-10-05 Performance Social 톤 (사용자 지시 "상세 UI도 새 톤앤매너로").
+       피드 카드의 숫자 줄·운동 목록과 같은 상자 — 어두운 바탕 + 얇은 회색 테두리.
+       세트 번호는 운동 목록의 번호 칸과 같은 모양, 완료는 라임 체크 원. 숫자는
+       고정폭 글꼴(`font-mono`) 대신 앱 글꼴의 고른 숫자(`tabular-nums`)로 맞춘다. */
+    <div className="flex flex-col gap-2">
+      {exercises.map((exercise, index) => {
+        const doneCount = exercise.sets.filter((s) => s.done === true).length;
+        const isRecord = exercise.sets.some((s) => s.done !== undefined);
+        return (
         <section
           key={`${exercise.name}-${index}`}
-          className="rounded-card-sm border border-line bg-surface-2 p-3"
+          className="overflow-hidden rounded-card-sm border border-line bg-surface-2/60"
         >
-          <p className="text-[13px] font-extrabold">{exercise.name}</p>
+          <div className="flex items-center justify-between gap-2 border-b border-line px-3 py-2">
+            <p className="min-w-0 truncate text-[13.5px] font-extrabold">{exercise.name}</p>
+            {exercise.sets.length > 0 && (
+              <span className="flex-none text-[11px] font-bold text-muted">
+                {isRecord
+                  ? `${doneCount} / ${exercise.sets.length}세트`
+                  : `${exercise.sets.length}세트`}
+              </span>
+            )}
+          </div>
           {exercise.sets.length === 0 ? (
-            <p className="mt-1 text-[11.5px] text-faint">세트 없음</p>
+            <p className="px-3 py-2 text-[11.5px] text-faint">세트 없음</p>
           ) : (
-            <ul className="mt-1.5 flex flex-col gap-1">
+            <ul className="divide-y divide-line/60 px-3">
               {exercise.sets.map((set, setIndex) => {
                 const number = setIndex + 1;
                 // 러닝 페이스 (2026-09-23) — **완료한 기록에만.** 계획의 페이스는
@@ -99,13 +116,13 @@ export function SetBreakdown({
                 return (
                   <li
                     key={setIndex}
-                    className="flex items-center gap-2 text-[12.5px]"
+                    className="flex min-h-[34px] items-center gap-2.5 text-[13px]"
                   >
-                    <span className="w-4 flex-none text-center font-mono text-[11px] text-faint">
+                    <span className="flex h-5 w-5 flex-none items-center justify-center rounded-[6px] bg-surface-3 text-[11px] font-extrabold text-muted tabular-nums">
                       {number}
                     </span>
                     <span
-                      className={`flex-1 font-mono ${
+                      className={`flex-1 font-bold tabular-nums ${
                         set.done === false ? "text-faint line-through" : ""
                       }`}
                     >
@@ -136,11 +153,13 @@ export function SetBreakdown({
                     {set.done !== undefined && (
                       <span
                         aria-label={`${number}세트 ${set.done ? "완료" : "미완료"}`}
-                        className={`flex-none text-[11px] font-bold ${
-                          set.done ? "text-good" : "text-faint"
+                        className={`flex h-5 w-5 flex-none items-center justify-center rounded-full ${
+                          set.done
+                            ? "bg-accent text-accent-ink"
+                            : "border border-line-strong text-faint"
                         }`}
                       >
-                        {set.done ? "✓" : "—"}
+                        <Icon name={set.done ? "check" : "minus"} size={12} strokeWidth={2.6} />
                       </span>
                     )}
                   </li>
@@ -151,12 +170,13 @@ export function SetBreakdown({
           {exercise.prescription &&
             exercise.exerciseType === "weight" &&
             exercise.sets.every(isEmptySet) && (
-              <p className="mt-1.5 text-[11px] text-faint">
+              <p className="px-3 pb-2 text-[11px] text-faint">
                 무게는 시작할 때 최근 기록으로 채워져요
               </p>
             )}
         </section>
-      ))}
+        );
+      })}
     </div>
   );
 }

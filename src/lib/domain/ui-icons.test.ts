@@ -90,18 +90,16 @@ describe("UI 아이콘 자산 — 경로가 실제 파일을 가리킨다", () =
   });
 
   /**
-   * ⚠️ 탭바는 `tab-${slug}${active ? "-active" : ""}.webp`로 **조립**한다.
-   * 위 정규식이 못 읽으므로 두 상태를 여기서 직접 만들어 확인한다.
-   * 비활성만 있고 활성이 없으면 탭을 누른 순간 그림이 사라진다.
+   * 탭바는 2026-10-05부터 비트맵이 아니라 SVG(`components/ui/icon.tsx`)를 쓴다
+   * (기획안 17-A "Bitmap PNG/WebP를 기능 아이콘으로 사용하지 않는다").
+   * 옛 `tab-*.webp` 조립 경로가 되살아나면 비트맵 아이콘으로 돌아간 것이다.
    */
-  it("탭 5개에 비활성·활성 파일이 모두 있다", () => {
-    const slugs = ["home", "feed", "record", "challenge", "profile"];
-    const missing = slugs.flatMap((slug) =>
-      [`tab-${slug}.webp`, `tab-${slug}-active.webp`].filter(
-        (name) => !existsSync(join(ICON_DIR, name)),
-      ),
-    );
-    expect(missing).toEqual([]);
+  it("탭바가 비트맵 탭 아이콘을 쓰지 않고 SVG 아이콘 5개를 쓴다", () => {
+    const tabBar = readFileSync(join(SRC, "components", "tab-bar.tsx"), "utf8");
+    // 주석에 옛 경로 설명이 남아 있으므로 **문자열 리터럴**로 시작하는 경로만 본다
+    expect(tabBar).not.toMatch(/[`"']\/ui-icons\/tab-/);
+    const icons = [...tabBar.matchAll(/icon: "([a-z]+)"/g)].map((m) => m[1]);
+    expect(icons).toEqual(["home", "feed", "record", "trophy", "person"]);
   });
 
   /**

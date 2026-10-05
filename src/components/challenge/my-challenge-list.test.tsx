@@ -26,6 +26,7 @@ function ch(over: Partial<MyChallenge> & { id: string; name: string }): MyChalle
     created_at: "2026-09-18T00:00:00Z",
     invite_code: "GND-AAAAA",
     discoverable: false,
+    live_ranking: false,
     recruit_note: null,
     recruit_image_url: null,
     myRole: "host",
@@ -69,7 +70,10 @@ describe("MyChallengeList", () => {
   it("진행 중 카드: DAY 7 / 28, 대표 버튼은 기록 화면으로 가는 링크", () => {
     renderList(list);
     const card = screen.getByRole("region", { name: "진행 중" });
-    expect(within(card).getByText("DAY 7 / 28")).toBeTruthy();
+    // 첫 진행 중 카드는 큰 카드다 — `DAY 7 / 28`의 7을 크게 쓰느라 글자가 나뉘어 있다
+    expect(
+      within(card).getByText((_, el) => el?.tagName === "P" && el.textContent === "DAY 7 / 28"),
+    ).toBeTruthy();
     const link = within(card).getByText("오늘 운동하기");
     expect(link.getAttribute("href")).toBe("/record");
   });

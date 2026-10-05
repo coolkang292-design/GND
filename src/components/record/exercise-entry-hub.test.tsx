@@ -229,15 +229,15 @@ describe("ExerciseEntryHub", () => {
       />,
     );
 
+    // 2026-10-05: 작은 아이콘은 SVG(`aria-hidden`)로 바뀌었다 — 그림 둘 다 이름이 없어야 한다
     const images = [...container.querySelectorAll("img")];
-    expect(images.length).toBeGreaterThan(0);
+    const icons = [...container.querySelectorAll("svg[data-icon]")];
+    expect(images.length + icons.length).toBeGreaterThan(0);
     expect(images.every((image) => image.getAttribute("alt") === "")).toBe(true);
+    expect(icons.every((icon) => icon.getAttribute("aria-hidden") === "true")).toBe(true);
     expect(container.querySelector("button button")).toBeNull();
-    expect(
-      container.querySelector('img[src*="hub-past.webp"]'),
-    ).not.toBeNull();
-    expect(
-      container.querySelector('img[src*="hub-routine.webp"]'),
-    ).not.toBeNull();
+    // 지난 운동 = 달력, 내 루틴 = 책 (적용 지침 §기존 UiIcon 연결 참고)
+    expect(container.querySelector('svg[data-icon="calendar"]')).not.toBeNull();
+    expect(container.querySelector('svg[data-icon="book"]')).not.toBeNull();
   });
 });

@@ -7,7 +7,7 @@
 -- 쓰는 법: 함수·정책의 '현행' 정의가 필요할 때 마이그레이션 51개를
 -- 뒤지지 말고 이 파일을 검색하라. 마이그레이션을 적용한 뒤에는 다시 뽑아라.
 --
--- 함수 102개 · 정책 86개 · 인덱스 105개
+-- 함수 103개 · 정책 86개 · 인덱스 105개
 
 -- ════════════════════════════════════════════════════════════
 -- 함수
@@ -2378,6 +2378,22 @@ AS $function$
     -- (reactions는 `workout_session_crew_visible`, cheers는 `session_crew_shared`).
     -- 각자 자기 정책과 맞춰야 "보이는데 이름은 안 나오는" 어긋남이 안 생긴다.
     and public.workout_session_crew_visible(rx.session_id)
+$function$;
+
+-- ── guard_challenge_live_ranking ──
+CREATE OR REPLACE FUNCTION public.guard_challenge_live_ranking()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO ''
+AS $function$
+begin
+  if new.live_ranking is distinct from old.live_ranking
+     and old.status <> 'setup' then
+    raise exception 'live_ranking_locked'
+      using hint = '실시간 랭킹 공개는 챌린지가 시작되기 전에만 바꿀 수 있어요';
+  end if;
+  return new;
+end;
 $function$;
 
 -- ── invite_to_challenge ──

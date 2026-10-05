@@ -127,7 +127,13 @@ export function ChallengeActivity({ challengeId }: { challengeId: string }) {
                 <p className="truncate text-[12px] text-muted">
                   {it.status === "active" ? "운동 중" : "운동 완료"}
                   {it.title ? ` · ${it.title}` : ""}
-                  {it.has_photo ? " · 📷" : ""}
+                  {it.has_photo && (
+                    <>
+                      {" · "}
+                      {/* 이모지 📷 → SVG (2026-10-05). 사진 인증이라는 뜻을 낭독에 남긴다 */}
+                      <UiIcon name="camera" size={13} alt="사진 인증" className="text-muted" />
+                    </>
+                  )}
                   {it.cheer_count > 0 ? ` · 응원 ${it.cheer_count}` : ""}
                 </p>
               </div>
@@ -204,11 +210,12 @@ function ActivityLeaders({
             <li key={l.userId} className="flex items-center gap-2 py-1">
               <span
                 className={`flex w-[4.5rem] flex-none items-center gap-0.5 text-[12px] font-extrabold ${
-                  l.rank === 1 ? "text-accent" : "text-muted"
+                  l.rank === 1 ? "text-gold" : "text-muted"
                 }`}
               >
                 {/* 옆에 '1위'가 있으니 alt는 비운다 (UiIcon 규칙) */}
-                {l.rank === 1 && <UiIcon name="crown" size={14} />}
+                {/* 1위는 보상 금색(사용자 색상 표: Reward Gold = 1위) */}
+                {l.rank === 1 && <UiIcon name="crown" size={14} className="text-gold" />}
                 {tied ? `공동 ${l.rank}위` : `${l.rank}위`}
               </span>
               <Avatar

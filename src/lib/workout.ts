@@ -11,7 +11,7 @@ import {
   parseSavedSetTimer,
   type SavedSetTimer,
 } from "@/lib/domain/set-timer-restore";
-import { dayKey, resolveTimeZone } from "@/lib/domain/time";
+import { dayKey, dayRange, resolveTimeZone } from "@/lib/domain/time";
 import { isIntervalBlockIndex, mergeRecentSessions } from "@/lib/domain/tabata";
 import { firstWorkoutImagePath, workoutImageList } from "@/lib/domain/social";
 import {
@@ -24,7 +24,7 @@ import {
   type WorkoutPhotoRow,
 } from "@/lib/domain/workout-photos";
 import type { CompletedSession } from "@/lib/domain/calendar";
-import type { VolumeSet } from "@/lib/domain/volume";
+import { summarizeVolume, type VolumeSet } from "@/lib/domain/volume";
 import type { LogExercise } from "@/lib/domain/workout-log";
 import type { ComparableExercise } from "@/lib/domain/record-beaten";
 import type {
@@ -1490,6 +1490,90 @@ export async function getSuggestionFacts(userId: string): Promise<{
     signedUpDayKey: profileRes.data
       ? dayKey(new Date(profileRes.data.created_at as string), tz)
       : "1970-01-01",
+  };
+}
+
+/** 홈 `오늘` 숫자 세 칸의 재료 (2026-10-05 Performance Social) */
+export type TodayWorkoutTotals = {
+  /** 오늘 완료한 세션 수 — 0이면 아직 안 했다 */
+  sessionCount: number;
+  /** 시간이 기록된 세션의 분 합. 기록된 세션이 하나도 없으면 `null`(0분으로 위장하지 않는다) */
+  minutes: number | null;
+  /** 완료 세트 수 */
+  setCount: number;
+  /** 완료 웨이트 세트의 중량×횟수 합(kg) */
+  weightVolumeKg: number;
+};
+
+/**
+ * 오늘(tz 기준 0시~) 완료한 내 운동의 시간·세트·볼륨 (2026-10-05).
+ *
+ * 홈 시안의 `42 MIN · 18 SETS · 6,840 KG` 세 칸이다. 세트·볼륨은
+ * `getCompletedSessions`에 없어서(세트를 안 받는다) 오늘 것만 따로 받는다 — 전체 기록의
+ * 세트를 끌어오지 않으려고 `completed_at` 범위로 좁힌다.
+ *
+ * ⚠️ 볼륨 계산은 `summarizeVolume` 하나다. 피드 카드·기록 완료 화면과 같은 함수라
+ *    같은 운동이 화면마다 다른 kg로 안 읽힌다.
+ * 실패하면 던진다 — 부르는 쪽이 `—`를 그린다.
+ */
+export async function getTodayWorkoutTotals(
+  userId: string,
+  now: Date,
+  timeZone: string,
+): Promise<TodayWorkoutTotals> {
+  const supabase = getSupabaseBrowserClient();
+  const { start, end } = dayRange(now, timeZone);
+  const { data, error } = await supabase
+    .from("workout_sessions")
+    .select(
+      "duration_minutes, workout_exercises(exercise_type, workout_sets(weight_kg, reps, duration_seconds, distance_meters, is_completed))",
+    )
+    .eq("user_id", userId)
+    .eq("status", "completed")
+    .is("deleted_at", null)
+    .gte("completed_at", start.toISOString())
+    .lt("completed_at", end.toISOString());
+  if (error) throw error;
+
+  type Row = {
+    duration_minutes: number | null;
+    workout_exercises:
+      | {
+          exercise_type: VolumeSet["exerciseType"];
+          workout_sets:
+            | {
+                weight_kg: number | null;
+                reps: number | null;
+                duration_seconds: number | null;
+                distance_meters: number | null;
+                is_completed: boolean;
+              }[]
+            | null;
+        }[]
+      | null;
+  };
+  const rows = (data ?? []) as Row[];
+  const sets: VolumeSet[] = rows.flatMap((r) =>
+    (r.workout_exercises ?? []).flatMap((ex) =>
+      (ex.workout_sets ?? []).map((s) => ({
+        exerciseType: ex.exercise_type,
+        isCompleted: s.is_completed,
+        weightKg: Number(s.weight_kg ?? 0),
+        reps: s.reps ?? 0,
+        durationSeconds: s.duration_seconds ?? 0,
+        distanceMeters: Number(s.distance_meters ?? 0),
+      })),
+    ),
+  );
+  const summary = summarizeVolume(sets);
+  const timed = rows.filter((r) => (r.duration_minutes ?? 0) > 0);
+  return {
+    sessionCount: rows.length,
+    minutes: timed.length
+      ? timed.reduce((sum, r) => sum + (r.duration_minutes ?? 0), 0)
+      : null,
+    setCount: summary.completedSetCount,
+    weightVolumeKg: summary.weightVolumeKg,
   };
 }
 

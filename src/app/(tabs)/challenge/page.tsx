@@ -55,6 +55,8 @@ import { dayKey, resolveTimeZone } from "@/lib/domain/time";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { getCompletedSessions } from "@/lib/workout";
 import type { Group, UserGoal } from "@/lib/types";
+import { Icon } from "@/components/ui/icon";
+import Image from "next/image";
 
 // 오류 문구는 여러 컴포넌트가 같이 쓰게 되어 `lib/challenge-errors.ts`로 옮겼다
 // (2026-09-18). 이 이름으로 가져가던 곳(page.test)을 위해 그대로 내보낸다.
@@ -221,6 +223,28 @@ function ChallengeScreen({ userId }: { userId: string }) {
   // ⚠ 가드는 state가 아니라 ref다. state로 두면 개발 모드(StrictMode)에서 effect가
   //   두 번 도는 동안 첫 실행이 취소되며 가드도 주소 정리도 건너뛰고, 두 번째가
   //   같은 코드로 다시 참가를 시도해 "이미 참가한 챌린지예요"가 뜬다.
+  /**
+   * `/challenge?create=1` — 챌린지 만들기를 바로 연다 (2026-10-05 사용자 지시: 피드 하단
+   * 고정 배너 "함께하는 크루가 더 강하게 만듭니다"를 누르면 챌린지 생성으로 바로).
+   *
+   * ⚠️ 연 뒤 주소에서 `create`를 지운다. 남겨 두면 새로고침·뒤로가기 때마다 만들기 창이
+   *    다시 뜬다(`join`과 같은 처리).
+   * ⚠️ 새 기능이 아니다 — 목록의 `+ 만들기` 버튼과 **같은 상태**(`createOpen`)를 켤 뿐이다.
+   */
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("create") !== "1") return;
+    params.delete("create");
+    const rest = params.toString();
+    window.history.replaceState(
+      null,
+      "",
+      rest ? `${window.location.pathname}?${rest}` : window.location.pathname,
+    );
+    // effect 본문에서 바로 setState하면 렌더가 연쇄된다(react-hooks/set-state-in-effect)
+    queueMicrotask(() => setCreateOpen(true));
+  }, []);
+
   const joinAttempted = useRef(false);
   useEffect(() => {
     if (joinAttempted.current) return;
@@ -571,9 +595,10 @@ function ChallengeScreen({ userId }: { userId: string }) {
     <button
       type="button"
       onClick={() => setCreateOpen(true)}
-      className="h-11 rounded-card bg-accent px-5 text-[14px] font-extrabold text-accent-ink"
+      className="flex h-11 items-center gap-1 rounded-card bg-accent px-5 text-[14px] font-extrabold text-accent-ink"
     >
-      ＋ 챌린지 만들기
+      <Icon name="plus" size={16} strokeWidth={2.4} />
+      챌린지 만들기
     </button>
   );
 
@@ -626,22 +651,42 @@ function ChallengeScreen({ userId }: { userId: string }) {
         )
       ) : (
         <div className="flex flex-col gap-3 pb-10">
-          <header className="flex items-center justify-between pt-2 pb-1">
-            <h1 className="text-[22px] font-extrabold tracking-tight">챌린지</h1>
-            {/* 만들기는 **언제나** 보인다 — 챌린지가 있든 없든 (0044 이후 개수 제한 없음) */}
-            <button
-              type="button"
-              onClick={() => setCreateOpen(true)}
-              className="h-9 rounded-full bg-accent px-4 text-[13px] font-extrabold text-accent-ink"
-            >
-              ＋ 만들기
-            </button>
+          {/* 시안 머리 (2026-10-05 Performance Social): 로고 · `챌린지` · 한 줄 소개 · `+ 만들기`.
+              ⚠️ 만들기는 **언제나** 보인다 — 챌린지가 있든 없든 (0044 이후 개수 제한 없음).
+              시안처럼 라임 **테두리** 버튼이다 — 채움은 카드의 `오늘 운동하기` 몫이다. */}
+          <header className="pt-1 pb-0.5">
+            <Image
+              src="/gnd/brand/logo.png"
+              alt="GND"
+              width={240}
+              height={80}
+              unoptimized
+              className="h-[26px] w-auto"
+            />
+            <div className="mt-2 flex items-end justify-between gap-3">
+              <div className="min-w-0">
+                <h1 className="text-[28px] font-black tracking-tight">챌린지</h1>
+                <p className="mt-0.5 text-[13px] text-muted">
+                  함께하는 운동이 더 멀리 가게 만듭니다.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCreateOpen(true)}
+                className="flex h-10 flex-none items-center gap-1 rounded-full border border-accent/70 bg-black/30 px-4 text-[13.5px] font-extrabold text-accent"
+              >
+                <Icon name="plus" size={16} strokeWidth={2.4} />
+                만들기
+              </button>
+            </div>
           </header>
 
+          {/* 시안의 밑줄 탭. 탭은 그대로 둘이다(둘러보기·내 챌린지) — 시안의 `추천·완료`는
+              새 분류라 만들지 않는다. 완료는 `내 챌린지`의 `종료` 칸에 있다. */}
           <div
             role="tablist"
             aria-label="챌린지 보기"
-            className="grid grid-cols-2 gap-1 rounded-card border border-line bg-surface p-1"
+            className="grid grid-cols-2 border-b border-line"
           >
             {(
               [
@@ -657,8 +702,10 @@ function ChallengeScreen({ userId }: { userId: string }) {
                   role="tab"
                   aria-selected={on}
                   onClick={() => setTab(key)}
-                  className={`h-10 rounded-card-sm text-[14px] font-extrabold ${
-                    on ? "border border-accent bg-accent/15 text-accent" : "text-muted"
+                  className={`relative h-11 text-[14.5px] font-extrabold ${
+                    on
+                      ? "text-text after:absolute after:inset-x-6 after:-bottom-px after:h-[3px] after:rounded-full after:bg-accent after:content-['']"
+                      : "text-muted"
                   }`}
                 >
                   {label}

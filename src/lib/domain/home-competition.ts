@@ -97,7 +97,7 @@ export function personalTodayAction(
   maxWorkoutXp: number,
 ): PersonalTodayAction {
   if (status === "done") {
-    return { kind: "success", label: "오늘 운동 완료! 오늘도 해냈어요 🔥" };
+    return { kind: "success", label: "오늘 운동 완료! 오늘도 해냈어요" };
   }
   if (status === "active") {
     return { kind: "link", label: "운동 이어가기" };

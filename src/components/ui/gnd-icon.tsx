@@ -25,7 +25,9 @@ export type GndIconName =
   | "situ-cardio";
 
 const IVORY = "#F6F3EA";
-const GOLD = "#D4AF37";
+// 선택 표시는 앱 강조색(라임)으로 통일한다 — 2026-10-05 Performance Social 적용 지침
+// "이전 골드 추천아이콘 패키지를 함께 적용할 때 선택 색상은 이번 라임으로 통일한다".
+const GOLD = "var(--accent)";
 
 const ICONS: Record<GndIconName, { base: ReactNode; accent: ReactNode }> = {
   "hub-situation": {
@@ -132,7 +134,8 @@ export function GndIcon({
       className={className}
     >
       <g>{icon.base}</g>
-      <g stroke={accent} color={accent}>
+      {/* style로 준다 — 표시 속성(stroke="…")에는 var()가 브라우저마다 안 먹을 수 있다 */}
+      <g style={{ stroke: accent, color: accent }}>
         {icon.accent}
       </g>
     </svg>

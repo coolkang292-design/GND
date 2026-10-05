@@ -1,72 +1,63 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Icon, type IconName } from "@/components/ui/icon";
 
 /**
- * 하단 탭 (2026-08-07 사용자 제공 시안으로 이모지 → 이미지).
+ * 하단 탭 — Performance Social (2026-10-05).
  *
- * ⚠️ `slug`에서 **두 개**의 파일 이름이 나온다 — `tab-<slug>.webp`와
- * `tab-<slug>-active.webp`. 시안이 두 상태를 따로 그려 준 것을 그대로 쓴다.
+ * 예전(2026-08-07)엔 탭마다 `public/ui-icons/tab-*.webp` 두 장(기본·선택)을 썼는데,
+ * 두 그림이 사실상 같아서 비활성에 `opacity-50`을 걸어 상태를 보였다. 이제 **SVG 한 벌을
+ * `currentColor`로** 그린다 — 선택은 라임, 기본은 회색. 색이 상태를 말하므로 흐림은 뗐다.
  *
- * ⚠️ **그런데 지금 두 자산은 사실상 같은 그림이다.** 시트를 세 판 받는 동안
- * "비활성은 속이 빈 외곽선, 활성은 채움"이 한 번도 안 나왔다 — 매번 둘 다
- * 채워져서 왔고, 실측 평균휘도 차이가 −0.026~−0.006으로 **눈에 안 보인다**
- * (`docs/ui-icon-asset-guide.md` 시트 D 참조).
+ * 지침(어플 UI 이미지/Performance-Social-2026-10-05/CLAUDE-적용지침.md §하단 메뉴):
+ *  - 아이콘 24px · 터치 영역 44px 이상 · 라벨 11px · 선택 라벨도 라임
+ *  - 확대·발광·이모지 혼용 금지 — 다섯 아이콘이 같은 시각 크기
+ *  - 탭은 5개 유지. 가운데 `+` 같은 별도 기능을 붙이지 않는다
+ *  - safe-area-inset-bottom
  *
- * 그래서 지금 상태를 말해 주는 것은 **자산이 아니라 아래 둘**이다:
- *   ① 라벨 글자색 `text-accent` / `text-muted`
- *   ② 비활성 아이콘의 `opacity-50`
- * 흐린 것과 또렷한 것이 나란히 있어야 어느 쪽이 지금인지 읽힌다. 자산만으로는
- * 다섯 개가 전부 같은 밝기라 **선택된 탭이 없어 보인다.**
- *
- * ⚠️ 시안이 진짜로 속 빈 판을 주면 `opacity-50`을 떼도 된다. 그 전에는 떼지
- * 마라 — 떼는 순간 상태 표시가 글자색 하나로 줄어든다.
- *
- * 자산은 `scripts/slice-ui-icons.py`가 만든다.
+ * ⚠️ 탭바는 `fixed`가 아니라 **흐름 안**(`flex-none`)에 있다. 그래서 스크롤 영역(`main`)이
+ *    탭바 위에서 끝나고, 마지막 카드가 탭바 뒤에 가리지 않는다. 떠 있는 독처럼 보이게
+ *    둥글린 것은 겉모습뿐이다 — `fixed`로 바꾸면 모든 화면에 아래 여백을 따로 줘야 한다.
  */
-const TABS = [
-  { href: "/home", slug: "home", label: "홈" },
-  { href: "/feed", slug: "feed", label: "피드" },
-  { href: "/record", slug: "record", label: "기록" },
-  { href: "/challenge", slug: "challenge", label: "챌린지" },
-  { href: "/profile", slug: "profile", label: "내 정보" },
-] as const;
+const TABS: { href: string; icon: IconName; label: string }[] = [
+  { href: "/home", icon: "home", label: "홈" },
+  { href: "/feed", icon: "feed", label: "피드" },
+  { href: "/record", icon: "record", label: "기록" },
+  { href: "/challenge", icon: "trophy", label: "챌린지" },
+  { href: "/profile", icon: "person", label: "내 정보" },
+];
 
 export function TabBar() {
   const pathname = usePathname();
 
   return (
-    <nav
-      className="flex-none grid grid-cols-5 border-t border-line bg-surface"
-      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+    <div
+      className="flex-none px-3 pt-1.5"
+      style={{ paddingBottom: "max(8px, env(safe-area-inset-bottom))" }}
     >
-      {TABS.map((tab) => {
-        const active = pathname.startsWith(tab.href);
-        return (
-          <Link
-            key={tab.href}
-            href={tab.href}
-            aria-current={active ? "page" : undefined}
-            className={`flex min-h-[44px] flex-col items-center justify-center gap-0.5 py-1.5 ${
-              active ? "text-accent" : "text-muted"
-            }`}
-          >
-            {/* ⚠️ `alt=""` — 바로 아래 `tab.label`이 같은 이름을 글자로 말한다.
-                alt를 채우면 스크린리더가 "홈 홈"으로 두 번 읽는다. 지금 탭인지는
-                `aria-current`가 알려 준다(이미지가 아니라). */}
-            <Image
-              src={`/ui-icons/tab-${tab.slug}${active ? "-active" : ""}.webp`}
-              alt=""
-              width={28}
-              height={28}
-              className={`h-7 w-7 ${active ? "" : "opacity-50"}`}
-            />
-            <span className="text-[10.5px] font-bold">{tab.label}</span>
-          </Link>
-        );
-      })}
-    </nav>
+      <nav className="grid grid-cols-5 rounded-[22px] border border-line bg-surface/95 shadow-card">
+        {TABS.map((tab) => {
+          const active = pathname.startsWith(tab.href);
+          return (
+            <Link
+              key={tab.href}
+              href={tab.href}
+              aria-current={active ? "page" : undefined}
+              className={`flex min-h-[56px] flex-col items-center justify-center gap-1 ${
+                active ? "text-accent" : "text-muted"
+              }`}
+            >
+              {/* 아이콘은 aria-hidden — 아래 라벨이 같은 이름을 말한다 */}
+              <Icon name={tab.icon} size={24} />
+              <span className="text-[11px] font-bold leading-none">
+                {tab.label}
+              </span>
+            </Link>
+          );
+        })}
+      </nav>
+    </div>
   );
 }

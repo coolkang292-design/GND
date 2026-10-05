@@ -1,5 +1,6 @@
+import Image from "next/image";
 import Link from "next/link";
-import { UiIcon } from "@/components/ui-icon";
+import { Icon } from "@/components/ui/icon";
 import { challengeDday } from "@/lib/domain/challenge-time";
 import { pickPrimaryRow } from "@/lib/domain/challenge-room";
 import { KING_DAYS } from "@/lib/domain/viewing-pass";
@@ -69,67 +70,90 @@ export function ChallengeSummaryCard({
   const now = new Date();
   const dday = challengeDday(dayKey(now, timeZone), challenge.end_date);
 
+  const pct = Math.min(100, Math.round(score?.achievement ?? 0));
+  const href = `/challenge?open=${challenge.id}`;
+
   return (
-    /* ⚠️ **높이를 다시 늘리지 마라** (2026-08-13 사용자 지시 "높이가 너무 높은 것
-       같아"). 첫 구현은 라벨 줄·이름 줄·숫자 2단 스택으로 6줄이었다. 지금은 4줄이다:
-       ① 이름+버튼 ② 숫자 한 줄 ③ 진행 바 ④ 자물쇠+D-day.
-       숫자 라벨을 값 **왼쪽**에 붙여 2단 스택을 한 줄로 접은 것이 가장 큰 절약이다.
-       홈은 이 카드 위에 크루 카드가 있고 아래로 성장·스트릭·주간 통계가 이어진다 —
-       여기서 한 줄 늘리면 아래 전부가 그만큼 접힘선 밖으로 밀린다. */
-    <section className="rounded-card bg-gradient-to-br from-accent to-[#0B6E66] px-3.5 py-3 text-accent-ink shadow-card">
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="flex min-w-0 items-center gap-1.5 text-[13.5px] font-extrabold">
-          <UiIcon name="trophy" size={16} />
-          <span className="truncate">{challenge.name}</span>
+    /* 2026-10-05 Performance Social — 시안의 `ACTIVE CHALLENGE` 카드.
+       왼쪽은 사진 위 챌린지 이름·진행 바, 오른쪽은 **내** 진행률·종합점수.
+
+       ⚠️⚠️ **진행 중에는 순위를 그리지 않는다** (사용자 확정 2026-10-05 "진행 중
+       챌린지는 내 목표·활동을 표시하고, TOP 3는 종료 후"). 시안의 `#3 · 12명 중 ·
+       1위까지 2회`는 진행 중 참가자 공개 순위라서 쓰지 않는다 — 기존 조건부 공개
+       (`KING_DAYS`일 연속 시 성과 공개)를 그대로 지킨다.
+
+       ⚠️ 숫자 둘은 `scoreParticipant`가 준 값 그대로다(챌린지 탭과 같은 함수).
+       조회 전에는 `—`다 — 0%로 채우면 실패한 성적처럼 읽힌다. */
+    <section>
+      <div className="flex items-center justify-between gap-2 px-0.5">
+        <h3 className="text-[18px] font-black italic tracking-tight">
+          <span aria-hidden>ACTIVE CHALLENGE</span>
+          <span className="sr-only">진행 중 챌린지</span>
         </h3>
         <Link
-          href={`/challenge?open=${challenge.id}`}
-          className="flex-none rounded-full bg-white/20 px-2.5 py-1 text-[11px] font-extrabold"
+          href={href}
+          className="flex min-h-[32px] flex-none items-center gap-0.5 text-[12px] font-bold text-muted"
         >
-          {others > 0 ? `외 ${others}개 ›` : "챌린지 보기 ›"}
+          {others > 0 ? `외 ${others}개 · 전체 보기` : "전체 보기"}
+          <Icon name="chevron" size={14} />
         </Link>
       </div>
 
-      {/* ⚠️ 숫자 둘은 **`scoreParticipant`가 준 값 그대로**다. 여기서 다시 계산하지
-          마라 — 챌린지 탭이 같은 함수를 지나므로 두 화면이 같은 숫자를 말한다.
-          ⚠️ 조회 전에는 `—`를 그린다. 0%·0.0으로 채우면 아직 안 온 값이 **실패한
-          성적처럼** 읽힌다(주간 통계가 같은 이유로 `—`를 쓴다). */}
-      <div className="mt-1.5 flex items-baseline justify-between gap-2">
-        <p className="min-w-0 truncate text-[11px] opacity-90">
-          목표 진행률{" "}
-          <b className="font-mono text-[19px] font-extrabold">
-            {score ? `${Math.round(score.achievement)}%` : "—"}
-          </b>
-        </p>
-        <p className="flex-none text-[11px] opacity-90">
-          종합점수{" "}
-          <b className="font-mono text-[19px] font-extrabold">
-            {score ? score.overall.toFixed(1) : "—"}
-          </b>
-        </p>
-      </div>
+      <Link
+        href={href}
+        className="mt-2.5 grid grid-cols-[1fr_118px] overflow-hidden rounded-card border border-line-strong bg-surface shadow-card"
+      >
+        <div className="relative min-h-[132px] overflow-hidden">
+          <Image
+            src="/gnd/photos/challenge-860.webp"
+            alt=""
+            fill
+            sizes="280px"
+            className="object-cover object-right"
+          />
+          <div aria-hidden className="absolute inset-0 bg-gradient-to-r from-surface via-surface/75 to-surface/20" />
+          <div className="relative flex h-full flex-col justify-between p-3.5">
+            <div>
+              <p className="line-clamp-2 text-[20px] font-black italic leading-tight tracking-tight">
+                {challenge.name}
+              </p>
+              <div className="mt-2 h-1.5 w-[82%] overflow-hidden rounded-full bg-surface-3">
+                <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
+              </div>
+            </div>
+            <div className="mt-2 flex items-center gap-3 text-[11px] text-muted">
+              {/* ⚠️ `5`를 손으로 적지 마라 — `KING_DAYS`에서 온다 */}
+              <span className="flex min-w-0 items-center gap-1 truncate">
+                <Icon name="lock" size={13} />
+                {KING_DAYS}일 연속 시 성과 공개
+              </span>
+              <span className="flex flex-none items-center gap-1 font-bold text-text">
+                <Icon name="calendar" size={13} className="text-muted" />
+                {dday < 0 ? "종료" : `D-${dday}`}
+              </span>
+            </div>
+          </div>
+        </div>
 
-      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/25">
-        <div
-          className="h-full rounded-full bg-white"
-          style={{
-            width: `${Math.min(100, Math.round(score?.achievement ?? 0))}%`,
-          }}
-        />
-      </div>
-
-      <div className="mt-2 flex items-center justify-between gap-2 text-[10.5px] opacity-95">
-        {/* ⚠️ `5`를 손으로 적지 마라 — `KING_DAYS`에서 온다. 열람권 규칙이 바뀌면
-            화면만 옛말을 하게 된다.
-            ⚠️ 문구가 짧다. 첫 구현의 `참가자 성과는 5일 연속 운동 시 공개`는 375px에서
-            **잘렸다**(사용자 화면 확인). 길이를 늘리려면 먼저 재라. */}
-        <span className="min-w-0 truncate">
-          <UiIcon name="lock" size={11} /> {KING_DAYS}일 연속 시 성과 공개
-        </span>
-        <span className="flex-none font-mono font-bold">
-          결과 발표 {dday < 0 ? "종료" : `D-${dday}`}
-        </span>
-      </div>
+        <div className="flex flex-col justify-between border-l border-line bg-surface-2 px-3 py-3">
+          <div>
+            <p className="flex items-center gap-1 text-[11px] font-extrabold text-accent">
+              <Icon name="target" size={14} />
+              MY
+            </p>
+            <p className="mt-1 text-[11px] text-muted">목표 진행률</p>
+            <p className="font-mono text-[26px] font-black leading-none text-accent">
+              {score ? `${Math.round(score.achievement)}%` : "—"}
+            </p>
+          </div>
+          <p className="mt-2 flex items-baseline justify-between gap-1 border-t border-line pt-2 text-[11px] text-muted">
+            종합점수
+            <b className="font-mono text-[15px] font-extrabold text-text">
+              {score ? score.overall.toFixed(1) : "—"}
+            </b>
+          </p>
+        </div>
+      </Link>
     </section>
   );
 }
@@ -145,21 +169,37 @@ export function ChallengeSummaryCard({
  */
 function NoChallengeCard() {
   return (
-    <section className="rounded-card border border-line bg-surface p-4 shadow-card">
-      <h3 className="flex items-center gap-1.5 text-sm font-extrabold">
-        <UiIcon name="trophy" size={20} />
-        혼자보다 같이가 더 오래 갑니다
+    <section>
+      <h3 className="px-0.5 text-[18px] font-black italic tracking-tight">
+        <span aria-hidden>ACTIVE CHALLENGE</span>
+        <span className="sr-only">진행 중 챌린지</span>
       </h3>
-      <p className="mt-1 text-xs text-muted">
-        기간과 목표를 정해 친구와 함께하면 중간에 그만두기 어려워져요. 4주만 같이
-        달려 보세요.
-      </p>
-      <Link
-        href="/challenge"
-        className="mt-3 flex h-11 items-center justify-center rounded-card-sm border border-line bg-surface-2 text-[13px] font-extrabold text-accent"
-      >
-        챌린지 시작하기 ›
-      </Link>
+      <div className="relative mt-2.5 overflow-hidden rounded-card border border-line-strong bg-surface p-4 shadow-card">
+        <Image
+          src="/gnd/photos/challenge-860.webp"
+          alt=""
+          fill
+          sizes="430px"
+          className="object-cover object-right opacity-70"
+        />
+        <div aria-hidden className="absolute inset-0 bg-gradient-to-r from-surface via-surface/85 to-surface/20" />
+        <div className="relative">
+          <p className="flex items-center gap-1.5 text-[15px] font-extrabold">
+            <Icon name="trophy" size={18} className="text-accent" />
+            혼자보다 같이가 더 오래 갑니다
+          </p>
+          <p className="mt-1 max-w-[80%] text-xs text-muted">
+            기간과 목표를 정해 친구와 함께하면 중간에 그만두기 어려워져요. 4주만 같이
+            달려 보세요.
+          </p>
+          <Link
+            href="/challenge"
+            className="mt-3 inline-flex h-10 items-center rounded-full border border-accent/60 bg-bg/60 px-4 text-[13px] font-extrabold text-accent"
+          >
+            챌린지 시작하기 ›
+          </Link>
+        </div>
+      </div>
     </section>
   );
 }

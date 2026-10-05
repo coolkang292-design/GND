@@ -10,6 +10,7 @@ import {
   toggleChip,
 } from "@/lib/domain/session-caption";
 import { updateSessionCaption } from "@/lib/workout";
+import { Icon } from "@/components/ui/icon";
 
 /**
  * 운동에 **내 말** 한 줄 붙이기 — 원탭 칩 (2026-08-30).
@@ -72,7 +73,7 @@ export function CaptionPicker({
       setWriting(false);
       // 고르고 나면 카드에서는 도로 접는다 — 고른 기분은 캡션 줄이 보여 준다
       if (variant === "card") setPicking(false);
-      onToast?.(next === null ? "한마디를 지웠어요" : "한마디를 남겼어요 ✍️");
+      onToast?.(next === null ? "한마디를 지웠어요" : "한마디를 남겼어요");
     } catch {
       onSaved(previous); // 롤백
       // ⚠️ 0행 UPDATE도 여기로 온다 (`updateSessionCaption`이 `.select()`로
@@ -101,9 +102,11 @@ export function CaptionPicker({
         <button
           type="button"
           onClick={() => setPicking(true)}
-          className="self-start text-[11.5px] font-bold text-accent"
+          className="inline-flex min-h-[32px] items-center gap-1 self-start text-[12px] font-bold text-accent"
         >
-          {current === null ? "✍️ 오늘 기분 남기기" : "기분 바꾸기"}
+          {/* 이모지 ✍️ → SVG (2026-10-05 기획안 17-A) */}
+          <Icon name="comment" size={14} />
+          {current === null ? "오늘 기분 남기기" : "기분 바꾸기"}
         </button>
         {error && (
           <p className="text-[11.5px] font-bold text-accent">{error}</p>
@@ -148,7 +151,7 @@ export function CaptionPicker({
           aria-expanded={writing}
           className="min-h-[38px] flex-none rounded-full border border-line bg-surface-2 px-3 text-[12.5px] font-bold whitespace-nowrap text-muted disabled:opacity-60"
         >
-          ✍️ 직접 쓰기
+          직접 쓰기
         </button>
       </div>
 

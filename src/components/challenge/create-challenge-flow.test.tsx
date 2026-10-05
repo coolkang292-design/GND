@@ -57,6 +57,7 @@ const ROOM = {
   created_at: "2026-09-18T00:00:00Z",
   invite_code: "GND-ABCDE",
   discoverable: false,
+  live_ranking: false,
   recruit_note: null,
   recruit_image_url: null,
 };

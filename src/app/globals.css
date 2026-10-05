@@ -1,19 +1,38 @@
 @import "tailwindcss";
 
-/* ── GND 테마 토큰 — 블랙&골드 단일 테마 (2026-07-18 브랜딩 결정, specs/2026-07-18) ── */
+/* ── GND 테마 토큰 — Performance Social (2026-10-05 사용자 결정) ──────────────
+   블랙&골드(2026-07-18) → 블랙&라임. 강조색(--accent)은 라임, 금색은 **우승·보상·배지
+   전용**(--gold)으로 따로 둔다. 사용자가 "전체 라임 + 금은 보상 전용"을 골랐다.
+   ⚠️ 금색이 필요한 자리(왕관·우승·보상·배지)에 text-accent를 쓰지 마라 — 라임이 된다.
+      text-gold / bg-gold-weak 를 쓴다.
+   근거 팔레트: 사용자 색상 표(2026-10-05) — Canvas #090A0C · Surface 01 #111318 ·
+   Surface 02 #181B21 · Elevated #20242B · Text #F7F8FA · Secondary #9CA3AF ·
+   Accent #C8FF3D(CTA·활성·진행) · Accent Deep #90C800(눌림) · Success #50DC88 ·
+   Danger #FF5C65 · Reward Gold #DDB85C(**XP·배지·1위만**). */
 :root {
-  --bg: #0b0b0c;
-  --surface: #16161a;
-  --surface-2: #211f18;
-  --text: #f2efe6;
-  --muted: #a49e8d;
-  --faint: #6f6a5c;
-  --line: #2c2a24;
-  --accent: #e8b84b;
-  --accent-ink: #1c1403;
-  --accent-weak: #33290f;
-  --good: #3dd37e;
-  --good-weak: #15301f;
+  --bg: #090a0c;
+  --surface: #111318;
+  --surface-2: #181b21;
+  --surface-3: #20242b;
+  --text: #f7f8fa;
+  --muted: #9ca3af;
+  --faint: #656d78;
+  /* white 8% 를 #111318 위에 얹은 값. 불투명으로 둔다 — 반투명이면 사진 위 카드에서 선이 흐려진다 */
+  --line: #25282e;
+  --line-strong: #33373e;
+  --accent: #c8ff3d;
+  --accent-press: #90c800;
+  --accent-ink: #0b0f02;
+  /* 라임 12% 를 bg 위에 얹은 값 */
+  --accent-weak: #1f2a0d;
+  --gold: #ddb85c;
+  --gold-weak: #2c2412;
+  --silver: #c9ced6;
+  --bronze: #c98a55;
+  --good: #50dc88;
+  --good-weak: #14301f;
+  --danger: #ff5c65;
+  --danger-weak: #331417;
   --warn: #fb8a3c;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 30px rgba(0, 0, 0, 0.35);
   --r: 18px;
@@ -26,15 +45,24 @@
   --color-bg: var(--bg);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
   --color-text: var(--text);
   --color-muted: var(--muted);
   --color-faint: var(--faint);
   --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
   --color-accent: var(--accent);
+  --color-accent-press: var(--accent-press);
+  --color-gold: var(--gold);
+  --color-gold-weak: var(--gold-weak);
+  --color-silver: var(--silver);
+  --color-bronze: var(--bronze);
   --color-accent-ink: var(--accent-ink);
   --color-accent-weak: var(--accent-weak);
   --color-good: var(--good);
   --color-good-weak: var(--good-weak);
+  --color-danger: var(--danger);
+  --color-danger-weak: var(--danger-weak);
   --color-warn: var(--warn);
   --radius-card: var(--r);
   --radius-card-sm: var(--r-sm);
@@ -80,13 +108,9 @@ textarea,
 }
 
 body {
-  background:
-    radial-gradient(
-      1200px 600px at 50% -10%,
-      color-mix(in srgb, var(--accent) 8%, transparent),
-      transparent 60%
-    ),
-    var(--bg);
+  /* 위쪽 강조색 번짐을 뺐다 (2026-10-05) — 라임이 번지면 화면 전체가 녹색으로 뜬다.
+     Performance Social 시안은 무채색 검정 위에 라임을 점으로만 쓴다. */
+  background: var(--bg);
   color: var(--text);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;

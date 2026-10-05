@@ -6,12 +6,13 @@ import {
   PrimaryButton,
   SheetHeader,
 } from "@/components/challenge/bottom-sheet";
-import { UiIcon } from "@/components/ui-icon";
+import { Icon, type IconName } from "@/components/ui/icon";
 import { uploadRecruitPhoto } from "@/lib/avatar";
 import { recordFunnelEvent } from "@/lib/analytics-events";
 import {
   createChallengeRoom,
   setChallengeDiscoverable,
+  setChallengeLiveRanking,
   setChallengeRecruitImage,
 } from "@/lib/challenge";
 import { errorMessage } from "@/lib/challenge-errors";
@@ -40,12 +41,13 @@ export type Audience = "public" | "friends" | "solo";
 
 const AUDIENCES: readonly {
   key: Audience;
-  icon: string;
+  /** SVG 아이콘 (2026-10-05 — 금색 비트맵 → 단색 윤곽선, 선택 시 라임) */
+  icon: IconName;
   title: string;
   sub: string;
 }[] = [
-  { key: "public", icon: "friends", title: "누구나 참여", sub: "GND에서 참가자를 모집해요" },
-  { key: "friends", icon: "friends-add", title: "아는 사람끼리", sub: "링크를 공유해서 친구를 초대해요" },
+  { key: "public", icon: "users", title: "누구나 참여", sub: "GND에서 참가자를 모집해요" },
+  { key: "friends", icon: "handshake", title: "아는 사람끼리", sub: "링크를 공유해서 친구를 초대해요" },
   { key: "solo", icon: "person", title: "나 혼자 먼저", sub: "나중에 사람을 초대할 수 있어요" },
 ];
 
@@ -97,6 +99,8 @@ export function CreateChallengeFlow({
   const [showStart, setShowStart] = useState(false);
   const [customDates, setCustomDates] = useState<{ start: string; end: string } | null>(null);
   const [audience, setAudience] = useState<Audience>("public");
+  /** 실시간 랭킹 공개 (0115) — 기본 꺼짐 */
+  const [liveRanking, setLiveRanking] = useState(false);
   /*
     챌린지 사진 (2026-09-18 사용자 지시 — "챌린지 만들 때도 사진을 추가하게 해야지").
 
@@ -211,8 +215,19 @@ export function CreateChallengeFlow({
               : "failed";
         }
       }
+      // 실시간 랭킹 공개 (0115) — 방을 만든 뒤에 적는다. 실패해도 방은 되돌리지 않는다
+      // (위 공개 모집과 같은 규칙). 실패하면 비공개(기본값)로 남고 방장이 ⋯에서 다시 켤 수 있다.
+      let liveSaved = false;
+      if (liveRanking) {
+        try {
+          await setChallengeLiveRanking(ch.id, true);
+          liveSaved = true;
+        } catch {
+          liveSaved = false;
+        }
+      }
       setCreated({
-        challenge: { ...ch, discoverable: recruit === "open" },
+        challenge: { ...ch, discoverable: recruit === "open", live_ranking: liveSaved },
         audience,
         recruit,
         imageFailed,
@@ -371,7 +386,7 @@ export function CreateChallengeFlow({
           <img src={image} alt="" className="h-full w-full object-cover" />
         ) : (
           <span className="flex h-full w-full flex-col items-center justify-center gap-1 text-muted">
-            <UiIcon name="camera" size={26} />
+            <Icon name="camera" size={26} className="text-accent" />
             <span className="text-[12.5px] font-bold">챌린지 사진 넣기</span>
             <span className="text-[11px] text-faint">목록과 상세에 이 사진이 보여요 · 선택</span>
           </span>
@@ -549,10 +564,10 @@ export function CreateChallengeFlow({
               aria-checked={on}
               onClick={() => setAudience(a.key)}
               className={`flex items-center gap-3 rounded-card border px-3.5 py-3 text-left ${
-                on ? "border-accent bg-accent/10" : "border-line bg-surface-2"
+                on ? "border-accent/70 bg-surface-2" : "border-line bg-surface-2"
               }`}
             >
-              <UiIcon name={a.icon} size={26} />
+              <Icon name={a.icon} size={24} className={on ? "text-accent" : "text-muted"} />
               <span className="min-w-0 flex-1">
                 <span className="block text-[14.5px] font-extrabold">{a.title}</span>
                 <span className="block text-[12px] text-muted">{a.sub}</span>
@@ -563,15 +578,49 @@ export function CreateChallengeFlow({
                 }`}
                 aria-hidden
               >
-                {on ? "✓" : ""}
+                {on && <Icon name="check" size={14} strokeWidth={2.6} />}
               </span>
             </button>
           );
         })}
       </div>
 
-      <p className="mt-3 flex items-center gap-1.5 rounded-card-sm bg-accent/10 px-3 py-2 text-[12px] font-bold text-accent">
-        <UiIcon name="camera" size={15} />이 챌린지는 사진 인증한 운동만 집계돼요
+      {/* 실시간 랭킹 공개 (0115, 2026-10-05 사용자 지시) — 기본은 꺼짐(옛 규칙: 진행 중엔
+          내 진행률만, 종료일에 한꺼번에 공개). 켜면 진행 중에도 종합점수 TOP 3가 보인다. */}
+      <button
+        type="button"
+        role="switch"
+        aria-checked={liveRanking}
+        onClick={() => setLiveRanking((v) => !v)}
+        className={`mt-4 flex w-full items-center gap-3 rounded-card border px-3.5 py-3 text-left ${
+          liveRanking ? "border-accent/60 bg-surface-2" : "border-line bg-surface-2"
+        }`}
+      >
+        <Icon name="ranking" size={24} className={liveRanking ? "text-accent" : "text-muted"} />
+        <span className="min-w-0 flex-1">
+          <span className="block text-[14.5px] font-extrabold">실시간 랭킹 공개</span>
+          <span className="block text-[12px] text-muted">
+            {liveRanking
+              ? "진행 중에도 종합점수 TOP 3와 내 순위가 보여요"
+              : "끄면 진행 중엔 내 진행률만, 순위는 종료일에 공개돼요"}
+          </span>
+        </span>
+        <span
+          aria-hidden
+          className={`relative h-6 w-11 flex-none rounded-full transition-colors ${
+            liveRanking ? "bg-accent" : "bg-surface-3"
+          }`}
+        >
+          <span
+            className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+              liveRanking ? "translate-x-[22px]" : "translate-x-0.5"
+            }`}
+          />
+        </span>
+      </button>
+
+      <p className="mt-3 flex items-center gap-1.5 rounded-card-sm border border-line bg-surface-2/60 px-3 py-2 text-[12px] font-bold">
+        <Icon name="camera" size={15} className="text-accent" />이 챌린지는 사진 인증한 운동만 집계돼요
       </p>
     </BottomSheet>
   );

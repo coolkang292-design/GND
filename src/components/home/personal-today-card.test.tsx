@@ -51,6 +51,13 @@ function renderCard(
     weeklyGoal: 5 as number | null,
     status: "idle" as const,
     badgeCount: 9 as number | null,
+    // 오늘 숫자 세 칸 — 기본은 "오늘 아직 안 했다"(0이 사실인 상태)
+    todayTotals: {
+      sessionCount: 0,
+      minutes: null,
+      setCount: 0,
+      weightVolumeKg: 0,
+    } as Parameters<typeof PersonalTodayCard>[0]["todayTotals"],
     onOpenProfile: vi.fn(),
     now: NOW,
     ...overrides,
@@ -60,16 +67,43 @@ function renderCard(
 }
 
 describe("PersonalTodayCard — 승인된 지표만 그린다", () => {
-  it("제목·이번 주·연속·비교 문구·주 행동을 한 카드에 담는다", () => {
+  /** 2026-10-05 Performance Social 홈 시안 — 인사말 · 오늘의 목표 · 오늘 숫자 세 칸 */
+  it("인사말·이번 주 목표·연속·배지·오늘 숫자를 그린다", () => {
     renderCard();
-    expect(screen.getByText("나의 오늘")).toBeTruthy();
-    expect(screen.getByText("dev-테스터A")).toBeTruthy();
-    expect(screen.getByText("이번 주")).toBeTruthy();
-    expect(screen.getByText("1 / 5")).toBeTruthy();
-    expect(screen.getByText("연속")).toBeTruthy();
-    expect(screen.getByText("1일")).toBeTruthy();
+    expect(screen.getByText("안녕하세요, dev-테스터A")).toBeTruthy();
+    expect(screen.getByText("오늘의 목표")).toBeTruthy();
+    expect(screen.getByLabelText("이번 주 1 / 5")).toBeTruthy();
+    expect(screen.getByText("이번 주 운동 1일 달성했어요!")).toBeTruthy();
+    expect(screen.getByRole("group", { name: "연속 1일 스트릭" })).toBeTruthy();
     expect(screen.getByText("배지")).toBeTruthy();
     expect(screen.getByText("9")).toBeTruthy();
+    expect(screen.getByText("오늘 운동 시간")).toBeTruthy();
+    expect(screen.getByText("오늘 총 세트")).toBeTruthy();
+    expect(screen.getByText("오늘 총 볼륨")).toBeTruthy();
+  });
+
+  it("같은 날 두 번 운동해도 이번 주 1일이다 — 분자는 고유 운동일", () => {
+    const morning = new Date("2026-08-20T00:00:00Z");
+    renderCard({ completedAts: [morning, YESTERDAY] });
+    expect(screen.getByLabelText("이번 주 1 / 5")).toBeTruthy();
+  });
+
+  it("목표를 넘겨도 숫자는 실제값이다", () => {
+    const days = [17, 18, 19, 20].map(
+      (d) => new Date(`2026-08-${d}T03:00:00Z`),
+    );
+    renderCard({ completedAts: [...days, TODAY], weeklyGoal: 3, status: "done" });
+    expect(screen.getByLabelText("이번 주 5 / 3")).toBeTruthy();
+    expect(screen.getByText("이번 주 목표 3일을 달성했어요!")).toBeTruthy();
+  });
+
+  it("세션 조회가 실패하면 0일로 위장하지 않고 다시 시도를 낸다", () => {
+    const onRetryWeek = vi.fn();
+    renderCard({ completedAts: [], weekLoadError: true, onRetryWeek });
+    expect(screen.getByText("이번 주 기록을 불러오지 못했어요")).toBeTruthy();
+    expect(screen.queryByLabelText(/이번 주 0/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "다시 시도" }));
+    expect(onRetryWeek).toHaveBeenCalledTimes(1);
   });
 
   /**
@@ -131,15 +165,15 @@ describe("PersonalTodayCard — 승인된 지표만 그린다", () => {
    */
   it("배지 수를 못 받으면 0으로 속이지 않는다", () => {
     renderCard({ badgeCount: null });
-    expect(screen.getByText("배지")).toBeTruthy();
-    expect(screen.getByText("—")).toBeTruthy();
-    expect(screen.queryByText("0")).toBeNull();
+    // 배지 알약 안만 본다 — 오늘 숫자 칸에도 0이 있다(오늘 아직 안 했다)
+    const chip = screen.getByText("배지").parentElement!;
+    expect(chip.textContent).toBe("배지—");
   });
 
   it("배지가 정말 0개면 0을 적는다", () => {
     renderCard({ badgeCount: 0 });
-    expect(screen.getByText("0")).toBeTruthy();
-    expect(screen.queryByText("—")).toBeNull();
+    const chip = screen.getByText("배지").parentElement!;
+    expect(chip.textContent).toBe("배지0");
   });
 
   it("레벨 진행을 단계명·레벨·진행바·남은 XP로 적는다", () => {
@@ -202,7 +236,7 @@ describe("PersonalTodayCard — 상태별 주 행동", () => {
   it("완료 뒤에는 누를 수 없는 칭찬 배너로 바뀐다", () => {
     renderCard({ status: "done" });
     expect(screen.getByRole("status").textContent).toContain(
-      "오늘 운동 완료! 오늘도 해냈어요 🔥",
+      "오늘 운동 완료! 오늘도 해냈어요",
     );
     expect(screen.queryByRole("link", { name: /오늘 운동 완료/ })).toBeNull();
     expect(screen.queryByRole("link", { name: /오늘 운동하고/ })).toBeNull();
@@ -236,9 +270,10 @@ describe("PersonalTodayCard — 주간 목표가 없을 때", () => {
     );
     const link = screen.getByRole("link", { name: /목표 정하기/ });
     expect(link.getAttribute("href")).toBe("/challenge");
-    // 분모 없이 일수만. 옆 `연속` 칸도 `1일`이라 **어느 칸의 값인지**까지 짚는다
     expect(link.textContent).toContain("이번 주");
-    expect(link.textContent).toContain("1일");
+    // 분모 없이 일수만
+    expect(screen.getByText("이번 주 운동한 날")).toBeTruthy();
+    expect(screen.queryByLabelText(/이번 주 \d+ \//)).toBeNull();
     expect(container.textContent).not.toContain("0%");
     expect(container.textContent).not.toContain("/ 0");
   });
@@ -258,8 +293,8 @@ describe("PersonalTodayCard — 성장 조회 실패", () => {
     renderCard({ summary: null });
     expect(screen.getByText("성장 정보를 불러오지 못했어요")).toBeTruthy();
     expect(screen.getByText("운동 전")).toBeTruthy();
-    expect(screen.getByText("1 / 5")).toBeTruthy();
-    expect(screen.getByText("1일")).toBeTruthy();
+    expect(screen.getByLabelText("이번 주 1 / 5")).toBeTruthy();
+    expect(screen.getByRole("group", { name: "연속 1일 스트릭" })).toBeTruthy();
     expect(screen.getByRole("link", { name: /오늘 운동하고/ })).toBeTruthy();
   });
 });
@@ -365,7 +400,7 @@ describe("PersonalTodayCard — 프로필로 가는 길과 아바타", () => {
  * ⚠️ 창(오늘까지 7칸)은 **`weeklyBars`가 정한다.** 기록 화면 오늘 카드가 쓰는 그
  * 함수다 — 여기서 다시 계산하면 같은 주가 두 화면에서 다르게 잘릴 수 있다.
  */
-describe("PersonalTodayCard — 최근 7일 점", () => {
+describe("PersonalTodayCard — 스트릭 한 줄", () => {
   /**
    * ⚠️ **점만 있으면 줄의 절반이 빈다** (2026-08-21 사용자 지시 — "요일칸은 빈 공간을
    * 줄이고 스트릭이 몇일째 유지되는지도 표시"). 그래서 이 줄은 점 + 유지 일수를
@@ -374,9 +409,19 @@ describe("PersonalTodayCard — 최근 7일 점", () => {
    * ⚠️ 문구는 옛 `StreakCard`의 것을 **그대로** 쓴다(`스트릭 N일 유지 중` /
    * `스트릭 없음`). 같은 사실을 부르는 말을 새로 지으면 화면마다 다른 이름이 된다.
    */
-  it("스트릭이 며칠째 유지 중인지 같은 칸에 적는다", () => {
+  it("스트릭이 며칠째인지 오늘의 목표 위 배너에 적는다", () => {
     renderCard({ completedAts: [YESTERDAY] });
-    expect(screen.getByText("스트릭 1일 유지 중")).toBeTruthy();
+    expect(screen.getByRole("group", { name: "연속 1일 스트릭" })).toBeTruthy();
+    expect(screen.getByText("DAY STREAK")).toBeTruthy();
+  });
+
+  it("배너는 오늘의 목표 카드보다 앞에 온다", () => {
+    renderCard({ completedAts: [YESTERDAY] });
+    const banner = screen.getByRole("group", { name: "연속 1일 스트릭" });
+    const goal = screen.getByText("오늘의 목표");
+    expect(
+      banner.compareDocumentPosition(goal) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   /**
@@ -428,30 +473,49 @@ describe("PersonalTodayCard — 최근 7일 점", () => {
 
   it("스트릭이 없으면 없다고 적는다", () => {
     renderCard({ completedAts: [] });
-    expect(screen.getByText("스트릭 없음")).toBeTruthy();
-    expect(screen.queryByText(/유지 중/)).toBeNull();
+    expect(screen.getByRole("group", { name: "스트릭 없음" })).toBeTruthy();
+    expect(screen.getByText("오늘 운동으로 스트릭을 시작해요")).toBeTruthy();
+    // 0을 크게 자랑하지 않는다
+    expect(screen.queryByText(/DAYS? STREAK/)).toBeNull();
   });
 
-  it("마지막 칸이 오늘인 요일 일곱 칸을 그린다", () => {
-    renderCard({ completedAts: [YESTERDAY] });
-    // 2026-08-15(토) ~ 08-21(금). 기준 시각이 금요일이라 마지막이 `금`이다
-    const row = screen.getByRole("img", { name: "최근 7일 중 1일 운동" });
-    expect(row.textContent).toBe("토일월화수목금");
+});
+
+/**
+ * 오늘 숫자 세 칸 (2026-10-05 Performance Social 홈 시안 `42 MIN · 18 SETS · 6,840 KG`).
+ * ⚠️ 모르는 값은 `—`, 오늘 안 했으면 0이 사실이므로 0이다. 둘을 섞지 않는다.
+ */
+describe("PersonalTodayCard — 오늘 숫자 세 칸", () => {
+  it("받은 값을 그대로 적는다", () => {
+    renderCard({
+      todayTotals: { sessionCount: 1, minutes: 42, setCount: 18, weightVolumeKg: 6840 },
+    });
+    expect(screen.getByText("42")).toBeTruthy();
+    expect(screen.getByText("18")).toBeTruthy();
+    expect(screen.getByText("6,840")).toBeTruthy();
   });
 
-  it("오늘 운동했으면 오늘 칸까지 센다", () => {
-    renderCard({ completedAts: [YESTERDAY, TODAY], status: "done" });
-    expect(
-      screen.getByRole("img", { name: "최근 7일 중 2일 운동" }),
-    ).toBeTruthy();
+  it("조회 중·실패면 0이 아니라 —다", () => {
+    renderCard({ todayTotals: undefined, badgeCount: 3 });
+    expect(screen.getAllByText("—")).toHaveLength(3);
+    cleanup();
+    renderCard({ todayTotals: null, badgeCount: 3 });
+    expect(screen.getAllByText("—")).toHaveLength(3);
   });
 
-  /** ⚠️ 창 밖(8일 전)의 운동을 세면 점과 `연속` 칸이 서로 다른 말을 한다 */
-  it("7일 창 밖의 운동은 세지 않는다", () => {
-    renderCard({ completedAts: [LONG_AGO, YESTERDAY] });
-    expect(
-      screen.getByRole("img", { name: "최근 7일 중 1일 운동" }),
-    ).toBeTruthy();
+  it("오늘 운동했지만 시간 기록이 없으면 시간 칸만 —다", () => {
+    renderCard({
+      todayTotals: { sessionCount: 1, minutes: null, setCount: 4, weightVolumeKg: 200 },
+      badgeCount: 3,
+    });
+    expect(screen.getAllByText("—")).toHaveLength(1);
+    expect(screen.getByText("200")).toBeTruthy();
+  });
+
+  it("세 칸 모두 기록 탭으로 간다", () => {
+    renderCard();
+    const tile = screen.getByText("오늘 총 볼륨").closest("a");
+    expect(tile?.getAttribute("href")).toBe("/record");
   });
 });
 

@@ -5,9 +5,11 @@ import { useMemo, useState } from "react";
 import { Avatar } from "@/components/avatar";
 import { ChallengeActivity } from "@/components/challenge/challenge-activity";
 import { ResultView } from "@/components/challenge/challenge-result";
+import { RankingPodium } from "@/components/challenge/ranking-podium";
 import { ParticipantPerformanceCard } from "@/components/challenge/participant-performance-card";
 import { RaiseGoalSheet } from "@/components/challenge/raise-goal-sheet";
-import { UiIcon } from "@/components/ui-icon";
+import { Chip } from "@/components/ui/chip";
+import { Icon, type IconName } from "@/components/ui/icon";
 import {
   EMPTY_STATS,
   GOAL_TYPE_META,
@@ -28,15 +30,79 @@ import {
 } from "@/lib/domain/challenge-time";
 import {
   goalRate,
+  rankParticipants,
   scoreParticipant,
   type GoalType,
   type ParticipantInput,
 } from "@/lib/domain/goal-score";
 import { challengeLevel, levelLabel } from "@/lib/domain/level";
-import { primaryActionOf } from "@/lib/domain/my-challenges";
+import { challengeDayProgress, primaryActionOf } from "@/lib/domain/my-challenges";
+import { challengeMilestones, type ChallengeMilestone } from "@/lib/domain/challenge-milestones";
+import { currentStreak, workoutDayKeys } from "@/lib/domain/streak";
+import { DEFAULT_TIMEZONE } from "@/lib/domain/time";
 import type { UserGoal } from "@/lib/types";
 
 type Profile = ChallengeParticipantProfile;
+
+/** 마일스톤 한 칸 — 육각 프레임(패키지 `decorations/*`) 위에 숫자는 글자로 겹친다 */
+function MilestoneCard({ m }: { m: ChallengeMilestone }) {
+  const done = m.state === "done";
+  return (
+    <div
+      className={`flex min-w-0 flex-col items-center rounded-card-sm border px-1.5 py-2.5 text-center ${
+        done ? "border-gold/60 bg-gold-weak/40" : "border-line bg-surface-2/60"
+      }`}
+    >
+      <span className="relative grid h-11 w-11 place-items-center">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={`/gnd/decorations/${done ? "gold" : "graphite"}-64.webp`}
+          alt=""
+          width={44}
+          height={44}
+          className={`absolute inset-0 h-full w-full ${m.state === "locked" ? "opacity-50" : ""}`}
+        />
+        <span className={`relative text-[14px] font-black ${done ? "text-gold" : "text-text"}`}>
+          {m.badge}
+        </span>
+      </span>
+      <span className="mt-1.5 w-full truncate text-[12px] font-extrabold">{m.title}</span>
+      {m.state === "done" && <span className="text-[11px] font-bold text-gold">달성 완료</span>}
+      {m.state === "progress" && (
+        <span className="mt-1 block h-1 w-[80%] overflow-hidden rounded-full bg-surface-3">
+          <span className="block h-full rounded-full bg-accent" style={{ width: `${Math.round(m.ratio * 100)}%` }} />
+        </span>
+      )}
+      {m.state === "progress" && <span className="mt-0.5 text-[10.5px] text-muted">진행 중</span>}
+      {m.state === "locked" && (
+        <span className="flex items-center gap-0.5 text-[10.5px] text-muted">
+          <Icon name="lock" size={11} /> 잠금 중
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** 4칸 정보줄 한 칸 — 아이콘 · 값 · 라벨 (시안 `12일 / 남은 기간`) */
+function InfoCell({
+  icon,
+  value,
+  label,
+  accent = false,
+}: {
+  icon: IconName;
+  value: string;
+  label: string;
+  accent?: boolean;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col items-center gap-1 px-1 text-center">
+      <Icon name={icon} size={20} className="text-accent" />
+      <strong className={`truncate text-[14px] font-black ${accent ? "text-accent" : ""}`}>{value}</strong>
+      <span className="truncate text-[10.5px] text-muted">{label}</span>
+    </div>
+  );
+}
 
 /**
  * 챌린지 상세 (2026-09-18 챌린지 탭 개편 — 옛 `challenge/page.tsx` 본문을 옮겼다).
@@ -175,6 +241,24 @@ export function ChallengeDetail({
     );
 
   const canShare = challenge.status === "setup" && challenge.myStatus === "joined";
+  /** 히어로 DAY 막대 — 목록 카드와 같은 날짜 진행 */
+  const dayProgress = challengeDayProgress(todayKey, challenge.start_date, challenge.end_date);
+  /** 히어로의 `N DAY STREAK` — 홈과 같은 원천(내 전체 완료 기록, `currentStreak`) */
+  const myStreak = useMemo(() => {
+    const keys = workoutDayKeys(completedAts, DEFAULT_TIMEZONE);
+    return currentStreak(keys, todayKey);
+  }, [completedAts, todayKey]);
+  /**
+   * 실시간 랭킹 (0115) — 방장이 만들 때 켠 방만. 종료 시상대와 **같은 자**
+   * (`rankParticipants` = 종합점수, 동점 같은 등수)로 잰다.
+   */
+  const liveRanked =
+    challenge.status === "active" && challenge.live_ranking
+      ? rankParticipants(participantInputs)
+      : null;
+  const myRank = liveRanked?.find((r) => r.userId === userId)?.rank ?? null;
+  /** 오늘 이 챌린지 기간 운동일에 들어갔는가 — 서버 집계(`stats`)와 같은 원천 */
+  const todayDone = stats?.get(userId)?.workoutDayKeys.includes(todayKey) ?? false;
 
   const primaryButton =
     action.kind === "none" ? null : action.kind === "goto_record" ? null : (
@@ -192,15 +276,10 @@ export function ChallengeDetail({
                   : undefined
         }
         disabled={busy}
-        className="h-13 min-h-[52px] w-full rounded-card bg-accent text-[16px] font-extrabold text-accent-ink disabled:opacity-60"
+        className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-[14px] bg-accent text-[16px] font-extrabold text-accent-ink active:bg-accent-press disabled:opacity-60"
       >
-        {action.kind === "finalize" ? (
-          <>
-            <UiIcon name="trophy" /> {action.label}
-          </>
-        ) : (
-          action.label
-        )}
+        {action.kind === "finalize" && <Icon name="trophy" size={18} />}
+        {action.label}
       </button>
     );
 
@@ -212,19 +291,19 @@ export function ChallengeDetail({
           type="button"
           onClick={onBack}
           aria-label="챌린지 목록으로"
-          className="grid h-10 w-10 flex-none place-items-center rounded-full text-xl font-bold text-muted"
+          className="grid h-10 w-10 flex-none place-items-center rounded-full text-text"
         >
-          ←
+          <Icon name="back" size={22} />
         </button>
-        <p className="min-w-0 flex-1 truncate text-[13px] font-bold text-muted">챌린지</p>
+        <p className="min-w-0 flex-1 truncate text-[15px] font-extrabold">챌린지</p>
         {canShare && (
           <button
             type="button"
             onClick={onShare}
             aria-label="초대 링크 공유"
-            className="grid h-10 w-10 flex-none place-items-center rounded-full text-lg"
+            className="grid h-10 w-10 flex-none place-items-center rounded-full text-text"
           >
-            ↗
+            <Icon name="users" size={21} />
           </button>
         )}
         {isHost && (
@@ -232,47 +311,121 @@ export function ChallengeDetail({
             type="button"
             onClick={onOpenManage}
             aria-label="챌린지 관리"
-            className="grid h-10 w-10 flex-none place-items-center rounded-full text-xl font-extrabold text-muted"
+            className="grid h-10 w-10 flex-none place-items-center rounded-full text-text"
           >
-            ⋯
+            <Icon name="settings" size={21} />
           </button>
         )}
       </header>
 
-      {/* 시안 ④는 상세가 언제나 사진으로 연다. 사진을 안 넣은 방은 대체 그림으로.
-          ⚠️ 사용자 사진이 언제나 이긴다(`detailArtFor`). */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={detailArtFor(challenge.recruit_image_url)}
-        alt=""
-        className="aspect-[16/9] w-full rounded-card object-cover"
-      />
+      {/* ── 히어로 (2026-10-05 Performance Social 챌린지 시안) ─────────
+          사진 위에 연속일 · 이름 · 기간, 진행 중이면 DAY 진행 막대 · 참여 인원 · 남은 날 ·
+          `오늘 운동하기`까지 한 장에 담는다.
+          ⚠️ 사용자 사진이 언제나 이긴다(`detailArtFor`).
+          ⚠️ DAY 막대는 **날짜** 진행이다(목록 카드와 같은 `challengeDayProgress`) — 운동
+             실적이 아니다. 실적은 아래 `내 진행`이 말한다. */}
+      <section className="overflow-hidden rounded-card border border-line-strong bg-surface shadow-card">
+        <div className="relative h-[190px]">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={detailArtFor(challenge.recruit_image_url)}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover object-right"
+          />
+          <div aria-hidden className="absolute inset-0 bg-gradient-to-r from-surface via-surface/70 to-surface/5" />
+          <div aria-hidden className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-surface to-transparent" />
+          <div className="absolute inset-0 flex flex-col justify-between p-4">
+            <div className="flex flex-wrap gap-1.5">
+              {challenge.status === "active" && myStreak > 0 && (
+                <Chip tone="streak">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/gnd/decorations/flame-32.webp" alt="" width={14} height={14} className="h-3.5 w-3.5" />
+                  {myStreak} DAY STREAK
+                </Chip>
+              )}
+              {challenge.status === "setup" && <Chip dot="warn">준비 중</Chip>}
+              {challenge.status === "ended" && <Chip dot="muted">종료</Chip>}
+            </div>
+            <div>
+              <h1 className="line-clamp-2 max-w-[86%] text-[28px] leading-[1.1] font-black italic tracking-tight">
+                {challenge.name}
+              </h1>
+              <p className="mt-1 text-[12.5px] text-muted">
+                {formatMonthDay(challenge.start_date)} ~ {formatMonthDay(challenge.end_date)} ·{" "}
+                {days}일간
+              </p>
+            </div>
+          </div>
+        </div>
 
-      <div>
-        <h1 className="text-[21px] leading-snug font-extrabold tracking-tight">
-          {challenge.name}
-        </h1>
-        <p className="mt-0.5 text-[12.5px] text-muted">
-          {formatMonthDay(challenge.start_date)} ~ {formatMonthDay(challenge.end_date)} ·{" "}
-          {days}일간
-        </p>
-        {challenge.recruit_note && challenge.status === "setup" && (
-          <p className="mt-2 text-[13px] leading-relaxed break-words whitespace-pre-line text-muted">
-            {challenge.recruit_note}
-          </p>
+        {challenge.status === "active" && (
+          <div className="px-4 pt-1 pb-4">
+            <div className="flex items-baseline justify-between">
+              <p className="text-[13px] font-extrabold text-muted">
+                DAY{" "}
+                <strong className="text-[22px] font-black text-text">{dayProgress.day}</strong> /{" "}
+                {dayProgress.total}
+              </p>
+              <span className="text-[13px] font-bold text-muted tabular-nums">
+                {Math.round(dayProgress.ratio * 100)}%
+              </span>
+            </div>
+            <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-surface-3">
+              <div
+                className="h-full rounded-full bg-accent"
+                style={{ width: `${Math.round(dayProgress.ratio * 100)}%` }}
+              />
+            </div>
+            <div className="mt-2.5 flex items-center gap-4 text-[12px] text-muted">
+              <span className="flex items-center gap-1.5">
+                <Icon name="users" size={15} />
+                {members.length}명 참여
+              </span>
+              <span className="flex items-center gap-1.5">
+                <Icon name="calendar" size={15} />
+                {endedByDate ? "결과 발표 대기" : dday === 0 ? "오늘 마지막 날" : `${dday}일 남음`}
+              </span>
+            </div>
+            {/* ⚠️ 이 탭의 대표 버튼이다 — "그래서 오늘 뭘 하면 되나"의 답.
+                ⚠️ 종료일이 지난 뒤에는 할 일이 운동이 아니라 결과 발표다. */}
+            {!endedByDate && (
+              <Link
+                href="/record"
+                className="mt-3 flex h-12 items-center justify-between rounded-[14px] bg-accent px-4 text-[15.5px] font-extrabold text-accent-ink active:bg-accent-press"
+              >
+                <span className="w-4" />
+                <span className="flex items-center gap-2">
+                  <Icon name="play" size={15} filled />
+                  오늘 운동하기
+                </span>
+                <Icon name="chevron" size={18} strokeWidth={2.4} />
+              </Link>
+            )}
+          </div>
         )}
-        {challenge.photo_required && (
-          <span className="mt-1.5 inline-block rounded-full border border-accent/40 bg-accent/10 px-2.5 py-1 text-[11px] font-bold text-accent">
-            <UiIcon name="camera" /> 사진 인증 필수 · 사진 없는 운동은 집계되지 않아요
-          </span>
-        )}
-      </div>
+      </section>
+
+      {(challenge.recruit_note && challenge.status === "setup") || challenge.photo_required ? (
+        <div>
+          {challenge.recruit_note && challenge.status === "setup" && (
+            <p className="text-[13px] leading-relaxed break-words whitespace-pre-line text-muted">
+              {challenge.recruit_note}
+            </p>
+          )}
+          {challenge.photo_required && (
+            <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-card-sm border border-line bg-surface-2/60 px-3 py-2 text-[12px] font-bold">
+              <Icon name="camera" size={15} className="text-accent" />
+              사진 인증 필수 · 사진 없는 운동은 집계되지 않아요
+            </span>
+          )}
+        </div>
+      ) : null}
 
       {/* ── 초대받음 ─────────────────────────────────────── */}
       {invited && (
-        <section className="rounded-card border border-accent/40 bg-accent/10 p-4 shadow-card">
-          <p className="text-sm font-extrabold">
-            <UiIcon name="trophy" /> 챌린지에 초대받았어요
+        <section className="rounded-card border border-accent/50 bg-surface p-4 shadow-card">
+          <p className="flex items-center gap-1.5 text-sm font-extrabold">
+            <Icon name="trophy" size={17} className="text-accent" /> 챌린지에 초대받았어요
           </p>
           <p className="mt-0.5 text-[12px] text-muted">
             {formatMonthDay(challenge.start_date)}에 시작해요 · 참여하면 주 몇 번 운동할지만
@@ -298,8 +451,8 @@ export function ChallengeDetail({
           {myGoals.length > 0 && (
             <div className="mt-3 rounded-card-sm bg-surface-2 px-3 py-2.5">
               <div className="flex items-center justify-between">
-                <p className="text-[12.5px] font-extrabold">
-                  <UiIcon name="goal" /> 내 목표
+                <p className="flex items-center gap-1.5 text-[12.5px] font-extrabold">
+                  <Icon name="target" size={15} className="text-accent" /> 내 목표
                 </p>
                 <button
                   type="button"
@@ -346,13 +499,9 @@ export function ChallengeDetail({
                         {m.id === userId && <span className="ml-1 text-faint">(나)</span>}
                       </span>
                     </button>
-                    <span
-                      className={`flex-none rounded-full px-2.5 py-1 text-[11px] font-bold ${
-                        ready ? "bg-good-weak text-good" : "bg-surface-2 text-muted"
-                      }`}
-                    >
+                    <Chip dot={ready ? "good" : "muted"}>
                       {ready ? "준비 완료" : "목표 정하는 중"}
-                    </span>
+                    </Chip>
                   </div>
                   {theirs.length > 0 && (
                     <p className="mt-1 ml-[42px] truncate text-[11px] text-muted">
@@ -456,56 +605,101 @@ export function ChallengeDetail({
       {/* ── 진행 중: 내 진행률만 공개 (§6 비공개) ─────────── */}
       {challenge.status === "active" && detailsAreCurrent && (
         <>
-          {/* ⚠️ **높이를 다시 늘리지 마라** (2026-08-13 사용자 지시). */}
-          <section className="rounded-card bg-gradient-to-br from-accent to-[#0B6E66] px-3.5 py-3 text-accent-ink shadow-card">
+          {/* ── 내 진행 (2026-10-05) ─────────────────────────────
+              시안의 `실시간 랭킹` 자리다. ⚠️⚠️ **진행 중에는 순위를 그리지 않는다**
+              (사용자 확정 2026-10-05 "진행 중 챌린지는 내 목표·활동을 표시하고, TOP 3는
+              종료 후"). 그래서 여기는 **내** 달성률·종합점수·레벨만이다 — 옛 금색→청록
+              그라데이션 카드의 숫자를 그대로 옮겼다(`scoreParticipant` 한 곳). */}
+          <section className="rounded-card border border-line-strong bg-surface p-4 shadow-card">
             <div className="flex items-center justify-between gap-2">
-              <p className="min-w-0 truncate text-[13.5px] font-extrabold">{challenge.name}</p>
-              <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-extrabold">
-                {levelLabel(levelOf(userId))}
-              </span>
+              <h2 className="text-[16px] font-extrabold">내 진행</h2>
+              <Chip>{levelLabel(levelOf(userId))}</Chip>
             </div>
-            <div className="mt-1.5 flex items-baseline justify-between gap-2">
-              <p className="min-w-0 truncate text-[11px] opacity-90">
-                평균 달성{" "}
-                <b className="font-mono text-[22px] font-extrabold">
+            <div className="mt-2 flex items-end justify-between gap-3">
+              <p className="leading-none">
+                <span className="block text-[11.5px] font-bold text-muted">평균 달성</span>
+                <strong className="mt-1 block text-[40px] font-black text-accent tabular-nums">
                   {Math.round(myScore.achievement)}%
-                </b>
+                </strong>
               </p>
-              <p className="flex-none text-[11px] opacity-90">
-                종합점수{" "}
-                <b className="font-mono text-[22px] font-extrabold">
+              <p className="text-right leading-none">
+                <span className="block text-[11.5px] font-bold text-muted">종합점수</span>
+                <strong className="mt-1 block text-[26px] font-black tabular-nums">
                   {myScore.overall.toFixed(1)}
-                </b>
+                </strong>
               </p>
             </div>
-            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/25">
+            <div className="mt-2.5 h-2 overflow-hidden rounded-full bg-surface-3">
               <div
-                className="h-full rounded-full bg-white"
+                className="h-full rounded-full bg-accent"
                 style={{ width: `${Math.min(100, Math.round(myScore.achievement))}%` }}
               />
             </div>
-            <p className="mt-2 text-[11px] opacity-95">
-              목표 {me?.goals.length ?? 0}개 · 참여율 {Math.round(myScore.participation)}% ·
-              결과 발표{" "}
-              <b className="font-mono">{endedByDate ? "종료!" : `D-${Math.max(0, dday)}`}</b>
+            <p className="mt-2 text-[11.5px] text-muted">
+              목표 {me?.goals.length ?? 0}개 · 참여율 {Math.round(myScore.participation)}% · 결과 발표{" "}
+              <b className="text-text">{endedByDate ? "종료!" : `D-${Math.max(0, dday)}`}</b>
             </p>
-
-            {/* ⚠️ 이 탭의 대표 버튼이다 — "그래서 오늘 뭘 하면 되나"의 답.
-                ⚠️ `상세 보기` 버튼은 넣지 않는다(바로 아래가 이미 상세다).
-                ⚠️ 종료일이 지난 뒤에는 할 일이 운동이 아니라 결과 발표다. */}
-            {!endedByDate && (
-              <Link
-                href="/record"
-                className="mt-2.5 flex h-10 items-center justify-center rounded-card-sm bg-white/20 text-[13px] font-extrabold text-accent-ink"
-              >
-                오늘 운동하기 ›
-              </Link>
-            )}
           </section>
+
+          {/* ── 실시간 랭킹 (0115, 2026-10-05 사용자 지시) ─────────────
+              방장이 만들 때 `실시간 랭킹 공개`를 켠 방에서만 진행 중에 보인다.
+              기본(꺼짐)은 옛 규칙 그대로 — 종료일에 한꺼번에 공개. */}
+          {liveRanked && liveRanked.length > 0 && (
+            <section className="rounded-card border border-line-strong bg-surface p-4 shadow-card">
+              <div className="mb-1 flex items-center justify-between">
+                <h2 className="text-[16px] font-extrabold">실시간 랭킹</h2>
+                <span className="text-[11px] font-bold text-muted">종합점수 기준</span>
+              </div>
+              <RankingPodium
+                ranked={liveRanked}
+                profileOf={profileOf}
+                myUserId={userId}
+                secondaryOf={(id) => {
+                  const n = stats?.get(id)?.workoutDayKeys.length;
+                  return n === undefined ? null : `${n}일 운동`;
+                }}
+                onProfileClick={onProfile}
+              />
+            </section>
+          )}
+
+          {/* ── 4칸 정보줄 (시안 `12,384명 · 12일 · 오늘의 미션 · 1위까지`) ─────
+              ⚠️ 마지막 칸은 `1위까지 N회`가 아니라 **내 진행**이다 — 진행 중 다른 참가자
+                 성과를 근거로 한 숫자를 내지 않는다(적용 지침 §순위 카드).
+              ⚠️ 오늘의 미션은 새 규칙이 아니다 — 오늘 운동을 했는지(챌린지 기간 운동일
+                 `stats.workoutDayKeys`, 서버 집계와 같은 원천)만 말한다. */}
+          <div className="grid grid-cols-4 divide-x divide-line rounded-card border border-line bg-surface py-3">
+            <InfoCell icon="users" value={`${members.length}명`} label="참여 중" />
+            <InfoCell
+              icon="calendar"
+              value={endedByDate ? "종료" : `${Math.max(0, dday)}일`}
+              label="남은 기간"
+            />
+            <InfoCell
+              icon="target"
+              value={todayDone ? "완료" : "운동 1회"}
+              label={todayDone ? "오늘 인증" : "오늘의 미션"}
+              accent={todayDone}
+            />
+            {/* 랭킹 공개 방이면 `내 순위` (사용자 결정 2026-10-05), 아니면 `내 진행` */}
+            {myRank !== null ? (
+              <InfoCell icon="ranking" value={`${myRank}위`} label="내 순위" accent />
+            ) : (
+              <InfoCell
+                icon="record"
+                value={`${Math.round(myScore.achievement)}%`}
+                label="내 진행"
+                accent
+              />
+            )}
+          </div>
 
           {me && me.goals.length > 0 && (
             <section className="rounded-card border border-line bg-surface p-4 shadow-card">
-              <h3 className="text-sm font-extrabold">내 목표 진행률</h3>
+              <h3 className="flex items-center gap-1.5 text-[15px] font-extrabold">
+                <Icon name="target" size={17} className="text-accent" />
+                내 목표 진행률
+              </h3>
               <div className="mt-2 flex flex-col gap-2">
                 {me.goals.map((g, i) => {
                   const rate = goalRate(g.target, g.actual);
@@ -520,7 +714,7 @@ export function ChallengeDetail({
                           {Math.round(g.actual * 10) / 10} · {Math.round(rate * 100)}%
                         </span>
                       </div>
-                      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-2">
+                      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-3">
                         <div
                           className={`h-full rounded-full ${rate >= 1 ? "bg-good" : "bg-accent"}`}
                           style={{ width: `${Math.min(100, rate * 100)}%` }}
@@ -538,7 +732,7 @@ export function ChallengeDetail({
                 <button
                   type="button"
                   onClick={() => setRaisingGoals(true)}
-                  className="mt-2.5 h-10 w-full rounded-card-sm border border-line bg-surface-2 text-[12.5px] font-bold text-accent"
+                  className="mt-2.5 h-10 w-full rounded-card-sm border border-accent/50 text-[12.5px] font-bold text-accent"
                 >
                   목표 올리기
                 </button>
@@ -561,10 +755,20 @@ export function ChallengeDetail({
 
           {/* ⚠️ **한 줄은 접지 않는다** (2026-08-13) — "왜 남의 점수가 안 보이나"의 답.
               ⚠️ **잠기는 것은 목표 점수뿐이다** (사용자 결정 2026-09-18). */}
-          <div className="rounded-card border border-line bg-surface-2 p-3 text-[12px] font-bold text-muted">
+          {/* 랭킹 공개 방(0115)이면 "기간 중엔 내 진행률만"은 거짓말이 된다 — 대신 공개 방이라고 말한다 */}
+          {challenge.live_ranking ? (
+            <p className="flex items-center gap-1.5 rounded-card border border-line bg-surface p-3 text-[12px] font-bold text-muted">
+              <Icon name="eye" size={15} className="flex-none text-accent" />
+              실시간 랭킹 공개 챌린지예요 — 종합점수 순위가 기간 중에도 보여요
+            </p>
+          ) : (
+          <div className="rounded-card border border-line bg-surface p-3 text-[12px] font-bold text-muted">
             <div className="flex items-center justify-between gap-2">
-              <span>
-                <UiIcon name="lock" /> 공정성을 위해 <b>기간 중에는 내 진행률만</b> 볼 수 있어요
+              <span className="flex items-start gap-1.5">
+                <Icon name="lock" size={15} className="mt-px flex-none" />
+                <span>
+                  공정성을 위해 <b className="text-text">기간 중에는 내 진행률만</b> 볼 수 있어요
+                </span>
               </span>
               <button
                 type="button"
@@ -591,6 +795,7 @@ export function ChallengeDetail({
               </div>
             )}
           </div>
+          )}
 
           {/* key: 챌린지를 바꾸면 리마운트시켜 이전 챌린지의 순위·열람 대상이 남지 않게 */}
           <ParticipantPerformanceCard
@@ -602,10 +807,12 @@ export function ChallengeDetail({
 
           <section className="rounded-card border border-line bg-surface p-4 shadow-card">
             <div className="mb-1 flex items-center justify-between">
-              <h3 className="text-sm font-extrabold">참여자 ({members.length}명)</h3>
-              <span className="text-xs text-muted">
-                <UiIcon name="lock" size={13} /> 종료일 공개
-              </span>
+              <h3 className="text-[15px] font-extrabold">참여자 ({members.length}명)</h3>
+              {!challenge.live_ranking && (
+                <span className="flex items-center gap-1 text-xs text-muted">
+                  <Icon name="lock" size={13} /> 종료일 공개
+                </span>
+              )}
             </div>
             {members.map((m) => (
               <div key={m.id} className="flex items-center gap-2.5 py-1.5">
@@ -627,8 +834,11 @@ export function ChallengeDetail({
                 <span className="font-mono text-sm font-extrabold text-faint">
                   {m.id === userId ? (
                     `${Math.round(myScore.achievement)}%`
+                  ) : liveRanked ? (
+                    /* 랭킹 공개 방(0115)은 남의 달성률도 보인다 — 랭킹과 같은 원천 */
+                    `${Math.round(liveRanked.find((r) => r.userId === m.id)?.achievement ?? 0)}%`
                   ) : (
-                    <UiIcon name="lock" size={15} alt="비공개" />
+                    <Icon name="lock" size={15} label="비공개" />
                   )}
                 </span>
               </div>
@@ -637,6 +847,29 @@ export function ChallengeDetail({
 
           {/* 챌린지 활동 (0095) — active일 때만. 끝나면 서버가 막아 자동으로 닫힌다. */}
           <ChallengeActivity challengeId={challenge.id} />
+
+          {/* ── 마일스톤 (2026-10-05 사용자 결정 "1번") ─────────────────
+              시안의 `챌린지 보상` 자리. ⚠️ **지급이 없는 진행 표시다** — XP·배지를 주지
+              않는다. 그래서 제목도 `보상`이 아니라 `마일스톤`이다. 계산은
+              `challengeMilestones`(챌린지 기간 운동일, 서버 집계와 같은 원천). */}
+          <section className="rounded-card border border-line bg-surface p-4 shadow-card">
+            <div className="mb-2.5 flex items-center justify-between">
+              <h3 className="text-[15px] font-extrabold">챌린지 마일스톤</h3>
+              <span className="text-[11px] text-muted">이 챌린지 기간 기록</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {challengeMilestones({
+                workoutDayKeys: stats?.get(userId)?.workoutDayKeys ?? [],
+                startDate: challenge.start_date,
+                endDate: challenge.end_date,
+                todayKey,
+                totalDays: dayProgress.total,
+                dayIndex: dayProgress.day,
+              }).map((m) => (
+                <MilestoneCard key={m.key} m={m} />
+              ))}
+            </div>
+          </section>
         </>
       )}
 
@@ -654,9 +887,9 @@ export function ChallengeDetail({
           <button
             type="button"
             onClick={onCreate}
-            className="h-12 rounded-card border border-accent/40 bg-accent-weak text-sm font-extrabold text-accent"
+            className="flex h-12 items-center justify-center gap-1.5 rounded-[14px] border border-accent/60 text-sm font-extrabold text-accent"
           >
-            ＋ 새 챌린지 만들기
+            <Icon name="plus" size={16} strokeWidth={2.4} />새 챌린지 만들기
           </button>
         </>
       )}

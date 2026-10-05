@@ -24,7 +24,11 @@ import {
   type MyChallengeScore,
 } from "@/lib/challenge";
 import { pickPrimaryRow } from "@/lib/domain/challenge-room";
-import { getCompletedSessions } from "@/lib/workout";
+import {
+  getCompletedSessions,
+  getTodayWorkoutTotals,
+  type TodayWorkoutTotals,
+} from "@/lib/workout";
 import { getActiveCrewSessions, type ActiveCrewSession } from "@/lib/social";
 import { getProgressSummary, type ProgressSummary } from "@/lib/progression";
 import { workedOutToday } from "@/lib/domain/friend-board";
@@ -32,6 +36,9 @@ import { resolvePersonalTodayStatus } from "@/lib/domain/home-competition";
 import { currentStreak, workoutDayKeys } from "@/lib/domain/streak";
 import { weekWorkoutDays } from "@/lib/domain/viewing-pass";
 import { DEFAULT_TIMEZONE, dayKey } from "@/lib/domain/time";
+import Image from "next/image";
+import Link from "next/link";
+import { Icon } from "@/components/ui/icon";
 
 const NO_ACTIVE_IDS: Set<string> = new Set();
 
@@ -39,6 +46,20 @@ const NO_ACTIVE_IDS: Set<string> = new Set();
 export function HomeClient() {
   const { userId, loading, configured } = useAuth();
   const [completedAts, setCompletedAts] = useState<Date[] | null>(null);
+  /**
+   * 오늘 숫자 세 칸(시간·세트·볼륨) — 2026-10-05 Performance Social 홈 시안.
+   * `undefined` = 조회 중, `null` = 실패. 둘 다 카드가 `—`를 그린다.
+   */
+  const [todayTotals, setTodayTotals] = useState<
+    TodayWorkoutTotals | null | undefined
+  >(undefined);
+  /**
+   * 세션 조회 실패 (2026-10-05). 예전엔 `[]`로 떨어뜨려 이번 주가 **0일**로 보였다 —
+   * 실패를 기록 없음으로 위장한 것이다. `completedAts`는 다른 위젯 때문에 여전히 `[]`로
+   * 떨어뜨리되, 내 카드의 주간 패널은 이 표식을 보고 재시도를 그린다.
+   */
+  const [sessionsError, setSessionsError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   // ⚠️ 기본 숫자를 넣지 마라. `null` = "챌린지에서 아직 안 정했다"이고, 화면은
   //    그때 분모 대신 `목표 정하기 ›`를 그린다 (2026-08-08 사용자 결정 —
   //    `personal-today-card.tsx`의 `hasGoal` 갈래).
@@ -106,6 +127,7 @@ export function HomeClient() {
         ]);
         if (cancelled) return;
         setCompletedAts(sessions.map((s) => s.completedAt));
+        setSessionsError(false);
         setWeeklyGoal(goalDays);
         setChallenges(myChallenges);
         if (profile) {
@@ -120,7 +142,21 @@ export function HomeClient() {
           if (profile.timezone) setTimeZone(profile.timezone);
         }
       } catch {
-        if (!cancelled) setCompletedAts([]);
+        if (!cancelled) {
+          setCompletedAts([]);
+          setSessionsError(true);
+        }
+      }
+    })();
+    // 오늘 숫자 세 칸 — 별도 조회. 실패해도 `—`만 그리고 홈의 다른 기능은 유지한다.
+    // ⚠️ 위 `Promise.all`에 넣지 마라. 넣으면 이 조회 하나가 던질 때 스트릭·친구 목록까지
+    //    `[]`로 떨어진다(바로 위 `.catch` 주석과 같은 이유).
+    (async () => {
+      try {
+        const totals = await getTodayWorkoutTotals(userId, dateRef, DEFAULT_TIMEZONE);
+        if (!cancelled) setTodayTotals(totals);
+      } catch {
+        if (!cancelled) setTodayTotals(null);
       }
     })();
     // 성장 요약은 별도 조회 — 실패해도 홈의 다른 기능은 유지(修正14)
@@ -155,7 +191,7 @@ export function HomeClient() {
     return () => {
       cancelled = true;
     };
-  }, [configured, loading, userId]);
+  }, [configured, loading, userId, reloadKey, dateRef]);
 
   // 진행 중 세션 — 60초 폴링은 여기 한 곳에만 둔다(옛날엔 진행 중 카드가 했다).
   useEffect(() => {
@@ -289,9 +325,40 @@ export function HomeClient() {
             나가서였는데, 이제 스트릭은 `나의 오늘` 카드의 `연속` 칸에 있고 그 카드가
             홈의 첫 카드다 — 같은 숫자를 두 줄 위아래로 두 번 적을 이유가 없다(설계 §5).
             되살리려거든 먼저 왜 두 곳에 있어야 하는지를 적어라. */}
-        <h1 className="text-[19px] font-extrabold tracking-tight">GND</h1>
-        <NotificationBell />
+        {/* 로고·모토 (2026-10-05 Performance Social). 이름은 h1 글자로 남긴다 —
+            그림만 두면 화면 낭독이 홈의 제목을 못 읽는다. */}
+        <h1>
+          <Image
+            src="/gnd/brand/logo.png"
+            alt="GND"
+            width={240}
+            height={80}
+            priority
+            unoptimized
+            className="h-[30px] w-auto"
+          />
+        </h1>
+        <div className="flex items-center gap-1">
+          <NotificationBell />
+          <Link
+            href="/crew"
+            aria-label="크루"
+            className="flex h-10 w-10 items-center justify-center rounded-full text-text"
+          >
+            <Icon name="users" size={24} />
+          </Link>
+        </div>
       </header>
+      {/* 시안의 `BETTER PEOPLE STRONGER TOGETHER` — 헤더 사진 위 장식. 읽을 거리가 아니다 */}
+      <Image
+        aria-hidden
+        src="/gnd/brand/motto.png"
+        alt=""
+        width={200}
+        height={223}
+        unoptimized
+        className="pointer-events-none absolute top-11 right-0 h-auto w-[78px] opacity-[0.14]"
+      />
 
       {/* ⚠️ **홈 첫 두 카드가 하나의 비교 구역이다** (2026-08-21 개편).
           설계: `docs/superpowers/specs/2026-08-21-home-personal-crew-competition-board-design.md`
@@ -311,6 +378,9 @@ export function HomeClient() {
           profile={myName}
           summary={summary}
           completedAts={completedAts}
+          todayTotals={todayTotals}
+          weekLoadError={sessionsError}
+          onRetryWeek={() => setReloadKey((k) => k + 1)}
           weeklyGoal={weeklyGoal}
           status={myTodayStatus}
           badgeCount={badgeCount}

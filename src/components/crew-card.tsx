@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { UiIcon } from "@/components/ui-icon";
+import { Icon } from "@/components/ui/icon";
 import { useAuth } from "@/components/auth-provider";
 import { issueMyInviteCode } from "@/lib/crew";
 
@@ -88,7 +88,7 @@ export function CrewCard() {
       <div className="flex items-center justify-between gap-2">
         {/* 옛 표기는 `👥`였다 (2026-08-07 2차 시안으로 교체) */}
         <h3 className="flex items-center gap-1.5 text-sm font-extrabold">
-          <UiIcon name="friends-add" size={22} />
+          <Icon name="users" size={20} className="text-accent" />
           친구 초대하기
         </h3>
         <button

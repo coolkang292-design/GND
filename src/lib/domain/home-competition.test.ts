@@ -44,7 +44,7 @@ describe("home competition rules", () => {
     });
     expect(personalTodayAction("done", 160)).toEqual({
       kind: "success",
-      label: "오늘 운동 완료! 오늘도 해냈어요 🔥",
+      label: "오늘 운동 완료! 오늘도 해냈어요",
     });
   });
 

@@ -70,9 +70,13 @@ describe("ChallengeSummaryCard — 진행 중 챌린지 요약", () => {
     expect(screen.getByText(/D-15/)).toBeTruthy();
     // ⚠️ `?open=`이 있어야 홈에서 본 챌린지가 탭에서 그대로 열린다.
     //    없으면 탭이 스스로 대표를 골라 **다른 방**이 열릴 수 있다.
-    expect(screen.getByText("챌린지 보기 ›").getAttribute("href")).toBe(
+    // 2026-10-05: 시안의 `전체 보기 ›`(헤더)와 카드 본체가 **둘 다** 그 방으로 간다.
+    expect(screen.getByText("전체 보기").closest("a")?.getAttribute("href")).toBe(
       "/challenge?open=ch-1",
     );
+    expect(
+      screen.getByText("8월 챌린지").closest("a")?.getAttribute("href"),
+    ).toBe("/challenge?open=ch-1");
   });
 
   it("종료 당일은 D-0이다", () => {
@@ -137,12 +141,12 @@ describe("ChallengeSummaryCard — 진행 중이 여러 개일 때", () => {
       challengeOf({ id: "b", name: "챌린지B", end_date: "2026-08-25" }),
       challengeOf({ id: "c", name: "챌린지C", end_date: "2026-08-27" }),
     ]);
-    expect(screen.getByText("외 2개 ›")).toBeTruthy();
+    expect(screen.getByText("외 2개 · 전체 보기")).toBeTruthy();
   });
 
   it("하나뿐이면 '외 0개'가 아니라 평소 문구다", () => {
     renderCard([challengeOf()]);
-    expect(screen.getByText("챌린지 보기 ›")).toBeTruthy();
+    expect(screen.getByText("전체 보기")).toBeTruthy();
     expect(screen.queryByText(/외 0개/)).toBeNull();
   });
 
@@ -152,7 +156,7 @@ describe("ChallengeSummaryCard — 진행 중이 여러 개일 때", () => {
       challengeOf({ id: "b", status: "ended" }),
       challengeOf({ id: "c", myStatus: "invited" }),
     ]);
-    expect(screen.getByText("챌린지 보기 ›")).toBeTruthy();
+    expect(screen.getByText("전체 보기")).toBeTruthy();
   });
 });
 
@@ -220,5 +224,20 @@ describe("ChallengeSummaryCard — 챌린지가 없을 때", () => {
   it("지어낸 통계를 적지 않는다", () => {
     const { container } = renderCard([]);
     expect(container.textContent ?? "").not.toMatch(/\d+\s*(배|%)/);
+  });
+});
+
+/**
+ * 2026-10-05 사용자 확정 — "진행 중 챌린지는 내 목표·활동을 표시하고, TOP 3는 종료 후".
+ * 시안의 `#3 · 12명 중 · 1위까지 2회`를 그대로 옮기면 진행 중 참가자 공개 순위가 된다.
+ * **부정 확인**이라 일부러 고장 내면(순위 문구를 넣으면) 이 단언이 실패한다.
+ */
+describe("ChallengeSummaryCard — 진행 중에는 순위를 말하지 않는다", () => {
+  it("등수·인원 대비 순위·1위까지 남은 횟수를 그리지 않는다", () => {
+    const { container } = renderCard([challengeOf()], SCORE);
+    expect(container.textContent).not.toMatch(/#\d/);
+    expect(container.textContent).not.toMatch(/\d+위/);
+    expect(container.textContent).not.toMatch(/명 중/);
+    expect(container.textContent).not.toMatch(/1위까지/);
   });
 });

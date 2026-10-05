@@ -180,10 +180,34 @@ describe("FeedItemCard — 기록 상세 펼치기", () => {
     expect(screen.getByText(/세트 기록이 없어요/)).toBeTruthy();
   });
 
-  it("기존 종목 요약 줄은 그대로 남는다", () => {
+  /**
+   * 2026-10-05 Performance Social — 종목 요약 한 줄(`벤치프레스 · 랫풀다운`)이
+   * 시안의 **번호 목록**(`1 벤치프레스 … 1세트 × 60kg ›`)으로 바뀌었다.
+   * 완료 세트만 센다 — 벤치프레스의 미완료 1세트는 요약에 안 들어간다.
+   */
+  it("종목을 번호 목록으로 적고 오른쪽에 완료 세트 요약을 붙인다", () => {
     renderCard();
 
-    expect(screen.getByText("벤치프레스 · 랫풀다운")).toBeTruthy();
+    const items = screen.getAllByRole("listitem");
+    expect(items[0].textContent).toContain("1벤치프레스1세트 × 60kg");
+    expect(items[1].textContent).toContain("2랫풀다운1세트 × 45kg");
+  });
+
+  it("4종 이상이면 3개만 보이고 나머지는 `+N종 더 보기`", () => {
+    const four = ["A", "B", "C", "D"].map((name) => ({ ...BREAKDOWN[1], name }));
+    renderCard(null, four);
+    expect(screen.getByText("+1종 더 보기")).toBeTruthy();
+    expect(screen.queryByText("D")).toBeNull();
+    fireEvent.click(toggle());
+    expect(screen.getAllByText("D").length).toBeGreaterThan(0);
+  });
+
+  it("숫자 줄 — 시간·세트·볼륨 (0인 칸은 없다)", () => {
+    renderCard();
+    expect(screen.getByText("운동 시간")).toBeTruthy();
+    expect(screen.getByText("전체 세트")).toBeTruthy();
+    expect(screen.getByText("1,200")).toBeTruthy();
+    expect(screen.queryByText("전체 반복")).toBeNull();
   });
 });
 
@@ -199,7 +223,7 @@ describe("FeedItemCard — 전신 인터벌 배지", () => {
       <FeedItemCard item={intervalItem()} userId="me" onProfileClick={() => {}} />,
     );
 
-    expect(screen.getByText(/🔥 전신 인터벌 8분/)).toBeTruthy();
+    expect(screen.getByText(/전신 인터벌 8분/)).toBeTruthy();
   });
 
   it("옛 용어 '타바타'는 남지 않는다", () => {
@@ -297,7 +321,7 @@ describe("FeedItemCard — 캡션", () => {
       />,
     );
     expect(screen.queryByText("💀 오늘 다 털렸다")).toBeNull();
-    fireEvent.click(screen.getByText("✍️ 오늘 기분 남기기"));
+    fireEvent.click(screen.getByText("오늘 기분 남기기"));
     expect(screen.getByText("💀 오늘 다 털렸다")).toBeTruthy();
   });
 
@@ -707,7 +731,21 @@ describe("FeedItemCard — 따라하기 버튼", () => {
     );
     fireEvent.click(screen.getByLabelText(/운동 상세/));
     // 세트 상세는 열렸는데 따라하기만 없어야 한다
-    expect(screen.getByText(/접기/)).toBeTruthy();
+    expect(screen.getByLabelText(/운동 상세/).getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByText("60kg 8회")).toBeTruthy();
     expect(screen.queryByText(/이 운동 따라하기/)).toBeNull();
+  });
+});
+
+/** 2026-10-05 사용자 지적 — "펼친 다음에 접기가 없네" */
+describe("FeedItemCard — 접기", () => {
+  it("펼치면 목록 끝과 세트 상세 끝에 접기가 생기고, 누르면 접힌다", () => {
+    render(<FeedItemCard item={feedItem(null)} userId="me" onProfileClick={() => {}} />);
+    expect(screen.queryByText("접기")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /운동 상세/ }));
+    expect(screen.getByText("접기")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /세트 상세 접기/ }));
+    expect(screen.queryByText("60kg 8회")).toBeNull();
+    expect(screen.queryByText("접기")).toBeNull();
   });
 });

@@ -465,7 +465,7 @@ describe("FriendBoardBody — 콕 찌르기", () => {
     const button = screen.getByLabelText("쉬는친구 찌르기") as HTMLButtonElement;
     expect(button.disabled).toBe(true);
     expect(
-      screen.getByText("오늘 운동을 마치면 크루를 콕 찌를 수 있어요 👉"),
+      screen.getByText("오늘 운동을 마치면 크루를 콕 찌를 수 있어요"),
     ).toBeTruthy();
   });
 
@@ -474,7 +474,7 @@ describe("FriendBoardBody — 콕 찌르기", () => {
     const button = screen.getByLabelText("쉬는친구 찌르기") as HTMLButtonElement;
     expect(button.disabled).toBe(false);
     expect(
-      screen.queryByText("오늘 운동을 마치면 크루를 콕 찌를 수 있어요 👉"),
+      screen.queryByText("오늘 운동을 마치면 크루를 콕 찌를 수 있어요"),
     ).toBeNull();
     fireEvent.click(button);
     expect(props.onPoke).toHaveBeenCalledTimes(1);

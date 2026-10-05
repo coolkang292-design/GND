@@ -12,6 +12,7 @@ import {
   type NotificationRow,
 } from "@/lib/social";
 import { timeAgo } from "@/lib/time-ago";
+import { Icon } from "@/components/ui/icon";
 
 const TYPE_ICON: Record<NotificationRow["type"], string> = {
   workout_started: "🏋️",
@@ -95,11 +96,12 @@ export function NotificationBell() {
       <button
         onClick={() => void openSheet()}
         aria-label="알림함"
-        className="relative flex h-9 w-9 items-center justify-center rounded-full border border-line bg-surface text-base"
+        className="relative flex h-10 w-10 items-center justify-center rounded-full text-text"
       >
-        🔔
+        {/* 이모지 🔔 → SVG 벨 (2026-10-05 기획안 17-A). 이름은 위 aria-label이 말한다 */}
+        <Icon name="bell" size={24} />
         {unread > 0 && (
-          <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-extrabold text-accent-ink">
+          <span className="absolute top-0.5 right-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-extrabold text-accent-ink">
             {unread > 9 ? "9+" : unread}
           </span>
         )}

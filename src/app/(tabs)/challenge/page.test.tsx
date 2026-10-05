@@ -131,6 +131,7 @@ const challenge = (id: string, name: string, createdAt: string) =>
     invite_code: `GND-${id.slice(-5).toUpperCase()}`,
     // 0085 — 기존 챌린지는 전부 비공개다
     discoverable: false,
+    live_ranking: false,
     recruit_note: null,
     recruit_image_url: null,
     myRole: "host",
@@ -388,15 +389,15 @@ describe("ChallengePage 목록", () => {
     expect(
       screen.getByRole("tab", { name: "둘러보기" }).getAttribute("aria-selected"),
     ).toBe("true");
-    expect(screen.getByRole("button", { name: "＋ 만들기" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "＋ 챌린지 만들기" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "만들기" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "챌린지 만들기" })).toBeTruthy();
   });
 
   it("＋ 만들기는 목록 위에 늘 있고, 이름칸이 빈 만들기 화면을 연다", async () => {
     render(<ChallengePage />);
     await screen.findByRole("region", { name: "준비 중" });
 
-    fireEvent.click(screen.getByRole("button", { name: "＋ 만들기" }));
+    fireEvent.click(screen.getByRole("button", { name: "만들기" }));
 
     const name = screen.getByLabelText("챌린지 이름") as HTMLInputElement;
     expect(name.value).toBe("");
@@ -592,7 +593,7 @@ describe("ChallengePage 진행 중 — 오늘 운동하기 · 공정성 안내",
   it("기록 화면으로 가는 문이 있다", async () => {
     arrange();
     render(<ChallengePage />);
-    const cta = await screen.findByText("오늘 운동하기 ›");
+    const cta = await screen.findByRole("link", { name: "오늘 운동하기" });
     expect(cta.getAttribute("href")).toBe("/record");
   });
 
@@ -606,7 +607,7 @@ describe("ChallengePage 진행 중 — 오늘 운동하기 · 공정성 안내",
   it("참가자 이름을 눌러 프로필 시트를 연다", async () => {
     arrange();
     render(<ChallengePage />);
-    await screen.findByText("오늘 운동하기 ›");
+    await screen.findByRole("link", { name: "오늘 운동하기" });
 
     const opener = await screen.findByLabelText("예전 참가자 프로필 보기");
     expect(opener.tagName).toBe("BUTTON");
@@ -619,15 +620,39 @@ describe("ChallengePage 진행 중 — 오늘 운동하기 · 공정성 안내",
   it("'상세 보기' 버튼은 넣지 않는다 — 바로 아래가 이미 상세다", async () => {
     arrange();
     render(<ChallengePage />);
-    await screen.findByText("오늘 운동하기 ›");
+    await screen.findByRole("link", { name: "오늘 운동하기" });
     expect(screen.queryByText("상세 보기")).toBeNull();
+  });
+
+  /**
+   * 실시간 랭킹 공개 (0115, 2026-10-05 사용자 지시) — 방장이 켠 방만 진행 중에 순위가 보인다.
+   * 기본(꺼짐)은 옛 규칙 그대로다: 순위 없음 · 정보줄은 `내 진행` · 공정성 안내.
+   * 둘 다 단언해야 "꺼져 있으면 안 보인다"(부정 확인)가 지켜진다.
+   */
+  it("랭킹 공개를 안 켠 방은 진행 중에 순위를 그리지 않는다", async () => {
+    arrange();
+    render(<ChallengePage />);
+    await screen.findByText("기간 중에는 내 진행률만");
+    expect(screen.queryByText("실시간 랭킹")).toBeNull();
+    expect(screen.queryByText("내 순위")).toBeNull();
+    expect(screen.getAllByText("내 진행").length).toBeGreaterThan(0);
+  });
+
+  it("랭킹 공개 방은 진행 중에도 TOP 3와 내 순위를 그린다", async () => {
+    arrange({ live_ranking: true });
+    render(<ChallengePage />);
+    expect(await screen.findByText("실시간 랭킹")).toBeTruthy();
+    expect(screen.getByText("내 순위")).toBeTruthy();
+    expect(screen.getByText("1위", { selector: "strong" })).toBeTruthy();
+    // 공개 방에서 "내 진행률만"이라고 말하면 거짓말이다
+    expect(screen.queryByText("기간 중에는 내 진행률만")).toBeNull();
   });
 
   it("종료일이 지나면 할 일은 운동이 아니라 결과 발표다", async () => {
     arrange({ end_date: "2000-01-01" });
     render(<ChallengePage />);
     await screen.findByText(/결과 발표하기/);
-    expect(screen.queryByText("오늘 운동하기 ›")).toBeNull();
+    expect(screen.queryByRole("link", { name: "오늘 운동하기" })).toBeNull();
   });
 
   /**

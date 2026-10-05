@@ -26,6 +26,8 @@ import {
   getCrewFeed,
   type FeedItem,
 } from "@/lib/social";
+import Image from "next/image";
+import { Icon } from "@/components/ui/icon";
 
 export default function FeedPage() {
   const { userId, loading, configured } = useAuth();
@@ -208,14 +210,25 @@ export default function FeedPage() {
 
   return (
     <div className="flex flex-col gap-3">
-      <header className="flex items-center justify-between pt-2 pb-1">
-        <div>
-          <h1 className="text-[19px] font-extrabold tracking-tight">피드</h1>
-          <p className="mt-0.5 text-[12.5px] text-muted">
-            크루의 운동, 같이 봐요 👀
-          </p>
+      {/* 시안 머리 (2026-10-05 Performance Social): 로고 줄 + `피드 오늘도, 더 강한 우리가.`
+          ⚠️ 시안의 검색·필터 아이콘은 넣지 않는다 — 피드에 그 기능이 없다(적용 지침:
+             없는 필터·저장 기능을 임의로 추가하지 않는다). 그 자리에는 알림 벨을 둔다. */}
+      <header className="pt-1 pb-0.5">
+        <div className="flex items-center justify-between">
+          <Image
+            src="/gnd/brand/logo.png"
+            alt="GND"
+            width={240}
+            height={80}
+            unoptimized
+            className="h-[26px] w-auto"
+          />
+          <NotificationBell />
         </div>
-        <NotificationBell />
+        <div className="mt-2 flex items-baseline gap-2.5">
+          <h1 className="text-[26px] font-black tracking-tight">피드</h1>
+          <p className="text-[13px] text-muted">오늘도, 더 강한 우리가.</p>
+        </div>
       </header>
 
       <FeedTabs value={tab} onChange={setTab} recruitCount={recruits.length} />
@@ -231,7 +244,7 @@ export default function FeedPage() {
       {pinnedId && (
         <section className="flex flex-col gap-2">
           <p className="flex items-center gap-2 text-xs font-extrabold text-accent">
-            <span>🔔</span> 알림에서 열어 본 운동
+            <Icon name="bell" size={14} /> 알림에서 열어 본 운동
           </p>
           {pinned === null ? (
             <p className="py-4 text-center text-sm text-muted">불러오는 중…</p>
@@ -258,7 +271,7 @@ export default function FeedPage() {
         <section className="rounded-card border border-line bg-surface p-5 text-center shadow-card">
           <p className="text-sm font-bold">아직 운동 기록이 없어요</p>
           <p className="mt-1 text-xs text-muted">
-            첫 운동을 완료하면 여기에 나타나요 💪
+            첫 운동을 완료하면 여기에 나타나요
           </p>
           <p className="mt-1 text-xs text-muted">
             내 정보 › 크루에서 닉네임으로 크루를 추가하면 서로의 운동도 보여요.
@@ -269,7 +282,7 @@ export default function FeedPage() {
           {dayGroups.map((g) => (
             <section key={g.dateKey} className="flex flex-col gap-3">
               <p className="mt-1 flex items-center gap-2 text-xs font-extrabold text-muted">
-                <span className="text-accent">📅</span>
+                <Icon name="calendar" size={14} className="text-accent" />
                 {feedDateLabel(g.dateKey, dateRef.todayKey, dateRef.yesterdayKey)}
                 <span className="font-bold text-faint">
                   운동 {g.items.length}

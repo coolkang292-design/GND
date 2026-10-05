@@ -1681,6 +1681,29 @@ export async function setChallengeDiscoverable(
   if (!data || data.length === 0) throw new Error("discoverable_not_saved");
 }
 
+/**
+ * 실시간 랭킹 공개 켜기/끄기 (0115). 방장만(정책), 시작 전만(트리거).
+ *
+ * ⚠️ `.select("id")`를 빼지 마라 — 빼면 한 줄도 안 바뀌어도 error가 null이다
+ *    (`setChallengeDiscoverable`과 같은 이유).
+ */
+export async function setChallengeLiveRanking(
+  challengeId: string,
+  on: boolean,
+): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("challenges")
+    .update({ live_ranking: on })
+    .eq("id", challengeId)
+    .select("id");
+  if (error) {
+    if (error.message?.includes("live_ranking_locked")) throw new Error("live_ranking_locked");
+    throw error;
+  }
+  if (!data || data.length === 0) throw new Error("live_ranking_not_saved");
+}
+
 /* ── 챌린지 활동 (0095) ──────────────────────────────────────────────────── */
 
 /**

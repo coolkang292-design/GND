@@ -93,7 +93,8 @@ describe("ProgramFlow", () => {
     expect(screen.getByText(/8월 17일.*오후 7:00/)).toBeTruthy();
     expect(screen.getByText("다음 운동")).toBeTruthy();
     expect(screen.getByText("1주차 A회 · 밀고 세우기")).toBeTruthy();
-    expect(document.querySelector('img[src*="finish.webp"]')).not.toBeNull();
+    // 2026-10-05: 깃발 아이콘이 금색 비트맵(`finish.webp`)에서 SVG(`flag`)로 바뀌었다
+    expect(document.querySelector('svg[data-icon="flag"]')).not.toBeNull();
 
     // 방금 담은 18회를 보러 가는 길이다 — 운동 탭이 아니라 달력으로 착지시킨다
     // (사용자 지적 2026-08-12)

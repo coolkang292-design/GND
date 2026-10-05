@@ -25,7 +25,8 @@ import {
   TODAY_STATUS_LABEL,
 } from "@/lib/domain/home-competition";
 import { pokeUser, SocialError } from "@/lib/social";
-import { UiIcon } from "@/components/ui-icon";
+import { Chip, type ChipDot } from "@/components/ui/chip";
+import { Icon } from "@/components/ui/icon";
 
 /**
  * 찌르기 실패 문구.
@@ -50,10 +51,10 @@ export function pokeErrorMessage(e: unknown): string {
  *
  * ⚠️ 색만으로 구별하지 않는다 — 색 옆에 항상 **글자**가 있다.
  */
-const STATUS_TONE: Record<FriendRow["status"], string> = {
-  done: "bg-good-weak text-good",
-  active: "bg-warn/15 text-warn",
-  idle: "bg-surface text-muted",
+const STATUS_DOT: Record<FriendRow["status"], ChipDot> = {
+  done: "good",
+  active: "warn",
+  idle: "muted",
 };
 
 /**
@@ -89,7 +90,9 @@ function FriendRowItem({
     /* ⚠️ `py-2`다. 실측 90px에서 84px 목표까지 6px을 여기와 지표 줄에서 뺐다
         (2026-08-21). 여백을 되돌리려거든 먼저 375×812에서 재라 — 크루 둘째 행이
         하단 탭 밑으로 내려가면 카드를 나눈 이유가 사라진다. */
-    <li className="rounded-card border border-line bg-surface-2 px-3 py-2">
+    /* 2026-10-05 Performance Social: 행마다 상자였던 것을 **한 카드 안의 구분선 목록**으로
+       (시안 YOUR CREW). 높이는 같다 — 테두리 대신 구분선이 행을 가른다. */
+    <li className="px-3 py-2.5">
       {/* ⚠️ `gap-2`·`gap-1`이다. 2.5/1.5로 되돌리면 375px에서 `오뎅끼데스까`가
           4px 잘린다(2026-08-21 실측 80/84). 이름 줄의 남는 폭은 전부 닉네임 몫이다. */}
       <div className="flex items-center gap-2">
@@ -113,7 +116,7 @@ function FriendRowItem({
             <Avatar
               src={row.avatarUrl}
               label={`${row.nickname}님 프로필 사진`}
-              className="h-11 w-11 flex-none overflow-hidden rounded-full border border-line bg-surface"
+              className="h-11 w-11 flex-none overflow-hidden rounded-full border border-line-strong bg-surface"
             />
           ) : (
             <Image
@@ -122,7 +125,7 @@ function FriendRowItem({
               width={44}
               height={58}
               sizes="44px"
-              className="h-11 w-11 flex-none rounded-full border border-line bg-surface object-cover object-top"
+              className="h-11 w-11 flex-none rounded-full border border-line-strong bg-surface object-cover object-top"
             />
           )}
           <span className="flex min-w-0 flex-1 items-center gap-1">
@@ -136,9 +139,11 @@ function FriendRowItem({
             {/* ⚠️ `px-1`이다. 1.5로 되돌리면 375px에서 `오뎅끼데스까`가 1px 모자라
                 말줄임표가 뜬다(2026-08-21 실측 83/84). 이름 줄의 남는 폭은 전부
                 닉네임 몫이라 여기서 4px을 빼 여유를 만들었다. */}
-            <span className="flex-none rounded-full border border-accent/40 bg-accent-weak px-1 py-[1px] text-[10.5px] font-extrabold text-accent">
+            {/* 톤은 `Chip` 하나(2026-10-05 사용자 지시 "톤앤매너에 맞게") — 금색 채움을 뗐다.
+                ⚠️ `px-1.5`·10.5px로 좁게 둔다 — 375px에서 닉네임 몫(위 주석) */}
+            <Chip className="!px-1.5 !text-[10.5px]">
               {row.stageName} Lv.{row.level}
-            </span>
+            </Chip>
           </span>
         </button>
 
@@ -156,9 +161,10 @@ function FriendRowItem({
         {poked.has(row.userId) ? (
           <span
             aria-label={`${row.nickname} 찌름 완료`}
-            className="flex-none rounded-full bg-surface px-2 py-1 text-[11px] font-bold text-faint opacity-70"
+            className="flex flex-none items-center gap-0.5 rounded-full bg-surface-3 px-2 py-1 text-[11px] font-bold text-faint"
           >
-            ✅ 찌름
+            <Icon name="check" size={12} strokeWidth={2.4} />
+            찌름
           </span>
         ) : (
           /* ⚠️ 44px 터치 영역을 **`after`로** 만든다 (설계 §10). 2026-08-21에
@@ -170,13 +176,14 @@ function FriendRowItem({
             onClick={() => onPoke(row)}
             disabled={!iWorkedOut || pokingId === row.userId}
             aria-label={`${row.nickname} 찌르기`}
-            className={`relative flex-none rounded-full px-2 py-1 text-[11px] font-extrabold after:absolute after:inset-x-0 after:top-1/2 after:h-11 after:-translate-y-1/2 after:content-[''] ${
+            className={`relative flex flex-none items-center gap-0.5 rounded-full px-2 py-1 text-[11px] font-extrabold after:absolute after:inset-x-0 after:top-1/2 after:h-11 after:-translate-y-1/2 after:content-[''] ${
               iWorkedOut
-                ? "bg-accent text-accent-ink"
-                : "bg-surface text-faint opacity-60"
+                ? "bg-accent text-accent-ink active:bg-accent-press"
+                : "bg-surface-3 text-faint opacity-60"
             }`}
           >
-            👉 콕
+            <Icon name="spark" size={12} strokeWidth={2.2} />
+            콕
           </button>
         )}
       </div>
@@ -187,11 +194,9 @@ function FriendRowItem({
           ⚠️ 연속 0일에도 칸을 그린다 — 빼면 그 행만 칸이 밀려 크루끼리 세로가
              안 맞는다(2026-08-07 사용자 요청 "일자로 고정"). */}
       <div className="mt-0.5 grid grid-cols-[1fr_auto_auto_auto] items-center gap-2">
-        <span
-          className={`justify-self-start rounded-full px-2 py-[2px] text-[11px] font-bold ${STATUS_TONE[row.status]}`}
-        >
+        <Chip dot={STATUS_DOT[row.status]} className="justify-self-start">
           {TODAY_STATUS_LABEL[row.status]}
-        </span>
+        </Chip>
         <span className="flex items-baseline gap-1 text-[11px] text-muted">
           <span>이번 주</span>
           <b className="text-[12px] font-extrabold text-text">
@@ -224,7 +229,7 @@ function SkeletonRow() {
   return (
     <li
       aria-hidden
-      className="animate-pulse rounded-card border border-line bg-surface-2 px-3 py-2"
+      className="animate-pulse px-3 py-2.5"
     >
       <div className="flex items-center gap-2">
         <div className="h-11 w-11 flex-none rounded-full bg-surface" />
@@ -289,14 +294,16 @@ export function FriendBoardBody({
   const summary = crewTodaySummary(rows);
 
   return (
-    <section className="rounded-card border border-line bg-surface p-4 shadow-card">
-      <div className="flex items-center justify-between">
+    <section>
+      <div className="flex items-center justify-between gap-2 px-0.5">
         {/* ⚠️ 제목이 **상태와 무관하게 하나**다 (2026-08-21). 옛 헤딩은 조회 상태마다
             `나의 크루` / `나의 크루 N명` / `크루와 함께하면 더 강해져요`로 갈렸는데,
             이제 이 카드는 "오늘"을 말하는 자리라 인원수가 제목에 있을 이유가 없다. */}
-        <h3 className="flex items-center gap-1.5 text-sm font-extrabold">
-          <UiIcon name={empty ? "friends-add" : "friends"} size={22} />
-          오늘의 크루
+        {/* 시안의 `YOUR CREW` 제목. ⚠️ 접근 이름은 한글 `오늘의 크루`로 남긴다 — 화면
+            낭독과 테스트가 그 이름으로 이 카드를 찾는다. */}
+        <h3 className="text-[18px] font-black italic tracking-tight">
+          <span aria-hidden>YOUR CREW</span>
+          <span className="sr-only">오늘의 크루</span>
         </h3>
         {/* ⚠️ 완료 칩 — 2026-08-21 설계 검토에서 한 번 뺐다가 같은 날 사용자가
             목업을 보고 **되살리라고 지시했다**(보완 기준 2 철회).
@@ -311,9 +318,10 @@ export function FriendBoardBody({
             ⚠️ 조회 전·크루 0명에는 그리지 않는다. `0 / 0명 완료`는 정보가 아니고,
             조회 중 `0 / 0`이 떴다가 `1 / 4`로 바뀌면 크루가 생긴 것처럼 읽힌다. */}
         {status === "ready" && summary.total > 0 && (
-          <span className="flex-none rounded-full border border-good/40 bg-good-weak/60 px-2.5 py-1 text-[11px] font-bold text-muted">
-            <b className="text-good">{summary.done}</b> / {summary.total}명 완료
-          </span>
+          <Chip dot="good">
+            <b className="font-extrabold">{summary.done}</b>
+            <span className="font-medium text-muted">/ {summary.total}명 완료</span>
+          </Chip>
         )}
       </div>
 
@@ -321,27 +329,31 @@ export function FriendBoardBody({
           먼저 둔다(2026-08-21 보완 기준 3, 설계 §7.3). 운동을 마치면 이 줄은
           사라지고 각 행의 콕이 금색으로 열린다. */}
       {status === "ready" && !iWorkedOut && pokeable > 0 && (
-        <p className="mt-1 text-[11px] text-muted">
-          오늘 운동을 마치면 크루를 콕 찌를 수 있어요 👉
+        <p className="mt-1 px-0.5 text-[11px] text-muted">
+          오늘 운동을 마치면 크루를 콕 찌를 수 있어요
         </p>
       )}
 
       {status === "loading" && (
-        <ul className="mt-2.5 flex flex-col gap-1">
+        <ul className="mt-2.5 divide-y divide-line overflow-hidden rounded-card border border-line bg-surface">
           <SkeletonRow />
         </ul>
       )}
 
       {status === "failed" && (
-        <p className="mt-3 rounded-card-sm border border-line bg-surface-2 px-3 py-2.5 text-xs text-muted">
+        <p className="mt-2.5 rounded-card border border-line bg-surface px-3 py-3 text-xs text-muted">
           크루 정보를 불러오지 못했어요.
         </p>
       )}
 
-      {empty && <p className="mt-1 text-xs text-muted">아직 크루가 없어요</p>}
+      {empty && (
+        <p className="mt-2.5 rounded-card border border-line bg-surface px-3 py-3 text-xs text-muted">
+          아직 크루가 없어요
+        </p>
+      )}
 
       {status === "ready" && visible.length > 0 && (
-        <ul className="mt-2.5 flex flex-col gap-1">
+        <ul className="mt-2.5 divide-y divide-line overflow-hidden rounded-card border border-line bg-surface shadow-card">
           {visible.map((row) => (
             <FriendRowItem
               key={row.userId}
@@ -361,7 +373,7 @@ export function FriendBoardBody({
       {empty && (
         <Link
           href="/crew"
-          className="mt-3 flex h-11 items-center justify-center rounded-card-sm border border-line bg-surface-2 text-[13px] font-extrabold text-accent"
+          className="mt-2 flex h-11 items-center justify-center rounded-card-sm border border-line bg-surface text-[13px] font-extrabold text-accent"
         >
           크루 찾으러 가기 ›
         </Link>
@@ -382,7 +394,7 @@ export function FriendBoardBody({
       )}
 
       {truncated && (
-        <p className="mt-2 text-[11px] text-muted">
+        <p className="mt-2 px-0.5 text-[11px] text-muted">
           기록이 많아 일부만 반영된 수치예요
         </p>
       )}

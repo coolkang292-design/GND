@@ -40,7 +40,7 @@ export function FeedTabs({
     <div
       role="tablist"
       aria-label="피드 보기"
-      className="flex gap-1 rounded-card border border-line bg-surface-2 p-1"
+      className="flex gap-1 rounded-full border border-line bg-surface p-1"
     >
       {tabs.map((tab) => {
         const on = value === tab.key;
@@ -51,15 +51,16 @@ export function FeedTabs({
             role="tab"
             aria-selected={on}
             onClick={() => onChange(tab.key)}
-            className={`flex min-h-[38px] flex-1 items-center justify-center gap-1.5 rounded-card-sm text-[13px] font-extrabold transition-colors ${
-              on ? "bg-surface text-accent shadow-card" : "text-muted"
+            /* 시안의 라임 알약 (2026-10-05) — 선택은 라임 채움 + 검은 글자 */
+            className={`flex min-h-[40px] flex-1 items-center justify-center gap-1.5 rounded-full text-[13.5px] font-extrabold transition-colors ${
+              on ? "bg-accent text-accent-ink" : "text-muted"
             }`}
           >
             {tab.label}
             {tab.count !== undefined && tab.count > 0 && (
               <span
                 className={`rounded-full px-1.5 text-[11px] font-bold ${
-                  on ? "bg-accent-weak text-accent" : "bg-surface text-muted"
+                  on ? "bg-black/15 text-accent-ink" : "bg-surface-3 text-muted"
                 }`}
               >
                 {tab.count}
