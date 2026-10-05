@@ -6,6 +6,7 @@ import { AcquisitionTracker } from "@/components/acquisition-tracker";
 import { FunnelTracker } from "@/components/funnel-tracker";
 import { TrailTracker } from "@/components/trail-tracker";
 import { InstallGate } from "@/components/install/install-gate";
+import { LaunchMotivationSplash } from "@/components/launch-motivation-splash";
 import {
   DEFAULT_SHARE,
   OG_IMAGE_HEIGHT,
@@ -83,6 +84,8 @@ export default function RootLayout({
           <FunnelTracker />
           <div className="w-full max-w-[430px] h-dvh flex flex-col relative bg-bg">
             {children}
+            {/* 실행 세션당 한 번. 로그인·온보딩 전환 중에도 1.5초 표시를 유지한다. */}
+            <LaunchMotivationSplash />
             {/* ⚠️ `(tabs)` 안이 아니라 **여기**다 — 카톡 인앱 탈출 안내가
                 `/login`·`/onboarding`보다 먼저 떠야 하는데 그 둘은 탭 밖이다. */}
             <InstallGate />

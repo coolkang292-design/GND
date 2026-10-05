@@ -9,7 +9,7 @@ import {
 
 const DISPLAY_MS = 1_500;
 const FADE_MS = 180;
-const MAX_BLOCK_MS = 3_000;
+const MAX_BLOCK_MS = 2_000;
 
 type Phase =
   | "checking"
@@ -116,7 +116,7 @@ export function LaunchMotivationSplash() {
       {phase !== "checking" && (
         <Image
           data-testid="launch-splash-image"
-          src="/splash/gnd-launch-motivation-v5.png"
+          src="/splash/gnd-launch-original-approved-v8.webp"
           alt=""
           fill
           priority

@@ -65,7 +65,7 @@ describe("LaunchMotivationSplash", () => {
     );
     const image = screen.getByTestId("launch-splash-image");
     expect(image.getAttribute("src")).toBe(
-      "/splash/gnd-launch-motivation-v5.png",
+      "/splash/gnd-launch-original-approved-v8.webp",
     );
     expect(image.getAttribute("data-unoptimized")).toBe("true");
     expect(image.getAttribute("sizes")).toBe(
@@ -150,15 +150,24 @@ describe("LaunchMotivationSplash", () => {
     ).toBeNull();
   });
 
-  it("이미지 상태가 오지 않아도 3초 뒤 앱 진입을 풀어준다", () => {
+  it("이미지 상태가 오지 않아도 2초 뒤 앱 진입을 풀어준다", () => {
     render(<LaunchMotivationSplash />);
     settleSessionDecision();
 
-    act(() => vi.advanceTimersByTime(3_000));
+    act(() => vi.advanceTimersByTime(2_000));
 
     expect(
       screen.queryByRole("button", { name: "시작 화면 건너뛰기" }),
     ).toBeNull();
+  });
+
+  it("늦게 로드된 이미지도 실행 후 2초를 넘겨 앱을 가리지 않는다", () => {
+    render(<LaunchMotivationSplash />);
+    settleSessionDecision();
+    act(() => vi.advanceTimersByTime(1_200));
+    fireEvent.load(screen.getByTestId("launch-splash-image"));
+    act(() => vi.advanceTimersByTime(800));
+    expect(screen.queryByRole("button", { name: "시작 화면 건너뛰기" })).toBeNull();
   });
 
   it("reduced motion에서는 터치 즉시 페이드 없이 사라진다", () => {

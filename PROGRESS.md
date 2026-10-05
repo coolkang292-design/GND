@@ -3,6 +3,13 @@
 > 새 세션은 저장소 루트 `AGENTS.md` → `CLAUDE.md` → 이 파일 → 가장 최근의 관련 `docs/superpowers/HANDOFF-*.md` 순서로 읽는다.
 > 이 파일은 전체 흐름의 요약이고, 작업별 세부 사실과 남은 확인은 최신 인수인계서가 기준이다.
 
+## ✅ 2026-10-06 Performance Social 원본 온보딩·앱 시작 — **로컬 수정 · 미배포**
+
+- 인수인계: docs/superpowers/HANDOFF-2026-10-06-performance-social-brand-entry.md. 자산/최종지침/원본 좌표/문구/미리보기: 어플 UI 이미지/Performance-Social-2026-10-06-Brand-Entry/ 및 ZIP.
+- 1번 원본은 온보딩 '지금 이 도전이 더 나은 나를 만든다'. 2번 원본은 버튼 없는 앱 시작 '의지가 꺾인 날에도 계속한 사람이 결국 이긴다'. AI 후보는 미채택. 온보딩 실제 UI는 Claude 적용 대기.
+- 앱 시작 v8 WebP(97KB)를 root에 연결. 1.5초 표시+180ms 페이드/로딩 포함 최대2초, 세션당1회. 개발/login 원본 표시·자동 종료·비밀번호 보기·새로고침 반복 없음 확인.
+- 관련15/전체4,037테스트 통과, lint오류0/경고4, typecheck통과. build는 별도 challenge/page.ts errorMessage 내보내기 오류로 실패. 인증/DB/운영배포변경없음, 실제폰·온보딩 인증미검증. 다음: Claude 온보딩 적용.
+
 ## ✅ 2026-10-06 Performance Social 내 정보·배지 30종 — **배포**
 
 - 프로필 카드(아바타·닉네임·소개·`프로필 편집` → 기존 ProfileEditSheet), 현재 단계 `단계명 Lv.N`(단계명 앞 규칙 유지)·누적 XP 금색, 포인트 3칸 아이콘, 다음 목표·혜택·타임라인 이모지→SVG, 보상 포인트 금색.

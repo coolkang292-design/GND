@@ -1,7 +1,6 @@
 import { TabBar } from "@/components/tab-bar";
 import { OnboardingGate } from "@/components/onboarding-gate";
 import { CheerBanner } from "@/components/cheer-banner";
-import { LaunchMotivationSplash } from "@/components/launch-motivation-splash";
 import { TabBackdrop } from "@/components/tab-backdrop";
 import { CrewBanner } from "@/components/feed/crew-banner";
 
@@ -12,7 +11,6 @@ export default function TabsLayout({
 }>) {
   return (
     <>
-      <LaunchMotivationSplash />
       <OnboardingGate />
       <CheerBanner />
       {/*

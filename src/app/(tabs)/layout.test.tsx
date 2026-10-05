@@ -20,14 +20,14 @@ vi.mock("@/components/tab-bar", () => ({
 afterEach(cleanup);
 
 describe("TabsLayout", () => {
-  it("일반 앱 셸에 실행 스플래시를 정확히 한 번 마운트한다", () => {
+  it("탭 셸은 공통 루트의 시작 화면을 중복 마운트하지 않는다", () => {
     render(
       <TabsLayout>
         <div>현재 화면</div>
       </TabsLayout>,
     );
 
-    expect(screen.getAllByTestId("launch-splash")).toHaveLength(1);
+    expect(screen.queryByTestId("launch-splash")).toBeNull();
     expect(screen.getByText("현재 화면")).toBeTruthy();
     expect(screen.getByTestId("onboarding-gate")).toBeTruthy();
     expect(screen.getByTestId("cheer-banner")).toBeTruthy();
