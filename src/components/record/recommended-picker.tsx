@@ -167,7 +167,9 @@ export function RecommendedPicker({
                   alt=""
                   width={40}
                   height={40}
-                  className="h-10 w-10 flex-none"
+                  /* 부위 아이콘은 남색 정사각형이라 모서리를 둥글린다 (2026-10-05).
+                     상황 아이콘(투명 금색)에는 보이는 차이가 없다 */
+                  className="h-10 w-10 flex-none rounded-lg"
                 />
                 <span className="min-w-0 flex-1">
                   <span

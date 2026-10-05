@@ -95,14 +95,18 @@ export type RecommendPart = (typeof RECOMMEND_PARTS)[number];
  * `{choice.icon}`으로 경로 **문자열을 글자 그대로 렌더**해도 타입이 통과한다.
  * 자산은 `scripts/slice-ui-icons.py`가 만든다.
  */
+//
+// 2026-10-05: 아이콘을 금색 선화에서 운동 그림과 같은 화풍(은회색 인체 + 파란 근육,
+// 남색 정사각형)으로 바꿨다(사용자 지시). 자산은 `scripts/build-part-icons.py`가 만든다.
+// ⚠️ `/ui-icons/part-*.webp`는 그대로 둔다 — 챌린지 목표 설정·운동 그림 대체 아이콘이 쓴다.
 export const PART_META: Record<RecommendPart, { iconSrc: string; sub: string }> =
   {
-    가슴: { iconSrc: "/ui-icons/part-chest.webp", sub: "가슴을 탄탄하게" },
-    등: { iconSrc: "/ui-icons/part-back.webp", sub: "등을 넓고 강하게" },
-    하체: { iconSrc: "/ui-icons/part-legs.webp", sub: "하체를 튼튼하게" },
-    어깨: { iconSrc: "/ui-icons/part-shoulders.webp", sub: "어깨를 안정적으로" },
-    팔: { iconSrc: "/ui-icons/part-arms.webp", sub: "팔 힘을 기르기" },
-    코어: { iconSrc: "/ui-icons/part-core.webp", sub: "중심을 단단하게" },
+    가슴: { iconSrc: "/part-images/chest.webp", sub: "가슴을 탄탄하게" },
+    등: { iconSrc: "/part-images/back.webp", sub: "등을 넓고 강하게" },
+    하체: { iconSrc: "/part-images/legs.webp", sub: "하체를 튼튼하게" },
+    어깨: { iconSrc: "/part-images/shoulders.webp", sub: "어깨를 안정적으로" },
+    팔: { iconSrc: "/part-images/arms.webp", sub: "팔 힘을 기르기" },
+    코어: { iconSrc: "/part-images/core.webp", sub: "중심을 단단하게" },
   };
 
 /** 순서가 곧 추천 순위다 — 위에 있을수록 먼저 권한다 */
