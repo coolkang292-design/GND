@@ -114,7 +114,7 @@ describe("RecordEmptyState — 등록 0개 화면 (사용자 지시 2026-08-06)"
     const recentButton = getByRole("button", { name: "최근 운동 불러오기" });
     const image = Array.from(startCard.querySelectorAll("img")).find((candidate) =>
       decodeURIComponent(candidate.getAttribute("src") ?? "").includes(
-        "/record-assets/exercise-picker-hero.webp",
+        "/record-assets/empty-checklist.webp",
       ),
     );
 

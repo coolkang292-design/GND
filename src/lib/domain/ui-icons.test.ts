@@ -111,7 +111,8 @@ describe("UI 아이콘 자산 — 경로가 실제 파일을 가리킨다", () =
       process.cwd(),
       "public",
       "record-assets",
-      "exercise-picker-hero.webp",
+      // 2026-10-06 검정·라임 체크리스트 정물로 교체(`record-empty-state.tsx` 주석)
+      "empty-checklist.webp",
     );
     expect(existsSync(hero)).toBe(true);
     // 첫 화면에 뜨는 이미지다 — 시안 원본(1.7MB)을 그대로 넣는 실수를 막는다

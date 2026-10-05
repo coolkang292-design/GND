@@ -102,16 +102,21 @@ export function RecordEmptyState({
             `alt=""` — 바로 아래 글자가 같은 뜻을 말한다. 이미지가 안 떠도 문구와
             버튼은 그대로 성립한다.
 
-            ⚠️ `object-cover`로 위아래를 자른다. 원본은 3:2인데 그대로 펼치면
-            빈 상태 카드가 화면 절반을 먹어 정작 눌러야 할 버튼이 접힌다. */}
+            ⚠️ `object-cover`로 위아래를 조금 자른다. 원본(16:9)을 그대로 펼치면
+            빈 상태 카드가 화면 절반을 먹어 정작 눌러야 할 버튼이 접힌다.
+
+            2026-10-06 사용자 지시로 **금색 그림 → 검정·라임 체크리스트 정물**로 교체했다
+            (원본: 다운로드 폴더 `네온 피트니스 체크리스트 정물.png`, Performance Social 톤).
+            ⚠️ 옛 `exercise-picker-hero.webp`(금색)를 덮어쓰지 않고 새 이름을 쓴다 —
+            `scripts/slice-ui-icons.py`가 그 이름으로 금색 그림을 다시 굽기 때문이다. */}
         <Image
-          src="/record-assets/exercise-picker-hero.webp"
+          src="/record-assets/empty-checklist.webp"
           alt=""
           width={1200}
-          height={800}
+          height={675}
           sizes="(max-width: 520px) 100vw, 520px"
           loading="eager"
-          className="h-36 w-full object-cover"
+          className="h-44 w-full object-cover"
         />
         <div className="px-4 pt-4 pb-4">
           <p className="text-base font-extrabold">아직 추가된 운동이 없어요</p>
