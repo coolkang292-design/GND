@@ -68,10 +68,13 @@ import {
   mergeImportedExercises,
 } from "@/lib/domain/workout-import";
 import {
+  decidePlanPull,
+  decidePlanPush,
+  planExercisesKey,
   toDraftExercises,
   toPlanExercises,
-  shouldAutoLoadTodayPlan,
   type PlanExercise,
+  type PlanSyncMark,
 } from "@/lib/domain/workout-plan";
 import {
   exerciseImprovementNote,
@@ -213,7 +216,9 @@ import type {
 import {
   createWorkoutPlan,
   deleteWorkoutPlan,
+  getWorkoutPlanById,
   getWorkoutPlansByDate,
+  updateWorkoutPlan,
   type WorkoutPlan,
 } from "@/lib/workout-plan";
 import {
@@ -242,11 +247,13 @@ import {
   getSuggestionFacts,
   hasCompletedHistory,
   loadDraft,
+  loadPlanSyncMark,
   loadSetTimer,
   localId,
   markRecordBeaten,
   newSet,
   saveDraft,
+  savePlanSyncMark,
   saveSetTimer,
   getSessionExerciseNames,
   saveSessionExercises,
@@ -948,105 +955,215 @@ function WorkoutScreen({ userId }: { userId: string }) {
   }, [userId, showToast]);
 
   /**
-   * 오늘 계획을 기록 화면에 미리 담는다 (사용자 지시 2026-08-12).
+   * 운동 탭 목록 = **오늘 계획 한 줄** (사용자 결정 2026-10-05).
    *
-   * 예전에는 계획을 짜 두고도 **달력까지 들어가야** 오늘 할 운동이 보였다.
-   * 이미 정해 둔 것을 다시 찾아가게 하는 단계라 없앴다. 화면을 열면 목록이
-   * 이미 차 있고 `운동 시작`만 누르면 된다.
+   * 신고: "달력에서 운동을 추가하면 운동 탭에서 안 보이고, 운동 탭에서 추가한 운동이
+   * 달력에서 안 보인다." 운동 탭 목록은 이 폰(draft)에만, 달력은 DB 계획만 읽었고,
+   * 운동 탭은 화면을 처음 열 때 계획을 **한 번 복사**해 올 뿐이었다(2026-08-12
+   * 자동 담기). 달력에서 돌아올 때 다시 읽는 것도 인터벌 계획뿐이었다(2026-08-13).
    *
-   * ⚠️ 담는 조건은 `shouldAutoLoadTodayPlan`이 정한다 — 사용자가 만든 상태를
-   *    덮지 않는 것이 핵심이라, 판정을 여기 인라인으로 쓰면 규칙이 갈라진다.
-   * ⚠️ 실패해도 조용히 지나간다. 계획을 못 불러온 것이 기록 자체를 막으면 안 된다.
+   * 이제 두 방향 모두 맞춘다.
+   * - **읽기(pull)** — 화면을 처음 열 때, 그리고 달력에서 운동 탭으로 **돌아올 때마다**.
+   *   달력이 고쳤으면 목록을 바꾸고, 지웠거나 옮겼으면 비우고, 빈 목록이면 오늘 계획을
+   *   담는다. 판정은 `decidePlanPull`.
+   * - **쓰기(push)** — 목록이 바뀌면 0.6초 모아서 계획에 쓴다. 묶인 계획이 없으면
+   *   오늘 계획을 만든다. 판정은 `decidePlanPush`. 달력 탭을 누르면 기다리던 쓰기를
+   *   **먼저 내보내고** 넘어간다 — 달력은 열 때 조회하므로 그 전에 써야 보인다.
+   *
+   * ⚠️ 읽기·쓰기를 **한 줄로 세운다**(`planSyncChainRef`). 만들기 둘이 겹치면 오늘
+   *    계획이 둘 생기고, 쓰는 중에 읽으면 방금 쓴 것을 "달력이 고쳤다"로 읽는다.
+   * ⚠️ 처음 읽기가 끝나기 전에는 쓰지 않는다(`planSyncReadyRef`). 다른 기기에서
+   *    고친 계획을 이 폰의 옛 목록으로 덮게 된다.
+   * ⚠️ 실패해도 조용히 지나간다. 계획을 못 맞춘 것이 기록 자체를 막으면 안 된다.
    */
-  /*
-    운동 탭으로 돌아올 때마다 **오늘 인터벌 계획을 다시 본다**
-    (사용자 지적 2026-08-13).
+  const planSyncMarkRef = useRef<PlanSyncMark | null | undefined>(undefined);
+  const planSyncChainRef = useRef<Promise<void>>(Promise.resolve());
+  const planSyncTimerRef = useRef<number | null>(null);
+  const planSyncReadyRef = useRef(false);
 
-    달력과 운동은 같은 페이지의 두 탭이라 컴포넌트가 다시 마운트되지 않는다.
-    아래 자동 담기 이펙트는 화면을 처음 열 때 한 번만 돌기 때문에, 달력에서
-    인터벌 계획을 만들고 운동 탭으로 넘어오면 버튼이 안 떴다.
+  function planSyncMark(): PlanSyncMark | null {
+    if (planSyncMarkRef.current === undefined) {
+      planSyncMarkRef.current = loadPlanSyncMark(userId);
+    }
+    return planSyncMarkRef.current;
+  }
 
-    ⚠️ 조회는 사용자가 탭을 누를 때만 돈다 — 주기 실행이 아니다.
-    ⚠️ 운동 중에는 건너뛴다. 진행 중인 세션 위에 시작 버튼을 세우지 않는다.
-  */
-  useEffect(() => {
-    if (subTab !== "workout" || !userId) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        /*
-          같은 날 계획이 여러 개일 수 있다 (0101). 인터벌 시작 버튼은 하나만
-          세우므로 **그날의 첫 인터벌 계획**을 고른다 — 순서는
-          `getWorkoutPlansByDate`가 예정 시각으로 안정시켜 준다.
-        */
-        const todayPlans = await getWorkoutPlansByDate(
-          userId,
-          dayKey(new Date(), resolveTimeZone()),
-        );
-        if (cancelled) return;
-        setTodayIntervalPlan(
-          todayPlans.find((plan) => plan.tabataMinutes) ?? null,
-        );
-      } catch {
-        // 못 읽으면 버튼만 안 뜬다 — 달력에서 시작하면 된다
+  function rememberPlanSync(mark: PlanSyncMark | null) {
+    planSyncMarkRef.current = mark;
+    savePlanSyncMark(userId, mark);
+  }
+
+  function enqueuePlanSync(task: () => Promise<void>): Promise<void> {
+    const next = planSyncChainRef.current.then(task).catch((error) => {
+      console.warn("[plan-sync] 오늘 계획 맞추기 실패", error);
+    });
+    planSyncChainRef.current = next;
+    return next;
+  }
+
+  async function pushPlanNow() {
+    const d = draftRef.current;
+    const push = decidePlanPush(d, planSyncMark());
+    if (push.kind === "none") return;
+    if (push.kind === "create") {
+      const plan = await createWorkoutPlan({
+        userId,
+        planDate: dayKey(new Date(), resolveTimeZone()),
+        sourceSessionId: d.sourceSessionId,
+        exercises: push.exercises,
+      });
+      // 만드는 사이에 달력에서 다른 계획을 불러왔으면 방금 만든 것은 고아다
+      if (draftRef.current.scheduledPlanId !== null) {
+        await deleteWorkoutPlan(plan.id);
+        return;
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [subTab, userId]);
+      setDraft((current) => ({ ...current, scheduledPlanId: plan.id }));
+      rememberPlanSync({
+        planId: plan.id,
+        updatedAt: plan.updatedAt,
+        json: planExercisesKey(push.exercises),
+      });
+      return;
+    }
+    if (push.kind === "update") {
+      const plan = await updateWorkoutPlan({
+        planId: push.planId,
+        sourceSessionId: d.sourceSessionId,
+        exercises: push.exercises,
+        tabataMinutes: null,
+      });
+      rememberPlanSync({
+        planId: plan.id,
+        updatedAt: plan.updatedAt,
+        json: planExercisesKey(push.exercises),
+      });
+      return;
+    }
+    await deleteWorkoutPlan(push.planId);
+    setDraft((current) =>
+      current.scheduledPlanId === push.planId && current.exercises.length === 0
+        ? { ...current, scheduledPlanId: null, sourceSessionId: null }
+        : current,
+    );
+    rememberPlanSync(null);
+  }
 
+  /** 기다리던 쓰기를 지금 내보내고, 줄에 선 것이 다 끝날 때까지 기다린다 */
+  function flushPlanSync(): Promise<void> {
+    if (planSyncTimerRef.current !== null) {
+      window.clearTimeout(planSyncTimerRef.current);
+      planSyncTimerRef.current = null;
+      void enqueuePlanSync(pushPlanNow);
+    }
+    return planSyncChainRef.current;
+  }
+
+  async function pullPlanNow() {
+    const todayKey = dayKey(new Date(), resolveTimeZone());
+    const todayPlans = await getWorkoutPlansByDate(userId, todayKey);
+    const d = draftRef.current;
+    const bound = d.scheduledPlanId
+      ? (todayPlans.find((plan) => plan.id === d.scheduledPlanId) ??
+        (await getWorkoutPlanById(d.scheduledPlanId)))
+      : null;
+    setTodayPlanExists(todayPlans.length > 0);
+    setTodayIntervalPlan(todayPlans.find((plan) => plan.tabataMinutes) ?? null);
+
+    const pull = decidePlanPull({
+      draft: d,
+      todayKey,
+      todayPlans,
+      bound,
+      mark: planSyncMark(),
+    });
+    if (pull.kind === "adopt") {
+      const exercises = toDraftExercises(pull.plan.exercises, localId);
+      setDraft((current) => ({
+        ...current,
+        exercises,
+        sourceSessionId: pull.plan.sourceSessionId,
+        suggestedForDayKey: null,
+      }));
+      rememberPlanSync({
+        planId: pull.plan.id,
+        updatedAt: pull.plan.updatedAt,
+        // 담은 목록 기준으로 적는다 — 프로그램 반복 미리 채움 때문에 계획과 다를 수
+        // 있는데, 계획 기준으로 적으면 그 차이 때문에 곧바로 한 번 더 쓴다
+        json: planExercisesKey(toPlanExercises(exercises)),
+      });
+      showToast("달력에서 고친 계획을 반영했어요");
+      return;
+    }
+    if (pull.kind === "clear") {
+      setDraft((current) => ({
+        ...current,
+        exercises: [],
+        scheduledPlanId: null,
+        sourceSessionId: null,
+        effortMessage: null,
+        program: null,
+      }));
+      rememberPlanSync(null);
+      if (pull.next) {
+        await handleLoadPlan(pull.next);
+      } else if (pull.reason === "deleted") {
+        showToast("달력에서 지운 계획이라 운동 목록을 비웠어요");
+      } else if (pull.reason === "moved") {
+        showToast("다른 날로 옮긴 계획이라 운동 목록에서 뺐어요");
+      }
+      return;
+    }
+    if (pull.kind === "load") await handleLoadPlan(pull.plan);
+  }
+
+  // 처음 읽기 — 종목 목록(catalog)이 온 뒤 한 번. 이 플래그가 서면
+  // `applySuggestion`이 종목을 고를 수 있다는 뜻이기도 하다.
   const autoLoadTriedRef = useRef(false);
   useEffect(() => {
     if (autoLoadTriedRef.current || catalog.length === 0) return;
     autoLoadTriedRef.current = true;
-    let cancelled = false;
-    (async () => {
-      try {
-        const todayKey = dayKey(new Date(), resolveTimeZone());
-        const todayPlans = await getWorkoutPlansByDate(userId, todayKey);
-        /*
-          자동으로 담는 것은 **한 개**다 (0101 뒤에도 그렇다). 여러 개를 한
-          세션에 합치면 오전 풀업과 오후 가슴이 한 기록이 되어, 애초에 계획을
-          나눈 이유가 없어진다. 나머지는 달력에서 골라 시작한다.
-
-          ⚠️ 인터벌이 아닌 것을 먼저 찾는다. 첫 계획이 인터벌이면 아래 판정이
-             false를 줘서 일반 계획이 있어도 아무것도 안 담기던 자리다.
-        */
-        const todayPlan =
-          todayPlans.find((plan) => !plan.tabataMinutes) ?? todayPlans[0];
-        if (cancelled) return;
-        const current = draftRef.current;
-        setTodayPlanExists(todayPlans.length > 0);
-        // 이 이펙트는 catalog가 온 뒤에만 돈다 — 그래서 이 플래그가 서면
-        // `applySuggestion`이 종목을 고를 수 있다는 뜻이기도 하다.
-        setPlansReady(true);
-        // 인터벌이면 담지 않고 버튼만 세운다 — 아래 판정이 false를 준다
-        setTodayIntervalPlan(
-          todayPlans.find((plan) => plan.tabataMinutes) ?? null,
-        );
-        if (
-          !shouldAutoLoadTodayPlan({
-            plan: todayPlan,
-            todayKey,
-            draftExerciseCount: current.exercises.length,
-            draftScheduledPlanId: current.scheduledPlanId,
-            active: current.startedAtMs !== null,
-          })
-        ) {
-          return;
-        }
-        await handleLoadPlan(todayPlan!);
-      } catch {
-        // 계획을 못 불러와도 빈 화면에서 평소대로 담으면 된다
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // handleLoadPlan은 렌더마다 새로 만들어진다. 한 번만 시도하도록 ref로 막는다.
+    void enqueuePlanSync(async () => {
+      await pullPlanNow();
+      setPlansReady(true);
+      planSyncReadyRef.current = true;
+    });
+    // pullPlanNow는 렌더마다 새로 만들어진다. 한 번만 시도하도록 ref로 막는다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, catalog.length]);
+
+  // 달력에서 운동 탭으로 돌아올 때마다 다시 읽는다 (예전엔 인터벌 계획만 읽었다).
+  // ⚠️ 조회는 사용자가 탭을 누를 때만 돈다 — 주기 실행이 아니다.
+  useEffect(() => {
+    if (subTab !== "workout" || !planSyncReadyRef.current) return;
+    void enqueuePlanSync(pullPlanNow);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subTab]);
+
+  // 목록이 바뀌면 0.6초 모아서 쓴다 — 무게·반복을 칠 때마다 쓰지 않게
+  useEffect(() => {
+    if (!planSyncReadyRef.current) return;
+    if (planSyncTimerRef.current !== null) {
+      window.clearTimeout(planSyncTimerRef.current);
+    }
+    planSyncTimerRef.current = window.setTimeout(() => {
+      planSyncTimerRef.current = null;
+      void enqueuePlanSync(pushPlanNow);
+    }, 600);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft]);
+
+  // 다른 하단 탭으로 떠나거나 앱을 내릴 때 기다리던 쓰기를 버리지 않는다
+  useEffect(() => {
+    const onHide = () => {
+      if (document.visibilityState === "hidden") void flushPlanSync();
+    };
+    document.addEventListener("visibilitychange", onHide);
+    return () => {
+      document.removeEventListener("visibilitychange", onHide);
+      void flushPlanSync();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /**
    * 이력이 있는 사용자인가 (2026-08-06) — 빈 화면의 보조 CTA 노출 판정.
@@ -2475,6 +2592,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
     }
     if (
       draft.exercises.length > 0 &&
+      // 운동 탭 목록이 이미 이 계획이면(2026-10-05 동기화) 바꿀 것이 없다 — 묻지 않는다
+      draft.scheduledPlanId !== plan.id &&
       !window.confirm("준비 중인 운동 목록을 지우고 예정표로 바꿀까요?")
     ) {
       return false;
@@ -2535,6 +2654,12 @@ function WorkoutScreen({ userId }: { userId: string }) {
       exercises,
       program,
     }));
+    // 이 계획과 맞춘 상태로 적는다 — 안 적으면 다음 쓰기가 같은 내용을 한 번 더 쓴다
+    rememberPlanSync({
+      planId: plan.id,
+      updatedAt: plan.updatedAt,
+      json: planExercisesKey(toPlanExercises(exercises)),
+    });
     setSubTab("workout");
     // 무게는 **비동기로 뒤따라 채운다.** 지난 기록 조회를 기다리느라 화면 전환이
     // 늦어지면, 사용자는 버튼이 안 먹은 줄 안다.
@@ -3645,7 +3770,22 @@ function WorkoutScreen({ userId }: { userId: string }) {
         {(["workout", "calendar"] as const).map((t) => (
           <button
             key={t}
-            onClick={() => setSubTab(t)}
+            onClick={() => {
+              if (t !== "calendar") {
+                setSubTab(t);
+                return;
+              }
+              /*
+                운동 탭에서 고친 것을 **먼저 계획에 쓰고** 달력을 연다 (2026-10-05).
+                달력은 열 때 한 번 조회해서, 0.6초 모으는 중이던 쓰기가 늦으면
+                방금 담은 운동이 달력에 없다. 네트워크가 늦어도 탭이 멈춰 보이면
+                안 되므로 1.5초까지만 기다린다.
+              */
+              void Promise.race([
+                flushPlanSync(),
+                new Promise((resolve) => window.setTimeout(resolve, 1500)),
+              ]).then(() => setSubTab("calendar"));
+            }}
             className={`h-9 flex-1 rounded-[9px] text-sm font-bold transition-colors ${
               subTab === t ? "bg-surface text-accent shadow-card" : "text-muted"
             }`}

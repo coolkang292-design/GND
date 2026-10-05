@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  decidePlanPull,
+  decidePlanPush,
+  planExercisesKey,
   addDaysToDateKey,
   isPlanDateAllowed,
   newPlanExercises,
@@ -402,5 +405,141 @@ describe("toDraftExercises — 프로그램 반복 횟수 미리 채움", () => 
     n = 0;
     const [ex] = toDraftExercises([{ ...base, sets: [zeroSet] }], key);
     expect(ex.sets[0].reps).toBe(0);
+  });
+});
+
+describe("운동 탭 ↔ 오늘 계획 동기화 (2026-10-05)", () => {
+  const squat = {
+    key: "e1",
+    name: "스쿼트",
+    bodyPart: "하체" as const,
+    exerciseType: "weight" as const,
+    measure: null,
+    isCustom: false,
+    sets: [{ key: "s1", done: false, weightKg: 40, reps: 10, distanceKm: 0, durationMin: 0 }],
+  };
+  const draft = {
+    exercises: [squat],
+    scheduledPlanId: null as string | null,
+    startedAtMs: null as number | null,
+    tabataMinutes: null as number | null,
+    suggestedForDayKey: null as string | null,
+    program: null as unknown,
+  };
+  const planEx = toPlanExercises([squat]);
+  const plan = (over: Partial<{ id: string; planDate: string; updatedAt: string; tabataMinutes: number | null }> = {}) => ({
+    id: "p1",
+    planDate: "2026-10-05",
+    updatedAt: "t1",
+    tabataMinutes: null,
+    exercises: planEx,
+    ...over,
+  });
+  const mark = { planId: "p1", updatedAt: "t1", json: planExercisesKey(planEx) };
+
+  describe("push — 운동 탭에서 고친 것을 계획에 쓴다", () => {
+    it("묶인 계획 없이 담으면 오늘 계획을 만든다", () => {
+      expect(decidePlanPush(draft, null)).toEqual({ kind: "create", exercises: planEx });
+    });
+
+    it("빈 목록은 아무것도 안 만든다", () => {
+      expect(decidePlanPush({ ...draft, exercises: [] }, null).kind).toBe("none");
+    });
+
+    it("기계가 담아 준 제안은 계획으로 만들지 않는다", () => {
+      expect(decidePlanPush({ ...draft, suggestedForDayKey: "2026-10-05" }, null).kind).toBe("none");
+    });
+
+    it("운동 중·인터벌에는 쓰지 않는다", () => {
+      expect(decidePlanPush({ ...draft, scheduledPlanId: "p1", startedAtMs: 1 }, null).kind).toBe("none");
+      expect(decidePlanPush({ ...draft, scheduledPlanId: "p1", tabataMinutes: 8 }, null).kind).toBe("none");
+    });
+
+    it("묶인 계획과 같으면 다시 쓰지 않는다", () => {
+      expect(decidePlanPush({ ...draft, scheduledPlanId: "p1" }, mark).kind).toBe("none");
+    });
+
+    it("세트를 고치면 묶인 계획을 고친다", () => {
+      const changed = { ...squat, sets: [{ ...squat.sets[0], reps: 12 }] };
+      const push = decidePlanPush({ ...draft, scheduledPlanId: "p1", exercises: [changed] }, mark);
+      expect(push.kind).toBe("update");
+      expect(push.kind === "update" && push.exercises[0].sets[0].reps).toBe(12);
+    });
+
+    it("표식이 없는 옛 목록은 한 번 써 올린다 — 목록이 이긴다", () => {
+      expect(decidePlanPush({ ...draft, scheduledPlanId: "p1" }, null).kind).toBe("update");
+    });
+
+    it("다 비우면 계획을 지운다", () => {
+      expect(decidePlanPush({ ...draft, scheduledPlanId: "p1", exercises: [] }, mark)).toEqual({
+        kind: "delete",
+        planId: "p1",
+      });
+    });
+
+    it("프로그램 회차는 비워도 지우지 않는다 — 진행표가 사라진다", () => {
+      expect(
+        decidePlanPush({ ...draft, scheduledPlanId: "p1", exercises: [], program: { week: 1 } }, mark).kind,
+      ).toBe("none");
+    });
+  });
+
+  describe("pull — 달력에서 고친 것을 운동 탭이 읽는다", () => {
+    const base = { draft: { ...draft, exercises: [] }, todayKey: "2026-10-05", todayPlans: [], bound: null, mark: null };
+
+    it("빈 목록에 오늘 계획이 있으면 담는다 — 달력에서 만들고 돌아온 경우", () => {
+      const p = plan();
+      expect(decidePlanPull({ ...base, todayPlans: [p] })).toEqual({ kind: "load", plan: p });
+    });
+
+    it("이미 담은 것이 있으면 오늘 계획을 덮지 않는다", () => {
+      expect(decidePlanPull({ ...base, draft, todayPlans: [plan()] }).kind).toBe("none");
+    });
+
+    it("달력이 묶인 계획을 고쳤으면 목록을 바꾼다", () => {
+      const p = plan({ updatedAt: "t2" });
+      expect(
+        decidePlanPull({ ...base, draft: { ...draft, scheduledPlanId: "p1" }, todayPlans: [p], bound: p, mark }),
+      ).toEqual({ kind: "adopt", plan: p });
+    });
+
+    it("내가 마지막으로 맞춘 그대로면 손대지 않는다", () => {
+      const p = plan();
+      expect(
+        decidePlanPull({ ...base, draft: { ...draft, scheduledPlanId: "p1" }, todayPlans: [p], bound: p, mark }).kind,
+      ).toBe("none");
+    });
+
+    it("달력에서 지웠으면 목록을 비운다", () => {
+      expect(
+        decidePlanPull({ ...base, draft: { ...draft, scheduledPlanId: "p1" }, bound: null, mark }),
+      ).toEqual({ kind: "clear", reason: "deleted", next: null });
+    });
+
+    it("다른 날로 옮겼으면 비우고, 남은 오늘 계획이 있으면 그것을 담는다", () => {
+      const moved = plan({ planDate: "2026-10-07" });
+      const other = plan({ id: "p2" });
+      expect(
+        decidePlanPull({
+          ...base,
+          draft: { ...draft, scheduledPlanId: "p1" },
+          todayPlans: [other],
+          bound: moved,
+          mark,
+        }),
+      ).toEqual({ kind: "clear", reason: "moved", next: other });
+    });
+
+    it("어제 계획에 묶인 목록은 날이 바뀌면 비운다", () => {
+      const old = plan({ planDate: "2026-10-04" });
+      const pull = decidePlanPull({ ...base, draft: { ...draft, scheduledPlanId: "p1" }, bound: old, mark });
+      expect(pull.kind === "clear" && pull.reason).toBe("stale");
+    });
+
+    it("운동 중에는 읽어도 손대지 않는다", () => {
+      expect(
+        decidePlanPull({ ...base, draft: { ...draft, scheduledPlanId: "p1", startedAtMs: 1 }, bound: null, mark }).kind,
+      ).toBe("none");
+    });
   });
 });

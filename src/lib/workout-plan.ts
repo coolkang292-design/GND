@@ -173,6 +173,25 @@ export async function getWorkoutPlansByDate(
 }
 
 /**
+ * 계획 한 줄을 id로 (없으면 null) — 운동 탭이 묶인 계획을 다시 읽을 때 (2026-10-05).
+ *
+ * 날짜로 찾지 않는 이유: 달력에서 **다른 날로 옮긴 것**과 **지운 것**을 갈라야
+ * 운동 탭이 "옮겼어요"와 "지웠어요"를 다르게 말할 수 있다.
+ */
+export async function getWorkoutPlanById(
+  planId: string,
+): Promise<WorkoutPlan | null> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("workout_plans")
+    .select("*")
+    .eq("id", planId)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? fromRow(data as WorkoutPlanRow) : null;
+}
+
+/**
  * 새 계획 한 줄을 만든다.
  *
  * ⚠️ 2026-09-04까지는 `saveWorkoutPlan`이 `(user_id, plan_date)` **upsert**로

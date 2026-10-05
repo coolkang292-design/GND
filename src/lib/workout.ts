@@ -31,7 +31,10 @@ import type {
   EffortFeedback,
   PreviousCompletedSet,
 } from "@/lib/domain/program-load";
-import type { ExercisePrescription } from "@/lib/domain/workout-plan";
+import type {
+  ExercisePrescription,
+  PlanSyncMark,
+} from "@/lib/domain/workout-plan";
 import type {
   BodyPart,
   CatalogExercise,
@@ -291,6 +294,36 @@ export function clearDraft(userId: string): void {
     localStorage.removeItem(draftKey(userId));
   } catch {
     /* noop */
+  }
+}
+
+// ── 운동 탭 ↔ 오늘 계획 동기화 표식 (2026-10-05) ──────────────────────────
+// draft와 **다른 키**다. draft에 넣으면 버전을 올리고 승격 코드를 써야 하는데,
+// 이 표식은 잃어도 "목록이 이긴다"로 한 번 다시 맞출 뿐이다(`decidePlanPush`).
+
+const planSyncKey = (userId: string) => `gnd-plan-sync:${userId}`;
+
+export function loadPlanSyncMark(userId: string): PlanSyncMark | null {
+  try {
+    const raw = localStorage.getItem(planSyncKey(userId));
+    if (!raw) return null;
+    const value = JSON.parse(raw) as Partial<PlanSyncMark>;
+    return typeof value.planId === "string" &&
+      typeof value.updatedAt === "string" &&
+      typeof value.json === "string"
+      ? { planId: value.planId, updatedAt: value.updatedAt, json: value.json }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export function savePlanSyncMark(userId: string, mark: PlanSyncMark | null): void {
+  try {
+    if (mark) localStorage.setItem(planSyncKey(userId), JSON.stringify(mark));
+    else localStorage.removeItem(planSyncKey(userId));
+  } catch {
+    // 저장 실패면 다음 맞춤에서 한 번 더 써 올릴 뿐이다
   }
 }
 

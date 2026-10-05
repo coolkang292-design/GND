@@ -1,6 +1,7 @@
 "use client";
 
-import Image from "next/image";
+import { useEffect } from "react";
+import Image, { getImageProps } from "next/image";
 import { usePathname } from "next/navigation";
 
 /**
@@ -23,9 +24,54 @@ const BACKDROPS: Record<string, string> = {
   "/profile": "/program-assets/chest.webp",
 };
 
+const SIZES = "(max-width: 480px) 100vw, 480px";
+
+/** 앱을 연 뒤 한 번만 미리 받는다 — 탭을 오갈 때마다 다시 걸 일이 아니다 */
+let warmed = false;
+
+/**
+ * 나머지 탭의 사진을 미리 받아 둔다 (2026-10-05 사용자 신고 "피드 탭으로 옮길 때 로딩이 생긴다").
+ *
+ * 탭을 옮기면 사진 주소가 바뀌고, 그때서야 받기 시작해서 위쪽이 0.1~1초 비었다가
+ * 사진이 들어왔다(프로덕션 실측 — 변환 캐시 MISS면 0.7~1초). 화면에 깔리는 `<img>`와
+ * **같은 srcset·sizes**로 받아야 브라우저가 같은 크기를 골라 캐시가 맞는다 —
+ * 그래서 주소를 손으로 만들지 않고 `getImageProps`에서 받는다.
+ */
+function warmOtherBackdrops(current: string) {
+  for (const src of Object.values(BACKDROPS)) {
+    if (src === current) continue;
+    const { props } = getImageProps({ src, alt: "", fill: true, sizes: SIZES });
+    const img = new window.Image();
+    img.decoding = "async";
+    // sizes를 srcset보다 먼저 — 순서가 바뀌면 기본값(100vw)으로 고를 수 있다
+    img.sizes = props.sizes ?? SIZES;
+    if (props.srcSet) img.srcset = props.srcSet;
+    img.src = props.src;
+  }
+}
+
 export function TabBackdrop() {
   const pathname = usePathname();
   const src = BACKDROPS[pathname];
+
+  useEffect(() => {
+    if (warmed || !src) return;
+    // ⚠️ 표식은 **실제로 받을 때** 세운다. 여기서 세우면 StrictMode가 이펙트를
+    //    한 번 치우고 다시 돌릴 때 두 번째가 그냥 돌아가 아무것도 안 받는다.
+    const run = () => {
+      if (warmed) return;
+      warmed = true;
+      warmOtherBackdrops(src);
+    };
+    // 지금 화면의 사진·데이터가 먼저다 — 한가해진 뒤에 받는다
+    if (typeof window.requestIdleCallback === "function") {
+      const id = window.requestIdleCallback(run, { timeout: 3000 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const id = window.setTimeout(run, 1200);
+    return () => window.clearTimeout(id);
+  }, [src]);
+
   if (!src) return null;
   return (
     <div
@@ -34,12 +80,17 @@ export function TabBackdrop() {
       data-src={src}
       className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[560px] overflow-hidden"
     >
+      {/*
+        화면 맨 위에 깔리는 사진이라 지연 로딩(lazy)이면 안 된다 — 배치가 끝난 뒤에야
+        받기 시작해서 그만큼 늦게 뜬다(2026-10-05).
+      */}
       <Image
         src={src}
         alt=""
         fill
-        priority={false}
-        sizes="(max-width: 480px) 100vw, 480px"
+        loading="eager"
+        fetchPriority="high"
+        sizes={SIZES}
         className="object-cover object-[50%_25%] opacity-70"
       />
       <div className="absolute inset-0 bg-gradient-to-b from-bg/0 via-bg/40 to-bg" />
