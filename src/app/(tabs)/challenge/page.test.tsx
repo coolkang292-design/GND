@@ -100,7 +100,8 @@ vi.mock("@/components/challenge/goal-setup-flow", () => ({
   ),
 }));
 
-import ChallengePage, { errorMessage } from "./page";
+import ChallengePage from "./page";
+import { errorMessage } from "@/lib/challenge-errors";
 
 describe("ChallengePage 오류 문구", () => {
   it("일반 객체의 message를 읽어 알려진 오류를 한글로 바꾼다", () => {

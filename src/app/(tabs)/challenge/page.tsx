@@ -58,10 +58,6 @@ import type { Group, UserGoal } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 import Image from "next/image";
 
-// 오류 문구는 여러 컴포넌트가 같이 쓰게 되어 `lib/challenge-errors.ts`로 옮겼다
-// (2026-09-18). 이 이름으로 가져가던 곳(page.test)을 위해 그대로 내보낸다.
-export { errorMessage };
-
 const NO_CHALLENGE_MEMBERS: ChallengeParticipantProfile[] = [];
 /** 참조 동일성 유지 — 성과 카드의 effect가 매 렌더마다 다시 돌지 않게 한다 */
 const NO_COMPLETED_ATS: Date[] = [];
