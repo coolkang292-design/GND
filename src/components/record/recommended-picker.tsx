@@ -217,7 +217,7 @@ export function RecommendedPicker({
             추천할 운동을 찾지 못했어요. 아래에서 직접 검색해 주세요.
           </p>
         ) : (
-          list.map(({ item, note, thumb }) => {
+          list.map(({ item, note, thumbSrc }) => {
             const isSelected = selected.has(item.id);
             return (
               // 카드 전체가 탭 영역이다 — '＋ 추가' 버튼만 누르게 하면
@@ -236,9 +236,9 @@ export function RecommendedPicker({
                 {/* 썸네일은 있는 것만 그린다. 없으면 자리도 비운다 —
                     부위 공통 이미지를 채우면 카드끼리 구별이 안 돼서
                     세로 공간만 먹는다 */}
-                {thumb && (
+                {thumbSrc && (
                   <Image
-                    src={`/exercise-thumbs/${thumb}.png`}
+                    src={thumbSrc}
                     alt=""
                     width={64}
                     height={64}

@@ -30,7 +30,8 @@ const CATALOG = [
   item("인클라인 벤치프레스"),
   item("덤벨 플라이"),
   item("푸시업", { exercise_type: "bodyweight", measure: "reps" }),
-  item("랫풀다운", { body_part: "등" }),
+  // 그림은 운동 ID로 잇는다 — 운영 시드와 같은 ID를 써야 그림 테스트가 성립한다
+  item("랫풀다운", { id: "5f00e9f0-8b12-4746-b59b-df6e7529f94f", body_part: "등" }),
   item("레그프레스", { body_part: "하체" }),
   item("숄더프레스", { body_part: "어깨" }),
   item("플랭크", {
@@ -343,8 +344,17 @@ describe("검색 모드 — 직접 만들기는 결과가 없을 때만 (사용�
     expect(chip).toBeTruthy();
   });
 
-  it("검색 결과에는 썸네일을 안 넣는다", () => {
-    const { container } = search();
-    expect(container.querySelector("img")).toBeNull();
+  // 2026-08-06 결정 ④("검색 결과에는 썸네일을 안 넣는다")를 사용자 지시로 뒤집었다
+  // (2026-10-05 — 운동 이름 앞에 그림). 연결표는 `exercise-images.data.json`(운동 ID → 파일).
+  it("검색 결과 줄마다 그림 칸이 있다 — 그림이 있으면 그 그림, 없으면 빈 칸", () => {
+    const { getByText } = search();
+    const rowOf = (name: string) => getByText(name).closest("button")!;
+    expect(
+      decodeURIComponent(rowOf("랫풀다운").querySelector("img")?.getAttribute("src") ?? ""),
+    ).toContain("/exercise-images/");
+    // 그림 없는 운동은 부위 아이콘이 아니라 빈 칸이다 (사용자 결정 2026-10-05)
+    const blank = rowOf("레그프레스");
+    expect(blank.querySelector("img")).toBeNull();
+    expect(blank.querySelector("[aria-hidden].h-12.w-12")).not.toBeNull();
   });
 });

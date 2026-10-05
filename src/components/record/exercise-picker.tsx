@@ -32,6 +32,7 @@ import {
   type SetupEntry,
 } from "./exercise-setup-sheet";
 import { ExerciseEntryHub } from "./exercise-entry-hub";
+import { ExerciseThumbTile } from "./exercise-thumb";
 
 const PARTS: readonly (BodyPart | "전체")[] = [
   "전체",
@@ -636,11 +637,12 @@ function PickerSheet({
                   key={e.id}
                   onClick={() => toggleSelect(e)}
                   aria-pressed={isSelected}
-                  className={`flex w-full items-center justify-between border-b border-line py-2.5 text-left ${
+                  className={`flex w-full items-center justify-between gap-3 border-b border-line py-2.5 text-left ${
                     isSelected ? "bg-accent-weak/40" : ""
                   }`}
                 >
-                  <span>
+                  <ExerciseThumbTile id={e.id} name={e.name} bodyPart={e.body_part} />
+                  <span className="min-w-0 flex-1">
                     <span className="block text-sm font-bold">
                       {e.name}
                       {e.is_custom && (

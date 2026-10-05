@@ -65,6 +65,10 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Offline image QA: no auth, anonymous-account creation or telemetry writes.
+  if (process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_EXERCISE_IMAGE_LOCAL_QA === "1") {
+    return <html lang="ko" className="h-full antialiased"><body className="min-h-full flex justify-center"><div className="w-full max-w-[430px] h-dvh flex flex-col relative bg-bg">{children}</div></body></html>;
+  }
   return (
     // suppressHydrationWarning: 카카오톡 등 인앱 브라우저가 로드 시
     // html/body 속성을 주입해 생기는 하이드레이션 경고 무시 (1단계 속성만)

@@ -1,5 +1,6 @@
 import { countsTowardChallenge, type GoalCategory } from "@/lib/challenge";
 import type { BodyPart, CatalogExercise } from "@/lib/types";
+import { exerciseImageSrc } from "./exercise-images";
 
 /**
  * 초보자용 한 줄 설명 — **이름당 한 곳에만 적는다** (2026-08-06).
@@ -239,19 +240,15 @@ export type ResolvedRecommendation = {
   /** 카탈로그 실물 — 부위·유형·measure는 **여기서** 읽는다 (상수에 안 적는다) */
   item: CatalogExercise;
   note: string;
-  /** `public/exercise-thumbs/{thumb}.png` (선택). 없으면 텍스트 카드다 */
-  thumb?: string;
+  /**
+   * 운동 그림 경로 (선택). 없으면 텍스트 카드다.
+   * 연결표는 `exercise-images.ts` 한 곳에만 둔다 — 운동 선택 목록과 같은 그림을 쓴다
+   * (2026-08-06의 `EXERCISE_THUMBS`는 비어 있던 채로 2026-10-05에 합쳤다).
+   */
+  thumbSrc?: string;
 };
 
-/**
- * `public/exercise-thumbs/{slug}.png` (2026-08-06).
- *
- * **선택 사항이다.** 없는 이름은 카드가 텍스트만으로 성립한다 — 이미지
- * 제작이 코드 일정을 막지 않게 하려는 것이다. 파일을 넣고 여기 한 줄씩
- * 채우면 그때부터 그려진다. 자산 규약은 `public/badges/`와 같다(png,
- * 정사각형, 개당 50KB 이하).
- */
-export const EXERCISE_THUMBS: Record<string, string> = {};
+
 
 /**
  * 이름 목록을 카탈로그와 **교집합**으로 해석한다.
@@ -278,7 +275,7 @@ export function resolveNames(
       {
         item,
         note: EXERCISE_NOTES[name] ?? "",
-        thumb: EXERCISE_THUMBS[name],
+        thumbSrc: exerciseImageSrc(item.id),
       },
     ];
   });

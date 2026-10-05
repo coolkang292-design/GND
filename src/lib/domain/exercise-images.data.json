@@ -1,0 +1,308 @@
+{
+  "4f1cce7d-4ed1-46b7-ac6e-44f00952a2f1": {
+    "name": "니 푸시업",
+    "file": "4f1cce7d-4ed1-46b7-ac6e-44f00952a2f1",
+    "source": "gnd",
+    "origin": "user-sheet"
+  },
+  "b81d2cde-c33d-4c43-827e-cb84c8e76388": {
+    "name": "덤벨 벤치프레스",
+    "file": "b81d2cde-c33d-4c43-827e-cb84c8e76388",
+    "source": "gnd",
+    "origin": "user-sheet"
+  },
+  "7dcb673c-adf7-477a-81bf-6f455d798622": {
+    "name": "덤벨 슈러그",
+    "file": "7dcb673c-adf7-477a-81bf-6f455d798622",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  },
+  "de1c3255-4056-42f7-9ee4-ee932530231e": {
+    "name": "덤벨 스퀴즈 프레스",
+    "file": "de1c3255-4056-42f7-9ee4-ee932530231e",
+    "source": "gnd",
+    "origin": "user-sheet"
+  },
+  "1b556520-526d-4a06-9a9b-deec7cd05841": {
+    "name": "덤벨 컬",
+    "file": "1b556520-526d-4a06-9a9b-deec7cd05841",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  },
+  "0a1e5d29-2712-4afb-8083-1035af2c21ce": {
+    "name": "덤벨 킥백",
+    "file": "0a1e5d29-2712-4afb-8083-1035af2c21ce",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  },
+  "3d95c8df-65c3-4be0-a349-3fc805cc8da8": {
+    "name": "덤벨 풀오버",
+    "file": "3d95c8df-65c3-4be0-a349-3fc805cc8da8",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  },
+  "3f4dcd4c-028d-4430-867b-a59f4ab6bf71": {
+    "name": "덤벨 프론트 레이즈",
+    "file": "3f4dcd4c-028d-4430-867b-a59f4ab6bf71",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  },
+  "95d76fa3-9cfd-4afd-ace5-67428e878c9a": {
+    "name": "덤벨 플라이",
+    "file": "95d76fa3-9cfd-4afd-ace5-67428e878c9a",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  },
+  "e8f0c354-f481-41f3-b32b-ad11b37a5abe": {
+    "name": "덤벨 해머 컬",
+    "file": "e8f0c354-f481-41f3-b32b-ad11b37a5abe",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  },
+  "2058f26d-3a03-414f-ad3d-11b79cd5d8b7": {
+    "name": "데드리프트",
+    "file": "2058f26d-3a03-414f-ad3d-11b79cd5d8b7",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  },
+  "5816c49f-6021-4de2-bd10-bca4d00587f7": {
+    "name": "디클라인 덤벨 플라이",
+    "file": "5816c49f-6021-4de2-bd10-bca4d00587f7",
+    "source": "gnd",
+    "origin": "user-sheet"
+  },
+  "c7db43ca-025f-4f7e-9da6-2ccda4c76150": {
+    "name": "디클라인 푸시업",
+    "file": "c7db43ca-025f-4f7e-9da6-2ccda4c76150",
+    "source": "gnd",
+    "origin": "user-sheet"
+  },
+  "da6544dc-60da-4a88-8f15-f95aa0c1b542": {
+    "name": "딥스",
+    "file": "da6544dc-60da-4a88-8f15-f95aa0c1b542",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  },
+  "5f00e9f0-8b12-4746-b59b-df6e7529f94f": {
+    "name": "랫풀다운",
+    "file": "5f00e9f0-8b12-4746-b59b-df6e7529f94f",
+    "source": "gnd",
+    "origin": "user-sheet"
+  },
+  "7f28c50b-fcff-4654-99cb-e9af890ab104": {
+    "name": "러닝",
+    "file": "7f28c50b-fcff-4654-99cb-e9af890ab104",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  },
+  "edb26b13-e26f-4b6e-925a-cf4dfeda06c2": {
+    "name": "러시안 트위스트",
+    "file": "edb26b13-e26f-4b6e-925a-cf4dfeda06c2",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  },
+  "ef6000b6-4322-4bee-8918-6318c30dd902": {
+    "name": "레그 익스텐션",
+    "file": "ef6000b6-4322-4bee-8918-6318c30dd902",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  },
+  "5ae60799-7446-4937-b75a-dbd742ea38b8": {
+    "name": "로잉",
+    "file": "5ae60799-7446-4937-b75a-dbd742ea38b8",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  },
+  "4af3f632-e3f7-49b7-a232-86ba82a8e21f": {
+    "name": "마운틴 클라이머",
+    "file": "4af3f632-e3f7-49b7-a232-86ba82a8e21f",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  },
+  "4eb0f324-780f-4945-a37f-5be3c6f5b585": {
+    "name": "매달리기",
+    "file": "4eb0f324-780f-4945-a37f-5be3c6f5b585",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  },
+  "b6b870d3-c3cb-4c19-8274-b3dea91fbfdb": {
+    "name": "바벨 백스쿼트",
+    "file": "d3887e12-d386-4fe4-b41f-219a8c0ab141",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  },
+  "fed25eab-0208-4899-9282-81a71d73c172": {
+    "name": "바벨 컬",
+    "file": "fed25eab-0208-4899-9282-81a71d73c172",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  },
+  "be2a2460-c20c-4327-a092-0d4dbaa5b5a6": {
+    "name": "벤치프레스",
+    "file": "be2a2460-c20c-4327-a092-0d4dbaa5b5a6",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  },
+  "f74f365f-52e1-4033-a1bd-b0c34c7cc5dc": {
+    "name": "복근 롤아웃",
+    "file": "f74f365f-52e1-4033-a1bd-b0c34c7cc5dc",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  },
+  "45ecb917-61a7-4987-b239-3c6c25639ed2": {
+    "name": "사이드 런지",
+    "file": "45ecb917-61a7-4987-b239-3c6c25639ed2",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  },
+  "639ad98b-b4a1-47f7-a382-8dd9e98035b0": {
+    "name": "사이드 플랭크",
+    "file": "639ad98b-b4a1-47f7-a382-8dd9e98035b0",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  },
+  "e5fec7fd-111d-4c75-9d93-60fb89293853": {
+    "name": "수평 레그 프레스",
+    "file": "e5fec7fd-111d-4c75-9d93-60fb89293853",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  },
+  "d3887e12-d386-4fe4-b41f-219a8c0ab141": {
+    "name": "스쿼트",
+    "file": "d3887e12-d386-4fe4-b41f-219a8c0ab141",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  },
+  "8fade715-13eb-457d-b48e-6f1ce0a9e597": {
+    "name": "스탠딩 카프 레이즈",
+    "file": "8fade715-13eb-457d-b48e-6f1ce0a9e597",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  },
+  "d782db99-4ad9-4e73-9376-8974896f1b5c": {
+    "name": "스탠딩 케이블 플라이",
+    "file": "d782db99-4ad9-4e73-9376-8974896f1b5c",
+    "source": "gnd",
+    "origin": "user-sheet"
+  },
+  "66af6e45-aef2-466a-8a3e-b90505c2a0e6": {
+    "name": "스텝업",
+    "file": "66af6e45-aef2-466a-8a3e-b90505c2a0e6",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  },
+  "1c56bc55-d633-4725-accd-351b3355eaf9": {
+    "name": "시티드 덤벨 리어 레터럴 레이즈",
+    "file": "1c56bc55-d633-4725-accd-351b3355eaf9",
+    "source": "gnd",
+    "origin": "user-sheet"
+  },
+  "616e417a-8600-41f7-9c98-93ac4f3f68bc": {
+    "name": "시티드 덤벨 숄더 프레스",
+    "file": "616e417a-8600-41f7-9c98-93ac4f3f68bc",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  },
+  "ce90ab46-1ace-4493-b691-cb0f82400c84": {
+    "name": "시티드 레그 컬",
+    "file": "ce90ab46-1ace-4493-b691-cb0f82400c84",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  },
+  "71220804-54f1-4e40-88aa-84663495dc2d": {
+    "name": "시티드 로우",
+    "file": "71220804-54f1-4e40-88aa-84663495dc2d",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  },
+  "b8702da2-e5e9-4974-b7d0-f4a8167998f0": {
+    "name": "오버헤드 프레스",
+    "file": "b8702da2-e5e9-4974-b7d0-f4a8167998f0",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  },
+  "64d460a4-f41c-4c95-9beb-a78f2c7d6ea2": {
+    "name": "인버티드 로우",
+    "file": "64d460a4-f41c-4c95-9beb-a78f2c7d6ea2",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  },
+  "04ba20b1-68f6-4a43-b853-3f23eb23fa05": {
+    "name": "인클라인 덤벨 플라이",
+    "file": "04ba20b1-68f6-4a43-b853-3f23eb23fa05",
+    "source": "gnd",
+    "origin": "user-sheet"
+  },
+  "6660fcd0-012a-4785-a956-ab3aa5d8cf48": {
+    "name": "인클라인 벤치프레스 머신",
+    "file": "6660fcd0-012a-4785-a956-ab3aa5d8cf48",
+    "source": "gnd",
+    "origin": "user-sheet"
+  },
+  "b0c305d6-338e-400f-9dfd-5ae6efb63d9a": {
+    "name": "줄넘기",
+    "file": "b0c305d6-338e-400f-9dfd-5ae6efb63d9a",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  },
+  "cabb25ea-2bf3-4d57-a593-30b7d0fe37be": {
+    "name": "컨벤셔널 데드리프트",
+    "file": "2058f26d-3a03-414f-ad3d-11b79cd5d8b7",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  },
+  "d40e1e72-997f-47e0-a14f-5caed643bc10": {
+    "name": "케이블 푸시다운",
+    "file": "d40e1e72-997f-47e0-a14f-5caed643bc10",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  },
+  "021145a7-de02-4e90-b5a5-c44a1ad5f34b": {
+    "name": "크런치",
+    "file": "021145a7-de02-4e90-b5a5-c44a1ad5f34b",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  },
+  "63c19460-6906-442e-9fb9-ed3ddba1c049": {
+    "name": "트레드밀",
+    "file": "63c19460-6906-442e-9fb9-ed3ddba1c049",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  },
+  "8cc9270d-c335-4d59-b4d9-a265cc5e1c65": {
+    "name": "페이스풀",
+    "file": "8cc9270d-c335-4d59-b4d9-a265cc5e1c65",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  },
+  "197fb122-f10f-431f-8f54-88d1ec8becd0": {
+    "name": "펙덱 플라이 머신",
+    "file": "197fb122-f10f-431f-8f54-88d1ec8becd0",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  },
+  "21211d6e-b1c9-4200-807c-ddb8b5ee89aa": {
+    "name": "푸시업",
+    "file": "21211d6e-b1c9-4200-807c-ddb8b5ee89aa",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  },
+  "83acbd5d-9359-4619-b359-2013e3d3b402": {
+    "name": "풀업",
+    "file": "83acbd5d-9359-4619-b359-2013e3d3b402",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  },
+  "0780c074-69d7-4d25-9a09-c6af6ec757e5": {
+    "name": "플랭크",
+    "file": "0780c074-69d7-4d25-9a09-c6af6ec757e5",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  },
+  "4ea5b8a7-1f1c-4bf1-987c-5291a83a4604": {
+    "name": "힙 브릿지",
+    "file": "4ea5b8a7-1f1c-4bf1-987c-5291a83a4604",
+    "source": "gnd",
+    "origin": "codex-pilot040"
+  }
+}

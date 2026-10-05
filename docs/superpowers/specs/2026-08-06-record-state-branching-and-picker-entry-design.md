@@ -115,6 +115,12 @@ export const RECOMMENDED: Record<BodyPart, readonly { name: string; note: string
 
 ### ④ 썸네일은 **추천 12개 전용**, `RECOMMENDED` 상수에 얹는다 (목업 2026-08-06)
 
+> ⚠️ **2026-10-05 사용자 지시로 뒤집혔다 — 검색 결과 목록에도 운동 그림을 붙인다.**
+> 연결표는 `src/lib/domain/exercise-images.ts` 한 곳이고(아래 `EXERCISE_THUMBS`는
+> 비어 있던 채로 거기에 합쳤다), 자산은 `public/exercise-images/*.webp`,
+> 프롬프트는 `docs/exercise-image-prompts.md`. 추천 카드는 그대로 "있는 것만 그린다".
+> 그림이 없는 목록 행을 어떻게 보일지(가정 ⑧과의 충돌)는 그 파일 주석을 본다.
+
 목업의 결론에 동의한다 — **전 종목 썸네일은 하지 않는다.** 다만 구현은 더 싸게 된다.
 
 ```ts
