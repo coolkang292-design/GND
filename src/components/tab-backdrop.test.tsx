@@ -22,9 +22,6 @@ vi.mock("next/image", () => ({
       fetchPriority={props.fetchPriority}
     />
   ),
-  getImageProps: ({ src }: { src: string }) => ({
-    props: { src: `/_next/image?url=${encodeURIComponent(src)}&w=1200&q=75`, srcSet: `${src} 1200w`, sizes: "100vw" },
-  }),
 }));
 
 import { TabBackdrop } from "./tab-backdrop";
@@ -61,32 +58,43 @@ describe("TabBackdrop — 탭 첫 화면 배경 사진 (2026-10-05)", () => {
     },
   );
 
-  it("화면 맨 위 사진이라 지연 로딩하지 않는다 — 탭을 옮기면 사진이 늦게 떴다", () => {
+  it("작게 만든 전용 사진을 지연 로딩 없이 쓴다 — 탭을 옮기면 사진이 늦게 떴다", () => {
     nav.pathname = "/feed";
     const { container } = render(<TabBackdrop />);
     const img = container.querySelector("img")!;
+    expect(img.getAttribute("src")).toBe("/tab-backdrops/feed.webp");
     expect(img.getAttribute("loading")).toBe("eager");
-    expect(img.getAttribute("fetchpriority")).toBe("high");
+    // 장식 사진이 피드 데이터보다 먼저 받아지면 안 된다 (2026-10-05 두 번째 신고)
+    expect(img.getAttribute("fetchpriority")).not.toBe("high");
   });
 
-  it("나머지 네 탭 사진을 한가할 때 한 번만 미리 받는다", () => {
+  it("나머지 네 장은 앱을 연 직후가 아니라 잠시 뒤, 낮은 우선순위로 한 장씩 받는다", () => {
     vi.useFakeTimers();
-    // jsdom의 Image는 팩토리라 하위 클래스가 안 먹는다 — 원형의 src 쓰기를 엿본다
-    const setSrc = vi.spyOn(HTMLImageElement.prototype, "src", "set");
+    const requested: { src: string; priority: string }[] = [];
+    // jsdom의 Image는 팩토리라 하위 클래스가 안 먹는다 — 원형의 src 쓰기를 엿보고,
+    // 받기를 흉내 내 onload를 부른다(한 장이 끝나야 다음 장을 받는지 본다)
+    const setSrc = vi
+      .spyOn(HTMLImageElement.prototype, "src", "set")
+      .mockImplementation(function (this: HTMLImageElement, value: string) {
+        if (!value.startsWith("/tab-backdrops/") || this.isConnected) return;
+        requested.push({ src: value, priority: String(this.fetchPriority) });
+        setTimeout(() => this.onload?.(new Event("load")), 100);
+      });
     try {
-      // requestIdleCallback이 없는 환경(jsdom)은 setTimeout으로 간다
       nav.pathname = "/feed";
-      const first = render(<TabBackdrop />);
-      act(() => vi.runAllTimers());
-      first.unmount();
-      nav.pathname = "/home";
       render(<TabBackdrop />);
+      act(() => vi.advanceTimersByTime(2000));
+      expect(requested).toHaveLength(0); // 첫 화면·첫 이동이 먼저다
+      act(() => vi.advanceTimersByTime(550)); // 2.5초에 첫 장, 그 장이 끝나기(+100ms) 전
+      expect(requested).toHaveLength(1); // 한꺼번에가 아니라 한 장
       act(() => vi.runAllTimers());
-      const warmed = setSrc.mock.calls
-        .map(([value]) => String(value))
-        .filter((value) => value.startsWith("/_next/image"));
-      expect(warmed).toHaveLength(4);
-      expect(warmed.some((u) => u.includes("shoulder"))).toBe(false); // 지금 화면 것은 빼고
+      expect(requested.map((r) => r.src)).toEqual([
+        "/tab-backdrops/home.webp",
+        "/tab-backdrops/record.webp",
+        "/tab-backdrops/challenge.webp",
+        "/tab-backdrops/profile.webp",
+      ]);
+      expect(requested.every((r) => r.priority === "low")).toBe(true);
     } finally {
       setSrc.mockRestore();
       vi.useRealTimers();

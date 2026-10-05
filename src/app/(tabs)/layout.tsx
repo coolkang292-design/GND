@@ -15,14 +15,22 @@ export default function TabsLayout({
       <OnboardingGate />
       <CheerBanner />
       {/*
-        relative isolate — 첫 화면 배경 사진(TabBackdrop, -z-10)이 내용 뒤에 깔리게 (2026-10-05).
-        ⚠️ z-50이 함께 있어야 한다. isolate만 주면 main이 0번 층이 되어, 그 안에서 뜨는
-           운동 추가 시트·운동 중 화면(z-20~50)이 뒤에 오는 하단 탭에 덮였다(2026-10-05 실측).
-           50은 그 창들의 원래 최고 층과 같고, 응원 배너(60)·실행 화면(100)보다는 낮다.
+        ⚠️⚠️ `main`에 위치·층(relative·isolate·z-*)을 주지 마라 (2026-10-05 아이폰 실측).
+        8d24301이 배경 사진을 내용 뒤에 깔려고 `relative isolate z-50`을 줬더니, 아이폰
+        Safari에서 그 안의 `fixed` 시트(운동 고르기)가 **이 스크롤 영역 경계에서 잘려**
+        하단 바 `운동 N개 바로 추가`가 탭바 뒤로 사라졌다. 크롬·윈도 WebKit에서는 재현되지
+        않는다 — 데스크톱 확인으로 통과했다고 믿지 마라.
+
+        그래서 `main`은 오늘 이전 그대로 두고, 사진과 내용은 **안쪽 상자에서 순서로만**
+        겹친다: 바깥 `relative`(층을 만들지 않음) → 사진(absolute, z 없음) → 내용
+        (`relative`, z 없음). 둘 다 z가 없으니 문서 순서대로 그려져 내용이 사진 위에 오고,
+        시트·운동 중 화면의 z-20~50은 문서 최상위 층에서 탭바를 덮는다(오늘 이전과 같다).
       */}
-      <main className="relative isolate z-50 flex-1 overflow-y-auto px-4 pt-4 pb-6">
-        <TabBackdrop />
-        {children}
+      <main className="flex-1 overflow-y-auto px-4 pt-4 pb-6">
+        <div className="relative">
+          <TabBackdrop />
+          <div className="relative">{children}</div>
+        </div>
       </main>
       <TabBar />
     </>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import Image, { getImageProps } from "next/image";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 
 /**
@@ -14,17 +14,21 @@ import { usePathname } from "next/navigation";
  *
  * ⚠️ **첫 화면만이다** — `/challenge/[id]`·`/record/programs` 같은 하위 화면에는 안 깐다.
  *    경로는 정확히 일치해야 한다.
- * ⚠️ 부모 `main`이 `relative isolate`여야 `-z-10`이 내용 뒤·배경 위에 깔린다.
+ * ⚠️ 층(z-index)을 주지 않는다. 내용 뒤에 깔리는 것은 `(tabs)/layout.tsx`의 문서 순서
+ *    (사진 → 내용 상자) 덕분이다. 예전처럼 `-z-10`을 쓰려면 부모가 층을 만들어야 하는데,
+ *    그 층이 아이폰에서 운동 고르기 시트를 잘랐다(2026-10-05) — layout 주석 참조.
+ * ⚠️ 부모 상자가 `main`의 안쪽 여백 안에 있어서 `-inset-x-4 -top-4`로 여백만큼 넓힌다.
  */
 const BACKDROPS: Record<string, string> = {
-  "/home": "/program-assets/lower-v2.webp",
-  "/feed": "/program-assets/shoulder.webp",
-  "/record": "/program-assets/interval.webp",
-  "/challenge": "/program-assets/lean-v2.webp",
-  "/profile": "/program-assets/chest.webp",
+  "/home": "/tab-backdrops/home.webp",
+  "/feed": "/tab-backdrops/feed.webp",
+  "/record": "/tab-backdrops/record.webp",
+  "/challenge": "/tab-backdrops/challenge.webp",
+  "/profile": "/tab-backdrops/profile.webp",
 };
 
-const SIZES = "(max-width: 480px) 100vw, 480px";
+/** 앱을 연 뒤 이만큼은 미리 받지 않는다 — 첫 화면·첫 이동이 먼저다 */
+const WARM_DELAY_MS = 2500;
 
 /** 앱을 연 뒤 한 번만 미리 받는다 — 탭을 오갈 때마다 다시 걸 일이 아니다 */
 let warmed = false;
@@ -32,22 +36,27 @@ let warmed = false;
 /**
  * 나머지 탭의 사진을 미리 받아 둔다 (2026-10-05 사용자 신고 "피드 탭으로 옮길 때 로딩이 생긴다").
  *
- * 탭을 옮기면 사진 주소가 바뀌고, 그때서야 받기 시작해서 위쪽이 0.1~1초 비었다가
- * 사진이 들어왔다(프로덕션 실측 — 변환 캐시 MISS면 0.7~1초). 화면에 깔리는 `<img>`와
- * **같은 srcset·sizes**로 받아야 브라우저가 같은 크기를 골라 캐시가 맞는다 —
- * 그래서 주소를 손으로 만들지 않고 `getImageProps`에서 받는다.
+ * 탭을 옮기면 사진 주소가 바뀌고 그때서야 받기 시작해서 위쪽이 비었다가 사진이 들어왔다.
+ *
+ * ⚠️⚠️ **한꺼번에, 바로 받지 마라** (같은 날 두 번째 신고 "피드로 옮기는 로딩이 더 늘었다").
+ *    첫 판은 앱을 열고 한가해지자마자 네 장(변환본 약 350KB)을 동시에 받았다. 폰 회선에서
+ *    피드로 넘어가는 파일·데이터 요청이 그 뒤에 줄을 서서 전환이 0.9초 → 3.4초가 됐다
+ *    (제한 네트워크 측정). 그래서 ① 사진을 장당 30KB 안팎의 전용 파일로 줄이고
+ *    (`scripts/build-tab-backdrops.py`) ② 앱을 연 뒤 잠시 기다렸다가 ③ 낮은 우선순위로
+ *    **한 장씩** 받는다.
  */
 function warmOtherBackdrops(current: string) {
-  for (const src of Object.values(BACKDROPS)) {
-    if (src === current) continue;
-    const { props } = getImageProps({ src, alt: "", fill: true, sizes: SIZES });
+  const rest = Object.values(BACKDROPS).filter((src) => src !== current);
+  const next = () => {
+    const src = rest.shift();
+    if (!src) return;
     const img = new window.Image();
     img.decoding = "async";
-    // sizes를 srcset보다 먼저 — 순서가 바뀌면 기본값(100vw)으로 고를 수 있다
-    img.sizes = props.sizes ?? SIZES;
-    if (props.srcSet) img.srcset = props.srcSet;
-    img.src = props.src;
-  }
+    img.fetchPriority = "low";
+    img.onload = img.onerror = next;
+    img.src = src;
+  };
+  next();
 }
 
 export function TabBackdrop() {
@@ -58,18 +67,23 @@ export function TabBackdrop() {
     if (warmed || !src) return;
     // ⚠️ 표식은 **실제로 받을 때** 세운다. 여기서 세우면 StrictMode가 이펙트를
     //    한 번 치우고 다시 돌릴 때 두 번째가 그냥 돌아가 아무것도 안 받는다.
+    let idleId: number | null = null;
     const run = () => {
       if (warmed) return;
       warmed = true;
       warmOtherBackdrops(src);
     };
-    // 지금 화면의 사진·데이터가 먼저다 — 한가해진 뒤에 받는다
-    if (typeof window.requestIdleCallback === "function") {
-      const id = window.requestIdleCallback(run, { timeout: 3000 });
-      return () => window.cancelIdleCallback(id);
-    }
-    const id = window.setTimeout(run, 1200);
-    return () => window.clearTimeout(id);
+    const timer = window.setTimeout(() => {
+      if (typeof window.requestIdleCallback === "function") {
+        idleId = window.requestIdleCallback(run, { timeout: 3000 });
+      } else {
+        run();
+      }
+    }, WARM_DELAY_MS);
+    return () => {
+      window.clearTimeout(timer);
+      if (idleId !== null) window.cancelIdleCallback(idleId);
+    };
   }, [src]);
 
   if (!src) return null;
@@ -78,19 +92,21 @@ export function TabBackdrop() {
       aria-hidden
       data-testid="tab-backdrop"
       data-src={src}
-      className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[560px] overflow-hidden"
+      className="pointer-events-none absolute -inset-x-4 -top-4 h-[560px] overflow-hidden"
     >
       {/*
         화면 맨 위에 깔리는 사진이라 지연 로딩(lazy)이면 안 된다 — 배치가 끝난 뒤에야
         받기 시작해서 그만큼 늦게 뜬다(2026-10-05).
+        `unoptimized` — 이미 작게 만든 전용 파일이라 변환 서버를 거칠 이유가 없다(변환
+        캐시가 비면 0.7~1초가 더 걸렸다). 우선순위는 기본값이다: 장식 사진이 피드
+        데이터보다 먼저 받아질 이유가 없다.
       */}
       <Image
         src={src}
         alt=""
         fill
+        unoptimized
         loading="eager"
-        fetchPriority="high"
-        sizes={SIZES}
         className="object-cover object-[50%_25%] opacity-70"
       />
       <div className="absolute inset-0 bg-gradient-to-b from-bg/0 via-bg/40 to-bg" />
