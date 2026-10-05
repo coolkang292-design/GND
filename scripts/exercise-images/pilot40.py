@@ -122,7 +122,7 @@ def report():
     retries=sum(max(0,len(r['attempts'])-1) for r in ledger['images']);failed_initial=sum(bool(r['attempts']) and r['attempts'][0]['qa']=='FAIL' for r in ledger['images'])
     repeated={k:v for k,v in types.items() if v>=2}
     stats={'first_pass':first,'pass_after_retry':retry,'final_fail':fail,'pending':pending,'total_pass':first+retry,'error_counts_by_failed_attempt':dict(errors),'error_types_by_failed_attempt':dict(types),'families':dict(families),'image_generation_calls':len(ledger['calls']),'sheet_calls':sum(c['kind']=='sheet_2x2' for c in ledger['calls']),'individual_retry_calls':sum(c['kind']=='single_retry' for c in ledger['calls']),'average_regeneration_all40':retries/40,'average_regeneration_initial_failures':retries/failed_initial if failed_initial else 0,'repeated_error_categories':repeated,'recommend_expansion':pending==0 and first+retry>=38 and not repeated,'repeat_detection':'Conservative: same detailed error type in2+attempts blocks recommendation, even if retries fix it.'}
-    write(ROOT/'data/exercise-image-pilot-040-summary.json',stats);print(json.dumps({k:v for k,v in stats.items() if k!='families'},ensure_ascii=False))
+    write(PLAN.with_name(PLAN.stem+'-summary.json'),stats);print(json.dumps({k:v for k,v in stats.items() if k!='families'},ensure_ascii=False))
 
 def sync_manifest():
     ledger=read(LEDGER);manifest=read(ROOT/'data/exercise-image-manifest.json');lookup={r['exercise_id']:r for r in ledger['images']}

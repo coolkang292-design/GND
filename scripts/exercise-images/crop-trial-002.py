@@ -16,7 +16,8 @@ def parent_manifest_matches(expected):
     if sha(path)==expected:return True
     # Pilot metadata is additive. Still prove every original field unchanged.
     data=json.loads(path.read_text(encoding='utf-8'))
-    for row in data['exercises']:row.pop('pilot_040',None)
+    for row in data['exercises']:
+        row.pop('pilot_040',None);row.pop('pilot_080',None)
     text=json.dumps(data,ensure_ascii=False,indent=2)+'\n'
     return any(hashlib.sha256(value.encode('utf-8')).hexdigest()==expected for value in [text,text.replace('\n','\r\n')])
 def boxes(width,height):

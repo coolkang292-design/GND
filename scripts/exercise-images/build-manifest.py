@@ -399,7 +399,7 @@ def main():
                 'qa_status':'NOT_RUN','qa_notes':None,'attempt_count':0,'last_error':None,'existing_candidates':[]}
         prev=old.get(r['id'])
         if prev and prev.get('definition_signature')==signature:
-            for k in ['status','sheet_file','cropped_file','qa_status','qa_notes','attempt_count','last_error','existing_candidates','structural_qa','semantic_qa','pilot_040']:
+            for k in ['status','sheet_file','cropped_file','qa_status','qa_notes','attempt_count','last_error','existing_candidates','structural_qa','semantic_qa','pilot_040','pilot_080']:
                 if k in prev: item[k]=prev[k]
         exercises.append(item)
     byname={r['name']:r for r in exercises}
@@ -440,6 +440,13 @@ def main():
                 row['pilot_first_generation_pass']=str(pilot['first_generation_pass']).lower() if pilot else ''
                 row['pilot_regeneration_count']=pilot.get('regeneration_count','')
                 row['pilot_final_qa']=pilot.get('final_qa','')
+        if any('pilot_080' in r for r in exercises):
+            fields += ['pilot080_first_generation_pass','pilot080_regeneration_count','pilot080_final_qa']
+            for row in exercises:
+                pilot=row.get('pilot_080',{})
+                row['pilot080_first_generation_pass']=str(pilot['first_generation_pass']).lower() if pilot else ''
+                row['pilot080_regeneration_count']=pilot.get('regeneration_count','')
+                row['pilot080_final_qa']=pilot.get('final_qa','')
         writer=csv.DictWriter(f,fieldnames=fields); writer.writeheader()
         writer.writerows({k:json.dumps(r[k],ensure_ascii=False) if isinstance(r[k],list) else r[k] for k in fields} for r in exercises)
     assert len({uid for b in batches for uid in b['exercises']})==sum(len(b['exercises']) for b in batches)
