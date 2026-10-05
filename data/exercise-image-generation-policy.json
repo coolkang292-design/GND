@@ -1,11 +1,11 @@
 {
-  "revision": "2026-10-05-local-app-qa",
+  "revision": "2026-10-05-pilot040-complete",
   "retired_generation_layout": [
     5,
     2
   ],
   "historical_manifest_and_batches": "preserved; not authorization to generate",
-  "active_trial": "GND-TRIAL-002",
+  "active_trial": "GND-P040",
   "layout": [
     2,
     2
@@ -20,13 +20,13 @@
     512
   ],
   "upscaling_allowed": false,
-  "generation_calls_allowed": 1,
-  "generation_calls_completed": 1,
+  "generation_calls_allowed": 22,
+  "generation_calls_completed": 22,
   "further_generation_authorized": false,
   "upload_authorized": false,
   "production_db_change_authorized": false,
   "app_integration_authorized": false,
-  "outcome": "CANDIDATE_APPROVED: 4/4 actual ExercisePicker local UI PASS; further generation and production integration await approval",
+  "outcome": "PILOT_COMPLETE:39 PASS/1 FAIL; expansion blocked by repeated clipping/highlight errors",
   "historical_minimum_native_cell_size": [
     768,
     768
@@ -36,5 +36,7 @@
     512,
     512
   ],
-  "local_app_test_authorized": true
+  "local_app_test_authorized": false,
+  "standard_generation_method": "2x2 -> native cell crop ->512PNG downscale; individual retry only for FAIL",
+  "pilot_app_integration_owner": "Claude; await user instruction"
 }

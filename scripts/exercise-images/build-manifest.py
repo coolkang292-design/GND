@@ -399,7 +399,7 @@ def main():
                 'qa_status':'NOT_RUN','qa_notes':None,'attempt_count':0,'last_error':None,'existing_candidates':[]}
         prev=old.get(r['id'])
         if prev and prev.get('definition_signature')==signature:
-            for k in ['status','sheet_file','cropped_file','qa_status','qa_notes','attempt_count','last_error','existing_candidates','structural_qa','semantic_qa']:
+            for k in ['status','sheet_file','cropped_file','qa_status','qa_notes','attempt_count','last_error','existing_candidates','structural_qa','semantic_qa','pilot_040']:
                 if k in prev: item[k]=prev[k]
         exercises.append(item)
     byname={r['name']:r for r in exercises}
@@ -433,6 +433,13 @@ def main():
     excluded=json.loads(custom_path.read_text(encoding='utf-8'))['exercises'] if custom_path.exists() else []
     fields=['exercise_id','name','body_part','visual_family','definition_status','pose_description','equipment','target_muscles','batch_no','slot_no','status','qa_status','review_notes']
     with (DATA/'exercise-image-manifest.csv').open('w',encoding='utf-8-sig',newline='') as f:
+        if any('pilot_040' in r for r in exercises):
+            fields += ['pilot_first_generation_pass','pilot_regeneration_count','pilot_final_qa']
+            for row in exercises:
+                pilot=row.get('pilot_040',{})
+                row['pilot_first_generation_pass']=str(pilot['first_generation_pass']).lower() if pilot else ''
+                row['pilot_regeneration_count']=pilot.get('regeneration_count','')
+                row['pilot_final_qa']=pilot.get('final_qa','')
         writer=csv.DictWriter(f,fieldnames=fields); writer.writeheader()
         writer.writerows({k:json.dumps(r[k],ensure_ascii=False) if isinstance(r[k],list) else r[k] for k in fields} for r in exercises)
     assert len({uid for b in batches for uid in b['exercises']})==sum(len(b['exercises']) for b in batches)

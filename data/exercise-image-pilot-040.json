@@ -1,0 +1,823 @@
+{
+  "pilot_id": "GND-P040",
+  "scope": "40 seed DRAFT_READY only; all74 NEEDS_REVIEW excluded; no335 bulk generation",
+  "standard": "2x2 ->native cell crop ->512PNG; no upscaling",
+  "preferred_sheet": [
+    2048,
+    2048
+  ],
+  "minimum_input_cell": [
+    512,
+    512
+  ],
+  "parent_manifest_sha256": "b9bc91354445eae419182418c53e76a08e38540e1c1323e6a34d36084bab5dff",
+  "production_db": false,
+  "storage_upload": false,
+  "deploy": false,
+  "selection": [
+    {
+      "exercise_id": "be2a2460-c20c-4327-a092-0d4dbaa5b5a6",
+      "name": "벤치프레스",
+      "body_part": "가슴",
+      "visual_family": "bench_press",
+      "pose_description": "Lying on a flat bench, feet on floor, both hands gripping a barbell above mid chest, elbows bent in a controlled bench press.",
+      "equipment": [
+        "flat bench",
+        "barbell"
+      ],
+      "target_muscles": [
+        "pectoralis major"
+      ],
+      "definition_signature": "2f0f23af654be2423081f9f15f15c29f08b9b15b0273206eb36ae453d7a87d3d",
+      "batch_no": "GND-P040-01",
+      "slot_no": 1,
+      "definition_preflight": "PASS"
+    },
+    {
+      "exercise_id": "5f00e9f0-8b12-4746-b59b-df6e7529f94f",
+      "name": "랫풀다운",
+      "body_part": "등",
+      "visual_family": "lat_pulldown",
+      "pose_description": "Seated under a high cable pulley, thighs under support pads, hands on a wide bar, pulling bar toward upper chest in front of the head.",
+      "equipment": [
+        "lat pulldown machine",
+        "wide bar"
+      ],
+      "target_muscles": [
+        "latissimus dorsi"
+      ],
+      "definition_signature": "f6facf9714121bd25b81fbd2fe50df150ccb25654e6fa8e2674ee93f65d90892",
+      "batch_no": "GND-P040-01",
+      "slot_no": 2,
+      "definition_preflight": "PASS"
+    },
+    {
+      "exercise_id": "1b556520-526d-4a06-9a9b-deec7cd05841",
+      "name": "덤벨 컬",
+      "body_part": "팔",
+      "visual_family": "biceps_curl",
+      "pose_description": "Standing, elbows close to ribs, palms up, curling two dumbbells toward shoulders.",
+      "equipment": [
+        "two dumbbells"
+      ],
+      "target_muscles": [
+        "biceps brachii"
+      ],
+      "definition_signature": "44c8e46d129d2665ffc0f9c8a7b007cb8175b3828e58958f38070440d53b1f26",
+      "batch_no": "GND-P040-01",
+      "slot_no": 3,
+      "definition_preflight": "PASS"
+    },
+    {
+      "exercise_id": "ef6000b6-4322-4bee-8918-6318c30dd902",
+      "name": "레그 익스텐션",
+      "body_part": "하체",
+      "visual_family": "leg_extension",
+      "pose_description": "Seated against the back pad of a leg-extension MACHINE, knees aligned with machine pivot, extending both knees against a padded roller in front of lower shins. Side view.",
+      "equipment": [
+        "leg extension machine"
+      ],
+      "target_muscles": [
+        "quadriceps"
+      ],
+      "definition_signature": "f4fb0da389e1f0a489470f2d8cc6c83d6d987a8b6f4719d06d449b495c2f9698",
+      "batch_no": "GND-P040-01",
+      "slot_no": 4,
+      "definition_preflight": "PASS"
+    },
+    {
+      "exercise_id": "21211d6e-b1c9-4200-807c-ddb8b5ee89aa",
+      "name": "푸시업",
+      "body_part": "가슴",
+      "visual_family": "push_up",
+      "pose_description": "Standard floor push-up, toes and palms on floor, body straight from heels to head, hands beneath shoulders, elbows bent at bottom. Side view.",
+      "equipment": [
+        "floor"
+      ],
+      "target_muscles": [
+        "pectoralis major"
+      ],
+      "definition_signature": "a2bb6da6688429e9071e1c83b05fac6fb7fd2bea4f46a138bb0b51e1d67c3da1",
+      "batch_no": "GND-P040-02",
+      "slot_no": 1,
+      "definition_preflight": "PASS"
+    },
+    {
+      "exercise_id": "71220804-54f1-4e40-88aa-84663495dc2d",
+      "name": "시티드 로우",
+      "body_part": "등",
+      "visual_family": "row",
+      "pose_description": "Seated with knees slightly bent, feet on foot plates, torso upright, pulling a low cable handle toward abdomen without leaning back.",
+      "equipment": [
+        "low cable row machine"
+      ],
+      "target_muscles": [
+        "latissimus dorsi",
+        "rhomboids"
+      ],
+      "definition_signature": "b306e180d7558f3e08d3b6184b6928615b89e5f84c9a0f5695b24281c5a37cfb",
+      "batch_no": "GND-P040-02",
+      "slot_no": 2,
+      "definition_preflight": "PASS"
+    },
+    {
+      "exercise_id": "b8702da2-e5e9-4974-b7d0-f4a8167998f0",
+      "name": "오버헤드 프레스",
+      "body_part": "어깨",
+      "visual_family": "shoulder_press",
+      "pose_description": "Standing strict barbell overhead press in FRONT of head, feet planted, pressing bar from upper chest overhead with no leg drive.",
+      "equipment": [
+        "barbell"
+      ],
+      "target_muscles": [
+        "anterior and lateral deltoids"
+      ],
+      "definition_signature": "c2e20cd212e6cc385120798eaed41490b5048a913a4181feff519712c16e84c3",
+      "batch_no": "GND-P040-02",
+      "slot_no": 3,
+      "definition_preflight": "PASS"
+    },
+    {
+      "exercise_id": "0780c074-69d7-4d25-9a09-c6af6ec757e5",
+      "name": "플랭크",
+      "body_part": "코어",
+      "visual_family": "plank",
+      "pose_description": "Forearms and toes on floor, elbows beneath shoulders, body straight and parallel to floor, holding position.",
+      "equipment": [
+        "floor"
+      ],
+      "target_muscles": [
+        "rectus abdominis"
+      ],
+      "definition_signature": "8f55c606b1da028e3d4d89fac62cc68d382884aee406facbbef0086e351a53d7",
+      "batch_no": "GND-P040-02",
+      "slot_no": 4,
+      "definition_preflight": "PASS"
+    },
+    {
+      "exercise_id": "95d76fa3-9cfd-4afd-ace5-67428e878c9a",
+      "name": "덤벨 플라이",
+      "body_part": "가슴",
+      "visual_family": "chest_fly",
+      "pose_description": "Lying on a FLAT bench, holding one dumbbell in each hand, arms opened wide with softly bent elbows at chest height. Show the flat bench unmistakably. Three-quarter side view.",
+      "equipment": [
+        "flat bench",
+        "two dumbbells"
+      ],
+      "target_muscles": [
+        "pectoralis major"
+      ],
+      "definition_signature": "2a7def41e78144828651c6c6b1e23c973a12e6bf95a1b7d45d396ea08e8003a3",
+      "batch_no": "GND-P040-03",
+      "slot_no": 1,
+      "definition_preflight": "PASS"
+    },
+    {
+      "exercise_id": "83acbd5d-9359-4619-b359-2013e3d3b402",
+      "name": "풀업",
+      "body_part": "등",
+      "visual_family": "pull_up",
+      "pose_description": "Hanging from a pull-up bar with overhand grip, lifting chin above bar, feet off floor, back view.",
+      "equipment": [
+        "pull-up bar"
+      ],
+      "target_muscles": [
+        "latissimus dorsi"
+      ],
+      "definition_signature": "5dd3e6e31b179c240edc42a12bafa566671555ea31d1d6726aff7985c5c716c2",
+      "batch_no": "GND-P040-03",
+      "slot_no": 2,
+      "definition_preflight": "PASS"
+    },
+    {
+      "exercise_id": "0a1e5d29-2712-4afb-8083-1035af2c21ce",
+      "name": "덤벨 킥백",
+      "body_part": "팔",
+      "visual_family": "triceps_extension",
+      "pose_description": "Torso hinged forward, upper arms along torso, extending elbows backward with dumbbells. Use equipment: two dumbbells. Full body and equipment visible.",
+      "equipment": [
+        "two dumbbells"
+      ],
+      "target_muscles": [
+        "triceps brachii"
+      ],
+      "definition_signature": "c492f2fc79a50d24e583ac0448eabe4f66cd093c7c76d4b3c94f85d942332080",
+      "batch_no": "GND-P040-03",
+      "slot_no": 3,
+      "definition_preflight": "PASS"
+    },
+    {
+      "exercise_id": "ce90ab46-1ace-4493-b691-cb0f82400c84",
+      "name": "시티드 레그 컬",
+      "body_part": "하체",
+      "visual_family": "leg_curl",
+      "pose_description": "Seated with thighs secured by pad, heels over ankle roller, bending BOTH knees to pull roller downward under seat.",
+      "equipment": [
+        "seated leg curl machine"
+      ],
+      "target_muscles": [
+        "hamstrings"
+      ],
+      "definition_signature": "9d3d63585bb772143996df09c2d98d8e282de9218288a686312f9e694415f480",
+      "batch_no": "GND-P040-03",
+      "slot_no": 4,
+      "definition_preflight": "PASS"
+    },
+    {
+      "exercise_id": "da6544dc-60da-4a88-8f15-f95aa0c1b542",
+      "name": "딥스",
+      "body_part": "가슴",
+      "visual_family": "dip",
+      "pose_description": "On parallel dip bars, feet off floor, elbows bent, torso leaning slightly forward between bars.",
+      "equipment": [
+        "parallel bars"
+      ],
+      "target_muscles": [
+        "pectoralis major",
+        "triceps brachii"
+      ],
+      "definition_signature": "5fa8d5e9bac09fff3c966dc59dfcaaea8e2899b76d931eee3f548acd32abe8fb",
+      "batch_no": "GND-P040-04",
+      "slot_no": 1,
+      "definition_preflight": "PASS"
+    },
+    {
+      "exercise_id": "64d460a4-f41c-4c95-9beb-a78f2c7d6ea2",
+      "name": "인버티드 로우",
+      "body_part": "등",
+      "visual_family": "row",
+      "pose_description": "Body straight beneath a fixed low bar, heels on floor, pulling chest up toward bar. Use equipment: fixed horizontal bar. Full body and equipment visible.",
+      "equipment": [
+        "fixed horizontal bar"
+      ],
+      "target_muscles": [
+        "latissimus dorsi"
+      ],
+      "definition_signature": "f08e84ee7c10bdaa03b81d84daa9d6f959cc79c6012cdedfd1d6020c431768a4",
+      "batch_no": "GND-P040-04",
+      "slot_no": 2,
+      "definition_preflight": "PASS"
+    },
+    {
+      "exercise_id": "3f4dcd4c-028d-4430-867b-a59f4ab6bf71",
+      "name": "덤벨 프론트 레이즈",
+      "body_part": "어깨",
+      "visual_family": "front_raise",
+      "pose_description": "Standing, raising load FORWARD to shoulder height with softly bent elbows. Use equipment: two dumbbells. Full body and equipment visible.",
+      "equipment": [
+        "two dumbbells"
+      ],
+      "target_muscles": [
+        "anterior deltoids"
+      ],
+      "definition_signature": "6b7f9afeba5fd8fcd0da644ff5e1d2854f2034eb6b11644f8b700cdcb9f9d40c",
+      "batch_no": "GND-P040-04",
+      "slot_no": 3,
+      "definition_preflight": "PASS"
+    },
+    {
+      "exercise_id": "d3887e12-d386-4fe4-b41f-219a8c0ab141",
+      "name": "스쿼트",
+      "body_part": "하체",
+      "visual_family": "squat",
+      "pose_description": "Barbell back squat, standing with a barbell resting on upper back, feet shoulder-width apart, hips and knees bent in a squat.",
+      "equipment": [
+        "barbell"
+      ],
+      "target_muscles": [
+        "quadriceps",
+        "gluteus maximus"
+      ],
+      "definition_signature": "10271bb89ef1f5bc1b6a5da12c20f5512063fdf06ccddfabf32f5874f040016c",
+      "batch_no": "GND-P040-04",
+      "slot_no": 4,
+      "definition_preflight": "PASS"
+    },
+    {
+      "exercise_id": "3d95c8df-65c3-4be0-a349-3fc805cc8da8",
+      "name": "덤벨 풀오버",
+      "body_part": "가슴",
+      "visual_family": "pullover",
+      "pose_description": "Lying lengthwise on a flat bench, holding ONE dumbbell with both hands, moving weight in an arc behind head with slightly bent elbows.",
+      "equipment": [
+        "flat bench",
+        "one dumbbell"
+      ],
+      "target_muscles": [
+        "latissimus dorsi",
+        "pectoralis major"
+      ],
+      "definition_signature": "e0043c73d46a36b08398852e75a7539a93de86433b5cd9f79a0e1cbf4256efba",
+      "batch_no": "GND-P040-05",
+      "slot_no": 1,
+      "definition_preflight": "PASS"
+    },
+    {
+      "exercise_id": "4eb0f324-780f-4945-a37f-5be3c6f5b585",
+      "name": "매달리기",
+      "body_part": "등",
+      "visual_family": "dead_hang",
+      "pose_description": "Dead hang from horizontal bar, arms fully extended overhead, feet off floor, not performing a pull-up.",
+      "equipment": [
+        "pull-up bar"
+      ],
+      "target_muscles": [
+        "forearm flexors"
+      ],
+      "definition_signature": "4a6b856bf17aacdae028d18564614d1b67b8eded127da6bcc905dd98246db816",
+      "batch_no": "GND-P040-05",
+      "slot_no": 2,
+      "definition_preflight": "PASS"
+    },
+    {
+      "exercise_id": "d40e1e72-997f-47e0-a14f-5caed643bc10",
+      "name": "케이블 푸시다운",
+      "body_part": "팔",
+      "visual_family": "triceps_extension",
+      "pose_description": "Standing facing high cable pulley, elbows kept at sides, pressing a straight cable bar downward by extending elbows.",
+      "equipment": [
+        "high cable machine",
+        "straight bar attachment"
+      ],
+      "target_muscles": [
+        "triceps brachii"
+      ],
+      "definition_signature": "5d01cfc333b0c8edd70515272f08035ddf07079f14c17541f5cff0d434bfed6f",
+      "batch_no": "GND-P040-05",
+      "slot_no": 3,
+      "definition_preflight": "PASS"
+    },
+    {
+      "exercise_id": "8fade715-13eb-457d-b48e-6f1ce0a9e597",
+      "name": "스탠딩 카프 레이즈",
+      "body_part": "하체",
+      "visual_family": "calf_raise",
+      "pose_description": "Standing with knees straight on a step, raising heels high onto forefeet, no external weights.",
+      "equipment": [
+        "step"
+      ],
+      "target_muscles": [
+        "gastrocnemius"
+      ],
+      "definition_signature": "d9269c6c1d1fd7c0640afbeaeef69da3302b049ccef804c3611831f5f872a91a",
+      "batch_no": "GND-P040-05",
+      "slot_no": 4,
+      "definition_preflight": "PASS"
+    },
+    {
+      "exercise_id": "197fb122-f10f-431f-8f54-88d1ec8becd0",
+      "name": "펙덱 플라이 머신",
+      "body_part": "가슴",
+      "visual_family": "chest_fly",
+      "pose_description": "Seated upright in a pec-deck machine, elbows softly bent, bringing machine handles together in front of chest.",
+      "equipment": [
+        "pec-deck machine"
+      ],
+      "target_muscles": [
+        "pectoralis major"
+      ],
+      "definition_signature": "ac17041e158e3322b2f2f09b647451cf48942c892f678d44b284bc7822b2fc36",
+      "batch_no": "GND-P040-06",
+      "slot_no": 1,
+      "definition_preflight": "PASS"
+    },
+    {
+      "exercise_id": "2058f26d-3a03-414f-ad3d-11b79cd5d8b7",
+      "name": "데드리프트",
+      "body_part": "등",
+      "visual_family": "deadlift",
+      "pose_description": "Conventional barbell deadlift from floor, feet hip-width, hands outside knees, hips hinged and back neutral, bar close to shins.",
+      "equipment": [
+        "barbell"
+      ],
+      "target_muscles": [
+        "gluteus maximus",
+        "hamstrings"
+      ],
+      "definition_signature": "3897933264908a3f7fe93f51edda3dd1aa4fc158013d293beff3e419ece55f33",
+      "batch_no": "GND-P040-06",
+      "slot_no": 2,
+      "definition_preflight": "PASS"
+    },
+    {
+      "exercise_id": "8cc9270d-c335-4d59-b4d9-a265cc5e1c65",
+      "name": "페이스풀",
+      "body_part": "어깨",
+      "visual_family": "face_pull",
+      "pose_description": "Standing facing a cable machine, holding a rope attachment with both hands, pulling rope ends to either side of the face with elbows elevated.",
+      "equipment": [
+        "cable machine",
+        "rope attachment"
+      ],
+      "target_muscles": [
+        "posterior deltoids"
+      ],
+      "definition_signature": "4dee326e09bb91adc328a4ab70407212a2f847cb58e420ca6d608aa4d9667f6b",
+      "batch_no": "GND-P040-06",
+      "slot_no": 3,
+      "definition_preflight": "PASS"
+    },
+    {
+      "exercise_id": "639ad98b-b4a1-47f7-a382-8dd9e98035b0",
+      "name": "사이드 플랭크",
+      "body_part": "코어",
+      "visual_family": "plank",
+      "pose_description": "Side plank on one forearm and outer edge of feet, elbow under shoulder, hips lifted, body in a straight line.",
+      "equipment": [
+        "floor"
+      ],
+      "target_muscles": [
+        "obliques"
+      ],
+      "definition_signature": "8ad76d20e9d1ebaf06a7b191bf308126a3eaab939cd292c5cdb98c18bbb0f619",
+      "batch_no": "GND-P040-06",
+      "slot_no": 4,
+      "definition_preflight": "PASS"
+    },
+    {
+      "exercise_id": "616e417a-8600-41f7-9c98-93ac4f3f68bc",
+      "name": "시티드 덤벨 숄더 프레스",
+      "body_part": "어깨",
+      "visual_family": "shoulder_press",
+      "pose_description": "Seated upright on a bench with upright back support, feet on floor, pressing TWO DUMBBELLS above shoulders, elbows under wrists. Front three-quarter view.",
+      "equipment": [
+        "upright bench",
+        "two dumbbells"
+      ],
+      "target_muscles": [
+        "anterior and lateral deltoids"
+      ],
+      "definition_signature": "e8574e0b6ed844643b2f75a379923cb71c27883082a8ffda4143e21f2f6f378c",
+      "batch_no": "GND-P040-07",
+      "slot_no": 1,
+      "definition_preflight": "PASS"
+    },
+    {
+      "exercise_id": "fed25eab-0208-4899-9282-81a71d73c172",
+      "name": "바벨 컬",
+      "body_part": "팔",
+      "visual_family": "biceps_curl",
+      "pose_description": "Standing, elbows beside ribs, bending elbows to curl load upward. Palms face upward. Use equipment: barbell. Full body and equipment visible.",
+      "equipment": [
+        "barbell"
+      ],
+      "target_muscles": [
+        "biceps brachii"
+      ],
+      "definition_signature": "cec3debea5bda9f56e0793f41a14383c3f5688f07e8566e86b7ec5ce4552b40b",
+      "batch_no": "GND-P040-07",
+      "slot_no": 2,
+      "definition_preflight": "PASS"
+    },
+    {
+      "exercise_id": "e5fec7fd-111d-4c75-9d93-60fb89293853",
+      "name": "수평 레그 프레스",
+      "body_part": "하체",
+      "visual_family": "leg_press",
+      "pose_description": "Seated upright in horizontal leg press machine, feet on platform in front, extending hips and knees to push platform horizontally.",
+      "equipment": [
+        "horizontal leg press machine"
+      ],
+      "target_muscles": [
+        "quadriceps",
+        "gluteus maximus"
+      ],
+      "definition_signature": "88b30adde8883d1e63fc318cf81123d654ae6ab6497f54d02ff529fbf3d215d7",
+      "batch_no": "GND-P040-07",
+      "slot_no": 3,
+      "definition_preflight": "PASS"
+    },
+    {
+      "exercise_id": "021145a7-de02-4e90-b5a5-c44a1ad5f34b",
+      "name": "크런치",
+      "body_part": "코어",
+      "visual_family": "crunch",
+      "pose_description": "Lying on back on floor, knees bent and feet planted, lifting shoulder blades slightly off floor without a full sit-up.",
+      "equipment": [
+        "floor"
+      ],
+      "target_muscles": [
+        "rectus abdominis"
+      ],
+      "definition_signature": "cfab5d4f9d26b41b063969370b9816fe777757dc05984ceb532cf83e6e92107b",
+      "batch_no": "GND-P040-07",
+      "slot_no": 4,
+      "definition_preflight": "PASS"
+    },
+    {
+      "exercise_id": "7dcb673c-adf7-477a-81bf-6f455d798622",
+      "name": "덤벨 슈러그",
+      "body_part": "어깨",
+      "visual_family": "shrug",
+      "pose_description": "Standing with arms straight down holding load, elevating shoulders toward ears without bending elbows. Use equipment: two dumbbells. Full body and equipment visible.",
+      "equipment": [
+        "two dumbbells"
+      ],
+      "target_muscles": [
+        "upper trapezius"
+      ],
+      "definition_signature": "616fd1aa2cfbf31bfafad49b14e531309c2f9f8a22e9c1c795307bdbd58bc6fd",
+      "batch_no": "GND-P040-08",
+      "slot_no": 1,
+      "definition_preflight": "PASS"
+    },
+    {
+      "exercise_id": "4ea5b8a7-1f1c-4bf1-987c-5291a83a4604",
+      "name": "힙 브릿지",
+      "body_part": "하체",
+      "visual_family": "hip_bridge",
+      "pose_description": "Lying on back on floor, knees bent, feet planted, lifting hips while shoulders stay on floor.",
+      "equipment": [
+        "floor"
+      ],
+      "target_muscles": [
+        "gluteus maximus"
+      ],
+      "definition_signature": "1e8bb562243a61cf6300544aecf5e2e3c231ebae68ff301e0888085fc89e9693",
+      "batch_no": "GND-P040-08",
+      "slot_no": 2,
+      "definition_preflight": "PASS"
+    },
+    {
+      "exercise_id": "edb26b13-e26f-4b6e-925a-cf4dfeda06c2",
+      "name": "러시안 트위스트",
+      "body_part": "코어",
+      "visual_family": "core_rotation",
+      "pose_description": "Seated on floor with knees bent, torso leaned back, both hands together rotating torso to one side, no external weight.",
+      "equipment": [
+        "floor"
+      ],
+      "target_muscles": [
+        "obliques"
+      ],
+      "definition_signature": "6b092eb0187ffd12c6258a8784a1d30b728783633ba4275e5b8a3bae2c0646b8",
+      "batch_no": "GND-P040-08",
+      "slot_no": 3,
+      "definition_preflight": "PASS"
+    },
+    {
+      "exercise_id": "7f28c50b-fcff-4654-99cb-e9af890ab104",
+      "name": "러닝",
+      "body_part": "유산소",
+      "visual_family": "cardio_run",
+      "pose_description": "Running on level ground with an unmistakable running stride, bent elbows, no treadmill or machine.",
+      "equipment": [
+        "floor"
+      ],
+      "target_muscles": [
+        "quadriceps"
+      ],
+      "definition_signature": "485e490d382064287127911f78ffcef07d5f3604bc14c6ce63051b947bd95b6b",
+      "batch_no": "GND-P040-08",
+      "slot_no": 4,
+      "definition_preflight": "PASS"
+    },
+    {
+      "exercise_id": "e8f0c354-f481-41f3-b32b-ad11b37a5abe",
+      "name": "덤벨 해머 컬",
+      "body_part": "팔",
+      "visual_family": "biceps_curl",
+      "pose_description": "Standing, elbows beside ribs, curling two dumbbells with neutral thumb-up grip maintained throughout.",
+      "equipment": [
+        "two dumbbells"
+      ],
+      "target_muscles": [
+        "brachialis",
+        "brachioradialis"
+      ],
+      "definition_signature": "c895939cc415cf6afaa481d999ab9b0004324a25abd8cc256efbb5ec9f4411fa",
+      "batch_no": "GND-P040-09",
+      "slot_no": 1,
+      "definition_preflight": "PASS"
+    },
+    {
+      "exercise_id": "66af6e45-aef2-466a-8a3e-b90505c2a0e6",
+      "name": "스텝업",
+      "body_part": "하체",
+      "visual_family": "step_up",
+      "pose_description": "One foot on stable box, stepping upward by extending planted leg while other foot rises from floor.",
+      "equipment": [
+        "box"
+      ],
+      "target_muscles": [
+        "quadriceps",
+        "gluteus maximus"
+      ],
+      "definition_signature": "a5d37bc5f8dea5e9339263d2dd74d07b0478c02b8a542e3e0e44e4951c74573b",
+      "batch_no": "GND-P040-09",
+      "slot_no": 2,
+      "definition_preflight": "PASS"
+    },
+    {
+      "exercise_id": "f74f365f-52e1-4033-a1bd-b0c34c7cc5dc",
+      "name": "복근 롤아웃",
+      "body_part": "코어",
+      "visual_family": "rollout",
+      "pose_description": "Kneeling on floor with both hands gripping an ab wheel, rolling wheel forward while extending hips and arms without arching back.",
+      "equipment": [
+        "ab wheel"
+      ],
+      "target_muscles": [
+        "rectus abdominis"
+      ],
+      "definition_signature": "7f6463b8f621489bae963aecb65f8470638ffe32860c2bb4b6856445bfec7073",
+      "batch_no": "GND-P040-09",
+      "slot_no": 3,
+      "definition_preflight": "PASS"
+    },
+    {
+      "exercise_id": "5ae60799-7446-4937-b75a-dbd742ea38b8",
+      "name": "로잉",
+      "body_part": "유산소",
+      "visual_family": "cardio_row",
+      "pose_description": "Seated on a rowing ergometer with feet strapped into foot plates, knees extending, pulling handle to lower ribs; entire rowing machine visible.",
+      "equipment": [
+        "rowing ergometer"
+      ],
+      "target_muscles": [
+        "latissimus dorsi",
+        "quadriceps"
+      ],
+      "definition_signature": "a4947e4bbcd54aa0b8180800608bdf15d25d76a89e770819377126377480886b",
+      "batch_no": "GND-P040-09",
+      "slot_no": 4,
+      "definition_preflight": "PASS"
+    },
+    {
+      "exercise_id": "45ecb917-61a7-4987-b239-3c6c25639ed2",
+      "name": "사이드 런지",
+      "body_part": "하체",
+      "visual_family": "lunge",
+      "pose_description": "Wide lateral step, bending stepping-leg knee while other leg remains straight. Use equipment: floor. Full body and equipment visible.",
+      "equipment": [
+        "floor"
+      ],
+      "target_muscles": [
+        "quadriceps",
+        "gluteus maximus"
+      ],
+      "definition_signature": "4072e94f2b04812dcc8d2ee0b130e55564637913f1cfb1bc86c156cdef5e101d",
+      "batch_no": "GND-P040-10",
+      "slot_no": 1,
+      "definition_preflight": "PASS"
+    },
+    {
+      "exercise_id": "4af3f632-e3f7-49b7-a232-86ba82a8e21f",
+      "name": "마운틴 클라이머",
+      "body_part": "코어",
+      "visual_family": "mountain_climber",
+      "pose_description": "High plank on palms and toes, drawing one knee toward chest with opposite leg extended.",
+      "equipment": [
+        "floor"
+      ],
+      "target_muscles": [
+        "rectus abdominis"
+      ],
+      "definition_signature": "9e168e13b6c8fd0100490010913314d9fc2199d2a4293069370aff11e5e28fed",
+      "batch_no": "GND-P040-10",
+      "slot_no": 2,
+      "definition_preflight": "PASS"
+    },
+    {
+      "exercise_id": "b0c305d6-338e-400f-9dfd-5ae6efb63d9a",
+      "name": "줄넘기",
+      "body_part": "유산소",
+      "visual_family": "cardio_skip",
+      "pose_description": "Standing in mid rope skip, holding a rope handle in each hand with a continuous rope arc under feet.",
+      "equipment": [
+        "jump rope"
+      ],
+      "target_muscles": [
+        "gastrocnemius"
+      ],
+      "definition_signature": "c754b1612e1463eb967b5b040c562feae32a4b3f805ae00f717267f0622cfcd2",
+      "batch_no": "GND-P040-10",
+      "slot_no": 3,
+      "definition_preflight": "PASS"
+    },
+    {
+      "exercise_id": "63c19460-6906-442e-9fb9-ed3ddba1c049",
+      "name": "트레드밀",
+      "body_part": "유산소",
+      "visual_family": "cardio_treadmill",
+      "pose_description": "Running on a motorized treadmill belt, upright body, natural alternating leg stride and bent arms. Entire treadmill is inside the cell.",
+      "equipment": [
+        "treadmill"
+      ],
+      "target_muscles": [
+        "quadriceps"
+      ],
+      "definition_signature": "e2ecc7d18363dfddcc704e3806a2b4298ef97640f1da6f97712c3a723f992990",
+      "batch_no": "GND-P040-10",
+      "slot_no": 4,
+      "definition_preflight": "PASS"
+    }
+  ],
+  "batches": [
+    {
+      "batch_no": "GND-P040-01",
+      "exercise_ids": [
+        "be2a2460-c20c-4327-a092-0d4dbaa5b5a6",
+        "5f00e9f0-8b12-4746-b59b-df6e7529f94f",
+        "1b556520-526d-4a06-9a9b-deec7cd05841",
+        "ef6000b6-4322-4bee-8918-6318c30dd902"
+      ],
+      "prompt": "Create ONE square 2x2 exercise sprite sheet, preferred2048x2048PNG, absolutely at least1024x1024. Four equal square quadrants in reading order:top-left,top-right,bottom-left,bottom-right. No text,letters,numbers,labels,arrows,borders or grid lines anywhere. Each cell is an independent exercise icon with full body and entire essential equipment INSIDE its quadrant, no overlap between cells; generous 6percent safe margin but subject fills roughly80percent cell. Reference image is STYLE ONLY; replace all four poses/equipment with the specified exercises. Match approved GND anatomical semi-realistic 3D illustration: SAME athletic adult male silver-gray body, dark shorts, dark graphite equipment, uniform very dark navy background #101b24; luminous saturated cyan-blue highlights ONLY the specified target muscles. All other muscles silver-gray, not blue. Muscles are anatomically localized: biceps front upperarm,triceps rear upperarm,lats broad side-back,rhomboids between shoulderblades,pectorals chest,deltoids shoulders,rectus abdominis frontabs,obliques sideabdomen,quadriceps frontthigh,hamstrings backthigh,gastrocnemius calf,trapezius upperback neck region,forearm flexors innerforearm. When gluteals are targeted a blue anatomical overlay may appear on shorts at buttock contours; avoid broad undifferentiated blue patches. Choose the view exposing target muscles and unmistakable equipment/pose, while preserving the prescribed view if given. Crisp large silhouettes readable at48x48. No photography, no charts, no duplicate/missing/extra limb, no invented machine, no accessory load not specified. Pose must be physically possible and show correct grip, supports and load path.\nCELL1 벤치프레스: POSE: Lying on a flat bench, feet on floor, both hands gripping a barbell above mid chest, elbows bent in a controlled bench press. EXACT EQUIPMENT: flat bench, barbell. BLUE TARGETS: pectoralis major. No other equipment/muscle highlights.\nCELL2 랫풀다운: POSE: Seated under a high cable pulley, thighs under support pads, hands on a wide bar, pulling bar toward upper chest in front of the head. EXACT EQUIPMENT: lat pulldown machine, wide bar. BLUE TARGETS: latissimus dorsi. No other equipment/muscle highlights.\nCELL3 덤벨 컬: POSE: Standing, elbows close to ribs, palms up, curling two dumbbells toward shoulders. EXACT EQUIPMENT: two dumbbells. BLUE TARGETS: biceps brachii. No other equipment/muscle highlights.\nCELL4 레그 익스텐션: POSE: Seated against the back pad of a leg-extension MACHINE, knees aligned with machine pivot, extending both knees against a padded roller in front of lower shins. Side view. EXACT EQUIPMENT: leg extension machine. BLUE TARGETS: quadriceps. No other equipment/muscle highlights."
+    },
+    {
+      "batch_no": "GND-P040-02",
+      "exercise_ids": [
+        "21211d6e-b1c9-4200-807c-ddb8b5ee89aa",
+        "71220804-54f1-4e40-88aa-84663495dc2d",
+        "b8702da2-e5e9-4974-b7d0-f4a8167998f0",
+        "0780c074-69d7-4d25-9a09-c6af6ec757e5"
+      ],
+      "prompt": "Create ONE square 2x2 exercise sprite sheet, preferred2048x2048PNG, absolutely at least1024x1024. Four equal square quadrants in reading order:top-left,top-right,bottom-left,bottom-right. No text,letters,numbers,labels,arrows,borders or grid lines anywhere. Each cell is an independent exercise icon with full body and entire essential equipment INSIDE its quadrant, no overlap between cells; generous 6percent safe margin but subject fills roughly80percent cell. Reference image is STYLE ONLY; replace all four poses/equipment with the specified exercises. Match approved GND anatomical semi-realistic 3D illustration: SAME athletic adult male silver-gray body, dark shorts, dark graphite equipment, uniform very dark navy background #101b24; luminous saturated cyan-blue highlights ONLY the specified target muscles. All other muscles silver-gray, not blue. Muscles are anatomically localized: biceps front upperarm,triceps rear upperarm,lats broad side-back,rhomboids between shoulderblades,pectorals chest,deltoids shoulders,rectus abdominis frontabs,obliques sideabdomen,quadriceps frontthigh,hamstrings backthigh,gastrocnemius calf,trapezius upperback neck region,forearm flexors innerforearm. When gluteals are targeted a blue anatomical overlay may appear on shorts at buttock contours; avoid broad undifferentiated blue patches. Choose the view exposing target muscles and unmistakable equipment/pose, while preserving the prescribed view if given. Crisp large silhouettes readable at48x48. No photography, no charts, no duplicate/missing/extra limb, no invented machine, no accessory load not specified. Pose must be physically possible and show correct grip, supports and load path.\nCELL1 푸시업: POSE: Standard floor push-up, toes and palms on floor, body straight from heels to head, hands beneath shoulders, elbows bent at bottom. Side view. EXACT EQUIPMENT: floor. BLUE TARGETS: pectoralis major. No other equipment/muscle highlights.\nCELL2 시티드 로우: POSE: Seated with knees slightly bent, feet on foot plates, torso upright, pulling a low cable handle toward abdomen without leaning back. EXACT EQUIPMENT: low cable row machine. BLUE TARGETS: latissimus dorsi, rhomboids. No other equipment/muscle highlights.\nCELL3 오버헤드 프레스: POSE: Standing strict barbell overhead press in FRONT of head, feet planted, pressing bar from upper chest overhead with no leg drive. EXACT EQUIPMENT: barbell. BLUE TARGETS: anterior and lateral deltoids. No other equipment/muscle highlights.\nCELL4 플랭크: POSE: Forearms and toes on floor, elbows beneath shoulders, body straight and parallel to floor, holding position. EXACT EQUIPMENT: floor. BLUE TARGETS: rectus abdominis. No other equipment/muscle highlights."
+    },
+    {
+      "batch_no": "GND-P040-03",
+      "exercise_ids": [
+        "95d76fa3-9cfd-4afd-ace5-67428e878c9a",
+        "83acbd5d-9359-4619-b359-2013e3d3b402",
+        "0a1e5d29-2712-4afb-8083-1035af2c21ce",
+        "ce90ab46-1ace-4493-b691-cb0f82400c84"
+      ],
+      "prompt": "Create ONE square 2x2 exercise sprite sheet, preferred2048x2048PNG, absolutely at least1024x1024. Four equal square quadrants in reading order:top-left,top-right,bottom-left,bottom-right. No text,letters,numbers,labels,arrows,borders or grid lines anywhere. Each cell is an independent exercise icon with full body and entire essential equipment INSIDE its quadrant, no overlap between cells; generous 6percent safe margin but subject fills roughly80percent cell. Reference image is STYLE ONLY; replace all four poses/equipment with the specified exercises. Match approved GND anatomical semi-realistic 3D illustration: SAME athletic adult male silver-gray body, dark shorts, dark graphite equipment, uniform very dark navy background #101b24; luminous saturated cyan-blue highlights ONLY the specified target muscles. All other muscles silver-gray, not blue. Muscles are anatomically localized: biceps front upperarm,triceps rear upperarm,lats broad side-back,rhomboids between shoulderblades,pectorals chest,deltoids shoulders,rectus abdominis frontabs,obliques sideabdomen,quadriceps frontthigh,hamstrings backthigh,gastrocnemius calf,trapezius upperback neck region,forearm flexors innerforearm. When gluteals are targeted a blue anatomical overlay may appear on shorts at buttock contours; avoid broad undifferentiated blue patches. Choose the view exposing target muscles and unmistakable equipment/pose, while preserving the prescribed view if given. Crisp large silhouettes readable at48x48. No photography, no charts, no duplicate/missing/extra limb, no invented machine, no accessory load not specified. Pose must be physically possible and show correct grip, supports and load path.\nCELL1 덤벨 플라이: POSE: Lying on a FLAT bench, holding one dumbbell in each hand, arms opened wide with softly bent elbows at chest height. Show the flat bench unmistakably. Three-quarter side view. EXACT EQUIPMENT: flat bench, two dumbbells. BLUE TARGETS: pectoralis major. No other equipment/muscle highlights.\nCELL2 풀업: POSE: Hanging from a pull-up bar with overhand grip, lifting chin above bar, feet off floor, back view. EXACT EQUIPMENT: pull-up bar. BLUE TARGETS: latissimus dorsi. No other equipment/muscle highlights.\nCELL3 덤벨 킥백: POSE: Torso hinged forward, upper arms along torso, extending elbows backward with dumbbells. Use equipment: two dumbbells. Full body and equipment visible. EXACT EQUIPMENT: two dumbbells. BLUE TARGETS: triceps brachii. No other equipment/muscle highlights.\nCELL4 시티드 레그 컬: POSE: Seated with thighs secured by pad, heels over ankle roller, bending BOTH knees to pull roller downward under seat. EXACT EQUIPMENT: seated leg curl machine. BLUE TARGETS: hamstrings. No other equipment/muscle highlights.\nCRITICAL GEOMETRY: Treat each quadrant as a HARD clipped canvas. No part of the person, barbell plates, cables, pulleys or machine may cross the horizontal/vertical50percent midlines or outer canvas edges. Shrink complete person+apparatus until all fit with at least6percent padding on ALL four sides of EACH cell. Give a clear empty center gutter. Particularly ensure overhead weights and tall machine upper frames never protrude beyond their own quadrant. No painted grid/borders."
+    },
+    {
+      "batch_no": "GND-P040-04",
+      "exercise_ids": [
+        "da6544dc-60da-4a88-8f15-f95aa0c1b542",
+        "64d460a4-f41c-4c95-9beb-a78f2c7d6ea2",
+        "3f4dcd4c-028d-4430-867b-a59f4ab6bf71",
+        "d3887e12-d386-4fe4-b41f-219a8c0ab141"
+      ],
+      "prompt": "Create ONE square 2x2 exercise sprite sheet, preferred2048x2048PNG, absolutely at least1024x1024. Four equal square quadrants in reading order:top-left,top-right,bottom-left,bottom-right. No text,letters,numbers,labels,arrows,borders or grid lines anywhere. Each cell is an independent exercise icon with full body and entire essential equipment INSIDE its quadrant, no overlap between cells; generous 6percent safe margin but subject fills roughly80percent cell. Reference image is STYLE ONLY; replace all four poses/equipment with the specified exercises. Match approved GND anatomical semi-realistic 3D illustration: SAME athletic adult male silver-gray body, dark shorts, dark graphite equipment, uniform very dark navy background #101b24; luminous saturated cyan-blue highlights ONLY the specified target muscles. All other muscles silver-gray, not blue. Muscles are anatomically localized: biceps front upperarm,triceps rear upperarm,lats broad side-back,rhomboids between shoulderblades,pectorals chest,deltoids shoulders,rectus abdominis frontabs,obliques sideabdomen,quadriceps frontthigh,hamstrings backthigh,gastrocnemius calf,trapezius upperback neck region,forearm flexors innerforearm. When gluteals are targeted a blue anatomical overlay may appear on shorts at buttock contours; avoid broad undifferentiated blue patches. Choose the view exposing target muscles and unmistakable equipment/pose, while preserving the prescribed view if given. Crisp large silhouettes readable at48x48. No photography, no charts, no duplicate/missing/extra limb, no invented machine, no accessory load not specified. Pose must be physically possible and show correct grip, supports and load path.\nCELL1 딥스: POSE: On parallel dip bars, feet off floor, elbows bent, torso leaning slightly forward between bars. EXACT EQUIPMENT: parallel bars. BLUE TARGETS: pectoralis major, triceps brachii. No other equipment/muscle highlights.\nCELL2 인버티드 로우: POSE: Body straight beneath a fixed low bar, heels on floor, pulling chest up toward bar. Use equipment: fixed horizontal bar. Full body and equipment visible. EXACT EQUIPMENT: fixed horizontal bar. BLUE TARGETS: latissimus dorsi. No other equipment/muscle highlights.\nCELL3 덤벨 프론트 레이즈: POSE: Standing, raising load FORWARD to shoulder height with softly bent elbows. Use equipment: two dumbbells. Full body and equipment visible. EXACT EQUIPMENT: two dumbbells. BLUE TARGETS: anterior deltoids. No other equipment/muscle highlights.\nCELL4 스쿼트: POSE: Barbell back squat, standing with a barbell resting on upper back, feet shoulder-width apart, hips and knees bent in a squat. EXACT EQUIPMENT: barbell. BLUE TARGETS: quadriceps, gluteus maximus. No other equipment/muscle highlights.\nCRITICAL GEOMETRY: Treat each quadrant as a HARD clipped canvas. No part of the person, barbell plates, cables, pulleys or machine may cross the horizontal/vertical50percent midlines or outer canvas edges. Shrink complete person+apparatus until all fit with at least6percent padding on ALL four sides of EACH cell. Give a clear empty center gutter. Particularly ensure overhead weights and tall machine upper frames never protrude beyond their own quadrant. No painted grid/borders."
+    },
+    {
+      "batch_no": "GND-P040-05",
+      "exercise_ids": [
+        "3d95c8df-65c3-4be0-a349-3fc805cc8da8",
+        "4eb0f324-780f-4945-a37f-5be3c6f5b585",
+        "d40e1e72-997f-47e0-a14f-5caed643bc10",
+        "8fade715-13eb-457d-b48e-6f1ce0a9e597"
+      ],
+      "prompt": "Create ONE square 2x2 exercise sprite sheet, preferred2048x2048PNG, absolutely at least1024x1024. Four equal square quadrants in reading order:top-left,top-right,bottom-left,bottom-right. No text,letters,numbers,labels,arrows,borders or grid lines anywhere. Each cell is an independent exercise icon with full body and entire essential equipment INSIDE its quadrant, no overlap between cells; generous 6percent safe margin but subject fills roughly80percent cell. Reference image is STYLE ONLY; replace all four poses/equipment with the specified exercises. Match approved GND anatomical semi-realistic 3D illustration: SAME athletic adult male silver-gray body, dark shorts, dark graphite equipment, uniform very dark navy background #101b24; luminous saturated cyan-blue highlights ONLY the specified target muscles. All other muscles silver-gray, not blue. Muscles are anatomically localized: biceps front upperarm,triceps rear upperarm,lats broad side-back,rhomboids between shoulderblades,pectorals chest,deltoids shoulders,rectus abdominis frontabs,obliques sideabdomen,quadriceps frontthigh,hamstrings backthigh,gastrocnemius calf,trapezius upperback neck region,forearm flexors innerforearm. When gluteals are targeted a blue anatomical overlay may appear on shorts at buttock contours; avoid broad undifferentiated blue patches. Choose the view exposing target muscles and unmistakable equipment/pose, while preserving the prescribed view if given. Crisp large silhouettes readable at48x48. No photography, no charts, no duplicate/missing/extra limb, no invented machine, no accessory load not specified. Pose must be physically possible and show correct grip, supports and load path.\nCELL1 덤벨 풀오버: POSE: Lying lengthwise on a flat bench, holding ONE dumbbell with both hands, moving weight in an arc behind head with slightly bent elbows. EXACT EQUIPMENT: flat bench, one dumbbell. BLUE TARGETS: latissimus dorsi, pectoralis major. No other equipment/muscle highlights.\nCELL2 매달리기: POSE: Dead hang from horizontal bar, arms fully extended overhead, feet off floor, not performing a pull-up. EXACT EQUIPMENT: pull-up bar. BLUE TARGETS: forearm flexors. No other equipment/muscle highlights.\nCELL3 케이블 푸시다운: POSE: Standing facing high cable pulley, elbows kept at sides, pressing a straight cable bar downward by extending elbows. EXACT EQUIPMENT: high cable machine, straight bar attachment. BLUE TARGETS: triceps brachii. No other equipment/muscle highlights.\nCELL4 스탠딩 카프 레이즈: POSE: Standing with knees straight on a step, raising heels high onto forefeet, no external weights. EXACT EQUIPMENT: step. BLUE TARGETS: gastrocnemius. No other equipment/muscle highlights.\nCRITICAL GEOMETRY: Treat each quadrant as a HARD clipped canvas. No part of the person, barbell plates, cables, pulleys or machine may cross the horizontal/vertical50percent midlines or outer canvas edges. Shrink complete person+apparatus until all fit with at least6percent padding on ALL four sides of EACH cell. Give a clear empty center gutter. Particularly ensure overhead weights and tall machine upper frames never protrude beyond their own quadrant. No painted grid/borders."
+    },
+    {
+      "batch_no": "GND-P040-06",
+      "exercise_ids": [
+        "197fb122-f10f-431f-8f54-88d1ec8becd0",
+        "2058f26d-3a03-414f-ad3d-11b79cd5d8b7",
+        "8cc9270d-c335-4d59-b4d9-a265cc5e1c65",
+        "639ad98b-b4a1-47f7-a382-8dd9e98035b0"
+      ],
+      "prompt": "Create ONE square 2x2 exercise sprite sheet, preferred2048x2048PNG, absolutely at least1024x1024. Four equal square quadrants in reading order:top-left,top-right,bottom-left,bottom-right. No text,letters,numbers,labels,arrows,borders or grid lines anywhere. Each cell is an independent exercise icon with full body and entire essential equipment INSIDE its quadrant, no overlap between cells; generous 6percent safe margin but subject fills roughly80percent cell. Reference image is STYLE ONLY; replace all four poses/equipment with the specified exercises. Match approved GND anatomical semi-realistic 3D illustration: SAME athletic adult male silver-gray body, dark shorts, dark graphite equipment, uniform very dark navy background #101b24; luminous saturated cyan-blue highlights ONLY the specified target muscles. All other muscles silver-gray, not blue. Muscles are anatomically localized: biceps front upperarm,triceps rear upperarm,lats broad side-back,rhomboids between shoulderblades,pectorals chest,deltoids shoulders,rectus abdominis frontabs,obliques sideabdomen,quadriceps frontthigh,hamstrings backthigh,gastrocnemius calf,trapezius upperback neck region,forearm flexors innerforearm. When gluteals are targeted a blue anatomical overlay may appear on shorts at buttock contours; avoid broad undifferentiated blue patches. Choose the view exposing target muscles and unmistakable equipment/pose, while preserving the prescribed view if given. Crisp large silhouettes readable at48x48. No photography, no charts, no duplicate/missing/extra limb, no invented machine, no accessory load not specified. Pose must be physically possible and show correct grip, supports and load path.\nCELL1 펙덱 플라이 머신: POSE: Seated upright in a pec-deck machine, elbows softly bent, bringing machine handles together in front of chest. EXACT EQUIPMENT: pec-deck machine. BLUE TARGETS: pectoralis major. No other equipment/muscle highlights.\nCELL2 데드리프트: POSE: Conventional barbell deadlift from floor, feet hip-width, hands outside knees, hips hinged and back neutral, bar close to shins. EXACT EQUIPMENT: barbell. BLUE TARGETS: gluteus maximus, hamstrings. No other equipment/muscle highlights.\nCELL3 페이스풀: POSE: Standing facing a cable machine, holding a rope attachment with both hands, pulling rope ends to either side of the face with elbows elevated. EXACT EQUIPMENT: cable machine, rope attachment. BLUE TARGETS: posterior deltoids. No other equipment/muscle highlights.\nCELL4 사이드 플랭크: POSE: Side plank on one forearm and outer edge of feet, elbow under shoulder, hips lifted, body in a straight line. EXACT EQUIPMENT: floor. BLUE TARGETS: obliques. No other equipment/muscle highlights.\nCRITICAL GEOMETRY: Treat each quadrant as a HARD clipped canvas. No part of the person, barbell plates, cables, pulleys or machine may cross the horizontal/vertical50percent midlines or outer canvas edges. Shrink complete person+apparatus until all fit with at least6percent padding on ALL four sides of EACH cell. Give a clear empty center gutter. Particularly ensure overhead weights and tall machine upper frames never protrude beyond their own quadrant. No painted grid/borders."
+    },
+    {
+      "batch_no": "GND-P040-07",
+      "exercise_ids": [
+        "616e417a-8600-41f7-9c98-93ac4f3f68bc",
+        "fed25eab-0208-4899-9282-81a71d73c172",
+        "e5fec7fd-111d-4c75-9d93-60fb89293853",
+        "021145a7-de02-4e90-b5a5-c44a1ad5f34b"
+      ],
+      "prompt": "Create ONE square 2x2 exercise sprite sheet, preferred2048x2048PNG, absolutely at least1024x1024. Four equal square quadrants in reading order:top-left,top-right,bottom-left,bottom-right. No text,letters,numbers,labels,arrows,borders or grid lines anywhere. Each cell is an independent exercise icon with full body and entire essential equipment INSIDE its quadrant, no overlap between cells; generous 6percent safe margin but subject fills roughly80percent cell. Reference image is STYLE ONLY; replace all four poses/equipment with the specified exercises. Match approved GND anatomical semi-realistic 3D illustration: SAME athletic adult male silver-gray body, dark shorts, dark graphite equipment, uniform very dark navy background #101b24; luminous saturated cyan-blue highlights ONLY the specified target muscles. All other muscles silver-gray, not blue. Muscles are anatomically localized: biceps front upperarm,triceps rear upperarm,lats broad side-back,rhomboids between shoulderblades,pectorals chest,deltoids shoulders,rectus abdominis frontabs,obliques sideabdomen,quadriceps frontthigh,hamstrings backthigh,gastrocnemius calf,trapezius upperback neck region,forearm flexors innerforearm. When gluteals are targeted a blue anatomical overlay may appear on shorts at buttock contours; avoid broad undifferentiated blue patches. Choose the view exposing target muscles and unmistakable equipment/pose, while preserving the prescribed view if given. Crisp large silhouettes readable at48x48. No photography, no charts, no duplicate/missing/extra limb, no invented machine, no accessory load not specified. Pose must be physically possible and show correct grip, supports and load path.\nCELL1 시티드 덤벨 숄더 프레스: POSE: Seated upright on a bench with upright back support, feet on floor, pressing TWO DUMBBELLS above shoulders, elbows under wrists. Front three-quarter view. EXACT EQUIPMENT: upright bench, two dumbbells. BLUE TARGETS: anterior and lateral deltoids. No other equipment/muscle highlights.\nCELL2 바벨 컬: POSE: Standing, elbows beside ribs, bending elbows to curl load upward. Palms face upward. Use equipment: barbell. Full body and equipment visible. EXACT EQUIPMENT: barbell. BLUE TARGETS: biceps brachii. No other equipment/muscle highlights.\nCELL3 수평 레그 프레스: POSE: Seated upright in horizontal leg press machine, feet on platform in front, extending hips and knees to push platform horizontally. EXACT EQUIPMENT: horizontal leg press machine. BLUE TARGETS: quadriceps, gluteus maximus. No other equipment/muscle highlights.\nCELL4 크런치: POSE: Lying on back on floor, knees bent and feet planted, lifting shoulder blades slightly off floor without a full sit-up. EXACT EQUIPMENT: floor. BLUE TARGETS: rectus abdominis. No other equipment/muscle highlights.\nCRITICAL GEOMETRY: Treat each quadrant as a HARD clipped canvas. No part of the person, barbell plates, cables, pulleys or machine may cross the horizontal/vertical50percent midlines or outer canvas edges. Shrink complete person+apparatus until all fit with at least6percent padding on ALL four sides of EACH cell. Give a clear empty center gutter. Particularly ensure overhead weights and tall machine upper frames never protrude beyond their own quadrant. No painted grid/borders."
+    },
+    {
+      "batch_no": "GND-P040-08",
+      "exercise_ids": [
+        "7dcb673c-adf7-477a-81bf-6f455d798622",
+        "4ea5b8a7-1f1c-4bf1-987c-5291a83a4604",
+        "edb26b13-e26f-4b6e-925a-cf4dfeda06c2",
+        "7f28c50b-fcff-4654-99cb-e9af890ab104"
+      ],
+      "prompt": "Create ONE square 2x2 exercise sprite sheet, preferred2048x2048PNG, absolutely at least1024x1024. Four equal square quadrants in reading order:top-left,top-right,bottom-left,bottom-right. No text,letters,numbers,labels,arrows,borders or grid lines anywhere. Each cell is an independent exercise icon with full body and entire essential equipment INSIDE its quadrant, no overlap between cells; generous 6percent safe margin but subject fills roughly80percent cell. Reference image is STYLE ONLY; replace all four poses/equipment with the specified exercises. Match approved GND anatomical semi-realistic 3D illustration: SAME athletic adult male silver-gray body, dark shorts, dark graphite equipment, uniform very dark navy background #101b24; luminous saturated cyan-blue highlights ONLY the specified target muscles. All other muscles silver-gray, not blue. Muscles are anatomically localized: biceps front upperarm,triceps rear upperarm,lats broad side-back,rhomboids between shoulderblades,pectorals chest,deltoids shoulders,rectus abdominis frontabs,obliques sideabdomen,quadriceps frontthigh,hamstrings backthigh,gastrocnemius calf,trapezius upperback neck region,forearm flexors innerforearm. When gluteals are targeted a blue anatomical overlay may appear on shorts at buttock contours; avoid broad undifferentiated blue patches. Choose the view exposing target muscles and unmistakable equipment/pose, while preserving the prescribed view if given. Crisp large silhouettes readable at48x48. No photography, no charts, no duplicate/missing/extra limb, no invented machine, no accessory load not specified. Pose must be physically possible and show correct grip, supports and load path.\nCELL1 덤벨 슈러그: POSE: Standing with arms straight down holding load, elevating shoulders toward ears without bending elbows. Use equipment: two dumbbells. Full body and equipment visible. EXACT EQUIPMENT: two dumbbells. BLUE TARGETS: upper trapezius. No other equipment/muscle highlights.\nCELL2 힙 브릿지: POSE: Lying on back on floor, knees bent, feet planted, lifting hips while shoulders stay on floor. EXACT EQUIPMENT: floor. BLUE TARGETS: gluteus maximus. No other equipment/muscle highlights.\nCELL3 러시안 트위스트: POSE: Seated on floor with knees bent, torso leaned back, both hands together rotating torso to one side, no external weight. EXACT EQUIPMENT: floor. BLUE TARGETS: obliques. No other equipment/muscle highlights.\nCELL4 러닝: POSE: Running on level ground with an unmistakable running stride, bent elbows, no treadmill or machine. EXACT EQUIPMENT: floor. BLUE TARGETS: quadriceps. No other equipment/muscle highlights.\nCRITICAL GEOMETRY: Treat each quadrant as a HARD clipped canvas. No part of the person, barbell plates, cables, pulleys or machine may cross the horizontal/vertical50percent midlines or outer canvas edges. Shrink complete person+apparatus until all fit with at least6percent padding on ALL four sides of EACH cell. Give a clear empty center gutter. Particularly ensure overhead weights and tall machine upper frames never protrude beyond their own quadrant. No painted grid/borders."
+    },
+    {
+      "batch_no": "GND-P040-09",
+      "exercise_ids": [
+        "e8f0c354-f481-41f3-b32b-ad11b37a5abe",
+        "66af6e45-aef2-466a-8a3e-b90505c2a0e6",
+        "f74f365f-52e1-4033-a1bd-b0c34c7cc5dc",
+        "5ae60799-7446-4937-b75a-dbd742ea38b8"
+      ],
+      "prompt": "Create ONE square 2x2 exercise sprite sheet, preferred2048x2048PNG, absolutely at least1024x1024. Four equal square quadrants in reading order:top-left,top-right,bottom-left,bottom-right. No text,letters,numbers,labels,arrows,borders or grid lines anywhere. Each cell is an independent exercise icon with full body and entire essential equipment INSIDE its quadrant, no overlap between cells; generous 6percent safe margin but subject fills roughly80percent cell. Reference image is STYLE ONLY; replace all four poses/equipment with the specified exercises. Match approved GND anatomical semi-realistic 3D illustration: SAME athletic adult male silver-gray body, dark shorts, dark graphite equipment, uniform very dark navy background #101b24; luminous saturated cyan-blue highlights ONLY the specified target muscles. All other muscles silver-gray, not blue. Muscles are anatomically localized: biceps front upperarm,triceps rear upperarm,lats broad side-back,rhomboids between shoulderblades,pectorals chest,deltoids shoulders,rectus abdominis frontabs,obliques sideabdomen,quadriceps frontthigh,hamstrings backthigh,gastrocnemius calf,trapezius upperback neck region,forearm flexors innerforearm. When gluteals are targeted a blue anatomical overlay may appear on shorts at buttock contours; avoid broad undifferentiated blue patches. Choose the view exposing target muscles and unmistakable equipment/pose, while preserving the prescribed view if given. Crisp large silhouettes readable at48x48. No photography, no charts, no duplicate/missing/extra limb, no invented machine, no accessory load not specified. Pose must be physically possible and show correct grip, supports and load path.\nCELL1 덤벨 해머 컬: POSE: Standing, elbows beside ribs, curling two dumbbells with neutral thumb-up grip maintained throughout. EXACT EQUIPMENT: two dumbbells. BLUE TARGETS: brachialis, brachioradialis. No other equipment/muscle highlights.\nCELL2 스텝업: POSE: One foot on stable box, stepping upward by extending planted leg while other foot rises from floor. EXACT EQUIPMENT: box. BLUE TARGETS: quadriceps, gluteus maximus. No other equipment/muscle highlights.\nCELL3 복근 롤아웃: POSE: Kneeling on floor with both hands gripping an ab wheel, rolling wheel forward while extending hips and arms without arching back. EXACT EQUIPMENT: ab wheel. BLUE TARGETS: rectus abdominis. No other equipment/muscle highlights.\nCELL4 로잉: POSE: Seated on a rowing ergometer with feet strapped into foot plates, knees extending, pulling handle to lower ribs; entire rowing machine visible. EXACT EQUIPMENT: rowing ergometer. BLUE TARGETS: latissimus dorsi, quadriceps. No other equipment/muscle highlights.\nCRITICAL GEOMETRY: Treat each quadrant as a HARD clipped canvas. No part of the person, barbell plates, cables, pulleys or machine may cross the horizontal/vertical50percent midlines or outer canvas edges. Shrink complete person+apparatus until all fit with at least6percent padding on ALL four sides of EACH cell. Give a clear empty center gutter. Particularly ensure overhead weights and tall machine upper frames never protrude beyond their own quadrant. No painted grid/borders."
+    },
+    {
+      "batch_no": "GND-P040-10",
+      "exercise_ids": [
+        "45ecb917-61a7-4987-b239-3c6c25639ed2",
+        "4af3f632-e3f7-49b7-a232-86ba82a8e21f",
+        "b0c305d6-338e-400f-9dfd-5ae6efb63d9a",
+        "63c19460-6906-442e-9fb9-ed3ddba1c049"
+      ],
+      "prompt": "Create ONE square 2x2 exercise sprite sheet, preferred2048x2048PNG, absolutely at least1024x1024. Four equal square quadrants in reading order:top-left,top-right,bottom-left,bottom-right. No text,letters,numbers,labels,arrows,borders or grid lines anywhere. Each cell is an independent exercise icon with full body and entire essential equipment INSIDE its quadrant, no overlap between cells; generous 6percent safe margin but subject fills roughly80percent cell. Reference image is STYLE ONLY; replace all four poses/equipment with the specified exercises. Match approved GND anatomical semi-realistic 3D illustration: SAME athletic adult male silver-gray body, dark shorts, dark graphite equipment, uniform very dark navy background #101b24; luminous saturated cyan-blue highlights ONLY the specified target muscles. All other muscles silver-gray, not blue. Muscles are anatomically localized: biceps front upperarm,triceps rear upperarm,lats broad side-back,rhomboids between shoulderblades,pectorals chest,deltoids shoulders,rectus abdominis frontabs,obliques sideabdomen,quadriceps frontthigh,hamstrings backthigh,gastrocnemius calf,trapezius upperback neck region,forearm flexors innerforearm. When gluteals are targeted a blue anatomical overlay may appear on shorts at buttock contours; avoid broad undifferentiated blue patches. Choose the view exposing target muscles and unmistakable equipment/pose, while preserving the prescribed view if given. Crisp large silhouettes readable at48x48. No photography, no charts, no duplicate/missing/extra limb, no invented machine, no accessory load not specified. Pose must be physically possible and show correct grip, supports and load path.\nCELL1 사이드 런지: POSE: Wide lateral step, bending stepping-leg knee while other leg remains straight. Use equipment: floor. Full body and equipment visible. EXACT EQUIPMENT: floor. BLUE TARGETS: quadriceps, gluteus maximus. No other equipment/muscle highlights.\nCELL2 마운틴 클라이머: POSE: High plank on palms and toes, drawing one knee toward chest with opposite leg extended. EXACT EQUIPMENT: floor. BLUE TARGETS: rectus abdominis. No other equipment/muscle highlights.\nCELL3 줄넘기: POSE: Standing in mid rope skip, holding a rope handle in each hand with a continuous rope arc under feet. EXACT EQUIPMENT: jump rope. BLUE TARGETS: gastrocnemius. No other equipment/muscle highlights.\nCELL4 트레드밀: POSE: Running on a motorized treadmill belt, upright body, natural alternating leg stride and bent arms. Entire treadmill is inside the cell. EXACT EQUIPMENT: treadmill. BLUE TARGETS: quadriceps. No other equipment/muscle highlights.\nCRITICAL GEOMETRY: Treat each quadrant as a HARD clipped canvas. No part of the person, barbell plates, cables, pulleys or machine may cross the horizontal/vertical50percent midlines or outer canvas edges. Shrink complete person+apparatus until all fit with at least6percent padding on ALL four sides of EACH cell. Give a clear empty center gutter. Particularly ensure overhead weights and tall machine upper frames never protrude beyond their own quadrant. No painted grid/borders."
+    }
+  ],
+  "definition_audit_notes": [
+    "Unselected 덤벨 스컬 크러셔 has biceps-curl draft mismatch; record for later review without changing original74-list."
+  ],
+  "retry_policy": "Only failed exercise individually, maximum2 targeted retries in this pilot; never regenerate a whole sheet. Exhausted retries remain FAIL.",
+  "prompt_revision_note": "After sheets01/02 boundary-clipping evidence, padding clarified for03-10 before their initial calls."
+}

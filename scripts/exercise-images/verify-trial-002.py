@@ -19,7 +19,7 @@ def main():
         assert failed;count+=1
     b=json.loads((ROOT/'data/exercise-image-trial-002.json').read_text(encoding='utf-8'))
     r=json.loads((ROOT/'data/exercise-image-trial-002-qa.json').read_text(encoding='utf-8'))
-    assert sha(ROOT/'data/exercise-image-manifest.json')==b['parent_manifest_sha256'];count+=1
+    assert mod.parent_manifest_matches(b['parent_manifest_sha256']);count+=1
     assert len(b['exercises'])==4 and len({x['visual_family'] for x in b['exercises']})==4;count+=1
     assert sha(ROOT/r['source_file'])==r['source_sha256'];count+=1
     with Image.open(ROOT/r['source_file']) as im: assert list(im.size)==r['source_resolution']

@@ -11,6 +11,14 @@ from PIL import Image, ImageCms
 ROOT=Path(__file__).resolve().parents[2]
 OUT=ROOT/'output/exercise-images/trial-002'
 def sha(p): return hashlib.sha256(p.read_bytes()).hexdigest()
+def parent_manifest_matches(expected):
+    path=ROOT/'data/exercise-image-manifest.json'
+    if sha(path)==expected:return True
+    # Pilot metadata is additive. Still prove every original field unchanged.
+    data=json.loads(path.read_text(encoding='utf-8'))
+    for row in data['exercises']:row.pop('pilot_040',None)
+    text=json.dumps(data,ensure_ascii=False,indent=2)+'\n'
+    return any(hashlib.sha256(value.encode('utf-8')).hexdigest()==expected for value in [text,text.replace('\n','\r\n')])
 def boxes(width,height):
     return [(round(c*width/2),round(r*height/2),round((c+1)*width/2),round((r+1)*height/2)) for r in range(2) for c in range(2)]
 def scale_cell(cell):
@@ -21,7 +29,7 @@ def main():
     parser=argparse.ArgumentParser();parser.add_argument('--source',required=True);args=parser.parse_args()
     b=json.loads((ROOT/'data/exercise-image-trial-002.json').read_text(encoding='utf-8'))
     assert len(b['exercises'])==4 and len({r['visual_family'] for r in b['exercises']})==4
-    assert sha(ROOT/'data/exercise-image-manifest.json')==b['parent_manifest_sha256'], 'Parent manifest changed'
+    assert parent_manifest_matches(b['parent_manifest_sha256']), 'Parent manifest definitions/history changed'
     for folder in ['sheets','cropped','reports']: (OUT/folder).mkdir(parents=True,exist_ok=True)
     source=Path(args.source); dest=OUT/'sheets/GND-TRIAL-002.png'
     if dest.exists() and sha(dest)!=sha(source): raise ValueError('Different trial image: overwrite refused')
