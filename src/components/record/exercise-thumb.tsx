@@ -31,13 +31,20 @@ export function ExerciseThumbTile({
   name: string;
   /** 불러오기 실패 시 부위 아이콘용. 없으면(프로그램 화면) 실패 시 칸을 숨긴다 */
   bodyPart?: BodyPart;
-  /** 목록 48px(기본) · 기록 화면 운동 카드 40px · 운동 중 화면 72px */
-  size?: 72 | 48 | 40;
+  /** 목록 48px(기본) · 기록 화면 운동 카드 40px · 운동 중 화면 72px · 인터벌 화면 160px */
+  size?: 160 | 72 | 48 | 40;
 }) {
   const broken = useContext(LocalTrialFailureContext);
   const src = localTrialImage(name, broken) ?? (id ? exerciseImageSrc(id) : undefined);
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
-  const box = size === 72 ? "h-[72px] w-[72px]" : size === 48 ? "h-12 w-12" : "h-10 w-10";
+  const box =
+    size === 160
+      ? "h-40 w-40"
+      : size === 72
+        ? "h-[72px] w-[72px]"
+        : size === 48
+          ? "h-12 w-12"
+          : "h-10 w-10";
 
   if (!src) {
     return <span aria-hidden className={`${box} flex-none rounded-lg bg-surface-2`} />;

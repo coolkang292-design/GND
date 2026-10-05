@@ -3,6 +3,8 @@
 import { intervalCheer } from "@/lib/domain/interval-cheer";
 import { intervalCueAt } from "@/lib/domain/interval-cue";
 import type { TabataMinutes } from "@/lib/domain/tabata";
+import { exerciseImageSrc } from "@/lib/domain/exercise-images";
+import { ExerciseThumbTile } from "./exercise-thumb";
 
 /**
  * 인터벌 실행 화면 (사용자 지시 2026-08-13).
@@ -25,6 +27,12 @@ export type IntervalSessionOverlayProps = {
   open: boolean;
   /** 4종목. 순서가 라운드 순서다 */
   exerciseNames: readonly string[];
+  /**
+   * `exerciseNames`와 같은 순서의 카탈로그 운동 ID (사용자 지시 2026-10-05 — 인터벌 중에도
+   * 그림). 그림 연결표에 없는 ID(그림 없는 운동·직접 만든 운동)는 빈 자리가 된다.
+   * 넘기지 않으면 그림 자리 자체가 없다(예전 화면 그대로).
+   */
+  exerciseIds?: readonly string[];
   minutes: TabataMinutes;
   /** 음원의 현재 위치(초). 부모가 `audio.currentTime`을 그대로 넘긴다 */
   elapsedSeconds: number;
@@ -36,6 +44,7 @@ export type IntervalSessionOverlayProps = {
 export function IntervalSessionOverlay({
   open,
   exerciseNames,
+  exerciseIds,
   minutes,
   elapsedSeconds,
   paused,
@@ -62,6 +71,20 @@ export function IntervalSessionOverlay({
           cue.phase === "prep" ? cue.nextExerciseIndex : cue.nextExerciseIndex,
         )
       : null;
+  /*
+    그림은 **지금 할 동작**이다 — 운동 중이면 지금 종목, 휴식·준비 중이면 다음 종목.
+    쉬는 10초 동안 다음 자세를 미리 본다. 끝나면 없다.
+  */
+  const imageIndex =
+    cue.phase === "work"
+      ? cue.exerciseIndex
+      : cue.phase === "rest" || cue.phase === "prep"
+        ? cue.nextExerciseIndex
+        : null;
+  const imageId =
+    imageIndex === null ? undefined : exerciseIds?.[imageIndex];
+  const imageName = nameAt(imageIndex);
+  const imageSrc = imageId ? exerciseImageSrc(imageId) : undefined;
   const cheer = intervalCheer(cue);
   const roundLabel =
     cue.phase === "done"
@@ -118,6 +141,23 @@ export function IntervalSessionOverlay({
       </header>
 
       <div className="flex flex-1 flex-col items-center justify-center gap-3">
+        {/*
+          종목 그림 160px (사용자 지시 2026-10-05). 그림이 없는 종목이어도 **자리는
+          남긴다** — 20초마다 종목이 바뀌는데 그림 유무로 아래 카운트다운이 위아래로
+          들썩이면 그게 제일 먼저 거슬린다. 끝난 화면과 그림을 안 넘긴 화면에는 없다.
+        */}
+        {exerciseIds && cue.phase !== "done" && (
+          imageSrc && imageId && imageName ? (
+            <ExerciseThumbTile
+              key={imageId}
+              id={imageId}
+              name={imageName}
+              size={160}
+            />
+          ) : (
+            <div aria-hidden data-testid="interval-image-slot" className="h-40 w-40" />
+          )
+        )}
         {/* 숫자가 빠진 자리를 종목 이름이 채운다 — 이제 이게 화면의 주인공이다 */}
         <p
           data-testid="interval-phase"

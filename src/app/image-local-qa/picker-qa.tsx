@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { ActiveSessionOverlay } from "@/components/record/active-session-overlay";
 import { ExerciseCard } from "@/components/record/exercise-card";
+import { IntervalSessionOverlay } from "@/components/record/interval-session-overlay";
 import { IntervalProgramDetail, ProgramDetail } from "@/components/programs/program-catalog";
 import { OFFICIAL_PROGRAMS, isIntervalProgram, isLadderProgram } from "@/lib/domain/official-programs";
 import { amountFields } from "@/lib/domain/set-input";
@@ -17,6 +18,7 @@ import { LocalTrialFailureContext } from "@/lib/domain/exercise-image-local-tria
  * (2026-10-05 클로드 추가. 카드는 계획 모드로 그려 완료 체크가 없다).
  * 「운동 중 화면」 버튼은 고른 첫 운동을 지금 운동, 둘째를 다음 운동으로 하는 운동 중
  * 화면(①제목·③다음 운동 그림)을 띄운다. 값은 가짜이고 아무 데도 저장하지 않는다.
+ * 「인터벌」 버튼은 고른 운동(최대 4개)으로 인터벌 화면을 운동 중(20초)·휴식(38초) 시점에 띄운다.
  * `?program=<key>`면 공식 프로그램 상세(종목 그림)를 그린다 — 실제 경로는 Supabase가 있어야 열린다.
  */
 function toLocal(item: CatalogExercise): LocalExercise {
@@ -44,6 +46,7 @@ export function LocalImagePickerQA({ catalog, broken, program }: { catalog: Cata
   const [open, setOpen] = useState(true);
   const [picked, setPicked] = useState<CatalogExercise[]>([]);
   const [overlay, setOverlay] = useState<"input" | "rest" | null>(null);
+  const [intervalAt, setIntervalAt] = useState<number | null>(null);
   const noop = () => {};
   const imageOf = (item: CatalogExercise | undefined) => {
     const id = item ? imageIdForAddedExercise({ name: item.name, isCustom: item.is_custom }) : undefined;
@@ -60,6 +63,10 @@ export function LocalImagePickerQA({ catalog, broken, program }: { catalog: Cata
       <button className="rounded border px-2" onClick={() => setOverlay("input")}>운동 중 화면(입력)</button>
       <button className="rounded border px-2" onClick={() => setOverlay("rest")}>운동 중 화면(휴식)</button>
     </p>}
+    {now && <p className="mt-2 flex gap-2">
+      <button className="rounded border px-2" onClick={() => setIntervalAt(20)}>인터벌(운동 중)</button>
+      <button className="rounded border px-2" onClick={() => setIntervalAt(38)}>인터벌(휴식)</button>
+    </p>}
     <LocalTrialFailureContext.Provider value={broken}>
       <div className="mt-3 flex flex-col gap-3">
         {picked.map((item, i) => (
@@ -68,6 +75,11 @@ export function LocalImagePickerQA({ catalog, broken, program }: { catalog: Cata
             onRemoveExercise={noop} planning />
         ))}
       </div>
+      {now && intervalAt !== null && (
+        <IntervalSessionOverlay open exerciseNames={picked.slice(0, 4).map(item => item.name)}
+          exerciseIds={picked.slice(0, 4).map(item => item.id)} minutes={4} elapsedSeconds={intervalAt}
+          paused={false} onTogglePause={noop} onStop={() => setIntervalAt(null)} />
+      )}
       {now && overlay && (
         <ActiveSessionOverlay open mode={overlay} elapsedLabel="12:34" exerciseName={now.name} exerciseImage={imageOf(now)}
           progress={{ completed: 1, total: 4, percent: 25 }} setProgress={{ done: 1, total: 3, remaining: 2 }}

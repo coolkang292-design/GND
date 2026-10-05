@@ -2,6 +2,7 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { seedExerciseIdByName } from "@/lib/domain/exercise-images";
 import { IntervalSessionOverlay } from "./interval-session-overlay";
 
 afterEach(cleanup);
@@ -238,5 +239,49 @@ describe("IntervalSessionOverlay", () => {
       "9라운드 / 32라운드",
     );
     expect(screen.getByTestId("interval-phase").textContent).toBe("맨몸 스쿼트");
+  });
+});
+
+// 인터벌 중에도 운동 그림 (사용자 지시 2026-10-05). 운동 중엔 지금 종목, 휴식·준비 중엔
+// 다음 종목. 그림이 없으면 자리만 남겨 카운트다운이 들썩이지 않게 한다.
+describe("인터벌 화면 그림", () => {
+  const IDS = NAMES.map((n) => seedExerciseIdByName(n) ?? `no-image-${n}`);
+  const imgSrc = (c: HTMLElement) => {
+    const s = c.querySelector("img")?.getAttribute("src");
+    return s ? decodeURIComponent(s) : null;
+  };
+
+  it("전제 — 앞 두 종목은 그림 연결표에 있다 (아래 단언이 공회전하지 않게)", () => {
+    expect(seedExerciseIdByName("맨몸 스쿼트")).toBeTruthy();
+    expect(seedExerciseIdByName("니 푸시업")).toBeTruthy();
+  });
+
+  it("운동 중(20초)에는 지금 종목의 그림을 160px로 보인다", () => {
+    const { container } = view(20, { exerciseIds: IDS });
+    expect(imgSrc(container)).toContain(IDS[0]);
+    expect(container.querySelector("img")!.parentElement!.className).toContain("h-40");
+  });
+
+  it("휴식 중(10초)에는 다음 종목의 그림을 보인다", () => {
+    const { container } = view(38, { exerciseIds: IDS });
+    expect(screen.getByTestId("interval-phase").textContent).toBe("휴식");
+    expect(imgSrc(container)).toContain(IDS[1]);
+  });
+
+  it("준비 중에는 첫 종목의 그림을 보인다", () => {
+    const { container } = view(5, { exerciseIds: IDS });
+    expect(imgSrc(container)).toContain(IDS[0]);
+  });
+
+  it("그림이 없는 종목은 같은 크기의 빈 자리만 남긴다", () => {
+    const { container } = view(20, { exerciseIds: ["no-image", ...IDS.slice(1)] });
+    expect(container.querySelector("img")).toBeNull();
+    expect(screen.getByTestId("interval-image-slot").className).toContain("h-40");
+  });
+
+  it("ID를 넘기지 않으면 그림 자리 자체가 없다 (예전 화면)", () => {
+    const { container } = view(20);
+    expect(container.querySelector("img")).toBeNull();
+    expect(screen.queryByTestId("interval-image-slot")).toBeNull();
   });
 });

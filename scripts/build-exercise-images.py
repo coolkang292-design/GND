@@ -5,7 +5,7 @@
 
 두 출처를 합친다.
 1. **Codex 파일럿 PASS** — `운동 이미지/GPT 생성된 이미지/전체NN_UUID_파일매핑.json`(누적,
-   2026-10-05 두 번째 묶음부터 누적 파일을 쓴다 — 80 → 120. 첫 묶음은 `운동_UUID_파일매핑.json`)에서
+   2026-10-05 두 번째 묶음부터 누적 파일을 쓴다 — 80 → 120 → 160. 첫 묶음은 `운동_UUID_파일매핑.json`)에서
    `final_qa == "PASS"`이고 file이 있는 행만. 인수인계서 지시대로 **운동 ID(UUID)로** 잇는다.
 2. **사용자 시트에서 자른 것** — `scripts/slice-exercise-images.py`가 만든
    `운동 이미지/_sliced/{slug}.png`. 아래 `SLICED`가 slug → 카탈로그 이름을 잇는다.
@@ -36,7 +36,7 @@ OUT = os.path.join(ROOT, "public", "exercise-images")
 DATA = os.path.join(ROOT, "src", "lib", "domain", "exercise-images.data.json")
 MANIFEST = os.path.join(ROOT, "data", "exercise-image-manifest.json")
 #: Codex 누적 매핑. 행의 `file`은 CODEX 폴더 기준 상대 경로다(묶음별 하위 폴더 포함).
-CODEX_MAPPING = "전체120_UUID_파일매핑.json"
+CODEX_MAPPING = "전체160_UUID_파일매핑.json"
 
 #: 가장 크게 그리는 곳은 운동 중 화면 72px(2026-10-05 추가)다. 폰 3배 밀도에서도 흐리지
 #: 않게 320px로 둔다(이전 160px은 48px 목록 기준이었다). 목록·카드는 next/image가 줄여 보낸다.

@@ -495,6 +495,7 @@ function TabataSheetBody({
         <IntervalSessionOverlay
           open
           exerciseNames={picked.map((item) => item.name)}
+          exerciseIds={picked.map((item) => item.id)}
           minutes={minutes}
           elapsedSeconds={elapsed}
           paused={paused}
