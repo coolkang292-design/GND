@@ -1,0 +1,224 @@
+{
+  "first_pass": 33,
+  "pass_after_retry": 5,
+  "final_fail": 2,
+  "pending": 0,
+  "total_pass": 38,
+  "error_counts_by_failed_attempt": {
+    "target_muscle": 7,
+    "equipment": 2,
+    "exercise": 3,
+    "thumbnail_48": 1,
+    "format": 1
+  },
+  "error_types_by_failed_attempt": {
+    "wrong_highlight_muscle": 7,
+    "wrong_machine_variant": 1,
+    "extra_limbs": 1,
+    "wrong_cable_resistance_direction": 1,
+    "invalid_cable_path": 1,
+    "cell_boundary_clipping": 1,
+    "wrong_bar_position": 1
+  },
+  "families": {
+    "bench_press": {
+      "selected": 4,
+      "initial_fail": 0,
+      "final_fail": 0,
+      "initial_failure_rate": 0.0,
+      "final_failure_rate": 0.0
+    },
+    "rear_delt": {
+      "selected": 2,
+      "initial_fail": 0,
+      "final_fail": 0,
+      "initial_failure_rate": 0.0,
+      "final_failure_rate": 0.0
+    },
+    "wrist_curl": {
+      "selected": 1,
+      "initial_fail": 0,
+      "final_fail": 0,
+      "initial_failure_rate": 0.0,
+      "final_failure_rate": 0.0
+    },
+    "lunge": {
+      "selected": 2,
+      "initial_fail": 0,
+      "final_fail": 0,
+      "initial_failure_rate": 0.0,
+      "final_failure_rate": 0.0
+    },
+    "push_up": {
+      "selected": 2,
+      "initial_fail": 0,
+      "final_fail": 0,
+      "initial_failure_rate": 0.0,
+      "final_failure_rate": 0.0
+    },
+    "upright_row": {
+      "selected": 1,
+      "initial_fail": 0,
+      "final_fail": 0,
+      "initial_failure_rate": 0.0,
+      "final_failure_rate": 0.0
+    },
+    "biceps_curl": {
+      "selected": 3,
+      "initial_fail": 1,
+      "final_fail": 0,
+      "initial_failure_rate": 0.3333333333333333,
+      "final_failure_rate": 0.0
+    },
+    "crunch": {
+      "selected": 2,
+      "initial_fail": 0,
+      "final_fail": 0,
+      "initial_failure_rate": 0.0,
+      "final_failure_rate": 0.0
+    },
+    "lateral_raise": {
+      "selected": 1,
+      "initial_fail": 0,
+      "final_fail": 0,
+      "initial_failure_rate": 0.0,
+      "final_failure_rate": 0.0
+    },
+    "triceps_extension": {
+      "selected": 2,
+      "initial_fail": 2,
+      "final_fail": 0,
+      "initial_failure_rate": 1.0,
+      "final_failure_rate": 0.0
+    },
+    "deadlift": {
+      "selected": 1,
+      "initial_fail": 1,
+      "final_fail": 0,
+      "initial_failure_rate": 1.0,
+      "final_failure_rate": 0.0
+    },
+    "chest_fly": {
+      "selected": 2,
+      "initial_fail": 0,
+      "final_fail": 0,
+      "initial_failure_rate": 0.0,
+      "final_failure_rate": 0.0
+    },
+    "shrug": {
+      "selected": 1,
+      "initial_fail": 0,
+      "final_fail": 0,
+      "initial_failure_rate": 0.0,
+      "final_failure_rate": 0.0
+    },
+    "wrist": {
+      "selected": 1,
+      "initial_fail": 1,
+      "final_fail": 1,
+      "initial_failure_rate": 1.0,
+      "final_failure_rate": 1.0
+    },
+    "hanging_leg_raise": {
+      "selected": 1,
+      "initial_fail": 0,
+      "final_fail": 0,
+      "initial_failure_rate": 0.0,
+      "final_failure_rate": 0.0
+    },
+    "shoulder_rotation": {
+      "selected": 1,
+      "initial_fail": 1,
+      "final_fail": 1,
+      "initial_failure_rate": 1.0,
+      "final_failure_rate": 1.0
+    },
+    "squat": {
+      "selected": 1,
+      "initial_fail": 0,
+      "final_fail": 0,
+      "initial_failure_rate": 0.0,
+      "final_failure_rate": 0.0
+    },
+    "hip_extension": {
+      "selected": 2,
+      "initial_fail": 0,
+      "final_fail": 0,
+      "initial_failure_rate": 0.0,
+      "final_failure_rate": 0.0
+    },
+    "shoulder_press": {
+      "selected": 2,
+      "initial_fail": 0,
+      "final_fail": 0,
+      "initial_failure_rate": 0.0,
+      "final_failure_rate": 0.0
+    },
+    "spinal_mobility": {
+      "selected": 1,
+      "initial_fail": 0,
+      "final_fail": 0,
+      "initial_failure_rate": 0.0,
+      "final_failure_rate": 0.0
+    },
+    "hip_abduction": {
+      "selected": 1,
+      "initial_fail": 0,
+      "final_fail": 0,
+      "initial_failure_rate": 0.0,
+      "final_failure_rate": 0.0
+    },
+    "v_up": {
+      "selected": 1,
+      "initial_fail": 0,
+      "final_fail": 0,
+      "initial_failure_rate": 0.0,
+      "final_failure_rate": 0.0
+    },
+    "leg_curl": {
+      "selected": 1,
+      "initial_fail": 0,
+      "final_fail": 0,
+      "initial_failure_rate": 0.0,
+      "final_failure_rate": 0.0
+    },
+    "core_rotation": {
+      "selected": 1,
+      "initial_fail": 0,
+      "final_fail": 0,
+      "initial_failure_rate": 0.0,
+      "final_failure_rate": 0.0
+    },
+    "leg_extension": {
+      "selected": 1,
+      "initial_fail": 0,
+      "final_fail": 0,
+      "initial_failure_rate": 0.0,
+      "final_failure_rate": 0.0
+    },
+    "calf_raise": {
+      "selected": 1,
+      "initial_fail": 1,
+      "final_fail": 0,
+      "initial_failure_rate": 1.0,
+      "final_failure_rate": 0.0
+    },
+    "jumping_jack": {
+      "selected": 1,
+      "initial_fail": 0,
+      "final_fail": 0,
+      "initial_failure_rate": 0.0,
+      "final_failure_rate": 0.0
+    }
+  },
+  "image_generation_calls": 19,
+  "sheet_calls": 10,
+  "individual_retry_calls": 9,
+  "average_regeneration_all40": 0.225,
+  "average_regeneration_initial_failures": 1.2857142857142858,
+  "repeated_error_categories": {
+    "wrong_highlight_muscle": 7
+  },
+  "recommend_expansion": false,
+  "repeat_detection": "Conservative: same detailed error type in2+attempts blocks recommendation, even if retries fix it."
+}

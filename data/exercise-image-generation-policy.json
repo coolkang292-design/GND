@@ -1,11 +1,11 @@
 {
-  "revision": "2026-10-05-pilot080-complete",
+  "revision": "2026-10-05-pilot120-complete",
   "retired_generation_layout": [
     5,
     2
   ],
   "historical_manifest_and_batches": "preserved; not authorization to generate",
-  "active_trial": "GND-P080",
+  "active_trial": "GND-P120",
   "layout": [
     2,
     2
@@ -20,13 +20,13 @@
     512
   ],
   "upscaling_allowed": false,
-  "generation_calls_allowed": 22,
-  "generation_calls_completed": 22,
+  "generation_calls_allowed": 19,
+  "generation_calls_completed": 19,
   "further_generation_authorized": false,
   "upload_authorized": false,
   "production_db_change_authorized": false,
   "app_integration_authorized": false,
-  "outcome": "SECOND40_COMPLETE:40 PASS; repeated muscle highlights8/clipping3; no automatic expansion",
+  "outcome": "THIRD40_COMPLETE:38 PASS/2 FAIL; repeated muscle highlights7; no automatic expansion",
   "historical_minimum_native_cell_size": [
     768,
     768
@@ -38,7 +38,7 @@
   ],
   "local_app_test_authorized": false,
   "standard_generation_method": "2x2 -> native cell crop ->512PNG downscale; individual retry only for FAIL",
-  "pilot_app_integration_owner": "Claude; await user instruction",
-  "cumulative_pilot_exercises": 80,
-  "cumulative_pilot_pass": 79
+  "pilot_app_integration_owner": "Claude; applying under separate user instructions",
+  "cumulative_pilot_exercises": 120,
+  "cumulative_pilot_pass": 117
 }
