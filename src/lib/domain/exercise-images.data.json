@@ -215,11 +215,29 @@
     "source": "gnd",
     "origin": "codex-pilot"
   },
+  "be8d2e74-62fa-4f25-89fe-087412bb045b": {
+    "name": "디클라인 리버스 크런치",
+    "file": "be8d2e74-62fa-4f25-89fe-087412bb045b",
+    "source": "gnd",
+    "origin": "codex-인터벌누락_2026-10-05"
+  },
   "dc4295d7-3d91-4cd9-922a-dd9399bf4045": {
     "name": "디클라인 벤치프레스",
     "file": "dc4295d7-3d91-4cd9-922a-dd9399bf4045",
     "source": "gnd",
     "origin": "codex-pilot"
+  },
+  "a11b7914-c1aa-4f32-9bd0-bc66b1a6a488": {
+    "name": "디클라인 싯업",
+    "file": "a11b7914-c1aa-4f32-9bd0-bc66b1a6a488",
+    "source": "gnd",
+    "origin": "codex-인터벌누락_2026-10-05"
+  },
+  "23fbe474-4cb5-475e-86f4-b35be55f572e": {
+    "name": "디클라인 크런치",
+    "file": "23fbe474-4cb5-475e-86f4-b35be55f572e",
+    "source": "gnd",
+    "origin": "codex-인터벌누락_2026-10-05"
   },
   "c7db43ca-025f-4f7e-9da6-2ccda4c76150": {
     "name": "디클라인 푸시업",
@@ -364,6 +382,18 @@
     "file": "beb901cb-bb0f-4931-a8b5-ed78551db010",
     "source": "gnd",
     "origin": "codex-pilot"
+  },
+  "89f804fc-0027-462c-817e-f278ef93c546": {
+    "name": "맨몸 스플릿 스쿼트",
+    "file": "89f804fc-0027-462c-817e-f278ef93c546",
+    "source": "gnd",
+    "origin": "codex-인터벌누락_2026-10-05"
+  },
+  "792e574a-1dd9-4d2f-a0eb-429a60deb304": {
+    "name": "맨몸 원레그 데드리프트",
+    "file": "792e574a-1dd9-4d2f-a0eb-429a60deb304",
+    "source": "gnd",
+    "origin": "codex-인터벌누락_2026-10-05"
   },
   "a1cd1dc9-5b53-4f38-b917-d0713e0424a1": {
     "name": "바벨 라잉 트라이셉 익스텐션",
@@ -575,11 +605,23 @@
     "source": "gnd",
     "origin": "codex-pilot"
   },
+  "656ae2ea-7b1f-45a3-b563-16a5ba436efa": {
+    "name": "스탠딩 힙 어브덕션",
+    "file": "656ae2ea-7b1f-45a3-b563-16a5ba436efa",
+    "source": "gnd",
+    "origin": "codex-인터벌누락_2026-10-05"
+  },
   "66af6e45-aef2-466a-8a3e-b90505c2a0e6": {
     "name": "스텝업",
     "file": "66af6e45-aef2-466a-8a3e-b90505c2a0e6",
     "source": "gnd",
     "origin": "codex-pilot"
+  },
+  "41f61b10-8f87-4f3d-8d31-bc4fc0eac08a": {
+    "name": "시티드 니업",
+    "file": "41f61b10-8f87-4f3d-8d31-bc4fc0eac08a",
+    "source": "gnd",
+    "origin": "codex-인터벌누락_2026-10-05"
   },
   "1c56bc55-d633-4725-accd-351b3355eaf9": {
     "name": "시티드 덤벨 리어 레터럴 레이즈",
@@ -628,6 +670,18 @@
     "file": "5d094859-8765-44bb-ac00-bd416bb10247",
     "source": "gnd",
     "origin": "codex-pilot"
+  },
+  "943ab2d4-e1a1-48f1-ab0e-93c800722649": {
+    "name": "싯업",
+    "file": "943ab2d4-e1a1-48f1-ab0e-93c800722649",
+    "source": "gnd",
+    "origin": "codex-인터벌누락_2026-10-05"
+  },
+  "e14b8625-377e-4a99-a613-93d62f1fdc2c": {
+    "name": "싱글 레그 글루트 브릿지",
+    "file": "e14b8625-377e-4a99-a613-93d62f1fdc2c",
+    "source": "gnd",
+    "origin": "codex-인터벌누락_2026-10-05"
   },
   "6b1013d6-5f25-4665-9782-9419db996443": {
     "name": "아처 푸시업",
@@ -899,6 +953,12 @@
     "source": "gnd",
     "origin": "codex-pilot"
   },
+  "a89a4f0c-f339-4db4-8902-6547992b02a4": {
+    "name": "클로즈그립 푸시업",
+    "file": "a89a4f0c-f339-4db4-8902-6547992b02a4",
+    "source": "gnd",
+    "origin": "codex-인터벌누락_2026-10-05"
+  },
   "9371e57e-7e33-4f08-8c5a-ad414ce7c7a4": {
     "name": "타이슨 푸시업",
     "file": "9371e57e-7e33-4f08-8c5a-ad414ce7c7a4",
@@ -977,6 +1037,12 @@
     "source": "gnd",
     "origin": "codex-pilot"
   },
+  "078b9e1c-6b0a-4591-98f5-d75ddcf99be5": {
+    "name": "플랭크 트위스트",
+    "file": "078b9e1c-6b0a-4591-98f5-d75ddcf99be5",
+    "source": "gnd",
+    "origin": "codex-인터벌누락_2026-10-05"
+  },
   "47e6ccc0-e87f-4645-b44a-634678e99fbd": {
     "name": "플러터 킥",
     "file": "47e6ccc0-e87f-4645-b44a-634678e99fbd",
@@ -989,15 +1055,33 @@
     "source": "gnd",
     "origin": "codex-pilot"
   },
+  "349208cd-975c-447b-b488-5373e5c3878a": {
+    "name": "피스톨 박스 스쿼트",
+    "file": "349208cd-975c-447b-b488-5373e5c3878a",
+    "source": "gnd",
+    "origin": "codex-인터벌누락_2026-10-05"
+  },
   "b60cc90b-204d-4ffb-acf0-8cdf10504df5": {
     "name": "피스톨 스쿼트",
     "file": "b60cc90b-204d-4ffb-acf0-8cdf10504df5",
     "source": "gnd",
     "origin": "codex-인터벌누락_2026-10-05"
   },
+  "d2010613-2257-4ef6-9063-2e7d00ec608d": {
+    "name": "필라테스 잭나이프",
+    "file": "d2010613-2257-4ef6-9063-2e7d00ec608d",
+    "source": "gnd",
+    "origin": "codex-인터벌누락_2026-10-05"
+  },
   "1ce6e6f1-9f35-46fe-9ea0-16b0567d43d5": {
     "name": "하이 니",
     "file": "1ce6e6f1-9f35-46fe-9ea0-16b0567d43d5",
+    "source": "gnd",
+    "origin": "codex-인터벌누락_2026-10-05"
+  },
+  "99c9282a-0f22-49ce-a8f9-314dfc24ba6a": {
+    "name": "할로우 락",
+    "file": "99c9282a-0f22-49ce-a8f9-314dfc24ba6a",
     "source": "gnd",
     "origin": "codex-인터벌누락_2026-10-05"
   },
@@ -1024,6 +1108,18 @@
     "file": "db480bba-6629-4db8-9592-09acd0bdc022",
     "source": "gnd",
     "origin": "codex-pilot"
+  },
+  "33403b43-b80a-4822-bcf7-c13dad0daf72": {
+    "name": "행잉 레그 레이즈",
+    "file": "33403b43-b80a-4822-bcf7-c13dad0daf72",
+    "source": "gnd",
+    "origin": "codex-인터벌누락_2026-10-05"
+  },
+  "fc1c62be-1510-4d36-8a92-d89c15167456": {
+    "name": "힐 터치",
+    "file": "fc1c62be-1510-4d36-8a92-d89c15167456",
+    "source": "gnd",
+    "origin": "codex-인터벌누락_2026-10-05"
   },
   "4ea5b8a7-1f1c-4bf1-987c-5291a83a4604": {
     "name": "힙 브릿지",
