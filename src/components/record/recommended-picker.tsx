@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useRef } from "react";
 import { UiIcon } from "@/components/ui-icon";
 import { GndIcon, type GndIconName } from "@/components/ui/gnd-icon";
 import { type GoalCategory } from "@/lib/challenge";
@@ -15,6 +16,7 @@ import {
   type SituationKey,
 } from "@/lib/domain/recommended-exercises";
 import type { CatalogExercise } from "@/lib/types";
+import { PickActions } from "./pick-actions";
 
 /** 그리드 한 칸 — 부위와 상황이 같은 모양을 쓴다 */
 /** ⚠️ `iconSrc`는 이모지가 아니라 이미지 경로다 (`PART_META` 주석 참조) */
@@ -52,7 +54,8 @@ export function RecommendedPicker({
   onToggle,
   onBack,
   onSearch,
-  onNext,
+  onAdd,
+  onAdjust,
   onStartInterval,
   intervalCta,
 }: {
@@ -63,13 +66,16 @@ export function RecommendedPicker({
   onPart: (next: RecommendPart) => void;
   situation: SituationKey;
   onSituation: (next: SituationKey) => void;
-  /** 선택된 카탈로그 id */
+  /** 선택된 카탈로그 id — 검색 화면에서 고른 것까지 **피커 전체**의 선택이다 */
   selected: ReadonlySet<string>;
   onToggle: (item: CatalogExercise) => void;
   onBack: () => void;
   /** '원하는 운동이 없나요?' — 검색 화면으로 */
   onSearch: () => void;
-  onNext: () => void;
+  /** 고른 것을 기본 세트(3세트·10회)로 바로 담는다 */
+  onAdd: () => void;
+  /** 세트 설정 화면으로 — 없으면 버튼이 안 나온다 (`PickActions`) */
+  onAdjust?: () => void;
   /**
    * 전신 인터벌을 연다 (사용자 지시 2026-08-13).
    *
@@ -82,6 +88,37 @@ export function RecommendedPicker({
   intervalCta?: string;
 }) {
   const byPart = mode === "part";
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const recHeadRef = useRef<HTMLParagraphElement>(null);
+  const recListRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * 고른 상황·부위의 추천 운동이 **가려져 있으면** 그 머리글까지 내려 준다 (2026-10-05).
+   *
+   * ⚠️ 375×667 폰에서 실측하니 그리드 아래 첫 추천 카드가 스크롤 영역의
+   *    309px 지점에서 시작하는데 보이는 높이는 280px였다(부위별 298 / 279).
+   *    카드를 눌러도 ✓ 하나만 바뀌고 `＋ 담기`는 화면 밖이라, 사용자에게는
+   *    "고른 다음에 추가가 안 된다"로 보였다.
+   *
+   * 이미 보이면 움직이지 않는다 — 큰 화면에서 그리드를 밀어 올리면 다른 상황과
+   * 비교하려는 사람이 다시 올려야 한다. 그리드를 접지 않는 것도 같은 이유다
+   * (부위는 선택지를 감추지 않는 그리드 — 이 파일 머리 주석, 사용자 지시).
+   */
+  function revealRecommendations() {
+    const box = scrollRef.current;
+    const head = recHeadRef.current;
+    if (!box || !head) return;
+    const boxRect = box.getBoundingClientRect();
+    const first = recListRef.current?.firstElementChild ?? head;
+    if (first.getBoundingClientRect().bottom <= boxRect.bottom) return;
+    const reduce =
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    box.scrollTo?.({
+      top: box.scrollTop + head.getBoundingClientRect().top - boxRect.top - 4,
+      behavior: reduce ? "auto" : "smooth",
+    });
+  }
 
   const situations = visibleSituations(
     challengeCategories,
@@ -167,7 +204,7 @@ export function RecommendedPicker({
         ✨ {byPart ? "부위를" : "상황을"} 고르면 추천 운동을 먼저 보여드려요
       </p>
 
-      <div className="min-h-0 flex-1 overflow-y-auto pt-3">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto pt-3">
         <p className="mb-2 text-sm font-extrabold">
           오늘 {byPart ? "어디를 운동할까요?" : "어떤 상황인가요?"}
         </p>
@@ -178,11 +215,12 @@ export function RecommendedPicker({
               <button
                 key={choice.key}
                 type="button"
-                onClick={() =>
-                  byPart
-                    ? onPart(choice.key as RecommendPart)
-                    : onSituation(choice.key as SituationKey)
-                }
+                onClick={() => {
+                  if (byPart) onPart(choice.key as RecommendPart);
+                  else onSituation(choice.key as SituationKey);
+                  // 새 목록이 그려진 뒤에 잰다
+                  requestAnimationFrame(revealRecommendations);
+                }}
                 aria-pressed={isActive}
                 /*
                   GND 아이콘 2.0 카드 (2026-10-05 제안서 §4). 선택은 색 하나로만 보이지
@@ -256,13 +294,14 @@ export function RecommendedPicker({
           })}
         </div>
 
-        <p className="mb-2 text-sm font-extrabold">
+        <p ref={recHeadRef} className="mb-2 text-sm font-extrabold">
           ✨ 이 {byPart ? "부위에" : "상황에"} 맞는 추천 운동{" "}
           <span className="ml-1 rounded-full bg-accent-weak px-2 py-0.5 text-[11px] text-accent">
             {activeLabel}
           </span>
         </p>
 
+        <div ref={recListRef}>
         {activeKey === "interval" && onStartInterval ? (
           <div className="rounded-card border border-accent/50 bg-accent-weak/40 p-4">
             <p className="text-[13px] leading-5 text-text">
@@ -329,12 +368,15 @@ export function RecommendedPicker({
                       : "border border-accent/40 bg-surface text-accent"
                   }`}
                 >
-                  {isSelected ? "✓ 추가됨" : "＋ 추가"}
+                  {/* '추가됨'이라고 쓰지 않는다 — 아직 담기만 한 것이고 실제로
+                      들어가는 것은 아래 `바로 추가`다 (2026-10-05) */}
+                  {isSelected ? "✓ 담음" : "＋ 담기"}
                 </span>
               </button>
             );
           })
         )}
+        </div>
 
         {/* 추천에 없는 종목을 찾는 사람에게 나가는 문을 준다 — 이게 없으면
             추천 목록이 곧 카탈로그 전부인 줄 알고 막힌다 */}
@@ -362,19 +404,7 @@ export function RecommendedPicker({
         </p>
       </div>
 
-      <div className="mt-2 flex flex-none items-center gap-3 border-t border-line pt-3">
-        <p className="text-[13px] font-bold text-muted">
-          선택한 운동 <span className="text-accent">{selected.size}개</span>
-        </p>
-        <button
-          type="button"
-          onClick={onNext}
-          disabled={selected.size === 0}
-          className="ml-auto h-12 flex-1 rounded-card-sm bg-accent text-sm font-extrabold text-accent-ink disabled:opacity-40"
-        >
-          다음
-        </button>
-      </div>
+      <PickActions count={selected.size} onAdd={onAdd} onAdjust={onAdjust} />
     </div>
   );
 }

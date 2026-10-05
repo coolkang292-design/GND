@@ -188,8 +188,9 @@ describe("TabataSheet — 운동 고르기 배선 (2026-08-06)", () => {
     // 가슴 추천 넷 중 **맨몸은 푸시업뿐**이다 — 나머지는 걸러진다
     // (인터벌 고르기 화면은 맨몸만 보여 준다, 2026-08-13)
     fireEvent.click(getByText("푸시업"));
-    fireEvent.click(getByText("다음"));
-    fireEvent.click(getByText("운동 1개 추가하기"));
+    // 인터벌은 코스가 세트를 정하므로 `세트 조절`이 없다 — 바로 담는다
+    expect(screen.queryByText("세트 조절")).toBeNull();
+    fireEvent.click(getByText("운동 1개 바로 추가"));
 
     expect(getByText("+ 운동 고르기 (1/4)")).toBeTruthy();
     expect(getAllByText("푸시업")).not.toHaveLength(0);
@@ -205,7 +206,7 @@ describe("TabataSheet — 운동 고르기 배선 (2026-08-06)", () => {
       target: { value: "버피" },
     });
     fireEvent.click(getByText("버피"));
-    fireEvent.click(getByText("선택한 1개 운동 추가"));
+    fireEvent.click(getByText("운동 1개 바로 추가"));
 
     expect(getByText("+ 운동 고르기 (1/4)")).toBeTruthy();
   });
@@ -218,7 +219,7 @@ describe("TabataSheet — 운동 고르기 배선 (2026-08-06)", () => {
     for (const name of FOUR.map((c) => c.name)) {
       fireEvent.click(getByText(name));
     }
-    fireEvent.click(getByText("선택한 4개 운동 추가"));
+    fireEvent.click(getByText("운동 4개 바로 추가"));
 
     expect(getByText("+ 운동 고르기 (4/4)")).toBeTruthy();
   });

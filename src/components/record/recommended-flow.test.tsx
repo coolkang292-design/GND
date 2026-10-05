@@ -67,7 +67,7 @@ describe("추천 흐름 — 부위 → 다중 선택 → 설정 → 추가 (2026
     expect(getByText("기구가 움직임을 잡아줘서 처음 시작하기 쉬워요")).toBeTruthy();
     // 부위 태그(카드 안)와 부위 버튼(그리드)이 둘 다 '가슴'을 쓴다
     expect(getAllByText("가슴").length).toBeGreaterThan(1);
-    expect(getAllByText("＋ 추가").length).toBe(4);
+    expect(getAllByText("＋ 담기").length).toBe(4);
   });
 
   it("부위 6칸이 전부 그려진다 (가로 스크롤이 아니라 그리드)", () => {
@@ -87,18 +87,16 @@ describe("추천 흐름 — 부위 → 다중 선택 → 설정 → 추가 (2026
     const { getByText } = setup();
     fireEvent.click(getByText("체스트프레스 머신"));
 
-    expect(getByText("✓ 추가됨")).toBeTruthy();
+    expect(getByText("✓ 담음")).toBeTruthy();
   });
 
   it("고를 때마다 하단 바의 개수가 오른다", () => {
-    const { getByText, container } = setup();
-    const count = () => container.querySelector(".text-accent")?.textContent;
+    const { getByText } = setup();
 
     fireEvent.click(getByText("체스트프레스 머신"));
-    expect(getByText("1개")).toBeTruthy();
+    expect(getByText("운동 1개 바로 추가")).toBeTruthy();
     fireEvent.click(getByText("인클라인 벤치프레스"));
-    expect(getByText("2개")).toBeTruthy();
-    expect(count).toBeTruthy();
+    expect(getByText("운동 2개 바로 추가")).toBeTruthy();
   });
 
   it("다시 누르면 선택이 풀린다", () => {
@@ -106,13 +104,14 @@ describe("추천 흐름 — 부위 → 다중 선택 → 설정 → 추가 (2026
     fireEvent.click(getByText("체스트프레스 머신"));
     fireEvent.click(getByText("체스트프레스 머신"));
 
-    expect(queryByText("✓ 추가됨")).toBeNull();
-    expect(getByText("0개")).toBeTruthy();
+    expect(queryByText("✓ 담음")).toBeNull();
+    expect(getByText("운동을 선택하세요")).toBeTruthy();
   });
 
-  it("아무것도 안 골랐으면 '다음'이 잠겨 있다", () => {
+  it("아무것도 안 골랐으면 두 버튼이 다 잠겨 있다", () => {
     const { getByText } = setup();
-    expect((getByText("다음") as HTMLButtonElement).disabled).toBe(true);
+    expect((getByText("운동을 선택하세요") as HTMLButtonElement).disabled).toBe(true);
+    expect((getByText("세트 조절") as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("부위를 바꾸면 그 부위의 추천으로 갈린다", () => {
@@ -124,11 +123,11 @@ describe("추천 흐름 — 부위 → 다중 선택 → 설정 → 추가 (2026
     expect(queryByText("체스트프레스 머신")).toBeNull();
   });
 
-  it("'다음'을 누르면 고른 개수만큼 3세트·10회·무게 운동 중 입력이 뜬다", () => {
+  it("'세트 조절'을 누르면 고른 개수만큼 3세트·10회·무게 운동 중 입력이 뜬다", () => {
     const { getByText, getAllByText } = setup();
     fireEvent.click(getByText("체스트프레스 머신"));
     fireEvent.click(getByText("인클라인 벤치프레스"));
-    fireEvent.click(getByText("다음"));
+    fireEvent.click(getByText("세트 조절"));
 
     expect(getByText("세트와 횟수 설정")).toBeTruthy();
     expect(getAllByText("3세트 · 10회 · 무게 운동 중 입력")).toHaveLength(2);
@@ -139,7 +138,7 @@ describe("추천 흐름 — 부위 → 다중 선택 → 설정 → 추가 (2026
     const { getByText, getAllByText } = setup();
     fireEvent.click(getAllByText("코어")[0]);
     fireEvent.click(getByText("플랭크"));
-    fireEvent.click(getByText("다음"));
+    fireEvent.click(getByText("세트 조절"));
 
     // ⚠️ 기본이 `1분`이던 시절엔 매달리기를 담자마자 못 채울 목표가 서 있었다
     expect(getByText("3세트 · 30초")).toBeTruthy();
@@ -149,7 +148,7 @@ describe("추천 흐름 — 부위 → 다중 선택 → 설정 → 추가 (2026
     const { getByText, getAllByText, getByLabelText } = setup();
     fireEvent.click(getByText("체스트프레스 머신"));
     fireEvent.click(getByText("인클라인 벤치프레스"));
-    fireEvent.click(getByText("다음"));
+    fireEvent.click(getByText("세트 조절"));
 
     fireEvent.click(getAllByText("조절")[0]);
     fireEvent.click(getByLabelText("세트 늘리기"));
@@ -162,7 +161,7 @@ describe("추천 흐름 — 부위 → 다중 선택 → 설정 → 추가 (2026
     const onPickConfigured = vi.fn();
     const { getByText } = setup(onPickConfigured);
     fireEvent.click(getByText("체스트프레스 머신"));
-    fireEvent.click(getByText("다음"));
+    fireEvent.click(getByText("세트 조절"));
     fireEvent.click(getByText("운동 1개 추가하기"));
 
     expect(onPickConfigured).toHaveBeenCalledTimes(1);
@@ -176,11 +175,181 @@ describe("추천 흐름 — 부위 → 다중 선택 → 설정 → 추가 (2026
   it("설정 화면에서 뒤로 가면 고른 것이 그대로 남아 있다", () => {
     const { getByText, getByLabelText } = setup();
     fireEvent.click(getByText("체스트프레스 머신"));
-    fireEvent.click(getByText("다음"));
-    fireEvent.click(getByLabelText("추천 운동으로 돌아가기"));
+    fireEvent.click(getByText("세트 조절"));
+    fireEvent.click(getByLabelText("고르던 화면으로 돌아가기"));
 
-    expect(getByText("✓ 추가됨")).toBeTruthy();
-    expect(getByText("1개")).toBeTruthy();
+    expect(getByText("✓ 담음")).toBeTruthy();
+    expect(getByText("운동 1개 바로 추가")).toBeTruthy();
+  });
+
+  // 사용자 결정 2026-10-05 — 세트 설정은 선택 단계다
+  it("'바로 추가'는 설정 화면 없이 3세트·10회로 바로 담는다", () => {
+    const onPickConfigured = vi.fn();
+    const { getByText, queryByText } = setup(onPickConfigured);
+    fireEvent.click(getByText("체스트프레스 머신"));
+    fireEvent.click(getByText("운동 1개 바로 추가"));
+
+    expect(queryByText("세트와 횟수 설정")).toBeNull();
+    const picks: ConfiguredPick[] = onPickConfigured.mock.calls[0][0];
+    expect(picks.map((p) => p.item.name)).toEqual(["체스트프레스 머신"]);
+    expect(picks[0].sets).toHaveLength(3);
+    expect(picks[0].sets.every((s) => s.reps === 10 && s.weightKg === 0)).toBe(true);
+  });
+
+  it("세트를 조절하고 뒤로 가서 '바로 추가'해도 조절한 값이 살아 있다", () => {
+    const onPickConfigured = vi.fn();
+    const { getByText, getByLabelText } = setup(onPickConfigured);
+    fireEvent.click(getByText("체스트프레스 머신"));
+    fireEvent.click(getByText("세트 조절"));
+    fireEvent.click(getByText("조절"));
+    fireEvent.click(getByLabelText("세트 늘리기"));
+    fireEvent.click(getByLabelText("고르던 화면으로 돌아가기"));
+    fireEvent.click(getByText("운동 1개 바로 추가"));
+
+    const picks: ConfiguredPick[] = onPickConfigured.mock.calls[0][0];
+    expect(picks[0].sets).toHaveLength(4);
+  });
+});
+
+/*
+  회귀 (2026-10-05 사용자 신고 "상황별·부위별 선택을 한 다음에 추가가 안 된다").
+
+  추천과 검색이 선택 목록을 따로 들고 있어서, 추천에서 2개를 고르고 `운동 이름 검색`으로
+  넘어가면 하단이 "운동을 선택하세요"(0개)가 되고 검색 화면의 추가 버튼은 그 2개를
+  안 담았다. 개발 서버에서 재현했다.
+*/
+describe("추천과 검색은 선택 목록 하나를 쓴다 (2026-10-05)", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("추천에서 고른 것이 검색 화면에서도 세어지고 ✓가 붙는다", () => {
+    const { getByText } = setup();
+    fireEvent.click(getByText("체스트프레스 머신"));
+    fireEvent.click(getByText("인클라인 벤치프레스"));
+    fireEvent.click(getByText("운동 이름 검색"));
+
+    expect(getByText("운동 2개 바로 추가")).toBeTruthy();
+    const row = getByText("체스트프레스 머신").closest("button")!;
+    expect(row.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("추천 2개 + 검색 1개를 한 번에 담는다", () => {
+    const onPickConfigured = vi.fn();
+    const { getByText } = setup(onPickConfigured);
+    fireEvent.click(getByText("체스트프레스 머신"));
+    fireEvent.click(getByText("인클라인 벤치프레스"));
+    fireEvent.click(getByText("운동 이름 검색"));
+    fireEvent.click(getByText("레그프레스"));
+    fireEvent.click(getByText("운동 3개 바로 추가"));
+
+    const picks: ConfiguredPick[] = onPickConfigured.mock.calls[0][0];
+    expect(picks.map((p) => p.item.name).sort()).toEqual(
+      ["레그프레스", "인클라인 벤치프레스", "체스트프레스 머신"].sort(),
+    );
+  });
+
+  it("검색에서 들어간 세트 조절의 ←는 검색으로 돌아온다", () => {
+    const { getByText, getByLabelText, getByPlaceholderText } = setup();
+    fireEvent.click(getByText("운동 이름 검색"));
+    fireEvent.click(getByText("레그프레스"));
+    fireEvent.click(getByText("세트 조절"));
+    fireEvent.click(getByLabelText("고르던 화면으로 돌아가기"));
+
+    expect(getByPlaceholderText("🔍 운동 검색 (예: 스쿼트, 벤치)")).toBeTruthy();
+  });
+
+  function withClose(onClose: () => void) {
+    return render(
+      <ExercisePicker
+        open
+        initialMode="part"
+        catalog={CATALOG}
+        pastSessions={[]}
+        pastLoading={false}
+        onClose={onClose}
+        onPickMany={vi.fn()}
+        onPickConfigured={vi.fn()}
+        onPickPast={vi.fn()}
+        onCreateCustom={vi.fn()}
+      />,
+    );
+  }
+
+  it("고른 것이 있으면 시트 바깥을 눌러도 묻고, 취소하면 안 닫힌다", () => {
+    const onClose = vi.fn();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const { getByText, container } = withClose(onClose);
+    const backdrop = container.querySelector("div.fixed.inset-0") as HTMLElement;
+
+    fireEvent.click(getByText("체스트프레스 머신"));
+    fireEvent.click(backdrop);
+    expect(confirm).toHaveBeenCalledWith("고른 운동 1개를 담지 않고 닫을까요?");
+    expect(onClose).not.toHaveBeenCalled();
+
+    confirm.mockReturnValue(true);
+    fireEvent.click(backdrop);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("아무것도 안 골랐으면 묻지 않고 닫는다", () => {
+    const onClose = vi.fn();
+    const confirm = vi.spyOn(window, "confirm");
+    const { container } = withClose(onClose);
+    fireEvent.click(container.querySelector("div.fixed.inset-0") as HTMLElement);
+
+    expect(confirm).not.toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+/*
+  회귀 (2026-10-05) — 375×667에서 첫 추천 카드가 스크롤 영역 309px 지점, 보이는
+  높이는 280px였다. 상황을 골라도 ✓만 바뀌고 `＋ 담기`가 화면 밖이었다.
+*/
+describe("고른 상황·부위의 추천이 가려져 있으면 내려 준다 (2026-10-05)", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  function rect(top: number, bottom: number) {
+    return { top, bottom, left: 0, right: 0, width: 0, height: bottom - top, x: 0, y: top, toJSON() {} } as DOMRect;
+  }
+
+  /** 스크롤 영역 100~380, 추천 머리글 360, 첫 카드는 `firstCard` */
+  function mount(firstCard: DOMRect) {
+    vi.spyOn(globalThis, "requestAnimationFrame").mockImplementation((cb) => {
+      cb(0);
+      return 0;
+    });
+    const at: { box?: Element; head?: Element } = {};
+    // ⚠️ 요소 하나에 spyOn을 걸면 프로토타입 메서드가 통째로 바뀐다 —
+    //    한 군데에서 요소별로 갈라 돌려준다
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(
+      function (this: Element) {
+        if (this === at.box) return rect(100, 380);
+        if (this === at.head) return rect(360, 380);
+        return firstCard;
+      },
+    );
+    const utils = setup();
+    const box = utils.getByText(/어디를 운동할까요/).parentElement as HTMLElement;
+    const scrollTo = vi.fn();
+    box.scrollTo = scrollTo as unknown as HTMLElement["scrollTo"];
+    at.box = box;
+    at.head = utils.getByText(/이 부위에 맞는 추천 운동/);
+    return { ...utils, scrollTo };
+  }
+
+  it("첫 카드가 영역 밖이면 추천 머리글까지 스크롤한다", () => {
+    const { getAllByText, scrollTo } = mount(rect(410, 480));
+    fireEvent.click(getAllByText("등")[0]);
+
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    expect(scrollTo.mock.calls[0][0].top).toBe(256); // 0 + 360 - 100 - 4
+  });
+
+  it("이미 보이면 움직이지 않는다", () => {
+    const { getAllByText, scrollTo } = mount(rect(200, 260));
+    fireEvent.click(getAllByText("등")[0]);
+
+    expect(scrollTo).not.toHaveBeenCalled();
   });
 });
 

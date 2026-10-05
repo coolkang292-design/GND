@@ -408,7 +408,7 @@ describe("CalendarView — 인터벌로 계획하기 (2026-08-13)", () => {
     for (const c of BODYWEIGHT_CATALOG) {
       fireEvent.click(screen.getByText(c.name));
     }
-    fireEvent.click(screen.getByText("선택한 4개 운동 추가"));
+    fireEvent.click(screen.getByText("운동 4개 바로 추가"));
     fireEvent.click(
       screen.getByRole("button", { name: /8월 16일 예정표로 저장/ }),
     );
@@ -447,7 +447,7 @@ describe("CalendarView — 인터벌로 계획하기 (2026-08-13)", () => {
     for (const c of BODYWEIGHT_CATALOG) {
       fireEvent.click(screen.getByText(c.name));
     }
-    fireEvent.click(screen.getByText("선택한 4개 운동 추가"));
+    fireEvent.click(screen.getByText("운동 4개 바로 추가"));
     fireEvent.click(
       screen.getByRole("button", { name: /8월 16일 예정표로 저장/ }),
     );

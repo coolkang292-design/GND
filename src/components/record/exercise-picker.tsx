@@ -34,6 +34,7 @@ import {
 } from "./exercise-setup-sheet";
 import { ExerciseEntryHub } from "./exercise-entry-hub";
 import { ExerciseThumbTile } from "./exercise-thumb";
+import { PickActions } from "./pick-actions";
 import { GndIcon, type GndIconName } from "@/components/ui/gnd-icon";
 import { imagesFirst } from "@/lib/domain/exercise-images";
 
@@ -93,8 +94,19 @@ type PickerProps = {
   onClose: () => void;
   /** 선택한 운동 여러 개를 한 번에 추가 (검색 경로 — 기본 세트) */
   onPickMany: (items: CatalogExercise[]) => void;
-  /** 추천 경로 — 세트·목표·무게까지 정해서 추가 (2026-08-06) */
+  /**
+   * 세트까지 정해서 추가 (2026-08-06). **넘기면 검색 경로도 이리로 온다**
+   * (2026-10-05) — `바로 추가`는 기본 3세트·10회, `세트 조절`은 정한 값으로.
+   * `onPickMany`는 이걸 안 넘기는 화면(로컬 이미지 검수)의 대비다.
+   */
   onPickConfigured?: (picks: ConfiguredPick[]) => void;
+  /**
+   * `세트 조절` 버튼을 낼지 (기본 true).
+   *
+   * 인터벌 고르기는 `false`다 — 세트는 코스 분수가 정해서(`tabataRepsForMinutes`)
+   * 여기서 정한 값을 버린다. 정하게 해 놓고 버리면 그 화면이 거짓말을 한다.
+   */
+  setupAdjustable?: boolean;
   /** 지난 완료 기록 하나를 현재 준비 목록 뒤에 중복 없이 추가 */
   onPickPast: (sessionId: string) => Promise<boolean>;
   /** 열자마자 보여줄 화면. 빈 기록 화면의 '최근 운동 불러오기'가 `past`로 연다 */
@@ -164,6 +176,7 @@ function PickerSheet({
   onClose,
   onPickMany,
   onPickConfigured,
+  setupAdjustable = true,
   onPickPast,
   onCreateCustom,
   onStartInterval,
@@ -210,24 +223,28 @@ function PickerSheet({
   const [routineBusyId, setRoutineBusyId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [part, setPart] = useState<(typeof FILTERS)[number]>("전체");
+  /**
+   * 고른 운동 — 검색·자주 한 운동·직접 만들기·상황별·부위별이 **전부 여기 하나**에 담는다.
+   *
+   * ⚠️ 2026-08-06에는 추천 경로가 따로 `recommendSelected`를 들고 있었다(확정 버튼이
+   *    기본 세트 / 정한 세트로 달랐기 때문). 그 결과 추천에서 고른 것이 검색 화면에서
+   *    안 보이고 검색 화면의 추가 버튼으로는 안 담겼다 — 사용자에게는 "추가가 안
+   *    된다"였다(2026-10-05 신고, 화면에서 재현). 확정 버튼을 하나로 합치면서 갈라
+   *    둘 이유가 없어졌다.
+   */
   const [selected, setSelected] = useState<Map<string, CatalogExercise>>(
     () => new Map(),
   );
-  // 추천 경로는 검색 경로와 선택 목록을 공유하지 않는다 — 확정 버튼이 서로
-  // 다른 일(기본 세트 / 정한 세트)을 하므로 섞이면 어느 쪽으로 갈지 모호해진다
   const [recommendPart, setRecommendPart] = useState<RecommendPart>("가슴");
   const [situation, setSituation] = useState<SituationKey>("beginner");
-  /** 설정 화면의 ←가 상황별/부위별 중 **왔던 쪽**으로 돌아가게 한다 */
-  const [lastRecommendMode, setLastRecommendMode] = useState<
-    "situation" | "part"
-  >("situation");
+  /** 설정 화면의 ←가 **왔던 화면**(상황별·부위별·검색)으로 돌아가게 한다 */
+  const [setupReturnMode, setSetupReturnMode] = useState<
+    "situation" | "part" | "search"
+  >("search");
   /** 추천 화면의 ←가 실제 진입점(허브 또는 검색)으로 돌아가게 한다. */
   const [recommendReturnMode, setRecommendReturnMode] = useState<
     "hub" | "search"
   >("hub");
-  const [recommendSelected, setRecommendSelected] = useState<
-    Map<string, CatalogExercise>
-  >(() => new Map());
   const [setupEntries, setSetupEntries] = useState<SetupEntry[]>([]);
   const [customOpen, setCustomOpen] = useState(false);
   const [customPart, setCustomPart] = useState<BodyPart>("가슴");
@@ -324,37 +341,70 @@ function PickerSheet({
     });
   }
 
-  function toggleRecommend(item: CatalogExercise) {
-    setRecommendSelected((prev) => {
-      const next = new Map(prev);
-      if (next.has(item.id)) next.delete(item.id);
-      else next.set(item.id, item);
-      return next;
-    });
-  }
-
   function openRecommendation(next: "situation" | "part") {
     setRecommendReturnMode("search");
     setMode(next);
   }
 
-  /** 추천에서 고른 것들을 설정 화면으로 넘긴다 (기본 3세트·10회·운동 중 입력) */
-  function goToSetup() {
-    const picked = [...recommendSelected.values()];
-    if (picked.length === 0) return;
-    if (mode === "situation" || mode === "part") setLastRecommendMode(mode);
-    setSetupEntries(initialSetupEntries(picked));
-    setMode("setup");
+  /**
+   * 고른 순서대로 설정값을 붙인다 — `세트 조절`에서 이미 바꾼 값은 **살린다.**
+   * 조절하고 뒤로 가서 하나 더 고른 뒤 다시 들어와도 앞의 조절이 지워지지 않게.
+   */
+  function currentEntries(): SetupEntry[] {
+    const adjusted = new Map(setupEntries.map((e) => [e.item.id, e.plan]));
+    return initialSetupEntries([...selected.values()]).map((entry) => ({
+      ...entry,
+      plan: adjusted.get(entry.item.id) ?? entry.plan,
+    }));
   }
 
-  function confirmSetup() {
-    if (!onPickConfigured || setupEntries.length === 0) return;
+  function submitEntries(entries: SetupEntry[]) {
+    if (entries.length === 0) return;
+    if (!onPickConfigured) {
+      onPickMany(entries.map((e) => e.item));
+      return;
+    }
     onPickConfigured(
-      setupEntries.map(({ item, plan }) => ({
+      entries.map(({ item, plan }) => ({
         item,
         sets: planToSets(item.exercise_type, item.measure, plan),
       })),
     );
+  }
+
+  /** `바로 추가` — 기본 3세트·10회·무게 운동 중 입력 (사용자 결정 2026-10-05) */
+  function addSelected() {
+    submitEntries(currentEntries());
+  }
+
+  /** `세트 조절` — 고른 것들을 설정 화면으로 넘긴다 */
+  function goToSetup() {
+    const entries = currentEntries();
+    if (entries.length === 0) return;
+    if (mode === "situation" || mode === "part" || mode === "search")
+      setSetupReturnMode(mode);
+    setSetupEntries(entries);
+    setMode("setup");
+  }
+
+  function confirmSetup() {
+    submitEntries(setupEntries);
+  }
+
+  /** 세트를 정할 수 있는 화면에서만 `세트 조절`을 낸다 */
+  const adjustSets = onPickConfigured && setupAdjustable ? goToSetup : undefined;
+
+  /**
+   * 시트 바깥을 눌러 닫을 때 — 고른 것이 있으면 한 번 묻는다 (2026-10-05).
+   * 바깥 한 번에 고른 것이 말없이 사라지면 그것도 "추가가 안 된다"로 보인다.
+   */
+  function requestClose() {
+    if (
+      selected.size > 0 &&
+      !window.confirm(`고른 운동 ${selected.size}개를 담지 않고 닫을까요?`)
+    )
+      return;
+    onClose();
   }
 
   async function createCustom() {
@@ -443,7 +493,7 @@ function PickerSheet({
     <>
       <div
         className="fixed inset-0 z-40 bg-black/40"
-        onClick={onClose}
+        onClick={requestClose}
         aria-hidden
       />
       <div className="fixed inset-x-0 bottom-0 z-50 flex max-h-[82dvh] flex-col rounded-t-[22px] border-t border-line bg-surface p-4 shadow-card">
@@ -475,11 +525,12 @@ function PickerSheet({
             onSituation={setSituation}
             onStartInterval={onStartInterval}
             intervalCta={intervalCta}
-            selected={new Set(recommendSelected.keys())}
-            onToggle={toggleRecommend}
+            selected={new Set(selected.keys())}
+            onToggle={toggleSelect}
             onBack={() => setMode(recommendReturnMode)}
             onSearch={() => setMode("search")}
-            onNext={goToSetup}
+            onAdd={addSelected}
+            onAdjust={adjustSets}
           />
         ) : mode === "setup" ? (
           <ExerciseSetupSheet
@@ -489,7 +540,7 @@ function PickerSheet({
                 prev.map((entry, i) => (i === index ? { ...entry, plan } : entry)),
               )
             }
-            onBack={() => setMode(lastRecommendMode)}
+            onBack={() => setMode(setupReturnMode)}
             onConfirm={confirmSetup}
           />
         ) : mode === "search" ? (
@@ -776,15 +827,11 @@ function PickerSheet({
           </button>
               ))}
 
-            <button
-              onClick={() => onPickMany([...selected.values()])}
-              disabled={selected.size === 0}
-              className="mt-2 h-12 w-full flex-none rounded-card-sm bg-accent text-sm font-extrabold text-accent-ink disabled:opacity-40"
-            >
-              {selected.size > 0
-                ? `선택한 ${selected.size}개 운동 추가`
-                : "운동을 선택하세요"}
-            </button>
+            <PickActions
+              count={selected.size}
+              onAdd={addSelected}
+              onAdjust={adjustSets}
+            />
           </>
         ) : mode === "routine" ? (
           <>

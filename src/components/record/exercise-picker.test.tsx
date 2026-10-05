@@ -371,7 +371,7 @@ describe("ExercisePicker — ⭐ 자주 한 운동 (2026-08-02)", () => {
       ?.lastElementChild as HTMLElement;
     fireEvent.click(chipRow.children[0]);
 
-    expect(queryByText("선택한 1개 운동 추가")).toBeTruthy();
+    expect(queryByText("운동 1개 바로 추가")).toBeTruthy();
   });
 
   it("완료 기록이 없으면 영역 자체가 안 나온다", () => {

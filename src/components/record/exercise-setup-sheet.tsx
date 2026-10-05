@@ -56,7 +56,8 @@ export function ExerciseSetupSheet({
         <button
           type="button"
           onClick={onBack}
-          aria-label="추천 운동으로 돌아가기"
+          /* 검색에서도 들어온다 (2026-10-05) — '추천'이라고 못 박지 않는다 */
+          aria-label="고르던 화면으로 돌아가기"
           className="flex h-8 w-8 items-center justify-center rounded-full text-lg text-muted"
         >
           ←

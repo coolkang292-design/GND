@@ -543,6 +543,8 @@ function TabataSheetBody({
           (`tabataRepsForMinutes`) — 여기서 받은 3세트·10회를 쓰면 안 된다.
         */
         onPickConfigured={(picks) => addPickedItems(picks.map((p) => p.item))}
+        // 세트는 코스가 정한다 — `세트 조절`을 내면 정한 값이 조용히 버려진다
+        setupAdjustable={false}
         onPickPast={(sessionId) => Promise.resolve(pickPastSession(sessionId))}
         onPickRoutine={
           routines

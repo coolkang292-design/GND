@@ -1358,6 +1358,10 @@ function WorkoutScreen({ userId }: { userId: string }) {
    */
   function addConfiguredExercises(picks: ConfiguredPick[]) {
     if (picks.length === 0) return;
+    // ⚠️ 운동 중 '바꾸기'로 연 피커면 추가가 아니라 교체다. 2026-10-05부터 검색도
+    //    이 경로로 오므로(피커의 `바로 추가`) 여기서 안 거르면 바꾸기가 추가가 된다.
+    //    추천 경로는 그 전부터 이 분기가 없어서 바꾸기가 추가로 새고 있었다.
+    if (replaceFocusedExercise(picks[0].item)) return;
     const added: LocalExercise[] = picks.map(({ item, sets }) => ({
       key: localId(),
       name: item.name,
