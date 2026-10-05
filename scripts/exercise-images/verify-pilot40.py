@@ -17,7 +17,7 @@ def main():
     assert len({r['body_part'] for r in plan['selection']})==7 and len({r['visual_family'] for r in plan['selection']})==33;passed+=1
     assert sum(r['definition_status']=='NEEDS_REVIEW' for r in byid.values())==74;passed+=1
     for row in manifest['exercises']:
-        row.pop('pilot_040',None);row.pop('pilot_080',None);row.pop('pilot_120',None)
+        row.pop('pilot_040',None);row.pop('pilot_080',None);row.pop('pilot_120',None);row.pop('pilot_160',None)
     original=json.dumps(manifest,ensure_ascii=False,indent=2)+'\n'
     assert hashlib.sha256(original.replace('\n','\r\n').encode()).hexdigest()==plan['parent_manifest_sha256'];passed+=1
     assert not plan['production_db'] and not plan['storage_upload'] and not plan['deploy'];passed+=1

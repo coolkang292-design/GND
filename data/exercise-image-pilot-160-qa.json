@@ -1,0 +1,2438 @@
+{
+  "pilot_id": "GND-P160",
+  "calls": [
+    {
+      "call_id": "GND-P160-01",
+      "kind": "sheet_2x2",
+      "exercise_ids": [
+        "de1c3255-4056-42f7-9ee4-ee932530231e",
+        "b452ccad-10da-4f25-8915-3a9045b51e95",
+        "b2f1e508-fcbf-4e70-8e53-23c1c0bcaf30",
+        "7669d541-f446-4887-bbd9-f5c0fbd7bbf1"
+      ],
+      "file": "output/exercise-images/pilot-160/sheets/GND-P160-01.png",
+      "sha256": "6d66eea2f7632a0d3d14db4ff24c75fb80020f552bf59c50434ef9dfbe55f614",
+      "resolution": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "call_id": "GND-P160-02",
+      "kind": "sheet_2x2",
+      "exercise_ids": [
+        "6660fcd0-012a-4785-a956-ab3aa5d8cf48",
+        "d693578a-b655-4dd7-b4a7-fd07316464d6",
+        "30a994a8-4cf3-4905-9c05-cddb3afa9997",
+        "50f60c1b-db40-46c3-afe5-efd22eeeca89"
+      ],
+      "file": "output/exercise-images/pilot-160/sheets/GND-P160-02.png",
+      "sha256": "c162e57ffed0cc0415342ff665cccf4cb388a1819deca73b3f7b92a150fafe1c",
+      "resolution": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "call_id": "GND-P160-03",
+      "kind": "sheet_2x2",
+      "exercise_ids": [
+        "ef8292ff-da18-48e3-92a0-0a1dbecf4738",
+        "a3390101-d4ed-46a2-8fbb-2205688f1836",
+        "1fbc7045-1bcc-4d85-80ce-c5506a66d973",
+        "ea6bd276-e7bc-4061-a14c-c7106f280704"
+      ],
+      "file": "output/exercise-images/pilot-160/sheets/GND-P160-03.png",
+      "sha256": "92f1613454794fcb8dad18f20787473c76f6f91f6b1f00b76a678d80b936de14",
+      "resolution": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "call_id": "GND-P160-04",
+      "kind": "sheet_2x2",
+      "exercise_ids": [
+        "6b1013d6-5f25-4665-9782-9419db996443",
+        "d3c1a643-5452-4f47-af95-c2e2d5374e23",
+        "817e92ba-4498-4b0e-99f4-378543b1e651",
+        "b0877bf9-21a7-4554-ba09-1029d4e013c7"
+      ],
+      "file": "output/exercise-images/pilot-160/sheets/GND-P160-04.png",
+      "sha256": "af69b0bc78639445b4a64aeb834f40c8351a838d45e8e3addb6422941170af47",
+      "resolution": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "call_id": "GND-P160-05",
+      "kind": "sheet_2x2",
+      "exercise_ids": [
+        "f34bfcaa-1c46-439f-9ffe-287f45670ef2",
+        "7dcf3022-91ca-42c8-b257-372a6067696e",
+        "13a1addf-3649-46c8-bef1-a19cc45870a9",
+        "47e6ccc0-e87f-4645-b44a-634678e99fbd"
+      ],
+      "file": "output/exercise-images/pilot-160/sheets/GND-P160-05.png",
+      "sha256": "39257da7897a3f549f201e637511e9c236e3b9b7c603fac64a6829a1864d76b8",
+      "resolution": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "call_id": "GND-P160-06",
+      "kind": "sheet_2x2",
+      "exercise_ids": [
+        "9fb956e7-1376-4607-b244-6e647b01dbe9",
+        "49edb349-6ce1-4f33-babb-9ab48106fc3d",
+        "efd3c05b-ddec-481b-bbdf-238b71a57cbb",
+        "689a7a84-48f6-4ce4-be16-7dbb94b9ada3"
+      ],
+      "file": "output/exercise-images/pilot-160/sheets/GND-P160-06.png",
+      "sha256": "34470668e9990d343a47c32d2a68610c5971310f212b3e54f1047a7e73e282c3",
+      "resolution": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "call_id": "GND-P160-07",
+      "kind": "sheet_2x2",
+      "exercise_ids": [
+        "225633ce-e69d-4a2e-8b28-4394f3423723",
+        "4bb6052c-478c-46a2-8329-b62b0aa29a14",
+        "4342ad12-e150-4159-814f-005ac5841d7f",
+        "1565a3d5-7bfa-438d-af7c-cf577d8af599"
+      ],
+      "file": "output/exercise-images/pilot-160/sheets/GND-P160-07.png",
+      "sha256": "4211d7c915b12a15f4d995499fb01b9eda542a13a4e782e6117db86dcc8f6535",
+      "resolution": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "call_id": "GND-P160-08",
+      "kind": "sheet_2x2",
+      "exercise_ids": [
+        "c164c5be-b792-4ac2-8b85-ba7a9470eee4",
+        "d1ad82b1-fe7f-485d-a9d1-a5e42bdf6eff",
+        "68c43953-ab2a-4548-9169-3d6e0895aecf",
+        "c5c92985-c48e-4c84-a8d7-04fcab930906"
+      ],
+      "file": "output/exercise-images/pilot-160/sheets/GND-P160-08.png",
+      "sha256": "06218831224f1459445d706ef62b08d3456d5c05cd69ced176c5a94d1a388e92",
+      "resolution": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "call_id": "GND-P160-09",
+      "kind": "sheet_2x2",
+      "exercise_ids": [
+        "b5fc1f18-ea7c-49dd-9b29-42a6dddfe5c9",
+        "0a779a2c-b8a4-43d1-a98a-4c166b0eb33d",
+        "2c38f171-8877-4dd1-bb20-3b95697fa175",
+        "f242d169-3e47-44d1-96c8-0a6f51fce13c"
+      ],
+      "file": "output/exercise-images/pilot-160/sheets/GND-P160-09.png",
+      "sha256": "82b683c1c60d171ed3b21979db93c3a18c584a80a3bd3ad6f87c9de291e81aa8",
+      "resolution": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "call_id": "GND-P160-10",
+      "kind": "sheet_2x2",
+      "exercise_ids": [
+        "30fffd17-72b8-4fde-95de-3ff62a57ab49",
+        "0a39b280-c943-4f3e-b7f7-c3d96a143009",
+        "6d22712f-01fb-4a09-9f52-91159733e6dc",
+        "85cd5fe7-27e6-4386-a451-a74859dc98af"
+      ],
+      "file": "output/exercise-images/pilot-160/sheets/GND-P160-10.png",
+      "sha256": "c2767640e5314879b4935d1d44f5dd8f847fa90c5ec961f244eac497ae8e6cd8",
+      "resolution": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "call_id": "RETRY-50f60c1b-db40-46c3-afe5-efd22eeeca89-1",
+      "kind": "single_retry",
+      "exercise_ids": [
+        "50f60c1b-db40-46c3-afe5-efd22eeeca89"
+      ],
+      "file": "output/exercise-images/pilot-160/sheets/RETRY-50f60c1b-db40-46c3-afe5-efd22eeeca89-1.png",
+      "sha256": "aed1cdfcba37a8975b8055e6b884810f82238c167499a50c48e5eb951d72b63b",
+      "resolution": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "call_id": "RETRY-7dcf3022-91ca-42c8-b257-372a6067696e-1",
+      "kind": "single_retry",
+      "exercise_ids": [
+        "7dcf3022-91ca-42c8-b257-372a6067696e"
+      ],
+      "file": "output/exercise-images/pilot-160/sheets/RETRY-7dcf3022-91ca-42c8-b257-372a6067696e-1.png",
+      "sha256": "db065bcf44bd880a206f47cf3b6b677547f592890dd368a1fb6f156326b3c746",
+      "resolution": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "call_id": "RETRY-47e6ccc0-e87f-4645-b44a-634678e99fbd-1",
+      "kind": "single_retry",
+      "exercise_ids": [
+        "47e6ccc0-e87f-4645-b44a-634678e99fbd"
+      ],
+      "file": "output/exercise-images/pilot-160/sheets/RETRY-47e6ccc0-e87f-4645-b44a-634678e99fbd-1.png",
+      "sha256": "38599c64385e7107aaf372e5845cbfd025440cda4e48a253ec87555c3b87bc34",
+      "resolution": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "call_id": "RETRY-9fb956e7-1376-4607-b244-6e647b01dbe9-1",
+      "kind": "single_retry",
+      "exercise_ids": [
+        "9fb956e7-1376-4607-b244-6e647b01dbe9"
+      ],
+      "file": "output/exercise-images/pilot-160/sheets/RETRY-9fb956e7-1376-4607-b244-6e647b01dbe9-1.png",
+      "sha256": "de007b2a7c355f4c807e18edaafec571ddf6efb8afbfe91a3ddfe3283361b6d8",
+      "resolution": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "call_id": "RETRY-49edb349-6ce1-4f33-babb-9ab48106fc3d-1",
+      "kind": "single_retry",
+      "exercise_ids": [
+        "49edb349-6ce1-4f33-babb-9ab48106fc3d"
+      ],
+      "file": "output/exercise-images/pilot-160/sheets/RETRY-49edb349-6ce1-4f33-babb-9ab48106fc3d-1.png",
+      "sha256": "6c29b73dc27216f679f1525e6df54ff6d1a4a4c995ca59db34b0a0137e3abe25",
+      "resolution": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "call_id": "RETRY-225633ce-e69d-4a2e-8b28-4394f3423723-1",
+      "kind": "single_retry",
+      "exercise_ids": [
+        "225633ce-e69d-4a2e-8b28-4394f3423723"
+      ],
+      "file": "output/exercise-images/pilot-160/sheets/RETRY-225633ce-e69d-4a2e-8b28-4394f3423723-1.png",
+      "sha256": "cfb01a91982cab413bd723811a6b1ffd8579aecb8677abea7a86400ad479daf6",
+      "resolution": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "call_id": "RETRY-4342ad12-e150-4159-814f-005ac5841d7f-1",
+      "kind": "single_retry",
+      "exercise_ids": [
+        "4342ad12-e150-4159-814f-005ac5841d7f"
+      ],
+      "file": "output/exercise-images/pilot-160/sheets/RETRY-4342ad12-e150-4159-814f-005ac5841d7f-1.png",
+      "sha256": "296e79ddc797e4f02ed01a421f592fde69cc13a1093e0f545fc1fe4b67165caa",
+      "resolution": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "call_id": "RETRY-2c38f171-8877-4dd1-bb20-3b95697fa175-1",
+      "kind": "single_retry",
+      "exercise_ids": [
+        "2c38f171-8877-4dd1-bb20-3b95697fa175"
+      ],
+      "file": "output/exercise-images/pilot-160/sheets/RETRY-2c38f171-8877-4dd1-bb20-3b95697fa175-1.png",
+      "sha256": "a5ab93c7f88ad837af44ac5a0340f754dd14a7b8cf79353563890a3a69c2384b",
+      "resolution": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "call_id": "RETRY-85cd5fe7-27e6-4386-a451-a74859dc98af-1",
+      "kind": "single_retry",
+      "exercise_ids": [
+        "85cd5fe7-27e6-4386-a451-a74859dc98af"
+      ],
+      "file": "output/exercise-images/pilot-160/sheets/RETRY-85cd5fe7-27e6-4386-a451-a74859dc98af-1.png",
+      "sha256": "557a00a90751ec3ff54c39fbea049b59950f80d28eb8039e9b855eabb42903d8",
+      "resolution": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "call_id": "RETRY-225633ce-e69d-4a2e-8b28-4394f3423723-2",
+      "kind": "single_retry",
+      "exercise_ids": [
+        "225633ce-e69d-4a2e-8b28-4394f3423723"
+      ],
+      "file": "output/exercise-images/pilot-160/sheets/RETRY-225633ce-e69d-4a2e-8b28-4394f3423723-2.png",
+      "sha256": "a444382380ad00bc01bd85b6227d5115e4bf36bb41a3da3118c6b8c7a56b1829",
+      "resolution": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "call_id": "RETRY-4342ad12-e150-4159-814f-005ac5841d7f-2",
+      "kind": "single_retry",
+      "exercise_ids": [
+        "4342ad12-e150-4159-814f-005ac5841d7f"
+      ],
+      "file": "output/exercise-images/pilot-160/sheets/RETRY-4342ad12-e150-4159-814f-005ac5841d7f-2.png",
+      "sha256": "27c58acd2a5c0ab71c0b031312de8a8f71a57e2ea280cafb6ac90cace401e78b",
+      "resolution": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "call_id": "RETRY-6d22712f-01fb-4a09-9f52-91159733e6dc-1",
+      "kind": "single_retry",
+      "exercise_ids": [
+        "6d22712f-01fb-4a09-9f52-91159733e6dc"
+      ],
+      "file": "output/exercise-images/pilot-160/sheets/RETRY-6d22712f-01fb-4a09-9f52-91159733e6dc-1.png",
+      "sha256": "b2dfa2685217c947d0a5c086568f2ea23c428cea9f64f665049320ab35b1bce4",
+      "resolution": [
+        1254,
+        1254
+      ]
+    }
+  ],
+  "images": [
+    {
+      "exercise_id": "de1c3255-4056-42f7-9ee4-ee932530231e",
+      "name": "덤벨 스퀴즈 프레스",
+      "visual_family": "bench_press",
+      "body_part": "가슴",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "call_id": "GND-P160-01",
+          "source_sha256": "6d66eea2f7632a0d3d14db4ff24c75fb80020f552bf59c50434ef9dfbe55f614",
+          "native_cell": [
+            627,
+            627
+          ],
+          "crop_box": [
+            0,
+            0,
+            627,
+            627
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/de1c3255-4056-42f7-9ee4-ee932530231e-a1.png",
+          "sha256": "3c8ae8c76000f9b2ff1c56890adc5c552562e6e43522c6db3f0d9a5941ae258e",
+          "scale_factor": 0.8165869218500797,
+          "qa": "PASS",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [],
+          "notes": "운동 자세·기구·지정 근육 및 실제48px 확인. 스퀴즈 덤벨 접촉/리어 머신 후면/리버스 회내그립/바닥 브릿지 식별.",
+          "error_types": [],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        }
+      ],
+      "final_qa": "PASS",
+      "final_file": "output/exercise-images/pilot-160/final/de1c3255-4056-42f7-9ee4-ee932530231e.png",
+      "final_sha256": "3c8ae8c76000f9b2ff1c56890adc5c552562e6e43522c6db3f0d9a5941ae258e"
+    },
+    {
+      "exercise_id": "b452ccad-10da-4f25-8915-3a9045b51e95",
+      "name": "리어 델토이드 플라이 머신",
+      "visual_family": "rear_delt",
+      "body_part": "어깨",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "call_id": "GND-P160-01",
+          "source_sha256": "6d66eea2f7632a0d3d14db4ff24c75fb80020f552bf59c50434ef9dfbe55f614",
+          "native_cell": [
+            627,
+            627
+          ],
+          "crop_box": [
+            627,
+            0,
+            1254,
+            627
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/b452ccad-10da-4f25-8915-3a9045b51e95-a1.png",
+          "sha256": "836eed9d70837444b5b0ce279d13f9689bcb0fb9728cb43766df4a098e7f2d13",
+          "scale_factor": 0.8165869218500797,
+          "qa": "PASS",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [],
+          "notes": "운동 자세·기구·지정 근육 및 실제48px 확인. 스퀴즈 덤벨 접촉/리어 머신 후면/리버스 회내그립/바닥 브릿지 식별.",
+          "error_types": [],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        }
+      ],
+      "final_qa": "PASS",
+      "final_file": "output/exercise-images/pilot-160/final/b452ccad-10da-4f25-8915-3a9045b51e95.png",
+      "final_sha256": "836eed9d70837444b5b0ce279d13f9689bcb0fb9728cb43766df4a098e7f2d13"
+    },
+    {
+      "exercise_id": "b2f1e508-fcbf-4e70-8e53-23c1c0bcaf30",
+      "name": "리버스 바벨 컬",
+      "visual_family": "biceps_curl",
+      "body_part": "팔",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "call_id": "GND-P160-01",
+          "source_sha256": "6d66eea2f7632a0d3d14db4ff24c75fb80020f552bf59c50434ef9dfbe55f614",
+          "native_cell": [
+            627,
+            627
+          ],
+          "crop_box": [
+            0,
+            627,
+            627,
+            1254
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/b2f1e508-fcbf-4e70-8e53-23c1c0bcaf30-a1.png",
+          "sha256": "a353f27c53639f88971a5720c7760a2bdd8597c2e6cf6fa266c7932b412cdb64",
+          "scale_factor": 0.8165869218500797,
+          "qa": "PASS",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [],
+          "notes": "운동 자세·기구·지정 근육 및 실제48px 확인. 스퀴즈 덤벨 접촉/리어 머신 후면/리버스 회내그립/바닥 브릿지 식별.",
+          "error_types": [],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        }
+      ],
+      "final_qa": "PASS",
+      "final_file": "output/exercise-images/pilot-160/final/b2f1e508-fcbf-4e70-8e53-23c1c0bcaf30.png",
+      "final_sha256": "a353f27c53639f88971a5720c7760a2bdd8597c2e6cf6fa266c7932b412cdb64"
+    },
+    {
+      "exercise_id": "7669d541-f446-4887-bbd9-f5c0fbd7bbf1",
+      "name": "글루트 브릿지",
+      "visual_family": "hip_bridge",
+      "body_part": "하체",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "call_id": "GND-P160-01",
+          "source_sha256": "6d66eea2f7632a0d3d14db4ff24c75fb80020f552bf59c50434ef9dfbe55f614",
+          "native_cell": [
+            627,
+            627
+          ],
+          "crop_box": [
+            627,
+            627,
+            1254,
+            1254
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/7669d541-f446-4887-bbd9-f5c0fbd7bbf1-a1.png",
+          "sha256": "0b3d1da5c0a753a6ecc31f9eb37aa4f41ad8ab63c4cdf8c4f84530a5d2ab9a64",
+          "scale_factor": 0.8165869218500797,
+          "qa": "PASS",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [],
+          "notes": "운동 자세·기구·지정 근육 및 실제48px 확인. 스퀴즈 덤벨 접촉/리어 머신 후면/리버스 회내그립/바닥 브릿지 식별.",
+          "error_types": [],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        }
+      ],
+      "final_qa": "PASS",
+      "final_file": "output/exercise-images/pilot-160/final/7669d541-f446-4887-bbd9-f5c0fbd7bbf1.png",
+      "final_sha256": "0b3d1da5c0a753a6ecc31f9eb37aa4f41ad8ab63c4cdf8c4f84530a5d2ab9a64"
+    },
+    {
+      "exercise_id": "6660fcd0-012a-4785-a956-ab3aa5d8cf48",
+      "name": "인클라인 벤치프레스 머신",
+      "visual_family": "chest_press_machine",
+      "body_part": "가슴",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "call_id": "GND-P160-02",
+          "source_sha256": "c162e57ffed0cc0415342ff665cccf4cb388a1819deca73b3f7b92a150fafe1c",
+          "native_cell": [
+            627,
+            627
+          ],
+          "crop_box": [
+            0,
+            0,
+            627,
+            627
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/6660fcd0-012a-4785-a956-ab3aa5d8cf48-a1.png",
+          "sha256": "f3de2efc5f896891494b81e25fe79e242068b290dbdf95dfdfd56729b9bb1747",
+          "scale_factor": 0.8165869218500797,
+          "qa": "PASS",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [],
+          "notes": "인클라인 머신 레버/가슴/48px 확인.",
+          "error_types": [],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        }
+      ],
+      "final_qa": "PASS",
+      "final_file": "output/exercise-images/pilot-160/final/6660fcd0-012a-4785-a956-ab3aa5d8cf48.png",
+      "final_sha256": "f3de2efc5f896891494b81e25fe79e242068b290dbdf95dfdfd56729b9bb1747"
+    },
+    {
+      "exercise_id": "d693578a-b655-4dd7-b4a7-fd07316464d6",
+      "name": "이지바 프론트 레이즈",
+      "visual_family": "front_raise",
+      "body_part": "어깨",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "call_id": "GND-P160-02",
+          "source_sha256": "c162e57ffed0cc0415342ff665cccf4cb388a1819deca73b3f7b92a150fafe1c",
+          "native_cell": [
+            627,
+            627
+          ],
+          "crop_box": [
+            627,
+            0,
+            1254,
+            627
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/d693578a-b655-4dd7-b4a7-fd07316464d6-a1.png",
+          "sha256": "d12c9c2df7e16f0cc68259419ff0417e95d2f16102854d384fd6703d3af446c4",
+          "scale_factor": 0.8165869218500797,
+          "qa": "PASS",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [],
+          "notes": "EZ바 전방 레이즈/전면어깨/48px 확인.",
+          "error_types": [],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        }
+      ],
+      "final_qa": "PASS",
+      "final_file": "output/exercise-images/pilot-160/final/d693578a-b655-4dd7-b4a7-fd07316464d6.png",
+      "final_sha256": "d12c9c2df7e16f0cc68259419ff0417e95d2f16102854d384fd6703d3af446c4"
+    },
+    {
+      "exercise_id": "30a994a8-4cf3-4905-9c05-cddb3afa9997",
+      "name": "캡틴스 체어 니 레이즈",
+      "visual_family": "hanging_leg_raise",
+      "body_part": "코어",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "call_id": "GND-P160-02",
+          "source_sha256": "c162e57ffed0cc0415342ff665cccf4cb388a1819deca73b3f7b92a150fafe1c",
+          "native_cell": [
+            627,
+            627
+          ],
+          "crop_box": [
+            0,
+            627,
+            627,
+            1254
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/30a994a8-4cf3-4905-9c05-cddb3afa9997-a1.png",
+          "sha256": "de81a31019d73903aad78f83a075604107e0f7d169d27050ebf7a54d7e5ec908",
+          "scale_factor": 0.8165869218500797,
+          "qa": "PASS",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [],
+          "notes": "팔꿈치 패드 지지 체어 무릎레이즈/복직근/48px 확인.",
+          "error_types": [],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        }
+      ],
+      "final_qa": "PASS",
+      "final_file": "output/exercise-images/pilot-160/final/30a994a8-4cf3-4905-9c05-cddb3afa9997.png",
+      "final_sha256": "de81a31019d73903aad78f83a075604107e0f7d169d27050ebf7a54d7e5ec908"
+    },
+    {
+      "exercise_id": "50f60c1b-db40-46c3-afe5-efd22eeeca89",
+      "name": "덤벨 레터럴 런지",
+      "visual_family": "lunge",
+      "body_part": "하체",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "call_id": "GND-P160-02",
+          "source_sha256": "c162e57ffed0cc0415342ff665cccf4cb388a1819deca73b3f7b92a150fafe1c",
+          "native_cell": [
+            627,
+            627
+          ],
+          "crop_box": [
+            627,
+            627,
+            1254,
+            1254
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/50f60c1b-db40-46c3-afe5-efd22eeeca89-a1.png",
+          "sha256": "1ac132a20415f33d783e65263e0487cc1b531a7ff3e86815ad66f08788c4354a",
+          "scale_factor": 0.8165869218500797,
+          "qa": "FAIL",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "FAIL",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [
+            "target_muscle"
+          ],
+          "notes": "덤벨 측면런지 자세와기구는 맞지만 둔근 대신 전면대퇴만 강조.",
+          "error_types": [
+            "wrong_highlight_muscle"
+          ],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        },
+        {
+          "attempt_no": 2,
+          "call_id": "RETRY-50f60c1b-db40-46c3-afe5-efd22eeeca89-1",
+          "source_sha256": "aed1cdfcba37a8975b8055e6b884810f82238c167499a50c48e5eb951d72b63b",
+          "native_cell": [
+            1254,
+            1254
+          ],
+          "crop_box": [
+            0,
+            0,
+            1254,
+            1254
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/50f60c1b-db40-46c3-afe5-efd22eeeca89-a2.png",
+          "sha256": "5e0070c2fb9e3b97794f2c06c0ab120c892b1379327a2296d801d6030d36cf56",
+          "scale_factor": 0.4082934609250399,
+          "qa": "PASS",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [],
+          "notes": "넓은 측면 스탠스 한쪽무릎굽힘/반대다리직선, 대퇴와후면둔근 강조 수정.48px 확인.",
+          "error_types": [],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        }
+      ],
+      "final_qa": "PASS",
+      "final_file": "output/exercise-images/pilot-160/final/50f60c1b-db40-46c3-afe5-efd22eeeca89.png",
+      "final_sha256": "5e0070c2fb9e3b97794f2c06c0ab120c892b1379327a2296d801d6030d36cf56"
+    },
+    {
+      "exercise_id": "ef8292ff-da18-48e3-92a0-0a1dbecf4738",
+      "name": "로우 풀리 케이블 플라이",
+      "visual_family": "chest_fly",
+      "body_part": "가슴",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "call_id": "GND-P160-03",
+          "source_sha256": "92f1613454794fcb8dad18f20787473c76f6f91f6b1f00b76a678d80b936de14",
+          "native_cell": [
+            627,
+            627
+          ],
+          "crop_box": [
+            0,
+            0,
+            627,
+            627
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/ef8292ff-da18-48e3-92a0-0a1dbecf4738-a1.png",
+          "sha256": "7a820e3717a8a56a134907b376561f1e6d88262613fd7dd6dfc5014a762cbf48",
+          "scale_factor": 0.8165869218500797,
+          "qa": "PASS",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [],
+          "notes": "낮은 케이블 플라이/후방바 프레스 상단/엎드린 스파이더컬/옆으로 누운 다리외전과48px 식별, 근육위치 확인.",
+          "error_types": [],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        }
+      ],
+      "final_qa": "PASS",
+      "final_file": "output/exercise-images/pilot-160/final/ef8292ff-da18-48e3-92a0-0a1dbecf4738.png",
+      "final_sha256": "7a820e3717a8a56a134907b376561f1e6d88262613fd7dd6dfc5014a762cbf48"
+    },
+    {
+      "exercise_id": "a3390101-d4ed-46a2-8fbb-2205688f1836",
+      "name": "비하인드 넥 프레스",
+      "visual_family": "shoulder_press",
+      "body_part": "어깨",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "call_id": "GND-P160-03",
+          "source_sha256": "92f1613454794fcb8dad18f20787473c76f6f91f6b1f00b76a678d80b936de14",
+          "native_cell": [
+            627,
+            627
+          ],
+          "crop_box": [
+            627,
+            0,
+            1254,
+            627
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/a3390101-d4ed-46a2-8fbb-2205688f1836-a1.png",
+          "sha256": "e77e64db4bbd14fffeefa6d50cc45b689941e623b5986de9b467f51f1fa73328",
+          "scale_factor": 0.8165869218500797,
+          "qa": "PASS",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [],
+          "notes": "낮은 케이블 플라이/후방바 프레스 상단/엎드린 스파이더컬/옆으로 누운 다리외전과48px 식별, 근육위치 확인.",
+          "error_types": [],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        }
+      ],
+      "final_qa": "PASS",
+      "final_file": "output/exercise-images/pilot-160/final/a3390101-d4ed-46a2-8fbb-2205688f1836.png",
+      "final_sha256": "e77e64db4bbd14fffeefa6d50cc45b689941e623b5986de9b467f51f1fa73328"
+    },
+    {
+      "exercise_id": "1fbc7045-1bcc-4d85-80ce-c5506a66d973",
+      "name": "덤벨 스파이더 컬",
+      "visual_family": "biceps_curl",
+      "body_part": "팔",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "call_id": "GND-P160-03",
+          "source_sha256": "92f1613454794fcb8dad18f20787473c76f6f91f6b1f00b76a678d80b936de14",
+          "native_cell": [
+            627,
+            627
+          ],
+          "crop_box": [
+            0,
+            627,
+            627,
+            1254
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/1fbc7045-1bcc-4d85-80ce-c5506a66d973-a1.png",
+          "sha256": "bf443031252b347e957cefc085476c26412432e99098b83eb5a56a34399ebd48",
+          "scale_factor": 0.8165869218500797,
+          "qa": "PASS",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [],
+          "notes": "낮은 케이블 플라이/후방바 프레스 상단/엎드린 스파이더컬/옆으로 누운 다리외전과48px 식별, 근육위치 확인.",
+          "error_types": [],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        }
+      ],
+      "final_qa": "PASS",
+      "final_file": "output/exercise-images/pilot-160/final/1fbc7045-1bcc-4d85-80ce-c5506a66d973.png",
+      "final_sha256": "bf443031252b347e957cefc085476c26412432e99098b83eb5a56a34399ebd48"
+    },
+    {
+      "exercise_id": "ea6bd276-e7bc-4061-a14c-c7106f280704",
+      "name": "라잉 힙 어브덕션",
+      "visual_family": "hip_abduction",
+      "body_part": "하체",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "call_id": "GND-P160-03",
+          "source_sha256": "92f1613454794fcb8dad18f20787473c76f6f91f6b1f00b76a678d80b936de14",
+          "native_cell": [
+            627,
+            627
+          ],
+          "crop_box": [
+            627,
+            627,
+            1254,
+            1254
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/ea6bd276-e7bc-4061-a14c-c7106f280704-a1.png",
+          "sha256": "973e244dac1f933a3a676005770bfde68b57d8838bc0032ec8880675d5fd54f8",
+          "scale_factor": 0.8165869218500797,
+          "qa": "PASS",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [],
+          "notes": "낮은 케이블 플라이/후방바 프레스 상단/엎드린 스파이더컬/옆으로 누운 다리외전과48px 식별, 근육위치 확인.",
+          "error_types": [],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        }
+      ],
+      "final_qa": "PASS",
+      "final_file": "output/exercise-images/pilot-160/final/ea6bd276-e7bc-4061-a14c-c7106f280704.png",
+      "final_sha256": "973e244dac1f933a3a676005770bfde68b57d8838bc0032ec8880675d5fd54f8"
+    },
+    {
+      "exercise_id": "6b1013d6-5f25-4665-9782-9419db996443",
+      "name": "아처 푸시업",
+      "visual_family": "push_up",
+      "body_part": "가슴",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "call_id": "GND-P160-04",
+          "source_sha256": "af69b0bc78639445b4a64aeb834f40c8351a838d45e8e3addb6422941170af47",
+          "native_cell": [
+            627,
+            627
+          ],
+          "crop_box": [
+            0,
+            0,
+            627,
+            627
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/6b1013d6-5f25-4665-9782-9419db996443-a1.png",
+          "sha256": "a737c91d46df00e5323d6a8e455df126165ab7d6c45ceb95195b8143c45d0970",
+          "scale_factor": 0.8165869218500797,
+          "qa": "PASS",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [],
+          "notes": "아처 편측팔/스미스 가이드바/회내 손목익스텐션/크런치 머신 정의·근육 및48px 식별 확인.",
+          "error_types": [],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        }
+      ],
+      "final_qa": "PASS",
+      "final_file": "output/exercise-images/pilot-160/final/6b1013d6-5f25-4665-9782-9419db996443.png",
+      "final_sha256": "a737c91d46df00e5323d6a8e455df126165ab7d6c45ceb95195b8143c45d0970"
+    },
+    {
+      "exercise_id": "d3c1a643-5452-4f47-af95-c2e2d5374e23",
+      "name": "스미스머신 슈러그",
+      "visual_family": "shrug",
+      "body_part": "어깨",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "call_id": "GND-P160-04",
+          "source_sha256": "af69b0bc78639445b4a64aeb834f40c8351a838d45e8e3addb6422941170af47",
+          "native_cell": [
+            627,
+            627
+          ],
+          "crop_box": [
+            627,
+            0,
+            1254,
+            627
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/d3c1a643-5452-4f47-af95-c2e2d5374e23-a1.png",
+          "sha256": "e388a14ba53b90529cdcf4a6684ee28d30b0e915ed485c6ca74d8870a259acb2",
+          "scale_factor": 0.8165869218500797,
+          "qa": "PASS",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [],
+          "notes": "아처 편측팔/스미스 가이드바/회내 손목익스텐션/크런치 머신 정의·근육 및48px 식별 확인.",
+          "error_types": [],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        }
+      ],
+      "final_qa": "PASS",
+      "final_file": "output/exercise-images/pilot-160/final/d3c1a643-5452-4f47-af95-c2e2d5374e23.png",
+      "final_sha256": "e388a14ba53b90529cdcf4a6684ee28d30b0e915ed485c6ca74d8870a259acb2"
+    },
+    {
+      "exercise_id": "817e92ba-4498-4b0e-99f4-378543b1e651",
+      "name": "리버스 바벨 리스트 컬",
+      "visual_family": "wrist_curl",
+      "body_part": "팔",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "call_id": "GND-P160-04",
+          "source_sha256": "af69b0bc78639445b4a64aeb834f40c8351a838d45e8e3addb6422941170af47",
+          "native_cell": [
+            627,
+            627
+          ],
+          "crop_box": [
+            0,
+            627,
+            627,
+            1254
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/817e92ba-4498-4b0e-99f4-378543b1e651-a1.png",
+          "sha256": "227d459ca579471d0f5189b8f2d5e1904030601ddcb5c23d88e1cf149aeabd3d",
+          "scale_factor": 0.8165869218500797,
+          "qa": "PASS",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [],
+          "notes": "아처 편측팔/스미스 가이드바/회내 손목익스텐션/크런치 머신 정의·근육 및48px 식별 확인.",
+          "error_types": [],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        }
+      ],
+      "final_qa": "PASS",
+      "final_file": "output/exercise-images/pilot-160/final/817e92ba-4498-4b0e-99f4-378543b1e651.png",
+      "final_sha256": "227d459ca579471d0f5189b8f2d5e1904030601ddcb5c23d88e1cf149aeabd3d"
+    },
+    {
+      "exercise_id": "b0877bf9-21a7-4554-ba09-1029d4e013c7",
+      "name": "복근 크런치 머신",
+      "visual_family": "crunch",
+      "body_part": "코어",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "call_id": "GND-P160-04",
+          "source_sha256": "af69b0bc78639445b4a64aeb834f40c8351a838d45e8e3addb6422941170af47",
+          "native_cell": [
+            627,
+            627
+          ],
+          "crop_box": [
+            627,
+            627,
+            1254,
+            1254
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/b0877bf9-21a7-4554-ba09-1029d4e013c7-a1.png",
+          "sha256": "5e4a53dd20a0727ed5ee83fb61fc4167732d7723080dc57492edbf434a52d9c8",
+          "scale_factor": 0.8165869218500797,
+          "qa": "PASS",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [],
+          "notes": "아처 편측팔/스미스 가이드바/회내 손목익스텐션/크런치 머신 정의·근육 및48px 식별 확인.",
+          "error_types": [],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        }
+      ],
+      "final_qa": "PASS",
+      "final_file": "output/exercise-images/pilot-160/final/b0877bf9-21a7-4554-ba09-1029d4e013c7.png",
+      "final_sha256": "5e4a53dd20a0727ed5ee83fb61fc4167732d7723080dc57492edbf434a52d9c8"
+    },
+    {
+      "exercise_id": "f34bfcaa-1c46-439f-9ffe-287f45670ef2",
+      "name": "어시스트 딥스 머신",
+      "visual_family": "dip",
+      "body_part": "가슴",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "call_id": "GND-P160-05",
+          "source_sha256": "39257da7897a3f549f201e637511e9c236e3b9b7c603fac64a6829a1864d76b8",
+          "native_cell": [
+            627,
+            627
+          ],
+          "crop_box": [
+            0,
+            0,
+            627,
+            627
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/f34bfcaa-1c46-439f-9ffe-287f45670ef2-a1.png",
+          "sha256": "1c9622abe2687976f61db23aecc144710dbc60b9ce8b6431353e13ccd481c09c",
+          "scale_factor": 0.8165869218500797,
+          "qa": "PASS",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [],
+          "notes": "무릎 보조패드 딥/가슴삼두 및48px 확인.",
+          "error_types": [],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        }
+      ],
+      "final_qa": "PASS",
+      "final_file": "output/exercise-images/pilot-160/final/f34bfcaa-1c46-439f-9ffe-287f45670ef2.png",
+      "final_sha256": "1c9622abe2687976f61db23aecc144710dbc60b9ce8b6431353e13ccd481c09c"
+    },
+    {
+      "exercise_id": "7dcf3022-91ca-42c8-b257-372a6067696e",
+      "name": "플레이트 숄더 프레스",
+      "visual_family": "shoulder_press",
+      "body_part": "어깨",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "call_id": "GND-P160-05",
+          "source_sha256": "39257da7897a3f549f201e637511e9c236e3b9b7c603fac64a6829a1864d76b8",
+          "native_cell": [
+            627,
+            627
+          ],
+          "crop_box": [
+            627,
+            0,
+            1254,
+            627
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/7dcf3022-91ca-42c8-b257-372a6067696e-a1.png",
+          "sha256": "eec17575530eca32694e38947dd77f9373469763aaf0ec96fe9d1af0daa66aa9",
+          "scale_factor": 0.8165869218500797,
+          "qa": "FAIL",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "FAIL",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [
+            "target_muscle"
+          ],
+          "notes": "플레이트는 맞으나 삼각근 외에 상완 삼두가 파란색.",
+          "error_types": [
+            "wrong_highlight_muscle"
+          ],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        },
+        {
+          "attempt_no": 2,
+          "call_id": "RETRY-7dcf3022-91ca-42c8-b257-372a6067696e-1",
+          "source_sha256": "db065bcf44bd880a206f47cf3b6b677547f592890dd368a1fb6f156326b3c746",
+          "native_cell": [
+            1254,
+            1254
+          ],
+          "crop_box": [
+            0,
+            0,
+            1254,
+            1254
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/7dcf3022-91ca-42c8-b257-372a6067696e-a2.png",
+          "sha256": "599458d2cdf0387890bd1b649a92a14268cb3911a27f5d0e3641c10a10218b88",
+          "scale_factor": 0.4082934609250399,
+          "qa": "PASS",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [],
+          "notes": "한장의 플레이트양손프레스, 삼각근만강조/상완회색48px 확인.",
+          "error_types": [],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        }
+      ],
+      "final_qa": "PASS",
+      "final_file": "output/exercise-images/pilot-160/final/7dcf3022-91ca-42c8-b257-372a6067696e.png",
+      "final_sha256": "599458d2cdf0387890bd1b649a92a14268cb3911a27f5d0e3641c10a10218b88"
+    },
+    {
+      "exercise_id": "13a1addf-3649-46c8-bef1-a19cc45870a9",
+      "name": "덤벨 스쿼트",
+      "visual_family": "squat",
+      "body_part": "하체",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "call_id": "GND-P160-05",
+          "source_sha256": "39257da7897a3f549f201e637511e9c236e3b9b7c603fac64a6829a1864d76b8",
+          "native_cell": [
+            627,
+            627
+          ],
+          "crop_box": [
+            0,
+            627,
+            627,
+            1254
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/13a1addf-3649-46c8-bef1-a19cc45870a9-a1.png",
+          "sha256": "536c550bbb6427f192c42c7ebe353c96052e4c66005aefb443e87fb50ac34a7a",
+          "scale_factor": 0.8165869218500797,
+          "qa": "PASS",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [],
+          "notes": "양손 덤벨 측면 스쿼트/둔근대퇴48px 확인.",
+          "error_types": [],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        }
+      ],
+      "final_qa": "PASS",
+      "final_file": "output/exercise-images/pilot-160/final/13a1addf-3649-46c8-bef1-a19cc45870a9.png",
+      "final_sha256": "536c550bbb6427f192c42c7ebe353c96052e4c66005aefb443e87fb50ac34a7a"
+    },
+    {
+      "exercise_id": "47e6ccc0-e87f-4645-b44a-634678e99fbd",
+      "name": "플러터 킥",
+      "visual_family": "leg_raise",
+      "body_part": "코어",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "call_id": "GND-P160-05",
+          "source_sha256": "39257da7897a3f549f201e637511e9c236e3b9b7c603fac64a6829a1864d76b8",
+          "native_cell": [
+            627,
+            627
+          ],
+          "crop_box": [
+            627,
+            627,
+            1254,
+            1254
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/47e6ccc0-e87f-4645-b44a-634678e99fbd-a1.png",
+          "sha256": "4e894bf23177c7da9afd690a7fbeffb1b268db7d38d83ee6777cc21719b862a3",
+          "scale_factor": 0.8165869218500797,
+          "qa": "FAIL",
+          "checks": {
+            "exercise": "FAIL",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [
+            "exercise"
+          ],
+          "notes": "누운 플러터킥 대신 팔꿈치 지지로 몸통을 크게 올린 자세.",
+          "error_types": [
+            "wrong_support_pose"
+          ],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        },
+        {
+          "attempt_no": 2,
+          "call_id": "RETRY-47e6ccc0-e87f-4645-b44a-634678e99fbd-1",
+          "source_sha256": "38599c64385e7107aaf372e5845cbfd025440cda4e48a253ec87555c3b87bc34",
+          "native_cell": [
+            1254,
+            1254
+          ],
+          "crop_box": [
+            0,
+            0,
+            1254,
+            1254
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/47e6ccc0-e87f-4645-b44a-634678e99fbd-a2.png",
+          "sha256": "fdf4e80bd87c9f8a1b9713cbf94889ee89cf79b8329a3818fb9b76abfe596f66",
+          "scale_factor": 0.4082934609250399,
+          "qa": "PASS",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [],
+          "notes": "양팔 바닥·몸통지지 수정, 낮은 직선다리 교대 플러터킥과 복직근48px 확인.",
+          "error_types": [],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        }
+      ],
+      "final_qa": "PASS",
+      "final_file": "output/exercise-images/pilot-160/final/47e6ccc0-e87f-4645-b44a-634678e99fbd.png",
+      "final_sha256": "fdf4e80bd87c9f8a1b9713cbf94889ee89cf79b8329a3818fb9b76abfe596f66"
+    },
+    {
+      "exercise_id": "9fb956e7-1376-4607-b244-6e647b01dbe9",
+      "name": "클랩 푸시업",
+      "visual_family": "push_up",
+      "body_part": "가슴",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "call_id": "GND-P160-06",
+          "source_sha256": "34470668e9990d343a47c32d2a68610c5971310f212b3e54f1047a7e73e282c3",
+          "native_cell": [
+            627,
+            627
+          ],
+          "crop_box": [
+            0,
+            0,
+            627,
+            627
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/9fb956e7-1376-4607-b244-6e647b01dbe9-a1.png",
+          "sha256": "f74ba0e53e9fa5096ab278ef607c82c98ac01c640a8508dec3d823a861175eb0",
+          "scale_factor": 0.8165869218500797,
+          "qa": "FAIL",
+          "checks": {
+            "exercise": "FAIL",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [
+            "exercise"
+          ],
+          "notes": "클랩 손동작은 맞으나 양발 발끝도 바닥에서 떠 있는 것으로 보임.",
+          "error_types": [
+            "wrong_ground_contact"
+          ],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        },
+        {
+          "attempt_no": 2,
+          "call_id": "RETRY-9fb956e7-1376-4607-b244-6e647b01dbe9-1",
+          "source_sha256": "de007b2a7c355f4c807e18edaafec571ddf6efb8afbfe91a3ddfe3283361b6d8",
+          "native_cell": [
+            1254,
+            1254
+          ],
+          "crop_box": [
+            0,
+            0,
+            1254,
+            1254
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/9fb956e7-1376-4607-b244-6e647b01dbe9-a2.png",
+          "sha256": "5ffe66c6ac20001e94a60fcdab20cca9c9ff7d7c263793e2df032176644d2ad1",
+          "scale_factor": 0.4082934609250399,
+          "qa": "PASS",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [],
+          "notes": "양발끝 바닥접촉 명확, 손뼉치기 가슴/48px 확인.",
+          "error_types": [],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        }
+      ],
+      "final_qa": "PASS",
+      "final_file": "output/exercise-images/pilot-160/final/9fb956e7-1376-4607-b244-6e647b01dbe9.png",
+      "final_sha256": "5ffe66c6ac20001e94a60fcdab20cca9c9ff7d7c263793e2df032176644d2ad1"
+    },
+    {
+      "exercise_id": "49edb349-6ce1-4f33-babb-9ab48106fc3d",
+      "name": "라잉 Y 레이즈",
+      "visual_family": "shoulder_raise",
+      "body_part": "어깨",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "call_id": "GND-P160-06",
+          "source_sha256": "34470668e9990d343a47c32d2a68610c5971310f212b3e54f1047a7e73e282c3",
+          "native_cell": [
+            627,
+            627
+          ],
+          "crop_box": [
+            627,
+            0,
+            1254,
+            627
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/49edb349-6ce1-4f33-babb-9ab48106fc3d-a1.png",
+          "sha256": "16388fc05085759a8c013a5c03705f12744f18aa970868869f24071abec4de85",
+          "scale_factor": 0.8165869218500797,
+          "qa": "FAIL",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "FAIL",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [
+            "target_muscle"
+          ],
+          "notes": "하부승모 대신 한쪽 견갑 주위 상부등 패치 강조.",
+          "error_types": [
+            "wrong_highlight_muscle"
+          ],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        },
+        {
+          "attempt_no": 2,
+          "call_id": "RETRY-49edb349-6ce1-4f33-babb-9ab48106fc3d-1",
+          "source_sha256": "6c29b73dc27216f679f1525e6df54ff6d1a4a4c995ca59db34b0a0137e3abe25",
+          "native_cell": [
+            1254,
+            1254
+          ],
+          "crop_box": [
+            0,
+            0,
+            1254,
+            1254
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/49edb349-6ce1-4f33-babb-9ab48106fc3d-a2.png",
+          "sha256": "deaf500e383505e3c7f5fa3d7beef2d4d483e57405eef8e181a6d10603122045",
+          "scale_factor": 0.4082934609250399,
+          "qa": "PASS",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [],
+          "notes": "양측 하부승모 V패치로 수정. 바닥엎드린 Y팔/48px 확인.",
+          "error_types": [],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        }
+      ],
+      "final_qa": "PASS",
+      "final_file": "output/exercise-images/pilot-160/final/49edb349-6ce1-4f33-babb-9ab48106fc3d.png",
+      "final_sha256": "deaf500e383505e3c7f5fa3d7beef2d4d483e57405eef8e181a6d10603122045"
+    },
+    {
+      "exercise_id": "efd3c05b-ddec-481b-bbdf-238b71a57cbb",
+      "name": "덤벨 인클라인 킥백",
+      "visual_family": "triceps_extension",
+      "body_part": "팔",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "call_id": "GND-P160-06",
+          "source_sha256": "34470668e9990d343a47c32d2a68610c5971310f212b3e54f1047a7e73e282c3",
+          "native_cell": [
+            627,
+            627
+          ],
+          "crop_box": [
+            0,
+            627,
+            627,
+            1254
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/efd3c05b-ddec-481b-bbdf-238b71a57cbb-a1.png",
+          "sha256": "9502bdef9ae6e678d3a7b1307aee0adc345de8ae43b50af8d05e5b864574f70e",
+          "scale_factor": 0.8165869218500797,
+          "qa": "PASS",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [],
+          "notes": "엎드린경사벤치 양덤벨 킥백/삼두 후면48px 확인.",
+          "error_types": [],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        }
+      ],
+      "final_qa": "PASS",
+      "final_file": "output/exercise-images/pilot-160/final/efd3c05b-ddec-481b-bbdf-238b71a57cbb.png",
+      "final_sha256": "9502bdef9ae6e678d3a7b1307aee0adc345de8ae43b50af8d05e5b864574f70e"
+    },
+    {
+      "exercise_id": "689a7a84-48f6-4ce4-be16-7dbb94b9ada3",
+      "name": "덤벨 스탠딩 카프 레이즈",
+      "visual_family": "calf_raise",
+      "body_part": "하체",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "call_id": "GND-P160-06",
+          "source_sha256": "34470668e9990d343a47c32d2a68610c5971310f212b3e54f1047a7e73e282c3",
+          "native_cell": [
+            627,
+            627
+          ],
+          "crop_box": [
+            627,
+            627,
+            1254,
+            1254
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/689a7a84-48f6-4ce4-be16-7dbb94b9ada3-a1.png",
+          "sha256": "bc7ed65092cca2e70fce76c67aee643f23e2aa0e4682edcfd9187156bd9612c1",
+          "scale_factor": 0.8165869218500797,
+          "qa": "PASS",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [],
+          "notes": "양덤벨 뒤꿈치상승/후면 비복근48px 확인.",
+          "error_types": [],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        }
+      ],
+      "final_qa": "PASS",
+      "final_file": "output/exercise-images/pilot-160/final/689a7a84-48f6-4ce4-be16-7dbb94b9ada3.png",
+      "final_sha256": "bc7ed65092cca2e70fce76c67aee643f23e2aa0e4682edcfd9187156bd9612c1"
+    },
+    {
+      "exercise_id": "225633ce-e69d-4a2e-8b28-4394f3423723",
+      "name": "스포토 벤치프레스",
+      "visual_family": "bench_press",
+      "body_part": "가슴",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "call_id": "GND-P160-07",
+          "source_sha256": "4211d7c915b12a15f4d995499fb01b9eda542a13a4e782e6117db86dcc8f6535",
+          "native_cell": [
+            627,
+            627
+          ],
+          "crop_box": [
+            0,
+            0,
+            627,
+            627
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/225633ce-e69d-4a2e-8b28-4394f3423723-a1.png",
+          "sha256": "a1eb4a530089584d94ded677484ed534277aa1d3fc66b5e17d66690252b359e7",
+          "scale_factor": 0.8165869218500797,
+          "qa": "FAIL",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "FAIL"
+          },
+          "errors": [
+            "format"
+          ],
+          "notes": "스포토 프레스 자세는 맞으나 오른쪽 신발끝이 셀중앙 경계를 넘어 crop시 잘림.",
+          "error_types": [
+            "cell_boundary_clipping"
+          ],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        },
+        {
+          "attempt_no": 2,
+          "call_id": "RETRY-225633ce-e69d-4a2e-8b28-4394f3423723-1",
+          "source_sha256": "cfb01a91982cab413bd723811a6b1ffd8579aecb8677abea7a86400ad479daf6",
+          "native_cell": [
+            1254,
+            1254
+          ],
+          "crop_box": [
+            0,
+            0,
+            1254,
+            1254
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/225633ce-e69d-4a2e-8b28-4394f3423723-a2.png",
+          "sha256": "b7c389993916948d5c6af2a632d99300a1c07fd814c5046ad68d97d947e3037e",
+          "scale_factor": 0.4082934609250399,
+          "qa": "FAIL",
+          "checks": {
+            "exercise": "FAIL",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [
+            "exercise"
+          ],
+          "notes": "잘림은 해소됐으나 바가 가슴에서 수cm 위의 낮은 정지위치보다 높게 보임.",
+          "error_types": [
+            "wrong_bar_height"
+          ],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        },
+        {
+          "attempt_no": 3,
+          "call_id": "RETRY-225633ce-e69d-4a2e-8b28-4394f3423723-2",
+          "source_sha256": "a444382380ad00bc01bd85b6227d5115e4bf36bb41a3da3118c6b8c7a56b1829",
+          "native_cell": [
+            1254,
+            1254
+          ],
+          "crop_box": [
+            0,
+            0,
+            1254,
+            1254
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/225633ce-e69d-4a2e-8b28-4394f3423723-a3.png",
+          "sha256": "74e299f04ad7bced32e6478d78dd46f7f388fa8326afd8d6551bcd603acf630c",
+          "scale_factor": 0.4082934609250399,
+          "qa": "FAIL",
+          "checks": {
+            "exercise": "FAIL",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "FAIL",
+            "format": "PASS"
+          },
+          "errors": [
+            "exercise",
+            "thumbnail_48"
+          ],
+          "notes": "측면뷰에서도 바와 가슴 간격이 수cm보다 크고 일반 하프프레스처럼 보여 스포토 정지위치 일치 불충분. 재생성2회 한도.",
+          "error_types": [
+            "wrong_bar_height"
+          ],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        }
+      ],
+      "final_qa": "FAIL"
+    },
+    {
+      "exercise_id": "4bb6052c-478c-46a2-8329-b62b0aa29a14",
+      "name": "이지바 업라이트 로우",
+      "visual_family": "upright_row",
+      "body_part": "어깨",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "call_id": "GND-P160-07",
+          "source_sha256": "4211d7c915b12a15f4d995499fb01b9eda542a13a4e782e6117db86dcc8f6535",
+          "native_cell": [
+            627,
+            627
+          ],
+          "crop_box": [
+            627,
+            0,
+            1254,
+            627
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/4bb6052c-478c-46a2-8329-b62b0aa29a14-a1.png",
+          "sha256": "bcc90cf424cca5f38e44ccb5f186ca3f28172adac54c9de2b9eb86565d98bed4",
+          "scale_factor": 0.8165869218500797,
+          "qa": "PASS",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [],
+          "notes": "EZ바 업라이트로우 팔꿈치 위/어깨48px 확인.",
+          "error_types": [],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        }
+      ],
+      "final_qa": "PASS",
+      "final_file": "output/exercise-images/pilot-160/final/4bb6052c-478c-46a2-8329-b62b0aa29a14.png",
+      "final_sha256": "bcc90cf424cca5f38e44ccb5f186ca3f28172adac54c9de2b9eb86565d98bed4"
+    },
+    {
+      "exercise_id": "4342ad12-e150-4159-814f-005ac5841d7f",
+      "name": "노르딕 햄스트링 컬",
+      "visual_family": "leg_curl",
+      "body_part": "하체",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "call_id": "GND-P160-07",
+          "source_sha256": "4211d7c915b12a15f4d995499fb01b9eda542a13a4e782e6117db86dcc8f6535",
+          "native_cell": [
+            627,
+            627
+          ],
+          "crop_box": [
+            0,
+            627,
+            627,
+            1254
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/4342ad12-e150-4159-814f-005ac5841d7f-a1.png",
+          "sha256": "381e6f0f4ac0630623649312cbc194f2e80f59adf543da35d93ad07a621f8714",
+          "scale_factor": 0.8165869218500797,
+          "qa": "FAIL",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "FAIL",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [
+            "target_muscle"
+          ],
+          "notes": "발목고정 무릎지지 전방기울기 맞음. 후면햄스트링 대신 전면대퇴 강조.",
+          "error_types": [
+            "wrong_highlight_muscle"
+          ],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        },
+        {
+          "attempt_no": 2,
+          "call_id": "RETRY-4342ad12-e150-4159-814f-005ac5841d7f-1",
+          "source_sha256": "296e79ddc797e4f02ed01a421f592fde69cc13a1093e0f545fc1fe4b67165caa",
+          "native_cell": [
+            1254,
+            1254
+          ],
+          "crop_box": [
+            0,
+            0,
+            1254,
+            1254
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/4342ad12-e150-4159-814f-005ac5841d7f-a2.png",
+          "sha256": "b84ccb66c7147db54f92b428cabb5eba627ddc0c22e3e678362c206eeb86fb89",
+          "scale_factor": 0.4082934609250399,
+          "qa": "FAIL",
+          "checks": {
+            "exercise": "FAIL",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [
+            "exercise"
+          ],
+          "notes": "햄스트링은 수정됐으나 무릎이 바닥에 닿지 않는 공중지지 형태.",
+          "error_types": [
+            "wrong_ground_contact"
+          ],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        },
+        {
+          "attempt_no": 3,
+          "call_id": "RETRY-4342ad12-e150-4159-814f-005ac5841d7f-2",
+          "source_sha256": "27c58acd2a5c0ab71c0b031312de8a8f71a57e2ea280cafb6ac90cace401e78b",
+          "native_cell": [
+            1254,
+            1254
+          ],
+          "crop_box": [
+            0,
+            0,
+            1254,
+            1254
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/4342ad12-e150-4159-814f-005ac5841d7f-a3.png",
+          "sha256": "c577c8e7d139cc839d1246c137428776573ac7cb6f417aaf5ef8ed2e7bfa1fe7",
+          "scale_factor": 0.4082934609250399,
+          "qa": "PASS",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [],
+          "notes": "양무릎 패드 접촉과 뒤발목 고정/몸통대퇴직선/후면햄스트링 강조 및48px 확인.",
+          "error_types": [],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        }
+      ],
+      "final_qa": "PASS",
+      "final_file": "output/exercise-images/pilot-160/final/4342ad12-e150-4159-814f-005ac5841d7f.png",
+      "final_sha256": "c577c8e7d139cc839d1246c137428776573ac7cb6f417aaf5ef8ed2e7bfa1fe7"
+    },
+    {
+      "exercise_id": "1565a3d5-7bfa-438d-af7c-cf577d8af599",
+      "name": "할로우 포지션",
+      "visual_family": "core_flexion",
+      "body_part": "코어",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "call_id": "GND-P160-07",
+          "source_sha256": "4211d7c915b12a15f4d995499fb01b9eda542a13a4e782e6117db86dcc8f6535",
+          "native_cell": [
+            627,
+            627
+          ],
+          "crop_box": [
+            627,
+            627,
+            1254,
+            1254
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/1565a3d5-7bfa-438d-af7c-cf577d8af599-a1.png",
+          "sha256": "3554b3f42de4bc63135746577c0de2d5f7f4bb872fab6e643b4868895dafd647",
+          "scale_factor": 0.8165869218500797,
+          "qa": "PASS",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [],
+          "notes": "바닥누운 팔위 직선다리 할로우자세/복직근48px 확인.",
+          "error_types": [],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        }
+      ],
+      "final_qa": "PASS",
+      "final_file": "output/exercise-images/pilot-160/final/1565a3d5-7bfa-438d-af7c-cf577d8af599.png",
+      "final_sha256": "3554b3f42de4bc63135746577c0de2d5f7f4bb872fab6e643b4868895dafd647"
+    },
+    {
+      "exercise_id": "c164c5be-b792-4ac2-8b85-ba7a9470eee4",
+      "name": "인클라인 케이블 플라이",
+      "visual_family": "chest_fly",
+      "body_part": "가슴",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "call_id": "GND-P160-08",
+          "source_sha256": "06218831224f1459445d706ef62b08d3456d5c05cd69ced176c5a94d1a388e92",
+          "native_cell": [
+            627,
+            627
+          ],
+          "crop_box": [
+            0,
+            0,
+            627,
+            627
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/c164c5be-b792-4ac2-8b85-ba7a9470eee4-a1.png",
+          "sha256": "e3fc75bcda8398f0df3bcfa860eb251b7e221520c1f2e7d8a8f50a03ff7c9617",
+          "scale_factor": 0.8165869218500797,
+          "qa": "PASS",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [],
+          "notes": "기구·지지·정의된 자세·근육 및48px 확인. 경사케이블/프리쳐레버/벨트부하/회전머신 구분.",
+          "error_types": [],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        }
+      ],
+      "final_qa": "PASS",
+      "final_file": "output/exercise-images/pilot-160/final/c164c5be-b792-4ac2-8b85-ba7a9470eee4.png",
+      "final_sha256": "e3fc75bcda8398f0df3bcfa860eb251b7e221520c1f2e7d8a8f50a03ff7c9617"
+    },
+    {
+      "exercise_id": "d1ad82b1-fe7f-485d-a9d1-a5e42bdf6eff",
+      "name": "프리쳐 컬 머신",
+      "visual_family": "biceps_curl",
+      "body_part": "팔",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "call_id": "GND-P160-08",
+          "source_sha256": "06218831224f1459445d706ef62b08d3456d5c05cd69ced176c5a94d1a388e92",
+          "native_cell": [
+            627,
+            627
+          ],
+          "crop_box": [
+            627,
+            0,
+            1254,
+            627
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/d1ad82b1-fe7f-485d-a9d1-a5e42bdf6eff-a1.png",
+          "sha256": "16d02db42cfe50457b376c780c4d00ce5cecddcd1e1841114da567ffeec7c0bd",
+          "scale_factor": 0.8165869218500797,
+          "qa": "PASS",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [],
+          "notes": "기구·지지·정의된 자세·근육 및48px 확인. 경사케이블/프리쳐레버/벨트부하/회전머신 구분.",
+          "error_types": [],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        }
+      ],
+      "final_qa": "PASS",
+      "final_file": "output/exercise-images/pilot-160/final/d1ad82b1-fe7f-485d-a9d1-a5e42bdf6eff.png",
+      "final_sha256": "16d02db42cfe50457b376c780c4d00ce5cecddcd1e1841114da567ffeec7c0bd"
+    },
+    {
+      "exercise_id": "68c43953-ab2a-4548-9169-3d6e0895aecf",
+      "name": "벨트 스쿼트 머신",
+      "visual_family": "squat",
+      "body_part": "하체",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "call_id": "GND-P160-08",
+          "source_sha256": "06218831224f1459445d706ef62b08d3456d5c05cd69ced176c5a94d1a388e92",
+          "native_cell": [
+            627,
+            627
+          ],
+          "crop_box": [
+            0,
+            627,
+            627,
+            1254
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/68c43953-ab2a-4548-9169-3d6e0895aecf-a1.png",
+          "sha256": "b88b24cfe0c9a10f4c084ffb814b7b289ac193d115a2825a08aa48b8f10ebed5",
+          "scale_factor": 0.8165869218500797,
+          "qa": "PASS",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [],
+          "notes": "기구·지지·정의된 자세·근육 및48px 확인. 경사케이블/프리쳐레버/벨트부하/회전머신 구분.",
+          "error_types": [],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        }
+      ],
+      "final_qa": "PASS",
+      "final_file": "output/exercise-images/pilot-160/final/68c43953-ab2a-4548-9169-3d6e0895aecf.png",
+      "final_sha256": "b88b24cfe0c9a10f4c084ffb814b7b289ac193d115a2825a08aa48b8f10ebed5"
+    },
+    {
+      "exercise_id": "c5c92985-c48e-4c84-a8d7-04fcab930906",
+      "name": "토르소 로테이션 머신",
+      "visual_family": "core_rotation",
+      "body_part": "코어",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "call_id": "GND-P160-08",
+          "source_sha256": "06218831224f1459445d706ef62b08d3456d5c05cd69ced176c5a94d1a388e92",
+          "native_cell": [
+            627,
+            627
+          ],
+          "crop_box": [
+            627,
+            627,
+            1254,
+            1254
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/c5c92985-c48e-4c84-a8d7-04fcab930906-a1.png",
+          "sha256": "1f58a66a69591ca87ad507963f134f84dfdb789c508d8c81bfe65abb1e995f23",
+          "scale_factor": 0.8165869218500797,
+          "qa": "PASS",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [],
+          "notes": "기구·지지·정의된 자세·근육 및48px 확인. 경사케이블/프리쳐레버/벨트부하/회전머신 구분.",
+          "error_types": [],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        }
+      ],
+      "final_qa": "PASS",
+      "final_file": "output/exercise-images/pilot-160/final/c5c92985-c48e-4c84-a8d7-04fcab930906.png",
+      "final_sha256": "1f58a66a69591ca87ad507963f134f84dfdb789c508d8c81bfe65abb1e995f23"
+    },
+    {
+      "exercise_id": "b5fc1f18-ea7c-49dd-9b29-42a6dddfe5c9",
+      "name": "시티드 딥스 머신",
+      "visual_family": "dip",
+      "body_part": "가슴",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "call_id": "GND-P160-09",
+          "source_sha256": "82b683c1c60d171ed3b21979db93c3a18c584a80a3bd3ad6f87c9de291e81aa8",
+          "native_cell": [
+            627,
+            627
+          ],
+          "crop_box": [
+            0,
+            0,
+            627,
+            627
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/b5fc1f18-ea7c-49dd-9b29-42a6dddfe5c9-a1.png",
+          "sha256": "e31ab07336baeb42b5891228c6a621bf764df3a5676e9221aac32c1901ac23d5",
+          "scale_factor": 0.8165869218500797,
+          "qa": "PASS",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [],
+          "notes": "앉은 딥스 머신 손잡이 아래/상완후면삼두48px 확인.",
+          "error_types": [],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        }
+      ],
+      "final_qa": "PASS",
+      "final_file": "output/exercise-images/pilot-160/final/b5fc1f18-ea7c-49dd-9b29-42a6dddfe5c9.png",
+      "final_sha256": "e31ab07336baeb42b5891228c6a621bf764df3a5676e9221aac32c1901ac23d5"
+    },
+    {
+      "exercise_id": "0a779a2c-b8a4-43d1-a98a-4c166b0eb33d",
+      "name": "케이블 사이드 벤드",
+      "visual_family": "side_bend",
+      "body_part": "코어",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "call_id": "GND-P160-09",
+          "source_sha256": "82b683c1c60d171ed3b21979db93c3a18c584a80a3bd3ad6f87c9de291e81aa8",
+          "native_cell": [
+            627,
+            627
+          ],
+          "crop_box": [
+            627,
+            0,
+            1254,
+            627
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/0a779a2c-b8a4-43d1-a98a-4c166b0eb33d-a1.png",
+          "sha256": "737499abce89f7abc1efb515d4a98667fa7a606ba0ec9a8081368414f05e4ab1",
+          "scale_factor": 0.8165869218500797,
+          "qa": "PASS",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [],
+          "notes": "낮은케이블 한손 측굴/복사근48px 확인.",
+          "error_types": [],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        }
+      ],
+      "final_qa": "PASS",
+      "final_file": "output/exercise-images/pilot-160/final/0a779a2c-b8a4-43d1-a98a-4c166b0eb33d.png",
+      "final_sha256": "737499abce89f7abc1efb515d4a98667fa7a606ba0ec9a8081368414f05e4ab1"
+    },
+    {
+      "exercise_id": "2c38f171-8877-4dd1-bb20-3b95697fa175",
+      "name": "덤벨 원레그 데드리프트",
+      "visual_family": "deadlift",
+      "body_part": "하체",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "call_id": "GND-P160-09",
+          "source_sha256": "82b683c1c60d171ed3b21979db93c3a18c584a80a3bd3ad6f87c9de291e81aa8",
+          "native_cell": [
+            627,
+            627
+          ],
+          "crop_box": [
+            0,
+            627,
+            627,
+            1254
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/2c38f171-8877-4dd1-bb20-3b95697fa175-a1.png",
+          "sha256": "25b8d8524c5a0a9da7523f0395c3ca19738e8600678f9ad4720a7243ab2cc042",
+          "scale_factor": 0.8165869218500797,
+          "qa": "FAIL",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "FAIL",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [
+            "target_muscle"
+          ],
+          "notes": "한발 데드리프트와덤벨은 맞으나 지지다리 전면대퇴까지 파란색.",
+          "error_types": [
+            "wrong_highlight_muscle"
+          ],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        },
+        {
+          "attempt_no": 2,
+          "call_id": "RETRY-2c38f171-8877-4dd1-bb20-3b95697fa175-1",
+          "source_sha256": "a5ab93c7f88ad837af44ac5a0340f754dd14a7b8cf79353563890a3a69c2384b",
+          "native_cell": [
+            1254,
+            1254
+          ],
+          "crop_box": [
+            0,
+            0,
+            1254,
+            1254
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/2c38f171-8877-4dd1-bb20-3b95697fa175-a2.png",
+          "sha256": "6262731b503ba7d90a62a3ecb156955564ec316eaa012b337454a99afa6e756e",
+          "scale_factor": 0.4082934609250399,
+          "qa": "PASS",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [],
+          "notes": "후방각도 햄스트링/둔근으로 강조 수정, 한발힌지와덤벨/48px 확인.",
+          "error_types": [],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        }
+      ],
+      "final_qa": "PASS",
+      "final_file": "output/exercise-images/pilot-160/final/2c38f171-8877-4dd1-bb20-3b95697fa175.png",
+      "final_sha256": "6262731b503ba7d90a62a3ecb156955564ec316eaa012b337454a99afa6e756e"
+    },
+    {
+      "exercise_id": "f242d169-3e47-44d1-96c8-0a6f51fce13c",
+      "name": "파이어 하이드런트",
+      "visual_family": "hip_abduction",
+      "body_part": "하체",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "call_id": "GND-P160-09",
+          "source_sha256": "82b683c1c60d171ed3b21979db93c3a18c584a80a3bd3ad6f87c9de291e81aa8",
+          "native_cell": [
+            627,
+            627
+          ],
+          "crop_box": [
+            627,
+            627,
+            1254,
+            1254
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/f242d169-3e47-44d1-96c8-0a6f51fce13c-a1.png",
+          "sha256": "d5cd16099257040f89732113952fd32de74bd47e4a212c609c480856d858c920",
+          "scale_factor": 0.8165869218500797,
+          "qa": "PASS",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [],
+          "notes": "네발지지 굽힌무릎측방/중둔근48px 확인.",
+          "error_types": [],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        }
+      ],
+      "final_qa": "PASS",
+      "final_file": "output/exercise-images/pilot-160/final/f242d169-3e47-44d1-96c8-0a6f51fce13c.png",
+      "final_sha256": "d5cd16099257040f89732113952fd32de74bd47e4a212c609c480856d858c920"
+    },
+    {
+      "exercise_id": "30fffd17-72b8-4fde-95de-3ff62a57ab49",
+      "name": "핸드스탠드 푸시업",
+      "visual_family": "push_up",
+      "body_part": "어깨",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "call_id": "GND-P160-10",
+          "source_sha256": "c2767640e5314879b4935d1d44f5dd8f847fa90c5ec961f244eac497ae8e6cd8",
+          "native_cell": [
+            627,
+            627
+          ],
+          "crop_box": [
+            0,
+            0,
+            627,
+            627
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/30fffd17-72b8-4fde-95de-3ff62a57ab49-a1.png",
+          "sha256": "efa3b0d6512089ea16c5bf830add8160c55380902cf5d804b059a7e84aa693d1",
+          "scale_factor": 0.8165869218500797,
+          "qa": "PASS",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [],
+          "notes": "양손 지지 물구나무 푸시업 굽힌팔/어깨48px 확인.",
+          "error_types": [],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        }
+      ],
+      "final_qa": "PASS",
+      "final_file": "output/exercise-images/pilot-160/final/30fffd17-72b8-4fde-95de-3ff62a57ab49.png",
+      "final_sha256": "efa3b0d6512089ea16c5bf830add8160c55380902cf5d804b059a7e84aa693d1"
+    },
+    {
+      "exercise_id": "0a39b280-c943-4f3e-b7f7-c3d96a143009",
+      "name": "덤벨 프론트 스쿼트",
+      "visual_family": "squat",
+      "body_part": "하체",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "call_id": "GND-P160-10",
+          "source_sha256": "c2767640e5314879b4935d1d44f5dd8f847fa90c5ec961f244eac497ae8e6cd8",
+          "native_cell": [
+            627,
+            627
+          ],
+          "crop_box": [
+            627,
+            0,
+            1254,
+            627
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/0a39b280-c943-4f3e-b7f7-c3d96a143009-a1.png",
+          "sha256": "78b667b11b6cc58b4b16c543b6297e8a6c22a4c8e8baa449935d99cdeeb03f03",
+          "scale_factor": 0.8165869218500797,
+          "qa": "PASS",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [],
+          "notes": "양덤벨 앞어깨 프론트스쿼트/대퇴둔근48px 확인.",
+          "error_types": [],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        }
+      ],
+      "final_qa": "PASS",
+      "final_file": "output/exercise-images/pilot-160/final/0a39b280-c943-4f3e-b7f7-c3d96a143009.png",
+      "final_sha256": "78b667b11b6cc58b4b16c543b6297e8a6c22a4c8e8baa449935d99cdeeb03f03"
+    },
+    {
+      "exercise_id": "6d22712f-01fb-4a09-9f52-91159733e6dc",
+      "name": "케이블 킥백",
+      "visual_family": "hip_extension",
+      "body_part": "하체",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "call_id": "GND-P160-10",
+          "source_sha256": "c2767640e5314879b4935d1d44f5dd8f847fa90c5ec961f244eac497ae8e6cd8",
+          "native_cell": [
+            627,
+            627
+          ],
+          "crop_box": [
+            0,
+            627,
+            627,
+            1254
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/6d22712f-01fb-4a09-9f52-91159733e6dc-a1.png",
+          "sha256": "4d4134673fe287d5fa76af55a4e7a60f848ab9ca6674e8f6e0be6048339f102a",
+          "scale_factor": 0.8165869218500797,
+          "qa": "FAIL",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "FAIL"
+          },
+          "errors": [
+            "format"
+          ],
+          "notes": "케이블 킥백 기구 상단이 셀 경계에서 잘림.",
+          "error_types": [
+            "cell_boundary_clipping"
+          ],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        },
+        {
+          "attempt_no": 2,
+          "call_id": "RETRY-6d22712f-01fb-4a09-9f52-91159733e6dc-1",
+          "source_sha256": "b2dfa2685217c947d0a5c086568f2ea23c428cea9f64f665049320ab35b1bce4",
+          "native_cell": [
+            1254,
+            1254
+          ],
+          "crop_box": [
+            0,
+            0,
+            1254,
+            1254
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/6d22712f-01fb-4a09-9f52-91159733e6dc-a2.png",
+          "sha256": "df4faad3a712b20c4c09066f544cdc992424dfbb7e76dad2ff1c140a88bfee7d",
+          "scale_factor": 0.4082934609250399,
+          "qa": "FAIL",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "FAIL",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [
+            "target_muscle"
+          ],
+          "notes": "기구 잘림은 수정됐으나 뒤로 뻗는 작업다리 쪽 둔근이 아닌 지지다리 쪽 둔근을 강조. 총 재생성 호출2회(무결과1포함).",
+          "error_types": [
+            "wrong_highlight_side"
+          ],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        }
+      ],
+      "final_qa": "FAIL"
+    },
+    {
+      "exercise_id": "85cd5fe7-27e6-4386-a451-a74859dc98af",
+      "name": "토즈투 바",
+      "visual_family": "hanging_leg_raise",
+      "body_part": "코어",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "call_id": "GND-P160-10",
+          "source_sha256": "c2767640e5314879b4935d1d44f5dd8f847fa90c5ec961f244eac497ae8e6cd8",
+          "native_cell": [
+            627,
+            627
+          ],
+          "crop_box": [
+            627,
+            627,
+            1254,
+            1254
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/85cd5fe7-27e6-4386-a451-a74859dc98af-a1.png",
+          "sha256": "ab748b35096f99e64f7ede85ffce8535647620c48216bc3517ea77952eab0b82",
+          "scale_factor": 0.8165869218500797,
+          "qa": "FAIL",
+          "checks": {
+            "exercise": "FAIL",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "FAIL",
+            "format": "PASS"
+          },
+          "errors": [
+            "exercise",
+            "thumbnail_48"
+          ],
+          "notes": "다리 올림은 있으나 발끝이 철봉 근처까지 도달하지 않아 일반 행잉레이즈와 구분 불충분.",
+          "error_types": [
+            "insufficient_leg_raise"
+          ],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        },
+        {
+          "attempt_no": 2,
+          "call_id": "RETRY-85cd5fe7-27e6-4386-a451-a74859dc98af-1",
+          "source_sha256": "557a00a90751ec3ff54c39fbea049b59950f80d28eb8039e9b855eabb42903d8",
+          "native_cell": [
+            1254,
+            1254
+          ],
+          "crop_box": [
+            0,
+            0,
+            1254,
+            1254
+          ],
+          "file": "output/exercise-images/pilot-160/attempts/85cd5fe7-27e6-4386-a451-a74859dc98af-a2.png",
+          "sha256": "7ce0b3317f3c0c976054938a4e81fa4b9488eafd366c774871d5b55659389607",
+          "scale_factor": 0.4082934609250399,
+          "qa": "PASS",
+          "checks": {
+            "exercise": "PASS",
+            "equipment": "PASS",
+            "target_muscle": "PASS",
+            "style": "PASS",
+            "thumbnail_48": "PASS",
+            "format": "PASS"
+          },
+          "errors": [],
+          "notes": "발끝 철봉높이 접촉으로 수정, 직선다리/복직근/48px 확인.",
+          "error_types": [],
+          "reviewer": "Codex direct512/256/native and true48px visual review; not independent expert"
+        }
+      ],
+      "final_qa": "PASS",
+      "final_file": "output/exercise-images/pilot-160/final/85cd5fe7-27e6-4386-a451-a74859dc98af.png",
+      "final_sha256": "7ce0b3317f3c0c976054938a4e81fa4b9488eafd366c774871d5b55659389607"
+    }
+  ],
+  "tool_failures": [
+    {
+      "call_id": "NOOUTPUT-KICKBACK-1",
+      "exercise_id": "6d22712f-01fb-4a09-9f52-91159733e6dc",
+      "kind": "single_retry",
+      "status": "NO_OUTPUT",
+      "reason": "Generation promise rejected; no image returned. Original error detail unavailable."
+    }
+  ]
+}
