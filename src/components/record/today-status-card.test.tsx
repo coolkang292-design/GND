@@ -14,7 +14,7 @@ const base = {
 };
 
 describe("TodayStatusCard — 미완료", () => {
-  it("완료 문구도 막대도 그리지 않는다", () => {
+  it("완료 문구는 그리지 않는다 — 지난 7일 막대는 그린다", () => {
     const html = renderToStaticMarkup(
       <TodayStatusCard
         {...base}
@@ -26,7 +26,9 @@ describe("TodayStatusCard — 미완료", () => {
     );
     expect(html).toContain("오늘은 아직이에요");
     expect(html).not.toContain("오늘 운동 완료!");
-    expect(html).not.toContain('role="img"'); // 막대 없음
+    // 2026-10-05: 시안(① 운동 준비)은 운동 전에도 **지난 7일 막대**를 그린다.
+    // 섞지 않는 것은 문장이다 — 완료 문구가 없어야 한다(위 단언).
+    expect(html).toContain('role="img"');
   });
 
   it("오늘 할 일 한 줄을 보여준다", () => {

@@ -134,10 +134,11 @@ export function ActivePhotoButton({
              안 보였다.** 운동 중 화면은 큰 숫자(타이머·세트)가 시선을 다 가져가서,
              옅은 알약은 배경으로 읽힌다. 골드 배경 + `사진` 글자로 못을 박는다.
         */
-        className="flex h-9 items-center gap-1.5 rounded-full bg-accent px-3 text-[12px] font-extrabold text-accent-ink disabled:opacity-45"
+        // 시안 ②의 `인증` 버튼처럼 테두리형 — 라임 채움은 `이 세트 완료` 한 곳에만 둔다(2026-10-05)
+        className="flex h-9 items-center gap-1.5 rounded-full border border-line-strong px-3 text-[12px] font-extrabold text-text disabled:opacity-45"
       >
         {/* 골드 배경 위라 아이콘을 검게 눕힌다 — `verification-photo.tsx`와 같은 이유 */}
-        <UiIcon name="camera" size={15} className="brightness-0" />
+        <UiIcon name="camera" size={15} className="text-accent" />
         {inFlight > 0 ? (
           <span>올리는 중…</span>
         ) : (

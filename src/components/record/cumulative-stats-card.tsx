@@ -1,5 +1,6 @@
 "use client";
 
+import { Icon, type IconName } from "@/components/ui/icon";
 import {
   formatCumulativeDistance,
   formatCumulativeMinutes,
@@ -35,16 +36,17 @@ export function CumulativeStatsCard({
 }) {
   return (
     <section className="rounded-card border border-line bg-surface p-4 shadow-card">
-      <h2 className="text-sm font-extrabold">누적 성과</h2>
+      <h2 className="text-[15px] font-extrabold">누적 성과</h2>
       <div className="mt-2.5 grid grid-cols-2 gap-2">
-        <Tile label="운동한 날" value={`${Math.max(0, workoutDays)}일`} />
-        <Tile label="운동 시간" value={formatCumulativeMinutes(totalMinutes)} />
-        <Tile label="든 무게" value={formatCumulativeVolume(volumeKg)} />
+        <Tile icon="calendar" label="운동한 날" value={`${Math.max(0, workoutDays)}일`} />
+        <Tile icon="clock" label="운동 시간" value={formatCumulativeMinutes(totalMinutes)} />
+        <Tile icon="volume" label="든 무게" value={formatCumulativeVolume(volumeKg)} />
         {/* ⚠️ `formatCumulativeDistance`는 0이면 `null`을 준다 — 프로필 시트는 그때
             칸을 통째로 뺀다(짧은 요약이라 잡음을 줄이는 게 맞다). 여기는 사용자가
             **넷을 지정해 요청한 자리**라 빈 칸이 생기면 넷이 셋으로 보인다.
             0은 사실이므로 그대로 적는다. */}
         <Tile
+          icon="shoe"
           label="달린 거리"
           value={formatCumulativeDistance(distanceMeters) ?? "0km"}
         />
@@ -53,13 +55,15 @@ export function CumulativeStatsCard({
   );
 }
 
-function Tile({ label, value }: { label: string; value: string }) {
+/** 한 칸 — 2026-10-05 Performance Social 톤(라임 아이콘 · 큰 숫자 · 작은 라벨) */
+function Tile({ icon, label, value }: { icon: IconName; label: string; value: string }) {
   return (
-    <div className="flex flex-col gap-0.5 rounded-card-sm border border-line bg-surface-2 px-3 py-2">
-      <span className="text-[11px] leading-tight text-muted">{label}</span>
-      <strong className="text-[17px] font-extrabold leading-tight">
-        {value}
-      </strong>
+    <div className="flex items-center gap-2.5 rounded-card-sm border border-line bg-surface-2/60 px-3 py-2.5">
+      <Icon name={icon} size={20} className="flex-none text-accent" />
+      <span className="min-w-0">
+        <strong className="block truncate text-[17px] font-black leading-tight">{value}</strong>
+        <span className="block text-[11px] leading-tight text-muted">{label}</span>
+      </span>
     </div>
   );
 }

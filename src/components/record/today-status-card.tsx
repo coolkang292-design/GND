@@ -44,20 +44,6 @@ export function TodayStatusCard({
   // 사용자는 어느 쪽이 맞는지 확인하러 탭을 오간다.
   const headline = streakHeadline({ stage, streak, gap, todayKey });
 
-  if (!didWorkoutToday) {
-    return (
-      <section className="rounded-card border border-line bg-surface p-4 shadow-card">
-        <p className="text-[15px] font-extrabold">오늘은 아직이에요 💪</p>
-        <p className="mt-1 text-[12.5px] leading-5 text-muted">{headline}</p>
-        {todayLine && (
-          <p className="mt-2.5 rounded-card-sm bg-surface-2 px-3 py-2 text-[12.5px] font-bold">
-            오늘의 운동 · {todayLine}
-          </p>
-        )}
-      </section>
-    );
-  }
-
   const totals = weekTotals(bars);
   const hours = Math.floor(totals.minutes / 60);
   const mins = totals.minutes % 60;
@@ -68,9 +54,36 @@ export function TodayStatusCard({
         ? `${totals.days}일 · ${hours}시간${mins > 0 ? ` ${mins}분` : ""}`
         : `${totals.days}일 · ${mins}분`;
 
+  /*
+    2026-10-05 Performance Social 기록 시안(① 운동 준비) — `오늘 상태` 라벨 · 큰 상태 문구 ·
+    스트릭 알약 · 최근 7일 막대를 **두 상태 모두** 그린다(시안은 운동 전에도 막대가 있다).
+
+    ⚠️ 두 상태가 배타적이라는 규칙은 그대로다 — 막대는 **지난 7일 기록**이라 "아직"과
+       모순되지 않는다. 섞지 않는 것은 문장이다: 운동 전엔 `오늘의 운동` 한 줄, 완료엔
+       칭찬 문구만.
+    ⚠️ 이모지(💪·🎉)는 쓰지 않는다(기획안 17-A). 불꽃은 패키지 장식이다.
+  */
   return (
-    <section className="rounded-card border border-good bg-surface p-4 shadow-card">
-      <p className="text-[15px] font-extrabold text-good">오늘 운동 완료! 🎉</p>
+    <section
+      className={`rounded-card border bg-surface p-4 shadow-card ${
+        didWorkoutToday ? "border-accent/50" : "border-line-strong"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[11.5px] font-bold text-muted">오늘 상태</p>
+          <p className={`mt-0.5 text-[22px] font-black tracking-tight ${didWorkoutToday ? "text-accent" : ""}`}>
+            {didWorkoutToday ? "오늘 운동 완료!" : "오늘은 아직이에요"}
+          </p>
+        </div>
+        {streak > 0 && (
+          <span className="mt-0.5 inline-flex h-6 flex-none items-center gap-1 rounded-full border border-warn/55 bg-black/35 px-2.5 text-[11px] font-extrabold">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/gnd/decorations/flame-32.webp" alt="" width={14} height={14} className="h-3.5 w-3.5" />
+            {streak} DAY STREAK
+          </span>
+        )}
+      </div>
       <p className="mt-1 text-[12.5px] leading-5 text-muted">{headline}</p>
 
       {/* 막대 7칸. 눈이 아니라 **글자로도** 읽히게 aria-label을 붙인다 —
@@ -80,23 +93,23 @@ export function TodayStatusCard({
         aria-label={`최근 7일 운동: ${bars
           .map((b) => `${b.label} ${b.done ? `${b.minutes}분` : "쉼"}`)
           .join(", ")}`}
-        className="mt-3 flex h-20 items-end justify-between gap-1.5"
+        className="mt-3 flex h-[72px] items-end justify-between gap-2"
       >
         {bars.map((b) => (
           <div key={b.dayKey} className="flex flex-1 flex-col items-center gap-1">
-            <div className="flex h-14 w-full items-end">
+            <div className="flex h-12 w-full items-end justify-center">
               <div
-                className={`w-full rounded-t-[3px] ${
-                  b.isToday ? "bg-good" : b.done ? "bg-accent" : "bg-surface-2"
-                }`}
-                // 안 한 날도 바닥선이 보이게 최소 2px를 남긴다 — 칸이 아예 없으면
+                className={`w-[10px] rounded-full ${
+                  b.done ? "bg-accent" : "bg-surface-3"
+                } ${b.isToday && b.done ? "shadow-[0_0_0_2px_rgba(200,255,61,0.25)]" : ""}`}
+                // 안 한 날도 바닥 점이 보이게 최소 높이를 남긴다 — 칸이 아예 없으면
                 // 요일 글자만 떠 있어 "그래프가 깨졌나" 싶다.
-                style={{ height: b.done ? `${b.heightPercent}%` : "2px" }}
+                style={{ height: b.done ? `${b.heightPercent}%` : "6px" }}
               />
             </div>
             <span
               className={`text-[10.5px] ${
-                b.isToday ? "font-extrabold text-good" : "text-faint"
+                b.isToday ? "font-extrabold text-accent" : "text-faint"
               }`}
             >
               {b.label}
@@ -105,7 +118,15 @@ export function TodayStatusCard({
         ))}
       </div>
 
-      <p className="mt-2 text-[11.5px] text-muted">이번 7일 · {totalLabel}</p>
+      {didWorkoutToday ? (
+        <p className="mt-2 text-[11.5px] text-muted">이번 7일 · {totalLabel}</p>
+      ) : (
+        todayLine && (
+          <p className="mt-3 rounded-card-sm border border-line bg-surface-2/60 px-3 py-2 text-[12.5px] font-bold">
+            오늘의 운동 · {todayLine}
+          </p>
+        )
+      )}
     </section>
   );
 }

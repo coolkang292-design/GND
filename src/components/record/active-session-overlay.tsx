@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { UiIcon } from "@/components/ui-icon";
+import { Icon } from "@/components/ui/icon";
 import { guideForExercise } from "@/lib/domain/exercise-guides";
 import { repRangeLabel, restClock } from "@/lib/domain/program-load";
 import type { ExercisePrescription } from "@/lib/domain/workout-plan";
@@ -100,7 +101,7 @@ function RecordNumberInput({
           setText(next);
           onChange(number);
         }}
-        className="mt-1 h-11 w-full min-w-0 rounded-card-sm border border-line bg-bg px-2 text-center font-mono text-lg font-extrabold outline-none focus:border-accent disabled:opacity-60"
+        className="mt-1 h-11 w-full min-w-0 rounded-[12px] border border-line bg-surface-2 px-2 text-center text-lg font-black tabular-nums outline-none focus:border-accent disabled:opacity-60"
       />
       {error && <span role="alert" className="mt-1 block text-[10px] text-warn">{error}</span>}
     </label>
@@ -168,8 +169,8 @@ function SetTimerCard({
   return (
     <div
       data-testid="set-timer-card"
-      className={`min-w-0 flex-1 rounded-card border p-3 ${
-        running ? "border-accent bg-accent-weak" : "border-line bg-surface-2"
+      className={`min-w-0 flex-1 rounded-[18px] border p-3.5 text-left ${
+        running ? "border-accent bg-surface-2" : "border-line bg-surface-2/70"
       }`}
     >
       <p
@@ -185,7 +186,7 @@ function SetTimerCard({
       <p
         role="timer"
         aria-label={`${field.label} ${amount}`}
-        className={`mt-1 font-mono text-[30px] leading-none font-extrabold ${
+        className={`mt-1 text-[40px] leading-none font-black tabular-nums ${
           running ? "text-accent" : ""
         }`}
       >
@@ -208,7 +209,7 @@ function SetTimerCard({
           type="button"
           onClick={onStop}
           disabled={busy}
-          className="mt-2 h-13 w-full rounded-card-sm bg-accent py-3 text-[13px] font-extrabold text-accent-ink disabled:opacity-60"
+          className="mt-2 h-13 w-full rounded-[14px] bg-accent py-3 text-[13px] font-extrabold text-accent-ink active:bg-accent-press disabled:opacity-60"
         >
           {finishesSet ? `✓ 마침 · ${amount} 기록` : "■ 정지"}
         </button>
@@ -217,7 +218,7 @@ function SetTimerCard({
           type="button"
           onClick={onStart}
           disabled={busy}
-          className="mt-2 h-13 w-full rounded-card-sm border-2 border-accent bg-transparent py-3 text-[13px] font-extrabold text-accent disabled:opacity-60"
+          className="mt-2 h-13 w-full rounded-[14px] border border-accent bg-transparent py-3 text-[13px] font-extrabold text-accent disabled:opacity-60"
         >
           {onChangeSeconds ? "▶ 시간 재기" : "▶ 시작"}
         </button>
@@ -252,7 +253,7 @@ function PreviousLine({
     );
   }
   return (
-    <div className="mt-2">
+    <div className="mt-3 text-left">
       <p className="text-[11.5px] font-bold text-muted">
         지난번 {setNumber}세트 ·{" "}
         <span className="font-extrabold text-fg">{hint.amountLabel}</span>
@@ -262,9 +263,10 @@ function PreviousLine({
           <button
             type="button"
             onClick={() => onChallenge(hint.challengeReps!)}
-            className="mt-1.5 h-8 rounded-card-sm border border-accent bg-accent-weak px-3 text-[11.5px] font-extrabold text-accent"
+            className="mt-2 flex h-11 w-full items-center justify-between rounded-[14px] border border-accent/60 bg-transparent px-3.5 text-[12.5px] font-extrabold text-accent"
           >
-            {hint.cheer}
+            <span>{hint.cheer}</span>
+            <span className="text-[11px] tracking-wider">+1 REP</span>
           </button>
         ) : (
           <p className="mt-1 text-[11.5px] font-bold text-muted">{hint.cheer}</p>
@@ -469,7 +471,7 @@ export function ActiveSessionOverlay({
 
   return (
     <div
-      className="fixed inset-x-0 top-0 z-20 flex flex-col overflow-y-auto bg-bg/95 px-3 backdrop-blur"
+      className="fixed inset-x-0 top-0 z-20 flex flex-col overflow-y-auto bg-bg px-3"
       style={{
         bottom: 0,
         // ⚠️ Tailwind `pt-3`으로 되돌리지 마라 — 설치형 앱에서 첫 줄이 상태바
@@ -485,24 +487,29 @@ export function ActiveSessionOverlay({
             32px(`h-8`)이던 것을 2026-08-09에 iOS HIG 최소 터치 타깃인 44px로
             키웠다 — 안전 영역 여백과 같은 신고에서 나왔다. */}
         <div className="mb-2 flex items-center gap-2">
+          {/* 시안 ②: 왼쪽 `최소화` 알약 · 오른쪽 `취소` 글자 */}
           <button
             type="button"
             onClick={onMinimize}
-            className="h-11 flex-1 rounded-full border border-line bg-surface-2 text-[11px] font-bold text-muted"
+            className="flex h-11 flex-none items-center gap-1.5 rounded-full border border-line bg-surface px-4 text-[12px] font-bold text-muted"
           >
-            ▾ 최소화
+            <Icon name="chevron" size={14} className="rotate-90" />
+            최소화
           </button>
+          <span className="flex-1" />
           <button
             type="button"
             onClick={onCancel}
             disabled={busy}
-            className="h-11 flex-none rounded-full px-4 text-[11px] font-bold text-faint disabled:opacity-50"
+            className="h-11 flex-none rounded-full px-4 text-[12px] font-bold text-faint disabled:opacity-50"
           >
             취소
           </button>
         </div>
 
-        <section className="rounded-[20px] border border-line bg-surface p-5 text-center shadow-card">
+        {/* 2026-10-05 Performance Social 기록 시안 ②·③ — 상태와 경과 시간을 한 줄에,
+            진행 막대를 그 아래에. 계산·버튼·흐름은 그대로이고 배치·톤만 바꿨다. */}
+        <section className="rounded-[22px] border border-line-strong bg-surface p-5 text-center shadow-card">
           {/*
             상태 배지 줄 (0103에서 사진 버튼이 오른쪽에 붙었다).
 
@@ -512,19 +519,25 @@ export function ActiveSessionOverlay({
             ⚠️ 입력·휴식 **양쪽**에 뜬다. 휴식 중에만 두면 종목의 첫 세트 앞에는
                휴식이 없어서(같은 파일의 다른 주석 참조) 찍을 자리가 사라진다.
           */}
-          <div className="flex items-center justify-center gap-2">
-            <span
-              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11.5px] font-extrabold ${
-                paused
-                  ? "bg-warn/15 text-warn"
-                  : resting
-                    ? "bg-accent-weak text-accent"
-                    : "bg-accent-weak text-accent"
-              }`}
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <span
+                className={`inline-flex items-center gap-1.5 text-[13px] font-extrabold ${
+                  paused ? "text-warn" : "text-accent"
+                }`}
+              >
+                <span aria-hidden className={`h-2 w-2 rounded-full ${paused ? "bg-warn" : "bg-accent"}`} />
+                {paused ? "정지됨 — 무동작" : resting ? "휴식 중" : "지금 운동 중"}
+              </span>
+              {photoSlot}
+            </div>
+            {/* 경과 시간 — 시안처럼 오른쪽 위. ⚠️ 휴식 타이머보다 작게 둔다(아래 주석) */}
+            <p
+              aria-label={`운동 경과 시간 ${elapsedLabel}`}
+              className="flex-none text-[26px] leading-none font-black tracking-tight tabular-nums"
             >
-              ● {paused ? "정지됨 — 무동작" : resting ? "휴식 중" : "지금 운동 중"}
-            </span>
-            {photoSlot}
+              {elapsedLabel}
+            </p>
           </div>
 
           {/*
@@ -542,7 +555,7 @@ export function ActiveSessionOverlay({
               <span className="text-[11.5px] font-bold text-muted">
                 전체 운동 진행률
               </span>
-              <span className="text-[11.5px] font-extrabold text-muted">
+              <span className="text-[11.5px] font-extrabold text-accent tabular-nums">
                 {progress.completed} / {progress.total} 완료
               </span>
             </div>
@@ -552,7 +565,7 @@ export function ActiveSessionOverlay({
               aria-valuemin={0}
               aria-valuemax={100}
               aria-label="전체 운동 진행률"
-              className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-surface-2"
+              className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-surface-3"
             >
               {/*
                 ⚠️ **`transition-[width]`를 붙이지 마라.** 붙이면 인라인
@@ -567,13 +580,13 @@ export function ActiveSessionOverlay({
                 style={{ width: `${progress.percent}%` }}
               />
             </div>
-            <p className="mt-1 text-right text-[11px] font-bold text-accent">
+            <p className="mt-1 text-right text-[11px] font-bold text-muted tabular-nums">
               {progress.percent}%
             </p>
           </div>
 
           {!resting && (
-            <div className="mt-3 flex items-center gap-3">
+            <div className="mt-4 flex items-center gap-3 rounded-[18px] border border-line bg-surface-2/60 p-3 text-left">
               {exerciseImage && exerciseName && (
                 <ExerciseThumbTile
                   id={exerciseImage.id}
@@ -582,9 +595,15 @@ export function ActiveSessionOverlay({
                   size={72}
                 />
               )}
-              <h2 className="min-w-0 text-[26px] leading-tight font-extrabold">
-                {exerciseName ?? "운동"}
-              </h2>
+              <div className="min-w-0">
+                <h2 className="text-[22px] leading-tight font-black">
+                  {exerciseName ?? "운동"}
+                </h2>
+                {/* 세트 위치는 아래 `현재 세트`가 말한다 — 같은 숫자를 두 번 적지 않는다 */}
+                {exerciseImage && (
+                  <p className="mt-1 text-[12px] font-bold text-muted">{exerciseImage.bodyPart}</p>
+                )}
+              </div>
             </div>
           )}
           {!resting && guideName && (
@@ -592,9 +611,10 @@ export function ActiveSessionOverlay({
               type="button"
               onClick={() => onOpenGuide?.(guideName)}
               aria-label={`${guideName} 자세 안내`}
-              className="mt-1 text-[11.5px] font-bold text-accent"
+              className="mt-2 inline-flex items-center gap-1 text-[11.5px] font-bold text-accent"
             >
-              📖 자세 안내
+              <Icon name="book" size={14} />
+              자세 안내
             </button>
           )}
 
@@ -620,10 +640,7 @@ export function ActiveSessionOverlay({
             사용자 지시로 **남은 세트를 휴식 타이머와 같은 34px로** 올려 둘이
             동급이 됐다. 셋 중 하나를 바꾸면 나머지도 같이 봐야 한다.
           */}
-          <p className="mt-3 text-[11.5px] font-bold text-muted">⏱ 운동 시간</p>
-          <p className="font-mono text-[26px] leading-none font-extrabold tracking-tight">
-            {elapsedLabel}
-          </p>
+          {/* 경과 시간은 2026-10-05에 상태 줄 오른쪽으로 올렸다(시안 ②). 크기 26px 그대로 */}
 
           {/*
             휴식 중에도 이 종목이 몇 세트 남았는지 말한다 (사용자 지시 ③).
@@ -638,11 +655,11 @@ export function ActiveSessionOverlay({
             남은 게 있다는 뜻으로 읽힌다.
           */}
           {resting && !allDone && exerciseName && (
-            <div className="mt-3 rounded-card border border-line bg-surface-2 px-4 py-3 text-left">
+            <div className="mt-3 rounded-[18px] border border-line bg-surface-2/60 px-4 py-3 text-left">
               <p className="text-[13px] font-extrabold">{exerciseName}</p>
               {setProgress.remaining > 0 ? (
                 <p className="mt-1 font-extrabold text-accent">
-                  <span className="font-mono text-[34px] leading-none">
+                  <span className="text-[48px] leading-none font-black tabular-nums">
                     {setProgress.remaining}
                   </span>
                   <span className="ml-1.5 text-[13px]">세트 남음</span>
@@ -660,9 +677,10 @@ export function ActiveSessionOverlay({
                   type="button"
                   onClick={() => onOpenGuide?.(guideName)}
                   aria-label={`${guideName} 자세 안내`}
-                  className="mt-1.5 text-[11.5px] font-bold text-accent"
+                  className="mt-1.5 inline-flex items-center gap-1 text-[11.5px] font-bold text-accent"
                 >
-                  📖 자세 안내
+                  <Icon name="book" size={14} />
+                  자세 안내
                 </button>
               )}
             </div>
@@ -683,7 +701,7 @@ export function ActiveSessionOverlay({
             했어요"라고 하면 `적용하기`가 횟수도 바꿀 것처럼 읽힌다.
           */}
           {resting && !allDone && spreadOffer && (
-            <div className="mt-3 rounded-card border border-accent/50 bg-accent-weak px-4 py-3 text-left">
+            <div className="mt-3 rounded-[18px] border border-accent/60 bg-transparent px-4 py-3 text-left">
               <p className="text-[12.5px] font-bold text-muted">
                 이번 세트는{" "}
                 <span className="font-extrabold text-accent">
@@ -705,14 +723,14 @@ export function ActiveSessionOverlay({
                 <button
                   type="button"
                   onClick={onApplySpread}
-                  className="h-10 flex-1 rounded-card-sm bg-accent text-[12.5px] font-extrabold text-accent-ink"
+                  className="h-10 flex-1 rounded-[12px] bg-accent text-[12.5px] font-extrabold text-accent-ink"
                 >
                   적용하기
                 </button>
                 <button
                   type="button"
                   onClick={onDismissSpread}
-                  className="h-10 flex-1 rounded-card-sm border border-line bg-surface text-[12.5px] font-bold text-muted"
+                  className="h-10 flex-1 rounded-[12px] border border-line bg-transparent text-[12.5px] font-bold text-muted"
                 >
                   이번만
                 </button>
@@ -751,27 +769,39 @@ export function ActiveSessionOverlay({
             </>
           ) : resting ? (
             <>
-              <p className="text-[12.5px] font-bold text-accent">휴식 시간</p>
-              <div className="mt-2 flex items-center justify-center gap-4 rounded-card border border-line bg-surface-2 py-3">
-                <button
-                  type="button"
-                  onClick={() => onAdjustRest(-10)}
-                  aria-label="휴식 10초 줄이기"
-                  className="grid h-10 w-10 place-items-center rounded-full border border-line bg-surface text-xl font-bold"
-                >
-                  –
-                </button>
-                <span className="font-mono text-[34px] leading-none font-extrabold">
+              <div className="rounded-[20px] border border-accent/50 bg-surface-2/60 px-4 pt-3 pb-4">
+                <p className="text-[12.5px] font-bold text-muted">휴식 시간</p>
+                {/* ⚠️ 남은 세트 숫자와 **같은 크기**다(사용자 지시 2026-08-24) — 둘을 같이 바꿔라 */}
+                <p className="mt-1 text-[48px] leading-none font-black tracking-tight text-accent tabular-nums">
                   {clock(restSeconds)}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => onAdjustRest(10)}
-                  aria-label="휴식 10초 늘리기"
-                  className="grid h-10 w-10 place-items-center rounded-full border border-line bg-surface text-xl font-bold"
-                >
-                  +
-                </button>
+                </p>
+                {/* 남은 휴식 막대 — 설정한 휴식(프리셋) 대비. 계산은 표시용이라 저장값과 무관하다 */}
+                <div className="mx-auto mt-3 h-1.5 w-[86%] overflow-hidden rounded-full bg-surface-3">
+                  <div
+                    className="h-full rounded-full bg-accent"
+                    style={{
+                      width: `${Math.max(0, Math.min(100, restPresetSeconds > 0 ? (restSeconds / restPresetSeconds) * 100 : 0))}%`,
+                    }}
+                  />
+                </div>
+                <div className="mt-3 flex items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onAdjustRest(-10)}
+                    aria-label="휴식 10초 줄이기"
+                    className="h-9 min-w-[72px] rounded-full border border-line-strong px-3 text-[12px] font-bold text-text"
+                  >
+                    −10초
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onAdjustRest(10)}
+                    aria-label="휴식 10초 늘리기"
+                    className="h-9 min-w-[72px] rounded-full border border-line-strong px-3 text-[12px] font-bold text-text"
+                  >
+                    +10초
+                  </button>
+                </div>
               </div>
 
               <div className="mt-2.5 flex flex-wrap justify-center gap-1.5">
@@ -783,10 +813,10 @@ export function ActiveSessionOverlay({
                       type="button"
                       aria-pressed={active}
                       onClick={() => onPickRestPreset(seconds)}
-                      className={`h-8 rounded-card-sm border px-2.5 text-[11.5px] font-bold ${
+                      className={`h-8 rounded-full border px-3 text-[11.5px] font-bold ${
                         active
-                          ? "border-accent bg-accent-weak text-accent"
-                          : "border-line bg-surface-2 text-muted"
+                          ? "border-accent text-accent"
+                          : "border-line text-muted"
                       }`}
                     >
                       {presetLabel(seconds)}
@@ -797,10 +827,10 @@ export function ActiveSessionOverlay({
 
               {nextUp ? (
                 <>
-                  <p className="mt-5 text-[12.5px] font-bold text-muted">
-                    다음 운동
+                  <p className="mt-5 text-left text-[11px] font-black tracking-wider text-muted">
+                    다음 운동 <span className="text-faint">· NEXT UP</span>
                   </p>
-                  <div className="mt-1 flex items-center gap-3">
+                  <div className="mt-1.5 flex items-center gap-3 rounded-[18px] border border-line bg-surface-2/60 p-3 text-left">
                     {nextUp.image && (
                       <ExerciseThumbTile
                         id={nextUp.image.id}
@@ -809,7 +839,7 @@ export function ActiveSessionOverlay({
                         size={72}
                       />
                     )}
-                    <p className="min-w-0 text-[22px] leading-tight font-extrabold">
+                    <p className="min-w-0 text-[20px] leading-tight font-black">
                       {nextUp.exerciseName}
                     </p>
                   </div>
@@ -825,23 +855,23 @@ export function ActiveSessionOverlay({
                   */}
                   {nextUpHint?.kind === "set" ? (
                     <div className="mt-2 flex items-stretch justify-center gap-2">
-                      <div className="flex-1 rounded-card border border-line bg-surface-2 px-3 py-2">
+                      <div className="flex-1 rounded-[14px] border border-line bg-surface-2/60 px-3 py-2">
                         <p className="text-[11px] font-bold text-muted">
                           지난번
                         </p>
-                        <p className="mt-0.5 font-mono text-[15px] font-extrabold text-muted">
+                        <p className="mt-0.5 text-[15px] font-black text-muted tabular-nums">
                           {nextUpHint.amountLabel}
                         </p>
                       </div>
-                      <div className="flex-1 rounded-card border border-accent bg-accent-weak px-3 py-2">
+                      <div className="flex-1 rounded-[14px] border border-accent px-3 py-2">
                         <p className="text-[11px] font-bold text-accent">오늘</p>
-                        <p className="mt-0.5 font-mono text-[15px] font-extrabold text-accent">
+                        <p className="mt-0.5 text-[15px] font-black text-accent tabular-nums">
                           {nextUp.amount}
                         </p>
                       </div>
                     </div>
                   ) : (
-                    <p className="mt-2 inline-block rounded-card border border-line bg-surface-2 px-4 py-2 font-mono text-base font-extrabold">
+                    <p className="mt-2 inline-block rounded-[14px] border border-line bg-surface-2/60 px-4 py-2 text-base font-black tabular-nums">
                       {nextUp.amount}
                     </p>
                   )}
@@ -853,7 +883,7 @@ export function ActiveSessionOverlay({
                         onClick={() =>
                           onNextUpChallengeReps(nextUpHint.challengeReps!)
                         }
-                        className="mt-2.5 h-10 w-full rounded-card-sm border border-accent bg-accent-weak text-[12.5px] font-extrabold text-accent"
+                        className="mt-2.5 h-11 w-full rounded-[14px] border border-accent/60 bg-transparent text-[12.5px] font-extrabold text-accent"
                       >
                         {nextUpHint.cheer}
                       </button>
@@ -865,9 +895,10 @@ export function ActiveSessionOverlay({
                   <button
                     type="button"
                     onClick={onStartNext}
-                    className="mt-5 h-13 w-full rounded-card bg-accent py-3.5 text-sm font-extrabold text-accent-ink"
+                    className="mt-5 flex h-14 w-full items-center justify-center gap-2 rounded-[16px] bg-accent text-[15px] font-extrabold text-accent-ink active:bg-accent-press"
                   >
-                    ▶ 다음 운동 시작
+                    <Icon name="play" size={15} filled />
+                    다음 운동 시작
                   </button>
                 </>
               ) : null}
@@ -876,7 +907,7 @@ export function ActiveSessionOverlay({
             <>
               <p className="text-[12.5px] font-bold text-muted">
                 현재 세트{" "}
-                <span className="font-mono text-accent">
+                <span className="font-extrabold text-accent tabular-nums">
                   {setPosition.index + 1} / {Math.max(1, setPosition.total)}
                 </span>
               </p>
@@ -891,7 +922,7 @@ export function ActiveSessionOverlay({
               */}
               {isLastPendingSet && (
                 <div className="mt-2">
-                  <p className="inline-flex items-center gap-1 rounded-full bg-good-weak px-3 py-1 text-[11.5px] font-extrabold text-good">
+                  <p className="inline-flex items-center gap-1 rounded-full border border-accent/50 px-3 py-1 text-[11.5px] font-extrabold text-accent">
                     {/* 옛 표기는 `🏁`였다 (2026-08-07 2차 시안으로 교체) */}
                     <UiIcon name="finish" size={14} />
                     마지막 세트예요 — 이것만 하면 오늘 몫 끝!
@@ -920,7 +951,7 @@ export function ActiveSessionOverlay({
                   ) : (
                     <div
                       key={`${exerciseName}:${setPosition.index}:${field.key}`}
-                      className="min-w-0 flex-1 rounded-card border border-line bg-surface-2 p-3"
+                      className="min-w-0 flex-1 rounded-[18px] border border-line bg-surface-2/70 p-3.5 text-left"
                     >
                       <p className="text-[11.5px] font-bold text-muted">
                         {field.label}
@@ -933,13 +964,11 @@ export function ActiveSessionOverlay({
                           />
                         </div>
                       )}
-                      <p className="mt-1 font-mono text-[30px] leading-none font-extrabold">
+                      <p className="mt-1.5 text-center text-[40px] leading-none font-black tabular-nums">
                         {values[field.key]}
-                        <span className="ml-1 text-[12px] font-bold text-muted">
-                          {field.unit}
-                        </span>
                       </p>
-                      <div className="mt-2 flex gap-1.5">
+                      <p className="mt-0.5 text-center text-[11px] font-bold text-muted">{field.unit}</p>
+                      <div className="mt-2.5 flex justify-between gap-2">
                         <button
                           type="button"
                           aria-label={`${field.label} 줄이기`}
@@ -949,9 +978,9 @@ export function ActiveSessionOverlay({
                               adjustAmount(values[field.key], -field.step),
                             )
                           }
-                          className="h-9 flex-1 rounded-card-sm border border-line bg-surface text-lg font-bold"
+                          className="grid h-9 w-9 place-items-center rounded-full border border-line-strong text-text"
                         >
-                          –
+                          <Icon name="minus" size={16} />
                         </button>
                         <button
                           type="button"
@@ -962,9 +991,9 @@ export function ActiveSessionOverlay({
                               adjustAmount(values[field.key], field.step),
                             )
                           }
-                          className="h-9 flex-1 rounded-card-sm border border-line bg-surface text-lg font-bold"
+                          className="grid h-9 w-9 place-items-center rounded-full border border-line-strong text-text"
                         >
-                          +
+                          <Icon name="plus" size={16} />
                         </button>
                       </div>
                     </div>
@@ -1012,7 +1041,7 @@ export function ActiveSessionOverlay({
                               adjustAmount(values[field.key], delta),
                             )
                           }
-                          className="h-8 rounded-card-sm border border-line bg-surface-2 px-2.5 font-mono text-[11.5px] font-bold text-muted"
+                          className="h-8 rounded-full border border-line px-3 text-[11.5px] font-bold text-muted tabular-nums"
                         >
                           {label}
                         </button>
@@ -1040,9 +1069,10 @@ export function ActiveSessionOverlay({
                 type="button"
                 onClick={onCompleteSet}
                 disabled={busy}
-                className="mt-5 h-13 w-full rounded-card border-2 border-accent bg-transparent py-3.5 text-sm font-extrabold text-accent disabled:opacity-60"
+                className="mt-5 flex h-14 w-full items-center justify-center gap-2 rounded-[16px] bg-accent text-[15px] font-extrabold text-accent-ink active:bg-accent-press disabled:opacity-60"
               >
-                ✓ 운동 완료
+                <Icon name="check" size={17} strokeWidth={2.6} />
+                이 세트 완료
               </button>
 
               {/*
@@ -1058,15 +1088,16 @@ export function ActiveSessionOverlay({
                 기록이 있는 종목을 바꾸면 그 기록이 다른 운동 것으로 둔갑한다 —
                 그 경우엔 `건너뛰기`가 답이다(완료분을 보존한다).
               */}
-              <div className="mt-4 flex gap-2 border-t border-line pt-3">
+              <div className="mt-3 flex gap-2">
                 {canReplaceExercise && (
                   <button
                     type="button"
                     onClick={onReplaceExercise}
                     disabled={busy}
-                    className="h-11 flex-1 rounded-card-sm border border-line bg-surface-2 text-[12px] font-bold text-muted disabled:opacity-50"
+                    className="flex h-11 flex-1 items-center justify-center gap-1.5 rounded-[14px] border border-line bg-transparent text-[12.5px] font-bold text-text disabled:opacity-50"
                   >
-                    ⇄ 운동 바꾸기
+                    <Icon name="repeat" size={14} className="text-muted" />
+                    운동 바꾸기
                   </button>
                 )}
                 {/* ⚠️ 문구를 '건너뛰기'로만 줄이지 마라. 이 버튼은 종목을 **오늘
@@ -1077,9 +1108,10 @@ export function ActiveSessionOverlay({
                   type="button"
                   onClick={onSkipExercise}
                   disabled={busy}
-                  className="h-11 flex-1 rounded-card-sm border border-line bg-surface-2 text-[12px] font-bold text-muted disabled:opacity-50"
+                  className="flex h-11 flex-1 items-center justify-center gap-1.5 rounded-[14px] border border-line bg-transparent text-[12.5px] font-bold text-text disabled:opacity-50"
                 >
-                  ↷ 이 종목 빼기
+                  <Icon name="close" size={14} className="text-muted" />
+                  이 종목 빼기
                 </button>
               </div>
             </>
@@ -1092,7 +1124,7 @@ export function ActiveSessionOverlay({
             type="button"
             onClick={onFinish}
             disabled={busy}
-            className="mt-3 h-11 w-full rounded-card border border-line bg-surface text-[13px] font-bold text-muted disabled:opacity-60"
+            className="mt-3 h-11 w-full rounded-full text-[13px] font-bold text-muted underline-offset-4 hover:underline disabled:opacity-60"
           >
             {busy ? "처리 중…" : "운동 종료"}
           </button>

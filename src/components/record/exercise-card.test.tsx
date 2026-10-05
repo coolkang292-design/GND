@@ -86,7 +86,7 @@ describe("ExerciseCard 직전 기록 불러오기", () => {
   it("운동 시작 전에는 종목별 불러오기 버튼을 활성화한다", () => {
     const html = renderCard();
 
-    expect(html).toContain("↻ 불러오기");
+    expect(html).toContain("이전 기록");
     expect(html).toContain('aria-label="벤치 프레스 직전 기록 불러오기"');
     expect(loadLastButton(html)).not.toContain('disabled=""');
   });
@@ -107,7 +107,7 @@ describe("ExerciseCard 직전 기록 불러오기", () => {
   it("다른 종목의 직전 기록을 조회하는 동안에도 버튼을 비활성화한다", () => {
     const html = renderCard({ loadLastDisabled: true });
 
-    expect(html).toContain("↻ 불러오기");
+    expect(html).toContain("이전 기록");
     expect(html).not.toContain("불러오는 중…");
     expect(loadLastButton(html)).toContain('disabled=""');
   });

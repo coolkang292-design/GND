@@ -133,7 +133,7 @@ describe("시간 수동 기록 — 측정 시작 없이 입력", () => {
     expect((distance as HTMLInputElement).value).toBe("5.");
     fireEvent.change(distance, { target: { value: "5.2" } });
     // blur 없이 완료해도 마지막 입력이 포함돼야 한다.
-    fireEvent.click(screen.getByText("✓ 운동 완료"));
+    fireEvent.click(screen.getByText("이 세트 완료"));
     expect(onStart).not.toHaveBeenCalled();
     expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ durationSec: 1960, distanceKm: 5.2 }));
     expect(screen.getByText("32:40")).toBeTruthy();
@@ -145,7 +145,7 @@ describe("시간 수동 기록 — 측정 시작 없이 입력", () => {
     fireEvent.change(screen.getByLabelText(kind === "time" ? "운동 시간 분" : "운동 거리 km"), {
       target: { value: kind === "time" ? "30" : "3.5" },
     });
-    fireEvent.click(screen.getByText("✓ 운동 완료"));
+    fireEvent.click(screen.getByText("이 세트 완료"));
     expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({
       durationSec: kind === "time" ? 1800 : 0,
       distanceKm: kind === "distance" ? 3.5 : 0,
@@ -159,7 +159,7 @@ describe("시간 수동 기록 — 측정 시작 없이 입력", () => {
     expect(screen.getByText("0~59 사이로 입력해 주세요")).toBeTruthy();
     fireEvent.change(screen.getByLabelText("운동 거리 km"), { target: { value: "-1" } });
     fireEvent.change(screen.getByLabelText("운동 시간 분"), { target: { value: "abc" } });
-    fireEvent.click(screen.getByText("✓ 운동 완료"));
+    fireEvent.click(screen.getByText("이 세트 완료"));
     expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ durationSec: 0, distanceKm: 0 }));
   });
 
@@ -181,7 +181,7 @@ describe("시간 수동 기록 — 측정 시작 없이 입력", () => {
     fireEvent.change(minutes, { target: { value: "30" } });
     fireEvent.change(minutes, { target: { value: "" } });
     expect(onComplete).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByText("✓ 운동 완료"));
+    fireEvent.click(screen.getByText("이 세트 완료"));
     expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ durationSec: 0 }));
   });
 
@@ -197,7 +197,7 @@ describe("시간 수동 기록 — 측정 시작 없이 입력", () => {
     expect(screen.getByText("02:37")).toBeTruthy();
     fireEvent.change(screen.getByLabelText("운동 시간 초"), { target: { value: "15" } });
     expect(onComplete).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByText("✓ 운동 완료"));
+    fireEvent.click(screen.getByText("이 세트 완료"));
     expect(onStart).not.toHaveBeenCalled();
     expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ durationSec: 135 }));
   });
@@ -575,7 +575,7 @@ describe("ActiveSessionOverlay — 운동 중(입력) 화면", () => {
     const onCompleteSet = vi.fn();
     renderInput({ onCompleteSet });
 
-    fireEvent.click(screen.getByRole("button", { name: /운동 완료/ }));
+    fireEvent.click(screen.getByRole("button", { name: /이 세트 완료/ }));
     expect(onCompleteSet).toHaveBeenCalled();
   });
 

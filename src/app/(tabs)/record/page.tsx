@@ -186,6 +186,7 @@ import {
 import { dayKey, resolveTimeZone } from "@/lib/domain/time";
 import { getMyBadgeMetrics } from "@/lib/badges";
 import { TodayStatusCard } from "@/components/record/today-status-card";
+import { Icon } from "@/components/ui/icon";
 import { CompletionHeroCard } from "@/components/record/completion-hero-card";
 import { pickNextCompletionHero } from "@/lib/completion-hero-pick";
 import { captionForEffort } from "@/lib/domain/session-caption";
@@ -3439,8 +3440,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
   if (result) {
     return (
       <div className="flex flex-col gap-3">
-        <header className="pt-2 pb-1">
-          <h1 className="text-[19px] font-extrabold tracking-tight">
+        <header className="pt-1 pb-0.5">
+          <h1 className="text-[28px] font-black tracking-tight">
             운동 기록
           </h1>
         </header>
@@ -3460,6 +3461,11 @@ function WorkoutScreen({ userId }: { userId: string }) {
             imageIndex: result.heroImageIndex,
           })}
           statsLine={`${result.durationMinutes}분 · 볼륨 ${result.summary.weightVolumeKg.toLocaleString()}kg · 완료 세트 ${result.summary.completedSetCount}개`}
+          stats={{
+            minutes: result.durationMinutes,
+            volumeKg: result.summary.weightVolumeKg,
+            sets: result.summary.completedSetCount,
+          }}
           recordNote={result.recordNote}
         />
         {/* ⚠️ 완료 카드 **바로 아래**다 (2026-09-29 사용자 지시 — "사진 먼저 찍고
@@ -3538,7 +3544,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
               );
             }
             return (
-              <section className="rounded-card border border-accent/40 bg-accent-weak p-4">
+              <section className="rounded-card border border-accent/50 bg-surface p-4">
                 <p className="flex items-center gap-1.5 text-xs font-extrabold text-accent">
                   <UiIcon name="goal" size={15} />
                   챌린지 목표에{" "}
@@ -3589,7 +3595,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
           onHidden={() => setCoachHidden(true)}
           captionSlot={
             <div>
-              <p className="text-[11px] font-bold text-faint">👥 크루 피드 한마디</p>
+              <p className="flex items-center gap-1 text-[11px] font-bold text-faint">
+                <Icon name="users" size={13} /> 크루 피드 한마디
+              </p>
               <p className="mt-0.5 text-[13.5px] font-extrabold">
                 {resultCaption ?? "아직 남긴 한마디가 없어요"}
               </p>
@@ -3635,9 +3643,10 @@ function WorkoutScreen({ userId }: { userId: string }) {
             const msg = shareResultToast(await shareOrCopyText(result.logText));
             if (msg) showToast(msg);
           }}
-          className="h-12 rounded-card border border-line bg-surface-2 text-sm font-bold"
+          className="flex h-12 items-center justify-center gap-1.5 rounded-[14px] border border-line bg-surface text-sm font-bold"
         >
-          📋 운동 일지 공유하기
+          <Icon name="feed" size={16} className="text-accent" />
+          운동 일지 공유하기
         </button>
         {/*
           운동을 마치면 **홈으로 보낸다** (2026-08-19 사장님 결정).
@@ -3659,9 +3668,10 @@ function WorkoutScreen({ userId }: { userId: string }) {
             setResult(null);
             router.push(AFTER_WORKOUT_PATH);
           }}
-          className="h-12 rounded-card bg-accent text-sm font-extrabold text-accent-ink"
+          className="flex h-14 items-center justify-center gap-1.5 rounded-[16px] bg-accent text-[15px] font-extrabold text-accent-ink active:bg-accent-press"
         >
-          크루 보러 가기 👉
+          크루 보러 가기
+          <Icon name="chevron" size={17} strokeWidth={2.4} />
         </button>
         {xpEvents.length > 0 && (
           <XpResultModal events={xpEvents} onClose={() => setXpEvents([])} />
@@ -3693,9 +3703,10 @@ function WorkoutScreen({ userId }: { userId: string }) {
     <div
       className={`flex flex-col gap-3 ${showFixedStart ? "pb-40" : "pb-24"}`}
     >
-      <header className="flex items-center justify-between pt-2 pb-1">
+      <header className="flex items-center justify-between pt-1 pb-0.5">
         <div>
-          <h1 className="text-[19px] font-extrabold tracking-tight">
+          {/* 2026-10-05 Performance Social 기록 시안 — 큰 제목 + 한 줄 부제 */}
+          <h1 className="text-[28px] font-black tracking-tight">
             운동 기록
           </h1>
           {/*
@@ -3704,8 +3715,14 @@ function WorkoutScreen({ userId }: { userId: string }) {
             추가해보세요"가 남아 화면이 스스로 모순된다 — 개발 서버에서 잡았다.
             부제의 일(지금 무슨 상태인가)을 카드가 더 잘 한다.
           */}
-          {!showTodayCard && (
-            <p className="mt-0.5 text-[12.5px] text-muted">
+          {/* 오늘 카드가 뜨면 상태 문장은 카드가 말한다 — 부제는 **할 일**만 말한다
+              (운동 완료 상태에선 아무 말도 안 해서 카드와 모순되지 않는다) */}
+          {showTodayCard ? (
+            !didWorkoutToday && (
+              <p className="mt-0.5 text-[13px] text-muted">오늘의 운동을 준비하세요</p>
+            )
+          ) : (
+            <p className="mt-0.5 text-[13px] text-muted">
               {active
                 ? "운동 중"
                 : isEmpty
@@ -3724,6 +3741,37 @@ function WorkoutScreen({ userId }: { userId: string }) {
           </button>
         )}
       </header>
+
+      {/* 운동 / 달력 서브탭 (§12) */}
+      {/* 2026-10-05: 시안대로 머리 바로 아래로 올렸고, 피드 탭과 같은 라임 알약이다 */}
+      <div className="flex gap-1 rounded-full border border-line bg-surface p-1">
+        {(["workout", "calendar"] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => {
+              if (t !== "calendar") {
+                setSubTab(t);
+                return;
+              }
+              /*
+                운동 탭에서 고친 것을 **먼저 계획에 쓰고** 달력을 연다 (2026-10-05).
+                달력은 열 때 한 번 조회해서, 0.6초 모으는 중이던 쓰기가 늦으면
+                방금 담은 운동이 달력에 없다. 네트워크가 늦어도 탭이 멈춰 보이면
+                안 되므로 1.5초까지만 기다린다.
+              */
+              void Promise.race([
+                flushPlanSync(),
+                new Promise((resolve) => window.setTimeout(resolve, 1500)),
+              ]).then(() => setSubTab("calendar"));
+            }}
+            className={`h-10 flex-1 rounded-full text-[14px] font-extrabold transition-colors ${
+              subTab === t ? "bg-accent text-accent-ink" : "text-muted"
+            }`}
+          >
+            {t === "workout" ? "운동" : "달력"}
+          </button>
+        ))}
+      </div>
 
       {/*
         오늘 상태 카드 (2026-08-19 사용자 요청) — **앱을 켜면 보이는 첫 카드**다.
@@ -3764,36 +3812,6 @@ function WorkoutScreen({ userId }: { userId: string }) {
           distanceMeters={cumulative.distanceMeters}
         />
       )}
-
-      {/* 운동 / 달력 서브탭 (§12) */}
-      <div className="flex gap-1 rounded-card border border-line bg-surface-2 p-1">
-        {(["workout", "calendar"] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => {
-              if (t !== "calendar") {
-                setSubTab(t);
-                return;
-              }
-              /*
-                운동 탭에서 고친 것을 **먼저 계획에 쓰고** 달력을 연다 (2026-10-05).
-                달력은 열 때 한 번 조회해서, 0.6초 모으는 중이던 쓰기가 늦으면
-                방금 담은 운동이 달력에 없다. 네트워크가 늦어도 탭이 멈춰 보이면
-                안 되므로 1.5초까지만 기다린다.
-              */
-              void Promise.race([
-                flushPlanSync(),
-                new Promise((resolve) => window.setTimeout(resolve, 1500)),
-              ]).then(() => setSubTab("calendar"));
-            }}
-            className={`h-9 flex-1 rounded-[9px] text-sm font-bold transition-colors ${
-              subTab === t ? "bg-surface text-accent shadow-card" : "text-muted"
-            }`}
-          >
-            {t === "workout" ? "운동" : "달력"}
-          </button>
-        ))}
-      </div>
 
       {subTab === "calendar" ? (
         <>
@@ -3842,11 +3860,12 @@ function WorkoutScreen({ userId }: { userId: string }) {
                 // 사람에게 계획이 사라져 보이면 안 된다 (2026-08-25).
                 void handleLoadPlan(todayIntervalPlan);
               }}
-              className="mb-3 flex w-full items-center justify-between gap-3 rounded-card border border-accent/55 bg-accent/10 px-4 py-3.5 text-left disabled:opacity-60"
+              className="mb-3 flex w-full items-center justify-between gap-3 rounded-card border border-accent/55 bg-surface px-4 py-3.5 text-left disabled:opacity-60"
             >
               <span className="min-w-0">
-                <span className="block text-sm font-black text-text">
-                  🔥 오늘은 전신 인터벌이에요
+                <span className="flex items-center gap-1.5 text-sm font-black text-text">
+                  <Icon name="interval" size={17} className="text-accent" />
+                  오늘은 전신 인터벌이에요
                 </span>
                 {/* break-keep: 375px에서 "이 / 어서 2종목"처럼 단어 중간이 끊겼다 (2026-09-29) */}
                 <span className="mt-0.5 block break-keep text-[11.5px] leading-4 text-muted">
@@ -3894,13 +3913,14 @@ function WorkoutScreen({ userId }: { userId: string }) {
 
           {/* 세션 헤더 (§10) */}
           {!isEmpty && (
-            <section className="rounded-card border border-line bg-surface p-4 shadow-card">
+            <section className="rounded-card border border-line-strong bg-surface p-4 shadow-card">
               <div className="flex items-start justify-between">
                 <div>
                   <p
-                    className={`text-xs font-bold ${paused ? "text-warn" : "text-accent"}`}
+                    className={`flex items-center gap-1 text-[12px] font-extrabold ${paused ? "text-warn" : "text-accent"}`}
                   >
-                    {paused ? "⏸ 정지됨 — 무동작" : active ? "운동 중" : "준비"}
+                    {paused && <Icon name="pause" size={13} />}
+                    {paused ? "정지됨 — 무동작" : active ? "운동 중" : "준비"}
                   </p>
                   {active ? (
                     <p
@@ -3911,19 +3931,19 @@ function WorkoutScreen({ userId }: { userId: string }) {
                       {hh}:{mm}:{ss}
                     </p>
                   ) : (
-                    <p className="mt-1 font-mono text-sm text-muted">
+                    <p className="mt-1 text-[17px] font-extrabold">
                       {today.getMonth() + 1}월 {today.getDate()}일
                     </p>
                   )}
                 </div>
                 <div className="text-right">
                   <p className="text-[11px] text-muted">완료 볼륨</p>
-                  <p className="font-mono text-[26px] leading-tight font-extrabold">
+                  <p className="text-[28px] leading-tight font-black tabular-nums">
                     {summary.weightVolumeKg.toLocaleString()}
-                    <span className="text-[15px]">kg</span>
+                    <span className="ml-0.5 text-[14px] font-extrabold text-muted">kg</span>
                   </p>
                   {volumeDelta !== null && (
-                    <p className="font-mono text-xs text-muted">
+                    <p className="text-xs text-muted tabular-nums">
                       이전 대비{" "}
                       <span
                         className={volumeDelta >= 0 ? "text-good" : "text-warn"}
@@ -4039,9 +4059,10 @@ function WorkoutScreen({ userId }: { userId: string }) {
             <div className="flex gap-2">
               <button
                 onClick={() => void openExercisePicker()}
-                className="h-12 flex-1 rounded-card border border-line bg-surface text-sm font-bold text-accent"
+                className="flex h-12 flex-1 items-center justify-center gap-1.5 rounded-[14px] border border-accent/50 bg-surface text-sm font-extrabold text-accent"
               >
-                + 운동 추가
+                <Icon name="plus" size={16} strokeWidth={2.4} />
+                운동 추가
               </button>
               {active && (
                 <button
@@ -4061,31 +4082,34 @@ function WorkoutScreen({ userId }: { userId: string }) {
       */}
           {!isEmpty && (
             <section className="flex items-center justify-between rounded-card border border-line bg-surface px-4 py-3 shadow-card">
-              <div>
-                <p className="text-sm font-bold">세트 사이 휴식</p>
+              <div className="flex items-center gap-2.5">
+                <Icon name="timer" size={20} className="flex-none text-accent" />
+                <div>
+                <p className="text-sm font-extrabold">세트 사이 휴식</p>
                 <p className="text-[11.5px] text-muted">
                   {active
                     ? "지금 쉬는 중이면 남은 시간도 같이 바뀌어요"
                     : "완료 체크하면 이 시간으로 시작해요"}
                 </p>
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => stepRest(-10)}
                   aria-label="10초 줄이기"
-                  className="h-9 w-9 rounded-full border border-line bg-surface-2 text-lg font-bold disabled:opacity-40"
+                  className="grid h-9 w-9 place-items-center rounded-full border border-line-strong text-text disabled:opacity-40"
                 >
-                  –
+                  <Icon name="minus" size={15} />
                 </button>
-                <span className="w-12 text-center font-mono text-sm font-extrabold">
+                <span className="w-12 text-center text-[15px] font-black tabular-nums">
                   {restMm}:{restSs}
                 </span>
                 <button
                   onClick={() => stepRest(10)}
                   aria-label="10초 늘리기"
-                  className="h-9 w-9 rounded-full border border-line bg-surface-2 text-lg font-bold disabled:opacity-40"
+                  className="grid h-9 w-9 place-items-center rounded-full border border-line-strong text-text disabled:opacity-40"
                 >
-                  +
+                  <Icon name="plus" size={15} />
                 </button>
               </div>
             </section>
@@ -4094,9 +4118,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
             <button
               onClick={() => setRoutineSaveOpen(true)}
               disabled={busy}
-              className="h-12 rounded-card border border-line bg-surface text-sm font-bold text-accent disabled:opacity-60"
+              className="flex h-12 items-center justify-center gap-1.5 rounded-[14px] border border-line bg-surface text-sm font-bold text-text disabled:opacity-60"
             >
-              💾 이 목록을{" "}
+              <Icon name="bookmark" size={15} className="text-accent" />이 목록을{" "}
               {routines.length >= slotLimit && routines.length > 0
                 ? "기존 루틴에 덮어쓰기"
                 : "루틴으로 저장"}{" "}
@@ -4136,8 +4160,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
               <button
                 onClick={handleStart}
                 disabled={busy || loadingExerciseKey !== null}
-                className="h-14 w-full rounded-card bg-accent text-[15px] font-extrabold text-accent-ink shadow-card disabled:opacity-60"
+                className="flex h-14 w-full items-center justify-center gap-2 rounded-[16px] bg-accent text-[16px] font-extrabold text-accent-ink shadow-card active:bg-accent-press disabled:opacity-60"
               >
+                {!busy && <Icon name="play" size={16} filled />}
                 {busy ? "처리 중…" : "운동 시작"}
               </button>
             </div>

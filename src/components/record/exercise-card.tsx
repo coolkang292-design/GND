@@ -14,6 +14,22 @@ import { setVolumeKg } from "@/lib/domain/volume";
 import type { LocalExercise, LocalSet } from "@/lib/workout";
 import { TYPE_LABEL } from "./exercise-picker";
 import { ExerciseThumbTile } from "./exercise-thumb";
+import { Icon } from "@/components/ui/icon";
+
+/*
+  2026-10-05 Performance Social 기록 시안(① 운동 준비)의 운동 카드 톤.
+  썸네일 · 이름 · `부위 · 종류` · 이전 기록 불러오기 · 라임 목표 줄 · SET/KG/REPS/완료 표 ·
+  완료는 라임 체크 원. **기능은 하나도 바꾸지 않았다** — 입력·완료 체크·세트 ±·삭제·
+  롱프레스 순서 이동·자세 안내·처방·불러오기·계획 모드 전부 그대로다.
+  ⚠️ 시안의 `이전` 열(세트별 지난 기록)은 넣지 않았다 — 카드에 그 데이터가 없고, 새 조회는
+     이번 범위가 아니다. 지난 기록은 `불러오기`가 채운다.
+*/
+
+/** 완료 체크 버튼 — 세 가지 입력 모양(표·유산소·시간)이 같은 모양을 쓴다 */
+const doneClass = (done: boolean) =>
+  `flex items-center justify-center rounded-full border transition-colors ${
+    done ? "border-accent bg-accent text-accent-ink" : "border-line-strong bg-transparent text-faint"
+  }`;
 
 /** 세트 입력 카드 — 번호·중량·횟수·완료 체크, 유형별 입력 (§10) */
 export function ExerciseCard({
@@ -105,14 +121,14 @@ export function ExerciseCard({
       inputMode={mode}
       placeholder="0"
       onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
-      className="h-9 w-full rounded-card-sm border border-line bg-bg px-2 text-center font-mono text-sm outline-none focus:border-accent"
+      className="h-10 w-full rounded-[10px] border border-line bg-surface-2 px-2 text-center text-[15px] font-bold tabular-nums outline-none focus:border-accent"
     />
   );
 
   return (
-    <section className="rounded-card border border-line bg-surface p-4 shadow-card">
-      <div className="flex select-none items-center gap-2" {...longPressHandlers}>
-        <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-accent-weak text-xs font-extrabold text-accent">
+    <section className="rounded-card border border-line-strong bg-surface p-4 shadow-card">
+      <div className="flex select-none items-center gap-2.5" {...longPressHandlers}>
+        <span className="flex h-5 w-5 flex-none items-center justify-center rounded-[6px] bg-surface-3 text-[11px] font-extrabold text-muted">
           {index + 1}
         </span>
         {/* 운동을 담은 뒤의 카드에도 그림을 보인다(사용자 지시 2026-10-05).
@@ -123,24 +139,32 @@ export function ExerciseCard({
             id={thumbId}
             name={exercise.name}
             bodyPart={exercise.bodyPart}
-            size={40}
+            size={48}
           />
         )}
-        <span className="text-sm font-extrabold">{exercise.name}</span>
-        {exercise.isCustom && (
-          <span className="rounded bg-accent-weak px-1.5 py-0.5 text-[10px] font-bold text-accent">
-            직접
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-1.5">
+            <span className="truncate text-[15.5px] font-extrabold">{exercise.name}</span>
+            {exercise.isCustom && (
+              <span className="flex-none rounded-full border border-accent/50 px-1.5 text-[10px] font-bold text-accent">
+                직접
+              </span>
+            )}
           </span>
-        )}
-        <span className="ml-auto rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-bold text-muted">
-          {TYPE_LABEL[exercise.exerciseType]}
+          <span className="mt-0.5 block text-[11.5px] text-muted">
+            {/* 부위가 종류와 같으면(유산소·유산소) 한 번만 적는다 */}
+            {exercise.bodyPart && exercise.bodyPart !== TYPE_LABEL[exercise.exerciseType]
+              ? `${exercise.bodyPart} · `
+              : ""}
+            {TYPE_LABEL[exercise.exerciseType]}
+          </span>
         </span>
         <button
           onClick={onRemoveExercise}
           aria-label={`${exercise.name} 삭제`}
-          className="text-sm text-faint"
+          className="grid h-8 w-8 flex-none place-items-center rounded-full text-faint"
         >
-          ✕
+          <Icon name="close" size={16} />
         </button>
       </div>
 
@@ -153,9 +177,10 @@ export function ExerciseCard({
           type="button"
           onClick={() => onOpenGuide?.(exercise.name)}
           aria-label={`${exercise.name} 자세 안내`}
-          className="mt-1.5 text-[11.5px] font-bold text-accent"
+          className="mt-2 inline-flex items-center gap-1 text-[11.5px] font-bold text-accent"
         >
-          📖 자세 안내
+          <Icon name="book" size={14} />
+          자세 안내
         </button>
       )}
 
@@ -166,7 +191,7 @@ export function ExerciseCard({
            `programWeightGuide()`가 유일한 출처다 — 두 곳에 두면 갈라진다.
       */}
       {exercise.prescription && (
-        <div className="mt-2 rounded-card-sm border border-line bg-surface-2 p-2.5">
+        <div className="mt-2 rounded-card-sm border border-line bg-surface-2/60 p-2.5">
           <p className="text-[11.5px] font-extrabold text-accent">
             목표 {repRangeLabel(exercise.prescription)} · 휴식{" "}
             {restClock(exercise.prescription.restSeconds)}
@@ -184,7 +209,7 @@ export function ExerciseCard({
         예정값을 같이 두면 어느 쪽을 보는지 헷갈린다.
       */}
       {!active && (
-        <p className="mt-1.5 text-xs font-bold text-accent">
+        <p className="mt-2 text-[12.5px] font-extrabold text-accent">
           {summarizePlan(
             exercise.exerciseType,
             exercise.measure,
@@ -218,9 +243,10 @@ export function ExerciseCard({
           onClick={onLoadLast}
           disabled={active || loadLastDisabled}
           aria-label={`${exercise.name} 직전 기록 불러오기`}
-          className="h-8 flex-none rounded-card-sm border border-line bg-surface-2 px-2.5 text-xs font-bold text-accent disabled:cursor-not-allowed disabled:opacity-40"
+          className="inline-flex h-8 flex-none items-center gap-1 rounded-full border border-accent/50 px-3 text-xs font-bold text-accent disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {loadingLast ? "불러오는 중…" : "↻ 불러오기"}
+          {!loadingLast && <Icon name="repeat" size={13} />}
+          {loadingLast ? "불러오는 중…" : "이전 기록"}
         </button>
       </div>
 
@@ -249,13 +275,9 @@ export function ExerciseCard({
                 <button
                   onClick={() => onToggleDone?.(si)}
                   aria-label="완료 체크"
-                  className={`h-9 w-11 flex-none rounded-card-sm border text-sm font-bold ${
-                    s.done
-                      ? "border-good bg-good text-white"
-                      : "border-line bg-surface-2 text-faint"
-                  }`}
+                  className={`h-10 w-10 flex-none ${doneClass(s.done)}`}
                 >
-                  ✓
+                  <Icon name="check" size={16} strokeWidth={2.6} />
                 </button>
               )}
             </div>
@@ -281,29 +303,29 @@ export function ExerciseCard({
                 <button
                   onClick={() => onToggleDone?.(si)}
                   aria-label={`${si + 1}세트 완료`}
-                  className={`h-9 w-11 flex-none rounded-card-sm border text-sm font-bold ${
-                    s.done
-                      ? "border-good bg-good text-white"
-                      : "border-line bg-surface-2 text-faint"
-                  } ${active ? "" : "opacity-60"}`}
+                  className={`h-10 w-10 flex-none ${doneClass(s.done)} ${active ? "" : "opacity-60"}`}
                 >
-                  ✓
+                  <Icon name="check" size={16} strokeWidth={2.6} />
                 </button>
               )}
             </div>
           ))}
           <div className="mt-2 flex gap-2">
+            {/* ⚠️ 접근 이름 `– 세트`·`+ 세트`를 바꾸지 마라 — 달력 예정표 테스트가 이 이름으로 찾는다 */}
             <button
               onClick={onRemoveSet}
-              className="h-9 flex-1 rounded-card-sm border border-line text-xs font-bold text-muted"
+              aria-label="– 세트"
+              className="flex h-10 w-12 flex-none items-center justify-center rounded-[10px] border border-line text-muted"
             >
-              – 세트
+              <Icon name="minus" size={16} />
             </button>
             <button
               onClick={onAddSet}
-              className="h-9 flex-1 rounded-card-sm bg-surface-2 text-xs font-bold text-accent"
+              aria-label="+ 세트"
+              className="flex h-10 flex-1 items-center justify-center gap-1 rounded-[10px] border border-dashed border-line-strong text-[12.5px] font-bold text-text"
             >
-              + 세트
+              <Icon name="plus" size={15} />
+              세트 추가
             </button>
           </div>
         </div>
@@ -311,17 +333,17 @@ export function ExerciseCard({
         <>
           <table className="mt-2 w-full">
             <thead>
-              <tr className="text-[11px] text-faint">
-                <th className="w-10 pb-1 font-bold">세트</th>
-                {isWeight && <th className="pb-1 font-bold">kg</th>}
-                <th className="pb-1 font-bold">회</th>
+              <tr className="text-[10.5px] tracking-wider text-faint">
+                <th className="w-10 pb-1 font-bold">SET</th>
+                {isWeight && <th className="pb-1 font-bold">KG</th>}
+                <th className="pb-1 font-bold">REPS</th>
                 {!planning && <th className="w-12 pb-1 font-bold">완료</th>}
               </tr>
             </thead>
             <tbody>
               {exercise.sets.map((s, si) => (
                 <tr key={s.key}>
-                  <td className="py-1 text-center font-mono text-sm text-muted">
+                  <td className="py-1 text-center text-[13px] font-extrabold text-muted tabular-nums">
                     {si + 1}
                   </td>
                   {isWeight && (
@@ -337,13 +359,9 @@ export function ExerciseCard({
                       <button
                         onClick={() => onToggleDone?.(si)}
                         aria-label={`${si + 1}세트 완료`}
-                        className={`h-9 w-10 rounded-card-sm border text-sm font-bold ${
-                          s.done
-                            ? "border-good bg-good text-white"
-                            : "border-line bg-surface-2 text-faint"
-                        } ${active ? "" : "opacity-60"}`}
+                        className={`mx-auto h-9 w-9 ${doneClass(s.done)} ${active ? "" : "opacity-60"}`}
                       >
-                        ✓
+                        <Icon name="check" size={15} strokeWidth={2.6} />
                       </button>
                     </td>
                   )}
@@ -352,17 +370,21 @@ export function ExerciseCard({
             </tbody>
           </table>
           <div className="mt-2 flex gap-2">
+            {/* ⚠️ 접근 이름 `– 세트`·`+ 세트`를 바꾸지 마라 — 달력 예정표 테스트가 이 이름으로 찾는다 */}
             <button
               onClick={onRemoveSet}
-              className="h-9 flex-1 rounded-card-sm border border-line text-xs font-bold text-muted"
+              aria-label="– 세트"
+              className="flex h-10 w-12 flex-none items-center justify-center rounded-[10px] border border-line text-muted"
             >
-              – 세트
+              <Icon name="minus" size={16} />
             </button>
             <button
               onClick={onAddSet}
-              className="h-9 flex-1 rounded-card-sm bg-surface-2 text-xs font-bold text-accent"
+              aria-label="+ 세트"
+              className="flex h-10 flex-1 items-center justify-center gap-1 rounded-[10px] border border-dashed border-line-strong text-[12.5px] font-bold text-text"
             >
-              + 세트
+              <Icon name="plus" size={15} />
+              세트 추가
             </button>
           </div>
         </>
