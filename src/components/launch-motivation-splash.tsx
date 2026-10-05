@@ -1,11 +1,23 @@
 "use client";
 
-import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   launchSplashGate,
   type LaunchSplashStorage,
 } from "@/lib/domain/launch-splash";
+import { BRAND_ENTRY_COPY as COPY } from "@/lib/domain/brand-copy";
+
+/**
+ * 시작 화면 그림 (2026-10-06 사용자 지시 "B로 고치기").
+ *
+ * ⚠️ **글자 없는 사진**이다. 바로 전 판(`/splash/gnd-launch-original-approved-v8.webp`)은
+ *    문구가 박힌 420×670 통짜 이미지라 ① 사용자 교정본(`더 나은 나를`)을 반영할 수 없었고
+ *    ② 폰에서 흐렸고 ③ 화면 비율이 달라 위아래에 검은 띠가 생겼다. 지금은 Codex 패키지의
+ *    글자 없는 사진(860×1859)을 꽉 채우고, 로고·슬로건·문구는 **실제 글자**로 올린다.
+ * ⚠️ 860px을 쓰는 이유: 이 화면은 앱 진입을 최대 2초 막는다 — 1280px(318KB)보다 가벼운
+ *    860px(약 200KB)이 그 안에 들어올 확률이 높다.
+ */
+const SPLASH_PHOTO = "/gnd/photos/onboarding-sweat-860.webp";
 
 const DISPLAY_MS = 1_500;
 const FADE_MS = 180;
@@ -99,6 +111,23 @@ export function LaunchMotivationSplash() {
     displayTimer.current = window.setTimeout(dismiss, DISPLAY_MS);
   }
 
+  /**
+   * 사진이 **이미 받아진 채로** 붙으면 `onLoad`가 오지 않는다 (2026-10-06 개발 서버 실측 —
+   * 새로고침하면 캐시에서 즉시 차서 complete=true인데 화면은 2초 안전장치까지 검은 채였다).
+   * 불러오기 단계에 들어서면 한 번 직접 확인한다.
+   */
+  useEffect(() => {
+    if (phase !== "loading") return;
+    // ⚠️ `next/image`에 ref를 붙이지 마라 — 붙였더니 Next 내부의 로딩 감지가 끊겨 `onLoad`도
+    //    안 와서 사진이 영영 안 떴다(2026-10-06 실측). DOM에서 직접 찾는다.
+    const img = document.querySelector<HTMLImageElement>('[data-testid="launch-splash-image"]');
+    if (img?.complete) {
+      queueMicrotask(() => startDisplay(img.naturalWidth > 0 ? "showing" : "fallback"));
+    }
+    // startDisplay는 ref만 만지는 함수라 의존성에 넣지 않는다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
+
   if (phase === "hidden") return null;
 
   const imageVisible = phase === "showing" || phase === "fading";
@@ -114,20 +143,85 @@ export function LaunchMotivationSplash() {
       }`}
     >
       {phase !== "checking" && (
-        <Image
+        /* ⚠️ `next/image`가 아니라 기본 `<img>`다 (2026-10-06 개발 서버 실측). `next/image`로는
+           사진이 다 받아져도(complete) `onLoad`가 오지 않아 2초 안전장치까지 검은 화면이었다.
+           변환 서버를 안 쓰는(unoptimized) 단일 사진이라 `next/image`로 얻는 것이 없다. */
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img
           data-testid="launch-splash-image"
-          src="/splash/gnd-launch-original-approved-v8.webp"
+          src={SPLASH_PHOTO}
           alt=""
-          fill
-          priority
-          unoptimized
-          sizes="(max-width: 430px) 100vw, 430px"
+          decoding="async"
+          fetchPriority="high"
           onLoad={() => startDisplay("showing")}
           onError={() => startDisplay("fallback")}
-          className={`object-contain object-center transition-opacity duration-200 ${
+          // 인물(여성 얼굴·뒤 남성)이 잘리지 않게 위쪽 40% 지점을 기준으로 채운다
+          className={`absolute inset-0 h-full w-full object-cover object-[42%_30%] transition-opacity duration-200 ${
             imageVisible ? "opacity-100" : "opacity-0"
           }`}
         />
+      )}
+
+      {/* 로고 자리·문구 자리의 대비 — 사진 위아래를 어둡게 누른다(지침 §온보딩) */}
+      {(imageVisible || phase === "fallback") && (
+        <span
+          data-testid="launch-splash-copy"
+          className="pointer-events-none absolute inset-0 z-20 flex flex-col justify-between"
+          style={{
+            paddingTop: "max(2.25rem, calc(env(safe-area-inset-top) + 1.25rem))",
+            // 문구 블록을 조금 올려 사진의 손·밧줄 구간을 덮는다(위 그라데이션 주석)
+            paddingBottom: "max(4.5rem, calc(env(safe-area-inset-bottom) + 3.5rem))",
+          }}
+        >
+          <span aria-hidden className="absolute inset-x-0 top-0 h-[34%] bg-gradient-to-b from-bg/85 via-bg/35 to-transparent" />
+          {/* ⚠️ 아래 그라데이션이 화면 **68%**까지 올라온다 (2026-10-06 사용자 지적 "손·밧줄 부분이
+              부자연스럽다" → "텍스트를 키워서 덮어라"). 생성 사진의 손·밧줄이 어색해서 큰 문구와
+              진한 그라데이션으로 그 구간을 가린다. 줄이면 그 부분이 다시 드러난다. */}
+          <span aria-hidden className="absolute inset-x-0 bottom-0 h-[68%] bg-gradient-to-t from-bg via-bg/92 via-55% to-transparent" />
+
+          {/* 위: 워드마크 + 오른쪽 슬로건 */}
+          <span className="relative flex items-start justify-between px-6">
+            <span className="block">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/gnd/brand/logo.png" alt="GND" width={240} height={80} className="h-[52px] w-auto" />
+              <span className="mt-2 block text-[11px] font-semibold tracking-[0.42em] text-text/85">
+                {COPY.wordmarkSub}
+              </span>
+            </span>
+            <span aria-hidden className="mt-1 block -rotate-6 text-right">
+              {COPY.slogan.map((word) => (
+                <span key={word} className="block text-[15px] leading-[1.15] font-light italic tracking-wide text-text/80">
+                  {word}
+                </span>
+              ))}
+              <span className="mt-1.5 ml-auto block h-[3px] w-14 -skew-x-12 rounded-full bg-accent" />
+              <span className="mt-1 ml-auto block h-[2px] w-10 -skew-x-12 rounded-full bg-accent/70" />
+            </span>
+          </span>
+
+          {/* 아래: 헤드라인 3줄(마지막 라임) + 보조 문구 2줄 */}
+          <span className="relative block px-6">
+            {COPY.headline.map((line, i) => (
+              <span
+                key={line}
+                // ⚠️ 한 줄 고정(`whitespace-nowrap`) — 11.5vw에서 `날에도`의 `도`가 다음 줄로 떨어졌다.
+                //    10vw면 375~430px에서 가장 긴 줄(`의지가 꺾인 날에도`)이 좌우 24px 안에 들어간다.
+                className={`block whitespace-nowrap text-[clamp(2.05rem,10vw,2.7rem)] leading-[1.1] font-black italic tracking-[-0.05em] ${
+                  i === COPY.headline.length - 1 ? "text-accent" : "text-text"
+                }`}
+              >
+                {line}
+              </span>
+            ))}
+            <span className="mt-5 block text-[16.5px] leading-[1.55] font-medium text-text/90">
+              {COPY.subcopy.map((line) => (
+                <span key={line} className="block">
+                  {line}
+                </span>
+              ))}
+            </span>
+          </span>
+        </span>
       )}
 
       <span
@@ -135,36 +229,8 @@ export function LaunchMotivationSplash() {
         data-testid="launch-splash-description"
         className="sr-only"
       >
-        의지가 꺾인 날에도 계속한 사람이, 결국 이긴다
+        {COPY.headline.join(" ")}
       </span>
-
-      {phase === "fallback" && (
-        <span
-          data-testid="launch-splash-copy"
-          className="pointer-events-none absolute inset-0 z-20 opacity-100"
-        >
-          <span
-            className="absolute inset-x-0 top-0 block text-center text-4xl font-black tracking-[0.28em] text-accent"
-            style={{ paddingTop: "max(3rem, env(safe-area-inset-top))" }}
-          >
-            GND
-          </span>
-          <span
-            className="absolute inset-x-0 bottom-0 block px-7 text-center"
-            style={{
-              paddingBottom:
-                "max(4rem, calc(env(safe-area-inset-bottom) + 3rem))",
-            }}
-          >
-            <span className="block text-[clamp(1.8rem,7.5vw,2.4rem)] font-black leading-[1.04] tracking-[-0.055em] text-text">
-              의지가 꺾인 날에도
-            </span>
-            <span className="mt-1 block text-[clamp(1.25rem,5.25vw,1.7rem)] font-black leading-[1.04] tracking-[-0.055em] text-accent">
-              계속한 사람이, 결국 이긴다
-            </span>
-          </span>
-        </span>
-      )}
     </button>
   );
 }

@@ -52,7 +52,11 @@ afterEach(() => {
 });
 
 describe("LaunchMotivationSplash", () => {
-  it("새 실행이면 지정 원본 이미지와 이미지 문구 설명을 준비한다", () => {
+  /**
+   * 2026-10-06 사용자 지시 "B로 고치기" — 글자 박힌 통짜 이미지 대신 **글자 없는 사진 +
+   * 실제 글자**. 사용자 교정본(`더 나은 나를`)이 화면에 있어야 하고 옛 문구(`당신을`)는 없어야 한다.
+   */
+  it("새 실행이면 글자 없는 사진을 꽉 채우고, 확정 문구를 실제 글자로 그린다", () => {
     render(<LaunchMotivationSplash />);
     settleSessionDecision();
 
@@ -64,25 +68,27 @@ describe("LaunchMotivationSplash", () => {
       "launch-splash-description",
     );
     const image = screen.getByTestId("launch-splash-image");
-    expect(image.getAttribute("src")).toBe(
-      "/splash/gnd-launch-original-approved-v8.webp",
-    );
-    expect(image.getAttribute("data-unoptimized")).toBe("true");
-    expect(image.getAttribute("sizes")).toBe(
-      "(max-width: 430px) 100vw, 430px",
-    );
-    expect(image.className).toContain("object-contain");
-    expect(image.className).not.toContain("object-cover");
+    expect(image.getAttribute("src")).toBe("/gnd/photos/onboarding-sweat-860.webp");
+    // 기본 <img>다 — next/image로는 캐시된 사진의 onLoad가 오지 않았다(2026-10-06 실측)
+    expect(image.tagName).toBe("IMG");
+    expect(image.getAttribute("fetchpriority")).toBe("high");
+    // 위아래 검은 띠가 생기지 않게 꽉 채운다
+    expect(image.className).toContain("object-cover");
+    expect(image.className).not.toContain("object-contain");
+    // 사진이 오기 전에는 글자도 없다(빈 화면 위 글자만 번쩍이지 않게)
+    expect(screen.queryByTestId("launch-splash-copy")).toBeNull();
     fireEvent.load(image);
 
     const description = screen.getByTestId("launch-splash-description");
     expect(description.className).toContain("sr-only");
     expect(description.textContent).toBe(
-      "의지가 꺾인 날에도 계속한 사람이, 결국 이긴다",
+      "의지가 꺾인 날에도 계속한 사람이 결국 이긴다",
     );
-    expect(description.textContent).not.toContain("매일 1도의 방향이");
-    expect(description.textContent).not.toContain("1년뒤 도착지를 뒤바꾼다");
-    expect(screen.queryByTestId("launch-splash-copy")).toBeNull();
+    const copy = screen.getByTestId("launch-splash-copy");
+    expect(copy.textContent).toContain("결국 이긴다");
+    expect(copy.textContent).toContain("친구들과의 기록이 더 나은 나를 만든다.");
+    expect(copy.textContent).not.toContain("당신을");
+    expect(screen.getByAltText("GND")).toBeTruthy();
   });
 
   it("이미 본 실행 세션이면 덮개를 즉시 없앤다", () => {
@@ -136,13 +142,11 @@ describe("LaunchMotivationSplash", () => {
     settleSessionDecision();
     fireEvent.error(screen.getByTestId("launch-splash-image"));
 
-    expect(screen.getByText("GND")).toBeTruthy();
+    // 사진이 없어도 같은 글자 화면(검은 바탕)이 뜬다
+    expect(screen.getByAltText("GND")).toBeTruthy();
     expect(screen.getByText("의지가 꺾인 날에도")).toBeTruthy();
-    expect(screen.getByText("계속한 사람이, 결국 이긴다")).toBeTruthy();
+    expect(screen.getByText("결국 이긴다")).toBeTruthy();
     expect(screen.queryByText("매일 1도의 방향이,")).toBeNull();
-    expect(screen.getByTestId("launch-splash-copy").className).toContain(
-      "opacity-100",
-    );
     act(() => vi.advanceTimersByTime(1_680));
 
     expect(
