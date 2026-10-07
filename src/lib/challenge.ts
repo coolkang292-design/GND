@@ -879,6 +879,11 @@ export const EMPTY_STATS: PeriodStats = {
 export type PeriodSessionRow = {
   userId: string;
   completedAt: string;
+  /**
+   * 세션 운동 시간(분, 서버가 완료 때 계산) — 결과 화면 재료 (0117).
+   * 0117 전 응답·로컬 draft 변환에는 없다. **점수 계산에 쓰지 않는다.**
+   */
+  durationMinutes?: number | null;
   /** 타바타 코스 분수 (0019) — 일반 세션은 생략/null */
   tabataMinutes?: number | null;
   exercises: {
@@ -956,6 +961,7 @@ export function toPeriodSessionRow(input: {
 type ChallengePeriodSessionRpcRow = {
   user_id: string;
   completed_at: string;
+  duration_minutes?: number | null;
   tabata_minutes: number | null;
   workout_exercises:
     | {
@@ -989,6 +995,7 @@ export function normalizeChallengePeriodSessions(
       typeof row.user_id !== "string" ||
       typeof row.completed_at !== "string" ||
       !isNullableNumber(row.tabata_minutes) ||
+      (row.duration_minutes !== undefined && !isNullableNumber(row.duration_minutes)) ||
       (row.workout_exercises !== null && !Array.isArray(row.workout_exercises))
     ) {
       throw new Error("invalid_challenge_period_sessions");
@@ -1025,6 +1032,10 @@ export function normalizeChallengePeriodSessions(
     return {
       userId: validRow.user_id,
       completedAt: validRow.completed_at,
+      // 키를 늘 넣으면 0117 전 응답이 null로 바뀌어 기존 단언과 부딪친다 — 있을 때만
+      ...(validRow.duration_minutes !== undefined
+        ? { durationMinutes: validRow.duration_minutes }
+        : {}),
       tabataMinutes: validRow.tabata_minutes,
       exercises: (validRow.workout_exercises ?? []).map((exercise) => ({
         exerciseType: exercise.exercise_type,

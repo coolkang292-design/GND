@@ -849,3 +849,26 @@ describe("getMyWeeklyGoalDays", () => {
     await expect(getMyWeeklyGoalDays("u1", client)).rejects.toThrow("boom");
   });
 });
+
+describe("normalizeChallengePeriodSessions — duration_minutes (0117)", () => {
+  const base = {
+    user_id: "u1",
+    completed_at: "2026-09-02T01:00:00Z",
+    tabata_minutes: null,
+    workout_exercises: [],
+  };
+
+  it("RPC가 준 운동 시간을 싣는다", () => {
+    expect(normalizeChallengePeriodSessions([{ ...base, duration_minutes: 42 }])[0].durationMinutes).toBe(42);
+  });
+
+  it("0117 적용 전 응답(키 없음)도 받는다", () => {
+    expect(normalizeChallengePeriodSessions([base])[0].durationMinutes).toBeUndefined();
+  });
+
+  it("숫자가 아니면 거절한다", () => {
+    expect(() =>
+      normalizeChallengePeriodSessions([{ ...base, duration_minutes: "42" }]),
+    ).toThrow("invalid_challenge_period_sessions");
+  });
+});
