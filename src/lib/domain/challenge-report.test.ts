@@ -6,6 +6,7 @@ import {
   dailyTotals,
   formatShortDay,
   periodRewards,
+  restRanking,
   resultShareText,
   topPercent,
   weekCutoffs,
@@ -254,5 +255,43 @@ describe("표기", () => {
         periodDays: 28,
       }),
     ).toBe("GND 「9월 챌린지」 결과\n3명 중 1위 · 종합 83.2점\n28일 중 20일 운동했어요");
+  });
+});
+
+describe("restRanking — 2명부터 수십 명까지", () => {
+  const people = (n: number) => Array.from({ length: n }, (_, i) => ({ userId: `u${i + 1}` }));
+
+  it("3명 이하는 목록이 없다", () => {
+    expect(restRanking(people(2), "u1", false).rows).toEqual([]);
+    expect(restRanking(people(3), "u3", false).rows).toEqual([]);
+  });
+
+  it("10명까지는 4~10위 전부", () => {
+    const r = restRanking(people(10), "u1", false);
+    expect(r.rows.map((x) => x.userId)).toEqual(["u4", "u5", "u6", "u7", "u8", "u9", "u10"]);
+    expect(r.hiddenCount).toBe(0);
+  });
+
+  it("30명 — 접으면 4~10위 + 내 줄, 나머지는 숨김 수", () => {
+    const r = restRanking(people(30), "u25", false);
+    expect(r.rows.map((x) => x.userId)).toEqual(["u4", "u5", "u6", "u7", "u8", "u9", "u10", "u25"]);
+    expect(r.gapBeforeLast).toBe(true);
+    expect(r.hiddenCount).toBe(19);
+  });
+
+  it("내가 11위면 사이가 없다", () => {
+    const r = restRanking(people(30), "u11", false);
+    expect(r.rows.at(-1)?.userId).toBe("u11");
+    expect(r.gapBeforeLast).toBe(false);
+  });
+
+  it("내가 10위 안이면 내 줄을 덧붙이지 않는다", () => {
+    const r = restRanking(people(30), "u5", false);
+    expect(r.rows).toHaveLength(7);
+    expect(r.hiddenCount).toBe(20);
+  });
+
+  it("펼치면 4위부터 전부", () => {
+    expect(restRanking(people(30), "u25", true).rows).toHaveLength(27);
   });
 });

@@ -17,8 +17,10 @@ import {
   goalLabel,
   type ChallengeParticipantProfile,
   type MyChallenge,
+  type PeriodSessionRow,
   type PeriodStats,
 } from "@/lib/challenge";
+import type { PlanInput } from "@/lib/domain/challenge-report";
 import { detailArtFor } from "@/lib/domain/challenge-art";
 import { isLocalOnlyUrl, type ShareResult } from "@/lib/challenge-share";
 import { inviteShareMessage } from "@/lib/domain/challenge-invite";
@@ -124,6 +126,9 @@ export function ChallengeDetail({
   goals,
   approvals,
   stats,
+  sessionRows,
+  plans,
+  timeZone,
   completedAts,
   busy,
   share,
@@ -151,6 +156,11 @@ export function ChallengeDetail({
   goals: readonly UserGoal[];
   approvals: ReadonlySet<string>;
   stats: Map<string, PeriodStats> | null;
+  /** 점수와 같은 RPC 행 — 결과 화면(종료)·경쟁 현황(진행 중) 재료 (2026-10-07) */
+  sessionRows: readonly PeriodSessionRow[] | null;
+  /** 내 계획 — 결과 화면 일별 활동의 회색 막대 */
+  plans: readonly PlanInput[];
+  timeZone: string;
   completedAts: Date[];
   busy: boolean;
   /** 마지막 공유 결과 — 직접 복사해야 하면 링크를 보여준다 */
@@ -285,6 +295,26 @@ export function ChallengeDetail({
         {action.label}
       </button>
     );
+
+  // 종료 — 시안(2026-10-07)의 결과 화면이 상세 전체다(머리·히어로 포함).
+  // ⚠️ 이 위에 훅을 모두 둔다. 이 아래로 훅을 옮기면 상태에 따라 훅 수가 달라진다.
+  if (challenge.status === "ended" && detailsAreCurrent) {
+    return (
+      <ResultView
+        challenge={challenge}
+        participants={participantInputs}
+        goals={[...goals]}
+        sessionRows={sessionRows ?? []}
+        plans={plans}
+        timeZone={timeZone}
+        profileOf={profileOf}
+        myUserId={userId}
+        onBack={onBack}
+        onProfileClick={onProfile}
+        onCreate={onCreate}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col gap-3 pb-10">
@@ -889,26 +919,6 @@ export function ChallengeDetail({
         </>
       )}
 
-      {/* ── 종료: 시상대 + 상세 순위 (§6) ─────────────────── */}
-      {challenge.status === "ended" && detailsAreCurrent && (
-        <>
-          <ResultView
-            participants={participantInputs}
-            goals={[...goals]}
-            profileOf={profileOf}
-            myUserId={userId}
-            levelOf={levelOf}
-            onProfileClick={onProfile}
-          />
-          <button
-            type="button"
-            onClick={onCreate}
-            className="flex h-12 items-center justify-center gap-1.5 rounded-[14px] border border-accent/60 text-sm font-extrabold text-accent"
-          >
-            <Icon name="plus" size={16} strokeWidth={2.4} />새 챌린지 만들기
-          </button>
-        </>
-      )}
     </div>
   );
 }

@@ -33,7 +33,8 @@ import {
   getMyChallenges,
   getMyGoalChallengeIds,
   getMyPreviousGoals,
-  getPeriodStatsByUser,
+  foldPeriodStats,
+  getChallengePeriodSessions,
   joinChallengeWithCode,
   leaveSetupChallenge,
   saveMyGoals,
@@ -44,6 +45,7 @@ import {
   type ChallengeParticipantProfile,
   type GoalDraft,
   type MyChallenge,
+  type PeriodSessionRow,
   type PeriodStats,
 } from "@/lib/challenge";
 import { errorMessage } from "@/lib/challenge-errors";
@@ -51,6 +53,8 @@ import { shareChallengeInvite, type ShareResult } from "@/lib/challenge-share";
 import { getMyGroups, getMyProfile } from "@/lib/crew";
 import { inviteShareMessage } from "@/lib/domain/challenge-invite";
 import { formatMonthDay } from "@/lib/domain/challenge-time";
+import type { PlanInput } from "@/lib/domain/challenge-report";
+import { getWorkoutPlans } from "@/lib/workout-plan";
 import { dayKey, resolveTimeZone } from "@/lib/domain/time";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { getCompletedSessions } from "@/lib/workout";
@@ -62,6 +66,7 @@ const NO_CHALLENGE_MEMBERS: ChallengeParticipantProfile[] = [];
 /** 참조 동일성 유지 — 성과 카드의 effect가 매 렌더마다 다시 돌지 않게 한다 */
 const NO_COMPLETED_ATS: Date[] = [];
 const NO_CHALLENGE_GOALS: UserGoal[] = [];
+const NO_PLANS: PlanInput[] = [];
 const NO_CHALLENGE_APPROVALS = new Set<string>();
 
 /* ── 주소 = 화면 상태 (2026-09-18) ──────────────────────────────────────────
@@ -157,6 +162,10 @@ function ChallengeScreen({ userId }: { userId: string }) {
   const [loadedGoals, setGoals] = useState<UserGoal[]>([]);
   const [loadedApprovals, setApprovals] = useState<Set<string>>(new Set());
   const [loadedStats, setStats] = useState<Map<string, PeriodStats> | null>(null);
+  /** 종료 챌린지 결과 화면 재료 — 점수와 같은 RPC 행 (2026-10-07). 진행 중엔 null */
+  const [loadedRows, setRows] = useState<PeriodSessionRow[] | null>(null);
+  /** 결과 화면 '계획' 막대 — 내 계획만. 실패해도 결과 화면은 뜬다 */
+  const [loadedPlans, setPlans] = useState<PlanInput[]>(NO_PLANS);
   const [timeZone, setTimeZone] = useState("Asia/Seoul");
   const [completedAts, setCompletedAts] = useState<Date[]>(NO_COMPLETED_ATS);
   const [loadedPrevGoals, setPrevGoals] = useState<UserGoal[] | null>(null);
@@ -340,6 +349,8 @@ function ChallengeScreen({ userId }: { userId: string }) {
   const goals = detailsAreCurrent ? loadedGoals : NO_CHALLENGE_GOALS;
   const approvals = detailsAreCurrent ? loadedApprovals : NO_CHALLENGE_APPROVALS;
   const stats = detailsAreCurrent ? loadedStats : null;
+  const sessionRows = detailsAreCurrent ? loadedRows : null;
+  const plans = detailsAreCurrent ? loadedPlans : NO_PLANS;
   const prevGoals = detailsAreCurrent ? loadedPrevGoals : null;
 
   // ── 상세 ── **openId에 반드시 반응해야 한다** (2026-07-31 사용자 신고:
@@ -354,6 +365,8 @@ function ChallengeScreen({ userId }: { userId: string }) {
           setGoals([]);
           setApprovals(new Set());
           setStats(null);
+          setRows(null);
+          setPlans(NO_PLANS);
           setPrevGoals(null);
           setLoadedChallengeId(null);
         }
@@ -365,6 +378,8 @@ function ChallengeScreen({ userId }: { userId: string }) {
       setGoals([]);
       setApprovals(new Set());
       setStats(null);
+      setRows(null);
+      setPlans(NO_PLANS);
       setPrevGoals(null);
       setLoadedChallengeId(null);
 
@@ -381,17 +396,33 @@ function ChallengeScreen({ userId }: { userId: string }) {
         setApprovals(appr);
 
         if (ch.status === "active" || ch.status === "ended") {
-          const statsByUser = await getPeriodStatsByUser(
-            ch.id,
-            ch.start_date,
-            ch.end_date,
-            timeZone,
-          );
+          // 행을 한 번 받아 점수(stats)와 결과·경쟁 화면(rows)이 **같은 원천**을 쓴다 (2026-10-07)
+          const rows = await getChallengePeriodSessions(ch.id);
+          const statsByUser = foldPeriodStats(rows, ch.start_date, ch.end_date, timeZone);
           if (cancelled) return;
           setStats(statsByUser);
+          setRows(rows);
           setLoadedChallengeId(ch.id);
+          if (ch.status === "ended") {
+            // 계획은 장식이다 — 실패하면 일별 활동에 회색 막대만 빠진다
+            getWorkoutPlans(userId)
+              .then((all) => {
+                if (cancelled) return;
+                setPlans(
+                  all
+                    .filter((p) => p.planDate >= ch.start_date && p.planDate <= ch.end_date)
+                    .map((p) => ({
+                      planDate: p.planDate,
+                      setCount: p.exercises.reduce((n, e) => n + e.sets.length, 0),
+                    })),
+                );
+              })
+              .catch(() => {});
+          }
         } else {
           setStats(null);
+          setRows(null);
+          setPlans(NO_PLANS);
           setLoadedChallengeId(ch.id);
         }
 
@@ -616,6 +647,9 @@ function ChallengeScreen({ userId }: { userId: string }) {
             goals={goals}
             approvals={approvals}
             stats={stats}
+            sessionRows={sessionRows}
+            plans={plans}
+            timeZone={timeZone}
             completedAts={completedAts}
             busy={busy}
             share={share}

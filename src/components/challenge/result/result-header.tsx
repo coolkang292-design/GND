@@ -5,8 +5,11 @@ export function ResultHeader({
   title,
   onBack,
   onShare,
+  quiet = false,
 }: {
   title: string;
+  /** 화면 A처럼 제목이 보조 정보(챌린지 이름)일 때 — 작고 흐리게 */
+  quiet?: boolean;
   onBack: () => void;
   onShare?: () => void;
 }) {
@@ -20,7 +23,13 @@ export function ResultHeader({
       >
         <Icon name="back" size={22} />
       </button>
-      <p className="min-w-0 flex-1 truncate text-center text-[15px] font-extrabold">{title}</p>
+      <p
+        className={`min-w-0 flex-1 truncate text-center ${
+          quiet ? "text-[12.5px] font-bold text-muted" : "text-[15px] font-extrabold"
+        }`}
+      >
+        {title}
+      </p>
       {onShare ? (
         <button
           type="button"

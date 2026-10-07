@@ -298,3 +298,30 @@ export function resultShareText(input: {
     `${input.periodDays}일 중 ${input.workoutDays}일 운동했어요`,
   ].join("\n");
 }
+
+/** 시상대 아래 목록에 접어서 보여 줄 마지막 등수 자리(10위까지) */
+export const REST_PREVIEW_UNTIL = 10;
+
+/**
+ * 시상대(1~3위) 아래 한 줄 목록 — 2명부터 수십 명까지 (사용자 지시 2026-10-07).
+ * 접힘: 4~10번째 자리 + **내 줄**(밖에 있으면 맨 아래에, 사이를 `gap`으로 표시).
+ * 펼침: 4번째부터 전부. 자리 기준이라 공동 순위가 있어도 줄 수가 일정하다.
+ */
+export function restRanking<T extends { userId: string }>(
+  ranked: readonly T[],
+  myUserId: string,
+  expanded: boolean,
+): { rows: T[]; gapBeforeLast: boolean; hiddenCount: number } {
+  const rest = ranked.slice(3);
+  if (expanded || ranked.length <= REST_PREVIEW_UNTIL) {
+    return { rows: rest, gapBeforeLast: false, hiddenCount: 0 };
+  }
+  const head = ranked.slice(3, REST_PREVIEW_UNTIL);
+  const myIndex = ranked.findIndex((r) => r.userId === myUserId);
+  const mineOutside = myIndex >= REST_PREVIEW_UNTIL;
+  return {
+    rows: mineOutside ? [...head, ranked[myIndex]] : head,
+    gapBeforeLast: mineOutside && myIndex > REST_PREVIEW_UNTIL,
+    hiddenCount: ranked.length - REST_PREVIEW_UNTIL - (mineOutside ? 1 : 0),
+  };
+}

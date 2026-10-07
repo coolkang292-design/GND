@@ -59,7 +59,16 @@ vi.mock("@/lib/challenge", async (importOriginal) => {
     getChallengeParticipantProfiles: mocks.getChallengeParticipantProfiles,
     getChallengeGoals: mocks.getChallengeGoals,
     getChallengeApprovals: mocks.getChallengeApprovals,
-    getPeriodStatsByUser: mocks.getPeriodStatsByUser,
+    /*
+      2026-10-07: 페이지가 행을 한 번 받아(`getChallengePeriodSessions`) 직접 접는다
+      (`foldPeriodStats`) — 결과·경쟁 화면이 같은 행을 쓰게. 테스트는 여전히 '사람별 실적 Map'을
+      주는 편이 읽기 쉬워서, 행 자리에 그 Map을 실어 보내고 접기에서 꺼낸다.
+      `getPeriodStatsByUser` 목은 그 Map을 만드는 자리로만 남았다.
+    */
+    getChallengePeriodSessions: async (challengeId: string) => [
+      { __stats: await mocks.getPeriodStatsByUser(challengeId) },
+    ],
+    foldPeriodStats: (rows: { __stats?: unknown }[]) => rows[0]?.__stats ?? new Map(),
     getMyPreviousGoals: mocks.getMyPreviousGoals,
     joinChallengeWithCode: mocks.joinChallengeWithCode,
     savePendingChallengeInvite: mocks.savePendingChallengeInvite,
@@ -511,12 +520,7 @@ describe("ChallengePage 챌린지 전환", () => {
     fireEvent.click(screen.getByRole("button", { name: "챌린지 목록으로" }));
     fireEvent.click(await screen.findByRole("button", { name: "새 챌린지 열기" }));
     await waitFor(() =>
-      expect(mocks.getPeriodStatsByUser).toHaveBeenCalledWith(
-        newChallenge.id,
-        newChallenge.start_date,
-        "2026-08-28",
-        "Asia/Seoul",
-      ),
+      expect(mocks.getPeriodStatsByUser).toHaveBeenCalledWith(newChallenge.id),
     );
 
     expect(screen.queryByText("예전 참가자")).toBeNull();
