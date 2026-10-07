@@ -1,12 +1,14 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Avatar } from "@/components/avatar";
 import { ChallengeActivity } from "@/components/challenge/challenge-activity";
 import { ResultView } from "@/components/challenge/challenge-result";
-import { RankingPodium } from "@/components/challenge/ranking-podium";
-import { ParticipantPerformanceCard } from "@/components/challenge/participant-performance-card";
+import { CompetitionTab } from "@/components/challenge/competition/competition-tab";
+import { RankingScreen } from "@/components/challenge/competition/ranking-screen";
+import type { RankingKey } from "@/components/challenge/competition/metric-selector";
+import { ChallengeHero } from "@/components/challenge/detail/challenge-hero";
+import { DetailTabs } from "@/components/challenge/detail/detail-tabs";
 import { RaiseGoalSheet } from "@/components/challenge/raise-goal-sheet";
 import { Chip } from "@/components/ui/chip";
 import { Icon, type IconName } from "@/components/ui/icon";
@@ -47,6 +49,14 @@ import type { UserGoal } from "@/lib/types";
 type Profile = ChallengeParticipantProfile;
 
 /** 마일스톤 한 칸 — 육각 프레임(패키지 `decorations/*`) 위에 숫자는 글자로 겹친다 */
+type ActiveTab = "overview" | "ranking" | "feed" | "mission";
+const ACTIVE_TABS: readonly { key: ActiveTab; label: string }[] = [
+  { key: "overview", label: "개요" },
+  { key: "ranking", label: "랭킹" },
+  { key: "feed", label: "피드" },
+  { key: "mission", label: "미션" },
+];
+
 function MilestoneCard({ m }: { m: ChallengeMilestone }) {
   const done = m.state === "done";
   return (
@@ -185,6 +195,10 @@ export function ChallengeDetail({
   const [showFairness, setShowFairness] = useState(false);
   /** 목표 올리기 시트 (0090) */
   const [raisingGoals, setRaisingGoals] = useState(false);
+  /** 진행 중 상세 탭 — 최종 시안(2026-10-07)은 `랭킹`이 첫 화면이다 */
+  const [activeTab, setActiveTab] = useState<ActiveTab>("ranking");
+  /** 진행 중 `챌린지 랭킹` 하위 화면 — 열려 있으면 처음 고를 지표 */
+  const [rankingView, setRankingView] = useState<RankingKey | null>(null);
 
   const isHost = challenge.created_by === userId;
   const invited = challenge.myStatus === "invited";
@@ -316,8 +330,70 @@ export function ChallengeDetail({
     );
   }
 
+  // 진행 중 집계 끝 = 오늘(종료일을 넘지 않게). 종목별 랭킹·내 진행 현황이 같은 끝을 쓴다
+  const competitionEndKey = todayKey < challenge.end_date ? todayKey : challenge.end_date;
+
+  // 진행 중 `챌린지 랭킹` 하위 화면 — 상세 전체를 대신한다(뒤로 = 상세)
+  if (challenge.status === "active" && detailsAreCurrent && rankingView) {
+    return (
+      <RankingScreen
+        rows={sessionRows ?? []}
+        members={members}
+        myUserId={userId}
+        startDate={challenge.start_date}
+        endDate={challenge.end_date}
+        endKey={competitionEndKey}
+        todayKey={todayKey}
+        timeZone={timeZone}
+        myGoals={myGoals}
+        initial={rankingView}
+        overallRanked={liveRanked}
+        onBack={() => setRankingView(null)}
+      />
+    );
+  }
+
   return (
     <div className="flex flex-col gap-3 pb-10">
+      {challenge.status === "active" ? (
+        <>
+          {/* ── 진행 중 머리·히어로·탭 (최종 시안 2026-10-07) ─────────── */}
+          <header className="flex h-11 items-center gap-1">
+            <button
+              type="button"
+              onClick={onBack}
+              aria-label="챌린지 목록으로"
+              className="grid h-10 w-10 flex-none place-items-center rounded-full text-text"
+            >
+              <Icon name="back" size={22} />
+            </button>
+            <p className="min-w-0 flex-1 truncate text-center text-[15px] font-extrabold">챌린지 상세</p>
+            {isHost ? (
+              <button
+                type="button"
+                onClick={onOpenManage}
+                aria-label="챌린지 관리"
+                className="grid h-10 w-10 flex-none place-items-center rounded-full text-text"
+              >
+                <Icon name="settings" size={21} />
+              </button>
+            ) : (
+              <span className="h-10 w-10 flex-none" />
+            )}
+          </header>
+          <ChallengeHero
+            name={challenge.name}
+            startDate={challenge.start_date}
+            endDate={challenge.end_date}
+            recruitImageUrl={challenge.recruit_image_url}
+            status="active"
+            dday={Math.max(0, dday)}
+            members={members}
+          />
+          <DetailTabs tabs={ACTIVE_TABS} value={activeTab} onChange={setActiveTab} />
+        </>
+      ) : (
+        <>
       {/* ── 머리 ─────────────────────────────────────────── */}
       <header className="flex h-11 items-center gap-1">
         <button
@@ -369,13 +445,6 @@ export function ChallengeDetail({
           <div aria-hidden className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-surface to-transparent" />
           <div className="absolute inset-0 flex flex-col justify-between p-4">
             <div className="flex flex-wrap gap-1.5">
-              {challenge.status === "active" && myStreak > 0 && (
-                <Chip tone="streak">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/gnd/decorations/flame-32.webp" alt="" width={14} height={14} className="h-3.5 w-3.5" />
-                  {myStreak} DAY STREAK
-                </Chip>
-              )}
               {challenge.status === "setup" && <Chip dot="warn">준비 중</Chip>}
               {challenge.status === "ended" && <Chip dot="muted">종료</Chip>}
             </div>
@@ -391,52 +460,9 @@ export function ChallengeDetail({
           </div>
         </div>
 
-        {challenge.status === "active" && (
-          <div className="px-4 pt-1 pb-4">
-            <div className="flex items-baseline justify-between">
-              <p className="text-[13px] font-extrabold text-muted">
-                DAY{" "}
-                <strong className="text-[22px] font-black text-text">{dayProgress.day}</strong> /{" "}
-                {dayProgress.total}
-              </p>
-              <span className="text-[13px] font-bold text-muted tabular-nums">
-                {Math.round(dayProgress.ratio * 100)}%
-              </span>
-            </div>
-            <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-surface-3">
-              <div
-                className="h-full rounded-full bg-accent"
-                style={{ width: `${Math.round(dayProgress.ratio * 100)}%` }}
-              />
-            </div>
-            <div className="mt-2.5 flex items-center gap-4 text-[12px] text-muted">
-              <span className="flex items-center gap-1.5">
-                <Icon name="users" size={15} />
-                {members.length}명 참여
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Icon name="calendar" size={15} />
-                {endedByDate ? "결과 발표 대기" : dday === 0 ? "오늘 마지막 날" : `${dday}일 남음`}
-              </span>
-            </div>
-            {/* ⚠️ 이 탭의 대표 버튼이다 — "그래서 오늘 뭘 하면 되나"의 답.
-                ⚠️ 종료일이 지난 뒤에는 할 일이 운동이 아니라 결과 발표다. */}
-            {!endedByDate && (
-              <Link
-                href="/record"
-                className="mt-3 flex h-12 items-center justify-between rounded-[14px] bg-accent px-4 text-[15.5px] font-extrabold text-accent-ink active:bg-accent-press"
-              >
-                <span className="w-4" />
-                <span className="flex items-center gap-2">
-                  <Icon name="play" size={15} filled />
-                  오늘 운동하기
-                </span>
-                <Icon name="chevron" size={18} strokeWidth={2.4} />
-              </Link>
-            )}
-          </div>
-        )}
       </section>
+        </>
+      )}
 
       {(challenge.recruit_note && challenge.status === "setup") || challenge.photo_required ? (
         <div>
@@ -651,6 +677,24 @@ export function ChallengeDetail({
       {/* ── 진행 중: 내 진행률만 공개 (§6 비공개) ─────────── */}
       {challenge.status === "active" && detailsAreCurrent && (
         <>
+          {activeTab === "ranking" && (
+            <CompetitionTab
+              rows={sessionRows ?? []}
+              members={members}
+              myUserId={userId}
+              startDate={challenge.start_date}
+              endKey={competitionEndKey}
+              todayKey={todayKey}
+              timeZone={timeZone}
+              todayDone={todayDone}
+              streak={myStreak}
+              liveRanking={challenge.live_ranking}
+              onOpenRanking={setRankingView}
+            />
+          )}
+
+          {activeTab === "overview" && (
+          <>
           {/* ── 내 진행 (2026-10-05) ─────────────────────────────
               시안의 `실시간 랭킹` 자리다. ⚠️⚠️ **진행 중에는 순위를 그리지 않는다**
               (사용자 확정 2026-10-05 "진행 중 챌린지는 내 목표·활동을 표시하고, TOP 3는
@@ -686,28 +730,6 @@ export function ChallengeDetail({
               <b className="text-text">{endedByDate ? "종료!" : `D-${Math.max(0, dday)}`}</b>
             </p>
           </section>
-
-          {/* ── 실시간 랭킹 (0115, 2026-10-05 사용자 지시) ─────────────
-              방장이 만들 때 `실시간 랭킹 공개`를 켠 방에서만 진행 중에 보인다.
-              기본(꺼짐)은 옛 규칙 그대로 — 종료일에 한꺼번에 공개. */}
-          {liveRanked && liveRanked.length > 0 && (
-            <section className="rounded-card border border-line-strong bg-surface p-4 shadow-card">
-              <div className="mb-1 flex items-center justify-between">
-                <h2 className="text-[16px] font-extrabold">실시간 랭킹</h2>
-                <span className="text-[11px] font-bold text-muted">종합점수 기준</span>
-              </div>
-              <RankingPodium
-                ranked={liveRanked}
-                profileOf={profileOf}
-                myUserId={userId}
-                secondaryOf={(id) => {
-                  const n = stats?.get(id)?.workoutDayKeys.length;
-                  return n === undefined ? null : `${n}일 운동`;
-                }}
-                onProfileClick={onProfile}
-              />
-            </section>
-          )}
 
           {/* ── 4칸 정보줄 (시안 `12,384명 · 12일 · 오늘의 미션 · 1위까지`) ─────
               ⚠️ 마지막 칸은 `1위까지 N회`가 아니라 **내 진행**이다 — 진행 중 다른 참가자
@@ -813,7 +835,7 @@ export function ChallengeDetail({
               <span className="flex items-start gap-1.5">
                 <Icon name="lock" size={15} className="mt-px flex-none" />
                 <span>
-                  공정성을 위해 <b className="text-text">기간 중에는 내 진행률만</b> 볼 수 있어요
+                  기간 중에는 <b className="text-text">종목별 기록만</b> 서로 볼 수 있어요
                 </span>
               </span>
               <button
@@ -828,28 +850,20 @@ export function ChallengeDetail({
             {showFairness && (
               <div className="mt-2 flex flex-col gap-1 border-t border-line pt-2 text-left text-[11.5px] leading-relaxed font-normal">
                 <p>
-                  다른 참가자의 <b>목표 점수</b>와 순위는 <b>종료일에 한꺼번에</b> 공개돼요.
-                  중간 순위를 보면 앞선 사람은 느슨해지고 뒤처진 사람은 포기하기 쉬워서예요.
+                  다른 참가자의 <b>목표 점수</b>와 종합 순위는 <b>종료일에 한꺼번에</b> 공개돼요.
+                  사람마다 목표가 달라서, 중간 점수는 앞선 사람은 느슨하게 뒤처진 사람은 포기하게 만들기 쉬워서예요.
                 </p>
                 <p>
-                  <b>5일 연속</b> 운동하면 아래 참가자 성과가 <b>2시간 동안</b> 열려요.
-                </p>
-                <p>
-                  다만 <b>누가 몇 번 운동했는지</b>는 아래 <b>챌린지 활동</b>에서 기간 중에도
-                  보여요. 목록에 한 줄씩 올라오는 것을 센 숫자라 목표 점수와는 다른 값이에요.
+                  대신 <b>누가 몇 번 운동했는지</b>와 운동 시간·유산소 거리·웨이트 볼륨은{" "}
+                  <b>랭킹</b> 탭에서 기간 중에도 보여요. 실제 기록을 더한 값이라 목표 점수와는 다른 숫자예요.
                 </p>
               </div>
             )}
           </div>
           )}
 
-          {/* key: 챌린지를 바꾸면 리마운트시켜 이전 챌린지의 순위·열람 대상이 남지 않게 */}
-          <ParticipantPerformanceCard
-            key={challenge.id}
-            challengeId={challenge.id}
-            endDate={challenge.end_date}
-            completedAts={completedAts}
-          />
+          {/* 꾸준왕 열람권 카드(ParticipantPerformanceCard)는 2026-10-07에 뺐다 — 종목별 랭킹이
+              모두에게 보이므로 "5일 연속이면 남의 순위를 엿본다"가 의미를 잃었다(사용자 결정). */}
 
           <section className="rounded-card border border-line bg-surface p-4 shadow-card">
             <div className="mb-1 flex items-center justify-between">
@@ -891,13 +905,17 @@ export function ChallengeDetail({
             ))}
           </section>
 
+          </>
+          )}
+
           {/* 챌린지 활동 (0095) — active일 때만. 끝나면 서버가 막아 자동으로 닫힌다. */}
-          <ChallengeActivity challengeId={challenge.id} />
+          {activeTab === "feed" && <ChallengeActivity challengeId={challenge.id} />}
 
           {/* ── 마일스톤 (2026-10-05 사용자 결정 "1번") ─────────────────
               시안의 `챌린지 보상` 자리. ⚠️ **지급이 없는 진행 표시다** — XP·배지를 주지
               않는다. 그래서 제목도 `보상`이 아니라 `마일스톤`이다. 계산은
               `challengeMilestones`(챌린지 기간 운동일, 서버 집계와 같은 원천). */}
+          {activeTab === "mission" && (
           <section className="rounded-card border border-line bg-surface p-4 shadow-card">
             <div className="mb-2.5 flex items-center justify-between">
               <h3 className="text-[15px] font-extrabold">챌린지 마일스톤</h3>
@@ -916,6 +934,7 @@ export function ChallengeDetail({
               ))}
             </div>
           </section>
+          )}
         </>
       )}
 

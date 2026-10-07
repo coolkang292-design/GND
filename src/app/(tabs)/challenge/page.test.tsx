@@ -516,6 +516,7 @@ describe("ChallengePage 챌린지 전환", () => {
     window.history.replaceState({}, "", "/challenge?open=challenge-old");
     render(<ChallengePage />);
 
+    await openOverview();
     await screen.findByText("예전 참가자");
     fireEvent.click(screen.getByRole("button", { name: "챌린지 목록으로" }));
     fireEvent.click(await screen.findByRole("button", { name: "새 챌린지 열기" }));
@@ -530,6 +531,7 @@ describe("ChallengePage 챌린지 전환", () => {
     await act(async () => {
       finishStats(new Map([["old-user", periodStats]]));
     });
+    await openOverview();
     expect(await screen.findByText("새 참가자")).not.toBeNull();
   });
 
@@ -538,6 +540,7 @@ describe("ChallengePage 챌린지 전환", () => {
     window.history.replaceState({}, "", "/challenge?open=challenge-old");
     render(<ChallengePage />);
 
+    await openOverview();
     await screen.findByText("예전 참가자");
     fireEvent.click(screen.getByRole("button", { name: "챌린지 목록으로" }));
     fireEvent.click(await screen.findByRole("button", { name: "새 챌린지 열기" }));
@@ -556,6 +559,11 @@ describe("ChallengePage 챌린지 전환", () => {
  * ⚠️ 종료일을 **고정된 먼 미래/과거**로 둔다. 실제 오늘 날짜에 기대면 언젠가
  * 저절로 빨개지는 테스트가 된다.
  */
+/** 진행 중 상세는 최종 시안(2026-10-07)대로 `랭킹` 탭이 먼저다 — 참여자 명단·안내는 `개요` 탭 */
+async function openOverview() {
+  fireEvent.click(await screen.findByRole("tab", { name: "개요" }));
+}
+
 describe("ChallengePage 진행 중 — 오늘 운동하기 · 공정성 안내", () => {
   function arrange(over: Partial<MyChallenge> = {}) {
     const ch = {
@@ -613,6 +621,7 @@ describe("ChallengePage 진행 중 — 오늘 운동하기 · 공정성 안내",
     arrange();
     render(<ChallengePage />);
     await screen.findByRole("link", { name: "오늘 운동하기" });
+    await openOverview();
 
     const opener = await screen.findByLabelText("예전 참가자 프로필 보기");
     expect(opener.tagName).toBe("BUTTON");
@@ -634,23 +643,31 @@ describe("ChallengePage 진행 중 — 오늘 운동하기 · 공정성 안내",
    * 기본(꺼짐)은 옛 규칙 그대로다: 순위 없음 · 정보줄은 `내 진행` · 공정성 안내.
    * 둘 다 단언해야 "꺼져 있으면 안 보인다"(부정 확인)가 지켜진다.
    */
-  it("랭킹 공개를 안 켠 방은 진행 중에 순위를 그리지 않는다", async () => {
+  it("랭킹 공개를 안 켠 방은 진행 중에 종합 점수를 잠근다 — 종목별 랭킹만", async () => {
     arrange();
     render(<ChallengePage />);
-    await screen.findByText("기간 중에는 내 진행률만");
-    expect(screen.queryByText("실시간 랭킹")).toBeNull();
-    expect(screen.queryByText("내 순위")).toBeNull();
-    expect(screen.getAllByText("내 진행").length).toBeGreaterThan(0);
+    expect(await screen.findByText("종합 점수는 종료일 공개")).toBeTruthy();
+    expect(screen.getByText("운동 횟수 랭킹")).toBeTruthy();
+    expect(screen.queryByText("종합 점수 실시간 공개 방")).toBeNull();
   });
 
-  it("랭킹 공개 방은 진행 중에도 TOP 3와 내 순위를 그린다", async () => {
+  it("랭킹 공개 방은 진행 중에도 종합 점수 랭킹을 연다 (사용자 결정 2026-10-07)", async () => {
     arrange({ live_ranking: true });
     render(<ChallengePage />);
-    expect(await screen.findByText("실시간 랭킹")).toBeTruthy();
-    expect(screen.getByText("내 순위")).toBeTruthy();
-    expect(screen.getByText("1위", { selector: "strong" })).toBeTruthy();
-    // 공개 방에서 "내 진행률만"이라고 말하면 거짓말이다
-    expect(screen.queryByText("기간 중에는 내 진행률만")).toBeNull();
+    fireEvent.click(await screen.findByText("종합 점수 실시간 공개 방"));
+    expect(await screen.findByText("종합 점수 랭킹")).toBeTruthy();
+    expect(screen.getByRole("tab", { name: /종합 점수/ }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.queryByText("종합 점수는 종료일 공개")).toBeNull();
+  });
+
+  it("꾸준왕 열람권 카드는 없다 (2026-10-07 결정 — 종목별 랭킹이 대신한다)", async () => {
+    arrange();
+    render(<ChallengePage />);
+    await screen.findByText("운동 횟수 랭킹");
+    for (const tab of ["개요", "랭킹", "피드", "미션"]) {
+      fireEvent.click(screen.getByRole("tab", { name: tab }));
+      expect(screen.queryByText(/열람권|참가자 성과/)).toBeNull();
+    }
   });
 
   it("종료일이 지나면 할 일은 운동이 아니라 결과 발표다", async () => {
@@ -667,7 +684,8 @@ describe("ChallengePage 진행 중 — 오늘 운동하기 · 공정성 안내",
   it("공정성 안내는 한 줄이 늘 보이고 상세만 접힌다", async () => {
     arrange();
     render(<ChallengePage />);
-    await screen.findByText("기간 중에는 내 진행률만");
+    await openOverview();
+    await screen.findByText("종목별 기록만");
 
     expect(screen.queryByText("종료일에 한꺼번에")).toBeNull();
     fireEvent.click(screen.getByText("자세히"));
@@ -676,7 +694,7 @@ describe("ChallengePage 진행 중 — 오늘 운동하기 · 공정성 안내",
     // 접은 뒤에도 한 줄은 남는다
     fireEvent.click(screen.getByText("자세히"));
     expect(screen.queryByText("종료일에 한꺼번에")).toBeNull();
-    expect(screen.getByText("기간 중에는 내 진행률만")).toBeTruthy();
+    expect(screen.getByText("종목별 기록만")).toBeTruthy();
   });
 
   /**
@@ -687,7 +705,8 @@ describe("ChallengePage 진행 중 — 오늘 운동하기 · 공정성 안내",
   it("잠기는 것이 목표 점수이고 활동 횟수는 기간 중에도 보인다고 말한다", async () => {
     arrange();
     render(<ChallengePage />);
-    await screen.findByText("기간 중에는 내 진행률만");
+    await openOverview();
+    await screen.findByText("종목별 기록만");
 
     fireEvent.click(screen.getByText("자세히"));
     expect(screen.getAllByText("목표 점수").length).toBeGreaterThan(0);
