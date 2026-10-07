@@ -13,6 +13,7 @@ import {
   canAttachPhotoLater,
   missingRequiredPhoto,
 } from "@/lib/domain/photo-window";
+import { WorkoutCompleteStamp } from "@/components/record/workout-complete-stamp";
 import { LatePhotoButton } from "@/components/record/late-photo-button";
 import {
   addDaysToDateKey,
@@ -85,6 +86,7 @@ import { TabataSheet } from "./tabata-sheet";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
+/** 날짜 상세 시트의 세션 줄이 쓴다 (달력 셀은 더 이상 쓰지 않는다) */
 const VERIFICATION_META: Record<
   Verification,
   { glyph: string; label: string; camera: boolean }
@@ -93,6 +95,34 @@ const VERIFICATION_META: Record<
   photo_uploaded: { glyph: "●", label: "사진 업로드", camera: false },
   none: { glyph: "✓", label: "완료", camera: false },
 };
+
+type DayState = "completed" | "scheduled" | "empty";
+
+const DAY_STATE_LABEL: Record<DayState, string> = {
+  completed: "운동 완료",
+  scheduled: "운동 예정",
+  empty: "계획 없음",
+};
+
+/** Lucide Calendar 계열 (의존성 없이 인라인) */
+function CalendarGlyph({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+      className={className}
+    >
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <path d="M16 2v4M8 2v4M3 10h18" />
+    </svg>
+  );
+}
 
 /** 그레고리력 월 일수 */
 function daysInMonth(year: number, month: number): number {
@@ -1307,8 +1337,9 @@ export function CalendarView({
             const stamp = stampByDate.get(dateKey);
             const dayPlans = plansByDate.get(dateKey) ?? [];
             const plan = dayPlans[0];
-            const meta = stamp ? VERIFICATION_META[stamp.verification] : null;
             const isToday = dateKey === todayKey;
+            // completed > scheduled > empty — 완료가 시각적으로 우선한다
+            const state: DayState = stamp ? "completed" : plan ? "scheduled" : "empty";
             /**
              * 빈 날짜도 **오늘 이후면 열린다** (2026-08-02).
              *
@@ -1325,36 +1356,43 @@ export function CalendarView({
             return (
               <button
                 key={dateKey}
-                aria-label={`${view.month}월 ${day}일`}
+                aria-label={`${view.month}월 ${day}일, ${DAY_STATE_LABEL[state]}`}
                 onClick={() => openable && openDate(dateKey)}
                 disabled={!openable}
-                className={`relative flex aspect-square flex-col items-center justify-center gap-0.5 rounded-[11px] border text-xs ${
-                  meta?.camera
-                    ? "border-accent/35 bg-accent-weak"
-                    : plan
-                      ? "border-good/40 bg-good-weak"
-                      : openable
-                        ? "border-dashed border-line bg-surface"
-                        : "border-line bg-surface"
-                } ${isToday ? "outline outline-2 outline-accent outline-offset-1" : ""} ${
-                  openable ? "cursor-pointer" : "cursor-default"
-                }`}
+                className={`relative flex aspect-square flex-col items-center justify-start overflow-hidden rounded-[11px] pt-1 text-xs ${
+                  state === "scheduled"
+                    ? "border border-dashed border-white/25 bg-white/[0.035]"
+                    : state === "empty"
+                      ? "border border-white/[0.09] bg-white/[0.02]"
+                      : "border border-white/[0.09] bg-white/[0.02]"
+                } ${
+                  isToday
+                    ? "border-2 !border-solid !border-accent shadow-[0_0_0_1px_rgb(200_255_61/0.2),0_0_12px_rgb(200_255_61/0.25)]"
+                    : ""
+                } ${openable ? "cursor-pointer" : "cursor-default"}`}
               >
                 <span
-                  className={`font-mono text-[11px] ${meta?.camera ? "text-accent" : "text-muted"}`}
+                  className={`font-mono text-[11px] leading-none ${
+                    state === "scheduled"
+                      ? "text-white/80"
+                      : state === "completed"
+                        ? "text-white/90"
+                        : "text-white/60"
+                  }`}
                 >
                   {day}
                 </span>
-                {meta && <span className="text-[15px] leading-none">{meta.glyph}</span>}
-                {plan && (
-                  <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 text-[8px] leading-none font-extrabold text-good">
-                    예정
-                  </span>
+                {state === "completed" && (
+                  <WorkoutCompleteStamp
+                    seed={dateKey}
+                    className="absolute bottom-[2px] left-1/2 h-[70%] w-[70%] -translate-x-1/2"
+                  />
                 )}
-                {stamp && stamp.count > 1 && (
-                  <span className="absolute right-0.5 top-0.5 grid h-[15px] min-w-[15px] place-items-center rounded-full bg-accent px-0.5 font-mono text-[9px] font-extrabold text-accent-ink">
-                    {stamp.count}
-                  </span>
+                {state === "scheduled" && (
+                  <CalendarGlyph className="mt-1.5 h-3 w-3 text-white/50" />
+                )}
+                {state === "empty" && (
+                  <i className="mt-2 block h-[3px] w-[3px] rounded-full bg-white/25" />
                 )}
               </button>
             );
@@ -1362,18 +1400,22 @@ export function CalendarView({
         </div>
 
         {/* 범례 */}
-        <div className="mt-3.5 flex flex-wrap gap-2.5 text-[11px] text-muted">
-          <span className="inline-flex items-center gap-1">
-            <i className="inline-block h-3 w-3 rounded border border-accent bg-accent-weak" />
-            카메라 인증
+        <div className="mt-3.5 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] text-muted">
+          <span className="inline-flex items-center gap-1.5">
+            <WorkoutCompleteStamp seed="legend" className="h-6 w-6" />
+            운동 완료
           </span>
-          <span className="inline-flex items-center gap-1">
-            <i className="inline-block h-3 w-3 rounded border border-line bg-surface-2" />
-            사진 업로드
-          </span>
-          <span className="inline-flex items-center gap-1">✓ 사진 없음</span>
-          <span className="inline-flex items-center gap-1 font-bold text-good">
+          <span className="inline-flex items-center gap-1.5">
+            <i className="grid h-5 w-5 place-items-center rounded-md border border-dashed border-white/25 bg-white/[0.035]">
+              <CalendarGlyph className="h-3 w-3 text-white/50" />
+            </i>
             예정
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <i className="grid h-5 w-5 place-items-center rounded-md border border-white/[0.09] bg-white/[0.02]">
+              <i className="block h-[3px] w-[3px] rounded-full bg-white/25" />
+            </i>
+            계획 없음
           </span>
         </div>
       </section>

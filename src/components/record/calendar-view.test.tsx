@@ -128,7 +128,7 @@ describe("CalendarView — 날짜를 눌러 계획하기 (2026-08-02)", () => {
     // 도달할 방법이 사실상 없었다. 다시 잠기면 여기서 실패한다.
     await setup();
 
-    const tomorrow = screen.getByRole("button", { name: "8월 16일" });
+    const tomorrow = screen.getByRole("button", { name: new RegExp("^8월 16일,") });
     expect(tomorrow).not.toHaveProperty("disabled", true);
     expect((tomorrow as HTMLButtonElement).disabled).toBe(false);
   });
@@ -136,7 +136,7 @@ describe("CalendarView — 날짜를 눌러 계획하기 (2026-08-02)", () => {
   it("오늘의 빈 날짜 셀도 눌린다", async () => {
     await setup();
     const today = screen.getByRole("button", {
-      name: "8월 15일",
+      name: new RegExp("^8월 15일,"),
     }) as HTMLButtonElement;
     expect(today.disabled).toBe(false);
   });
@@ -146,7 +146,7 @@ describe("CalendarView — 날짜를 눌러 계획하기 (2026-08-02)", () => {
     // 지난 날은 기록도 없고 0015 RLS상 계획도 세울 수 없다.
     await setup();
     const yesterday = screen.getByRole("button", {
-      name: "8월 14일",
+      name: new RegExp("^8월 14일,"),
     }) as HTMLButtonElement;
     expect(yesterday.disabled).toBe(true);
   });
@@ -155,7 +155,7 @@ describe("CalendarView — 날짜를 눌러 계획하기 (2026-08-02)", () => {
     await setup();
 
     expect(screen.queryByText("➕ 새 운동 계획 만들기")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "8월 16일" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 16일,") }));
 
     expect(screen.getByText("➕ 새 운동 계획 만들기")).toBeTruthy();
     expect(
@@ -210,7 +210,7 @@ describe("CalendarView — 같은 날 계획 여러 개 (0101)", () => {
     mocks.getWorkoutPlans.mockResolvedValue([MORNING, EVENING]);
     await setup();
 
-    fireEvent.click(screen.getByRole("button", { name: "8월 16일" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 16일,") }));
 
     /*
       하나라도 사라지면 여기서 걸린다 — 그것이 Map 덮어쓰기 회귀다.
@@ -232,7 +232,7 @@ describe("CalendarView — 같은 날 계획 여러 개 (0101)", () => {
     mocks.getWorkoutPlans.mockResolvedValue([MORNING]);
     await setup();
 
-    fireEvent.click(screen.getByRole("button", { name: "8월 16일" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 16일,") }));
     expect(screen.getByText("➕ 새 운동 계획 만들기")).toBeTruthy();
   });
 
@@ -243,7 +243,7 @@ describe("CalendarView — 같은 날 계획 여러 개 (0101)", () => {
       .mockReturnValue(true);
     try {
       await setup();
-      fireEvent.click(screen.getByRole("button", { name: "8월 16일" }));
+      fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 16일,") }));
 
       // 카드가 둘이라 삭제 버튼도 둘 — 첫 번째(오전)를 지운다
       fireEvent.click(screen.getAllByRole("button", { name: "삭제" })[0]);
@@ -261,7 +261,7 @@ describe("CalendarView — 같은 날 계획 여러 개 (0101)", () => {
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     try {
       await setup();
-      fireEvent.click(screen.getByRole("button", { name: "8월 16일" }));
+      fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 16일,") }));
       fireEvent.click(screen.getByRole("button", { name: "삭제" }));
 
       await waitFor(() =>
@@ -347,7 +347,7 @@ describe("CalendarView — 인터벌로 계획하기 (2026-08-13)", () => {
   it("상황별 추천에 인터벌 칸이 있고, 누르면 코스 고르는 화면이 열린다", async () => {
     await setup();
 
-    fireEvent.click(screen.getByRole("button", { name: "8월 16일" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 16일,") }));
     fireEvent.click(screen.getByText("➕ 새 운동 계획 만들기"));
     fireEvent.click(screen.getByText("운동 직접 고르기"));
     fireEvent.click(screen.getByText(/상황별 추천/));
@@ -368,7 +368,7 @@ describe("CalendarView — 인터벌로 계획하기 (2026-08-13)", () => {
   it("종목 4개를 채우기 전에는 저장할 수 없다", async () => {
     await setup();
 
-    fireEvent.click(screen.getByRole("button", { name: "8월 16일" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 16일,") }));
     fireEvent.click(screen.getByText("➕ 새 운동 계획 만들기"));
     fireEvent.click(screen.getByText("운동 직접 고르기"));
     fireEvent.click(screen.getByText(/상황별 추천/));
@@ -396,7 +396,7 @@ describe("CalendarView — 인터벌로 계획하기 (2026-08-13)", () => {
   it("코스가 세트를 정한다 — 4분이면 2회로 저장한다", async () => {
     await setup(BODYWEIGHT_CATALOG);
 
-    fireEvent.click(screen.getByRole("button", { name: "8월 16일" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 16일,") }));
     fireEvent.click(screen.getByText("➕ 새 운동 계획 만들기"));
     fireEvent.click(screen.getByText("운동 직접 고르기"));
     fireEvent.click(screen.getByText(/상황별 추천/));
@@ -437,7 +437,7 @@ describe("CalendarView — 인터벌로 계획하기 (2026-08-13)", () => {
   it("키를 localId로 만든다 — 보안 컨텍스트가 아니어도 저장된다", async () => {
     await setup(BODYWEIGHT_CATALOG);
 
-    fireEvent.click(screen.getByRole("button", { name: "8월 16일" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 16일,") }));
     fireEvent.click(screen.getByText("➕ 새 운동 계획 만들기"));
     fireEvent.click(screen.getByText("운동 직접 고르기"));
     fireEvent.click(screen.getByText(/상황별 추천/));
@@ -464,7 +464,7 @@ describe("CalendarView — 지난 기록 상세 (2026-08-04)", () => {
 
   async function openDay() {
     await setup();
-    fireEvent.click(screen.getByRole("button", { name: "8월 10일" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 10일,") }));
   }
 
   it("펼치기 전에는 세트가 보이지 않는다", async () => {
@@ -514,7 +514,7 @@ describe("CalendarView — 계획 상세 (2026-08-04)", () => {
     mocks.getWorkoutPlans.mockResolvedValue([PLAN]);
     await setup();
 
-    fireEvent.click(screen.getByRole("button", { name: "8월 16일" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 16일,") }));
 
     expect(screen.getByText("80kg 5회")).toBeTruthy();
     expect(screen.getByText("80kg 3회")).toBeTruthy();
@@ -525,7 +525,7 @@ describe("CalendarView — 계획 상세 (2026-08-04)", () => {
     mocks.getWorkoutPlans.mockResolvedValue([PLAN]);
     await setup();
 
-    fireEvent.click(screen.getByRole("button", { name: "8월 16일" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 16일,") }));
 
     expect(screen.queryByLabelText(/세트 완료$/)).toBeNull();
     expect(screen.queryByLabelText(/세트 미완료$/)).toBeNull();
@@ -535,7 +535,7 @@ describe("CalendarView — 계획 상세 (2026-08-04)", () => {
     mocks.getWorkoutPlans.mockResolvedValue([PLAN]);
     await setup();
 
-    fireEvent.click(screen.getByRole("button", { name: "8월 16일" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 16일,") }));
 
     expect(screen.getByText("스쿼트 · 러닝")).toBeTruthy();
     expect(screen.getByText(/2종목/)).toBeTruthy();
@@ -565,7 +565,7 @@ describe("CalendarView — 전신 인터벌 명칭 (2026-08-12)", () => {
     mocks.getWorkoutPlans.mockResolvedValue([INTERVAL_PLAN]);
     await setup();
 
-    fireEvent.click(screen.getByRole("button", { name: "8월 15일" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 15일,") }));
 
     expect(screen.getByText("🔥 전신 인터벌 8분 예정")).toBeTruthy();
     expect(
@@ -577,7 +577,7 @@ describe("CalendarView — 전신 인터벌 명칭 (2026-08-12)", () => {
     mocks.getCompletedSessions.mockResolvedValue([INTERVAL_SESSION]);
     await setup();
 
-    fireEvent.click(screen.getByRole("button", { name: "8월 10일" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 10일,") }));
 
     expect(screen.getByText(/전신 인터벌 8분/)).toBeTruthy();
   });
@@ -588,10 +588,10 @@ describe("CalendarView — 전신 인터벌 명칭 (2026-08-12)", () => {
     mocks.getCompletedSessions.mockResolvedValue([INTERVAL_SESSION]);
     const { container } = await setup();
 
-    fireEvent.click(screen.getByRole("button", { name: "8월 15일" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 15일,") }));
     expect(container.textContent ?? "").not.toContain("타바타");
 
-    fireEvent.click(screen.getByRole("button", { name: "8월 10일" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 10일,") }));
     expect(container.textContent ?? "").not.toContain("타바타");
   });
 });
@@ -669,7 +669,7 @@ describe("CalendarView — 프로그램 진행 표시 (2026-08-12)", () => {
     ]);
     await setup();
 
-    fireEvent.click(screen.getByRole("button", { name: "8월 24일" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 24일,") }));
 
     expect(screen.getByText("상체의 틀을 넓히는 6주")).toBeTruthy();
     expect(screen.getByText("2주차 · A")).toBeTruthy();
@@ -686,7 +686,7 @@ describe("CalendarView — 프로그램 진행 표시 (2026-08-12)", () => {
     ]);
     await setup();
 
-    fireEvent.click(screen.getByRole("button", { name: "8월 24일" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 24일,") }));
 
     expect(screen.getByText("6주차 · C")).toBeTruthy();
   });
@@ -702,7 +702,7 @@ describe("CalendarView — 프로그램 진행 표시 (2026-08-12)", () => {
     ]);
     await setup();
 
-    fireEvent.click(screen.getByRole("button", { name: "8월 24일" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 24일,") }));
 
     expect(screen.queryByText("운동 예정")).toBeNull();
     expect(screen.getByText(/프로그램 예정/)).toBeTruthy();
@@ -735,7 +735,7 @@ describe("CalendarView — 프로그램 진행 표시 (2026-08-12)", () => {
       .mockReturnValueOnce(true);
     await setup();
 
-    fireEvent.click(screen.getByRole("button", { name: "8월 24일" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 24일,") }));
     // 두 삭제의 범위가 라벨로 갈린다
     expect(screen.getByRole("button", { name: "이 회차만 삭제" })).toBeTruthy();
     const quit = screen.getByRole("button", { name: "프로그램 그만두기" });
@@ -759,7 +759,7 @@ describe("CalendarView — 프로그램 진행 표시 (2026-08-12)", () => {
     mocks.getWorkoutPlans.mockResolvedValue([PLAN]);
     await setup();
 
-    fireEvent.click(screen.getByRole("button", { name: "8월 16일" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 16일,") }));
 
     expect(screen.getByRole("button", { name: "삭제" })).toBeTruthy();
     expect(
@@ -771,7 +771,7 @@ describe("CalendarView — 프로그램 진행 표시 (2026-08-12)", () => {
     mocks.getWorkoutPlans.mockResolvedValue([PLAN]);
     await setup();
 
-    fireEvent.click(screen.getByRole("button", { name: "8월 16일" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 16일,") }));
 
     expect(screen.getByText("운동 예정")).toBeTruthy();
     expect(screen.queryByText(/프로그램 예정/)).toBeNull();
@@ -788,7 +788,7 @@ describe("CalendarView — 프로그램 진행 표시 (2026-08-12)", () => {
     ]);
     await setup();
 
-    fireEvent.click(screen.getByRole("button", { name: "8월 10일" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 10일,") }));
 
     expect(screen.getByText("놓친 운동")).toBeTruthy();
   });
@@ -811,7 +811,7 @@ describe("CalendarView — 프로그램 진행 표시 (2026-08-12)", () => {
     ]);
     await setup();
 
-    fireEvent.click(screen.getByRole("button", { name: "8월 10일" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 10일,") }));
 
     expect(screen.queryByText("놓친 운동")).toBeNull();
   });
@@ -827,7 +827,7 @@ describe("CalendarView — 프로그램 진행 표시 (2026-08-12)", () => {
     ]);
     await setup();
 
-    fireEvent.click(screen.getByRole("button", { name: "8월 24일" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 24일,") }));
 
     expect(screen.queryByText("놓친 운동")).toBeNull();
   });
@@ -871,7 +871,7 @@ describe("CalendarView — 남은 일정 재배치 (2026-08-12)", () => {
 
   async function openMissed() {
     await setup();
-    fireEvent.click(screen.getByRole("button", { name: "8월 10일" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 10일,") }));
   }
 
   it("프로그램 계획은 날짜 이동 대신 남은 일정 다시 잡기를 준다", async () => {
@@ -885,7 +885,7 @@ describe("CalendarView — 남은 일정 재배치 (2026-08-12)", () => {
 
   it("아직 오지 않은 프로그램 회차에는 재배치 버튼을 보이지 않는다", async () => {
     await setup();
-    fireEvent.click(screen.getByRole("button", { name: "8월 17일" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 17일,") }));
 
     expect(
       screen.queryByRole("button", { name: "남은 일정 다시 잡기" }),
@@ -897,7 +897,7 @@ describe("CalendarView — 남은 일정 재배치 (2026-08-12)", () => {
     mocks.getCompletedSessions.mockResolvedValue([]);
     await setup();
 
-    fireEvent.click(screen.getByRole("button", { name: "8월 16일" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 16일,") }));
 
     expect(screen.getByRole("button", { name: "날짜 이동" })).toBeTruthy();
     expect(
@@ -987,7 +987,7 @@ describe("CalendarView — 계획한 날 바로 시작 (2026-08-12)", () => {
     mocks.getWorkoutPlans.mockResolvedValue([todayPlan]);
     await setup();
 
-    fireEvent.click(screen.getByRole("button", { name: "8월 15일" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 15일,") }));
 
     expect(screen.getByRole("button", { name: "운동 시작하기" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "운동 준비하기" })).toBeNull();
@@ -1007,7 +1007,7 @@ describe("CalendarView — 계획한 날 바로 시작 (2026-08-12)", () => {
     );
     await screen.findByText("2026년 8월");
 
-    fireEvent.click(screen.getByRole("button", { name: "8월 15일" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 15일,") }));
     fireEvent.click(screen.getByRole("button", { name: "운동 시작하기" }));
 
     await waitFor(() => expect(onLoadPlan).toHaveBeenCalledTimes(1));
@@ -1033,7 +1033,7 @@ describe("CalendarView — 계획한 날 바로 시작 (2026-08-12)", () => {
     );
     await screen.findByText("2026년 8월");
 
-    fireEvent.click(screen.getByRole("button", { name: "8월 15일" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 15일,") }));
     fireEvent.click(
       screen.getByRole("button", { name: "🔥 전신 인터벌 시작하기" }),
     );
@@ -1055,7 +1055,7 @@ describe("CalendarView — 계획한 날 바로 시작 (2026-08-12)", () => {
     mocks.getWorkoutPlans.mockResolvedValue([PLAN]);
     await setup();
 
-    fireEvent.click(screen.getByRole("button", { name: "8월 16일" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 16일,") }));
 
     expect(screen.queryByRole("button", { name: /운동 시작하기/ })).toBeNull();
   });
@@ -1132,7 +1132,7 @@ const INTERVAL_PLAN_WITH_FOLLOW_UPS = {
 };
 
 async function openEditSheet() {
-  fireEvent.click(screen.getByRole("button", { name: "8월 16일" }));
+  fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 16일,") }));
   fireEvent.click(screen.getByRole("button", { name: "수정" }));
   await screen.findByText("8월 16일 예정표 고치기");
 }
@@ -1149,7 +1149,7 @@ describe("CalendarView — 계획한 운동 수정 (2026-08-28)", () => {
     mocks.getWorkoutPlans.mockResolvedValue([RAMPED_PLAN]);
     await setup();
 
-    fireEvent.click(screen.getByRole("button", { name: "8월 16일" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 16일,") }));
 
     expect(screen.getByRole("button", { name: "수정" })).toBeTruthy();
   });
@@ -1167,7 +1167,7 @@ describe("CalendarView — 계획한 운동 수정 (2026-08-28)", () => {
     ]);
     await setup();
 
-    fireEvent.click(screen.getByRole("button", { name: "8월 24일" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 24일,") }));
 
     expect(screen.getByText("이 회차만 삭제")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "수정" })).toBeNull();
@@ -1181,7 +1181,7 @@ describe("CalendarView — 계획한 운동 수정 (2026-08-28)", () => {
     ]);
     await setup();
 
-    fireEvent.click(screen.getByRole("button", { name: "8월 10일" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 10일,") }));
 
     expect(screen.getByText("운동 예정")).toBeTruthy();
     expect(screen.getByRole("button", { name: "삭제" })).toBeTruthy();
@@ -1385,7 +1385,7 @@ describe("CalendarView — 계획한 운동 수정 (2026-08-28)", () => {
   it("새 계획 피커는 날짜를 말하고, 담는 버튼도 그 날짜 계획에 담는다 (2026-10-05)", async () => {
     await setup(BODYWEIGHT_CATALOG);
 
-    fireEvent.click(screen.getByRole("button", { name: "8월 16일" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 16일,") }));
     fireEvent.click(screen.getByText("➕ 새 운동 계획 만들기"));
     expect(screen.getByText("8월 16일 계획 만들기")).toBeTruthy();
     // 옛 제목은 없어야 한다 (부정 확인)
@@ -1408,7 +1408,7 @@ describe("CalendarView — 계획한 운동 수정 (2026-08-28)", () => {
     mocks.getWorkoutPlans.mockResolvedValue([INTERVAL_PLAN_PICKED]);
     await setup(BODYWEIGHT_CATALOG);
 
-    fireEvent.click(screen.getByRole("button", { name: "8월 15일" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 15일,") }));
     fireEvent.click(screen.getByRole("button", { name: "수정" }));
 
     const save = (await screen.findByRole("button", {
@@ -1422,7 +1422,7 @@ describe("CalendarView — 계획한 운동 수정 (2026-08-28)", () => {
     mocks.getWorkoutPlans.mockResolvedValue([INTERVAL_PLAN_WITH_FOLLOW_UPS]);
     await setup(BODYWEIGHT_CATALOG);
 
-    fireEvent.click(screen.getByRole("button", { name: "8월 15일" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 15일,") }));
     expect(screen.getByTestId("plan-follow-ups").textContent).toBe(
       "인터벌 뒤에 이어서: 흉추 익스텐션",
     );
@@ -1524,7 +1524,7 @@ describe("CalendarView — 사다리 재배치는 요일이 아니라 주기로 
 
   it("다시 잡은 날짜가 5일 훈련 1일 휴식을 지킨다", async () => {
     await setup();
-    fireEvent.click(screen.getByRole("button", { name: "8월 10일" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 10일,") }));
     fireEvent.click(screen.getByRole("button", { name: "남은 일정 다시 잡기" }));
     fireEvent.click(await screen.findByRole("button", { name: "이대로 옮기기" }));
 
@@ -1548,7 +1548,7 @@ describe("CalendarView — 사다리 재배치는 요일이 아니라 주기로 
 
   it("남은 회차를 오늘부터 다시 깐다 — 오늘이 원래 휴식일이어도", async () => {
     await setup();
-    fireEvent.click(screen.getByRole("button", { name: "8월 10일" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 10일,") }));
     fireEvent.click(screen.getByRole("button", { name: "남은 일정 다시 잡기" }));
     fireEvent.click(await screen.findByRole("button", { name: "이대로 옮기기" }));
 
@@ -1574,7 +1574,7 @@ describe("CalendarView — 사다리 재배치는 요일이 아니라 주기로 
       }),
     ]);
     await setup();
-    fireEvent.click(screen.getByRole("button", { name: "8월 10일" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 10일,") }));
     fireEvent.click(screen.getByRole("button", { name: "남은 일정 다시 잡기" }));
     fireEvent.click(await screen.findByRole("button", { name: "이대로 옮기기" }));
 

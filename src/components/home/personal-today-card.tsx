@@ -1,5 +1,6 @@
 "use client";
 
+import { WorkoutCompleteStamp } from "@/components/record/workout-complete-stamp";
 import Image from "next/image";
 import Link from "next/link";
 import { Avatar } from "@/components/avatar";
@@ -345,9 +346,9 @@ export function PersonalTodayCard({
                   >
                     <span className={`text-[11px] font-bold ${key === todayKey ? "text-accent" : "text-muted"}`}>{label}</span>
                     <span aria-hidden className={`flex aspect-square w-full max-w-11 items-center justify-center rounded-[12px] border text-[13px] font-extrabold ${
-                      done ? "border-accent bg-accent text-accent-ink" : "border-line-strong bg-bg/70 text-muted"
+                      done ? "border-white/[0.09] bg-bg/70" : "border-line-strong bg-bg/70 text-muted"
                     } ${key === todayKey ? "ring-2 ring-accent ring-offset-2 ring-offset-surface" : ""}`}>
-                      {done ? <Icon name="check" size={18} strokeWidth={2.6} /> : dateNumber}
+                      {done ? <WorkoutCompleteStamp seed={key} className="h-[88%] w-[88%]" /> : dateNumber}
                     </span>
                   </li>
                 ))}
