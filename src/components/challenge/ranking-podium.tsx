@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { Avatar } from "@/components/avatar";
 import type { ChallengeParticipantProfile } from "@/lib/challenge";
 import type { rankParticipants } from "@/lib/domain/goal-score";
@@ -38,6 +39,7 @@ export function RankingPodium({
   profileOf,
   myUserId,
   secondaryOf,
+  metaOf,
   onProfileClick,
 }: {
   ranked: Ranked[];
@@ -45,6 +47,8 @@ export function RankingPodium({
   myUserId: string;
   /** 점수 아래 한 줄(예: `12회 운동`) — 없으면 점수만 */
   secondaryOf?: (userId: string) => string | null;
+  /** 점수 아래 아이콘 줄 — 결과 화면 시안의 `🕐 21일 · 📅 37%` (2026-10-07). 없으면 안 그린다 */
+  metaOf?: (userId: string) => ReactNode;
   onProfileClick: (p: ChallengeParticipantProfile) => void;
 }) {
   // 가운데가 1등 자리 — [2, 1, 3] 순서로 놓는다(옛 시상대와 같은 배치)
@@ -128,6 +132,7 @@ export function RankingPodium({
                   <span className="ml-0.5 text-[10.5px] font-bold text-muted">점</span>
                 </span>
                 {secondary && <span className="text-[10.5px] text-muted">{secondary}</span>}
+                {metaOf?.(r.userId)}
               </button>
               {/* 금속 받침대 */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
