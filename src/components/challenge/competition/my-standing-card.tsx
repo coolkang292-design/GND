@@ -14,12 +14,15 @@ export function MyStandingCard({
   todayDone,
   streak,
   weeklyFirst,
+  periodOver = false,
   onOpenRanking,
 }: {
   standing: { metric: MetricKey; rank: number } | null;
   todayDone: boolean;
   streak: number;
   weeklyFirst: boolean;
+  /** 종료일이 지났다(결과 발표 대기) — 할 일은 운동이 아니라 결과 발표라 운동 링크를 숨긴다 */
+  periodOver?: boolean;
   onOpenRanking: () => void;
 }) {
   const first = standing?.rank === 1;
@@ -48,7 +51,9 @@ export function MyStandingCard({
       </button>
       <div className="my-3 w-px flex-none bg-line" aria-hidden />
       <div className="flex min-w-0 flex-col justify-center gap-1.5 px-3 py-3">
-        {todayDone ? (
+        {periodOver ? (
+          <span className="text-[12.5px] font-extrabold text-muted">기간 종료 · 결과 발표 대기</span>
+        ) : todayDone ? (
           <span className="flex items-center gap-1.5 text-[12.5px] font-extrabold">
             <span className="grid h-5 w-5 place-items-center rounded-full bg-accent text-accent-ink">
               <Icon name="check" size={12} strokeWidth={3} />

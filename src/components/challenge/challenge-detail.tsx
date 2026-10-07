@@ -155,6 +155,7 @@ export function ChallengeDetail({
   onOpenManage,
   onProfile,
   onCreate,
+  onDiscover,
   onGoalRaised,
 }: {
   challenge: MyChallenge;
@@ -189,6 +190,8 @@ export function ChallengeDetail({
   onOpenManage: () => void;
   onProfile: (p: Profile) => void;
   onCreate: () => void;
+  /** 종료 화면 `다음 챌린지 참여하기` → 둘러보기 (2026-10-07 결정) */
+  onDiscover: () => void;
   onGoalRaised: () => void;
 }) {
   /** 공정성 안내 상세 접힘 — 기본은 접힌다 (2026-08-13, CrewCard와 같은 규약) */
@@ -316,6 +319,7 @@ export function ChallengeDetail({
     return (
       <ResultView
         challenge={challenge}
+        members={members}
         participants={participantInputs}
         goals={[...goals]}
         sessionRows={sessionRows ?? []}
@@ -325,7 +329,7 @@ export function ChallengeDetail({
         myUserId={userId}
         onBack={onBack}
         onProfileClick={onProfile}
-        onCreate={onCreate}
+        onDiscover={onDiscover}
       />
     );
   }
@@ -689,6 +693,7 @@ export function ChallengeDetail({
               todayDone={todayDone}
               streak={myStreak}
               liveRanking={challenge.live_ranking}
+              periodOver={endedByDate}
               onOpenRanking={setRankingView}
             />
           )}

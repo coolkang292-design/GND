@@ -113,3 +113,11 @@ describe("진행 중 랭킹 탭", () => {
     expect(screen.getByText("이번 주 1위")).toBeTruthy();
   });
 });
+
+describe("종료일이 지난 진행 중 챌린지", () => {
+  it("운동하기 링크 대신 결과 발표 대기", () => {
+    setup([session("me", 1)], 2, { todayDone: false, periodOver: true });
+    expect(screen.queryByRole("link", { name: /오늘 운동하기/ })).toBeNull();
+    expect(screen.getByText("기간 종료 · 결과 발표 대기")).toBeTruthy();
+  });
+});

@@ -291,11 +291,14 @@ export function resultShareText(input: {
   overall: number;
   workoutDays: number;
   periodDays: number;
+  /** 최종 랭킹 `챌린지 기록 인증` — 종목 기록 한 줄 */
+  records?: string;
 }): string {
   return [
     `GND 「${input.challengeName}」 결과`,
     `${input.total}명 중 ${input.rank}위 · 종합 ${input.overall.toFixed(1)}점`,
     `${input.periodDays}일 중 ${input.workoutDays}일 운동했어요`,
+    ...(input.records ? [input.records] : []),
   ].join("\n");
 }
 

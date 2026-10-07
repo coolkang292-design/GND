@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Icon, type IconName } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
 import { RankingPodium } from "@/components/challenge/ranking-podium";
+import { ChallengeHero } from "@/components/challenge/detail/challenge-hero";
+import { DetailTabs } from "@/components/challenge/detail/detail-tabs";
 import {
   goalLabel,
   myScoreTrend,
@@ -16,49 +18,36 @@ import {
   dailyBars,
   dailyTotals,
   periodRewards,
-  restRanking,
   resultShareText,
   weeklyAchievement,
   type PeriodRewards,
   type PlanInput,
 } from "@/lib/domain/challenge-report";
 import {
-  goalRate,
-  rankParticipants,
-  type GoalType,
-  type ParticipantInput,
-} from "@/lib/domain/goal-score";
+  METRICS,
+  formatMetric,
+  metricTotalsByUser,
+  minutesKnown,
+  rankMetric,
+} from "@/lib/domain/challenge-metrics";
+import { goalRate, rankParticipants, type ParticipantInput } from "@/lib/domain/goal-score";
 import type { UserGoal } from "@/lib/types";
-import { MyResultReport, type MyReport } from "./result/my-result-report";
-import { ResultSummary } from "./result/result-summary";
-import type { StatCardData } from "./result/stat-card";
+import { FinalRanking } from "./result/final-ranking";
+import { RecordAnalysis, type MyReport } from "./result/record-analysis";
+import { ResultHeader } from "./result/result-header";
+import { ResultOverview, type MetricCell } from "./result/result-overview";
 
 /*
-  2026-10-07: 사용자 시안(「챌린지 종료!」 / 「나의 챌린지 결과」)으로 다시 그렸다.
-  순위·점수 계산은 그대로다 — 순위는 `rankParticipants`(종합점수, 동점 같은 등수),
-  점수는 `scoreParticipant`를 지난다(홈·탭·시상대가 같은 자로 잰다).
-  옛 참가자별 상세 카드(목표별 실적·참여율)는 시안에 없어 지웠고(D2), 4위 이하는
-  시상대 아래 한 줄 목록이다.
+  2026-10-07 최종 시안: 종료 상세 = 히어로 + `결과 요약 · 최종 랭킹 · 기록 분석 · 피드` 4탭.
+  종합 점수·순위 계산은 그대로다 — `rankParticipants`(종합점수, 동점 같은 등수)만 쓴다.
+  종목 4종 순위는 `challenge-metrics.ts`(진행 중 랭킹과 같은 함수, 종료일까지).
 */
 
-const GOAL_ICON: Record<GoalType, IconName> = {
-  weight_reps: "sets",
-  weight_days: "dumbbell",
-  cardio_distance: "shoe",
-  cardio_time: "clock",
-  bodyweight_reps: "sets",
-  bodyweight_time: "timer",
-  bodyweight_days: "body",
-  cardio_days: "shoe",
-  tabata_count: "interval",
-  volume: "dumbbell",
-  workout_days: "calendar",
-};
-
-const fmt = (n: number) => (Math.round(n * 10) / 10).toLocaleString();
+type Tab = "summary" | "final" | "analysis" | "feed";
 
 export function ResultView({
   challenge,
+  members,
   participants,
   goals,
   sessionRows,
@@ -68,15 +57,23 @@ export function ResultView({
   myUserId,
   onBack,
   onProfileClick,
-  onCreate,
+  onDiscover,
 }: {
-  challenge: { id: string; name: string; start_date: string; end_date: string };
-  /** 목표 있는 참여자만 — `buildParticipantInput`으로 조립된 것 */
+  challenge: {
+    id: string;
+    name: string;
+    start_date: string;
+    end_date: string;
+    recruit_image_url: string | null;
+  };
+  /** 참가자 명단 전원(목표 없는 사람 포함) — 히어로·종목 랭킹 */
+  members: readonly ChallengeParticipantProfile[];
+  /** 목표 있는 참여자만 — `buildParticipantInput`으로 조립된 것(종합 점수) */
   participants: ParticipantInput[];
   goals: UserGoal[];
   /** 점수와 같은 RPC 행(`get_challenge_period_sessions`) */
   sessionRows: readonly PeriodSessionRow[];
-  /** 내 계획 — 일별 활동의 회색 막대 */
+  /** 내 계획 — 기록 분석 일별 활동의 회색 막대 */
   plans: readonly PlanInput[];
   timeZone: string;
   profileOf: (id: string) => ChallengeParticipantProfile | undefined;
@@ -84,26 +81,29 @@ export function ResultView({
   onBack: () => void;
   /** ⚠️ 시트를 여기서 띄우지 않는다 — 화면에 시트가 둘이 된다 */
   onProfileClick: (p: ChallengeParticipantProfile) => void;
-  onCreate: () => void;
+  /** `다음 챌린지 참여하기` → 둘러보기 (사용자 결정 2026-10-07) */
+  onDiscover: () => void;
 }) {
-  const [view, setView] = useState<"summary" | "report">("summary");
+  const [tab, setTab] = useState<Tab>("summary");
   const [rewards, setRewards] = useState<PeriodRewards | null>(null);
   const [shareNote, setShareNote] = useState<string | null>(null);
-  /** 4위 이하 목록 펼침 — 참가자가 수십 명일 수 있다 */
-  const [restOpen, setRestOpen] = useState(false);
   const { start_date: start, end_date: end } = challenge;
   const periodDays = inclusiveDays(start, end);
   const ranked = useMemo(() => rankParticipants(participants), [participants]);
   const total = ranked.length;
+  const memberIds = useMemo(() => members.map((m) => m.id), [members]);
+  const minutesOk = minutesKnown(sessionRows);
+  const totals = useMemo(
+    () => metricTotalsByUser(sessionRows, memberIds, start, end, timeZone),
+    [sessionRows, memberIds, start, end, timeZone],
+  );
 
   // 레벨·보상 칸 재료 — 실패해도 결과 화면은 뜬다(그 칸만 숨는다)
   useEffect(() => {
     let cancelled = false;
     getMyRewardLedgers(start)
       .then((l) => {
-        if (!cancelled) {
-          setRewards(periodRewards({ ...l, startDate: start, endDate: end, timeZone }));
-        }
+        if (!cancelled) setRewards(periodRewards({ ...l, startDate: start, endDate: end, timeZone }));
       })
       .catch(() => {});
     return () => {
@@ -111,87 +111,64 @@ export function ResultView({
     };
   }, [challenge.id, start, end, timeZone]);
 
-  const mine = useMemo(() => {
-    const r = ranked.find((x) => x.userId === myUserId);
+  const myRanked = ranked.find((r) => r.userId === myUserId) ?? null;
+
+  const report = useMemo<MyReport | null>(() => {
     const input = participants.find((p) => p.userId === myUserId);
-    if (!r || !input) return null;
+    if (!myRanked || !input) return null;
     const myGoals = goals.filter((g) => g.user_id === myUserId);
-    const totals = dailyTotals(
-      sessionRows.filter((s) => s.userId === myUserId),
-      start,
-      end,
-      timeZone,
-    );
-    const all = [...totals.values()];
-    const goalResults = myGoals.map((g) => {
-      const actual = input.goals.find((x) => x.type === g.goal_type)?.actual ?? 0;
-      const target = Number(g.target_value);
-      return {
-        key: g.id,
-        type: g.goal_type,
-        label: goalLabel(g.goal_type, g.qualifier),
-        actual,
-        target,
-        unit: g.unit ?? "",
-        rate: goalRate(target, actual),
-      };
-    });
-    const minutes = all.some((t) => t.minutes != null)
-      ? all.reduce((s, t) => s + (t.minutes ?? 0), 0)
-      : null;
-    // 시안의 2×2 — 내 목표를 앞에서 4장까지, 모자라면 기간 기록(링 없음)으로 채운다
-    const filler: StatCardData[] = [
-      { key: "f-sessions", icon: "flame", label: "운동 횟수", value: fmt(all.reduce((s, t) => s + t.sessions, 0)), unit: "회", sub: "기간 기록", rate: null },
-      { key: "f-minutes", icon: "clock", label: "운동 시간", value: minutes === null ? "-" : fmt(minutes), unit: minutes === null ? "" : "분", sub: "기간 기록", rate: null },
-      { key: "f-km", icon: "shoe", label: "유산소 거리", value: fmt(all.reduce((s, t) => s + t.cardioKm, 0)), unit: "km", sub: "기간 기록", rate: null },
-      { key: "f-kg", icon: "dumbbell", label: "총 볼륨", value: fmt(all.reduce((s, t) => s + t.volumeKg, 0)), unit: "kg", sub: "기간 기록", rate: null },
-    ];
-    const stats: StatCardData[] = [
-      ...goalResults.slice(0, 4).map((g) => ({
-        key: g.key,
-        icon: GOAL_ICON[g.type],
-        label: g.label,
-        value: fmt(g.actual),
-        unit: g.unit,
-        sub: `목표 ${g.target.toLocaleString()}${g.unit}`,
-        rate: g.rate,
-      })),
-      ...filler,
-    ].slice(0, 4);
-    const report: MyReport = {
-      ranked: r,
-      total,
-      goals: goalResults,
-      bars: dailyBars(totals, plans, start, end),
-      records: bestRecords(totals),
-      trend: myScoreTrend({
-        rows: sessionRows,
-        userId: myUserId,
-        goals: myGoals,
-        startDate: start,
-        endDate: end,
-        timeZone,
-      }),
-    };
+    const days = dailyTotals(sessionRows.filter((s) => s.userId === myUserId), start, end, timeZone);
     return {
-      workoutDays: input.workoutDays,
-      stats,
+      ranked: myRanked,
+      total,
+      goals: myGoals.map((g) => {
+        const actual = input.goals.find((x) => x.type === g.goal_type)?.actual ?? 0;
+        const target = Number(g.target_value);
+        return {
+          key: g.id,
+          label: goalLabel(g.goal_type, g.qualifier),
+          actual,
+          target,
+          unit: g.unit ?? "",
+          rate: goalRate(target, actual),
+        };
+      }),
+      bars: dailyBars(days, plans, start, end),
+      records: bestRecords(days),
+      trend: myScoreTrend({ rows: sessionRows, userId: myUserId, goals: myGoals, startDate: start, endDate: end, timeZone }),
       // 주간 목표 횟수 — buildParticipantInput과 같은 기본값 5
-      weeks: weeklyAchievement([...totals.keys()], start, end, myGoals[0]?.planned_days ?? 5),
-      report,
+      weeks: weeklyAchievement([...days.keys()], start, end, myGoals[0]?.planned_days ?? 5),
     };
-  }, [ranked, participants, goals, sessionRows, plans, myUserId, start, end, timeZone, total]);
+  }, [myRanked, participants, goals, sessionRows, plans, myUserId, start, end, timeZone, total]);
+
+  // 결과 요약의 종목 4칸 — 값 + 내 순위
+  const cells: MetricCell[] = METRICS.map((m) => {
+    const mine = rankMetric(totals, m.key).find((r) => r.userId === myUserId);
+    const unknown = m.key === "minutes" && !minutesOk;
+    return {
+      key: m.key,
+      label: m.label,
+      value: unknown ? "-" : formatMetric(m.key, mine?.value ?? 0),
+      rank: unknown ? null : (mine?.rank ?? null),
+    };
+  });
 
   // ⚠️ navigator.share는 클릭 안에서 바로 부른다(await 뒤로 미루면 브라우저가 거절한다)
   async function handleShare() {
-    if (!mine) return;
+    if (!myRanked) return;
+    const t = totals.get(myUserId);
     const text = resultShareText({
       challengeName: challenge.name,
-      rank: mine.report.ranked.rank,
+      rank: myRanked.rank,
       total,
-      overall: mine.report.ranked.overall,
-      workoutDays: mine.workoutDays,
+      overall: myRanked.overall,
+      workoutDays: participants.find((p) => p.userId === myUserId)?.workoutDays ?? 0,
       periodDays,
+      records: t
+        ? METRICS.filter((m) => m.key !== "minutes" || minutesOk)
+            .map((m) => formatMetric(m.key, t[m.key]))
+            .join(" · ")
+        : undefined,
     });
     const url = window.location.origin;
     try {
@@ -210,89 +187,86 @@ export function ResultView({
     }
   }
 
-  const rest = restRanking(ranked, myUserId, restOpen);
-  const workoutDaysOf = new Map(participants.map((p) => [p.userId, p.workoutDays]));
   const podium = (
-    <>
-      <RankingPodium
-        ranked={ranked}
-        profileOf={profileOf}
-        myUserId={myUserId}
-        onProfileClick={onProfileClick}
-        metaOf={(id) => {
-          const r = ranked.find((x) => x.userId === id);
-          return (
-            <span className="mt-0.5 flex items-center gap-1.5 text-[10.5px] text-muted">
-              <span className="flex items-center gap-0.5">
-                <Icon name="clock" size={11} />
-                {workoutDaysOf.get(id) ?? 0}일
-              </span>
-              <span className="flex items-center gap-0.5">
-                <Icon name="calendar" size={11} />
-                {Math.round(r?.achievement ?? 0)}%
-              </span>
-            </span>
-          );
-        }}
-      />
-      {rest.rows.length > 0 && (
-        <ol className="mt-2 flex flex-col">
-          {rest.rows.map((r, i) => {
-            const mine = r.userId === myUserId;
-            return (
-              <li
-                key={r.userId}
-                data-testid="rest-rank"
-                className={`flex items-center gap-2 px-2 py-2 text-[13px] ${
-                  rest.gapBeforeLast && i === rest.rows.length - 1
-                    ? "mt-1 border-t border-dashed border-line-strong"
-                    : "border-t border-line"
-                } ${mine ? "rounded-card-sm bg-accent-weak text-accent" : ""}`}
-              >
-                <span className="w-9 font-mono font-extrabold text-muted">{r.rank}위</span>
-                <span className="min-w-0 flex-1 truncate font-bold">
-                  {mine ? "나" : (profileOf(r.userId)?.nickname ?? "?")}
-                </span>
-                <span className="font-mono font-extrabold">{r.overall.toFixed(1)}점</span>
-              </li>
-            );
-          })}
-        </ol>
-      )}
-      {(rest.hiddenCount > 0 || restOpen) && ranked.length > 10 && (
-        <button
-          type="button"
-          onClick={() => setRestOpen((v) => !v)}
-          className="mt-1 w-full py-2 text-center text-[12.5px] font-bold text-muted"
-        >
-          {restOpen ? "접기" : `전체 ${total}명 보기`}
-        </button>
-      )}
-    </>
+    <RankingPodium
+      ranked={ranked}
+      profileOf={profileOf}
+      myUserId={myUserId}
+      onProfileClick={onProfileClick}
+      metaOf={(id) => {
+        const t = totals.get(id);
+        if (!t) return null;
+        return (
+          <span className="mt-0.5 text-[10.5px] text-muted">
+            {formatMetric("sessions", t.sessions)}
+            {minutesOk && ` | ${formatMetric("minutes", t.minutes)}`}
+          </span>
+        );
+      }}
+    />
   );
 
-  if (view === "report" && mine) {
-    return (
-      <MyResultReport
-        me={mine.report}
-        rewards={rewards}
-        onBack={() => setView("summary")}
-        onShare={() => void handleShare()}
-        onCreate={onCreate}
-      />
-    );
-  }
+  const tabs: { key: Tab; label: string }[] = [
+    { key: "summary", label: "결과 요약" },
+    { key: "final", label: "최종 랭킹" },
+    ...(report ? [{ key: "analysis" as const, label: "기록 분석" }] : []),
+    { key: "feed", label: "피드" },
+  ];
+
   return (
-    <ResultSummary
-      challengeName={challenge.name}
-      periodDays={periodDays}
-      podium={podium}
-      mine={mine ? { stats: mine.stats, weeks: mine.weeks } : null}
-      rewards={rewards}
-      shareNote={shareNote}
-      onBack={onBack}
-      onShare={() => void handleShare()}
-      onOpenReport={() => setView("report")}
-    />
+    <div className="flex flex-col gap-3 pb-10">
+      <ResultHeader title="챌린지 결과" onBack={onBack} onShare={myRanked ? () => void handleShare() : undefined} />
+      <ChallengeHero
+        name={challenge.name}
+        startDate={start}
+        endDate={end}
+        recruitImageUrl={challenge.recruit_image_url}
+        status="ended"
+        members={members}
+      />
+      <DetailTabs tabs={tabs} value={tab} onChange={setTab} />
+
+      {tab === "summary" && (
+        <ResultOverview
+          mine={
+            myRanked
+              ? { rank: myRanked.rank, overall: myRanked.overall, avatarUrl: profileOf(myUserId)?.avatar_url ?? null }
+              : null
+          }
+          cells={cells}
+          podium={podium}
+          onOpenFinal={() => setTab("final")}
+        />
+      )}
+
+      {tab === "final" && (
+        <FinalRanking
+          overall={ranked}
+          totals={totals}
+          minutesAvailable={minutesOk}
+          myUserId={myUserId}
+          profileOf={profileOf}
+          onCertify={myRanked ? () => void handleShare() : undefined}
+          certifyNote={shareNote}
+          onDiscover={onDiscover}
+        />
+      )}
+
+      {tab === "analysis" && report && <RecordAnalysis me={report} rewards={rewards} />}
+
+      {tab === "feed" && (
+        <section className="flex flex-col items-center gap-1.5 rounded-card border border-line bg-surface px-4 py-6 text-center shadow-card">
+          <Icon name="feed" size={22} className="text-muted" />
+          <p className="text-[14px] font-extrabold">챌린지가 끝나 활동 피드가 닫혔어요</p>
+          <p className="text-[12px] text-muted">기간 중 기록은 최종 랭킹과 기록 분석에 남아 있어요.</p>
+        </section>
+      )}
+
+      {shareNote && tab !== "final" && (
+        <p role="status" className="text-center text-[12px] font-bold text-accent">
+          {shareNote}
+        </p>
+      )}
+    </div>
   );
 }

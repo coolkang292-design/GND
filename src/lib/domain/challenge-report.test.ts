@@ -259,6 +259,22 @@ describe("표기", () => {
   });
 });
 
+describe("resultShareText — 기록 인증 줄", () => {
+  it("종목 기록 한 줄을 덧붙인다", () => {
+    expect(
+      resultShareText({
+        challengeName: "9월 챌린지",
+        rank: 2,
+        total: 12,
+        overall: 76.1,
+        workoutDays: 20,
+        periodDays: 30,
+        records: "운동 28회 · 603분 · 42.3km · 12,350kg",
+      }),
+    ).toBe("GND 「9월 챌린지」 결과\n12명 중 2위 · 종합 76.1점\n30일 중 20일 운동했어요\n운동 28회 · 603분 · 42.3km · 12,350kg");
+  });
+});
+
 describe("restRanking — 2명부터 수십 명까지", () => {
   const people = (n: number) => Array.from({ length: n }, (_, i) => ({ userId: `u${i + 1}` }));
 

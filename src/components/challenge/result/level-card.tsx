@@ -48,15 +48,10 @@ export function XpBar({ r }: { r: PeriodRewards }) {
  * 시안 화면 A `Lv.2 산책러 +1 레벨 업 >` — 누르면 화면 B.
  * 표기는 앱 규칙 `단계명 Lv.N`(2026-10-06 결정). 레벨은 **영구 성장 레벨**이다(챌린지 레벨 아님).
  */
-export function LevelCard({ r, onOpen }: { r: PeriodRewards; onOpen: () => void }) {
+export function LevelCard({ r, onOpen }: { r: PeriodRewards; onOpen?: () => void }) {
   const gained = r.levelAtEnd - r.levelAtStart;
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      aria-label="나의 챌린지 결과 보기"
-      className="flex w-full items-center gap-3 rounded-card border border-accent/40 bg-surface p-3.5 text-left shadow-card"
-    >
+  const body = (
+    <>
       <LevelHex level={r.levelAtEnd} />
       <div className="min-w-0 flex-1">
         <p className="text-[13.5px] font-extrabold">
@@ -67,6 +62,19 @@ export function LevelCard({ r, onOpen }: { r: PeriodRewards; onOpen: () => void 
           <XpBar r={r} />
         </div>
       </div>
+    </>
+  );
+  const cls = "flex w-full items-center gap-3 rounded-card border border-accent/40 bg-surface p-3.5 text-left shadow-card";
+  if (!onOpen) {
+    return (
+      <div data-testid="level-card" className={cls}>
+        {body}
+      </div>
+    );
+  }
+  return (
+    <button type="button" onClick={onOpen} aria-label="나의 챌린지 결과 보기" className={cls}>
+      {body}
       <Icon name="chevron" size={18} className="text-muted" />
     </button>
   );

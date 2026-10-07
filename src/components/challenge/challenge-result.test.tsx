@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChallengeParticipantProfile, PeriodSessionRow } from "@/lib/challenge";
 import type { UserGoal } from "@/lib/types";
@@ -22,154 +22,120 @@ beforeEach(() => {
 });
 
 const goal = (user_id: string, goal_type: string, target_value: number, unit: string) =>
-  ({
-    id: `${user_id}-${goal_type}`,
-    user_id,
-    goal_type,
-    target_value,
-    qualifier: null,
-    planned_days: 3,
-    unit,
-  }) as unknown as UserGoal;
-const row = (userId: string, iso: string): PeriodSessionRow => ({
+  ({ id: `${user_id}-${goal_type}`, user_id, goal_type, target_value, qualifier: null, planned_days: 3, unit }) as unknown as UserGoal;
+const row = (userId: string, iso: string, km = 0): PeriodSessionRow => ({
   userId,
   completedAt: iso,
   durationMinutes: 40,
-  exercises: [],
-});
-const profiles: Record<string, ChallengeParticipantProfile> = {
-  me: { id: "me", nickname: "나", avatar_url: null } as unknown as ChallengeParticipantProfile,
-  b: { id: "b", nickname: "스칼레또", avatar_url: null } as unknown as ChallengeParticipantProfile,
-};
-
-function setup(myGoals = true) {
-  const participants = [
-    ...(myGoals
-      ? [
-          {
-            userId: "me",
-            goals: [
-              { type: "workout_days" as const, target: 4, actual: 2 },
-              { type: "cardio_distance" as const, target: 10, actual: 12 },
-            ],
-            workoutDays: 2,
-            plannedDays: 6,
-          },
-        ]
-      : []),
+  exercises: [
     {
-      userId: "b",
-      goals: [{ type: "workout_days" as const, target: 4, actual: 1 }],
-      workoutDays: 1,
-      plannedDays: 6,
+      exerciseType: "cardio",
+      exerciseName: "러닝",
+      bodyPart: null,
+      sets: [{ weightKg: null, reps: null, distanceMeters: km * 1000, durationSeconds: null, isCompleted: true }],
     },
+  ],
+});
+const profile = (id: string, nickname: string) =>
+  ({ id, nickname, avatar_url: null }) as unknown as ChallengeParticipantProfile;
+
+function setup(opts: { myGoals?: boolean; n?: number } = {}) {
+  const myGoals = opts.myGoals ?? true;
+  const n = opts.n ?? 2;
+  const ids = Array.from({ length: n }, (_, i) => (i === 0 ? "me" : `p${i}`));
+  const members = ids.map((id) => profile(id, id === "me" ? "나" : `참가자${id}`));
+  const rows = [
+    row("me", "2026-09-01T01:00:00Z", 5),
+    row("me", "2026-09-02T01:00:00Z"),
+    ...ids.slice(1).map((id) => row(id, "2026-09-01T01:00:00Z", 1)),
   ];
+  const participants = ids
+    .filter((id) => myGoals || id !== "me")
+    .map((id) => ({
+      userId: id,
+      goals: [{ type: "workout_days" as const, target: 4, actual: id === "me" ? 2 : 1 }],
+      workoutDays: id === "me" ? 2 : 1,
+      plannedDays: 6,
+    }));
+  const onDiscover = vi.fn();
   render(
     <ResultView
-      challenge={{ id: "c1", name: "GND 9월 챌린지", start_date: "2026-09-01", end_date: "2026-09-14" }}
+      challenge={{ id: "c1", name: "9월 개노답 탈출 챌린지", start_date: "2026-09-01", end_date: "2026-09-14", recruit_image_url: null }}
+      members={members}
       participants={participants}
-      goals={
-        myGoals
-          ? [goal("me", "workout_days", 4, "일"), goal("me", "cardio_distance", 10, "km"), goal("b", "workout_days", 4, "일")]
-          : [goal("b", "workout_days", 4, "일")]
-      }
-      sessionRows={[
-        row("me", "2026-09-01T01:00:00Z"),
-        row("me", "2026-09-02T01:00:00Z"),
-        row("b", "2026-09-01T01:00:00Z"),
-      ]}
+      goals={participants.map((p) => goal(p.userId, "workout_days", 4, "일"))}
+      sessionRows={rows}
       plans={[{ planDate: "2026-09-02", setCount: 6 }]}
       timeZone="Asia/Seoul"
-      profileOf={(id) => profiles[id]}
+      profileOf={(id) => members.find((m) => m.id === id)}
       myUserId="me"
       onBack={() => {}}
       onProfileClick={() => {}}
-      onCreate={() => {}}
+      onDiscover={onDiscover}
     />,
   );
+  return { onDiscover };
 }
 
-describe("ResultView — 화면 A (챌린지 종료!)", () => {
-  it("시안 머리, 2×2 카드 4장, 주간 2칸, 보상 3칸", async () => {
+describe("종료 화면 — 최종 시안 (히어로 + 4탭)", () => {
+  it("히어로·4탭, 결과 요약이 먼저 — 내 순위·종합 점수·종목 4칸 순위", () => {
     setup();
-    expect(screen.getByText("종료!")).toBeTruthy();
-    expect(screen.getByText(/14일간, 정말 수고했어요!/)).toBeTruthy();
-    expect(screen.getAllByTestId("stat-card")).toHaveLength(4);
-    expect(screen.getAllByTestId("heat-week")).toHaveLength(2);
+    expect(screen.getByText("챌린지 결과")).toBeTruthy();
+    expect(screen.getByText("종료")).toBeTruthy();
+    expect(screen.getByText("9.1 (화) ~ 9.14 (월)")).toBeTruthy();
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["결과 요약", "최종 랭킹", "기록 분석", "피드"]);
+    const cells = screen.getAllByTestId("metric-cell");
+    expect(cells).toHaveLength(4);
+    expect(cells[0].textContent).toContain("2회");
+    expect(cells[0].textContent).toContain("(1위)");
+    expect(cells[2].textContent).toContain("5km");
+    expect(cells[3].textContent).toContain("-"); // 볼륨 기록 없음
+    expect(screen.getByText("최종 TOP 3")).toBeTruthy();
+  });
+
+  it("최종 랭킹 — 30명 전원, 종목 탭 전환, 기록 인증·다음 챌린지 참여하기(둘러보기)", () => {
+    const { onDiscover } = setup({ n: 30 });
+    fireEvent.click(screen.getByRole("tab", { name: "최종 랭킹" }));
+    expect(screen.getAllByTestId("final-row")).toHaveLength(30);
+    const mine = screen.getAllByTestId("final-row").find((r) => r.getAttribute("data-mine"));
+    expect(within(mine!).getByText("나")).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: /유산소 거리/ }));
+    expect(screen.getAllByTestId("final-row")[0].textContent).toContain("5km");
+    expect(screen.getByText("챌린지 기록 인증")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "다음 챌린지 참여하기" }));
+    expect(onDiscover).toHaveBeenCalled();
+  });
+
+  it("기록 분석 — 레벨·링·일별 활동·주요 기록·성장·보상", async () => {
+    setup();
+    fireEvent.click(screen.getByRole("tab", { name: "기록 분석" }));
     await waitFor(() => expect(screen.getAllByTestId("reward-tile")).toHaveLength(3));
-    expect(screen.getByText("+200")).toBeTruthy();
-    expect(screen.getByText(/\+1 레벨 업!/)).toBeTruthy(); // 950 XP(Lv.5) → 1250 XP(Lv.6)
-    expect(screen.getByRole("button", { name: /결과 공유하기/ })).toBeTruthy();
-  });
-
-  it("시안의 지급 없는 보상(랜덤 상자·코인)은 없다", async () => {
-    setup();
-    await waitFor(() => screen.getAllByTestId("reward-tile"));
-    expect(screen.queryByText(/랜덤 아이템|코인/)).toBeNull();
-  });
-
-  it("장부 조회가 실패해도 화면은 뜨고 레벨·보상 칸만 숨는다", async () => {
-    mocks.getMyRewardLedgers.mockRejectedValueOnce(new Error("x"));
-    setup();
-    expect(screen.getAllByTestId("stat-card")).toHaveLength(4);
-    await waitFor(() => expect(mocks.getMyRewardLedgers).toHaveBeenCalled());
-    expect(screen.getByRole("button", { name: "나의 챌린지 결과 보기" })).toBeTruthy();
-    expect(screen.queryByTestId("reward-tile")).toBeNull();
-  });
-
-  it("목표를 안 건 사람은 시상대만", () => {
-    setup(false);
-    expect(screen.getByText("종료!")).toBeTruthy();
-    expect(screen.queryByTestId("stat-card")).toBeNull();
-    expect(screen.queryByRole("button", { name: /결과 공유하기/ })).toBeNull();
-  });
-});
-
-describe("ResultView — 화면 B (나의 챌린지 결과)", () => {
-  it("레벨 카드를 누르면 열리고, 뒤로 가면 A", async () => {
-    setup();
-    await screen.findAllByTestId("reward-tile"); // 장부가 와서 레벨 카드로 바뀐 뒤에 누른다
-    fireEvent.click(screen.getByRole("button", { name: "나의 챌린지 결과 보기" }));
-    expect(screen.getByText("나의 챌린지 결과")).toBeTruthy();
-    expect(screen.getByText(/상위 50%/)).toBeTruthy();
-    expect(screen.getAllByTestId("goal-ring")).toHaveLength(2);
-    expect(screen.getByText("목표 2개 중 1개 달성!")).toBeTruthy();
+    expect(screen.getByTestId("level-card")).toBeTruthy();
+    expect(screen.getAllByTestId("goal-ring")).toHaveLength(1);
     expect(screen.getAllByTestId("day-bar")).toHaveLength(14);
     expect(screen.getAllByTestId("best-record")).toHaveLength(4);
-    expect(screen.getAllByTestId("trend-point")).toHaveLength(3); // 시작·1주·2주
-    expect(screen.getByRole("button", { name: /다음 챌린지 신청하기/ })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "뒤로" }));
-    expect(screen.getByText("종료!")).toBeTruthy();
+    expect(screen.getAllByTestId("trend-point")).toHaveLength(3);
   });
-});
 
-describe("ResultView — 참가자가 많을 때", () => {
-  it("30명: 4~10위 + 내 줄만, 전체 보기로 펼친다", () => {
-    const n = 30;
-    const participants = Array.from({ length: n }, (_, i) => ({
-      userId: i === 24 ? "me" : `p${i}`,
-      goals: [{ type: "workout_days" as const, target: 30, actual: n - i }],
-      workoutDays: n - i,
-      plannedDays: 30,
-    }));
-    render(
-      <ResultView
-        challenge={{ id: "big", name: "큰 방", start_date: "2026-09-01", end_date: "2026-09-28" }}
-        participants={participants}
-        goals={participants.map((p) => goal(p.userId, "workout_days", 30, "일"))}
-        sessionRows={[]}
-        plans={[]}
-        timeZone="Asia/Seoul"
-        profileOf={(id) => ({ id, nickname: id, avatar_url: null }) as unknown as ChallengeParticipantProfile}
-        myUserId="me"
-        onBack={() => {}}
-        onProfileClick={() => {}}
-        onCreate={() => {}}
-      />,
-    );
-    expect(screen.getAllByTestId("rest-rank")).toHaveLength(8);
-    expect(screen.getByText("25위")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "전체 30명 보기" }));
-    expect(screen.getAllByTestId("rest-rank")).toHaveLength(27);
+  it("피드 탭 — 끝난 챌린지는 활동 피드가 닫혔다고 말한다", () => {
+    setup();
+    fireEvent.click(screen.getByRole("tab", { name: "피드" }));
+    expect(screen.getByText("챌린지가 끝나 활동 피드가 닫혔어요")).toBeTruthy();
+  });
+
+  it("목표를 안 건 사람 — 종합 점수 없음 안내, 기록 분석 탭·기록 인증 없음", () => {
+    setup({ myGoals: false });
+    expect(screen.getByText(/목표를 정하지 않아 종합 점수가 없어요/)).toBeTruthy();
+    expect(screen.queryByRole("tab", { name: "기록 분석" })).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "최종 랭킹" }));
+    expect(screen.queryByText("챌린지 기록 인증")).toBeNull();
+  });
+
+  it("지급 없는 보상(랜덤 상자·코인)·열람권 문구는 어디에도 없다", async () => {
+    setup();
+    for (const t of ["결과 요약", "최종 랭킹", "기록 분석", "피드"]) {
+      fireEvent.click(screen.getByRole("tab", { name: t }));
+      expect(screen.queryByText(/랜덤 아이템|코인|열람권/)).toBeNull();
+    }
   });
 });

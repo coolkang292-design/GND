@@ -39,6 +39,7 @@ export function CompetitionTab({
   todayDone,
   streak,
   liveRanking,
+  periodOver = false,
   onOpenRanking,
 }: {
   rows: readonly MetricRow[];
@@ -52,6 +53,8 @@ export function CompetitionTab({
   todayDone: boolean;
   streak: number;
   liveRanking: boolean;
+  /** 종료일이 지났다(결과 발표 대기) */
+  periodOver?: boolean;
   onOpenRanking: (key: RankingKey) => void;
 }) {
   const [metric, setMetric] = useState<MetricKey>("sessions");
@@ -80,6 +83,7 @@ export function CompetitionTab({
         todayDone={todayDone}
         streak={streak}
         weeklyFirst={weeklyFirst}
+        periodOver={periodOver}
         onOpenRanking={() => onOpenRanking(standing?.metric ?? metric)}
       />
 
