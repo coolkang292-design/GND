@@ -35,7 +35,7 @@ export function MetricSelector({
     <div
       role="tablist"
       aria-label="랭킹 종목"
-      className={withOverall ? "-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5" : "grid grid-cols-4 gap-1.5"}
+      className={withOverall ? "-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5 [contain:inline-size]" : "grid grid-cols-4 gap-1.5"}
     >
       {items.map((it) => {
         const on = it.key === value;

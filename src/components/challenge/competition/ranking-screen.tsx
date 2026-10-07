@@ -197,24 +197,24 @@ function ComparisonCard({
   return (
     <section data-testid="comparison" className="rounded-card border border-line bg-surface p-4 shadow-card">
       <h3 className="mb-3 text-[15px] font-extrabold">{rival.rank}위와 비교</h3>
-      <div className="flex items-center justify-between gap-2">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
         <div className="flex min-w-0 items-center gap-2">
-          <Avatar src={me.profile?.avatar_url} className="grid h-10 w-10 flex-none place-items-center overflow-hidden rounded-full border-2 border-accent bg-surface-2" />
+          <Avatar src={me.profile?.avatar_url} className="grid h-9 w-9 flex-none place-items-center overflow-hidden rounded-full border-2 border-accent bg-surface-2" />
           <div className="min-w-0">
             <p className="text-[12px] text-muted">나</p>
-            <p className="font-mono text-[16px] font-black text-accent">{formatMetric(metric, me.value)}</p>
+            <p className="truncate font-mono text-[15px] font-black text-accent">{formatMetric(metric, me.value)}</p>
           </div>
         </div>
-        <span className="flex-none rounded-full border border-line-strong bg-surface-2 px-3 py-1 font-mono text-[13px] font-extrabold">
+        <span className="rounded-full border border-line-strong bg-surface-2 px-2 py-1 font-mono text-[12px] font-extrabold whitespace-nowrap">
           {diff >= 0 ? "+" : "-"}
           {formatMetric(metric, Math.abs(diff))}
         </span>
-        <div className="flex min-w-0 items-center gap-2 text-right">
+        <div className="flex min-w-0 items-center justify-end gap-2 text-right">
           <div className="min-w-0">
             <p className="truncate text-[12px] text-muted">{rival.profile?.nickname ?? "?"}</p>
-            <p className="font-mono text-[16px] font-black">{formatMetric(metric, rival.value)}</p>
+            <p className="truncate font-mono text-[15px] font-black">{formatMetric(metric, rival.value)}</p>
           </div>
-          <Avatar src={rival.profile?.avatar_url} className="grid h-10 w-10 flex-none place-items-center overflow-hidden rounded-full bg-surface-2" />
+          <Avatar src={rival.profile?.avatar_url} className="grid h-9 w-9 flex-none place-items-center overflow-hidden rounded-full bg-surface-2" />
         </div>
       </div>
       <div className="mt-3 h-2 overflow-hidden rounded-full bg-surface-3">

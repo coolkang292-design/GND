@@ -74,7 +74,14 @@ export function MetricDailyChart({
         })}
         {days.map((d, i) =>
           i % step === 0 || i === days.length - 1 ? (
-            <text key={d.dayKey} x={i * slot + slot / 2} y={H + 13} textAnchor="middle" fontSize={8.5} fill="var(--muted)">
+            <text
+              key={d.dayKey}
+              x={i === days.length - 1 ? 300 : i === 0 ? 0 : i * slot + slot / 2}
+              y={H + 13}
+              textAnchor={i === days.length - 1 ? "end" : i === 0 ? "start" : "middle"}
+              fontSize={8.5}
+              fill="var(--muted)"
+            >
               {formatShortDay(d.dayKey).split("(")[0]}
             </text>
           ) : null,

@@ -62,7 +62,7 @@ export function FinalRanking({
       <MetricSelector value={key} onChange={setKey} minutesAvailable={minutesAvailable} withOverall />
 
       <section className="rounded-card border border-line bg-surface shadow-card">
-        <div className="grid grid-cols-[40px_1fr_76px_64px] items-center gap-1 border-b border-line px-3 py-2 text-[11px] font-bold text-muted">
+        <div className="grid grid-cols-[40px_minmax(0,1fr)_76px_64px] items-center gap-1 border-b border-line px-3 py-2 text-[11px] font-bold text-muted">
           <span>순위</span>
           <span>참가자</span>
           <span className="text-right">{column}</span>
@@ -81,7 +81,7 @@ export function FinalRanking({
                 key={r.userId}
                 data-testid="final-row"
                 data-mine={mine || undefined}
-                className={`grid grid-cols-[40px_1fr_76px_64px] items-center gap-1 px-3 py-2 ${
+                className={`grid grid-cols-[40px_minmax(0,1fr)_76px_64px] items-center gap-1 px-3 py-2 ${
                   mine ? "border-y border-accent bg-accent-weak" : "border-b border-line last:border-b-0"
                 }`}
               >

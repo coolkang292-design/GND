@@ -7,7 +7,13 @@ import { RankingScreen } from "@/components/challenge/competition/ranking-screen
 import type { RankingKey } from "@/components/challenge/competition/metric-selector";
 import { ChallengeHero } from "@/components/challenge/detail/challenge-hero";
 import { DetailTabs } from "@/components/challenge/detail/detail-tabs";
-import type { ChallengeParticipantProfile, PeriodSessionRow } from "@/lib/challenge";
+import {
+  buildParticipantInput,
+  foldPeriodStats,
+  type ChallengeParticipantProfile,
+  type PeriodSessionRow,
+} from "@/lib/challenge";
+import { inclusiveDays } from "@/lib/domain/challenge-time";
 import type { UserGoal } from "@/lib/types";
 
 const NAMES = ["나", "스칼레또", "낭만송곳니", "아라짱", "운동하는김씨", "지훈이", "헬린이123", "민수"];
@@ -56,18 +62,17 @@ export function ResultQA({ count, state, withMinutes }: { count: number; state: 
   const goal = (user_id: string, goal_type: string, target_value: number, unit: string): UserGoal =>
     ({ id: `${user_id}-${goal_type}`, user_id, goal_type, target_value, qualifier: null, planned_days: 4, unit }) as unknown as UserGoal;
   const goals = users.flatMap((u) => [goal(u, "workout_days", 20, "일"), goal(u, "cardio_distance", 30, "km"), goal(u, "weight_days", 18, "일")]);
-  const mine = (u: string) => rows.filter((r) => r.userId === u);
-  const km = (u: string) => mine(u).reduce((s, r) => s + (r.exercises[1].sets[0].distanceMeters ?? 0) / 1000, 0);
-  const participants = users.map((u) => ({
-    userId: u,
-    goals: [
-      { type: "workout_days" as const, target: 20, actual: mine(u).length },
-      { type: "cardio_distance" as const, target: 30, actual: km(u) },
-      { type: "weight_days" as const, target: 18, actual: Math.round(mine(u).length * 0.7) },
-    ],
-    workoutDays: mine(u).length,
-    plannedDays: 16,
-  }));
+  // 실제 화면과 같은 길로 조립한다 — 세션 행 → foldPeriodStats → buildParticipantInput
+  const endKey = state === "ended" ? "2026-09-28" : "2026-09-30";
+  const stats = foldPeriodStats(rows, "2026-09-01", endKey, "Asia/Seoul");
+  const participants = users.map((u) =>
+    buildParticipantInput({
+      userId: u,
+      goals: goals.filter((g) => g.user_id === u),
+      stats: stats.get(u)!,
+      periodDays: inclusiveDays("2026-09-01", endKey),
+    }),
+  );
   const members = users.map(
     (id, i) => ({ id, nickname: NAMES[i] ?? `참가자${i + 1}`, avatar_url: null }) as unknown as ChallengeParticipantProfile,
   );

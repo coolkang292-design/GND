@@ -4,7 +4,7 @@ import type { WeekAchievement } from "@/lib/domain/challenge-report";
 /** 시안 `주간 달성 히트맵` — 주마다 상자, 목표 횟수만큼 체크 원, 가로로 넘긴다 */
 export function WeeklyHeatmap({ weeks }: { weeks: WeekAchievement[] }) {
   return (
-    <div className="-mx-1 flex snap-x gap-2 overflow-x-auto px-1 pb-1">
+    <div className="-mx-1 flex snap-x gap-2 overflow-x-auto px-1 pb-1 [contain:inline-size]">
       {weeks.map((w) => (
         <div
           key={w.week}

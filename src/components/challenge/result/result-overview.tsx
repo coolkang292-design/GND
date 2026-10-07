@@ -47,7 +47,7 @@ export function ResultOverview({
             </div>
             <div className="text-center">
               <p className="text-[12px] text-muted">종합 점수</p>
-              <p className="font-mono text-[28px] leading-tight font-black text-gold">
+              <p className={`font-mono text-[28px] leading-tight font-black ${mine.rank === 1 ? "text-gold" : "text-text"}`}>
                 {mine.overall.toFixed(1)}
                 <span className="ml-0.5 text-[14px]">점</span>
               </p>
