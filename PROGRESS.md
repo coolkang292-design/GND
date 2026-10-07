@@ -3456,3 +3456,14 @@ Storage 버킷도 SQL로 생성 가능했음(`insert into storage.buckets`, 0005
 
 ### 릴리스 공지
 `2026-08-04-challenge-feedback-and-late-photo` — 전 사용자 5명에게 발송 완료.
+
+
+## 2026-10-07 완료 도장 UI 운영 배포
+- 사용자 배포 요청으로 main의 도장 UI 커밋 2a60b604c6fa7ba1f4b996ff98fc9c063e90404e를 검증하고, 새소식 항목을 46f797d7cbed11cc503284792642edfa5de37ef4에 추가·푸시.
+- 개발 서버 http://127.0.0.1:3001: 실제 PersonalTodayCard·CalendarView를 고정 테스트 데이터로 렌더. 375/390/430px 모두 홈 7칸·완료 날짜 3개·예정 날짜 1개·예정일 클릭 PASS, 가로 넘침 없음, pageerror 0. 임시 QA 경로 삭제.
+- 검증: 전체 234파일/4,040테스트 PASS, 새소식 16테스트 PASS, lint 오류0/기존경고4, Next build PASS, typecheck PASS. 임시 QA 경로 삭제 후 남은 .next/dev 생성 타입은 제거하고 typecheck 재검사.
+- 연결된 Vercel API 수동 배포: Git 소스 시도는 git_info_fail. 검증한 커밋의 소스·자산을 SHA와 변경 파일 본문으로 제출. 운영 Supabase 환경변수는 프로젝트 설정 사용.
+- 운영 배포 커밋 46f797d, ID dpl_BD3CrMjouHUnn1UKHdTYt7enYJiW, URL https://gnd-d6a06ym2s-gnd4.vercel.app. READY, aliasError null. https://gnd-one.vercel.app 별칭이 이 배포를 가리키는 것을 재조회. /home·/record·/whats-new HTTP200 및 새소식 제목 반영 확인.
+- DB·마이그레이션 변경 없음, 알림 발송 없음. 운영 로그인 계정 화면과 iPhone 실기기는 미검증. 테스트 브라우저 CJK 글꼴 부족으로 한국어 가독성은 검증하지 못함.
+- 런타임 오류 조회는 기존 배포의 /api/push/notify url.parse deprecation 경고만 반환했으며, 신규 배포에 한정한 관측 증거로 해석하지 않음.
+- 다음 액션: 사용자 iPhone에서 앱 재실행 후 홈과 기록 달력의 작은 도장 가독성 확인.
