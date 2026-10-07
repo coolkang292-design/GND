@@ -3,7 +3,15 @@
 > 작성 2026-10-07 밤. 사용자가 자러 가며 "승인이 필요하면 묻지 말고 정리하고, 내일 오전에 승인 요청·이어서 진행"을 지시했다.
 > **아침 세션은 이 문서의 §아침에 할 일부터** 한다.
 
-## 상태 한 줄
+## 2026-10-08 결과 (아침 세션)
+
+- 사용자 승인: 내 종합 점수도 숨김(A3) · 푸시+배포(A1·A4) · 0117은 사용자가 직접 SQL 실행(A2)
+- A3 반영 1f80268(상세 `내 진행`·홈 카드 → `종료일 공개`), 새소식 126eeda
+- main fast-forward → push(origin/main 0 0) → `git archive main` 복사본에서 Vercel 배포. 첫 시도 `Not authorized`(pnpm dlx vercel 62.5.0, --scope gnd4 붙였는데도), `npx vercel@latest`로 재시도 성공 — dpl_138ct5TVKpSojv5TTW7kzsTUDa4m READY, gnd-one.vercel.app
+- 운영 JS 확인: 새 문구 있음 / 옛 문구(`기간 중에는 내 진행률만`·열람권·`최종 순위 발표`) 없음. `나의 챌린지 결과 보기`는 남아 있다 — `LevelCard`의 onOpen 갈래(지금은 아무도 안 넘김) 문자열이라 화면엔 안 나온다
+- **0117 미적용** — 사용자 실행 후 `node scripts/challenge-metrics-check.mjs A` 출력에 `운동 시간 키 없음`이 사라져야 한다. 이어 `pnpm db:snapshot`
+
+## 상태 한 줄 (2026-10-07 밤 기준)
 
 브랜치 `feat/challenge-result-screen`(로컬 커밋 20개, **푸시 안 함 · 배포 안 함**). 구현 계획 v2의 Task 1~7과 Task 8의 화면 확인까지 끝났다. 게이트는 관련 테스트 4,125건 통과, 추적 코드 lint 오류 0·typecheck 오류 0, 깨끗한 `git archive HEAD` 복사본 build 통과.
 
