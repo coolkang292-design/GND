@@ -10,6 +10,7 @@ import {
   type RankedParticipant,
 } from "@/lib/domain/goal-score";
 import { inclusiveDays } from "@/lib/domain/challenge-time";
+import { weekCutoffs } from "@/lib/domain/challenge-report";
 import { challengeJoinPath } from "@/lib/domain/challenge-invite";
 import type { Challenge, Profile, UserGoal } from "@/lib/types";
 
@@ -1317,6 +1318,43 @@ export function buildParticipantInput(input: {
     plannedDays: plannedDaysForPeriod(goals[0]?.planned_days ?? 5, periodDays),
     allGoalsCompletedAtMs: null,
   };
+}
+
+/**
+ * 결과 화면 「나의 성장」 — 주차 끝마다 그때까지의 기록으로 잰 종합점수 (2026-10-07).
+ *
+ * ⚠️ 점수를 따로 조립하지 않는다. `foldPeriodStats` → `buildParticipantInput` →
+ *    `scoreParticipant`, 순위표와 같은 길이다. 그래서 마지막 점이 시상대 점수와 같다
+ *    (테스트가 묶는다). 기간 일수는 **전체 기간** — 1주차 점수는 "4주 목표 중 1주 치"로 잰다.
+ */
+export function myScoreTrend(input: {
+  rows: readonly PeriodSessionRow[];
+  userId: string;
+  goals: UserGoal[];
+  startDate: string;
+  endDate: string;
+  timeZone: string;
+}): { label: string; overall: number }[] {
+  const mine = input.rows.filter((r) => r.userId === input.userId);
+  const periodDays = inclusiveDays(input.startDate, input.endDate);
+  const scoreUntil = (endKey: string) =>
+    scoreParticipant(
+      buildParticipantInput({
+        userId: input.userId,
+        goals: input.goals,
+        stats:
+          foldPeriodStats(mine, input.startDate, endKey, input.timeZone).get(input.userId) ??
+          EMPTY_STATS,
+        periodDays,
+      }),
+    ).overall;
+  return [
+    { label: "시작", overall: 0 },
+    ...weekCutoffs(input.startDate, input.endDate).map((c) => ({
+      label: c.label,
+      overall: scoreUntil(c.endKey),
+    })),
+  ];
 }
 
 /** 홈 챌린지 카드가 쓰는 내 점수 요약 (2026-08-13) */

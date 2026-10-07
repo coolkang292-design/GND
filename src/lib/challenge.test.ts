@@ -7,6 +7,8 @@ import {
   sessionGoalContribution,
   actualForGoal,
   foldPeriodStats,
+  buildParticipantInput,
+  myScoreTrend,
   getMyWeeklyGoalDays,
   goalLabel,
   normalizeChallengeParticipantProfiles,
@@ -17,6 +19,8 @@ import {
   type PeriodSessionRow,
   type PeriodStats,
 } from "@/lib/challenge";
+import type { UserGoal } from "@/lib/types";
+import { rankParticipants } from "@/lib/domain/goal-score";
 
 const STATS: PeriodStats = {
   workoutDays: 5,
@@ -870,5 +874,43 @@ describe("normalizeChallengePeriodSessions — duration_minutes (0117)", () => {
     expect(() =>
       normalizeChallengePeriodSessions([{ ...base, duration_minutes: "42" }]),
     ).toThrow("invalid_challenge_period_sessions");
+  });
+});
+
+describe("myScoreTrend", () => {
+  const goal = {
+    id: "g1",
+    user_id: "u1",
+    goal_type: "workout_days",
+    target_value: 4,
+    qualifier: null,
+    planned_days: 2,
+    unit: "일",
+  } as unknown as UserGoal;
+  const row = (iso: string, userId = "u1"): PeriodSessionRow => ({ userId, completedAt: iso, exercises: [] });
+  const rows = [
+    row("2026-09-01T01:00:00Z"),
+    row("2026-09-03T01:00:00Z"),
+    row("2026-09-09T01:00:00Z"),
+    row("2026-09-10T01:00:00Z"),
+  ];
+  const args = { userId: "u1", goals: [goal], startDate: "2026-09-01", endDate: "2026-09-14", timeZone: "Asia/Seoul" };
+
+  it("시작 0점 → 주차 누적, 마지막 점 = 순위표 점수", () => {
+    const trend = myScoreTrend({ rows, ...args });
+    expect(trend.map((p) => p.label)).toEqual(["시작", "1주", "2주"]);
+    expect(trend[0].overall).toBe(0);
+    expect(trend[1].overall).toBeLessThan(trend[2].overall);
+    const stats = foldPeriodStats(rows, "2026-09-01", "2026-09-14", "Asia/Seoul").get("u1")!;
+    const [ranked] = rankParticipants([
+      buildParticipantInput({ userId: "u1", goals: [goal], stats, periodDays: 14 }),
+    ]);
+    expect(trend[2].overall).toBeCloseTo(ranked.overall, 9);
+  });
+
+  it("남의 세션은 안 들어간다", () => {
+    expect(myScoreTrend({ rows: [...rows, row("2026-09-02T01:00:00Z", "u2")], ...args })).toEqual(
+      myScoreTrend({ rows, ...args }),
+    );
   });
 });
