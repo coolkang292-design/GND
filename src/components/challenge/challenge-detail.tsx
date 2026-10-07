@@ -715,11 +715,13 @@ export function ChallengeDetail({
                   {Math.round(myScore.achievement)}%
                 </strong>
               </p>
+              {/* 종합 점수는 **내 것도** 종료일 공개 (사용자 결정 2026-10-08) — 랭킹 탭 잠금 카드와 같은 말 */}
               <p className="text-right leading-none">
                 <span className="block text-[11.5px] font-bold text-muted">종합점수</span>
-                <strong className="mt-1 block text-[26px] font-black tabular-nums">
-                  {myScore.overall.toFixed(1)}
-                </strong>
+                <span className="mt-1.5 flex items-center justify-end gap-1 text-[12.5px] font-extrabold text-muted">
+                  <Icon name="lock" size={14} />
+                  종료일 공개
+                </span>
               </p>
             </div>
             <div className="mt-2.5 h-2 overflow-hidden rounded-full bg-surface-3">

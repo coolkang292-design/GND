@@ -90,7 +90,7 @@ describe("ChallengeSummaryCard — 진행 중 챌린지 요약", () => {
    */
   it("종료일이 지난 진행 중 챌린지는 '종료'로 적는다", () => {
     renderCard([challengeOf({ end_date: "2026-08-12" })]);
-    expect(screen.getByText(/종료/)).toBeTruthy();
+    expect(screen.getByText("종료")).toBeTruthy();
     expect(screen.queryByText(/D-0/)).toBeNull();
   });
 
@@ -168,10 +168,11 @@ describe("ChallengeSummaryCard — 진행 중이 여러 개일 때", () => {
  * 당한 종류의 사고다. 그래서 이 카드는 prop으로만 숫자를 받는다.
  */
 describe("ChallengeSummaryCard — 진행률·종합점수", () => {
-  it("받은 값을 그대로 적는다 (달성률은 반올림, 점수는 소수 한 자리)", () => {
+  it("달성률은 받은 값 그대로, 종합 점수는 내 것도 종료일 공개 (2026-10-08 사용자 결정)", () => {
     renderCard([challengeOf()], SCORE);
     expect(screen.getByText("40%")).toBeTruthy();
-    expect(screen.getByText("10.7")).toBeTruthy();
+    expect(screen.queryByText("10.7")).toBeNull();
+    expect(screen.getByText("종료일 공개")).toBeTruthy();
   });
 
   it("무엇을 센 숫자인지 글자로 적는다", () => {
@@ -186,7 +187,7 @@ describe("ChallengeSummaryCard — 진행률·종합점수", () => {
    */
   it("점수가 아직 안 왔으면 0으로 채우지 않고 —를 그린다", () => {
     renderCard([challengeOf()], null);
-    expect(screen.getAllByText("—")).toHaveLength(2);
+    expect(screen.getAllByText("—")).toHaveLength(1);
     expect(screen.queryByText("0%")).toBeNull();
     expect(screen.queryByText("0.0")).toBeNull();
   });

@@ -148,8 +148,10 @@ export function ChallengeSummaryCard({
           </div>
           <p className="mt-2 flex items-baseline justify-between gap-1 border-t border-line pt-2 text-[11px] text-muted">
             종합점수
-            <b className="font-mono text-[15px] font-extrabold text-text">
-              {score ? score.overall.toFixed(1) : "—"}
+            {/* 진행 중 종합 점수는 내 것도 종료일 공개 (사용자 결정 2026-10-08) */}
+            <b className="flex items-center gap-0.5 text-[11px] font-extrabold text-muted">
+              <Icon name="lock" size={12} />
+              종료일 공개
             </b>
           </p>
         </div>
