@@ -154,7 +154,6 @@ export function ChallengeDetail({
   onShare,
   onOpenManage,
   onProfile,
-  onCreate,
   onDiscover,
   onGoalRaised,
 }: {
@@ -189,7 +188,6 @@ export function ChallengeDetail({
   onShare: () => void;
   onOpenManage: () => void;
   onProfile: (p: Profile) => void;
-  onCreate: () => void;
   /** 종료 화면 `다음 챌린지 참여하기` → 둘러보기 (2026-10-07 결정) */
   onDiscover: () => void;
   onGoalRaised: () => void;

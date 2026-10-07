@@ -665,7 +665,6 @@ function ChallengeScreen({ userId }: { userId: string }) {
             onShare={() => void handleShare()}
             onOpenManage={() => setManageOpen(true)}
             onProfile={setProfileTarget}
-            onCreate={() => setCreateOpen(true)}
             onDiscover={() => {
               // 목록으로 돌아가며 둘러보기 탭을 연다 — 모집 중 챌린지에 바로 참여
               setTab("discover");
