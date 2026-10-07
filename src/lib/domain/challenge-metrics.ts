@@ -208,3 +208,36 @@ export function pinMine<T extends { userId: string }>(
   const mine = list.find((r) => r.userId === myUserId);
   return mine ? { rows: [...head, mine], pinned: true } : { rows: head, pinned: false };
 }
+
+/** `dailyTotals`(challenge-report)의 하루 합계 중 지표에 필요한 칸만 */
+type DayLike = { sessions: number; minutes: number | null; cardioKm: number; volumeKg: number };
+
+/** 시안 `내 진행 현황` — 기간 날짜마다 선택 지표 값(기록 없는 날 0) */
+export function dailyMetric(
+  totals: ReadonlyMap<string, DayLike>,
+  key: MetricKey,
+  startDate: string,
+  endKey: string,
+): { dayKey: string; value: number }[] {
+  const n = Math.max(0, inclusiveDays(startDate, endKey));
+  return Array.from({ length: n }, (_, i) => {
+    const k = addDaysToDateKey(startDate, i);
+    const t = totals.get(k);
+    return { dayKey: k, value: t ? (t[key] ?? 0) : 0 };
+  });
+}
+
+/**
+ * 시안의 점선 `목표 420분` — **같은 지표의 목표가 있을 때만** 하루 페이스(목표 ÷ 기간 일수).
+ * 운동 횟수(목표는 운동'일'), 운동 시간(목표는 유산소 시간만)은 대응하는 목표가 없어 그리지 않는다.
+ */
+export function goalPace(
+  goals: readonly { goal_type: string; target_value: number | string }[],
+  key: MetricKey,
+  periodDays: number,
+): number | null {
+  const type = key === "cardioKm" ? "cardio_distance" : key === "volumeKg" ? "volume" : null;
+  if (!type || periodDays <= 0) return null;
+  const g = goals.find((x) => x.goal_type === type);
+  return g ? Number(g.target_value) / periodDays : null;
+}

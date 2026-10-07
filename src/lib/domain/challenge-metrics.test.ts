@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   METRICS,
+  dailyMetric,
   formatMetric,
+  goalPace,
   gapMessage,
   metricTotalsByUser,
   minutesKnown,
@@ -275,5 +277,28 @@ describe("표기", () => {
     expect(formatMetric("cardioKm", 42.26)).toBe("42.3km");
     expect(formatMetric("volumeKg", 12350)).toBe("12,350kg");
     expect(METRICS.map((m) => m.label)).toEqual(["운동 횟수", "운동 시간", "유산소 거리", "웨이트 볼륨"]);
+  });
+});
+
+describe("dailyMetric — 내 진행 현황 막대", () => {
+  it("기간 날짜마다 값, 이번 주만 자를 수 있다", () => {
+    const totals = new Map([
+      ["2026-09-02", { dayKey: "2026-09-02", sessions: 2, completedSets: 3, minutes: 62, cardioKm: 1.5, volumeKg: 300 }],
+      ["2026-09-09", { dayKey: "2026-09-09", sessions: 1, completedSets: 1, minutes: null, cardioKm: 0, volumeKg: 0 }],
+    ]);
+    const all = dailyMetric(totals, "minutes", "2026-09-01", "2026-09-10");
+    expect(all).toHaveLength(10);
+    expect(all[1]).toEqual({ dayKey: "2026-09-02", value: 62 });
+    expect(all[8]).toEqual({ dayKey: "2026-09-09", value: 0 });
+    expect(dailyMetric(totals, "sessions", "2026-09-08", "2026-09-10").map((d) => d.value)).toEqual([0, 1, 0]);
+  });
+});
+
+describe("goalPace — 같은 지표 목표가 있을 때만 하루 페이스", () => {
+  it("유산소 거리·볼륨만 대응, 하루 = 목표 ÷ 기간 일수", () => {
+    expect(goalPace([{ goal_type: "cardio_distance", target_value: 30 }], "cardioKm", 30)).toBe(1);
+    expect(goalPace([{ goal_type: "volume", target_value: 6000 }], "volumeKg", 30)).toBe(200);
+    expect(goalPace([{ goal_type: "workout_days", target_value: 20 }], "sessions", 30)).toBeNull();
+    expect(goalPace([], "minutes", 30)).toBeNull();
   });
 });
