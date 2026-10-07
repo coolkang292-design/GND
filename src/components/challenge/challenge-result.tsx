@@ -148,7 +148,8 @@ export function ResultView({
     return {
       key: m.key,
       label: m.label,
-      value: unknown ? "-" : formatMetric(m.key, mine?.value ?? 0),
+      // 기록 없음(순위 없음)은 `0kg`이 아니라 `-` — 순위 칸과 같은 말을 한다
+      value: unknown || !mine || mine.rank === null ? "-" : formatMetric(m.key, mine.value),
       rank: unknown ? null : (mine?.rank ?? null),
     };
   });
