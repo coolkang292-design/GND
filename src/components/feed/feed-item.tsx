@@ -13,7 +13,6 @@ import { ReactionBar } from "@/components/feed/reaction-bar";
 import { ImageLightbox } from "@/components/image-lightbox";
 import { PhotoCarousel } from "@/components/feed/photo-carousel";
 import { PhotoStamp } from "@/components/photo-stamp";
-import { SetBreakdown } from "@/components/workout/set-breakdown";
 import { Icon } from "@/components/ui/icon";
 import { exerciseSetSummary, feedStatCells } from "@/lib/domain/feed-card";
 import { normalizeCaption } from "@/lib/domain/session-caption";
@@ -76,10 +75,10 @@ type Props = {
 };
 
 /**
- * 요약 블록 자체가 상세 토글이다 (2026-08-04).
+ * 요약 블록은 운동 목록 펼치기 토글이다.
  *
  * 사진 카드와 일반 카드가 **같은 블록을 쓰므로** 여기 한 번만 붙이면 두 변형
- * 모두에서 펼칠 수 있다. 세트는 `getCrewFeed`가 이미 받아 온 것이라 새 질의가 없다.
+ * 모두에서 목록을 펼칠 수 있다. 2026-10-07 사용자 지시로 하단 세트 상세 카드는 제거했다.
  */
 function WorkoutSummary({
   item,
@@ -90,7 +89,6 @@ function WorkoutSummary({
   isMine: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const listRef = useRef<HTMLButtonElement>(null);
   const cells = feedStatCells(item);
   const rows = item.breakdown;
   const hidden = Math.max(0, rows.length - VISIBLE_EXERCISES);
@@ -152,7 +150,6 @@ function WorkoutSummary({
         ⚠️ 이름과 접근 이름 `… 운동 상세`를 바꾸지 마라 — 테스트와 화면 낭독이 그 이름으로 찾는다.
       */}
       <button
-        ref={listRef}
         type="button"
         aria-label={`${item.nickname} 운동 상세`}
         aria-expanded={expanded}
@@ -204,22 +201,6 @@ function WorkoutSummary({
       */}
       {expanded && (
         <div className="mt-2.5">
-          <SetBreakdown exercises={item.breakdown} />
-          {/* 세트 상세가 길면 위 목록의 `접기`가 화면 밖에 있다 — 끝에서도 접을 수 있게 */}
-          <button
-            type="button"
-            onClick={() => {
-              setExpanded(false);
-              // 아래에서 접으면 내용이 줄며 화면이 다른 카드로 튄다 — 이 목록으로 되돌린다
-              requestAnimationFrame(() =>
-                listRef.current?.scrollIntoView?.({ block: "nearest" }),
-              );
-            }}
-            className="mt-2 flex min-h-[40px] w-full items-center justify-center gap-1 rounded-card-sm border border-line text-[12.5px] font-bold text-muted"
-          >
-            세트 상세 접기
-            <Icon name="chevron" size={13} className="-rotate-90" />
-          </button>
           {!isMine && (
             <Link
               href={`/record?copy=${item.sessionId}`}

@@ -18,16 +18,16 @@ import {
   pickByDay,
   STAGE_MESSAGES,
 } from "@/lib/domain/streak-messages";
-import { DEFAULT_TIMEZONE, dayKey } from "@/lib/domain/time";
+import { DEFAULT_TIMEZONE, DAY_MS, dayKey, weekStart } from "@/lib/domain/time";
 import { weekWorkoutDays } from "@/lib/domain/viewing-pass";
 import { MAX_DAILY_WORKOUT_XP_NOW } from "@/lib/domain/xp";
 import type { ProgressSummary } from "@/lib/progression";
 import type { TodayWorkoutTotals } from "@/lib/workout";
 
 /**
- * 홈 최상단 — 인사말 · 오늘의 목표 · 오늘 숫자 세 칸 (2026-10-05 Performance Social 개편).
+ * 홈 최상단 — 인사말 · 이번 주 날짜별 운동 · 오늘 숫자 세 칸.
  *
- * 사용자가 공유한 홈 시안(`안녕하세요, 형` · `오늘의 목표 3 / 4` · `42 MIN / 18 SETS /
+ * 사용자가 공유한 홈 시안(`안녕하세요, 형` · `이번 주 운동` · `42 MIN / 18 SETS /
  * 6,840 KG`)을 그대로 따른다. 옛 `나의 오늘` 카드(2026-08-21 설계,
  * `docs/superpowers/specs/2026-08-21-home-personal-crew-competition-board-design.md`)가
  * 가지던 기능은 **하나도 지우지 않고 자리만 옮겼다**:
@@ -36,11 +36,11 @@ import type { TodayWorkoutTotals } from "@/lib/workout";
  * |---|---|
  * | 아바타·이름(성과 시트 열기) | 인사말 줄 — 같은 버튼, 같은 접근 이름 `… 성과 보기` |
  * | 단계·레벨·XP 진행바 | 인사말 아래 알약 + 얇은 진행바 |
- * | 오늘 상태 알약(오늘 완료/운동 중/운동 전) | 오늘의 목표 카드 오른쪽 위 |
- * | 이번 주 N / 목표 | 오늘의 목표 큰 숫자 + 진행바 + 체크 원 |
+ * | 오늘 상태 알약(오늘 완료/운동 중/운동 전) | 이번 주 운동 카드 오른쪽 위 |
+ * | 이번 주 운동일 | 완료 일수 + 월~일 7칸 + 작은 챌린지 목표 문구 |
  * | 연속 · 배지 | 인사말 아래 스트릭 알약 · 배지 알약 |
- * | 스트릭 오늘의 한 줄 · 소멸 경고 | 오늘의 목표 카드 안 |
- * | 주 행동(시작/이어하기/완료 배너) | 오늘의 목표 카드 맨 아래 |
+ * | 스트릭 오늘의 한 줄 · 소멸 경고 | 이번 주 운동 카드 안 |
+ * | 주 행동(시작/이어하기/완료 배너) | 이번 주 운동 카드 맨 아래 |
  *
  * ⚠️ **여기서 조회하지 않는다.** 재료는 전부 홈이 부른 것을 내려받는다 — 크루 카드와 같은 규약.
  * ⚠️ 홈의 **유일한** 운동 시작 버튼이 이 안에 있다. 다른 곳에 또 만들지 마라(2026-08-13).
@@ -168,7 +168,13 @@ export function PersonalTodayCard({
   const hasGoal = weeklyGoal !== null && weeklyGoal > 0;
   const action = personalTodayAction(status, MAX_DAILY_WORKOUT_XP_NOW);
   const pct = summary ? Math.min(100, Math.round(summary.levelProgressPercent)) : 0;
-  const goalPct = hasGoal ? Math.min(100, Math.round((days.length / weeklyGoal) * 100)) : 0;
+  // 월~일은 목표 수가 아니라 날짜별 완료 기록이다. 홈과 같은 KST 경계를 쓴다.
+  const monday = weekStart(now, tz);
+  const weekDays = ["월", "화", "수", "목", "금", "토", "일"].map((label, i) => {
+    const date = new Date(monday.getTime() + i * DAY_MS);
+    const key = dayKey(date, tz);
+    return { label, key, dateNumber: Number(key.slice(-2)), done: days.includes(key) };
+  });
 
   const minutes =
     todayTotals == null
@@ -259,7 +265,7 @@ export function PersonalTodayCard({
         </div>
       </button>
 
-      {/* ── 스트릭 배너 (2026-10-05 사용자 지시 — 시안 `🔥 12 DAY STREAK`를 오늘의 목표 위에) ──
+      {/* ── 스트릭 배너 (2026-10-05 사용자 지시 — 시안 `🔥 12 DAY STREAK`를 이번 주 운동 위에) ──
           숫자는 `currentStreak` 하나에서 온다(옛 `연속` 칸·스트릭 칸과 같은 값).
           ⚠️ 0일이면 0을 크게 자랑하지 않는다 — 시작을 권하는 문장으로 바꾼다.
           ⚠️ 불꽃은 패키지의 입체 장식이다(이모지 🔥 금지, 기획안 17-A). */}
@@ -290,7 +296,7 @@ export function PersonalTodayCard({
         )}
       </div>
 
-      {/* ── 오늘의 목표 ─────────────────────────────────────────
+      {/* ── 이번 주 운동 ─────────────────────────────────────────
           사진은 오른쪽(셰이커), 왼쪽은 어둡게 눌러 숫자를 읽힌다(적용 지침 §디자인 규칙). */}
       <section className="relative overflow-hidden rounded-card border border-line-strong bg-surface shadow-card">
         <Image
@@ -305,7 +311,7 @@ export function PersonalTodayCard({
 
         <div className="relative p-4">
           <div className="flex items-center justify-between gap-2">
-            <h2 className="text-[16px] font-extrabold">오늘의 목표</h2>
+            <h2 className="text-[16px] font-extrabold">이번 주 운동</h2>
             <Chip dot={STATUS_STYLE[status].dot}>{STATUS_STYLE[status].label}</Chip>
           </div>
 
@@ -323,59 +329,38 @@ export function PersonalTodayCard({
                 </button>
               )}
             </div>
-          ) : hasGoal ? (
-            <>
-              <p
-                className="mt-1 flex items-baseline gap-2 leading-none"
-                aria-label={`이번 주 ${days.length} / ${weeklyGoal}`}
-              >
-                <strong aria-hidden className="text-[56px] font-black italic text-accent">
-                  {days.length}
-                </strong>
-                <span aria-hidden className="text-[34px] font-black italic">
-                  / {weeklyGoal}
-                </span>
-              </p>
-              <p className="mt-1.5 text-[12.5px] text-muted">
-                {days.length >= weeklyGoal
-                  ? `이번 주 목표 ${weeklyGoal}일을 달성했어요!`
-                  : days.length === 0
-                    ? "이번 주 첫 운동을 시작해 볼까요?"
-                    : `이번 주 운동 ${days.length}일 달성했어요!`}
-              </p>
-              <div className="mt-2.5 h-2 w-[64%] overflow-hidden rounded-full bg-surface-3">
-                <div className="h-full rounded-full bg-accent" style={{ width: `${goalPct}%` }} />
-              </div>
-              {/* 목표 일수만큼 원 — 채운 원이 이번 주에 운동한 날 수다 */}
-              <div aria-hidden className="mt-2.5 flex gap-2">
-                {Array.from({ length: weeklyGoal }, (_, i) =>
-                  i < days.length ? (
-                    <span
-                      key={i}
-                      className="flex h-6 w-6 items-center justify-center rounded-full bg-accent text-accent-ink"
-                    >
-                      <Icon name="check" size={14} strokeWidth={2.6} />
-                    </span>
-                  ) : (
-                    <span key={i} className="h-6 w-6 rounded-full border-2 border-line-strong" />
-                  ),
-                )}
-              </div>
-            </>
           ) : (
-            /* ⚠️ 목표가 없으면 분모를 지어내지 않는다 — 정하러 가는 문을 연다(설계 §9) */
             <>
-              <p className="mt-1 flex items-baseline gap-1 leading-none">
-                <strong className="text-[56px] font-black italic text-accent">{days.length}</strong>
-                <span className="text-[24px] font-black italic">일</span>
+              <p className="mt-2 flex items-baseline gap-2 leading-none" aria-label={`이번 주 ${days.length}일 완료`}>
+                <strong aria-hidden className="text-[56px] font-black italic text-accent">{days.length}</strong>
+                <span aria-hidden className="text-[20px] font-extrabold">일 완료</span>
               </p>
-              <p className="mt-1.5 text-[12.5px] text-muted">이번 주 운동한 날</p>
-              <Link
-                href="/challenge"
-                className="mt-2 inline-flex min-h-[32px] items-center rounded-full border border-accent/50 bg-bg/60 px-3 text-[12px] font-extrabold text-accent"
-              >
-                이번 주 · 목표 정하기 ›
-              </Link>
+              <ol aria-label="이번 주 날짜별 운동 기록" className="mt-4 grid grid-cols-7 gap-1.5">
+                {weekDays.map(({ label, key, dateNumber, done }) => (
+                  <li
+                    key={key}
+                    aria-label={`${key} ${label}요일 · ${done ? "운동 완료" : key > todayKey ? "예정" : "운동 기록 없음"}`}
+                    aria-current={key === todayKey ? "date" : undefined}
+                    className="flex min-w-0 flex-col items-center gap-1.5"
+                  >
+                    <span className={`text-[11px] font-bold ${key === todayKey ? "text-accent" : "text-muted"}`}>{label}</span>
+                    <span aria-hidden className={`flex aspect-square w-full max-w-11 items-center justify-center rounded-[12px] border text-[13px] font-extrabold ${
+                      done ? "border-accent bg-accent text-accent-ink" : "border-line-strong bg-bg/70 text-muted"
+                    } ${key === todayKey ? "ring-2 ring-accent ring-offset-2 ring-offset-surface" : ""}`}>
+                      {done ? <Icon name="check" size={18} strokeWidth={2.6} /> : dateNumber}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+              {hasGoal ? (
+                <p className="mt-3 text-[12px] text-muted">
+                  주간 목표 {weeklyGoal}일 · {days.length >= weeklyGoal ? "달성" : `${weeklyGoal - days.length}일 남음`}
+                </p>
+              ) : (
+                <Link href="/challenge" className="mt-3 inline-flex min-h-[32px] items-center rounded-full border border-accent/50 bg-bg/60 px-3 text-[12px] font-extrabold text-accent">
+                  이번 주 · 목표 정하기 ›
+                </Link>
+              )}
             </>
           )}
 
@@ -455,11 +440,12 @@ export function PersonalTodayCardSkeleton() {
         </div>
       </div>
       <section className="rounded-card border border-line-strong bg-surface p-4">
-        <h2 className="text-[16px] font-extrabold">오늘의 목표</h2>
+        <h2 className="text-[16px] font-extrabold">이번 주 운동</h2>
         <div aria-hidden className="mt-2 animate-pulse">
           <div className="h-14 w-32 rounded-card-sm bg-surface-2" />
-          <div className="mt-3 h-2 w-[64%] rounded-full bg-surface-2" />
-          <div className="mt-3 h-6 w-36 rounded-full bg-surface-2" />
+          <div className="mt-4 grid grid-cols-7 gap-1.5">
+            {Array.from({ length: 7 }, (_, i) => <div key={i} className="aspect-square rounded-[12px] bg-surface-2" />)}
+          </div>
         </div>
         <Link
           href="/record"

@@ -134,50 +134,25 @@ describe("FeedItemCard — 기록 상세 펼치기", () => {
     expect(screen.queryByText("60kg 8회")).toBeNull();
   });
 
-  it("요약을 누르면 종목별 세트가 펼쳐진다", () => {
+  it("펼쳐도 중복 세트 상세 카드를 표시하지 않는다 — 사진·일반 카드 공통", () => {
+    for (const photo of [null, "https://example.com/workout.jpg"]) {
+      const view = renderCard(photo);
+      fireEvent.click(toggle());
+      expect(screen.queryByText("60kg 8회")).toBeNull();
+      expect(screen.queryByText("45kg 12회")).toBeNull();
+      expect(screen.queryByLabelText("1세트 완료")).toBeNull();
+      expect(screen.queryByRole("button", { name: /세트 상세 접기/ })).toBeNull();
+      expect(screen.getByText("1세트 × 60kg")).toBeTruthy();
+      view.unmount();
+    }
+  });
+
+  it("목록을 다시 누르면 접힌다", () => {
     renderCard();
-
     fireEvent.click(toggle());
-
-    expect(screen.getByText("60kg 8회")).toBeTruthy();
-    expect(screen.getByText("45kg 12회")).toBeTruthy();
-  });
-
-  it("완료·미완료를 구분해 보여준다 — done이 실제로 전달돼야 한다", () => {
-    renderCard();
-
+    expect(toggle().getAttribute("aria-expanded")).toBe("true");
     fireEvent.click(toggle());
-
-    // 종목 2개가 각각 1세트를 완료했고, 벤치프레스만 2세트를 남겼다.
-    expect(screen.getAllByLabelText("1세트 완료")).toHaveLength(2);
-    expect(screen.getAllByLabelText("2세트 미완료")).toHaveLength(1);
-    expect(screen.queryByLabelText("2세트 완료")).toBeNull();
-  });
-
-  it("다시 누르면 접힌다", () => {
-    renderCard();
-
-    fireEvent.click(toggle());
-    expect(screen.getByText("60kg 8회")).toBeTruthy();
-
-    fireEvent.click(toggle());
-    expect(screen.queryByText("60kg 8회")).toBeNull();
-  });
-
-  it("사진 카드에서도 펼칠 수 있다 — 두 변형이 같은 요약 블록을 쓴다", () => {
-    renderCard("https://example.com/workout.jpg");
-
-    fireEvent.click(toggle());
-
-    expect(screen.getByText("60kg 8회")).toBeTruthy();
-  });
-
-  it("저장된 세트가 없으면 없다고 알린다 — 빈 칸을 남기지 않는다", () => {
-    renderCard(null, []);
-
-    fireEvent.click(toggle());
-
-    expect(screen.getByText(/세트 기록이 없어요/)).toBeTruthy();
+    expect(toggle().getAttribute("aria-expanded")).toBe("false");
   });
 
   /**
@@ -732,19 +707,19 @@ describe("FeedItemCard — 따라하기 버튼", () => {
     fireEvent.click(screen.getByLabelText(/운동 상세/));
     // 세트 상세는 열렸는데 따라하기만 없어야 한다
     expect(screen.getByLabelText(/운동 상세/).getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getByText("60kg 8회")).toBeTruthy();
+    expect(screen.queryByText("60kg 8회")).toBeNull();
     expect(screen.queryByText(/이 운동 따라하기/)).toBeNull();
   });
 });
 
 /** 2026-10-05 사용자 지적 — "펼친 다음에 접기가 없네" */
 describe("FeedItemCard — 접기", () => {
-  it("펼치면 목록 끝과 세트 상세 끝에 접기가 생기고, 누르면 접힌다", () => {
+  it("펼치면 목록 끝의 접기로 다시 접을 수 있다", () => {
     render(<FeedItemCard item={feedItem(null)} userId="me" onProfileClick={() => {}} />);
     expect(screen.queryByText("접기")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /운동 상세/ }));
     expect(screen.getByText("접기")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /세트 상세 접기/ }));
+    fireEvent.click(screen.getByRole("button", { name: /운동 상세/ }));
     expect(screen.queryByText("60kg 8회")).toBeNull();
     expect(screen.queryByText("접기")).toBeNull();
   });

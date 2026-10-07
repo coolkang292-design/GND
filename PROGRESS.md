@@ -3,6 +3,12 @@
 > 새 세션은 저장소 루트 `AGENTS.md` → `CLAUDE.md` → 이 파일 → 가장 최근의 관련 `docs/superpowers/HANDOFF-*.md` 순서로 읽는다.
 > 이 파일은 전체 흐름의 요약이고, 작업별 세부 사실과 남은 확인은 최신 인수인계서가 기준이다.
 
+## 2026-10-07 홈 월~일 7칸 + 피드 중복 상세 제거 — 로컬 수정 · 미배포
+
+- 홈 날짜별 완료 체크/오늘 강조, 챌린지 목표 보조 문구. 피드 하단 세트 상세만 제거, 상단 요약·따라하기 유지. DB 변경 없음.
+- 233파일/4,037테스트 PASS, 변경파일 lint PASS, build PASS. 대체 Chromium으로 375/390/430px 실제 컴포넌트 화면/상호작용 PASS. 운영 로그인 연결·폰 가독성 미검증. 사용자 배포 승인 받음, 운영 배포 전. 인수인계: docs/superpowers/HANDOFF-2026-10-07-home-week-feed-summary.md.
+- 다음: 실제 개발 화면 검수 후 승인된 배포 절차.
+
 ## ✅ 2026-10-06 GND 바탕화면·알림 G Monogram — **운영 배포 완료**
 
 - 첨부 OPTION1 원본 G를 설치180/192/512/maskable·알림단색96·favicon으로 연결. metadata/manifest/sw·기존경로 호환. 내부 UI는 Claude 담당, Codex 임시 화면수정은 되돌림.
