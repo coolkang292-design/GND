@@ -9,7 +9,7 @@
 - A3 반영 1f80268(상세 `내 진행`·홈 카드 → `종료일 공개`), 새소식 126eeda
 - main fast-forward → push(origin/main 0 0) → `git archive main` 복사본에서 Vercel 배포. 첫 시도 `Not authorized`(pnpm dlx vercel 62.5.0, --scope gnd4 붙였는데도), `npx vercel@latest`로 재시도 성공 — dpl_138ct5TVKpSojv5TTW7kzsTUDa4m READY, gnd-one.vercel.app
 - 운영 JS 확인: 새 문구 있음 / 옛 문구(`기간 중에는 내 진행률만`·열람권·`최종 순위 발표`) 없음. `나의 챌린지 결과 보기`는 남아 있다 — `LevelCard`의 onOpen 갈래(지금은 아무도 안 넘김) 문자열이라 화면엔 안 나온다
-- **0117 미적용** — 사용자 실행 후 `node scripts/challenge-metrics-check.mjs A` 출력에 `운동 시간 키 없음`이 사라져야 한다. 이어 `pnpm db:snapshot`
+- **0117 적용 완료** — 사용자가 SQL Editor에서 실행. `challenge-metrics-check.mjs A` 7개 챌린지 모두 운동 시간 키 있음, 교차 테스트 8/8, 스냅샷 차이 `duration_minutes` 한 줄. 이 작업의 남은 일 없음(실제 폰·공유 시트만 `[미검증]`)
 
 ## 상태 한 줄 (2026-10-07 밤 기준)
 

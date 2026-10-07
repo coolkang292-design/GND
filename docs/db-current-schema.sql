@@ -2117,6 +2117,7 @@ begin
     select jsonb_build_object(
       'user_id', s.user_id,
       'completed_at', s.completed_at,
+      'duration_minutes', s.duration_minutes,
       'tabata_minutes', s.tabata_minutes,
       'workout_exercises', coalesce((
         select jsonb_agg(jsonb_build_object(
