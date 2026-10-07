@@ -4,6 +4,7 @@ import {
   cheerCopy,
   dailyBars,
   dailyTotals,
+  formatPeriod,
   formatShortDay,
   periodRewards,
   restRanking,
@@ -293,5 +294,11 @@ describe("restRanking — 2명부터 수십 명까지", () => {
 
   it("펼치면 4위부터 전부", () => {
     expect(restRanking(people(30), "u25", true).rows).toHaveLength(27);
+  });
+});
+
+describe("formatPeriod — 시안 `9.1 (월) ~ 9.30 (화)`", () => {
+  it("월.일 (요일)", () => {
+    expect(formatPeriod("2026-09-01", "2026-09-30")).toBe("9.1 (화) ~ 9.30 (수)");
   });
 });

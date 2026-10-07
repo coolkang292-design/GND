@@ -325,3 +325,12 @@ export function restRanking<T extends { userId: string }>(
     hiddenCount: ranked.length - REST_PREVIEW_UNTIL - (mineOutside ? 1 : 0),
   };
 }
+
+/** 시안 히어로 표기 `9.1 (월) ~ 9.30 (화)` */
+export function formatPeriod(startKey: string, endKey: string): string {
+  const one = (key: string) => {
+    const [y, m, d] = key.split("-").map(Number);
+    return `${m}.${d} (${WEEKDAY[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]})`;
+  };
+  return `${one(startKey)} ~ ${one(endKey)}`;
+}
