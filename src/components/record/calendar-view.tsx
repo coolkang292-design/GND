@@ -1366,11 +1366,11 @@ export function CalendarView({
               {selectedPlans.map((selectedPlan) => (
                 <div
                   key={selectedPlan.id}
-                  className="rounded-card border border-good/40 bg-good-weak p-3"
+                  className="rounded-card border border-line-strong bg-surface-2 p-3"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="text-[11px] font-extrabold text-good">
+                      <p className="text-[11px] font-extrabold text-accent">
                         {selectedPlan.programEnrollmentId
                           ? "📋 프로그램 예정"
                           : selectedPlan.tabataMinutes
@@ -1522,7 +1522,7 @@ export function CalendarView({
                         })();
                       }}
                       disabled={planBusy}
-                      className="mt-3 h-10 w-full rounded-card-sm bg-good text-sm font-extrabold text-white disabled:opacity-50"
+                      className="mt-3 h-10 w-full rounded-card-sm bg-accent text-sm font-extrabold text-accent-ink disabled:opacity-50"
                     >
                       {selectedPlan.tabataMinutes
                         ? "🔥 전신 인터벌 시작하기"

@@ -547,6 +547,9 @@ function ChallengeScreen({ userId }: { userId: string }) {
       await cancelChallenge(challenge.id);
       setChallenges((list) => list.filter((c) => c.id !== challenge.id));
       showToast("챌린지를 취소했어요");
+      // 목표 설정 시트에서도 부른다 (2026-10-07) — 취소한 방의 시트가 떠 있으면 안 된다
+      setGoalSheet(null);
+      setManageOpen(false);
       backToList();
       reload();
     } catch (e) {
@@ -623,6 +626,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
             onStart={() => void handleStart()}
             onApprove={(approved) => void handleApprove(approved)}
             onLeave={() => void handleLeave()}
+            onCancelChallenge={() => void handleCancel()}
             onFinalize={() => void handleFinalize()}
             onShare={() => void handleShare()}
             onOpenManage={() => setManageOpen(true)}
@@ -765,6 +769,12 @@ function ChallengeScreen({ userId }: { userId: string }) {
           busy={busy}
           onSubmit={(v) => void handleSaveGoals(v)}
           onClose={() => setGoalSheet(null)}
+          onCancelChallenge={
+            challenge.created_by === userId &&
+            (challenge.status === "setup" || challenge.status === "active")
+              ? () => void handleCancel()
+              : undefined
+          }
         />
       )}
 

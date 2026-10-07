@@ -134,6 +134,7 @@ export function ChallengeDetail({
   onStart,
   onApprove,
   onLeave,
+  onCancelChallenge,
   onFinalize,
   onShare,
   onOpenManage,
@@ -161,6 +162,8 @@ export function ChallengeDetail({
   onStart: () => void;
   onApprove: (approved: boolean) => void;
   onLeave: () => void;
+  /** 방장 — 준비 중 화면에 바로 보이는 취소 (2026-10-07). 확인창·RPC는 부르는 쪽 */
+  onCancelChallenge: () => void;
   onFinalize: () => void;
   onShare: () => void;
   onOpenManage: () => void;
@@ -590,7 +593,20 @@ export function ChallengeDetail({
         </details>
       )}
 
-      {/* 나가기 (0085) — 방장이 **아닌** 참가자에게만. 방장은 ⋯에서 취소한다. */}
+      {/* 취소 (사용자 지시 2026-10-07, 버그 신고 5da574d7) — 방장은 ⚙ 관리 시트 맨
+          아래에서만 취소할 수 있어서 찾지 못했다. 참가자의 `나가기`와 같은 자리에 둔다. */}
+      {challenge.status === "setup" && isHost && (
+        <button
+          type="button"
+          onClick={onCancelChallenge}
+          disabled={busy}
+          className="h-10 text-[12.5px] font-bold text-warn underline underline-offset-2 disabled:opacity-50"
+        >
+          챌린지 취소하기
+        </button>
+      )}
+
+      {/* 나가기 (0085) — 방장이 **아닌** 참가자에게만. 방장은 위의 취소를 쓴다. */}
       {challenge.status === "setup" && !invited && !isHost && (
         <button
           type="button"

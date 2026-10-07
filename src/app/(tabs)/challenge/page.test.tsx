@@ -775,4 +775,27 @@ describe("ChallengePage setup — 자동 시작을 말한다", () => {
     })) as HTMLButtonElement;
     expect(button.disabled).toBe(false);
   });
+  /**
+   * 방장 취소는 준비 중 화면에 바로 보인다 (사용자 지시 2026-10-07, 버그 신고 5da574d7).
+   * ⚙ 관리 시트 맨 아래에만 있어서 방장이 못 찾았다.
+   */
+  it("방장은 준비 중 화면에서 바로 챌린지를 취소할 수 있다 — 확인창을 먼저 띄운다", async () => {
+    arrangeSetup();
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    render(<ChallengePage />);
+
+    const cancel = await screen.findByRole("button", { name: "챌린지 취소하기" });
+    expect(screen.queryByRole("button", { name: "이 챌린지에서 나가기" })).toBeNull();
+    fireEvent.click(cancel);
+    expect(confirmSpy).toHaveBeenCalledWith("챌린지를 취소할까요? 되돌릴 수 없어요.");
+    confirmSpy.mockRestore();
+  });
+
+  it("방장이 아니면 취소 대신 나가기다", async () => {
+    arrangeSetup({ created_by: "someone-else" });
+    render(<ChallengePage />);
+
+    await screen.findByRole("button", { name: "이 챌린지에서 나가기" });
+    expect(screen.queryByRole("button", { name: "챌린지 취소하기" })).toBeNull();
+  });
 });

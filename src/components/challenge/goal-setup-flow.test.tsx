@@ -465,3 +465,32 @@ describe("진행 예시 — 시안 ④ (2026-09-18 추가)", () => {
     expect(card?.querySelectorAll("li")).toHaveLength(7);
   });
 });
+
+/**
+ * 방장의 `챌린지 취소하기` (사용자 지시 2026-10-07, 버그 신고 5da574d7).
+ * 관리(⚙) 시트 맨 아래에만 있어서 방장이 못 찾았다 — 시작 버튼 아래에 바로 보인다.
+ */
+describe("방장 챌린지 취소하기", () => {
+  it("넘기면 시작 버튼 아래에 보이고, 누르면 부른다", () => {
+    const onCancelChallenge = vi.fn();
+    renderFlow({ onCancelChallenge });
+    const cancel = screen.getByRole("button", { name: "챌린지 취소하기" });
+    // 자동 시작 안내 줄 **뒤**에 있다 (사용자가 표시한 자리)
+    const line = screen.getByText(/9월 21일에 자동으로 시작해요/);
+    expect(line.compareDocumentPosition(cancel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.click(cancel);
+    expect(onCancelChallenge).toHaveBeenCalledTimes(1);
+  });
+
+  it("방장이 아니면(넘기지 않으면) 없다", () => {
+    renderFlow();
+    expect(screen.queryByRole("button", { name: "챌린지 취소하기" })).toBeNull();
+  });
+
+  it("세부 목표를 고르는 중에는 내지 않는다", () => {
+    renderFlow({ onCancelChallenge: vi.fn() });
+    fireEvent.click(screen.getByRole("button", { name: /세부 목표 추가/ }));
+    expect(screen.queryByRole("button", { name: "이 목표로 시작하기" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "챌린지 취소하기" })).toBeNull();
+  });
+});

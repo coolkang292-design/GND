@@ -226,6 +226,7 @@ export function GoalSetupFlow({
   busy,
   onSubmit,
   onClose,
+  onCancelChallenge,
 }: {
   userId: string;
   challengeName: string;
@@ -242,6 +243,12 @@ export function GoalSetupFlow({
   busy: boolean;
   onSubmit: (value: { goals: GoalDraft[]; plannedDays: number }) => void;
   onClose: () => void;
+  /**
+   * 방장만 — 넘기면 시작 버튼 아래에 `챌린지 취소하기`를 그린다 (사용자 지시 2026-10-07).
+   * 관리(⚙) 시트 맨 아래에만 있어서 방장이 못 찾았다(버그 신고 5da574d7).
+   * 확인창·RPC는 부르는 쪽(`handleCancel`)이 맡는다.
+   */
+  onCancelChallenge?: () => void;
 }) {
   const periodDays = Math.max(1, inclusiveDays(startDate, endDate));
   const [initial] = useState(() => splitGoalsForEdit(myGoals, periodDays));
@@ -471,7 +478,14 @@ export function GoalSetupFlow({
     </section>
   );
 
-  const footer = (label: string, onClick: () => void, disabled = false, sub?: string) => (
+  const footer = (
+    label: string,
+    onClick: () => void,
+    disabled = false,
+    sub?: string,
+    /** 시작 화면(기본·검토)에만 — 세부 목표 편집 중에는 내지 않는다 */
+    withCancel = false,
+  ) => (
     <>
       {notice && (
         <p role="alert" className="mb-2 text-center text-[12.5px] font-bold text-warn">
@@ -482,6 +496,16 @@ export function GoalSetupFlow({
         {busy ? "저장 중…" : label}
       </PrimaryButton>
       {sub && <p className="mt-1.5 text-center text-[11.5px] text-muted">{sub}</p>}
+      {withCancel && onCancelChallenge && (
+        <button
+          type="button"
+          onClick={onCancelChallenge}
+          disabled={busy}
+          className="mx-auto mt-1 flex h-10 items-center px-4 text-[13px] font-bold text-warn underline decoration-line underline-offset-4 disabled:opacity-50"
+        >
+          챌린지 취소하기
+        </button>
+      )}
     </>
   );
 
@@ -499,7 +523,7 @@ export function GoalSetupFlow({
             onClose={onClose}
           />
         }
-        footer={footer("이 목표로 시작하기", submit, false, startLine)}
+        footer={footer("이 목표로 시작하기", submit, false, startLine, true)}
       >
         {justJoined && <JoinedBanner challengeName={challengeName} />}
 
@@ -911,7 +935,7 @@ export function GoalSetupFlow({
       titleId={TITLE_ID}
       onClose={onClose}
       header={<SheetHeader titleId={TITLE_ID} title="내 목표 확인" onClose={onClose} />}
-      footer={footer("이 목표로 시작하기", submit, false, startLine)}
+      footer={footer("이 목표로 시작하기", submit, false, startLine, true)}
     >
       <GoalHero hero="review" line1="좋은 오늘이" line2="더 나은 내일을 만듭니다" />
 
