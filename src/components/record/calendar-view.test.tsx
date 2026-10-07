@@ -87,9 +87,9 @@ beforeEach(() => {
   mocks.localId.mockReset();
   mocks.localId.mockImplementation(() => `id-${++seq}`);
   mocks.createWorkoutPlan.mockReset();
-  mocks.createWorkoutPlan.mockResolvedValue({ id: "plan-1" });
+  mocks.createWorkoutPlan.mockImplementation(async (input) => ({ ...PLAN, ...input, id: "plan-1" }));
   mocks.updateWorkoutPlan.mockReset();
-  mocks.updateWorkoutPlan.mockResolvedValue({ id: "plan-1" });
+  mocks.updateWorkoutPlan.mockImplementation(async (input) => ({ ...PLAN, ...input, id: input.planId }));
 });
 
 /** 인터벌 고르기 화면은 맨몸·비시간형만 보여 준다 */
@@ -1591,5 +1591,46 @@ describe("CalendarView — 사다리 재배치는 요일이 아니라 주기로 
         new Date(Date.UTC(year, month - 1, day)).getUTCDay(),
       );
     }
+  });
+});
+
+describe("CalendarView — 월간 카드와 완료 날짜 수가 일치한다", () => {
+  it("5개 기록이 4개 날짜면 4일, 중복 계획과 다른 달은 분모에서 제외한다", async () => {
+    mocks.getCompletedSessions.mockResolvedValue([
+      ...[10, 10, 11, 12, 13].map((day, i) => ({...SESSION, id:`s-${i}`, completedAt:new Date(`2026-08-${day}T12:00:00+09:00`), durationSeconds:600})),
+      {...SESSION, id:"july", completedAt:new Date("2026-07-15T12:00:00+09:00"), durationSeconds:1800},
+    ]);
+    mocks.getWorkoutPlans.mockResolvedValue([
+      ...[10,14,16,16].map((day,i) => ({...PLAN,id:`p-${i}`,planDate:`2026-08-${day}`})),
+      {...PLAN,id:"july-plan",planDate:"2026-07-16"},
+      {...PLAN,id:"september-plan",planDate:"2026-09-01"},
+    ]);
+    const {container} = await setup();
+    const summary = container.querySelector("section")!;
+    expect(summary.textContent).toContain("4일");
+    expect(summary.textContent).not.toContain("5회");
+    expect(summary.textContent).toContain("0:50");
+    expect(summary.textContent).toContain("67%");
+    expect(summary.textContent).toContain("완료 4 / 전체 6일");
+    expect(container.querySelectorAll('button[aria-label$="운동 완료"]')).toHaveLength(4);
+
+    fireEvent.click(screen.getByRole("button",{name:"이전 달"}));
+    expect(summary.textContent).toContain("2026년 7월");
+    expect(summary.textContent).toContain("1일");
+    expect(summary.textContent).toContain("0:30");
+    expect(summary.textContent).toContain("50%");
+    expect(summary.textContent).toContain("완료 1 / 전체 2일");
+
+    fireEvent.click(screen.getByRole("button",{name:"다음 달"}));
+    fireEvent.click(screen.getByRole("button",{name:"다음 달"}));
+    expect(summary.textContent).toContain("2026년 9월");
+    expect(summary.textContent).toContain("0일");
+    expect(summary.textContent).toContain("0:00");
+    expect(summary.textContent).toContain("0%");
+    expect(summary.textContent).toContain("완료 0 / 전체 1일");
+
+    fireEvent.click(screen.getByRole("button",{name:"다음 달"}));
+    expect(summary.textContent).toContain("일정 없음");
+    expect(summary.textContent).not.toContain("%");
   });
 });

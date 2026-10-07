@@ -47,7 +47,6 @@ import {
   type ProgramEnrollment,
 } from "@/lib/programs";
 import { getMyProfile } from "@/lib/crew";
-import { getMyWeeklyGoalDays } from "@/lib/challenge";
 import { shareOrCopyText, shareResultToast } from "@/lib/share";
 import type {
   BodyPart,
@@ -264,8 +263,6 @@ export function CalendarView({
   const [timeZone, setTimeZone] = useState(
     () => resolveTimeZone(),
   );
-  // ⚠️ 기본 숫자를 넣지 마라 — 주간 기준은 진행 중 챌린지에서 온다(2026-08-08).
-  const [weeklyGoal, setWeeklyGoal] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
 
@@ -335,14 +332,11 @@ export function CalendarView({
     let cancelled = false;
     (async () => {
       try {
-        const [profile, list, savedPlans, goalDays, activePrograms] =
+        const [profile, list, savedPlans, activePrograms] =
           await Promise.all([
             getMyProfile(userId),
             getCompletedSessions(userId),
             getWorkoutPlans(userId),
-            // ⚠️ `profile.weekly_goal`이 아니다 — 홈과 같은 원천을 써야 두 화면의
-            //    달성률이 갈라지지 않는다(2026-08-08).
-            getMyWeeklyGoalDays(userId).catch(() => null),
             // 재배치 제안에 필요한 요일·시간 슬롯이 여기 있다. 실패해도 달력
             // 나머지는 그려야 하므로 삼키고 빈 목록으로 둔다 — 그 경우 프로그램
             // 계획은 보이되 '다시 잡기'만 막힌다.
@@ -352,7 +346,6 @@ export function CalendarView({
         if (profile) {
           setTimeZone(profile.timezone || timeZone);
         }
-        setWeeklyGoal(goalDays);
         setSessions(list);
         setPlans(savedPlans);
         setEnrollments(activePrograms);
@@ -379,8 +372,8 @@ export function CalendarView({
   }, [userId]);
 
   const summary = useMemo(
-    () => summarizeMonth(sessions, timeZone, view.year, view.month, weeklyGoal),
-    [sessions, timeZone, view, weeklyGoal],
+    () => summarizeMonth(sessions, timeZone, view.year, view.month, plans),
+    [sessions, timeZone, view, plans],
   );
 
   const stampByDate = useMemo(() => {
@@ -1295,9 +1288,9 @@ export function CalendarView({
         <div className="grid grid-cols-3 gap-2 text-center">
           <div className="rounded-card bg-surface-2 py-2.5">
             <p className="font-mono text-lg font-extrabold">
-              {summary.sessionCount}회
+              {summary.workoutDayCount}일
             </p>
-            <p className="text-[11px] text-muted">이번 달 운동</p>
+            <p className="text-[11px] text-muted">운동한 날</p>
           </div>
           <div className="rounded-card bg-surface-2 py-2.5">
             <p className="font-mono text-lg font-extrabold">
@@ -1305,19 +1298,33 @@ export function CalendarView({
             </p>
             <p className="text-[11px] text-muted">총 운동시간</p>
           </div>
-          {/* ⚠️ `achievementRate ?? 0`으로 뭉개지 마라. 목표를 안 정한 사람에게
-              `0%`를 보여주면 실패한 것처럼 읽힌다 (2026-08-08). */}
-          <div className="rounded-card bg-surface-2 py-2.5">
+          {/* 선택 월의 완료일 + 미완료 계획일. 주간 목표를 월간으로 환산하지 않는다. */}
+          <div
+            className="rounded-card bg-surface-2 py-2.5"
+            aria-label={summary.achievementRate === null
+              ? "월간 완료율, 일정 없음"
+              : `월간 완료율 ${Math.round(summary.achievementRate * 100)}%, 완료 ${summary.workoutDayCount}일 / 전체 ${summary.monthlyTargetDayCount}일. 전체는 완료일과 미완료 계획일이며 미래 계획을 포함합니다.`}
+          >
             <p className="font-mono text-lg font-extrabold">
               {summary.achievementRate === null
                 ? "—"
                 : `${Math.round(summary.achievementRate * 100)}%`}
             </p>
             <p className="text-[11px] text-muted">
-              {summary.achievementRate === null ? "목표 미설정" : "달성률"}
+              {summary.achievementRate === null ? "일정 없음" : "월간 완료율"}
             </p>
+            {summary.achievementRate !== null && (
+              <p className="mt-1 text-[10px] text-faint">
+                완료 {summary.workoutDayCount} / 전체 {summary.monthlyTargetDayCount}일
+              </p>
+            )}
           </div>
         </div>
+        {summary.achievementRate !== null && (
+          <p className="mt-2 text-center text-[10px] text-faint">
+            전체 일정 = 완료일 + 미완료 계획일 · 미래 계획 포함
+          </p>
+        )}
       </section>
 
       {/* 달력 그리드 */}

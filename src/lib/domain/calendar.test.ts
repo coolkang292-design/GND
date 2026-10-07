@@ -119,63 +119,60 @@ describe("sessionsOnDay — tz 기준 특정 날짜의 세션 (상세 시트·�
   });
 });
 
-describe("summarizeMonth — 월간 요약 (횟수·총시간·달성률)", () => {
+describe("summarizeMonth — 선택 월의 운동일·총시간·계획 대비 완료율", () => {
   const july = [
     session("2026-07-01T03:00:00Z", "none", 1200),
-    session("2026-07-01T09:00:00Z", "camera_verified", 1800), // 같은 날 2회
+    session("2026-07-01T09:00:00Z", "camera_verified", 1800),
     session("2026-07-05T03:00:00Z", "photo_uploaded", 600),
-    session("2026-08-01T03:00:00Z", "none", 999), // 8월 → 제외
+    session("2026-08-01T03:00:00Z", "none", 999),
   ];
+  const plans = ["2026-07-01", "2026-07-06", "2026-07-06", "2026-07-31", "2026-06-30", "2026-08-01"].map(planDate => ({ planDate }));
 
-  it("운동일 수·세션 수·총시간을 tz·월 기준으로 집계", () => {
-    const s = summarizeMonth(july, TZ, 2026, 7, 3);
-    expect(s.workoutDayCount).toBe(2); // 7/1, 7/5
-    expect(s.sessionCount).toBe(3); // 8월 제외
-    expect(s.totalDurationSeconds).toBe(3600); // 1200+1800+600
-  });
-
-  it("월의 일수를 tz 기준으로 반영 (7월=31일)", () => {
-    expect(summarizeMonth(july, TZ, 2026, 7, 3).daysInMonth).toBe(31);
-    expect(summarizeMonth([], TZ, 2026, 2, 3).daysInMonth).toBe(28);
-    expect(summarizeMonth([], TZ, 2024, 2, 3).daysInMonth).toBe(29); // 윤년
-  });
-
-  it("달성률 = 운동일 / (주간목표를 그 달 일수로 환산), 1.0 상한", () => {
-    // weeklyGoal 3, 7월 31일 → 기대 운동일 = 3/7*31 ≈ 13.29
-    const s = summarizeMonth(july, TZ, 2026, 7, 3);
-    expect(s.achievementRate).toBeCloseTo(2 / (3 / 7 * 31), 5);
-  });
-
-  it("주간목표를 초과 달성해도 달성률은 1.0을 넘지 않는다", () => {
-    const daily = Array.from({ length: 20 }, (_, i) =>
-      session(`2026-07-${String(i + 1).padStart(2, "0")}T03:00:00Z`, "none", 60),
-    );
-    // weeklyGoal 1 → 기대 4.43일, 20일 운동 → 상한 1.0
-    expect(summarizeMonth(daily, TZ, 2026, 7, 1).achievementRate).toBe(1);
-  });
-
-  it("주간목표 0이면 달성률 0 (0으로 나누지 않음)", () => {
-    expect(summarizeMonth(july, TZ, 2026, 7, 0).achievementRate).toBe(0);
-  });
-
-  /**
-   * ⚠️ 2026-08-08부터 주간 기준은 진행 중 챌린지에서 온다. 챌린지가 없으면
-   * 기준이 **없는 것**이지 0이 아니다. `?? 0`을 붙이면 화면에 `0%`가 떠서
-   * 목표를 안 정했을 뿐인 사람이 실패한 것처럼 보인다.
-   */
-  it("주간목표가 null이면 달성률도 null이다 (0이 아니다)", () => {
-    const s = summarizeMonth(july, TZ, 2026, 7, null);
-    expect(s.achievementRate).toBeNull();
-    // 나머지 숫자는 그대로 나와야 한다 — 목표가 없다고 기록까지 사라지지 않는다.
+  it("같은 날 여러 운동은 1일이며 시간은 선택 월의 모든 기록을 합산한다", () => {
+    const s = summarizeMonth(july, TZ, 2026, 7, plans);
     expect(s.workoutDayCount).toBe(2);
-    expect(s.daysInMonth).toBe(31);
+    expect(s.sessionCount).toBe(3);
+    expect(s.totalDurationSeconds).toBe(3600);
   });
 
-  it("세션 없는 달은 전부 0", () => {
-    const s = summarizeMonth([], TZ, 2026, 7, 3);
-    expect(s.workoutDayCount).toBe(0);
-    expect(s.sessionCount).toBe(0);
-    expect(s.totalDurationSeconds).toBe(0);
-    expect(s.achievementRate).toBe(0);
+  it("완료일과 계획일의 합집합으로 계산해 중복 계획·완료 후 삭제·다른 월을 처리한다", () => {
+    const s = summarizeMonth(july, TZ, 2026, 7, plans);
+    expect(s.monthlyTargetDayCount).toBe(4); // 1, 5, 6, 31일
+    expect(s.remainingPlanDayCount).toBe(2);
+    expect(s.achievementRate).toBe(0.5);
+  });
+
+  it("월 전체의 놓친 계획과 미래 계획을 모두 포함한다", () => {
+    const s = summarizeMonth([session("2026-07-15T03:00:00Z")], TZ, 2026, 7,
+      ["2026-07-01", "2026-07-15", "2026-07-31"].map(planDate => ({planDate})));
+    expect(s.achievementRate).toBeCloseTo(1 / 3);
+  });
+
+  it("계획 없이 완료했거나 완료 계획이 삭제돼도 완료율은 100%로 유지된다", () => {
+    expect(summarizeMonth(july, TZ, 2026, 7, []).achievementRate).toBe(1);
+  });
+
+  it("해당 월에 계획만 있으면 0%, 기록과 계획 모두 없으면 기준 없음", () => {
+    expect(summarizeMonth([], TZ, 2026, 7, plans).achievementRate).toBe(0);
+    const empty = summarizeMonth([], TZ, 2026, 9, plans);
+    expect(empty.workoutDayCount).toBe(0);
+    expect(empty.totalDurationSeconds).toBe(0);
+    expect(empty.monthlyTargetDayCount).toBe(0);
+    expect(empty.achievementRate).toBeNull();
+  });
+
+  it("월 이동과 연·KST 월 경계에서 세 지표 모두 해당 월만 본다", () => {
+    const sessions = [session("2025-12-31T14:59:59Z", "none", 600), session("2025-12-31T15:00:00Z", "none", 900)];
+    const plans = [{planDate:"2025-12-31"}, {planDate:"2026-01-02"}];
+    const dec = summarizeMonth(sessions, TZ, 2025, 12, plans);
+    const jan = summarizeMonth(sessions, TZ, 2026, 1, plans);
+    expect([dec.workoutDayCount, dec.totalDurationSeconds, dec.achievementRate]).toEqual([1,600,1]);
+    expect([jan.workoutDayCount, jan.totalDurationSeconds, jan.achievementRate]).toEqual([1,900,0.5]);
+  });
+
+  it("월의 일수와 윤년을 반영한다", () => {
+    expect(summarizeMonth([], TZ, 2026, 7, []).daysInMonth).toBe(31);
+    expect(summarizeMonth([], TZ, 2026, 2, []).daysInMonth).toBe(28);
+    expect(summarizeMonth([], TZ, 2024, 2, []).daysInMonth).toBe(29);
   });
 });

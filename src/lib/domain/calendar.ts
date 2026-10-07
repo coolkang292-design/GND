@@ -26,7 +26,10 @@ export type MonthlySummary = {
   sessionCount: number;
   totalDurationSeconds: number;
   daysInMonth: number;
-  /** 0~1. `null` = 주간 기준이 없다 (진행 중 챌린지가 없다) */
+  /** 완료일 + 미완료 계획일. 같은 날짜는 한 번만 센다. */
+  monthlyTargetDayCount: number;
+  remainingPlanDayCount: number;
+  /** 0~1. `null` = 해당 월에 완료 기록도 계획도 없다. */
   achievementRate: number | null;
 };
 
@@ -95,19 +98,17 @@ function daysInGregorianMonth(year: number, month: number): number {
 }
 
 /**
- * 월간 요약 — 달성률은 주간목표를 그 달 일수로 환산한 기대 운동일 대비 (1.0 상한)
- *
- * ⚠️ `weeklyGoal`이 `null`이면 `achievementRate`도 `null`이다 — **0이 아니다.**
- * 2026-08-08부터 주간 기준은 진행 중 챌린지에서 오고, 챌린지가 없으면 기준 자체가
- * 없다. 0으로 만들면 화면에 `0%`가 떠서 "다 못 했다"로 읽힌다. 아무도 목표를
- * 안 정했을 뿐인데 실패한 것처럼 보이는 것이 이 작업이 없애려던 상태다.
+ * 선택 월의 기록·계획만 집계한다. 완료율 = 완료 운동일 / (완료일 ∪ 계획일).
+ * 완료 후 계획이 삭제되므로 완료일도 분모에 보존한다. 같은 날의 여러 기록·계획은
+ * 한 운동일이다. 계획 없이 한 운동도 완료일로 포함되며, 과거 미완료·미래 계획 모두
+ * 남은 계획일에 포함한다. 엄밀한 원래 계획 준수율이 아니라 현재 월 일정의 진행률이다.
  */
 export function summarizeMonth(
   sessions: CompletedSession[],
   timeZone: string,
   year: number,
   month: number,
-  weeklyGoal: number | null,
+  plans: readonly { planDate: string }[],
 ): MonthlySummary {
   const inMonth = sessionsInMonth(sessions, timeZone, year, month);
   const stamps = computeDayStamps(inMonth, timeZone);
@@ -119,19 +120,24 @@ export function summarizeMonth(
     0,
   );
 
-  const expectedDays = weeklyGoal === null ? 0 : (weeklyGoal / 7) * daysInMonth;
-  const achievementRate =
-    weeklyGoal === null
-      ? null
-      : expectedDays > 0
-        ? Math.min(1, workoutDayCount / expectedDays)
-        : 0;
+  const prefix = `${year}-${String(month).padStart(2, "0")}-`;
+  const targetDates = new Set(stamps.map((stamp) => stamp.dateKey));
+  for (const plan of plans) {
+    if (plan.planDate.startsWith(prefix)) targetDates.add(plan.planDate);
+  }
+  const monthlyTargetDayCount = targetDates.size;
+  const remainingPlanDayCount = monthlyTargetDayCount - workoutDayCount;
+  const achievementRate = monthlyTargetDayCount > 0
+    ? workoutDayCount / monthlyTargetDayCount
+    : null;
 
   return {
     workoutDayCount,
     sessionCount: inMonth.length,
     totalDurationSeconds,
     daysInMonth,
+    monthlyTargetDayCount,
+    remainingPlanDayCount,
     achievementRate,
   };
 }
