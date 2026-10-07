@@ -4,6 +4,7 @@ import {
   decidePlanPush,
   planExercisesKey,
   addDaysToDateKey,
+  isPastPlanDate,
   isPlanDateAllowed,
   newPlanExercises,
   parsePlanExercises,
@@ -103,6 +104,17 @@ describe("운동 예정표 날짜", () => {
   it("실제 존재하지 않는 날짜와 형식을 거부한다", () => {
     expect(isPlanDateAllowed("2026-02-29", "2026-01-01")).toBe(false);
     expect(isPlanDateAllowed("2026-7-18", "2026-01-01")).toBe(false);
+  });
+
+  it("어제 이전만 지난 계획이다 — 오늘은 잠기지 않는다", () => {
+    expect(isPastPlanDate("2026-07-17", "2026-07-18")).toBe(true);
+    expect(isPastPlanDate("2026-07-18", "2026-07-18")).toBe(false);
+    expect(isPastPlanDate("2026-07-19", "2026-07-18")).toBe(false);
+  });
+
+  it("형식이 틀린 날짜를 지난 계획으로 치지 않는다", () => {
+    expect(isPastPlanDate("2026-7-1", "2026-07-18")).toBe(false);
+    expect(isPastPlanDate("2026-07-17", "bad")).toBe(false);
   });
 
   it("날짜 키에 일수를 더할 때 월·연 경계를 처리한다", () => {

@@ -41,5 +41,13 @@ export function planSaveErrorText(
   if (errorText(error).includes("plan_date_taken")) {
     return "그 날짜에 이미 계획이 있어요.";
   }
+  // 0116 `guard_past_workout_plan`: 지난 계획은 수정·삭제·이동이 막혀 있다.
+  // 화면은 버튼을 숨기지만, 자정을 넘겨 화면을 열어 둔 채 누르면 여기로 온다
+  if (errorText(error).includes("past_plan_locked")) {
+    return "지난 계획은 기록으로 남아 고치거나 지울 수 없어요.";
+  }
+  if (errorText(error).includes("past_plan_date")) {
+    return "지난 날짜로는 옮길 수 없어요.";
+  }
   return fallback;
 }

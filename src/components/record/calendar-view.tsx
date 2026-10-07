@@ -17,6 +17,7 @@ import { WorkoutCompleteStamp } from "@/components/record/workout-complete-stamp
 import { LatePhotoButton } from "@/components/record/late-photo-button";
 import {
   addDaysToDateKey,
+  isPastPlanDate,
   isPlanDateAllowed,
   newPlanExercises,
   toDraftExercises,
@@ -36,14 +37,8 @@ import {
   type TabataMinutes,
 } from "@/lib/domain/tabata";
 import {
-  buildMissedSessionProposal,
-  type ProgramPlanMove,
-} from "@/lib/domain/program-schedule";
-import { buildLadderMissedSessionProposal } from "@/lib/domain/ladder-schedule";
-import {
   cancelProgramEnrollment,
   getActiveProgramEnrollments,
-  rescheduleProgramPlans,
   type ProgramEnrollment,
 } from "@/lib/programs";
 import { getMyProfile } from "@/lib/crew";
@@ -312,21 +307,6 @@ export function CalendarView({
   /** 고치는 중에 연 '＋ 종목 추가' 피커. `planPickerDate`(새 계획)와 배타적이다 */
   const [addPickerOpen, setAddPickerOpen] = useState(false);
   const [enrollments, setEnrollments] = useState<ProgramEnrollment[]>([]);
-  /**
-   * 재배치 **미리보기**. null이면 아직 아무것도 계산하지 않았다는 뜻이다.
-   *
-   * ⚠️ 이 상태가 차 있다고 DB가 바뀐 것이 아니다. `buildMissedSessionProposal()`은
-   *    순수 함수라 여기까지는 읽기뿐이고, 실제 이동은 사용자가 확인을 누른 뒤
-   *    `rescheduleProgramPlans()` 한 번으로만 나간다.
-   *
-   * 어느 날짜에서 만든 제안인지 같이 들고 다닌다. 날짜를 옮겨 다닐 때 effect로
-   * 지우면 렌더가 한 번 더 도는데(react-hooks/set-state-in-effect), 여기서는
-   * 그냥 **다른 날짜면 없는 것으로 읽으면** 된다.
-   */
-  const [proposal, setProposal] = useState<{
-    date: string;
-    moves: ProgramPlanMove[];
-  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -494,112 +474,6 @@ export function CalendarView({
     [completedDateKeys, todayKey],
   );
 
-  /** 지금 열린 날짜에서 만든 제안만 보여준다 — 앞 날짜 것이 따라다니지 않게 */
-  const activeProposal =
-    proposal && selectedDate && proposal.date === selectedDate
-      ? proposal.moves
-      : null;
-
-  /** 제안을 만든다 — **읽기만 한다.** 실제 이동은 확인 뒤 한 번뿐이다. */
-  function openRescheduleProposal(plan: WorkoutPlan) {
-    const enrollment = enrollmentOfPlan(plan);
-    if (!selectedDate || !plan.programEnrollmentId || !enrollment) return;
-    const enrollmentId = plan.programEnrollmentId;
-    const mine = plans.filter(
-      (plan) => plan.programEnrollmentId === enrollmentId,
-    );
-    // 다른 프로그램·일반 계획이 있는 날은 비켜 간다 — 덮어쓰거나 지우지 않는다.
-    const occupiedDates = new Set(
-      plans
-        .filter((plan) => plan.programEnrollmentId !== enrollmentId)
-        .map((plan) => plan.planDate),
-    );
-    const mineForProposal = mine.map((plan) => ({
-      id: plan.id,
-      date: plan.planDate,
-      completed: completedDateKeys.has(plan.planDate),
-    }));
-    try {
-      setProposal({
-        date: selectedDate,
-        /*
-          ⚠️ 사다리는 **다른 함수로** 다시 잡는다. 공용 함수는
-          `preferredSlots`의 요일로 다음 자리를 고르는데, 사다리의 슬롯은
-          날짜를 정하는 값이 아니라 첫 주기 5일의 요일일 뿐이라 6일 주기가
-          7일로 근사된다. 그러고도 RPC를 통과해서 **조용히 틀린 날짜가
-          깔린다** — `ladder-schedule.ts`의 함수 주석에 자세히 적어 뒀다.
-
-          시각은 슬롯 첫 칸에서 가져온다. 사다리는 모든 회차가 같은 시각이고
-          슬롯 전부가 그 시각을 담고 있다(`buildLadderSchedule`).
-        */
-        moves: isLadderPlan(plan)
-          ? buildLadderMissedSessionProposal({
-              plans: mineForProposal,
-              todayKey,
-              time: enrollment.preferredSlots[0].time,
-              timeZone: enrollment.timeZone || timeZone,
-            })
-          : buildMissedSessionProposal({
-              plans: mineForProposal,
-              todayKey,
-              preferredSlots: enrollment.preferredSlots,
-              timeZone: enrollment.timeZone || timeZone,
-              occupiedDates,
-            }),
-      });
-    } catch {
-      setProposal({ date: selectedDate, moves: [] });
-      showPlanToast("일정을 다시 계산하지 못했어요");
-    }
-  }
-
-  async function handleReschedule(plan: WorkoutPlan) {
-    if (
-      !plan.programEnrollmentId ||
-      !activeProposal ||
-      activeProposal.length === 0
-    ) {
-      return;
-    }
-    const moves = activeProposal;
-    const enrollmentId = plan.programEnrollmentId;
-    setPlanBusy(true);
-    try {
-      await rescheduleProgramPlans({ enrollmentId, moves });
-      const movedById = new Map(
-        moves.map((move) => [move.planId, move] as const),
-      );
-      setPlans((current) =>
-        current.map((plan) => {
-          const move = movedById.get(plan.id);
-          return move
-            ? {
-                ...plan,
-                planDate: move.suggestedDate,
-                scheduledAt: move.scheduledAt,
-              }
-            : plan;
-        }),
-      );
-      setProposal(null);
-      setSelectedDate(null);
-      showPlanToast("남은 일정을 다시 잡았어요");
-    } catch (error) {
-      // 이미 지워진 계획을 옮기려 하면 RPC가 plan_not_found로 막는다. 0066은
-      // '완료로 지움'과 '사용자가 지움'을 구분하지 못하므로, 지어내지 말고
-      // 그대로 알리고 다시 열어 보게 한다.
-      const message = error instanceof Error ? error.message : "";
-      showPlanToast(
-        message.includes("plan_not_found")
-          ? "일정이 그새 바뀌었어요. 달력을 다시 열어 주세요"
-          : "남은 일정을 다시 잡지 못했어요",
-      );
-      setProposal(null);
-    } finally {
-      setPlanBusy(false);
-    }
-  }
-
   // 공유용 일지 텍스트 프리페치 — iOS는 navigator.share를 사용자 제스처 안에서
   // 불러야 하므로, 시트가 열릴 때 미리 만들어 두고 클릭 시 즉시 공유한다.
   //
@@ -729,19 +603,22 @@ export function CalendarView({
    * `삭제`는 **이 회차 하나만** 지운다. 그만두려는 사람에게 그 버튼만 있으면
    * 18번 눌러야 한다 — 프로그램을 보는 곳에서 프로그램을 끝낼 수 있어야 한다.
    *
-   * ⚠️ 지우는 것은 **달력에 남은 회차**뿐이다. 완료한 운동은 마칠 때 계획 행이
-   *    이미 지워져서 여기 없고, 기록은 `workout_sessions`에 그대로 남는다.
+   * ⚠️ 지우는 것은 **오늘 이후 회차**뿐이다 (0116). 지난 회차는 놓친 것까지
+   *    기록으로 남는다 — 그만두기로 지난 계획을 지우면 월간 완료율이 올라간다.
+   *    완료한 운동의 기록은 `workout_sessions`에 그대로 남는다.
    */
   async function handleQuitProgram(plan: WorkoutPlan) {
     const enrollmentId = plan.programEnrollmentId;
     if (!enrollmentId || planBusy) return;
     const title = enrollmentOfPlan(plan)?.title ?? "이 프로그램";
-    const remaining = plans.filter(
-      (plan) => plan.programEnrollmentId === enrollmentId,
+    const upcoming = plans.filter(
+      (plan) =>
+        plan.programEnrollmentId === enrollmentId &&
+        !isPastPlanDate(plan.planDate, todayKey),
     ).length;
     if (
       !window.confirm(
-        `${title}을(를) 그만둘까요?\n달력에 남은 ${remaining}회가 사라져요. 이미 완료한 운동 기록은 그대로 남습니다.`,
+        `${title}을(를) 그만둘까요?\n오늘 이후 남은 ${upcoming}회가 사라져요. 지난 계획과 완료한 운동 기록은 그대로 남습니다.`,
       )
     ) {
       return;
@@ -750,7 +627,11 @@ export function CalendarView({
     try {
       const removed = await cancelProgramEnrollment(enrollmentId);
       setPlans((current) =>
-        current.filter((plan) => plan.programEnrollmentId !== enrollmentId),
+        current.filter(
+          (plan) =>
+            plan.programEnrollmentId !== enrollmentId ||
+            isPastPlanDate(plan.planDate, todayKey),
+        ),
       );
       setEnrollments((current) =>
         current.filter((item) => item.id !== enrollmentId),
@@ -777,8 +658,9 @@ export function CalendarView({
         setSelectedDate(null);
       }
       showPlanToast("예정표를 삭제했어요");
-    } catch {
-      showPlanToast("예정표를 삭제하지 못했어요");
+    } catch (error) {
+      // 자정을 넘겨 화면을 열어 둔 채 누르면 버튼은 보여도 DB가 막는다 (0116)
+      showPlanToast(planSaveErrorText(error, "예정표를 삭제하지 못했어요"));
     } finally {
       setPlanBusy(false);
     }
@@ -1583,14 +1465,24 @@ export function CalendarView({
                             수정
                           </button>
                         )}
-                      <button
-                        onClick={() => handleDeletePlan(selectedPlan)}
-                        disabled={planBusy}
-                        className="h-8 rounded-card-sm border border-line bg-surface px-3 text-xs font-bold text-warn disabled:opacity-50"
-                      >
-                        {selectedPlan.programEnrollmentId ? "이 회차만 삭제" : "삭제"}
-                      </button>
-                      {selectedPlan.programEnrollmentId && (
+                      {/*
+                        지난 계획은 삭제도 없다 (사용자 지시 2026-10-07, 0116).
+                        놓친 계획을 지우면 월간 완료율이 올라간다 — 기록은 남는다.
+                        DB 트리거도 같은 규칙으로 막으므로 여기서 숨기지 않으면
+                        누르는데 실패만 하는 죽은 버튼이 된다.
+                      */}
+                      {!isPastPlanDate(selectedPlan.planDate, todayKey) && (
+                        <button
+                          onClick={() => handleDeletePlan(selectedPlan)}
+                          disabled={planBusy}
+                          className="h-8 rounded-card-sm border border-line bg-surface px-3 text-xs font-bold text-warn disabled:opacity-50"
+                        >
+                          {selectedPlan.programEnrollmentId ? "이 회차만 삭제" : "삭제"}
+                        </button>
+                      )}
+                      {/* 이미 그만둔 프로그램의 지난 회차에는 그만둘 대상이 없다 */}
+                      {selectedPlan.programEnrollmentId &&
+                        enrollmentOfPlan(selectedPlan) && (
                         <button
                           onClick={() => handleQuitProgram(selectedPlan)}
                           disabled={planBusy}
@@ -1638,72 +1530,18 @@ export function CalendarView({
                     </button>
                   )}
                   {/*
-                    프로그램 계획은 **한 장씩 옮기지 않는다** (계획 2026-08-12).
-                    18회는 최소 2일 회복 간격으로 짜인 한 덩어리라, 한 장만 밀면
-                    나머지와 간격이 깨진다. 남은 회차를 통째로 다시 잡는다.
+                    지난 계획은 옮기지도 않는다 (사용자 지시 2026-10-07, 0116).
+                    놓친 프로그램 회차를 미래로 미는 `남은 일정 다시 잡기`도 이
+                    규칙에 걸려 내렸다 — 지난 회차를 옮기는 기능이라 DB가 거절한다.
+                    프로그램 회차는 원래 한 장씩 옮기지 않는다 (계획 2026-08-12).
                   */}
-                  {selectedPlan.programEnrollmentId && planMissed(selectedPlan) ? (
-                    <div className="mt-2">
-                      {activeProposal === null ? (
-                        <button
-                          onClick={() => openRescheduleProposal(selectedPlan)}
-                          disabled={planBusy || !enrollmentOfPlan(selectedPlan)}
-                          className="h-10 w-full rounded-card-sm border border-line bg-surface px-3 text-xs font-bold text-accent disabled:opacity-40"
-                        >
-                          남은 일정 다시 잡기
-                        </button>
-                      ) : activeProposal.length === 0 ? (
-                        <div className="rounded-card-sm border border-line bg-surface p-2.5">
-                          <p className="text-[11.5px] text-muted">
-                            지금은 옮길 회차가 없어요.
-                          </p>
-                          <button
-                            onClick={() => setProposal(null)}
-                            className="mt-2 h-9 w-full rounded-card-sm border border-line text-xs font-bold text-muted"
-                          >
-                            닫기
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="rounded-card-sm border border-accent/40 bg-surface p-2.5">
-                          <p className="text-[11.5px] font-extrabold">
-                            이렇게 옮길게요 · {activeProposal.length}회차
-                          </p>
-                          <ul className="mt-1.5 flex flex-col gap-0.5">
-                            {activeProposal.map((move) => (
-                              <li
-                                key={move.planId}
-                                className="text-[11.5px] text-muted"
-                              >
-                                {dateKeyLabel(move.fromDate)} →{" "}
-                                <span className="font-bold text-accent">
-                                  {dateKeyLabel(move.suggestedDate)}
-                                </span>
-                              </li>
-                            ))}
-                          </ul>
-                          <p className="mt-1.5 text-[10.5px] text-faint">
-                            이미 마친 회차와 다른 예정표는 그대로 둬요.
-                          </p>
-                          <div className="mt-2 flex items-center gap-2">
-                            <button
-                              onClick={() => setProposal(null)}
-                              disabled={planBusy}
-                              className="h-9 flex-1 rounded-card-sm border border-line text-xs font-bold text-muted disabled:opacity-40"
-                            >
-                              취소
-                            </button>
-                            <button
-                              onClick={() => handleReschedule(selectedPlan)}
-                              disabled={planBusy}
-                              className="h-9 flex-1 rounded-card-sm bg-accent text-xs font-extrabold text-white disabled:opacity-40"
-                            >
-                              이대로 옮기기
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                  {isPastPlanDate(selectedPlan.planDate, todayKey) ? (
+                    <p
+                      data-testid="plan-past-locked"
+                      className="mt-2 text-[11px] text-muted"
+                    >
+                      지난 계획은 기록으로 남아 고치거나 지울 수 없어요
+                    </p>
                   ) : !selectedPlan.programEnrollmentId ? (
                     <div className="mt-2 flex items-center gap-2">
                       <input

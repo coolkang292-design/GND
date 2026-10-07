@@ -7,7 +7,7 @@
 -- 쓰는 법: 함수·정책의 '현행' 정의가 필요할 때 마이그레이션 51개를
 -- 뒤지지 말고 이 파일을 검색하라. 마이그레이션을 적용한 뒤에는 다시 뽑아라.
 --
--- 함수 103개 · 정책 86개 · 인덱스 105개
+-- 함수 104개 · 정책 86개 · 인덱스 105개
 
 -- ════════════════════════════════════════════════════════════
 -- 함수
@@ -774,7 +774,10 @@ begin
 
   delete from public.workout_plans
   where program_enrollment_id = p_enrollment_id
-    and user_id = v_user_id;
+    and user_id = v_user_id
+    and plan_date >= (now() at time zone coalesce(
+      (select timezone from public.profiles where id = v_user_id), 'Asia/Seoul'
+    ))::date;
   get diagnostics v_removed = row_count;
 
   -- ⚠️ `cancelled_at`을 같이 채운다. 0066의 check가 둘을 묶어 두었다 —
@@ -2392,6 +2395,38 @@ begin
     raise exception 'live_ranking_locked'
       using hint = '실시간 랭킹 공개는 챌린지가 시작되기 전에만 바꿀 수 있어요';
   end if;
+  return new;
+end;
+$function$;
+
+-- ── guard_past_workout_plan ──
+CREATE OR REPLACE FUNCTION public.guard_past_workout_plan()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO ''
+AS $function$
+declare
+  v_today date;
+begin
+  -- A deleted source workout may clear its FK without changing the saved plan.
+  if tg_op = 'UPDATE' and old.source_session_id is not null
+    and new.source_session_id is null
+    and (to_jsonb(new) - 'source_session_id' - 'updated_at') =
+        (to_jsonb(old) - 'source_session_id' - 'updated_at') then
+    return new;
+  end if;
+  if auth.uid() is not null then
+    select (now() at time zone coalesce(p.timezone, 'Asia/Seoul'))::date
+      into v_today from public.profiles p where p.id = old.user_id;
+    v_today := coalesce(v_today, (now() at time zone 'Asia/Seoul')::date);
+    if old.plan_date < v_today then
+      raise exception 'past_plan_locked' using errcode = 'P0001';
+    end if;
+    if tg_op = 'UPDATE' and new.plan_date < v_today then
+      raise exception 'past_plan_date' using errcode = 'P0001';
+    end if;
+  end if;
+  if tg_op = 'DELETE' then return old; end if;
   return new;
 end;
 $function$;

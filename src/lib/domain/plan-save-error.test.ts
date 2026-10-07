@@ -50,4 +50,14 @@ describe("planSaveErrorText", () => {
       planSaveErrorText({ message: "unique index build failed" }),
     ).toBe("운동 계획을 저장하지 못했어요");
   });
+
+  // 0116 `guard_past_workout_plan` — 지난 계획 잠금
+  it("지난 계획 잠금을 사람 말로 바꾼다", () => {
+    expect(planSaveErrorText({ message: "past_plan_locked", code: "P0001" })).toBe(
+      "지난 계획은 기록으로 남아 고치거나 지울 수 없어요.",
+    );
+    expect(planSaveErrorText({ message: "past_plan_date", code: "P0001" })).toBe(
+      "지난 날짜로는 옮길 수 없어요.",
+    );
+  });
 });

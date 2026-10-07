@@ -81,6 +81,20 @@ export function isPlanDateAllowed(dateKey: string, todayKey: string): boolean {
   );
 }
 
+/**
+ * 지난 날짜의 계획인가 — 수정·삭제·이동이 모두 잠긴다 (사용자 지시 2026-10-07, 0116).
+ *
+ * 놓친 계획을 지우거나 미래로 옮기면 월간 완료율이 올라간다. 그래서 지난 계획은
+ * 기록으로 남긴다. 오늘 계획은 그날이 끝날 때까지 고칠 수 있다.
+ *
+ * `!isPlanDateAllowed`와 다르다: 그쪽은 형식이 틀린 날짜도 false를 주므로
+ * 뒤집으면 "형식 오류 = 지난 날짜"가 된다. 이쪽은 둘 다 올바른 날짜일 때만 참이다.
+ * DB 트리거 `guard_past_workout_plan`이 같은 규칙의 최종 방어선이다.
+ */
+export function isPastPlanDate(dateKey: string, todayKey: string): boolean {
+  return isValidDateKey(dateKey) && isValidDateKey(todayKey) && dateKey < todayKey;
+}
+
 export function addDaysToDateKey(dateKey: string, days: number): string {
   if (!isValidDateKey(dateKey)) throw new Error("invalid_date_key");
   const [year, month, date] = dateKey.split("-").map(Number);
