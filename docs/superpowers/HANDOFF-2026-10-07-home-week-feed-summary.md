@@ -13,3 +13,9 @@
 - 대체 @sparticuz/chromium 153으로 localhost:3001의 실제 홈/피드 컴포넌트를 고정 테스트 데이터로 렌더. 375/390/430px 7칸·완료3칸·오늘1칸·가로넘침0. 피드 요약 펼치기/접기·상세 없음·따라하기 표시, 목표 링크 challenge 이동. pageerror0.
 - 운영 사용자 로그인 데이터 연결은 미검증. 테스트 환경 CJK 시스템 글꼴 없음(문자가 tofu로 표시), 실제폰 가독성 미검증. 임시 QA 경로 삭제.
 - 새소식 기록 추가, 발송 없음. 다음: 승인된 운영 배포. 이 환경은 Vercel 연결 정상, CLI 로그인 정보 없음.
+
+## 운영 배포 완료
+- 사용자 승인으로 연결된 Vercel API 수동 배포 사용. Git 소스 배포 2회는 git_info_fail로 빌드 전 중단. 승인 커밋의 추적 소스·자산 파일을 SHA로 직접 업로드하여 배포.
+- 배포 커밋: ab38b6aeef38919dbd943bf59d50568970a5b702. 배포 ID: dpl_DA2fw6sjtsEEqc2FKspowNQLQQNK. 대상: gnd4/gnd, production.
+- Vercel Next build 및 TypeScript 성공. 배포 READY, aliasError null. https://gnd-one.vercel.app 이 새 배포 ID를 가리키는 것을 API로 재확인. 운영 주소 HTTP 200 확인.
+- 사용자 계정 로그인 화면·실제폰 가독성은 여전히 미검증. DB·마이그레이션·알림 발송 없음. 위의 운영 배포 전/다음 단계 기록은 이 완료 기록으로 갱신됨.
