@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { BlockedUsersSection } from "@/components/moderation/blocked-users-section";
 import { DataDeletionRequest } from "@/components/account/data-deletion-request";
+import { AnalyticsConsentSetting } from "@/components/analytics/analytics-consent-setting";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   PROVIDER_META,
@@ -324,6 +325,10 @@ export default function AccountPage() {
             ⚠️ 로그아웃 **위**에 둔다. 아래에 두면 로그아웃하려고 내려온 사람이
             삭제 요청을 먼저 만나고, 그 둘은 되돌릴 수 있는 정도가 전혀 다르다. */}
         <DataDeletionRequest />
+
+        {/* 이용 분석 동의·철회(PostHog). 키가 없는 환경에서는 스스로 아무것도 그리지 않는다.
+            ⚠️ 로그아웃 **위**에 둔다(로그아웃하려고 내려온 사람이 철회를 먼저 볼 수 있게). */}
+        <AnalyticsConsentSetting />
 
         {/* ⚠️ 조건이 `email`이 아니라 `isProtected`다. 이메일로 되돌리면 카카오만
             붙인 사람이 영영 로그아웃하지 못한다. */}

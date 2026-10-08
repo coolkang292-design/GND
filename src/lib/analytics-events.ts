@@ -17,6 +17,7 @@
  */
 
 import { readAcquisition } from "@/lib/acquisition";
+import { trackProduct } from "@/lib/posthog/track";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
 /** 0093의 `check` 제약과 **정확히 같아야 한다.** 다르면 DB가 거부한다. */
@@ -84,6 +85,58 @@ function landingAttribution(): {
 }
 
 /**
+ * 같은 사실을 PostHog에도 **한 곳에서** 복제한다 — 화면 코드가 두 번 부르지 않도록.
+ *
+ * ⛔ 원본은 여전히 `analytics_events`(Supabase)다. 이 함수는 동의한 사용자에 한해 동일 사실을
+ *    탐색용으로 복제할 뿐이고, 실패해도 DB 기록과 앱에 영향을 주지 않는다.
+ * ⚠️ DB의 `unique (user_id, event_name)`과 다르게, PostHog는 **탭 세션당 한 번**이다
+ *    (재방문 분석에 쓰기 위해). 시도가 의미 있는 `identity_link_*`는 중복 제거를 하지 않는다.
+ */
+function mirrorToPosthog(
+  event: FunnelEvent,
+  userId: string | null,
+  errorCode: string | undefined,
+  extra: FunnelExtra | undefined,
+): void {
+  if (!userId) return;
+  const provider = extra?.provider;
+  switch (event) {
+    case "landing_opened": {
+      const a = readAcquisition();
+      trackProduct(
+        "landing_opened",
+        {
+          utm_source: a?.source,
+          utm_medium: a?.medium,
+          utm_campaign: a?.campaign,
+          referrer_host: a?.referrer,
+          landing_path: a?.landing,
+        },
+        { userId, dedupe: { key: event, scope: "session" } },
+      );
+      return;
+    }
+    case "identity_link_started":
+      trackProduct("identity_link_started", { provider }, { userId });
+      return;
+    case "identity_link_failed":
+      trackProduct(
+        "identity_link_failed",
+        { provider, error_code: errorCode },
+        { userId },
+      );
+      return;
+    default:
+      trackProduct(event, {}, { userId, dedupe: { key: event, scope: "session" } });
+  }
+}
+
+/** 화면이 더해 보낼 수 있는 선택 정보. 자유 텍스트는 실지 않는다. */
+export interface FunnelExtra {
+  provider?: string;
+}
+
+/**
  * 이벤트 한 건 기록. **성공 여부를 돌려주되 던지지 않는다.**
  *
  * @param userId 지금 로그인(익명 포함)한 사용자. 없으면 기록하지 않는다 —
@@ -94,7 +147,15 @@ export async function recordFunnelEvent(
   event: FunnelEvent,
   userId: string | null,
   errorCode?: string,
+  extra?: FunnelExtra,
 ): Promise<boolean> {
+  // PostHog 복제 — DB 경로보다 먼저, 그리고 DB의 실패·중복(23505)와 무관하게.
+  // (동의가 없거나 키가 없으면 이 호출은 아무 일도 하지 않는다.)
+  try {
+    mirrorToPosthog(event, userId, errorCode, extra);
+  } catch {
+    // 분석이 기존 기록을 막지 않는다
+  }
   try {
     if (!isSupabaseConfigured() || !userId) return false;
     if (alreadyAttempted(event)) return false;

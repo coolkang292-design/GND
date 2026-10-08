@@ -17,6 +17,7 @@ import {
 } from "@/components/brand/entry";
 import { ONBOARDING_COPY as COPY } from "@/lib/domain/brand-copy";
 import { recordFunnelEvent } from "@/lib/analytics-events";
+import { trackProduct } from "@/lib/posthog/track";
 import { DEFAULT_AVATAR, DEFAULT_WEEKLY_GOAL } from "@/lib/domain/avatars";
 import {
   PROVIDER_META,
@@ -165,6 +166,23 @@ export default function OnboardingPage() {
   }, [configured, loading, userId, linked, providers.length]);
 
   /**
+   * 닉네임 단계가 실제로 노출된 순간 (PostHog 전용 — 이탈 구간 분리용).
+   * DB에는 이벤트를 만들지 않는다(감사표: `identity_link` 성공 = 닉네임 화면 노출로 파생 가능).
+   */
+  useEffect(() => {
+    if (!configured || loading || !userId || step !== "profile") return;
+    if (!(providers.length === 0 || linked === true)) return;
+    trackProduct(
+      "onboarding_nickname_shown",
+      {},
+      {
+        userId,
+        dedupe: { key: "onboarding_nickname_shown", scope: "session" },
+      },
+    );
+  }, [configured, loading, userId, step, linked, providers.length]);
+
+  /**
    * ⚠️⚠️ **이미 가입한 사람은 이 화면에 머물지 않는다** (D8, 2026-08-09).
    *
    * 이 화면은 `(tabs)` 밖이라 `OnboardingGate`가 없다. 그래서 프로필이 있는
@@ -217,7 +235,9 @@ export default function OnboardingPage() {
          지금까지 둘 다 똑같이 "정식 전환 안 됨"으로만 보였다.
       ⚠️ `await`하지 않는다 — 계측이 OAuth 이동을 한 프레임도 늦추면 안 된다.
     */
-    void recordFunnelEvent("identity_link_started", userId);
+    void recordFunnelEvent("identity_link_started", userId, undefined, {
+      provider,
+    });
     try {
       // ⚠️ linkIdentity다. signInWithOAuth를 쓰면 AuthProvider가 방금 발급한
       //    익명 계정을 버리고 새 계정으로 갈아탄다(설계 §5.4).
@@ -226,7 +246,9 @@ export default function OnboardingPage() {
       setError(identityError(e));
       setLinking(null);
       // ⚠️ **분류 코드만 보낸다.** raw error 전문·스택·주소를 저장하지 않는다.
-      void recordFunnelEvent("identity_link_failed", userId, linkFailureCode(e));
+      void recordFunnelEvent("identity_link_failed", userId, linkFailureCode(e), {
+        provider,
+      });
     }
   }
 
@@ -248,6 +270,15 @@ export default function OnboardingPage() {
         avatar_url: DEFAULT_AVATAR,
         weekly_goal: DEFAULT_WEEKLY_GOAL,
       });
+      // 온보딩 완료 = 프로필 생성(`profiles.created_at`). 정답은 DB다 — 여기서는 PostHog에 복제만 남긴다.
+      trackProduct(
+        "onboarding_completed",
+        { has_invite: Boolean(challengeCode || joinCode) },
+        {
+          userId,
+          dedupe: { key: `onboarding_completed:${userId}`, scope: "persistent" },
+        },
+      );
 
       // 챌린지 초대로 온 사람은 크루 단계를 통째로 건너뛴다.
       if (challengeCode) {

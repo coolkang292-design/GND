@@ -6,7 +6,10 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { getMyProfile } from "@/lib/crew";
 import { pendingChallengeInvitePath } from "@/lib/challenge";
 import { APP_LANDING_PATH } from "@/lib/domain/landing";
-import { identityError, takeAuthIntent } from "@/lib/identity";
+import { identityError, linkFailureCode, takeAuthIntent } from "@/lib/identity";
+import { trackProduct } from "@/lib/posthog/track";
+import { awaitAnalyticsIdle } from "@/lib/posthog/client";
+import { linkProviderOf, loginProviderOf } from "@/lib/posthog/provider";
 
 /**
  * 카카오·구글에서 돌아오는 착지점 (설계 §5.4).
@@ -47,6 +50,49 @@ export default function AuthCallbackPage() {
      */
     const intent = takeAuthIntent();
 
+    /**
+     * PostHog — 돌아온 결과를 기록한다. 이 화면이 **실제 성공·실패가 드러나는 유일한 지점**이다
+     * (온보딩의 `identity_link_failed`는 OAuth 이동 *전* 오류만 잡는다 — `identity_already_exists`는 여기로 온다).
+     * ⚠️ DB(`analytics_events`)에는 쓰지 않는다 — 기존 기록 동작을 바꾸지 않는다.
+     * ⚠️ 의도를 모르면(저장소 막힘) 아무것도 기록하지 않는다. 추측하지 않는다.
+     */
+    async function currentUser() {
+      try {
+        const { data } = await getSupabaseBrowserClient().auth.getSession();
+        return data.session?.user ?? null;
+      } catch {
+        return null;
+      }
+    }
+    async function trackFailure(code: string) {
+      if (intent === null) return;
+      const user = await currentUser();
+      if (intent === "link") {
+        trackProduct("identity_link_failed", { error_code: code }, { userId: user?.id ?? null });
+      } else {
+        trackProduct("login_failed", { error_code: code }, { userId: user?.id ?? null });
+      }
+    }
+    async function trackSuccess() {
+      if (intent === null) return;
+      const user = await currentUser();
+      if (!user) return;
+      if (intent === "link") {
+        // 승격이 끝난 사람만 — 익명이 그대로면 성공이 아니다.
+        if (user.is_anonymous === true) return;
+        trackProduct(
+          "identity_link_succeeded",
+          { provider: linkProviderOf(user) },
+          {
+            userId: user.id,
+            dedupe: { key: `identity_link_succeeded:${user.id}`, scope: "persistent" },
+          },
+        );
+      } else {
+        trackProduct("login_succeeded", { provider: loginProviderOf(user) }, { userId: user.id });
+      }
+    }
+
     async function run() {
       // useSearchParams를 쓰지 않는다 — Suspense 경계를 요구해서 이 화면 하나
       // 때문에 빌드가 깨진다. 착지 직후 한 번만 읽으면 되는 값이다.
@@ -67,9 +113,13 @@ export default function AuthCallbackPage() {
         const code = params.get("error_code") ?? err;
         const cancelled = /access_denied/i.test(code);
         if (cancelled) {
+          await trackFailure("user_cancelled");
           await leave();
           return;
         }
+        await trackFailure(
+          linkFailureCode(new Error(params.get("error_description") ?? code)),
+        );
         setError(
           identityError(
             new Error(params.get("error_description") ?? code),
@@ -94,6 +144,7 @@ export default function AuthCallbackPage() {
         const { error: exchangeError } =
           await supabase.auth.exchangeCodeForSession(code);
         if (exchangeError) {
+          await trackFailure("code_exchange_failed");
           setError(
             "연결을 마치지 못했어요. 잠시 뒤 다시 시도해 주세요.",
           );
@@ -124,6 +175,8 @@ export default function AuthCallbackPage() {
         // 갱신 실패는 치명적이지 않다. 위 주석 참조.
       }
 
+      // 갱신된 토큰 뒤에 기록해야 `is_anonymous`가 맞다.
+      await trackSuccess();
       await leave();
     }
 
@@ -166,6 +219,8 @@ export default function AuthCallbackPage() {
     }
 
     async function leave() {
+      // 페이지를 떠나기 전에 PostHog 대기열을 비운다. 동의가 없으면 즉시 돌아온다(지연 0).
+      await awaitAnalyticsIdle(2000);
       // ⚠️ router.replace가 아니라 **전체 페이지 로드**다. `AuthProvider`가 루트
       // 레이아웃에 있어 클라이언트 이동으로는 세션을 다시 읽지 않고, **연결 전의
       // userId를 그대로 들고** 조회한다(`/login`이 같은 이유로 이렇게 한다).

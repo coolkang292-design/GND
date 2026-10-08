@@ -11,6 +11,7 @@ import {
 import { useRouter } from "next/navigation";
 import { AFTER_WORKOUT_PATH } from "@/lib/domain/landing";
 import { useAuth } from "@/components/auth-provider";
+import { reportWorkoutCompleted } from "@/lib/posthog/workout-event";
 import { UiIcon } from "@/components/ui-icon";
 import { CalendarView } from "@/components/record/calendar-view";
 import { CoachCard } from "@/components/record/coach-card";
@@ -2847,8 +2848,10 @@ function WorkoutScreen({ userId }: { userId: string }) {
         ⓘ 사진 XP는 여기서 청구하지 않는다. `award_workout_photo_xp`는 세션
           기준 멱등이고, 완료 화면이 제 자리에서 청구한다.
       */
+      let completedPhotoCount = 0;
       try {
         const rows = await listSessionPhotoRows(sessionId);
+        completedPhotoCount = rows.length;
         // 완료 화면이 어떤 모습으로 열릴지 정한다 — 0장이면 예전 VerificationPhoto,
         // 1장 이상이면 썸네일 관리 화면.
         setResultPhotoCount(rows.length);
@@ -2859,6 +2862,15 @@ function WorkoutScreen({ userId }: { userId: string }) {
         setResultPhotoCount(0);
         setResultPhotoDone(false);
       }
+      // PostHog 복제(동의한 사용자만). 원본은 workout_sessions다. 완료 흐름을 기다리게 하지 않는다.
+      void reportWorkoutCompleted({
+        userId,
+        sessionId,
+        exerciseCount: draft.exercises.length,
+        durationMinutes: s?.duration_minutes ?? null,
+        photoCount: completedPhotoCount,
+        replay: xp.idempotentReplay === true,
+      });
       let planCleanupFailed = false;
       if (draft.scheduledPlanId) {
         try {

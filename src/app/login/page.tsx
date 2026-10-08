@@ -13,12 +13,15 @@ import {
 } from "@/components/brand/entry";
 import { LOGIN_COPY as COPY } from "@/lib/domain/brand-copy";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { trackProduct } from "@/lib/posthog/track";
+import { awaitAnalyticsIdle } from "@/lib/posthog/client";
 import { pendingChallengeInvitePath } from "@/lib/challenge";
 import { APP_LANDING_PATH } from "@/lib/domain/landing";
 import {
   PROVIDER_META,
   enabledProviders,
   identityError,
+  linkFailureCode,
   signInWithProvider,
   type OAuthProvider,
 } from "@/lib/identity";
@@ -81,6 +84,8 @@ export default function LoginPage() {
     } catch (e) {
       setError(identityError(e));
       setOauthBusy(null);
+      // PostHog: 제공자로 떠나기 *전*에 막혔다(분류 코드만). 돌아온 뒤의 실패는 /auth/callback이 기록한다.
+      trackProduct("login_failed", { provider, error_code: linkFailureCode(e) });
     }
   }
 
@@ -92,7 +97,7 @@ export default function LoginPage() {
 
     const supabase = getSupabaseBrowserClient();
     // 이메일은 소문자로 눕힌다 — iOS가 첫 글자를 대문자로 바꿔 보내는 일이 잦다
-    const { error: signInError } = await supabase.auth.signInWithPassword({
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
       email: email.trim().toLowerCase(),
       password,
     });
@@ -108,8 +113,23 @@ export default function LoginPage() {
           : `로그인에 실패했어요 (${signInError.message})`,
       );
       setBusy(false);
+      // PostHog: 자격증명 오류는 한 코드로 합친다(계정 존재 여부가 새지 않게).
+      trackProduct("login_failed", {
+        provider: "password",
+        error_code: /invalid login credentials/i.test(signInError.message)
+          ? "invalid_credentials"
+          : linkFailureCode(signInError),
+      });
       return;
     }
+
+    // PostHog: 성공. 전체 페이지 로드로 떠나므로 대기열이 비워지기를 잠깐 기다린다(동의 없으면 즉시).
+    trackProduct(
+      "login_succeeded",
+      { provider: "password" },
+      { userId: signInData?.user?.id ?? null },
+    );
+    await awaitAnalyticsIdle(2000);
 
     // ⚠️ router.replace를 쓰면 안 된다. AuthProvider는 루트 레이아웃에 있어
     // 클라이언트 이동으로는 다시 초기화되지 않고, **이전 익명 userId를 그대로

@@ -9,6 +9,8 @@ vi.mock("@/components/service-worker-register", () => ({ ServiceWorkerRegister: 
 vi.mock("@/components/acquisition-tracker", () => ({ AcquisitionTracker: () => null }));
 vi.mock("@/components/funnel-tracker", () => ({ FunnelTracker: () => null }));
 vi.mock("@/components/trail-tracker", () => ({ TrailTracker: () => null }));
+vi.mock("@/components/analytics/analytics-provider", () => ({ AnalyticsProvider: () => null }));
+vi.mock("@/components/analytics/analytics-consent-banner", () => ({ AnalyticsConsentBanner: () => null }));
 vi.mock("@/components/install/install-gate", () => ({ InstallGate: () => null }));
 vi.mock("@/components/launch-motivation-splash", () => ({ LaunchMotivationSplash: () => <div data-testid="launch-splash" /> }));
 vi.mock("@/lib/site-url", () => ({ siteUrl: () => "https://example.com" }));
