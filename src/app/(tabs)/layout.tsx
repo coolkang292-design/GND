@@ -25,7 +25,13 @@ export default function TabsLayout({
         (`relative`, z 없음). 둘 다 z가 없으니 문서 순서대로 그려져 내용이 사진 위에 오고,
         시트·운동 중 화면의 z-20~50은 문서 최상위 층에서 탭바를 덮는다(오늘 이전과 같다).
       */}
-      <main className="flex-1 overflow-y-auto px-4 pt-4 pb-6">
+      {/* iOS PWA의 black-translucent 상태 표시줄은 viewport 안에 겹친다.
+          main은 층을 만들지 않고, 기존 16px 여백에 노치/상태바 높이만 더한다.
+          safe-area-inset-top이 0인 브라우저에는 기존 pt-4와 동일하다. */}
+      <main
+        className="flex-1 overflow-y-auto px-4 pb-6"
+        style={{ paddingTop: "calc(1rem + env(safe-area-inset-top, 0px))" }}
+      >
         <div className="relative">
           <TabBackdrop />
           <div className="relative">{children}</div>
