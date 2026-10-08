@@ -96,7 +96,7 @@ export function NotificationBell() {
       <button
         onClick={() => void openSheet()}
         aria-label="알림함"
-        className="relative flex h-10 w-10 items-center justify-center rounded-full text-text"
+        className="relative flex h-11 w-11 items-center justify-center rounded-full text-text"
       >
         {/* 이모지 🔔 → SVG 벨 (2026-10-05 기획안 17-A). 이름은 위 aria-label이 말한다 */}
         <Icon name="bell" size={24} />
