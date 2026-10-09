@@ -94,6 +94,17 @@ ALIASES = {
 }
 
 
+# Generated resistance-band exercises added to the user catalog on 2026-10-09.
+# Keep these UUID-matched images when rebuilding; custom exercise names stay private in the app JSON.
+MANUAL_CUSTOM_IMAGE_IDS = [
+    "4f47934b-e7a8-4618-8d24-085ebc297dde",
+    "bef0d91e-ea01-4817-b00e-e5978a5bdbe8",
+    "e5835092-9ce2-4cd6-ae4e-e71cde1d7583",
+    "3ac56225-c8be-49bb-9997-5360e651882d",
+    "aaf1b8e3-e12e-4d6f-846c-c1fd2cec768d",
+]
+
+
 def runs(on, gapmin):
     segs, s = [], None
     for i, v in enumerate(on):
@@ -214,6 +225,23 @@ def main():
         save(img, file_id)
         for n, i in todo:
             data[i] = {"name": n, "file": file_id, "source": "gnd", "origin": "user-sheet"}
+
+    # 3) User-created band exercises with approved dark anatomical thumbnails.
+    # Files are checked into public/exercise-images and must survive regeneration.
+    for uid in MANUAL_CUSTOM_IMAGE_IDS:
+        path = os.path.join(OUT, f"{uid}.webp")
+        if not os.path.isfile(path):
+            raise SystemExit(f"Custom band image missing: {uid}")
+        with Image.open(path) as img:
+            if img.format != "WEBP" or img.size != (SIZE, SIZE):
+                raise SystemExit(f"Wrong band image format/dimensions: {uid}")
+        data[uid] = {
+            "name": "",
+            "file": uid,
+            "source": "gnd",
+            "origin": "gnd-band-custom-2026-10-09",
+            "custom": True,
+        }
 
     # 연결표에 없는 낡은 파일 정리 (이 폴더는 이 스크립트만 쓴다)
     keep = {f"{v['file']}.webp" for v in data.values()}
