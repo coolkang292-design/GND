@@ -69,6 +69,30 @@ describe("exercise-images", () => {
   });
 });
 
+describe("user-created resistance band exercise images", () => {
+  const ids = ["4f47934b-e7a8-4618-8d24-085ebc297dde","bef0d91e-ea01-4817-b00e-e5978a5bdbe8","e5835092-9ce2-4cd6-ae4e-e71cde1d7583","3ac56225-c8be-49bb-9997-5360e651882d","aaf1b8e3-e12e-4d6f-846c-c1fd2cec768d"] as const;
+
+  it("all 5 bands have a UUID-matched WebP and no user exercise names in the public map", () => {
+    for (const id of ids) {
+      const entry = EXERCISE_IMAGES[id];
+      expect(entry, id).toBeDefined();
+      expect(entry.custom).toBe(true);
+      expect(entry.name).toBe("");
+      expect(entry.file).toBe(id);
+      expect(entry.source).toBe("gnd");
+      expect(entry.origin).toBe("gnd-band-custom-2026-10-09");
+      expect(existsSync(publicPath(`exercise-images/${id}.webp`))).toBe(true);
+      expect(exerciseImageSrc(id)).toBe(`/exercise-images/${id}.webp`);
+    }
+  });
+
+  it("custom band lookup requires exact own catalog id, not just exercise name", () => {
+    const own = [{ id: ids[0], name: "밴드 바이셉 컬", is_custom: true }];
+    expect(imageIdForAddedExercise({ name: "밴드 바이셉 컬", isCustom: true }, own)).toBe(ids[0]);
+    expect(imageIdForAddedExercise({ name: "밴드 바이셉 컬", isCustom: true })).toBeUndefined();
+  });
+});
+
 describe("imagesFirst — 그림 있는 운동을 위로 (사용자 지시 2026-10-05)", () => {
   const withImg = Object.keys(EXERCISE_IMAGES);
   const items = [

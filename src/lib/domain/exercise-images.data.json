@@ -1186,5 +1186,40 @@
     "source": "gnd",
     "origin": "codex-기록누락_2026-10-05",
     "custom": true
+  },
+  "4f47934b-e7a8-4618-8d24-085ebc297dde": {
+    "name": "",
+    "file": "4f47934b-e7a8-4618-8d24-085ebc297dde",
+    "source": "gnd",
+    "origin": "gnd-band-custom-2026-10-09",
+    "custom": true
+  },
+  "bef0d91e-ea01-4817-b00e-e5978a5bdbe8": {
+    "name": "",
+    "file": "bef0d91e-ea01-4817-b00e-e5978a5bdbe8",
+    "source": "gnd",
+    "origin": "gnd-band-custom-2026-10-09",
+    "custom": true
+  },
+  "e5835092-9ce2-4cd6-ae4e-e71cde1d7583": {
+    "name": "",
+    "file": "e5835092-9ce2-4cd6-ae4e-e71cde1d7583",
+    "source": "gnd",
+    "origin": "gnd-band-custom-2026-10-09",
+    "custom": true
+  },
+  "3ac56225-c8be-49bb-9997-5360e651882d": {
+    "name": "",
+    "file": "3ac56225-c8be-49bb-9997-5360e651882d",
+    "source": "gnd",
+    "origin": "gnd-band-custom-2026-10-09",
+    "custom": true
+  },
+  "aaf1b8e3-e12e-4d6f-846c-c1fd2cec768d": {
+    "name": "",
+    "file": "aaf1b8e3-e12e-4d6f-846c-c1fd2cec768d",
+    "source": "gnd",
+    "origin": "gnd-band-custom-2026-10-09",
+    "custom": true
   }
 }
