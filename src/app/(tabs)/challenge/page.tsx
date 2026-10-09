@@ -711,7 +711,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
               <button
                 type="button"
                 onClick={() => setCreateOpen(true)}
-                className="flex h-10 flex-none items-center gap-1 rounded-full border border-accent/70 bg-black/30 px-4 text-[13.5px] font-extrabold text-accent"
+                className="tap-44 flex h-10 flex-none items-center gap-1 rounded-full border border-accent/70 bg-black/30 px-4 text-[13.5px] font-extrabold text-accent"
               >
                 <Icon name="plus" size={16} strokeWidth={2.4} />
                 만들기

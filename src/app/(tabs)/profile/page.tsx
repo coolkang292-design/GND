@@ -116,7 +116,7 @@ export default function ProfilePage() {
           onClick={() => setShowSettings((v) => !v)}
           aria-expanded={showSettings}
           aria-label={showSettings ? "설정 닫기" : "설정"}
-          className={`flex h-10 w-10 flex-none items-center justify-center rounded-full border ${
+          className={`tap-44 flex h-10 w-10 flex-none items-center justify-center rounded-full border ${
             showSettings
               ? "border-accent text-accent"
               : "border-line bg-surface text-text"

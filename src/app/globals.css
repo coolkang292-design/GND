@@ -190,6 +190,24 @@ body {
   }
 }
 
+/* 상단 버튼의 누르는 영역을 44×44px 이상으로 (2026-10-08 아이폰 설치 앱 신고 "상단 버튼이
+   잘 안 눌린다"). 보이는 크기·자리는 그대로 두고 투명한 ::before만 가운데 기준으로 넓힌다 —
+   버튼 크기를 키우면 테두리 원·알약이 커지고 머리 높이·제목 위치가 밀린다.
+   ⚠️ z-index를 주지 마라. 층이 생기면 `(tabs)/layout.tsx`의 `main` 주석과 같은 시트 잘림이 난다.
+   ⚠️ overflow-hidden이 걸린 요소에는 쓰지 마라 — 넓힌 영역이 잘린다. */
+@utility tap-44 {
+  position: relative;
+  &::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+  }
+}
+
 /* 탭 첫 화면 배경 사진 위의 반투명 카드 (2026-10-05 사용자 지시 — "배경이 살짝 보이게").
    배경 사진(TabBackdrop)이 깔린 화면에서만 카드가 비친다. 카드 색 토큰 자체는 그대로다.
    ⚠️ `:not(.fixed, .fixed *)`처럼 복잡한 :not은 CSS 변환기(Lightning CSS)가 규칙째 버린다

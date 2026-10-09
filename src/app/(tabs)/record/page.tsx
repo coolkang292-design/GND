@@ -3735,7 +3735,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
           <button
             onClick={handleCancel}
             disabled={busy}
-            className="text-xs font-bold text-faint"
+            className="tap-44 text-xs font-bold text-faint"
           >
             취소
           </button>

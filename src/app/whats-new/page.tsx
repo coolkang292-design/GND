@@ -8,11 +8,16 @@ export const metadata = { title: "새 소식 · GND" };
 export default function WhatsNewPage() {
   return (
     <main className="flex flex-1 flex-col overflow-y-auto">
-      <header className="sticky top-0 z-10 flex items-center gap-2.5 border-b border-line bg-surface/95 px-4 py-3 backdrop-blur">
+      {/* 탭 묶음 밖 화면이라 상태표시줄 여백을 직접 더한다 (2026-10-08 아이폰 설치 앱).
+          머리가 `sticky`라 그 높이만큼 반투명 배경이 상태표시줄 뒤까지 깔린다. */}
+      <header
+        className="sticky top-0 z-10 flex items-center gap-2.5 border-b border-line bg-surface/95 px-4 pb-3 backdrop-blur"
+        style={{ paddingTop: "calc(0.75rem + env(safe-area-inset-top))" }}
+      >
         <Link
           href={APP_LANDING_PATH}
           aria-label="닫기"
-          className="flex h-9 w-9 items-center justify-center rounded-full border border-line bg-surface text-lg"
+          className="tap-44 flex h-9 w-9 items-center justify-center rounded-full border border-line bg-surface text-lg"
         >
           ←
         </Link>

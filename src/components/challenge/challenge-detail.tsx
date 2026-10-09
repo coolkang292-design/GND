@@ -365,7 +365,7 @@ export function ChallengeDetail({
               type="button"
               onClick={onBack}
               aria-label="챌린지 목록으로"
-              className="grid h-10 w-10 flex-none place-items-center rounded-full text-text"
+              className="tap-44 grid h-10 w-10 flex-none place-items-center rounded-full text-text"
             >
               <Icon name="back" size={22} />
             </button>
@@ -375,7 +375,7 @@ export function ChallengeDetail({
                 type="button"
                 onClick={onOpenManage}
                 aria-label="챌린지 관리"
-                className="grid h-10 w-10 flex-none place-items-center rounded-full text-text"
+                className="tap-44 grid h-10 w-10 flex-none place-items-center rounded-full text-text"
               >
                 <Icon name="settings" size={21} />
               </button>
@@ -402,7 +402,7 @@ export function ChallengeDetail({
           type="button"
           onClick={onBack}
           aria-label="챌린지 목록으로"
-          className="grid h-10 w-10 flex-none place-items-center rounded-full text-text"
+          className="tap-44 grid h-10 w-10 flex-none place-items-center rounded-full text-text"
         >
           <Icon name="back" size={22} />
         </button>
@@ -412,7 +412,7 @@ export function ChallengeDetail({
             type="button"
             onClick={onShare}
             aria-label="초대 링크 공유"
-            className="grid h-10 w-10 flex-none place-items-center rounded-full text-text"
+            className="tap-44 grid h-10 w-10 flex-none place-items-center rounded-full text-text"
           >
             <Icon name="users" size={21} />
           </button>
@@ -422,7 +422,7 @@ export function ChallengeDetail({
             type="button"
             onClick={onOpenManage}
             aria-label="챌린지 관리"
-            className="grid h-10 w-10 flex-none place-items-center rounded-full text-text"
+            className="tap-44 grid h-10 w-10 flex-none place-items-center rounded-full text-text"
           >
             <Icon name="settings" size={21} />
           </button>

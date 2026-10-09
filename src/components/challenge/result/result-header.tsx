@@ -19,7 +19,7 @@ export function ResultHeader({
         type="button"
         onClick={onBack}
         aria-label="뒤로"
-        className="grid h-10 w-10 flex-none place-items-center rounded-full text-text"
+        className="tap-44 grid h-10 w-10 flex-none place-items-center rounded-full text-text"
       >
         <Icon name="back" size={22} />
       </button>
@@ -35,7 +35,7 @@ export function ResultHeader({
           type="button"
           onClick={onShare}
           aria-label="결과 공유"
-          className="grid h-10 w-10 flex-none place-items-center rounded-full text-text"
+          className="tap-44 grid h-10 w-10 flex-none place-items-center rounded-full text-text"
         >
           <Icon name="share" size={21} />
         </button>

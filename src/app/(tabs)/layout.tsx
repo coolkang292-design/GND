@@ -25,14 +25,16 @@ export default function TabsLayout({
         (`relative`, z 없음). 둘 다 z가 없으니 문서 순서대로 그려져 내용이 사진 위에 오고,
         시트·운동 중 화면의 z-20~50은 문서 최상위 층에서 탭바를 덮는다(오늘 이전과 같다).
       */}
-      {/* iOS PWA의 black-translucent 상태 표시줄은 viewport 안에 겹친다.
-          main은 층을 만들지 않고, 기존 16px 여백에 노치/상태바 높이만 더한다.
-          safe-area-inset-top이 0인 브라우저에는 기존 pt-4와 동일하다. */}
-      <main
-        className="flex-1 overflow-y-auto px-4 pb-6"
-        style={{ paddingTop: "calc(1rem + env(safe-area-inset-top, 0px))" }}
-      >
-        <div className="relative">
+      <main className="flex-1 overflow-y-auto px-4 pt-4 pb-6">
+        {/*
+          ⚠️ 상태표시줄 여백은 `main`이 아니라 **이 상자의 안쪽 여백**에 둔다 (2026-10-08
+          아이폰 설치 앱 신고 "로고·알림·크루 버튼이 시계·배터리에 붙어 누르기 어렵다").
+          설치 앱은 `viewportFit: "cover"` + `black-translucent`라 내용이 상태표시줄 밑으로
+          들어간다. `main`에 넣으면 사진(`-top-4`)도 같이 내려가 화면 맨 위에 사진 없는
+          띠가 생긴다 — 사진의 기준은 이 상자의 바깥 테두리라 안쪽 여백에는 안 움직인다.
+          그래서 사진은 지금처럼 맨 위까지 깔리고 내용만 내려간다. 일반 브라우저는 값이 0.
+        */}
+        <div className="relative pt-[env(safe-area-inset-top)]">
           <TabBackdrop />
           <div className="relative">{children}</div>
         </div>

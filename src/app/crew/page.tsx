@@ -169,7 +169,12 @@ export default function CrewPage() {
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col gap-3 px-4 pb-10">
-      <header className="flex items-center justify-between gap-2 pt-3 pb-1">
+      {/* 탭 묶음 밖 화면이라 `(tabs)/layout.tsx`의 상태표시줄 여백을 못 받는다 (2026-10-08).
+          설치 앱에서 제목·닫기가 시계·배터리와 겹치지 않게 기존 12px에 그 높이만 더한다. */}
+      <header
+        className="flex items-center justify-between gap-2 pb-1"
+        style={{ paddingTop: "calc(0.75rem + env(safe-area-inset-top))" }}
+      >
         <div>
           <h1 className="text-[19px] font-extrabold tracking-tight">크루</h1>
           <p className="mt-0.5 text-[12.5px] text-muted">
@@ -178,7 +183,7 @@ export default function CrewPage() {
         </div>
         <Link
           href="/profile"
-          className="shrink-0 rounded-full border border-line px-3 py-1.5 text-[12.5px] font-bold text-muted"
+          className="tap-44 shrink-0 rounded-full border border-line px-3 py-1.5 text-[12.5px] font-bold text-muted"
         >
           닫기
         </Link>
