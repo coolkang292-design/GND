@@ -69,6 +69,24 @@ describe("exercise-images", () => {
   });
 });
 
+describe("DY row machine: planned gym exercise image", () => {
+  const id = "50aa51d7-6b63-4b88-a117-76a635d447ee";
+
+  it("maps the registered seed exercise to its dedicated WebP without a fallback", () => {
+    expect(SEED_NAME_BY_ID.get(id)).toBe("DY 로우 머신");
+    expect(EXERCISE_IMAGES[id]).toEqual({
+      name: "DY 로우 머신",
+      file: id,
+      source: "gnd",
+      origin: "gnd-dy-row-2026-10-09",
+    });
+    expect(existsSync(publicPath(`exercise-images/${id}.webp`))).toBe(true);
+    expect(seedExerciseIdByName("DY 로우 머신")).toBe(id);
+    expect(imageIdForAddedExercise({ name: "DY 로우 머신", isCustom: false })).toBe(id);
+    expect(exerciseImageSrc(id)).toBe(`/exercise-images/${id}.webp`);
+  });
+});
+
 describe("user-created resistance band exercise images", () => {
   const ids = ["4f47934b-e7a8-4618-8d24-085ebc297dde","bef0d91e-ea01-4817-b00e-e5978a5bdbe8","e5835092-9ce2-4cd6-ae4e-e71cde1d7583","3ac56225-c8be-49bb-9997-5360e651882d","aaf1b8e3-e12e-4d6f-846c-c1fd2cec768d"] as const;
 

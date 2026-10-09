@@ -105,6 +105,13 @@ MANUAL_CUSTOM_IMAGE_IDS = [
 ]
 
 
+# Manually approved app thumbnail for the catalog's machine-specific DY row.
+# Preserve the checked-in source file when regenerating the UUID image map.
+MANUAL_SEED_IMAGES = {
+    "50aa51d7-6b63-4b88-a117-76a635d447ee": "DY 로우 머신",
+}
+
+
 def runs(on, gapmin):
     segs, s = [], None
     for i, v in enumerate(on):
@@ -241,6 +248,25 @@ def main():
             "source": "gnd",
             "origin": "gnd-band-custom-2026-10-09",
             "custom": True,
+        }
+
+    # 4) Approved, checked-in seed exercise images not in the older source batches.
+    for uid, name in MANUAL_SEED_IMAGES.items():
+        if name_by_id.get(uid) != name:
+            raise SystemExit(f"Manual seed ID/name mismatch: {uid} {name}")
+        if uid in data:
+            raise SystemExit(f"Manual seed ID collides with generated image: {uid}")
+        path = os.path.join(OUT, f"{uid}.webp")
+        if not os.path.isfile(path):
+            raise SystemExit(f"Manual exercise thumbnail missing: {uid}")
+        with Image.open(path) as img:
+            if img.format != "WEBP" or img.size != (SIZE, SIZE):
+                raise SystemExit(f"Wrong manual image format/dimensions: {uid}")
+        data[uid] = {
+            "name": name,
+            "file": uid,
+            "source": "gnd",
+            "origin": "gnd-dy-row-2026-10-09",
         }
 
     # 연결표에 없는 낡은 파일 정리 (이 폴더는 이 스크립트만 쓴다)

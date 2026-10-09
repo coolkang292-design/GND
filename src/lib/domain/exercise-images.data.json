@@ -29,12 +29,6 @@
     "source": "gnd",
     "origin": "codex-pilot"
   },
-  "07ecbb16-3adf-4ee3-893c-9b3bb12cdd8b": {
-    "name": "덤벨 Y 레이즈",
-    "file": "07ecbb16-3adf-4ee3-893c-9b3bb12cdd8b",
-    "source": "gnd",
-    "origin": "codex-pilot"
-  },
   "34ad9d6d-82d1-45c8-a493-148462097bde": {
     "name": "덤벨 고블릿 스쿼트",
     "file": "34ad9d6d-82d1-45c8-a493-148462097bde",
@@ -191,6 +185,12 @@
     "source": "gnd",
     "origin": "codex-pilot"
   },
+  "07ecbb16-3adf-4ee3-893c-9b3bb12cdd8b": {
+    "name": "덤벨 Y 레이즈",
+    "file": "07ecbb16-3adf-4ee3-893c-9b3bb12cdd8b",
+    "source": "gnd",
+    "origin": "codex-pilot"
+  },
   "7874f28b-6b4a-4b4f-85c7-b94a5e5e905f": {
     "name": "덩키 킥",
     "file": "7874f28b-6b4a-4b4f-85c7-b94a5e5e905f",
@@ -251,15 +251,15 @@
     "source": "gnd",
     "origin": "codex-pilot"
   },
-  "49edb349-6ce1-4f33-babb-9ab48106fc3d": {
-    "name": "라잉 Y 레이즈",
-    "file": "49edb349-6ce1-4f33-babb-9ab48106fc3d",
-    "source": "gnd",
-    "origin": "codex-pilot"
-  },
   "ea6bd276-e7bc-4061-a14c-c7106f280704": {
     "name": "라잉 힙 어브덕션",
     "file": "ea6bd276-e7bc-4061-a14c-c7106f280704",
+    "source": "gnd",
+    "origin": "codex-pilot"
+  },
+  "49edb349-6ce1-4f33-babb-9ab48106fc3d": {
+    "name": "라잉 Y 레이즈",
+    "file": "49edb349-6ce1-4f33-babb-9ab48106fc3d",
     "source": "gnd",
     "origin": "codex-pilot"
   },
@@ -1145,11 +1145,38 @@
     "source": "gnd",
     "origin": "codex-pilot"
   },
+  "50aa51d7-6b63-4b88-a117-76a635d447ee": {
+    "name": "DY 로우 머신",
+    "file": "50aa51d7-6b63-4b88-a117-76a635d447ee",
+    "source": "gnd",
+    "origin": "gnd-dy-row-2026-10-09"
+  },
+  "3ac56225-c8be-49bb-9997-5360e651882d": {
+    "name": "",
+    "file": "3ac56225-c8be-49bb-9997-5360e651882d",
+    "source": "gnd",
+    "origin": "gnd-band-custom-2026-10-09",
+    "custom": true
+  },
   "3d9264b3-b67c-40ee-9385-fad0d8fb786b": {
     "name": "",
     "file": "3d9264b3-b67c-40ee-9385-fad0d8fb786b",
     "source": "gnd",
     "origin": "codex-기록누락_2026-10-05",
+    "custom": true
+  },
+  "4f47934b-e7a8-4618-8d24-085ebc297dde": {
+    "name": "",
+    "file": "4f47934b-e7a8-4618-8d24-085ebc297dde",
+    "source": "gnd",
+    "origin": "gnd-band-custom-2026-10-09",
+    "custom": true
+  },
+  "aaf1b8e3-e12e-4d6f-846c-c1fd2cec768d": {
+    "name": "",
+    "file": "aaf1b8e3-e12e-4d6f-846c-c1fd2cec768d",
+    "source": "gnd",
+    "origin": "gnd-band-custom-2026-10-09",
     "custom": true
   },
   "b79eef2a-2e72-4d00-836a-c5559de8669d": {
@@ -1173,27 +1200,6 @@
     "origin": "codex-기록누락_2026-10-05",
     "custom": true
   },
-  "e62f53c9-bb53-4f0d-b89a-9e7ad6fe77b9": {
-    "name": "",
-    "file": "e62f53c9-bb53-4f0d-b89a-9e7ad6fe77b9",
-    "source": "gnd",
-    "origin": "codex-기록누락_2026-10-05",
-    "custom": true
-  },
-  "e6a6598d-8597-4d22-8d81-ef2265e0c168": {
-    "name": "",
-    "file": "e6a6598d-8597-4d22-8d81-ef2265e0c168",
-    "source": "gnd",
-    "origin": "codex-기록누락_2026-10-05",
-    "custom": true
-  },
-  "4f47934b-e7a8-4618-8d24-085ebc297dde": {
-    "name": "",
-    "file": "4f47934b-e7a8-4618-8d24-085ebc297dde",
-    "source": "gnd",
-    "origin": "gnd-band-custom-2026-10-09",
-    "custom": true
-  },
   "bef0d91e-ea01-4817-b00e-e5978a5bdbe8": {
     "name": "",
     "file": "bef0d91e-ea01-4817-b00e-e5978a5bdbe8",
@@ -1208,18 +1214,18 @@
     "origin": "gnd-band-custom-2026-10-09",
     "custom": true
   },
-  "3ac56225-c8be-49bb-9997-5360e651882d": {
+  "e62f53c9-bb53-4f0d-b89a-9e7ad6fe77b9": {
     "name": "",
-    "file": "3ac56225-c8be-49bb-9997-5360e651882d",
+    "file": "e62f53c9-bb53-4f0d-b89a-9e7ad6fe77b9",
     "source": "gnd",
-    "origin": "gnd-band-custom-2026-10-09",
+    "origin": "codex-기록누락_2026-10-05",
     "custom": true
   },
-  "aaf1b8e3-e12e-4d6f-846c-c1fd2cec768d": {
+  "e6a6598d-8597-4d22-8d81-ef2265e0c168": {
     "name": "",
-    "file": "aaf1b8e3-e12e-4d6f-846c-c1fd2cec768d",
+    "file": "e6a6598d-8597-4d22-8d81-ef2265e0c168",
     "source": "gnd",
-    "origin": "gnd-band-custom-2026-10-09",
+    "origin": "codex-기록누락_2026-10-05",
     "custom": true
   }
 }
