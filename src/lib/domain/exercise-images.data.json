@@ -1210,5 +1210,95 @@
     "file": "e6a6598d-8597-4d22-8d81-ef2265e0c168",
     "source": "gnd",
     "origin": "gnd-custom-image-2026-10-10"
+  },
+  "f8af8821-457b-4083-8875-b14685623457": {
+    "name": "스미스머신 스쿼트",
+    "file": "f8af8821-457b-4083-8875-b14685623457",
+    "source": "gnd",
+    "origin": "gnd-1011-2026-10-11"
+  },
+  "6afd3211-51be-452d-b35a-92b0d874ff45": {
+    "name": "카프 레이즈",
+    "file": "6afd3211-51be-452d-b35a-92b0d874ff45",
+    "source": "gnd",
+    "origin": "gnd-1011-2026-10-11"
+  },
+  "8d498e12-32e2-4580-86ac-66194291ad95": {
+    "name": "힙 쓰러스트",
+    "file": "8d498e12-32e2-4580-86ac-66194291ad95",
+    "source": "gnd",
+    "origin": "gnd-1011-2026-10-11"
+  },
+  "d187322d-0171-4b4a-98b4-b731afcc9830": {
+    "name": "핵 스쿼트 머신",
+    "file": "d187322d-0171-4b4a-98b4-b731afcc9830",
+    "source": "gnd",
+    "origin": "gnd-1011-2026-10-11"
+  },
+  "6c1dd5d1-aacf-4983-a104-d5d74217b171": {
+    "name": "덤벨 루마니안 데드리프트",
+    "file": "6c1dd5d1-aacf-4983-a104-d5d74217b171",
+    "source": "gnd",
+    "origin": "gnd-1011-2026-10-11"
+  },
+  "84acc89a-ee72-40a8-8d64-93fcc410904b": {
+    "name": "사이클",
+    "file": "84acc89a-ee72-40a8-8d64-93fcc410904b",
+    "source": "gnd",
+    "origin": "gnd-1011-2026-10-11"
+  },
+  "5c360aa5-0c6a-4d7a-b6d3-22c8ec34e532": {
+    "name": "아놀드 덤벨 프레스",
+    "file": "5c360aa5-0c6a-4d7a-b6d3-22c8ec34e532",
+    "source": "gnd",
+    "origin": "gnd-1011-2026-10-11"
+  },
+  "db8accfa-7bba-4e73-88f7-ef6beb3fe83a": {
+    "name": "케이블 오버헤드 트라이셉 익스텐션",
+    "file": "db8accfa-7bba-4e73-88f7-ef6beb3fe83a",
+    "source": "gnd",
+    "origin": "gnd-1011-2026-10-11"
+  },
+  "e70c0de0-e520-4999-bbb2-ae4ae92b5b90": {
+    "name": "스미스머신 힙 쓰러스트",
+    "file": "e70c0de0-e520-4999-bbb2-ae4ae92b5b90",
+    "source": "gnd",
+    "origin": "gnd-1011-2026-10-11"
+  },
+  "3751d625-ab5a-429f-95a8-09dad36bb391": {
+    "name": "덤벨 워킹 런지",
+    "file": "3751d625-ab5a-429f-95a8-09dad36bb391",
+    "source": "gnd",
+    "origin": "gnd-1011-2026-10-11"
+  },
+  "607c7fc6-7fbf-48db-9a43-c9982447e72f": {
+    "name": "시티드 덤벨 컬",
+    "file": "607c7fc6-7fbf-48db-9a43-c9982447e72f",
+    "source": "gnd",
+    "origin": "gnd-1011-2026-10-11"
+  },
+  "1bb7dd06-0b58-4a60-8a5f-dce07d91c664": {
+    "name": "클로즈 그립 벤치프레스",
+    "file": "1bb7dd06-0b58-4a60-8a5f-dce07d91c664",
+    "source": "gnd",
+    "origin": "gnd-1011-2026-10-11"
+  },
+  "ae81bdea-781c-4ed2-836f-9d17181ad16f": {
+    "name": "프론트 스쿼트",
+    "file": "ae81bdea-781c-4ed2-836f-9d17181ad16f",
+    "source": "gnd",
+    "origin": "gnd-1011-2026-10-11"
+  },
+  "4dfc7f15-f41f-4e2a-a60d-b7f99f4be4fc": {
+    "name": "스티프 레그 데드리프트",
+    "file": "4dfc7f15-f41f-4e2a-a60d-b7f99f4be4fc",
+    "source": "gnd",
+    "origin": "gnd-1011-2026-10-11"
+  },
+  "bfe7288b-4287-4720-afd8-30ac5da3d0af": {
+    "name": "원레그 프레스",
+    "file": "bfe7288b-4287-4720-afd8-30ac5da3d0af",
+    "source": "gnd",
+    "origin": "gnd-1011-2026-10-11"
   }
 }

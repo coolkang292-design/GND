@@ -160,6 +160,46 @@ describe("0118: 운영자가 직접 만든 운동 → 공용 운동 (2026-10-10)
   });
 });
 
+describe("운동 이미지/1011 — 그림 없던 공용 운동 15개 (2026-10-11)", () => {
+  // 05:46 묶음 1~10 + 05:52 묶음 1~5. 05:46-7·05:46-10은 사용자가 운동을 지정했다.
+  const added = [
+    ["607c7fc6-7fbf-48db-9a43-c9982447e72f", "시티드 덤벨 컬"],
+    ["1bb7dd06-0b58-4a60-8a5f-dce07d91c664", "클로즈 그립 벤치프레스"],
+    ["ae81bdea-781c-4ed2-836f-9d17181ad16f", "프론트 스쿼트"],
+    ["4dfc7f15-f41f-4e2a-a60d-b7f99f4be4fc", "스티프 레그 데드리프트"],
+    ["bfe7288b-4287-4720-afd8-30ac5da3d0af", "원레그 프레스"],
+    ["f8af8821-457b-4083-8875-b14685623457", "스미스머신 스쿼트"],
+    ["6afd3211-51be-452d-b35a-92b0d874ff45", "카프 레이즈"],
+    ["8d498e12-32e2-4580-86ac-66194291ad95", "힙 쓰러스트"],
+    ["d187322d-0171-4b4a-98b4-b731afcc9830", "핵 스쿼트 머신"],
+    ["6c1dd5d1-aacf-4983-a104-d5d74217b171", "덤벨 루마니안 데드리프트"],
+    ["84acc89a-ee72-40a8-8d64-93fcc410904b", "사이클"],
+    ["5c360aa5-0c6a-4d7a-b6d3-22c8ec34e532", "아놀드 덤벨 프레스"],
+    ["db8accfa-7bba-4e73-88f7-ef6beb3fe83a", "케이블 오버헤드 트라이셉 익스텐션"],
+    ["e70c0de0-e520-4999-bbb2-ae4ae92b5b90", "스미스머신 힙 쓰러스트"],
+    ["3751d625-ab5a-429f-95a8-09dad36bb391", "덤벨 워킹 런지"],
+  ] as const;
+
+  it("공용 운동 ID에 전용 그림이 붙고 이름으로도 찾는다", () => {
+    for (const [id, name] of added) {
+      expect(SEED_NAME_BY_ID.get(id), id).toBe(name);
+      expect(EXERCISE_IMAGES[id], name).toEqual({ name, file: id, source: "gnd", origin: "gnd-1011-2026-10-11" });
+      expect(existsSync(publicPath(`exercise-images/${id}.webp`)), name).toBe(true);
+      expect(imageIdForAddedExercise({ name, isCustom: false }), name).toBe(id);
+    }
+  });
+
+  it("비슷한 이름의 다른 운동 그림을 건드리지 않는다", () => {
+    // 하는 방식이 다르면 그림도 다르다 — 각자 자기 파일을 쓴다
+    for (const name of ["스미스머신 스쿼트", "힙 쓰러스트", "덤벨 워킹 런지"]) {
+      const id = seedExerciseIdByName(name)!;
+      expect(EXERCISE_IMAGES[id].file, name).toBe(id);
+    }
+    expect(seedExerciseIdByName("덤벨 런지")).toBeUndefined();
+    expect(seedExerciseIdByName("덤벨 스플릿 스쿼트")).toBeUndefined();
+  });
+});
+
 describe("imagesFirst — 그림 있는 운동을 위로 (사용자 지시 2026-10-05)", () => {
   const withImg = Object.keys(EXERCISE_IMAGES);
   const items = [
