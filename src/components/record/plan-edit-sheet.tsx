@@ -1,6 +1,8 @@
 "use client";
 
 import type { LocalExercise, LocalSet } from "@/lib/workout";
+import type { CatalogExercise } from "@/lib/types";
+import { imageIdForAddedExercise } from "@/lib/domain/exercise-images";
 import { ExerciseCard } from "./exercise-card";
 
 /**
@@ -22,6 +24,7 @@ export function PlanEditSheet({
   open,
   dateLabel,
   exercises,
+  catalog,
   busy = false,
   loadingKey,
   onUpdateSet,
@@ -37,6 +40,8 @@ export function PlanEditSheet({
   /** "8월 30일" */
   dateLabel: string;
   exercises: readonly LocalExercise[];
+  /** Own catalog resolves user-created exercise image UUIDs safely. */
+  catalog: readonly CatalogExercise[];
   busy?: boolean;
   /** 직전 기록을 불러오는 중인 종목 키 */
   loadingKey?: string | null;
@@ -84,6 +89,7 @@ export function PlanEditSheet({
             <ExerciseCard
               key={exercise.key}
               exercise={exercise}
+              imageId={imageIdForAddedExercise(exercise, catalog)}
               index={index}
               planning
               /* 계획에는 "운동 중"이 없다 — 요약 줄이 보이는 쪽이 맞다 */

@@ -1774,6 +1774,7 @@ export function CalendarView({
         open={editing !== null}
         dateLabel={editing ? dateKeyLabel(editing.plan.planDate) : ""}
         exercises={editing?.exercises ?? []}
+        catalog={catalog}
         busy={planBusy}
         loadingKey={loadingLastKey}
         onUpdateSet={updateEditSet}
