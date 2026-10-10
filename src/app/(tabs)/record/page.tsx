@@ -10,6 +10,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { AFTER_WORKOUT_PATH } from "@/lib/domain/landing";
+import { ProtectRecordsCard } from "@/components/record/protect-records-card";
 import { useAuth } from "@/components/auth-provider";
 import { UiIcon } from "@/components/ui-icon";
 import { CalendarView } from "@/components/record/calendar-view";
@@ -3637,6 +3638,13 @@ function WorkoutScreen({ userId }: { userId: string }) {
           />
         </section>
         )}
+
+        {/*
+          기록 지키기 (2026-10-11, Issue #2 P0-2). "바로 시작"으로 들어온 익명 사용자에게만
+          뜬다 — 운동을 막 끝낸 지금이 연결을 권하기 가장 좋은 순간이다. 신원이 붙은
+          사람에게는 아무것도 안 그린다.
+        */}
+        <ProtectRecordsCard />
 
         <button
           onClick={async () => {

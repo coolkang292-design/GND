@@ -115,7 +115,13 @@ afterEach(() => {
 });
 
 /**
- * ⚠️⚠️ 3차 결정(2026-08-08) — 첫 화면은 **카카오·구글만**이다.
+ * ⚠️⚠️ **2026-10-11 사용자 결정으로 바뀌었다 — "바로 시작"이 추가됐다** (Issue #2 P0-2,
+ *    `docs/qa/onboarding-dropoff-first-principles-2026-10-11.md`). SNS로 온 사람 ~50명 중
+ *    3명만 가입 버튼을 눌렀다. 카카오·구글은 그대로 첫 자리에 두고, 그 아래에
+ *    "닉네임만 정하고 바로 시작"을 둔다. **챌린지 초대는 여전히 가입이 먼저다.**
+ *    기록 지키기 연결은 첫 운동 완료 화면에서 권한다(`ProtectRecordsCard`).
+ *
+ * (옛 판) ⚠️⚠️ 3차 결정(2026-08-08) — 첫 화면은 **카카오·구글만**이다.
  * *"처음부터 가입할 때 카카오·구글로 가는 게 더 안전한 방법인 것 같음."*
  *
  * 닉네임 경로를 첫 화면에 되살리면 이 describe가 깨진다. 되살리기 전에 설계
@@ -134,7 +140,7 @@ describe("OnboardingPage 모드 1 — 처음 (신원 없음)", () => {
     mocks.peekPendingChallengeInvite.mockReturnValue(null);
   });
 
-  it("카카오·구글 버튼만 보여주고 닉네임을 묻지 않는다", async () => {
+  it("카카오·구글이 먼저 보이고, 닉네임 칸은 '바로 시작'을 눌러야 나온다", async () => {
     render(<OnboardingPage />);
 
     await screen.findByRole("button", { name: "카카오로 시작하기" });
@@ -175,6 +181,44 @@ describe("OnboardingPage 모드 1 — 처음 (신원 없음)", () => {
     render(<OnboardingPage />);
     await screen.findByRole("button", { name: "구글로 시작하기" });
     expect(screen.queryByText(/구글 로그인은 인스타·카톡/)).toBeNull();
+  });
+
+  it("⚠️ '바로 시작'을 누르면 가입 없이 닉네임만으로 시작한다 — 제공자로 떠나지 않는다", async () => {
+    mocks.upsertMyProfile.mockResolvedValue(undefined);
+    render(<OnboardingPage />);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: /닉네임만 정하고 바로 시작/ }),
+    );
+    fireEvent.change(await screen.findByPlaceholderText("예: 스칼레또"), {
+      target: { value: "구경꾼" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "GND 시작하기" }));
+
+    await waitFor(() =>
+      expect(mocks.upsertMyProfile).toHaveBeenCalledWith({
+        id: "fresh-user",
+        nickname: "구경꾼",
+        avatar_url: "🧔",
+        weekly_goal: 3,
+      }),
+    );
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/record"));
+    expect(mocks.linkIdentity).not.toHaveBeenCalled();
+    expect(mocks.signInWithOAuth).not.toHaveBeenCalled();
+  });
+
+  it("'바로 시작'에서 카카오·구글로 돌아갈 수 있다", async () => {
+    render(<OnboardingPage />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: /닉네임만 정하고 바로 시작/ }),
+    );
+    await screen.findByPlaceholderText("예: 스칼레또");
+    fireEvent.click(screen.getByRole("button", { name: /카카오·구글로 시작하기/ }));
+    expect(
+      await screen.findByRole("button", { name: "카카오로 시작하기" }),
+    ).not.toBeNull();
+    expect(screen.queryByPlaceholderText("예: 스칼레또")).toBeNull();
   });
 
   /** 온보딩은 익명 세션 위에서 돈다 — signInWithOAuth를 쓰면 기록이 갈린다 */
@@ -289,6 +333,14 @@ describe("OnboardingPage 챌린지 초대 모드", () => {
    * 사람이 **소셜 신원 0개짜리 브라우저 전용 계정**을 쥐게 된다 — 브라우저를
    * 지우면 기록이 사라지는, 배치 3이 없애려던 그 상태다. 되살리지 마라.
    */
+  it("⚠️ 챌린지 초대에는 '바로 시작'이 없다 — 여러 주짜리 경쟁이라 계정이 먼저다 (2026-10-11 사용자 결정)", async () => {
+    render(<OnboardingPage />);
+    await screen.findByRole("button", { name: "카카오로 시작하기" });
+    expect(
+      screen.queryByRole("button", { name: /닉네임만 정하고 바로 시작/ }),
+    ).toBeNull();
+  });
+
   it("신원이 없으면 초대로 와도 카카오·구글을 먼저 보여준다", async () => {
     render(<OnboardingPage />);
 

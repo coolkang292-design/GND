@@ -26,6 +26,8 @@ export const ONBOARDING_COPY = {
   headline: ["지금 이 도전이", "더 나은 나를 만든다"],
   subcopy: ["혼자가 아닌, 함께라서 더 멀리.", "GND와 함께 더 나은 당신의 하루를 시작하세요."],
   providerSuffix: "로 시작하기",
+  /** 2026-10-11 (Issue #2 P0-2) — 가입 없이 닉네임만으로 시작. 챌린지 초대에는 안 보인다 */
+  tryFirst: "닉네임만 정하고 바로 시작",
   haveAccount: "이미 계정이 있나요?",
   login: "로그인",
 } as const;

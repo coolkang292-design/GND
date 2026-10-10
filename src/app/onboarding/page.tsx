@@ -111,6 +111,19 @@ export default function OnboardingPage() {
    */
   const [linked, setLinked] = useState<boolean | null>(null);
   const [linking, setLinking] = useState<OAuthProvider | null>(null);
+  /**
+   * **"닉네임만 정하고 바로 시작"을 눌렀다** (2026-10-11 사용자 결정, Issue #2 P0-2).
+   *
+   * 익명 계정 그대로 프로필을 만든다. DB는 이미 허용한다 — 0094가 익명에게 막는 것은
+   * 초대 링크 발급·크루 요청·챌린지 방 생성 셋뿐이고, 기록·프로필은 열려 있다.
+   * 카카오·구글은 나중에 `linkIdentity`로 **같은 UID에** 붙으므로 기록이 따라간다.
+   *
+   * ⚠️ 08-08 3차 결정이 경고한 위험은 그대로 있다: 다른 기기에서 같은 카카오로 먼저
+   *    가입하면 이 계정에는 그 카카오를 못 붙인다(`identity_already_exists`).
+   *    그래서 첫 운동 완료 화면에서 바로 연결을 권한다(`ProtectRecordsCard`).
+   * ⚠️ 챌린지 초대에는 열지 않는다 — 여러 주짜리 경쟁이라 계정이 먼저다.
+   */
+  const [tryFirst, setTryFirst] = useState(false);
   // ⚠️ 인스타·카톡 웹뷰에서는 구글이 빠진다 — `components/auth/usable-providers.tsx`
   const { providers, googleBlocked } = useUsableProviders();
 
@@ -375,8 +388,10 @@ export default function OnboardingPage() {
    * KOE205로 실제로 죽었다 — 가정이 아니다.
    */
   const mustAskNickname = providers.length === 0;
-  const showNicknameStep = mustAskNickname || linked === true;
-  const waiting = !mustAskNickname && linked === null;
+  const canTryFirst = !challengeCode;
+  const showNicknameStep =
+    mustAskNickname || linked === true || (canTryFirst && tryFirst);
+  const waiting = !mustAskNickname && !tryFirst && linked === null;
 
   return (
     <Shell hero={step === "profile"}>
@@ -414,6 +429,25 @@ export default function OnboardingPage() {
                   {busy ? "처리 중…" : challengeCode ? "챌린지 참가하기" : "GND 시작하기"}
                 </LimeCta>
               </div>
+
+              {/* 바로 시작으로 들어온 사람만 — 신원이 붙어 돌아온 사람에게는 되돌아갈 곳이 없다 */}
+              {tryFirst && linked !== true && !mustAskNickname && (
+                <>
+                  <p className="relative mt-3 text-[12px] leading-relaxed text-muted">
+                    카카오·구글은 나중에 연결해도 돼요. 연결하면 지금 기록이 그대로 이어져요.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTryFirst(false);
+                      setError(null);
+                    }}
+                    className="relative mx-auto mt-2 block py-1 text-[13px] font-bold text-text underline underline-offset-4"
+                  >
+                    ← 카카오·구글로 시작하기
+                  </button>
+                </>
+              )}
             </>
           ) : (
             <>
@@ -447,6 +481,19 @@ export default function OnboardingPage() {
                   />
                 ))}
                 {googleBlocked && <GoogleBlockedNote className="mt-1" />}
+                {canTryFirst && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTryFirst(true);
+                      setError(null);
+                    }}
+                    disabled={linking !== null}
+                    className="mt-1 flex h-[52px] w-full items-center justify-center rounded-full border border-line-strong bg-surface/70 text-[15px] font-extrabold disabled:opacity-60"
+                  >
+                    {COPY.tryFirst}
+                  </button>
+                )}
               </div>
             </>
           )}
