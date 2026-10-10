@@ -13,11 +13,11 @@ import {
 } from "@/components/brand/entry";
 import { LOGIN_COPY as COPY } from "@/lib/domain/brand-copy";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { GoogleBlockedNote, useUsableProviders } from "@/components/auth/usable-providers";
 import { pendingChallengeInvitePath } from "@/lib/challenge";
 import { APP_LANDING_PATH } from "@/lib/domain/landing";
 import {
   PROVIDER_META,
-  enabledProviders,
   identityError,
   signInWithProvider,
   type OAuthProvider,
@@ -46,7 +46,8 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [oauthBusy, setOauthBusy] = useState<OAuthProvider | null>(null);
-  const providers = enabledProviders();
+  // ⚠️ 인스타·카톡 웹뷰에서는 구글이 빠진다 — `components/auth/usable-providers.tsx`
+  const { providers, googleBlocked } = useUsableProviders();
 
   /**
    * **홈 화면 앱을 방금 설치하고 처음 연 사람인가** (`auth-provider.tsx`가 붙인다).
@@ -190,6 +191,7 @@ export default function LoginPage() {
                 }
               />
             ))}
+            {googleBlocked && <GoogleBlockedNote />}
             {/* 이메일 폼을 없애지 않는다. 카카오·구글이 둘 다 없는 사용자의
                 탈출구이고, 이미 이메일로 붙은 계정이 있다(설계 §5.6). */}
             <div className="mt-3 flex items-center gap-3 text-[13px] text-muted">

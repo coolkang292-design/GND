@@ -17,10 +17,10 @@ import {
 } from "@/components/brand/entry";
 import { ONBOARDING_COPY as COPY } from "@/lib/domain/brand-copy";
 import { recordFunnelEvent } from "@/lib/analytics-events";
+import { GoogleBlockedNote, useUsableProviders } from "@/components/auth/usable-providers";
 import { DEFAULT_AVATAR, DEFAULT_WEEKLY_GOAL } from "@/lib/domain/avatars";
 import {
   PROVIDER_META,
-  enabledProviders,
   getMyIdentities,
   identityError,
   linkFailureCode,
@@ -111,7 +111,8 @@ export default function OnboardingPage() {
    */
   const [linked, setLinked] = useState<boolean | null>(null);
   const [linking, setLinking] = useState<OAuthProvider | null>(null);
-  const providers = enabledProviders();
+  // ⚠️ 인스타·카톡 웹뷰에서는 구글이 빠진다 — `components/auth/usable-providers.tsx`
+  const { providers, googleBlocked } = useUsableProviders();
 
   const [doneInfo, setDoneInfo] = useState<
     | { mode: "join"; crewName: string }
@@ -445,6 +446,7 @@ export default function OnboardingPage() {
                     }
                   />
                 ))}
+                {googleBlocked && <GoogleBlockedNote className="mt-1" />}
               </div>
             </>
           )}

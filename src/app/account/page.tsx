@@ -5,9 +5,9 @@ import Link from "next/link";
 import { BlockedUsersSection } from "@/components/moderation/blocked-users-section";
 import { DataDeletionRequest } from "@/components/account/data-deletion-request";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { GoogleBlockedNote, useUsableProviders } from "@/components/auth/usable-providers";
 import {
   PROVIDER_META,
-  enabledProviders,
   getMyIdentities,
   identityError,
   linkProvider,
@@ -94,7 +94,9 @@ export default function AccountPage() {
     ...(email && !identities.includes("email") ? ["email"] : []),
     ...(identities.includes("email") ? ["email"] : []),
   ];
-  const linkable = enabledProviders().filter((p) => !identities.includes(p));
+  // ⚠️ 인스타·카톡 웹뷰에서는 구글이 빠진다 — `components/auth/usable-providers.tsx`
+  const { providers: usable, googleBlocked } = useUsableProviders();
+  const linkable = usable.filter((p) => !identities.includes(p));
 
   async function handleLink(provider: OAuthProvider) {
     if (linking) return;
@@ -229,9 +231,13 @@ export default function AccountPage() {
             </div>
           )}
 
+          {ready && googleBlocked && !identities.includes("google") && (
+            <GoogleBlockedNote className="mt-2" />
+          )}
+
           {/* 플래그가 비어 있으면(§5.3 설정 전) 버튼이 하나도 없다. 그때 아무 말도
               없으면 "지켜지지 않았다"는 경고만 남아 사용자가 할 일을 못 찾는다. */}
-          {ready && !isProtected && linkable.length === 0 && (
+          {ready && !isProtected && linkable.length === 0 && !googleBlocked && (
             <p className="mt-3 text-xs leading-relaxed text-muted">
               <b className="text-fg">지금은 연결 수단이 꺼져 있어요.</b> 크루장에게
               알려 주세요.

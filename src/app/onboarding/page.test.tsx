@@ -146,6 +146,37 @@ describe("OnboardingPage 모드 1 — 처음 (신원 없음)", () => {
     expect(screen.queryByPlaceholderText("예: 스칼레또")).toBeNull();
   });
 
+  /**
+   * ⚠️⚠️ **Issue #2 P0-3 (2026-10-11).** 인스타·카톡 웹뷰에서 구글 OAuth는
+   * `403 disallowed_useragent`로 막힌다(구글 페이지에서 나서 콜백에 안 돌아온다).
+   * 누르면 갇히는 버튼은 안 보여주고, 왜 없는지와 어떻게 하면 되는지를 말한다.
+   */
+  it("⚠️ 인스타 인앱에서는 구글 버튼 대신 안내가 뜨고 카카오는 남는다", async () => {
+    const original = navigator.userAgent;
+    Object.defineProperty(navigator, "userAgent", {
+      configurable: true,
+      get: () =>
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/22H31 Instagram 450.0.0.0.0",
+    });
+    try {
+      render(<OnboardingPage />);
+      await screen.findByRole("button", { name: "카카오로 시작하기" });
+      expect(screen.queryByRole("button", { name: "구글로 시작하기" })).toBeNull();
+      expect(screen.getByText(/구글 로그인은 인스타·카톡 같은 앱 안 화면에서는 막혀 있어요/)).not.toBeNull();
+    } finally {
+      Object.defineProperty(navigator, "userAgent", {
+        configurable: true,
+        get: () => original,
+      });
+    }
+  });
+
+  it("일반 브라우저에서는 구글 안내 문구가 없다", async () => {
+    render(<OnboardingPage />);
+    await screen.findByRole("button", { name: "구글로 시작하기" });
+    expect(screen.queryByText(/구글 로그인은 인스타·카톡/)).toBeNull();
+  });
+
   /** 온보딩은 익명 세션 위에서 돈다 — signInWithOAuth를 쓰면 기록이 갈린다 */
   it("주 버튼은 linkIdentity를 부른다 (signInWithOAuth가 아니다)", async () => {
     render(<OnboardingPage />);
