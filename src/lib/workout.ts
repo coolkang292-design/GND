@@ -1479,7 +1479,10 @@ export async function getSuggestionFacts(userId: string): Promise<{
       .order("completed_at", { ascending: false })
       .limit(1)
       .maybeSingle(),
-    supabase.from("profiles").select("created_at").eq("id", userId).single(),
+    // ⚠️ `.single()`로 되돌리지 마라 (2026-10-11). 새 익명 방문자는 닉네임을 정하기 전이라
+    //    프로필이 0행이고, `.single()`은 그때 PostgREST 406을 받아 콘솔에 에러를 남긴다.
+    //    0행은 아래 `"1970-01-01"`로 받는 정상 상태다. 회귀: workout-suggestion-facts.test.ts
+    supabase.from("profiles").select("created_at").eq("id", userId).maybeSingle(),
   ]);
   const last = lastRes.data;
   return {
