@@ -308,17 +308,26 @@ describe("decideGuide — 무엇을 보여줄 것인가", () => {
   const state = readOfferState(null);
   const now = 1_000_000;
 
-  it("⚠️ 신원이 없으면 침묵이 아니라 '먼저 로그인'이다", () => {
+  /**
+   * ⚠️⚠️ **2026-10-11에 다시 뒤집었다** (Issue #2,
+   *    `docs/qa/onboarding-dropoff-first-principles-2026-10-11.md`).
+   *    08-22 판은 익명에게도 자동으로 '먼저 로그인'을 띄웠는데, 신규 방문자의 첫 화면에서
+   *    그 시트가 **카카오·구글 버튼을 통째로 덮었다.** 사람 폰 ~50명 중 가입 버튼을
+   *    누른 사람은 3명. 앱을 아직 못 본 사람은 안내를 안 듣는다(08-21 원칙)로 돌아간다.
+   */
+  it("⚠️ 신원이 없으면 자동으로는 아무것도 안 띄운다 — 신규 방문자의 첫 화면을 가리지 않는다", () => {
+    for (const env of ["ios-safari", "android-prompt", "android-manual", "inapp-ios", "inapp-android", "ios-other"] as const) {
+      expect(decideGuide({ env, linked: false, state, now })).toBe("none");
+    }
+  });
+
+  it("신원이 없어도 직접 열면(manual) '먼저 로그인'을 보여준다 — 내 정보 탭의 문", () => {
     expect(
-      decideGuide({ env: "ios-safari", linked: false, state, now }),
+      decideGuide({ env: "ios-safari", linked: false, state, now, manual: true }),
     ).toBe("login-first");
     expect(
-      decideGuide({ env: "android-prompt", linked: false, state, now }),
+      decideGuide({ env: "inapp-ios", linked: false, state, now, manual: true }),
     ).toBe("login-first");
-    // 인앱 브라우저에서도 마찬가지다 — 순서만 하나 앞설 뿐이다
-    expect(decideGuide({ env: "inapp-ios", linked: false, state, now })).toBe(
-      "login-first",
-    );
   });
 
   it("신원이 붙었으면 환경대로 안내한다", () => {

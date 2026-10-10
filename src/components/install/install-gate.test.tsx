@@ -43,6 +43,11 @@ vi.mock("@/lib/identity", () => ({
   },
 }));
 
+const nav = vi.hoisted(() => ({ pathname: "/record" }));
+vi.mock("next/navigation", () => ({
+  usePathname: () => nav.pathname,
+}));
+
 vi.mock("next/image", () => ({
   default: ({ src, alt }: { src: string; alt: string }) => (
     // eslint-disable-next-line @next/next/no-img-element
@@ -81,6 +86,7 @@ beforeEach(() => {
   auth.state.userId = "u1";
   identity.providers = ["kakao"];
   identity.fail = false;
+  nav.pathname = "/record";
   setStandalone(false);
   setUA(UA.iosSafari);
 });
@@ -109,13 +115,12 @@ describe("InstallGate — 뜨는가", () => {
     expect(await sheetTitle()).toBe("이제 홈 화면에 놓을 차례예요");
   });
 
-  /**
-   * ⚠️⚠️ 2026-08-22 사장님 지시로 뒤집었다 — *"로그인을 했든 안 했든 앱이 안
-   * 깔려 있으면 나가게 세팅된 게 아닌가?"*. 옛 판은 익명이면 **침묵**했다.
-   */
-  it("⚠️ 익명 계정에는 '먼저 로그인' 시트가 뜬다 — 침묵하지 않는다", async () => {
+  it("익명 계정도 내 정보 탭에서 직접 열면 '먼저 로그인' 시트가 뜬다", async () => {
     identity.providers = [];
     render(<InstallGate />);
+    expect(await sheetTitle()).toBeNull();
+
+    window.dispatchEvent(new Event(OPEN_INSTALL_GUIDE_EVENT));
     expect(await sheetTitle()).toBe("먼저 로그인해 주세요");
   });
 
@@ -144,6 +149,43 @@ describe("InstallGate — 뜨는가", () => {
 });
 
 describe("InstallGate — 안 뜨는가 (부정 확인)", () => {
+  /**
+   * ⚠️⚠️ **회귀 (2026-10-11, Issue #2).** 08-22 판은 익명에게도 자동으로
+   * '먼저 로그인'을 띄웠고, 그 시트가 신규 방문자의 첫 화면에서 **카카오·구글 버튼을
+   * 통째로 덮었다.** 앱을 아직 못 본 사람에게는 아무것도 자동으로 띄우지 않는다.
+   */
+  it("⚠️ 익명 계정에는 자동으로 아무 시트도 뜨지 않는다 — 가입 버튼을 가리지 않는다", async () => {
+    identity.providers = [];
+    for (const ua of [UA.iosSafari, UA.iosKakao, UA.androidChrome]) {
+      setUA(ua);
+      render(<InstallGate />);
+      expect(await sheetTitle()).toBeNull();
+      cleanup();
+    }
+  }, 15_000);
+
+  /**
+   * ⚠️ 가입·로그인 화면에서는 신원이 붙어 있어도 띄우지 않는다. 인스타 인앱에서
+   *    카카오를 붙이고 돌아오면 `linked && inapp-ios`라 탈출 안내가 **닉네임 입력칸을
+   *    덮는다.** 가입을 끝낸 다음 화면에서 띄운다.
+   */
+  it("⚠️ 가입·로그인 화면에서는 뜨지 않고, 가입을 마친 화면에서 뜬다", async () => {
+    setUA(UA.iosKakao);
+    for (const path of ["/onboarding", "/login", "/auth/callback"]) {
+      nav.pathname = path;
+      render(<InstallGate />);
+      expect(await sheetTitle()).toBeNull();
+      cleanup();
+    }
+
+    nav.pathname = "/onboarding";
+    const { rerender } = render(<InstallGate />);
+    expect(await sheetTitle()).toBeNull();
+    nav.pathname = "/record";
+    rerender(<InstallGate />);
+    expect(await sheetTitle()).toBe("이제 홈 화면에 놓을 차례예요");
+  }, 15_000); // 부정 확인마다 1.5초를 기다린다
+
   it("이미 설치해서 쓰는 사람에게는 안 뜬다", async () => {
     setStandalone(true);
     render(<InstallGate />);

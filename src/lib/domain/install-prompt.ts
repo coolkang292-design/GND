@@ -256,7 +256,10 @@ export type GuideKind =
 /**
  * **안내의 단일 결정 지점.**
  *
- * ⚠️⚠️ **익명이라고 침묵하지 않는다** (2026-08-22 사장님 지시 — *"로그인을 했든
+ * ⚠️⚠️ **2026-10-11에 아래 08-22 판을 되돌렸다 — 익명에게는 자동으로 띄우지 않는다.**
+ *    본문의 `!linked` 분기 주석과 `docs/qa/onboarding-dropoff-first-principles-2026-10-11.md`.
+ *
+ * (옛 판) **익명이라고 침묵하지 않는다** (2026-08-22 사장님 지시 — *"로그인을 했든
  *    안 했든 앱이 안 깔려 있으면 나가게 세팅된 게 아닌가?"*).
  *
  *    옛 판은 신원이 없으면 **아무것도** 안 띄웠다. 익명 계정으로 설치하면
@@ -284,9 +287,14 @@ export function decideGuide(args: {
   // 때마다 필요한 안내다. 반복 노출은 세션 단위로 막는다(게이트 담당).
   if (linked && needsBrowserEscape(env)) return "escape";
 
-  if (!manual && !withinPolicy(state, now)) return "none";
+  // ⚠️⚠️ **익명에게는 자동으로 말을 걸지 않는다** (2026-10-11, Issue #2 — 위 08-22
+  //    결정을 되돌린다). 신규 방문자의 첫 화면에서 '먼저 로그인' 시트가 카카오·구글
+  //    버튼을 통째로 덮었고, 사람 폰 ~50명 중 3명만 가입 버튼을 눌렀다
+  //    (`docs/qa/onboarding-dropoff-first-principles-2026-10-11.md`).
+  //    "아직 앱을 못 본 사람은 안내를 안 듣는다"(08-21)가 맞았다. 직접 열면 보여준다.
+  if (!linked) return manual ? "login-first" : "none";
 
-  if (!linked) return "login-first";
+  if (!manual && !withinPolicy(state, now)) return "none";
   return canOfferInstall(env) ? "install" : "none";
 }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 
 import { useAuth } from "@/components/auth-provider";
 import { hasLinkedIdentity } from "@/lib/identity";
@@ -34,6 +35,20 @@ import { InstallSheet, type SheetVariant } from "./install-sheet";
  *     그냥 나간다. iOS는 이 순서 때문에 로그인이 한 번 늘지만(카톡·사파리·
  *     설치본), 그건 **카카오 버튼 한 번**이고 계정도 같다 — 훨씬 싼 비용이다.
  */
+
+/**
+ * **자동 안내를 띄우지 않는 화면** — 가입·로그인이 진행 중인 곳 (2026-10-11, Issue #2).
+ *
+ * ⚠️ 인스타 인앱에서 카카오를 붙이고 `/onboarding`으로 돌아오면 `linked && inapp-ios`라
+ *    탈출 안내가 **닉네임 입력칸을 덮는다.** 가입을 마치고 다음 화면에 착지한 뒤에 띄운다.
+ *    내 정보 탭에서 직접 여는 것(`OPEN_INSTALL_GUIDE_EVENT`)은 막지 않는다.
+ */
+const AUTH_FLOW_PATHS = ["/onboarding", "/login", "/auth/callback"];
+
+function inAuthFlow(pathname: string | null): boolean {
+  if (!pathname) return false;
+  return AUTH_FLOW_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
 
 /** 크롬이 설치 가능 시점에 던지는 이벤트 — 표준 타입에 아직 없다 */
 type BeforeInstallPromptEvent = Event & {
@@ -103,6 +118,8 @@ function installVariant(env: InstallEnv): SheetVariant | null {
 
 export function InstallGate() {
   const { userId, loading } = useAuth();
+  const pathname = usePathname();
+  const authFlow = inAuthFlow(pathname);
   const [promptEvent, setPromptEvent] =
     useState<BeforeInstallPromptEvent | null>(null);
   const [variant, setVariant] = useState<SheetVariant | null>(null);
@@ -124,7 +141,7 @@ export function InstallGate() {
   }, []);
 
   useEffect(() => {
-    if (loading || decided.current) return;
+    if (loading || decided.current || authFlow) return;
 
     let cancelled = false;
     void (async () => {
@@ -187,7 +204,7 @@ export function InstallGate() {
     return () => {
       cancelled = true;
     };
-  }, [loading, userId, promptEvent]);
+  }, [loading, userId, promptEvent, authFlow]);
 
   /**
    * **내 정보 탭에서 직접 열었다** — 닫기 이력을 보지 않는다.
