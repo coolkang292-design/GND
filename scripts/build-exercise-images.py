@@ -105,6 +105,16 @@ MANUAL_CUSTOM_IMAGE_IDS = [
 ]
 
 
+# User-owned catalog images approved in the GND UI on 2026-10-10.
+# Skip older Codex sources for these UUIDs so running this script cannot
+# restore the obsolete Bulgarian split squat or delete the new incline press.
+# SHA256 pins the exact app-ready WebP asset; user-defined names stay private.
+MANUAL_CUSTOM_IMAGE_OVERRIDES = {
+    "e6a6598d-8597-4d22-8d81-ef2265e0c168": "730243afdc9685667e73cc27bdb5790dfb9e6376e8a03602ec39a4485d5f9384",
+    "90033d48-4db9-40bd-bd3f-3b8e1cbb55d1": "8a72ca8a9327935f86b2bcc3be42a2f53447987ab396b4da5061c4a253b3dff3",
+}
+
+
 # Manually approved app thumbnail for the catalog's machine-specific DY row.
 # Preserve the checked-in source file when regenerating the UUID image map.
 MANUAL_SEED_IMAGES = {
@@ -198,6 +208,9 @@ def main():
             if not ok or r.get("final_qa") == "FAIL" or not r.get("file"):
                 continue
             uid = r["exercise_id"]
+            if uid in MANUAL_CUSTOM_IMAGE_OVERRIDES:
+                print(f"Superseded custom image skipped: {uid}")
+                continue
             custom = uid not in name_by_id
             if not custom and name_by_id[uid] != r["name"]:
                 raise SystemExit(f"{folder}: ID·이름이 매니페스트와 다르다: {uid} {r['name']}")
@@ -247,6 +260,28 @@ def main():
             "file": uid,
             "source": "gnd",
             "origin": "gnd-band-custom-2026-10-09",
+            "custom": True,
+        }
+
+    # 3-b) User-owned custom thumbnails; newer approved images override old sources.
+    # Never put a user-defined exercise name into the client-visible mapping.
+    for uid, expected_hash in MANUAL_CUSTOM_IMAGE_OVERRIDES.items():
+        if uid in name_by_id:
+            raise SystemExit(f"Custom override ID unexpectedly belongs to a seed: {uid}")
+        path = os.path.join(OUT, f"{uid}.webp")
+        if not os.path.isfile(path):
+            raise SystemExit(f"Approved custom image missing: {uid}")
+        with Image.open(path) as img:
+            if img.format != "WEBP" or img.size != (SIZE, SIZE):
+                raise SystemExit(f"Wrong custom image format/dimensions: {uid}")
+        actual_hash = hashlib.sha256(open(path, "rb").read()).hexdigest()
+        if actual_hash != expected_hash:
+            raise SystemExit(f"Approved custom image SHA256 mismatch: {uid}")
+        data[uid] = {
+            "name": "",
+            "file": uid,
+            "source": "gnd",
+            "origin": "gnd-custom-image-2026-10-10",
             "custom": True,
         }
 

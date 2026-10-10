@@ -87,6 +87,37 @@ describe("DY row machine: planned gym exercise image", () => {
   });
 });
 
+describe("user-owned scheduled exercise thumbnails (2026-10-10)", () => {
+  const ownCatalog = [
+    { id: "e6a6598d-8597-4d22-8d81-ef2265e0c168", name: "불가리안 스플릿 스쿼트", is_custom: true },
+    { id: "90033d48-4db9-40bd-bd3f-3b8e1cbb55d1", name: "아이소 레터럴 인클라인 프레스머신", is_custom: true },
+  ] as const;
+
+  it("uses exact own custom catalog IDs, never the public seed exercise name map", () => {
+    for (const item of ownCatalog) {
+      expect(SEED_NAME_BY_ID.has(item.id), item.id).toBe(false);
+      expect(EXERCISE_IMAGES[item.id]).toEqual({
+        name: "",
+        file: item.id,
+        source: "gnd",
+        origin: "gnd-custom-image-2026-10-10",
+        custom: true,
+      });
+      expect(existsSync(publicPath(`exercise-images/${item.id}.webp`))).toBe(true);
+      expect(exerciseImageSrc(item.id)).toBe(`/exercise-images/${item.id}.webp`);
+      expect(imageIdForAddedExercise({ name: item.name, isCustom: true }, ownCatalog)).toBe(item.id);
+      expect(imageIdForAddedExercise({ name: item.name, isCustom: true })).toBeUndefined();
+    }
+  });
+
+  it("prevents a different same-name custom exercise ID from leaking these images", () => {
+    const otherCatalog = ownCatalog.map((item) => ({ ...item, id: "00000000-0000-0000-0000-000000000000" }));
+    for (const item of ownCatalog) {
+      expect(imageIdForAddedExercise({ name: item.name, isCustom: true }, otherCatalog)).toBeUndefined();
+    }
+  });
+});
+
 describe("user-created resistance band exercise images", () => {
   const ids = ["4f47934b-e7a8-4618-8d24-085ebc297dde","bef0d91e-ea01-4817-b00e-e5978a5bdbe8","e5835092-9ce2-4cd6-ae4e-e71cde1d7583","3ac56225-c8be-49bb-9997-5360e651882d","aaf1b8e3-e12e-4d6f-846c-c1fd2cec768d"] as const;
 

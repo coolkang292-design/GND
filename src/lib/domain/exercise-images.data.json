@@ -1172,6 +1172,13 @@
     "origin": "gnd-band-custom-2026-10-09",
     "custom": true
   },
+  "90033d48-4db9-40bd-bd3f-3b8e1cbb55d1": {
+    "name": "",
+    "file": "90033d48-4db9-40bd-bd3f-3b8e1cbb55d1",
+    "source": "gnd",
+    "origin": "gnd-custom-image-2026-10-10",
+    "custom": true
+  },
   "aaf1b8e3-e12e-4d6f-846c-c1fd2cec768d": {
     "name": "",
     "file": "aaf1b8e3-e12e-4d6f-846c-c1fd2cec768d",
@@ -1225,7 +1232,7 @@
     "name": "",
     "file": "e6a6598d-8597-4d22-8d81-ef2265e0c168",
     "source": "gnd",
-    "origin": "codex-기록누락_2026-10-05",
+    "origin": "gnd-custom-image-2026-10-10",
     "custom": true
   }
 }
