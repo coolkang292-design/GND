@@ -381,9 +381,9 @@ def atomic_json(path, value):
 
 def main():
     rows = json.loads((DATA/'exercise-image-catalog-snapshot.json').read_text(encoding='utf-8'))['rows']
-    assert len(rows)==335 and len({r['id'] for r in rows})==335
+    assert len(rows)==348 and len({r['id'] for r in rows})==348
     seeds = [r for r in rows if r['is_seed'] and not r['is_custom']]
-    assert len(seeds)==335
+    assert len(seeds)==348
     path = DATA/'exercise-image-manifest.json'
     old = {r['exercise_id']:r for r in json.loads(path.read_text(encoding='utf-8'))['exercises']} if path.exists() else {}
     exercises=[]
@@ -417,7 +417,7 @@ def main():
             byid[uid]['batch_no']=batch['batch_no']; byid[uid]['slot_no']=slot
             if byid[uid]['status']=='PENDING': byid[uid]['status']='BATCHED'
     manifest={'schema_version':1,'catalog_snapshot':'exercise-image-catalog-snapshot.json','prompt_version':VERSION,
-              'scope':'335 seed exercises only; custom exercises excluded','exercises':exercises}
+              'scope':'348 seed exercises only; custom exercises excluded','exercises':exercises}
     atomic_json(path,manifest)
     held=[]
     for part in sorted({r['body_part'] for r in exercises}):

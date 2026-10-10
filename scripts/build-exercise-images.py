@@ -94,8 +94,8 @@ ALIASES = {
 }
 
 
-# Generated resistance-band exercises added to the user catalog on 2026-10-09.
-# Keep these UUID-matched images when rebuilding; custom exercise names stay private in the app JSON.
+# Generated resistance-band exercises added to the user catalog on 2026-10-09 (공용 since 0118).
+# Keep these UUID-matched images when rebuilding; names come from the seed manifest.
 MANUAL_CUSTOM_IMAGE_IDS = [
     "4f47934b-e7a8-4618-8d24-085ebc297dde",
     "bef0d91e-ea01-4817-b00e-e5978a5bdbe8",
@@ -105,20 +105,36 @@ MANUAL_CUSTOM_IMAGE_IDS = [
 ]
 
 
-# User-owned catalog images approved in the GND UI on 2026-10-10.
-# Skip older Codex sources for these UUIDs so running this script cannot
-# restore the obsolete Bulgarian split squat or delete the new incline press.
-# SHA256 pins the exact app-ready WebP asset; user-defined names stay private.
-MANUAL_CUSTOM_IMAGE_OVERRIDES = {
-    "e6a6598d-8597-4d22-8d81-ef2265e0c168": "730243afdc9685667e73cc27bdb5790dfb9e6376e8a03602ec39a4485d5f9384",
-    "90033d48-4db9-40bd-bd3f-3b8e1cbb55d1": "8a72ca8a9327935f86b2bcc3be42a2f53447987ab396b4da5061c4a253b3dff3",
+# 0118 (2026-10-10): 운영자가 직접 만든 운동을 공용으로 전환했다 (사용자 지시).
+# 같은 ID를 기본 운동으로 바꿨으니 옛 Codex 묶음에 남은 옛 이름 대신 새 이름으로 대조한다.
+PROMOTED_FROM_CUSTOM = {
+    "3d9264b3-b67c-40ee-9385-fad0d8fb786b": "인클라인 YTW 레이즈",          # 옛 YTW
+    "ba21558a-58db-4e58-a055-12309b9a438b": "맨몸 벤트오버 레터럴 레이즈",  # 옛 벤드 레터럴 레이즈
+    "b79eef2a-2e72-4d00-836a-c5559de8669d": "스캐풀러 푸시업 플러스",       # 옛 Scapular Push-up Plus
+}
+# 기존 기본 운동과 같은 동작이라 그쪽으로 합치고 직접 운동 행을 지웠다 — 그림도 버린다.
+MERGED_INTO_SEED = {
+    "e62f53c9-bb53-4f0d-b89a-9e7ad6fe77b9": "시티드 로우",               # 옛 시티드 케이블 로우
+    "bc0e833c-985d-4cf3-8a01-024a071bcfcd": "인클라인 덤벨 벤치프레스",  # 옛 덤벨 인클라인
 }
 
 
-# Manually approved app thumbnail for the catalog's machine-specific DY row.
-# Preserve the checked-in source file when regenerating the UUID image map.
+# Catalog images approved in the GND UI on 2026-10-10 (공용 since 0118).
+# Skip older Codex sources for these UUIDs so running this script cannot
+# restore the obsolete Bulgarian split squat.
+# SHA256 pins the exact app-ready WebP asset.
+MANUAL_CUSTOM_IMAGE_OVERRIDES = {
+    "e6a6598d-8597-4d22-8d81-ef2265e0c168": "730243afdc9685667e73cc27bdb5790dfb9e6376e8a03602ec39a4485d5f9384",
+}
+
+
+# Manually approved, checked-in seed thumbnails (UUID -> (seed name, origin)).
+# Preserve these source files when regenerating the UUID image map.
+# 아이소 레터럴 인클라인 프레스 머신: 직접 운동 → 기본 운동 전환 (0118, 2026-10-10).
+# 같은 ID·같은 그림이라 옛 직접 운동 자리(MANUAL_CUSTOM_IMAGE_OVERRIDES)에서 옮겨 왔다.
 MANUAL_SEED_IMAGES = {
-    "50aa51d7-6b63-4b88-a117-76a635d447ee": "DY 로우 머신",
+    "50aa51d7-6b63-4b88-a117-76a635d447ee": ("DY 로우 머신", "gnd-dy-row-2026-10-09"),
+    "90033d48-4db9-40bd-bd3f-3b8e1cbb55d1": ("아이소 레터럴 인클라인 프레스 머신", "gnd-custom-image-2026-10-10"),
 }
 
 
@@ -211,8 +227,13 @@ def main():
             if uid in MANUAL_CUSTOM_IMAGE_OVERRIDES:
                 print(f"Superseded custom image skipped: {uid}")
                 continue
+            if uid in MERGED_INTO_SEED:
+                print(f"Merged into seed, image dropped: {uid} -> {MERGED_INTO_SEED[uid]}")
+                continue
             custom = uid not in name_by_id
-            if not custom and name_by_id[uid] != r["name"]:
+            # 0118로 공용이 된 옛 직접 운동은 묶음에 옛 이름이 남아 있다 — 새 이름으로 대조한다
+            expected = PROMOTED_FROM_CUSTOM.get(uid, r["name"])
+            if not custom and name_by_id[uid] != expected:
                 raise SystemExit(f"{folder}: ID·이름이 매니페스트와 다르다: {uid} {r['name']}")
             path = os.path.join(base, r["file"].replace("\\", "/"))
             if r.get("sha256"):
@@ -224,7 +245,7 @@ def main():
                 print(f"가장자리 조각 지움  {r['name']}: {erased}")
             save(img, uid)
             data[uid] = {
-                "name": "" if custom else r["name"],
+                "name": "" if custom else name_by_id[uid],
                 "file": uid,
                 "source": "gnd",
                 "origin": f"codex-{folder}",
@@ -246,28 +267,28 @@ def main():
         for n, i in todo:
             data[i] = {"name": n, "file": file_id, "source": "gnd", "origin": "user-sheet"}
 
-    # 3) User-created band exercises with approved dark anatomical thumbnails.
+    # 3) Band exercises with approved dark anatomical thumbnails (공용 since 0118).
     # Files are checked into public/exercise-images and must survive regeneration.
     for uid in MANUAL_CUSTOM_IMAGE_IDS:
+        if uid not in name_by_id:
+            raise SystemExit(f"Band exercise is not a seed in the manifest: {uid}")
         path = os.path.join(OUT, f"{uid}.webp")
         if not os.path.isfile(path):
-            raise SystemExit(f"Custom band image missing: {uid}")
+            raise SystemExit(f"Band image missing: {uid}")
         with Image.open(path) as img:
             if img.format != "WEBP" or img.size != (SIZE, SIZE):
                 raise SystemExit(f"Wrong band image format/dimensions: {uid}")
         data[uid] = {
-            "name": "",
+            "name": name_by_id[uid],
             "file": uid,
             "source": "gnd",
             "origin": "gnd-band-custom-2026-10-09",
-            "custom": True,
         }
 
-    # 3-b) User-owned custom thumbnails; newer approved images override old sources.
-    # Never put a user-defined exercise name into the client-visible mapping.
+    # 3-b) Approved thumbnails that override old sources (공용 since 0118).
     for uid, expected_hash in MANUAL_CUSTOM_IMAGE_OVERRIDES.items():
-        if uid in name_by_id:
-            raise SystemExit(f"Custom override ID unexpectedly belongs to a seed: {uid}")
+        if uid not in name_by_id:
+            raise SystemExit(f"Override ID is not a seed in the manifest: {uid}")
         path = os.path.join(OUT, f"{uid}.webp")
         if not os.path.isfile(path):
             raise SystemExit(f"Approved custom image missing: {uid}")
@@ -278,15 +299,14 @@ def main():
         if actual_hash != expected_hash:
             raise SystemExit(f"Approved custom image SHA256 mismatch: {uid}")
         data[uid] = {
-            "name": "",
+            "name": name_by_id[uid],
             "file": uid,
             "source": "gnd",
             "origin": "gnd-custom-image-2026-10-10",
-            "custom": True,
         }
 
     # 4) Approved, checked-in seed exercise images not in the older source batches.
-    for uid, name in MANUAL_SEED_IMAGES.items():
+    for uid, (name, origin) in MANUAL_SEED_IMAGES.items():
         if name_by_id.get(uid) != name:
             raise SystemExit(f"Manual seed ID/name mismatch: {uid} {name}")
         if uid in data:
@@ -301,7 +321,7 @@ def main():
             "name": name,
             "file": uid,
             "source": "gnd",
-            "origin": "gnd-dy-row-2026-10-09",
+            "origin": origin,
         }
 
     # 연결표에 없는 낡은 파일 정리 (이 폴더는 이 스크립트만 쓴다)

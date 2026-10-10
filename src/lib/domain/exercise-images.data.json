@@ -1152,87 +1152,63 @@
     "origin": "gnd-dy-row-2026-10-09"
   },
   "3ac56225-c8be-49bb-9997-5360e651882d": {
-    "name": "",
+    "name": "밴드 풀어파트",
     "file": "3ac56225-c8be-49bb-9997-5360e651882d",
     "source": "gnd",
-    "origin": "gnd-band-custom-2026-10-09",
-    "custom": true
+    "origin": "gnd-band-custom-2026-10-09"
   },
   "3d9264b3-b67c-40ee-9385-fad0d8fb786b": {
-    "name": "",
+    "name": "인클라인 YTW 레이즈",
     "file": "3d9264b3-b67c-40ee-9385-fad0d8fb786b",
     "source": "gnd",
-    "origin": "codex-기록누락_2026-10-05",
-    "custom": true
+    "origin": "codex-기록누락_2026-10-05"
   },
   "4f47934b-e7a8-4618-8d24-085ebc297dde": {
-    "name": "",
+    "name": "밴드 바이셉 컬",
     "file": "4f47934b-e7a8-4618-8d24-085ebc297dde",
     "source": "gnd",
-    "origin": "gnd-band-custom-2026-10-09",
-    "custom": true
+    "origin": "gnd-band-custom-2026-10-09"
   },
   "90033d48-4db9-40bd-bd3f-3b8e1cbb55d1": {
-    "name": "",
+    "name": "아이소 레터럴 인클라인 프레스 머신",
     "file": "90033d48-4db9-40bd-bd3f-3b8e1cbb55d1",
     "source": "gnd",
-    "origin": "gnd-custom-image-2026-10-10",
-    "custom": true
+    "origin": "gnd-custom-image-2026-10-10"
   },
   "aaf1b8e3-e12e-4d6f-846c-c1fd2cec768d": {
-    "name": "",
+    "name": "밴드 시티드 로우",
     "file": "aaf1b8e3-e12e-4d6f-846c-c1fd2cec768d",
     "source": "gnd",
-    "origin": "gnd-band-custom-2026-10-09",
-    "custom": true
+    "origin": "gnd-band-custom-2026-10-09"
   },
   "b79eef2a-2e72-4d00-836a-c5559de8669d": {
-    "name": "",
+    "name": "스캐풀러 푸시업 플러스",
     "file": "b79eef2a-2e72-4d00-836a-c5559de8669d",
     "source": "gnd",
-    "origin": "codex-기록누락_2026-10-05",
-    "custom": true
+    "origin": "codex-기록누락_2026-10-05"
   },
   "ba21558a-58db-4e58-a055-12309b9a438b": {
-    "name": "",
+    "name": "맨몸 벤트오버 레터럴 레이즈",
     "file": "ba21558a-58db-4e58-a055-12309b9a438b",
     "source": "gnd",
-    "origin": "codex-기록누락_2026-10-05",
-    "custom": true
-  },
-  "bc0e833c-985d-4cf3-8a01-024a071bcfcd": {
-    "name": "",
-    "file": "bc0e833c-985d-4cf3-8a01-024a071bcfcd",
-    "source": "gnd",
-    "origin": "codex-기록누락_2026-10-05",
-    "custom": true
+    "origin": "codex-기록누락_2026-10-05"
   },
   "bef0d91e-ea01-4817-b00e-e5978a5bdbe8": {
-    "name": "",
+    "name": "밴드 레터럴 레이즈",
     "file": "bef0d91e-ea01-4817-b00e-e5978a5bdbe8",
     "source": "gnd",
-    "origin": "gnd-band-custom-2026-10-09",
-    "custom": true
+    "origin": "gnd-band-custom-2026-10-09"
   },
   "e5835092-9ce2-4cd6-ae4e-e71cde1d7583": {
-    "name": "",
+    "name": "밴드 스쿼트",
     "file": "e5835092-9ce2-4cd6-ae4e-e71cde1d7583",
     "source": "gnd",
-    "origin": "gnd-band-custom-2026-10-09",
-    "custom": true
-  },
-  "e62f53c9-bb53-4f0d-b89a-9e7ad6fe77b9": {
-    "name": "",
-    "file": "e62f53c9-bb53-4f0d-b89a-9e7ad6fe77b9",
-    "source": "gnd",
-    "origin": "codex-기록누락_2026-10-05",
-    "custom": true
+    "origin": "gnd-band-custom-2026-10-09"
   },
   "e6a6598d-8597-4d22-8d81-ef2265e0c168": {
-    "name": "",
+    "name": "불가리안 스플릿 스쿼트",
     "file": "e6a6598d-8597-4d22-8d81-ef2265e0c168",
     "source": "gnd",
-    "origin": "gnd-custom-image-2026-10-10",
-    "custom": true
+    "origin": "gnd-custom-image-2026-10-10"
   }
 }

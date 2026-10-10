@@ -117,6 +117,7 @@
       "body_part": "어깨",
       "exercises": [
         "b452ccad-10da-4f25-8915-3a9045b51e95",
+        "ba21558a-58db-4e58-a055-12309b9a438b",
         "14ca58a0-47e4-44e2-9c16-8cd20613a581",
         "1c56bc55-d633-4725-accd-351b3355eaf9",
         "c91a0c5f-d770-4c3f-a909-3a3fd0cbd813",
@@ -124,8 +125,7 @@
         "8784cfc1-7b5b-4088-8f17-f5115a1adece",
         "b8702da2-e5e9-4974-b7d0-f4a8167998f0",
         "4de57986-2076-4476-9b01-a8f2c70a6ee0",
-        "8ae05401-d085-49ab-a5fd-6c594f020a6d",
-        "7dcf3022-91ca-42c8-b257-372a6067696e"
+        "8ae05401-d085-49ab-a5fd-6c594f020a6d"
       ]
     },
     {
@@ -134,6 +134,7 @@
       "kind": "planned",
       "body_part": "어깨",
       "exercises": [
+        "7dcf3022-91ca-42c8-b257-372a6067696e",
         "07ecbb16-3adf-4ee3-893c-9b3bb12cdd8b",
         "49edb349-6ce1-4f33-babb-9ab48106fc3d",
         "4b6aabd5-e39b-4f28-9451-ad5588489b4b",
@@ -142,8 +143,7 @@
         "7dcb673c-adf7-477a-81bf-6f455d798622",
         "ced2f6b3-a728-42f4-8208-b4f3a5cf2d11",
         "8b3a47c0-3744-4029-94fa-2736e99df0d9",
-        "d3c1a643-5452-4f47-af95-c2e2d5374e23",
-        "9afb8dcb-80a2-455a-9ab1-1cc65e99cfd3"
+        "d3c1a643-5452-4f47-af95-c2e2d5374e23"
       ]
     },
     {
@@ -152,6 +152,7 @@
       "kind": "planned",
       "body_part": "어깨",
       "exercises": [
+        "9afb8dcb-80a2-455a-9ab1-1cc65e99cfd3",
         "9e88831c-6048-4c71-9236-3ca3bb2e2297",
         "4bb6052c-478c-46a2-8329-b62b0aa29a14"
       ]
@@ -512,7 +513,9 @@
         "4750b6da-0a3f-40d4-89a7-ccf4560e83a5",
         "9371e57e-7e33-4f08-8c5a-ad414ce7c7a4",
         "e0e00655-0876-4693-b3bb-b56f2435ff2a",
-        "08aad5ac-8a93-4c98-8a19-0b3fb5aa3702"
+        "08aad5ac-8a93-4c98-8a19-0b3fb5aa3702",
+        "90033d48-4db9-40bd-bd3f-3b8e1cbb55d1",
+        "ac897fe5-30df-466b-a190-e0a660a545c3"
       ],
       "note": "Reserved planning group only. Definitions must be approved and prompt/order frozen before generation."
     },
@@ -524,7 +527,10 @@
       "exercises": [
         "50aa51d7-6b63-4b88-a117-76a635d447ee",
         "89a8c6e1-9ba9-423e-ba69-56f13885caa2",
-        "69fe67ed-dbb6-4b5a-8d56-a83ab1d9a726"
+        "69fe67ed-dbb6-4b5a-8d56-a83ab1d9a726",
+        "3d9264b3-b67c-40ee-9385-fad0d8fb786b",
+        "cb431896-1837-45d7-afed-e31cee522974",
+        "aaf1b8e3-e12e-4d6f-846c-c1fd2cec768d"
       ],
       "note": "Reserved planning group only. Definitions must be approved and prompt/order frozen before generation."
     },
@@ -540,12 +546,25 @@
         "f42e4491-c9fa-4088-9498-d66cc631aa69",
         "e7bf3724-4afe-4fd3-858b-04fc17ef43dd",
         "5c360aa5-0c6a-4d7a-b6d3-22c8ec34e532",
-        "6ba4df00-55a1-4c62-a5a5-a13e7bb4a0de"
+        "6ba4df00-55a1-4c62-a5a5-a13e7bb4a0de",
+        "b79eef2a-2e72-4d00-836a-c5559de8669d",
+        "b84bb13d-7323-42d4-b97e-f220d261432c",
+        "3ac56225-c8be-49bb-9997-5360e651882d"
       ],
       "note": "Reserved planning group only. Definitions must be approved and prompt/order frozen before generation."
     },
     {
       "batch_no": "GND-HOLD-004",
+      "generation_authorized": false,
+      "kind": "NEEDS_REVIEW",
+      "body_part": "어깨",
+      "exercises": [
+        "bef0d91e-ea01-4817-b00e-e5978a5bdbe8"
+      ],
+      "note": "Reserved planning group only. Definitions must be approved and prompt/order frozen before generation."
+    },
+    {
+      "batch_no": "GND-HOLD-005",
       "generation_authorized": false,
       "kind": "NEEDS_REVIEW",
       "body_part": "코어",
@@ -562,7 +581,7 @@
       "note": "Reserved planning group only. Definitions must be approved and prompt/order frozen before generation."
     },
     {
-      "batch_no": "GND-HOLD-005",
+      "batch_no": "GND-HOLD-006",
       "generation_authorized": false,
       "kind": "NEEDS_REVIEW",
       "body_part": "팔",
@@ -581,18 +600,19 @@
       "note": "Reserved planning group only. Definitions must be approved and prompt/order frozen before generation."
     },
     {
-      "batch_no": "GND-HOLD-006",
+      "batch_no": "GND-HOLD-007",
       "generation_authorized": false,
       "kind": "NEEDS_REVIEW",
       "body_part": "팔",
       "exercises": [
         "e947a048-e5e7-4b91-a209-bf06f2dcfe32",
-        "af467ef3-388f-4010-96b4-1683337e7020"
+        "af467ef3-388f-4010-96b4-1683337e7020",
+        "4f47934b-e7a8-4618-8d24-085ebc297dde"
       ],
       "note": "Reserved planning group only. Definitions must be approved and prompt/order frozen before generation."
     },
     {
-      "batch_no": "GND-HOLD-007",
+      "batch_no": "GND-HOLD-008",
       "generation_authorized": false,
       "kind": "NEEDS_REVIEW",
       "body_part": "하체",
@@ -611,7 +631,7 @@
       "note": "Reserved planning group only. Definitions must be approved and prompt/order frozen before generation."
     },
     {
-      "batch_no": "GND-HOLD-008",
+      "batch_no": "GND-HOLD-009",
       "generation_authorized": false,
       "kind": "NEEDS_REVIEW",
       "body_part": "하체",
@@ -630,7 +650,7 @@
       "note": "Reserved planning group only. Definitions must be approved and prompt/order frozen before generation."
     },
     {
-      "batch_no": "GND-HOLD-009",
+      "batch_no": "GND-HOLD-010",
       "generation_authorized": false,
       "kind": "NEEDS_REVIEW",
       "body_part": "하체",
@@ -649,7 +669,7 @@
       "note": "Reserved planning group only. Definitions must be approved and prompt/order frozen before generation."
     },
     {
-      "batch_no": "GND-HOLD-010",
+      "batch_no": "GND-HOLD-011",
       "generation_authorized": false,
       "kind": "NEEDS_REVIEW",
       "body_part": "하체",
@@ -661,7 +681,9 @@
         "db046055-a511-41f2-9c45-563bf0ca2132",
         "d187322d-0171-4b4a-98b4-b731afcc9830",
         "8d498e12-32e2-4580-86ac-66194291ad95",
-        "5f6ed03f-05b0-4eb3-86d9-82ba7a28e48a"
+        "5f6ed03f-05b0-4eb3-86d9-82ba7a28e48a",
+        "e6a6598d-8597-4d22-8d81-ef2265e0c168",
+        "e5835092-9ce2-4cd6-ae4e-e71cde1d7583"
       ],
       "note": "Reserved planning group only. Definitions must be approved and prompt/order frozen before generation."
     }
@@ -740,6 +762,18 @@
     "db046055-a511-41f2-9c45-563bf0ca2132",
     "d187322d-0171-4b4a-98b4-b731afcc9830",
     "8d498e12-32e2-4580-86ac-66194291ad95",
-    "5f6ed03f-05b0-4eb3-86d9-82ba7a28e48a"
+    "5f6ed03f-05b0-4eb3-86d9-82ba7a28e48a",
+    "90033d48-4db9-40bd-bd3f-3b8e1cbb55d1",
+    "3d9264b3-b67c-40ee-9385-fad0d8fb786b",
+    "e6a6598d-8597-4d22-8d81-ef2265e0c168",
+    "b79eef2a-2e72-4d00-836a-c5559de8669d",
+    "cb431896-1837-45d7-afed-e31cee522974",
+    "ac897fe5-30df-466b-a190-e0a660a545c3",
+    "b84bb13d-7323-42d4-b97e-f220d261432c",
+    "4f47934b-e7a8-4618-8d24-085ebc297dde",
+    "3ac56225-c8be-49bb-9997-5360e651882d",
+    "e5835092-9ce2-4cd6-ae4e-e71cde1d7583",
+    "bef0d91e-ea01-4817-b00e-e5978a5bdbe8",
+    "aaf1b8e3-e12e-4d6f-846c-c1fd2cec768d"
   ]
 }

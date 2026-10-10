@@ -28,7 +28,8 @@ const PARTS: BodyPart[] = ["가슴", "등", "하체", "어깨", "팔", "코어",
 
 describe("exercise-images", () => {
   it("매니페스트가 비어 있지 않다 (아래 대조 단언이 공회전하지 않게)", () => {
-    expect(SEED_NAME_BY_ID.size).toBe(335);
+    // 335 (2026-10-05) + 운영자 직접 운동 13개를 공용으로 전환 (0118, 2026-10-10)
+    expect(SEED_NAME_BY_ID.size).toBe(348);
     expect(Object.keys(EXERCISE_IMAGES).length).toBeGreaterThanOrEqual(50);
   });
 
@@ -87,58 +88,75 @@ describe("DY row machine: planned gym exercise image", () => {
   });
 });
 
-describe("user-owned scheduled exercise thumbnails (2026-10-10)", () => {
-  const ownCatalog = [
-    { id: "e6a6598d-8597-4d22-8d81-ef2265e0c168", name: "불가리안 스플릿 스쿼트", is_custom: true },
-    { id: "90033d48-4db9-40bd-bd3f-3b8e1cbb55d1", name: "아이소 레터럴 인클라인 프레스머신", is_custom: true },
+describe("0118: 운영자가 직접 만든 운동 → 공용 운동 (2026-10-10)", () => {
+  // 같은 ID를 기본 운동으로 바꾼 것 중 그림이 있는 10개 (옛 이름 → 새 이름)
+  const promoted = [
+    ["3d9264b3-b67c-40ee-9385-fad0d8fb786b", "YTW", "인클라인 YTW 레이즈"],
+    ["ba21558a-58db-4e58-a055-12309b9a438b", "벤드 레터럴 레이즈", "맨몸 벤트오버 레터럴 레이즈"],
+    ["e6a6598d-8597-4d22-8d81-ef2265e0c168", "불가리안 스플릿 스쿼트", "불가리안 스플릿 스쿼트"],
+    ["b79eef2a-2e72-4d00-836a-c5559de8669d", "Scapular Push-up Plus", "스캐풀러 푸시업 플러스"],
+    ["90033d48-4db9-40bd-bd3f-3b8e1cbb55d1", "아이소 레터럴 인클라인 프레스머신", "아이소 레터럴 인클라인 프레스 머신"],
+    ["4f47934b-e7a8-4618-8d24-085ebc297dde", "밴드 바이셉 컬", "밴드 바이셉 컬"],
+    ["3ac56225-c8be-49bb-9997-5360e651882d", "밴드 풀어파트", "밴드 풀어파트"],
+    ["e5835092-9ce2-4cd6-ae4e-e71cde1d7583", "밴드 스쿼트", "밴드 스쿼트"],
+    ["bef0d91e-ea01-4817-b00e-e5978a5bdbe8", "밴드 레터럴 레이즈", "밴드 레터럴 레이즈"],
+    ["aaf1b8e3-e12e-4d6f-846c-c1fd2cec768d", "밴드 시티드 로우", "밴드 시티드 로우"],
   ] as const;
+  // 그림 없이 공용이 된 3개
+  const promotedNoImage = [
+    ["cb431896-1837-45d7-afed-e31cee522974", "흉추 익스텐션"],
+    ["ac897fe5-30df-466b-a190-e0a660a545c3", "도어웨이 가슴 스트레칭"],
+    ["b84bb13d-7323-42d4-b97e-f220d261432c", "월 슬라이드"],
+  ] as const;
+  // 기존 기본 운동으로 합치고 지운 직접 운동
+  const merged = ["e62f53c9-bb53-4f0d-b89a-9e7ad6fe77b9", "bc0e833c-985d-4cf3-8a01-024a071bcfcd"];
 
-  it("uses exact own custom catalog IDs, never the public seed exercise name map", () => {
-    for (const item of ownCatalog) {
-      expect(SEED_NAME_BY_ID.has(item.id), item.id).toBe(false);
-      expect(EXERCISE_IMAGES[item.id]).toEqual({
-        name: "",
-        file: item.id,
-        source: "gnd",
-        origin: "gnd-custom-image-2026-10-10",
-        custom: true,
-      });
-      expect(existsSync(publicPath(`exercise-images/${item.id}.webp`))).toBe(true);
-      expect(exerciseImageSrc(item.id)).toBe(`/exercise-images/${item.id}.webp`);
-      expect(imageIdForAddedExercise({ name: item.name, isCustom: true }, ownCatalog)).toBe(item.id);
-      expect(imageIdForAddedExercise({ name: item.name, isCustom: true })).toBeUndefined();
-    }
-  });
-
-  it("prevents a different same-name custom exercise ID from leaking these images", () => {
-    const otherCatalog = ownCatalog.map((item) => ({ ...item, id: "00000000-0000-0000-0000-000000000000" }));
-    for (const item of ownCatalog) {
-      expect(imageIdForAddedExercise({ name: item.name, isCustom: true }, otherCatalog)).toBeUndefined();
-    }
-  });
-});
-
-describe("user-created resistance band exercise images", () => {
-  const ids = ["4f47934b-e7a8-4618-8d24-085ebc297dde","bef0d91e-ea01-4817-b00e-e5978a5bdbe8","e5835092-9ce2-4cd6-ae4e-e71cde1d7583","3ac56225-c8be-49bb-9997-5360e651882d","aaf1b8e3-e12e-4d6f-846c-c1fd2cec768d"] as const;
-
-  it("all 5 bands have a UUID-matched WebP and no user exercise names in the public map", () => {
-    for (const id of ids) {
+  it("공용이 된 운동은 같은 ID·같은 그림을 새 공용 이름으로 찾는다", () => {
+    for (const [id, , name] of promoted) {
+      expect(SEED_NAME_BY_ID.get(id), id).toBe(name);
       const entry = EXERCISE_IMAGES[id];
-      expect(entry, id).toBeDefined();
-      expect(entry.custom).toBe(true);
-      expect(entry.name).toBe("");
-      expect(entry.file).toBe(id);
-      expect(entry.source).toBe("gnd");
-      expect(entry.origin).toBe("gnd-band-custom-2026-10-09");
-      expect(existsSync(publicPath(`exercise-images/${id}.webp`))).toBe(true);
-      expect(exerciseImageSrc(id)).toBe(`/exercise-images/${id}.webp`);
+      expect(entry.name, id).toBe(name);
+      expect(entry.custom, id).toBeUndefined();
+      expect(entry.file, id).toBe(id);
+      expect(existsSync(publicPath(`exercise-images/${id}.webp`)), id).toBe(true);
+      expect(seedExerciseIdByName(name), id).toBe(id);
+      expect(imageIdForAddedExercise({ name, isCustom: false }), id).toBe(id);
+    }
+    for (const [id, name] of promotedNoImage) {
+      expect(SEED_NAME_BY_ID.get(id), id).toBe(name);
+      expect(EXERCISE_IMAGES[id], id).toBeUndefined();
     }
   });
 
-  it("custom band lookup requires exact own catalog id, not just exercise name", () => {
-    const own = [{ id: ids[0], name: "밴드 바이셉 컬", is_custom: true }];
-    expect(imageIdForAddedExercise({ name: "밴드 바이셉 컬", isCustom: true }, own)).toBe(ids[0]);
-    expect(imageIdForAddedExercise({ name: "밴드 바이셉 컬", isCustom: true })).toBeUndefined();
+  it("0118 실행 전(아직 직접 운동)에도 본인 카탈로그 ID로 같은 그림을 찾는다 — 앱을 먼저 배포해도 된다", () => {
+    for (const [id, oldName] of promoted) {
+      const own = [{ id, name: oldName, is_custom: true }];
+      expect(imageIdForAddedExercise({ name: oldName, isCustom: true }, own), id).toBe(id);
+    }
+  });
+
+  it("영어·오타였던 옛 이름으로는 공용 그림이 붙지 않는다", () => {
+    for (const [, oldName, name] of promoted) {
+      if (oldName !== name) expect(seedExerciseIdByName(oldName), oldName).toBeUndefined();
+    }
+  });
+
+  it("합친 직접 운동은 연결표·그림 파일에서 빠지고 합친 공용 운동 그림을 쓴다", () => {
+    for (const id of merged) {
+      expect(EXERCISE_IMAGES[id], id).toBeUndefined();
+      expect(existsSync(publicPath(`exercise-images/${id}.webp`)), id).toBe(false);
+    }
+    expect(imageIdForAddedExercise({ name: "시티드 로우", isCustom: false })).toBe("71220804-54f1-4e40-88aa-84663495dc2d");
+    expect(seedExerciseIdByName("인클라인 덤벨 벤치프레스")).toBe("1c0251d1-54ca-45f6-ace2-4cb8bebab7a6");
+  });
+
+  it("연결표에 직접 운동 항목이 남지 않았다 (모두 운영자 운동이었다)", () => {
+    expect(Object.values(EXERCISE_IMAGES).filter((e) => e.custom)).toEqual([]);
+  });
+
+  it("같은 이름이라도 다른 사람의 직접 운동 ID에는 그림이 붙지 않는다", () => {
+    const other = [{ id: "00000000-0000-0000-0000-000000000000", name: "밴드 바이셉 컬", is_custom: true }];
+    expect(imageIdForAddedExercise({ name: "밴드 바이셉 컬", isCustom: true }, other)).toBeUndefined();
   });
 });
 
@@ -166,11 +184,9 @@ describe("imagesFirst — 그림 있는 운동을 위로 (사용자 지시 2026-
 });
 
 describe("imageIdForAddedExercise — 담은 운동의 그림 ID", () => {
-  const customId = Object.entries(EXERCISE_IMAGES).find(([, e]) => e.custom)?.[0];
-
-  it("전제 — 직접 만든 운동 그림이 연결표에 하나 이상 있다", () => {
-    expect(customId).toBeTruthy();
-  });
+  // 0118 이후 연결표에 직접 운동 항목은 없다. 그림이 있는 아무 ID로 "본인 카탈로그의
+  // 직접 운동 행이 그 ID다"라는 상황을 만든다 (0118 실행 전의 운영자 운동이 그랬다).
+  const customId = "90033d48-4db9-40bd-bd3f-3b8e1cbb55d1";
 
   it("기본 운동은 이름으로 찾는다", () => {
     expect(imageIdForAddedExercise({ name: "벤치프레스", isCustom: false })).toBe(

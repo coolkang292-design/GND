@@ -3016,6 +3016,123 @@
       "measure": null,
       "is_custom": false,
       "is_seed": true
+    },
+    {
+      "id": "90033d48-4db9-40bd-bd3f-3b8e1cbb55d1",
+      "name": "아이소 레터럴 인클라인 프레스 머신",
+      "body_part": "가슴",
+      "exercise_type": "weight",
+      "measure": null,
+      "is_custom": false,
+      "is_seed": true
+    },
+    {
+      "id": "3d9264b3-b67c-40ee-9385-fad0d8fb786b",
+      "name": "인클라인 YTW 레이즈",
+      "body_part": "등",
+      "exercise_type": "weight",
+      "measure": null,
+      "is_custom": false,
+      "is_seed": true
+    },
+    {
+      "id": "ba21558a-58db-4e58-a055-12309b9a438b",
+      "name": "맨몸 벤트오버 레터럴 레이즈",
+      "body_part": "어깨",
+      "exercise_type": "bodyweight",
+      "measure": "reps",
+      "is_custom": false,
+      "is_seed": true
+    },
+    {
+      "id": "e6a6598d-8597-4d22-8d81-ef2265e0c168",
+      "name": "불가리안 스플릿 스쿼트",
+      "body_part": "하체",
+      "exercise_type": "weight",
+      "measure": null,
+      "is_custom": false,
+      "is_seed": true
+    },
+    {
+      "id": "b79eef2a-2e72-4d00-836a-c5559de8669d",
+      "name": "스캐풀러 푸시업 플러스",
+      "body_part": "어깨",
+      "exercise_type": "bodyweight",
+      "measure": "reps",
+      "is_custom": false,
+      "is_seed": true
+    },
+    {
+      "id": "cb431896-1837-45d7-afed-e31cee522974",
+      "name": "흉추 익스텐션",
+      "body_part": "등",
+      "exercise_type": "bodyweight",
+      "measure": "reps",
+      "is_custom": false,
+      "is_seed": true
+    },
+    {
+      "id": "ac897fe5-30df-466b-a190-e0a660a545c3",
+      "name": "도어웨이 가슴 스트레칭",
+      "body_part": "가슴",
+      "exercise_type": "bodyweight",
+      "measure": "time",
+      "is_custom": false,
+      "is_seed": true
+    },
+    {
+      "id": "b84bb13d-7323-42d4-b97e-f220d261432c",
+      "name": "월 슬라이드",
+      "body_part": "어깨",
+      "exercise_type": "bodyweight",
+      "measure": "reps",
+      "is_custom": false,
+      "is_seed": true
+    },
+    {
+      "id": "4f47934b-e7a8-4618-8d24-085ebc297dde",
+      "name": "밴드 바이셉 컬",
+      "body_part": "팔",
+      "exercise_type": "weight",
+      "measure": null,
+      "is_custom": false,
+      "is_seed": true
+    },
+    {
+      "id": "3ac56225-c8be-49bb-9997-5360e651882d",
+      "name": "밴드 풀어파트",
+      "body_part": "어깨",
+      "exercise_type": "weight",
+      "measure": null,
+      "is_custom": false,
+      "is_seed": true
+    },
+    {
+      "id": "e5835092-9ce2-4cd6-ae4e-e71cde1d7583",
+      "name": "밴드 스쿼트",
+      "body_part": "하체",
+      "exercise_type": "weight",
+      "measure": null,
+      "is_custom": false,
+      "is_seed": true
+    },
+    {
+      "id": "bef0d91e-ea01-4817-b00e-e5978a5bdbe8",
+      "name": "밴드 레터럴 레이즈",
+      "body_part": "어깨",
+      "exercise_type": "weight",
+      "measure": null,
+      "is_custom": false,
+      "is_seed": true
+    },
+    {
+      "id": "aaf1b8e3-e12e-4d6f-846c-c1fd2cec768d",
+      "name": "밴드 시티드 로우",
+      "body_part": "등",
+      "exercise_type": "weight",
+      "measure": null,
+      "is_custom": false,
+      "is_seed": true
     }
   ],
   "source_total": 348,
