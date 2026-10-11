@@ -16,6 +16,10 @@ export function isExcludedPath(pathname: string | null | undefined): boolean {
 
 export const INTERNAL_FLAG_KEY = "gnd-analytics-internal";
 
+/** 내부(QA) 표시를 켜고 끄는 쿼리 이름과 알아듣는 값. `/`의 리다이렉트도 이 둘만 실어 보낸다(`app/page.tsx`). */
+export const INTERNAL_PARAM = "gnd_internal";
+export const INTERNAL_PARAM_VALUES = ["0", "1"] as const;
+
 /**
  * 내부 테스트 브라우저 표시. `?gnd_internal=1`로 한 번 열면 이 브라우저가 내부(QA)로
  * 표시되고 `?gnd_internal=0`으로 푼다. 인증이 아니라 **편의**다 — 누가 켜도 자기 자신만 바뀐다.
@@ -27,7 +31,7 @@ export const INTERNAL_FLAG_KEY = "gnd-analytics-internal";
  */
 export function applyInternalFlagFromSearch(search: string): void {
   try {
-    const v = new URLSearchParams(search).get("gnd_internal");
+    const v = new URLSearchParams(search).get(INTERNAL_PARAM);
     if (v === "1") window.localStorage.setItem(INTERNAL_FLAG_KEY, "1");
     else if (v === "0") window.localStorage.removeItem(INTERNAL_FLAG_KEY);
   } catch {

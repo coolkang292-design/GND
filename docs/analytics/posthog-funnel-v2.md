@@ -75,9 +75,33 @@ autocapture·페이지뷰·리플레이·히트맵·플래그·설문 전부 끔
 | 속성 | 위치 | 값 | 규칙 |
 |---|---|---|---|
 | `utm_source` (이벤트) / `initial_utm_source` (사람, `$set_once`) | `src/lib/posthog/events.ts` `normalizeUtmSource` | `instagram`·`youtube`·`threads`·`tiktok`·`other` | `ig`(정확히)·`ig_*`·`*instagram*` → instagram, `yt`·`*youtube*`·`youtu.be` → youtube, `*threads*`, `*tiktok*`, 그 밖 문자열 → `other`, 비어 있으면 **속성 없음**(직접 유입). **원문은 보내지 않는다** — 이메일 모양도 `other` |
-| `traffic_type` (이벤트) | `src/lib/posthog/context.ts` `trafficType` | `new`·`returning` | 첫 접촉 기록(`gnd-acquisition.capturedAt`, 기존 기능)이 30분 안이면 `new`. 정한 값은 **탭 세션 동안 고정**(sessionStorage) — 첫 방문 중 OAuth 왕복으로 페이지가 새로 떠도 안 뒤집힌다. 동의 후에만 계산·저장, 철회 시 삭제 |
-| `is_internal` (이벤트+사람) | `context.ts` / `client.ts` `personProps` | true/false | `?gnd_internal=1`(켜기)·`=0`(끄기) — v1 로직 그대로, 차단만 표시로 바꿈 |
+| `traffic_type` (이벤트) | `src/lib/posthog/context.ts` `trafficType` | `new`·`returning` | 첫 접촉 기록이 30분 안이면 `new` — **정확한 기준은 아래 §3-1** |
+| `is_internal` (이벤트+사람) | `context.ts` / `client.ts` `personProps` | true/false | `?gnd_internal=1`(켜기)·`=0`(끄기) — v1 로직 그대로, 차단만 표시로 바꿈. `/`·`/onboarding`·`/login` 등 **어느 주소에 붙여도** 된다(`/`의 리다이렉트가 `0`·`1`만 실어 보낸다 — 2026-10-12 수정, `src/app/page.tsx`) |
 | 봇 | `src/lib/posthog/exclusion.ts` `isLikelyBot` | (전송 안 함) | `navigator.webdriver`, `headless`, 알려진 크롤러(구글·빙·네이버 Yeti·Daumoa·페이스북·카카오 스크랩·GPTBot·ClaudeBot 등), `curl/`·`python-requests` 등. 짧은 `bot`은 단어 경계로만(`CUBOT` 휴대폰 오인 방지). 인스타·스레드(Barcelona)·카톡·네이버·유튜브 인앱 UA는 사람(테스트 고정). **UA 원문은 전송하지 않는다** |
+
+### 3-1. `traffic_type`의 정확한 기준 — "신규 사용자"가 아니라 "이 브라우저의 첫 방문 탭"
+
+| 항목 | 기준 |
+|---|---|
+| 판정 근거 | 이 브라우저 localStorage의 `gnd-acquisition.capturedAt` = **이 브라우저가 GND를 처음 연 시각.** `AcquisitionTracker`가 첫 진입에 한 번 심고 덮어쓰지 않는다(동의와 무관한 기존 기능) |
+| `new` | 이 **탭 세션**에서 처음 이벤트를 보낼 때, 처음 연 시각으로부터 **30분 안**이다 |
+| `returning` | 30분이 넘었다 |
+| 고정 | 한 번 정하면 **그 탭을 닫을 때까지** 바뀌지 않는다(sessionStorage). 같은 탭에서 OAuth를 다녀오거나 새로고침해도 그대로다. 탭을 닫았다 다시 열면 새로 판정한다 |
+| 속성 없음 | 첫 접촉 기록이 없을 때(저장소 차단·프라이빗 모드) |
+| 계산 시점 | **동의한 뒤에만** 계산·저장한다. 철회하면 지운다 |
+
+**사람 기준이 아니다.** 아래는 모두 `new`로 찍힌다.
+- 브라우저 저장소를 지우고 다시 온 기존 사용자
+- 같은 사람이 PC·폰·시크릿 창에서 각각 처음 연 경우
+- 인스타 인앱 브라우저에서 보다가 Safari/Chrome으로 옮겨 연 경우(저장소가 다르다)
+
+**경계 사례.**
+- 첫 방문에서 30분 넘게 머문 뒤 **처음으로 동의**하면 그 탭은 `returning`이 된다
+- 첫 방문에는 거부했다가 며칠 뒤 동의하면 `returning`이다
+
+**사람 기준 신규 여부의 원본은 Supabase `profiles.created_at`이다.** PostHog의 기본 "첫 이벤트 기준 신규 사용자"(사람 단위)와도
+다르다 — `traffic_type`은 **이벤트마다** 그때의 탭 상태를 적은 값이다. 그래서 같은 사람의 첫날 이벤트는 `new`, 다음 날 이벤트는
+`returning`이 된다(퍼널 필터를 걸 때 주의 — §6-2).
 
 **봇을 표시가 아니라 차단으로 한 근거**(사용자 승인): 전송은 동의 버튼을 눌러야 시작되므로 일반 크롤러는 원래 0건이다.
 남는 것은 Playwright 같은 자동화(우리 QA 포함)인데, 운영 숫자에 섞일 이유가 없다. posthog-js에도 자체 봇 필터가 있지만,
@@ -133,7 +157,8 @@ PostHog 건수 ≤ `workout_sessions` 건수가 정상이다.
    - 사람 속성 대신 이벤트 속성으로 하려면 *Event properties* → `is_internal` → **is not** → `true` (모든 제품 이벤트에 실려 있다)
 3. **"Enable this filter on all new insights"** 켜기
 4. 기존 인사이트는 각 화면의 **"Filter out internal and test users"** 토글을 켠다
-5. 확인: QA 브라우저에서 `https://<Preview 주소>/onboarding?gnd_internal=1` → 동의 → 이벤트 발생 → **Activity**에서 `is_internal=true`로 보이고, 토글을 켠 인사이트에서는 빠지는지 본다. QA가 끝나면 `?gnd_internal=0`
+5. 확인: QA 브라우저에서 `https://<Preview 주소>/?gnd_internal=1`(또는 `/onboarding?gnd_internal=1`) → 동의 → 이벤트 발생 → **Activity**에서 `is_internal=true`로 보이고, 토글을 켠 인사이트에서는 빠지는지 본다. QA가 끝나면 `?gnd_internal=0`
+   - 표시는 **그 브라우저 저장소**에 남는다. 인스타 인앱처럼 저장소가 다른 브라우저에서는 그 안에서 한 번 더 열어야 한다
 
 `is_internal`은 식별할 때 항상 true/false로 넣으므로 "속성 없음" 사람이 생기지 않는다.
 
@@ -141,8 +166,27 @@ PostHog 건수 ≤ `workout_sessions` 건수가 정상이다.
 
 - 단계: `landing_opened` → `start_clicked` → `onboarding_completed` → `workout_started` (`is_first = true`) → `workout_completed` (`is_first = true`) → `identity_link_succeeded`
 - Breakdown: 사람 `initial_utm_source` 또는 이벤트 `utm_source`
-- Filter: `traffic_type = new`(신규만), 내부 필터 켬
+- 신규만 보려면: **1단계(`landing_opened`)에만** 이벤트 속성 `traffic_type = new` 필터를 건다
+  - ⚠️ 인사이트 **전체 필터**로 걸면 안 된다. 첫날 들어와서 다음 날 첫 운동을 끝낸 사람은 뒤 단계 이벤트가 `returning`이라
+    그 단계에서 빠지고, 전환율이 실제보다 낮게 나온다(§3-1)
+- 내부 필터 켬(§6-1)
 - 집계 기준: Unique users. 전환 기간 7일 권장
+
+### 6-3. 대시보드·인사이트 설명란에 붙일 문구
+
+PostHog 대시보드(또는 퍼널 인사이트)의 **Description**에 그대로 붙여 넣는다.
+
+```
+[GND 가입 퍼널 · PostHog]
+- 동의한 사용자만 집계된다. 절대 숫자·전환율의 원본은 Supabase(profiles·workout_sessions·analytics_events)다.
+- utm_source: 첫 접촉 utm을 instagram/youtube/threads/tiktok/other로 줄인 값. 없으면 직접 유입.
+- traffic_type: 사람 기준 신규가 아니다. "이 브라우저가 GND를 처음 연 지 30분 안의 탭"이면 new, 아니면 returning.
+  탭을 닫을 때까지 고정. 저장소를 지우거나 다른 기기·인앱 브라우저로 오면 다시 new. 동의한 뒤에만 계산된다.
+  신규만 볼 때는 1단계(landing_opened)에만 traffic_type = new 를 건다 — 전체 필터로 걸면 다음 날 완료한 사람이 빠진다.
+- is_internal = true 는 QA 브라우저(?gnd_internal=1). 내부 사용자 필터로 뺀다.
+- 동의 전 클릭은 없다(사전 동의). 2단계 이탈이 실제보다 커 보일 수 있다.
+- 정의 문서: docs/analytics/posthog-funnel-v2.md §3-1 · §6
+```
 
 ⚠️ **해석 주의**: 동의 전 클릭은 PostHog에 없다. 첫 화면에서 배너보다 먼저 "바로 시작"을 누른 사람은 `start_clicked`가 비어
 2단계에서 빠진 것처럼 보인다. **절대 전환율은 Supabase가 원본**이고, PostHog는 동의자 안에서의 상대적 이탈 구간을 보는 용도다.
@@ -167,6 +211,9 @@ PostHog 건수 ≤ `workout_sessions` 건수가 정상이다.
 | 동의 후 "카카오로 시작하기"(카카오 로그인 화면으로 이동, 로그인 안 함) | 떠나기 전 이벤트 유실 없음 | ✅ `start_clicked(onboarding_kakao)`·`identity_link_started(location=onboarding)` 도착 |
 | 운영 빌드, 저장소 비운 새 방문 `?utm_source=ig` → 배너 "동의"(새로고침 없음) | `landing_opened`·`onboarding_started` 도착, `ig`→`instagram` | ❌(#10 전에는 원리상 누락) → **수정 후 ✅** · 원문 `ig` 0건 · DB 추가 쓰기 0 |
 | 운영 빌드 동의 전/후 SDK 청크 | 전: 미로드 / 후: 로드 | ✅ |
+| *(2026-10-12)* 운영 빌드, 저장소 비움 → `/?gnd_internal=1&utm_source=ig` | `/record?…&gnd_internal=1`로 이동, 내부 표시 켜짐 | ✅ 쿼리 유지·표시 `1`·`utm_source=ig` 보존 |
+| *(2026-10-12)* `/?gnd_internal=0` | 표시 꺼짐 | ✅ `/record?gnd_internal=0`·표시 없음 |
+| *(2026-10-12)* `/?gnd_internal=yes&next=https://evil.example` | 아무것도 안 넘김 | ✅ `/record` |
 
 참고: 브라우저 패널이 창 뒤에 있어 일부 화면(`/account` 토글, 배너 버튼)은 화면 그리기가 멈춰 **DOM click 이벤트**로 눌렀다.
 나머지 버튼은 실제 클릭이다.
@@ -194,7 +241,8 @@ autocapture·페이지뷰 자동수집·세션 리플레이·히트맵은 **꺼�
 1. Vercel **Preview** 환경에 `NEXT_PUBLIC_POSTHOG_KEY`(프로젝트 653928의 `phc_` 키) 입력 — 에이전트는 환경변수를 건드리지 않았다. 호스트는 비워 두면 US Cloud
 2. `/privacy` 문구 승인 — 초안: `docs/analytics/posthog-privacy-review.md` §8(v2 수집 항목 반영). **운영 페이지는 수정하지 않았다**
 3. PostHog 내부 사용자 필터 설정(§6-1)
-4. Preview에서 QA: `?gnd_internal=1`로 동의 → 위 퍼널 이벤트가 Activity에 뜨는지
+4. Preview에서 QA: `/?gnd_internal=1`로 동의 → 위 퍼널 이벤트가 Activity에 뜨는지
+5. PostHog 대시보드 설명란에 §6-3 문구 붙여 넣기
 
 **미검증·후속 제안**
 - §7의 브라우저 [미검증] 3건

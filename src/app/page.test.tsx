@@ -66,4 +66,25 @@ describe("RootPage 리다이렉트", () => {
   it("빈 값은 넘기지 않는다", async () => {
     expect(await go({ utm_source: "" })).toBe("/record");
   });
+
+  /**
+   * 내부(QA) 표시 `?gnd_internal=1`도 여기서 사라졌다 (PostHog v2 검토, 2026-10-12).
+   * QA가 공유 링크(`/`)로 들어오면 표시가 안 붙어 실사용자로 섞였다.
+   * ⚠️ 값은 `0`·`1`만 넘긴다 — `exclusion.ts`가 그 둘만 알아듣고, 그 밖의 값을 실어 나를 이유가 없다.
+   */
+  it("gnd_internal=1·0은 실어 보낸다 (utm과 함께여도)", async () => {
+    expect(await go({ gnd_internal: "1" })).toBe("/record?gnd_internal=1");
+    expect(await go({ gnd_internal: "0" })).toBe("/record?gnd_internal=0");
+    const url = await go({ utm_source: "instagram", gnd_internal: "1" });
+    const qs = new URLSearchParams(url.split("?")[1]);
+    expect(qs.get("utm_source")).toBe("instagram");
+    expect(qs.get("gnd_internal")).toBe("1");
+  });
+
+  it("gnd_internal이 0·1이 아니면 넘기지 않는다", async () => {
+    for (const v of ["yes", "true", "2", "1;evil", " 1", ""]) {
+      expect(await go({ gnd_internal: v })).toBe("/record");
+    }
+    expect(await go({ gnd_internal: ["1", "0"] })).toBe("/record?gnd_internal=1");
+  });
 });
