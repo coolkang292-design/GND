@@ -92,12 +92,26 @@ node scripts/dev-fixture.mjs destroy    # 픽스처 2개만 삭제
 
 ## 배포 — `git push`는 배포가 아니다 ⚠️
 
-**이 프로젝트는 GitHub 연동 배포를 쓰지 않는다.** Vercel 프로젝트가 로컬 저장소에 CLI로 링크돼 있고(`.vercel/project.json`, `.gitignore`에 포함), 배포는 **검증한 로컬 `main` 코드를 기준으로 사람이나 에이전트가 로컬에서 직접 실행**해야 한다. GitHub Actions·GitHub 웹 화면·Vercel의 GitHub 자동 배포는 모두 금지한다.
+**운영 배포는 GitHub 연동으로 하지 않는다.** Vercel 프로젝트가 로컬 저장소에 CLI로 링크돼 있고(`.vercel/project.json`, `.gitignore`에 포함), 운영 배포는 **검증한 로컬 `main` 코드를 기준으로 사람이나 에이전트가 로컬에서 직접 실행**해야 한다. GitHub Actions·GitHub 웹 화면·Vercel의 GitHub 자동 **운영** 배포는 모두 금지한다.
+
+**단, 미리보기(Preview)는 GitHub 연동으로 자동 생성된다** (사용자 지시 2026-10-12).
+Vercel 프로젝트 `gnd`가 `coolkang292-design/GND`에 연결돼 있고(운영 브랜치 `main`),
+`vercel.json`의 `git.deploymentEnabled.main: false`가 **`main` 푸시의 자동 배포만** 끈다.
 
 ```
-git push   →  GitHub에만 올라간다. 사용자 폰에는 아무 변화가 없다.
-vercel --prod  →  이게 실제 배포다.
+git push (작업 브랜치)  →  Vercel이 Preview를 자동으로 만든다. 사용자 폰에는 아무 변화가 없다.
+git push (main)        →  GitHub에만 올라간다. 배포 안 된다. 사용자 폰에는 아무 변화가 없다.
+vercel --prod          →  이게 실제 배포다.
 ```
+
+- ⛔ **`vercel.json`에서 `"main": false`를 지우지 마라.** 지우는 순간 `main` 푸시가
+  승인 없이 운영 배포가 된다. Vercel은 **푸시된 커밋의** `vercel.json`을 읽으므로
+  `main`에 들어간 이 줄이 유일한 차단막이다
+- Preview 주소(`gnd-<hash>-gnd4.vercel.app`)는 **Vercel 로그인이 있어야 열린다**
+  (Deployment Protection). 폰에서 보려면 폰 브라우저에서 Vercel에 로그인한다
+- Preview에는 Supabase·PostHog 키만 있다. **푸시 알림(VAPID)·관리자·크론·서비스 롤 기능은
+  Preview에서 동작하지 않는다** — 그건 버그가 아니라 환경변수가 Production 전용이라서다
+- Preview가 떴다고 **개발 서버 확인(§개발 환경에서 먼저 확인한다)을 대신하지 않는다**
 
 2026-07-31에 이걸 몰라서 사고가 났다. 응원 포인트(7/29 완성)와 챌린지 종목 집계(7/30 완성)를 "배포했다"고 보고했지만 **푸시만 했고 이틀간 사용자 폰에는 옛날 코드가 돌고 있었다.** 사용자는 "기능이 적용 안 됐다"고 느꼈고, 서버 DB는 정상이라 원인을 찾는 데 오래 걸렸다.
 
@@ -152,7 +166,7 @@ curl -s https://gnd-one.vercel.app/challenge \
 **배포 승인을 받았으면 푸시 승인도 받은 것이다.** 묻지 말고 커밋 → 푸시 → 배포를
 한 흐름으로 끝낸다.
 
-이 저장소는 **GitHub 연동 배포를 쓰지 않아서**(위 §배포) 푸시하지 않아도 배포가 된다.
+이 저장소는 **운영 배포를 GitHub 연동으로 하지 않아서**(위 §배포) 푸시하지 않아도 배포가 된다.
 그래서 아무도 안 챙기면 **운영에는 새 코드가 도는데 깃허브는 옛 코드**로 남는다.
 2026-08-28에 실제로 그럴 뻔했다 — 확대 기능을 두 번 배포하고도 원격은 `69893a1`
 (시작 이미지 v5)에 머물러 있었다. 다음 세션이 원격을 읽으면 이미 살아 있는 기능을
