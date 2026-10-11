@@ -1,6 +1,6 @@
 # PostHog 도입 — 개인정보 검토 (코드 작성 전 정리)
 
-작성 2026-10-09 · 브랜치 `feat/posthog-funnel`
+작성 2026-10-09 · 브랜치 `feat/posthog-funnel` · **2026-10-11 갱신(v2, `feat/posthog-funnel-v2`)** — 이벤트 2종·공통 속성 3종·봇 차단·내부 표시 반영. 변경 근거: `docs/analytics/posthog-funnel-v2.md`
 
 > **이 문서는 법적 검토가 끝난 문서가 아니다.** 사실관계(무엇을 보내는가)는 코드 기준으로 적었고,
 > 법적 판단이 필요한 항목은 "미해결"로 표시했다. 운영 배포 전에 개인정보 담당자·법률 자문 확인이 필요하다.
@@ -18,21 +18,31 @@
 
 | 이벤트 | 속성 |
 |---|---|
-| `landing_opened` | `utm_source`, `utm_medium`, `utm_campaign`, `referrer_host`(호스트만), `landing_path`(초대 코드 마스킹) |
+| `landing_opened` | `utm_source`(**다섯 채널로 정규화**), `utm_medium`, `utm_campaign`, `referrer_host`(호스트만), `landing_path`(초대 코드 마스킹) |
+| `start_clicked` *(v2)* | `location`(정해 둔 4값: `onboarding_try_first`·`onboarding_kakao`·`onboarding_google`·`login_signup`) |
 | `onboarding_started` / `onboarding_nickname_shown` | 없음 |
 | `onboarding_completed` | `has_invite`(true/false) |
-| `identity_link_started` | `provider`(kakao/google) |
+| `identity_link_started` | `provider`(kakao/google), `location`(*v2*: `onboarding`·`protect_records`) |
 | `identity_link_succeeded` | `provider` |
-| `identity_link_failed` | `provider`, `error_code`(분류 코드) |
+| `identity_link_failed` | `provider`, `location`(*v2*), `error_code`(분류 코드) |
 | `login_succeeded` | `provider`(kakao/google/password) |
 | `login_failed` | `provider`, `error_code` |
+| `workout_started` *(v2)* | `is_first`, `workout_index`(n번째 운동인가 = 완료 수 + 1) |
 | `workout_completed` | `is_first`, `workout_index`(n번째), `exercise_count`, `duration_bucket`(구간), `has_photo` |
 | `challenge_viewed`, `challenge_create_started`, `challenge_share_started`, `challenge_goal_started`, `ai_coach_onboarding_started` | 없음 |
+
+**모든 이벤트에 붙는 공통 속성 (v2)** — 화면 코드가 아니라 `src/lib/posthog/context.ts`가 붙이고 화이트리스트가 다시 거른다.
+
+| 속성 | 값 | 근거 |
+|---|---|---|
+| `utm_source` | `instagram`·`youtube`·`threads`·`tiktok`·`other` 중 하나. utm이 없으면 속성 없음 | 첫 접촉 기록(`gnd-acquisition`)의 원문을 정규화. `ig`→instagram. **원문은 보내지 않는다** |
+| `traffic_type` | `new`·`returning` | 첫 접촉 기록이 30분 안에 생겼으면 `new`, 탭 세션 동안 고정. 브라우저 저장소 기준(사람 기준 아님) |
+| `is_internal` | true/false | `?gnd_internal=1`로 표시한 내부(QA) 브라우저 |
 
 ### 2-2. 식별자와 사람 속성
 
 - `distinct_id`: Supabase `auth.uid()`(무작위 UUID). 로그인 전/세션 없음 구간에는 PostHog가 만든 무작위 UUID.
-- 사람 속성: `is_anonymous`(bool), 최초 유입 `initial_utm_source/medium/campaign`(`$set_once`).
+- 사람 속성: `is_anonymous`(bool), `is_internal`(bool, *v2*), 최초 유입 `initial_utm_source`(*v2*: 다섯 채널로 정규화)`/medium/campaign`(`$set_once`).
 
 ### 2-3. SDK가 자동으로 붙이는 값 (허용 목록으로 걸러냄)
 
@@ -43,7 +53,13 @@
 
 이메일, 닉네임, 이름, 프로필 사진, 운동 사진, 운동 종목명·무게·메모·캡션, 초대 코드 원문, 챌린지 이름·ID, 검색어, 토큰, 자유 텍스트. 화이트리스트에 없는 속성 키는 전부 버리고, 이메일·JWT 모양의 값은 허용된 키에서도 버린다(단위 테스트로 검증).
 
-### 2-5. 켜지 않는 기능
+### 2-5. 봇·자동화와 내부(QA) 브라우저 (v2, 2026-10-11 사용자 결정)
+
+- **봇·자동화는 전송하지 않는다.** `navigator.webdriver=true`, `HeadlessChrome`, 알려진 크롤러 UA(구글·네이버 Yeti·페이스북·카카오 스크랩 등)면 SDK를 아예 불러오지 않는다. UA 원문은 어디에도 보내지 않는다(판정은 기기 안에서 true/false로 끝난다). 인스타·스레드·카톡·네이버·유튜브 인앱 UA는 사람으로 본다(테스트로 고정).
+- **내부(QA) 브라우저는 보내되 표시한다.** v1은 `?gnd_internal=1`이면 전송을 막았으나, QA가 Preview에서 PostHog로 직접 확인할 수 있도록 **이벤트·사람 속성 `is_internal=true`를 붙여 보낸다.** 숫자에서 빼는 것은 PostHog의 "Filter out internal and test users" 설정이 한다(설정법: `posthog-funnel-v2.md` §6).
+- 관리자 화면(`/admin` 등)과 `NEXT_PUBLIC_ANALYTICS_EXCLUDE_USER_IDS`의 계정은 v1대로 전송하지 않는다.
+
+### 2-6. 켜지 않는 기능
 
 autocapture, 페이지뷰·페이지이탈 자동 수집, 세션 리플레이, 히트맵, 설문, 웹 실험, 대화(conversations), 제품 투어, 에러 자동 수집, dead click/rage click, 피처 플래그 호출.
 
@@ -102,7 +118,7 @@ autocapture, 페이지뷰·페이지이탈 자동 수집, 세션 리플레이, �
 > **이용 분석 도구 (선택)**
 > GND는 서비스 개선을 위해 PostHog(PostHog Inc., 미국)를 **사용자가 동의한 경우에만** 사용합니다.
 >
-> - **수집 항목**: 이름 없는 이용자 식별 번호, 방문 경로(광고·링크 출처 구분 값), 로그인·가입 성공 또는 실패와 분류 코드, 온보딩 진행 단계, 운동 완료 여부와 횟수·종목 수·시간대(구간), 브라우저·기기 종류와 화면 크기, 시간대.
+> - **수집 항목**: 이름 없는 이용자 식별 번호, 방문 경로(인스타그램·유튜브·스레드·틱톡·기타 중 하나와 광고·링크 출처 구분 값), 첫 방문 여부, 시작 버튼을 누른 위치, 로그인·가입 성공 또는 실패와 분류 코드, 온보딩 진행 단계, 운동 시작·완료 여부와 횟수·종목 수·시간대(구간), 브라우저·기기 종류와 화면 크기, 시간대.
 > - **수집하지 않는 것**: 이메일, 닉네임, 사진, 운동 메모, 초대 코드, 정확한 접속 주소, IP 주소 저장.
 > - **목적**: 가입·운동 기록 과정에서 이탈하는 구간을 찾아 서비스를 개선합니다. 광고나 제3자 제공에 쓰지 않습니다.
 > - **보유 기간**: 12개월 (검토 후 확정)

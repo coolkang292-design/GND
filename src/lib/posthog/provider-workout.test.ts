@@ -53,6 +53,7 @@ const KEY = "phc_abcdefghij1234567890";
 const U = "11111111-1111-4111-8111-111111111111";
 
 let reportWorkoutCompleted: typeof import("./workout-event").reportWorkoutCompleted;
+let reportWorkoutStarted: typeof import("./workout-event").reportWorkoutStarted;
 let syncAnalytics: typeof import("./client").syncAnalytics;
 let grantAnalyticsConsent: typeof import("./consent-actions").grantAnalyticsConsent;
 
@@ -68,7 +69,7 @@ beforeEach(async () => {
   h.state.queries = 0;
   h.state.opted = false;
   for (const f of Object.values(h.sdk)) (f as { mockClear?: () => void }).mockClear?.();
-  ({ reportWorkoutCompleted } = await import("./workout-event"));
+  ({ reportWorkoutCompleted, reportWorkoutStarted } = await import("./workout-event"));
   ({ syncAnalytics } = await import("./client"));
   ({ grantAnalyticsConsent } = await import("./consent-actions"));
 });
@@ -121,6 +122,7 @@ describe("workout_completed", () => {
           exercise_count: 4,
           duration_bucket: "20-40",
           has_photo: false,
+          is_internal: false,
         },
       },
     ]);
@@ -153,5 +155,78 @@ describe("workout_completed", () => {
     expect(h.captures[0]!.props).not.toHaveProperty("is_first");
     expect(h.captures[0]!.props).not.toHaveProperty("workout_index");
     expect(h.captures[0]!.props).toMatchObject({ exercise_count: 4, duration_bucket: "20-40" });
+  });
+});
+
+describe("workout_completed — 첫 운동은 사용자당 한 번", () => {
+  it("첫 운동을 지우고 다시 끝내도(DB상 완료 1회가 두 번) is_first=true는 한 번만 나간다", async () => {
+    grantAnalyticsConsent();
+    await syncAnalytics({ userId: U, isAnonymous: true, pathname: "/record" });
+    h.state.count = 1;
+    await reportWorkoutCompleted({ ...base, sessionId: "first-a" });
+    await reportWorkoutCompleted({ ...base, sessionId: "first-b" }); // 지우고 새로 한 첫 운동
+    expect(h.captures.filter((c) => c.props.is_first === true)).toHaveLength(1);
+    // 두 번째 운동은 정상적으로 나간다
+    h.state.count = 2;
+    await reportWorkoutCompleted({ ...base, sessionId: "second" });
+    expect(h.captures.map((c) => c.props.workout_index)).toEqual([1, 2]);
+  });
+});
+
+describe("workout_started", () => {
+  it("동의 전: DB 조회도 하지 않고 아무것도 보내지 않는다", async () => {
+    await syncAnalytics({ userId: U, isAnonymous: true, pathname: "/record" });
+    await reportWorkoutStarted({ userId: U, sessionId: "s1" });
+    expect(h.state.queries).toBe(0);
+    expect(h.captures).toHaveLength(0);
+  });
+
+  it("완료 0회면 is_first=true, workout_index=1 (세션 id는 안 보낸다)", async () => {
+    grantAnalyticsConsent();
+    await syncAnalytics({ userId: U, isAnonymous: true, pathname: "/record" });
+    h.state.count = 0;
+    await reportWorkoutStarted({ userId: U, sessionId: "sess-start-1" });
+    expect(h.captures).toEqual([
+      { event: "workout_started", props: { workout_index: 1, is_first: true, is_internal: false } },
+    ]);
+    expect(JSON.stringify(h.captures)).not.toContain("sess-start-1");
+  });
+
+  it("완료 n회면 workout_index=n+1, is_first=false — 그 운동을 끝내면 completed의 index와 같다", async () => {
+    grantAnalyticsConsent();
+    await syncAnalytics({ userId: U, isAnonymous: true, pathname: "/record" });
+    h.state.count = 4;
+    await reportWorkoutStarted({ userId: U, sessionId: "s5" });
+    h.state.count = 5; // 끝낸 뒤 DB 완료 수
+    await reportWorkoutCompleted({ ...base, sessionId: "s5" });
+    expect(h.captures.map((c) => [c.event, c.props.workout_index, c.props.is_first])).toEqual([
+      ["workout_started", 5, false],
+      ["workout_completed", 5, false],
+    ]);
+  });
+
+  it("같은 세션에서 시작을 다시 눌러도, 첫 운동을 여러 번 시작해도 is_first=true는 한 번", async () => {
+    grantAnalyticsConsent();
+    await syncAnalytics({ userId: U, isAnonymous: true, pathname: "/record" });
+    h.state.count = 0;
+    await reportWorkoutStarted({ userId: U, sessionId: "a" });
+    await reportWorkoutStarted({ userId: U, sessionId: "a" }); // 재시도
+    await reportWorkoutStarted({ userId: U, sessionId: "b" }); // 첫 운동을 버리고 새로 시작
+    expect(h.captures).toHaveLength(1);
+    expect(h.captures[0]!.props.is_first).toBe(true);
+    // 첫 운동이 아닌 시작은 세션마다 한 번
+    h.state.count = 1;
+    await reportWorkoutStarted({ userId: U, sessionId: "c" });
+    await reportWorkoutStarted({ userId: U, sessionId: "c" });
+    await reportWorkoutStarted({ userId: U, sessionId: "d" });
+    expect(h.captures).toHaveLength(3);
+  });
+
+  it("횟수 조회가 실패해도 이벤트는 나가되 is_first·workout_index는 뺀다", async () => {
+    grantAnalyticsConsent();
+    await syncAnalytics({ userId: U, isAnonymous: true, pathname: "/record" });
+    h.state.count = null;
+    await reportWorkoutStarted({ userId: U, sessionId: "x" });
+    expect(h.captures).toEqual([{ event: "workout_started", props: { is_internal: false } }]);
   });
 });

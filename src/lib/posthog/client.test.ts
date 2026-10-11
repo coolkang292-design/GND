@@ -170,7 +170,7 @@ describe("동의 후", () => {
 
     expect(sdk.fake.identify).toHaveBeenCalledWith(
       A,
-      { is_anonymous: true },
+      { is_anonymous: true, is_internal: false },
       { initial_utm_source: "instagram", initial_utm_medium: "creator", initial_utm_campaign: "pilot01" },
     );
   });
@@ -184,7 +184,12 @@ describe("동의 후", () => {
       { provider: "google", error_code: "network", email: "a@b.com", detail: "raw error text" },
       { userId: A },
     );
-    expect(sdk.fake.capture).toHaveBeenCalledWith("login_failed", { provider: "google", error_code: "network" });
+    // 공통 맥락은 is_internal만(유입 기록이 없으면 utm_source·traffic_type은 빠진다)
+    expect(sdk.fake.capture).toHaveBeenCalledWith("login_failed", {
+      provider: "google",
+      error_code: "network",
+      is_internal: false,
+    });
   });
 
   it("준비 전에 들어온 이벤트는 식별 뒤에 정확히 한 번 나간다", async () => {
@@ -291,6 +296,25 @@ describe("사용자 식별 충돌", () => {
     expect(sdk.fake.identify).not.toHaveBeenCalled();
   });
 
+  it("같은 사용자 재로드: 사람 속성이 그대로면 $set도 다시 보내지 않는다 (2026-10-11 로컬 브라우저에서 발견)", async () => {
+    configure();
+    grantAnalyticsConsent();
+    await sync(A, true); // 첫 방문: 식별 + 사람 속성
+    expect(sdk.fake.identify).toHaveBeenCalledTimes(1);
+
+    // 새로고침 = 모듈 상태가 사라진다. SDK 저장소·우리 표식은 남는다.
+    __resetAnalyticsForTests();
+    await sync(A, null); // 세션 읽는 중 — 반쪽 속성으로 $set 하지 않는다
+    await sync(A, true);
+    expect(sdk.fake.identify).toHaveBeenCalledTimes(1);
+    expect(sdk.fake.reset).not.toHaveBeenCalled();
+    expect(sdk.fake.setPersonProperties).not.toHaveBeenCalled();
+
+    // 값이 실제로 바뀌면(승격) 그때만 보낸다
+    await sync(A, false);
+    expect(sdk.fake.setPersonProperties).toHaveBeenCalledTimes(1);
+  });
+
   it("표식이 없으면(저장소 정리 등) 안전하게 다시 식별한다", async () => {
     configure();
     grantAnalyticsConsent();
@@ -326,7 +350,7 @@ describe("사용자 식별 충돌", () => {
     await sync(A, false);
     expect(sdk.fake.reset).not.toHaveBeenCalled();
     expect(sdk.fake.identify).toHaveBeenCalledTimes(1);
-    expect(sdk.fake.setPersonProperties).toHaveBeenCalledWith({ is_anonymous: false });
+    expect(sdk.fake.setPersonProperties).toHaveBeenCalledWith({ is_anonymous: false, is_internal: false });
   });
 });
 
@@ -411,14 +435,25 @@ describe("제외 대상", () => {
     expect(sdk.fake.capture).toHaveBeenCalledTimes(1);
   });
 
-  it("내부 테스트 브라우저 표시가 있으면 보내지 않는다", async () => {
+  it("내부(QA) 브라우저는 막지 않고 is_internal=true를 이벤트·사람 속성 둘 다에 싣는다 (2026-10-11 결정)", async () => {
     configure();
     grantAnalyticsConsent();
     window.localStorage.setItem(INTERNAL_FLAG_KEY, "1");
     await sync(A);
     trackProduct("onboarding_started", {}, { userId: A });
-    expect(sdk.fake.init).not.toHaveBeenCalled();
-    expect(sdk.fake.capture).not.toHaveBeenCalled();
+    expect(sdk.fake.identify).toHaveBeenCalledWith(A, { is_anonymous: true, is_internal: true }, {});
+    expect(sdk.fake.capture).toHaveBeenCalledWith("onboarding_started", { is_internal: true });
+  });
+
+  it("?gnd_internal=0으로 풀면 사람 속성이 is_internal=false로 갱신된다", async () => {
+    configure();
+    grantAnalyticsConsent();
+    window.localStorage.setItem(INTERNAL_FLAG_KEY, "1");
+    await sync(A);
+    window.localStorage.removeItem(INTERNAL_FLAG_KEY);
+    await sync(A);
+    expect(sdk.fake.setPersonProperties).toHaveBeenCalledWith({ is_anonymous: true, is_internal: false });
+    expect(sdk.fake.identify).toHaveBeenCalledTimes(1);
   });
 
   it("지정한 내부 테스트 계정은 보내지 않는다 (대소문자 무관)", async () => {

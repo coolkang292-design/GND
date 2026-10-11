@@ -117,12 +117,12 @@ function mirrorToPosthog(
       return;
     }
     case "identity_link_started":
-      trackProduct("identity_link_started", { provider }, { userId });
+      trackProduct("identity_link_started", { provider, location: extra?.location }, { userId });
       return;
     case "identity_link_failed":
       trackProduct(
         "identity_link_failed",
-        { provider, error_code: errorCode },
+        { provider, location: extra?.location, error_code: errorCode },
         { userId },
       );
       return;
@@ -134,6 +134,8 @@ function mirrorToPosthog(
 /** 화면이 더해 보낼 수 있는 선택 정보. 자유 텍스트는 실지 않는다. */
 export interface FunnelExtra {
   provider?: string;
+  /** PostHog 전용 — 연결 버튼이 있던 화면(`events.ts`의 `LINK_LOCATIONS`). DB에는 싣지 않는다. */
+  location?: string;
 }
 
 /**

@@ -92,10 +92,12 @@ describe("DB ↔ PostHog 대조", () => {
     expect(h.captures.map((c) => c.event)).toEqual([...FUNNEL_EVENTS]);
     // 속성: 실패 이벤트에만 error_code, 시작·실패에만 provider
     const failed = h.captures.find((c) => c.event === "identity_link_failed")!;
-    expect(failed.props).toEqual({ provider: "kakao", error_code: "network" });
+    expect(failed.props).toEqual({ provider: "kakao", error_code: "network", is_internal: false });
     const started = h.captures.find((c) => c.event === "identity_link_started")!;
-    expect(started.props).toEqual({ provider: "kakao" });
-    expect(h.captures.find((c) => c.event === "onboarding_started")!.props).toEqual({});
+    expect(started.props).toEqual({ provider: "kakao", is_internal: false });
+    expect(h.captures.find((c) => c.event === "onboarding_started")!.props).toEqual({
+      is_internal: false,
+    });
   });
 
   it("같은 세션에서 같은 이벤트를 반복 호출해도 DB 1건, PostHog 1건", async () => {
@@ -132,6 +134,9 @@ describe("DB ↔ PostHog 대조", () => {
       utm_campaign: "pilot01",
       referrer_host: "l.instagram.com",
       landing_path: "/invite/:code",
+      // 공통 맥락: 첫 접촉이 30분보다 오래전 → 재방문, 내부 아님
+      traffic_type: "returning",
+      is_internal: false,
     });
   });
 

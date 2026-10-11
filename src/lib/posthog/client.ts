@@ -14,7 +14,7 @@
 import type { PostHog } from "posthog-js";
 import { isAnalyticsConfigured, posthogHost, posthogKey, POSTHOG_US_UI_HOST } from "./config";
 import { readConsent } from "./consent";
-import { isExcludedPath, isExcludedUser, isInternalBrowser } from "./exclusion";
+import { isExcludedPath, isExcludedUser, isInternalBrowser, isLikelyBot } from "./exclusion";
 import {
   sanitizeOutgoing,
   sanitizePersonProps,
@@ -54,9 +54,28 @@ function readIdentMark(): string | null {
 function writeIdentMark(id: string | null): void {
   try {
     if (id) window.localStorage.setItem(IDENT_MARK, id);
-    else window.localStorage.removeItem(IDENT_MARK);
+    else {
+      window.localStorage.removeItem(IDENT_MARK);
+      window.localStorage.removeItem(PERSON_MARK);
+    }
   } catch {
     // 표식을 못 남기면 다음 로드에서 한 번 더 식별할 뿐이다
+  }
+}
+
+/**
+ * 마지막으로 PostHog에 반영한 사람 속성 서명 (동의 이후에만 쓴다, 식별 표식과 함께 지운다).
+ * 새로고침마다 같은 `$set`을 다시 보내지 않으려는 표식이다(2026-10-11 로컬 브라우저에서 확인).
+ */
+const PERSON_MARK = "gnd:ph:person";
+
+function setPersonSig(sig: string): void {
+  state.personSig = sig;
+  try {
+    if (sig) window.localStorage.setItem(PERSON_MARK, sig);
+    else window.localStorage.removeItem(PERSON_MARK);
+  } catch {
+    // 못 남기면 다음 로드에서 `$set`이 한 번 더 나갈 뿐이다
   }
 }
 
@@ -108,7 +127,8 @@ export function isTrackingAllowed(userId?: string | null): boolean {
     if (readConsent() !== "granted") return false;
     if (typeof window === "undefined") return false;
     if (isExcludedPath(window.location.pathname)) return false;
-    if (isInternalBrowser()) return false;
+    // 봇·자동화는 전송하지 않는다(SDK도 안 띄운다). 내부(QA) 브라우저는 막지 않고 표시만 한다.
+    if (isLikelyBot()) return false;
     if (isExcludedUser(userId)) return false;
     return true;
   } catch {
@@ -173,6 +193,7 @@ async function ensureSdk(): Promise<PostHog | null> {
           const mark = readIdentMark();
           if (mark && mark === posthog.get_distinct_id()) {
             state.identifiedId = mark;
+            state.personSig = window.localStorage.getItem(PERSON_MARK) ?? "";
           } else if (mark) {
             writeIdentMark(null);
           }
@@ -240,6 +261,8 @@ export function stopAnalytics(): void {
 function personProps(input: SyncInput): Record<string, Primitive> {
   const out: Record<string, unknown> = {};
   if (input.userId && input.isAnonymous !== null) out.is_anonymous = input.isAnonymous;
+  // 내부(QA) 표시 — PostHog "Filter out internal and test users"가 이 값으로 사람을 뺀다
+  if (input.userId) out.is_internal = isInternalBrowser();
   return sanitizePersonProps(out);
 }
 
@@ -247,7 +270,7 @@ function firstTouchProps(): Record<string, Primitive> {
   const a = readAcquisition();
   if (!a) return {};
   return sanitizePersonProps({
-    initial_utm_source: a.source,
+    initial_utm_source: a.source, // 원문이 아니라 다섯 채널로 줄어서 나간다(`events.ts`)
     initial_utm_medium: a.medium,
     initial_utm_campaign: a.campaign,
   });
@@ -314,14 +337,15 @@ async function runSync(input: SyncInput): Promise<void> {
         sdk.identify(input.userId, personProps(input), firstTouchProps());
         state.identifiedId = input.userId;
         writeIdentMark(input.userId);
-        state.personSig = JSON.stringify(personProps(input));
+        setPersonSig(JSON.stringify(personProps(input)));
       }
-    } else if (input.userId) {
+    } else if (input.userId && input.isAnonymous !== null) {
+      // `is_anonymous`를 아직 모르면(세션 읽는 중) 기다린다 — 반쪽 속성으로 `$set`을 한 번 더 보내지 않게.
       const props = personProps(input);
       const sig = JSON.stringify(props);
       if (sig !== state.personSig && Object.keys(props).length > 0) {
         sdk.setPersonProperties(props);
-        state.personSig = sig;
+        setPersonSig(sig);
       }
     }
 

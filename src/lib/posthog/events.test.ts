@@ -41,7 +41,9 @@ describe("sanitizeEventProps — 화이트리스트", () => {
       referrer_host: "https://google.com/search?q=secret",
       landing_path: "/invite/GND-7K2QP?by=abc",
     });
-    expect(out).toEqual({});
+    // utm_source는 원문이 아니라 다섯 채널 중 하나로만 나간다 — 이메일 모양은 `other`
+    expect(out).toEqual({ utm_source: "other" });
+    expect(JSON.stringify(out)).not.toMatch(/@|example/);
   });
 
   it("공백이 든 캠페인 이름은 밑줄로 정규화하고 64자로 자른다", () => {
@@ -93,7 +95,12 @@ describe("sanitizeEventProps — 화이트리스트", () => {
         email: "a@b.com",
         nickname: "x",
       }),
-    ).toEqual({ is_anonymous: false, initial_utm_source: "kakao" });
+    ).toEqual({ is_anonymous: false, initial_utm_source: "other" });
+    expect(sanitizePersonProps({ is_internal: true, initial_utm_source: "IG" })).toEqual({
+      is_internal: true,
+      initial_utm_source: "instagram",
+    });
+    expect(sanitizePersonProps({ is_internal: "yes" })).toEqual({});
   });
 });
 
@@ -167,7 +174,7 @@ describe("sanitizeOutgoing — SDK before_send", () => {
     );
     expect(out).not.toBeNull();
     expect(out!.$set).toEqual({ is_anonymous: true });
-    expect(out!.$set_once).toEqual({ initial_utm_source: "ig" });
+    expect(out!.$set_once).toEqual({ initial_utm_source: "instagram" });
     expect((out!.properties as Record<string, unknown>).$set).toEqual({ is_anonymous: true });
     expect((out!.properties as Record<string, unknown>).$anon_distinct_id).toBe("anon-1");
   });

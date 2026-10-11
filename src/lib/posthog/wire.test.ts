@@ -177,4 +177,74 @@ describe("선 위로 나가는 데이터 (진짜 SDK)", () => {
     }
     expect(leftovers).toEqual([]);
   });
+
+  it("동의 상태별 요청 수 — 동의 전 0 · 거부 0 · 동의 >0 · 철회 후 추가 0 (v2 신규 이벤트 포함)", async () => {
+    const fire = () => {
+      trackProduct("start_clicked", { location: "onboarding_try_first" }, { userId: A });
+      trackProduct("onboarding_completed", { has_invite: false }, { userId: A });
+      trackProduct("workout_started", { is_first: true, workout_index: 1 }, { userId: A });
+      trackProduct("workout_completed", { is_first: true, workout_index: 1 }, { userId: A });
+      trackProduct("identity_link_started", { provider: "kakao", location: "protect_records" }, { userId: A });
+    };
+    const counts: Record<string, number> = {};
+
+    // 1) 동의 전
+    await syncAnalytics({ userId: A, isAnonymous: true, pathname: window.location.pathname });
+    fire();
+    await settle();
+    counts.unset = urls.length;
+
+    // 2) 거부
+    declineOrWithdrawAnalyticsConsent();
+    await syncAnalytics({ userId: A, isAnonymous: true, pathname: window.location.pathname });
+    fire();
+    await settle();
+    counts.denied = urls.length - counts.unset;
+
+    // 3) 동의
+    grantAnalyticsConsent();
+    await syncAnalytics({ userId: A, isAnonymous: true, pathname: window.location.pathname });
+    fire();
+    await settle();
+    counts.granted = urls.length - counts.unset - counts.denied;
+    const names = allEvents().map((e) => e.event);
+    for (const e of ["start_clicked", "onboarding_completed", "workout_started", "workout_completed", "identity_link_started"]) {
+      expect(names).toContain(e);
+    }
+
+    // 4) 철회
+    declineOrWithdrawAnalyticsConsent();
+    await syncAnalytics({ userId: A, isAnonymous: true, pathname: window.location.pathname });
+    const beforeWithdrawFire = urls.length;
+    fire();
+    await settle();
+    counts.withdrawn = urls.length - beforeWithdrawFire;
+
+    expect(counts.unset).toBe(0);
+    expect(counts.denied).toBe(0);
+    expect(counts.granted).toBeGreaterThanOrEqual(5); // 이벤트 5건 + $identify
+    expect(counts.withdrawn).toBe(0);
+    // 자동 수집(페이지뷰·리플레이·플래그·설문) 요청은 동의한 뒤에도 0
+    for (const u of urls) expect(u).not.toMatch(/\/s\/|\/flags|\/decide|recorder|surveys/);
+    expect(names.filter((n) => typeof n === "string" && n.startsWith("$") && n !== "$identify" && n !== "$set")).toEqual([]);
+    console.info("[wire] 동의 상태별 요청 수", JSON.stringify(counts));
+  });
+
+  it("봇(navigator.webdriver)은 동의해도 요청 0 — SDK를 불러오지도 않는다", async () => {
+    // ⚠️ posthog-js도 자체 봇 필터로 webdriver 이벤트를 버린다. 그래서 `urls`만 보면 우리 차단을
+    //    빼도 통과한다(2026-10-11 변이 테스트로 확인). **SDK 미로드**가 우리 차단의 증거다.
+    const { __analyticsStateForTests } = await import("./client");
+    Object.defineProperty(window.navigator, "webdriver", { configurable: true, get: () => true });
+    try {
+      grantAnalyticsConsent();
+      await syncAnalytics({ userId: A, isAnonymous: true, pathname: window.location.pathname });
+      trackProduct("start_clicked", { location: "onboarding_try_first" }, { userId: A });
+      await settle();
+      expect(urls).toEqual([]);
+      expect(__analyticsStateForTests().loaded).toBe(false);
+      expect(__analyticsStateForTests().queued).toBe(0);
+    } finally {
+      delete (window.navigator as unknown as Record<string, unknown>).webdriver;
+    }
+  });
 });

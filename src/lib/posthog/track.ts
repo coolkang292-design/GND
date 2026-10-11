@@ -4,11 +4,13 @@
  * - 동의·키·제외 조건이 하나라도 안 맞으면 조용히 버린다 (앱 동작에는 영향 없음).
  * - 속성은 `events.ts` 화이트리스트로 한 번 거르고, SDK `before_send`에서 또 거른다.
  * - 같은 사실을 두 번 보내지 않도록 `dedupe`를 쓴다.
+ * - 유입 채널·첫 방문/재방문·내부(QA) 표시는 여기서 붙인다(`context.ts`). 화면이 넘긴 값이 먼저다.
  * - 어떤 경우에도 던지지 않는다.
  */
 
 import { isProductEvent, sanitizeEventProps, type ProductEvent } from "./events";
 import { isTrackingAllowed, submitEvent } from "./client";
+import { eventContext, TRAFFIC_KEY } from "./context";
 
 export interface TrackOptions {
   /** 이 이벤트를 만든 사용자. 식별된 사람과 다르면 보내지 않는다. */
@@ -55,7 +57,11 @@ export function trackProduct(
     const userId = opts?.userId ?? null;
     if (!isTrackingAllowed(userId)) return;
     if (opts?.dedupe && claim(opts.dedupe)) return;
-    submitEvent({ event, props: sanitizeEventProps(event, props), userId });
+    submitEvent({
+      event,
+      props: sanitizeEventProps(event, { ...eventContext(), ...(props ?? {}) }),
+      userId,
+    });
   } catch {
     // 무시
   }
@@ -65,6 +71,7 @@ export function trackProduct(
 export function clearDedupeRecords(): void {
   try {
     window.localStorage.removeItem(PERSISTENT_KEY);
+    window.sessionStorage.removeItem(TRAFFIC_KEY);
     const doomed: string[] = [];
     for (let i = 0; i < window.sessionStorage.length; i++) {
       const k = window.sessionStorage.key(i);

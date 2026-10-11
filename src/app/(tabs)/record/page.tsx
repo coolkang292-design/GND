@@ -12,7 +12,7 @@ import { useRouter } from "next/navigation";
 import { AFTER_WORKOUT_PATH } from "@/lib/domain/landing";
 import { ProtectRecordsCard } from "@/components/record/protect-records-card";
 import { useAuth } from "@/components/auth-provider";
-import { reportWorkoutCompleted } from "@/lib/posthog/workout-event";
+import { reportWorkoutCompleted, reportWorkoutStarted } from "@/lib/posthog/workout-event";
 import { UiIcon } from "@/components/ui-icon";
 import { CalendarView } from "@/components/record/calendar-view";
 import { CoachCard } from "@/components/record/coach-card";
@@ -2770,6 +2770,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
         setDraft((d) => ({ ...d, sessionId }));
       }
       const started = await startWorkout(sessionId);
+      // PostHog 복제(동의한 사용자만). 원본은 workout_sessions.started_at이다. 기다리지 않는다.
+      void reportWorkoutStarted({ userId, sessionId });
       const startedAtMs = new Date(started.started_at!).getTime();
       setDraft((d) => ({
         ...d,

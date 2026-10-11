@@ -13,6 +13,7 @@ import type { CaptureResult } from "posthog-js";
 
 export const PRODUCT_EVENTS = [
   "landing_opened",
+  "start_clicked",
   "onboarding_started",
   "onboarding_nickname_shown",
   "onboarding_completed",
@@ -21,6 +22,7 @@ export const PRODUCT_EVENTS = [
   "identity_link_failed",
   "login_succeeded",
   "login_failed",
+  "workout_started",
   "workout_completed",
   "challenge_viewed",
   "challenge_create_started",
@@ -40,10 +42,36 @@ type Spec =
   | { kind: "bool" }
   | { kind: "int"; min: number; max: number }
   | { kind: "slug" }
+  | { kind: "source" }
   | { kind: "host" }
   | { kind: "path" };
 
 const LINK_PROVIDERS = ["kakao", "google", "other"] as const;
+
+/**
+ * 시작 버튼이 **어디서** 눌렸나 (`start_clicked.location`).
+ * 버튼마다 하나 — 같은 값을 두 버튼이 공유하면 어느 쪽이 먹혔는지 못 가른다.
+ */
+export const START_LOCATIONS = [
+  "onboarding_try_first", // 온보딩 "닉네임만 정하고 바로 시작" (P0-2)
+  "onboarding_kakao", // 온보딩 카카오로 시작
+  "onboarding_google", // 온보딩 구글로 시작
+  "login_signup", // /login 하단 "처음이세요? 가입하기"
+] as const;
+export type StartLocation = (typeof START_LOCATIONS)[number];
+
+/** 계정 연결 버튼이 어느 화면에 있었나 (`identity_link_started/failed.location`) */
+export const LINK_LOCATIONS = ["onboarding", "protect_records"] as const;
+
+/**
+ * 유입 채널 — `utm_source` 원문은 **보내지 않고** 이 다섯 값으로만 줄인다.
+ * 화이트리스트에 없는 값(오타·개인 링크·이메일 모양)은 전부 `other`가 된다.
+ */
+export const UTM_SOURCES = ["instagram", "youtube", "threads", "tiktok", "other"] as const;
+export type UtmSource = (typeof UTM_SOURCES)[number];
+
+/** 브라우저 저장소 기준 첫 방문/재방문 (`client.ts`의 `trafficType`) */
+export const TRAFFIC_TYPES = ["new", "returning"] as const;
 const LOGIN_PROVIDERS = ["kakao", "google", "password", "other"] as const;
 export const DURATION_BUCKETS = [
   "lt10",
@@ -55,27 +83,46 @@ export const DURATION_BUCKETS = [
   "unknown",
 ] as const;
 
-const SPECS: Record<ProductEvent, Record<string, Spec>> = {
+/**
+ * **모든 제품 이벤트에 붙는 공통 맥락.** 퍼널을 유입·신규/재방문·내부(QA)로 가르는 데 쓴다.
+ * 값은 `client.ts`가 채운다(화면 코드가 넘기지 않는다).
+ * ⚠️ 봇은 여기 없다 — 봇으로 판정되면 **전송 자체를 하지 않는다**(`isTrackingAllowed`).
+ */
+const COMMON_SPECS: Record<string, Spec> = {
+  utm_source: { kind: "source" },
+  traffic_type: { kind: "enum", values: TRAFFIC_TYPES },
+  is_internal: { kind: "bool" },
+};
+
+const EVENT_SPECS: Record<ProductEvent, Record<string, Spec>> = {
   landing_opened: {
-    utm_source: { kind: "slug" },
     utm_medium: { kind: "slug" },
     utm_campaign: { kind: "slug" },
     referrer_host: { kind: "host" },
     landing_path: { kind: "path" },
   },
+  start_clicked: { location: { kind: "enum", values: START_LOCATIONS } },
   onboarding_started: {},
   onboarding_nickname_shown: {},
   onboarding_completed: { has_invite: { kind: "bool" } },
-  identity_link_started: { provider: { kind: "enum", values: LINK_PROVIDERS } },
+  identity_link_started: {
+    provider: { kind: "enum", values: LINK_PROVIDERS },
+    location: { kind: "enum", values: LINK_LOCATIONS },
+  },
   identity_link_succeeded: { provider: { kind: "enum", values: LINK_PROVIDERS } },
   identity_link_failed: {
     provider: { kind: "enum", values: LINK_PROVIDERS },
+    location: { kind: "enum", values: LINK_LOCATIONS },
     error_code: { kind: "slug" },
   },
   login_succeeded: { provider: { kind: "enum", values: LOGIN_PROVIDERS } },
   login_failed: {
     provider: { kind: "enum", values: LOGIN_PROVIDERS },
     error_code: { kind: "slug" },
+  },
+  workout_started: {
+    is_first: { kind: "bool" },
+    workout_index: { kind: "int", min: 1, max: 100000 },
   },
   workout_completed: {
     is_first: { kind: "bool" },
@@ -91,10 +138,15 @@ const SPECS: Record<ProductEvent, Record<string, Spec>> = {
   ai_coach_onboarding_started: {},
 };
 
+const SPECS = Object.fromEntries(
+  Object.entries(EVENT_SPECS).map(([event, spec]) => [event, { ...COMMON_SPECS, ...spec }]),
+) as Record<ProductEvent, Record<string, Spec>>;
+
 /** 사람 속성(`$set`/`$set_once`)에 실을 수 있는 키 */
 const PERSON_SPECS: Record<string, Spec> = {
   is_anonymous: { kind: "bool" },
-  initial_utm_source: { kind: "slug" },
+  is_internal: { kind: "bool" },
+  initial_utm_source: { kind: "source" },
   initial_utm_medium: { kind: "slug" },
   initial_utm_campaign: { kind: "slug" },
 };
@@ -117,6 +169,24 @@ function normalizeSlug(v: unknown): string | null {
   return s;
 }
 
+/**
+ * `utm_source` 원문 → 다섯 채널. 대소문자·공백 무시, 부분 일치.
+ * 비어 있으면 null(속성을 아예 안 싣는다 = 직접 유입). 그 밖의 모든 문자열은 `other`.
+ *
+ * ⚠️ `ig`는 정확히 일치할 때만 instagram이다. 부분 일치로 두면 `bigbang` 같은 캠페인
+ *    이름이 인스타로 잘못 잡힌다.
+ */
+export function normalizeUtmSource(v: unknown): UtmSource | null {
+  if (typeof v !== "string") return null;
+  const s = v.trim().toLowerCase();
+  if (!s) return null;
+  if (s === "ig" || s.startsWith("ig_") || s.includes("instagram")) return "instagram";
+  if (s === "yt" || s.includes("youtube") || s.includes("youtu.be")) return "youtube";
+  if (s.includes("threads")) return "threads";
+  if (s.includes("tiktok")) return "tiktok";
+  return "other";
+}
+
 function check(spec: Spec, v: unknown): Primitive | null {
   switch (spec.kind) {
     case "bool":
@@ -132,6 +202,8 @@ function check(spec: Spec, v: unknown): Primitive | null {
       return typeof v === "string" && spec.values.includes(v) ? v : null;
     case "slug":
       return normalizeSlug(v);
+    case "source":
+      return normalizeUtmSource(v);
     case "host":
       return typeof v === "string" && HOST.test(v) ? v : null;
     case "path":

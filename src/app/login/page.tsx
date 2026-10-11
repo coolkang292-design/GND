@@ -296,6 +296,13 @@ export default function LoginPage() {
 
         <Link
           href="/onboarding"
+          onClick={() =>
+            trackProduct(
+              "start_clicked",
+              { location: "login_signup" },
+              { dedupe: { key: "start_clicked:login_signup", scope: "session" } },
+            )
+          }
           aria-label={`${COPY.signupLead} ${COPY.signup}`}
           className="relative mx-auto mt-5 flex w-fit items-center gap-1.5 py-1 text-[14px] text-muted"
         >
