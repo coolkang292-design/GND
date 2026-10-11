@@ -69,7 +69,7 @@ Supabase 대시보드 → 프로젝트 "GND workout challenge"
 
 ### 왜 필요한가
 
-GND는 **GitHub 연동 배포를 쓰지 않는다**(CLAUDE.md §배포). 배포는 검증한 로컬 `main`에서
+GND는 **운영 배포를 GitHub 연동으로 하지 않는다**(CLAUDE.md §배포 — 작업 브랜치 Preview만 자동). 운영 배포는 검증한 로컬 `main`에서
 사람이 `vercel --prod`로 한다. 그래서 CI는 배포를 막을 수 없고, **`main`에 깨진 코드가
 들어가는 것만** 막을 수 있다. 그게 유일한 자동 방어선이므로 실제로 강제해야 의미가 있다.
 
