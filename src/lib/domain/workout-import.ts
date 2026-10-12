@@ -78,7 +78,11 @@ export function applyLastRecordedSetsToExercises({
   };
 }
 
-function normalizedName(name: string): string {
+/**
+ * 종목 이름 비교 규칙 — 지난 기록 불러오기와 계획 합치기가 **같은 규칙**을 쓴다.
+ * 두 벌로 두면 한쪽만 고쳐졌을 때 "이미 있는 운동"의 기준이 갈린다.
+ */
+export function normalizedExerciseName(name: string): string {
   return name.trim().toLocaleLowerCase("ko-KR");
 }
 
@@ -87,11 +91,11 @@ export function mergeImportedExercises(
   current: LocalExercise[],
   imported: LocalExercise[],
 ): ImportMergeResult {
-  const knownNames = new Set(current.map((item) => normalizedName(item.name)));
+  const knownNames = new Set(current.map((item) => normalizedExerciseName(item.name)));
   const added: LocalExercise[] = [];
 
   for (const item of imported) {
-    const name = normalizedName(item.name);
+    const name = normalizedExerciseName(item.name);
     if (!name || knownNames.has(name)) continue;
     knownNames.add(name);
     added.push(item);
