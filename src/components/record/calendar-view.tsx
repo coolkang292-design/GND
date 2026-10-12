@@ -68,10 +68,13 @@ import {
   createWorkoutPlan,
   deleteWorkoutPlan,
   getWorkoutPlans,
+  getWorkoutPlansByDate,
   moveWorkoutPlan,
   updateWorkoutPlan,
   type WorkoutPlan,
 } from "@/lib/workout-plan";
+import { addToDayPlan, consolidateUpcomingPlans } from "@/lib/day-plan-store";
+import { isGeneralPlan } from "@/lib/domain/day-plan";
 import type { WorkoutRoutine } from "@/lib/routines";
 import { SetBreakdown } from "@/components/workout/set-breakdown";
 import { ExercisePicker, type ConfiguredPick } from "./exercise-picker";
@@ -327,8 +330,21 @@ export function CalendarView({
           setTimeZone(profile.timezone || timeZone);
         }
         setSessions(list);
-        setPlans(savedPlans);
         setEnrollments(activePrograms);
+        // 오늘 이후 같은 날 일반 계획이 둘이면 하나로 합친다 (2026-10-13 이전 중복).
+        // 실패해도 달력은 그린다 — 합치기는 다음에 다시 시도된다.
+        // ⚠️ 오늘은 **프로필 시간대로** 구한다. 위의 `todayKey`는 이 시점에 아직
+        //    초기 시간대라, 자정 근처에 하루 어긋난 날짜를 "지난 날"로 볼 수 있다.
+        const plansToShow = await consolidateUpcomingPlans(
+          userId,
+          savedPlans,
+          dayKey(new Date(), profile?.timezone || timeZone),
+        ).catch((error) => {
+          console.warn("[calendar] 같은 날 계획 합치기 실패", error);
+          return savedPlans;
+        });
+        if (cancelled) return;
+        setPlans(plansToShow);
       } catch (error) {
         /*
           ⚠️ `catch {}`로 되돌리지 마라 (2026-09-04에 실제로 물렸다).
@@ -576,13 +592,50 @@ export function CalendarView({
     setPlanBusy(true);
     try {
       /*
-        `replace`는 **언제나 false**다 (0101). 옮겨 갈 날짜에 계획이 있어도
-        비켜 주거나 지울 필요가 없다 — 나란히 선다. 옛 true 경로는 그 날짜의
-        계획을 **지웠다**.
+        `replace`는 **언제나 false**다 (0101). 옛 true 경로는 그 날짜의 계획을
+        **지웠다**.
+
+        일반 계획을 일반 계획이 있는 날로 옮기면 **거기에 합친다** — 하루 일반
+        계획은 하나다 (2026-10-13). 인터벌·프로그램 회차는 따로 두므로 그 밖의
+        경우는 예전처럼 나란히 선다.
 
         ⚠️ 0101을 Run하기 전에는 RPC가 `plan_date_taken`으로 막는다.
            `planSaveErrorText`가 그 잠깐을 사람 말로 알린다.
       */
+      const targetHasGeneral = plans.some(
+        (item) => item.planDate === moveDate && isGeneralPlan(item),
+      );
+      if (isGeneralPlan(plan) && targetHasGeneral) {
+        // 옮길 날에 일반 계획이 있으면 거기에 합친다 — 하루 일반 계획은 하나 (2026-10-13).
+        // 붙이기가 성공한 뒤에 원래 것을 지운다(지우기 먼저면 실패 시 종목이 사라진다)
+        const result = await addToDayPlan({
+          userId,
+          planDate: moveDate,
+          exercises: plan.exercises,
+          sourceSessionId: plan.sourceSessionId,
+        });
+        /*
+          ⚠️ 50개 상한에 걸려 못 담은 종목이 있으면 원래 계획을 **지우지 않는다.**
+             지우면 넘친 종목은 어디에도 남지 않는다. 담긴 것은 옮긴 날에 들어갔고
+             원래 날에도 그대로 남는다 — 중복이 사라지는 것보다 낫다.
+        */
+        const keepSource = result.overflowCount > 0;
+        if (!keepSource) await deleteWorkoutPlan(plan.id);
+        setPlans((current) => [
+          ...current.filter(
+            (item) =>
+              (keepSource || item.id !== plan.id) && item.planDate !== moveDate,
+          ),
+          ...result.dayPlans,
+        ]);
+        setSelectedDate(moveDate);
+        showPlanToast(
+          keepSource
+            ? "한 계획에는 운동을 50개까지 담을 수 있어요"
+            : "예정 날짜를 옮겼어요",
+        );
+        return;
+      }
       const moved = await moveWorkoutPlan(plan.id, moveDate, false);
       setPlans((current) => [
         ...current.filter((item) => item.id !== moved.id),
@@ -907,8 +960,10 @@ export function CalendarView({
         exercises,
         tabataMinutes: editing.plan.tabataMinutes,
       });
+      // ⚠️ id로 갈아 끼운다 (0101) — 날짜로 거르면 같은 날 다른 계획(인터벌·
+      //    프로그램 회차)이 화면에서 사라진다 (2026-10-13 발견)
       setPlans((current) => [
-        ...current.filter((plan) => plan.planDate !== saved.planDate),
+        ...current.filter((plan) => plan.id !== saved.id),
         saved,
       ]);
       closePlanEdit();
@@ -920,6 +975,29 @@ export function CalendarView({
     } finally {
       setPlanBusy(false);
     }
+  }
+
+  /**
+   * 그날 계획을 통째로 갈아 끼운다 — `addToDayPlan`이 합치며 지운 행까지 반영한다.
+   *
+   * 날짜로 거르는 것이 여기서는 맞다. `dayPlans`는 저장소가 다시 읽은 **그날 계획
+   * 전부**(인터벌·프로그램 회차 포함)라, 걷어낸 것이 그대로 다시 들어온다.
+   * 아래 `applySavedPlan`이 id로 거르는 것과 헷갈리지 말 것 — 그쪽은 한 행만 받는다.
+   */
+  function applyDayPlans(
+    planDate: string,
+    result: { dayPlans: WorkoutPlan[]; overflowCount: number },
+  ) {
+    setPlans((current) => [
+      ...current.filter((plan) => plan.planDate !== planDate),
+      ...result.dayPlans,
+    ]);
+    setPlanPickerDate(null);
+    showPlanToast(
+      result.overflowCount > 0
+        ? "한 계획에는 운동을 50개까지 담을 수 있어요"
+        : "운동 계획을 저장했어요",
+    );
   }
 
   /**
@@ -1006,11 +1084,12 @@ export function CalendarView({
     if (!planPickerDate || planBusy) return;
     setPlanBusy(true);
     try {
-      applySavedPlan(
-        await createWorkoutPlan({
+      // 그날 일반 계획에 붙인다(없으면 만든다) — 하루 일반 계획은 하나 (2026-10-13)
+      applyDayPlans(
+        planPickerDate,
+        await addToDayPlan({
           userId,
           planDate: planPickerDate,
-          sourceSessionId: null,
           exercises: newPlanExercises(items),
         }),
       );
@@ -1041,11 +1120,11 @@ export function CalendarView({
     if (!planPickerDate || planBusy) return;
     setPlanBusy(true);
     try {
-      applySavedPlan(
-        await createWorkoutPlan({
+      applyDayPlans(
+        planPickerDate,
+        await addToDayPlan({
           userId,
           planDate: planPickerDate,
-          sourceSessionId: null,
           exercises: planExercisesFromPicks(picks),
         }),
       );
@@ -1067,11 +1146,11 @@ export function CalendarView({
     if (!planPickerDate || planBusy) return false;
     setPlanBusy(true);
     try {
-      applySavedPlan(
-        await createWorkoutPlan({
+      applyDayPlans(
+        planPickerDate,
+        await addToDayPlan({
           userId,
           planDate: planPickerDate,
-          sourceSessionId: null,
           exercises: routine.exercises,
         }),
       );
@@ -1090,13 +1169,29 @@ export function CalendarView({
     setPlanBusy(true);
     try {
       const source = sessions.find((s) => s.id === sessionId);
-      applySavedPlan(
-        await onScheduleSession(
-          sessionId,
-          planPickerDate,
-          source?.tabataMinutes,
-        ),
+      const saved = await onScheduleSession(
+        sessionId,
+        planPickerDate,
+        source?.tabataMinutes,
       );
+      /*
+        붙였으면 그날 다른 행이 합쳐져 지워졌을 수 있다 — 저장된 그날 계획
+        전부로 갈아 끼운다. 그 날짜 하나만 다시 읽는다(전 기간 조회는 필요 없다).
+
+        ⚠️ 다시 읽기가 실패해도 저장은 이미 됐다 — "저장하지 못했어요"라고 하면
+           거짓말이 된다. 그때는 받은 행 하나만 id로 반영한다.
+      */
+      const fresh = await getWorkoutPlansByDate(userId, saved.planDate).catch(
+        (error) => {
+          console.warn("[calendar] 그날 계획 다시 읽기 실패", error);
+          return null;
+        },
+      );
+      if (fresh) {
+        applyDayPlans(saved.planDate, { dayPlans: fresh, overflowCount: 0 });
+      } else {
+        applySavedPlan(saved);
+      }
       return true;
     } catch {
       showPlanToast("운동 계획을 저장하지 못했어요");
@@ -1351,6 +1446,10 @@ export function CalendarView({
                 계획이 **이미 있어도** 이 버튼을 낸다 (0101). 예전에는 그날
                 계획이 하나라도 있으면 사라져서, 오전 풀업을 담은 사람은 오후
                 가슴을 담을 길이 화면에 없었다.
+
+                그날 일반 계획이 있으면 새로 만들지 않고 **거기에 붙인다**
+                (2026-10-13 하루 일반 계획 하나) — 그래서 문구도 `더하기`로 바꾼다.
+                "새 계획"이라고 해 놓고 기존 계획에 붙으면 누른 사람이 속는다.
               */}
               {isPlanDateAllowed(selectedDate, todayKey) && (
                 <button
@@ -1360,7 +1459,11 @@ export function CalendarView({
                   }}
                   className="h-11 w-full rounded-card border border-accent bg-surface text-sm font-extrabold text-accent"
                 >
-                  ➕ 새 운동 계획 만들기
+                  {plans.some(
+                    (plan) => plan.planDate === selectedDate && isGeneralPlan(plan),
+                  )
+                    ? "➕ 이 날 계획에 운동 더하기"
+                    : "➕ 새 운동 계획 만들기"}
                 </button>
               )}
               {selectedPlans.map((selectedPlan) => (
@@ -1808,10 +1911,19 @@ export function CalendarView({
           addPickerOpen
             ? { title: "계획에 운동 더하기", sub: "고른 운동을 편집 중인 계획에 붙여요" }
             : planPickerDate
-              ? {
-                  title: `${dateKeyLabel(planPickerDate)} 계획 만들기`,
-                  sub: "이 날 할 운동을 골라 주세요",
-                }
+              ? // 그날 일반 계획이 있으면 저장이 거기에 붙는다 (2026-10-13) — 상단 버튼과 같은 말
+                plans.some(
+                  (plan) =>
+                    plan.planDate === planPickerDate && isGeneralPlan(plan),
+                )
+                ? {
+                    title: `${dateKeyLabel(planPickerDate)} 계획에 운동 더하기`,
+                    sub: "고른 운동을 그날 계획에 붙여요",
+                  }
+                : {
+                    title: `${dateKeyLabel(planPickerDate)} 계획 만들기`,
+                    sub: "이 날 할 운동을 골라 주세요",
+                  }
               : undefined
         }
         addLabel={(n) =>

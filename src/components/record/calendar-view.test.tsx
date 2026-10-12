@@ -31,6 +31,9 @@ const mocks = vi.hoisted(() => ({
   deleteWorkoutPlan: vi.fn(),
   getLastRecordedSets: vi.fn(),
   getSessionExerciseStructure: vi.fn(),
+  addToDayPlan: vi.fn(),
+  consolidateUpcomingPlans: vi.fn(),
+  getWorkoutPlansByDate: vi.fn(),
 }));
 
 vi.mock("@/lib/crew", () => ({ getMyProfile: mocks.getMyProfile }));
@@ -61,6 +64,11 @@ vi.mock("@/lib/workout-plan", () => ({
   updateWorkoutPlan: mocks.updateWorkoutPlan,
   moveWorkoutPlan: vi.fn(),
   deleteWorkoutPlan: mocks.deleteWorkoutPlan,
+  getWorkoutPlansByDate: mocks.getWorkoutPlansByDate,
+}));
+vi.mock("@/lib/day-plan-store", () => ({
+  addToDayPlan: mocks.addToDayPlan,
+  consolidateUpcomingPlans: mocks.consolidateUpcomingPlans,
 }));
 vi.mock("@/lib/programs", () => ({
   getActiveProgramEnrollments: mocks.getActiveProgramEnrollments,
@@ -93,6 +101,22 @@ beforeEach(() => {
   mocks.createWorkoutPlan.mockImplementation(async (input) => ({ ...PLAN, ...input, id: "plan-1" }));
   mocks.updateWorkoutPlan.mockReset();
   mocks.updateWorkoutPlan.mockImplementation(async (input) => ({ ...PLAN, ...input, id: input.planId }));
+  mocks.consolidateUpcomingPlans.mockReset();
+  mocks.consolidateUpcomingPlans.mockImplementation(
+    async (_userId: string, plans: unknown[]) => plans,
+  );
+  mocks.addToDayPlan.mockReset();
+  mocks.addToDayPlan.mockImplementation(async (input) => {
+    const plan = await mocks.createWorkoutPlan({
+      userId: input.userId,
+      planDate: input.planDate,
+      sourceSessionId: input.sourceSessionId ?? null,
+      exercises: input.exercises,
+    });
+    return { plan, dayPlans: [plan], created: true, skippedCount: 0, overflowCount: 0 };
+  });
+  mocks.getWorkoutPlansByDate.mockReset();
+  mocks.getWorkoutPlansByDate.mockResolvedValue([]);
 });
 
 /** 인터벌 고르기 화면은 맨몸·비시간형만 보여 준다 */
@@ -231,12 +255,15 @@ describe("CalendarView — 같은 날 계획 여러 개 (0101)", () => {
       예전에는 `{!selectedPlan && ...}`이라 계획이 하나라도 있으면 이 버튼이
       사라졌다. 오전 풀업을 담은 사람에게는 오후 가슴을 담을 길이 화면에
       **없었다** — DB를 고쳐도 이 버튼이 없으면 기능이 없는 것과 같다.
+
+      2026-10-13부터 일반 계획이 있는 날은 문구가 `이 날 계획에 운동 더하기`다
+      (하루 일반 계획 하나) — 버튼이 남는다는 단언은 그대로다.
     */
     mocks.getWorkoutPlans.mockResolvedValue([MORNING]);
     await setup();
 
     fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 16일,") }));
-    expect(screen.getByText("➕ 새 운동 계획 만들기")).toBeTruthy();
+    expect(screen.getByText("➕ 이 날 계획에 운동 더하기")).toBeTruthy();
   });
 
   it("하나를 지워도 나머지는 남고 시트가 닫히지 않는다", async () => {
@@ -267,9 +294,12 @@ describe("CalendarView — 같은 날 계획 여러 개 (0101)", () => {
       fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 16일,") }));
       fireEvent.click(screen.getByRole("button", { name: "삭제" }));
 
-      await waitFor(() =>
-        expect(screen.queryByText("➕ 새 운동 계획 만들기")).toBeNull(),
-      );
+      // ⚠️ 두 문구를 다 본다 (2026-10-13). 지우기 전에는 버튼이 `더하기`라
+      //    `새 운동 계획 만들기`만 보면 시트가 안 닫혀도 처음부터 통과한다.
+      await waitFor(() => {
+        expect(screen.queryByText("➕ 이 날 계획에 운동 더하기")).toBeNull();
+        expect(screen.queryByText("➕ 새 운동 계획 만들기")).toBeNull();
+      });
     } finally {
       confirmSpy.mockRestore();
     }
@@ -1480,5 +1510,127 @@ describe("CalendarView — 월간 카드와 완료 날짜 수가 일치한다", 
     fireEvent.click(screen.getByRole("button",{name:"다음 달"}));
     expect(summary.textContent).toContain("일정 없음");
     expect(summary.textContent).not.toContain("%");
+  });
+});
+
+describe("CalendarView — 하루 계획 하나 (2026-10-13)", () => {
+  it("수정 저장 뒤에도 같은 날 인터벌 계획이 화면에 남는다 — 날짜로 거르던 버그", async () => {
+    const general = { ...PLAN, id: "plan-general", planDate: "2026-08-15" };
+    mocks.getWorkoutPlans.mockResolvedValue([general, INTERVAL_PLAN_PICKED]);
+    mocks.updateWorkoutPlan.mockImplementation(async (input) => ({
+      ...general,
+      ...input,
+      id: input.planId,
+    }));
+    await setup(BODYWEIGHT_CATALOG);
+
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 15일,") }));
+    // 카드는 조회 순서대로 그린다 — 첫 `수정`이 일반 계획이다
+    expect(screen.getAllByRole("button", { name: "수정" })).toHaveLength(2);
+    fireEvent.click(screen.getAllByRole("button", { name: "수정" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "이대로 저장하기" }));
+
+    await waitFor(() => expect(mocks.updateWorkoutPlan).toHaveBeenCalled());
+    // 저장 뒤 그날이 다시 열린다(`openDate`) — 카드가 여전히 2장
+    await waitFor(() =>
+      expect(screen.getAllByRole("button", { name: "수정" })).toHaveLength(2),
+    );
+  });
+
+  it("일반 계획이 있는 날은 상단 버튼이 `이 날 계획에 운동 더하기`다", async () => {
+    mocks.getWorkoutPlans.mockResolvedValue([{ ...PLAN, id: "plan-general" }]);
+    await setup();
+
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 16일,") }));
+
+    expect(screen.getByText("➕ 이 날 계획에 운동 더하기")).toBeTruthy();
+    // 부정 확인 — 옛 문구가 없어야 한다
+    expect(screen.queryByText("➕ 새 운동 계획 만들기")).toBeNull();
+  });
+
+  it("그날 계획이 있으면 새 행을 만들지 않고 addToDayPlan으로 붙인다", async () => {
+    const general = { ...PLAN, id: "plan-general" };
+    mocks.getWorkoutPlans.mockResolvedValue([general]);
+    mocks.addToDayPlan.mockImplementation(async (input) => {
+      const plan = {
+        ...general,
+        exercises: [...general.exercises, ...input.exercises],
+      };
+      return { plan, dayPlans: [plan], created: false, skippedCount: 0, overflowCount: 0 };
+    });
+    await setup(BODYWEIGHT_CATALOG);
+
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 16일,") }));
+    fireEvent.click(screen.getByText("➕ 이 날 계획에 운동 더하기"));
+    expect(screen.getByText("8월 16일 계획에 운동 더하기")).toBeTruthy();
+    fireEvent.click(screen.getByText("운동 직접 고르기"));
+    fireEvent.click(screen.getByText(BODYWEIGHT_CATALOG[0].name));
+    fireEvent.click(screen.getByText("8월 16일 계획에 1개 담기"));
+
+    await waitFor(() => expect(mocks.addToDayPlan).toHaveBeenCalled());
+    expect(mocks.addToDayPlan.mock.calls[0][0].planDate).toBe("2026-08-16");
+    expect(mocks.createWorkoutPlan).not.toHaveBeenCalled();
+  });
+
+  it("달력을 열 때 오늘 이후 같은 날 일반 계획 중복을 합친다", async () => {
+    const a = { ...PLAN, id: "a", planDate: "2026-08-16" };
+    const b = { ...PLAN, id: "b", planDate: "2026-08-16" };
+    mocks.getWorkoutPlans.mockResolvedValue([a, b]);
+    mocks.consolidateUpcomingPlans.mockResolvedValue([a]);
+    await setup();
+
+    expect(mocks.consolidateUpcomingPlans).toHaveBeenCalledWith("user-1", [a, b], "2026-08-15");
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 16일,") }));
+    expect(screen.getAllByRole("button", { name: "수정" })).toHaveLength(1);
+  });
+
+  /*
+    일반 계획이 있는 날로 일반 계획을 옮기면 **합친다.** 붙이기가 성공한 뒤에만
+    원래 것을 지운다 — 순서가 뒤집히면 붙이기 실패 때 종목이 사라진다.
+  */
+  async function moveGeneralPlanTo17(overflowCount: number) {
+    const source = { ...PLAN, id: "plan-source", planDate: "2026-08-16" };
+    const target = { ...PLAN, id: "plan-target", planDate: "2026-08-17" };
+    mocks.getWorkoutPlans.mockResolvedValue([source, target]);
+    mocks.addToDayPlan.mockImplementation(async (input) => {
+      const plan = { ...target, exercises: [...target.exercises, ...input.exercises] };
+      return { plan, dayPlans: [plan], created: false, skippedCount: 0, overflowCount };
+    });
+    const { container } = await setup();
+
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 16일,") }));
+    fireEvent.change(container.querySelector("input[type=\"date\"]")!, {
+      target: { value: "2026-08-17" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "날짜 이동" }));
+    await waitFor(() => expect(mocks.addToDayPlan).toHaveBeenCalled());
+    expect(mocks.addToDayPlan.mock.calls[0][0]).toMatchObject({
+      planDate: "2026-08-17",
+      exercises: source.exercises,
+    });
+  }
+
+  it("일반 계획이 있는 날로 옮기면 거기에 붙이고 원래 계획을 지운다", async () => {
+    await moveGeneralPlanTo17(0);
+
+    await waitFor(() =>
+      expect(mocks.deleteWorkoutPlan).toHaveBeenCalledWith("plan-source"),
+    );
+    // 옮긴 날에는 합쳐진 계획 하나만 남는다
+    await waitFor(() =>
+      expect(screen.getAllByRole("button", { name: "수정" })).toHaveLength(1),
+    );
+    expect(screen.getByText("예정 날짜를 옮겼어요")).toBeTruthy();
+  });
+
+  it("50개 상한에 걸리면 원래 계획을 지우지 않고 알린다", async () => {
+    await moveGeneralPlanTo17(2);
+
+    await waitFor(() =>
+      expect(
+        screen.getByText("한 계획에는 운동을 50개까지 담을 수 있어요"),
+      ).toBeTruthy(),
+    );
+    expect(mocks.deleteWorkoutPlan).not.toHaveBeenCalled();
   });
 });
