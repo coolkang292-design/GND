@@ -110,7 +110,6 @@ import {
   hasIntervalFollowUps,
   intervalBlockNames,
   intervalBlockPending,
-  intervalPlanLine,
   isIntervalBlockExercise,
   isIntervalBlockIndex,
   splitIntervalPlan,
@@ -219,10 +218,15 @@ import {
   createWorkoutPlan,
   deleteWorkoutPlan,
   getWorkoutPlanById,
-  getWorkoutPlansByDate,
   updateWorkoutPlan,
   type WorkoutPlan,
 } from "@/lib/workout-plan";
+import {
+  addToDayPlan,
+  consolidateDayPlans,
+  settlePlanAfterWorkout,
+} from "@/lib/day-plan-store";
+import { TodayPlanCards } from "@/components/record/today-plan-cards";
 import {
   cancelWorkout,
   clearDraft,
@@ -548,15 +552,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const [tabataOpen, setTabataOpen] = useState(false);
   /** 인터벌 음원이 도는 중인가 — 그동안 근력 오버레이를 내린다 */
   const [intervalPlaying, setIntervalPlaying] = useState(false);
-  /**
-   * 오늘의 인터벌 계획 (사용자 지시 2026-08-13).
-   *
-   * 근력 계획은 화면을 열 때 목록에 자동으로 담기는데, 인터벌은 담을 수가
-   * 없다 — 종목만 담으면 음원도 코스도 없는 맨몸 운동 넷이 된다. 그래서
-   * **버튼 하나를 대신 세운다.** 달력까지 들어가지 않아도 여기서 시작한다.
-   */
-  const [todayIntervalPlan, setTodayIntervalPlan] =
-    useState<WorkoutPlan | null>(null);
+  /** 오늘 계획 전부 — 인터벌·프로그램 회차 카드를 그린다 (2026-10-13) */
+  const [todayPlans, setTodayPlans] = useState<WorkoutPlan[]>([]);
   /** 예정표에서 연 타바타 — 종목·코스를 채운 채 열고, 완료하면 그 계획을 지운다 */
   const [tabataPrefill, setTabataPrefill] = useState<TabataPrefill | null>(
     null,
@@ -1008,23 +1005,57 @@ function WorkoutScreen({ userId }: { userId: string }) {
     const push = decidePlanPush(d, planSyncMark());
     if (push.kind === "none") return;
     if (push.kind === "create") {
-      const plan = await createWorkoutPlan({
+      // 그날 일반 계획이 있으면 붙이고 없으면 만든다 (2026-10-13) — 예전엔 언제나
+      // 새 행을 만들어, 달력에 계획이 둘이 되고 운동 탭은 하나만 보였다
+      const result = await addToDayPlan({
         userId,
         planDate: dayKey(new Date(), resolveTimeZone()),
         sourceSessionId: d.sourceSessionId,
         exercises: push.exercises,
       });
-      // 만드는 사이에 달력에서 다른 계획을 불러왔으면 방금 만든 것은 고아다
+      // 쓰는 사이에 달력에서 다른 계획을 불러왔으면 덮지 않는다
       if (draftRef.current.scheduledPlanId !== null) {
-        await deleteWorkoutPlan(plan.id);
+        if (result.created) await deleteWorkoutPlan(result.plan.id);
         return;
       }
-      setDraft((current) => ({ ...current, scheduledPlanId: plan.id }));
+      if (result.overflowCount > 0) {
+        showToast("한 계획에는 운동을 50개까지 담을 수 있어요");
+      }
+      // 새로 만들었어도 빈 이름·중복·50개 초과는 걸러져 들어간다. 그때는 목록도 계획과
+      // 같게 바꾼다 — 목록에만 남은 종목은 달력에 없고, 다음 쓰기에서 또 걸러진다
+      const dropped = result.skippedCount + result.overflowCount > 0;
+      if (result.created && !dropped) {
+        setDraft((current) => ({ ...current, scheduledPlanId: result.plan.id }));
+        rememberPlanSync({
+          planId: result.plan.id,
+          updatedAt: result.plan.updatedAt,
+          // 계획(DB에서 돌아온 값)이 아니라 목록 기준으로 적는다 — `decidePlanPush`는
+          // 목록을 같은 함수로 바꿔 이 값과 비교한다. 다르면 곧바로 한 번 더 쓴다
+          json: planExercisesKey(push.exercises),
+        });
+        setTodayPlans(result.dayPlans);
+        return;
+      }
+      // 합쳤다(또는 걸러졌다) — 목록을 그 계획으로 바꾼다. 달력 오늘 칸과 같은 목록이 된다
+      const exercises = toDraftExercises(result.plan.exercises, localId);
+      setDraft((current) => ({
+        ...current,
+        scheduledPlanId: result.plan.id,
+        sourceSessionId: result.plan.sourceSessionId,
+        exercises,
+      }));
       rememberPlanSync({
-        planId: plan.id,
-        updatedAt: plan.updatedAt,
-        json: planExercisesKey(push.exercises),
+        planId: result.plan.id,
+        updatedAt: result.plan.updatedAt,
+        // adopt·불러오기와 같이 담은 목록 기준 — 프로그램 반복 미리 채움 때문에 계획과
+        // 다를 수 있다
+        json: planExercisesKey(toPlanExercises(exercises)),
       });
+      setTodayPlans(result.dayPlans);
+      // 넘침 안내를 덮지 않는다 — 못 담은 것이 있다는 쪽이 더 알아야 할 일이다
+      if (!result.created && result.overflowCount === 0) {
+        showToast("오늘 계획에 합쳤어요");
+      }
       return;
     }
     if (push.kind === "update") {
@@ -1062,14 +1093,15 @@ function WorkoutScreen({ userId }: { userId: string }) {
 
   async function pullPlanNow() {
     const todayKey = dayKey(new Date(), resolveTimeZone());
-    const todayPlans = await getWorkoutPlansByDate(userId, todayKey);
+    // 오늘 일반 계획이 둘 이상이면 먼저 하나로 합친다 (2026-10-13 이전에 생긴 중복)
+    const todayPlans = await consolidateDayPlans(userId, todayKey);
     const d = draftRef.current;
     const bound = d.scheduledPlanId
       ? (todayPlans.find((plan) => plan.id === d.scheduledPlanId) ??
         (await getWorkoutPlanById(d.scheduledPlanId)))
       : null;
     setTodayPlanExists(todayPlans.length > 0);
-    setTodayIntervalPlan(todayPlans.find((plan) => plan.tabataMinutes) ?? null);
+    setTodayPlans(todayPlans);
 
     const pull = decidePlanPull({
       draft: d,
@@ -1106,8 +1138,10 @@ function WorkoutScreen({ userId }: { userId: string }) {
         program: null,
       }));
       rememberPlanSync(null);
+      // `special`(시작 전 목록이 인터벌·프로그램 계획에 묶여 있음)은 알리지 않는다 —
+      // 그 계획은 위 카드로 그대로 보인다
       if (pull.next) {
-        await handleLoadPlan(pull.next);
+        await handleLoadPlan(pull.next, { fromSync: true });
       } else if (pull.reason === "deleted") {
         showToast("달력에서 지운 계획이라 운동 목록을 비웠어요");
       } else if (pull.reason === "moved") {
@@ -1115,7 +1149,11 @@ function WorkoutScreen({ userId }: { userId: string }) {
       }
       return;
     }
-    if (pull.kind === "load") await handleLoadPlan(pull.plan);
+    if (pull.kind === "load") await handleLoadPlan(pull.plan, { fromSync: true });
+    // 연결 없이 직접 담은 목록 — 오늘 계획에 합친다 (push의 create가 그 일을 한다).
+    // ⚠️ 직접 부른다 — pull은 이미 `enqueuePlanSync` 줄 안에서 돈다. 다시 줄에
+    //    세우면 자기 뒤에 서서 교착한다
+    if (pull.kind === "absorb") await pushPlanNow();
   }
 
   // 처음 읽기 — 종목 목록(catalog)이 온 뒤 한 번. 이 플래그가 서면
@@ -2447,13 +2485,23 @@ function WorkoutScreen({ userId }: { userId: string }) {
         }
         exercises = tabataDraftExercises(picked, localId, course);
       }
-      const plan = await createWorkoutPlan({
-        userId,
-        planDate,
-        sourceSessionId: sessionId,
-        exercises: toPlanExercises(exercises),
-        tabataMinutes: course,
-      });
+      // 인터벌은 따로 둔다(코스로 열림). 일반 기록은 그날 계획에 붙인다 (2026-10-13)
+      const plan = course
+        ? await createWorkoutPlan({
+            userId,
+            planDate,
+            sourceSessionId: sessionId,
+            exercises: toPlanExercises(exercises),
+            tabataMinutes: course,
+          })
+        : (
+            await addToDayPlan({
+              userId,
+              planDate,
+              sourceSessionId: sessionId,
+              exercises: toPlanExercises(exercises),
+            })
+          ).plan;
       const what = course ? `🔥 ${INTERVAL_COPY.session(course)}을` : "운동을";
       showToast(
         `${what} ${Number(planDate.slice(5, 7))}월 ${Number(planDate.slice(8))}일 예정표로 저장했어요`,
@@ -2503,16 +2551,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
     } finally {
       tabataMinutesRef.current = null; // 일반 운동 시작에 표식이 새지 않게
     }
-    const started = draftRef.current.startedAtMs !== null;
-    /*
-      오늘 인터벌 계획 배너는 **실제로 시작했을 때** 내린다 (2026-08-25).
-
-      예전에는 배너를 누른 자리에서 바로 지웠다. 그때는 누르는 것이 곧 시작이라
-      맞았지만, 지금은 누르면 코스를 고르는 시트가 열릴 뿐이다 — 거기서 닫으면
-      계획은 그대로인데 배너만 사라져서 달력까지 들어가야 했다.
-    */
-    if (started) setTodayIntervalPlan(null);
-    return started;
+    // 오늘 인터벌 카드는 여기서 내리지 않는다 (2026-10-13) — 운동 중에는 `!active`가
+    // 가리고, 끝나면 pull이 지운 계획을 뺀다. 시트만 열고 닫은 사람에게는 그대로 보인다
+    return draftRef.current.startedAtMs !== null;
   }
 
   async function completeTabata() {
@@ -2586,19 +2627,40 @@ function WorkoutScreen({ userId }: { userId: string }) {
    */
   async function handleLoadPlan(
     plan: WorkoutPlan,
-    options?: { startNow?: boolean },
+    options?: {
+      startNow?: boolean;
+      /**
+       * 동기화 줄(`pullPlanNow`) 안에서 불렀다 (2026-10-13) — 아래 세 가지를 건너뛴다.
+       *
+       * ① 기다리던 쓰기 내보내기: `flushPlanSync`는 줄의 맨 끝을 돌려준다. 줄 안에서
+       *    그걸 기다리면 지금 도는 자기 자신이 끝나기를 기다리게 되어 영영 안 끝난다(교착).
+       *    쓸 것도 없다 — 목록이 비어 있거나(`load`) 막 비웠다(`clear`).
+       * ② 운동 중 막기 ③ 목록 지우기 확인: pull은 운동 완료·취소 직후에도 돈다. 그때
+       *    부른 함수는 **운동 중이던 렌더**의 것이라 `active`·`draft`가 옛 값이다 —
+       *    그대로 두면 방금 끝낸 사람에게 "운동 중에는 불러올 수 없어요"가 뜬다.
+       *    판정은 `decidePlanPull`이 최신 `draftRef`로 이미 했다(시작 전 · 빈 목록).
+       */
+      fromSync?: boolean;
+    },
   ): Promise<boolean> {
-    if (active) {
-      showToast("운동 중에는 다른 예정표를 불러올 수 없어요");
-      return false;
-    }
-    if (
-      draft.exercises.length > 0 &&
-      // 운동 탭 목록이 이미 이 계획이면(2026-10-05 동기화) 바꿀 것이 없다 — 묻지 않는다
-      draft.scheduledPlanId !== plan.id &&
-      !window.confirm("준비 중인 운동 목록을 지우고 예정표로 바꿀까요?")
-    ) {
-      return false;
+    if (!options?.fromSync) {
+      if (active) {
+        showToast("운동 중에는 다른 예정표를 불러올 수 없어요");
+        return false;
+      }
+      if (
+        draft.exercises.length > 0 &&
+        // 운동 탭 목록이 이미 이 계획이면(2026-10-05 동기화) 바꿀 것이 없다 — 묻지 않는다
+        draft.scheduledPlanId !== plan.id &&
+        // 목록이 오늘 계획에 묶여 있으면 지워지는 것이 없다 — 계획은 DB에 남고,
+        // 이 운동을 마치면 운동 탭으로 돌아온다 (2026-10-13)
+        draft.scheduledPlanId === null &&
+        !window.confirm("준비 중인 운동 목록을 지우고 예정표로 바꿀까요?")
+      ) {
+        return false;
+      }
+      // 기다리던 쓰기를 먼저 내보낸다 — 0.6초 안에 고친 세트가 사라지지 않게
+      await flushPlanSync();
     }
     /*
       타바타 계획은 운동 목록이 아니라 **타바타 시트**로 연다 (2026-08-05).
@@ -2863,7 +2925,10 @@ function WorkoutScreen({ userId }: { userId: string }) {
       let planCleanupFailed = false;
       if (draft.scheduledPlanId) {
         try {
-          await deleteWorkoutPlan(draft.scheduledPlanId);
+          // 세트를 하나도 안 한 종목은 오늘 계획에 남긴다 (사용자 결정 2026-10-13).
+          // 자정을 넘겨 끝낸 운동이면 계획이 잠겨 있다("locked") — 실패가 아니다.
+          // 인터벌·프로그램 회차 계획은 예전처럼 통째로 지운다(`settlePlanAfterWorkout`)
+          await settlePlanAfterWorkout(draft.scheduledPlanId, draft.exercises);
         } catch {
           planCleanupFailed = true;
         }
@@ -2967,6 +3032,10 @@ function WorkoutScreen({ userId }: { userId: string }) {
       if (planCleanupFailed) {
         showToast("운동은 완료됐지만 예정표는 달력에서 직접 삭제해 주세요");
       }
+      // 남긴 종목·카드를 다시 그린다 — 다음 운동 탭 진입까지 기다리지 않는다.
+      // 바로 위 `setDraft`가 `draftRef`를 동기로 비웠으므로 pull은 빈 목록을 보고
+      // 오늘 계획(남은 종목)을 담는다
+      void enqueuePlanSync(pullPlanNow);
     } catch (e) {
       showToast(errorMessage(e));
     } finally {
@@ -2986,6 +3055,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
       if (draft.sessionId) await cancelWorkout(draft.sessionId);
       setDraft(emptyDraft(draft.restSeconds));
       showToast("운동을 취소했어요");
+      // 계획에서 시작한 운동을 취소해도 계획은 그대로다 — 목록·카드를 다시 담는다
+      void enqueuePlanSync(pullPlanNow);
     } catch (e) {
       showToast(errorMessage(e));
     } finally {
@@ -3845,47 +3916,19 @@ function WorkoutScreen({ userId }: { userId: string }) {
       ) : (
         <>
           {/*
-        오늘 인터벌 계획이 있으면 **여기서 인터벌 시트를 연다** (2026-08-13).
-
-        근력 계획은 화면을 열 때 목록에 자동으로 담기는데 인터벌은 담을 수가
-        없다 — 종목만 담으면 음원도 코스도 없는 맨몸 운동 넷이 된다. 그래서
-        담는 대신 버튼을 세운다. 달력까지 들어가지 않아도 된다.
-
-        ⚠️ 누르면 **바로 시작하지 않는다** (사용자 지시 2026-08-25). 계획한
-           종목·코스를 채운 채 시트를 열고, 오늘 할 시간(4·8·16분)을 고른 뒤
-           시트의 `전신 인터벌 시작`이 시작한다.
-
-        ⚠️ 운동 중에는 안 보여 준다. 진행 중인 세션 위에 또 시작할 자리를 주면
-           "이미 운동 중이에요"만 보게 된다.
-      */}
-          {todayIntervalPlan && !active && (
-            <button
-              type="button"
-              data-testid="today-interval-start"
+            오늘 인터벌·프로그램 회차 카드 (2026-10-13) — 달력 오늘 칸과 같은 단위.
+            일반 계획은 아래 목록 자체다. 운동 중에는 안 보인다 — 진행 중인 세션 위에
+            또 시작할 자리를 주면 "이미 운동 중이에요"만 보게 된다.
+          */}
+          {!active && (
+            <TodayPlanCards
+              plans={todayPlans}
               disabled={busy}
-              onClick={() => {
-                // 배너를 내리는 것은 `beginTabata`가 한다 — 시트를 닫고 돌아온
-                // 사람에게 계획이 사라져 보이면 안 된다 (2026-08-25).
-                void handleLoadPlan(todayIntervalPlan);
+              onStart={(plan) => {
+                // 인터벌은 시트를 연다(바로 시작 안 함, 2026-08-25), 프로그램은 바로 시작
+                void handleLoadPlan(plan, plan.tabataMinutes ? undefined : { startNow: true });
               }}
-              className="mb-3 flex w-full items-center justify-between gap-3 rounded-card border border-accent/55 bg-surface px-4 py-3.5 text-left disabled:opacity-60"
-            >
-              <span className="min-w-0">
-                <span className="flex items-center gap-1.5 text-sm font-black text-text">
-                  <Icon name="interval" size={17} className="text-accent" />
-                  오늘은 전신 인터벌이에요
-                </span>
-                {/* break-keep: 375px에서 "이 / 어서 2종목"처럼 단어 중간이 끊겼다 (2026-09-29) */}
-                <span className="mt-0.5 block break-keep text-[11.5px] leading-4 text-muted">
-                  {intervalPlanLine(
-                    todayIntervalPlan.exercises.map((item) => item.name),
-                  )}
-                </span>
-              </span>
-              <span className="flex-none text-xs font-extrabold text-accent">
-                시작하기
-              </span>
-            </button>
+            />
           )}
 
           {/*
