@@ -629,10 +629,20 @@ export function CalendarView({
         ⚠️ 0101을 Run하기 전에는 RPC가 `plan_date_taken`으로 막는다.
            `planSaveErrorText`가 그 잠깐을 사람 말로 알린다.
       */
-      const targetHasGeneral = plans.some(
-        (item) => item.planDate === moveDate && isGeneralPlan(item),
+      /*
+        합칠지 말지는 **서버의 지금 그날**로 정한다. `plans`는 달력을 연 때의
+        사진이라, 그 사이 다른 화면(운동 탭 등)이 그날 계획을 만들거나 지웠으면
+        틀린 쪽으로 간다. 다시 읽기가 실패하면 그 사진으로라도 판단한다.
+      */
+      const freshTarget = await getWorkoutPlansByDate(userId, moveDate).catch(
+        (error) => {
+          console.warn("[calendar] 옮길 날 계획 다시 읽기 실패", error);
+          return null;
+        },
       );
-      if (isGeneralPlan(plan) && targetHasGeneral) {
+      const targetPlans =
+        freshTarget ?? plans.filter((item) => item.planDate === moveDate);
+      if (isGeneralPlan(plan) && targetPlans.some(isGeneralPlan)) {
         // 옮길 날에 일반 계획이 있으면 거기에 합친다 — 하루 일반 계획은 하나 (2026-10-13).
         // 붙이기가 성공한 뒤에 원래 것을 지운다(지우기 먼저면 실패 시 종목이 사라진다)
         const result = await addToDayPlan({
@@ -641,26 +651,32 @@ export function CalendarView({
           exercises: plan.exercises,
           sourceSessionId: plan.sourceSessionId,
         });
+        // 붙인 결과는 **지우기 전에** 화면에 반영한다 — 지우기가 실패해도 옮긴 날은
+        // 이미 합쳐진 상태다. 그때 원래 계획은 지워지지 않았으니 화면에도 남는다
+        setPlans((current) => [
+          ...current.filter((item) => item.planDate !== moveDate),
+          ...result.dayPlans,
+        ]);
+        setSelectedDate(moveDate);
         /*
           ⚠️ 50개 상한에 걸려 못 담은 종목이 있으면 원래 계획을 **지우지 않는다.**
              지우면 넘친 종목은 어디에도 남지 않는다. 담긴 것은 옮긴 날에 들어갔고
              원래 날에도 그대로 남는다 — 중복이 사라지는 것보다 낫다.
         */
-        const keepSource = result.overflowCount > 0;
-        if (!keepSource) await deleteWorkoutPlan(plan.id);
-        setPlans((current) => [
-          ...current.filter(
-            (item) =>
-              (keepSource || item.id !== plan.id) && item.planDate !== moveDate,
-          ),
-          ...result.dayPlans,
-        ]);
-        setSelectedDate(moveDate);
-        showPlanToast(
-          keepSource
-            ? "한 계획에는 운동을 50개까지 담을 수 있어요"
-            : "예정 날짜를 옮겼어요",
-        );
+        if (result.overflowCount > 0) {
+          showPlanToast("한 계획에는 운동을 50개까지 담을 수 있어요");
+          return;
+        }
+        try {
+          await deleteWorkoutPlan(plan.id);
+        } catch (error) {
+          // 바깥 catch의 "옮기지 못했어요"는 거짓말이다 — 옮긴 날에는 이미 들어갔다
+          console.warn("[calendar] 합친 뒤 원래 계획 지우기 실패", error);
+          showPlanToast("옮긴 날에 합쳤지만 원래 계획을 지우지 못했어요");
+          return;
+        }
+        setPlans((current) => current.filter((item) => item.id !== plan.id));
+        showPlanToast("예정 날짜를 옮겼어요");
         return;
       }
       const moved = await moveWorkoutPlan(plan.id, moveDate, false);
@@ -1013,17 +1029,33 @@ export function CalendarView({
    */
   function applyDayPlans(
     planDate: string,
-    result: { dayPlans: WorkoutPlan[]; overflowCount: number },
+    result: {
+      dayPlans: WorkoutPlan[];
+      overflowCount: number;
+      created: boolean;
+      skippedCount: number;
+    },
+    /** 담으려고 넘긴 종목 수 — 전부 건너뛰었는지 가르는 데 쓴다 */
+    requestedCount: number,
   ) {
     setPlans((current) => [
       ...current.filter((plan) => plan.planDate !== planDate),
       ...result.dayPlans,
     ]);
     setPlanPickerDate(null);
+    /*
+      하나도 안 들어갔는데 "저장했어요"라고 하면 거짓말이다 (2026-10-13).
+      이미 그날 계획에 있는 종목은 `addToDayPlan`이 건너뛴다 — 그 경우를 따로 말한다.
+      상한 초과는 그보다 먼저 알린다(못 담은 것이 있다는 것이 더 중요하다).
+    */
+    const nothingAdded =
+      !result.created && result.skippedCount >= requestedCount;
     showPlanToast(
       result.overflowCount > 0
         ? "한 계획에는 운동을 50개까지 담을 수 있어요"
-        : "운동 계획을 저장했어요",
+        : nothingAdded
+          ? "이미 그 날 계획에 있는 운동이에요"
+          : "운동 계획을 저장했어요",
     );
   }
 
@@ -1112,13 +1144,11 @@ export function CalendarView({
     setPlanBusy(true);
     try {
       // 그날 일반 계획에 붙인다(없으면 만든다) — 하루 일반 계획은 하나 (2026-10-13)
+      const exercises = newPlanExercises(items);
       applyDayPlans(
         planPickerDate,
-        await addToDayPlan({
-          userId,
-          planDate: planPickerDate,
-          exercises: newPlanExercises(items),
-        }),
+        await addToDayPlan({ userId, planDate: planPickerDate, exercises }),
+        exercises.length,
       );
     } catch (error) {
       showPlanToast(planSaveErrorText(error));
@@ -1147,13 +1177,11 @@ export function CalendarView({
     if (!planPickerDate || planBusy) return;
     setPlanBusy(true);
     try {
+      const exercises = planExercisesFromPicks(picks);
       applyDayPlans(
         planPickerDate,
-        await addToDayPlan({
-          userId,
-          planDate: planPickerDate,
-          exercises: planExercisesFromPicks(picks),
-        }),
+        await addToDayPlan({ userId, planDate: planPickerDate, exercises }),
+        exercises.length,
       );
     } catch (error) {
       showPlanToast(planSaveErrorText(error));
@@ -1173,13 +1201,11 @@ export function CalendarView({
     if (!planPickerDate || planBusy) return false;
     setPlanBusy(true);
     try {
+      const exercises = routine.exercises;
       applyDayPlans(
         planPickerDate,
-        await addToDayPlan({
-          userId,
-          planDate: planPickerDate,
-          exercises: routine.exercises,
-        }),
+        await addToDayPlan({ userId, planDate: planPickerDate, exercises }),
+        exercises.length,
       );
       return true;
     } catch (error) {

@@ -34,6 +34,7 @@ const mocks = vi.hoisted(() => ({
   addToDayPlan: vi.fn(),
   consolidateUpcomingPlans: vi.fn(),
   getWorkoutPlansByDate: vi.fn(),
+  moveWorkoutPlan: vi.fn(),
 }));
 
 vi.mock("@/lib/crew", () => ({ getMyProfile: mocks.getMyProfile }));
@@ -62,7 +63,7 @@ vi.mock("@/lib/workout-plan", () => ({
   getWorkoutPlans: mocks.getWorkoutPlans,
   createWorkoutPlan: mocks.createWorkoutPlan,
   updateWorkoutPlan: mocks.updateWorkoutPlan,
-  moveWorkoutPlan: vi.fn(),
+  moveWorkoutPlan: mocks.moveWorkoutPlan,
   deleteWorkoutPlan: mocks.deleteWorkoutPlan,
   getWorkoutPlansByDate: mocks.getWorkoutPlansByDate,
 }));
@@ -117,6 +118,7 @@ beforeEach(() => {
   });
   mocks.getWorkoutPlansByDate.mockReset();
   mocks.getWorkoutPlansByDate.mockResolvedValue([]);
+  mocks.moveWorkoutPlan.mockReset();
 });
 
 /** 인터벌 고르기 화면은 맨몸·비시간형만 보여 준다 */
@@ -1588,25 +1590,44 @@ describe("CalendarView — 하루 계획 하나 (2026-10-13)", () => {
     일반 계획이 있는 날로 일반 계획을 옮기면 **합친다.** 붙이기가 성공한 뒤에만
     원래 것을 지운다 — 순서가 뒤집히면 붙이기 실패 때 종목이 사라진다.
   */
-  async function moveGeneralPlanTo17(overflowCount: number) {
-    const source = { ...PLAN, id: "plan-source", planDate: "2026-08-16" };
-    const target = { ...PLAN, id: "plan-target", planDate: "2026-08-17" };
-    mocks.getWorkoutPlans.mockResolvedValue([source, target]);
-    mocks.addToDayPlan.mockImplementation(async (input) => {
-      const plan = { ...target, exercises: [...target.exercises, ...input.exercises] };
-      return { plan, dayPlans: [plan], created: false, skippedCount: 0, overflowCount };
-    });
-    const { container } = await setup();
+  const MOVE_SOURCE = { ...PLAN, id: "plan-source", planDate: "2026-08-16" };
+  const MOVE_TARGET = { ...PLAN, id: "plan-target", planDate: "2026-08-17" };
+  /** 합쳐진 계획에만 있는 종목 — 옮긴 날이 합친 결과를 그리는지 가른다 */
+  const MERGED_MARK = {
+    name: "합쳐진 표시 종목",
+    bodyPart: "코어" as const,
+    exerciseType: "bodyweight" as const,
+    measure: "reps" as const,
+    isCustom: true,
+    sets: [{ weightKg: 0, reps: 10, distanceKm: 0, durationMin: 0 }],
+  };
 
+  async function clickMoveTo17() {
+    const { container } = await setup();
     fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 16일,") }));
     fireEvent.change(container.querySelector("input[type=\"date\"]")!, {
       target: { value: "2026-08-17" },
     });
     fireEvent.click(screen.getByRole("button", { name: "날짜 이동" }));
+  }
+
+  async function moveGeneralPlanTo17(overflowCount: number) {
+    mocks.getWorkoutPlans.mockResolvedValue([MOVE_SOURCE, MOVE_TARGET]);
+    // 합칠지는 서버의 지금 그날로 정한다 — 그날 일반 계획이 있다고 답한다
+    mocks.getWorkoutPlansByDate.mockResolvedValue([MOVE_TARGET]);
+    mocks.addToDayPlan.mockImplementation(async (input) => {
+      const plan = {
+        ...MOVE_TARGET,
+        exercises: [...MOVE_TARGET.exercises, ...input.exercises, MERGED_MARK],
+      };
+      return { plan, dayPlans: [plan], created: false, skippedCount: 0, overflowCount };
+    });
+    await clickMoveTo17();
     await waitFor(() => expect(mocks.addToDayPlan).toHaveBeenCalled());
+    expect(mocks.getWorkoutPlansByDate).toHaveBeenCalledWith("user-1", "2026-08-17");
     expect(mocks.addToDayPlan.mock.calls[0][0]).toMatchObject({
       planDate: "2026-08-17",
-      exercises: source.exercises,
+      exercises: MOVE_SOURCE.exercises,
     });
   }
 
@@ -1632,6 +1653,73 @@ describe("CalendarView — 하루 계획 하나 (2026-10-13)", () => {
       ).toBeTruthy(),
     );
     expect(mocks.deleteWorkoutPlan).not.toHaveBeenCalled();
+  });
+
+  it("합친 뒤 원래 계획 지우기가 실패해도 옮긴 날은 합쳐진 채 보이고 원래 계획도 남는다", async () => {
+    mocks.deleteWorkoutPlan.mockRejectedValue(new Error("network"));
+    await moveGeneralPlanTo17(0);
+
+    await waitFor(() =>
+      expect(
+        screen.getByText("옮긴 날에 합쳤지만 원래 계획을 지우지 못했어요"),
+      ).toBeTruthy(),
+    );
+    // 옮긴 날(8월 17일)이 열려 있다 — 합쳐진 계획 한 장
+    expect(screen.getAllByRole("button", { name: "수정" })).toHaveLength(1);
+    expect(screen.getAllByText("합쳐진 표시 종목").length).toBeGreaterThan(0);
+    // 원래 날(8월 16일)에는 지워지지 않은 원래 계획이 그대로다
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 16일,") }));
+    expect(screen.getAllByRole("button", { name: "수정" })).toHaveLength(1);
+    expect(screen.queryAllByText("합쳐진 표시 종목")).toHaveLength(0);
+  });
+
+  it("붙이기가 실패하면 원래 계획을 지우지 않는다", async () => {
+    mocks.getWorkoutPlans.mockResolvedValue([MOVE_SOURCE, MOVE_TARGET]);
+    mocks.getWorkoutPlansByDate.mockResolvedValue([MOVE_TARGET]);
+    mocks.addToDayPlan.mockRejectedValue(new Error("network"));
+    await clickMoveTo17();
+
+    await waitFor(() =>
+      expect(screen.getByText("예정 날짜를 옮기지 못했어요")).toBeTruthy(),
+    );
+    expect(mocks.deleteWorkoutPlan).not.toHaveBeenCalled();
+  });
+
+  it("달력을 연 뒤 옮길 날 계획이 사라졌으면 합치지 않고 그냥 옮긴다", async () => {
+    // 달력을 연 때의 사진에는 17일 계획이 있지만, 서버의 지금 그날은 비었다
+    mocks.getWorkoutPlans.mockResolvedValue([MOVE_SOURCE, MOVE_TARGET]);
+    mocks.getWorkoutPlansByDate.mockResolvedValue([]);
+    mocks.moveWorkoutPlan.mockResolvedValue({ ...MOVE_SOURCE, planDate: "2026-08-17" });
+    await clickMoveTo17();
+
+    // RPC 이동 경로로 갔다 — 붙이기도 지우기도 없다
+    await waitFor(() =>
+      expect(mocks.moveWorkoutPlan).toHaveBeenCalledWith("plan-source", "2026-08-17", false),
+    );
+    expect(mocks.getWorkoutPlansByDate).toHaveBeenCalledWith("user-1", "2026-08-17");
+    expect(mocks.addToDayPlan).not.toHaveBeenCalled();
+    expect(mocks.deleteWorkoutPlan).not.toHaveBeenCalled();
+  });
+
+  it("고른 운동이 이미 그날 계획에 있으면 저장했다고 하지 않는다", async () => {
+    mocks.getWorkoutPlans.mockResolvedValue([{ ...PLAN, id: "plan-general" }]);
+    mocks.addToDayPlan.mockImplementation(async () => {
+      const plan = { ...PLAN, id: "plan-general" };
+      return { plan, dayPlans: [plan], created: false, skippedCount: 1, overflowCount: 0 };
+    });
+    await setup(BODYWEIGHT_CATALOG);
+
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 16일,") }));
+    fireEvent.click(screen.getByText("➕ 이 날 계획에 운동 더하기"));
+    fireEvent.click(screen.getByText("운동 직접 고르기"));
+    fireEvent.click(screen.getByText(BODYWEIGHT_CATALOG[0].name));
+    fireEvent.click(screen.getByText("8월 16일 계획에 1개 담기"));
+
+    await waitFor(() =>
+      expect(screen.getByText("이미 그 날 계획에 있는 운동이에요")).toBeTruthy(),
+    );
+    // 부정 확인 — 하나도 안 들어갔는데 저장했다고 하면 거짓말이다
+    expect(screen.queryByText("운동 계획을 저장했어요")).toBeNull();
   });
 
   it("지난 기록을 일반 계획이 있는 날로 복사하면 그날을 다시 읽어 카드가 1장이다", async () => {
