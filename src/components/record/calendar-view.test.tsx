@@ -1633,4 +1633,44 @@ describe("CalendarView — 하루 계획 하나 (2026-10-13)", () => {
     );
     expect(mocks.deleteWorkoutPlan).not.toHaveBeenCalled();
   });
+
+  it("지난 기록을 일반 계획이 있는 날로 복사하면 그날을 다시 읽어 카드가 1장이다", async () => {
+    /*
+      복사는 그날 일반 계획에 **붙고**, 붙이며 같은 날 중복 행을 합쳐 지운다.
+      예전처럼 받은 한 행만 id로 끼우면 합쳐져 사라진 행(b)이 화면에 남아 2장이 된다.
+      그래서 중복 둘(합치기 실패로 남은 상태)에서 시작한다 — 하나로는 이 회귀가 안 보인다.
+    */
+    const a = { ...PLAN, id: "a", planDate: "2026-08-16" };
+    const b = { ...PLAN, id: "b", planDate: "2026-08-16" };
+    const merged = { ...a, exercises: [...a.exercises, ...b.exercises] };
+    mocks.getCompletedSessions.mockResolvedValue([SESSION]);
+    mocks.getWorkoutPlans.mockResolvedValue([a, b]);
+    mocks.getWorkoutPlansByDate.mockResolvedValue([merged]);
+    const onScheduleSession = vi.fn().mockResolvedValue(merged);
+    render(
+      <CalendarView
+        userId="user-1"
+        catalog={[]}
+        onScheduleSession={onScheduleSession}
+        onLoadPlan={vi.fn()}
+        onCreateCustom={vi.fn()}
+      />,
+    );
+    await screen.findByText("2026년 8월");
+
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 10일,") }));
+    // 복사 날짜의 기본값은 내일(8월 16일)이다
+    fireEvent.click(screen.getByText("📋 복사"));
+    fireEvent.click(screen.getByRole("button", { name: "예정표로 저장" }));
+
+    await waitFor(() =>
+      expect(mocks.getWorkoutPlansByDate).toHaveBeenCalledWith("user-1", "2026-08-16"),
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "예정표로 저장" })).toBeNull(),
+    );
+    expect(onScheduleSession.mock.calls[0][1]).toBe("2026-08-16");
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 16일,") }));
+    expect(screen.getAllByRole("button", { name: "수정" })).toHaveLength(1);
+  });
 });

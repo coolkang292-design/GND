@@ -560,6 +560,35 @@ export function CalendarView({
     setExpandedSessionId(null);
   }
 
+  /**
+   * `onScheduleSession`이 저장한 뒤 그날 계획을 서버 기준으로 다시 맞춘다 (2026-10-13).
+   *
+   * 일반 기록은 그날 일반 계획에 **붙고**, 붙이면서 같은 날 중복 행이 합쳐져
+   * 지워졌을 수 있다. 받은 한 행만 id로 끼우면 지워진 카드가 화면에 남는다 —
+   * 그 날짜 하나만 다시 읽어 통째로 갈아 끼운다(전 기간 조회는 필요 없다).
+   *
+   * ⚠️ 다시 읽기가 실패해도 저장은 이미 됐다 — 던지면 부르는 쪽이 "저장하지
+   *    못했어요"라고 거짓말을 한다. 그때는 받은 행 하나만 id로 반영한다.
+   *
+   * 토스트·시트 닫기는 하지 않는다 — 두 경로(복사 시트·계획 피커)가 다르게 닫는다.
+   */
+  async function refreshDayAfterSchedule(saved: WorkoutPlan) {
+    const fresh = await getWorkoutPlansByDate(userId, saved.planDate).catch(
+      (error) => {
+        console.warn("[calendar] 그날 계획 다시 읽기 실패", error);
+        return null;
+      },
+    );
+    setPlans((current) =>
+      fresh
+        ? [
+            ...current.filter((plan) => plan.planDate !== saved.planDate),
+            ...fresh,
+          ]
+        : [...current.filter((plan) => plan.id !== saved.id), saved],
+    );
+  }
+
   async function handleSaveCopy() {
     if (!copySource || !isPlanDateAllowed(copyDate, todayKey)) return;
     /*
@@ -574,10 +603,8 @@ export function CalendarView({
         copyDate,
         copySource.tabataMinutes,
       );
-      setPlans((current) => [
-        ...current.filter((plan) => plan.id !== saved.id),
-        saved,
-      ]);
+      // 일반 기록은 그날 계획에 붙는다(2026-10-13) — 합치며 지운 행까지 반영한다
+      await refreshDayAfterSchedule(saved);
       setCopySource(null);
     } catch {
       // 상위 화면 토스트에 상세 오류가 표시된다.
@@ -1174,24 +1201,9 @@ export function CalendarView({
         planPickerDate,
         source?.tabataMinutes,
       );
-      /*
-        붙였으면 그날 다른 행이 합쳐져 지워졌을 수 있다 — 저장된 그날 계획
-        전부로 갈아 끼운다. 그 날짜 하나만 다시 읽는다(전 기간 조회는 필요 없다).
-
-        ⚠️ 다시 읽기가 실패해도 저장은 이미 됐다 — "저장하지 못했어요"라고 하면
-           거짓말이 된다. 그때는 받은 행 하나만 id로 반영한다.
-      */
-      const fresh = await getWorkoutPlansByDate(userId, saved.planDate).catch(
-        (error) => {
-          console.warn("[calendar] 그날 계획 다시 읽기 실패", error);
-          return null;
-        },
-      );
-      if (fresh) {
-        applyDayPlans(saved.planDate, { dayPlans: fresh, overflowCount: 0 });
-      } else {
-        applySavedPlan(saved);
-      }
+      await refreshDayAfterSchedule(saved);
+      setPlanPickerDate(null);
+      showPlanToast("운동 계획을 저장했어요");
       return true;
     } catch {
       showPlanToast("운동 계획을 저장하지 못했어요");
