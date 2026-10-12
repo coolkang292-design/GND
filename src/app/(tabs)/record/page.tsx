@@ -290,6 +290,9 @@ const INTERVAL_SUGGESTION_NAMES: readonly string[] =
  */
 const EMPTY_PREVIOUS: ReadonlyMap<string, PreviousSet[]> = new Map();
 
+/** 사용자가 누른 자리에서 기다리던 계획 쓰기를 기다리는 상한 (`flushPlanSyncBounded`) */
+const PLAN_FLUSH_WAIT_MS = 1500;
+
 export default function RecordPage() {
   const { userId, loading, configured, error } = useAuth();
 
@@ -1089,6 +1092,21 @@ function WorkoutScreen({ userId }: { userId: string }) {
       void enqueuePlanSync(pushPlanNow);
     }
     return planSyncChainRef.current;
+  }
+
+  /**
+   * `flushPlanSync`를 1.5초까지만 기다린다 — 사용자가 누른 자리(달력 탭·계획 불러오기)용.
+   * 네트워크가 늦어도 버튼이 멈춰 보이면 사용자는 안 눌린 줄 안다. 시간이 지나도
+   * 쓰기는 줄에서 계속 돈다 — 기다리기만 그만둔다.
+   * ⚠️ 동기화 줄 안에서는 부르지 않는다 — 1.5초마다 교착을 빠져나올 뿐 같은 문제다.
+   */
+  function flushPlanSyncBounded(): Promise<void> {
+    return Promise.race([
+      flushPlanSync(),
+      new Promise<void>((resolve) =>
+        window.setTimeout(resolve, PLAN_FLUSH_WAIT_MS),
+      ),
+    ]);
   }
 
   async function pullPlanNow() {
@@ -2659,8 +2677,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
       ) {
         return false;
       }
-      // 기다리던 쓰기를 먼저 내보낸다 — 0.6초 안에 고친 세트가 사라지지 않게
-      await flushPlanSync();
+      // 기다리던 쓰기를 먼저 내보낸다 — 0.6초 안에 고친 세트가 사라지지 않게.
+      // 1.5초까지만 기다린다(달력 탭과 같다) — 네트워크가 늦어도 버튼이 멈춰 보이지 않게
+      await flushPlanSyncBounded();
     }
     /*
       타바타 계획은 운동 목록이 아니라 **타바타 시트**로 연다 (2026-08-05).
@@ -2734,7 +2753,11 @@ function WorkoutScreen({ userId }: { userId: string }) {
       await handleStart();
       return draftRef.current.startedAtMs !== null;
     }
-    showToast("예정표를 불러왔어요 — 준비되면 운동을 시작하세요");
+    // 동기화가 담은 것은 알리지 않는다 (2026-10-13) — 운동 탭 목록이 곧 오늘 계획이라
+    // 알릴 소식이 아니고, 완료 직후에는 결과 화면과 예정표 정리 실패 안내를 덮었다
+    if (!options?.fromSync) {
+      showToast("예정표를 불러왔어요 — 준비되면 운동을 시작하세요");
+    }
     return true;
   }
 
@@ -3838,10 +3861,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
                 방금 담은 운동이 달력에 없다. 네트워크가 늦어도 탭이 멈춰 보이면
                 안 되므로 1.5초까지만 기다린다.
               */
-              void Promise.race([
-                flushPlanSync(),
-                new Promise((resolve) => window.setTimeout(resolve, 1500)),
-              ]).then(() => setSubTab("calendar"));
+              void flushPlanSyncBounded().then(() => setSubTab("calendar"));
             }}
             className={`h-10 flex-1 rounded-full text-[14px] font-extrabold transition-colors ${
               subTab === t ? "bg-accent text-accent-ink" : "text-muted"
