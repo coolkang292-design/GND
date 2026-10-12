@@ -439,11 +439,20 @@ describe("운동 탭 ↔ 오늘 계획 동기화 (2026-10-05)", () => {
     program: null as unknown,
   };
   const planEx = toPlanExercises([squat]);
-  const plan = (over: Partial<{ id: string; planDate: string; updatedAt: string; tabataMinutes: number | null }> = {}) => ({
+  const plan = (
+    over: Partial<{
+      id: string;
+      planDate: string;
+      updatedAt: string;
+      tabataMinutes: number | null;
+      programEnrollmentId: string | null;
+    }> = {},
+  ) => ({
     id: "p1",
     planDate: "2026-10-05",
     updatedAt: "t1",
     tabataMinutes: null,
+    programEnrollmentId: null,
     exercises: planEx,
     ...over,
   });
@@ -494,6 +503,16 @@ describe("운동 탭 ↔ 오늘 계획 동기화 (2026-10-05)", () => {
         decidePlanPush({ ...draft, scheduledPlanId: "p1", exercises: [], program: { week: 1 } }, mark).kind,
       ).toBe("none");
     });
+
+    it("프로그램 회차에 묶인 목록은 쓰지 않는다 — 회차는 카드에서만 시작한다", () => {
+      const changed = { ...squat, sets: [{ ...squat.sets[0], reps: 12 }] };
+      expect(
+        decidePlanPush(
+          { ...draft, scheduledPlanId: "p1", exercises: [changed], program: { week: 1 } },
+          mark,
+        ).kind,
+      ).toBe("none");
+    });
   });
 
   describe("pull — 달력에서 고친 것을 운동 탭이 읽는다", () => {
@@ -504,8 +523,42 @@ describe("운동 탭 ↔ 오늘 계획 동기화 (2026-10-05)", () => {
       expect(decidePlanPull({ ...base, todayPlans: [p] })).toEqual({ kind: "load", plan: p });
     });
 
-    it("이미 담은 것이 있으면 오늘 계획을 덮지 않는다", () => {
-      expect(decidePlanPull({ ...base, draft, todayPlans: [plan()] }).kind).toBe("none");
+    it("연결 없이 직접 담은 목록이 있으면 오늘 계획에 합친다 — 새 행을 만들지 않는다", () => {
+      expect(decidePlanPull({ ...base, draft, todayPlans: [plan()] })).toEqual({ kind: "absorb" });
+    });
+
+    it("앱이 담아 준 제안은 합치지 않는다 — 고치기 전까지 계획이 아니다", () => {
+      expect(
+        decidePlanPull({
+          ...base,
+          draft: { ...draft, suggestedForDayKey: "2026-10-05" },
+          todayPlans: [plan()],
+        }).kind,
+      ).toBe("none");
+    });
+
+    it("프로그램 회차는 목록에 자동으로 담지 않는다 — 카드로 보인다", () => {
+      const program = plan({ id: "pp", programEnrollmentId: "e1" });
+      expect(decidePlanPull({ ...base, todayPlans: [program] }).kind).toBe("none");
+      const general = plan({ id: "g" });
+      expect(decidePlanPull({ ...base, todayPlans: [program, general] })).toEqual({
+        kind: "load",
+        plan: general,
+      });
+    });
+
+    it("시작 전 목록이 프로그램 회차에 묶여 있으면 비우고 일반 계획을 담는다", () => {
+      const program = plan({ programEnrollmentId: "e1" });
+      const general = plan({ id: "g" });
+      expect(
+        decidePlanPull({
+          ...base,
+          draft: { ...draft, scheduledPlanId: "p1", program: { week: 1 } },
+          todayPlans: [program, general],
+          bound: program,
+          mark,
+        }),
+      ).toEqual({ kind: "clear", reason: "special", next: general });
     });
 
     it("달력이 묶인 계획을 고쳤으면 목록을 바꾼다", () => {

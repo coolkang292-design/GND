@@ -1,4 +1,5 @@
 import type { BodyPart, CatalogExercise, ExerciseType } from "@/lib/types";
+import { isGeneralPlan } from "./day-plan";
 
 export type PlanSet = {
   weightKg: number;
@@ -319,6 +320,8 @@ export type SyncPlan = {
   planDate: string;
   updatedAt: string;
   tabataMinutes: number | null;
+  /** 프로그램 회차면 등록 id — 회차는 목록에 담지 않고 카드로 보인다 (2026-10-13) */
+  programEnrollmentId: string | null;
   exercises: PlanExercise[];
 };
 
@@ -359,8 +362,10 @@ export type PlanPush =
  *   그 칸이 비워지므로 그때부터 쓴다.
  * - 묶인 계획이 없고 목록이 있으면 오늘 계획을 **만든다**
  * - 목록을 다 비우면 계획을 **지운다** — 운동 탭에서 다 뺐는데 달력에 남으면 그게
- *   바로 신고된 어긋남이다. 단 **프로그램 회차는 지우지 않는다.** 지우면 18회
- *   진행표에서 그 회차가 사라지고 되살릴 길이 없다.
+ *   바로 신고된 어긋남이다.
+ * - **프로그램 회차에 묶인 목록은 아무것도 쓰지 않는다** (2026-10-13). 회차는 카드에서만
+ *   시작하고, 지우면 18회 진행표에서 그 회차가 사라져 되살릴 길이 없다. RLS(0066)도
+ *   막는다.
  * - 목록이 있는데 계획 모양으로 못 바꾸면(값이 깨짐) 손대지 않는다 — 고장 난 값으로
  *   멀쩡한 계획을 덮지 않는다.
  */
@@ -370,13 +375,15 @@ export function decidePlanPush(
 ): PlanPush {
   if (draft.startedAtMs !== null || draft.tabataMinutes) return { kind: "none" };
   if (draft.suggestedForDayKey !== null) return { kind: "none" };
+  // 프로그램 회차는 운동 탭이 고치지 않는다 — RLS도 막는다 (0066)
+  if (draft.program) return { kind: "none" };
   const planId = draft.scheduledPlanId;
   const exercises = toPlanExercises(draft.exercises);
   if (!planId) {
     return exercises.length > 0 ? { kind: "create", exercises } : { kind: "none" };
   }
   if (draft.exercises.length === 0) {
-    return draft.program ? { kind: "none" } : { kind: "delete", planId };
+    return { kind: "delete", planId };
   }
   if (exercises.length === 0) return { kind: "none" };
   if (mark?.planId === planId && mark.json === planExercisesKey(exercises)) {
@@ -390,17 +397,24 @@ export type PlanPull<P extends SyncPlan> =
   /** 달력(또는 다른 기기)이 묶인 계획을 고쳤다 — 목록을 계획으로 바꾼다 */
   | { kind: "adopt"; plan: P }
   /**
-   * 묶인 계획이 오늘 것이 아니게 됐다 — 목록을 비운다.
-   * `deleted` 달력에서 지움 · `moved` 다른 날로 옮김 · `stale` 날이 바뀜(어제 계획).
-   * `next`는 비운 뒤 대신 담을 오늘 계획(있으면).
+   * 묶인 계획이 오늘 일반 계획이 아니게 됐다 — 목록을 비운다.
+   * `deleted` 달력에서 지움 · `moved` 다른 날로 옮김 · `stale` 날이 바뀜(어제 계획)
+   * · `special` 시작 전 목록이 프로그램·인터벌 계획에 묶여 있음(카드에서 시작한다).
+   * `next`는 비운 뒤 대신 담을 오늘 일반 계획(있으면).
    */
-  | { kind: "clear"; reason: "deleted" | "moved" | "stale"; next: P | null }
-  /** 빈 목록인데 오늘 계획이 있다 — 담는다 (예전 자동 담기와 같은 규칙) */
-  | { kind: "load"; plan: P };
+  | { kind: "clear"; reason: "deleted" | "moved" | "stale" | "special"; next: P | null }
+  /** 빈 목록인데 오늘 일반 계획이 있다 — 담는다 */
+  | { kind: "load"; plan: P }
+  /**
+   * 연결 없이 사용자가 직접 담은 목록이 있다 — 오늘 계획에 **합치고** 연결한다
+   * (2026-10-13). 예전엔 `none`이었고, 뒤이은 push가 새 행을 만들어 하루 계획이
+   * 둘이 됐다.
+   */
+  | { kind: "absorb" };
 
 function todayCandidate<P extends SyncPlan>(todayPlans: P[]): P | undefined {
-  // 인터벌이 아닌 것을 먼저 — 인터벌은 담지 않고 시작 버튼으로 연다
-  return todayPlans.find((plan) => !plan.tabataMinutes) ?? todayPlans[0];
+  // 일반 계획만 — 인터벌·프로그램 회차는 운동 탭에 카드로 보인다 (2026-10-13)
+  return todayPlans.find(isGeneralPlan);
 }
 
 /**
@@ -420,13 +434,20 @@ export function decidePlanPull<P extends SyncPlan>(input: {
   if (draft.startedAtMs !== null || draft.tabataMinutes) return { kind: "none" };
 
   if (draft.scheduledPlanId) {
-    if (!bound || bound.planDate !== todayKey) {
+    const special = bound !== null && !isGeneralPlan(bound);
+    if (!bound || bound.planDate !== todayKey || special) {
       const next = todayCandidate(
         todayPlans.filter((plan) => plan.id !== draft.scheduledPlanId),
       );
       return {
         kind: "clear",
-        reason: !bound ? "deleted" : bound.planDate > todayKey ? "moved" : "stale",
+        reason: !bound
+          ? "deleted"
+          : special
+            ? "special"
+            : bound.planDate > todayKey
+              ? "moved"
+              : "stale",
         next:
           next &&
           shouldAutoLoadTodayPlan({
@@ -444,6 +465,10 @@ export function decidePlanPull<P extends SyncPlan>(input: {
       return { kind: "adopt", plan: bound };
     }
     return { kind: "none" };
+  }
+
+  if (draft.exercises.length > 0) {
+    return draft.suggestedForDayKey === null ? { kind: "absorb" } : { kind: "none" };
   }
 
   const plan = todayCandidate(todayPlans);
