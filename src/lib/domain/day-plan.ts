@@ -17,8 +17,10 @@ import type { PlanExercise } from "./workout-plan";
 export type DayPlanLike = {
   id: string;
   planDate: string;
-  tabataMinutes: number | null;
-  programEnrollmentId: string | null;
+  // `isGeneralPlan`과 같은 이유로 선택 필드다 — 0059·0066 이전 행과 테스트 고정값에는
+  // 두 필드가 아예 없다(undefined). 필수로 두면 그런 계획을 이 규칙들에 못 넘긴다.
+  tabataMinutes?: number | null;
+  programEnrollmentId?: string | null;
   exercises: PlanExercise[];
 };
 
@@ -39,24 +41,48 @@ export function pickDayGeneralPlan<P extends DayPlanLike>(plans: P[]): P | null 
   return plans.find(isGeneralPlan) ?? null;
 }
 
-/** 이름이 겹치지 않는 종목만 뒤에 붙인다 — 겹치면 원래 계획의 세트가 남는다 */
+/**
+ * 한 계획에 담을 수 있는 종목 수 — DB check(0015)는 `exercises` 길이 1..50이다.
+ *
+ * ⚠️ 넘겨서 저장하면 DB가 거절할 뿐 아니라, 이미 들어간 행도 위험하다.
+ *    `parsePlanExercises`가 50개 초과를 빈 배열로 돌려주고 `fromRow`는 빈 배열을
+ *    `invalid_workout_plan`으로 던져서, **그 행 하나 때문에 달력 전체가 안 뜬다.**
+ *    합치는 쪽이 이 상한을 지켜야 하는 이유다.
+ */
+export const MAX_PLAN_EXERCISES = 50;
+
+/**
+ * 이름이 겹치지 않는 종목만 뒤에 붙인다 — 겹치면 원래 계획의 세트가 남는다.
+ *
+ * - `skippedCount`: 이름이 비었거나 이미 있어서 건너뛴 수 (사용자가 잃는 것이 없다)
+ * - `overflowCount`: 새 종목인데 `MAX_PLAN_EXERCISES`를 넘겨서 **못 넣은** 수
+ *   (사용자가 담으려던 것이 빠졌으니 호출한 쪽이 알려야 한다)
+ *
+ * `base` 안에 이미 있는 중복은 손대지 않는다 — 합치기가 원본 계획을 고쳐 쓰면 안 된다.
+ */
 export function mergePlanExercises(
   base: PlanExercise[],
   added: PlanExercise[],
-): { exercises: PlanExercise[]; skippedCount: number } {
+): { exercises: PlanExercise[]; skippedCount: number; overflowCount: number } {
   const known = new Set(base.map((item) => normalizedExerciseName(item.name)));
   const exercises = [...base];
   let skippedCount = 0;
+  let overflowCount = 0;
   for (const item of added) {
     const name = normalizedExerciseName(item.name);
     if (!name || known.has(name)) {
       skippedCount += 1;
       continue;
     }
+    // 넘쳐서 못 넣은 이름도 기록한다 — 같은 이름이 또 오면 "넘침"이 아니라 "중복"이다
     known.add(name);
+    if (exercises.length >= MAX_PLAN_EXERCISES) {
+      overflowCount += 1;
+      continue;
+    }
     exercises.push(item);
   }
-  return { exercises, skippedCount };
+  return { exercises, skippedCount, overflowCount };
 }
 
 export type DayPlanMerge = {
@@ -65,16 +91,28 @@ export type DayPlanMerge = {
   deleteIds: string[];
 };
 
-/** 같은 날 일반 계획이 둘 이상이면 첫 것에 합칠 계획. 아니면 null */
+/**
+ * 같은 날 일반 계획이 둘 이상이면 첫 것에 합칠 계획. 합칠 것이 없으면 null.
+ *
+ * 나머지 계획을 순서대로 첫 계획에 합친다. **한 계획이라도 통째로 들어가지 못하면
+ * (50개 초과) 거기서 멈춘다** — 그 계획과 뒤의 계획은 합치지도 지우지도 않는다.
+ * 일부만 옮기고 지우면 종목이 사라지고, 건너뛰고 뒤의 것을 먼저 합치면 순서가 뒤집힌다.
+ * 못 합친 계획은 그대로 남아 다음 읽기에서 다시 시도된다.
+ */
 export function planDayMerge<P extends DayPlanLike>(plans: P[]): DayPlanMerge | null {
   const general = plans.filter(isGeneralPlan);
   if (general.length < 2) return null;
   const [keep, ...rest] = general;
   let exercises = keep.exercises;
+  const deleteIds: string[] = [];
   for (const other of rest) {
-    exercises = mergePlanExercises(exercises, other.exercises).exercises;
+    const merged = mergePlanExercises(exercises, other.exercises);
+    if (merged.overflowCount > 0) break;
+    exercises = merged.exercises;
+    deleteIds.push(other.id);
   }
-  return { keepId: keep.id, exercises, deleteIds: rest.map((item) => item.id) };
+  if (deleteIds.length === 0) return null;
+  return { keepId: keep.id, exercises, deleteIds };
 }
 
 /**

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   datesNeedingMerge,
   isGeneralPlan,
+  MAX_PLAN_EXERCISES,
   mergePlanExercises,
   pickDayGeneralPlan,
   planDayMerge,
@@ -45,6 +46,10 @@ describe("isGeneralPlan", () => {
     expect(isGeneralPlan(plan("b", { tabataMinutes: 8 }))).toBe(false);
     expect(isGeneralPlan(plan("c", { programEnrollmentId: "e1" }))).toBe(false);
   });
+
+  it("두 필드가 아예 없는 행(0059 이전·테스트 고정값)도 일반 계획이다", () => {
+    expect(isGeneralPlan({})).toBe(true);
+  });
 });
 
 describe("pickDayGeneralPlan", () => {
@@ -73,6 +78,44 @@ describe("mergePlanExercises", () => {
     expect(result.exercises.map((e) => e.name)).toEqual(["점프 스쿼트", "풀업"]);
     expect(result.exercises[0].sets[0].reps).toBe(25);
     expect(result.skippedCount).toBe(1);
+    expect(result.overflowCount).toBe(0);
+  });
+
+  it("이름이 빈 종목은 건너뛴다", () => {
+    const result = mergePlanExercises([ex("풀업")], [ex("   "), ex("")]);
+    expect(result.exercises.map((e) => e.name)).toEqual(["풀업"]);
+    expect(result.skippedCount).toBe(2);
+  });
+
+  it("더할 목록 안의 중복은 한 번만 넣는다", () => {
+    const result = mergePlanExercises([], [ex("풀업", 4), ex("풀업", 9), ex("푸시업")]);
+    expect(result.exercises.map((e) => e.name)).toEqual(["풀업", "푸시업"]);
+    expect(result.exercises[0].sets[0].reps).toBe(4);
+    expect(result.skippedCount).toBe(1);
+  });
+
+  it("base 안에 이미 있는 중복은 건드리지 않는다", () => {
+    const base = [ex("풀업", 4), ex("풀업", 9)];
+    const result = mergePlanExercises(base, [ex("푸시업")]);
+    expect(result.exercises.map((e) => e.name)).toEqual(["풀업", "풀업", "푸시업"]);
+  });
+
+  it("50개를 넘기는 종목은 넣지 않고 overflowCount로 센다", () => {
+    expect(MAX_PLAN_EXERCISES).toBe(50);
+    const base = Array.from({ length: 49 }, (_, i) => ex(`기존-${i}`));
+    const result = mergePlanExercises(base, [ex("a"), ex("b"), ex("c")]);
+    expect(result.exercises).toHaveLength(50);
+    expect(result.exercises[49].name).toBe("a");
+    expect(result.skippedCount).toBe(0);
+    expect(result.overflowCount).toBe(2);
+  });
+
+  it("이미 50개인 계획에는 새 종목이 하나도 들어가지 않는다", () => {
+    const base = Array.from({ length: 50 }, (_, i) => ex(`기존-${i}`));
+    const result = mergePlanExercises(base, [ex("a"), ex("기존-3")]);
+    expect(result.exercises).toHaveLength(50);
+    expect(result.skippedCount).toBe(1);
+    expect(result.overflowCount).toBe(1);
   });
 });
 
@@ -90,6 +133,35 @@ describe("planDayMerge", () => {
       exercises: [ex("점프 스쿼트", 25), ex("풀업", 4), ex("밴드 레터럴 레이즈", 12)],
       deleteIds: ["b"],
     });
+  });
+
+  it("셋 이상이면 순서대로 첫 계획에 합치고 겹치는 이름은 한 번만 남긴다", () => {
+    const a = plan("a", { exercises: [ex("점프 스쿼트", 25), ex("풀업", 4)] });
+    const b = plan("b", { exercises: [ex("풀업", 9), ex("푸시업")] });
+    const c = plan("c", { exercises: [ex("푸시업", 3), ex("점프 스쿼트", 1), ex("런지")] });
+    expect(planDayMerge([a, b, c])).toEqual({
+      keepId: "a",
+      exercises: [ex("점프 스쿼트", 25), ex("풀업", 4), ex("푸시업"), ex("런지")],
+      deleteIds: ["b", "c"],
+    });
+  });
+
+  it("합치다 50개를 넘기는 계획부터는 합치지도 지우지도 않는다 — 종목 손실 방지", () => {
+    const a = plan("a", { exercises: Array.from({ length: 30 }, (_, i) => ex(`a-${i}`)) });
+    const b = plan("b", { exercises: Array.from({ length: 15 }, (_, i) => ex(`b-${i}`)) });
+    const c = plan("c", { exercises: Array.from({ length: 10 }, (_, i) => ex(`c-${i}`)) });
+    const d = plan("d", { exercises: [ex("d-0")] });
+    const merge = planDayMerge([a, b, c, d]);
+    expect(merge?.keepId).toBe("a");
+    expect(merge?.exercises).toHaveLength(45);
+    // c가 못 들어가면 그 뒤의 d도 건드리지 않는다 — 순서가 뒤집히면 안 된다
+    expect(merge?.deleteIds).toEqual(["b"]);
+  });
+
+  it("첫 번째 나머지 계획부터 넘치면 null — 아무것도 합치지 않는다", () => {
+    const a = plan("a", { exercises: Array.from({ length: 40 }, (_, i) => ex(`a-${i}`)) });
+    const b = plan("b", { exercises: Array.from({ length: 11 }, (_, i) => ex(`b-${i}`)) });
+    expect(planDayMerge([a, b])).toBeNull();
   });
 });
 
