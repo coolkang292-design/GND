@@ -1,5 +1,6 @@
 import type { BodyPart, CatalogExercise, ExerciseType } from "@/lib/types";
 import { isGeneralPlan } from "./day-plan";
+import { normalizedExerciseName } from "./workout-import";
 
 export type PlanSet = {
   weightKg: number;
@@ -337,6 +338,8 @@ export type PlanSyncMark = { planId: string; updatedAt: string; json: string };
 type SyncDraft = {
   exercises: LocalExerciseInput[];
   scheduledPlanId: string | null;
+  /** 세션이 열렸는가 — 시작 응답(`startedAtMs`)보다 먼저 선다 (`handleStart`) */
+  sessionId: string | null;
   startedAtMs: number | null;
   tabataMinutes: number | null;
   suggestedForDayKey: string | null;
@@ -429,9 +432,19 @@ export function decidePlanPull<P extends SyncPlan>(input: {
   todayPlans: P[];
   bound: P | null;
   mark: PlanSyncMark | null;
+  /**
+   * 계획으로 운동을 **시작하는 중**인가 (2026-10-13). 달력의 `운동 시작하기`는 목록을
+   * 그 계획에 묶고 → 운동 탭으로 넘기고 → 시작을 기다린다. 탭을 넘기는 순간 pull이
+   * 도는데, 시작 응답 전이라 `startedAtMs`가 비어 있다 — 프로그램 회차면 `special`로
+   * 읽혀 목록이 비워지고, 시작되는 세션에 일반 계획이 담겼다.
+   */
+  starting: boolean;
 }): PlanPull<P> {
-  const { draft, todayKey, todayPlans, bound, mark } = input;
+  const { draft, todayKey, todayPlans, bound, mark, starting } = input;
   if (draft.startedAtMs !== null || draft.tabataMinutes) return { kind: "none" };
+  // 세션이 열렸으면(시작 응답 전, 또는 시작이 실패해 남은 세션) 목록은 그 세션 것이다.
+  // 다음 `운동 시작`이 이 세션을 이어 쓴다 — 그 위에 계획을 덮지 않는다
+  if (starting || draft.sessionId !== null) return { kind: "none" };
 
   if (draft.scheduledPlanId) {
     const special = bound !== null && !isGeneralPlan(bound);
@@ -481,4 +494,39 @@ export function decidePlanPull<P extends SyncPlan>(input: {
   })
     ? { kind: "load", plan: plan! }
     : { kind: "none" };
+}
+
+/**
+ * push가 오늘 계획에 **합친 뒤**, 그 사이(왕복 중) 목록이 바뀌었을 때 쓸 목록 (2026-10-13).
+ *
+ * 합친 계획으로 목록을 통째로 갈면 왕복하는 동안 친 무게·반복이 사라지고, 카드 키가
+ * 바뀌어 입력 중이던 칸이 다시 그려진다(모바일에서 자판이 내려간다). 그렇다고 목록을
+ * 그대로 두면 다음 쓰기(update)가 **목록만으로** 계획을 덮어, 합치기로 들어온 원래
+ * 계획 종목이 사라진다. 그래서 둘을 겹친다.
+ *
+ * - 순서는 계획을 따른다
+ * - 목록에 같은 이름이 있으면 **그 객체를 그대로** 쓴다 — 키·고친 값이 산다
+ * - 계획에만 있는 종목은 `fromPlan`으로 새로 만든다
+ * - 계획에 없는 목록 종목(왕복 중에 담은 것)은 뒤에 붙인다
+ *
+ * 이름은 합치기와 같은 규칙(`normalizedExerciseName`)으로 맞춘다.
+ */
+export function listOverMergedPlan<T extends { name: string }>(
+  plan: PlanExercise[],
+  current: T[],
+  fromPlan: (exercise: PlanExercise) => T,
+): T[] {
+  const currentByName = new Map<string, T>();
+  for (const item of current) {
+    const name = normalizedExerciseName(item.name);
+    if (!currentByName.has(name)) currentByName.set(name, item);
+  }
+  const planNames = new Set(plan.map((item) => normalizedExerciseName(item.name)));
+  const kept = plan.map(
+    (item) => currentByName.get(normalizedExerciseName(item.name)) ?? fromPlan(item),
+  );
+  const added = current.filter(
+    (item) => !planNames.has(normalizedExerciseName(item.name)),
+  );
+  return [...kept, ...added];
 }

@@ -6,6 +6,7 @@ import {
   addDaysToDateKey,
   isPastPlanDate,
   isPlanDateAllowed,
+  listOverMergedPlan,
   newPlanExercises,
   parsePlanExercises,
   shouldAutoLoadTodayPlan,
@@ -433,6 +434,7 @@ describe("운동 탭 ↔ 오늘 계획 동기화 (2026-10-05)", () => {
   const draft = {
     exercises: [squat],
     scheduledPlanId: null as string | null,
+    sessionId: null as string | null,
     startedAtMs: null as number | null,
     tabataMinutes: null as number | null,
     suggestedForDayKey: null as string | null,
@@ -516,7 +518,14 @@ describe("운동 탭 ↔ 오늘 계획 동기화 (2026-10-05)", () => {
   });
 
   describe("pull — 달력에서 고친 것을 운동 탭이 읽는다", () => {
-    const base = { draft: { ...draft, exercises: [] }, todayKey: "2026-10-05", todayPlans: [], bound: null, mark: null };
+    const base = {
+      draft: { ...draft, exercises: [] },
+      todayKey: "2026-10-05",
+      todayPlans: [],
+      bound: null,
+      mark: null,
+      starting: false,
+    };
 
     it("빈 목록에 오늘 계획이 있으면 담는다 — 달력에서 만들고 돌아온 경우", () => {
       const p = plan();
@@ -605,6 +614,75 @@ describe("운동 탭 ↔ 오늘 계획 동기화 (2026-10-05)", () => {
       expect(
         decidePlanPull({ ...base, draft: { ...draft, scheduledPlanId: "p1", startedAtMs: 1 }, bound: null, mark }).kind,
       ).toBe("none");
+    });
+
+    it("계획으로 운동을 시작하는 중이면 손대지 않는다 — 시작 전 프로그램 목록을 비우지 않는다", () => {
+      const program = plan({ programEnrollmentId: "e1" });
+      const general = plan({ id: "g" });
+      expect(
+        decidePlanPull({
+          ...base,
+          draft: { ...draft, scheduledPlanId: "p1", program: { week: 1 } },
+          todayPlans: [program, general],
+          bound: program,
+          mark,
+          starting: true,
+        }),
+      ).toEqual({ kind: "none" });
+    });
+
+    it("세션이 이미 열렸으면(시작 응답 전) 손대지 않는다", () => {
+      const program = plan({ programEnrollmentId: "e1" });
+      expect(
+        decidePlanPull({
+          ...base,
+          draft: { ...draft, scheduledPlanId: "p1", sessionId: "s1", program: { week: 1 } },
+          todayPlans: [program],
+          bound: program,
+          mark,
+        }).kind,
+      ).toBe("none");
+    });
+  });
+
+  describe("합친 계획 위에 그 사이 바뀐 목록을 얹는다", () => {
+    type Item = { key: string; name: string; reps: number };
+    const fromPlan = (exercise: PlanExercise): Item => ({
+      key: `new-${exercise.name}`,
+      name: exercise.name,
+      reps: exercise.sets[0]?.reps ?? 0,
+    });
+    const planItem = (name: string, reps: number): PlanExercise => ({
+      ...planEx[0],
+      name,
+      sets: [{ weightKg: 0, reps, distanceKm: 0, durationMin: 0 }],
+    });
+
+    it("계획 순서를 따르고, 목록에 있던 종목은 그 객체(키·고친 값)를 그대로 쓴다", () => {
+      const typed: Item = { key: "k-bench", name: "벤치프레스", reps: 12 };
+      const result = listOverMergedPlan(
+        [planItem("스쿼트", 5), planItem("벤치프레스", 10)],
+        [typed],
+        fromPlan,
+      );
+      expect(result).toEqual([
+        { key: "new-스쿼트", name: "스쿼트", reps: 5 },
+        typed,
+      ]);
+      expect(result[1]).toBe(typed);
+    });
+
+    it("그 사이 새로 담은 종목은 뒤에 붙인다 — 사라지지 않는다", () => {
+      const later: Item = { key: "k-row", name: "바벨로우", reps: 8 };
+      expect(listOverMergedPlan([planItem("스쿼트", 5)], [later], fromPlan)).toEqual([
+        { key: "new-스쿼트", name: "스쿼트", reps: 5 },
+        later,
+      ]);
+    });
+
+    it("이름은 합치기와 같은 규칙(앞뒤 공백·대소문자 무시)으로 맞춘다", () => {
+      const typed: Item = { key: "k-lat", name: " Lat Pulldown ", reps: 9 };
+      expect(listOverMergedPlan([planItem("lat pulldown", 10)], [typed], fromPlan)).toEqual([typed]);
     });
   });
 });

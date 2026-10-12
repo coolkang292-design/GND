@@ -71,6 +71,7 @@ import {
 import {
   decidePlanPull,
   decidePlanPush,
+  listOverMergedPlan,
   planExercisesKey,
   toDraftExercises,
   toPlanExercises,
@@ -982,6 +983,13 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const planSyncChainRef = useRef<Promise<void>>(Promise.resolve());
   const planSyncTimerRef = useRef<number | null>(null);
   const planSyncReadyRef = useRef(false);
+  /**
+   * 계획으로 운동을 시작하는 중 (`handleLoadPlan`의 `startNow`, 2026-10-13).
+   * 그동안 pull은 목록에 손대지 않는다 — `decidePlanPull`의 `starting` 참조.
+   */
+  const startingPlanRef = useRef(false);
+  /** 사용자가 누른 계획 불러오기가 도는 중 — 쓰기를 기다리는 1.5초 사이 두 번째 탭을 막는다 */
+  const loadingPlanRef = useRef(false);
 
   function planSyncMark(): PlanSyncMark | null {
     if (planSyncMarkRef.current === undefined) {
@@ -1040,7 +1048,20 @@ function WorkoutScreen({ userId }: { userId: string }) {
         return;
       }
       // 합쳤다(또는 걸러졌다) — 목록을 그 계획으로 바꾼다. 달력 오늘 칸과 같은 목록이 된다
-      const exercises = toDraftExercises(result.plan.exercises, localId);
+      //
+      // ⚠️ 쓰는 동안(왕복) 목록이 바뀌었으면 통째로 갈지 않는다. 그 사이 친 값이 사라지고
+      //    카드가 다시 그려진다. 그렇다고 목록을 그대로 두면 다음 쓰기(update)가 목록만으로
+      //    계획을 덮어, 합치기로 들어온 원래 계획 종목이 지워진다. 그래서 계획 위에 지금
+      //    목록을 얹고(`listOverMergedPlan`), 표식은 **계획 기준**으로 적는다 — 얹은 목록이
+      //    계획과 다르므로 0.6초 뒤 쓰기가 그것을 계획에 써서 둘을 같게 만든다
+      const changedMeanwhile = draftRef.current.exercises !== d.exercises;
+      const exercises = changedMeanwhile
+        ? listOverMergedPlan(
+            result.plan.exercises,
+            draftRef.current.exercises,
+            (item) => toDraftExercises([item], localId)[0],
+          )
+        : toDraftExercises(result.plan.exercises, localId);
       setDraft((current) => ({
         ...current,
         scheduledPlanId: result.plan.id,
@@ -1050,9 +1071,11 @@ function WorkoutScreen({ userId }: { userId: string }) {
       rememberPlanSync({
         planId: result.plan.id,
         updatedAt: result.plan.updatedAt,
-        // adopt·불러오기와 같이 담은 목록 기준 — 프로그램 반복 미리 채움 때문에 계획과
-        // 다를 수 있다
-        json: planExercisesKey(toPlanExercises(exercises)),
+        // 그대로 갈았으면 adopt·불러오기와 같이 담은 목록 기준 — 프로그램 반복 미리
+        // 채움 때문에 계획과 다를 수 있다. 얹었으면 계획 기준(위 ⚠️)
+        json: changedMeanwhile
+          ? planExercisesKey(result.plan.exercises)
+          : planExercisesKey(toPlanExercises(exercises)),
       });
       setTodayPlans(result.dayPlans);
       // 넘침 안내를 덮지 않는다 — 못 담은 것이 있다는 쪽이 더 알아야 할 일이다
@@ -1127,6 +1150,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
       todayPlans,
       bound,
       mark: planSyncMark(),
+      // 위 두 조회를 기다리는 사이에 시작이 걸렸을 수 있다 — 판정 직전에 읽는다.
+      // 카드(`todayPlans`)는 위에서 이미 갈았다 — 시작 중이어도 카드는 최신이어야 한다
+      starting: startingPlanRef.current,
     });
     if (pull.kind === "adopt") {
       const exercises = toDraftExercises(pull.plan.exercises, localId);
@@ -1171,7 +1197,16 @@ function WorkoutScreen({ userId }: { userId: string }) {
     // 연결 없이 직접 담은 목록 — 오늘 계획에 합친다 (push의 create가 그 일을 한다).
     // ⚠️ 직접 부른다 — pull은 이미 `enqueuePlanSync` 줄 안에서 돈다. 다시 줄에
     //    세우면 자기 뒤에 서서 교착한다
-    if (pull.kind === "absorb") await pushPlanNow();
+    // ⚠️ 쓰기 실패는 여기서 삼킨다. 처음 읽기에서 던지면 `planSyncReadyRef`가 영영 안
+    //    서서, 그 뒤로 목록을 고쳐도 계획에 쓰지 않는다. 목록은 그대로 남고, 다음
+    //    0.6초 쓰기나 다음 읽기가 다시 합친다
+    if (pull.kind === "absorb") {
+      try {
+        await pushPlanNow();
+      } catch (error) {
+        console.warn("[plan-sync] 직접 담은 목록을 오늘 계획에 합치지 못했어요", error);
+      }
+    }
   }
 
   // 처음 읽기 — 종목 목록(catalog)이 온 뒤 한 번. 이 플래그가 서면
@@ -2503,28 +2538,40 @@ function WorkoutScreen({ userId }: { userId: string }) {
         }
         exercises = tabataDraftExercises(picked, localId, course);
       }
-      // 인터벌은 따로 둔다(코스로 열림). 일반 기록은 그날 계획에 붙인다 (2026-10-13)
-      const plan = course
-        ? await createWorkoutPlan({
-            userId,
-            planDate,
-            sourceSessionId: sessionId,
-            exercises: toPlanExercises(exercises),
-            tabataMinutes: course,
-          })
-        : (
-            await addToDayPlan({
-              userId,
-              planDate,
-              sourceSessionId: sessionId,
-              exercises: toPlanExercises(exercises),
-            })
-          ).plan;
       const what = course ? `🔥 ${INTERVAL_COPY.session(course)}을` : "운동을";
-      showToast(
-        `${what} ${Number(planDate.slice(5, 7))}월 ${Number(planDate.slice(8))}일 예정표로 저장했어요`,
-      );
-      return plan;
+      const savedText = `${what} ${Number(planDate.slice(5, 7))}월 ${Number(planDate.slice(8))}일 예정표로 저장했어요`;
+      // 인터벌은 따로 둔다(코스로 열림). 일반 기록은 그날 계획에 붙인다 (2026-10-13)
+      if (course) {
+        const plan = await createWorkoutPlan({
+          userId,
+          planDate,
+          sourceSessionId: sessionId,
+          exercises: toPlanExercises(exercises),
+          tabataMinutes: course,
+        });
+        showToast(savedText);
+        return plan;
+      }
+      const planExercises = toPlanExercises(exercises);
+      const result = await addToDayPlan({
+        userId,
+        planDate,
+        sourceSessionId: sessionId,
+        exercises: planExercises,
+      });
+      // 붙이기는 이름이 겹치는 종목을 건너뛴다 — 하나도 안 들어갔는데 "저장했어요"라고
+      // 하면 사용자는 같은 운동이 두 번 담긴 줄 안다. 넘쳐서 못 담은 것은 먼저 알린다
+      if (result.overflowCount > 0) {
+        showToast("한 계획에는 운동을 50개까지 담을 수 있어요");
+      } else if (
+        !result.created &&
+        result.skippedCount >= planExercises.length
+      ) {
+        showToast("이미 그 날 계획에 있는 운동이에요");
+      } else {
+        showToast(savedText);
+      }
+      return result.plan;
     } catch (e) {
       showToast(errorMessage(e));
       throw e;
@@ -2648,39 +2695,57 @@ function WorkoutScreen({ userId }: { userId: string }) {
     options?: {
       startNow?: boolean;
       /**
-       * 동기화 줄(`pullPlanNow`) 안에서 불렀다 (2026-10-13) — 아래 세 가지를 건너뛴다.
+       * 동기화 줄(`pullPlanNow`) 안에서 불렀다 (2026-10-13) — 아래 확인을 건너뛰고
+       * 바로 담는다(`loadPlanNow`).
        *
        * ① 기다리던 쓰기 내보내기: `flushPlanSync`는 줄의 맨 끝을 돌려준다. 줄 안에서
        *    그걸 기다리면 지금 도는 자기 자신이 끝나기를 기다리게 되어 영영 안 끝난다(교착).
        *    쓸 것도 없다 — 목록이 비어 있거나(`load`) 막 비웠다(`clear`).
        * ② 운동 중 막기 ③ 목록 지우기 확인: pull은 운동 완료·취소 직후에도 돈다. 그때
-       *    부른 함수는 **운동 중이던 렌더**의 것이라 `active`·`draft`가 옛 값이다 —
-       *    그대로 두면 방금 끝낸 사람에게 "운동 중에는 불러올 수 없어요"가 뜬다.
+       *    부른 함수는 **운동 중이던 렌더**의 것이라 `active`가 옛 값이다 — 그대로
+       *    두면 방금 끝낸 사람에게 "운동 중에는 불러올 수 없어요"가 뜬다.
        *    판정은 `decidePlanPull`이 최신 `draftRef`로 이미 했다(시작 전 · 빈 목록).
+       * ④ 두 번 누르기 막기: 사람이 누른 것이 아니다.
        */
       fromSync?: boolean;
     },
   ): Promise<boolean> {
-    if (!options?.fromSync) {
+    if (options?.fromSync) return loadPlanNow(plan, options);
+    // 두 번째 탭은 무시한다 — 아래 쓰기를 최대 1.5초 기다리는 동안 다시 누르면 확인창이
+    // 두 번 뜨거나, 같은 계획으로 운동을 두 번 시작하려 든다
+    if (loadingPlanRef.current) return false;
+    loadingPlanRef.current = true;
+    try {
       if (active) {
         showToast("운동 중에는 다른 예정표를 불러올 수 없어요");
-        return false;
-      }
-      if (
-        draft.exercises.length > 0 &&
-        // 운동 탭 목록이 이미 이 계획이면(2026-10-05 동기화) 바꿀 것이 없다 — 묻지 않는다
-        draft.scheduledPlanId !== plan.id &&
-        // 목록이 오늘 계획에 묶여 있으면 지워지는 것이 없다 — 계획은 DB에 남고,
-        // 이 운동을 마치면 운동 탭으로 돌아온다 (2026-10-13)
-        draft.scheduledPlanId === null &&
-        !window.confirm("준비 중인 운동 목록을 지우고 예정표로 바꿀까요?")
-      ) {
         return false;
       }
       // 기다리던 쓰기를 먼저 내보낸다 — 0.6초 안에 고친 세트가 사라지지 않게.
       // 1.5초까지만 기다린다(달력 탭과 같다) — 네트워크가 늦어도 버튼이 멈춰 보이지 않게
       await flushPlanSyncBounded();
+      // 확인은 쓰기를 내보낸 **뒤의** 목록으로 한다. 직접 담은 목록은 방금 쓰기로 오늘
+      // 계획에 묶였을 수 있고, 묶여 있으면 지워지는 것이 없다 — 계획은 DB에 남고, 이
+      // 운동을 마치면 운동 탭으로 돌아온다 (2026-10-13). 그래서 묶이지 않은 목록
+      // (앱이 담아 준 제안 등)일 때만 묻는다. 이 계획에 이미 묶여 있으면 당연히 안 묻는다
+      const current = draftRef.current;
+      if (
+        current.exercises.length > 0 &&
+        current.scheduledPlanId === null &&
+        !window.confirm("준비 중인 운동 목록을 지우고 예정표로 바꿀까요?")
+      ) {
+        return false;
+      }
+      return await loadPlanNow(plan, options);
+    } finally {
+      loadingPlanRef.current = false;
     }
+  }
+
+  /** 계획을 목록에 담는다(인터벌은 시트를 연다). 확인·막기는 `handleLoadPlan`이 끝냈다 */
+  async function loadPlanNow(
+    plan: WorkoutPlan,
+    options?: { startNow?: boolean; fromSync?: boolean },
+  ): Promise<boolean> {
     /*
       타바타 계획은 운동 목록이 아니라 **타바타 시트**로 연다 (2026-08-05).
       draft에 종목만 부어 넣으면 음원도 코스도 없는 맨몸 운동 4개가 될 뿐이다.
@@ -2729,29 +2794,41 @@ function WorkoutScreen({ userId }: { userId: string }) {
             templateVersion: plan.programTemplateVersion,
           }
         : null;
-    setDraft((current) => ({
-      ...current,
-      scheduledPlanId: plan.id,
-      sourceSessionId: plan.sourceSessionId,
-      effortMessage: null,
-      exercises,
-      program,
-    }));
-    // 이 계획과 맞춘 상태로 적는다 — 안 적으면 다음 쓰기가 같은 내용을 한 번 더 쓴다
-    rememberPlanSync({
-      planId: plan.id,
-      updatedAt: plan.updatedAt,
-      json: planExercisesKey(toPlanExercises(exercises)),
-    });
-    setSubTab("workout");
-    // 무게는 **비동기로 뒤따라 채운다.** 지난 기록 조회를 기다리느라 화면 전환이
-    // 늦어지면, 사용자는 버튼이 안 먹은 줄 안다.
-    if (program) void fillProgramLoads(exercises);
-    if (options?.startNow) {
-      // `setDraft`가 `draftRef`를 동기 갱신하므로 바로 시작해도 최신 목록을 본다
-      // (beginTabata와 같은 경로).
-      await handleStart();
-      return draftRef.current.startedAtMs !== null;
+    /*
+      바로 시작하면 **목록을 묶기 전에** 시작 중 표식을 세운다 (2026-10-13).
+      아래 `setSubTab("workout")`이 pull을 줄에 세우는데, 그 pull이 시작 응답 전에 돌면
+      `startedAtMs`가 비어 있어 프로그램 회차 목록을 `special`로 읽고 비운 뒤 일반
+      계획을 담았다 — 시작되는 세션에 엉뚱한 종목이 들어갔다. 표식은 시작이 끝나면
+      (성공·실패 모두) 내린다. 그 뒤엔 `startedAtMs`·`sessionId`가 pull을 막는다.
+    */
+    if (options?.startNow) startingPlanRef.current = true;
+    try {
+      setDraft((current) => ({
+        ...current,
+        scheduledPlanId: plan.id,
+        sourceSessionId: plan.sourceSessionId,
+        effortMessage: null,
+        exercises,
+        program,
+      }));
+      // 이 계획과 맞춘 상태로 적는다 — 안 적으면 다음 쓰기가 같은 내용을 한 번 더 쓴다
+      rememberPlanSync({
+        planId: plan.id,
+        updatedAt: plan.updatedAt,
+        json: planExercisesKey(toPlanExercises(exercises)),
+      });
+      setSubTab("workout");
+      // 무게는 **비동기로 뒤따라 채운다.** 지난 기록 조회를 기다리느라 화면 전환이
+      // 늦어지면, 사용자는 버튼이 안 먹은 줄 안다.
+      if (program) void fillProgramLoads(exercises);
+      if (options?.startNow) {
+        // `setDraft`가 `draftRef`를 동기 갱신하므로 바로 시작해도 최신 목록을 본다
+        // (beginTabata와 같은 경로).
+        await handleStart();
+        return draftRef.current.startedAtMs !== null;
+      }
+    } finally {
+      if (options?.startNow) startingPlanRef.current = false;
     }
     // 동기화가 담은 것은 알리지 않는다 (2026-10-13) — 운동 탭 목록이 곧 오늘 계획이라
     // 알릴 소식이 아니고, 완료 직후에는 결과 화면과 예정표 정리 실패 안내를 덮었다
