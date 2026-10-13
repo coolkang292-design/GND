@@ -228,6 +228,7 @@ import {
   settlePlanAfterWorkout,
 } from "@/lib/day-plan-store";
 import { TodayPlanCards } from "@/components/record/today-plan-cards";
+import { isGeneralPlan } from "@/lib/domain/day-plan";
 import {
   cancelWorkout,
   clearDraft,
@@ -3919,7 +3920,19 @@ function WorkoutScreen({ userId }: { userId: string }) {
    * 오늘 카드를 그리는가 — 헤더 부제와 **같은 판정을 써야 한다**.
    * 둘이 갈리면 부제와 카드가 동시에 뜨거나 둘 다 사라진다.
    */
-  const showTodayCard = !active && subTab === "workout" && todayStatus !== null;
+  /*
+    오늘 할 운동이 잡혀 있으면(목록이 있거나 인터벌·프로그램 계획 카드가 있으면)
+    상태·누적 카드를 **안 그리고** 운동 목록만 보여 준다 (사용자 지시 2026-10-14).
+    계획이 없거나 오늘 운동을 마친 뒤에만 카드가 돌아온다 — 할 일이 있을 때는
+    할 일이 첫 화면이다. 일반 계획은 목록 자체라 `isEmpty`로 본다.
+  */
+  const hasTodayPlan =
+    !isEmpty || todayPlans.some((plan) => !isGeneralPlan(plan));
+  const showTodayCard =
+    !active &&
+    subTab === "workout" &&
+    todayStatus !== null &&
+    (!hasTodayPlan || didWorkoutToday);
 
   return (
     <div
@@ -3949,7 +3962,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
                 ? "운동 중"
                 : isEmpty
                   ? "처음이라면 운동부터 추가해보세요"
-                  : "준비"}
+                  : "오늘의 운동을 준비하세요"}
             </p>
           )}
         </div>
