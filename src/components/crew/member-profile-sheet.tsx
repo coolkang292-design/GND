@@ -30,6 +30,7 @@ import {
   type ProfileViewSource,
 } from "@/lib/profile-views";
 import { badgeImageSrc } from "@/lib/domain/badge-art";
+import { MemberWorkoutCalendar } from "@/components/crew/member-workout-calendar";
 
 /**
  * 성과 요약 (2026-08-07) — 홈 친구 목록이 **이미 계산해 둔 값**을 넘겨준다.
@@ -77,6 +78,7 @@ export function MemberProfileBody({
   stats,
   streak,
   editSlot,
+  calendarSlot,
 }: {
   profile: CrewMemberProfile;
   catalog: BadgeMeta[];
@@ -92,6 +94,8 @@ export function MemberProfileBody({
    *    셸이 정한다(넣는 곳도 `onAvatarChanged` 하나로 갈린다).
    */
   editSlot?: React.ReactNode;
+  /** 크루 공개 운동 캘린더. 권한 판정은 시트 셸에서 하고 본문은 표시만 한다. */
+  calendarSlot?: React.ReactNode;
 }) {
   const pct = Math.min(100, Math.round(profile.levelProgressPercent));
   const distance = formatCumulativeDistance(profile.distanceMeters);
@@ -197,6 +201,8 @@ export function MemberProfileBody({
           )}
         </div>
       )}
+
+      {calendarSlot}
 
       {/* ⚠️⚠️ 누적 수치는 **RPC(0081)가 단일 원천**이다 — `stats` prop이 아니다.
           옛 판은 홈 친구 목록이 계산해 넘길 때만 이 블록을 그렸다. 그래서
@@ -811,6 +817,9 @@ export function MemberProfileSheet({
             stats={stats}
             streak={streak}
             editSlot={onAvatarChanged ? editSlot : undefined}
+            calendarSlot={(crewKnown === true || Boolean(onAvatarChanged))
+              ? <MemberWorkoutCalendar key={userId} userId={userId} />
+              : undefined}
           />
         )}
 
