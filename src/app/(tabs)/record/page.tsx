@@ -1212,24 +1212,67 @@ function WorkoutScreen({ userId }: { userId: string }) {
   // 처음 읽기 — 종목 목록(catalog)이 온 뒤 한 번. 이 플래그가 서면
   // `applySuggestion`이 종목을 고를 수 있다는 뜻이기도 하다.
   const autoLoadTriedRef = useRef(false);
+  const firstPullRunningRef = useRef(false);
+
+  /**
+   * 처음 읽기. 성공해야 동기화가 선다(`planSyncReadyRef`).
+   *
+   * ⚠️ 실패하면 **다시 시도할 수 있어야 한다** (2026-10-14 신고). 예전엔 처음 한 번만
+   *    돌았다 — 읽기가 실패하면(그날 계획 행 하나를 못 읽는 등) 준비 플래그가 영영 안
+   *    서서 탭을 오가도, 앱을 내렸다 올려도 다시 읽지 않았다. 달력은 열 때마다 새로
+   *    읽어 회복되는데, 운동 탭은 앱을 완전히 끄기 전까지 오늘 계획이 비어 있었다.
+   */
+  function runFirstPull() {
+    if (firstPullRunningRef.current) return;
+    firstPullRunningRef.current = true;
+    void enqueuePlanSync(async () => {
+      try {
+        await pullPlanNow();
+        setPlansReady(true);
+        planSyncReadyRef.current = true;
+      } finally {
+        firstPullRunningRef.current = false;
+      }
+    });
+  }
+
   useEffect(() => {
     if (autoLoadTriedRef.current || catalog.length === 0) return;
     autoLoadTriedRef.current = true;
-    void enqueuePlanSync(async () => {
-      await pullPlanNow();
-      setPlansReady(true);
-      planSyncReadyRef.current = true;
-    });
+    runFirstPull();
     // pullPlanNow는 렌더마다 새로 만들어진다. 한 번만 시도하도록 ref로 막는다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, catalog.length]);
 
+  /** 운동 탭이 보일 때 오늘 계획을 다시 맞춘다 — 처음 읽기가 실패했으면 그것부터 */
+  function repullPlans() {
+    if (!autoLoadTriedRef.current) return;
+    if (planSyncReadyRef.current) void enqueuePlanSync(pullPlanNow);
+    else runFirstPull();
+  }
+
   // 달력에서 운동 탭으로 돌아올 때마다 다시 읽는다 (예전엔 인터벌 계획만 읽었다).
-  // ⚠️ 조회는 사용자가 탭을 누를 때만 돈다 — 주기 실행이 아니다.
+  // ⚠️ 조회는 사용자가 탭을 누르거나 앱을 다시 띄울 때만 돈다 — 주기 실행이 아니다.
   useEffect(() => {
-    if (subTab !== "workout" || !planSyncReadyRef.current) return;
-    void enqueuePlanSync(pullPlanNow);
+    if (subTab !== "workout") return;
+    repullPlans();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subTab]);
+
+  // 앱을 내렸다가 다시 띄울 때도 다시 읽는다 (2026-10-14). 홈 화면 앱은 며칠씩 메모리에
+  // 남아, 그 사이 날이 바뀌거나 달력·다른 기기에서 계획이 바뀌어도 운동 탭이 몰랐다
+  // 리스너가 처음 렌더의 함수를 붙잡지 않게 최신 것을 담아 둔다
+  const repullRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    repullRef.current = repullPlans;
+  });
+  useEffect(() => {
+    if (subTab !== "workout") return;
+    const onShow = () => {
+      if (document.visibilityState === "visible") repullRef.current();
+    };
+    document.addEventListener("visibilitychange", onShow);
+    return () => document.removeEventListener("visibilitychange", onShow);
   }, [subTab]);
 
   // 목록이 바뀌면 0.6초 모아서 쓴다 — 무게·반복을 칠 때마다 쓰지 않게
