@@ -1300,5 +1300,47 @@
     "file": "bfe7288b-4287-4720-afd8-30ac5da3d0af",
     "source": "gnd",
     "origin": "gnd-1011-2026-10-11"
+  },
+  "b84bb13d-7323-42d4-b97e-f220d261432c": {
+    "name": "월 슬라이드",
+    "file": "b84bb13d-7323-42d4-b97e-f220d261432c",
+    "source": "gnd",
+    "origin": "gnd-imagegen-2026-10-14-qa-pass"
+  },
+  "cb431896-1837-45d7-afed-e31cee522974": {
+    "name": "흉추 익스텐션",
+    "file": "cb431896-1837-45d7-afed-e31cee522974",
+    "source": "gnd",
+    "origin": "gnd-imagegen-2026-10-14-qa-pass"
+  },
+  "ac897fe5-30df-466b-a190-e0a660a545c3": {
+    "name": "도어웨이 가슴 스트레칭",
+    "file": "ac897fe5-30df-466b-a190-e0a660a545c3",
+    "source": "gnd",
+    "origin": "gnd-imagegen-2026-10-14-qa-pass"
+  },
+  "69fe67ed-dbb6-4b5a-8d56-a83ab1d9a726": {
+    "name": "하이퍼 익스텐션",
+    "file": "69fe67ed-dbb6-4b5a-8d56-a83ab1d9a726",
+    "source": "gnd",
+    "origin": "gnd-imagegen-2026-10-14-qa-pass"
+  },
+  "6ba4df00-55a1-4c62-a5a5-a13e7bb4a0de": {
+    "name": "업라이트 로우",
+    "file": "6ba4df00-55a1-4c62-a5a5-a13e7bb4a0de",
+    "source": "gnd",
+    "origin": "gnd-imagegen-2026-10-14-qa-pass"
+  },
+  "8ae05401-d085-49ab-a5fd-6c594f020a6d": {
+    "name": "푸시 프레스",
+    "file": "8ae05401-d085-49ab-a5fd-6c594f020a6d",
+    "source": "gnd",
+    "origin": "gnd-imagegen-2026-10-14-qa-pass"
+  },
+  "c4878b8f-9736-4931-a1ec-56c985f6653c": {
+    "name": "터키쉬 겟업",
+    "file": "c4878b8f-9736-4931-a1ec-56c985f6653c",
+    "source": "gnd",
+    "origin": "gnd-imagegen-2026-10-14-qa-pass"
   }
 }

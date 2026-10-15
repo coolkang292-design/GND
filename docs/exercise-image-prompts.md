@@ -240,3 +240,10 @@ THE 10 EXERCISES, in reading order (left to right, top row first):
 | 그림에 글자·숫자가 생겼다 | `Remove all text and numbers.` |
 | 화풍이 첨부와 다르다(배경색·근육색) | `Match the attached image exactly: light grey figure, bright blue target muscles, dark navy background.` |
 | 한 칸만 동작이 틀렸다 | 그 운동 한 줄만 1칸짜리로 다시 받는다 |
+
+
+## 2026-10-14 앱 배경 일치 규칙
+
+- UI Canvas: `#090A0C` (source: `src/app/globals.css`, `--bg`). 최종 320x320 WebP의 바깥 배경은 이 색과 이어지도록 매트 처리한다.
+- 인체는 회색 3D 해부학, 타깃 근육은 파랑, 기구는 어두운 회색. 로고·글자·화살표 없음. 기존 생성용 남색 시트 지시보다 최종 앱 배경의 정확한 일치가 우선이다.
+- 이번 QA: `docs/exercise-images-qa-2026-10-14.md`. 움직임 차이가 불명확한 케이블 내·외회전과 리버스그립 푸시업은 매핑하지 않는다.
