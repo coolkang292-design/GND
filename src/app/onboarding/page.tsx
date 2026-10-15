@@ -18,6 +18,8 @@ import {
 import { ONBOARDING_COPY as COPY } from "@/lib/domain/brand-copy";
 import { recordFunnelEvent } from "@/lib/analytics-events";
 import { GoogleBlockedNote, useUsableProviders } from "@/components/auth/usable-providers";
+import { trackProduct } from "@/lib/posthog/track";
+import { useConsentStatus } from "@/components/analytics/use-consent-status";
 import { DEFAULT_AVATAR, DEFAULT_WEEKLY_GOAL } from "@/lib/domain/avatars";
 import {
   PROVIDER_META,
@@ -124,6 +126,8 @@ export default function OnboardingPage() {
    * ⚠️ 챌린지 초대에는 열지 않는다 — 여러 주짜리 경쟁이라 계정이 먼저다.
    */
   const [tryFirst, setTryFirst] = useState(false);
+  // 이 화면에서 나중에 동의해도 `onboarding_started`가 PostHog에 남게 한다(`use-consent-status.ts`)
+  const consent = useConsentStatus();
   // ⚠️ 인스타·카톡 웹뷰에서는 구글이 빠진다 — `components/auth/usable-providers.tsx`
   const { providers, googleBlocked } = useUsableProviders();
 
@@ -176,7 +180,29 @@ export default function OnboardingPage() {
     const screenShown = providers.length === 0 || linked !== null;
     if (!screenShown) return;
     void recordFunnelEvent("onboarding_started", userId);
-  }, [configured, loading, userId, linked, providers.length]);
+    // `consent`: 동의 순간 한 번 더 — PostHog 복제는 탭 세션당 1회, DB는 세션 표시·unique가 막는다
+  }, [configured, loading, userId, linked, providers.length, consent]);
+
+  /**
+   * 닉네임 단계가 실제로 노출된 순간 (PostHog 전용 — 이탈 구간 분리용).
+   * DB에는 이벤트를 만들지 않는다(감사표: `identity_link` 성공 = 닉네임 화면 노출로 파생 가능).
+   */
+  useEffect(() => {
+    if (!configured || loading || !userId || step !== "profile") return;
+    // 아래 렌더의 `showNicknameStep`과 같은 조건이어야 한다. P0-2 "바로 시작"(`tryFirst`)도
+    // 닉네임 칸을 띄우므로 포함한다 — 빼면 바로 시작한 사람이 퍼널에서 이 단계를 건너뛴 것처럼 보인다.
+    const nicknameVisible =
+      providers.length === 0 || linked === true || (!challengeCode && tryFirst);
+    if (!nicknameVisible) return;
+    trackProduct(
+      "onboarding_nickname_shown",
+      {},
+      {
+        userId,
+        dedupe: { key: "onboarding_nickname_shown", scope: "session" },
+      },
+    );
+  }, [configured, loading, userId, step, linked, providers.length, challengeCode, tryFirst]);
 
   /**
    * ⚠️⚠️ **이미 가입한 사람은 이 화면에 머물지 않는다** (D8, 2026-08-09).
@@ -231,7 +257,15 @@ export default function OnboardingPage() {
          지금까지 둘 다 똑같이 "정식 전환 안 됨"으로만 보였다.
       ⚠️ `await`하지 않는다 — 계측이 OAuth 이동을 한 프레임도 늦추면 안 된다.
     */
-    void recordFunnelEvent("identity_link_started", userId);
+    trackProduct(
+      "start_clicked",
+      { location: provider === "kakao" ? "onboarding_kakao" : "onboarding_google" },
+      { userId, dedupe: { key: `start_clicked:onboarding_${provider}`, scope: "session" } },
+    );
+    void recordFunnelEvent("identity_link_started", userId, undefined, {
+      provider,
+      location: "onboarding",
+    });
     try {
       // ⚠️ linkIdentity다. signInWithOAuth를 쓰면 AuthProvider가 방금 발급한
       //    익명 계정을 버리고 새 계정으로 갈아탄다(설계 §5.4).
@@ -240,7 +274,10 @@ export default function OnboardingPage() {
       setError(identityError(e));
       setLinking(null);
       // ⚠️ **분류 코드만 보낸다.** raw error 전문·스택·주소를 저장하지 않는다.
-      void recordFunnelEvent("identity_link_failed", userId, linkFailureCode(e));
+      void recordFunnelEvent("identity_link_failed", userId, linkFailureCode(e), {
+        provider,
+        location: "onboarding",
+      });
     }
   }
 
@@ -262,6 +299,15 @@ export default function OnboardingPage() {
         avatar_url: DEFAULT_AVATAR,
         weekly_goal: DEFAULT_WEEKLY_GOAL,
       });
+      // 온보딩 완료 = 프로필 생성(`profiles.created_at`). 정답은 DB다 — 여기서는 PostHog에 복제만 남긴다.
+      trackProduct(
+        "onboarding_completed",
+        { has_invite: Boolean(challengeCode || joinCode) },
+        {
+          userId,
+          dedupe: { key: `onboarding_completed:${userId}`, scope: "persistent" },
+        },
+      );
 
       // 챌린지 초대로 온 사람은 크루 단계를 통째로 건너뛴다.
       if (challengeCode) {
@@ -487,6 +533,14 @@ export default function OnboardingPage() {
                     onClick={() => {
                       setTryFirst(true);
                       setError(null);
+                      trackProduct(
+                        "start_clicked",
+                        { location: "onboarding_try_first" },
+                        {
+                          userId,
+                          dedupe: { key: "start_clicked:onboarding_try_first", scope: "session" },
+                        },
+                      );
                     }}
                     disabled={linking !== null}
                     className="mt-1 flex h-[52px] w-full items-center justify-center rounded-full border border-line-strong bg-surface/70 text-[15px] font-extrabold disabled:opacity-60"

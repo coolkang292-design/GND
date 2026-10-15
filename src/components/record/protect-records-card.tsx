@@ -3,13 +3,16 @@
 import { useEffect, useState } from "react";
 
 import { GoogleBlockedNote, useUsableProviders } from "@/components/auth/usable-providers";
+import { useAuth } from "@/components/auth-provider";
 import {
   PROVIDER_META,
   hasLinkedIdentity,
   identityError,
+  linkFailureCode,
   linkProvider,
   type OAuthProvider,
 } from "@/lib/identity";
+import { trackProduct } from "@/lib/posthog/track";
 
 /**
  * **운동을 마친 익명 사용자에게 기록 지키기를 권한다** (2026-10-11, Issue #2 P0-2).
@@ -25,6 +28,7 @@ import {
  *    붙은 사람에게 "지켜 두세요"는 틀린 말이다.
  */
 export function ProtectRecordsCard() {
+  const { userId } = useAuth();
   const { providers, googleBlocked } = useUsableProviders();
   const [show, setShow] = useState(false);
   const [linking, setLinking] = useState<OAuthProvider | null>(null);
@@ -50,12 +54,21 @@ export function ProtectRecordsCard() {
     if (linking) return;
     setLinking(provider);
     setError(null);
+    // PostHog 전용(동의한 사용자만) — 온보딩의 연결 시도와 `location`으로 가른다.
+    // ⚠️ DB(`analytics_events`)에는 쓰지 않는다. `/auth/callback`의 성공·실패 기록과 같은 규칙이다
+    //    — 기존 DB 기록 동작은 바꾸지 않는다. 성공(`identity_link_succeeded`)은 콜백이 남긴다.
+    trackProduct("identity_link_started", { provider, location: "protect_records" }, { userId });
     try {
       // 성공하면 제공자 화면으로 떠난다. 돌아오면 `/auth/callback` → `/account`.
       await linkProvider(provider);
     } catch (e) {
       setError(identityError(e));
       setLinking(null);
+      trackProduct(
+        "identity_link_failed",
+        { provider, location: "protect_records", error_code: linkFailureCode(e) },
+        { userId },
+      );
     }
   }
 

@@ -15,7 +15,11 @@ const mocks = vi.hoisted(() => ({
   linked: false,
   linkFail: null as Error | null,
   linkProvider: vi.fn(),
+  trackProduct: vi.fn(),
 }));
+
+vi.mock("@/lib/posthog/track", () => ({ trackProduct: mocks.trackProduct }));
+vi.mock("@/components/auth-provider", () => ({ useAuth: () => ({ userId: "anon-user" }) }));
 
 vi.mock("@/lib/identity", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/identity")>()),
@@ -35,6 +39,7 @@ beforeEach(() => {
   mocks.linked = false;
   mocks.linkFail = null;
   mocks.linkProvider.mockReset();
+  mocks.trackProduct.mockReset();
 });
 
 afterEach(() => {
@@ -73,5 +78,24 @@ describe("ProtectRecordsCard", () => {
     expect(
       (screen.getByRole("button", { name: "카카오로 지키기" }) as HTMLButtonElement).disabled,
     ).toBe(false);
+  });
+
+  it("PostHog: 누르면 identity_link_started(location=protect_records), 실패하면 분류 코드만 담은 failed", async () => {
+    mocks.linkFail = Object.assign(new Error("Identity is already linked to another user"), {
+      code: "identity_already_exists",
+    });
+    render(<ProtectRecordsCard />);
+    fireEvent.click(await screen.findByRole("button", { name: "카카오로 지키기" }));
+    await screen.findByRole("alert");
+    expect(mocks.trackProduct.mock.calls).toEqual([
+      ["identity_link_started", { provider: "kakao", location: "protect_records" }, { userId: "anon-user" }],
+      [
+        "identity_link_failed",
+        { provider: "kakao", location: "protect_records", error_code: "identity_already_exists" },
+        { userId: "anon-user" },
+      ],
+    ]);
+    // raw 오류 문구는 싣지 않는다
+    expect(JSON.stringify(mocks.trackProduct.mock.calls)).not.toMatch(/already linked to another user/);
   });
 });

@@ -22,7 +22,11 @@ const mocks = vi.hoisted(() => ({
   getUserIdentities: vi.fn(),
   linkIdentity: vi.fn(),
   signInWithOAuth: vi.fn(),
+  trackProduct: vi.fn(),
 }));
+
+// PostHog 입구만 목으로 막아 **무엇을 보내려 했는가**를 센다(동의·전송은 `src/lib/posthog/*.test.ts`가 본다).
+vi.mock("@/lib/posthog/track", () => ({ trackProduct: mocks.trackProduct }));
 
 // ⚠️ `@/lib/identity`를 목으로 덮지 않는다. 이 화면이 **linkIdentity를 부르는가
 //    signInWithOAuth를 부르는가**가 검사 대상이라, 그 모듈을 가리면 뒤바꿔도
@@ -681,5 +685,92 @@ describe("온보딩 — 이미 가입한 사람은 머물지 않는다 (D8)", ()
 
     await screen.findByPlaceholderText("예: 스칼레또");
     expect(mocks.replace).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * PostHog 퍼널 v2 (2026-10-11) — P0-2 "바로 시작" 흐름에도 계측이 정확히 한 번씩 붙는가.
+ * 이벤트 이름·속성·중복 방지 키만 본다. 실제 전송 여부(동의·봇)는 `src/lib/posthog/*.test.ts`.
+ */
+describe("OnboardingPage — PostHog 계측 (v2)", () => {
+  afterEach(() => cleanup());
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.NEXT_PUBLIC_OAUTH_PROVIDERS = "kakao,google";
+    mocks.linkIdentity.mockResolvedValue({ data: {}, error: null });
+    noIdentities();
+    mocks.getMyProfile.mockResolvedValue(null);
+    mocks.peekPendingInvite.mockReturnValue(null);
+    mocks.peekPendingChallengeInvite.mockReturnValue(null);
+    mocks.upsertMyProfile.mockResolvedValue(undefined);
+  });
+
+  const calls = (event: string) => mocks.trackProduct.mock.calls.filter((c) => c[0] === event);
+
+  it("바로 시작: start_clicked(onboarding_try_first) → 닉네임 노출 → onboarding_completed 각 한 번", async () => {
+    render(<OnboardingPage />);
+    await screen.findByRole("button", { name: "카카오로 시작하기" });
+    // 첫 화면(카카오·구글)에서는 아직 닉네임 단계가 아니다
+    expect(calls("onboarding_nickname_shown")).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole("button", { name: /닉네임만 정하고 바로 시작/ }));
+    fireEvent.change(await screen.findByPlaceholderText("예: 스칼레또"), {
+      target: { value: "구경꾼" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "GND 시작하기" }));
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/record"));
+
+    expect(calls("start_clicked")).toEqual([
+      [
+        "start_clicked",
+        { location: "onboarding_try_first" },
+        { userId: "fresh-user", dedupe: { key: "start_clicked:onboarding_try_first", scope: "session" } },
+      ],
+    ]);
+    expect(calls("onboarding_nickname_shown")).toHaveLength(1);
+    expect(calls("onboarding_completed")).toEqual([
+      [
+        "onboarding_completed",
+        { has_invite: false },
+        { userId: "fresh-user", dedupe: { key: "onboarding_completed:fresh-user", scope: "persistent" } },
+      ],
+    ]);
+    // 바로 시작은 계정 연결이 아니다
+    expect(calls("identity_link_started")).toHaveLength(0);
+  });
+
+  it("카카오로 시작: start_clicked(onboarding_kakao) + identity_link_started(location=onboarding)", async () => {
+    render(<OnboardingPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "카카오로 시작하기" }));
+    await waitFor(() => expect(mocks.linkIdentity).toHaveBeenCalledTimes(1));
+
+    expect(calls("start_clicked").map((c) => c[1])).toEqual([{ location: "onboarding_kakao" }]);
+    expect(calls("identity_link_started").map((c) => c[1])).toEqual([
+      { provider: "kakao", location: "onboarding" },
+    ]);
+    expect(calls("onboarding_completed")).toHaveLength(0);
+  });
+
+  it("첫 화면에서 나중에 동의해도 onboarding_started가 PostHog 쪽으로 한 번 더 시도된다", async () => {
+    const { grantAnalyticsConsent } = await import("@/lib/posthog/consent-actions");
+    render(<OnboardingPage />);
+    await screen.findByRole("button", { name: "카카오로 시작하기" });
+    await waitFor(() => expect(calls("onboarding_started")).toHaveLength(1));
+    grantAnalyticsConsent();
+    await waitFor(() => expect(calls("onboarding_started")).toHaveLength(2));
+    window.localStorage.removeItem("gnd-analytics-consent");
+  });
+
+  it("저장이 실패하면 onboarding_completed를 보내지 않는다 (프로필이 없으면 완료가 아니다)", async () => {
+    mocks.upsertMyProfile.mockRejectedValue(new Error("network"));
+    render(<OnboardingPage />);
+    fireEvent.click(await screen.findByRole("button", { name: /닉네임만 정하고 바로 시작/ }));
+    fireEvent.change(await screen.findByPlaceholderText("예: 스칼레또"), {
+      target: { value: "구경꾼" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "GND 시작하기" }));
+    expect(await screen.findByText("network")).not.toBeNull();
+    expect(calls("onboarding_completed")).toHaveLength(0);
   });
 });

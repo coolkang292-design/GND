@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { recordFunnelEvent } from "@/lib/analytics-events";
+import { useConsentStatus } from "@/components/analytics/use-consent-status";
 
 /**
  * 유입(`landing_opened`)을 한 번 기록한다. 루트 레이아웃에 한 번만 둔다.
@@ -20,15 +21,20 @@ import { recordFunnelEvent } from "@/lib/analytics-events";
  * ⚠️ 유입 값 자체(`utm`)는 `AcquisitionTracker`가 이미 localStorage에 재워 뒀다.
  *    여기서는 그것을 읽어 실어 보내기만 한다 — 파싱을 두 곳에 두지 않는다.
  *
+ * ⚠️ **분석 동의 상태도 의존성에 넣는다** (PostHog v2, 2026-10-11). 첫 방문자는 이 화면에서
+ *    나중에 동의한다 — 동의하는 순간 한 번 더 돌아야 PostHog 퍼널의 첫 단계가 생긴다.
+ *    DB 쪽은 `recordFunnelEvent`의 세션 표시·`unique(user_id, event_name)`이 막아 **두 번 쓰지 않는다.**
+ *
  * 렌더는 아무것도 하지 않는다(`TrailTracker`·`AcquisitionTracker`와 같은 규약).
  */
 export function FunnelTracker() {
   const { userId } = useAuth();
+  const consent = useConsentStatus();
 
   useEffect(() => {
     if (!userId) return;
     void recordFunnelEvent("landing_opened", userId);
-  }, [userId]);
+  }, [userId, consent]);
 
   return null;
 }

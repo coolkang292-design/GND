@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { UTM_KEYS } from "@/lib/domain/acquisition";
 import { APP_LANDING_PATH } from "@/lib/domain/landing";
+import { INTERNAL_PARAM, INTERNAL_PARAM_VALUES } from "@/lib/posthog/exclusion";
 
 /**
  * `/` → `/home`. **utm 파라미터를 함께 넘긴다.**
@@ -16,6 +17,10 @@ import { APP_LANDING_PATH } from "@/lib/domain/landing";
  *
  * utm만 넘긴다 — 들어온 파라미터를 통째로 실어 나르면 남의 링크에 붙은 값이
  * 우리 주소로 옮겨 붙는다.
+ *
+ * ⚠️ 예외 하나: 내부(QA) 표시 `gnd_internal`(값 `0`·`1`만). 2026-10-12 PostHog v2 검토에서
+ *    같은 이유로 사라지는 것을 잡았다 — QA가 `/?gnd_internal=1`로 들어오면 표시가 안 붙어
+ *    실사용자 숫자에 섞인다. 그 밖의 값은 `exclusion.ts`가 알아듣지 않으므로 넘기지 않는다.
  */
 export default async function RootPage({
   searchParams,
@@ -29,6 +34,12 @@ export default async function RootPage({
     const raw = sp[key];
     const value = Array.isArray(raw) ? raw[0] : raw;
     if (value) forward.set(key, value);
+  }
+
+  const rawInternal = sp[INTERNAL_PARAM];
+  const internal = Array.isArray(rawInternal) ? rawInternal[0] : rawInternal;
+  if (internal && (INTERNAL_PARAM_VALUES as readonly string[]).includes(internal)) {
+    forward.set(INTERNAL_PARAM, internal);
   }
 
   const qs = forward.toString();

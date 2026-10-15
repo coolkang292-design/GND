@@ -4,6 +4,8 @@ import { AuthProvider } from "@/components/auth-provider";
 import { ServiceWorkerRegister } from "@/components/service-worker-register";
 import { AcquisitionTracker } from "@/components/acquisition-tracker";
 import { FunnelTracker } from "@/components/funnel-tracker";
+import { AnalyticsProvider } from "@/components/analytics/analytics-provider";
+import { AnalyticsConsentBanner } from "@/components/analytics/analytics-consent-banner";
 import { TrailTracker } from "@/components/trail-tracker";
 import { InstallGate } from "@/components/install/install-gate";
 import { LaunchMotivationSplash } from "@/components/launch-motivation-splash";
@@ -80,6 +82,10 @@ export default function RootLayout({
         <TrailTracker />
         <AcquisitionTracker />
         <AuthProvider>
+          {/* PostHog — 키가 없으면 아무것도 안 한다. 동의 전에는 SDK를 받지도 않는다.
+              ⚠️ 다른 트래커보다 **앞**에 둔다(같은 렌더의 effect 순서). 이벤트는 식별 전에
+              들어와도 `client.ts`가 붙들어 뒀다가 식별 뒤에 보낸다. */}
+          <AnalyticsProvider />
           {/* ⚠️ AuthProvider **안**이다 — 익명 계정을 여기서 발급하므로
               밖에 두면 userId가 영원히 null이라 유입이 한 건도 안 잡힌다. */}
           <FunnelTracker />
@@ -90,6 +96,8 @@ export default function RootLayout({
             {/* ⚠️ `(tabs)` 안이 아니라 **여기**다 — 카톡 인앱 탈출 안내가
                 `/login`·`/onboarding`보다 먼저 떠야 하는데 그 둘은 탭 밖이다. */}
             <InstallGate />
+            {/* 분석 동의 안내 — 키가 설정되고 아직 고르지 않은 사람에게만 뜬다 */}
+            <AnalyticsConsentBanner />
           </div>
         </AuthProvider>
       </body>
