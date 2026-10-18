@@ -14,6 +14,9 @@ import { PointHistory, PointHistoryList } from "@/components/profile/point-histo
 import { HistorySheet } from "@/components/profile/history-sheet";
 import { BadgeSheet } from "@/components/profile/badge-sheet";
 import { BadgeShowcase } from "@/components/profile/badge-showcase";
+import { GrowthSummaryCard } from "@/components/profile/growth-summary-card";
+import { RecentAchievementHistory } from "@/components/profile/recent-achievement-history";
+import { buildAchievementHistory, type AchievementEvent } from "@/lib/domain/profile-achievements";
 import { NextGoalCard } from "@/components/profile/next-goal-card";
 import { PointSummary } from "@/components/profile/point-summary";
 import { getBadgeCatalog, getMyBadgeMetrics, getMyBadges } from "@/lib/badges";
@@ -35,6 +38,7 @@ import {
   getLevelRewards,
   getMyUnlocks,
   getProgressSummary,
+  getCrewMemberProfile,
   getRecentXpTransactions,
   type LevelReward,
   type ProgressSummary,
@@ -49,6 +53,8 @@ interface HubData {
   pointTransactions: PointTransactionRow[];
   balance: number;
   streakDays: number;
+  workoutCount: number;
+  history: AchievementEvent[];
   shelf: BadgeShelfItem[];
   achievements: Achievement[];
 }
@@ -71,7 +77,7 @@ export function GrowthHub() {
     (async () => {
       try {
         const supabase = getSupabaseBrowserClient();
-        const [summary, rewards, unlocks, transactions, wallet, pointTransactions, catalog, earned, sessions, metrics] =
+        const [summary, rewards, unlocks, transactions, wallet, pointTransactions, catalog, earned, sessions, metrics, crewProfile] =
           await Promise.all([
             getProgressSummary(),
             getLevelRewards(),
@@ -88,6 +94,7 @@ export function GrowthHub() {
               .is("deleted_at", null)
               .not("completed_at", "is", null),
             getMyBadgeMetrics(),
+            getCrewMemberProfile(userId),
           ]);
         if (sessions.error) throw sessions.error;
         const instants = (sessions.data ?? []).map(
@@ -102,6 +109,13 @@ export function GrowthHub() {
             summary, rewards, unlocks, transactions, pointTransactions,
             balance: wallet.balance,
             streakDays,
+            workoutCount: crewProfile.workoutCount,
+            history: buildAchievementHistory({
+              joinedAt: crewProfile.joinedAt,
+              levelUps: crewProfile.levelUps,
+              badges: crewProfile.badges,
+              catalog,
+            }),
             shelf: badgeShelf(catalog, earned),
             achievements: buildAchievements(catalog, earned, metrics as Record<BadgeMetricKey, number>),
           });
@@ -148,10 +162,22 @@ export function GrowthHub() {
     );
   }
 
-  const { summary, rewards, unlocks, transactions, pointTransactions, balance, streakDays, shelf, achievements } = data;
+  const { summary, rewards, unlocks, transactions, pointTransactions, balance, streakDays, workoutCount, history, shelf, achievements } = data;
 
   return (
     <>
+      <GrowthSummaryCard summary={summary} streakDays={streakDays} workoutCount={workoutCount} />
+
+      <BadgeShowcase shelf={shelf} onOpenAll={() => setBadgeSheetOpen(true)} />
+
+      <RecentAchievementHistory events={history} />
+
+      {/* 기존 포인트·XP·단계·레벨 보상 기능은 삭제하지 않고 상세 영역에서 유지한다. */}
+      <details className="rounded-card border border-line bg-surface p-4 shadow-card">
+        <summary className="tap-44 flex cursor-pointer items-center justify-between text-[14px] font-extrabold text-accent">
+          내 성장 상세 <span aria-hidden>⌄</span>
+        </summary>
+        <div className="mt-3 flex flex-col gap-3">
       <StageCarousel
         currentStage={summary.currentStage}
         onHelpClick={() => setStageGuideOpen(true)}
@@ -165,8 +191,6 @@ export function GrowthHub() {
       <PointSummary balance={balance} streakDays={streakDays} />
 
       <NextGoalCard goal={selectNextGoal(achievements)} />
-
-      <BadgeShowcase shelf={shelf} onOpenAll={() => setBadgeSheetOpen(true)} />
 
       <LevelRewards
         rewards={rewards}
@@ -199,6 +223,9 @@ export function GrowthHub() {
       >
         XP 획득 방법 보기
       </button>
+
+        </div>
+      </details>
 
       {guideOpen && <XpGuideSheet onClose={() => setGuideOpen(false)} />}
 
