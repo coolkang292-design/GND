@@ -21,36 +21,41 @@ const EARNED: EarnedBadge[] = [
   { badgeKey: "streak_5", periodKey: "2026-07-25", earnedAt: new Date("2026-07-25") },
 ];
 
-describe("BadgeShowcase", () => {
-  it("획득 종류 수와 전체 수를 보여준다", () => {
+describe("BadgeShowcase — 성취별 대표 배지", () => {
+  it("6개 지표별 카드를 표시한다", () => {
     const html = renderToStaticMarkup(
       <BadgeShowcase shelf={badgeShelf(CATALOG, EARNED)} onOpenAll={() => {}} />,
     );
-    expect(html).toContain("2 / 3");
-    expect(html).toContain("전체 보기");
+    expect(html).toContain("대표 배지");
+    expect(html).toContain("전체 배지");
+    for (const label of ["운동 횟수", "누적 시간", "연속 운동", "운동 볼륨", "이동 거리", "기록 갱신"]) {
+      expect(html).toContain(label);
+    }
+    expect(html.match(/<li /g)).toHaveLength(6);
   });
 
-  it("획득한 배지만 진열한다", () => {
+  it("획득한 배지만 표시하고 미획득 카테고리는 잠금 상태로 남긴다", () => {
     const html = renderToStaticMarkup(
       <BadgeShowcase shelf={badgeShelf(CATALOG, EARNED)} onOpenAll={() => {}} />,
     );
     expect(html).toContain("workout_1.webp");
     expect(html).toContain("streak_5.webp");
     expect(html).not.toContain("workout_10.webp");
+    expect(html).toContain("미획득");
   });
 
-  it("반복 배지는 개수를 붙인다", () => {
+  it("반복 배지 획득 횟수를 유지한다", () => {
     const html = renderToStaticMarkup(
       <BadgeShowcase shelf={badgeShelf(CATALOG, EARNED)} onOpenAll={() => {}} />,
     );
     expect(html).toContain("×2");
   });
 
-  it("하나도 없으면 안내 문구", () => {
+  it("획득한 배지가 하나도 없어도 6칸을 보여준다", () => {
     const html = renderToStaticMarkup(
       <BadgeShowcase shelf={badgeShelf(CATALOG, [])} onOpenAll={() => {}} />,
     );
-    expect(html).toContain("아직 획득한 배지가 없어요");
-    expect(html).toContain("0 / 3");
+    expect(html).toContain("대표 배지");
+    expect(html.match(/미획득/g)?.length).toBeGreaterThanOrEqual(6);
   });
 });
