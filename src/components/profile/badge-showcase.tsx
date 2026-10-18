@@ -2,59 +2,81 @@
 
 import Image from "next/image";
 import type { BadgeShelfItem } from "@/lib/domain/badges";
+import {
+  PROFILE_METRIC_LABEL, featuredBadgeCondition, selectFeaturedBadges,
+} from "@/lib/domain/profile-achievements";
 import { badgeImageSrc } from "@/lib/domain/badge-art";
 
-/** 프로필 보유 배지 — 최근 획득 6개까지. 전체는 시트에서 본다. */
+/** 카테고리별 최고 획득 배지 6개. 배지 전체 시트는 기존 기능을 사용한다. */
 export function BadgeShowcase({
-  shelf,
-  onOpenAll,
+  shelf, onOpenAll,
 }: {
   shelf: BadgeShelfItem[];
   onOpenAll: () => void;
 }) {
-  const owned = shelf.filter((b) => b.earnedAt !== null);
-  const recent = [...owned]
-    .sort((a, b) => b.earnedAt!.getTime() - a.earnedAt!.getTime())
-    .slice(0, 6);
+  const featured = selectFeaturedBadges(shelf);
 
   return (
-    <section className="rounded-card border border-line bg-surface p-4 shadow-card">
-      <div className="flex items-baseline justify-between">
-        <h3 className="text-[15px] font-extrabold">보유 배지</h3>
+    <section aria-labelledby="featured-badges-heading">
+      <div className="flex items-center justify-between gap-2">
+        <h2 id="featured-badges-heading" className="text-[18px] font-extrabold">
+          대표 배지
+        </h2>
         <button
-          type="button"
-          onClick={onOpenAll}
-          className="text-[11px] font-bold text-accent"
+          type="button" onClick={onOpenAll}
+          className="tap-44 flex shrink-0 items-center rounded-full border border-accent/50 bg-accent/10 px-4 text-[12px] font-extrabold text-accent"
         >
-          {owned.length} / {shelf.length} · 전체 보기 ›
+          전체 배지 ›
         </button>
       </div>
-
-      {owned.length === 0 ? (
-        <p className="mt-2 text-[11.5px] text-muted">
-          아직 획득한 배지가 없어요. 오늘 운동을 완료하면 첫 배지를 받아요.
-        </p>
-      ) : (
-        <ul className="mt-3 flex flex-wrap gap-3">
-          {recent.map((b) => (
-            <li key={b.key} className="relative">
-              <Image
-                src={badgeImageSrc(b.key)}
-                alt={b.name}
-                width={52}
-                height={52}
-                sizes="52px"
-                unoptimized
-              />
-              {b.count > 1 && (
-                <span className="absolute -right-1 -bottom-1 rounded-full border border-gold/50 bg-bg px-1.5 text-[10px] font-extrabold text-gold">
-                  ×{b.count}
+      <p className="mt-0.5 mb-3 text-[11.5px] text-muted">
+        6개 항목에서 최고 달성 배지만 표시
+      </p>
+      <ul className="grid grid-cols-2 gap-2">
+        {featured.map(({ metricKey, badge }) => (
+          <li key={metricKey} className="min-w-0">
+            <button
+              type="button"
+              onClick={onOpenAll}
+              aria-label={PROFILE_METRIC_LABEL[metricKey] + ": " + (badge?.name ?? "미획득") + " · 전체 배지 보기"}
+              className="flex min-h-[112px] w-full items-center gap-2 rounded-card border border-line bg-surface p-2.5 text-left shadow-card"
+            >
+              {badge ? (
+                <span className="relative shrink-0">
+                  <Image
+                    src={badgeImageSrc(badge.key)}
+                    alt=""
+                    width={48}
+                    height={48}
+                    sizes="48px"
+                    unoptimized
+                  />
+                  {badge.count > 1 && (
+                    <span className="absolute -bottom-1 -right-1 rounded-full border border-gold/40 bg-bg px-1 text-[9px] font-bold text-gold">
+                      ×{badge.count}
+                    </span>
+                  )}
+                </span>
+              ) : (
+                <span aria-hidden className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-line text-[20px] text-faint">
+                  ?
                 </span>
               )}
-            </li>
-          ))}
-        </ul>
-      )}
+              <span className="min-w-0 flex-1">
+                <span className="block text-[10.5px] text-muted">
+                  {PROFILE_METRIC_LABEL[metricKey]}
+                </span>
+                <span className="mt-1 block break-keep text-[12.5px] font-extrabold leading-snug">
+                  {badge?.name ?? "미획득"}
+                </span>
+                <span className="mt-1.5 block break-keep text-[10.5px] leading-snug text-faint">
+                  {badge ? featuredBadgeCondition(badge) : "첫 달성을 기다려요"}
+                </span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }
