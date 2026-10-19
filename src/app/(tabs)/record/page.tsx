@@ -97,6 +97,9 @@ import {
 import {
   getChallengeGoals,
   getMyChallenges,
+  getPeriodStatsByUser,
+  actualForGoal,
+  goalLabel,
   goalCategories,
   sessionGoalContribution,
   toPeriodSessionRow,
@@ -183,7 +186,7 @@ import {
   shouldRestAfterCompletion,
   skipExercise,
 } from "@/lib/domain/session-flow";
-import { dayKey, resolveTimeZone } from "@/lib/domain/time";
+import { dayKey, resolveTimeZone, DEFAULT_TIMEZONE } from "@/lib/domain/time";
 import { getMyBadgeMetrics } from "@/lib/badges";
 import { TodayStatusCard } from "@/components/record/today-status-card";
 import { Icon } from "@/components/ui/icon";
@@ -194,7 +197,8 @@ import {
   completedWorkoutFeedPath,
   feedPathAfterProof,
 } from "@/lib/domain/achievement-moment";
-import { ChallengeProofCard } from "@/components/record/challenge-proof-card";
+import { VerifiedChallengeProofCard } from "@/components/record/verified-challenge-proof-card";
+import { hasPendingChallengeProof, type ActiveChallengeContext, type ChallengeConfirmation } from "@/lib/domain/challenge-confirmation";
 import { CompletionDetails } from "@/components/record/completion-details";
 import { pickNextCompletionHero } from "@/lib/completion-hero-pick";
 import { captionForEffort } from "@/lib/domain/session-caption";
@@ -335,8 +339,8 @@ type CompletedResult = {
   summary: VolumeSummary;
   logText: string; // 완료 시점에 미리 생성 — draft가 비워진 뒤에도 공유 가능
   recordNote: string | null; // 기록 갱신 문구 (원본 세션 초과 시)
-  /** 이번 운동이 챌린지 목표에 보탠 양 (2026-08-04) — draft가 비워지기 전에 계산한다 */
-  challengeGains: GoalContribution[];
+  /** All active, joined challenges, snapshotted before clearing the workout draft. */
+  challengeResults: { context: ActiveChallengeContext; gains: GoalContribution[] }[];
   /** 완료 카드 사진 번호 — 완료 순간 한 번 뽑는다. 렌더마다 뽑으면 사진이 바뀐다 (2026-09-29) */
   heroImageIndex: number;
 };
@@ -659,6 +663,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
     [challengeGoals],
   );
   const [challengePhotoRequired, setChallengePhotoRequired] = useState(false);
+  const [activeChallengeContexts, setActiveChallengeContexts] = useState<ActiveChallengeContext[]>([]);
+  const [challengeConfirmations, setChallengeConfirmations] = useState<Record<string, ChallengeConfirmation>>({});
   /** 완료 화면에서 인증사진을 올렸는가 — 기여 문구가 "쌓여요"→"쌓였어요"로 바뀐다 */
   const [resultPhotoDone, setResultPhotoDone] = useState(false);
   /**
@@ -1407,15 +1413,28 @@ function WorkoutScreen({ userId }: { userId: string }) {
     let cancelled = false;
     (async () => {
       try {
-        const active = (await getMyChallenges(userId)).find(
-          (c) => c.status === "active" && c.myStatus !== "invited",
+        const active = (await getMyChallenges(userId)).filter(
+          (c) => c.status === "active" && c.myStatus === "joined",
         );
-        if (!active) return;
-        const goals = await getChallengeGoals(active.id);
+        const loaded = await Promise.allSettled(
+          active.map(async (challenge): Promise<ActiveChallengeContext> => ({
+            id: challenge.id,
+            name: challenge.name,
+            startDate: challenge.start_date,
+            endDate: challenge.end_date,
+            photoRequired: Boolean(challenge.photo_required),
+            goals: (await getChallengeGoals(challenge.id)).filter((g) => g.user_id === userId),
+          })),
+        );
         if (cancelled) return;
-        // 사진 필수 여부는 달력이 "사진이 없어 안 잡혀요"를 말하는 데 쓴다
-        setChallengePhotoRequired(Boolean(active.photo_required));
-        setChallengeGoals(goals.filter((g) => g.user_id === userId));
+        const contexts = loaded
+          .filter((entry): entry is PromiseFulfilledResult<ActiveChallengeContext> => entry.status === "fulfilled")
+          .map((entry) => entry.value);
+        setActiveChallengeContexts(contexts);
+        // Keep the picker/category warnings aware of every joined active challenge.
+        setChallengeGoals(loaded.some((entry) => entry.status === "rejected") ? null : contexts.flatMap((c) => c.goals));
+        // Legacy calendar indicator: true if any active challenge needs photo proof.
+        setChallengePhotoRequired(contexts.some((c) => c.photoRequired));
       } catch {
         // 챌린지가 없거나 못 읽어도 기록은 그대로 돼야 한다
       }
@@ -3150,21 +3169,21 @@ function WorkoutScreen({ userId }: { userId: string }) {
         recordNote,
         heroImageIndex: pickNextCompletionHero(),
         // draft를 비우기 전에 계산한다 — 아래 setDraft(emptyDraft())가 지운다
-        challengeGains:
-          challengeGoals && challengeGoals.length > 0
-            ? sessionGoalContribution({
-                session: toPeriodSessionRow({
-                  userId,
-                  completedAtMs,
-                  exercises: draft.exercises,
-                  // 타바타를 빠뜨리면 tabata_count 목표가 늘 0으로 보인다
-                  // (신고 a2ffb44a) — draft가 비워지기 전에 읽는다
-                  tabataMinutes: draft.tabataMinutes,
-                }),
-                goals: challengeGoals,
-                timeZone: resolveTimeZone(),
-              })
-            : [],
+        challengeResults: activeChallengeContexts.map((context) => ({
+          context,
+          // This is only a provisional single-session estimate. Confirmed UI shows
+          // authoritative PERIOD totals, never these guessed per-session increments.
+          gains: sessionGoalContribution({
+            session: toPeriodSessionRow({
+              userId,
+              completedAtMs,
+              exercises: draft.exercises,
+              tabataMinutes: draft.tabataMinutes,
+            }),
+            goals: context.goals,
+            timeZone: DEFAULT_TIMEZONE,
+          }),
+        })),
       });
       setXpEvents(buildXpEvents(xp)); // XP·배지 지급 로직은 그대로, 상세 화면만 선택 열람
       setXpDetailsOpen(false);
@@ -3638,6 +3657,45 @@ function WorkoutScreen({ userId }: { userId: string }) {
   }, [result?.sessionId]);
 
 
+  // Read-only confirmation after completion and whenever photo proof changes.
+  // RPC returns period totals without session IDs; never claim this particular
+  // workout gained +N based solely on the resulting total.
+  useEffect(() => {
+    if (!result) {
+      setChallengeConfirmations({});
+      return;
+    }
+    let cancelled = false;
+    setChallengeConfirmations({});
+    for (const { context } of result.challengeResults) {
+      if (context.photoRequired && !resultPhotoDone) continue;
+      void getPeriodStatsByUser(
+        context.id, context.startDate, context.endDate, DEFAULT_TIMEZONE,
+      )
+        .then((statsByUser) => {
+          if (cancelled) return;
+          const stats = statsByUser.get(userId);
+          const totals = context.goals.map((goal) => ({
+            type: goal.goal_type,
+            label: goalLabel(goal.goal_type, goal.qualifier),
+            value: stats ? actualForGoal(stats, goal.goal_type, goal.qualifier) : 0,
+            unit: goal.unit ?? "",
+            target: Number(goal.target_value),
+          }));
+          setChallengeConfirmations((prev) => ({
+            ...prev,
+            [context.id]: { status: "confirmed", totals },
+          }));
+        })
+        .catch(() => {
+          if (!cancelled) setChallengeConfirmations((prev) => ({
+            ...prev, [context.id]: { status: "unavailable" },
+          }));
+        });
+    }
+    return () => { cancelled = true; };
+  }, [result, resultPhotoDone, userId]);
+
   // 멈춰 있던 시간은 경과 시간에서 뺀다. 정지 중에는 정지 시작 시점에 멈춰 있다.
   const elapsedSec =
     active && draft.startedAtMs
@@ -3668,12 +3726,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
       사진 필수 챌린지에 보탤 몫이 있는데 사진이 없으면 피드 버튼을 빼고, 사진을 올리면
       (`resultPhotoDone`) 그 자리에서 다시 생긴다. 비공개는 원래부터 `feedPath`가 null이다.
     */
-    const proofState = challengeProofState({
-      photoRequired: challengePhotoRequired,
-      photoDone: resultPhotoDone,
-      gains: result.challengeGains,
-    });
-    const proofPending = proofState === "pending";
+    const proofPending = hasPendingChallengeProof(result.challengeResults, resultPhotoDone);
     const feedPath = feedPathAfterProof(result.feedPath, proofPending);
     // ⚠️ 방금 끝낸 운동을 **합쳐서** 센다. `sessionMinutes`는 완료 전에 읽은
     //    값이라 오늘 첫 운동이면 오늘이 빠져 있다. 같은 날 두 번째면 하루로 합쳐진다
@@ -3724,12 +3777,19 @@ function WorkoutScreen({ userId }: { userId: string }) {
           챌린지 반영 상태 (이슈 #16 P0-B). 예정형(인증 대기)과 확정형(반영됐어요)을 문장으로 가른다.
           판정은 `challengeProofState` — 확정의 근거는 서버 집계가 사진 있는 세션만 센다는 것.
         */}
-        {proofState !== "none" && (
-          <ChallengeProofCard
-            state={proofState}
-            photoRequired={challengePhotoRequired}
-            gains={result.challengeGains}
-          />
+        {result.challengeResults.length > 0 && (
+          <section className="flex flex-col gap-2" aria-label="챌린지별 실적">
+            {result.challengeResults.map(({ context, gains }) => (
+              <VerifiedChallengeProofCard
+                key={context.id}
+                name={context.name}
+                photoRequired={context.photoRequired}
+                photoDone={resultPhotoDone}
+                gains={gains}
+                confirmation={challengeConfirmations[context.id] ?? { status: "checking" }}
+              />
+            ))}
+          </section>
         )}
         {/*
           인증사진 (§11 → 0103 다중 사진).
