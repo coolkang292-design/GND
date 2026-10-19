@@ -105,3 +105,30 @@ export function buildXpEvents(result: WorkoutXpResult): XpEvent[] {
 
   return events;
 }
+
+/**
+ * 완료 화면 보상 버튼의 한 줄 조각 (2026-10-19, PR #15 보완).
+ *
+ * ⚠️ 완료 직후 모달이 자동으로 뜨지 않는다 — 이 줄이 **받은 보상 전부**를 말해야
+ *    한다. XP만 말하면 레벨업·배지가 버튼 안쪽에 숨는다.
+ * ⚠️ `buildXpEvents`의 결과에서만 만든다. 두 번째 계산 경로를 두면 모달과 요약이
+ *    다른 숫자를 말한다. 순서도 모달과 같다.
+ */
+export function summarizeXpEvents(events: XpEvent[]): string[] {
+  return events.map((event) => {
+    switch (event.type) {
+      case "xp":
+        return `+${event.amount.toLocaleString()} XP`;
+      case "point":
+        return `+${event.amount.toLocaleString()} P`;
+      case "level_up":
+        return `Lv.${event.to} 달성`;
+      case "stage_up":
+        return "단계 진화";
+      case "reward":
+        return "보상 해금";
+      case "badge":
+        return `새 배지 ${event.badges.length}`;
+    }
+  });
+}

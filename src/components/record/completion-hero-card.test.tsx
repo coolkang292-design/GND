@@ -50,6 +50,12 @@ describe("CompletionHeroCard", () => {
     ).toBeTruthy();
   });
 
+  it("실제 주간 성장 정보가 있으면 숫자로 성취를 강조하고 누적 기록은 보존한다", () => {
+    render(<CompletionHeroCard hero={hero} achievementLine="지난주보다 1일 더 운동했어요." statsLine="x" recordNote={null} />);
+    expect(screen.getByLabelText("이번 운동의 성취").textContent).toContain("지난주보다 1일");
+    expect(screen.getByText(hero.progressLine)).toBeTruthy();
+  });
+
   it("누적일을 모르면 그 줄을 숨긴다", () => {
     render(
       <CompletionHeroCard

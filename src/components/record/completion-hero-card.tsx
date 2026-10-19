@@ -16,8 +16,11 @@ export function CompletionHeroCard({
   statsLine,
   stats,
   recordNote,
+  achievementLine,
 }: {
   hero: CompletionHero;
+  /** Verified week-level achievement; omit when history cannot be read. */
+  achievementLine?: string | null;
   /** "1분 · 볼륨 1,755kg · 완료 세트 3개" — 화면 낭독용 한 줄(숫자 칸과 같은 값) */
   statsLine: string;
   /**
@@ -39,8 +42,13 @@ export function CompletionHeroCard({
         className="block aspect-[16/9] w-full object-cover"
       />
       <div className="px-5 pt-3.5 pb-4 text-center">
+        {achievementLine && (
+          <p className="text-[17px] font-extrabold text-accent" aria-label="이번 운동의 성취">
+            {achievementLine}
+          </p>
+        )}
         {hero.progressLine && (
-          <p className="text-[15px] font-extrabold text-accent">
+          <p className={`${achievementLine ? "mt-1 text-[12px] text-muted" : "text-[15px] font-extrabold text-accent"}`}>
             {hero.progressLine}
           </p>
         )}
