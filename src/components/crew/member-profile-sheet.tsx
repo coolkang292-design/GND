@@ -21,7 +21,6 @@ import {
   type CrewMemberProfile,
 } from "@/lib/progression";
 import {
-  buildProfileHistory,
   formatCumulativeDistance,
   formatCumulativeMinutes,
 } from "@/lib/domain/profile-history";
@@ -32,6 +31,8 @@ import {
 import { badgeImageSrc } from "@/lib/domain/badge-art";
 import { MemberWorkoutCalendar } from "@/components/crew/member-workout-calendar";
 import { MemberAchievementOverview } from "@/components/crew/member-achievement-overview";
+import { AchievementHistoryTimeline } from "@/components/profile/recent-achievement-history";
+import { buildAchievementHistory } from "@/lib/domain/profile-achievements";
 
 /**
  * 성과 요약 (2026-08-07) — 홈 친구 목록이 **이미 계산해 둔 값**을 넘겨준다.
@@ -54,11 +55,6 @@ export type MemberPerformance = {
   workoutCount?: number;
   totalMinutes?: number;
 };
-
-/** 이력 줄의 날짜 — `2026. 8. 19.`처럼 길면 한 줄에 안 들어간다 */
-function historyDate(at: Date): string {
-  return `${at.getFullYear() % 100}.${at.getMonth() + 1}.${at.getDate()}`;
-}
 
 function Tile({ label, value }: { label: string; value: string }) {
   return (
@@ -100,7 +96,7 @@ export function MemberProfileBody({
 }) {
   const pct = Math.min(100, Math.round(profile.levelProgressPercent));
   const distance = formatCumulativeDistance(profile.distanceMeters);
-  const history = buildProfileHistory({
+  const history = buildAchievementHistory({
     joinedAt: profile.joinedAt,
     levelUps: profile.levelUps,
     badges: profile.badges,
@@ -244,28 +240,9 @@ export function MemberProfileBody({
           <summary className="tap-44 flex cursor-pointer items-center text-[12px] font-extrabold text-accent">
             전체 이력 보기 ({history.length}건) ›
           </summary>
-          <ul className="mt-2 flex flex-col gap-1.5">
-            {history.map((e, i) => (
-              <li
-                key={`${e.kind}-${e.at.getTime()}-${i}`}
-                className="flex items-center gap-2.5 text-[12.5px]"
-              >
-                <span className="w-[74px] flex-none font-mono text-[11px] text-faint">
-                  {historyDate(e.at)}
-                </span>
-                <span className="flex-none">
-                  {e.kind === "joined" ? "🎬" : e.kind === "level_up" ? "⬆️" : e.emoji}
-                </span>
-                <span className="min-w-0 flex-1 truncate">
-                  {e.kind === "joined"
-                    ? "GND 시작"
-                    : e.kind === "level_up"
-                      ? `Lv.${e.level} 달성`
-                      : e.name}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <div className="mt-3">
+            <AchievementHistoryTimeline events={history} />
+          </div>
         </details>
       )}
 
