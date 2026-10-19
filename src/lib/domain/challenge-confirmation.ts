@@ -26,13 +26,17 @@ export type ChallengeConfirmation =
       }[];
     };
 
-/** Photo proof is only a gate for challenges which need a photo and have provisional work. */
+/**
+ * Photo-proof gate applies to any active challenge whose server scoring excludes
+ * unverified sessions — even if a single-session estimate says delta=0. A second
+ * workout on the same day can satisfy a distinct-exercise daily threshold.
+ */
 export function hasPendingChallengeProof(
-  entries: readonly { context: Pick<ActiveChallengeContext, "photoRequired">; gains: readonly GoalContribution[] }[],
+  entries: readonly { context: Pick<ActiveChallengeContext, "photoRequired" | "goals">; gains: readonly GoalContribution[] }[],
   photoDone: boolean,
 ): boolean {
-  return !photoDone && entries.some(({ context, gains }) =>
-    context.photoRequired && gains.some((goal) => goal.delta > 0));
+  return !photoDone && entries.some(({ context }) =>
+    context.photoRequired && context.goals.length > 0);
 }
 
 /** A confirmation is per-challenge; never treat a successful sibling as confirmation. */
