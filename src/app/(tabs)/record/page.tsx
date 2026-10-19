@@ -663,7 +663,10 @@ function WorkoutScreen({ userId }: { userId: string }) {
   );
   const [challengePhotoRequired, setChallengePhotoRequired] = useState(false);
   const [activeChallengeContexts, setActiveChallengeContexts] = useState<ActiveChallengeContext[]>([]);
-  const [challengeConfirmations, setChallengeConfirmations] = useState<Record<string, ChallengeConfirmation>>({});
+  const [challengeConfirmations, setChallengeConfirmations] = useState<{
+    scope: string;
+    data: Record<string, ChallengeConfirmation>;
+  } | null>(null);
   /** 완료 화면에서 인증사진을 올렸는가 — 기여 문구가 "쌓여요"→"쌓였어요"로 바뀐다 */
   const [resultPhotoDone, setResultPhotoDone] = useState(false);
   /**
@@ -3660,12 +3663,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
   // RPC returns period totals without session IDs; never claim this particular
   // workout gained +N based solely on the resulting total.
   useEffect(() => {
-    if (!result) {
-      setChallengeConfirmations({});
-      return;
-    }
+    if (!result) return;
     let cancelled = false;
-    setChallengeConfirmations({});
+    const scope = result.sessionId + ":" + resultPhotoDone;
     for (const { context } of result.challengeResults) {
       if (context.photoRequired && !resultPhotoDone) continue;
       void getPeriodStatsByUser(
@@ -3682,13 +3682,20 @@ function WorkoutScreen({ userId }: { userId: string }) {
             target: Number(goal.target_value),
           }));
           setChallengeConfirmations((prev) => ({
-            ...prev,
-            [context.id]: { status: "confirmed", totals },
+            scope,
+            data: {
+              ...(prev?.scope === scope ? prev.data : {}),
+              [context.id]: { status: "confirmed", totals },
+            },
           }));
         })
         .catch(() => {
           if (!cancelled) setChallengeConfirmations((prev) => ({
-            ...prev, [context.id]: { status: "unavailable" },
+            scope,
+            data: {
+              ...(prev?.scope === scope ? prev.data : {}),
+              [context.id]: { status: "unavailable" },
+            },
           }));
         });
     }
@@ -3726,6 +3733,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
       (`resultPhotoDone`) 그 자리에서 다시 생긴다. 비공개는 원래부터 `feedPath`가 null이다.
     */
     const proofPending = hasPendingChallengeProof(result.challengeResults, resultPhotoDone);
+    const scopedConfirmations = challengeConfirmations?.scope === result.sessionId + ":" + resultPhotoDone
+      ? challengeConfirmations.data : {};
     const feedPath = feedPathAfterProof(result.feedPath, proofPending);
     // ⚠️ 방금 끝낸 운동을 **합쳐서** 센다. `sessionMinutes`는 완료 전에 읽은
     //    값이라 오늘 첫 운동이면 오늘이 빠져 있다. 같은 날 두 번째면 하루로 합쳐진다
@@ -3785,7 +3794,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
                 photoRequired={context.photoRequired}
                 photoDone={resultPhotoDone}
                 gains={gains}
-                confirmation={challengeConfirmations[context.id] ?? { status: "checking" }}
+                confirmation={scopedConfirmations[context.id] ?? { status: "checking" }}
               />
             ))}
           </section>
