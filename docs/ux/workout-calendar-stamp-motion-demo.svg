@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 400" width="840" height="400" role="img" aria-label="운동 완료 달력 도장 찍기 반복 시안">
+<style>
+  text {font-family:system-ui,-apple-system,'Apple SD Gothic Neo','Noto Sans KR',sans-serif;}
+  .muted {fill:#9CA3AF;font-size:15px;font-weight:700;}
+  .small {font-size:12px;}
+  .imprint {transform-box:fill-box;transform-origin:center;animation:stamp 3.5s ease-in-out infinite;}
+  .shock {fill:none;stroke:#C8FF3D;stroke-width:2.5px;transform-box:fill-box;transform-origin:center;animation:ring 3.5s infinite;}
+  .sound {fill:#C8FF3D;font-size:16px;font-weight:900;animation:word 3.5s infinite;}
+  @keyframes stamp {
+    0%,10% {opacity:0;transform:translateY(-24px) scale(1.48) rotate(-10deg);}
+    22% {opacity:1;transform:translateY(2px) scale(.86) rotate(2deg);}
+    30% {transform:translateY(-4px) scale(1.08);}
+    42%,100% {opacity:1;transform:translateY(0) scale(1);}
+  }
+  @keyframes ring {
+    0%,20% {opacity:0;transform:scale(.4);}
+    24% {opacity:.8;transform:scale(.95);}
+    42%,100% {opacity:0;transform:scale(1.6);}
+  }
+  @keyframes word {
+    0%,19% {opacity:0;}
+    25% {opacity:1;}
+    42%,100% {opacity:0;}
+  }
+  @media (prefers-reduced-motion:reduce) {
+    .imprint,.shock,.sound {animation:none;}
+    .imprint {opacity:1;}
+    .shock,.sound {display:none;}
+  }
+</style>
+<rect width="840" height="400" rx="24" fill="#090A0C"/>
+<rect x="23" y="22" width="794" height="351" rx="18" fill="#111318" stroke="#25282E"/>
+<text x="56" y="68" fill="#C8FF3D" font-size="15" font-weight="850">GND  /  WORKOUT COMPLETE</text>
+<text x="56" y="111" fill="#F7F8FA" font-size="28" font-weight="900">이번 주 운동 달력</text>
+<text x="750" y="108" fill="#C8FF3D" font-size="16" font-weight="700">2일 완료</text>
+<text x="106" y="155" text-anchor="middle" class="muted">월</text><rect x="66" y="170" width="80" height="110" rx="13" fill="#181B21" stroke="#33373E" stroke-width="1"/><text x="76" y="190" class="muted small">19</text><g transform="translate(106 225)"><g class=""><circle cx="0" cy="0" r="28" fill="none" stroke="#C8FF3D" stroke-width="4.3"/><circle cx="0" cy="0" r="23" fill="none" stroke="#C8FF3D" stroke-width="1"/><path d="M-16 0 L-4 12 L17 -11" fill="none" stroke="#C8FF3D" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/></g></g>
+<text x="198" y="155" text-anchor="middle" class="muted">화</text><rect x="158" y="170" width="80" height="110" rx="13" fill="#181B21" stroke="#C8FF3D" stroke-width="2"/><text x="168" y="190" class="muted small">20</text><g transform="translate(198 225)"><g class="imprint"><circle cx="0" cy="0" r="28" fill="none" stroke="#C8FF3D" stroke-width="4.3"/><circle cx="0" cy="0" r="23" fill="none" stroke="#C8FF3D" stroke-width="1"/><path d="M-16 0 L-4 12 L17 -11" fill="none" stroke="#C8FF3D" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/></g></g><circle cx="198" cy="225" r="37" class="shock"/><text x="198" y="166" text-anchor="middle" class="sound">쾅!</text>
+<text x="290" y="155" text-anchor="middle" class="muted">수</text><rect x="250" y="170" width="80" height="110" rx="13" fill="#181B21" stroke="#33373E" stroke-width="1"/><text x="260" y="190" class="muted small">21</text>
+<text x="382" y="155" text-anchor="middle" class="muted">목</text><rect x="342" y="170" width="80" height="110" rx="13" fill="#181B21" stroke="#33373E" stroke-width="1"/><text x="352" y="190" class="muted small">22</text>
+<text x="474" y="155" text-anchor="middle" class="muted">금</text><rect x="434" y="170" width="80" height="110" rx="13" fill="#181B21" stroke="#33373E" stroke-width="1"/><text x="444" y="190" class="muted small">23</text>
+<text x="566" y="155" text-anchor="middle" class="muted">토</text><rect x="526" y="170" width="80" height="110" rx="13" fill="#181B21" stroke="#33373E" stroke-width="1"/><text x="536" y="190" class="muted small">24</text>
+<text x="658" y="155" text-anchor="middle" class="muted">일</text><rect x="618" y="170" width="80" height="110" rx="13" fill="#181B21" stroke="#33373E" stroke-width="1"/><text x="628" y="190" class="muted small">25</text>
+<text x="420" y="325" text-anchor="middle" fill="#C8FF3D" font-size="20" font-weight="900">오늘의 도장, 찍었다!</text>
+<text x="420" y="357" text-anchor="middle" fill="#9CA3AF" font-size="12">시안은 확인을 위해 반복 재생 · 실제 앱에서는 첫 운동일에 0.78초 한 번만</text>
+</svg>
