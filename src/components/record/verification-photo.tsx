@@ -44,6 +44,7 @@ export function VerificationPhoto({
   onToast,
   onUploaded,
   emphasis = "optional",
+  collapsedInitially = false,
 }: {
   userId: string;
   sessionId: string;
@@ -55,11 +56,14 @@ export function VerificationPhoto({
   onUploaded?: () => void;
   /** `required` = 챌린지 인증 대기 — 사진 인증이 주 CTA (이슈 #16) */
   emphasis?: "required" | "optional";
+  /** Hide optional camera/album choices until the user requests a photo. */
+  collapsedInitially?: boolean;
 }) {
   const cameraInput = useRef<HTMLInputElement>(null);
   const albumInput = useRef<HTMLInputElement>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [state, setState] = useState<"idle" | "uploading" | "failed" | "done">("idle");
+  const [optionalExpanded, setOptionalExpanded] = useState(false);
   /**
    * 마지막 시도 — 실패 시 같은 사진으로 다시 한다. `stored`는 파일·행 저장까지는 끝났다는 뜻
    * (그러면 다시 시도는 인증 확정부터).
@@ -161,6 +165,24 @@ export function VerificationPhoto({
     const file = e.target.files?.[0];
     e.target.value = ""; // 같은 파일 재선택 허용
     if (file) void handleFile(file, source);
+  }
+
+  // One small optional action by default: do not make people read photo instructions
+  // after exercise unless a challenge requires verification or they opt in.
+  if (collapsedInitially && emphasis === "optional" && !optionalExpanded && state === "idle") {
+    return (
+      <section className="rounded-card border border-line bg-surface px-4 py-2 shadow-card">
+        <button
+          type="button"
+          onClick={() => setOptionalExpanded(true)}
+          className="flex min-h-11 w-full items-center justify-between gap-2 text-sm font-bold text-muted"
+          aria-label="운동 사진 추가 (선택)"
+        >
+          <span className="flex items-center gap-2"><UiIcon name="camera" size={17} /> 운동 사진 추가 · 선택</span>
+          <span aria-hidden="true">＋</span>
+        </button>
+      </section>
+    );
   }
 
   return (

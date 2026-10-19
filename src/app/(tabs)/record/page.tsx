@@ -3825,6 +3825,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
             completedAtMs={result.completedAtMs}
             onToast={showToast}
             emphasis={proofPending ? "required" : "optional"}
+            collapsedInitially={!proofPending}
             onUploaded={() => {
               setResultPhotoDone(true);
               // 0장 → 1장이 되면 관리 화면으로 넘어간다
