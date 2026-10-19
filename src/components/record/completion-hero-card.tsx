@@ -21,13 +21,15 @@ export function CompletionHeroCard({
   hero: CompletionHero;
   /** Verified week-level achievement; omit when history cannot be read. */
   achievementLine?: string | null;
-  /** "1분 · 볼륨 1,755kg · 완료 세트 3개" — 화면 낭독용 한 줄(숫자 칸과 같은 값) */
+  /** "45분 · 운동한 날 24일째 · +120 XP" — 화면 낭독용 한 줄(숫자 칸과 같은 값) */
   statsLine: string;
   /**
-   * 시안 ④의 큰 숫자 세 칸(`52분 · 6,840kg · 18 SETS`, 2026-10-05). 없으면 한 줄로 그린다.
+   * 큰 숫자 칸 = **운동 시간 · 운동한 날 · XP** (이슈 #16 P0-A, 2026-10-19 사용자 결정).
+   * 옛 칸(`분 · KG · SETS`, 시안 ④ 2026-10-05)의 볼륨·세트는 접힘 영역 "기록 상세"로 갔다.
+   * ⚠️ 모르는 값(`null`)은 **칸을 뺀다** — 0을 지어내지 않는다(누적일 미조회, XP 0·멱등 재생).
    * ⚠️ `statsLine`과 **같은 결과값**에서 만든다 — 두 곳이 다른 숫자를 말하지 않게 부르는 쪽이 같이 넘긴다.
    */
-  stats?: { minutes: number; volumeKg: number; sets: number };
+  stats?: { minutes: number; workoutDays: number | null; xp: number | null };
   recordNote: string | null;
 }) {
   return (
@@ -47,7 +49,8 @@ export function CompletionHeroCard({
             {achievementLine}
           </p>
         )}
-        {hero.progressLine && (
+        {/* 운동한 날 칸이 있으면 같은 숫자를 문장으로 또 말하지 않는다 */}
+        {hero.progressLine && !(stats && stats.workoutDays !== null) && (
           <p className={`${achievementLine ? "mt-1 text-[12px] text-muted" : "text-[15px] font-extrabold text-accent"}`}>
             {hero.progressLine}
           </p>
@@ -55,10 +58,18 @@ export function CompletionHeroCard({
         {stats ? (
           <>
             <p className="sr-only">{statsLine}</p>
-            <div aria-hidden className="mt-3 grid grid-cols-3 divide-x divide-line rounded-card-sm border border-line bg-surface-2/60 py-2.5">
-              <StatCell icon="clock" value={stats.minutes.toLocaleString()} unit="MIN" />
-              <StatCell icon="volume" value={Math.round(stats.volumeKg).toLocaleString()} unit="KG" />
-              <StatCell icon="dumbbell" value={stats.sets.toLocaleString()} unit="SETS" />
+            <div
+              aria-hidden
+              data-testid="hero-stats"
+              className={`mt-3 grid ${statColumns(stats)} divide-x divide-line rounded-card-sm border border-line bg-surface-2/60 py-2.5`}
+            >
+              <StatCell icon="clock" value={stats.minutes.toLocaleString()} unit="분" />
+              {stats.workoutDays !== null && (
+                <StatCell icon="calendar" value={stats.workoutDays.toLocaleString()} unit="운동한 날" />
+              )}
+              {stats.xp !== null && (
+                <StatCell icon="spark" value={`+${stats.xp.toLocaleString()}`} unit="XP" accent />
+              )}
             </div>
           </>
         ) : (
@@ -78,14 +89,28 @@ export function CompletionHeroCard({
   );
 }
 
-function StatCell({ icon, value, unit }: { icon: IconName; value: string; unit: string }) {
+function statColumns(stats: { workoutDays: number | null; xp: number | null }): string {
+  const n = 1 + (stats.workoutDays !== null ? 1 : 0) + (stats.xp !== null ? 1 : 0);
+  return n === 3 ? "grid-cols-3" : n === 2 ? "grid-cols-2" : "grid-cols-1";
+}
+
+function StatCell({
+  icon,
+  value,
+  unit,
+  accent = false,
+}: {
+  icon: IconName;
+  value: string;
+  unit: string;
+  /** XP는 보상이라 라임으로 강조한다(시안 STATE 01~03) */
+  accent?: boolean;
+}) {
   return (
     <div className="flex flex-col items-center gap-0.5 px-1">
       <Icon name={icon} size={18} className="text-accent" />
-      <span className="flex items-baseline gap-1">
-        <strong className="text-[20px] font-black tabular-nums">{value}</strong>
-        <span className="text-[10.5px] font-extrabold">{unit}</span>
-      </span>
+      <strong className={`text-[20px] font-black tabular-nums ${accent ? "text-accent" : ""}`}>{value}</strong>
+      <span className="text-[10.5px] font-extrabold text-muted">{unit}</span>
     </div>
   );
 }

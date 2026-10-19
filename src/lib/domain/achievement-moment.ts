@@ -59,7 +59,36 @@ export function isChallengeProofPending(input: {
   photoDone: boolean;
   gains: readonly { delta: number }[];
 }): boolean {
-  return input.photoRequired && !input.photoDone && input.gains.some((g) => g.delta > 0);
+  return challengeProofState(input) === "pending";
+}
+
+/**
+ * 완료 화면의 챌린지 인증 상태 (이슈 #16 P0-B, 2026-10-19).
+ *
+ * | 상태 | 뜻 | 화면 |
+ * |---|---|---|
+ * | `none` | 챌린지 기여를 계산하지 않았다(미참여·목표 없음) | 챌린지 문구 없음 |
+ * | `no_gain` | 계산했지만 이번 운동이 보탠 몫이 0 | 반영됐다고 말하지 않고 사유 |
+ * | `pending` | 사진 필수인데 사진이 아직 없다 | **예정형** "사진을 올리면 … 반영" + 사진 인증 CTA |
+ * | `confirmed` | 반영 조건을 채웠다 | **확정형** "반영됐어요" |
+ *
+ * ⚠️ `confirmed`의 근거: 서버 집계 `get_challenge_period_sessions`는 사진 필수 챌린지에서
+ *    `workout_images` 행이 **있는** 세션만 센다(`docs/db-current-schema.sql`). `photoDone`은
+ *    업로드와 인증 확정이 **둘 다 성공한 뒤에만** 참이 된다(`VerificationPhoto.onUploaded`,
+ *    `SessionPhotoManager.onPhotosChange`가 서버 목록을 다시 읽은 결과) — 업로드 시도만으로
+ *    확정형을 말하지 않는다.
+ */
+export type ChallengeProofState = "none" | "no_gain" | "pending" | "confirmed";
+
+export function challengeProofState(input: {
+  photoRequired: boolean;
+  photoDone: boolean;
+  gains: readonly { delta: number }[];
+}): ChallengeProofState {
+  if (input.gains.length === 0) return "none";
+  if (!input.gains.some((g) => g.delta > 0)) return "no_gain";
+  if (input.photoRequired && !input.photoDone) return "pending";
+  return "confirmed";
 }
 
 /** 인증 대기 중에는 피드로 보내지 않는다 — 사진을 올리면 다시 링크가 생긴다. */

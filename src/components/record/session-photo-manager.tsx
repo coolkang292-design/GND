@@ -222,7 +222,7 @@ export function SessionPhotoManager({
                 disabled={busy}
                 onClick={() => void handleDelete(p)}
                 aria-label={`${i + 1}번째 사진 삭제`}
-                className="absolute right-1 top-1 h-5 w-5 rounded-full bg-black/60 text-[11px] font-bold text-white disabled:opacity-50"
+                className="absolute right-1 top-1 h-5 w-5 rounded-full bg-black/60 text-[11px] font-bold text-white disabled:opacity-50 after:absolute after:content-[''] after:-inset-3"
               >
                 ✕
               </button>
@@ -236,7 +236,7 @@ export function SessionPhotoManager({
                     disabled={busy}
                     onClick={() => void handleMove(i, -1)}
                     aria-label={`${i + 1}번째 사진 앞으로 옮기기`}
-                    className="h-6 flex-1 rounded-card-sm border border-line bg-surface-2 text-[11px] font-bold disabled:opacity-50"
+                    className="relative h-6 flex-1 rounded-card-sm border border-line bg-surface-2 text-[11px] font-bold disabled:opacity-50 after:absolute after:content-[''] after:-inset-y-2.5 after:inset-x-0"
                   >
                     ◀
                   </button>
@@ -247,7 +247,7 @@ export function SessionPhotoManager({
                     disabled={busy}
                     onClick={() => void handleMove(i, 1)}
                     aria-label={`${i + 1}번째 사진 뒤로 옮기기`}
-                    className="h-6 flex-1 rounded-card-sm border border-line bg-surface-2 text-[11px] font-bold disabled:opacity-50"
+                    className="relative h-6 flex-1 rounded-card-sm border border-line bg-surface-2 text-[11px] font-bold disabled:opacity-50 after:absolute after:content-[''] after:-inset-y-2.5 after:inset-x-0"
                   >
                     ▶
                   </button>
@@ -276,7 +276,7 @@ export function SessionPhotoManager({
               type="button"
               disabled={busy}
               onClick={() => albumRef.current?.click()}
-              className="mt-1 h-6 w-full rounded-card-sm border border-line bg-surface text-[11px] font-bold text-accent disabled:opacity-50"
+              className="relative mt-1 h-6 w-full rounded-card-sm border border-line bg-surface text-[11px] font-bold text-accent disabled:opacity-50 after:absolute after:content-[''] after:-inset-y-2.5 after:inset-x-0"
             >
               🖼 앨범
             </button>
