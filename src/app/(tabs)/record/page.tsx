@@ -193,7 +193,6 @@ import { Icon } from "@/components/ui/icon";
 import { CompletionHeroCard } from "@/components/record/completion-hero-card";
 import {
   achievementMomentLine,
-  challengeProofState,
   completedWorkoutFeedPath,
   feedPathAfterProof,
 } from "@/lib/domain/achievement-moment";
@@ -1432,7 +1431,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
           .map((entry) => entry.value);
         setActiveChallengeContexts(contexts);
         // Keep the picker/category warnings aware of every joined active challenge.
-        setChallengeGoals(loaded.some((entry) => entry.status === "rejected") ? null : contexts.flatMap((c) => c.goals));
+        setChallengeGoals(loaded.some((entry) => entry.status === "rejected") || contexts.length === 0 ? null : contexts.flatMap((c) => c.goals));
         // Legacy calendar indicator: true if any active challenge needs photo proof.
         setChallengePhotoRequired(contexts.some((c) => c.photoRequired));
       } catch {
