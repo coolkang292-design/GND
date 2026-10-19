@@ -66,4 +66,51 @@ describe("CompletionHeroCard", () => {
     );
     expect(screen.queryByText(/일째/)).toBeNull();
   });
+
+  /**
+   * 이슈 #16 P0-A (2026-10-19 사용자 결정) — 큰 숫자 세 칸 = 운동 시간 · 운동한 날 · XP.
+   * 볼륨·세트는 접힘 영역(기록 상세)으로 내려간다.
+   */
+  it("세 칸은 운동 시간·운동한 날·XP다", () => {
+    render(
+      <CompletionHeroCard
+        hero={hero}
+        statsLine="45분 · 운동한 날 24일째 · +120 XP"
+        stats={{ minutes: 45, workoutDays: 24, xp: 120 }}
+        recordNote={null}
+      />,
+    );
+    const cells = screen.getByTestId("hero-stats");
+    expect(cells.textContent).toContain("45");
+    expect(cells.textContent).toContain("24");
+    expect(cells.textContent).toContain("+120");
+    expect(cells.textContent).not.toMatch(/KG|SETS/);
+  });
+
+  it("모르는 값은 칸을 빼고 0을 지어내지 않는다", () => {
+    render(
+      <CompletionHeroCard
+        hero={{ ...hero, progressLine: null }}
+        statsLine="45분"
+        stats={{ minutes: 45, workoutDays: null, xp: null }}
+        recordNote={null}
+      />,
+    );
+    const cells = screen.getByTestId("hero-stats");
+    expect(cells.children).toHaveLength(1);
+    expect(cells.textContent).not.toContain("XP");
+  });
+
+  it("운동한 날 칸이 있으면 누적일 문장을 또 쓰지 않는다 — 같은 숫자 두 번", () => {
+    render(
+      <CompletionHeroCard
+        hero={hero}
+        statsLine="x"
+        stats={{ minutes: 45, workoutDays: 21, xp: 120 }}
+        recordNote={null}
+      />,
+    );
+    expect(screen.queryByText(hero.progressLine)).toBeNull();
+  });
 });
+

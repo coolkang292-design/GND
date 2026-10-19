@@ -227,3 +227,78 @@ describe("VerificationPhoto — 앨범에서 고르기", () => {
     );
   });
 });
+
+/**
+ * 이슈 #16 P0-B (2026-10-19) — 인증 대기면 사진 인증이 단 하나의 강한 CTA,
+ * 반복 설명은 접고, 실패하면 사진을 잃지 않고 다시 시도한다.
+ */
+describe("VerificationPhoto — 인증 상태와 실패 복구", () => {
+  function setupMode(emphasis?: "required" | "optional") {
+    const onToast = vi.fn();
+    const onUploaded = vi.fn();
+    const utils = render(
+      <VerificationPhoto
+        userId="user-1"
+        sessionId="session-1"
+        durationMinutes={65}
+        completedAtMs={Date.parse("2026-07-26T12:00:00+09:00")}
+        onToast={onToast}
+        onUploaded={onUploaded}
+        emphasis={emphasis}
+      />,
+    );
+    const cameraInput = utils.container.querySelector("input[capture]") as HTMLInputElement;
+    return { ...utils, onToast, onUploaded, cameraInput };
+  }
+
+  it("인증 대기(required)면 '사진 인증하기'가 주 버튼, 앨범은 보조", () => {
+    const { getByRole } = setupMode("required");
+    expect(getByRole("button", { name: /사진 인증하기/ }).className).toContain("bg-accent");
+    expect(getByRole("button", { name: /앨범에서 선택/ }).className).not.toContain("bg-accent");
+  });
+
+  it("선택(optional)이면 강한 버튼을 쓰지 않는다 — 다른 CTA와 겨루지 않는다", () => {
+    const { getByRole } = setupMode("optional");
+    expect(getByRole("button", { name: /지금 촬영/ }).className).not.toContain("bg-accent");
+  });
+
+  it("사진이 없을 때 빈 미리보기 칸을 그리지 않는다", () => {
+    const { queryByText } = setupMode();
+    expect(queryByText("사진을 올리면 여기에 표시돼요")).toBeNull();
+  });
+
+  it("등급·압축·달력 스탬프 설명은 '도움말' 안에 접혀 있다", () => {
+    const { container, getByText } = setupMode();
+    const details = container.querySelector("details");
+    expect(details).toBeTruthy();
+    expect(details!.open).toBe(false);
+    expect(getByText("도움말")).toBeTruthy();
+    expect(details!.textContent).toContain("달력");
+  });
+
+  it("업로드가 실패하면 그 자리에 '다시 시도'가 생기고, 같은 사진으로 다시 올린다", async () => {
+    mocks.uploadWorkoutImage.mockRejectedValueOnce(new Error("network"));
+    const { cameraInput, findByRole, onUploaded, queryByText } = setupMode("required");
+    pickPhoto(cameraInput);
+
+    const retry = await findByRole("button", { name: /다시 시도/ });
+    expect(queryByText(/인증 완료/)).toBeNull();
+    expect(onUploaded).not.toHaveBeenCalled();
+
+    fireEvent.click(retry);
+    await waitFor(() => expect(onUploaded).toHaveBeenCalled());
+    expect(mocks.uploadWorkoutImage).toHaveBeenCalledTimes(2);
+    expect(mocks.compressImage).toHaveBeenCalledTimes(1);
+  });
+
+  it("저장은 됐는데 인증 확정만 실패하면, 다시 시도는 확정만 다시 한다 — 사진이 두 장 되지 않는다", async () => {
+    mocks.finalizeWorkoutVerification.mockRejectedValueOnce(new Error("rpc"));
+    const { cameraInput, findByRole, onUploaded } = setupMode("required");
+    pickPhoto(cameraInput);
+
+    fireEvent.click(await findByRole("button", { name: /다시 시도/ }));
+    await waitFor(() => expect(onUploaded).toHaveBeenCalled());
+    expect(mocks.uploadWorkoutImage).toHaveBeenCalledTimes(1);
+    expect(mocks.finalizeWorkoutVerification).toHaveBeenCalledTimes(2);
+  });
+});

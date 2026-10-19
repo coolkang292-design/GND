@@ -102,7 +102,7 @@ export function CaptionPicker({
         <button
           type="button"
           onClick={() => setPicking(true)}
-          className="inline-flex min-h-[32px] items-center gap-1 self-start text-[12px] font-bold text-accent"
+          className="inline-flex min-h-11 items-center gap-1 self-start text-[12px] font-bold text-accent"
         >
           {/* 이모지 ✍️ → SVG (2026-10-05 기획안 17-A) */}
           <Icon name="comment" size={14} />
@@ -134,7 +134,7 @@ export function CaptionPicker({
               onClick={() => void save(toggleChip(current, chip))}
               disabled={saving}
               aria-pressed={on}
-              className={`min-h-[38px] flex-none rounded-full border px-3 text-[12.5px] font-bold whitespace-nowrap transition-colors disabled:opacity-60 ${
+              className={`min-h-11 flex-none rounded-full border px-3 text-[12.5px] font-bold whitespace-nowrap transition-colors disabled:opacity-60 ${
                 on
                   ? "border-accent bg-accent-weak text-accent"
                   : "border-line bg-surface-2 text-muted"
@@ -149,7 +149,7 @@ export function CaptionPicker({
           onClick={() => setWriting((open) => !open)}
           disabled={saving}
           aria-expanded={writing}
-          className="min-h-[38px] flex-none rounded-full border border-line bg-surface-2 px-3 text-[12.5px] font-bold whitespace-nowrap text-muted disabled:opacity-60"
+          className="min-h-11 flex-none rounded-full border border-line bg-surface-2 px-3 text-[12.5px] font-bold whitespace-nowrap text-muted disabled:opacity-60"
         >
           직접 쓰기
         </button>
@@ -186,7 +186,7 @@ export function CaptionPicker({
             type="button"
             onClick={() => void save(null)}
             disabled={saving}
-            className="text-[11.5px] font-bold text-faint underline disabled:opacity-60"
+            className="inline-flex min-h-11 items-center text-[11.5px] font-bold text-faint underline disabled:opacity-60"
           >
             한마디 지우기
           </button>
@@ -195,7 +195,7 @@ export function CaptionPicker({
           <button
             type="button"
             onClick={() => setPicking(false)}
-            className="text-[11.5px] font-bold text-faint"
+            className="inline-flex min-h-11 items-center text-[11.5px] font-bold text-faint"
           >
             접기 ▲
           </button>

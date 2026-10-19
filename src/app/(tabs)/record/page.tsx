@@ -12,7 +12,6 @@ import { useRouter } from "next/navigation";
 import { AFTER_WORKOUT_PATH } from "@/lib/domain/landing";
 import { ProtectRecordsCard } from "@/components/record/protect-records-card";
 import { useAuth } from "@/components/auth-provider";
-import { UiIcon } from "@/components/ui-icon";
 import { CalendarView } from "@/components/record/calendar-view";
 import { CoachCard } from "@/components/record/coach-card";
 import { ExerciseCard } from "@/components/record/exercise-card";
@@ -191,10 +190,12 @@ import { Icon } from "@/components/ui/icon";
 import { CompletionHeroCard } from "@/components/record/completion-hero-card";
 import {
   achievementMomentLine,
+  challengeProofState,
   completedWorkoutFeedPath,
   feedPathAfterProof,
-  isChallengeProofPending,
 } from "@/lib/domain/achievement-moment";
+import { ChallengeProofCard } from "@/components/record/challenge-proof-card";
+import { CompletionDetails } from "@/components/record/completion-details";
 import { pickNextCompletionHero } from "@/lib/completion-hero-pick";
 import { captionForEffort } from "@/lib/domain/session-caption";
 import type { EffortLevel } from "@/lib/domain/workout-analysis";
@@ -672,8 +673,6 @@ function WorkoutScreen({ userId }: { userId: string }) {
    * 하는 용도다(낙관적 반영·롤백의 되돌릴 자리이기도 하다).
    */
   const [resultCaption, setResultCaption] = useState<string | null>(null);
-  /** AI 코치 칸이 사라졌나 — 그러면 한마디 칸을 따로 보여 준다 (2026-09-29) */
-  const [coachHidden, setCoachHidden] = useState(false);
 
   /**
    * 강도 한 번으로 크루 피드 한마디까지 (2026-09-29 사용자 결정).
@@ -3138,7 +3137,6 @@ function WorkoutScreen({ userId }: { userId: string }) {
       }
       // 새 결과 화면이니 지난 회차의 한마디 선택을 지운다 (2026-08-30)
       setResultCaption(null);
-      setCoachHidden(false);
       setResult({
         sessionId,
         feedPath: completedWorkoutFeedPath(sessionId, s?.visibility),
@@ -3670,12 +3668,25 @@ function WorkoutScreen({ userId }: { userId: string }) {
       사진 필수 챌린지에 보탤 몫이 있는데 사진이 없으면 피드 버튼을 빼고, 사진을 올리면
       (`resultPhotoDone`) 그 자리에서 다시 생긴다. 비공개는 원래부터 `feedPath`가 null이다.
     */
-    const proofPending = isChallengeProofPending({
+    const proofState = challengeProofState({
       photoRequired: challengePhotoRequired,
       photoDone: resultPhotoDone,
       gains: result.challengeGains,
     });
+    const proofPending = proofState === "pending";
     const feedPath = feedPathAfterProof(result.feedPath, proofPending);
+    // ⚠️ 방금 끝낸 운동을 **합쳐서** 센다. `sessionMinutes`는 완료 전에 읽은
+    //    값이라 오늘 첫 운동이면 오늘이 빠져 있다. 같은 날 두 번째면 하루로 합쳐진다
+    const workoutDays = sessionMinutes
+      ? workoutDayKeys(
+          [...sessionMinutes.map((r) => r.completedAt), new Date(result.completedAtMs)],
+          resolveTimeZone(),
+        ).length
+      : null;
+    // 이번 운동으로 받은 XP — 이벤트가 없으면(0 XP·멱등 재생) 모르는 값으로 두고 칸을 뺀다
+    const xpAwarded =
+      xpEvents.find((e): e is Extract<XpEvent, { type: "xp" }> => e.type === "xp")?.amount ?? null;
+    const rewardSummary = xpEvents.length > 0 ? summarizeXpEvents(xpEvents).join(" · ") : null;
     return (
       <div className="flex flex-col gap-3">
         <header className="pt-1 pb-0.5">
@@ -3683,27 +3694,25 @@ function WorkoutScreen({ userId }: { userId: string }) {
             운동 기록
           </h1>
         </header>
+        {/*
+          운동 완료 화면 구조 (이슈 #16, 2026-10-19 사용자 결정 — 시안
+          `docs/ux/workout-complete-ux-reference-20261019.svg`). 3초 안에 ① 해낸 일 ② 인증이
+          필요한지 ③ 다음 행동이 보이게:
+            완료 카드(축하 + 운동 시간·운동한 날·XP) → 챌린지 반영 상태 → 인증 사진
+            → 크루 피드 한마디 → [접힘] 분석·보상·기록 상세 → 이동 버튼
+          ⚠️ 옛 순서(2026-09-29: 완료 카드 → 사진 → 챌린지 기여 → AI 코치)에서 챌린지 상태를 사진
+             **위**로 올렸다 — "인증 대기"를 먼저 말해야 바로 아래 사진 버튼이 왜 있는지 읽힌다.
+        */}
         <CompletionHeroCard
-          hero={completionHero({
-            // ⚠️ 방금 끝낸 운동을 **합쳐서** 센다. `sessionMinutes`는 완료 전에 읽은
-            //    값이라 오늘 첫 운동이면 오늘이 빠져 있다. 같은 날 두 번째면 하루로 합쳐진다
-            workoutDays: sessionMinutes
-              ? workoutDayKeys(
-                  [
-                    ...sessionMinutes.map((r) => r.completedAt),
-                    new Date(result.completedAtMs),
-                  ],
-                  resolveTimeZone(),
-                ).length
-              : null,
-            imageIndex: result.heroImageIndex,
-          })}
-          statsLine={`${result.durationMinutes}분 · 볼륨 ${result.summary.weightVolumeKg.toLocaleString()}kg · 완료 세트 ${result.summary.completedSetCount}개`}
-          stats={{
-            minutes: result.durationMinutes,
-            volumeKg: result.summary.weightVolumeKg,
-            sets: result.summary.completedSetCount,
-          }}
+          hero={completionHero({ workoutDays, imageIndex: result.heroImageIndex })}
+          statsLine={[
+            `${result.durationMinutes}분`,
+            workoutDays !== null ? `운동한 날 ${workoutDays}일째` : null,
+            xpAwarded !== null ? `+${xpAwarded} XP` : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+          stats={{ minutes: result.durationMinutes, workoutDays, xp: xpAwarded }}
           recordNote={result.recordNote}
           achievementLine={achievementMomentLine({
             previousCompletedAts: sessionMinutes?.map((row) => row.completedAt) ?? null,
@@ -3712,36 +3721,23 @@ function WorkoutScreen({ userId }: { userId: string }) {
           })}
         />
         {/*
-          보상 요약 (2026-10-19). 완료 직후 보상 모달을 자동으로 띄우지 않는다 —
-          대신 이 한 줄이 **받은 보상 전부**(XP·포인트·레벨업·진화·배지)를 말한다.
-          ⚠️ XP만 보여주면 레벨업·배지가 버튼 안쪽에 숨는다. `summarizeXpEvents`가
-             모달과 같은 `xpEvents`에서 만든다.
+          챌린지 반영 상태 (이슈 #16 P0-B). 예정형(인증 대기)과 확정형(반영됐어요)을 문장으로 가른다.
+          판정은 `challengeProofState` — 확정의 근거는 서버 집계가 사진 있는 세션만 센다는 것.
         */}
-        {xpEvents.length > 0 && (
-          <button
-            type="button"
-            onClick={() => setXpDetailsOpen(true)}
-            className="flex min-h-12 items-center justify-between gap-2 rounded-card border border-line bg-surface px-4 py-3 text-left"
-          >
-            <span className="min-w-0">
-              <span className="block text-[11px] font-bold text-faint">오늘 받은 보상</span>
-              <span className="block text-sm font-extrabold text-accent">
-                {summarizeXpEvents(xpEvents).join(" · ")}
-              </span>
-            </span>
-            <span className="shrink-0 text-xs font-bold text-muted">상세 보기 ›</span>
-          </button>
+        {proofState !== "none" && (
+          <ChallengeProofCard
+            state={proofState}
+            photoRequired={challengePhotoRequired}
+            gains={result.challengeGains}
+          />
         )}
-        {/* ⚠️ 완료 카드 **바로 아래**다 (2026-09-29 사용자 지시 — "사진 먼저 찍고
-            입력·분석을 받는 게 좋다"). 순서: 완료 카드 → 사진 → 챌린지 기여 → AI 코치. */}
         {/*
           인증사진 (§11 → 0103 다중 사진).
 
-          ⚠️ **사진이 0장일 때는 예전 화면 그대로다.** `VerificationPhoto`의 큰
-             미리보기와 두 버튼은 "아직 아무것도 안 올린 사람"에게 가장 좋은
-             화면이고, 그 흐름을 바꾸지 않기로 했다 (계획 §8).
-             한 장이라도 있으면 — 운동 중에 찍었든 여기서 올렸든 — 썸네일 목록으로
-             바뀌어 **추가·삭제·순서**를 할 수 있다 (계획 §9).
+          ⚠️ 사진이 0장이면 `VerificationPhoto`(촬영·앨범), 한 장이라도 있으면 — 운동 중에
+             찍었든 여기서 올렸든 — 썸네일 목록으로 바뀌어 **추가·삭제·순서**를 할 수 있다 (계획 §9).
+          ⚠️ 인증 대기면 `emphasis="required"` — 사진 인증이 화면의 단 하나의 강한 CTA다(이슈 #16 P1).
+          ⚠️ 사진을 올려도 화면을 떠나지 않는다(아래 이동 버튼 주석).
         */}
         {resultPhotoCount > 0 ? (
           <SessionPhotoManager
@@ -3760,6 +3756,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
             durationMinutes={result.durationMinutes}
             completedAtMs={result.completedAtMs}
             onToast={showToast}
+            emphasis={proofPending ? "required" : "optional"}
             onUploaded={() => {
               setResultPhotoDone(true);
               // 0장 → 1장이 되면 관리 화면으로 넘어간다
@@ -3767,131 +3764,21 @@ function WorkoutScreen({ userId }: { userId: string }) {
             }}
           />
         )}
-        <p className="text-center text-xs text-muted">
-          &lsquo;달력&rsquo; 탭에서 오늘 스탬프를 확인할 수 있어요. 카메라
-          인증은 🔥, 업로드는 ●로 찍혀요.
-        </p>
-        {/*
-          이번 운동이 챌린지 목표에 얼마나 보탰는지 (2026-08-04, 사용자 요청).
-          사진 필수 챌린지인데 아직 사진이 없으면 "쌓여요"(미래형)로 말하고,
-          바로 아래 촬영 버튼으로 이어 준다 — 경고보다 이쪽이 동기가 된다.
-        */}
-        {result.challengeGains.length > 0 &&
-          (() => {
-            const gained = result.challengeGains.filter((g) => g.delta > 0);
-            // 하나도 못 보탰으면 **그 사실과 이유**를 말한다. 카드를 감추면
-            // "왜 안 오르지?"에 침묵하게 된다 (2026-08-04 사용자 지적).
-            if (gained.length === 0) {
-              return (
-                <section className="rounded-card border border-warn/40 bg-surface p-4">
-                  <p className="flex items-center gap-1.5 text-xs font-extrabold text-warn">
-                    {/* 옛 표기는 `🎯`였다 (2026-08-07 2차 시안으로 교체) */}
-                    <UiIcon name="goal" size={15} />
-                    이번 운동은 챌린지 성과에 안 잡혔어요
-                  </p>
-                  <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">
-                    운동 기록과 XP는 그대로 쌓였어요. 다만 지금 내 챌린지 목표와
-                    맞는 게 없어요.
-                  </p>
-                  <ul className="mt-2 flex flex-col gap-1">
-                    {result.challengeGains.map((gain) => (
-                      <li key={gain.type} className="text-[12.5px] font-bold">
-                        · {gain.label}{" "}
-                        <span className="font-normal text-muted">
-                          (목표 {gain.target}
-                          {gain.unit})
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              );
-            }
-            return (
-              <section className="rounded-card border border-accent/50 bg-surface p-4">
-                <p className="flex items-center gap-1.5 text-xs font-extrabold text-accent">
-                  <UiIcon name="goal" size={15} />
-                  챌린지 목표에{" "}
-                  {challengePhotoRequired && !resultPhotoDone
-                    ? "쌓일 몫"
-                    : "쌓였어요"}
-                </p>
-                <ul className="mt-2 flex flex-col gap-1.5">
-                  {gained.map((gain) => (
-                    <li
-                      key={gain.type}
-                      className="flex items-baseline justify-between gap-2 text-sm"
-                    >
-                      <span className="font-bold">{gain.label}</span>
-                      <span className="font-mono font-extrabold text-accent">
-                        +{gain.delta}
-                        {gain.unit}
-                        <span className="ml-1 font-sans text-[11px] font-bold text-muted">
-                          / 목표 {gain.target}
-                          {gain.unit}
-                        </span>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-                {challengePhotoRequired && !resultPhotoDone && (
-                  <p className="mt-2.5 flex items-center gap-1.5 text-[11.5px] font-bold text-warn">
-                    <UiIcon name="camera" size={14} />
-                    위에서 인증 사진을 올려야 챌린지 성과에 반영돼요.
-                  </p>
-                )}
-              </section>
-            );
-          })()}
 
         {/*
-          AI 코치 (0112, 설계 2026-09-28).
+          크루 피드 한마디 (2026-08-30 원탭 칩) — **늘 보인다** (이슈 #16 P0-C).
 
-          ⚠️ 완료·XP·배지는 이미 끝났다. 이 칸은 그 **뒤에** 따로 분석을 부르고,
-             무엇에 실패해도 위아래 칸을 막지 않는다 — 실패하면 자기 칸만 바꾸고,
-             테이블이 없으면(0112 미적용) 칸 자체를 숨긴다.
-          ⚠️ 챌린지 기여 **아래**다. 챌린지 참가자에게 가장 급한 정보는 그쪽이다.
+          ⚠️ **자유 입력창을 첫 화면에 놓지 마라 (사용자 결정).** 방금 운동을 끝낸 사람은
+          땀나고 숨찬 상태다. 지친 사람이 지불할 수 있는 비용은 **탭 1회**다. 자유 입력은
+          `CaptionPicker` 안에 접혀 있다.
+          ⚠️ 옛 구조(2026-09-29)는 한마디를 리포트 칸 **안**에 두었다. 리포트를 기본 접힘으로 바꾸면서
+             한마디를 밖으로 뺐다 — 접으면 잃어버린다. 리포트에서 강도를 고르면 여전히 한마디를
+             채운다(`fillCaptionFromEffort`, 이미 고른 한마디는 덮지 않는다).
         */}
-        <CoachCard
-          userId={userId}
-          sessionId={result.sessionId}
-          onEffortChosen={(effort) => void fillCaptionFromEffort(result.sessionId, effort)}
-          onHidden={() => setCoachHidden(true)}
-          captionSlot={
-            <div>
-              <p className="flex items-center gap-1 text-[11px] font-bold text-faint">
-                <Icon name="users" size={13} /> 크루 피드 한마디
-              </p>
-              <p className="mt-0.5 text-[13.5px] font-extrabold">
-                {resultCaption ?? "아직 남긴 한마디가 없어요"}
-              </p>
-              <div className="mt-1.5">
-                <CaptionPicker
-                  sessionId={result.sessionId}
-                  caption={resultCaption}
-                  onSaved={setResultCaption}
-                  onToast={showToast}
-                  variant="card"
-                />
-              </div>
-            </div>
-          }
-        />
-
-        {/*
-          오늘 한마디 (2026-08-30) — 원탭 칩.
-
-          ⚠️ **자유 입력창을 첫 화면에 놓지 마라 (사용자 결정).** 여기는 방금
-          운동을 끝낸 사람이 보는 화면이다 — 땀나고 숨찬 상태다. 인스타는 캡션을
-          소파에서 쓰지만 여기는 아니다. 지친 사람이 지불할 수 있는 비용은
-          **탭 1회**다. 자유 입력은 `CaptionPicker` 안에 접혀 있다.
-
-          ⚠️ (2026-09-29) 평소에는 **AI 코치 칸 안**에 있다 — 강도 한 번이 분석과
-          한마디를 같이 정한다. 이 칸은 코치가 사라졌을 때(0112 미적용·오류·"다음에")만
-          보인다. 코치가 없다고 한마디를 남길 길까지 없어지면 안 된다.
-        */}
-        {coachHidden && (
         <section className="rounded-card border border-line bg-surface p-4 shadow-card">
+          <p className="mb-1.5 flex items-center gap-1 text-[11px] font-bold text-faint">
+            <Icon name="users" size={13} /> 크루 피드 한마디
+          </p>
           <CaptionPicker
             sessionId={result.sessionId}
             caption={resultCaption}
@@ -3900,7 +3787,38 @@ function WorkoutScreen({ userId }: { userId: string }) {
             variant="complete"
           />
         </section>
-        )}
+
+        {/*
+          내 운동 분석 · 보상 보기 — 기본 접힘 (이슈 #16 P0-C).
+          ⚠️ 접혀 있어도 받은 보상 한 줄은 보인다(`rewardSummary`). 상세는 기존 `XpResultModal`.
+          ⚠️ 볼륨·세트는 완료 카드의 큰 숫자 칸에서 여기로 왔다(칸은 운동 시간·운동한 날·XP).
+          ⚠️ GND 퍼포먼스 리포트(0112): 완료·XP·배지는 이미 끝났다. 이 칸은 그 **뒤에** 따로
+             분석을 부르고, 무엇에 실패해도 위아래 칸을 막지 않는다. 열었을 때 마운트된다.
+        */}
+        <CompletionDetails summary={rewardSummary}>
+          {xpEvents.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setXpDetailsOpen(true)}
+              className="flex min-h-11 items-center justify-between gap-2 rounded-card-sm border border-line bg-surface-2 px-3 text-left"
+            >
+              <span className="text-[13px] font-bold">받은 보상 자세히 보기</span>
+              <Icon name="chevron" size={16} className="shrink-0 text-muted" />
+            </button>
+          )}
+          <div className="rounded-card-sm border border-line bg-surface-2 px-3 py-2.5">
+            <p className="text-[11px] font-bold text-faint">기록 상세</p>
+            <p className="mt-0.5 text-sm font-extrabold">
+              볼륨 {Math.round(result.summary.weightVolumeKg).toLocaleString()}kg · 완료 세트{" "}
+              {result.summary.completedSetCount}개
+            </p>
+          </div>
+          <CoachCard
+            userId={userId}
+            sessionId={result.sessionId}
+            onEffortChosen={(effort) => void fillCaptionFromEffort(result.sessionId, effort)}
+          />
+        </CompletionDetails>
 
         {/*
           기록 지키기 (2026-10-11, Issue #2 P0-2). "바로 시작"으로 들어온 익명 사용자에게만
@@ -3970,7 +3888,12 @@ function WorkoutScreen({ userId }: { userId: string }) {
             setResult(null);
             router.push(destination);
           }}
-          className="flex h-14 items-center justify-center gap-1.5 rounded-[16px] bg-accent text-[15px] font-extrabold text-accent-ink active:bg-accent-press"
+          className={`flex h-14 items-center justify-center gap-1.5 rounded-[16px] text-[15px] font-extrabold ${
+            // 인증 대기면 사진 인증이 단 하나의 강한 CTA다(이슈 #16 P1) — 이동 버튼은 보조 모양
+            proofPending
+              ? "border border-line bg-surface"
+              : "bg-accent text-accent-ink active:bg-accent-press"
+          }`}
         >
           {feedPath ? "내 운동 피드에서 보기" : "크루 보러 가기"}
           <Icon name="chevron" size={17} strokeWidth={2.4} />
