@@ -154,6 +154,14 @@ MANUAL_SEED_IMAGES = {
     "ae81bdea-781c-4ed2-836f-9d17181ad16f": ("프론트 스쿼트", "gnd-1011-2026-10-11"),
     "4dfc7f15-f41f-4e2a-a60d-b7f99f4be4fc": ("스티프 레그 데드리프트", "gnd-1011-2026-10-11"),
     "bfe7288b-4287-4720-afd8-30ac5da3d0af": ("원레그 프레스", "gnd-1011-2026-10-11"),
+    # 2026-10-14: 320px WebP, QA PASS, app canvas matte #090A0C. Excluded 3 ambiguous poses.
+    "b84bb13d-7323-42d4-b97e-f220d261432c": ("월 슬라이드", "gnd-imagegen-2026-10-14-qa-pass"),
+    "cb431896-1837-45d7-afed-e31cee522974": ("흉추 익스텐션", "gnd-imagegen-2026-10-14-qa-pass"),
+    "ac897fe5-30df-466b-a190-e0a660a545c3": ("도어웨이 가슴 스트레칭", "gnd-imagegen-2026-10-14-qa-pass"),
+    "69fe67ed-dbb6-4b5a-8d56-a83ab1d9a726": ("하이퍼 익스텐션", "gnd-imagegen-2026-10-14-qa-pass"),
+    "6ba4df00-55a1-4c62-a5a5-a13e7bb4a0de": ("업라이트 로우", "gnd-imagegen-2026-10-14-qa-pass"),
+    "8ae05401-d085-49ab-a5fd-6c594f020a6d": ("푸시 프레스", "gnd-imagegen-2026-10-14-qa-pass"),
+    "c4878b8f-9736-4931-a1ec-56c985f6653c": ("터키쉬 겟업", "gnd-imagegen-2026-10-14-qa-pass"),
 }
 
 
