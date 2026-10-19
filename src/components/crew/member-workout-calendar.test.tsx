@@ -71,3 +71,28 @@ describe("크루 프로필 공개 운동 달력", () => {
     expect(html).toContain('aria-label="이전 달"');
   });
 });
+
+describe("본인 프로필 운동 달력", () => {
+  it("기존 WORKOUT 표시와 운동일을 유지하며 비공개 기록 포함을 명확히 알린다", () => {
+    const html = renderToStaticMarkup(
+      <CrewCalendarMonthView
+        view={{ year: 2026, month: 10 }}
+        data={SAMPLE}
+        selected={null}
+        onSelect={() => {}}
+        onPrevious={() => {}}
+        onNext={() => {}}
+        onToday={() => {}}
+        nextDisabled={true}
+        includePrivate
+      />,
+    );
+    expect(html).toContain('aria-label="내 운동 완료 캘린더"');
+    expect(html).toContain("운동 완료 캘린더");
+    expect(html).toContain("WORKOUT");
+    expect(html).toContain("운동한 날");
+    expect(html).toContain("내 운동 완료일 (비공개 포함)");
+    expect(html).toContain("본인에게는 공개·비공개 완료 운동이 모두 표시됩니다.");
+    expect(html).not.toContain("공개한 완료 운동만 표시됩니다.");
+  });
+});

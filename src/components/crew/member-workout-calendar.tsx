@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { WorkoutCompleteStamp } from "@/components/record/workout-complete-stamp";
 import {
   getPublicCrewCalendarMonth,
+  getMyWorkoutCalendarMonth,
   type PublicCrewCalendarMonth,
 } from "@/lib/crew-calendar";
 import type { DayStamp } from "@/lib/domain/calendar";
@@ -43,6 +44,7 @@ export function CrewCalendarMonthView({
   onNext,
   onToday,
   nextDisabled,
+  includePrivate = false,
 }: {
   view: Month;
   data: PublicCrewCalendarMonth;
@@ -52,6 +54,7 @@ export function CrewCalendarMonthView({
   onNext: () => void;
   onToday: () => void;
   nextDisabled: boolean;
+  includePrivate?: boolean;
 }) {
   const firstWeekday = new Date(Date.UTC(view.year, view.month - 1, 1)).getUTCDay();
   const days = new Date(Date.UTC(view.year, view.month, 0)).getUTCDate();
@@ -60,7 +63,7 @@ export function CrewCalendarMonthView({
   const selectedStamp: DayStamp | undefined = selected ? stamps.get(selected) : undefined;
 
   return (
-    <section aria-label="크루 운동 완료 캘린더" className="mt-4 border-t border-line pt-3.5">
+    <section aria-label={includePrivate ? "내 운동 완료 캘린더" : "크루 운동 완료 캘린더"} className="mt-4 border-t border-line pt-3.5">
       <h4 className="text-sm font-extrabold">운동 완료 캘린더</h4>
       <div className="mt-2.5 rounded-card border border-line bg-surface p-3">
         <div className="mb-3 flex items-center justify-between gap-2">
@@ -79,11 +82,11 @@ export function CrewCalendarMonthView({
         <div className="mb-3 grid grid-cols-2 gap-2 text-center">
           <div className="rounded-card-sm bg-surface-2 px-2 py-2.5">
             <p className="text-lg font-extrabold">{data.workoutDays}일</p>
-            <p className="text-[11px] text-muted">공개 운동한 날</p>
+            <p className="text-[11px] text-muted">{includePrivate ? "운동한 날" : "공개 운동한 날"}</p>
           </div>
           <div className="rounded-card-sm bg-surface-2 px-2 py-2.5">
             <p className="text-lg font-extrabold">{durationText(data.totalDurationSeconds)}</p>
-            <p className="text-[11px] text-muted">공개 운동시간</p>
+            <p className="text-[11px] text-muted">{includePrivate ? "완료 운동시간" : "공개 운동시간"}</p>
           </div>
         </div>
 
@@ -140,23 +143,25 @@ export function CrewCalendarMonthView({
         )}
         {data.workoutDays === 0 && (
           <p className="mt-3 text-center text-[11.5px] text-muted">
-            이 달에 크루에게 공개된 완료 운동이 없어요
+            {includePrivate ? "이 달에 완료한 운동이 없어요" : "이 달에 크루에게 공개된 완료 운동이 없어요"}
           </p>
         )}
         <div className="mt-3 flex items-center gap-2 text-[11px] text-muted">
           <WorkoutCompleteStamp seed="crew-calendar-legend" className="h-6 w-6 flex-none" />
-          <span>크루에게 공개된 운동 완료일</span>
+          <span>{includePrivate ? "내 운동 완료일 (비공개 포함)" : "크루에게 공개된 운동 완료일"}</span>
         </div>
       </div>
       <p className="mt-2 text-[10.5px] leading-relaxed text-faint">
-        공개한 완료 운동만 표시됩니다. 누적 성과에는 비공개 운동이 포함될 수 있어요.
+        {includePrivate
+          ? "본인에게는 공개·비공개 완료 운동이 모두 표시됩니다."
+          : "공개한 완료 운동만 표시됩니다. 누적 성과에는 비공개 운동이 포함될 수 있어요."}
       </p>
     </section>
   );
 }
 
 /** 크루 프로필용 읽기 전용 달력. 계획 작성/수정 UI 및 데이터를 가져오지 않는다. */
-export function MemberWorkoutCalendar({ userId }: { userId: string }) {
+export function MemberWorkoutCalendar({ userId, includePrivate = false }: { userId: string; includePrivate?: boolean }) {
   const [view, setView] = useState<Month>(currentMonth);
   const [result, setResult] = useState<{
     key: string;
@@ -165,11 +170,11 @@ export function MemberWorkoutCalendar({ userId }: { userId: string }) {
   } | null>(null);
   const [selected, setSelected] = useState<{ key: string; day: string } | null>(null);
   const [retry, setRetry] = useState(0);
-  const key = `${userId}:${view.year}-${view.month}`;
+  const key = `${userId}:${view.year}-${view.month}:${includePrivate ? "self" : "crew"}`;
 
   useEffect(() => {
     let cancelled = false;
-    void getPublicCrewCalendarMonth(userId, view.year, view.month)
+    void (includePrivate ? getMyWorkoutCalendarMonth : getPublicCrewCalendarMonth)(userId, view.year, view.month)
       .then((data) => {
         if (!cancelled) setResult({ key, data });
       })
@@ -178,7 +183,7 @@ export function MemberWorkoutCalendar({ userId }: { userId: string }) {
         if (!cancelled) setResult({ key, error: true });
       });
     return () => { cancelled = true; };
-  }, [userId, view.year, view.month, key, retry]);
+  }, [userId, view.year, view.month, includePrivate, key, retry]);
 
   const visible = result?.key === key ? result : null;
   const now = currentMonth();
@@ -187,11 +192,11 @@ export function MemberWorkoutCalendar({ userId }: { userId: string }) {
 
   if (!visible?.data) {
     return (
-      <section aria-label="크루 운동 완료 캘린더" className="mt-4 border-t border-line pt-3.5">
+      <section aria-label={includePrivate ? "내 운동 완료 캘린더" : "크루 운동 완료 캘린더"} className="mt-4 border-t border-line pt-3.5">
         <h4 className="text-sm font-extrabold">운동 완료 캘린더</h4>
         {visible?.error ? (
           <div className="mt-3 text-[12px] text-muted">
-            공개 운동 기록을 불러오지 못했어요.
+            {includePrivate ? "운동 기록을 불러오지 못했어요." : "공개 운동 기록을 불러오지 못했어요."}
             <button type="button" className="ml-2 text-accent underline"
               onClick={() => setRetry((n) => n + 1)}>다시 시도</button>
           </div>
@@ -212,6 +217,7 @@ export function MemberWorkoutCalendar({ userId }: { userId: string }) {
       onNext={() => { if (!nextDisabled) setView((month) => shiftMonth(month, 1)); }}
       onToday={() => setView(currentMonth())}
       nextDisabled={nextDisabled}
+      includePrivate={includePrivate}
     />
   );
 }
