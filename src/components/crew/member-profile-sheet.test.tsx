@@ -154,7 +154,7 @@ describe("MemberProfileBody — 이력·누적 (0081)", () => {
     const html = renderToStaticMarkup(
       <MemberProfileBody profile={profile({ distanceMeters: 0 })} catalog={CATALOG} />,
     );
-    expect(html).not.toContain("거리");
+    expect(html).not.toContain(">거리</p>"); // 대표 배지의 "이동 거리"는 여전히 표시될 수 있다
   });
 
   it("가입·레벨업·배지를 최신순 이력으로 그린다", () => {
@@ -322,5 +322,47 @@ describe("MemberProfileBody — 소개·SNS", () => {
     );
     expect(html).toContain("@only");
     expect(html).not.toContain("📷");
+  });
+});
+
+describe("홈·크루 프로필 시트 — 성취 요약과 달력 동시 유지", () => {
+  it("대표 배지 6칸과 최근 성취 3건을 보여주고 전체 목록은 접어 둔다", () => {
+    const html = renderToStaticMarkup(
+      <MemberProfileBody
+        profile={profile({
+          joinedAt: new Date("2026-08-01T00:00:00+09:00"),
+          levelUps: [
+            { level: 17, at: new Date("2026-10-05T10:00:00+09:00") },
+            { level: 16, at: new Date("2026-09-25T10:00:00+09:00") },
+          ],
+        })}
+        catalog={CATALOG}
+      />,
+    );
+    const cards = html.split('id="member-featured-badges"')[1].split('id="member-recent-history"')[0];
+    expect(cards.match(/<li /g)).toHaveLength(6);
+    expect(cards).toContain("대표 배지");
+    expect(cards).toContain("기록 갱신");
+    const recent = html.split('id="member-recent-history"')[1].split("전체 이력 보기")[0];
+    expect(recent.match(/<li /g)).toHaveLength(3);
+    expect(html).toContain("<details");
+    expect(html).toContain("전체 배지 보기");
+    expect(html).toContain("전체 이력 보기");
+  });
+
+  it("운동 달력은 배지·최근 이력보다 앞에 보이며 접힘 영역으로 옮기지 않는다", () => {
+    const html = renderToStaticMarkup(
+      <MemberProfileBody
+        profile={profile()}
+        catalog={CATALOG}
+        calendarSlot={<section aria-label="운동 완료 캘린더">WORKOUT</section>}
+      />,
+    );
+    const calendar = html.indexOf('aria-label="운동 완료 캘린더"');
+    const badges = html.indexOf('id="member-featured-badges"');
+    const firstDetails = html.indexOf("<details");
+    expect(calendar).toBeGreaterThan(-1);
+    expect(calendar).toBeLessThan(badges);
+    expect(badges).toBeLessThan(firstDetails);
   });
 });
