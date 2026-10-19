@@ -51,11 +51,11 @@ describe("achievementMomentLine", () => {
 
 describe("completedWorkoutFeedPath", () => {
   it("deep-links only group-visible sessions", () => {
-    expect(completedWorkoutFeedPath("workout-id", "group")).toBe("/feed?session=workout-id");
+    expect(completedWorkoutFeedPath("workout-id", "group")).toBe("/feed?session=workout-id&from=complete");
     expect(completedWorkoutFeedPath("workout-id", "private")).toBeNull();
     expect(completedWorkoutFeedPath("workout-id", null)).toBeNull();
   });
   it("escapes the link parameter", () => {
-    expect(completedWorkoutFeedPath("a&b", "group")).toBe("/feed?session=a%26b");
+    expect(completedWorkoutFeedPath("a&b", "group")).toBe("/feed?session=a%26b&from=complete");
   });
 });

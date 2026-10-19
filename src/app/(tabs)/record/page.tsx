@@ -203,7 +203,7 @@ import {
 } from "@/lib/domain/streak";
 import { errorText } from "@/lib/domain/error-text";
 import { XpResultModal } from "@/components/record/xp-result-modal";
-import { buildXpEvents, type XpEvent } from "@/lib/domain/xp-events";
+import { buildXpEvents, summarizeXpEvents, type XpEvent } from "@/lib/domain/xp-events";
 import { shareOrCopyText, shareResultToast } from "@/lib/share";
 import {
   playRestCountdownBeep,
@@ -3695,17 +3695,25 @@ function WorkoutScreen({ userId }: { userId: string }) {
             timeZone: resolveTimeZone(),
           })}
         />
+        {/*
+          보상 요약 (2026-10-19). 완료 직후 보상 모달을 자동으로 띄우지 않는다 —
+          대신 이 한 줄이 **받은 보상 전부**(XP·포인트·레벨업·진화·배지)를 말한다.
+          ⚠️ XP만 보여주면 레벨업·배지가 버튼 안쪽에 숨는다. `summarizeXpEvents`가
+             모달과 같은 `xpEvents`에서 만든다.
+        */}
         {xpEvents.length > 0 && (
           <button
             type="button"
             onClick={() => setXpDetailsOpen(true)}
             className="flex min-h-12 items-center justify-between gap-2 rounded-card border border-line bg-surface px-4 py-3 text-left"
           >
-            <span className="text-sm font-extrabold">
-              오늘 받은 보상
-              {xpEvents[0]?.type === "xp" ? ` · +${xpEvents[0].amount} XP` : ""}
+            <span className="min-w-0">
+              <span className="block text-[11px] font-bold text-faint">오늘 받은 보상</span>
+              <span className="block text-sm font-extrabold text-accent">
+                {summarizeXpEvents(xpEvents).join(" · ")}
+              </span>
             </span>
-            <span className="text-xs font-bold text-accent">상세 보기 ›</span>
+            <span className="shrink-0 text-xs font-bold text-muted">상세 보기 ›</span>
           </button>
         )}
         {/* ⚠️ 완료 카드 **바로 아래**다 (2026-09-29 사용자 지시 — "사진 먼저 찍고
@@ -3896,7 +3904,18 @@ function WorkoutScreen({ userId }: { userId: string }) {
           운동 일지 다른 앱에 공유
         </button>
         {/*
-          운동을 마치면 **홈으로 보낸다** (2026-08-19 사장님 결정).
+          운동을 마친 뒤의 이동 (2026-10-19 사용자 결정으로 바뀌었다).
+
+          - **공개 운동**(`visibility='group'`, 사실상 전부): 주 버튼 = **내 운동 피드에서 보기**
+            (`/feed?session=<id>`, 방금 운동이 맨 위에 고정된다). 홈은 보조 버튼이다.
+            이유: 감정 UX 검수(2026-10-19) — 완료한 성취를 크루의 실제 반응(좋아요·댓글)으로
+            잇는 동선을 먼저 보여 준다.
+          - **비공개·판정 실패**: 예전처럼 주 버튼 = 크루 보러 가기(`/home`).
+            ⚠️ 피드는 `visibility='group'`만 보여주므로 비공개로 보내면 "찾을 수 없음"이 뜬다.
+
+          옛 결정(2026-08-19 사장님): 주 버튼이 홈이었다 — 운동 직후는 **찌르기가 열린
+          순간**이고 찌르기는 홈에만 있다(`friend-board-card.tsx`의 `iWorkedOut` 잠금).
+          그래서 홈 버튼을 없애지 않고 보조로 남겼다.
 
           ⚠️⚠️ **여기가 유일한 이동 시점이다. 사진 업로드를 트리거로 걸지 마라.**
           이 화면에는 사진 말고도 기록 갱신 · 챌린지 기여 · XP 결과가 함께 있다.

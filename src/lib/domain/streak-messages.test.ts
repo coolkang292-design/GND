@@ -68,7 +68,7 @@ describe("나머지 단계는 쉰 일수를 정확히 말한다", () => {
  * ⚠️ 문구는 사람이 손으로 고치는 곳이라 시간이 지나면 물러진다. 다음 사람이
  * 부드럽게 다듬다가 **잃을 양을 빼 버리는 것**을 막는 것이 이 describe의 목적이다.
  */
-describe("손실 회피 — 잃을 양을 숫자로 말한다", () => {
+describe("스트릭 경고 — 숫자와 남은 날을 사실대로 말한다", () => {
   const STAGES = ["d4", "d3", "d2", "d1"] as const;
 
   it("모든 단계가 잃을 일수(n)를 문구 안에 적는다", () => {
@@ -113,9 +113,33 @@ describe("손실 회피 — 잃을 양을 숫자로 말한다", () => {
     }
   });
 
-  it("d1만 전부 잃는다고 말한다 — 그때가 사실이다", () => {
+  it("d1만 마지막 날이라고 말한다 — 그때가 사실이다", () => {
     for (const make of STAGE_MESSAGES.d1 ?? []) {
-      expect(make(7)).toMatch(/0일|마지막|끝/);
+      expect(make(7)).toMatch(/마지막|끝/);
+    }
+  });
+
+  /**
+   * 2026-10-19 사용자 결정 — d2·d1에서 손실 회피를 걷어냈다(`streak-messages.ts` 표).
+   * "n일이 0일이 돼요"는 스트릭이 끝나면 해낸 운동까지 사라지는 것처럼 읽혔다.
+   */
+  it("d2·d1은 n일이 0일이 된다고 겁주지 않는다", () => {
+    for (const stage of ["d2", "d1"] as const) {
+      for (const make of STAGE_MESSAGES[stage] ?? []) {
+        expect(make(7)).not.toMatch(/0일/);
+      }
+    }
+  });
+
+  /**
+   * 이 문구는 홈 경고 배너와 아침 브리핑 **푸시 제목**(`🔥` 접두)에 그대로 들어간다.
+   * 길면 잠금 화면에서 잘린다. 기준은 개정 전 최장 문구(d3, 46자).
+   */
+  it("경고 문구는 46자를 넘지 않는다", () => {
+    for (const stage of STAGES) {
+      for (const make of STAGE_MESSAGES[stage] ?? []) {
+        expect([...make(7)].length).toBeLessThanOrEqual(46);
+      }
     }
   });
 });

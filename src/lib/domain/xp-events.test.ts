@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildXpEvents, type XpEvent } from "./xp-events";
+import { buildXpEvents, summarizeXpEvents, type XpEvent } from "./xp-events";
 import type { WorkoutXpResult } from "@/lib/workout";
 
 const awarded: WorkoutXpResult = {
@@ -120,5 +120,49 @@ describe("buildXpEvents — 포인트·배지 (0032)", () => {
       idempotentReplay: false, awarded: false, xpAwarded: 0, pointsAwarded: 0,
     });
     expect(events).toEqual([]);
+  });
+});
+
+/**
+ * 완료 화면의 보상 요약 한 줄 (2026-10-19, PR #15 보완).
+ *
+ * 완료 직후 모달을 자동으로 띄우지 않게 되면서, 버튼 한 줄이 **받은 보상 전부**를
+ * 말해야 한다. XP만 말하면 레벨업·배지를 받은 사람이 버튼을 안 누르는 한 모른다.
+ */
+describe("summarizeXpEvents", () => {
+  it("이벤트가 없으면 빈 배열 — 버튼을 그리지 않는다", () => {
+    expect(summarizeXpEvents([])).toEqual([]);
+  });
+
+  it("받은 보상을 전부 한 줄 조각으로 만든다", () => {
+    const events: XpEvent[] = [
+      { type: "xp", amount: 120, breakdown: [] },
+      { type: "point", amount: 1300, multiplier: 2, streakDays: 7 },
+      { type: "level_up", from: 4, to: 5 },
+      { type: "stage_up", from: 1, to: 2 },
+      { type: "reward", rewards: [{ key: "r1", label: "테마" }] },
+      {
+        type: "badge",
+        badges: [
+          { badgeKey: "a", name: "A", points: 10 },
+          { badgeKey: "b", name: "B", points: 10 },
+        ],
+      },
+    ];
+    expect(summarizeXpEvents(events)).toEqual([
+      "+120 XP",
+      "+1,300 P",
+      "Lv.5 달성",
+      "단계 진화",
+      "보상 해금",
+      "새 배지 2",
+    ]);
+  });
+
+  it("buildXpEvents가 만든 배열을 그대로 요약한다 — 멱등 재생은 빈 줄", () => {
+    expect(summarizeXpEvents(buildXpEvents({ ...awarded, idempotentReplay: true }))).toEqual([]);
+    expect(
+      summarizeXpEvents(buildXpEvents({ ...awarded, levelUp: true, previousLevel: 1, newLevel: 2 })),
+    ).toEqual(["+160 XP", "Lv.2 달성"]);
   });
 });

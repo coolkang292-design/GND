@@ -90,6 +90,16 @@ export default function FeedPage() {
     () => new URLSearchParams(window.location.search).get("session"),
     () => null,
   );
+  /**
+   * 운동 완료 화면에서 왔는가 (2026-10-19) — `&from=complete`.
+   * 고정 카드 제목이 "알림에서 열어 본 운동"이면 방금 운동을 끝내고 온 사람에게
+   * 틀린 말이 된다. 알림 딥링크(`domain/push.ts`)는 이 값을 붙이지 않는다.
+   */
+  const pinnedFromCompletion = useSyncExternalStore(
+    () => () => {},
+    () => new URLSearchParams(window.location.search).get("from") === "complete",
+    () => false,
+  );
 
   useEffect(() => {
     if (!configured || loading || !userId) return;
@@ -244,7 +254,15 @@ export default function FeedPage() {
       {pinnedId && (
         <section className="flex flex-col gap-2">
           <p className="flex items-center gap-2 text-xs font-extrabold text-accent">
-            <Icon name="bell" size={14} /> 알림에서 열어 본 운동
+            {pinnedFromCompletion ? (
+              <>
+                <Icon name="feed" size={14} /> 방금 끝낸 내 운동
+              </>
+            ) : (
+              <>
+                <Icon name="bell" size={14} /> 알림에서 열어 본 운동
+              </>
+            )}
           </p>
           {pinned === null ? (
             <p className="py-4 text-center text-sm text-muted">불러오는 중…</p>

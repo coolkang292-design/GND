@@ -31,10 +31,16 @@ export function achievementMomentLine(input: {
   return `이번 주 ${thisWeekDays}일째, 오늘도 해냈어요.`;
 }
 
-/** The feed only lists group-visible completed sessions; private sessions must not deep-link. */
+/**
+ * The feed only lists group-visible completed sessions; private sessions must not deep-link.
+ * `from=complete` tells the feed to title the pinned card "방금 끝낸 내 운동" instead of the
+ * notification label (`feed/page.tsx`).
+ */
 export function completedWorkoutFeedPath(
   sessionId: string,
   visibility: string | null | undefined,
 ): string | null {
-  return visibility === "group" ? `/feed?session=${encodeURIComponent(sessionId)}` : null;
+  return visibility === "group"
+    ? `/feed?session=${encodeURIComponent(sessionId)}&from=complete`
+    : null;
 }
