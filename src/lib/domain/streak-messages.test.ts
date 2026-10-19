@@ -106,6 +106,13 @@ describe("손실 회피 — 잃을 양을 숫자로 말한다", () => {
     }
   });
 
+  it("d1 경고는 스트릭 만료와 누적 기록을 혼동하지 않는다", () => {
+    for (const make of STAGE_MESSAGES.d1 ?? []) {
+      expect(make(7)).toContain("스트릭");
+      expect(make(7)).not.toContain("7일 → 0일");
+    }
+  });
+
   it("d1만 전부 잃는다고 말한다 — 그때가 사실이다", () => {
     for (const make of STAGE_MESSAGES.d1 ?? []) {
       expect(make(7)).toMatch(/0일|마지막|끝/);
@@ -162,6 +169,13 @@ describe("동기 조합 — 단계마다 다른 기제", () => {
    * 찌를 손실이 없고, "당신은 N일을 잃었습니다"는 재촉이 아니라 면박이다.
    * 남은 지렛대는 다시 시작하는 문턱을 낮추는 것(새 출발 효과)뿐이다.
    */
+  it("소멸해도 과거 운동 기록이 지워졌다고 말하지 않는다", () => {
+    for (const message of EXPIRED_MESSAGES) {
+      expect(message).toMatch(/운동 기록|해낸 운동/);
+      expect(message).not.toContain("원래 없던");
+    }
+  });
+
   it("소멸 문구는 겁주지 않고 재시작을 권한다", () => {
     expect(EXPIRED_MESSAGES.length).toBeGreaterThan(0);
     for (const msg of EXPIRED_MESSAGES) {

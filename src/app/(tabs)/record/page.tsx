@@ -189,6 +189,7 @@ import { getMyBadgeMetrics } from "@/lib/badges";
 import { TodayStatusCard } from "@/components/record/today-status-card";
 import { Icon } from "@/components/ui/icon";
 import { CompletionHeroCard } from "@/components/record/completion-hero-card";
+import { achievementMomentLine, completedWorkoutFeedPath } from "@/lib/domain/achievement-moment";
 import { pickNextCompletionHero } from "@/lib/completion-hero-pick";
 import { captionForEffort } from "@/lib/domain/session-caption";
 import type { EffortLevel } from "@/lib/domain/workout-analysis";
@@ -321,6 +322,8 @@ export default function RecordPage() {
 
 type CompletedResult = {
   sessionId: string;
+  /** Only group-visible completed workouts have an in-app feed destination. */
+  feedPath: string | null;
   completedAtMs: number;
   durationMinutes: number;
   summary: VolumeSummary;
@@ -702,6 +705,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const [nextSlotLevel, setNextSlotLevel] = useState<number | null>(null);
   const [result, setResult] = useState<CompletedResult | null>(null);
   const [xpEvents, setXpEvents] = useState<XpEvent[]>([]);
+  const [xpDetailsOpen, setXpDetailsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const finishingRef = useRef(false); // 종료 재진입 방지
   const [loadingExerciseKey, setLoadingExerciseKey] = useState<string | null>(
@@ -3132,6 +3136,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
       setCoachHidden(false);
       setResult({
         sessionId,
+        feedPath: completedWorkoutFeedPath(sessionId, s?.visibility),
         completedAtMs,
         durationMinutes: s?.duration_minutes ?? 0,
         summary: summarizeVolume(toVolumeSets(draft.exercises)),
@@ -3158,7 +3163,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
               })
             : [],
       });
-      setXpEvents(buildXpEvents(xp)); // 멱등 재생·XP 0이면 빈 배열 → 모달 없음
+      setXpEvents(buildXpEvents(xp)); // XP·배지 지급 로직은 그대로, 상세 화면만 선택 열람
+      setXpDetailsOpen(false);
       clearDraft(userId);
       setDraft(emptyDraft(draft.restSeconds));
       /*
@@ -3683,7 +3689,25 @@ function WorkoutScreen({ userId }: { userId: string }) {
             sets: result.summary.completedSetCount,
           }}
           recordNote={result.recordNote}
+          achievementLine={achievementMomentLine({
+            previousCompletedAts: sessionMinutes?.map((row) => row.completedAt) ?? null,
+            completedAt: new Date(result.completedAtMs),
+            timeZone: resolveTimeZone(),
+          })}
         />
+        {xpEvents.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setXpDetailsOpen(true)}
+            className="flex min-h-12 items-center justify-between gap-2 rounded-card border border-line bg-surface px-4 py-3 text-left"
+          >
+            <span className="text-sm font-extrabold">
+              오늘 받은 보상
+              {xpEvents[0]?.type === "xp" ? ` · +${xpEvents[0].amount} XP` : ""}
+            </span>
+            <span className="text-xs font-bold text-accent">상세 보기 ›</span>
+          </button>
+        )}
         {/* ⚠️ 완료 카드 **바로 아래**다 (2026-09-29 사용자 지시 — "사진 먼저 찍고
             입력·분석을 받는 게 좋다"). 순서: 완료 카드 → 사진 → 챌린지 기여 → AI 코치. */}
         {/*
@@ -3869,7 +3893,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
           className="flex h-12 items-center justify-center gap-1.5 rounded-[14px] border border-line bg-surface text-sm font-bold"
         >
           <Icon name="feed" size={16} className="text-accent" />
-          운동 일지 공유하기
+          운동 일지 다른 앱에 공유
         </button>
         {/*
           운동을 마치면 **홈으로 보낸다** (2026-08-19 사장님 결정).
@@ -3886,18 +3910,31 @@ function WorkoutScreen({ userId }: { userId: string }) {
           그리고 지금이 **찌르기가 열린 순간**이다 — 홈에만 있는 기능이다
           (`friend-board-card.tsx:234`의 `iWorkedOut` 잠금).
         */}
+        {result.feedPath && (
+          <button
+            type="button"
+            onClick={() => {
+              setResult(null);
+              router.push(AFTER_WORKOUT_PATH);
+            }}
+            className="flex h-11 items-center justify-center rounded-card border border-line bg-surface text-sm font-bold"
+          >
+            크루 현황 보러 가기
+          </button>
+        )}
         <button
           onClick={() => {
+            const destination = result.feedPath ?? AFTER_WORKOUT_PATH;
             setResult(null);
-            router.push(AFTER_WORKOUT_PATH);
+            router.push(destination);
           }}
           className="flex h-14 items-center justify-center gap-1.5 rounded-[16px] bg-accent text-[15px] font-extrabold text-accent-ink active:bg-accent-press"
         >
-          크루 보러 가기
+          {result.feedPath ? "내 운동 피드에서 보기" : "크루 보러 가기"}
           <Icon name="chevron" size={17} strokeWidth={2.4} />
         </button>
-        {xpEvents.length > 0 && (
-          <XpResultModal events={xpEvents} onClose={() => setXpEvents([])} />
+        {xpDetailsOpen && xpEvents.length > 0 && (
+          <XpResultModal events={xpEvents} onClose={() => setXpDetailsOpen(false)} />
         )}
         {toast && (
           <div
