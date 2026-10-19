@@ -55,6 +55,41 @@ beforeEach(() => {
 
 afterEach(() => cleanup());
 
+describe("VerificationPhoto — optional photo stays discoverable", () => {
+  it("shows one compact option until the user chooses to open camera and album", () => {
+    const utils = render(
+      <VerificationPhoto
+        userId="user-1"
+        sessionId="session-1"
+        durationMinutes={30}
+        completedAtMs={Date.parse("2026-10-19T11:00:00+09:00")}
+        onToast={vi.fn()}
+        emphasis="optional"
+        collapsedInitially
+      />
+    );
+    expect(utils.getByRole("button", { name: /운동 사진 추가/ })).toBeTruthy();
+    expect(utils.queryByRole("button", { name: /지금 촬영/ })).toBeNull();
+    fireEvent.click(utils.getByRole("button", { name: /운동 사진 추가/ }));
+    expect(utils.getByRole("button", { name: /지금 촬영/ })).toBeTruthy();
+    expect(utils.getByRole("button", { name: /앨범에서 고르기/ })).toBeTruthy();
+  });
+  it("does not hide the required proof action", () => {
+    const utils = render(
+      <VerificationPhoto
+        userId="user-1"
+        sessionId="session-1"
+        durationMinutes={30}
+        completedAtMs={Date.parse("2026-10-19T11:00:00+09:00")}
+        onToast={vi.fn()}
+        emphasis="required"
+        collapsedInitially
+      />
+    );
+    expect(utils.getByRole("button", { name: /사진 인증하기/ })).toBeTruthy();
+  });
+});
+
 describe("VerificationPhoto — 사진 XP 후등록", () => {
   it("업로드가 성공하면 사진 XP를 이어서 청구한다", async () => {
     const { cameraInput } = setup();
