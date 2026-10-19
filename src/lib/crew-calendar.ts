@@ -30,10 +30,36 @@ function validTimeZone(input: string | null | undefined): string {
  * 48시간은 유효한 IANA 시간대의 월 경계 차이를 포함한다.
  * 월을 이동할 때마다 해당 월만 조회해 운동 이력 전량을 다운로드하지 않는다.
  */
+/**
+ * 홈에서 본인 프로필을 연 경우에만 비공개 완료 운동을 포함한다.
+ * auth.getUser 검증으로 다른 사람의 비공개 운동이 조회되지 않도록 한다.
+ */
+export async function getMyWorkoutCalendarMonth(
+  targetId: string,
+  year: number,
+  month: number,
+): Promise<PublicCrewCalendarMonth> {
+  const supabase = getSupabaseBrowserClient();
+  const { data: auth, error } = await supabase.auth.getUser();
+  if (error || !auth.user || auth.user.id !== targetId) {
+    throw new Error("private_calendar_owner_only");
+  }
+  return loadCrewCalendarMonth(targetId, year, month, true);
+}
+
 export async function getPublicCrewCalendarMonth(
   targetId: string,
   year: number,
   month: number,
+): Promise<PublicCrewCalendarMonth> {
+  return loadCrewCalendarMonth(targetId, year, month, false);
+}
+
+async function loadCrewCalendarMonth(
+  targetId: string,
+  year: number,
+  month: number,
+  includePrivate: boolean,
 ): Promise<PublicCrewCalendarMonth> {
   if (!Number.isInteger(year) || year < 2000 || year > 2100 ||
       !Number.isInteger(month) || month < 1 || month > 12) {
@@ -45,13 +71,15 @@ export async function getPublicCrewCalendarMonth(
   const until = new Date(Date.UTC(year, month, 1) + extra).toISOString();
 
   const supabase = getSupabaseBrowserClient();
+  let sessionsQuery = supabase.from("workout_sessions")
+    .select("completed_at, duration_minutes, verification_status")
+    .eq("user_id", targetId)
+    .eq("status", "completed");
+  // 타인 조회에서는 기존의 visibility 필터를 반드시 유지한다.
+  if (!includePrivate) sessionsQuery = sessionsQuery.eq("visibility", "group");
   const [person, records] = await Promise.all([
     supabase.from("profiles").select("timezone").eq("id", targetId).maybeSingle(),
-    supabase.from("workout_sessions")
-      .select("completed_at, duration_minutes, verification_status")
-      .eq("user_id", targetId)
-      .eq("status", "completed")
-      .eq("visibility", "group")
+    sessionsQuery
       .is("deleted_at", null)
       .not("completed_at", "is", null)
       .gte("completed_at", from)
