@@ -231,3 +231,39 @@ main:has(> div > [data-testid="tab-backdrop"]) .fixed.bg-surface-2,
 main:has(> div > [data-testid="tab-backdrop"]) .fixed .bg-surface-2 {
   background-color: var(--surface-2);
 }
+
+
+/* Workout-day stamp impact: one shot, no DB writes or layout shifts. */
+@keyframes gnd-stamp-impact {
+  0% { opacity:0; transform:translateY(-22px) scale(1.48) rotate(-10deg); }
+  44% { opacity:1; transform:translateY(3px) scale(.86) rotate(2deg); }
+  63% { transform:translateY(-4px) scale(1.08) rotate(-1deg); }
+  84% { transform:translateY(1px) scale(.98); }
+  100% { opacity:1; transform:translateY(0) scale(1); }
+}
+@keyframes gnd-stamp-ring {
+  0%,39% { opacity:0; transform:translate(-50%,-50%) scale(.4); }
+  46% { opacity:.8; transform:translate(-50%,-50%) scale(.85); }
+  78%,100% { opacity:0; transform:translate(-50%,-50%) scale(1.7); }
+}
+@keyframes gnd-stamp-word {
+  0%,38% { opacity:0; transform:translate(-50%,7px) scale(.8); }
+  48% { opacity:1; transform:translate(-50%,-1px) scale(1.03); }
+  85%,100% { opacity:0; transform:translate(-50%,-16px) scale(1); }
+}
+.gnd-stamp-impact { animation:gnd-stamp-impact 780ms cubic-bezier(.22,.83,.25,1) both; transform-origin:center; }
+.gnd-stamp-impact-ring {
+  position:absolute;left:50%;top:52%;width:115%;aspect-ratio:1;
+  border:2px solid var(--accent);border-radius:50%;pointer-events:none;
+  animation:gnd-stamp-ring 780ms ease-out both;
+}
+.gnd-stamp-impact-word {
+  position:absolute;left:50%;top:-17px;color:var(--accent);
+  font-size:11px;font-weight:900;white-space:nowrap;pointer-events:none;
+  animation:gnd-stamp-word 780ms ease-out both;
+}
+@media (prefers-reduced-motion:reduce) {
+  .gnd-stamp-impact,.gnd-stamp-impact-ring,.gnd-stamp-impact-word {animation:none;transform:none;}
+  .gnd-stamp-impact {opacity:1;}
+  .gnd-stamp-impact-ring,.gnd-stamp-impact-word {display:none;}
+}

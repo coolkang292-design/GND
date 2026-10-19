@@ -191,6 +191,7 @@ import { getMyBadgeMetrics } from "@/lib/badges";
 import { TodayStatusCard } from "@/components/record/today-status-card";
 import { Icon } from "@/components/ui/icon";
 import { CompletionHeroCard } from "@/components/record/completion-hero-card";
+import { WorkoutWeekStampCelebration } from "@/components/record/workout-week-stamp-celebration";
 import {
   achievementMomentLine,
   completedWorkoutFeedPath,
@@ -3780,6 +3781,12 @@ function WorkoutScreen({ userId }: { userId: string }) {
             completedAt: new Date(result.completedAtMs),
             timeZone: resolveTimeZone(),
           })}
+        />
+        <WorkoutWeekStampCelebration
+          key={result.sessionId}
+          sessionId={result.sessionId}
+          userId={userId}
+          completedAtMs={result.completedAtMs}
         />
         {/*
           챌린지 반영 상태 (이슈 #16 P0-B). 예정형(인증 대기)과 확정형(반영됐어요)을 문장으로 가른다.
