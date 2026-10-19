@@ -189,7 +189,12 @@ import { getMyBadgeMetrics } from "@/lib/badges";
 import { TodayStatusCard } from "@/components/record/today-status-card";
 import { Icon } from "@/components/ui/icon";
 import { CompletionHeroCard } from "@/components/record/completion-hero-card";
-import { achievementMomentLine, completedWorkoutFeedPath } from "@/lib/domain/achievement-moment";
+import {
+  achievementMomentLine,
+  completedWorkoutFeedPath,
+  feedPathAfterProof,
+  isChallengeProofPending,
+} from "@/lib/domain/achievement-moment";
 import { pickNextCompletionHero } from "@/lib/completion-hero-pick";
 import { captionForEffort } from "@/lib/domain/session-caption";
 import type { EffortLevel } from "@/lib/domain/workout-analysis";
@@ -3660,6 +3665,17 @@ function WorkoutScreen({ userId }: { userId: string }) {
     prevVolume !== null ? summary.weightVolumeKg - prevVolume : null;
 
   if (result) {
+    /*
+      인증 대기면 피드로 보내지 않는다 (2026-10-19 사용자 결정, 시안 STATE 01).
+      사진 필수 챌린지에 보탤 몫이 있는데 사진이 없으면 피드 버튼을 빼고, 사진을 올리면
+      (`resultPhotoDone`) 그 자리에서 다시 생긴다. 비공개는 원래부터 `feedPath`가 null이다.
+    */
+    const proofPending = isChallengeProofPending({
+      photoRequired: challengePhotoRequired,
+      photoDone: resultPhotoDone,
+      gains: result.challengeGains,
+    });
+    const feedPath = feedPathAfterProof(result.feedPath, proofPending);
     return (
       <div className="flex flex-col gap-3">
         <header className="pt-1 pb-0.5">
@@ -3910,7 +3926,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
             (`/feed?session=<id>`, 방금 운동이 맨 위에 고정된다). 홈은 보조 버튼이다.
             이유: 감정 UX 검수(2026-10-19) — 완료한 성취를 크루의 실제 반응(좋아요·댓글)으로
             잇는 동선을 먼저 보여 준다.
-          - **비공개·판정 실패**: 예전처럼 주 버튼 = 크루 보러 가기(`/home`).
+          - **비공개·판정 실패·챌린지 인증 대기**: 예전처럼 주 버튼 = 크루 보러 가기(`/home`).
+            인증 대기(사진 필수 챌린지, 사진 없음)는 사진을 올리면 피드 버튼이 생긴다
+            (2026-10-19 사용자 결정, 시안 `docs/ux/workout-complete-ux-reference-20261019.svg`).
             ⚠️ 피드는 `visibility='group'`만 보여주므로 비공개로 보내면 "찾을 수 없음"이 뜬다.
 
           옛 결정(2026-08-19 사장님): 주 버튼이 홈이었다 — 운동 직후는 **찌르기가 열린
@@ -3929,7 +3947,12 @@ function WorkoutScreen({ userId }: { userId: string }) {
           그리고 지금이 **찌르기가 열린 순간**이다 — 홈에만 있는 기능이다
           (`friend-board-card.tsx:234`의 `iWorkedOut` 잠금).
         */}
-        {result.feedPath && (
+        {proofPending && result.feedPath && (
+          <p className="text-center text-xs font-bold text-muted">
+            사진 인증 후 피드에서 성취를 확인할 수 있어요
+          </p>
+        )}
+        {feedPath && (
           <button
             type="button"
             onClick={() => {
@@ -3943,13 +3966,13 @@ function WorkoutScreen({ userId }: { userId: string }) {
         )}
         <button
           onClick={() => {
-            const destination = result.feedPath ?? AFTER_WORKOUT_PATH;
+            const destination = feedPath ?? AFTER_WORKOUT_PATH;
             setResult(null);
             router.push(destination);
           }}
           className="flex h-14 items-center justify-center gap-1.5 rounded-[16px] bg-accent text-[15px] font-extrabold text-accent-ink active:bg-accent-press"
         >
-          {result.feedPath ? "내 운동 피드에서 보기" : "크루 보러 가기"}
+          {feedPath ? "내 운동 피드에서 보기" : "크루 보러 가기"}
           <Icon name="chevron" size={17} strokeWidth={2.4} />
         </button>
         {xpDetailsOpen && xpEvents.length > 0 && (

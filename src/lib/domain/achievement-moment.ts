@@ -44,3 +44,28 @@ export function completedWorkoutFeedPath(
     ? `/feed?session=${encodeURIComponent(sessionId)}&from=complete`
     : null;
 }
+
+/**
+ * 챌린지 사진 인증 대기인가 (2026-10-19 사용자 결정 — 시안
+ * `docs/ux/workout-complete-ux-reference-20261019.svg` STATE 01 "인증 대기").
+ *
+ * 사진 필수 챌린지에 이번 운동이 **보탤 몫이 있는데** 아직 사진이 없으면 대기다.
+ * 보탤 몫이 없으면 사진은 챌린지와 무관하므로 대기가 아니다.
+ * ⚠️ 완료 화면의 "챌린지 목표에 쌓일 몫 / 쌓였어요" 카드와 **같은 조건**이어야 한다 —
+ *    카드는 "위에서 인증 사진을 올려야 반영돼요"라고 하는데 버튼은 피드로 보내면 모순이다.
+ */
+export function isChallengeProofPending(input: {
+  photoRequired: boolean;
+  photoDone: boolean;
+  gains: readonly { delta: number }[];
+}): boolean {
+  return input.photoRequired && !input.photoDone && input.gains.some((g) => g.delta > 0);
+}
+
+/** 인증 대기 중에는 피드로 보내지 않는다 — 사진을 올리면 다시 링크가 생긴다. */
+export function feedPathAfterProof(
+  feedPath: string | null,
+  proofPending: boolean,
+): string | null {
+  return proofPending ? null : feedPath;
+}
