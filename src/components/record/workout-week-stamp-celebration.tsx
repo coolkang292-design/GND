@@ -8,6 +8,8 @@ import {
   workoutWeekStampSnapshot, type WeekStampSnapshot,
 } from "@/lib/domain/workout-week-stamps";
 import { WorkoutCompleteStamp } from "./workout-complete-stamp";
+import { claimWorkoutStamp, getMyStampColors, type StampAward } from "@/lib/stamps";
+import { stampCompletionLine, type StampVariant } from "@/lib/domain/workout-stamps";
 
 /** A real stamp, once per NEW exercise day, never a new stored badge.
  * Client-only presentation failure must not affect successful workout saving.
@@ -16,18 +18,26 @@ export function WorkoutWeekStampCelebration({
   userId, sessionId, completedAtMs,
 }: { userId: string; sessionId: string; completedAtMs: number }) {
   const [snapshot, setSnapshot] = useState<WeekStampSnapshot | null>(null);
+  const [colors, setColors] = useState<Record<string, StampVariant>>({});
+  const [award, setAward] = useState<StampAward | null>(null);
   useEffect(() => {
     let cancelled = false;
-    void Promise.all([getCompletedSessionMinutes(userId), getMyProfile(userId)])
-      .then(([sessions, profile]) => {
-        if (cancelled) return;
-        setSnapshot(workoutWeekStampSnapshot({
-          completedAt: new Date(completedAtMs),
-          completedSessions: sessions.map(s => s.completedAt),
-          timeZone: profile?.timezone || resolveTimeZone(),
-        }));
-      })
-      .catch(() => { /* Leave the existing completion hero intact. */ });
+    void (async () => {
+      const [sessions, profile, claimed] = await Promise.all([
+        getCompletedSessionMinutes(userId), getMyProfile(userId),
+        claimWorkoutStamp(sessionId).catch(() => null),
+      ]);
+      const snapshot = workoutWeekStampSnapshot({
+        completedAt: new Date(completedAtMs),
+        completedSessions: sessions.map(s => s.completedAt),
+        timeZone: profile?.timezone || resolveTimeZone(),
+      });
+      const colors = await getMyStampColors(userId).catch(() => ({}));
+      if (cancelled) return;
+      setSnapshot(snapshot);
+      setColors(colors);
+      setAward(claimed);
+    })().catch(() => { /* Reward UI cannot undo a saved workout. */ });
     return () => { cancelled = true; };
   }, [userId, sessionId, completedAtMs]);
 
@@ -56,7 +66,10 @@ export function WorkoutWeekStampCelebration({
               <span className="absolute left-1 top-1 font-mono text-[10px] text-muted">{d.dayOfMonth}</span>
               {d.completed && (
                 <span className={`absolute inset-x-[12%] bottom-[2px] h-[72%] ${d.isNewStamp ? "gnd-stamp-impact" : ""}`}>
-                  <WorkoutCompleteStamp seed={d.dateKey} className="h-full w-full" />
+                  <WorkoutCompleteStamp seed={d.dateKey} variant={colors[d.dateKey] ?? "basic"} className="h-full w-full" />
+                  {d.isNewStamp && award?.newlyAwarded && award.dateKey === d.dateKey && award.variant === "gold" && (
+                    <span aria-hidden="true" className="gnd-stamp-gold-burst" />
+                  )}
                   {d.isNewStamp && (
                     <>
                       <span aria-hidden="true" className="gnd-stamp-impact-ring"/>
@@ -71,7 +84,7 @@ export function WorkoutWeekStampCelebration({
       </ol>
       {snapshot.newStamp && (
         <p className="mt-2.5 text-center text-[12px] font-extrabold text-accent">
-          오늘의 도장, 찍었다!
+          {stampCompletionLine(snapshot.days.some(d => d.isNewStamp && award?.dateKey === d.dateKey && award.newlyAwarded) ? award?.variant ?? "basic" : "basic")}
         </p>
       )}
     </section>

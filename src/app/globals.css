@@ -262,7 +262,20 @@ main:has(> div > [data-testid="tab-backdrop"]) .fixed .bg-surface-2 {
   font-size:11px;font-weight:900;white-space:nowrap;pointer-events:none;
   animation:gnd-stamp-word 780ms ease-out both;
 }
+/* One-shot gold glint: no layout shift and no repeat on calendar revisit. */
+@keyframes gnd-stamp-gold-glint {
+  0%,18% {opacity:0;transform:scale(.65) rotate(-18deg);}
+  43% {opacity:.9;transform:scale(1.2) rotate(8deg);}
+  100% {opacity:0;transform:scale(1.55) rotate(22deg);}
+}
+.gnd-stamp-gold-burst {
+  position:absolute;inset:-30%;pointer-events:none;border-radius:50%;
+  background:radial-gradient(circle,rgba(255,231,160,.6) 0%,rgba(255,214,103,.2) 35%,transparent 67%);
+  box-shadow:0 0 18px 3px rgba(230,181,44,.25);
+  animation:gnd-stamp-gold-glint 950ms ease-out 170ms both;
+}
 @media (prefers-reduced-motion:reduce) {
+  .gnd-stamp-gold-burst {display:none;}
   .gnd-stamp-impact,.gnd-stamp-impact-ring,.gnd-stamp-impact-word {animation:none;transform:none;}
   .gnd-stamp-impact {opacity:1;}
   .gnd-stamp-impact-ring,.gnd-stamp-impact-word {display:none;}

@@ -6,6 +6,7 @@
  *
  * 회전각은 날짜 키로 정해진다(렌더마다 바뀌지 않는다 — Math.random 금지).
  */
+import type { StampVariant } from "@/lib/domain/workout-stamps";
 const ANGLES = [-5, 3, -2, 5, -3, 4, -4, 2];
 
 /** "YYYY-MM-DD" → 항상 같은 회전각 */
@@ -20,10 +21,12 @@ export function stampRotation(seed: string): number {
 export function WorkoutCompleteStamp({
   seed,
   className = "",
+  variant = "basic",
 }: {
   /** 회전각을 정하는 값 (날짜 키). 범례는 고정 문자열을 넘긴다 */
   seed: string;
   className?: string;
+  variant?: StampVariant;
 }) {
   const rotate = stampRotation(seed);
   // 같은 화면에 도장이 여러 개여도 필터 id가 겹치지 않게 (겹쳐도 동일 정의라 무해하지만 안전하게)
@@ -33,7 +36,7 @@ export function WorkoutCompleteStamp({
       viewBox="0 0 100 100"
       aria-hidden="true"
       focusable="false"
-      className={`pointer-events-none text-accent ${className}`}
+      className={`pointer-events-none ${variant === "gold" ? "text-[#C39420]" : variant === "orange" ? "text-[#E97A25]" : "text-accent"} ${className}`}
       style={{ transform: `rotate(${rotate}deg)`, opacity: 0.92 }}
     >
       <defs>

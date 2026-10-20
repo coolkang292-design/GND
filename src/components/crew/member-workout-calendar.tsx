@@ -115,6 +115,7 @@ export function CrewCalendarMonthView({
                 {stamp && (
                   <WorkoutCompleteStamp
                     seed={key}
+                    variant={includePrivate ? data.stampColors?.[key] ?? "basic" : "basic"}
                     className="absolute bottom-[2px] left-1/2 h-[68%] w-[68%] -translate-x-1/2"
                   />
                 )}
