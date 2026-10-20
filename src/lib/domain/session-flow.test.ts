@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   canReplaceExercise,
   COMPLETION_AUTO_FINISH_MS,
+  STAMP_REVEAL_DURATION_MS,
   overlayMode,
   replaceExercise,
   shouldAutoFinishAfterRest,
@@ -65,9 +66,12 @@ describe("shouldRestAfterCompletion", () => {
   });
 });
 
-describe("COMPLETION_AUTO_FINISH_MS", () => {
-  it("축하 화면을 3초 보여주고 넘어간다 (사용자 확정)", () => {
-    expect(COMPLETION_AUTO_FINISH_MS).toBe(3000);
+describe("save before reward", () => {
+  it("starts a save promptly after the last set", () => {
+    expect(COMPLETION_AUTO_FINISH_MS).toBeLessThan(300);
+  });
+  it("holds the server award long enough for the physical stamp to settle", () => {
+    expect(STAMP_REVEAL_DURATION_MS).toBeGreaterThanOrEqual(3600);
   });
 });
 

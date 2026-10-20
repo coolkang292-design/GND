@@ -21,6 +21,11 @@ describe("WorkoutCompleteStamp", () => {
     expect(set.size).toBeGreaterThanOrEqual(4);
   });
 
+  it("gold only changes ink while preserving textured stamp shapes", () => {
+    const { container } = render(<WorkoutCompleteStamp seed="2026-10-07" variant="gold" />);
+    expect(container.querySelector("svg")?.getAttribute("class")).toContain("text-[#C39420]");
+    expect(container.querySelectorAll("circle")).toHaveLength(2);
+  });
   it("보조기기에는 숨기고(셀 aria-label이 상태를 말한다) 라임 토큰 색을 쓴다", () => {
     const { container } = render(<WorkoutCompleteStamp seed="2026-10-07" />);
     const svg = container.querySelector("svg")!;

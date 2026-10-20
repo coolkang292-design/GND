@@ -6,6 +6,8 @@
  * visibility='group'도 명시해 본인 화면에서도 비공개 운동을 노출하지 않는다.
  */
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { getMyStampColors } from "@/lib/stamps";
+import type { StampVariant } from "@/lib/domain/workout-stamps";
 import {
   summarizePublicCrewMonth,
   type PublicCrewMonth,
@@ -13,7 +15,7 @@ import {
 import { DEFAULT_TIMEZONE } from "@/lib/domain/time";
 import type { Verification } from "@/lib/domain/calendar";
 
-export type PublicCrewCalendarMonth = PublicCrewMonth & { timeZone: string };
+export type PublicCrewCalendarMonth = PublicCrewMonth & { timeZone: string; stampColors?: Record<string, StampVariant> };
 
 function validTimeZone(input: string | null | undefined): string {
   const candidate = input || DEFAULT_TIMEZONE;
@@ -103,8 +105,13 @@ async function loadCrewCalendarMonth(
     };
   });
 
+  // Cosmetic stamp rows are owner-only: do not read them for other people.
+  const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
+  const next = new Date(Date.UTC(year, month, 1)).toISOString().slice(0, 10);
+  const stampColors = includePrivate ? await getMyStampColors(targetId, monthStart, next).catch(() => ({})) : undefined;
   return {
     ...summarizePublicCrewMonth(sessions, timeZone, year, month),
     timeZone,
+    stampColors,
   };
 }

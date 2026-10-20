@@ -14,6 +14,8 @@ import {
   missingRequiredPhoto,
 } from "@/lib/domain/photo-window";
 import { WorkoutCompleteStamp } from "@/components/record/workout-complete-stamp";
+import { getMyStampColors } from "@/lib/stamps";
+import type { StampVariant } from "@/lib/domain/workout-stamps";
 import { LatePhotoButton } from "@/components/record/late-photo-button";
 import {
   addDaysToDateKey,
@@ -257,6 +259,7 @@ export function CalendarView({
   }) => Promise<CatalogExercise | null>;
 }) {
   const [sessions, setSessions] = useState<CalendarSession[]>([]);
+  const [stampColors, setStampColors] = useState<Record<string, StampVariant>>({});
   const [plans, setPlans] = useState<WorkoutPlan[]>([]);
   const [timeZone, setTimeZone] = useState(
     () => resolveTimeZone(),
@@ -315,7 +318,7 @@ export function CalendarView({
     let cancelled = false;
     (async () => {
       try {
-        const [profile, list, savedPlans, activePrograms] =
+        const [profile, list, savedPlans, activePrograms, colors] =
           await Promise.all([
             getMyProfile(userId),
             getCompletedSessions(userId),
@@ -324,8 +327,10 @@ export function CalendarView({
             // 나머지는 그려야 하므로 삼키고 빈 목록으로 둔다 — 그 경우 프로그램
             // 계획은 보이되 '다시 잡기'만 막힌다.
             getActiveProgramEnrollments(userId).catch(() => []),
+            getMyStampColors(userId).catch(() => ({})),
           ]);
         if (cancelled) return;
+        setStampColors(colors);
         if (profile) {
           setTimeZone(profile.timezone || timeZone);
         }
@@ -1407,6 +1412,7 @@ export function CalendarView({
                 {state === "completed" && (
                   <WorkoutCompleteStamp
                     seed={dateKey}
+                    variant={stampColors[dateKey] ?? "basic"}
                     className="absolute bottom-[2px] left-1/2 h-[70%] w-[70%] -translate-x-1/2"
                   />
                 )}

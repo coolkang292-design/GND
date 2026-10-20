@@ -8,28 +8,35 @@ import {
   workoutWeekStampSnapshot, type WeekStampSnapshot,
 } from "@/lib/domain/workout-week-stamps";
 import { WorkoutCompleteStamp } from "./workout-complete-stamp";
+import { getMyStampColors, type StampAward } from "@/lib/stamps";
+import type { StampVariant } from "@/lib/domain/workout-stamps";
 
-/** A real stamp, once per NEW exercise day, never a new stored badge.
- * Client-only presentation failure must not affect successful workout saving.
- * The final calendar still derives stamps from completed sessions as before. */
+/** Static weekly record after the large stamp has landed in the workout overlay.
+ * No new animation, claim or duplicate reward on the results page. */
 export function WorkoutWeekStampCelebration({
-  userId, sessionId, completedAtMs,
-}: { userId: string; sessionId: string; completedAtMs: number }) {
+  userId, sessionId, completedAtMs, awardedStamp = null,
+}: { userId: string; sessionId: string; completedAtMs: number; awardedStamp?: StampAward | null }) {
   const [snapshot, setSnapshot] = useState<WeekStampSnapshot | null>(null);
+  const [colors, setColors] = useState<Record<string, StampVariant>>({});
   useEffect(() => {
     let cancelled = false;
-    void Promise.all([getCompletedSessionMinutes(userId), getMyProfile(userId)])
-      .then(([sessions, profile]) => {
-        if (cancelled) return;
-        setSnapshot(workoutWeekStampSnapshot({
-          completedAt: new Date(completedAtMs),
-          completedSessions: sessions.map(s => s.completedAt),
-          timeZone: profile?.timezone || resolveTimeZone(),
-        }));
-      })
-      .catch(() => { /* Leave the existing completion hero intact. */ });
+    void (async () => {
+      const [sessions, profile] = await Promise.all([
+        getCompletedSessionMinutes(userId), getMyProfile(userId),
+      ]);
+      const snapshot = workoutWeekStampSnapshot({
+        completedAt: new Date(completedAtMs),
+        completedSessions: sessions.map(s => s.completedAt),
+        timeZone: profile?.timezone || resolveTimeZone(),
+      });
+      const colors: Record<string, StampVariant> = await getMyStampColors(userId).catch(() => ({}));
+      if (awardedStamp) colors[awardedStamp.dateKey] = awardedStamp.variant;
+      if (cancelled) return;
+      setSnapshot(snapshot);
+      setColors(colors);
+    })().catch(() => { /* Reward UI cannot undo a saved workout. */ });
     return () => { cancelled = true; };
-  }, [userId, sessionId, completedAtMs]);
+  }, [userId, sessionId, completedAtMs, awardedStamp]);
 
   if (!snapshot) return null;
   const ariaDays = snapshot.days.map(
@@ -51,29 +58,18 @@ export function WorkoutWeekStampCelebration({
             <span className="mb-1 block text-[11px] font-bold text-muted">{d.weekday}</span>
             <div
               aria-label={`${d.dateKey} ${d.completed ? "운동 완료" : "운동 기록 없음"}`}
-              className={`relative aspect-square rounded-[10px] border bg-surface-2/70 ${d.isNewStamp ? "border-accent/70" : "border-line"}`}
+              className="relative aspect-square rounded-[10px] border border-line bg-surface-2/70"
             >
               <span className="absolute left-1 top-1 font-mono text-[10px] text-muted">{d.dayOfMonth}</span>
               {d.completed && (
-                <span className={`absolute inset-x-[12%] bottom-[2px] h-[72%] ${d.isNewStamp ? "gnd-stamp-impact" : ""}`}>
-                  <WorkoutCompleteStamp seed={d.dateKey} className="h-full w-full" />
-                  {d.isNewStamp && (
-                    <>
-                      <span aria-hidden="true" className="gnd-stamp-impact-ring"/>
-                      <span aria-hidden="true" className="gnd-stamp-impact-word">쾅!</span>
-                    </>
-                  )}
+                <span className="absolute inset-x-[12%] bottom-[2px] h-[72%]">
+                  <WorkoutCompleteStamp seed={d.dateKey} variant={colors[d.dateKey] ?? "basic"} className="h-full w-full" />
                 </span>
               )}
             </div>
           </li>
         ))}
       </ol>
-      {snapshot.newStamp && (
-        <p className="mt-2.5 text-center text-[12px] font-extrabold text-accent">
-          오늘의 도장, 찍었다!
-        </p>
-      )}
     </section>
   );
 }

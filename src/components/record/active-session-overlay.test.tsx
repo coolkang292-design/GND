@@ -1067,7 +1067,7 @@ describe("ActiveSessionOverlay — 마지막 세트와 마무리", () => {
       onFinish,
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /지금 바로 보기/ }));
+    fireEvent.click(screen.getByRole("button", { name: /지금 저장하기/ }));
     expect(onFinish).toHaveBeenCalled();
   });
 
@@ -1113,20 +1113,43 @@ describe("ActiveSessionOverlay — 완료 화면 (B안)", () => {
     expect(screen.queryByRole("button", { name: "2분" })).toBeNull();
   });
 
-  it("곧 결과 화면으로 넘어간다고 알린다", () => {
+  it("저장 전에는 결과 이동을 약속하지 않고 기록 저장을 안내한다", () => {
     renderRest(done);
-
-    expect(screen.getByText(/잠시 후|곧/)).toBeTruthy();
+    expect(screen.getByText("운동 기록을 저장하고 있어요…")).toBeTruthy();
+    expect(screen.queryByText(/잠시 후|곧/)).toBeNull();
   });
 
   it("바로 가고 싶으면 누를 수 있다 — 기다림이 강제가 아니다", () => {
     const onFinish = vi.fn();
     renderRest({ ...done, onFinish });
 
-    fireEvent.click(screen.getByRole("button", { name: /지금 바로 보기/ }));
+    fireEvent.click(screen.getByRole("button", { name: /지금 저장하기/ }));
     expect(onFinish).toHaveBeenCalled();
   });
 
+  it("saving shows no fake stamp and disables completion navigation", () => {
+    renderRest({ ...done, busy: true });
+    expect(screen.getByText("운동 기록 저장 중…")).toBeTruthy();
+    expect(screen.queryByTestId("workout-stamp-reveal")).toBeNull();
+    expect(screen.getByRole("button", {name:"처리 중…"})).toHaveProperty("disabled", true);
+  });
+  it("after saving, orange prints large in this overlay and the status is done", () => {
+    render(<ActiveSessionOverlay {...restProps} nextUp={null}
+      completionStamp={{sessionId:"session",dateKey:"2026-10-21",variant:"orange"}} />);
+    expect(screen.getByTestId("large-stamp-impact")).toBeTruthy();
+    expect(screen.getByText("오늘도 해냈다.")).toBeTruthy();
+    expect(screen.getByText("오늘은 느낌이 좀 좋은데?")).toBeTruthy();
+    expect(screen.getByText("운동 완료")).toBeTruthy();
+    expect(screen.queryByText("휴식 중")).toBeNull();
+  });
+  it("save failure offers a retry and no stamp", () => {
+    const onFinish = vi.fn();
+    render(<ActiveSessionOverlay {...restProps} nextUp={null} finishSaveError onFinish={onFinish}/>);
+    expect(screen.getByText("기록 저장을 다시 시도해 주세요")).toBeTruthy();
+    expect(screen.queryByTestId("large-stamp-impact")).toBeNull();
+    fireEvent.click(screen.getByRole("button",{name:"다시 저장"}));
+    expect(onFinish).toHaveBeenCalledOnce();
+  });
   it("아직 남은 세트가 있으면 휴식 타이머는 그대로 나온다", () => {
     renderRest();
 
