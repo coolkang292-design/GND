@@ -8,8 +8,8 @@ import {
   workoutWeekStampSnapshot, type WeekStampSnapshot,
 } from "@/lib/domain/workout-week-stamps";
 import { WorkoutCompleteStamp } from "./workout-complete-stamp";
-import { claimWorkoutStamp, getMyStampColors, type StampAward } from "@/lib/stamps";
-import { stampCompletionLine, type StampVariant } from "@/lib/domain/workout-stamps";
+import { getMyStampColors } from "@/lib/stamps";
+import type { StampVariant } from "@/lib/domain/workout-stamps";
 
 /** A real stamp, once per NEW exercise day, never a new stored badge.
  * Client-only presentation failure must not affect successful workout saving.
@@ -19,13 +19,11 @@ export function WorkoutWeekStampCelebration({
 }: { userId: string; sessionId: string; completedAtMs: number }) {
   const [snapshot, setSnapshot] = useState<WeekStampSnapshot | null>(null);
   const [colors, setColors] = useState<Record<string, StampVariant>>({});
-  const [award, setAward] = useState<StampAward | null>(null);
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const [sessions, profile, claimed] = await Promise.all([
+      const [sessions, profile] = await Promise.all([
         getCompletedSessionMinutes(userId), getMyProfile(userId),
-        claimWorkoutStamp(sessionId).catch(() => null),
       ]);
       const snapshot = workoutWeekStampSnapshot({
         completedAt: new Date(completedAtMs),
@@ -33,12 +31,9 @@ export function WorkoutWeekStampCelebration({
         timeZone: profile?.timezone || resolveTimeZone(),
       });
       const colors: Record<string, StampVariant> = await getMyStampColors(userId).catch(() => ({}));
-      // Authoritative RPC result bridges brief read failures / replication lag.
-      if (claimed) colors[claimed.dateKey] = claimed.variant;
       if (cancelled) return;
       setSnapshot(snapshot);
       setColors(colors);
-      setAward(claimed);
     })().catch(() => { /* Reward UI cannot undo a saved workout. */ });
     return () => { cancelled = true; };
   }, [userId, sessionId, completedAtMs]);
@@ -63,32 +58,18 @@ export function WorkoutWeekStampCelebration({
             <span className="mb-1 block text-[11px] font-bold text-muted">{d.weekday}</span>
             <div
               aria-label={`${d.dateKey} ${d.completed ? "운동 완료" : "운동 기록 없음"}`}
-              className={`relative aspect-square rounded-[10px] border bg-surface-2/70 ${d.isNewStamp ? "border-accent/70" : "border-line"}`}
+              className="relative aspect-square rounded-[10px] border border-line bg-surface-2/70"
             >
               <span className="absolute left-1 top-1 font-mono text-[10px] text-muted">{d.dayOfMonth}</span>
               {d.completed && (
-                <span className={`absolute inset-x-[12%] bottom-[2px] h-[72%] ${d.isNewStamp ? "gnd-stamp-impact" : ""}`}>
+                <span className="absolute inset-x-[12%] bottom-[2px] h-[72%]">
                   <WorkoutCompleteStamp seed={d.dateKey} variant={colors[d.dateKey] ?? "basic"} className="h-full w-full" />
-                  {d.isNewStamp && award?.newlyAwarded && award.dateKey === d.dateKey && award.variant === "gold" && (
-                    <span aria-hidden="true" className="gnd-stamp-gold-burst" />
-                  )}
-                  {d.isNewStamp && (
-                    <>
-                      <span aria-hidden="true" className="gnd-stamp-impact-ring"/>
-                      <span aria-hidden="true" className="gnd-stamp-impact-word">쾅!</span>
-                    </>
-                  )}
                 </span>
               )}
             </div>
           </li>
         ))}
       </ol>
-      {snapshot.newStamp && (
-        <p className="mt-2.5 text-center text-[12px] font-extrabold text-accent">
-          {stampCompletionLine(snapshot.days.some(d => d.isNewStamp && award?.dateKey === d.dateKey && award.newlyAwarded) ? award?.variant ?? "basic" : "basic")}
-        </p>
-      )}
     </section>
   );
 }

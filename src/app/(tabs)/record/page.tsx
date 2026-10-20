@@ -180,6 +180,7 @@ import {
 import {
   canReplaceExercise,
   COMPLETION_AUTO_FINISH_MS,
+  STAMP_REVEAL_DURATION_MS,
   overlayMode,
   replaceExercise,
   shouldAutoFinishAfterRest,
@@ -192,6 +193,8 @@ import { TodayStatusCard } from "@/components/record/today-status-card";
 import { Icon } from "@/components/ui/icon";
 import { CompletionHeroCard } from "@/components/record/completion-hero-card";
 import { WorkoutWeekStampCelebration } from "@/components/record/workout-week-stamp-celebration";
+import { claimWorkoutStamp } from "@/lib/stamps";
+import type { StampVariant } from "@/lib/domain/workout-stamps";
 import {
   achievementMomentLine,
   completedWorkoutFeedPath,
@@ -720,6 +723,12 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const [xpEvents, setXpEvents] = useState<XpEvent[]>([]);
   const [xpDetailsOpen, setXpDetailsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [finishSaveError, setFinishSaveError] = useState(false);
+  /** Only server-confirmed newly earned colors trigger an overlay impact. */
+  const [stampMoment, setStampMoment] = useState<{
+    sessionId: string; dateKey: string; variant: StampVariant;
+  } | null>(null);
+  const finishRevealRef = useRef<(() => void) | null>(null);
   const finishingRef = useRef(false); // 종료 재진입 방지
   const [loadingExerciseKey, setLoadingExerciseKey] = useState<string | null>(
     null,
@@ -3023,10 +3032,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
   }
 
   /**
-   * 축하 화면을 잠깐 보여준 뒤 결과·인증 사진 화면으로 넘긴다 (B안).
-   *
-   * `handleFinish`는 재진입 가드(`finishingRef`)가 있어 사용자가 '지금 바로 보기'를
-   * 먼저 눌러도 두 번 종료되지 않는다.
+   * Start saving promptly after the last set. The reward plays only AFTER
+   * the server has confirmed both the completed workout and its stamp.
    */
   function scheduleAutoFinish() {
     clearAutoFinish();
@@ -3037,6 +3044,11 @@ function WorkoutScreen({ userId }: { userId: string }) {
   }
 
   async function handleFinish() {
+    // Skip an already-saved reveal without replaying complete_workout or rerolling.
+    if (finishRevealRef.current) {
+      finishRevealRef.current();
+      return;
+    }
     // 타바타 자동 완료가 setDraft 직후 호출해도 최신 상태를 보도록 ref 사용
     const draft = draftRef.current;
     if (!draft.sessionId) return;
@@ -3056,6 +3068,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
     }
     finishingRef.current = true;
     stopRest();
+    setFinishSaveError(false);
     setBusy(true);
     try {
       await saveSessionExercises(draft.sessionId, draft.exercises);
@@ -3066,6 +3079,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
       const sessionId = draft.sessionId;
       // 무동작으로 멈춰 있던 시간은 서버 duration에서 뺀다 (0055).
       const xp = await finishWorkout(sessionId, totalPausedSeconds());
+      // The award RPC owns the color decision; never use Math.random() on the client.
+      const stampPromise = claimWorkoutStamp(sessionId).catch(() => null);
       const s = await getSessionById(sessionId);
       const completedAtMs = s?.completed_at
         ? new Date(s.completed_at).getTime()
@@ -3159,7 +3174,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
       }
       // 새 결과 화면이니 지난 회차의 한마디 선택을 지운다 (2026-08-30)
       setResultCaption(null);
-      setResult({
+      const completedResult: CompletedResult = {
         sessionId,
         feedPath: completedWorkoutFeedPath(sessionId, s?.visibility),
         completedAtMs,
@@ -3187,11 +3202,11 @@ function WorkoutScreen({ userId }: { userId: string }) {
             timeZone: DEFAULT_TIMEZONE,
           }),
         })),
-      });
+      };
       setXpEvents(buildXpEvents(xp)); // XP·배지 지급 로직은 그대로, 상세 화면만 선택 열람
       setXpDetailsOpen(false);
+      // Clear persisted draft even if the user exits during the reward animation.
       clearDraft(userId);
-      setDraft(emptyDraft(draft.restSeconds));
       /*
         ⚠️ 오늘 운동했다는 사실을 **여기서 바로** 세운다 (사용자 지적 2026-08-16).
 
@@ -3207,11 +3222,29 @@ function WorkoutScreen({ userId }: { userId: string }) {
       if (planCleanupFailed) {
         showToast("운동은 완료됐지만 예정표는 달력에서 직접 삭제해 주세요");
       }
-      // 남긴 종목·카드를 다시 그린다 — 다음 운동 탭 진입까지 기다리지 않는다.
-      // 바로 위 `setDraft`가 `draftRef`를 동기로 비웠으므로 pull은 빈 목록을 보고
-      // 오늘 계획(남은 종목)을 담는다
-      void enqueuePlanSync(pullPlanNow);
+      const award = await stampPromise;
+      // Same-day repeats, retry replays and the separate Tabata finish sheet never animate.
+      const showStamp = incomplete === 0 && !tabataOpen && !intervalPlaying
+        && !xp.idempotentReplay && award?.newlyAwarded === true;
+      const showSavedResult = () => {
+        clearAutoFinish();
+        finishRevealRef.current = null;
+        setStampMoment(null);
+        setResult(completedResult);
+        setDraft(emptyDraft(draft.restSeconds));
+        // Pull pending plans only after the draft is emptied.
+        void enqueuePlanSync(pullPlanNow);
+      };
+      if (showStamp && award) {
+        setStampMoment({sessionId, dateKey: award.dateKey, variant: award.variant});
+        finishRevealRef.current = showSavedResult;
+        clearAutoFinish();
+        autoFinishTimer.current = setTimeout(showSavedResult, STAMP_REVEAL_DURATION_MS);
+      } else {
+        showSavedResult();
+      }
     } catch (e) {
+      setFinishSaveError(true);
       showToast(errorMessage(e));
     } finally {
       setBusy(false);
@@ -4655,6 +4688,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
         isLastPendingSet={pendingSetCount === 1 && !focusedSet?.done}
         lastSetMessage={lastSetMessage}
         completionMessage={completionMessage}
+        completionStamp={stampMoment}
+        finishSaveError={finishSaveError}
         paused={paused}
         busy={busy}
         onChangeAmount={(key, value) => {

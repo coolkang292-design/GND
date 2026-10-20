@@ -47,7 +47,8 @@ export function shouldRestAfterCompletion(input: {
 }
 
 /** 축하 화면을 보여주는 시간 — 이 뒤에 결과·인증 사진 화면으로 넘어간다 */
-export const COMPLETION_AUTO_FINISH_MS = 3000;
+export const COMPLETION_AUTO_FINISH_MS = 150;
+export const STAMP_REVEAL_DURATION_MS = 1850;
 
 // ── 운동 중 종목 바꾸기·건너뛰기 (2026-08-09) ──────────────────
 //

@@ -20,6 +20,8 @@ import type {
   WorkoutProgress,
 } from "@/lib/domain/workout-progress";
 import type { BodyPart } from "@/lib/types";
+import type { StampVariant } from "@/lib/domain/workout-stamps";
+import { WorkoutStampReveal } from "./workout-stamp-reveal";
 import { ExerciseThumbTile } from "./exercise-thumb";
 
 /**
@@ -295,6 +297,8 @@ export function ActiveSessionOverlay({
   isLastPendingSet,
   lastSetMessage,
   completionMessage,
+  completionStamp,
+  finishSaveError = false,
   paused,
   busy,
   canReplaceExercise,
@@ -363,6 +367,9 @@ export function ActiveSessionOverlay({
   lastSetMessage: string;
   /** 다 끝냈을 때 보여줄 안내 + 응원 (`workoutCompletionMessage`) */
   completionMessage: { headline: string; cheer: string };
+  /** A new stamp awarded by the server after successfully saving this workout. */
+  completionStamp?: { sessionId: string; dateKey: string; variant: StampVariant } | null;
+  finishSaveError?: boolean;
   paused: boolean;
   busy: boolean;
   /**
@@ -491,7 +498,8 @@ export function ActiveSessionOverlay({
           <button
             type="button"
             onClick={onMinimize}
-            className="flex h-11 flex-none items-center gap-1.5 rounded-full border border-line bg-surface px-4 text-[12px] font-bold text-muted"
+            disabled={busy || Boolean(completionStamp)}
+            className="flex h-11 flex-none items-center gap-1.5 rounded-full border border-line bg-surface px-4 text-[12px] font-bold text-muted disabled:opacity-50"
           >
             <Icon name="chevron" size={14} className="rotate-90" />
             최소화
@@ -500,7 +508,7 @@ export function ActiveSessionOverlay({
           <button
             type="button"
             onClick={onCancel}
-            disabled={busy}
+            disabled={busy || Boolean(completionStamp)}
             className="h-11 flex-none rounded-full px-4 text-[12px] font-bold text-faint disabled:opacity-50"
           >
             취소
@@ -527,9 +535,9 @@ export function ActiveSessionOverlay({
                 }`}
               >
                 <span aria-hidden className={`h-2 w-2 rounded-full ${paused ? "bg-warn" : "bg-accent"}`} />
-                {paused ? "정지됨 — 무동작" : resting ? "휴식 중" : "지금 운동 중"}
+                {allDone ? "운동 완료" : paused ? "정지됨 — 무동작" : resting ? "휴식 중" : "지금 운동 중"}
               </span>
-              {photoSlot}
+              {!busy && !completionStamp ? photoSlot : null}
             </div>
             {/* 경과 시간 — 시안처럼 오른쪽 위. ⚠️ 휴식 타이머보다 작게 둔다(아래 주석) */}
             <p
@@ -742,29 +750,31 @@ export function ActiveSessionOverlay({
 
           {allDone ? (
             <>
-              {/*
-                B안 (2026-08-04, 사용자 결정) — 마지막 세트에는 휴식을 걸지 않는다.
-                돌지도 않는 타이머와 프리셋을 그리면 거짓말이 된다.
-                3초 뒤 결과 화면으로 넘어가고, 기다리기 싫으면 바로 누를 수 있다.
-              */}
-              <div className="rounded-card border border-good/40 bg-good-weak px-4 py-4">
-                <p className="text-[15px] font-extrabold text-good">
-                  {completionMessage.headline}
-                </p>
-                <p className="mt-1.5 text-[12.5px] leading-5 font-bold text-muted">
-                  {completionMessage.cheer}
-                </p>
-              </div>
+              {/* Show the impact only after the server persisted the workout. */}
+              {completionStamp ? (
+                <WorkoutStampReveal key={completionStamp.sessionId}
+                  dateKey={completionStamp.dateKey} variant={completionStamp.variant} />
+              ) : (
+                <div className="rounded-card border border-good/40 bg-good-weak px-4 py-4" aria-live="polite">
+                  <p className="text-[15px] font-extrabold text-good">
+                    {busy ? "운동 기록 저장 중…" : finishSaveError ? "기록 저장을 다시 시도해 주세요" : completionMessage.headline}
+                  </p>
+                  {!busy && !finishSaveError && (
+                    <p className="mt-1.5 text-[12.5px] leading-5 font-bold text-muted">{completionMessage.cheer}</p>
+                  )}
+                  {finishSaveError && <p className="mt-1.5 text-[12px] text-muted">저장에 성공해야 오늘의 도장이 찍힙니다.</p>}
+                </div>
+              )}
               <p className="mt-4 text-[12px] font-bold text-muted">
-                잠시 후 결과 화면으로 넘어가요…
+                {completionStamp ? "잠시 후 운동 결과로 이동해요…" : busy ? "기록을 안전하게 저장하고 있어요…" : finishSaveError ? "다시 저장해 주세요." : "운동 기록을 저장하고 있어요…"}
               </p>
               <button
                 type="button"
                 onClick={onFinish}
                 disabled={busy}
-                className="mt-2 text-[12px] font-bold text-accent underline underline-offset-4 disabled:opacity-60"
+                className="mt-2 inline-flex min-h-11 items-center justify-center px-3 text-[12px] font-bold text-accent underline underline-offset-4 disabled:opacity-60"
               >
-                {busy ? "처리 중…" : "지금 바로 보기"}
+                {busy ? "처리 중…" : completionStamp ? "결과 바로 보기" : finishSaveError ? "다시 저장" : "지금 저장하기"}
               </button>
             </>
           ) : resting ? (
