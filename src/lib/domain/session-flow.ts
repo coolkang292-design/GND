@@ -48,7 +48,8 @@ export function shouldRestAfterCompletion(input: {
 
 /** 마지막 세트 이후 서버 저장을 시작하기까지의 짧은 UI 렌더 여유 */
 export const COMPLETION_AUTO_FINISH_MS = 150;
-export const STAMP_REVEAL_DURATION_MS = 1850;
+/** Keep the full-size stamp and copy visible; skipping results remains user-controlled. */
+export const STAMP_REVEAL_DURATION_MS = 3800;
 
 // ── 운동 중 종목 바꾸기·건너뛰기 (2026-08-09) ──────────────────
 //

@@ -276,7 +276,7 @@ main:has(> div > [data-testid="tab-backdrop"]) .fixed .bg-surface-2 {
   75%,100% {opacity:0;transform:translate(-50%,-50%) scale(1.5);}
 }
 @keyframes gnd-stamp-reveal-message {
-  0%,60% {opacity:0;transform:translateY(7px);}
+  0% {opacity:0;transform:translateY(7px);}
   100% {opacity:1;transform:translateY(0);}
 }
 .gnd-stamp-reveal-impact {animation:gnd-stamp-reveal-impact 1050ms cubic-bezier(.21,.77,.28,1) both;transform-origin:center;}
@@ -285,7 +285,9 @@ main:has(> div > [data-testid="tab-backdrop"]) .fixed .bg-surface-2 {
   border:2px solid rgba(204,227,153,.65);border-radius:50%;pointer-events:none;
   animation:gnd-stamp-reveal-ring 940ms ease-out both;
 }
-.gnd-stamp-reveal-message {animation:gnd-stamp-reveal-message 1250ms ease-out both;}
+/* Delays come from domain/workout-stamps.ts so the headline starts AFTER ink settles. */
+.gnd-stamp-reveal-message {animation:gnd-stamp-reveal-message 460ms ease-out both;}
+.gnd-stamp-reveal-submessage {animation:gnd-stamp-reveal-message 460ms ease-out both;}
 /* One-shot gold glint: no layout shift and no repeat on calendar revisit. */
 @keyframes gnd-stamp-gold-glint {
   0%,18% {opacity:0;transform:scale(.65) rotate(-18deg);}
@@ -300,7 +302,7 @@ main:has(> div > [data-testid="tab-backdrop"]) .fixed .bg-surface-2 {
 }
 @media (prefers-reduced-motion:reduce) {
   .gnd-stamp-gold-burst,.gnd-stamp-reveal-ring {display:none;}
-  .gnd-stamp-reveal-impact,.gnd-stamp-reveal-message {animation:none;transform:none;opacity:1;filter:none;}
+  .gnd-stamp-reveal-impact,.gnd-stamp-reveal-message,.gnd-stamp-reveal-submessage {animation:none;transform:none;opacity:1;filter:none;}
   .gnd-stamp-impact,.gnd-stamp-impact-ring,.gnd-stamp-impact-word {animation:none;transform:none;}
   .gnd-stamp-impact {opacity:1;}
   .gnd-stamp-impact-ring,.gnd-stamp-impact-word {display:none;}

@@ -71,7 +71,7 @@ describe("save before reward", () => {
     expect(COMPLETION_AUTO_FINISH_MS).toBeLessThan(300);
   });
   it("holds the server award long enough for the physical stamp to settle", () => {
-    expect(STAMP_REVEAL_DURATION_MS).toBeGreaterThanOrEqual(1400);
+    expect(STAMP_REVEAL_DURATION_MS).toBeGreaterThanOrEqual(3600);
   });
 });
 

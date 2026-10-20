@@ -1137,6 +1137,7 @@ describe("ActiveSessionOverlay — 완료 화면 (B안)", () => {
     render(<ActiveSessionOverlay {...restProps} nextUp={null}
       completionStamp={{sessionId:"session",dateKey:"2026-10-21",variant:"orange"}} />);
     expect(screen.getByTestId("large-stamp-impact")).toBeTruthy();
+    expect(screen.getByText("오늘도 해냈다.")).toBeTruthy();
     expect(screen.getByText("오늘은 느낌이 좀 좋은데?")).toBeTruthy();
     expect(screen.getByText("운동 완료")).toBeTruthy();
     expect(screen.queryByText("휴식 중")).toBeNull();
