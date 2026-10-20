@@ -3223,8 +3223,10 @@ function WorkoutScreen({ userId }: { userId: string }) {
         showToast("운동은 완료됐지만 예정표는 달력에서 직접 삭제해 주세요");
       }
       const award = await stampPromise;
-      // Same-day repeats, retry replays and the separate Tabata finish sheet never animate.
-      const showStamp = incomplete === 0 && !tabataOpen && !intervalPlaying
+      // One saved-workout stamp for any finished routine, including Tabata.
+      // Tabata's onComplete closes its sheet after this function returns, exposing
+      // the same workout overlay for the stamp. Same-day/replay never re-animates.
+      const showStamp = incomplete === 0
         && !xp.idempotentReplay && award?.newlyAwarded === true;
       const showSavedResult = () => {
         clearAutoFinish();
