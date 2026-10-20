@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
 import { WorkoutStampReveal } from "./workout-stamp-reveal";
 import { STAMP_HEADLINE_DELAY_MS, STAMP_SPECIAL_LINE_DELAY_MS } from "@/lib/domain/workout-stamps";
 import { STAMP_REVEAL_DURATION_MS } from "@/lib/domain/session-flow";
+
+afterEach(cleanup);
 
 describe("saved workout stamp impact", () => {
   it("shows a large stamped orange award without a gold burst", () => {
