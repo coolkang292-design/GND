@@ -32,7 +32,9 @@ export function WorkoutWeekStampCelebration({
         completedSessions: sessions.map(s => s.completedAt),
         timeZone: profile?.timezone || resolveTimeZone(),
       });
-      const colors = await getMyStampColors(userId).catch(() => ({}));
+      const colors: Record<string, StampVariant> = await getMyStampColors(userId).catch(() => ({}));
+      // Authoritative RPC result bridges brief read failures / replication lag.
+      if (claimed) colors[claimed.dateKey] = claimed.variant;
       if (cancelled) return;
       setSnapshot(snapshot);
       setColors(colors);
