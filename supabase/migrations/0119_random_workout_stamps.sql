@@ -61,7 +61,7 @@ BEGIN
   ) THEN
     v_variant := 'orange';
   ELSE
-    v_entropy := gen_random_bytes(4);
+    v_entropy := extensions.gen_random_bytes(4);
     v_roll := ((get_byte(v_entropy,0)::bigint*16777216
       +get_byte(v_entropy,1)::bigint*65536
       +get_byte(v_entropy,2)::bigint*256
