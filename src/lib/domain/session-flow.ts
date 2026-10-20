@@ -46,7 +46,7 @@ export function shouldRestAfterCompletion(input: {
   return input.pendingSetCountAfter > 0;
 }
 
-/** 축하 화면을 보여주는 시간 — 이 뒤에 결과·인증 사진 화면으로 넘어간다 */
+/** 마지막 세트 이후 서버 저장을 시작하기까지의 짧은 UI 렌더 여유 */
 export const COMPLETION_AUTO_FINISH_MS = 150;
 export const STAMP_REVEAL_DURATION_MS = 1850;
 

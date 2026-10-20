@@ -535,7 +535,7 @@ export function ActiveSessionOverlay({
                 }`}
               >
                 <span aria-hidden className={`h-2 w-2 rounded-full ${paused ? "bg-warn" : "bg-accent"}`} />
-                {allDone ? "운동 완료" : paused ? "정지됨 — 무동작" : resting ? "휴식 중" : "지금 운동 중"}
+                {allDone ? (completionStamp ? "운동 완료" : busy ? "기록 저장 중" : finishSaveError ? "저장 실패" : "세트 완료") : paused ? "정지됨 — 무동작" : resting ? "휴식 중" : "지금 운동 중"}
               </span>
               {!busy && !completionStamp ? photoSlot : null}
             </div>

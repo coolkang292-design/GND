@@ -11,9 +11,8 @@ import { WorkoutCompleteStamp } from "./workout-complete-stamp";
 import { getMyStampColors } from "@/lib/stamps";
 import type { StampVariant } from "@/lib/domain/workout-stamps";
 
-/** A real stamp, once per NEW exercise day, never a new stored badge.
- * Client-only presentation failure must not affect successful workout saving.
- * The final calendar still derives stamps from completed sessions as before. */
+/** Static weekly record after the large stamp has landed in the workout overlay.
+ * No new animation, claim or duplicate reward on the results page. */
 export function WorkoutWeekStampCelebration({
   userId, sessionId, completedAtMs,
 }: { userId: string; sessionId: string; completedAtMs: number }) {
