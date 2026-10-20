@@ -193,7 +193,7 @@ import { TodayStatusCard } from "@/components/record/today-status-card";
 import { Icon } from "@/components/ui/icon";
 import { CompletionHeroCard } from "@/components/record/completion-hero-card";
 import { WorkoutWeekStampCelebration } from "@/components/record/workout-week-stamp-celebration";
-import { claimWorkoutStamp } from "@/lib/stamps";
+import { claimWorkoutStamp, type StampAward } from "@/lib/stamps";
 import type { StampVariant } from "@/lib/domain/workout-stamps";
 import {
   achievementMomentLine,
@@ -728,6 +728,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const [stampMoment, setStampMoment] = useState<{
     sessionId: string; dateKey: string; variant: StampVariant;
   } | null>(null);
+  /** Preserve today's authoritative color even if the read-only calendar query fails. */
+  const [resultStampAward, setResultStampAward] = useState<StampAward | null>(null);
   const finishRevealRef = useRef<(() => void) | null>(null);
   const finishingRef = useRef(false); // 종료 재진입 방지
   const [loadingExerciseKey, setLoadingExerciseKey] = useState<string | null>(
@@ -3223,6 +3225,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
         showToast("운동은 완료됐지만 예정표는 달력에서 직접 삭제해 주세요");
       }
       const award = await stampPromise;
+      setResultStampAward(award);
       // One saved-workout stamp for any finished routine, including Tabata.
       // Tabata's onComplete closes its sheet after this function returns, exposing
       // the same workout overlay for the stamp. Same-day/replay never re-animates.
@@ -3822,6 +3825,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
           sessionId={result.sessionId}
           userId={userId}
           completedAtMs={result.completedAtMs}
+          awardedStamp={resultStampAward}
         />
         {/*
           챌린지 반영 상태 (이슈 #16 P0-B). 예정형(인증 대기)과 확정형(반영됐어요)을 문장으로 가른다.

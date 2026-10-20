@@ -8,14 +8,14 @@ import {
   workoutWeekStampSnapshot, type WeekStampSnapshot,
 } from "@/lib/domain/workout-week-stamps";
 import { WorkoutCompleteStamp } from "./workout-complete-stamp";
-import { getMyStampColors } from "@/lib/stamps";
+import { getMyStampColors, type StampAward } from "@/lib/stamps";
 import type { StampVariant } from "@/lib/domain/workout-stamps";
 
 /** Static weekly record after the large stamp has landed in the workout overlay.
  * No new animation, claim or duplicate reward on the results page. */
 export function WorkoutWeekStampCelebration({
-  userId, sessionId, completedAtMs,
-}: { userId: string; sessionId: string; completedAtMs: number }) {
+  userId, sessionId, completedAtMs, awardedStamp = null,
+}: { userId: string; sessionId: string; completedAtMs: number; awardedStamp?: StampAward | null }) {
   const [snapshot, setSnapshot] = useState<WeekStampSnapshot | null>(null);
   const [colors, setColors] = useState<Record<string, StampVariant>>({});
   useEffect(() => {
@@ -30,12 +30,13 @@ export function WorkoutWeekStampCelebration({
         timeZone: profile?.timezone || resolveTimeZone(),
       });
       const colors: Record<string, StampVariant> = await getMyStampColors(userId).catch(() => ({}));
+      if (awardedStamp) colors[awardedStamp.dateKey] = awardedStamp.variant;
       if (cancelled) return;
       setSnapshot(snapshot);
       setColors(colors);
     })().catch(() => { /* Reward UI cannot undo a saved workout. */ });
     return () => { cancelled = true; };
-  }, [userId, sessionId, completedAtMs]);
+  }, [userId, sessionId, completedAtMs, awardedStamp]);
 
   if (!snapshot) return null;
   const ariaDays = snapshot.days.map(

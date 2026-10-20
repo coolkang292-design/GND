@@ -53,6 +53,16 @@ describe("WorkoutWeekStampCelebration", () => {
     expect(screen.queryByText("오늘, 뭔가 좋은 일 생기려나?")).toBeNull();
     expect(container.querySelectorAll(".gnd-stamp-gold-burst")).toHaveLength(0);
   });
+  it("preserves the server-awarded color when the read-only colors query fails",async()=>{
+    mocks.getMyProfile.mockResolvedValue({timezone:"Asia/Seoul"});
+    mocks.getCompletedSessionMinutes.mockResolvedValue([item("2026-10-20T07:52:00+09:00")]);
+    mocks.getMyStampColors.mockRejectedValue(new Error("temporary network failure"));
+    const {container}=render(<WorkoutWeekStampCelebration {...props}
+      awardedStamp={{dateKey:"2026-10-20",variant:"gold",newlyAwarded:true}}/>);
+    await waitFor(()=>expect(screen.getByText("1일 완료")).toBeTruthy());
+    expect(container.querySelector('svg[class*="text-[#C39420]"]')).not.toBeNull();
+    expect(container.querySelector(".gnd-stamp-gold-burst")).toBeNull();
+  });
   it("never invents a calendar on network failure",async()=>{
     mocks.getMyProfile.mockResolvedValue({timezone:"Asia/Seoul"});
     mocks.getCompletedSessionMinutes.mockRejectedValue(new Error("network"));

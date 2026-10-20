@@ -1113,10 +1113,10 @@ describe("ActiveSessionOverlay — 완료 화면 (B안)", () => {
     expect(screen.queryByRole("button", { name: "2분" })).toBeNull();
   });
 
-  it("곧 결과 화면으로 넘어간다고 알린다", () => {
+  it("저장 전에는 결과 이동을 약속하지 않고 기록 저장을 안내한다", () => {
     renderRest(done);
-
-    expect(screen.getByText(/잠시 후|곧/)).toBeTruthy();
+    expect(screen.getByText("운동 기록을 저장하고 있어요…")).toBeTruthy();
+    expect(screen.queryByText(/잠시 후|곧/)).toBeNull();
   });
 
   it("바로 가고 싶으면 누를 수 있다 — 기다림이 강제가 아니다", () => {
