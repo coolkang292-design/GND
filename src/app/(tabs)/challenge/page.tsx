@@ -281,14 +281,43 @@ function ChallengeScreen({ userId }: { userId: string }) {
       window.history.replaceState(null, "", window.location.pathname);
 
       try {
+        // Already-joined members should open the room, not rejoin it. The
+        // user-scoped list only includes rooms visible to this account.
+        const mine = await getMyChallenges(userId);
+        const existing = mine.find(
+          (c) => c.invite_code === code && c.myStatus === "joined",
+        );
+        if (existing) {
+          goUrl(detailUrl(existing.id), "replace");
+          clearPendingChallengeInvite();
+          reload();
+          return;
+        }
         const r = await joinChallengeWithCode(code);
         // 참가한 방을 열고 목표 설정을 바로 띄운다 — "참여 → 주 몇 번 → 운동"
         goUrl(detailUrl(r.challengeId, "joined"), "replace");
         showToast(`${r.challengeName}에 참가했어요! 🎉`);
         clearPendingChallengeInvite();
       } catch (e) {
+        // Concurrent joins can return already_joined even after the first
+        // lookup. Recheck membership without exposing any other user's room.
+        const message = e instanceof Error ? e.message : String(e);
+        if (message.includes("already_joined")) {
+          try {
+            const mine = await getMyChallenges(userId);
+            const existing = mine.find(
+              (c) => c.invite_code === code && c.myStatus === "joined",
+            );
+            if (existing) {
+              goUrl(detailUrl(existing.id), "replace");
+              clearPendingChallengeInvite();
+              return;
+            }
+          } catch {
+            // Preserve the original error when membership cannot be verified.
+          }
+        }
         showToast(errorMessage(e));
-        // 이미 참가했거나 코드가 잘못됐으면 보관해 둘 이유가 없다.
         clearPendingChallengeInvite();
       } finally {
         reload();
