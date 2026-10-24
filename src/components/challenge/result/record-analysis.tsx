@@ -1,13 +1,9 @@
 "use client";
 
 import { Icon } from "@/components/ui/icon";
-import type { RankedParticipant } from "@/lib/domain/goal-score";
-import type {
-  BestRecords as Records,
-  DailyBar,
-  PeriodRewards,
-  WeekAchievement,
-} from "@/lib/domain/challenge-report";
+import type { PeriodRewards } from "@/lib/domain/challenge-report";
+import type { MyReport } from "@/lib/domain/challenge-record-analysis";
+export type { MyReport } from "@/lib/domain/challenge-record-analysis";
 import { BestRecords } from "./best-records";
 import { DailyActivityChart } from "./daily-activity-chart";
 import { GoalRing } from "./goal-ring";
@@ -16,38 +12,21 @@ import { RewardsRow } from "./rewards-row";
 import { ScoreTrendChart } from "./score-trend-chart";
 import { WeeklyHeatmap } from "./weekly-heatmap";
 
-export type MyGoalResult = {
-  key: string;
-  label: string;
-  actual: number;
-  target: number;
-  unit: string;
-  rate: number;
-};
-
-export type MyReport = {
-  ranked: RankedParticipant;
-  total: number;
-  goals: MyGoalResult[];
-  bars: DailyBar[];
-  records: Records;
-  trend: { label: string; overall: number }[];
-  weeks: WeekAchievement[];
-};
-
 const card = "rounded-card border border-line bg-surface p-4 shadow-card";
 
 /**
- * 종료 화면 `기록 분석` 탭 (최종 시안 2026-10-07).
+ * 종료 결과는 전체 분석을 유지하고, 진행 중에는 기존 `내 진행`과 중복하지 않도록
+ * 일별 계획 대비 실제 운동 및 주간 달성만 표시한다.
  * 첫 시안의 「나의 챌린지 결과」 본문을 여기로 옮겼다 — 목표 달성률 · 일별 활동 · 주요 기록 · 나의 성장,
  * 그리고 레벨 · 주간 달성 · 획득한 보상. 순위·종합 점수 머리는 `결과 요약`이 맡는다.
  */
-export function RecordAnalysis({ me, rewards }: { me: MyReport; rewards: PeriodRewards | null }) {
+export function RecordAnalysis({ me, rewards, mode = "ended" }: { me: MyReport; rewards: PeriodRewards | null; mode?: "live" | "ended" }) {
   const done = me.goals.filter((g) => g.rate >= 1).length;
   return (
     <div className="flex flex-col gap-3">
-      {rewards && <LevelCard r={rewards} />}
+      {mode === "ended" && rewards && <LevelCard r={rewards} />}
 
+      {mode === "ended" && (
       <section className={card}>
         <div className="mb-3 flex items-center justify-between gap-2">
           <h3 className="text-[15px] font-extrabold">목표 달성률</h3>
@@ -56,6 +35,7 @@ export function RecordAnalysis({ me, rewards }: { me: MyReport; rewards: PeriodR
             <Icon name="thumbsup" size={14} className="text-gold" />
           </span>
         </div>
+        {me.goals.length === 0 && <p className="text-[12px] text-muted">설정한 개인 목표가 없어요. 기존 목표 설정 화면에서 목표를 등록해 주세요.</p>}
         <div className="grid grid-cols-3 gap-3">
           {me.goals.map((g) => (
             <div key={g.key} data-testid="goal-ring" className="relative flex flex-col items-center gap-1 pt-1 text-center">
@@ -74,6 +54,7 @@ export function RecordAnalysis({ me, rewards }: { me: MyReport; rewards: PeriodR
           ))}
         </div>
       </section>
+      )}
 
       <section className={card}>
         <div className="flex items-center justify-between">
@@ -95,22 +76,28 @@ export function RecordAnalysis({ me, rewards }: { me: MyReport; rewards: PeriodR
       <section className={card}>
         <div className="mb-2.5 flex items-center justify-between">
           <h3 className="text-[15px] font-extrabold">주간 달성</h3>
-          <span className="text-[11px] text-muted">꾸준함이 만든 결과예요!</span>
+          <span className="text-[11px] text-muted">
+            {mode === "live" ? "이번 주는 진행 중이에요" : "꾸준함이 만든 결과예요!"}
+          </span>
         </div>
         <WeeklyHeatmap weeks={me.weeks} />
       </section>
 
-      <section className={card}>
-        <h3 className="mb-2.5 text-[15px] font-extrabold">주요 기록</h3>
-        <BestRecords records={me.records} />
-      </section>
+      {mode === "ended" && (
+        <>
+          <section className={card}>
+            <h3 className="mb-2.5 text-[15px] font-extrabold">주요 기록</h3>
+            <BestRecords records={me.records} />
+          </section>
 
-      <section className={card}>
-        <h3 className="mb-1 text-[15px] font-extrabold">나의 성장</h3>
-        <ScoreTrendChart points={me.trend} />
-      </section>
+          <section className={card}>
+            <h3 className="mb-1 text-[15px] font-extrabold">나의 성장</h3>
+            <ScoreTrendChart points={me.trend} />
+          </section>
+        </>
+      )}
 
-      {rewards && (
+      {mode === "ended" && rewards && (
         <section className={card}>
           <h3 className="mb-2.5 text-[15px] font-extrabold">획득한 보상</h3>
           <RewardsRow r={rewards} />

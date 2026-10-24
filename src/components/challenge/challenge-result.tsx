@@ -6,20 +6,15 @@ import { RankingPodium } from "@/components/challenge/ranking-podium";
 import { ChallengeHero } from "@/components/challenge/detail/challenge-hero";
 import { DetailTabs } from "@/components/challenge/detail/detail-tabs";
 import {
-  goalLabel,
-  myScoreTrend,
   type ChallengeParticipantProfile,
   type PeriodSessionRow,
 } from "@/lib/challenge";
 import { getMyRewardLedgers } from "@/lib/challenge-rewards";
 import { inclusiveDays } from "@/lib/domain/challenge-time";
+import { buildMyRecordReport, type MyReport } from "@/lib/domain/challenge-record-analysis";
 import {
-  bestRecords,
-  dailyBars,
-  dailyTotals,
   periodRewards,
   resultShareText,
-  weeklyAchievement,
   type PeriodRewards,
   type PlanInput,
 } from "@/lib/domain/challenge-report";
@@ -30,10 +25,10 @@ import {
   minutesKnown,
   rankMetric,
 } from "@/lib/domain/challenge-metrics";
-import { goalRate, rankParticipants, type ParticipantInput } from "@/lib/domain/goal-score";
+import { rankParticipants, type ParticipantInput } from "@/lib/domain/goal-score";
 import type { UserGoal } from "@/lib/types";
 import { FinalRanking } from "./result/final-ranking";
-import { RecordAnalysis, type MyReport } from "./result/record-analysis";
+import { RecordAnalysis } from "./result/record-analysis";
 import { ResultHeader } from "./result/result-header";
 import { ResultOverview, type MetricCell } from "./result/result-overview";
 
@@ -116,29 +111,19 @@ export function ResultView({
   const report = useMemo<MyReport | null>(() => {
     const input = participants.find((p) => p.userId === myUserId);
     if (!myRanked || !input) return null;
-    const myGoals = goals.filter((g) => g.user_id === myUserId);
-    const days = dailyTotals(sessionRows.filter((s) => s.userId === myUserId), start, end, timeZone);
-    return {
+    return buildMyRecordReport({
+      userId: myUserId,
+      participant: input,
+      goals,
+      rows: sessionRows,
+      plans,
+      startDate: start,
+      endDate: end,
+      timeZone,
+      finalized: true,
       ranked: myRanked,
       total,
-      goals: myGoals.map((g) => {
-        const actual = input.goals.find((x) => x.type === g.goal_type)?.actual ?? 0;
-        const target = Number(g.target_value);
-        return {
-          key: g.id,
-          label: goalLabel(g.goal_type, g.qualifier),
-          actual,
-          target,
-          unit: g.unit ?? "",
-          rate: goalRate(target, actual),
-        };
-      }),
-      bars: dailyBars(days, plans, start, end),
-      records: bestRecords(days),
-      trend: myScoreTrend({ rows: sessionRows, userId: myUserId, goals: myGoals, startDate: start, endDate: end, timeZone }),
-      // 주간 목표 횟수 — buildParticipantInput과 같은 기본값 5
-      weeks: weeklyAchievement([...days.keys()], start, end, myGoals[0]?.planned_days ?? 5),
-    };
+    });
   }, [myRanked, participants, goals, sessionRows, plans, myUserId, start, end, timeZone, total]);
 
   // 결과 요약의 종목 4칸 — 값 + 내 순위
