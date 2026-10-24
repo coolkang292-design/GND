@@ -723,33 +723,6 @@ export function ChallengeDetail({
 
           {activeTab === "overview" && (
           <>
-          {challenge.myStatus === "joined" && (
-            <section className="rounded-card border border-line bg-surface p-4 shadow-card">
-              <button
-                type="button"
-                onClick={() => setShowMyRecords((open) => !open)}
-                aria-expanded={showMyRecords}
-                aria-controls="live-personal-records"
-                className="flex min-h-11 w-full items-center justify-between gap-3 text-left"
-              >
-                <span>
-                  <strong className="block text-[15px] font-extrabold">나의 기록 · 성장</strong>
-                  <span className="block text-[11.5px] text-muted">오늘까지의 인증만 집계 · 본인만 보는 분석</span>
-                </span>
-                <span className="text-[12px] font-bold text-accent">{showMyRecords ? "접기" : "펼치기"}</span>
-              </button>
-              {showMyRecords && (
-                <div id="live-personal-records" className="mt-3 border-t border-line pt-3">
-                  {liveRecordReport ? (
-                    <RecordAnalysis me={liveRecordReport} rewards={null} mode="live" />
-                  ) : (
-                    <p className="text-[12.5px] text-muted">개인 목표를 등록하면 기록 분석을 볼 수 있어요.</p>
-                  )}
-                </div>
-              )}
-            </section>
-          )}
-
           {/* ── 내 진행 (2026-10-05) ─────────────────────────────
               시안의 `실시간 랭킹` 자리다. ⚠️⚠️ **진행 중에는 순위를 그리지 않는다**
               (사용자 확정 2026-10-05 "진행 중 챌린지는 내 목표·활동을 표시하고, TOP 3는
@@ -876,6 +849,33 @@ export function ChallengeDetail({
               onClose={() => setRaisingGoals(false)}
               onRaised={onGoalRaised}
             />
+          )}
+
+          {challenge.myStatus === "joined" && (
+            <section className="rounded-card border border-line bg-surface p-4 shadow-card">
+              <button
+                type="button"
+                onClick={() => setShowMyRecords((open) => !open)}
+                aria-expanded={showMyRecords}
+                aria-controls="live-personal-records"
+                className="flex min-h-11 w-full items-center justify-between gap-3 text-left"
+              >
+                <span>
+                  <strong className="block text-[15px] font-extrabold">운동 패턴 보기</strong>
+                  <span className="block text-[11.5px] text-muted">일별 운동·주간 달성 · 오늘까지의 내 기록</span>
+                </span>
+                <span className="text-[12px] font-bold text-accent">{showMyRecords ? "접기" : "펼치기"}</span>
+              </button>
+              {showMyRecords && (
+                <div id="live-personal-records" className="mt-3 border-t border-line pt-3">
+                  {liveRecordReport ? (
+                    <RecordAnalysis me={liveRecordReport} rewards={null} mode="live" />
+                  ) : (
+                    <p className="text-[12.5px] text-muted">목표를 설정하고 운동을 인증하면 활동 분석을 볼 수 있어요.</p>
+                  )}
+                </div>
+              )}
+            </section>
           )}
 
           {/* ⚠️ **한 줄은 접지 않는다** (2026-08-13) — "왜 남의 점수가 안 보이나"의 답.
