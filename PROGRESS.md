@@ -4,7 +4,10 @@
 > 이 파일은 전체 흐름의 요약이고, 작업별 세부 사실과 남은 확인은 최신 인수인계서가 기준이다.
 
 
-## 🟡 2026-10-24 배포 용량 최적화 1·2단계 (이슈 #22) — **브랜치 `perf/storage-audio-assets`, 배포 안 함**
+## ✅ 2026-10-24 배포 용량 최적화 1·2단계 (이슈 #22) — **운영 배포 완료**
+
+- 코드 main `8f2b2ee`(로컬 fast-forward 후 push, 0 0 — 웹 병합 아님). Vercel `dpl_3TWjMCBKRHn35z9WpPgmhcUqcGQW`(`gnd-d0fnldatw-gnd4`) CLI target production READY·PROMOTED, `meta.gndCommitSha` = `8f2b2ee…` → `gnd-one.vercel.app`. 운영: `-v3` 음원 3개 200(4,001,325 / 8,001,453 / 16,001,709 B), 옛 `-v2`·`tabata-4min-total-body.mp3`·`gnd-launch-motivation-v5.png` 404, `/` → `/record` 200. 운영 JS 24개: `total-body-v3` 2개 / `total-body-v2`·옛 4분 이름·`gnd-launch-motivation` 0개. `main` push는 로컬 푸시라 자동 배포 없음.
+- Vercel Usage(Deployment Storage, Hobby라 API 불가 → 대시보드): 10/20~23 약 **8.1GB**(10GB 한도). 10/24 점은 2.93kB로 표시되나 집계 중인 당일 값으로 보인다 `[미확인]`. 기존 배포는 30일 보존 만료(10/26~11/23)로 빠지고 새 배포부터 약 33MB씩 작다 — 감소는 날짜를 두고 다시 잰다.
 
 - 배경: Vercel Deployment Storage 10GB 중 7.5GB. 배포 1건 ≈ `public/` 72MB, 그중 타바타 음원 56MB가 배포마다 다시 저장된다. 계획서는 PR #23(Draft) `docs/plans/2026-10-23-vercel-deployment-storage.md`.
 - ① 음원: v2(256kbps)를 **128kbps CBR로만 다시 인코딩**해 `-v3`로 이름을 올렸다(캐시 규칙, `tabata.ts` 주석). 56.2MB → 28.0MB. 디코딩 길이 원본과 같음(250.009 / 500.018 / 1000.036초), 준비·이음매·끝 15곳 상호상관 어긋남 **0.0ms**(유사도 0.998+). `interval-cue.test.ts`의 초당 바이트 상수 32,800 → 16,000(일부러 16분 파일을 8분으로 바꿔치면 실패하는 것 확인).
