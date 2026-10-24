@@ -8,6 +8,7 @@ import {
 } from "@/lib/challenge";
 import type { HostChallenge } from "@/lib/creator-access";
 import { buildCreatorMemberDetail, type CreatorMemberDetail } from "@/lib/domain/creator-member-detail";
+import { buildDailyProofRates, type DailyProofRate } from "@/lib/domain/creator-report";
 import {
   buildCreatorSnapshot,
   buildRecentActivity,
@@ -77,8 +78,8 @@ export async function loadCreatorMemberDetail(
 export async function loadCreatorView(
   db: SupabaseClient,
   challenge: HostChallenge,
-  options: { recentLimit?: number } = {},
-): Promise<{ snapshot: CreatorSnapshot; recent: CreatorActivityView[] }> {
+  options: { recentLimit?: number; daily?: boolean } = {},
+): Promise<{ snapshot: CreatorSnapshot; recent: CreatorActivityView[]; daily: DailyProofRate[] }> {
   const { data: participantData, error } = await db
     .from("challenge_participants")
     .select("user_id,role,status,joined_at")
@@ -97,6 +98,7 @@ export async function loadCreatorView(
       : Promise.resolve([]),
   ]);
 
+  const todayKey = dayKey(new Date(), DEFAULT_TIMEZONE);
   const snapshot = buildCreatorSnapshot({
     participants,
     profiles,
@@ -104,13 +106,23 @@ export async function loadCreatorView(
     sessions,
     startDate: challenge.start_date,
     endDate: challenge.end_date,
-    todayKey: dayKey(new Date(), DEFAULT_TIMEZONE),
+    todayKey,
     status: challenge.status,
   });
+  const daily = options.daily
+    ? buildDailyProofRates({
+        participants,
+        sessions,
+        startDate: challenge.start_date,
+        endDate: challenge.end_date,
+        todayKey,
+        status: challenge.status,
+      })
+    : [];
   const recent = options.recentLimit
     ? buildRecentActivity({ participants, profiles, activity, limit: options.recentLimit })
         // Labels are made on the server so hydration never disagrees with them.
         .map((a) => ({ ...a, when: timeAgo(new Date(a.at)) }))
     : [];
-  return { snapshot, recent };
+  return { snapshot, recent, daily };
 }

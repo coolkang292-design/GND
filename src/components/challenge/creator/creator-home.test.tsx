@@ -34,6 +34,8 @@ describe("Creator Studio home (mockup 4)", () => {
   it("leads with the invite only while recruiting", () => {
     const html = render("setup");
     expect(html).toContain("초대 링크 공유");
+    expect(html).not.toContain("성과 리포트 보기"); // 시작 전엔 리포트할 것이 없다
+    expect(render("active")).toContain("/challenge/creator/c1/report");
     expect(html).not.toContain("3일 이상 기록 없음");
   });
 

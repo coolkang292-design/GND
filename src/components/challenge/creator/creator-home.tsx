@@ -165,6 +165,15 @@ export function CreatorHome({
           <Icon name={secondary.icon} size={19} /> {secondary.label}
         </Link>
       </div>
+      {challenge.status !== "setup" && (
+        <Link
+          href={`${base}/report`}
+          className={`${card} flex min-h-12 items-center justify-center gap-2 px-3 text-[14.5px] font-bold`}
+        >
+          <Icon name="ranking" size={18} className="text-accent" /> 성과 리포트 보기
+          <Icon name="chevron" size={16} className="ml-auto text-muted" />
+        </Link>
+      )}
       {challenge.status === "active" && (
         <p className="-mt-1.5 text-[11px] text-muted">진행 중에는 새 회원이 참가할 수 없어 초대 공유를 숨겼어요.</p>
       )}
