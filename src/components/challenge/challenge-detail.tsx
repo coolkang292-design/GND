@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { Avatar } from "@/components/avatar";
 import { ChallengeActivity } from "@/components/challenge/challenge-activity";
 import { ResultView } from "@/components/challenge/challenge-result";
@@ -370,6 +371,11 @@ export function ChallengeDetail({
               <Icon name="back" size={22} />
             </button>
             <p className="min-w-0 flex-1 truncate text-center text-[15px] font-extrabold">챌린지 상세</p>
+            {isHost && (
+              <Link href={`/creator/${encodeURIComponent(challenge.id)}`} className="flex min-h-10 items-center rounded-card-sm border border-accent px-2.5 text-xs font-extrabold text-accent">
+                운영 관리
+              </Link>
+            )}
             {isHost ? (
               <button
                 type="button"
@@ -416,6 +422,11 @@ export function ChallengeDetail({
           >
             <Icon name="users" size={21} />
           </button>
+        )}
+        {isHost && (
+          <Link href={`/creator/${encodeURIComponent(challenge.id)}`} className="flex min-h-10 items-center rounded-card-sm border border-accent px-2.5 text-xs font-extrabold text-accent">
+            운영 관리
+          </Link>
         )}
         {isHost && (
           <button
