@@ -262,7 +262,7 @@ describe("타바타 코스", () => {
 
   it("분수로 코스를 찾는다", () => {
     expect(tabataTrackForMinutes(8)?.src).toBe(
-      "/audio/tabata-8min-total-body-v2.mp3",
+      "/audio/tabata-8min-total-body-v3.mp3",
     );
     expect(tabataTrackForMinutes(5)).toBeNull();
   });

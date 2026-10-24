@@ -34,29 +34,30 @@ export type TabataTrack = {
 /**
  * 내장 타바타 코스 — 8·16분은 4분 원본을 이어붙인 파일이다.
  *
- * ⚠️ 파일 이름의 `-v2`를 지우지 마라 (2026-08-13). 예전 8·16분 파일은 이음매마다
- *    4.98초가 빠져 있어서 화면 카운트다운이 음악보다 앞서 갔다. 같은 이름으로
- *    덮으면 브라우저·CDN이 **옛 파일을 계속 쓴다** — 고쳐 놓고도 안 맞는다.
- *    음원을 다시 만들면 이름도 올려라.
+ * ⚠️ 음원을 다시 만들면 **파일 이름의 버전도 올려라** (2026-08-13 `-v2`). 예전 8·16분
+ *    파일은 이음매마다 4.98초가 빠져 있어서 화면 카운트다운이 음악보다 앞서 갔다.
+ *    같은 이름으로 덮으면 브라우저·CDN이 **옛 파일을 계속 쓴다** — 고쳐 놓고도 안 맞는다.
+ * `-v3` (2026-10-24, GND#22 배포 용량): v2를 256→128kbps로만 다시 인코딩했다(48kHz 스테레오).
+ *    56MB → 28MB. 디코딩 길이는 원본과 같고, 준비·이음매·끝 15곳 상호상관 어긋남 0.0ms.
  * 추가는 여기 한 줄 (권리 확인된 사용자 제작 음원만).
  */
 export const TABATA_TRACKS: readonly TabataTrack[] = [
   {
     id: "total-body-4min",
     title: "4분 전신",
-    src: "/audio/tabata-4min-total-body.mp3",
+    src: "/audio/tabata-4min-total-body-v3.mp3",
     minutes: 4,
   },
   {
     id: "total-body-8min",
     title: "8분 전신 (2회 반복)",
-    src: "/audio/tabata-8min-total-body-v2.mp3",
+    src: "/audio/tabata-8min-total-body-v3.mp3",
     minutes: 8,
   },
   {
     id: "total-body-16min",
     title: "16분 전신 (4회 반복)",
-    src: "/audio/tabata-16min-total-body-v2.mp3",
+    src: "/audio/tabata-16min-total-body-v3.mp3",
     minutes: 16,
   },
 ] as const;

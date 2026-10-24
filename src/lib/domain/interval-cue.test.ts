@@ -163,14 +163,17 @@ describe("인터벌 진행 판정", () => {
    * 2026-08-13에 8·16분 음원을 다시 만들었다. 예전 파일은 이음매마다 4.98초가
    * 빠져 있어서 두 번째 블록부터 화면이 음악보다 5초씩 앞서 갔다. 파일을 다시
    * 건드리면 이 테스트가 먼저 깨져야 한다.
+   *
+   * 2026-10-24 `-v3`: 256→128kbps CBR로 다시 인코딩했다(GND#22 배포 용량). 그래서
+   * 초당 바이트 상수를 바꿨다. 비트레이트를 또 바꾸면 이 상수도 같이 바꿔야 한다.
    */
   it("음원 파일 길이가 블록 계산과 맞는다", () => {
     const dir = join(process.cwd(), "public", "audio");
     for (const track of TABATA_TRACKS) {
       const bytes = statSync(join(dir, track.src.replace("/audio/", ""))).size;
       const expected = intervalTotalSeconds(track.minutes);
-      // 262kbps 기준 초당 약 32.8KB. 길이가 절반이나 두 배로 어긋나면 잡힌다.
-      const approxSeconds = bytes / 32_800;
+      // 128kbps CBR 기준 초당 16KB. 길이가 절반이나 두 배로 어긋나면 잡힌다.
+      const approxSeconds = bytes / 16_000;
       expect(Math.abs(approxSeconds - expected)).toBeLessThan(expected * 0.05);
     }
   });
