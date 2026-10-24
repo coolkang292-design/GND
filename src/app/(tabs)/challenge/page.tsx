@@ -432,8 +432,8 @@ function ChallengeScreen({ userId }: { userId: string }) {
           setStats(statsByUser);
           setRows(rows);
           setLoadedChallengeId(ch.id);
-          if (ch.status === "ended") {
-            // 계획은 장식이다 — 실패하면 일별 활동에 회색 막대만 빠진다
+          if (ch.status === "ended" || ch.status === "active") {
+            // 같은 개인 계획 원천을 진행 중/종료 분석 모두에 사용한다.
             getWorkoutPlans(userId)
               .then((all) => {
                 if (cancelled) return;
