@@ -3,8 +3,8 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Avatar } from "@/components/avatar";
-import { MemberProfileSheet } from "@/components/crew/member-profile-sheet";
 import { Icon } from "@/components/ui/icon";
+import { formatMonthDay } from "@/lib/domain/challenge-time";
 import { CREATOR_BASE_PATH } from "@/lib/domain/creator-return";
 import {
   ATTENTION_INACTIVE_DAYS,
@@ -20,7 +20,7 @@ type Sort = "activity" | "joined" | "name";
 /** 회원 한 줄의 사실 문구 — 판정어("미인증")가 아니라 날짜·횟수다. */
 function memberLine(m: CreatorMember, status: Challenge["status"]): string {
   if (status === "setup") return m.hasGoals ? "목표 설정 완료" : "목표를 아직 정하지 않았어요";
-  const last = m.lastProofDay ? `마지막 인증 ${m.lastProofDay.slice(5).replace("-", "/")}` : "아직 인증 기록 없음";
+  const last = m.lastProofDay ? `마지막 인증 ${formatMonthDay(m.lastProofDay)}` : "아직 인증 기록 없음";
   if (status === "ended") return `기간 인증 ${m.totalProofDays}일 · ${last}`;
   if (m.todayProof) return `오늘 인증 완료 · 최근 7일 ${m.recentProofDays}일`;
   if (m.inactiveDays >= ATTENTION_INACTIVE_DAYS) return `${m.inactiveDays}일째 기록 없음 · ${last}`;
@@ -33,11 +33,10 @@ function memberLine(m: CreatorMember, status: Challenge["status"]): string {
  * ⚠️ 일괄 응원·리마인드는 없다 — 새 다중 발송은 이슈 #25가 보류, 찌르기는 크루 전용(계획서 §3).
  */
 export function CreatorMembers({
-  challenge, snapshot, viewerId, initialFilter,
+  challenge, snapshot, initialFilter,
 }: {
   challenge: Pick<Challenge, "id" | "name" | "status" | "start_date" | "end_date" | "recruit_image_url" | "recruit_note">;
   snapshot: CreatorSnapshot;
-  viewerId: string;
   initialFilter: MemberFilter;
 }) {
   const tracked = snapshot.todayTracked;
@@ -47,7 +46,6 @@ export function CreatorMembers({
   );
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<Sort>("activity");
-  const [selected, setSelected] = useState<CreatorMember | null>(null);
 
   const members = useMemo(() => {
     const q = search.trim().toLocaleLowerCase();
@@ -169,10 +167,9 @@ export function CreatorMembers({
 
       <div className="flex flex-col gap-2">
         {members.map((m) => (
-          <button
-            type="button"
+          <Link
             key={m.id}
-            onClick={() => setSelected(m)}
+            href={`${CREATOR_BASE_PATH}/${encodeURIComponent(challenge.id)}/members/${encodeURIComponent(m.id)}`}
             className={`${card} flex min-h-[76px] w-full items-center gap-3 px-3 py-3 text-left`}
           >
             <Avatar src={m.avatarUrl} label={m.nickname} className="h-12 w-12 shrink-0" />
@@ -182,7 +179,7 @@ export function CreatorMembers({
             </span>
             {m.badge && <StatusBadge badge={m.badge} />}
             <Icon name="chevron" size={16} className="shrink-0 text-muted" />
-          </button>
+          </Link>
         ))}
         {members.length === 0 && (
           <p className={`${card} py-8 text-center text-sm text-muted`}>
@@ -194,16 +191,6 @@ export function CreatorMembers({
       </div>
       {tracked && (
         <p className="text-[11px] text-muted">쉬는 날은 알 수 없어요. 기록이 없다는 사실만 보여 줍니다.</p>
-      )}
-
-      {selected && (
-        <MemberProfileSheet
-          userId={selected.id}
-          nickname={selected.nickname}
-          avatarUrl={selected.avatarUrl}
-          viewerId={viewerId}
-          onClose={() => setSelected(null)}
-        />
       )}
     </div>
   );

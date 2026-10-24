@@ -80,7 +80,9 @@ export function CreatorHome({
       ? [{
           filter: "attention", icon: "warning" as const,
           title: `${ATTENTION_INACTIVE_DAYS}일 이상 기록 없음 ${snapshot.attentionCount}명`,
-          hint: "응원으로 먼저 안부를 물어 보세요.", count: snapshot.attentionCount,
+          // ⚠️ "응원으로 안부"라고 쓰지 마라 — send_cheer는 운동 중인 세션만 받는다(not_active).
+          //    쉬고 있는 회원에게 보낼 경로는 아직 없다(계획서 §5.3, P2).
+          hint: "상세에서 기록을 확인해 보세요.", count: snapshot.attentionCount,
         }]
       : []),
     ...(challenge.status !== "ended"

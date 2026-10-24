@@ -14,13 +14,12 @@ export default async function CreatorMembersPage({
   searchParams: Promise<{ filter?: string | string[] }>;
 }) {
   const [{ id }, query] = await Promise.all([params, searchParams]);
-  const { db, user, challenge } = await requireHostChallenge(id, `${CREATOR_BASE_PATH}/${id}/members`);
+  const { db, challenge } = await requireHostChallenge(id, `${CREATOR_BASE_PATH}/${id}/members`);
   const { snapshot } = await loadCreatorView(db, challenge);
   return (
     <CreatorMembers
       challenge={challenge}
       snapshot={snapshot}
-      viewerId={user.id}
       initialFilter={parseMemberFilter(query.filter)}
     />
   );

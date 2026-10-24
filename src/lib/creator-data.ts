@@ -7,6 +7,7 @@ import {
   getChallengePeriodSessions,
 } from "@/lib/challenge";
 import type { HostChallenge } from "@/lib/creator-access";
+import { buildCreatorMemberDetail, type CreatorMemberDetail } from "@/lib/domain/creator-member-detail";
 import {
   buildCreatorSnapshot,
   buildRecentActivity,
@@ -18,6 +19,55 @@ import { dayKey, DEFAULT_TIMEZONE } from "@/lib/domain/time";
 import { timeAgo } from "@/lib/time-ago";
 
 export type CreatorActivityView = CreatorActivity & { when: string };
+
+export type CreatorMemberDetailView = Omit<CreatorMemberDetail, "recent"> & {
+  recent: (CreatorMemberDetail["recent"][number] & { when: string })[];
+  todayKey: string;
+};
+
+/** 참여자 상세 (시안 2). null → the page answers 404 (not this room's member). */
+export async function loadCreatorMemberDetail(
+  db: SupabaseClient,
+  challenge: HostChallenge,
+  userId: string,
+): Promise<CreatorMemberDetailView | null> {
+  const { data: participantData, error } = await db
+    .from("challenge_participants")
+    .select("user_id,role,status,joined_at")
+    .eq("challenge_id", challenge.id);
+  if (error) throw new Error("Creator participants could not be loaded");
+  const participants = (participantData ?? []) as CreatorParticipant[];
+  if (!participants.some((p) => p.user_id === userId && p.role !== "host" && p.status === "joined")) {
+    return null; // 다른 방 회원·탈퇴자·방장 — 더 읽지 않는다
+  }
+
+  const tracked = challenge.status === "active" || challenge.status === "ended";
+  const [profiles, goals, sessions, activity] = await Promise.all([
+    getChallengeParticipantProfiles(challenge.id, db),
+    getChallengeGoals(challenge.id, db),
+    tracked ? getChallengePeriodSessions(challenge.id, db) : Promise.resolve([]),
+    challenge.status === "active" ? getChallengeActivity(challenge.id, db) : Promise.resolve([]),
+  ]);
+  const todayKey = dayKey(new Date(), DEFAULT_TIMEZONE);
+  const detail = buildCreatorMemberDetail({
+    userId,
+    participants,
+    profiles,
+    goals,
+    sessions,
+    activity,
+    startDate: challenge.start_date,
+    endDate: challenge.end_date,
+    todayKey,
+    status: challenge.status,
+  });
+  if (!detail) return null;
+  return {
+    ...detail,
+    todayKey,
+    recent: detail.recent.map((r) => ({ ...r, when: timeAgo(new Date(r.at)) })),
+  };
+}
 
 /**
  * One load for every Creator Studio page, so home and members never count
