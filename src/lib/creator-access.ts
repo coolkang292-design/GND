@@ -9,7 +9,7 @@ export { challengeStatusLabel } from "@/lib/domain/creator-studio";
 
 export type HostChallenge = Pick<
   Challenge,
-  "id" | "name" | "status" | "start_date" | "end_date" | "invite_code" | "created_by" | "recruit_image_url"
+  "id" | "name" | "status" | "start_date" | "end_date" | "invite_code" | "created_by" | "recruit_image_url" | "recruit_note"
 >;
 
 /**
@@ -31,7 +31,7 @@ export async function requireHostChallenge(id: string, returnPath: string) {
   const { db, user } = await requireCreatorUser(returnPath);
   const { data, error } = await db
     .from("challenges")
-    .select("id,name,status,start_date,end_date,invite_code,created_by,recruit_image_url")
+    .select("id,name,status,start_date,end_date,invite_code,created_by,recruit_image_url,recruit_note")
     .eq("id", id)
     .maybeSingle();
   if (error || !data || data.created_by !== user.id || data.status === "cancelled") notFound();

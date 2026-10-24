@@ -1789,10 +1789,12 @@ export interface ChallengeActivityItem {
  */
 export async function getChallengeActivity(
   challengeId: string,
+  client?: SupabaseClient,
 ): Promise<ChallengeActivityItem[]> {
   try {
     // ⚠️ `getSupabaseBrowserClient()`도 던진다(env 미설정). 같은 이유로 감싼다.
-    const supabase = getSupabaseBrowserClient();
+    //    서버(Creator Studio)는 쿠키 세션 클라이언트를 넘긴다 — RPC 권한은 같다.
+    const supabase = client ?? getSupabaseBrowserClient();
     const { data, error } = await supabase.rpc("get_challenge_activity", {
       p_challenge_id: challengeId,
     });

@@ -1,4 +1,9 @@
-import { foldPeriodStats, type ChallengeParticipantProfile, type PeriodSessionRow } from "@/lib/challenge";
+import {
+  foldPeriodStats,
+  type ChallengeActivityItem,
+  type ChallengeParticipantProfile,
+  type PeriodSessionRow,
+} from "@/lib/challenge";
 import { dayKey, DEFAULT_TIMEZONE } from "@/lib/domain/time";
 import type { Challenge, UserGoal } from "@/lib/types";
 
@@ -50,6 +55,15 @@ export type CreatorSnapshot = {
   recentJoinCount: number;
   members: CreatorMember[];
 };
+
+const MEMBER_FILTERS = ["all", "attention", "no-proof", "no-goal", "new"] as const;
+export type MemberFilter = (typeof MEMBER_FILTERS)[number];
+
+/** `?filter=` from the 운영 홈 to-do rows. Unknown values fall back to all. */
+export function parseMemberFilter(raw: string | string[] | undefined): MemberFilter {
+  const v = Array.isArray(raw) ? raw[0] : raw;
+  return (MEMBER_FILTERS as readonly string[]).includes(v ?? "") ? (v as MemberFilter) : "all";
+}
 
 export function challengeStatusLabel(status: Challenge["status"]): string {
   return status === "setup" ? "모집 준비" : status === "active" ? "진행 중" : status === "ended" ? "종료" : "취소";
@@ -152,4 +166,58 @@ export function buildCreatorSnapshot(input: {
     recentJoinCount: members.filter((m) => m.recentlyJoined).length,
     members: members.map(({ keys: _keys, ...m }) => m),
   };
+}
+
+export type CreatorActivity = {
+  kind: "join" | "proof";
+  userId: string;
+  nickname: string;
+  avatarUrl: string | null;
+  /** ISO timestamp. */
+  at: string;
+  hasPhoto: boolean;
+  sessionId: string | null;
+};
+
+/**
+ * 운영 홈 "최근 활동" (시안 4). Joins come from `challenge_participants`,
+ * proofs from `get_challenge_activity` (active challenges only). The host's own
+ * sessions and in-progress workouts are not shown. Link clicks are not measured
+ * (P1), so there is no such row.
+ */
+export function buildRecentActivity(input: {
+  participants: readonly CreatorParticipant[];
+  profiles: readonly ChallengeParticipantProfile[];
+  activity: readonly ChallengeActivityItem[];
+  limit: number;
+}): CreatorActivity[] {
+  const profileById = new Map(input.profiles.map((p) => [p.id, p]));
+  const members = input.participants.filter((p) => p.role !== "host" && p.status === "joined");
+  const memberIds = new Set(members.map((p) => p.user_id));
+  const joins: CreatorActivity[] = members
+    .filter((p) => p.joined_at)
+    .map((p) => ({
+      kind: "join",
+      userId: p.user_id,
+      nickname: profileById.get(p.user_id)?.nickname ?? "참가자",
+      avatarUrl: profileById.get(p.user_id)?.avatar_url ?? null,
+      at: p.joined_at as string,
+      hasPhoto: false,
+      sessionId: null,
+    }));
+  const proofs: CreatorActivity[] = input.activity
+    .filter((a) => a.status === "completed" && a.completed_at && memberIds.has(a.user_id))
+    .map((a) => ({
+      kind: "proof",
+      userId: a.user_id,
+      nickname: a.nickname ?? profileById.get(a.user_id)?.nickname ?? "참가자",
+      avatarUrl: a.avatar_url ?? profileById.get(a.user_id)?.avatar_url ?? null,
+      at: a.completed_at as string,
+      hasPhoto: a.has_photo,
+      sessionId: a.session_id,
+    }));
+  return [...joins, ...proofs]
+    // Parse, don't string-compare: Postgres sends `+00:00`, JS sends `Z`.
+    .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
+    .slice(0, input.limit);
 }

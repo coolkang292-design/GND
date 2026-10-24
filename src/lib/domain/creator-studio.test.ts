@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCreatorSnapshot, type CreatorParticipant } from "./creator-studio";
+import { buildCreatorSnapshot, buildRecentActivity, type CreatorParticipant } from "./creator-studio";
 import type { PeriodSessionRow } from "@/lib/challenge";
 import type { UserGoal } from "@/lib/types";
 
@@ -115,6 +115,31 @@ describe("Creator Studio P0 snapshot", () => {
       expect(setup.members.find((m) => m.id === "quiet")?.badge).toBe("ready");
       expect(setup.members.find((m) => m.id === "noGoal")?.badge).toBe("needs-goal");
     });
+  });
+
+  // 운영 홈 "최근 활동" (시안 4) — 합류와 완료된 인증만, 방장 제외, 최신순.
+  it("merges joins and completed proofs into one recent feed", () => {
+    const feed = buildRecentActivity({
+      participants,
+      profiles: input.profiles,
+      activity: [
+        { session_id: "s1", user_id: "first", nickname: "First", avatar_url: null, status: "completed",
+          title: "하체", workout_type: null, started_at: null, completed_at: "2026-10-23T05:00:00Z",
+          has_photo: true, cheer_count: 0, my_cheers: 0, is_mine: false },
+        { session_id: "s2", user_id: "host", nickname: "Host", avatar_url: null, status: "completed",
+          title: null, workout_type: null, started_at: null, completed_at: "2026-10-24T05:00:00Z",
+          has_photo: false, cheer_count: 0, my_cheers: 0, is_mine: true },
+        { session_id: "s3", user_id: "first", nickname: "First", avatar_url: null, status: "active",
+          title: null, workout_type: null, started_at: "2026-10-24T06:00:00Z", completed_at: null,
+          has_photo: false, cheer_count: 0, my_cheers: 0, is_mine: false },
+      ],
+      limit: 5,
+    });
+    expect(feed.map((f) => `${f.kind}:${f.userId}`)).toEqual(["proof:first", "join:first"]);
+    expect(feed[0]).toMatchObject({ nickname: "First", hasPhoto: true, sessionId: "s1" });
+
+    expect(buildRecentActivity({ participants, profiles: input.profiles, activity: [], limit: 1 }))
+      .toHaveLength(1);
   });
 
   // 종료·모집 중에는 "오늘"이 기간 밖이라 전원이 "오늘 기록 없음"으로 잡혔다.
