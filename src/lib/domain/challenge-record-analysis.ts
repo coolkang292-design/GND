@@ -13,6 +13,7 @@ import {
   type PlanInput,
   type WeekAchievement,
 } from "@/lib/domain/challenge-report";
+import { inclusiveDays } from "@/lib/domain/challenge-time";
 import { goalRate, type ParticipantInput, type RankedParticipant } from "@/lib/domain/goal-score";
 import type { UserGoal } from "@/lib/types";
 
@@ -49,12 +50,16 @@ export function buildMyRecordReport(input: {
   plans: readonly PlanInput[];
   startDate: string;
   endDate: string;
+  /** The challenge's real last day. Live callers cap `endDate` at today, but
+   *  weekly targets must still come from full weeks (5/7, not 3/3 on day 3). */
+  periodEndDate?: string;
   timeZone: string;
   finalized: boolean;
   ranked?: RankedParticipant | null;
   total?: number;
 }): MyReport {
   const { userId, participant, goals, rows, plans, startDate, endDate, timeZone, finalized } = input;
+  const periodEndDate = input.periodEndDate ?? endDate;
   const personalGoals = goals.filter((g) => g.user_id === userId);
   const personalRows = rows.filter((s) => s.userId === userId);
   const days = dailyTotals(personalRows, startDate, endDate, timeZone);
@@ -83,8 +88,9 @@ export function buildMyRecordReport(input: {
           startDate, endDate, timeZone,
         })
       : [],
+    // Weeks that have started by endDate, each with its full-period target.
     weeks: weeklyAchievement(
-      [...days.keys()], startDate, endDate, personalGoals[0]?.planned_days ?? 5,
-    ),
+      [...days.keys()], startDate, periodEndDate, personalGoals[0]?.planned_days ?? 5,
+    ).slice(0, Math.ceil(Math.max(0, inclusiveDays(startDate, endDate)) / 7)),
   };
 }

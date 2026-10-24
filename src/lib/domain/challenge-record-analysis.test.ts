@@ -44,4 +44,23 @@ describe("shared record analysis for live and ended challenges", () => {
     expect(ended.records.maxMinutes?.value).toBe(30);
     expect(ended.goals).toEqual(live.goals);
   });
+
+  // 진행 중에 이번 주 목표가 "지난 날 수"로 줄면 수요일엔 주 5회가 3/3으로 보인다.
+  it("keeps the full weekly target for the current live week", () => {
+    const live = buildMyRecordReport({
+      ...basic, endDate: "2026-10-03", periodEndDate: "2026-10-14", finalized: false,
+    });
+    expect(live.weeks).toHaveLength(1);
+    expect(live.weeks[0]).toMatchObject({ week: 1, target: 5, done: 1 });
+
+    const secondWeek = buildMyRecordReport({
+      ...basic, endDate: "2026-10-09", periodEndDate: "2026-10-14", finalized: false,
+    });
+    expect(secondWeek.weeks.map((w) => w.target)).toEqual([5, 5]);
+
+    const ended = buildMyRecordReport({
+      ...basic, endDate: "2026-10-14", finalized: true,
+    });
+    expect(ended.weeks.slice(0, 2).map((w) => w.target)).toEqual(secondWeek.weeks.map((w) => w.target));
+  });
 });

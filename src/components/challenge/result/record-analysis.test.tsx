@@ -36,6 +36,9 @@ describe("personal challenge record analysis presentation", () => {
     expect(html).not.toContain("나의 성장");
     expect(html).not.toContain("종합점수");
     expect(html).not.toContain("획득한 보상");
+    // 진행 중에는 결과 문구가 아니라 진행 중임을 말한다
+    expect(html).not.toContain("꾸준함이 만든 결과예요!");
+    expect(html).toContain("이번 주는 진행 중이에요");
   });
 
   it("preserves the existing complete analysis in ended mode", () => {

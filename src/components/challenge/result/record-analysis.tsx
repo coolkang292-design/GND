@@ -76,7 +76,9 @@ export function RecordAnalysis({ me, rewards, mode = "ended" }: { me: MyReport; 
       <section className={card}>
         <div className="mb-2.5 flex items-center justify-between">
           <h3 className="text-[15px] font-extrabold">주간 달성</h3>
-          <span className="text-[11px] text-muted">꾸준함이 만든 결과예요!</span>
+          <span className="text-[11px] text-muted">
+            {mode === "live" ? "이번 주는 진행 중이에요" : "꾸준함이 만든 결과예요!"}
+          </span>
         </div>
         <WeeklyHeatmap weeks={me.weeks} />
       </section>

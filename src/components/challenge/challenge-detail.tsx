@@ -308,6 +308,7 @@ export function ChallengeDetail({
           plans,
           startDate: challenge.start_date,
           endDate: todayKey < challenge.end_date ? todayKey : challenge.end_date,
+          periodEndDate: challenge.end_date,
           timeZone,
           finalized: false,
         })
