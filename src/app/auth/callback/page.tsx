@@ -5,6 +5,7 @@ import { ScreenError } from "@/components/screen-error";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { getMyProfile } from "@/lib/crew";
 import { pendingChallengeInvitePath } from "@/lib/challenge";
+import { consumeCreatorReturn } from "@/lib/domain/creator-return";
 import { APP_LANDING_PATH } from "@/lib/domain/landing";
 import { identityError, takeAuthIntent } from "@/lib/identity";
 
@@ -155,6 +156,11 @@ export default function AuthCallbackPage() {
       //    `/challenge`가 보관된 코드로 참가까지 마무리한다.
       const pendingChallenge = pendingChallengeInvitePath();
       if (pendingChallenge) return pendingChallenge;
+
+      // Creator Studio 링크에서 로그인하러 왔다면 그 화면으로(2026-10-24, `/login`이 맡겨 둔 값).
+      // 방장이 아니면 그 페이지가 서버에서 다시 404를 낸다.
+      const creatorReturn = consumeCreatorReturn();
+      if (creatorReturn) return creatorReturn;
 
       // ⚠️ 로그아웃했다가 `/login`으로 다시 들어온 사람을 `/account`(설정)에
       //    떨어뜨리지 마라 — 사용자 지적 2026-08-10. 그 사람이 하려던 일은

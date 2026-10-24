@@ -15,6 +15,7 @@ import { LOGIN_COPY as COPY } from "@/lib/domain/brand-copy";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { GoogleBlockedNote, useUsableProviders } from "@/components/auth/usable-providers";
 import { pendingChallengeInvitePath } from "@/lib/challenge";
+import { creatorReturnPath, rememberCreatorReturn } from "@/lib/domain/creator-return";
 import { APP_LANDING_PATH } from "@/lib/domain/landing";
 import {
   PROVIDER_META,
@@ -77,6 +78,8 @@ export default function LoginPage() {
     setOauthBusy(provider);
     setError(null);
     try {
+      // 제공자 화면을 다녀오면 주소의 `next`가 사라진다 — `/auth/callback`이 꺼내 쓰게 맡긴다.
+      rememberCreatorReturn(new URLSearchParams(window.location.search).get("next"));
       // 성공하면 브라우저가 제공자 화면으로 떠난다 — 여기로 돌아오지 않는다.
       await signInWithProvider(provider);
     } catch (e) {
@@ -121,7 +124,13 @@ export default function LoginPage() {
     //    초대 링크를 탭했다가 "이미 계정이 있나요? 로그인"으로 넘어온 사람인데,
     //    홈에 떨어뜨리면 **초대가 조용히 사라진다.** `/auth/callback`이 소셜
     //    로그인에서 하는 것과 같은 처리다.
-    window.location.assign(pendingChallengeInvitePath() ?? APP_LANDING_PATH);
+    // ⚠️ Creator Studio 링크로 왔으면 그 화면으로 되돌린다(2026-10-24). `creatorReturnPath`가
+    //    스튜디오 경로만 통과시킨다 — 아무 `next`나 따르면 오픈 리다이렉트가 된다.
+    window.location.assign(
+      pendingChallengeInvitePath()
+        ?? creatorReturnPath(new URLSearchParams(window.location.search).get("next"))
+        ?? APP_LANDING_PATH,
+    );
   }
 
   return (
