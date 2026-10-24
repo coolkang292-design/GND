@@ -15,7 +15,8 @@ import { WeeklyHeatmap } from "./weekly-heatmap";
 const card = "rounded-card border border-line bg-surface p-4 shadow-card";
 
 /**
- * 종료 화면 `기록 분석` 탭 (최종 시안 2026-10-07).
+ * 종료 결과는 전체 분석을 유지하고, 진행 중에는 기존 `내 진행`과 중복하지 않도록
+ * 일별 계획 대비 실제 운동 및 주간 달성만 표시한다.
  * 첫 시안의 「나의 챌린지 결과」 본문을 여기로 옮겼다 — 목표 달성률 · 일별 활동 · 주요 기록 · 나의 성장,
  * 그리고 레벨 · 주간 달성 · 획득한 보상. 순위·종합 점수 머리는 `결과 요약`이 맡는다.
  */
@@ -25,6 +26,7 @@ export function RecordAnalysis({ me, rewards, mode = "ended" }: { me: MyReport; 
     <div className="flex flex-col gap-3">
       {mode === "ended" && rewards && <LevelCard r={rewards} />}
 
+      {mode === "ended" && (
       <section className={card}>
         <div className="mb-3 flex items-center justify-between gap-2">
           <h3 className="text-[15px] font-extrabold">목표 달성률</h3>
@@ -52,6 +54,7 @@ export function RecordAnalysis({ me, rewards, mode = "ended" }: { me: MyReport; 
           ))}
         </div>
       </section>
+      )}
 
       <section className={card}>
         <div className="flex items-center justify-between">
@@ -78,22 +81,19 @@ export function RecordAnalysis({ me, rewards, mode = "ended" }: { me: MyReport; 
         <WeeklyHeatmap weeks={me.weeks} />
       </section>
 
-      <section className={card}>
-        <h3 className="mb-2.5 text-[15px] font-extrabold">주요 기록</h3>
-        <BestRecords records={me.records} />
-      </section>
+      {mode === "ended" && (
+        <>
+          <section className={card}>
+            <h3 className="mb-2.5 text-[15px] font-extrabold">주요 기록</h3>
+            <BestRecords records={me.records} />
+          </section>
 
-      <section className={card}>
-        <h3 className="mb-1 text-[15px] font-extrabold">나의 성장</h3>
-        {mode === "ended" ? (
-          <ScoreTrendChart points={me.trend} />
-        ) : (
-          <div className="text-[12.5px] leading-relaxed text-muted">
-            <strong className="text-text">{me.bars.filter((b) => b.actualCount > 0).length}일</strong> 운동 · <strong className="text-text">{me.bars.reduce((n, b) => n + b.actualCount, 0)}회</strong> 인증했어요.
-            <p className="mt-1">성장 추이는 위의 일별 활동에서 확인하세요. 종합점수와 최종 순위는 챌린지 종료 후 공개돼요.</p>
-          </div>
-        )}
-      </section>
+          <section className={card}>
+            <h3 className="mb-1 text-[15px] font-extrabold">나의 성장</h3>
+            <ScoreTrendChart points={me.trend} />
+          </section>
+        </>
+      )}
 
       {mode === "ended" && rewards && (
         <section className={card}>
