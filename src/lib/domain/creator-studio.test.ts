@@ -27,6 +27,7 @@ const input = {
   startDate: "2026-10-01",
   endDate: "2026-10-31",
   todayKey: "2026-10-24",
+  status: "active" as const,
 };
 
 describe("Creator Studio P0 snapshot", () => {
@@ -55,6 +56,25 @@ describe("Creator Studio P0 snapshot", () => {
       lastProofDay: null,
       recentProofDays: 0,
       recentlyJoined: false,
+    });
+  });
+
+  // 종료·모집 중에는 "오늘"이 기간 밖이라 전원이 "오늘 기록 없음"으로 잡혔다.
+  it("does not track today's proof outside an active period", () => {
+    const active = buildCreatorSnapshot({ ...input, status: "active" });
+    expect(active.todayTracked).toBe(true);
+
+    const setup = buildCreatorSnapshot({ ...input, sessions: [], status: "setup" });
+    expect(setup.todayTracked).toBe(false);
+
+    const ended = buildCreatorSnapshot({
+      ...input, status: "ended", endDate: "2026-10-23", todayKey: "2026-10-30",
+    });
+    expect(ended.todayTracked).toBe(false);
+    // 최근 7일은 오늘이 아니라 기간 마지막 날 기준이다 (10-17~10-23 안의 10-23)
+    expect(ended.members.find((m) => m.id === "first")).toMatchObject({
+      recentProofDays: 1,
+      lastProofDay: "2026-10-23",
     });
   });
 });

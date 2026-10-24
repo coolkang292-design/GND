@@ -51,12 +51,14 @@ export function CreatorStudio({
     }
   }
 
+  // "오늘 기록"은 진행 기간 안에서만 묻는다 — 모집 중·종료 후엔 전원이 "없음"으로 잡힌다.
   const filters: { id: Filter; label: string }[] = [
     { id: "all", label: `전체 ${snapshot.memberCount}` },
-    { id: "no-proof", label: "오늘 기록 없음" },
+    ...(snapshot.todayTracked ? [{ id: "no-proof" as const, label: "오늘 기록 없음" }] : []),
     { id: "no-goal", label: `목표 미설정 ${snapshot.noGoalCount}` },
     { id: "new", label: "최근 7일 합류" },
   ];
+  const recentLabel = challenge.status === "ended" ? "마지막 7일" : "최근 7일";
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-4 px-4 pb-20 pt-5 text-text">
@@ -86,7 +88,9 @@ export function CreatorStudio({
         {([
           ["참가 회원", snapshot.memberCount, "방장 제외 · 가입 완료"],
           ["첫 인증 도달", snapshot.firstProofCount, "기간 중 유효 기록 1일 이상"],
-          ["오늘 인증", snapshot.todayProofCount, "휴식일 제외 분모 아님"],
+          snapshot.todayTracked
+            ? ["오늘 인증", snapshot.todayProofCount, "휴식일 여부는 반영하지 않아요"]
+            : ["오늘 인증", "–", "진행 중에만 집계해요"],
           ["목표 미설정", snapshot.noGoalCount, "가입 회원 기준"],
         ] as const).map(([label, value, sub]) => (
           <div key={label} className="rounded-card border border-line bg-surface p-4 shadow-card">
@@ -97,6 +101,7 @@ export function CreatorStudio({
         ))}
       </section>
 
+      {challenge.status !== "ended" && (
       <section className="rounded-card border border-line bg-surface p-4 shadow-card">
         <h2 className="text-[15px] font-extrabold">오늘 할 일</h2>
         <div className="mt-2 flex flex-col gap-2">
@@ -107,16 +112,21 @@ export function CreatorStudio({
           >
             목표를 아직 정하지 않은 회원 <span className="text-accent">{snapshot.noGoalCount}명 →</span>
           </button>
-          <button
-            type="button"
-            className="flex w-full items-center justify-between rounded-card-sm bg-surface-2 px-3 py-3 text-left text-sm font-bold"
-            onClick={() => { setFilter("no-proof"); document.getElementById("creator-members")?.scrollIntoView({ behavior: "smooth" }); }}
-          >
-            오늘 기록 없는 회원 <span className="text-accent">{snapshot.memberCount - snapshot.todayProofCount}명 →</span>
-          </button>
+          {snapshot.todayTracked && (
+            <button
+              type="button"
+              className="flex w-full items-center justify-between rounded-card-sm bg-surface-2 px-3 py-3 text-left text-sm font-bold"
+              onClick={() => { setFilter("no-proof"); document.getElementById("creator-members")?.scrollIntoView({ behavior: "smooth" }); }}
+            >
+              오늘 기록 없는 회원 <span className="text-accent">{snapshot.memberCount - snapshot.todayProofCount}명 →</span>
+            </button>
+          )}
         </div>
-        <p className="mt-2 text-[11px] text-muted">기록 없음은 운동 포기나 인증 의무 미이행을 뜻하지 않아요. 개인별 휴식일을 고려해 확인하세요.</p>
+        {snapshot.todayTracked && (
+          <p className="mt-2 text-[11px] text-muted">기록 없음은 운동 포기나 인증 의무 미이행을 뜻하지 않아요. 개인별 휴식일을 고려해 확인하세요.</p>
+        )}
       </section>
+      )}
 
       <section className="rounded-card border border-line bg-surface p-4 shadow-card">
         <h2 className="text-[15px] font-extrabold">초대 및 운영</h2>
@@ -171,7 +181,11 @@ export function CreatorStudio({
             </button>
           ))}
         </div>
-        <p className="mt-2 text-[11px] text-muted">주간 활동은 최근 7일의 챌린지 유효 인증일입니다. 회원 개인 목표는 변경하지 않습니다.</p>
+        <p className="mt-2 text-[11px] text-muted">
+          {challenge.status === "setup"
+            ? "챌린지가 시작되면 인증 현황이 표시됩니다."
+            : `주간 활동은 ${recentLabel}의 챌린지 유효 인증일입니다.`} 회원 개인 목표는 변경하지 않습니다.
+        </p>
         <div className="mt-2 divide-y divide-line">
           {members.map((m) => (
             <button
@@ -186,14 +200,17 @@ export function CreatorStudio({
               <span className="min-w-0 flex-1">
                 <strong className="block truncate text-sm">{m.nickname}</strong>
                 <span className="mt-1 block text-[11px] text-muted">
-                  {m.hasGoals ? "목표 설정" : "목표 없음"} · 최근 7일 {m.recentProofDays}일
+                  {m.hasGoals ? "목표 설정" : "목표 없음"}
+                  {challenge.status !== "setup" && ` · ${recentLabel} ${m.recentProofDays}일`}
                 </span>
-                <span className="block text-[11px] text-muted">
-                  마지막 인증 {m.lastProofDay ?? "기록 없음"}
-                </span>
+                {challenge.status !== "setup" && (
+                  <span className="block text-[11px] text-muted">
+                    마지막 인증 {m.lastProofDay ?? "기록 없음"}
+                  </span>
+                )}
               </span>
               <span className="shrink-0 text-right text-[11px] font-bold text-accent">
-                {m.todayProof ? "오늘 인증" : "오늘 기록 없음"}
+                {snapshot.todayTracked && (m.todayProof ? "오늘 인증" : "오늘 기록 없음")}
                 <span className="block text-[10px] text-muted">상세 →</span>
               </span>
             </button>

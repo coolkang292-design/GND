@@ -61,6 +61,7 @@ export default async function CreatorChallengePage({
     startDate: challenge.start_date,
     endDate: challenge.end_date,
     todayKey: dayKey(new Date(), DEFAULT_TIMEZONE),
+    status: challenge.status,
   });
   return <CreatorStudio challenge={challenge} snapshot={snapshot} viewerId={user.id} />;
 }

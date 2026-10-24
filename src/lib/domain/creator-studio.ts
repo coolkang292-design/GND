@@ -1,6 +1,6 @@
 import { foldPeriodStats, type ChallengeParticipantProfile, type PeriodSessionRow } from "@/lib/challenge";
 import { dayKey, DEFAULT_TIMEZONE } from "@/lib/domain/time";
-import type { UserGoal } from "@/lib/types";
+import type { Challenge, UserGoal } from "@/lib/types";
 
 export type CreatorParticipant = {
   user_id: string;
@@ -23,6 +23,9 @@ export type CreatorMember = {
 };
 
 export type CreatorSnapshot = {
+  /** "Today" is inside an active period. Otherwise today's proof is not a
+   *  meaningful question (setup: no sessions yet; ended: today is after the end). */
+  todayTracked: boolean;
   memberCount: number;
   firstProofCount: number;
   todayProofCount: number;
@@ -48,12 +51,17 @@ export function buildCreatorSnapshot(input: {
   startDate: string;
   endDate: string;
   todayKey: string;
+  status: Challenge["status"];
 }): CreatorSnapshot {
   const end = input.todayKey < input.endDate ? input.todayKey : input.endDate;
+  const todayTracked =
+    input.status === "active" && input.startDate <= input.todayKey && input.todayKey <= input.endDate;
   const stats = foldPeriodStats([...input.sessions], input.startDate, end, DEFAULT_TIMEZONE);
   const profileById = new Map(input.profiles.map((p) => [p.id, p]));
   const goalsSet = new Set(input.goals.map((g) => g.user_id));
-  const recentStart = dateOffset(input.todayKey, -6);
+  // Proof activity is measured back from the last counted day; joins from today.
+  const recentProofStart = dateOffset(end, -6);
+  const recentJoinStart = dateOffset(input.todayKey, -6);
   const members: CreatorMember[] = input.participants
     .filter((p) => p.role !== "host" && p.status === "joined")
     .map((p) => {
@@ -67,14 +75,15 @@ export function buildCreatorSnapshot(input: {
         joinedAt: joinedKey,
         hasGoals: goalsSet.has(p.user_id),
         lastProofDay: keys.at(-1) ?? null,
-        todayProof: keys.includes(input.todayKey),
-        recentProofDays: keys.filter((key) => key >= recentStart).length,
+        todayProof: todayTracked && keys.includes(input.todayKey),
+        recentProofDays: keys.filter((key) => key >= recentProofStart).length,
         totalProofDays: keys.length,
-        recentlyJoined: joinedKey !== null && joinedKey >= recentStart && joinedKey <= input.todayKey,
+        recentlyJoined: joinedKey !== null && joinedKey >= recentJoinStart && joinedKey <= input.todayKey,
       };
     })
     .sort((a, b) => (b.joinedAt ?? "").localeCompare(a.joinedAt ?? ""));
   return {
+    todayTracked,
     memberCount: members.length,
     firstProofCount: members.filter((m) => m.totalProofDays > 0).length,
     todayProofCount: members.filter((m) => m.todayProof).length,
