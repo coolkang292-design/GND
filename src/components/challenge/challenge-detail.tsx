@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { CREATOR_BASE_PATH } from "@/lib/domain/creator-return";
 import { Avatar } from "@/components/avatar";
 import { ChallengeActivity } from "@/components/challenge/challenge-activity";
 import { ResultView } from "@/components/challenge/challenge-result";
@@ -372,7 +373,7 @@ export function ChallengeDetail({
             </button>
             <p className="min-w-0 flex-1 truncate text-center text-[15px] font-extrabold">챌린지 상세</p>
             {isHost && (
-              <Link href={`/creator/${encodeURIComponent(challenge.id)}`} className="flex min-h-10 items-center rounded-card-sm border border-accent px-2.5 text-xs font-extrabold text-accent">
+              <Link href={`${CREATOR_BASE_PATH}/${encodeURIComponent(challenge.id)}`} className="flex min-h-10 items-center rounded-card-sm border border-accent px-2.5 text-xs font-extrabold text-accent">
                 운영 관리
               </Link>
             )}
@@ -424,7 +425,7 @@ export function ChallengeDetail({
           </button>
         )}
         {isHost && (
-          <Link href={`/creator/${encodeURIComponent(challenge.id)}`} className="flex min-h-10 items-center rounded-card-sm border border-accent px-2.5 text-xs font-extrabold text-accent">
+          <Link href={`${CREATOR_BASE_PATH}/${encodeURIComponent(challenge.id)}`} className="flex min-h-10 items-center rounded-card-sm border border-accent px-2.5 text-xs font-extrabold text-accent">
             운영 관리
           </Link>
         )}

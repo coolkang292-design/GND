@@ -3,12 +3,29 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Avatar } from "@/components/avatar";
 import { MemberProfileSheet } from "@/components/crew/member-profile-sheet";
 import { challengeInviteUrl } from "@/lib/domain/challenge-invite";
-import type { CreatorMember, CreatorSnapshot } from "@/lib/domain/creator-studio";
+import { CREATOR_BASE_PATH } from "@/lib/domain/creator-return";
+import {
+  ATTENTION_INACTIVE_DAYS,
+  challengeStatusLabel,
+  type CreatorBadge,
+  type CreatorMember,
+  type CreatorSnapshot,
+} from "@/lib/domain/creator-studio";
 import type { Challenge } from "@/lib/types";
 
-type Filter = "all" | "no-proof" | "no-goal" | "new";
+type Filter = "all" | "attention" | "no-proof" | "no-goal" | "new";
+
+const BADGE: Record<CreatorBadge, { label: string; className: string }> = {
+  "done-today": { label: "완료", className: "border-accent/60 text-accent" },
+  attention: { label: "확인 필요", className: "border-gold/70 text-gold" },
+  "needs-goal": { label: "설정 필요", className: "border-line-strong text-muted" },
+  new: { label: "신규", className: "border-sky-400/60 text-sky-300" },
+  active: { label: "진행 중", className: "border-line text-muted" },
+  ready: { label: "준비 완료", className: "border-accent/60 text-accent" },
+};
 
 export function CreatorStudio({
   challenge, snapshot, viewerId,
@@ -26,6 +43,7 @@ export function CreatorStudio({
   const members = useMemo(
     () => snapshot.members.filter((m) => {
       if (!m.nickname.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())) return false;
+      if (filter === "attention") return m.badge === "attention";
       if (filter === "no-proof") return !m.todayProof;
       if (filter === "no-goal") return !m.hasGoals;
       if (filter === "new") return m.recentlyJoined;
@@ -54,16 +72,34 @@ export function CreatorStudio({
   // "오늘 기록"은 진행 기간 안에서만 묻는다 — 모집 중·종료 후엔 전원이 "없음"으로 잡힌다.
   const filters: { id: Filter; label: string }[] = [
     { id: "all", label: `전체 ${snapshot.memberCount}` },
-    ...(snapshot.todayTracked ? [{ id: "no-proof" as const, label: "오늘 기록 없음" }] : []),
+    ...(snapshot.todayTracked
+      ? [
+          { id: "attention" as const, label: `확인 필요 ${snapshot.attentionCount}` },
+          { id: "no-proof" as const, label: "오늘 기록 없음" },
+        ]
+      : []),
     { id: "no-goal", label: `목표 미설정 ${snapshot.noGoalCount}` },
     { id: "new", label: "최근 7일 합류" },
   ];
   const recentLabel = challenge.status === "ended" ? "마지막 7일" : "최근 7일";
+  const showMembers = (next: Filter) => {
+    setFilter(next);
+    document.getElementById("creator-members")?.scrollIntoView({ behavior: "smooth" });
+  };
+  // 오늘 할 일 (계획서 §5.1) — 진행 중: 확인 필요·목표 미설정·신규, 모집 중: 목표 미설정·신규
+  const todos: { id: Filter; title: string; count: number }[] = [
+    ...(snapshot.todayTracked
+      ? [{ id: "attention" as const, title: `${ATTENTION_INACTIVE_DAYS}일 이상 운동 기록이 없는 회원`, count: snapshot.attentionCount }]
+      : []),
+    { id: "no-goal", title: "목표를 아직 정하지 않은 회원", count: snapshot.noGoalCount },
+    { id: "new", title: "이번 주 새로 합류한 회원", count: snapshot.recentJoinCount },
+  ];
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-4 px-4 pb-20 pt-5 text-text">
+    // (tabs) 레이아웃 안이다 — `main`·화면 여백은 레이아웃이 준다. 중첩 `main`을 만들지 않는다.
+    <div className="flex flex-col gap-4 pb-6 text-text">
       <header className="flex items-center gap-3">
-        <Link href="/creator" className="rounded-card-sm border border-line px-3 py-2 text-sm font-bold">
+        <Link href={CREATOR_BASE_PATH} className="rounded-card-sm border border-line px-3 py-2 text-sm font-bold">
           ← 목록
         </Link>
         <div className="min-w-0">
@@ -81,7 +117,7 @@ export function CreatorStudio({
       </header>
 
       <p className="text-[12px] text-muted">
-        {challenge.start_date} ~ {challenge.end_date} · {challenge.status === "setup" ? "모집 준비" : challenge.status === "active" ? "진행 중" : "종료"}
+        {challenge.start_date} ~ {challenge.end_date} · {challengeStatusLabel(challenge.status)}
       </p>
 
       <section className="grid grid-cols-2 gap-2" aria-label="운영 현황">
@@ -105,25 +141,21 @@ export function CreatorStudio({
       <section className="rounded-card border border-line bg-surface p-4 shadow-card">
         <h2 className="text-[15px] font-extrabold">오늘 할 일</h2>
         <div className="mt-2 flex flex-col gap-2">
-          <button
-            type="button"
-            className="flex w-full items-center justify-between rounded-card-sm bg-surface-2 px-3 py-3 text-left text-sm font-bold"
-            onClick={() => { setFilter("no-goal"); document.getElementById("creator-members")?.scrollIntoView({ behavior: "smooth" }); }}
-          >
-            목표를 아직 정하지 않은 회원 <span className="text-accent">{snapshot.noGoalCount}명 →</span>
-          </button>
-          {snapshot.todayTracked && (
+          {todos.map((t) => (
             <button
+              key={t.id}
               type="button"
               className="flex w-full items-center justify-between rounded-card-sm bg-surface-2 px-3 py-3 text-left text-sm font-bold"
-              onClick={() => { setFilter("no-proof"); document.getElementById("creator-members")?.scrollIntoView({ behavior: "smooth" }); }}
+              onClick={() => showMembers(t.id)}
             >
-              오늘 기록 없는 회원 <span className="text-accent">{snapshot.memberCount - snapshot.todayProofCount}명 →</span>
+              {t.title} <span className="text-accent">{t.count}명 →</span>
             </button>
-          )}
+          ))}
         </div>
         {snapshot.todayTracked && (
-          <p className="mt-2 text-[11px] text-muted">기록 없음은 운동 포기나 인증 의무 미이행을 뜻하지 않아요. 개인별 휴식일을 고려해 확인하세요.</p>
+          <p className="mt-2 text-[11px] text-muted">
+            쉬는 날은 알 수 없어요. 기록이 없다는 사실만 보여 주니, 응원으로 먼저 안부를 물어 주세요.
+          </p>
         )}
       </section>
       )}
@@ -194,13 +226,13 @@ export function CreatorStudio({
               onClick={() => setSelected(m)}
               className="flex min-h-[76px] w-full items-center gap-3 py-3 text-left"
             >
-              <span aria-hidden className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-surface-2 text-sm font-black">
-                {m.nickname.slice(0, 1)}
-              </span>
+              <Avatar src={m.avatarUrl} label={m.nickname} className="h-10 w-10 shrink-0" />
               <span className="min-w-0 flex-1">
                 <strong className="block truncate text-sm">{m.nickname}</strong>
                 <span className="mt-1 block text-[11px] text-muted">
-                  {m.hasGoals ? "목표 설정" : "목표 없음"}
+                  {m.inactiveDays >= ATTENTION_INACTIVE_DAYS
+                    ? `${m.inactiveDays}일째 기록 없음`
+                    : m.hasGoals ? "목표 설정" : "목표 없음"}
                   {challenge.status !== "setup" && ` · ${recentLabel} ${m.recentProofDays}일`}
                 </span>
                 {challenge.status !== "setup" && (
@@ -209,9 +241,13 @@ export function CreatorStudio({
                   </span>
                 )}
               </span>
-              <span className="shrink-0 text-right text-[11px] font-bold text-accent">
-                {snapshot.todayTracked && (m.todayProof ? "오늘 인증" : "오늘 기록 없음")}
-                <span className="block text-[10px] text-muted">상세 →</span>
+              <span className="flex shrink-0 flex-col items-end gap-1 text-[10px] text-muted">
+                {m.badge && (
+                  <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${BADGE[m.badge].className}`}>
+                    {BADGE[m.badge].label}
+                  </span>
+                )}
+                상세 →
               </span>
             </button>
           ))}
@@ -232,6 +268,6 @@ export function CreatorStudio({
           onClose={() => setSelected(null)}
         />
       )}
-    </main>
+    </div>
   );
 }

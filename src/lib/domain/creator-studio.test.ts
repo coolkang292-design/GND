@@ -59,6 +59,64 @@ describe("Creator Studio P0 snapshot", () => {
     });
   });
 
+  // 사용자 결정 2026-10-24: "3일 이상 연속 운동 기록 없음"이 확인 필요다.
+  // 오늘은 세지 않는다(아직 운동할 수 있다). 기준점은 마지막 인증 다음 날, 없으면 max(시작, 합류).
+  describe("3 consecutive days without a workout", () => {
+    const people: CreatorParticipant[] = [
+      { user_id: "host", role: "host", status: "joined", joined_at: "2026-10-01T00:00:00Z" },
+      { user_id: "quiet", role: "member", status: "joined", joined_at: "2026-10-02T03:00:00Z" },
+      { user_id: "twoDays", role: "member", status: "joined", joined_at: "2026-10-02T03:00:00Z" },
+      { user_id: "today", role: "member", status: "joined", joined_at: "2026-10-02T03:00:00Z" },
+      { user_id: "newbie", role: "member", status: "joined", joined_at: "2026-10-22T03:00:00Z" },
+      { user_id: "noGoal", role: "member", status: "joined", joined_at: "2026-10-02T03:00:00Z" },
+    ];
+    const rows: PeriodSessionRow[] = [
+      { userId: "quiet", completedAt: "2026-10-20T03:00:00Z", exercises: [] },
+      { userId: "twoDays", completedAt: "2026-10-21T03:00:00Z", exercises: [] },
+      { userId: "today", completedAt: "2026-10-18T03:00:00Z", exercises: [] },
+      { userId: "today", completedAt: "2026-10-24T03:00:00Z", exercises: [] },
+    ];
+    const goals = ["quiet", "twoDays", "today", "newbie"].map((id) => ({ user_id: id }) as UserGoal);
+    const snap = buildCreatorSnapshot({
+      ...input, participants: people, sessions: rows, goals, profiles: [],
+    });
+    const by = (id: string) => snap.members.find((m) => m.id === id)!;
+
+    it("counts whole days since the last proof, excluding today", () => {
+      expect(by("quiet").inactiveDays).toBe(3); // 21·22·23
+      expect(by("twoDays").inactiveDays).toBe(2); // 22·23
+      expect(by("today").inactiveDays).toBe(0); // worked out today
+      expect(by("newbie").inactiveDays).toBe(2); // joined 22 → 22·23, not since start
+    });
+
+    it("labels each member with one badge, most actionable first", () => {
+      expect(by("noGoal").badge).toBe("needs-goal");
+      expect(by("today").badge).toBe("done-today");
+      expect(by("quiet").badge).toBe("attention");
+      expect(by("newbie").badge).toBe("new");
+      expect(by("twoDays").badge).toBe("active");
+      expect(snap.attentionCount).toBe(1);
+      expect(snap.recentJoinCount).toBe(1);
+      expect(snap.yesterdayProofCount).toBe(0);
+    });
+
+    it("never flags inactivity outside an active period", () => {
+      const ended = buildCreatorSnapshot({
+        ...input, participants: people, sessions: rows, goals, profiles: [],
+        status: "ended", endDate: "2026-10-23", todayKey: "2026-10-30",
+      });
+      expect(ended.attentionCount).toBe(0);
+      expect(ended.members.every((m) => m.inactiveDays === 0 && m.badge === null)).toBe(true);
+      expect(ended.yesterdayProofCount).toBeNull();
+
+      const setup = buildCreatorSnapshot({
+        ...input, participants: people, sessions: [], goals, profiles: [], status: "setup",
+      });
+      expect(setup.members.find((m) => m.id === "quiet")?.badge).toBe("ready");
+      expect(setup.members.find((m) => m.id === "noGoal")?.badge).toBe("needs-goal");
+    });
+  });
+
   // 종료·모집 중에는 "오늘"이 기간 밖이라 전원이 "오늘 기록 없음"으로 잡혔다.
   it("does not track today's proof outside an active period", () => {
     const active = buildCreatorSnapshot({ ...input, status: "active" });
