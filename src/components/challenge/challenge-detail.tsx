@@ -293,27 +293,25 @@ export function ChallengeDetail({
 
   // Same assembly as the ended result, but limited to elapsed days and without
   // final rankings, score-trend points or reward grants.
-  const liveRecordReport = useMemo(() => {
-    if (
-      challenge.status !== "active" ||
-      challenge.myStatus !== "joined" ||
-      !detailsAreCurrent ||
-      !sessionRows ||
-      !me
-    ) return null;
-    return buildMyRecordReport({
-      userId,
-      participant: me,
-      goals: myGoals,
-      rows: sessionRows,
-      plans,
-      startDate: challenge.start_date,
-      endDate: todayKey < challenge.end_date ? todayKey : challenge.end_date,
-      timeZone,
-      finalized: false,
-    });
-  }, [challenge.status, challenge.myStatus, challenge.start_date, challenge.end_date,
-      detailsAreCurrent, sessionRows, me, myGoals, plans, userId, todayKey, timeZone]);
+  const liveRecordReport =
+    showMyRecords &&
+    challenge.status === "active" &&
+    challenge.myStatus === "joined" &&
+    detailsAreCurrent &&
+    sessionRows &&
+    me
+      ? buildMyRecordReport({
+          userId,
+          participant: me,
+          goals: myGoals,
+          rows: sessionRows,
+          plans,
+          startDate: challenge.start_date,
+          endDate: todayKey < challenge.end_date ? todayKey : challenge.end_date,
+          timeZone,
+          finalized: false,
+        })
+      : null;
 
   const primaryButton =
     action.kind === "none" ? null : action.kind === "goto_record" ? null : (
