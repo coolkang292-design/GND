@@ -96,17 +96,30 @@ node scripts/dev-fixture.mjs destroy    # 픽스처 2개만 삭제
 
 **단, 미리보기(Preview)는 GitHub 연동으로 자동 생성된다** (사용자 지시 2026-10-12).
 Vercel 프로젝트 `gnd`가 `coolkang292-design/GND`에 연결돼 있고(운영 브랜치 `main`),
-`vercel.json`의 `git.deploymentEnabled.main: false`가 **`main` 푸시의 자동 배포만** 끈다.
+차단막은 **두 겹**이다.
+
+| 차단막 | 어디에 | 막는 것 |
+|---|---|---|
+| `vercel.json`의 `git.deploymentEnabled.main: false` | 저장소 | 로컬에서 `main`에 푸시하면 배포를 **아예 만들지 않는다** |
+| Vercel **Ignored Build Step** (프로젝트 설정 `commandForIgnoringBuildStep`, 2026-10-24 적용) | Vercel 대시보드 | Git 연동이 시작한 **Production 빌드를 CANCELED로 취소**한다. Preview는 통과 |
 
 ```
-git push (작업 브랜치)  →  Vercel이 Preview를 자동으로 만든다. 사용자 폰에는 아무 변화가 없다.
-git push (main)        →  GitHub에만 올라간다. 배포 안 된다. 사용자 폰에는 아무 변화가 없다.
-vercel --prod          →  이게 실제 배포다.
+git push (작업 브랜치)   →  Preview 자동 생성. 사용자 폰에는 아무 변화가 없다.
+git push (main, 로컬)   →  배포 안 생김.
+GitHub 웹에서 PR 병합    →  Production 배포가 생기지만 Ignored Build Step이 CANCELED로 취소한다.
+vercel --prod (CLI)     →  이게 실제 배포다. CLI 배포는 Ignored Build Step을 거치지 않는다.
 ```
 
-- ⛔ **`vercel.json`에서 `"main": false`를 지우지 마라.** 지우는 순간 `main` 푸시가
-  승인 없이 운영 배포가 된다. Vercel은 **푸시된 커밋의** `vercel.json`을 읽으므로
-  `main`에 들어간 이 줄이 유일한 차단막이다
+- ⚠️ **첫 번째 차단막만으로는 부족했다.** 2026-10-12~23에 GitHub 웹 squash 병합 7건이
+  `main: false`를 뚫고 운영으로 자동 배포됐다(#12·#13·#14·#18·#20·#21·#24). 로컬 푸시는
+  한 번도 안 뚫렸다. Vercel 내부 원인은 미확인이다 — 비공개 실험 저장소에서는 재현되지
+  않았다. 조사·실험 전체: `docs/plans/2026-10-23-vercel-prod-autodeploy-guard.md`
+- ⛔ **두 차단막 모두 지우지 마라.** `vercel.json`의 `"main": false`도, 대시보드의
+  Ignored Build Step도 그대로 둔다. 되돌리기는 `commandForIgnoringBuildStep: null` (위 문서 §6)
+- ⛔ **`GND_MANUAL_PROD`를 프로젝트 환경변수로 만들지 마라.** Ignored Build Step 명령에서
+  이 값이 `1`이면 Production 빌드를 통과시킨다. 만들면 차단이 통째로 풀린다
+- 대시보드 **Redeploy**로 운영을 다시 올리면 취소될 수 있다 [미검증]. 운영 재배포는 CLI로 한다
+- `gnd-git-main-gnd4.vercel.app`은 병합 때마다 취소된 배포를 가리키게 된다. 사용자가 쓰는 주소가 아니다
 - Preview 주소(`gnd-<hash>-gnd4.vercel.app`)는 **Vercel 로그인이 있어야 열린다**
   (Deployment Protection). 폰에서 보려면 폰 브라우저에서 Vercel에 로그인한다
 - Preview에는 Supabase·PostHog 키만 있다. **푸시 알림(VAPID)·관리자·크론·서비스 롤 기능은
@@ -129,8 +142,13 @@ vercel --prod          →  이게 실제 배포다.
 git worktree add /tmp/deploy-main main
 cp .env.local .vercel -r /tmp/deploy-main/    # 둘 다 gitignore라 따로 복사
 cd /tmp/deploy-main && npm install && npm run build
-npx vercel@latest --prod --yes --scope gnd4
+npx vercel@latest --prod --yes --scope gnd4 --meta gndCommitSha=$(git rev-parse HEAD)
 ```
+
+**배포할 때 커밋 SHA와 Vercel 배포 ID를 함께 기록한다** (사용자 지시 2026-10-23).
+`--meta gndCommitSha=…`가 SHA를 Vercel 배포 기록에 남긴다 — `.git` 없이 올리면 Vercel에는
+SHA가 없어서 어느 커밋이 운영인지 나중에 대조할 수 없었다. 배포 ID(`dpl_…`)는 CLI 출력과
+`/v13/deployments`에서 얻는다. 둘을 작업 보고와 `PROGRESS.md`에 같이 적는다.
 
 ⚠️ **`--scope gnd4`를 빼면 `Not authorized`로 죽는다** (2026-08-31에 겪었다).
 프로젝트가 개인이 아니라 **팀(`gnd4`) 소유**라서, 로그인은 돼 있어도(`vercel whoami`가
