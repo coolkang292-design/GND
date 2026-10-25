@@ -121,15 +121,29 @@ console.log(`피해자 B=${B.id}\n`);
 
 // ── 대상 찾기 (service_role, 읽기 전용) ──────────────────────────────────
 const [bProfile] = await svcGet(`profiles?select=id,nickname&id=eq.${B.id}`);
-const [bSession] = await svcGet(
-  `workout_sessions?select=id,title,status&user_id=eq.${B.id}&order=created_at.desc&limit=1`,
+// ⚠️ "가장 최근 세션"만 집지 마라 — 2026-10-25 화면 확인 중 시작했다 취소한 B의 빈 세션이 잡혀
+//    [3] 종목·세트 단언 2건이 조용히 건너뛰어졌다(52 → 50). 종목·세트가 있는 가장 최근 세션을 고른다.
+const bRecent = await svcGet(
+  `workout_sessions?select=id,title,status&user_id=eq.${B.id}&order=created_at.desc&limit=30`,
 );
-const bEx = bSession
-  ? (await svcGet(`workout_exercises?select=id,session_id&session_id=eq.${bSession.id}&limit=1`))[0]
-  : null;
-const bSet = bEx
-  ? (await svcGet(`workout_sets?select=id,workout_exercise_id&workout_exercise_id=eq.${bEx.id}&limit=1`))[0]
-  : null;
+let bSession = bRecent[0] ?? null;
+let bEx = null;
+let bSet = null;
+for (const s of bRecent) {
+  const [ex] = await svcGet(`workout_exercises?select=id,session_id&session_id=eq.${s.id}&limit=1`);
+  const [set] = ex
+    ? await svcGet(`workout_sets?select=id,workout_exercise_id&workout_exercise_id=eq.${ex.id}&limit=1`)
+    : [];
+  if (set) {
+    [bSession, bEx, bSet] = [s, ex, set];
+    break;
+  }
+}
+if (!bSet) {
+  // 건너뛰면 "검사했는데 문제 없음"과 구별이 안 된다 — 전제가 깨졌다고 크게 말한다
+  console.error("픽스처 B에 종목·세트가 있는 세션이 최근 30개 안에 없습니다 — [3]을 검사할 수 없습니다.");
+  process.exitCode = 1;
+}
 const [bNotif] = await svcGet(`notifications?select=id,user_id,read_at&user_id=eq.${B.id}&limit=1`);
 const [otherChallenge] = await svcGet(
   `challenges?select=id,created_by,status&created_by=neq.${A.id}&limit=1`,

@@ -93,8 +93,14 @@ const kstToday = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
 //
 // profiles 표에는 이메일이 없어서 auth 관리자 API로 id를 얻은 뒤 프로필을 읽는다.
 const FIXTURE_EMAIL = "dev-fixture-a@gnd.local";
-const authPage = await get(`/auth/v1/admin/users?page=1&per_page=200`);
-const authUser = (authPage?.users ?? []).find((u) => u.email === FIXTURE_EMAIL);
+// ⚠️ 첫 페이지만 보지 마라 — 익명 계정이 계속 쌓여 2026-10-25에 359명이 되자 픽스처 A가
+//    최신순 348번째로 밀려 "없습니다"가 났다(단언 8 → 0). dev-fixture.mjs와 같은 방식으로 다 훑는다.
+let authUser;
+for (let page = 1; page <= 20 && !authUser; page++) {
+  const users = (await get(`/auth/v1/admin/users?page=${page}&per_page=200`))?.users ?? [];
+  authUser = users.find((u) => u.email === FIXTURE_EMAIL);
+  if (users.length < 200) break;
+}
 const [fixture] = authUser
   ? await get(`/rest/v1/profiles?select=id,nickname&id=eq.${authUser.id}`)
   : [];
