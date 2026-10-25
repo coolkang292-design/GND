@@ -3,6 +3,22 @@ import type { VolumeSummary } from "./volume";
 import { durationSecondsOf, formatDurationAmount } from "./set-timer";
 
 /**
+ * 피드 카드의 운동 요약 블록(숫자 줄 · 기록 갱신 · 번호 목록)이 읽는 것만.
+ * `FeedItem`은 이걸 그대로 만족한다. 피드 밖(Creator Studio 참여자 상세, 2026-10-25)에서
+ * 같은 블록을 쓸 때 게시물 전체를 지어내지 않으려고 좁혔다.
+ */
+export type WorkoutSummaryInput = {
+  sessionId: string;
+  nickname: string;
+  durationMinutes: number;
+  volume: VolumeSummary;
+  breakdown: BreakdownExercise[];
+  exerciseNames: string[];
+  recordNote: string | null;
+  tabataMinutes: number | null;
+};
+
+/**
  * 피드 카드의 숫자 줄과 운동 목록 표기 (2026-10-05 Performance Social 피드 시안).
  *
  * 시안: `52 MIN 운동 시간 · 18 SETS 전체 세트 · 6,840 KG 전체 볼륨` +

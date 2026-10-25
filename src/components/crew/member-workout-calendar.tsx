@@ -45,6 +45,10 @@ export function CrewCalendarMonthView({
   onToday,
   nextDisabled,
   includePrivate = false,
+  previousDisabled = false,
+  labels,
+  selectedDetail,
+  sectionClassName = "mt-4 border-t border-line pt-3.5",
 }: {
   view: Month;
   data: PublicCrewCalendarMonth;
@@ -55,6 +59,14 @@ export function CrewCalendarMonthView({
   onToday: () => void;
   nextDisabled: boolean;
   includePrivate?: boolean;
+  /** 기간이 정해진 달력(챌린지)에서 시작 달 이전으로 못 가게 한다 */
+  previousDisabled?: boolean;
+  /** 다른 자리(Creator Studio 참여자 상세)에서 쓸 때 문구만 바꾼다. 비우면 크루 문구 그대로 */
+  labels?: Partial<Record<"title" | "aria" | "days" | "time" | "empty" | "legend" | "footnote", string>>;
+  /** 날짜를 눌렀을 때 기본 "운동 N회 · 시간" 대신 보여 줄 내용 */
+  selectedDetail?: React.ReactNode;
+  /** 카드 안에 넣을 때 위 구분선·여백을 뺀다 */
+  sectionClassName?: string;
 }) {
   const firstWeekday = new Date(Date.UTC(view.year, view.month - 1, 1)).getUTCDay();
   const days = new Date(Date.UTC(view.year, view.month, 0)).getUTCDate();
@@ -63,14 +75,15 @@ export function CrewCalendarMonthView({
   const selectedStamp: DayStamp | undefined = selected ? stamps.get(selected) : undefined;
 
   return (
-    <section aria-label={includePrivate ? "내 운동 완료 캘린더" : "크루 운동 완료 캘린더"} className="mt-4 border-t border-line pt-3.5">
-      <h4 className="text-sm font-extrabold">운동 완료 캘린더</h4>
+    <section aria-label={labels?.aria ?? (includePrivate ? "내 운동 완료 캘린더" : "크루 운동 완료 캘린더")} className={sectionClassName}>
+      {labels?.title !== "" && <h4 className="text-sm font-extrabold">{labels?.title ?? "운동 완료 캘린더"}</h4>}
       <div className="mt-2.5 rounded-card border border-line bg-surface p-3">
         <div className="mb-3 flex items-center justify-between gap-2">
           <h5 className="text-[14px] font-extrabold">{view.year}년 {view.month}월</h5>
           <div className="flex items-center gap-1">
             <button type="button" aria-label="이전 달" onClick={onPrevious}
-              className="grid h-9 w-9 place-items-center rounded-full border border-line bg-surface-2 text-base">‹</button>
+              disabled={previousDisabled}
+              className="grid h-9 w-9 place-items-center rounded-full border border-line bg-surface-2 text-base disabled:opacity-35">‹</button>
             <button type="button" onClick={onToday}
               className="h-9 rounded-full border border-line bg-surface-2 px-2.5 text-[11px] font-bold">오늘</button>
             <button type="button" aria-label="다음 달" onClick={onNext}
@@ -82,11 +95,11 @@ export function CrewCalendarMonthView({
         <div className="mb-3 grid grid-cols-2 gap-2 text-center">
           <div className="rounded-card-sm bg-surface-2 px-2 py-2.5">
             <p className="text-lg font-extrabold">{data.workoutDays}일</p>
-            <p className="text-[11px] text-muted">{includePrivate ? "운동한 날" : "공개 운동한 날"}</p>
+            <p className="text-[11px] text-muted">{labels?.days ?? (includePrivate ? "운동한 날" : "공개 운동한 날")}</p>
           </div>
           <div className="rounded-card-sm bg-surface-2 px-2 py-2.5">
             <p className="text-lg font-extrabold">{durationText(data.totalDurationSeconds)}</p>
-            <p className="text-[11px] text-muted">{includePrivate ? "완료 운동시간" : "공개 운동시간"}</p>
+            <p className="text-[11px] text-muted">{labels?.time ?? (includePrivate ? "완료 운동시간" : "공개 운동시간")}</p>
           </div>
         </div>
 
@@ -134,7 +147,8 @@ export function CrewCalendarMonthView({
           })}
         </div>
 
-        {selectedStamp && (
+        {selectedStamp && selectedDetail}
+        {selectedStamp && !selectedDetail && (
           <div role="status" className="mt-3 rounded-card-sm bg-surface-2 px-3 py-2 text-[12px]">
             <strong>{Number(selected?.slice(5, 7))}월 {Number(selected?.slice(8, 10))}일</strong>
             <span className="ml-2 text-muted">
@@ -144,18 +158,18 @@ export function CrewCalendarMonthView({
         )}
         {data.workoutDays === 0 && (
           <p className="mt-3 text-center text-[11.5px] text-muted">
-            {includePrivate ? "이 달에 완료한 운동이 없어요" : "이 달에 크루에게 공개된 완료 운동이 없어요"}
+            {labels?.empty ?? (includePrivate ? "이 달에 완료한 운동이 없어요" : "이 달에 크루에게 공개된 완료 운동이 없어요")}
           </p>
         )}
         <div className="mt-3 flex items-center gap-2 text-[11px] text-muted">
           <WorkoutCompleteStamp seed="crew-calendar-legend" className="h-6 w-6 flex-none" />
-          <span>{includePrivate ? "내 운동 완료일 (비공개 포함)" : "크루에게 공개된 운동 완료일"}</span>
+          <span>{labels?.legend ?? (includePrivate ? "내 운동 완료일 (비공개 포함)" : "크루에게 공개된 운동 완료일")}</span>
         </div>
       </div>
       <p className="mt-2 text-[10.5px] leading-relaxed text-faint">
-        {includePrivate
+        {labels?.footnote ?? (includePrivate
           ? "본인에게는 공개·비공개 완료 운동이 모두 표시됩니다."
-          : "공개한 완료 운동만 표시됩니다. 누적 성과에는 비공개 운동이 포함될 수 있어요."}
+          : "공개한 완료 운동만 표시됩니다. 누적 성과에는 비공개 운동이 포함될 수 있어요.")}
       </p>
     </section>
   );

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ChallengeActivityItem, PeriodSessionRow } from "@/lib/challenge";
 import type { UserGoal } from "@/lib/types";
-import { buildCreatorMemberDetail, monthCells } from "./creator-member-detail";
+import { buildCreatorMemberDetail } from "./creator-member-detail";
 import type { CreatorParticipant } from "./creator-studio";
 
 const participants: CreatorParticipant[] = [
@@ -55,6 +55,9 @@ describe("Creator Studio member detail (mockup 2)", () => {
     expect(d.streak).toBe(3); // 간격 5일 미만이면 사슬이 이어진다 (streak.ts)
     expect(d.daysSinceLast).toBe(2);
     expect(d.week).toBe(2); // 10/1 시작 → 10/12는 2주차
+    // 달력 도장(운동 내용)과 운동일 수가 같은 날들을 가리킨다 — 미래 10/30은 없다
+    expect(d.workoutDays.map((w) => w.dayKey)).toEqual(d.dayKeys);
+    expect(d.workoutSummary.days).toBe(3);
   });
 
   it("uses the member's own goals and the shared actual calculation", () => {
@@ -77,14 +80,5 @@ describe("Creator Studio member detail (mockup 2)", () => {
     const d = buildCreatorMemberDetail(input)!;
     expect(d.recent.map((r) => r.sessionId)).toEqual(["done"]);
     expect(d.recent[0]).toMatchObject({ title: "하체", hasPhoto: true });
-  });
-});
-
-describe("monthCells", () => {
-  it("lays out a Sunday-first month with leading blanks", () => {
-    const cells = monthCells("2026-10"); // 2026-10-01 is a Thursday
-    expect(cells.slice(0, 5)).toEqual([null, null, null, null, "2026-10-01"]);
-    expect(cells.filter(Boolean)).toHaveLength(31);
-    expect(cells.length % 7).toBe(0);
   });
 });

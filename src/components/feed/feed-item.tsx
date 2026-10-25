@@ -14,7 +14,7 @@ import { ImageLightbox } from "@/components/image-lightbox";
 import { PhotoCarousel } from "@/components/feed/photo-carousel";
 import { PhotoStamp } from "@/components/photo-stamp";
 import { Icon } from "@/components/ui/icon";
-import { exerciseSetSummary, feedStatCells } from "@/lib/domain/feed-card";
+import { exerciseSetSummary, feedStatCells, type WorkoutSummaryInput } from "@/lib/domain/feed-card";
 import { normalizeCaption } from "@/lib/domain/session-caption";
 import {
   totalCommentCount,
@@ -80,13 +80,16 @@ type Props = {
  * 사진 카드와 일반 카드가 **같은 블록을 쓰므로** 여기 한 번만 붙이면 두 변형
  * 모두에서 목록을 펼칠 수 있다. 2026-10-07 사용자 지시로 하단 세트 상세 카드는 제거했다.
  */
-function WorkoutSummary({
+export function WorkoutSummary({
   item,
   isMine,
+  canCopy = true,
 }: {
-  item: FeedItem;
+  item: WorkoutSummaryInput;
   /** 내 기록이면 따라하기를 안 그린다 (2026-08-31 사용자 지시) */
   isMine: boolean;
+  /** 따라하기 링크를 아예 안 그린다 — 세션 id가 없는 자리(Creator Studio 참여자 상세) */
+  canCopy?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const cells = feedStatCells(item);
@@ -201,7 +204,7 @@ function WorkoutSummary({
       */}
       {expanded && (
         <div className="mt-2.5">
-          {!isMine && (
+          {!isMine && canCopy && (
             <Link
               href={`/record?copy=${item.sessionId}`}
               className="mt-2.5 flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-card-sm border border-accent/50 bg-black/30 text-[12.5px] font-extrabold text-accent"

@@ -7,6 +7,12 @@ import {
   type PeriodSessionRow,
 } from "@/lib/challenge";
 import { inclusiveDays } from "@/lib/domain/challenge-time";
+import {
+  buildMemberWorkoutDays,
+  summarizeMemberWorkouts,
+  type MemberWorkoutDay,
+  type MemberWorkoutSummary,
+} from "@/lib/domain/creator-member-workouts";
 import { buildCreatorSnapshot, type CreatorMember, type CreatorParticipant } from "@/lib/domain/creator-studio";
 import { goalRate } from "@/lib/domain/goal-score";
 import { currentStreak, daysSinceLastWorkout } from "@/lib/domain/streak";
@@ -37,6 +43,9 @@ export type CreatorMemberDetail = {
    *  (`not_active`), so there is nothing to cheer otherwise. */
   liveSessionId: string | null;
   recent: { sessionId: string; at: string; title: string | null; hasPhoto: boolean; cheerCount: number }[];
+  /** 날짜별 운동 내용 — 달력 도장과 날짜 눌렀을 때의 상세 (2026-10-25) */
+  workoutDays: MemberWorkoutDay[];
+  workoutSummary: MemberWorkoutSummary;
 };
 
 function daysBetween(from: string, to: string): number {
@@ -85,9 +94,15 @@ export function buildCreatorMemberDetail(input: {
       })
     : null;
 
+  // 달력 도장과 운동일 수가 갈리지 않게 같은 기간(시작일~기준일)으로 자른다
+  const workoutDays = buildMemberWorkoutDays(input.sessions, input.userId, DEFAULT_TIMEZONE, member.nickname)
+    .filter((d) => d.dayKey >= input.startDate && d.dayKey <= ref);
+
   return {
     member,
     dayKeys,
+    workoutDays,
+    workoutSummary: summarizeMemberWorkouts(workoutDays),
     totalProofDays: dayKeys.length,
     streak: input.status === "setup" ? 0 : currentStreak(dayKeys, ref),
     daysSinceLast: daysSinceLastWorkout(dayKeys, ref),
@@ -120,15 +135,4 @@ export function buildCreatorMemberDetail(input: {
         cheerCount: a.cheer_count,
       })),
   };
-}
-
-/** Sunday-first month grid: leading `null`s, then every day key, padded to full weeks. */
-export function monthCells(monthKey: string): (string | null)[] {
-  const [y, m] = monthKey.split("-").map(Number);
-  const first = new Date(Date.UTC(y, m - 1, 1)).getUTCDay();
-  const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
-  const cells: (string | null)[] = Array.from({ length: first }, () => null);
-  for (let d = 1; d <= days; d++) cells.push(`${monthKey}-${String(d).padStart(2, "0")}`);
-  while (cells.length % 7) cells.push(null);
-  return cells;
 }

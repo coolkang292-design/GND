@@ -1,32 +1,16 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { Avatar } from "@/components/avatar";
 import { CheerActions } from "@/components/feed/cheer-actions";
 import { Icon, type IconName } from "@/components/ui/icon";
 import type { CreatorMemberDetailView } from "@/lib/creator-data";
 import { formatMonthDay } from "@/lib/domain/challenge-time";
-import { monthCells } from "@/lib/domain/creator-member-detail";
 import { CREATOR_BASE_PATH, isDemoChallenge } from "@/lib/domain/creator-return";
 import { ATTENTION_INACTIVE_DAYS } from "@/lib/domain/creator-studio";
 import type { Challenge } from "@/lib/types";
+import { CreatorMemberCalendar } from "./creator-member-calendar";
 import { card, SectionTitle, StatusBadge } from "./creator-ui";
-
-const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
-
-/** 챌린지 기간에 걸친 달 목록 — 달력은 이 밖으로 넘어가지 않는다. */
-function periodMonths(start: string, end: string): string[] {
-  const out: string[] = [];
-  let [y, m] = start.split("-").map(Number);
-  const [ey, em] = end.split("-").map(Number);
-  while (y < ey || (y === ey && m <= em)) {
-    out.push(`${y}-${String(m).padStart(2, "0")}`);
-    m += 1;
-    if (m > 12) { m = 1; y += 1; }
-  }
-  return out;
-}
 
 function lastProofText(daysSince: number | null): string {
   if (daysSince === null) return "–";
@@ -46,13 +30,6 @@ export function CreatorMemberDetailScreen({
   detail: CreatorMemberDetailView;
 }) {
   const { member } = detail;
-  const months = periodMonths(challenge.start_date, challenge.end_date);
-  const refMonth = (detail.todayKey < challenge.end_date ? detail.todayKey : challenge.end_date).slice(0, 7);
-  const [monthIdx, setMonthIdx] = useState(() => Math.max(0, months.indexOf(refMonth)));
-  const month = months[monthIdx] ?? months[0];
-  const proofDays = new Set(detail.dayKeys);
-  const [, mm] = month.split("-").map(Number);
-
   const stats: { icon: IconName; label: string; value: string; tone: string }[] = [
     { icon: "check", label: "누적 인증", value: `${detail.totalProofDays}일`, tone: "text-accent" },
     { icon: "flame", label: "현재 스트릭", value: `${detail.streak}일`, tone: "text-gold" },
@@ -127,58 +104,13 @@ export function CreatorMemberDetailScreen({
         <p className="mt-1 text-[11px] text-muted">회원이 정한 목표예요. 방장은 바꿀 수 없어요.</p>
       </section>
 
-      <section className={`${card} p-3.5`} aria-label="운동 달력">
-        <div className="flex items-center justify-between">
-          <SectionTitle icon="calendar" title="운동 달력" />
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              aria-label="이전 달"
-              disabled={monthIdx === 0}
-              onClick={() => setMonthIdx((i) => Math.max(0, i - 1))}
-              className="grid h-9 w-9 place-items-center rounded-full text-muted disabled:opacity-30"
-            >
-              <Icon name="back" size={16} />
-            </button>
-            <span className="min-w-[44px] text-center text-[14px] font-bold">{mm}월</span>
-            <button
-              type="button"
-              aria-label="다음 달"
-              disabled={monthIdx >= months.length - 1}
-              onClick={() => setMonthIdx((i) => Math.min(months.length - 1, i + 1))}
-              className="grid h-9 w-9 place-items-center rounded-full text-muted disabled:opacity-30"
-            >
-              <Icon name="chevron" size={16} />
-            </button>
-          </div>
-        </div>
-        <div className="mt-2 grid grid-cols-7 gap-y-1.5 text-center text-[12px]">
-          {WEEKDAYS.map((w) => (
-            <span key={w} className="pb-1 text-[11px] font-bold text-muted">{w}</span>
-          ))}
-          {monthCells(month).map((key, i) => {
-            if (!key) return <span key={`blank-${i}`} />;
-            const inPeriod = key >= challenge.start_date && key <= challenge.end_date;
-            const done = proofDays.has(key);
-            const isToday = key === detail.todayKey;
-            return (
-              <span key={key} className="grid place-items-center">
-                <span
-                  aria-label={done ? `${key} 인증` : undefined}
-                  className={`grid h-9 w-9 place-items-center rounded-full tabular-nums ${
-                    done ? "bg-accent font-extrabold text-accent-ink"
-                      : isToday ? "border border-line-strong font-bold"
-                        : inPeriod ? "text-text" : "text-muted/50"
-                  }`}
-                >
-                  {Number(key.slice(8))}
-                </span>
-              </span>
-            );
-          })}
-        </div>
-        <p className="mt-2 text-[11px] text-muted">초록 = 챌린지에 반영된 인증일. 기간 밖 날짜는 흐리게 표시돼요.</p>
-      </section>
+      <CreatorMemberCalendar
+        days={detail.workoutDays}
+        summary={detail.workoutSummary}
+        startDate={challenge.start_date}
+        endDate={challenge.end_date}
+        todayKey={detail.todayKey}
+      />
 
       <section className={`${card} p-3.5`}>
         <SectionTitle icon="bell" title="최근 활동" />

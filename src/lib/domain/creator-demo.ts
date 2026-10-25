@@ -61,6 +61,44 @@ const GOAL: Partial<Record<GoalType, { target: number; unit: string; qualifier: 
   weight_days: { target: 8, unit: "일", qualifier: 1 },
 };
 
+type Exercise = PeriodSessionRow["exercises"][number];
+type SetRow = Exercise["sets"][number];
+const blank: SetRow = { weightKg: null, reps: null, distanceMeters: null, durationSeconds: null, isCompleted: true };
+
+/** 분할 루틴 — 하체 / 가슴 / 등을 돌리고, 가끔 코어, 유산소 회원은 격일 유산소. 무게는 기간 동안 조금씩 오른다. */
+function routine(d: number, cardio: boolean, rnd: () => number): Exercise[] {
+  const base = 30 + Math.round(rnd() * 20) + d; // kg
+  const lifts = (name: string, bodyPart: string, kg: number, reps: number): Exercise => ({
+    exerciseType: "weight", exerciseName: name, bodyPart,
+    sets: [0, 1, 2].map((i) => ({ ...blank, weightKg: kg + i * 5, reps: reps - i, isCompleted: !(i === 2 && rnd() < 0.2) })),
+  });
+  const body = (name: string, bodyPart: string, reps: number): Exercise => ({
+    exerciseType: "bodyweight", exerciseName: name, bodyPart,
+    sets: [reps, reps - 3].map((r) => ({ ...blank, reps: r })),
+  });
+  const split = [
+    [lifts("스쿼트", "하체", base + 10, 10), lifts("런지", "하체", Math.round(base / 3), 12)],
+    [lifts("벤치프레스", "가슴", base, 10), body("푸시업", "가슴", 20)],
+    [lifts("데드리프트", "등", base + 20, 8), lifts("랫풀다운", "등", base - 5, 12), body("턱걸이", "등", 8)],
+  ][d % 3];
+  const core: Exercise[] = rnd() < 0.35
+    ? [{ exerciseType: "bodyweight", exerciseName: "플랭크", bodyPart: "코어", sets: [{ ...blank, durationSeconds: 60 + Math.round(rnd() * 60) }] }]
+    : [];
+  const cardioRun: Exercise[] = cardio && d % 2 === 0
+    ? [[
+        { exerciseType: "cardio", exerciseName: "러닝", bodyPart: null, sets: [{ ...blank, distanceMeters: 3000 + Math.round(rnd() * 3000), durationSeconds: 1500 + Math.round(rnd() * 900) }] },
+        { exerciseType: "cardio", exerciseName: "사이클", bodyPart: null, sets: [{ ...blank, distanceMeters: 8000 + Math.round(rnd() * 6000), durationSeconds: 1800 }] },
+        { exerciseType: "cardio", exerciseName: "수영", bodyPart: null, sets: [{ ...blank, distanceMeters: 800, durationSeconds: 1500 + Math.round(rnd() * 600) }] },
+      ][d % 3] as Exercise]
+    : [];
+  return [...split, ...core, ...cardioRun];
+}
+
+function titleOf(exercises: readonly Exercise[]): string {
+  const names = exercises.map((e) => e.exerciseName);
+  return names.length > 2 ? `${names.slice(0, 2).join(" · ")} 외 ${names.length - 2}개` : names.join(" · ");
+}
+
 /** mulberry32 — 회원마다 고정된 무늬 */
 function seeded(seed: number): () => number {
   let a = seed >>> 0;
@@ -125,6 +163,8 @@ export function buildCreatorDemo(todayKey: string, nowMs: number = Date.now()): 
     });
 
     const cardio = plan.goals.includes("cardio_time");
+    // 운동 내용은 출석 무늬와 다른 난수를 쓴다 — 바꿔도 배지·확인 필요 구성이 흔들리지 않게
+    const lift = seeded(idx * 104729 + 3);
     for (let d = Math.max(0, plan.join); d <= 20; d++) {
       if (!plan.did(d, rnd)) continue;
       const day = shift(start, d);
@@ -134,23 +174,12 @@ export function buildCreatorDemo(todayKey: string, nowMs: number = Date.now()): 
         userId: id,
         completedAt,
         durationMinutes: 40 + Math.round(rnd() * 30),
-        exercises: [
-          {
-            exerciseType: "weight", exerciseName: "스쿼트", bodyPart: "하체",
-            sets: [1, 2, 3].map(() => ({ weightKg: 40, reps: 10, distanceMeters: null, durationSeconds: null, isCompleted: true })),
-          },
-          ...(cardio && d % 2 === 0
-            ? [{
-                exerciseType: "cardio" as const, exerciseName: "러닝", bodyPart: null,
-                sets: [{ weightKg: null, reps: null, distanceMeters: 3000, durationSeconds: 1500, isCompleted: true }],
-              }]
-            : []),
-        ],
+        exercises: routine(d, cardio, lift),
       });
       if (d >= 13) {
         activity.push({
           session_id: `${id}-${day}`, user_id: id, nickname: plan.nickname, avatar_url: plan.avatar,
-          status: "completed", title: cardio && d % 2 === 0 ? "러닝 + 하체" : "하체 웨이트",
+          status: "completed", title: titleOf(sessions.at(-1)!.exercises),
           workout_type: null, started_at: completedAt, completed_at: completedAt,
           has_photo: rnd() < 0.6, cheer_count: Math.floor(rnd() * 4), my_cheers: 0, is_mine: false,
         });
