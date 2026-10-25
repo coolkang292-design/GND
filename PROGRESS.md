@@ -4,6 +4,17 @@
 > 이 파일은 전체 흐름의 요약이고, 작업별 세부 사실과 남은 확인은 최신 인수인계서가 기준이다.
 
 
+## ✅ 2026-10-25 이슈 #25 — PR #26(진행 중 운동 패턴) + PR #27(Creator Studio P0) — **운영 배포 완료 (일괄)**
+
+- 코드 main `32b20b5`(로컬 `--no-ff` 병합 f61ae71·0d08eec + 릴리스 노트 2b1f0b5 + 회귀 스크립트 수정 32b20b5, push 0 0 — 웹 병합 아님, GitHub가 #26·#27을 merged로 표시). Vercel `dpl_6rj5aHEKvSEond2ReQ27QJBzaUFD`(`gnd-ls9ppxygz-gnd4`) `--prod --scope gnd4` READY → `gnd-one.vercel.app`. 배포 원본은 `git archive main` 깨끗한 복사본 + `.vercel`만(`.env.local` 복사는 권한 규칙에 막힘 — 운영 빌드는 Vercel Production 환경변수 11개 사용, 이름 확인).
+- 운영 확인: `/challenge/creator`·`/challenge/creator/<id>` 비로그인 → 307 `/login?next=…`, 옛 `/creator` → 307 `/challenge/creator`, **미리보기 `/challenge/creator/demo/**` 404**(개발 서버 전용), `/whats-new`에 두 항목. `/challenge` 청크 20개: `운동 패턴 보기` 1 · `이번 주는 진행 중이에요` 1 · `운영 관리` 2 · `/challenge/creator` 1.
+- 내용: Creator Studio 운영 홈(시안 4)·참여자 관리(시안 3)·참여자 상세(시안 2, 앱 도장 달력 + 날짜 누르면 피드 `WorkoutSummary`)·성과 리포트 축소판(시안 1, 일별 인증률). 계획서 `docs/superpowers/plans/2026-10-24-creator-studio-ui-rebuild.md`(사용자 결정 §9: 확인 필요 = 3일 이상 연속 기록 없음 · 리포트 축소판 · 비로그인 로그인 후 복귀 · PR #27 이어서).
+- 확인: 병합본 개발 서버(:3200) **A(앱 브라우저)·B(크롬)** — B 운동 시작 → A 참여자 상세 "지금 운동 중이에요" + 응원 5버튼 → 🔥 → "응원을 보냈어요! +10 P"·버튼 잠김 → B 알림함 "헬스장주주님의 응원 📣 · 방금 전" → B 테스트 운동 취소(`cancelled`) → A 카드 사라짐. lint 0·typecheck·테스트 4375·build. 회귀 core 9종 0 실패(356건).
+- 회귀 첫 실행 2종 실패는 스크립트 문제였다: peek-reset(auth 359명 → 픽스처 A가 첫 200명 밖, 8 → 0), cross-user-abuse(B 최신 세션이 위 취소 세션이라 [3] 2건 건너뜀, 52 → 50). 32b20b5에서 고쳤다.
+- `[미검증]` 운영 화면을 실제 계정으로 조작한 확인, 크루 아닌 회원(C)의 목록·상세, 로그인 후 원래 화면 복귀 실제 왕복(이메일·OAuth), 실제 아이폰. 픽스처 B 운영 데이터에 취소된 운동 1건·받은 응원 1건·알림 1건 추가.
+- 알아 둘 것: send_cheer는 **운동 중 세션만** 받는다(쉬는 회원 안부는 P2). 응원 알림 본문이 `fire`처럼 코드값으로 보이는 것은 기존 동작.
+
+
 ## ✅ 2026-10-24 배포 용량 최적화 1·2단계 (이슈 #22) — **운영 배포 완료**
 
 - 코드 main `8f2b2ee`(로컬 fast-forward 후 push, 0 0 — 웹 병합 아님). Vercel `dpl_3TWjMCBKRHn35z9WpPgmhcUqcGQW`(`gnd-d0fnldatw-gnd4`) CLI target production READY·PROMOTED, `meta.gndCommitSha` = `8f2b2ee…` → `gnd-one.vercel.app`. 운영: `-v3` 음원 3개 200(4,001,325 / 8,001,453 / 16,001,709 B), 옛 `-v2`·`tabata-4min-total-body.mp3`·`gnd-launch-motivation-v5.png` 404, `/` → `/record` 200. 운영 JS 24개: `total-body-v3` 2개 / `total-body-v2`·옛 4분 이름·`gnd-launch-motivation` 0개. `main` push는 로컬 푸시라 자동 배포 없음.
