@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import { Avatar } from "@/components/avatar";
 import { ChallengeActivity } from "@/components/challenge/challenge-activity";
 import { ResultView } from "@/components/challenge/challenge-result";
+import { RecordAnalysis } from "@/components/challenge/result/record-analysis";
+import { buildMyRecordReport } from "@/lib/domain/challenge-record-analysis";
 import { CompetitionTab } from "@/components/challenge/competition/competition-tab";
 import { RankingScreen } from "@/components/challenge/competition/ranking-screen";
 import type { RankingKey } from "@/components/challenge/competition/metric-selector";
@@ -194,6 +196,7 @@ export function ChallengeDetail({
 }) {
   /** 공정성 안내 상세 접힘 — 기본은 접힌다 (2026-08-13, CrewCard와 같은 규약) */
   const [showFairness, setShowFairness] = useState(false);
+  const [showMyRecords, setShowMyRecords] = useState(false);
   /** 목표 올리기 시트 (0090) */
   const [raisingGoals, setRaisingGoals] = useState(false);
   /** 진행 중 상세 탭 — 최종 시안(2026-10-07)은 `랭킹`이 첫 화면이다 */
@@ -287,6 +290,29 @@ export function ChallengeDetail({
   const myRank = liveRanked?.find((r) => r.userId === userId)?.rank ?? null;
   /** 오늘 이 챌린지 기간 운동일에 들어갔는가 — 서버 집계(`stats`)와 같은 원천 */
   const todayDone = stats?.get(userId)?.workoutDayKeys.includes(todayKey) ?? false;
+
+  // Same assembly as the ended result, but limited to elapsed days and without
+  // final rankings, score-trend points or reward grants.
+  const liveRecordReport =
+    showMyRecords &&
+    challenge.status === "active" &&
+    challenge.myStatus === "joined" &&
+    detailsAreCurrent &&
+    sessionRows &&
+    me
+      ? buildMyRecordReport({
+          userId,
+          participant: me,
+          goals: myGoals,
+          rows: sessionRows,
+          plans,
+          startDate: challenge.start_date,
+          endDate: todayKey < challenge.end_date ? todayKey : challenge.end_date,
+          periodEndDate: challenge.end_date,
+          timeZone,
+          finalized: false,
+        })
+      : null;
 
   const primaryButton =
     action.kind === "none" ? null : action.kind === "goto_record" ? null : (
@@ -824,6 +850,33 @@ export function ChallengeDetail({
               onClose={() => setRaisingGoals(false)}
               onRaised={onGoalRaised}
             />
+          )}
+
+          {challenge.myStatus === "joined" && (
+            <section className="rounded-card border border-line bg-surface p-4 shadow-card">
+              <button
+                type="button"
+                onClick={() => setShowMyRecords((open) => !open)}
+                aria-expanded={showMyRecords}
+                aria-controls="live-personal-records"
+                className="flex min-h-11 w-full items-center justify-between gap-3 text-left"
+              >
+                <span>
+                  <strong className="block text-[15px] font-extrabold">운동 패턴 보기</strong>
+                  <span className="block text-[11.5px] text-muted">일별 운동·주간 달성 · 오늘까지의 내 기록</span>
+                </span>
+                <span className="text-[12px] font-bold text-accent">{showMyRecords ? "접기" : "펼치기"}</span>
+              </button>
+              {showMyRecords && (
+                <div id="live-personal-records" className="mt-3 border-t border-line pt-3">
+                  {liveRecordReport ? (
+                    <RecordAnalysis me={liveRecordReport} rewards={null} mode="live" />
+                  ) : (
+                    <p className="text-[12.5px] text-muted">목표를 설정하고 운동을 인증하면 활동 분석을 볼 수 있어요.</p>
+                  )}
+                </div>
+              )}
+            </section>
           )}
 
           {/* ⚠️ **한 줄은 접지 않는다** (2026-08-13) — "왜 남의 점수가 안 보이나"의 답.
