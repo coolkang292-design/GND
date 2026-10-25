@@ -35,7 +35,9 @@ import { workedOutToday } from "@/lib/domain/friend-board";
 import { resolvePersonalTodayStatus } from "@/lib/domain/home-competition";
 import { currentStreak, workoutDayKeys } from "@/lib/domain/streak";
 import { weekWorkoutDays } from "@/lib/domain/viewing-pass";
-import { DEFAULT_TIMEZONE, dayKey } from "@/lib/domain/time";
+import { DAY_MS, DEFAULT_TIMEZONE, dayKey, weekStart } from "@/lib/domain/time";
+import { getMyStampColors } from "@/lib/stamps";
+import type { StampVariant } from "@/lib/domain/workout-stamps";
 import Image from "next/image";
 import Link from "next/link";
 import { Icon } from "@/components/ui/icon";
@@ -81,6 +83,8 @@ export function HomeClient() {
    * 어긋날 수 없다(`lib/friends.ts` 주석).
    */
   const [badgeCount, setBadgeCount] = useState<number | null>(null);
+  /** 이번 주 날짜별 도장 색. 비어 있으면 카드가 기본 라임을 찍는다 */
+  const [stampColors, setStampColors] = useState<Record<string, StampVariant>>({});
   // 챌린지 요약의 재료. `null` = 아직 조회 전 — 빈 상태가 번쩍이지 않게 구별한다.
   const [challenges, setChallenges] = useState<MyChallenge[] | null>(null);
   // ⚠️ 챌린지 요약 **전용** 타임존이다. 홈의 다른 위젯(스트릭·주간 통계)은 여전히
@@ -169,6 +173,23 @@ export function HomeClient() {
         }
       } catch {
         if (!cancelled) setSummaryError(true);
+      }
+    })();
+    /**
+     * 이번 주 도장 색 — 별도 조회. 달력(`calendar-view`)과 같은 `getMyStampColors`다.
+     * ⚠️ 위 `Promise.all`에 넣지 마라. 실패하면 도장이 기본 라임으로 찍힐 뿐이다.
+     */
+    (async () => {
+      try {
+        const monday = weekStart(dateRef, DEFAULT_TIMEZONE);
+        const colors = await getMyStampColors(
+          userId,
+          dayKey(monday, DEFAULT_TIMEZONE),
+          dayKey(new Date(monday.getTime() + 7 * DAY_MS), DEFAULT_TIMEZONE),
+        );
+        if (!cancelled) setStampColors(colors);
+      } catch {
+        /* 부가 정보 — 실패하면 기본 라임 도장 */
       }
     })();
     /**
@@ -381,6 +402,7 @@ export function HomeClient() {
           todayTotals={todayTotals}
           weekLoadError={sessionsError}
           onRetryWeek={() => setReloadKey((k) => k + 1)}
+          stampColors={stampColors}
           weeklyGoal={weeklyGoal}
           status={myTodayStatus}
           badgeCount={badgeCount}

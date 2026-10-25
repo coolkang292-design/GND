@@ -8,6 +8,7 @@ import { Chip, type ChipDot } from "@/components/ui/chip";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { isPhotoAvatar } from "@/lib/domain/avatar-source";
 import type { FriendStatus } from "@/lib/domain/friend-board";
+import type { StampVariant } from "@/lib/domain/workout-stamps";
 import { personalTodayAction } from "@/lib/domain/home-competition";
 import {
   currentStreak,
@@ -118,6 +119,12 @@ export type PersonalTodayCardProps = {
   weekLoadError?: boolean;
   onRetryWeek?: () => void;
   /**
+   * 날짜별 도장 색(`workout_stamp_colors`, #21). 달력과 **같은 값**을 찍는다 —
+   * 빠지면 홈만 늘 라임이라 달력의 주황·금색 도장과 갈린다(2026-10-25).
+   * 없는 날짜·조회 실패는 기본 라임이다.
+   */
+  stampColors?: Record<string, StampVariant>;
+  /**
    * 오늘 숫자 세 칸. `undefined` = 아직 조회 중, `null` = 조회 실패 — 둘 다 `—`.
    * ⚠️ 0으로 미리 채우지 않는다. 도착하는 순간 숫자가 튀어 기록이 생긴 것처럼 읽힌다.
    */
@@ -142,6 +149,7 @@ export function PersonalTodayCard({
   completedAts,
   weekLoadError = false,
   onRetryWeek,
+  stampColors,
   todayTotals,
   weeklyGoal,
   status,
@@ -348,7 +356,7 @@ export function PersonalTodayCard({
                     <span aria-hidden className={`flex aspect-square w-full max-w-11 items-center justify-center rounded-[12px] border text-[13px] font-extrabold ${
                       done ? "border-white/[0.09] bg-bg/70" : "border-line-strong bg-bg/70 text-muted"
                     } ${key === todayKey ? "ring-2 ring-accent ring-offset-2 ring-offset-surface" : ""}`}>
-                      {done ? <WorkoutCompleteStamp seed={key} className="h-[88%] w-[88%]" /> : dateNumber}
+                      {done ? <WorkoutCompleteStamp seed={key} variant={stampColors?.[key] ?? "basic"} className="h-[88%] w-[88%]" /> : dateNumber}
                     </span>
                   </li>
                 ))}

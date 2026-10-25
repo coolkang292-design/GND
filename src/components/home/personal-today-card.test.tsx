@@ -619,6 +619,24 @@ describe("홈 월~일 날짜 칸", () => {
     expect(screen.getByLabelText("이번 주 2일 완료")).toBeTruthy();
   });
 
+  /**
+   * 랜덤 도장 색(#21)은 달력에만 적용되고 홈은 늘 라임이었다(2026-10-25 사용자 신고).
+   * 홈도 달력과 같은 `workout_stamp_colors` 값을 그대로 찍는다.
+   */
+  it("도장은 받은 날짜별 색을 쓰고, 색이 없는 날은 기본 라임이다", () => {
+    renderCard({
+      completedAts: [YESTERDAY, TODAY],
+      stampColors: { "2026-08-20": "orange", "2026-08-21": "gold" },
+    });
+    const ink = (label: string) =>
+      screen.getByLabelText(label).querySelector("svg")?.getAttribute("class") ?? "";
+    expect(ink("2026-08-20 목요일 · 운동 완료")).toContain("text-[#E97A25]");
+    expect(ink("2026-08-21 금요일 · 운동 완료")).toContain("text-[#C39420]");
+    cleanup();
+    renderCard({ completedAts: [YESTERDAY] });
+    expect(ink("2026-08-20 목요일 · 운동 완료")).toContain("text-accent");
+  });
+
   it("한국 자정·월요일·연도 경계에서 이전 주 기록을 채우지 않는다", () => {
     renderCard({ now: new Date("2027-01-03T15:01:00Z"), weeklyGoal: null,
       completedAts: [new Date("2027-01-03T14:59:00Z"), new Date("2027-01-03T15:00:00Z")] });
