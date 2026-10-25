@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Avatar } from "@/components/avatar";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { challengeInviteUrl } from "@/lib/domain/challenge-invite";
-import { CREATOR_BASE_PATH } from "@/lib/domain/creator-return";
+import { CREATOR_BASE_PATH, isDemoChallenge } from "@/lib/domain/creator-return";
 import { ATTENTION_INACTIVE_DAYS, type CreatorSnapshot } from "@/lib/domain/creator-studio";
 import type { Challenge } from "@/lib/types";
 import { card, CreatorChallengeCard, KpiCard, SectionTitle, type KpiDelta } from "./creator-ui";
@@ -107,10 +107,14 @@ export function CreatorHome({
       : challenge.status === "ended"
         ? { kind: "link" as const, label: "결과 보기", icon: "trophy" as const, href: `/challenge?open=${encodeURIComponent(challenge.id)}` }
         : { kind: "link" as const, label: "참여자 관리", icon: "users" as const, href: members };
-  const secondary =
-    primary.label === "참여자 관리"
-      ? { label: "챌린지 상세", icon: "eye" as const, href: `/challenge?open=${encodeURIComponent(challenge.id)}` }
-      : { label: "참여자 관리", icon: "users" as const, href: members };
+  // 미리보기(가짜 챌린지)는 실제 챌린지 상세가 없다 — 자리만 보여 주고 누를 수 없게 둔다
+  const secondary: { label: string; icon: IconName; href: string | null } =
+    primary.label !== "참여자 관리"
+      ? { label: "참여자 관리", icon: "users", href: members }
+      : {
+          label: "챌린지 상세", icon: "eye",
+          href: isDemoChallenge(challenge.id) ? null : `/challenge?open=${encodeURIComponent(challenge.id)}`,
+        };
 
   return (
     <div className="flex flex-col gap-3.5 pb-6 text-text">
@@ -158,12 +162,21 @@ export function CreatorHome({
             <Icon name={primary.icon} size={19} /> {primary.label}
           </Link>
         )}
-        <Link
-          href={secondary.href}
-          className={`${card} flex min-h-14 items-center justify-center gap-2 px-3 text-[15px] font-extrabold`}
-        >
-          <Icon name={secondary.icon} size={19} /> {secondary.label}
-        </Link>
+        {secondary.href ? (
+          <Link
+            href={secondary.href}
+            className={`${card} flex min-h-14 items-center justify-center gap-2 px-3 text-[15px] font-extrabold`}
+          >
+            <Icon name={secondary.icon} size={19} /> {secondary.label}
+          </Link>
+        ) : (
+          <span
+            aria-disabled="true"
+            className={`${card} flex min-h-14 items-center justify-center gap-2 px-3 text-[15px] font-extrabold opacity-40`}
+          >
+            <Icon name={secondary.icon} size={19} /> {secondary.label}
+          </span>
+        )}
       </div>
       {challenge.status !== "setup" && (
         <Link
@@ -219,7 +232,7 @@ export function CreatorHome({
           <ul className="mt-2 divide-y divide-line">
             {recent.map((a) => (
               <li key={`${a.kind}-${a.userId}-${a.when}`} className="flex items-center gap-3 py-2.5">
-                <Avatar src={a.avatarUrl} label={a.nickname} className="h-10 w-10 shrink-0" />
+                <Avatar src={a.avatarUrl} label={a.nickname} className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full bg-surface-2 text-lg" />
                 <p className="min-w-0 flex-1 text-[13px]">
                   <strong>{a.nickname}</strong>님이{" "}
                   {a.kind === "join" ? "챌린지에 새로 참여했어요." : "운동 인증을 완료했어요."}

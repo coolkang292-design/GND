@@ -7,6 +7,9 @@
  */
 export const CREATOR_BASE_PATH = "/challenge/creator";
 
+/** 개발 서버 미리보기(`/challenge/creator/demo`)의 가짜 챌린지 — 실제 화면·RPC로 이어지면 안 된다. */
+export const isDemoChallenge = (id: string) => id === "demo";
+
 const CREATOR_PATH =/^\/challenge\/creator(\/[A-Za-z0-9-]+){0,3}$/;
 
 export function creatorReturnPath(raw: string | null | undefined): string | null {

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { detailArtFor } from "@/lib/domain/challenge-art";
 import { formatPeriod } from "@/lib/domain/challenge-report";
+import { isDemoChallenge } from "@/lib/domain/creator-return";
 import { challengeStatusLabel, type CreatorBadge } from "@/lib/domain/creator-studio";
 import type { Challenge } from "@/lib/types";
 
@@ -39,11 +40,9 @@ export function CreatorChallengeCard({
   };
 }) {
   const live = challenge.status === "active";
-  return (
-    <Link
-      href={`/challenge?open=${encodeURIComponent(challenge.id)}`}
-      className={`${card} flex items-center gap-3 overflow-hidden p-2.5 pr-3`}
-    >
+  const demo = isDemoChallenge(challenge.id);
+  const body = (
+    <>
       {/* eslint-disable-next-line @next/next/no-img-element -- 같은 일러스트를 챌린지 상세 히어로도 <img>로 쓴다 */}
       <img
         src={detailArtFor(challenge.recruit_image_url)}
@@ -66,8 +65,15 @@ export function CreatorChallengeCard({
           <p className="mt-0.5 truncate text-[12px] text-muted">{challenge.recruit_note}</p>
         )}
       </div>
-      <Icon name="chevron" size={18} className="shrink-0 text-muted" />
-    </Link>
+      {!demo && <Icon name="chevron" size={18} className="shrink-0 text-muted" />}
+    </>
+  );
+  const box = `${card} flex items-center gap-3 overflow-hidden p-2.5 pr-3`;
+  // 미리보기의 가짜 챌린지는 실제 챌린지 상세로 이어지지 않는다
+  return demo ? (
+    <div className={box}>{body}</div>
+  ) : (
+    <Link href={`/challenge?open=${encodeURIComponent(challenge.id)}`} className={box}>{body}</Link>
   );
 }
 

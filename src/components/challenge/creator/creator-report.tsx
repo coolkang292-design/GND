@@ -84,8 +84,13 @@ function DailyRateChart({ days }: { days: readonly DailyProofRate[] }) {
               className="fill-accent stroke-surface" strokeWidth={2} />
           ) : null,
         )}
+        {/* 첫·마지막 점 라벨은 안쪽으로 붙인다 — 첫날 "67%"가 y축 "75"를 덮었다(2026-10-25 미리보기) */}
         {[...labelled].map((i) => (
-          <text key={`l-${i}`} x={x(i)} y={y(days[i].rate as number) - 8} textAnchor="middle" className="fill-text text-[10px] font-bold">
+          <text
+            key={`l-${i}`} x={x(i)} y={y(days[i].rate as number) - 8}
+            textAnchor={n > 1 && i === 0 ? "start" : n > 1 && i === n - 1 ? "end" : "middle"}
+            className="fill-text text-[10px] font-bold"
+          >
             {pct(days[i].rate)}
           </text>
         ))}

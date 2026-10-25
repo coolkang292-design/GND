@@ -8,7 +8,7 @@ import { Icon, type IconName } from "@/components/ui/icon";
 import type { CreatorMemberDetailView } from "@/lib/creator-data";
 import { formatMonthDay } from "@/lib/domain/challenge-time";
 import { monthCells } from "@/lib/domain/creator-member-detail";
-import { CREATOR_BASE_PATH } from "@/lib/domain/creator-return";
+import { CREATOR_BASE_PATH, isDemoChallenge } from "@/lib/domain/creator-return";
 import { ATTENTION_INACTIVE_DAYS } from "@/lib/domain/creator-studio";
 import type { Challenge } from "@/lib/types";
 import { card, SectionTitle, StatusBadge } from "./creator-ui";
@@ -73,7 +73,7 @@ export function CreatorMemberDetailScreen({
       </header>
 
       <section className={`${card} flex items-center gap-4 p-4`}>
-        <Avatar src={member.avatarUrl} label={member.nickname} className="h-[72px] w-[72px] shrink-0" />
+        <Avatar src={member.avatarUrl} label={member.nickname} className="grid h-[72px] w-[72px] shrink-0 place-items-center overflow-hidden rounded-full bg-surface-2 text-[34px]" />
         <div className="min-w-0 flex-1">
           <p className="truncate text-[20px] font-black">{member.nickname}</p>
           <p className="mt-0.5 text-[12.5px] text-muted">
@@ -93,11 +93,11 @@ export function CreatorMemberDetailScreen({
 
       <section className="grid grid-cols-3 gap-2" aria-label="인증 요약">
         {stats.map((s) => (
+          // 아이콘을 위로 — 375px 3칸에서 "현재 스트릭"이 "스트/릭"으로 갈렸다(2026-10-25 미리보기 확인)
           <div key={s.label} className={`${card} p-3`}>
-            <p className="flex items-center gap-1.5 text-[11.5px] font-bold text-muted">
-              <Icon name={s.icon} size={16} className={s.tone} /> {s.label}
-            </p>
-            <p className="mt-1 text-[22px] font-black tabular-nums">{s.value}</p>
+            <Icon name={s.icon} size={18} className={s.tone} />
+            <p className="mt-1 whitespace-nowrap text-[11.5px] font-bold text-muted">{s.label}</p>
+            <p className="mt-0.5 text-[22px] font-black tabular-nums">{s.value}</p>
           </div>
         ))}
       </section>
@@ -109,13 +109,16 @@ export function CreatorMemberDetailScreen({
         ) : (
           <ul className="mt-2 divide-y divide-line">
             {detail.goals.map((g) => (
-              <li key={g.key} className="flex items-center gap-3 py-2.5">
-                <span className="w-[88px] shrink-0 truncate text-[13.5px] font-bold">{g.label}</span>
-                <span className="h-2 flex-1 overflow-hidden rounded-full bg-surface-3" aria-hidden>
+              // 이름이 길다("웨이트 운동일(하루 1종목+)") — 한 줄을 다 쓰고 막대는 아래에 둔다
+              <li key={g.key} className="py-2.5">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="min-w-0 text-[13.5px] font-bold">{g.label}</span>
+                  <span className="shrink-0 text-[13px] font-bold tabular-nums">
+                    {g.actual}<span className="text-muted"> / {g.target}{g.unit}</span>
+                  </span>
+                </div>
+                <span className="mt-1.5 block h-2 overflow-hidden rounded-full bg-surface-3" aria-hidden>
                   <span className="block h-full rounded-full bg-accent" style={{ width: `${Math.min(100, Math.round(g.rate * 100))}%` }} />
-                </span>
-                <span className="w-[78px] shrink-0 text-right text-[13px] font-bold tabular-nums">
-                  {g.actual}<span className="text-muted"> / {g.target}{g.unit}</span>
                 </span>
               </li>
             ))}
@@ -207,7 +210,12 @@ export function CreatorMemberDetailScreen({
             <span className="h-2 w-2 animate-pulse rounded-full bg-accent" aria-hidden />
             지금 운동 중이에요 — 응원 보내기
           </p>
-          <CheerActions sessionId={detail.liveSessionId} nickname={member.nickname} />
+          {isDemoChallenge(challenge.id) ? (
+            // 미리보기의 가짜 세션으로 send_cheer를 부르지 않는다
+            <p className="mt-2 text-[12px] text-muted">미리보기에서는 응원 버튼이 이 자리에 보여요. 실제로 보내지는 않아요.</p>
+          ) : (
+            <CheerActions sessionId={detail.liveSessionId} nickname={member.nickname} />
+          )}
         </section>
       ) : (
         challenge.status === "active" && (
