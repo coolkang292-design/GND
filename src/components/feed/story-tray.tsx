@@ -24,7 +24,9 @@ import { activeExerciseNamesLabel } from "@/lib/domain/social";
  */
 export function StoryTray() {
   const { sessions, myUserId } = useActiveCrewSessions();
-  const [open, setOpen] = useState<ActiveCrewSession | null>(null);
+  const [openSessionId, setOpenSessionId] = useState<string | null>(null);
+  // Derive from polled sessions so the open sheet does not freeze old exercise names.
+  const open = sessions.find((s) => s.sessionId === openSessionId) ?? null;
 
   if (sessions.length === 0) return null;
 
@@ -40,7 +42,7 @@ export function StoryTray() {
               <li key={s.sessionId} className="flex-none">
                 <button
                   type="button"
-                  onClick={() => setOpen(s)}
+                  onClick={() => setOpenSessionId(s.sessionId)}
                   aria-label={`${s.nickname}님 ${minutesSince(s.startedAt)}분째 운동 중 — 응원하기`}
                   className="flex w-[68px] flex-col items-center gap-1"
                 >
@@ -68,7 +70,7 @@ export function StoryTray() {
         <StoryCheerSheet
           session={open}
           isMine={open.userId === myUserId}
-          onClose={() => setOpen(null)}
+          onClose={() => setOpenSessionId(null)}
         />
       )}
     </>
