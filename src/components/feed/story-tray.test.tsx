@@ -70,6 +70,18 @@ describe("ActiveWorkoutCards — 홈은 그대로 카드다", () => {
     expect(screen.getByText("한마디")).toBeTruthy();
   });
 
+  it("홈 운동 중 카드에서 실제 종목을 보이고 응원 기능은 유지한다", async () => {
+    render(<ActiveWorkoutCards sessions={[OTHER]} />);
+    expect(screen.getByText("운동 종목: 스쿼트 · 푸시업 외 1종")).toBeTruthy();
+    expect(screen.getByText("한마디")).toBeTruthy();
+  });
+
+  it("종목이 아직 서버에 동기화되지 않았으면 운동 상태만 표시한다", async () => {
+    render(<ActiveWorkoutCards sessions={[MINE]} />);
+    expect(screen.getByText(/5분째 운동 중/)).toBeTruthy();
+    expect(screen.queryByText(/운동 종목:/)).toBeNull();
+  });
+
   it("내 운동 카드에는 응원 버튼이 없다", async () => {
     mocks.getActiveCrewSessions.mockResolvedValue([MINE]);
     render(<ActiveWorkoutCards />);
