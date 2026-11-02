@@ -363,6 +363,31 @@ function CardFooter({
         </button>
       )}
 
+      {/* 이미 댓글인 운동 중 한마디를 접힌 카드에서도 보여준다.
+          새 테이블·복사·네트워크 조회 없이 기존 item.thread만 사용한다. */}
+      {!showComments && liveCheer && (
+        <button
+          type="button"
+          onClick={() => setShowComments(true)}
+          aria-label="운동 중 받은 한마디 댓글 보기"
+          className="mx-3.5 mb-3 flex w-[calc(100%-1.75rem)] flex-col gap-1.5 rounded-card-sm border border-line bg-surface-2/60 px-3 py-2.5 text-left"
+        >
+          <span className="flex items-center gap-1.5 text-[11px] font-extrabold text-accent">
+            <Icon name="comment" size={14} />
+            운동 중 받은 한마디
+          </span>
+          <span className="text-[13px] leading-snug break-words">
+            <span className="font-extrabold">
+              {item.people.get(liveCheer.senderId)?.nickname ?? "크루원"}
+            </span>{" "}
+            {liveCheer.body}
+          </span>
+          <span className="self-end text-[11px] font-bold text-accent">
+            댓글 보기 <span aria-hidden>›</span>
+          </span>
+        </button>
+      )}
+
       {showComments && onItemChange && (
         <CommentThread
           sessionId={item.sessionId}
