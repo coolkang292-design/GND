@@ -772,7 +772,7 @@ export async function getActiveCrewSessions(
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const { data: events, error: eErr } = await supabase
     .from("workout_events")
-    .select("session_id, user_id, event_type, created_at")
+    .select("session_id, user_id, event_type, created_at, exercise_names")
     .in("user_id", memberIds)
     .gte("created_at", since);
   if (eErr) throw eErr;
