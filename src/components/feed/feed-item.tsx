@@ -17,6 +17,7 @@ import { Icon } from "@/components/ui/icon";
 import { exerciseSetSummary, feedStatCells, type WorkoutSummaryInput } from "@/lib/domain/feed-card";
 import { normalizeCaption } from "@/lib/domain/session-caption";
 import {
+  latestWorkoutCheer,
   totalCommentCount,
   type SessionThread,
 } from "@/lib/domain/session-comments";
