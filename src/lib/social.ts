@@ -754,6 +754,8 @@ export type ActiveCrewSession = {
   nickname: string;
   avatarUrl: string | null;
   startedAt: Date;
+  /** 운동 중 로컬 초안에서 서버에 공유된 종목명만 (세트/중량 미포함) */
+  exerciseNames: string[];
 };
 
 /** 크루원들의 진행 중 세션 (본인 포함 — 표시 제외는 UI 책임) */
