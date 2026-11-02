@@ -781,7 +781,7 @@ export async function getActiveCrewSessions(
   const activeIds = activeSessionIds(rows);
   if (activeIds.length === 0) return [];
 
-  const ownerBySession = new Map<string, { userId: string; startedAt: Date }>();
+  const ownerBySession = new Map<string, { userId: string; startedAt: Date; exerciseNames: string[] }>();
   for (const e of rows) {
     if (e.event_type === "workout_started") {
       ownerBySession.set(e.session_id, {
