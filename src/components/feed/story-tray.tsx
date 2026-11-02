@@ -92,6 +92,7 @@ function StoryCheerSheet({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
 
+  const namesLabel = activeExerciseNamesLabel(session.exerciseNames, 3);
   return (
     <>
       <div className="fixed inset-0 z-40 bg-black/40" onClick={onClose} aria-hidden />
