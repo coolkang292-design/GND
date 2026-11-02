@@ -353,6 +353,72 @@ describe("FeedItemCard — 댓글", () => {
     people: new Map([["friend-1", { nickname: "오빙크", avatarUrl: null }]]),
   });
 
+  const withLiveCheer = (photoUrl: string | null): FeedItem => ({
+    ...withComments(0),
+    photos: feedItem(photoUrl).photos,
+    thread: {
+      comments: [{
+        id: "live-1",
+        senderId: "cheerer",
+        body: "끝까지 파이팅!",
+        createdAt: new Date("2026-11-02T11:32:00Z"),
+        fromCheer: true,
+        parentId: null,
+        replies: [],
+        editedAt: null,
+      }],
+      cheerTally: [],
+      cheerTotal: 0,
+    },
+    people: new Map([["cheerer", { nickname: "운동친구", avatarUrl: null }]]),
+  });
+
+  it.each([null, "https://example.com/workout.jpg"])(
+    "운동 중 받은 한마디를 사진 유무(%s)에 관계없이 피드에 보여주고 클릭하면 스레드를 연다",
+    (photoUrl) => {
+      render(
+        <FeedItemCard
+          item={withLiveCheer(photoUrl)}
+          userId="me"
+          onProfileClick={() => {}}
+          onItemChange={() => {}}
+        />,
+      );
+      expect(screen.getByRole("button", { name: "댓글 1개" })).toBeTruthy();
+      expect(screen.getByText(/끝까지 파이팅!/)).toBeTruthy();
+      const preview = screen.getByRole("button", { name: "운동 중 받은 한마디 댓글 보기" });
+      expect(preview.textContent).toContain("운동친구");
+      fireEvent.click(preview);
+      // 접힌 미리보기만 사라진다. 실제 댓글은 기존 스레드의 같은 행이다.
+      expect(screen.queryByRole("button", { name: "운동 중 받은 한마디 댓글 보기" })).toBeNull();
+      expect(screen.getByLabelText("댓글 입력")).toBeTruthy();
+      expect(screen.getByText(/끝까지 파이팅!/)).toBeTruthy();
+    },
+  );
+
+  it("완료 후 일반 댓글만 있는 게시물에는 운동 중 한마디 미리보기를 넣지 않는다", () => {
+    render(
+      <FeedItemCard
+        item={withComments(1)}
+        userId="me"
+        onProfileClick={() => {}}
+        onItemChange={() => {}}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: "운동 중 받은 한마디 댓글 보기" })).toBeNull();
+  });
+
+  it("읽기 전용 카드에는 동작하지 않는 미리보기 버튼을 넣지 않는다", () => {
+    render(
+      <FeedItemCard
+        item={withLiveCheer(null)}
+        userId="me"
+        onProfileClick={() => {}}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: "운동 중 받은 한마디 댓글 보기" })).toBeNull();
+  });
+
   it("댓글 수를 액션 줄에 표시한다", () => {
     const html = renderToStaticMarkup(
       <FeedItemCard
