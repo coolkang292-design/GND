@@ -777,7 +777,7 @@ export async function getActiveCrewSessions(
     .gte("created_at", since);
   if (eErr) throw eErr;
 
-  const rows = (events ?? []) as (SocialEvent & { user_id: string })[];
+  const rows = (events ?? []) as (SocialEvent & { user_id: string; exercise_names: string[] | null })[];
   const activeIds = activeSessionIds(rows);
   if (activeIds.length === 0) return [];
 
