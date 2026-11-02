@@ -139,6 +139,23 @@ describe("activeSessionIds", () => {
   });
 });
 
+describe("activeExerciseNamesLabel", () => {
+  it("실제 선택한 종목만 보여주고 여러 종목은 개수로 접는다", () => {
+    expect(activeExerciseNamesLabel(["스쿼트", "푸시업", "플랭크"])).toBe(
+      "스쿼트 · 푸시업 외 1종",
+    );
+    expect(activeExerciseNamesLabel(["스쿼트", "푸시업", "플랭크"], 3)).toBe(
+      "스쿼트 · 푸시업 · 플랭크",
+    );
+  });
+
+  it("빈 값, 공백, 중복은 제거하고 결과가 없으면 표시하지 않는다", () => {
+    expect(activeExerciseNamesLabel(["", "  ", "스쿼트", "스쿼트"])).toBe("스쿼트");
+    expect(activeExerciseNamesLabel([])).toBe("");
+    expect(activeExerciseNamesLabel(["푸시업"], 0)).toBe("");
+  });
+});
+
 describe("unreadCount", () => {
   it("read_at null만 센다", () => {
     expect(
