@@ -787,6 +787,7 @@ export async function getActiveCrewSessions(
       ownerBySession.set(e.session_id, {
         userId: e.user_id,
         startedAt: new Date(e.created_at),
+        exerciseNames: Array.isArray(e.exercise_names) ? e.exercise_names : [],
       });
     }
   }
