@@ -72,6 +72,11 @@ function ActiveWorkoutCard({
           <p className="text-xs font-bold text-accent">
             {minutesSince(session.startedAt)}분째 운동 중 🔥
           </p>
+          {namesLabel && (
+            <p className="mt-0.5 text-xs text-muted" title={session.exerciseNames.join(" · ")}>
+              운동 종목: {namesLabel}
+            </p>
+          )}
         </div>
       </div>
 
