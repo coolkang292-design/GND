@@ -85,6 +85,26 @@ describe("foldSessionThread", () => {
   });
 });
 
+describe("latestWorkoutCheer", () => {
+  it("일반 댓글이 더 최근이어도 운동 중 한마디 중 최신을 선택한다", () => {
+    const thread = foldSessionThread([
+      row({ id: "first", cheerType: "custom", message: "힘내", createdAt: new Date("2026-10-01T10:00:00Z") }),
+      row({ id: "latest", cheerType: "custom", message: "끝까지!", createdAt: new Date("2026-10-01T10:05:00Z") }),
+      row({ id: "normal", cheerType: "comment", message: "운동 완료!", createdAt: new Date("2026-10-01T10:10:00Z") }),
+    ]);
+    expect(latestWorkoutCheer(thread)?.id).toBe("latest");
+  });
+
+  it("문자 없는 응원과 일반 댓글만 있으면 미리보기가 없다", () => {
+    const thread = foldSessionThread([
+      row({ id: "emoji", cheerType: "fire", message: null }),
+      row({ id: "normal", cheerType: "comment", message: "고생!", createdAt: new Date("2026-10-01T10:10:00Z") }),
+    ]);
+    expect(latestWorkoutCheer(thread)).toBeNull();
+    expect(latestWorkoutCheer(foldSessionThread([]))).toBeNull();
+  });
+});
+
 describe("threadPreview", () => {
   /**
    * ⚠️ 회귀 방어. `slice(0, limit)`으로 앞에서 자르면 **가장 오래된 댓글**이
