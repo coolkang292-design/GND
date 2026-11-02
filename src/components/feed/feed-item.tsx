@@ -300,6 +300,7 @@ function CardFooter({
   const [showLikers, setShowLikers] = useState(false);
   // 답글까지 센다 — 스레드에 5줄이 있는데 💬 2로 뜨면 안 맞는다
   const commentCount = totalCommentCount(item.thread);
+  const liveCheer = latestWorkoutCheer(item.thread);
 
   return (
     <>
