@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   foldSessionThread,
+  latestWorkoutCheer,
   threadPreview,
   totalCommentCount,
   type SessionCheerRow,
