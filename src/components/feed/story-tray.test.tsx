@@ -135,6 +135,7 @@ describe("StoryTray — 피드는 한 줄이다", () => {
     fireEvent.click(btn);
 
     expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(screen.getByText("운동 종목: 스쿼트 · 푸시업 · 플랭크")).toBeTruthy();
     fireEvent.click(screen.getByText("불태워"));
     await waitFor(() =>
       expect(mocks.sendCheer).toHaveBeenCalledWith("s-other", "fire", undefined),
