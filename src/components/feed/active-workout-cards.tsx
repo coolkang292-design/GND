@@ -6,6 +6,7 @@ import { CheerActions } from "@/components/feed/cheer-actions";
 import { useActiveCrewSessions } from "@/lib/hooks/use-active-crew-sessions";
 import type { ActiveCrewSession } from "@/lib/social";
 import { minutesSince } from "@/lib/time-ago";
+import { activeExerciseNamesLabel } from "@/lib/domain/social";
 
 /**
  * 진행 중 크루 세션 카드 목록 — **홈 전용이 됐다** (Phase C, 2026-08-31).
