@@ -810,6 +810,7 @@ export async function getActiveCrewSessions(
         nickname: profile?.nickname ?? "크루원",
         avatarUrl: profile?.avatar_url ?? null,
         startedAt: owner.startedAt,
+        exerciseNames: owner.exerciseNames,
       },
     ];
   });
