@@ -51,6 +51,7 @@ function ActiveWorkoutCard({
   session: ActiveCrewSession;
   isMine: boolean;
 }) {
+  const namesLabel = activeExerciseNamesLabel(session.exerciseNames);
   return (
     <section className="rounded-card border border-accent/40 bg-surface p-4 shadow-card">
       <div className="flex items-center gap-2.5">
