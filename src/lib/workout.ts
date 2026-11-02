@@ -524,6 +524,23 @@ export async function getMyActiveSession(
   return data;
 }
 
+/**
+ * 운동 중 크루 카드용 종목 이름 스냅샷.
+ * 세트/중량 데이터는 완료 전까지 기기에만 남기고, 종목명만 서버에 전달한다.
+ * 서버 RPC가 본인 소유 active 세션인지 검증한다.
+ */
+export async function setLiveWorkoutExerciseNames(
+  sessionId: string,
+  names: string[],
+): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  const { error } = await supabase.rpc("set_live_workout_exercise_names", {
+    p_session_id: sessionId,
+    p_exercise_names: names,
+  });
+  if (error) throw error;
+}
+
 export async function startWorkout(sessionId: string): Promise<WorkoutSession> {
   const supabase = getSupabaseBrowserClient();
   const { data, error } = await supabase.rpc("start_workout", {
