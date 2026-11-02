@@ -41,6 +41,7 @@ const MINE = {
   nickname: "스칼레또",
   avatarUrl: null,
   startedAt: new Date(Date.now() - 5 * 60_000),
+  exerciseNames: [],
 };
 
 beforeEach(() => {
