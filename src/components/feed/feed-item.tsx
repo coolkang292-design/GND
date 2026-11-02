@@ -365,7 +365,7 @@ function CardFooter({
 
       {/* 이미 댓글인 운동 중 한마디를 접힌 카드에서도 보여준다.
           새 테이블·복사·네트워크 조회 없이 기존 item.thread만 사용한다. */}
-      {!showComments && liveCheer && (
+      {!showComments && liveCheer && onItemChange && (
         <button
           type="button"
           onClick={() => setShowComments(true)}
