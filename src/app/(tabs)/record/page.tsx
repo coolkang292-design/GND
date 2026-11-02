@@ -816,6 +816,29 @@ function WorkoutScreen({ userId }: { userId: string }) {
    */
   const exerciseNamesKey = JSON.stringify(draft.exercises.map((ex) => ex.name));
 
+  // Exercise rows are only saved when the workout finishes. Publish names
+  // separately while active so crew can see what is being worked on.
+  // Keep writes serialized: an earlier slow request must not overwrite a
+  // later selection. Do not block the athlete's workout if social sync fails.
+  const liveNamesSyncQueue = useRef<Promise<void>>(Promise.resolve());
+  useEffect(() => {
+    const sessionId = draft.sessionId;
+    if (!active || !sessionId) return;
+    const names = Array.from(new Set(JSON.parse(exerciseNamesKey) as string[]))
+      .map((name) => name.trim())
+      .filter(Boolean);
+    if (names.length === 0) return; // avoid erasing a snapshot on draft recovery
+
+    const timer = setTimeout(() => {
+      liveNamesSyncQueue.current = liveNamesSyncQueue.current
+        .catch(() => undefined)
+        .then(() => setLiveWorkoutExerciseNames(sessionId, names));
+      void liveNamesSyncQueue.current.catch(() => undefined);
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [active, draft.sessionId, exerciseNamesKey]);
+
   /*
     운동 중인 종목들의 **지난번 완료 세트**를 받아 둔다 (설계 2026-08-24 §3.9).
 
