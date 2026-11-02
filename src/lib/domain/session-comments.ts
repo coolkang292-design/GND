@@ -167,6 +167,18 @@ export function totalCommentCount(thread: SessionThread): number {
 }
 
 /**
+ * 운동 중 받은 마지막 한마디 — 댓글(완료 후 작성)과 무언 이모지 응원은 제외한다.
+ * 기존 cheers 행의 fromCheer 표지만 사용하므로 데이터 복제나 추가 조회가 없다.
+ */
+export function latestWorkoutCheer(thread: SessionThread): ThreadComment | null {
+  for (let i = thread.comments.length - 1; i >= 0; i--) {
+    const comment = thread.comments[i];
+    if (comment.fromCheer) return comment;
+  }
+  return null;
+}
+
+/**
  * 카드에 접어 보여줄 미리보기 — **최신 `limit`개를 읽는 순서로** 돌려준다.
  *
  * ⚠️ 앞에서 자르지 않는다(`slice(0, limit)`). 인스타처럼 최신 댓글이 보여야

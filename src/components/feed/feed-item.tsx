@@ -17,6 +17,7 @@ import { Icon } from "@/components/ui/icon";
 import { exerciseSetSummary, feedStatCells, type WorkoutSummaryInput } from "@/lib/domain/feed-card";
 import { normalizeCaption } from "@/lib/domain/session-caption";
 import {
+  latestWorkoutCheer,
   totalCommentCount,
   type SessionThread,
 } from "@/lib/domain/session-comments";
@@ -299,6 +300,7 @@ function CardFooter({
   const [showLikers, setShowLikers] = useState(false);
   // 답글까지 센다 — 스레드에 5줄이 있는데 💬 2로 뜨면 안 맞는다
   const commentCount = totalCommentCount(item.thread);
+  const liveCheer = latestWorkoutCheer(item.thread);
 
   return (
     <>
@@ -358,6 +360,31 @@ function CardFooter({
             {likersSentence(item)}
           </span>
           <Icon name="chevron" size={14} className="flex-none text-faint" />
+        </button>
+      )}
+
+      {/* 이미 댓글인 운동 중 한마디를 접힌 카드에서도 보여준다.
+          새 테이블·복사·네트워크 조회 없이 기존 item.thread만 사용한다. */}
+      {!showComments && liveCheer && onItemChange && (
+        <button
+          type="button"
+          onClick={() => setShowComments(true)}
+          aria-label="운동 중 받은 한마디 댓글 보기"
+          className="mx-3.5 mb-3 flex w-[calc(100%-1.75rem)] flex-col gap-1.5 rounded-card-sm border border-line bg-surface-2/60 px-3 py-2.5 text-left"
+        >
+          <span className="flex items-center gap-1.5 text-[11px] font-extrabold text-accent">
+            <Icon name="comment" size={14} />
+            운동 중 받은 한마디
+          </span>
+          <span className="text-[13px] leading-snug break-words">
+            <span className="font-extrabold">
+              {item.people.get(liveCheer.senderId)?.nickname ?? "크루원"}
+            </span>{" "}
+            {liveCheer.body}
+          </span>
+          <span className="self-end text-[11px] font-bold text-accent">
+            댓글 보기 <span aria-hidden>›</span>
+          </span>
         </button>
       )}
 
