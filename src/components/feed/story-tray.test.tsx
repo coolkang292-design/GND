@@ -33,6 +33,7 @@ const OTHER = {
   nickname: "낭만송곳니",
   avatarUrl: null,
   startedAt: new Date(Date.now() - 12 * 60_000),
+  exerciseNames: ["스쿼트", "푸시업", "플랭크"],
 };
 const MINE = {
   sessionId: "s-mine",
