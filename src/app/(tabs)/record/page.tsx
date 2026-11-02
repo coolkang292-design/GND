@@ -279,6 +279,7 @@ import {
   saveSetTimer,
   getSessionExerciseNames,
   saveSessionExercises,
+  setLiveWorkoutExerciseNames,
   startWorkout,
   toVolumeSets,
   type CalendarSession,
