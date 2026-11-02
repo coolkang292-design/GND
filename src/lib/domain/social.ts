@@ -80,6 +80,18 @@ export function activeSessionIds(
     .map(([sid]) => sid);
 }
 
+/** Short, truthful exercise-name summary (not a claim about the current set). */
+export function activeExerciseNamesLabel(
+  names: readonly string[],
+  maxVisible = 2,
+): string {
+  const unique = Array.from(new Set(names.map((n) => n.trim()).filter(Boolean)));
+  if (unique.length === 0 || maxVisible < 1) return "";
+  const visible = unique.slice(0, maxVisible).join(" · ");
+  const remaining = unique.length - maxVisible;
+  return remaining > 0 ? `${visible} 외 ${remaining}종` : visible;
+}
+
 /** 미읽음 알림 수 */
 export function unreadCount(rows: { read_at: string | null }[]): number {
   return rows.filter((r) => r.read_at === null).length;
