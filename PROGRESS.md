@@ -3,13 +3,14 @@
 > 새 세션은 저장소 루트 `AGENTS.md` → `CLAUDE.md` → 이 파일 → 가장 최근의 관련 `docs/superpowers/HANDOFF-*.md` 순서로 읽는다.
 > 이 파일은 전체 흐름의 요약이고, 작업별 세부 사실과 남은 확인은 최신 인수인계서가 기준이다.
 
-## 2026-11-05 캐릭터 이미지 7종 교체 — 로컬 확인 · 미배포
+## ✅ 2026-11-05 캐릭터 이미지 7종 교체 — 운영 배포 완료
 
 - 사용자 제공 `Downloads/gnd_characters_webp_7.zip`의 재해석 캐릭터를 기존 `public/characters/char-1.png`~`char-7.png`에 순서대로 교체. `fallback.png`도 1단계와 일치. 투명 배경·전신을 보존해 기존 600×800 PNG 캔버스로 변환, 8파일 합계 3,113,066바이트.
-- XP·35레벨·진화 조건·단계명·DB·화면 코드는 변경하지 않음. 7단계 명칭도 기존 `전설이개` 그대로. 이번 자산·기록 커밋의 기준 HEAD는 `7ff3b83`이며 기존 미푸시 커밋을 보존함.
-- 검증: 관련 기존 테스트 3파일/44건 통과. `localhost:3001/character-image-qa`에서 실제 홈 카드·현재 단계 카드·캐러셀·안내 시트를 재사용해 단계 1~7 전환, 안내 7행/7이미지 로드, 열기·닫기, 390px 화면 확인. 임시 페이지는 검사 뒤 제거. 개발용 이미지 캐시가 구버전을 반환해 별도 백업 후 새 이미지로 재확인함.
-- DB 적용·운영 배포·실사용자 알림 없음. 로그인 계정의 실제 홈·내 정보, 실제 폰, 운영 이미지 캐시 갱신은 미검증. 자산만 바뀌어 전체 lint/typecheck/test/build는 생략.
-- 인수인계: `docs/superpowers/HANDOFF-2026-11-05-character-image-replacement.md`. 다음: 푸시 여부 확인(운영 배포는 별도 승인).
+- XP·35레벨·진화 조건·단계명·DB·화면 코드는 변경하지 않음. 7단계 명칭도 기존 `전설이개` 그대로. 최신 운영 기준 `e4dc6e5`에 이미지 변경만 반영해 `main` **497af90** 배포. 원래 `feat/posthog-funnel`의 미푸시 운동 탭 수정 `7ff3b83`은 제외·보존.
+- 개발 확인: 최신 main 기반 `localhost:3000/character-image-qa`, 실제 홈 카드·현재 단계 카드·캐러셀·안내·진화 모달 재사용. 1~7단계 전환, 안내 7행/7이미지·열기/닫기, 6→7 진화, 390px 표시 확인. 임시 페이지 제거. 최종 lint 0오류/기존 경고5 · typecheck · 전체 **4,389 passed/1 skipped** · Git archive 깨끗한 복사본 build 통과.
+- Vercel **dpl_A1mbiVbuKwjsZSohhjBWg2kvtfj3 READY**, `gnd-nwi0lew58-gnd4.vercel.app` → **https://gnd-one.vercel.app**. CDN 캐시 갱신 후 운영 원본 **8/8 SHA-256 일치**, 최적화 **7/7 새 투명 그림**, 새소식 확인. 운영 원본 1·7단계는 브라우저에서도 직접 확인. main 푸시 후 fetch `0 0` 확인.
+- DB 적용·실사용자 알림 발송 없음. 로그인 계정의 실제 홈·내 정보·크루 화면, 실제 폰은 미검증.
+- 인수인계: `docs/superpowers/HANDOFF-2026-11-05-character-image-replacement.md`. 다음: 실제 폰에서 앱을 다시 열어 현재 단계 새 캐릭터 확인.
 
 
 ## ✅ 2026-10-25 이슈 #25 — PR #26(진행 중 운동 패턴) + PR #27(Creator Studio P0) — **운영 배포 완료 (일괄)**
