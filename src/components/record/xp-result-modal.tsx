@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getStageGroups, STAGE_DESCRIPTIONS } from "@/lib/domain/progression";
 import type { XpEvent } from "@/lib/domain/xp-events";
 import { badgeImageSrc } from "@/lib/domain/badge-art";
+import { characterSrc, useMyCharacterVariant } from "@/lib/character-variant";
 
 const FADE_MS = 300;
 
@@ -110,6 +111,7 @@ export function XpResultModal({
 }
 
 function EventBody({ event }: { event: XpEvent }) {
+  const variant = useMyCharacterVariant();
   if (event.type === "xp") {
     return (
       <div className="mt-2 text-center">
@@ -159,7 +161,7 @@ function EventBody({ event }: { event: XpEvent }) {
         </h2>
         <div className="mt-3 flex items-center justify-center gap-3">
           <Image
-            src={from.characterPath}
+            src={characterSrc(from.characterPath, variant)}
             alt={`${from.stageName} 캐릭터`}
             width={72}
             height={96}
@@ -170,7 +172,7 @@ function EventBody({ event }: { event: XpEvent }) {
             →
           </span>
           <Image
-            src={to.characterPath}
+            src={characterSrc(to.characterPath, variant)}
             alt={`${to.stageName} 캐릭터`}
             width={96}
             height={128}

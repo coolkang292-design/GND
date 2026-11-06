@@ -1,6 +1,12 @@
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { getLevelProgress } from "@/lib/domain/progression";
 import type { EarnedBadge } from "@/lib/domain/badges";
+import {
+  characterSrc,
+  getMyCharacterVariant,
+  normalizeCharacterVariant,
+  type CharacterVariant,
+} from "@/lib/character-variant";
 
 /** Asia/Seoul 기준 오늘(YYYY-MM-DD). */
 function todayKst(): string {
@@ -12,7 +18,9 @@ export interface ProgressSummary {
   currentLevel: number;
   currentStage: number;
   stageName: string;
+  /** `character_variant`이 반영된 최종 경로 (female이면 /characters/female/…) */
   characterPath: string;
+  characterVariant: CharacterVariant;
   nextLevelRequiredXp: number | null;
   xpToNextLevel: number;
   levelProgressPercent: number;
@@ -20,10 +28,18 @@ export interface ProgressSummary {
   hasReceivedTodayWorkoutXp: boolean;
 }
 
+async function getMyVariantSafe(): Promise<CharacterVariant> {
+  try {
+    return normalizeCharacterVariant(await getMyCharacterVariant());
+  } catch {
+    return "male";
+  }
+}
+
 /** 홈·내 정보 공용 요약. RLS로 본인 행만 조회. error는 throw, data null은 신규(0 XP). */
 export async function getProgressSummary(): Promise<ProgressSummary> {
   const supabase = getSupabaseBrowserClient();
-  const [{ data, error }, todayXp] = await Promise.all([
+  const [{ data, error }, todayXp, variant] = await Promise.all([
     supabase
       .from("user_progress")
       .select("total_xp, current_stage, streak_shield_count")
@@ -33,6 +49,7 @@ export async function getProgressSummary(): Promise<ProgressSummary> {
       .select("id", { count: "exact", head: true })
       .eq("reason", "workout_completed")
       .eq("effective_date", todayKst()),
+    getMyVariantSafe(),
   ]);
   if (error) throw error;
   if (todayXp.error) throw todayXp.error;
@@ -44,7 +61,8 @@ export async function getProgressSummary(): Promise<ProgressSummary> {
     currentLevel: p.currentLevel,
     currentStage: p.currentStageIndex,
     stageName: p.stageName,
-    characterPath: p.characterPath,
+    characterPath: characterSrc(p.characterPath, variant),
+    characterVariant: variant,
     nextLevelRequiredXp: p.nextLevelRequiredXp,
     xpToNextLevel: p.xpToNextLevel,
     levelProgressPercent: p.percent,

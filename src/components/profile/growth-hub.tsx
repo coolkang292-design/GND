@@ -180,6 +180,7 @@ export function GrowthHub() {
         <div className="mt-3 flex flex-col gap-3">
       <StageCarousel
         currentStage={summary.currentStage}
+        variant={summary.characterVariant}
         onHelpClick={() => setStageGuideOpen(true)}
       />
 
@@ -202,6 +203,7 @@ export function GrowthHub() {
       <NextStagePreview
         currentStage={summary.currentStage}
         totalXp={summary.totalXp}
+        variant={summary.characterVariant}
       />
 
       <GrowthTimeline
@@ -233,6 +235,7 @@ export function GrowthHub() {
         <StageGuideSheet
           currentStage={summary.currentStage}
           totalXp={summary.totalXp}
+          variant={summary.characterVariant}
           onClose={() => setStageGuideOpen(false)}
         />
       )}

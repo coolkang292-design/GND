@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { UiIcon } from "@/components/ui-icon";
 import { getStageGroups } from "@/lib/domain/progression";
+import { characterSrc, type CharacterVariant } from "@/lib/character-variant";
 
 /**
  * 7단계 가로 캐러셀 — 완료 단계는 그대로, 현재 단계는 강조 테두리,
@@ -10,9 +11,11 @@ import { getStageGroups } from "@/lib/domain/progression";
  */
 export function StageCarousel({
   currentStage,
+  variant = "male",
   onHelpClick,
 }: {
   currentStage: number;
+  variant?: CharacterVariant;
   onHelpClick: () => void;
 }) {
   const groups = getStageGroups();
@@ -55,7 +58,7 @@ export function StageCarousel({
               >
                 <div className="relative overflow-hidden rounded-[9px]">
                   <Image
-                    src={g.characterPath}
+                    src={characterSrc(g.characterPath, variant)}
                     alt=""
                     width={64}
                     height={85}

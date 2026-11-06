@@ -4,6 +4,7 @@ import Image from "next/image";
 import { UiIcon } from "@/components/ui-icon";
 import { useEffect, useRef } from "react";
 import { getStageGroups } from "@/lib/domain/progression";
+import { characterSrc, type CharacterVariant } from "@/lib/character-variant";
 
 /**
  * 7단계 진화 안내 시트 — 각 단계가 어떤 상태이고 몇 레벨에 열리는지 설명한다.
@@ -14,10 +15,12 @@ import { getStageGroups } from "@/lib/domain/progression";
 export function StageGuideSheet({
   currentStage,
   totalXp,
+  variant = "male",
   onClose,
 }: {
   currentStage: number;
   totalXp: number;
+  variant?: CharacterVariant;
   onClose: () => void;
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -71,7 +74,7 @@ export function StageGuideSheet({
               >
                 <div className="relative flex-none overflow-hidden rounded-card-sm">
                   <Image
-                    src={g.characterPath}
+                    src={characterSrc(g.characterPath, variant)}
                     alt={`${g.stageName} 캐릭터`}
                     width={56}
                     height={75}

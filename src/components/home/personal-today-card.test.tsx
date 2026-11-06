@@ -34,6 +34,7 @@ const SUMMARY: ProgressSummary = {
   currentStage: 0,
   stageName: "개노답",
   characterPath: "/characters/char-04.png",
+  characterVariant: "male",
   nextLevelRequiredXp: 800,
   xpToNextLevel: 160,
   levelProgressPercent: 60,
