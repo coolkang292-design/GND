@@ -4382,6 +4382,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
                 if (questKind) void applySuggestion(questKind);
               }}
               onApplySecondary={() => void applySuggestion("interval")}
+              onPreviewQuest={previewQuestExercises}
             />
           )}
 
