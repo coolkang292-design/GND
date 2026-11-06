@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { QuestExercisePreview, type QuestPreviewItem } from "./quest-exercise-preview";
 import { Icon } from "@/components/ui/icon";
 import { UiIcon } from "@/components/ui-icon";
 import type { SuggestionKind } from "@/lib/domain/workout-suggestion";
@@ -36,6 +37,7 @@ export function RecordEmptyState({
   heroImage = null,
   onApplySuggestion,
   onApplySecondary,
+  onPreviewQuest,
 }: {
   /**
    * 완료한 운동이 하나라도 있나.
@@ -68,6 +70,7 @@ export function RecordEmptyState({
   onApplySuggestion?: () => void;
   /** 4분 인터벌 — 담기가 아니라 **시작**이다 */
   onApplySecondary?: () => void;
+  onPreviewQuest?: () => Promise<QuestPreviewItem[]>;
 }) {
   const hasQuestButton = Boolean(suggestionKind && onApplySuggestion);
   // 인터벌이 이미 주 제안이면 타일에 같은 길을 또 두지 않는다
@@ -131,6 +134,10 @@ export function RecordEmptyState({
         suggestionBody && (
           <p className="text-[12.5px] leading-5 text-muted">{suggestionBody}</p>
         )
+      )}
+
+      {quest && hasQuestButton && onPreviewQuest && (
+        <QuestExercisePreview onLoad={onPreviewQuest} />
       )}
 
       {hasQuestButton && (
