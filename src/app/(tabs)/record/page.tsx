@@ -1072,7 +1072,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
 
   async function pushPlanNow() {
     // 내 방법으로 고른 날은 오늘 계획에 합치지 않는다 (퀘스트·계획과 분리)
-    if (customTodayRef.current) return;
+    if (customTodayRef.current && draftRef.current.exercises.length > 0) return;
     const d = draftRef.current;
     const push = decidePlanPush(d, planSyncMark());
     if (push.kind === "none") return;
@@ -1206,7 +1206,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
     setTodayPlans(todayPlans);
 
     // 내 방법으로 고른 날은 계획을 목록에 다시 채우지 않는다 — 카드(`todayPlans`)만 갱신했다
-    if (customTodayRef.current) return;
+    if (customTodayRef.current && draftRef.current.exercises.length > 0) return;
 
     const pull = decidePlanPull({
       draft: d,
@@ -4274,6 +4274,18 @@ function WorkoutScreen({ userId }: { userId: string }) {
   // 퀘스트 카드가 떠 있을 땐 카드의 [퀘스트 시작]이 시작이다 — 하단 고정 버튼은 목록 화면에서만
   const fixedStartVisible = showFixedStart && !questListCollapsed;
 
+  /**
+   * 오늘 **일반 계획이 달력에 있는데 목록은 비어 있는** 날 (사용자 신고 2026-11-07 — 운영에서 카드
+   * 없이 타일 4개만 보였다). 이 폰에서 계획을 이미 한 번 불러왔다가 목록을 비웠거나 내 방법으로
+   * 골랐다 비운 경우, 앱은 계획을 다시 채우지 않고(싸우지 않으려고) 퀘스트도 "계획 있는 날"이라
+   * 내지 않는다 — 카드도 목록도 없는 막다른 화면이 된다. 그때는 그 계획을 퀘스트 카드로 보여
+   * 주고, 확인하면 목록에 담는다.
+   */
+  const emptyListPlan =
+    isEmpty && !active && !didWorkoutToday && !questKind
+      ? (todayPlans.find((plan) => isGeneralPlan(plan) && plan.exercises.length > 0) ?? null)
+      : null;
+
   return (
     <div
       className={`flex flex-col gap-3 ${fixedStartVisible ? "pb-40" : "pb-24"}`}
@@ -4407,10 +4419,10 @@ function WorkoutScreen({ userId }: { userId: string }) {
           */}
           {/*
             인터벌·프로그램 계획은 **퀘스트 카드 모양으로** 보인다 (사용자 지시 2026-11-07).
-            퀘스트가 올 수 있는 날(운동 전·내 방법 모드 아님)에만 — 아니면 예전 계획 카드 그대로.
+            퀘스트가 올 수 있는 날(운동 전·목록이 빈 상태)에만 — 아니면 예전 계획 카드 그대로.
           */}
           {!active &&
-            (!didWorkoutToday && !customToday && isEmpty ? (
+            (!didWorkoutToday && isEmpty ? (
               todayPlans
                 .filter((plan) => !isGeneralPlan(plan))
                 .map((plan) => {
@@ -4474,15 +4486,21 @@ function WorkoutScreen({ userId }: { userId: string }) {
             <RecordEmptyState
               hasHistory={hasHistory}
               // 퀘스트가 있는 날은 타일이 퀘스트와 분리된 내 목록이다. 퀘스트가 없는 날은 그대로
-              onAdd={() => (questKind ? startCustomList("hub") : void openExercisePicker("hub"))}
+              onAdd={() =>
+                questKind || emptyListPlan ? startCustomList("hub") : void openExercisePicker("hub")
+              }
               onLoadRecent={() =>
-                questKind ? startCustomList("past") : void openExercisePicker("past")
+                questKind || emptyListPlan
+                  ? startCustomList("past")
+                  : void openExercisePicker("past")
               }
               onLoadRoutine={() =>
-                questKind ? startCustomList("routine") : void openExercisePicker("routine")
+                questKind || emptyListPlan
+                  ? startCustomList("routine")
+                  : void openExercisePicker("routine")
               }
               routineCount={routines?.length ?? 0}
-              suggestionKind={questKind}
+              suggestionKind={questKind ?? (emptyListPlan ? "repeat" : null)}
               heroImage={questHeroSrc}
               quest={
                 questKind
@@ -4492,7 +4510,16 @@ function WorkoutScreen({ userId }: { userId: string }) {
                       streak: todayStatus?.streak ?? null,
                       focus: challengeFocus,
                     })
-                  : null
+                  : emptyListPlan
+                    ? dailyQuestCopy({
+                        kind: "repeat",
+                        todayKey: dayKey(new Date(), resolveTimeZone()),
+                        streak: todayStatus?.streak ?? null,
+                        names: emptyListPlan.exercises.map((item) => item.name),
+                        applied: true,
+                        planned: true,
+                      })
+                    : null
               }
               suggestionBody={
                 questKind
@@ -4506,6 +4533,13 @@ function WorkoutScreen({ userId }: { userId: string }) {
                   : ""
               }
               onApplySuggestion={() => {
+                if (!questKind && emptyListPlan) {
+                  // 달력의 오늘 계획을 목록에 담고 바로 목록 화면으로 간다
+                  setCustomMode(false);
+                  setQuestListOpen(true);
+                  void handleLoadPlan(emptyListPlan);
+                  return;
+                }
                 if (!questKind) return;
                 // 퀘스트를 받으면 내 방법 모드를 끄고(계획과 다시 주고받는다), 담은 뒤 바로 목록 화면이다
                 setCustomMode(false);
