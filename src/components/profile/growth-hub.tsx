@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { CurrentStageCard } from "@/components/profile/current-stage-card";
+import { EvolutionStatusCard } from "@/components/profile/evolution-status-card";
 import { GrowthTimeline } from "@/components/profile/growth-timeline";
 import { LevelRewards } from "@/components/profile/level-rewards";
 import { NextStagePreview } from "@/components/profile/next-stage-preview";
@@ -187,6 +188,12 @@ export function GrowthHub() {
       <CurrentStageCard
         summary={summary}
         onGuideClick={() => setStageGuideOpen(true)}
+      />
+
+      <EvolutionStatusCard
+        userId={userId as string}
+        totalXp={summary.totalXp}
+        currentStage={summary.currentStage}
       />
 
       <PointSummary balance={balance} streakDays={streakDays} />
