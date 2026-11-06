@@ -1072,7 +1072,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
 
   async function pushPlanNow() {
     // 내 방법으로 고른 날은 오늘 계획에 합치지 않는다 (퀘스트·계획과 분리)
-    if (customTodayRef.current && draftRef.current.exercises.length > 0) return;
+    if (isCustomListNow()) return;
     const d = draftRef.current;
     const push = decidePlanPush(d, planSyncMark());
     if (push.kind === "none") return;
@@ -1206,7 +1206,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
     setTodayPlans(todayPlans);
 
     // 내 방법으로 고른 날은 계획을 목록에 다시 채우지 않는다 — 카드(`todayPlans`)만 갱신했다
-    if (customTodayRef.current && draftRef.current.exercises.length > 0) return;
+    if (isCustomListNow()) return;
 
     const pull = decidePlanPull({
       draft: d,
@@ -3630,6 +3630,16 @@ function WorkoutScreen({ userId }: { userId: string }) {
       /* 저장소를 못 써도 이 화면에서는 동작한다 */
     }
   }
+  /**
+   * 지금 목록이 "내 방법으로 고른 목록"인가 — 표시가 켜져 있고, 목록이 있고, **계획에 안 묶여 있다**.
+   * 계획에 묶인 목록(오늘 계획을 불러온 것)은 내 방법이 아니라 계획이다: 퀘스트 카드로 보이고
+   * 계획과 자동으로 주고받는다. 표시는 그날 내내 남으므로 이 판정이 없으면, 오늘 타일을 한 번
+   * 써 본 폰은 나중에 계획이 담겨도 카드 없이 바로 목록이 뜬다 (사용자 신고 2026-11-07).
+   */
+  function isCustomListNow(): boolean {
+    const d = draftRef.current;
+    return customTodayRef.current && d.exercises.length > 0 && d.scheduledPlanId === null;
+  }
 
   // 타일로 연 선택 화면에서 새 운동이 담기면 → 퀘스트·계획 목록은 빼고 고른 것만 남긴다
   useEffect(() => {
@@ -4269,7 +4279,10 @@ function WorkoutScreen({ userId }: { userId: string }) {
    * ⚠️ 접을 때는 `hidden`으로 **그리기만 막는다** — 언마운트하면 입력 중이던 세트가 사라진다.
    */
   const questCardShown =
-    !customToday && draft.exercises.length > 0 && !active && !didWorkoutToday;
+    !(customToday && draft.scheduledPlanId === null) &&
+    draft.exercises.length > 0 &&
+    !active &&
+    !didWorkoutToday;
   const questListCollapsed = questCardShown && !questListOpen;
   // 퀘스트 카드가 떠 있을 땐 카드의 [퀘스트 시작]이 시작이다 — 하단 고정 버튼은 목록 화면에서만
   const fixedStartVisible = showFixedStart && !questListCollapsed;
