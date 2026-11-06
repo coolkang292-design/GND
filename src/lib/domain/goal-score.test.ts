@@ -187,12 +187,12 @@ describe("gndLabel — 시상대 등급 (표시용)", () => {
   it("1위=탈출, 꼴찌=확정, 중간=탈출중", () => {
     expect(gndLabel(1, 4)).toBe("GND 탈출!");
     expect(gndLabel(2, 4)).toBe("GND 탈출중");
-    expect(gndLabel(4, 4)).toBe("GND 확정");
+    expect(gndLabel(4, 4)).toBe("개노답 확정");
   });
 
   it("2인 크루: 1위 탈출, 2위 확정", () => {
     expect(gndLabel(1, 2)).toBe("GND 탈출!");
-    expect(gndLabel(2, 2)).toBe("GND 확정");
+    expect(gndLabel(2, 2)).toBe("개노답 확정");
   });
 
   it("1인이면 항상 탈출", () => {
