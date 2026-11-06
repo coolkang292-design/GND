@@ -828,6 +828,7 @@ export function MemberProfileSheet({
                   userId={userId}
                   totalXp={profile.totalXp}
                   currentStage={profile.currentStage}
+                  variant={profile.characterVariant}
                 />
               ) : undefined
             }

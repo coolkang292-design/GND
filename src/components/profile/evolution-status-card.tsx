@@ -1,9 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { UiIcon } from "@/components/ui-icon";
+import Link from "next/link";
+import { Icon } from "@/components/ui/icon";
 import { ProgressBar } from "@/components/profile/progress-bar";
 import { getStageGroups } from "@/lib/domain/progression";
+import {
+  evolutionAvatarSrc,
+  type CharacterVariant,
+} from "@/lib/domain/character-variant";
 import type {
   EvolutionCondition,
   EvolutionStatus,
@@ -153,8 +158,128 @@ export function remainingItems(status: EvolutionStatus): RemainingItem[] {
   return items;
 }
 
-/** 표시 전용 카드 (데이터는 부모가 준다) — 서버 렌더·테스트가 쉽다 */
-export function EvolutionStatusView({ status }: { status: EvolutionStatus }) {
+function pctOf(c: EvolutionCondition): number {
+  return Math.round(Math.max(0, Math.min(1, c.progress)) * 100);
+}
+
+/** 다음 진화 목표 칩 — 조건의 "기준값"만 짧게 */
+export function targetChips(status: EvolutionStatus): string[] {
+  const chips: string[] = [];
+  for (const c of status.conditions) {
+    if (c.key === "xp") chips.push(`Lv.${c.required}`);
+    else if (c.key === "days") chips.push(`${c.required}일`);
+    else if (c.key === "weeks") chips.push(`${c.required}주`);
+    else if (c.key === "growth" && !c.baselineOnly) chips.push(`+${c.required}%`);
+    else if (c.key === "recent") chips.push(`최근 ${c.windowDays}일 중 ${c.required}일`);
+  }
+  return chips;
+}
+
+function FaceThumb({
+  stage,
+  variant,
+  state,
+}: {
+  stage: number;
+  variant: CharacterVariant;
+  /** 지나온 단계 · 지금 단계 · 아직 잠긴 단계 */
+  state: "done" | "current" | "locked";
+}) {
+  const src = evolutionAvatarSrc(stage, variant);
+  return (
+    <span
+      data-stage={stage}
+      data-state={state}
+      className={`relative grid h-9 w-9 flex-none place-items-center overflow-hidden rounded-full border-2 bg-surface-2 ${
+        state === "current" ? "border-accent" : "border-line"
+      }`}
+    >
+      {state === "locked" || !src ? (
+        <Icon name="lock" size={14} className="text-faint" />
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt="" className="h-full w-full object-cover" />
+      )}
+    </span>
+  );
+}
+
+/** 카드 제목줄 — 아이콘 · 제목 · 작은 설명 · 상태 알약 */
+function CardHead({
+  icon,
+  title,
+  note,
+  met,
+}: {
+  icon: "spark" | "calendar" | "ranking";
+  title: string;
+  note: string;
+  met: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <span className="grid h-9 w-9 flex-none place-items-center rounded-xl bg-accent-weak">
+        <Icon name={icon} size={18} className="text-accent" />
+      </span>
+      <p className="min-w-0 flex-1 text-[14px] font-extrabold">
+        {title}
+        <span className="ml-1 text-[11px] font-bold text-muted">{note}</span>
+      </p>
+      <span
+        className={`flex-none rounded-full px-2 py-0.5 text-[10.5px] font-extrabold ${
+          met ? "bg-accent/15 text-accent" : "bg-surface-2 text-muted"
+        }`}
+      >
+        {met ? "완료" : "진행 중"}
+      </span>
+    </div>
+  );
+}
+
+function MeterRow({
+  label,
+  value,
+  c,
+}: {
+  label: string;
+  value: string;
+  c: EvolutionCondition;
+}) {
+  return (
+    <div className="mt-2.5">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-[12px] font-bold text-muted">{label}</span>
+        <span className="text-[13px] font-extrabold tabular-nums">{value}</span>
+      </div>
+      <div className="mt-1 flex items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <ProgressBar progress={c.progress} state={c.met ? "earned" : "active"} />
+        </div>
+        <span className="w-9 flex-none text-right text-[11px] font-extrabold text-muted tabular-nums">
+          {pctOf(c)}%
+        </span>
+      </div>
+    </div>
+  );
+}
+
+type GlanceRow = { c: EvolutionCondition; label: string; value: string; need: string };
+
+/**
+ * 표시 전용 카드 (데이터는 부모가 준다) — 서버 렌더·테스트가 쉽다.
+ *
+ * 구성 (시안 2026-11-06): 현재 진화 단계 띠 → 다음 진화 목표(잠긴 실루엣 + 조건 칩) →
+ * 조건 카드 3개(경험치 레벨 · 운동 습관 · 내 성장) → 한눈에 보기 → [이제 이것만 하면 돼요
+ * + 오늘 운동 시작하기]. 말은 초등학생도 알 수 있게 쓴다.
+ */
+export function EvolutionStatusView({
+  status,
+  variant = "male",
+}: {
+  status: EvolutionStatus;
+  /** 단계 얼굴 이미지의 남·여 — 없으면 남성 */
+  variant?: CharacterVariant;
+}) {
   const groups = getStageGroups();
 
   if (status.nextStage === null) {
@@ -171,6 +296,36 @@ export function EvolutionStatusView({ status }: { status: EvolutionStatus }) {
 
   const next = groups[status.nextStage - 1];
   const items = remainingItems(status);
+  const by = (k: EvolutionCondition["key"]) => status.conditions.find((c) => c.key === k);
+  const xp = by("xp");
+  const days = by("days");
+  const weeks = by("weeks");
+  const growth = by("growth");
+  const recent = by("recent");
+  const habitMet = [days, weeks, recent].every((c) => !c || c.met);
+  const nextFace = evolutionAvatarSrc(status.nextStage, variant);
+  const cardCount = (xp ? 1 : 0) + (days || weeks ? 1 : 0) + (growth ? 1 : 0);
+
+  const glance: GlanceRow[] = [];
+  if (xp) glance.push({ c: xp, label: "경험치 레벨", value: `Lv.${xp.current}`, need: `Lv.${xp.required} 필요` });
+  if (weeks) glance.push({ c: weeks, label: "운동 기간", value: `${weeks.current}주`, need: `${weeks.required}주 필요` });
+  if (days) glance.push({ c: days, label: "운동한 날", value: `${days.current}일`, need: `${days.required}일 필요` });
+  if (growth && !growth.baselineOnly) {
+    glance.push({
+      c: growth,
+      label: "내 성장",
+      value: growth.preparing ? "재는 중" : fmtPct(growth.current ?? 0),
+      need: `${fmtPct(growth.required)} 필요`,
+    });
+  }
+  if (recent) {
+    glance.push({
+      c: recent,
+      label: `요즘 활동 (${recent.windowDays}일)`,
+      value: `${recent.current}일`,
+      need: `${recent.required}일 필요`,
+    });
+  }
 
   return (
     <>
@@ -178,45 +333,140 @@ export function EvolutionStatusView({ status }: { status: EvolutionStatus }) {
         aria-label="진화 현황"
         className="rounded-card border border-line-strong bg-surface p-4 shadow-card"
       >
-        <h2 className="text-[15px] font-extrabold">다음엔 이렇게 진화해요</h2>
-        <p className="mt-0.5 text-[12px] text-muted">
-          다음 모습:{" "}
-          <span className="font-extrabold text-accent">
-            {status.nextStage}단계 {next.stageName}
+        {/* 현재 진화 단계 띠 — 지나온 얼굴 · 지금(라임 테두리) · 잠긴 단계 */}
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-[15px] font-extrabold">
+            현재 진화 단계 <span className="text-accent">{status.currentStage}단계</span>
+          </h2>
+          <span className="text-[11px] font-bold text-muted">{status.currentStage} / 7</span>
+        </div>
+        <div className="mt-2 flex items-center justify-between" data-testid="stage-strip">
+          {[1, 2, 3, 4, 5, 6, 7].map((n) => (
+            <FaceThumb
+              key={n}
+              stage={n}
+              variant={variant}
+              state={n < status.currentStage ? "done" : n === status.currentStage ? "current" : "locked"}
+            />
+          ))}
+        </div>
+
+        {/* 다음 진화 목표 — 잠긴 실루엣 + 조건 칩 */}
+        <div
+          data-testid="next-target"
+          className="mt-3.5 flex items-center gap-3 rounded-2xl border border-accent/40 bg-accent-weak/30 p-3"
+        >
+          <span className="relative grid h-14 w-14 flex-none place-items-center overflow-hidden rounded-xl bg-surface-2">
+            {nextFace && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={nextFace} alt="" className="h-full w-full object-cover opacity-40 brightness-50 grayscale" />
+            )}
+            <span aria-hidden className="absolute inset-0 grid place-items-center">
+              <Icon name="lock" size={18} className="text-text" />
+            </span>
           </span>
-          . 아래 {status.conditions.length}가지를 모두 채우면 돼요.
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-bold text-muted">다음 진화 목표</p>
+            <p className="text-[16px] font-black leading-tight">
+              {status.nextStage}단계 {next.stageName}
+            </p>
+            <ul className="mt-1.5 flex flex-wrap gap-1">
+              {targetChips(status).map((chip) => (
+                <li
+                  key={chip}
+                  className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] font-extrabold"
+                >
+                  {chip}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        <h3 className="mt-4 text-[14px] font-extrabold">다음엔 이렇게 진화해요</h3>
+        <p className="mt-0.5 text-[11.5px] text-muted">
+          아래 {cardCount}가지를 모두 채우면 진화할 수 있어요.
         </p>
 
-        <ul className="mt-3 flex flex-col gap-3.5">
-          {status.conditions.map((c) => {
-            const row = conditionRow(c);
-            return (
-              <li key={c.key}>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-1.5 text-[13px] font-extrabold">
-                    {row.label}
-                    {row.met && (
-                      <span className="rounded-full bg-accent/15 px-1.5 py-0.5 text-[10px] font-extrabold text-accent">
-                        통과!
-                      </span>
-                    )}
-                  </span>
-                  <span
-                    className={`text-right text-[12.5px] font-bold ${
-                      row.met ? "text-accent" : "text-text"
-                    }`}
-                  >
-                    {row.value}
-                  </span>
-                </div>
-                <div className="mt-1.5">
-                  <ProgressBar progress={row.progress} state={row.met ? "earned" : "active"} />
-                </div>
-                <p className="mt-1 text-[11px] leading-snug text-muted">{row.hint}</p>
+        {/* ① 경험치 레벨 */}
+        {xp && (
+          <div className="mt-3 rounded-2xl border border-line bg-surface-2/50 p-3">
+            <CardHead icon="spark" title="경험치 레벨" note="진화 자격" met={xp.met} />
+            <MeterRow label="지금 레벨" value={`Lv.${xp.current} / Lv.${xp.required}`} c={xp} />
+            <p className="mt-2 text-[11px] leading-snug text-muted">
+              운동하면 경험치가 쌓이고, 쌓이면 레벨이 올라가요.
+            </p>
+          </div>
+        )}
+
+        {/* ② 운동 습관 — 운동한 날 · 시작한 지 · (6단계부터) 요즘 활동 */}
+        {(days || weeks) && (
+          <div className="mt-2.5 rounded-2xl border border-line bg-surface-2/50 p-3">
+            <CardHead icon="calendar" title="운동 습관" note="꾸준함" met={habitMet} />
+            {days && (
+              <MeterRow label="운동한 날" value={`${days.current} / ${days.required}일`} c={days} />
+            )}
+            {weeks && (
+              <MeterRow label="운동을 시작한 지" value={`${weeks.current} / ${weeks.required}주`} c={weeks} />
+            )}
+            {recent && (
+              <MeterRow
+                label={`요즘 활동 (최근 ${recent.windowDays}일)`}
+                value={`${recent.current} / ${recent.required}일`}
+                c={recent}
+              />
+            )}
+            <p className="mt-2 text-[11px] leading-snug text-muted">
+              {days?.altPath
+                ? "아직 내가 세졌는지 잴 수 없어서, 운동한 날을 1.5배로 채우는 길이에요. "
+                : ""}
+              하루에 여러 번 해도 1일이에요. 시간이 지나면 저절로 채워져요.
+            </p>
+          </div>
+        )}
+
+        {/* ③ 내 성장 */}
+        {growth && (
+          <div className="mt-2.5 rounded-2xl border border-line bg-surface-2/50 p-3">
+            <CardHead icon="ranking" title="내 성장" note="예전의 나보다" met={growth.met} />
+            {growth.baselineOnly ? (
+              <MeterRow label="예전의 나 기록" value={growth.met ? "완료" : "아직 재는 중"} c={growth} />
+            ) : growth.preparing ? (
+              <MeterRow label="얼마나 세졌나" value="아직 재는 중" c={growth} />
+            ) : (
+              <MeterRow
+                label="얼마나 세졌나"
+                value={`${fmtPct(growth.current ?? 0)} / ${fmtPct(growth.required)}`}
+                c={growth}
+              />
+            )}
+            <p className="mt-2 text-[11px] leading-snug text-muted">
+              처음 했을 때보다 힘이 얼마나 늘었는지 봐요. 친구랑 비교하지 않아요.
+            </p>
+          </div>
+        )}
+
+        {/* 한눈에 보기 */}
+        <div className="mt-3 rounded-2xl border border-line bg-surface-2/50 p-3" data-testid="glance">
+          <p className="text-[13px] font-extrabold">한눈에 보기</p>
+          <ul className="mt-2 flex flex-col gap-1.5">
+            {glance.map((r) => (
+              <li key={r.label} className="flex items-center gap-2 text-[12.5px]">
+                <span
+                  aria-hidden
+                  className={`grid h-4 w-4 flex-none place-items-center rounded-full ${
+                    r.c.met ? "bg-accent text-accent-ink" : "border border-line-strong text-transparent"
+                  }`}
+                >
+                  <Icon name="check" size={11} strokeWidth={3} />
+                </span>
+                <span className="flex-1 font-bold">{r.label}</span>
+                <span className="font-extrabold tabular-nums">{r.value}</span>
+                <span className="text-[11px] text-muted">({r.need})</span>
               </li>
-            );
-          })}
-        </ul>
+            ))}
+          </ul>
+        </div>
       </section>
 
       <section
@@ -224,13 +474,11 @@ export function EvolutionStatusView({ status }: { status: EvolutionStatus }) {
         className="rounded-card border border-line bg-surface p-4 shadow-card"
       >
         <div className="flex items-center gap-1.5">
-          <UiIcon name="goal" size={16} />
+          <Icon name="target" size={16} className="text-accent" />
           <h2 className="text-[14px] font-extrabold">이제 이것만 하면 돼요</h2>
         </div>
         {items.length === 0 ? (
-          <p className="mt-2 text-sm font-bold text-accent">
-            모두 채웠어요! 곧 진화해요.
-          </p>
+          <p className="mt-2 text-sm font-bold text-accent">모두 채웠어요! 곧 진화해요.</p>
         ) : (
           <ul className="mt-2.5 flex flex-col gap-3">
             {items.map((it) => (
@@ -259,6 +507,14 @@ export function EvolutionStatusView({ status }: { status: EvolutionStatus }) {
           경험치는 입장권이에요. 꾸준히 운동하고, 예전의 내가 더 세지면 진화해요!
           한번 진화한 모습은 운동을 쉬어도 그대로예요.
         </p>
+        <Link
+          href="/record"
+          data-testid="start-today"
+          className="mt-3 flex h-14 w-full items-center justify-center gap-2 rounded-full bg-accent text-[16px] font-black text-accent-ink"
+        >
+          <Icon name="dumbbell" size={20} />
+          오늘 운동 시작하기
+        </Link>
       </section>
     </>
   );
@@ -269,10 +525,13 @@ export function EvolutionStatusCard({
   userId,
   totalXp,
   currentStage,
+  variant = "male",
 }: {
   userId: string;
   totalXp: number;
   currentStage: number;
+  /** 단계 얼굴 이미지의 남·여 */
+  variant?: CharacterVariant;
 }) {
   const [status, setStatus] = useState<EvolutionStatus | null>(null);
   const [failed, setFailed] = useState(false);
@@ -310,5 +569,5 @@ export function EvolutionStatusCard({
       />
     );
   }
-  return <EvolutionStatusView status={status} />;
+  return <EvolutionStatusView status={status} variant={variant} />;
 }

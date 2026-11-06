@@ -20,16 +20,16 @@ describe("dailyQuestCopy — 도착 알림 + 클리어 혜택", () => {
 
   it("XP는 **실제로 받을 수 있는 최대치** 상수를 쓴다 (받을 수 없는 XP를 약속하지 않는다)", () => {
     const c = dailyQuestCopy({ kind: "repeat", todayKey: TODAY, streak: 3 });
-    expect(c.hooks[0]).toBe(`⚡ 클리어하면 최대 +${MAX_DAILY_WORKOUT_XP_NOW} XP`);
+    expect(c.hooks[0]).toBe(`⚡ 최대 +${MAX_DAILY_WORKOUT_XP_NOW} XP`);
     expect(MAX_DAILY_WORKOUT_XP_NOW).toBe(160);
   });
 
   it("연속 중이면 내일 숫자를, 끊겼으면 숫자 없이 '다시 1일'을 말한다 (0일째 금지)", () => {
     const on = dailyQuestCopy({ kind: "repeat", todayKey: TODAY, streak: 5 });
-    expect(on.hooks).toContain("🔥 6일 연속 달성");
+    expect(on.hooks).toContain("🔥 6일 연속");
 
     const off = dailyQuestCopy({ kind: "repeat", todayKey: TODAY, streak: 0 });
-    expect(off.hooks).toContain("🔥 오늘 한 번이면 다시 1일");
+    expect(off.hooks).toContain("🔥 다시 1일");
     expect(off.hooks.join(" ")).not.toContain("0일");
     expect(off.hooks.join(" ")).not.toContain("1일 연속");
   });
@@ -37,7 +37,7 @@ describe("dailyQuestCopy — 도착 알림 + 클리어 혜택", () => {
   it("연속을 아직 모르면(null) 그 줄을 아예 뺀다 — 0으로 채워 거짓을 말하지 않는다", () => {
     const c = dailyQuestCopy({ kind: "repeat", todayKey: TODAY, streak: null });
     expect(c.hooks.some((h) => h.includes("🔥"))).toBe(false);
-    expect(c.hooks).toHaveLength(2);
+    expect(c.hooks).toEqual(["⚡ 최대 +160 XP"]);
   });
 
   it("종목이 담겼으면 이름까지, 아직이면 '세팅할게요'", () => {
@@ -48,7 +48,16 @@ describe("dailyQuestCopy — 도착 알림 + 클리어 혜택", () => {
     expect(applied.lead).toBe("지난 운동으로 오늘 목록을 세팅해 뒀어요 · 벤치프레스 · 랫풀다운");
 
     const pending = dailyQuestCopy({ kind: "repeat", todayKey: TODAY, streak: 1 });
-    expect(pending.lead).toBe("지난 운동으로 오늘 목록을 세팅할게요");
+    expect(pending.lead).toBe("지난 운동을 바탕으로 추천했어요");
+  });
+
+  it("내가 직접 짠 계획이면 '세팅해 뒀어요'가 아니라 '오늘 계획한 운동'이라고 말한다", () => {
+    const c = dailyQuestCopy({
+      kind: "repeat", todayKey: TODAY, streak: 1, applied: true, planned: true,
+      names: ["스쿼트", "레그프레스"],
+    });
+    expect(c.lead).toBe("오늘 계획한 운동이에요 · 스쿼트 · 레그프레스");
+    expect(c.lead).not.toContain("세팅");
   });
 
   it("걷기·인터벌 퀘스트는 각자의 말을 한다", () => {

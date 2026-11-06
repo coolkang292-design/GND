@@ -44,7 +44,10 @@ describe("EvolutionStatusView — 쉬운 말", () => {
     expect(html).toContain("경험치 레벨");
     expect(html).toContain("운동한 날");
     expect(html).toContain("운동을 시작한 지");
-    expect(html).toContain("예전의 나보다 세졌나");
+    expect(html).toContain("예전의 나보다");
+    expect(html).toContain("얼마나 세졌나");
+    expect(html).toContain("한눈에 보기");
+    expect(html).toContain("오늘 운동 시작하기");
     expect(html).toContain("이제 이것만 하면 돼요");
     expect(html).not.toContain("XP 자격");
     expect(html).not.toContain("성장률");
@@ -100,8 +103,8 @@ describe("EvolutionStatusView — 쉬운 말", () => {
       totalXp: 15000, currentStage: 5, today: TODAY, workoutDays: days(100, 300), growth: g(12),
     });
     const html = renderToStaticMarkup(<EvolutionStatusView status={status} />);
-    expect(html).toContain("요즘도 열심히 하나");
-    expect(html).toContain("최근 28일 중");
+    expect(html).toContain("요즘 활동 (최근 28일)");
+    expect(html).toContain("운동 습관");
   });
 
   it("최종 단계면 마지막 문구", () => {

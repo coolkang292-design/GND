@@ -194,6 +194,7 @@ export function GrowthHub() {
         userId={userId as string}
         totalXp={summary.totalXp}
         currentStage={summary.currentStage}
+        variant={summary.characterVariant}
       />
 
       <PointSummary balance={balance} streakDays={streakDays} />

@@ -20,15 +20,19 @@ export function DailyQuestCard({
       className="rounded-card border border-accent/55 bg-accent-weak/30 p-4"
     >
       <p className="text-[11.5px] font-extrabold text-accent">{quest.eyebrow}</p>
-      <p className="mt-1.5 text-[17px] font-black leading-snug break-keep">
+      <p className="mt-1 text-[17px] font-black leading-snug break-keep">
         {quest.title}
       </p>
       <p className="mt-1 text-[12.5px] leading-snug break-keep text-muted">
         {quest.lead}
       </p>
-      <ul className="mt-3 flex flex-col gap-1.5 rounded-card-sm bg-surface/70 p-3">
+      {/* 혜택은 한 줄 칩이다 — 박스 목록은 화면을 길게 만들었다 (2026-11-06 "복잡해") */}
+      <ul className="mt-2.5 flex flex-wrap gap-1.5">
         {quest.hooks.map((hook) => (
-          <li key={hook} className="text-[13px] font-bold leading-snug">
+          <li
+            key={hook}
+            className="rounded-full bg-surface/70 px-2.5 py-1 text-[11.5px] font-bold leading-snug"
+          >
             {hook}
           </li>
         ))}

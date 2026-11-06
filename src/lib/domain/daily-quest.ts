@@ -21,12 +21,36 @@ import { MAX_DAILY_WORKOUT_XP_NOW } from "./xp";
 import { pickByDay } from "./streak-messages";
 import type { SuggestionKind } from "./workout-suggestion";
 
+/**
+ * 챌린지 목표가 겨냥하는 운동 분류 (2026-11-06). 진행 중인 챌린지가 있으면 퀘스트가 그
+ * 목표에 쌓이는 운동을 제안한다 — 고르는 쪽은 `lib/challenge-quest.ts`.
+ */
+export type QuestFocusKind = "weight" | "cardio" | "bodyweight" | "interval";
+
+export type QuestFocus = {
+  kind: QuestFocusKind;
+  /** 화면에 말할 목표 이름 — 예: "유산소 거리 20km" */
+  goalLabel: string;
+};
+
+const FOCUS_TAIL: Record<QuestFocusKind, string> = {
+  weight: "오늘 근력 완료",
+  cardio: "오늘 유산소 완료",
+  bodyweight: "오늘 맨몸 완료",
+  interval: "오늘 인터벌 완료",
+};
+
 export const QUEST_EYEBROW = "🎯 오늘의 퀘스트가 도착했어요";
 
 export type QuestCopy = {
   eyebrow: string;
-  /** 한 줄 후킹 제목 */
+  /** 한 줄 후킹 제목 (알림·배너용) */
   title: string;
+  /**
+   * 큰 퀘스트 카드의 두 줄 제목 — 첫 줄은 흰색, 둘째 줄은 라임색으로 그린다
+   * (시안 2026-11-06: "이 퀘스트 하나면 / 오늘 운동 완료").
+   */
+  headline: [string, string];
   /** 무엇을 하는 퀘스트인가 (종목이 정해졌으면 이름까지) */
   lead: string;
   /** 완료하면 얻는 것 — 전부 사실이어야 한다 */
@@ -84,17 +108,47 @@ export function questNamesLine(names: string[]): string {
     : `${clean.slice(0, 3).join(" · ")} 외 ${clean.length - 3}`;
 }
 
-function leadFor(kind: SuggestionKind, names: string[], applied: boolean): string {
+function leadFor(
+  kind: SuggestionKind,
+  names: string[],
+  applied: boolean,
+  planned: boolean,
+  focus: QuestFocus | null,
+): string {
+  const line = questNamesLine(names);
+  // 내가 계획한 운동이면 "세팅해 뒀어요"가 아니라 내 계획이라고 말한다 (거짓 금지)
+  if (planned) {
+    return line ? `오늘 계획한 운동이에요 · ${line}` : "오늘 계획한 운동이에요";
+  }
+  // 챌린지 목표에 맞춘 퀘스트 — 어떤 목표를 겨냥했는지 말한다
+  if (focus) {
+    if (focus.kind === "interval") {
+      return `챌린지 목표(${focus.goalLabel})에 맞춰 4분 인터벌을 추천했어요`;
+    }
+    if (applied) {
+      return line
+        ? `챌린지 목표(${focus.goalLabel})에 맞춰 세팅해 뒀어요 · ${line}`
+        : `챌린지 목표(${focus.goalLabel})에 맞춰 세팅해 뒀어요`;
+    }
+    return `챌린지 목표(${focus.goalLabel})에 맞춰 추천했어요`;
+  }
   if (kind === "walk") return "10분만 걸어도 퀘스트 완료예요";
   if (kind === "interval") return "시간 없는 날엔 4분이면 충분해요";
-  const line = questNamesLine(names);
   if (applied) {
     return line
       ? `지난 운동으로 오늘 목록을 세팅해 뒀어요 · ${line}`
       : "지난 운동으로 오늘 목록을 세팅해 뒀어요";
   }
-  return "지난 운동으로 오늘 목록을 세팅할게요";
+  return "지난 운동을 바탕으로 추천했어요";
 }
+
+const HEADLINE_TAIL: Record<SuggestionKind, string> = {
+  repeat: "오늘 운동 완료",
+  walk: "오늘 걷기 완료",
+  interval: "오늘 인터벌 완료",
+};
+
+
 
 /**
  * @param streak 현재 연속 일수. 아직 모르면 `null`(그 줄을 뺀다), 끊겼으면 0
@@ -107,25 +161,34 @@ export function dailyQuestCopy(input: {
   streak: number | null;
   names?: string[];
   applied?: boolean;
+  /** 사용자가 직접 정한 오늘 계획이다 (기계가 담은 제안이 아니다) */
+  planned?: boolean;
+  /** 진행 중인 챌린지의 목표에 맞춘 퀘스트 — 있으면 그 목표를 겨냥해 말한다 */
+  focus?: QuestFocus | null;
 }): QuestCopy {
   const { kind, todayKey, streak } = input;
+  const focus = input.focus ?? null;
   const titles =
     kind === "repeat" ? REPEAT_TITLES : kind === "walk" ? WALK_TITLES : INTERVAL_TITLES;
 
-  const hooks: string[] = [`⚡ 클리어하면 최대 +${MAX_DAILY_WORKOUT_XP_NOW} XP`];
+  // 칩 두 개 — 짧게 (시안 2026-11-06 "추천 배치": "+160 XP · 25일 연속").
+  // ⚠️ XP는 "최대"다. 받을 수 있는 하루 최대치만 말한다(받을 수 없는 XP 약속 금지).
+  const hooks: string[] = [`⚡ 최대 +${MAX_DAILY_WORKOUT_XP_NOW} XP`];
   if (streak !== null) {
-    hooks.push(
-      streak > 0
-        ? `🔥 ${streak + 1}일 연속 달성`
-        : "🔥 오늘 한 번이면 다시 1일",
-    );
+    hooks.push(streak > 0 ? `🔥 ${streak + 1}일 연속` : "🔥 다시 1일");
   }
-  hooks.push("📈 경험치가 쌓여 레벨업에 한 걸음 더");
 
   return {
     eyebrow: QUEST_EYEBROW,
     title: pickByDay(titles, todayKey),
-    lead: leadFor(kind, input.names ?? [], input.applied ?? false),
+    headline: ["이 퀘스트 하나면", focus ? FOCUS_TAIL[focus.kind] : HEADLINE_TAIL[kind]],
+    lead: leadFor(
+      kind,
+      input.names ?? [],
+      input.applied ?? false,
+      input.planned ?? false,
+      focus,
+    ),
     hooks,
   };
 }

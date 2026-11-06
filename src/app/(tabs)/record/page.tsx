@@ -244,7 +244,8 @@ import {
 import { TodayPlanCards } from "@/components/record/today-plan-cards";
 import { DailyQuestCard } from "@/components/record/daily-quest-card";
 import { dailyQuestCopy, shouldAutoSetQuest } from "@/lib/domain/daily-quest";
-import { isGeneralPlan } from "@/lib/domain/day-plan";
+import { shouldShowTodayCards } from "@/lib/domain/record-layout";
+import { pickChallengeExercises, pickChallengeFocus } from "@/lib/challenge-quest";
 import {
   cancelWorkout,
   clearDraft,
@@ -1804,8 +1805,42 @@ function WorkoutScreen({ userId }: { userId: string }) {
    * ⚠️ **인터벌만 목록에 담지 않는다.** 담으면 음원도 코스도 없는 맨몸 4개가 된다
    *    (`tabata.ts`의 `tabataResumeFromSession` 주석에 그 옛 버그가 적혀 있다).
    */
-  async function applySuggestion(kind: SuggestionKind): Promise<void> {
+  async function applySuggestion(requested: SuggestionKind): Promise<void> {
     const todayKey = dayKey(new Date(), resolveTimeZone());
+    let kind: SuggestionKind = requested;
+
+    /*
+      진행 중인 챌린지가 있으면 **그 목표에 쌓이는 운동**을 먼저 제안한다 (사용자 지시
+      2026-11-06). 퀘스트 버튼 · 알림(`?suggest=1`) · 자동 세팅이 모두 이 함수를 지나므로
+      세 길이 같은 퀘스트를 낸다.
+
+      ⚠️ 이미 인터벌을 요청한 경우(보조 "4분 인터벌")는 그대로 인터벌이다 — 사용자가 고른 것을
+         덮지 않는다. 오늘의 목표가 인터벌(타바타 횟수)이면 인터벌 시트를 연다.
+    */
+    if (challengeFocus && requested !== "interval") {
+      if (challengeFocus.kind === "interval") {
+        kind = "interval";
+      } else {
+        // 내가 해 온 그 분류의 종목(최근 순)을 우선 — 못 읽으면 추천 이름·카탈로그 순
+        let recentNames: string[] = [];
+        try {
+          const sessions = await getCompletedSessions(userId);
+          recentNames = sessions
+            .filter((s) => s.tabataMinutes === null)
+            .flatMap((s) => s.exerciseNames)
+            .slice(0, 60);
+        } catch {
+          /* 이력을 못 읽어도 퀘스트는 나간다 */
+        }
+        const items = pickChallengeExercises(challengeFocus.kind, catalog, recentNames);
+        if (items.length > 0) {
+          addExercises(items);
+          setDraft((current) => ({ ...current, suggestedForDayKey: todayKey }));
+          return;
+        }
+        // 카탈로그에서 그 분류 종목을 못 찾으면 기존 퀘스트로 떨어진다
+      }
+    }
 
     if (kind === "interval") {
       const picked = tabataPickFromNames(INTERVAL_SUGGESTION_NAMES, catalog);
@@ -3391,6 +3426,26 @@ function WorkoutScreen({ userId }: { userId: string }) {
   );
 
   /**
+   * 화면에 그리는 퀘스트 종류 — **퀘스트는 매일 생긴다** (사용자 지시 2026-11-06 "제안
+   * 없는 날 카드는 필요 없지 않아?").
+   *
+   * `pickSuggestionKind`가 `null`을 주는 날 중 오늘 계획이 없고 운동도 안 한 날은 가입 창이
+   * 지난 무기록 사용자뿐이다(이력이 있으면 지난 운동·인터벌이 나온다). 그 사람에게는 걷기
+   * 퀘스트를 준다. ⚠️ **알림은 그대로 조용하다** — 알림 쪽 `pickSuggestionKind`는 건드리지
+   * 않았다(가입만 하고 잊은 사람에게 영원히 가는 알림은 차단으로 이어진다). 이 값은 화면
+   * 카드에만 쓰고, 자동 세팅(`shouldAutoSetQuest`)에도 쓰지 않는다 — 누르면 담긴다.
+   */
+  const questKind: SuggestionKind | null =
+    suggestionKind ??
+    (factsReady && plansReady && !todayPlanExists && !didWorkoutToday ? "walk" : null);
+
+  /** 진행 중인 챌린지 목표에 맞춘 오늘의 분류 (없으면 null → 기존 퀘스트) */
+  const challengeFocus = useMemo(
+    () => pickChallengeFocus(challengeGoals, dayKey(new Date(), resolveTimeZone())),
+    [challengeGoals],
+  );
+
+  /**
    * 오늘 카드의 "오늘의 운동" 한 줄 (2026-08-19).
    *
    * ⚠️⚠️ **담긴 종목이 있을 때만 말한다.** 처음엔 제안(`suggestionCopy`)까지
@@ -4107,13 +4162,17 @@ function WorkoutScreen({ userId }: { userId: string }) {
     계획이 없거나 오늘 운동을 마친 뒤에만 카드가 돌아온다 — 할 일이 있을 때는
     할 일이 첫 화면이다. 일반 계획은 목록 자체라 `isEmpty`로 본다.
   */
-  const hasTodayPlan =
-    !isEmpty || todayPlans.some((plan) => !isGeneralPlan(plan));
-  const showTodayCard =
-    !active &&
-    subTab === "workout" &&
-    todayStatus !== null &&
-    (!hasTodayPlan || didWorkoutToday);
+  /*
+    ⚠️ 2026-11-06 사용자 지시: 오늘 상태·누적 성과 카드는 **운동을 마친 뒤에만** 보인다.
+    운동 전에는 퀘스트 카드(계획이 없으면 버튼 3개, 있으면 계획한 운동 목록)만 있다 —
+    기록 탭을 최대한 단순하게. 예전에는 계획이 없을 때도 이 카드들이 먼저 떴다.
+  */
+  const showTodayCard = shouldShowTodayCards({
+    workoutActive: active,
+    subTab,
+    hasStatus: todayStatus !== null,
+    didWorkoutToday,
+  });
 
   return (
     <div
@@ -4133,17 +4192,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
           */}
           {/* 오늘 카드가 뜨면 상태 문장은 카드가 말한다 — 부제는 **할 일**만 말한다
               (운동 완료 상태에선 아무 말도 안 해서 카드와 모순되지 않는다) */}
-          {showTodayCard ? (
-            !didWorkoutToday && (
-              <p className="mt-0.5 text-[13px] text-muted">오늘의 운동을 준비하세요</p>
-            )
-          ) : (
+          {showTodayCard ? null : (
             <p className="mt-0.5 text-[13px] text-muted">
-              {active
-                ? "운동 중"
-                : isEmpty
-                  ? "처음이라면 운동부터 추가해보세요"
-                  : "오늘의 운동을 준비하세요"}
+              {active ? "운동 중" : "오늘의 운동을 준비하세요"}
             </p>
           )}
         </div>
@@ -4196,7 +4247,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
         ⚠️ `todayStatus`가 `null`이면(조회 전·실패) 그냥 안 그린다 — 0으로 채운
            막대를 잠깐 보여 주면 "이번 주에 아무것도 안 했다"는 거짓말이 된다.
       */}
-      {showTodayCard && (
+      {showTodayCard && todayStatus && (
         <TodayStatusCard
           didWorkoutToday={didWorkoutToday}
           bars={todayStatus.bars}
@@ -4277,39 +4328,37 @@ function WorkoutScreen({ userId }: { userId: string }) {
               onLoadRecent={() => void openExercisePicker("past")}
               onLoadRoutine={() => void openExercisePicker("routine")}
               routineCount={routines?.length ?? 0}
-              suggestionKind={suggestionKind}
+              suggestionKind={questKind}
               quest={
-                suggestionKind
+                questKind
                   ? dailyQuestCopy({
-                      kind: suggestionKind,
+                      kind: questKind,
                       todayKey: dayKey(new Date(), resolveTimeZone()),
                       streak: todayStatus?.streak ?? null,
+                      focus: challengeFocus,
                     })
                   : null
               }
               suggestionBody={
-                suggestionKind
+                questKind
                   ? // ⚠️ 스트릭 0을 넘긴다. 카드는 `body`만 쓰는데 `body`는 스트릭에
                     // 영향받지 않는다 — 숫자가 나오는 곳은 `title`뿐이다.
                     suggestionCopy(
-                      suggestionKind,
+                      questKind,
                       dayKey(new Date(), resolveTimeZone()),
                       0,
                     ).body
                   : ""
               }
               onApplySuggestion={() => {
-                if (suggestionKind) void applySuggestion(suggestionKind);
+                if (questKind) void applySuggestion(questKind);
               }}
               onApplySecondary={() => void applySuggestion("interval")}
             />
           )}
 
           {/* 오늘의 퀘스트 — 자동 세팅된 목록이 있을 때. 버튼은 없다: 아래 시작 버튼이 퀘스트 시작이다 */}
-          {!isEmpty &&
-            !active &&
-            !didWorkoutToday &&
-            draft.suggestedForDayKey === dayKey(new Date(), resolveTimeZone()) && (
+          {!isEmpty && !active && !didWorkoutToday && (
               <DailyQuestCard
                 quest={dailyQuestCopy({
                   kind:
@@ -4320,6 +4369,10 @@ function WorkoutScreen({ userId }: { userId: string }) {
                   streak: todayStatus?.streak ?? null,
                   names: draft.exercises.map((e) => e.name),
                   applied: true,
+                  // 기계가 담은 제안이 아니면(내가 짠 계획·달력 계획) 내 계획이라고 말한다
+                  planned:
+                    draft.suggestedForDayKey !== dayKey(new Date(), resolveTimeZone()),
+                  focus: challengeFocus,
                 })}
               >
                 <p className="mt-3 text-[12px] font-bold text-accent">

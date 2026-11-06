@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
+  characterSrc,
   normalizeCharacterVariant,
   type CharacterVariant,
 } from "@/lib/domain/character-variant";
@@ -69,4 +70,44 @@ export function useMyCharacterVariant(): CharacterVariant {
     };
   }, []);
   return variant;
+}
+
+
+/**
+ * 내 전신 캐릭터 이미지 경로 (현재 단계와 외형) - 오늘의 퀘스트 카드 오른쪽에 그린다.
+ * 본인 행만 읽는다(RLS). 못 읽거나 단계가 범위 밖이면 null: 그림 없이 카드만 그린다.
+ */
+export async function getMyCharacterFullSrc(): Promise<string | null> {
+  try {
+    const supabase = getSupabaseBrowserClient();
+    const { data: auth } = await supabase.auth.getUser();
+    const uid = auth.user?.id;
+    if (!uid) return null;
+    const [profile, progress] = await Promise.all([
+      supabase.from("profiles").select("character_variant").eq("id", uid).maybeSingle(),
+      supabase.from("user_progress").select("current_stage").eq("user_id", uid).maybeSingle(),
+    ]);
+    const stage = (progress.data as { current_stage?: number } | null)?.current_stage ?? 1;
+    if (!Number.isInteger(stage) || stage < 1 || stage > 7) return null;
+    const variant = normalizeCharacterVariant(
+      (profile.data as { character_variant?: unknown } | null)?.character_variant,
+    );
+    return characterSrc(`/characters/char-${stage}.png`, variant);
+  } catch {
+    return null;
+  }
+}
+
+export function useMyCharacterFullSrc(): string | null {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    getMyCharacterFullSrc().then((v) => {
+      if (alive) setSrc(v);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return src;
 }
