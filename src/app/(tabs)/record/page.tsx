@@ -19,7 +19,7 @@ import {
   ExercisePicker,
   type ConfiguredPick,
 } from "@/components/record/exercise-picker";
-import { RecordEmptyState } from "@/components/record/record-empty-state";
+import { RecordEmptyState, StartOptions } from "@/components/record/record-empty-state";
 import { ExerciseReorderSheet } from "@/components/record/exercise-reorder-sheet";
 import { IdlePauseModal } from "@/components/record/idle-pause-modal";
 import { RoutineSaveSheet } from "@/components/record/routine-save-sheet";
@@ -243,7 +243,6 @@ import {
 } from "@/lib/day-plan-store";
 import { TodayPlanCards } from "@/components/record/today-plan-cards";
 import { DailyQuestCard } from "@/components/record/daily-quest-card";
-import type { QuestPreviewItem } from "@/components/record/quest-exercise-preview";
 import { dailyQuestCopy, shouldAutoSetQuest } from "@/lib/domain/daily-quest";
 import { shouldShowTodayCards } from "@/lib/domain/record-layout";
 import { pickChallengeExercises, pickChallengeFocus } from "@/lib/challenge-quest";
@@ -1781,6 +1780,27 @@ function WorkoutScreen({ userId }: { userId: string }) {
    * @param replaceKey 운동 중 '바꾸기'로 여는 경우 대상 종목 키. 그 밖에는 `null`.
    *   **항상 명시적으로 덮어쓴다** — 기본값 `null`이라 옛 값이 남을 수 없다.
    */
+  /**
+   * 퀘스트 카드 아래 다른 타일을 고르면 **앱이 자동으로 담아 둔 목록은 비운다** (사용자 지시
+   * 2026-11-07 — "다른 타일을 고르면 그 타일에 맞게 운동을 고르게"). 안 비우면 고른 운동 위에
+   * 자동 목록이 섞여 어느 쪽이 내 선택인지 알 수 없다.
+   *
+   * ⚠️ **기계가 담은 목록만** 비운다(`suggestedForDayKey`가 오늘). 내가 짠 계획·달력 계획이 묶인
+   *    목록은 건드리지 않는다 — 지우면 계획과의 연결이 끊긴다.
+   */
+  function dropSuggestedList() {
+    const d = draftRef.current;
+    if (active || d.startedAtMs !== null) return;
+    if (d.suggestedForDayKey !== dayKey(new Date(), resolveTimeZone())) return;
+    setDraft((current) => ({
+      ...current,
+      exercises: [],
+      sourceSessionId: null,
+      effortMessage: null,
+      suggestedForDayKey: null,
+    }));
+  }
+
   async function openExercisePicker(
     mode: "hub" | "past" | "routine" | "search" = "hub",
     replaceKey: string | null = null,
@@ -3447,29 +3467,6 @@ function WorkoutScreen({ userId }: { userId: string }) {
     [challengeGoals],
   );
 
-  async function previewQuestExercises(): Promise<QuestPreviewItem[]> {
-    if (!questKind) return [];
-    if (challengeFocus && questKind !== "interval") {
-      if (challengeFocus.kind === "interval") {
-        return tabataPickFromNames(INTERVAL_SUGGESTION_NAMES, catalog).map((item) => ({ name: item.name, detail: "4분 인터벌" }));
-      }
-      let recentNames: string[] = [];
-      try {
-        const sessions = await getCompletedSessions(userId);
-        recentNames = sessions.filter((s) => s.tabataMinutes === null).flatMap((s) => s.exerciseNames).slice(0, 60);
-      } catch { /* 실제 시작 로직과 동일하게 카탈로그로 폴백 */ }
-      const chosen = pickChallengeExercises(challengeFocus.kind, catalog, recentNames);
-      if (chosen.length > 0) return chosen.map((item) => ({ name: item.name }));
-    }
-    if (questKind === "interval") return tabataPickFromNames(INTERVAL_SUGGESTION_NAMES, catalog).map((item) => ({ name: item.name, detail: "4분 인터벌" }));
-    if (questKind === "walk") return catalog.filter((item) => item.name === "걷기").map((item) => ({ name: item.name, detail: "10분 걷기" }));
-    const sessions = await getCompletedSessions(userId);
-    const recent = sessions[0];
-    if (!recent) return [];
-    if (recent.tabataMinutes !== null) return tabataPickFromNames(INTERVAL_SUGGESTION_NAMES, catalog).map((item) => ({ name: item.name, detail: "4분 인터벌" }));
-    return recent.exerciseNames.map((name) => ({ name }));
-  }
-
   /**
    * 오늘 카드의 "오늘의 운동" 한 줄 (2026-08-19).
    *
@@ -3600,6 +3597,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const questAutoRef = useRef(false);
   // 퀘스트 카드 오른쪽에 그릴 내 캐릭터 (현재 단계 · 외형). 못 읽으면 null → 그림 없이 카드만.
   const questHeroSrc = useMyCharacterFullSrc();
+  // 퀘스트 카드 아래 운동 목록(준비·팁·운동 카드)을 펼쳤나 — 카드가 떠 있을 때만 접혀 있다
+  const [questListOpen, setQuestListOpen] = useState(false);
   useEffect(() => {
     if (questAutoRef.current) return;
     // 알림(`?suggest=1`)으로 들어왔으면 위 (2)번 경로가 이미 담는다 — 여기서 또 담으면
@@ -4201,9 +4200,22 @@ function WorkoutScreen({ userId }: { userId: string }) {
     didWorkoutToday,
   });
 
+  /**
+   * 퀘스트 카드가 떠 있으면 아래 운동 목록은 **접어 둔다** (사용자 지시 2026-11-07 — "전체 운동
+   * 확인하기를 누르면 화면 전환"). 운동 전 첫 화면은 카드 하나와 시작 버튼뿐이다.
+   *
+   * 카드는 **계획이 있든 없든** 뜬다 (사용자 지시 2026-11-07): 오늘 계획이 있으면 그 계획이
+   * 목록에 담겨 "내 계획"으로, 없으면 지난 기록으로 자동 세팅한 목록이 카드가 된다.
+   * ⚠️ 접을 때는 `hidden`으로 **그리기만 막는다** — 언마운트하면 입력 중이던 세트가 사라진다.
+   */
+  const questCardShown = draft.exercises.length > 0 && !active && !didWorkoutToday;
+  const questListCollapsed = questCardShown && !questListOpen;
+  // 퀘스트 카드가 떠 있을 땐 카드의 [퀘스트 시작]이 시작이다 — 하단 고정 버튼은 목록 화면에서만
+  const fixedStartVisible = showFixedStart && !questListCollapsed;
+
   return (
     <div
-      className={`flex flex-col gap-3 ${showFixedStart ? "pb-40" : "pb-24"}`}
+      className={`flex flex-col gap-3 ${fixedStartVisible ? "pb-40" : "pb-24"}`}
     >
       <header className="flex items-center justify-between pt-1 pb-0.5">
         <div>
@@ -4379,16 +4391,19 @@ function WorkoutScreen({ userId }: { userId: string }) {
                   : ""
               }
               onApplySuggestion={() => {
-                if (questKind) void applySuggestion(questKind);
+                if (!questKind) return;
+                // 담고 나면 바로 목록(운동 계획) 화면이다 — 카드는 거치지 않는다
+                setQuestListOpen(true);
+                void applySuggestion(questKind);
               }}
               onApplySecondary={() => void applySuggestion("interval")}
-              onPreviewQuest={previewQuestExercises}
             />
           )}
 
           {/* 오늘의 퀘스트 — 자동 세팅된 목록이 있을 때. 버튼은 없다: 아래 시작 버튼이 퀘스트 시작이다 */}
-          {!isEmpty && !active && !didWorkoutToday && (
+          {questCardShown && !questListOpen && (
               <DailyQuestCard
+                heroImage={questHeroSrc}
                 exercises={draft.exercises.map((exercise) => ({
                   name: exercise.name,
                   detail: draft.tabataMinutes ? `${draft.tabataMinutes}분 인터벌` : `${exercise.sets.length}세트`,
@@ -4408,15 +4423,62 @@ function WorkoutScreen({ userId }: { userId: string }) {
                   focus: challengeFocus,
                 })}
               >
-                <p className="mt-3 text-[12px] font-bold text-accent">
-                  아래 [운동 시작]만 누르면 퀘스트 시작!
-                </p>
+                <button
+                  type="button"
+                  data-priority="primary"
+                  onClick={() => {
+                    // 화면 전환: 카드는 내려가고 운동 목록 + 시작 버튼 화면이 된다
+                    setQuestListOpen(true);
+                    window.scrollTo({ top: 0 });
+                  }}
+                  className="relative mt-3.5 h-14 w-full rounded-full bg-accent text-[16px] font-black text-accent-ink"
+                >
+                  퀘스트 확인하기
+                </button>
+                <StartOptions
+                  withQuest
+                  hasHistory={hasHistory}
+                  showInterval
+                  showRoutine={(routines?.length ?? 0) > 0}
+                  onLoadRecent={() => {
+                    dropSuggestedList();
+                    void openExercisePicker("past");
+                  }}
+                  onApplySecondary={() => void applySuggestion("interval")}
+                  onAdd={() => {
+                    dropSuggestedList();
+                    void openExercisePicker("hub");
+                  }}
+                  onLoadRoutine={() => {
+                    dropSuggestedList();
+                    void openExercisePicker("routine");
+                  }}
+                />
               </DailyQuestCard>
             )}
 
+          {/* 목록 화면에서 퀘스트 카드로 돌아가는 길 */}
+          {questCardShown && questListOpen && (
+            <button
+              type="button"
+              onClick={() => {
+                setQuestListOpen(false);
+                window.scrollTo({ top: 0 });
+              }}
+              className="self-start text-[12.5px] font-bold text-accent"
+            >
+              ← 퀘스트로 돌아가기
+            </button>
+          )}
+
+          {/* 퀘스트 카드가 떠 있으면 접힌다 — `contents`라 목록 화면일 때 레이아웃은 그대로다 */}
+          <div className={questListCollapsed ? "hidden" : "contents"}>
           {/* 세션 헤더 (§10) */}
           {!isEmpty && (
-            <section className="rounded-card border border-line-strong bg-surface p-4 shadow-card">
+            <section
+              id="workout-session-section"
+              className="scroll-mt-4 rounded-card border border-line-strong bg-surface p-4 shadow-card"
+            >
               <div className="flex items-start justify-between">
                 <div>
                   <p
@@ -4647,6 +4709,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
               복구됩니다.
             </p>
           )}
+          </div>
 
           {/*
         운동 시작은 **하단 고정 CTA**다 (사용자 지시 2026-08-06).
@@ -4655,7 +4718,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
         위치 규약은 RestBar와 같다(safe-area + 72px = 탭 바 높이). 둘은
         공존하지 않는다 — RestBar는 운동 중에만 뜬다.
       */}
-          {showFixedStart && (
+          {fixedStartVisible && (
             <div
               className="fixed inset-x-3 z-30"
               style={{ bottom: "calc(env(safe-area-inset-bottom) + 72px)" }}

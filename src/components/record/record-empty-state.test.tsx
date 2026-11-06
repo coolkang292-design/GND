@@ -119,12 +119,12 @@ describe("퀘스트 카드 — 한 줄 제목 · 칩 2개 · 버튼 1개", () =>
     ]);
   });
 
-  it("주 버튼은 '퀘스트 받기' 하나 — 누르면 퀘스트를 담는다", () => {
+  it("주 버튼은 '퀘스트 확인하기' 하나 — 누르면 퀘스트를 담고 계획 화면으로 간다", () => {
     const onApply = vi.fn();
     renderQuest({ onApplySuggestion: onApply });
     const primary = screen.getAllByRole("button").filter((b) => b.getAttribute("data-priority") === "primary");
     expect(primary).toHaveLength(1);
-    expect(primary[0].textContent).toBe("퀘스트 받기");
+    expect(primary[0].textContent).toBe("퀘스트 확인하기");
     fireEvent.click(primary[0]);
     expect(onApply).toHaveBeenCalledTimes(1);
   });
@@ -160,10 +160,10 @@ describe("퀘스트 카드 — 한 줄 제목 · 칩 2개 · 버튼 1개", () =>
     );
   });
 
-  it("인터벌 퀘스트: '퀘스트 시작'이고 타일에 인터벌을 또 두지 않는다", () => {
+  it("인터벌 퀘스트: 같은 '퀘스트 확인하기'이고 타일에 인터벌을 또 두지 않는다", () => {
     const interval = dailyQuestCopy({ kind: "interval", todayKey: "2026-11-06", streak: 2 });
     const { getByRole, queryByText } = renderQuest({ suggestionKind: "interval", quest: interval });
-    expect(getByRole("button", { name: "퀘스트 시작" })).toBeTruthy();
+    expect(getByRole("button", { name: "퀘스트 확인하기" })).toBeTruthy();
     expect(queryByText("4분 인터벌")).toBeNull();
   });
 
@@ -223,7 +223,7 @@ describe("제안만 있는 호출(퀘스트 문구 없음)", () => {
         onApplySuggestion={() => {}}
       />,
     );
-    for (const name of ["퀘스트 받기", "퀘스트 시작", "지난번 그대로 담기", "10분 걷기 담기", "4분 인터벌 시작"]) {
+    for (const name of ["퀘스트 확인하기", "지난번 그대로 담기", "10분 걷기 담기", "4분 인터벌 시작"]) {
       expect(screen.queryByRole("button", { name })).toBeNull();
     }
   });

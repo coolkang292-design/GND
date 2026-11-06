@@ -8,10 +8,16 @@ export function QuestExercisePreview({
   items,
   onLoad,
   label = "오늘의 운동",
+  onViewAll,
+  hideButton = false,
 }: {
   items?: QuestPreviewItem[];
   onLoad?: () => Promise<QuestPreviewItem[]>;
   label?: string;
+  /** 주면 버튼이 시트를 열지 않고 이 함수를 부른다 (계획한 목록이 이미 화면에 있을 때) */
+  onViewAll?: () => void;
+  /** 카드에 버튼이 따로 있을 때 — 목록만 보여 주고 버튼은 안 둔다 */
+  hideButton?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [loaded, setLoaded] = useState<QuestPreviewItem[] | null>(null);
@@ -19,6 +25,10 @@ export function QuestExercisePreview({
   const [error, setError] = useState(false);
   const visible = items ?? loaded ?? [];
   async function showDetails() {
+    if (onViewAll) {
+      onViewAll();
+      return;
+    }
     setOpen(true);
     if (!onLoad || items || loaded) return;
     setLoading(true);
@@ -50,9 +60,11 @@ export function QuestExercisePreview({
       ) : (
         <p className="mt-1 text-[11.5px] text-muted">시작 전에 운동 목록을 확인할 수 있어요.</p>
       )}
-      <button type="button" onClick={() => void showDetails()} className="mt-2.5 w-full rounded-xl border border-line-strong px-3 py-2 text-[12px] font-bold text-accent" data-testid="quest-preview-open">
+      {!hideButton && (
+              <button type="button" onClick={() => void showDetails()} className="mt-2.5 w-full rounded-xl border border-line-strong px-3 py-2 text-[12px] font-bold text-accent" data-testid="quest-preview-open">
         전체 운동 확인하기
       </button>
+      )}
       {open && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/70" role="presentation" onClick={() => setOpen(false)}>
           <section role="dialog" aria-modal="true" aria-label="퀘스트 전체 운동" onClick={(event) => event.stopPropagation()} className="max-h-[80dvh] w-full max-w-xl overflow-y-auto rounded-t-[24px] border border-line bg-surface p-5 pb-8">

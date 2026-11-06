@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import { QuestExercisePreview, type QuestPreviewItem } from "./quest-exercise-preview";
 import { Icon } from "@/components/ui/icon";
 import { UiIcon } from "@/components/ui-icon";
 import type { SuggestionKind } from "@/lib/domain/workout-suggestion";
@@ -37,7 +36,6 @@ export function RecordEmptyState({
   heroImage = null,
   onApplySuggestion,
   onApplySecondary,
-  onPreviewQuest,
 }: {
   /**
    * 완료한 운동이 하나라도 있나.
@@ -70,7 +68,6 @@ export function RecordEmptyState({
   onApplySuggestion?: () => void;
   /** 4분 인터벌 — 담기가 아니라 **시작**이다 */
   onApplySecondary?: () => void;
-  onPreviewQuest?: () => Promise<QuestPreviewItem[]>;
 }) {
   const hasQuestButton = Boolean(suggestionKind && onApplySuggestion);
   // 인터벌이 이미 주 제안이면 타일에 같은 길을 또 두지 않는다
@@ -136,10 +133,6 @@ export function RecordEmptyState({
         )
       )}
 
-      {quest && hasQuestButton && onPreviewQuest && (
-        <QuestExercisePreview onLoad={onPreviewQuest} />
-      )}
-
       {hasQuestButton && (
         <button
           type="button"
@@ -148,9 +141,7 @@ export function RecordEmptyState({
           className="relative mt-3.5 h-14 w-full rounded-full bg-accent text-[16px] font-black text-accent-ink"
         >
           {quest
-            ? suggestionKind === "interval"
-              ? "퀘스트 시작"
-              : "퀘스트 받기"
+            ? "퀘스트 확인하기"
             : suggestionKind === "walk"
               ? "10분 걷기 담기"
               : suggestionKind === "repeat"
@@ -159,45 +150,89 @@ export function RecordEmptyState({
         </button>
       )}
 
-      <div className={`relative ${quest ? "mt-4 border-t border-line pt-3" : ""}`}>
-        <h3 className="mb-2 text-[12.5px] font-bold text-muted">
-          {quest ? "다른 방법으로 시작하기" : "운동 시작하기"}
-        </h3>
-        <div className="grid grid-cols-2 gap-2">
-          {hasHistory && (
-            <Tile
-              title="지난 운동"
-              sub="그대로 담기"
-              icon={<UiIcon name="hub-past" size={22} />}
-              onClick={onLoadRecent}
-            />
-          )}
-          {showInterval && (
-            <Tile
-              title="4분 인터벌"
-              sub="바로 시작"
-              icon={<Icon name="interval" size={22} className="text-accent" />}
-              onClick={onApplySecondary!}
-            />
-          )}
-          <Tile
-            title="운동 계획"
-            sub="새로 만들기"
-            icon={<UiIcon name="goal" size={22} />}
-            onClick={onAdd}
-            primary={!hasQuestButton}
-          />
-          {showRoutine && (
-            <Tile
-              title="내 루틴"
-              sub="불러오기"
-              icon={<UiIcon name="hub-routine" size={22} />}
-              onClick={onLoadRoutine!}
-            />
-          )}
-        </div>
-      </div>
+      <StartOptions
+        withQuest={Boolean(quest)}
+        hasHistory={hasHistory}
+        showInterval={showInterval}
+        showRoutine={showRoutine}
+        primaryAdd={!hasQuestButton}
+        onLoadRecent={onLoadRecent}
+        onApplySecondary={onApplySecondary}
+        onAdd={onAdd}
+        onLoadRoutine={onLoadRoutine}
+      />
     </section>
+  );
+}
+
+/**
+ * "다른 방법으로 시작하기" 타일 묶음 — 빈 기록 화면과 운동이 담긴 퀘스트 카드가 **같은 것**을 쓴다
+ * (사용자 지시 2026-11-07: 자동으로 담긴 날에도 다른 길이 남아 있어야 한다).
+ */
+export function StartOptions({
+  withQuest,
+  hasHistory,
+  showInterval,
+  showRoutine,
+  primaryAdd = false,
+  onLoadRecent,
+  onApplySecondary,
+  onAdd,
+  onLoadRoutine,
+}: {
+  /** 퀘스트 카드 안이면 구분선과 "다른 방법으로 시작하기" 제목 */
+  withQuest: boolean;
+  hasHistory: boolean;
+  showInterval: boolean;
+  showRoutine: boolean;
+  primaryAdd?: boolean;
+  onLoadRecent: () => void;
+  onApplySecondary?: () => void;
+  onAdd: () => void;
+  onLoadRoutine?: () => void;
+}) {
+  return (
+    <div
+      data-testid="start-options"
+      className={`relative ${withQuest ? "mt-4 border-t border-line pt-3" : ""}`}
+    >
+      <h3 className="mb-2 text-[12.5px] font-bold text-muted">
+        {withQuest ? "다른 방법으로 시작하기" : "운동 시작하기"}
+      </h3>
+      <div className="grid grid-cols-2 gap-2">
+        {hasHistory && (
+          <Tile
+            title="지난 운동"
+            sub="그대로 담기"
+            icon={<UiIcon name="hub-past" size={22} />}
+            onClick={onLoadRecent}
+          />
+        )}
+        {showInterval && (
+          <Tile
+            title="4분 인터벌"
+            sub="바로 시작"
+            icon={<Icon name="interval" size={22} className="text-accent" />}
+            onClick={onApplySecondary!}
+          />
+        )}
+        <Tile
+          title="운동 계획"
+          sub="새로 만들기"
+          icon={<UiIcon name="goal" size={22} />}
+          onClick={onAdd}
+          primary={primaryAdd}
+        />
+        {showRoutine && (
+          <Tile
+            title="내 루틴"
+            sub="불러오기"
+            icon={<UiIcon name="hub-routine" size={22} />}
+            onClick={onLoadRoutine!}
+          />
+        )}
+      </div>
+    </div>
   );
 }
 
