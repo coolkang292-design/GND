@@ -423,7 +423,7 @@ export default function OnboardingPage() {
                 lime={challengeCode ? "닉네임만 정하면 참가해요" : "닉네임부터 정하세요"}
               />
               <p className="relative mt-3 text-[14px] text-text/85">
-                운동 안 하면 GND 확정. 친구들과 함께 탈출해요.
+                운동 안 하면 개노답 확정. 친구들과 함께 탈출해요.
               </p>
               <ShieldLine>
                 GND에서 친구들에게 보여질 이름이에요.
@@ -437,7 +437,7 @@ export default function OnboardingPage() {
 
               <div className="relative mt-4">
                 <LimeCta onClick={submitProfile} busy={busy}>
-                  {busy ? "처리 중…" : challengeCode ? "챌린지 참가하기" : "GND 시작하기"}
+                  {busy ? "처리 중…" : challengeCode ? "챌린지 참가하기" : "개노답 탈출 챌린지 시작하기"}
                 </LimeCta>
               </div>
 
@@ -556,7 +556,7 @@ export default function OnboardingPage() {
           </p>
 
           <div className="mt-7">
-            <LimeCta onClick={() => router.replace(APP_LANDING_PATH)}>GND 시작하기</LimeCta>
+            <LimeCta onClick={() => router.replace(APP_LANDING_PATH)}>개노답 탈출 챌린지 시작하기</LimeCta>
           </div>
         </>
       )}

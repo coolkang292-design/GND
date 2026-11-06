@@ -193,7 +193,7 @@ describe("OnboardingPage 모드 1 — 처음 (신원 없음)", () => {
     fireEvent.change(await screen.findByPlaceholderText("예: 스칼레또"), {
       target: { value: "구경꾼" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "GND 시작하기" }));
+    fireEvent.click(screen.getByRole("button", { name: "개노답 탈출 챌린지 시작하기" }));
 
     await waitFor(() =>
       expect(mocks.upsertMyProfile).toHaveBeenCalledWith({
@@ -219,7 +219,7 @@ describe("OnboardingPage 모드 1 — 처음 (신원 없음)", () => {
     fireEvent.click(screen.getByRole("radio", { name: /하루/ }));
     expect(screen.getByRole("radio", { name: /하루/ }).getAttribute("aria-checked")).toBe("true");
     fireEvent.change(screen.getByLabelText("닉네임"), { target: { value: "여성사용자" } });
-    fireEvent.click(screen.getByRole("button", { name: "GND 시작하기" }));
+    fireEvent.click(screen.getByRole("button", { name: "개노답 탈출 챌린지 시작하기" }));
 
     await waitFor(() =>
       expect(mocks.upsertMyProfile).toHaveBeenCalledWith(
@@ -307,7 +307,7 @@ describe("OnboardingPage 모드 2 — 제공자에서 돌아옴 (신원 있음)"
     fireEvent.change(await screen.findByPlaceholderText("예: 스칼레또"), {
       target: { value: "새사람" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "GND 시작하기" }));
+    fireEvent.click(screen.getByRole("button", { name: "개노답 탈출 챌린지 시작하기" }));
 
     await waitFor(() =>
       expect(mocks.upsertMyProfile).toHaveBeenCalledWith({
@@ -559,7 +559,7 @@ describe("OnboardingPage 친구 초대 링크 모드", () => {
       await screen.findByPlaceholderText("예: 스칼레또"),
       { target: { value: "새친구" } },
     );
-    fireEvent.click(screen.getByRole("button", { name: "GND 시작하기" }));
+    fireEvent.click(screen.getByRole("button", { name: "개노답 탈출 챌린지 시작하기" }));
   }
 
   it("신원이 없으면 친구 초대로 와도 카카오·구글이 먼저다", async () => {
