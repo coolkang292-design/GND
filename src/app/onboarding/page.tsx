@@ -1,10 +1,17 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { APP_LANDING_PATH } from "@/lib/domain/landing";
 import { useAuth } from "@/components/auth-provider";
+import {
+  CHARACTER_NAMES,
+  CHARACTER_VARIANTS,
+  characterSrc,
+  type CharacterVariant,
+} from "@/lib/character-variant";
 import { Icon } from "@/components/ui/icon";
 import {
   BrandWordmark,
@@ -88,6 +95,7 @@ export default function OnboardingPage() {
 
   const [step, setStep] = useState<Step>("profile");
   const [nickname, setNickname] = useState("");
+  const [variant, setVariant] = useState<CharacterVariant>("male");
   // /invite/[code]로 들어온 경우 저장된 코드를 미리 채움
   const [joinCode] = useState<string>(() =>
     typeof window === "undefined" ? "" : (peekPendingInvite() ?? ""),
@@ -261,6 +269,7 @@ export default function OnboardingPage() {
         nickname: nick,
         avatar_url: DEFAULT_AVATAR,
         weekly_goal: DEFAULT_WEEKLY_GOAL,
+        character_variant: variant,
       });
 
       // 챌린지 초대로 온 사람은 크루 단계를 통째로 건너뛴다.
@@ -421,6 +430,8 @@ export default function OnboardingPage() {
                 <br />
                 언제든 바꿀 수 있어요.
               </ShieldLine>
+
+              <CharacterPicker value={variant} onChange={setVariant} />
 
               <NicknameField value={nickname} onChange={setNickname} />
 
@@ -586,6 +597,72 @@ function ShieldLine({ children }: { children: React.ReactNode }) {
  * ⚠️ 라벨을 placeholder로만 두지 마라. 입력을 시작하면 placeholder가 사라져서
  * **무엇을 넣는 칸인지 알 수 없게 된다.** 시안이 라벨을 칸 안에 넣은 이유다.
  */
+/**
+ * 시작 전 캐릭터 선택. 레벨·XP와 무관한 외형이고(`profiles.character_variant`),
+ * 프로필에서 나중에 바꾸는 자리는 아직 없다 — 그래서 여기서 한 번 고른다.
+ * 기본은 male(DB 기본값과 같다).
+ */
+function CharacterPicker({
+  value,
+  onChange,
+}: {
+  value: CharacterVariant;
+  onChange: (v: CharacterVariant) => void;
+}) {
+  return (
+    <div className="relative mt-5">
+      <p id="onboarding-character-label" className="text-[15px] font-extrabold text-text">
+        탈출 파트너를 고르세요
+      </p>
+      {/* 선택한 캐릭터 이름이 문구에 들어간다 — 고르는 순간 "내 캐릭터"가 되는 느낌.
+          단계 이름(개노답→전설이개)은 domain/progression의 STAGES와 같다. */}
+      <p className="mt-1 text-[12.5px] leading-snug text-text/80">
+        운동할수록 <span className="font-extrabold text-accent">{CHARACTER_NAMES[value]}</span>
+        도 쑥쑥! 개노답에서 전설이개까지 7단계 진화!
+      </p>
+      <div
+        role="radiogroup"
+        aria-labelledby="onboarding-character-label"
+        className="mt-2 grid grid-cols-2 gap-3"
+      >
+        {CHARACTER_VARIANTS.map((v) => {
+          const selected = v === value;
+          return (
+            <button
+              key={v}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              onClick={() => onChange(v)}
+              className={`flex flex-col items-center rounded-2xl border px-3 pb-3 pt-2 transition-colors ${
+                selected
+                  ? "border-accent bg-surface"
+                  : "border-line-strong bg-surface/70 opacity-80"
+              }`}
+            >
+              <Image
+                src={characterSrc("/characters/char-1.png", v)}
+                alt={`${CHARACTER_NAMES[v]} 캐릭터`}
+                width={90}
+                height={120}
+                sizes="90px"
+                className="rounded-card-sm object-cover"
+              />
+              <span
+                className={`mt-2 text-[14px] font-extrabold ${
+                  selected ? "text-accent" : "text-text"
+                }`}
+              >
+                {CHARACTER_NAMES[v]}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function NicknameField({
   value,
   onChange,

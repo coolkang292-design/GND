@@ -201,11 +201,31 @@ describe("OnboardingPage 모드 1 — 처음 (신원 없음)", () => {
         nickname: "구경꾼",
         avatar_url: "🧔",
         weekly_goal: 3,
+        character_variant: "male",
       }),
     );
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/record"));
     expect(mocks.linkIdentity).not.toHaveBeenCalled();
     expect(mocks.signInWithOAuth).not.toHaveBeenCalled();
+  });
+
+  it("캐릭터를 하루(여성)로 고르면 character_variant: female로 저장한다", async () => {
+    render(<OnboardingPage />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: /닉네임만 정하고 바로 시작/ }),
+    );
+    // 기본은 무쇠(남성)
+    expect(screen.getByRole("radio", { name: /무쇠/ }).getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(screen.getByRole("radio", { name: /하루/ }));
+    expect(screen.getByRole("radio", { name: /하루/ }).getAttribute("aria-checked")).toBe("true");
+    fireEvent.change(screen.getByLabelText("닉네임"), { target: { value: "여성사용자" } });
+    fireEvent.click(screen.getByRole("button", { name: "GND 시작하기" }));
+
+    await waitFor(() =>
+      expect(mocks.upsertMyProfile).toHaveBeenCalledWith(
+        expect.objectContaining({ nickname: "여성사용자", character_variant: "female" }),
+      ),
+    );
   });
 
   it("'바로 시작'에서 카카오·구글로 돌아갈 수 있다", async () => {
@@ -295,6 +315,7 @@ describe("OnboardingPage 모드 2 — 제공자에서 돌아옴 (신원 있음)"
         nickname: "새사람",
         avatar_url: "🧔",
         weekly_goal: 3,
+        character_variant: "male",
       }),
     );
   });
@@ -430,6 +451,7 @@ describe("OnboardingPage 챌린지 초대 모드", () => {
       nickname: "새참가자",
       avatar_url: "🧔",
       weekly_goal: 3,
+      character_variant: "male",
     });
     // 신입이 성공했으면 폴백은 부르지 않는다 — 두 번 참가시키면 안 된다.
     expect(mocks.joinChallengeWithCode).not.toHaveBeenCalled();

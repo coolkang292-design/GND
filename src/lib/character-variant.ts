@@ -7,6 +7,14 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
  */
 export type CharacterVariant = "male" | "female";
 
+/** 선택 화면·프로필에 보이는 캐릭터 이름. 단계 이름(개노답…)과는 별개다. */
+export const CHARACTER_NAMES: Record<CharacterVariant, string> = {
+  male: "무쇠",
+  female: "하루",
+};
+
+export const CHARACTER_VARIANTS: CharacterVariant[] = ["male", "female"];
+
 export function normalizeCharacterVariant(v: unknown): CharacterVariant {
   return v === "female" ? "female" : "male";
 }

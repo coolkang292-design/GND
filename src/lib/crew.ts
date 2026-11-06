@@ -21,6 +21,11 @@ export async function upsertMyProfile(input: {
   avatar_url: string;
   weekly_goal: number;
   /**
+   * 캐릭터 외형. **온보딩에서만** 넘긴다 — 안 넘기면 upsert에서 키가 빠져
+   * 저장된 값이 그대로 남는다(프로필 편집이 외형을 덮어쓰지 않는다).
+   */
+  character_variant?: "male" | "female";
+  /**
    * 소개·SNS (0085). **optional인 이유** — 이 함수를 부르는 곳이 프로필 편집만이
    * 아니다. 필수로 만들면 기존 호출부를 전부 고쳐야 하고, 안 고친 곳은 값을
    * 안 넘겨 **저장돼 있던 소개가 지워진다.**

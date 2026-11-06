@@ -3,4 +3,5 @@
 -- 레벨·XP와 무관하다. 앱은 이 값으로 이미지 경로만 고른다
 -- (/characters/char-N.png ↔ /characters/female/char-N.png).
 alter table public.profiles
-  add column if not exists character_variant text not null default 'male';
+  add column if not exists character_variant text not null default 'male'
+  check (character_variant in ('male', 'female'));

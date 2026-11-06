@@ -90,6 +90,8 @@ export type Profile = {
   /** DB CHECK: https:// 로 시작 + 200자. 도메인 검증은 `domain/profile-links.ts` */
   instagram_url: string | null;
   youtube_url: string | null;
+  /** 캐릭터 외형 (0121). 기본 male. 이미지 경로만 바꾼다. */
+  character_variant?: "male" | "female";
 };
 
 export type Group = {
