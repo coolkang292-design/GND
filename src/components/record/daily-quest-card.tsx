@@ -1,3 +1,4 @@
+import { QuestExercisePreview, type QuestPreviewItem } from "./quest-exercise-preview";
 import type { QuestCopy } from "@/lib/domain/daily-quest";
 
 /**
@@ -9,9 +10,11 @@ import type { QuestCopy } from "@/lib/domain/daily-quest";
 export function DailyQuestCard({
   quest,
   children,
+  exercises,
 }: {
   quest: QuestCopy;
   children?: React.ReactNode;
+  exercises?: QuestPreviewItem[];
 }) {
   return (
     <section
@@ -37,6 +40,7 @@ export function DailyQuestCard({
           </li>
         ))}
       </ul>
+      {exercises && exercises.length > 0 && <QuestExercisePreview items={exercises} />}
       {children}
     </section>
   );
