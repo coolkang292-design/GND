@@ -4,6 +4,7 @@ import {
   QUEST_PUSH_TITLE,
   dailyQuestCopy,
   planQuestCopy,
+  splitQuestTitle,
   questNamesLine,
   questPushCopy,
   shouldAutoSetQuest,
@@ -157,5 +158,28 @@ describe("planQuestCopy — 인터벌·프로그램 계획을 퀘스트 카드�
   it("연속 일수가 모르면 줄을 빼고, 끊겼으면 숫자를 말하지 않는다", () => {
     expect(planQuestCopy({ interval: true, title: null, detail: "", streak: null }).hooks).toHaveLength(1);
     expect(planQuestCopy({ interval: true, title: null, detail: "", streak: 0 }).hooks[1]).toBe("🔥 다시 1일");
+  });
+});
+
+describe("splitQuestTitle — 제목을 두 줄로", () => {
+  it("쉼표에서 나눈다: 앞줄 흰색 · 뒷줄 라임", () => {
+    expect(splitQuestTitle("딱 4분, 심장을 깨워라!")).toEqual(["딱 4분,", "심장을 깨워라!"]);
+  });
+  it("쉼표가 없으면 단어 절반쯤에서 자른다", () => {
+    expect(splitQuestTitle("오늘 한 번 더 가자")).toEqual(["오늘 한 번", "더 가자"]);
+  });
+  it("한 단어면 뒷줄이 비고, 빈 문자열도 터지지 않는다", () => {
+    expect(splitQuestTitle("파이팅")).toEqual(["파이팅", ""]);
+    expect(splitQuestTitle("")).toEqual(["", ""]);
+  });
+  it("실제 제목은 전부 쉼표가 있어 두 줄로 읽힌다", () => {
+    for (const kind of ["repeat", "walk", "interval"] as const) {
+      for (let day = 1; day <= 28; day += 1) {
+        const key = `2026-11-${String(day).padStart(2, "0")}`;
+        const [a, b] = splitQuestTitle(dailyQuestCopy({ kind, todayKey: key, streak: 1 }).title);
+        expect(a.length).toBeGreaterThan(0);
+        expect(b.length).toBeGreaterThan(0);
+      }
+    }
   });
 });

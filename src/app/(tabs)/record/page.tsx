@@ -4444,39 +4444,36 @@ function WorkoutScreen({ userId }: { userId: string }) {
                   return (
                     <DailyQuestCard
                       key={plan.id}
+                      testId={interval ? "today-interval-card" : "today-program-card"}
                       heroImage={questHeroSrc}
-                      exercises={names.map((name) => ({ name }))}
+                      exercises={names.map((name) => ({
+                        name,
+                        imageId: imageIdForAddedExercise({ name, isCustom: false }),
+                      }))}
                       quest={planQuestCopy({
                         interval,
                         title: plan.title,
                         detail: interval ? intervalPlanLine(names) : names.join(" · "),
                         streak: todayStatus?.streak ?? null,
                       })}
-                    >
-                      <button
-                        type="button"
-                        data-priority="primary"
-                        data-testid={interval ? "today-interval-start" : "today-program-start"}
-                        disabled={busy}
-                        onClick={() => {
-                          // 인터벌은 시트를 연다(바로 시작 안 함, 2026-08-25), 프로그램은 바로 시작
-                          void handleLoadPlan(plan, interval ? undefined : { startNow: true });
-                        }}
-                        className="relative mt-3.5 h-14 w-full rounded-full bg-accent text-[16px] font-black text-accent-ink disabled:opacity-60"
-                      >
-                        {interval ? "퀘스트 확인하기" : "퀘스트 시작하기"}
-                      </button>
-                      <StartOptions
-                        withQuest
-                        hasHistory={hasHistory}
-                        showInterval={!interval}
-                        showRoutine={(routines?.length ?? 0) > 0}
-                        onLoadRecent={() => startCustomList("past")}
-                        onApplySecondary={() => void applySuggestion("interval")}
-                        onAdd={() => startCustomList("hub")}
-                        onLoadRoutine={() => startCustomList("routine")}
-                      />
-                    </DailyQuestCard>
+                      busy={busy}
+                      onStart={() => {
+                        // 인터벌은 시트를 연다(바로 시작 안 함, 2026-08-25), 프로그램은 바로 시작
+                        void handleLoadPlan(plan, interval ? undefined : { startNow: true });
+                      }}
+                      options={
+                        <StartOptions
+                          withQuest
+                          hasHistory={hasHistory}
+                          showInterval={!interval}
+                          showRoutine={(routines?.length ?? 0) > 0}
+                          onLoadRecent={() => startCustomList("past")}
+                          onApplySecondary={() => void applySuggestion("interval")}
+                          onAdd={() => startCustomList("hub")}
+                          onLoadRoutine={() => startCustomList("routine")}
+                        />
+                      }
+                    />
                   );
                 })
             ) : (
@@ -4570,6 +4567,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
                 exercises={draft.exercises.map((exercise) => ({
                   name: exercise.name,
                   detail: draft.tabataMinutes ? `${draft.tabataMinutes}분 인터벌` : `${exercise.sets.length}세트`,
+                  imageId: imageIdForAddedExercise({ name: exercise.name, isCustom: exercise.isCustom }),
                 }))}
                 quest={dailyQuestCopy({
                   kind:
@@ -4585,30 +4583,24 @@ function WorkoutScreen({ userId }: { userId: string }) {
                     draft.suggestedForDayKey !== dayKey(new Date(), resolveTimeZone()),
                   focus: challengeFocus,
                 })}
-              >
-                <button
-                  type="button"
-                  data-priority="primary"
-                  onClick={() => {
-                    // 화면 전환: 카드는 내려가고 운동 목록 + 시작 버튼 화면이 된다
-                    setQuestListOpen(true);
-                    window.scrollTo({ top: 0 });
-                  }}
-                  className="relative mt-3.5 h-14 w-full rounded-full bg-accent text-[16px] font-black text-accent-ink"
-                >
-                  퀘스트 확인하기
-                </button>
-                <StartOptions
-                  withQuest
-                  hasHistory={hasHistory}
-                  showInterval
-                  showRoutine={(routines?.length ?? 0) > 0}
-                  onLoadRecent={() => startCustomList("past")}
-                  onApplySecondary={() => void applySuggestion("interval")}
-                  onAdd={() => startCustomList("hub")}
-                  onLoadRoutine={() => startCustomList("routine")}
-                />
-              </DailyQuestCard>
+                onStart={() => {
+                  // 화면 전환: 카드는 내려가고 운동 목록 + 시작 버튼 화면이 된다
+                  setQuestListOpen(true);
+                  window.scrollTo({ top: 0 });
+                }}
+                options={
+                  <StartOptions
+                    withQuest
+                    hasHistory={hasHistory}
+                    showInterval
+                    showRoutine={(routines?.length ?? 0) > 0}
+                    onLoadRecent={() => startCustomList("past")}
+                    onApplySecondary={() => void applySuggestion("interval")}
+                    onAdd={() => startCustomList("hub")}
+                    onLoadRoutine={() => startCustomList("routine")}
+                  />
+                }
+              />
             )}
 
           {/* 목록 화면에서 퀘스트 카드로 돌아가는 길 */}

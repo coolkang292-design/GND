@@ -1,76 +1,70 @@
-import Image from "next/image";
-import { QuestExercisePreview, type QuestPreviewItem } from "./quest-exercise-preview";
+import { Icon } from "@/components/ui/icon";
 import type { QuestCopy } from "@/lib/domain/daily-quest";
+import { QuestHero } from "./quest-hero";
+import { QuestTodayCard, type QuestPreviewItem } from "./quest-today-card";
+
+export type { QuestPreviewItem };
 
 /**
- * 오늘의 퀘스트 카드 — 도착 알림 + 클리어 혜택.
+ * 오늘의 퀘스트 카드 (시안 2026-11-07) — 배너 · 오늘의 운동 · 큰 시작 버튼 · 다른 방법.
  *
- * 표시 전용이다. 버튼은 부르는 쪽이 `children`으로 넣는다(빈 화면에서는 "담기",
- * 이미 세팅된 뒤에는 버튼 없음 — 아래 고정 시작 버튼이 그 일을 한다).
+ * 버튼은 **하나**다(`onStart`). 무엇을 하는지는 부르는 쪽이 정한다 — 운동이 담긴 화면에서는
+ * 계획 화면으로, 빈 화면에서는 퀘스트를 담고 계획 화면으로, 인터벌·프로그램 계획은 그 시작으로.
+ * 다른 방법 타일은 `options`로 받아 카드 **아래**에 둔다.
  */
 export function DailyQuestCard({
   quest,
-  children,
-  exercises,
   heroImage = null,
+  exercises,
+  startLabel = "퀘스트 시작하기",
+  onStart,
+  busy = false,
+  onMore,
+  options,
+  testId = "daily-quest-card",
 }: {
   quest: QuestCopy;
-  children?: React.ReactNode;
-  exercises?: QuestPreviewItem[];
-  /** 내 캐릭터(현재 단계·외형) — 빈 기록 화면 카드와 같은 자리·같은 방식 */
+  /** 내 캐릭터(현재 단계·외형) */
   heroImage?: string | null;
+  /** 오늘 담긴 운동 — 있으면 그림 칸으로 보인다. 없으면(빈 화면) 버튼만 */
+  exercises?: QuestPreviewItem[];
+  startLabel?: string;
+  onStart: () => void;
+  busy?: boolean;
+  /** `+N종 더보기` — 보통 시작 버튼과 같은 곳(계획 화면) */
+  onMore?: () => void;
+  /** 카드 아래 `다른 방법으로 시작하기` */
+  options?: React.ReactNode;
+  testId?: string;
 }) {
+  const start = (
+    <button
+      type="button"
+      data-priority="primary"
+      data-testid="quest-start"
+      disabled={busy}
+      onClick={onStart}
+      className="mt-4 flex h-16 w-full items-center justify-center gap-2.5 rounded-full bg-accent text-[19px] font-black text-accent-ink shadow-card active:bg-accent-press disabled:opacity-60"
+    >
+      {!busy && <Icon name="play" size={18} filled />}
+      {busy ? "처리 중…" : startLabel}
+    </button>
+  );
   return (
     <section
-      data-testid="daily-quest-card"
+      data-testid={testId}
       aria-label="오늘의 퀘스트"
-      className="relative rounded-card border border-accent/55 bg-accent-weak/30 p-4"
+      className="flex flex-col gap-3"
     >
-      {/* 내 캐릭터 — 제목·칩 오른쪽에만 상체를 깐다. 아래 운동 박스·버튼 뒤로는 내려오지 않는다 */}
-      {heroImage && (
-        <div
-          aria-hidden
-          data-testid="quest-character"
-          className="pointer-events-none absolute right-0 top-0 h-[150px] w-[42%] overflow-hidden rounded-tr-card"
-          style={{
-            // 왼쪽 가장자리를 투명하게 흘려 글자 쪽으로 번지지 않게 한다
-            WebkitMaskImage: "linear-gradient(to right, transparent, #000 45%)",
-            maskImage: "linear-gradient(to right, transparent, #000 45%)",
-          }}
-        >
-          <Image
-            src={heroImage}
-            alt=""
-            fill
-            sizes="(max-width: 768px) 42vw, 200px"
-            className="origin-top scale-[1.2] object-cover object-top"
-          />
-        </div>
+      <QuestHero quest={quest} heroImage={heroImage} />
+      {exercises && exercises.length > 0 ? (
+        <QuestTodayCard items={exercises} onMore={onMore ?? onStart}>
+          {start}
+        </QuestTodayCard>
+      ) : (
+        <div className="-mt-1">{start}</div>
       )}
-      <div className={`relative ${heroImage ? "max-w-[62%]" : ""}`}>
-      <p className="text-[11.5px] font-extrabold text-accent">{quest.eyebrow}</p>
-      <p className="mt-1 text-[17px] font-black leading-snug break-keep">
-        {quest.title}
-      </p>
-      <p className="mt-1 text-[12.5px] leading-snug break-keep text-muted">
-        {quest.lead}
-      </p>
-      {/* 혜택은 한 줄 칩이다 — 박스 목록은 화면을 길게 만들었다 (2026-11-06 "복잡해") */}
-      <ul className="mt-2.5 flex flex-wrap gap-1.5">
-        {quest.hooks.map((hook) => (
-          <li
-            key={hook}
-            className="rounded-full bg-surface/70 px-2.5 py-1 text-[11.5px] font-bold leading-snug"
-          >
-            {hook}
-          </li>
-        ))}
-      </ul>
-      </div>
-      {exercises && exercises.length > 0 && (
-        <QuestExercisePreview items={exercises} hideButton />
-      )}
-      {children}
+      {options}
     </section>
   );
 }

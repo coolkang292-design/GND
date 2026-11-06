@@ -57,19 +57,37 @@ export type QuestCopy = {
   hooks: string[];
 };
 
+/**
+ * 퀘스트 제목 (2026-11-07 사용자 지시 — "운동을 자극하는 문구로").
+ * ⚠️ 카드는 쉼표(", ")에서 두 줄로 나눠 **뒤쪽을 라임색**으로 그린다(`splitQuestTitle`) — 문구마다
+ *    쉼표가 하나 있어야 제목이 두 줄로 읽힌다. 기록·숫자를 약속하는 말은 쓰지 않는다(거짓 금지).
+ */
 const REPEAT_TITLES: string[] = [
-  "지난번 그 운동, 오늘 한 번 더!",
-  "어제의 나를 오늘 한 번 넘어봐요",
-  "이 퀘스트 하나면 오늘 하루 완성",
+  "오늘도 해낸다, 어제보다 강하게!",
+  "한 번 더 가자, 한계를 넘어!",
+  "지난번보다 더, 오늘의 나를 증명해!",
 ];
 const WALK_TITLES: string[] = [
-  "딱 10분 걷기, 오늘의 퀘스트",
-  "10분이면 퀘스트 클리어",
+  "딱 10분이면 끝, 몸을 깨워라!",
+  "발걸음 하나로, 오늘을 이겨라!",
 ];
 const INTERVAL_TITLES: string[] = [
-  "딱 4분이면 클리어!",
-  "4분 인터벌, 오늘의 퀘스트",
+  "딱 4분, 심장을 깨워라!",
+  "4분 불태우고, 오늘을 끝내자!",
 ];
+
+/**
+ * 제목을 카드의 두 줄로 나눈다 — 앞줄은 흰색, 뒷줄은 라임색.
+ * 쉼표(", ")가 있으면 거기서, 없으면 단어 수의 절반쯤에서 자른다. 한 단어면 뒷줄이 비다.
+ */
+export function splitQuestTitle(title: string): [string, string] {
+  const comma = title.indexOf(", ");
+  if (comma > 0) return [title.slice(0, comma + 1), title.slice(comma + 2)];
+  const words = title.split(" ");
+  if (words.length < 2) return [title, ""];
+  const mid = Math.ceil(words.length / 2);
+  return [words.slice(0, mid).join(" "), words.slice(mid).join(" ")];
+}
 
 /** 푸시 제목 — 알림이 오면 이 말이 먼저 보인다 */
 export const QUEST_PUSH_TITLE = "🎯 오늘의 퀘스트가 도착했어요";

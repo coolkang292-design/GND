@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { RecordEmptyState } from "./record-empty-state";
-import { dailyQuestCopy } from "@/lib/domain/daily-quest";
+import { dailyQuestCopy, splitQuestTitle } from "@/lib/domain/daily-quest";
 
 afterEach(cleanup);
 
@@ -11,7 +11,7 @@ const QUEST = dailyQuestCopy({ kind: "repeat", todayKey: "2026-11-06", streak: 2
 
 function tiles(container: HTMLElement) {
   return [...container.querySelectorAll("button")]
-    .filter((b) => b.className.includes("min-h-[92px]"))
+    .filter((b) => b.className.includes("min-h-[72px]"))
     .map((b) => (b.textContent ?? "").trim());
 }
 
@@ -89,7 +89,7 @@ describe("RecordEmptyState — 추천 배치 (시안 2026-11-06)", () => {
   });
 });
 
-describe("퀘스트 카드 — 한 줄 제목 · 칩 2개 · 버튼 1개", () => {
+describe("퀘스트 카드 — 두 줄 제목 · 칩 2개 · 큰 버튼 1개 (시안 2026-11-07)", () => {
   function renderQuest(over: Partial<React.ComponentProps<typeof RecordEmptyState>> = {}) {
     return render(
       <RecordEmptyState
@@ -107,24 +107,29 @@ describe("퀘스트 카드 — 한 줄 제목 · 칩 2개 · 버튼 1개", () =>
     );
   }
 
-  it("'오늘의 퀘스트가 도착했어요' · 한 줄 제목 · 설명 · 칩 2개", () => {
+  it("'🎯 오늘의 퀘스트' · 두 줄 제목(뒷줄 라임) · 칩 2개 — 설명 문장은 없다", () => {
     const { getByTestId } = renderQuest();
     const card = getByTestId("daily-quest-card");
-    expect(card.textContent).toContain("오늘의 퀘스트가 도착했어요");
-    expect(card.querySelector("h2")?.textContent).toBe("이 퀘스트 하나면 오늘 운동 완료");
-    expect(card.textContent).toContain("지난 운동을 바탕으로 추천했어요");
-    expect([...card.querySelectorAll("li")].map((l) => l.textContent)).toEqual([
+    expect(card.textContent).toContain("🎯 오늘의 퀘스트");
+    const [first, second] = splitQuestTitle(QUEST.title);
+    const h2 = card.querySelector("h2")!;
+    expect(h2.textContent).toBe(first + second);
+    expect(h2.querySelector("span")?.textContent).toBe(second);
+    expect(h2.querySelector("span")?.className).toContain("text-accent");
+    // 설명 문장(lead)은 더 이상 그리지 않는다 — 글자는 적고 크게
+    expect(card.textContent).not.toContain(QUEST.lead);
+    expect([...getByTestId("quest-hero").querySelectorAll("li")].map((l) => l.textContent)).toEqual([
       "⚡ 최대 +160 XP",
       "🔥 25일 연속",
     ]);
   });
 
-  it("주 버튼은 '퀘스트 확인하기' 하나 — 누르면 퀘스트를 담고 계획 화면으로 간다", () => {
+  it("주 버튼은 '퀘스트 시작하기' 하나 — 누르면 퀘스트를 담고 계획 화면으로 간다", () => {
     const onApply = vi.fn();
     renderQuest({ onApplySuggestion: onApply });
     const primary = screen.getAllByRole("button").filter((b) => b.getAttribute("data-priority") === "primary");
     expect(primary).toHaveLength(1);
-    expect(primary[0].textContent).toBe("퀘스트 확인하기");
+    expect(primary[0].textContent).toBe("퀘스트 시작하기");
     fireEvent.click(primary[0]);
     expect(onApply).toHaveBeenCalledTimes(1);
   });
@@ -152,18 +157,17 @@ describe("퀘스트 카드 — 한 줄 제목 · 칩 2개 · 버튼 1개", () =>
     expect(getByText("운동 계획").closest("button")!.getAttribute("data-priority")).toBe("primary");
   });
 
-  it("걷기 퀘스트: 제목이 '오늘 걷기 완료'", () => {
+  it("걷기 퀘스트: 걷기 제목이 두 줄로 나온다", () => {
     const walk = dailyQuestCopy({ kind: "walk", todayKey: "2026-11-06", streak: 0 });
     const { getByTestId } = renderQuest({ suggestionKind: "walk", quest: walk, hasHistory: false });
-    expect(getByTestId("daily-quest-card").querySelector("h2")?.textContent).toBe(
-      "이 퀘스트 하나면 오늘 걷기 완료",
-    );
+    const [first, second] = splitQuestTitle(walk.title);
+    expect(getByTestId("daily-quest-card").querySelector("h2")?.textContent).toBe(first + second);
   });
 
-  it("인터벌 퀘스트: 같은 '퀘스트 확인하기'이고 타일에 인터벌을 또 두지 않는다", () => {
+  it("인터벌 퀘스트: 같은 '퀘스트 시작하기'이고 타일에 인터벌을 또 두지 않는다", () => {
     const interval = dailyQuestCopy({ kind: "interval", todayKey: "2026-11-06", streak: 2 });
     const { getByRole, queryByText } = renderQuest({ suggestionKind: "interval", quest: interval });
-    expect(getByRole("button", { name: "퀘스트 확인하기" })).toBeTruthy();
+    expect(getByRole("button", { name: "퀘스트 시작하기" })).toBeTruthy();
     expect(queryByText("4분 인터벌")).toBeNull();
   });
 
@@ -223,7 +227,7 @@ describe("제안만 있는 호출(퀘스트 문구 없음)", () => {
         onApplySuggestion={() => {}}
       />,
     );
-    for (const name of ["퀘스트 확인하기", "지난번 그대로 담기", "10분 걷기 담기", "4분 인터벌 시작"]) {
+    for (const name of ["퀘스트 시작하기", "지난번 그대로 담기", "10분 걷기 담기", "4분 인터벌 시작"]) {
       expect(screen.queryByRole("button", { name })).toBeNull();
     }
   });
@@ -245,7 +249,7 @@ describe("퀘스트 카드의 내 캐릭터 (시안 단계 — 기록 화면에�
     const hero = getByTestId("quest-character");
     expect(hero.querySelector("img")).not.toBeNull();
     // 글자 영역을 좁혀 캐릭터와 겹치지 않게 한다
-    expect(getByTestId("daily-quest-card").innerHTML).toContain("max-w-[64%]");
+    expect(getByTestId("daily-quest-card").innerHTML).toContain("max-w-[68%]");
   });
 
   it("heroImage가 없으면 그림 없이 글자를 넓게 쓴다 (기록 화면의 현재 상태)", () => {
@@ -260,6 +264,6 @@ describe("퀘스트 카드의 내 캐릭터 (시안 단계 — 기록 화면에�
       />,
     );
     expect(container.querySelector("img")).toBeNull();
-    expect(getByTestId("daily-quest-card").innerHTML).not.toContain("max-w-[64%]");
+    expect(getByTestId("daily-quest-card").innerHTML).not.toContain("max-w-[68%]");
   });
 });

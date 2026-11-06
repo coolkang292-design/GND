@@ -1,21 +1,24 @@
 "use client";
 
-import Image from "next/image";
 import { Icon } from "@/components/ui/icon";
 import { UiIcon } from "@/components/ui-icon";
 import type { SuggestionKind } from "@/lib/domain/workout-suggestion";
 import type { QuestCopy } from "@/lib/domain/daily-quest";
+import { DailyQuestCard } from "./daily-quest-card";
+import { QuestHero } from "./quest-hero";
 
 /**
  * 등록된 운동이 0개일 때의 기록 화면 — "추천 배치" (시안 2026-11-06).
  *
- * **카드 하나**다. 위에서 아래로:
+ * 위에서 아래로 (시안 2026-11-07):
  *
- *   오늘의 퀘스트 · 한 줄 제목 · 한 줄 설명 · 칩(+XP · 연속) · [퀘스트 받기]
- *   ─────────────
+ *   퀘스트 배너(큰 캐릭터 · 두 줄 제목 · 칩) · [퀘스트 시작하기] (큰 버튼 하나)
  *   다른 방법으로 시작하기
  *   [지난 운동 · 그대로 담기] [4분 인터벌 · 바로 시작]
  *   [운동 계획 · 새로 만들기] [내 루틴 · 불러오기]
+ *
+ * 설명 문장은 없다 — 글자는 적고 크게 (사용자 지시 "텍스트가 너무 작고 많아").
+ * 버튼을 누르면 퀘스트를 담고 계획 화면으로 간다(부르는 쪽이 정한다).
  *
  * 예전에는 제안 카드 + `아직 추가된 운동이 없어요` 카드(그림·안내문·버튼 3개)가 따로
  * 있었다. 같은 말을 두 번 하는 화면이었다 — 둘 다 없앴다.
@@ -33,37 +36,28 @@ export function RecordEmptyState({
   suggestionKind = null,
   suggestionBody = "",
   quest = null,
+  /** 퀘스트 배너 오른쪽에 그릴 내 캐릭터 (현재 단계 · 외형). 없으면 그림 없이 */
   heroImage = null,
   onApplySuggestion,
   onApplySecondary,
 }: {
   /**
    * 완료한 운동이 하나라도 있나.
-   *
-   * ⚠️ 이력이 없는 사람에게 '지난 운동'을 띄우면 눌러도 빈 목록이다 —
-   * 막다른 길을 주는 대신 아예 안 보인다.
+   * 없으면 `지난 운동 불러오기`는 눌러 봐야 빈 목록이다 — 타일을 아예 안 낸다.
    */
   hasHistory: boolean;
+  /** 운동 계획(새로 만들기) — 선택 허브를 연다 */
   onAdd: () => void;
   onLoadRecent: () => void;
-  /**
-   * 내 루틴에서 담기 (사용자 지시 2026-08-13).
-   *
-   * ⚠️ 저장된 루틴이 **있을 때만** 보여 준다. 지난 운동과 같은 이유다 —
-   *    눌러도 빈 목록이면 막다른 길을 하나 더 주는 셈이다.
-   */
   onLoadRoutine?: () => void;
+  /** 저장한 루틴 수 — 0이면 `내 루틴` 타일을 안 낸다 */
   routineCount?: number;
-  /**
-   * 오늘의 제안 (2026-08-16). `null`이면 퀘스트 버튼을 안 그린다.
-   * 판정은 `pickSuggestionKind` — 알림과 **같은 함수**다.
-   */
+  /** 오늘의 퀘스트 종류 — 있으면 큰 시작 버튼이 선다 */
   suggestionKind?: SuggestionKind | null;
-  /** 퀘스트 문구가 없을 때(옛 호출)의 본문 — `suggestionCopy`가 준다 */
+  /** 퀘스트가 없는 날의 한 줄 안내 */
   suggestionBody?: string;
-  /** 오늘의 퀘스트 문구. 없으면(제안이 없는 날) 제목만 있는 카드다 */
+  /** 오늘의 퀘스트 문구 — 주면 퀘스트 카드, 없으면 시작 타일만 */
   quest?: QuestCopy | null;
-  /** 퀘스트 카드 오른쪽에 그릴 내 전신 캐릭터 (현재 단계 · 외형). 없으면 그림 없이 카드만 */
   heroImage?: string | null;
   onApplySuggestion?: () => void;
   /** 4분 인터벌 — 담기가 아니라 **시작**이다 */
@@ -74,93 +68,66 @@ export function RecordEmptyState({
   const showInterval = Boolean(onApplySecondary) && suggestionKind !== "interval";
   const showRoutine = Boolean(onLoadRoutine) && routineCount > 0;
 
+  const options = (
+    <StartOptions
+      withQuest={Boolean(quest)}
+      hasHistory={hasHistory}
+      showInterval={showInterval}
+      showRoutine={showRoutine}
+      primaryAdd={!hasQuestButton}
+      onLoadRecent={onLoadRecent}
+      onApplySecondary={onApplySecondary}
+      onAdd={onAdd}
+      onLoadRoutine={onLoadRoutine}
+    />
+  );
+
+  if (quest) {
+    return (
+      <div data-testid="record-start-card" className="flex flex-col gap-3">
+        {hasQuestButton ? (
+          <DailyQuestCard
+            quest={quest}
+            heroImage={heroImage}
+            onStart={onApplySuggestion!}
+            options={options}
+          />
+        ) : (
+          <>
+            <QuestHero quest={quest} heroImage={heroImage} />
+            {options}
+          </>
+        )}
+      </div>
+    );
+  }
+
+  /* ⚠️ 퀘스트는 **매일** 생긴다(제안이 없는 날도 걷기·지난 운동으로 채운다). 그래서
+     "제안 없는 날" 카드는 없다. 퀘스트 문구가 없는 때는 오늘 이미 계획이 있거나
+     운동을 마친 날뿐이고, 그때는 아래 시작 타일만 그린다. */
   return (
     <section
       data-testid="record-start-card"
       className="rounded-[22px] border border-line-strong bg-surface p-4 shadow-card"
     >
-      {quest ? (
-        <div
-          data-testid="daily-quest-card"
-          aria-label="오늘의 퀘스트"
-          role="group"
-          className="relative"
-        >
-          {/* 내 캐릭터 — 퀘스트 글자 영역(제목·칩) 오른쪽에만 상체를 깐다(현재 단계 · 외형).
-              아래 버튼·타일 뒤로 내려오지 않는다. 글자 쪽으로 번지지 않게 왼쪽을 카드 색으로
-              덮고, 그림이 없으면 글자만 넓게 쓴다. */}
-          {heroImage && (
-            <div
-              aria-hidden
-              data-testid="quest-character"
-              className="pointer-events-none absolute -right-4 -top-4 bottom-0 w-[46%] overflow-hidden rounded-tr-[22px]"
-            >
-              <Image
-                src={heroImage}
-                alt=""
-                fill
-                sizes="(max-width: 768px) 46vw, 220px"
-                className="origin-top scale-[1.2] object-cover object-top"
-              />
-              <span className="absolute inset-0 bg-gradient-to-r from-surface via-surface/50 to-transparent" />
-            </div>
-          )}
-          <div className={`relative ${heroImage ? "max-w-[64%]" : ""}`}>
-            <p className="text-[11.5px] font-extrabold text-accent">{quest.eyebrow}</p>
-            <h2 className="mt-1.5 text-[19px] font-black leading-snug tracking-tight break-keep">
-              {quest.headline.join(" ")}
-            </h2>
-            <p className="mt-1 text-[12.5px] leading-snug break-keep text-muted">{quest.lead}</p>
-            <ul className="mt-2.5 flex flex-wrap gap-1.5">
-              {quest.hooks.map((hook) => (
-                <li
-                  key={hook}
-                  className="rounded-full bg-surface-2 px-2.5 py-1 text-[11.5px] font-bold leading-snug"
-                >
-                  {hook}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      ) : (
-        /* ⚠️ 퀘스트는 **매일** 생긴다(제안이 없는 날도 걷기·지난 운동으로 채운다). 그래서
-           "제안 없는 날" 카드는 없다. 퀘스트 문구가 없는 때는 오늘 이미 계획이 있거나
-           운동을 마친 날뿐이고, 그때는 아래 시작 타일만 그린다. 옛 `아직 추가된 운동이
-           없어요` 그림·안내문은 되살리지 않는다. */
-        suggestionBody && (
-          <p className="text-[12.5px] leading-5 text-muted">{suggestionBody}</p>
-        )
+      {suggestionBody && (
+        <p className="mb-3 text-[14px] leading-5 text-muted">{suggestionBody}</p>
       )}
-
       {hasQuestButton && (
         <button
           type="button"
           data-priority="primary"
           onClick={onApplySuggestion}
-          className="relative mt-3.5 h-14 w-full rounded-full bg-accent text-[16px] font-black text-accent-ink"
+          className="mb-4 h-14 w-full rounded-full bg-accent text-[16px] font-black text-accent-ink"
         >
-          {quest
-            ? "퀘스트 확인하기"
-            : suggestionKind === "walk"
-              ? "10분 걷기 담기"
-              : suggestionKind === "repeat"
-                ? "지난번 그대로 담기"
-                : "4분 인터벌 시작"}
+          {suggestionKind === "walk"
+            ? "10분 걷기 담기"
+            : suggestionKind === "repeat"
+              ? "지난번 그대로 담기"
+              : "4분 인터벌 시작"}
         </button>
       )}
-
-      <StartOptions
-        withQuest={Boolean(quest)}
-        hasHistory={hasHistory}
-        showInterval={showInterval}
-        showRoutine={showRoutine}
-        primaryAdd={!hasQuestButton}
-        onLoadRecent={onLoadRecent}
-        onApplySecondary={onApplySecondary}
-        onAdd={onAdd}
-        onLoadRoutine={onLoadRoutine}
-      />
+      {options}
     </section>
   );
 }
@@ -192,11 +159,8 @@ export function StartOptions({
   onLoadRoutine?: () => void;
 }) {
   return (
-    <div
-      data-testid="start-options"
-      className={`relative ${withQuest ? "mt-4 border-t border-line pt-3" : ""}`}
-    >
-      <h3 className="mb-2 text-[12.5px] font-bold text-muted">
+    <div data-testid="start-options" className="relative">
+      <h3 className="mb-2.5 px-1 text-[16px] font-extrabold">
         {withQuest ? "다른 방법으로 시작하기" : "운동 시작하기"}
       </h3>
       <div className="grid grid-cols-2 gap-2">
@@ -256,14 +220,14 @@ function Tile({
       type="button"
       data-priority={primary ? "primary" : "secondary"}
       onClick={onClick}
-      className={`flex min-h-[92px] flex-col justify-between rounded-2xl border bg-surface-2/60 p-3 text-left ${
+      className={`flex min-h-[72px] items-center gap-3 rounded-2xl border bg-surface p-3.5 text-left ${
         primary ? "border-accent/60" : "border-line"
       }`}
     >
-      <span className="flex h-6 items-center">{icon}</span>
-      <span>
-        <span className="block text-[15px] font-extrabold leading-tight">{title}</span>
-        <span className="mt-0.5 block text-[12px] leading-tight text-muted">{sub}</span>
+      <span className="flex h-9 w-9 flex-none items-center justify-center">{icon}</span>
+      <span className="min-w-0">
+        <span className="block text-[16px] font-extrabold leading-tight">{title}</span>
+        <span className="mt-0.5 block text-[13px] leading-tight text-muted">{sub}</span>
       </span>
     </button>
   );
