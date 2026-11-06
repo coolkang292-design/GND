@@ -4,6 +4,9 @@ import Image from "next/image";
 import { CharacterImage } from "@/components/character-image";
 import { useEffect, useRef, useState } from "react";
 import { Avatar } from "@/components/avatar";
+import { ProfileAvatar } from "@/components/profile-avatar";
+import { evolutionAvatarSrc } from "@/lib/domain/character-variant";
+import { EvolutionStatusCard } from "@/components/profile/evolution-status-card";
 import { ImageLightbox } from "@/components/image-lightbox";
 import { UiIcon } from "@/components/ui-icon";
 import { uploadAvatarPhoto } from "@/lib/avatar";
@@ -76,6 +79,7 @@ export function MemberProfileBody({
   stats,
   streak,
   editSlot,
+  evolutionSlot,
   calendarSlot,
 }: {
   profile: CrewMemberProfile;
@@ -92,6 +96,8 @@ export function MemberProfileBody({
    *    셸이 정한다(넣는 곳도 `onAvatarChanged` 하나로 갈린다).
    */
   editSlot?: React.ReactNode;
+  /** 내 프로필일 때만 — 다음 진화 현황(쉬운 말 진행바). 남의 시트에는 넘기지 않는다. */
+  evolutionSlot?: React.ReactNode;
   /** 크루 공개 운동 캘린더. 권한 판정은 시트 셸에서 하고 본문은 표시만 한다. */
   calendarSlot?: React.ReactNode;
 }) {
@@ -151,6 +157,11 @@ export function MemberProfileBody({
       {/* 편집 자리 — 레벨 사진 바로 밑. 소개보다도 위다: 소개가 비어 있을 때
           "어디서 쓰지?"가 되면 안 된다 (2026-08-31 사용자 화면 확인). */}
       {editSlot && <div className="mt-3.5">{editSlot}</div>}
+
+      {/* 다음 진화 현황 — 내 프로필에만. 레벨 바로 밑에서 "다음에 뭘 해야 하나"를 답한다 */}
+      {evolutionSlot && (
+        <div className="mt-3.5 flex flex-col gap-3">{evolutionSlot}</div>
+      )}
 
       {/*
         소개 · SNS (0085) — 레벨·성과보다 **앞**이다.
@@ -402,6 +413,11 @@ export function MemberProfileSheet({
    * 테스트가 통과한다** — 2026-08-28에 일부러 고장 내 보고 실제로 그랬다.
    * 안전장치를 늘리는 대신 진실을 하나로 뒀다.
    */
+  // 사진이 없을 때 그리는 진화 캐릭터 얼굴 — 조회 전(profile 없음)엔 기존 아바타
+  const faceSrc = profile
+    ? evolutionAvatarSrc(profile.currentStage, profile.characterVariant)
+    : null;
+
   const avatarPhotoUrl = (() => {
     const source = avatarSource(avatarUrl);
     return source.kind === "photo" ? source.url : null;
@@ -610,10 +626,11 @@ export function MemberProfileSheet({
                 aria-label="프로필 사진 바꾸기"
                 className="relative flex-none rounded-full disabled:opacity-60"
               >
-                <Avatar
+                <ProfileAvatar
                   src={avatarUrl}
+                  faceSrc={faceSrc}
                   /* 버튼의 접근 가능한 이름이 이미 말한다 — 채우면 두 번 읽힌다 */
-                  className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border border-accent/60 bg-surface-2 text-2xl"
+                  className="flex h-[52px] w-[52px] items-center justify-center overflow-hidden rounded-full border-2 border-accent bg-surface-2 text-2xl"
                 />
                 <span
                   aria-hidden
@@ -658,7 +675,7 @@ export function MemberProfileSheet({
               <Avatar
                 src={avatarUrl}
                 /* 버튼의 접근 가능한 이름이 이미 말한다 — 채우면 두 번 읽힌다 */
-                className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border border-line bg-surface-2 text-2xl"
+                className="flex h-[52px] w-[52px] items-center justify-center overflow-hidden rounded-full border-2 border-accent bg-surface-2 text-2xl"
               />
               {/* ⚠️ 칩을 지우지 마라. 내 시트의 카메라 칩과 **같은 자리·같은 19px**
                   이고, 이유도 같다 — 표시가 없으면 눌린다는 것을 알 방법이 아예 없다.
@@ -682,10 +699,11 @@ export function MemberProfileSheet({
               </span>
             </button>
           ) : (
-            <Avatar
+            <ProfileAvatar
               src={avatarUrl}
+              faceSrc={faceSrc}
               label={`${nickname}님 프로필 사진`}
-              className="flex h-11 w-11 flex-none items-center justify-center overflow-hidden rounded-full bg-surface-2 text-2xl"
+              className="flex h-[52px] w-[52px] flex-none items-center justify-center overflow-hidden rounded-full border-2 border-accent bg-surface-2 text-2xl"
             />
           )}
           <p id="member-profile-title" className="text-lg font-extrabold">
@@ -804,6 +822,15 @@ export function MemberProfileSheet({
             stats={stats}
             streak={streak}
             editSlot={onAvatarChanged ? editSlot : undefined}
+            evolutionSlot={
+              onAvatarChanged ? (
+                <EvolutionStatusCard
+                  userId={userId}
+                  totalXp={profile.totalXp}
+                  currentStage={profile.currentStage}
+                />
+              ) : undefined
+            }
             calendarSlot={(crewKnown === true || Boolean(onAvatarChanged))
               ? <MemberWorkoutCalendar key={userId} userId={userId} includePrivate={Boolean(onAvatarChanged)} />
               : undefined}

@@ -10,7 +10,7 @@ describe("PointSummary", () => {
     expect(html).toContain("12,840");
     expect(html).toContain("×4");
     expect(html).toContain("27일");
-    expect(html).toContain("GND 포인트");
+    expect(html).toContain("개노답 챌린지 포인트");
   });
 
   it("불꽃 구간별 배수를 맞게 계산한다 — SQL point_multiplier와 같아야 한다", () => {

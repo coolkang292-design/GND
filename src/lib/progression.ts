@@ -142,6 +142,8 @@ export interface CrewMemberProfile {
   currentStage: number;
   stageName: string;
   characterPath: string;
+  /** 이 사람의 캐릭터 외형 — 프로필 얼굴 아바타 경로를 고른다 */
+  characterVariant: CharacterVariant;
   nextLevelRequiredXp: number | null;
   xpToNextLevel: number;
   levelProgressPercent: number;
@@ -211,6 +213,7 @@ export async function getCrewMemberProfile(
     currentStage: p.currentStageIndex,
     stageName: p.stageName,
     characterPath: characterSrc(p.characterPath, variant),
+    characterVariant: variant,
     nextLevelRequiredXp: p.nextLevelRequiredXp,
     xpToNextLevel: p.xpToNextLevel,
     levelProgressPercent: p.percent,

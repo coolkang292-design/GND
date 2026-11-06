@@ -313,7 +313,7 @@ export function CoachCard({
            (2026-01 시행)의 생성형 AI 결과물 고지다. 머리글에서 뺀 대신 여기 남긴다.
       */}
       <p id="coach-card-title" className="flex items-center gap-1.5 text-xs font-extrabold text-accent">
-        <span aria-hidden>📊</span> GND 퍼포먼스 리포트
+        <span aria-hidden>📊</span> 개노답 챌린지 퍼포먼스 리포트
         <span className="font-bold text-faint">· 내 기록 기준</span>
       </p>
 

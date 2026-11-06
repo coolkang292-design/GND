@@ -8,7 +8,7 @@ import type { PeriodRewards } from "@/lib/domain/challenge-report";
  */
 export function RewardsRow({ r }: { r: PeriodRewards }) {
   const tiles: { key: string; icon: IconName; title: string; value: string; isNew: boolean }[] = [
-    { key: "points", icon: "spark", title: "GND 포인트", value: `+${r.pointsEarned.toLocaleString()}`, isNew: false },
+    { key: "points", icon: "spark", title: "개노답 챌린지 포인트", value: `+${r.pointsEarned.toLocaleString()}`, isNew: false },
     { key: "badges", icon: "award", title: "배지", value: `${r.badgeCount}개`, isNew: r.badgeCount > 0 },
     { key: "xp", icon: "level", title: "경험치", value: `+${r.xpGained.toLocaleString()} XP`, isNew: false },
   ];

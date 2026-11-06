@@ -9,6 +9,7 @@ export {
   CHARACTER_NAMES,
   CHARACTER_VARIANTS,
   characterSrc,
+  evolutionAvatarSrc,
   normalizeCharacterVariant,
   type CharacterVariant,
 } from "@/lib/domain/character-variant";

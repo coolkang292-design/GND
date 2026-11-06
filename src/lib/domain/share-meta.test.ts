@@ -71,7 +71,7 @@ describe("challengeShareMeta", () => {
 describe("friendInviteShareMeta", () => {
   it("친구 코드면 초대자 닉네임을 말한다", () => {
     expect(friendInviteShareMeta({ inviterNickname: "민수" }).title).toBe(
-      "민수님이 GND 친구로 초대했어요",
+      "민수님이 개노답 챌린지 친구로 초대했어요",
     );
   });
 
@@ -84,7 +84,7 @@ describe("friendInviteShareMeta", () => {
   });
 
   it("아무것도 못 찾아도 제목이 비지 않는다", () => {
-    expect(friendInviteShareMeta({}).title).toBe("GND에 초대받았어요");
+    expect(friendInviteShareMeta({}).title).toBe("개노답 챌린지에 초대받았어요");
   });
 
   /**

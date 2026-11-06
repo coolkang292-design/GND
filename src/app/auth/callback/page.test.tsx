@@ -194,7 +194,7 @@ describe("/auth/callback — 오류를 삼키지 않는다", () => {
     );
     render(<AuthCallbackPage />);
     await waitFor(() =>
-      expect(screen.getByText(/이미 다른 GND 계정에 연결/)).not.toBeNull(),
+      expect(screen.getByText(/이미 다른 개노답 챌린지 계정에 연결/)).not.toBeNull(),
     );
     expect(screen.getByText(/기록은 옮겨지지 않아요/)).not.toBeNull();
     expect(assign).not.toHaveBeenCalled();
@@ -248,7 +248,7 @@ describe("/auth/callback — 오류 화면에 가두지 않는다", () => {
     setUrl("?error=server_error&error_code=identity_already_exists");
     render(<AuthCallbackPage />);
 
-    const link = await screen.findByRole("link", { name: "GND로 돌아가기" });
+    const link = await screen.findByRole("link", { name: "개노답 챌린지로 돌아가기" });
     expect(link.getAttribute("href")).toBe("/record");
   });
 });

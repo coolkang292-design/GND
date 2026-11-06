@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   //    못 가져와 **태그는 있는데 그림만 없는** 카드가 된다.
   metadataBase: new URL(siteUrl()),
   title: "GND",
-  description: "친구 운동 챌린지 — GND 탈출하자",
+  description: "친구 운동 챌린지 — 개노답 탈출하자",
   manifest: "/manifest.webmanifest",
   icons: { apple: [{ url: "/icons/gnd-monogram-180.png", sizes: "180x180", type: "image/png" }] },
   appleWebApp: {

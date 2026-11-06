@@ -235,9 +235,9 @@ describe("identityError — 실패 갈래 (설계 §5.5)", () => {
    * ⚠️ "기록이 옮겨지지 않는다"를 반드시 말해야 한다. 이 말이 없으면 사용자는
    * 계정이 지켜진 줄 알고 브라우저를 지운다 — 그 순간 기록이 사라진다.
    */
-  it("이미 다른 GND 계정에 붙은 신원이면 기록이 안 옮겨진다고 말한다", () => {
+  it("이미 다른 개노답 챌린지 계정에 붙은 신원이면 기록이 안 옮겨진다고 말한다", () => {
     const msg = identityError(new Error("identity_already_exists"));
-    expect(msg).toContain("이미 다른 GND 계정");
+    expect(msg).toContain("이미 다른 개노답 챌린지 계정");
     expect(msg).toContain("옮겨지지 않아요");
   });
 
@@ -358,7 +358,7 @@ describe("linkFailureCode", () => {
   it("⚠️ identityError와 같은 순서로 판정한다 — 둘이 갈리면 안 된다", () => {
     // 사람 문장과 집계 코드가 같은 원인을 가리켜야 한다
     const e = new Error("identity_already_exists");
-    expect(identityError(e)).toContain("이미 다른 GND 계정");
+    expect(identityError(e)).toContain("이미 다른 개노답 챌린지 계정");
     expect(linkFailureCode(e)).toBe("identity_already_exists");
   });
 

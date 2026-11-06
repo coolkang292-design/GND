@@ -134,10 +134,10 @@ export function friendInviteShareMeta(input: {
   const group = cleanChallengeName(input.groupName);
 
   const title = who
-    ? `${who}님이 GND 친구로 초대했어요`
+    ? `${who}님이 개노답 챌린지 친구로 초대했어요`
     : group
       ? `${group} 크루에 초대받았어요`
-      : "GND에 초대받았어요";
+      : "개노답 챌린지에 초대받았어요";
 
   return {
     title,

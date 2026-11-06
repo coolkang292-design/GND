@@ -738,7 +738,7 @@ export function ProgramDetail({
       <div className="overflow-hidden rounded-[28px] border border-line bg-surface shadow-card">
         <ProgramCover program={program} featured />
         <div className="p-5">
-          <p className="text-[11px] font-extrabold tracking-[0.08em] text-accent">GND 공식 프로그램</p>
+          <p className="text-[11px] font-extrabold tracking-[0.08em] text-accent">개노답 챌린지 공식 프로그램</p>
           <h1 className="mt-1.5 text-2xl font-black leading-8 text-text">{program.eyebrow}</h1>
           <p className="mt-1 text-sm font-bold text-muted">{program.title}</p>
         </div>

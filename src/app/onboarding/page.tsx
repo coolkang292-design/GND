@@ -419,7 +419,7 @@ export default function OnboardingPage() {
                   ⚠️ 두 줄 모두 **한 줄에 들어가는 길이**로 유지하라. 넘치면 제목이
                   3줄이 되면서 사진 위 인물을 덮는다. */}
               <Title
-                white={challengeCode ? "챌린지에 초대받았어요" : "GND 탈출 게임 시작!"}
+                white={challengeCode ? "챌린지에 초대받았어요" : "개노답 챌린지 시작!"}
                 lime={challengeCode ? "닉네임만 정하면 참가해요" : "닉네임부터 정하세요"}
               />
               <p className="relative mt-3 text-[14px] text-text/85">
@@ -552,7 +552,7 @@ export default function OnboardingPage() {
           <p className="mt-1.5 text-[14px] text-muted">
             {doneInfo.mode === "friend"
               ? `${doneInfo.nickname}님과 서로의 기록을 보고 콕 찌를 수 있어요.`
-              : `이제 "${doneInfo.crewName}"의 GND 챌린지에 함께해요. 각자 목표를 세우면 시작!`}
+              : `이제 "${doneInfo.crewName}"의 개노답 챌린지에 함께해요. 각자 목표를 세우면 시작!`}
           </p>
 
           <div className="mt-7">

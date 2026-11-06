@@ -26,6 +26,7 @@ function profile(over: Partial<CrewMemberProfile> = {}): CrewMemberProfile {
     currentStage: 4,
     stageName: "꾸준러",
     characterPath: "/characters/char-4.png",
+    characterVariant: "male",
     nextLevelRequiredXp: 7600,
     xpToNextLevel: 380,
     levelProgressPercent: 52.5,
@@ -169,10 +170,10 @@ describe("MemberProfileBody — 이력·누적 (0081)", () => {
     );
     expect(html).toContain("이력");
     expect(html).toContain("Lv.17 달성");
-    expect(html).toContain("GND 시작");
+    expect(html).toContain("개노답 챌린지 시작");
     expect(html).toContain("어제의 나를 이겼개"); // 배지 이름
     // 최신(레벨업 8/10)이 가입(7/19)보다 앞에 온다
-    expect(html.indexOf("Lv.17 달성")).toBeLessThan(html.indexOf("GND 시작"));
+    expect(html.indexOf("Lv.17 달성")).toBeLessThan(html.indexOf("개노답 챌린지 시작"));
   });
 
   it("이력이 하나도 없으면 이력 블록을 안 그린다", () => {

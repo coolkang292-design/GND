@@ -206,9 +206,9 @@ export function InviteSheet({
             </p>
           )}
           <p className="mt-1.5 text-[11px] text-muted">
-            <b className="text-text">이미 GND를 쓰는 사람</b>은 링크로 참가해도 서로
+            <b className="text-text">이미 개노답 챌린지를 쓰는 사람</b>은 링크로 참가해도 서로
             크루가 되지 않아요. 이름과 랭킹은 이 챌린지 안에서만 보여요.{" "}
-            <b className="text-text">GND가 처음인 사람</b>은 나와 친구가 돼요.
+            <b className="text-text">개노답 챌린지가 처음인 사람</b>은 나와 친구가 돼요.
           </p>
           {message && (
             <p className="mt-2 text-[11px] font-bold text-accent">{message}</p>
@@ -474,9 +474,9 @@ export function InviteSheet({
           </p>
         )}
         <p className="mt-1.5 text-[11px] text-muted">
-          <b className="text-text">이미 GND를 쓰는 사람</b>은 링크로 참가해도 서로
+          <b className="text-text">이미 개노답 챌린지를 쓰는 사람</b>은 링크로 참가해도 서로
           크루가 되지 않아요. 이름과 랭킹은 이 챌린지 안에서만 보여요.{" "}
-          <b className="text-text">GND가 처음인 사람</b>은 나와 친구가 돼요.
+          <b className="text-text">개노답 챌린지가 처음인 사람</b>은 나와 친구가 돼요.
         </p>
       </div>
 

@@ -195,7 +195,7 @@ export function identityError(e: unknown): string {
   const msg = e instanceof Error ? e.message : String(e);
 
   if (/identity_already_exists|already.*linked|identity is already/i.test(msg)) {
-    return "이 계정은 이미 다른 GND 계정에 연결돼 있어요. 그 계정으로 로그인해 주세요 — 지금 기록은 옮겨지지 않아요.";
+    return "이 계정은 이미 다른 개노답 챌린지 계정에 연결돼 있어요. 그 계정으로 로그인해 주세요 — 지금 기록은 옮겨지지 않아요.";
   }
   // 설정(§5.3의 6단계)이 안 된 것이지 사용자 잘못이 아니다. 사용자 문구로
   // 뭉개면 원인을 못 찾는다 — 개발자가 알아볼 말을 남긴다.
