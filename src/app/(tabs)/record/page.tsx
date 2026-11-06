@@ -1069,6 +1069,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
   }
 
   async function pushPlanNow() {
+    // 내 방법으로 고른 날은 오늘 계획에 합치지 않는다 (퀘스트·계획과 분리)
+    if (customTodayRef.current) return;
     const d = draftRef.current;
     const push = decidePlanPush(d, planSyncMark());
     if (push.kind === "none") return;
@@ -1200,6 +1202,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
       : null;
     setTodayPlanExists(todayPlans.length > 0);
     setTodayPlans(todayPlans);
+
+    // 내 방법으로 고른 날은 계획을 목록에 다시 채우지 않는다 — 카드(`todayPlans`)만 갱신했다
+    if (customTodayRef.current) return;
 
     const pull = decidePlanPull({
       draft: d,
@@ -1781,24 +1786,28 @@ function WorkoutScreen({ userId }: { userId: string }) {
    *   **항상 명시적으로 덮어쓴다** — 기본값 `null`이라 옛 값이 남을 수 없다.
    */
   /**
-   * 퀘스트 카드 아래 다른 타일을 고르면 **앱이 자동으로 담아 둔 목록은 비운다** (사용자 지시
-   * 2026-11-07 — "다른 타일을 고르면 그 타일에 맞게 운동을 고르게"). 안 비우면 고른 운동 위에
-   * 자동 목록이 섞여 어느 쪽이 내 선택인지 알 수 없다.
+   * 퀘스트 카드 아래 **다른 방법 타일**을 고르면 퀘스트와 분리된 새 목록으로 시작한다 (사용자 지시
+   * 2026-11-07). 퀘스트 목록이든, 내가 건드려 오늘 계획에 묶인 목록이든 비운다.
    *
-   * ⚠️ **기계가 담은 목록만** 비운다(`suggestedForDayKey`가 오늘). 내가 짠 계획·달력 계획이 묶인
-   *    목록은 건드리지 않는다 — 지우면 계획과의 연결이 끊긴다.
+   * ⚠️ **오늘 계획(달력 행)은 지우지 않는다.** 목록과의 연결만 끊는다 — 달력에는 그대로 남는다.
+   * ⚠️ 비운 목록에 계획이 다시 채워지거나(`load`) 새로 고른 운동이 계획에 합쳐지는(`absorb`) 일을
+   *    막으려고 이 날은 계획 자동 저장·불러오기를 끈다(`customToday`).
    */
-  function dropSuggestedList() {
+  function startCustomList(mode: "hub" | "past" | "routine") {
     const d = draftRef.current;
     if (active || d.startedAtMs !== null) return;
-    if (d.suggestedForDayKey !== dayKey(new Date(), resolveTimeZone())) return;
+    setCustomMode(true);
     setDraft((current) => ({
       ...current,
       exercises: [],
+      scheduledPlanId: null,
       sourceSessionId: null,
       effortMessage: null,
+      program: null,
+      tabataMinutes: null,
       suggestedForDayKey: null,
     }));
+    void openExercisePicker(mode);
   }
 
   async function openExercisePicker(
@@ -3599,6 +3608,30 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const questHeroSrc = useMyCharacterFullSrc();
   // 퀘스트 카드 아래 운동 목록(준비·팁·운동 카드)을 펼쳤나 — 카드가 떠 있을 때만 접혀 있다
   const [questListOpen, setQuestListOpen] = useState(false);
+  /**
+   * "내 방법으로 시작" 모드 (사용자 지시 2026-11-07 — "퀘스트 카드와 아래 타일은 분리해서").
+   * 타일로 직접 고른 날은 퀘스트도 오늘 계획도 건드리지 않는다: 계획과 주고받는 자동 저장·불러오기를
+   * 끄고, 퀘스트 카드는 숨긴다. 켜진 값은 그날 안에서 기억한다(새로고침해도 유지).
+   */
+  const customStorageKey = `gnd-quest-custom:${userId}:${dayKey(new Date(), resolveTimeZone())}`;
+  const [customToday, setCustomToday] = useState<boolean>(() => {
+    try {
+      return window.localStorage.getItem(customStorageKey) === "1";
+    } catch {
+      return false; // 못 읽으면 꺼진 것으로
+    }
+  });
+  const customTodayRef = useRef(customToday);
+  function setCustomMode(on: boolean) {
+    customTodayRef.current = on;
+    setCustomToday(on);
+    try {
+      if (on) window.localStorage.setItem(customStorageKey, "1");
+      else window.localStorage.removeItem(customStorageKey);
+    } catch {
+      /* 저장소를 못 써도 이 화면에서는 동작한다 */
+    }
+  }
   useEffect(() => {
     if (questAutoRef.current) return;
     // 알림(`?suggest=1`)으로 들어왔으면 위 (2)번 경로가 이미 담는다 — 여기서 또 담으면
@@ -4208,7 +4241,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
    * 목록에 담겨 "내 계획"으로, 없으면 지난 기록으로 자동 세팅한 목록이 카드가 된다.
    * ⚠️ 접을 때는 `hidden`으로 **그리기만 막는다** — 언마운트하면 입력 중이던 세트가 사라진다.
    */
-  const questCardShown = draft.exercises.length > 0 && !active && !didWorkoutToday;
+  const questCardShown =
+    !customToday && draft.exercises.length > 0 && !active && !didWorkoutToday;
   const questListCollapsed = questCardShown && !questListOpen;
   // 퀘스트 카드가 떠 있을 땐 카드의 [퀘스트 시작]이 시작이다 — 하단 고정 버튼은 목록 화면에서만
   const fixedStartVisible = showFixedStart && !questListCollapsed;
@@ -4363,9 +4397,14 @@ function WorkoutScreen({ userId }: { userId: string }) {
           {isEmpty && (
             <RecordEmptyState
               hasHistory={hasHistory}
-              onAdd={() => void openExercisePicker("hub")}
-              onLoadRecent={() => void openExercisePicker("past")}
-              onLoadRoutine={() => void openExercisePicker("routine")}
+              // 퀘스트가 있는 날은 타일이 퀘스트와 분리된 내 목록이다. 퀘스트가 없는 날은 그대로
+              onAdd={() => (questKind ? startCustomList("hub") : void openExercisePicker("hub"))}
+              onLoadRecent={() =>
+                questKind ? startCustomList("past") : void openExercisePicker("past")
+              }
+              onLoadRoutine={() =>
+                questKind ? startCustomList("routine") : void openExercisePicker("routine")
+              }
               routineCount={routines?.length ?? 0}
               suggestionKind={questKind}
               heroImage={questHeroSrc}
@@ -4392,7 +4431,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
               }
               onApplySuggestion={() => {
                 if (!questKind) return;
-                // 담고 나면 바로 목록(운동 계획) 화면이다 — 카드는 거치지 않는다
+                // 퀘스트를 받으면 내 방법 모드를 끄고(계획과 다시 주고받는다), 담은 뒤 바로 목록 화면이다
+                setCustomMode(false);
                 setQuestListOpen(true);
                 void applySuggestion(questKind);
               }}
@@ -4440,19 +4480,10 @@ function WorkoutScreen({ userId }: { userId: string }) {
                   hasHistory={hasHistory}
                   showInterval
                   showRoutine={(routines?.length ?? 0) > 0}
-                  onLoadRecent={() => {
-                    dropSuggestedList();
-                    void openExercisePicker("past");
-                  }}
+                  onLoadRecent={() => startCustomList("past")}
                   onApplySecondary={() => void applySuggestion("interval")}
-                  onAdd={() => {
-                    dropSuggestedList();
-                    void openExercisePicker("hub");
-                  }}
-                  onLoadRoutine={() => {
-                    dropSuggestedList();
-                    void openExercisePicker("routine");
-                  }}
+                  onAdd={() => startCustomList("hub")}
+                  onLoadRoutine={() => startCustomList("routine")}
                 />
               </DailyQuestCard>
             )}
