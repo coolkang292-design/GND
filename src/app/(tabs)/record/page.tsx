@@ -246,6 +246,7 @@ import { DailyQuestCard } from "@/components/record/daily-quest-card";
 import { dailyQuestCopy, shouldAutoSetQuest } from "@/lib/domain/daily-quest";
 import { shouldShowTodayCards } from "@/lib/domain/record-layout";
 import { pickChallengeExercises, pickChallengeFocus } from "@/lib/challenge-quest";
+import { useMyCharacterFullSrc } from "@/lib/character-variant";
 import {
   cancelWorkout,
   clearDraft,
@@ -3573,6 +3574,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
   //     하루 한 번(이 기기), 목록이 비었고 운동 전일 때만. 달력 계획은 만들지 않는다
   //     (`decidePlanPush`가 제안 draft를 쓰지 않는다). 규칙은 `shouldAutoSetQuest`.
   const questAutoRef = useRef(false);
+  // 퀘스트 카드 오른쪽에 그릴 내 캐릭터 (현재 단계 · 외형). 못 읽으면 null → 그림 없이 카드만.
+  const questHeroSrc = useMyCharacterFullSrc();
   useEffect(() => {
     if (questAutoRef.current) return;
     // 알림(`?suggest=1`)으로 들어왔으면 위 (2)번 경로가 이미 담는다 — 여기서 또 담으면
@@ -4329,6 +4332,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
               onLoadRoutine={() => void openExercisePicker("routine")}
               routineCount={routines?.length ?? 0}
               suggestionKind={questKind}
+              heroImage={questHeroSrc}
               quest={
                 questKind
                   ? dailyQuestCopy({
