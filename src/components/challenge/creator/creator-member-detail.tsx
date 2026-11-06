@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Avatar } from "@/components/avatar";
+import { UserAvatar } from "@/components/user-avatar";
 import { CheerActions } from "@/components/feed/cheer-actions";
 import { Icon, type IconName } from "@/components/ui/icon";
 import type { CreatorMemberDetailView } from "@/lib/creator-data";
@@ -50,7 +50,7 @@ export function CreatorMemberDetailScreen({
       </header>
 
       <section className={`${card} flex items-center gap-4 p-4`}>
-        <Avatar src={member.avatarUrl} label={member.nickname} className="grid h-[72px] w-[72px] shrink-0 place-items-center overflow-hidden rounded-full bg-surface-2 text-[34px]" />
+        <UserAvatar userId={member.id} src={member.avatarUrl} label={member.nickname} className="grid h-[72px] w-[72px] shrink-0 place-items-center overflow-hidden rounded-full bg-surface-2 text-[34px]" />
         <div className="min-w-0 flex-1">
           <p className="truncate text-[20px] font-black">{member.nickname}</p>
           <p className="mt-0.5 text-[12.5px] text-muted">

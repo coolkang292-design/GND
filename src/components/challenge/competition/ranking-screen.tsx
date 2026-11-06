@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Avatar } from "@/components/avatar";
+import { UserAvatar } from "@/components/user-avatar";
 import { Icon } from "@/components/ui/icon";
 import { ResultHeader } from "@/components/challenge/result/result-header";
 import { dailyTotals } from "@/lib/domain/challenge-report";
@@ -199,7 +199,7 @@ function ComparisonCard({
       <h3 className="mb-3 text-[15px] font-extrabold">{rival.rank}위와 비교</h3>
       <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
         <div className="flex min-w-0 items-center gap-2">
-          <Avatar src={me.profile?.avatar_url} className="grid h-9 w-9 flex-none place-items-center overflow-hidden rounded-full border-2 border-accent bg-surface-2" />
+          <UserAvatar userId={me.profile?.id} src={me.profile?.avatar_url} className="grid h-9 w-9 flex-none place-items-center overflow-hidden rounded-full border-2 border-accent bg-surface-2" />
           <div className="min-w-0">
             <p className="text-[12px] text-muted">나</p>
             <p className="truncate font-mono text-[15px] font-black text-accent">{formatMetric(metric, me.value)}</p>
@@ -214,7 +214,7 @@ function ComparisonCard({
             <p className="truncate text-[12px] text-muted">{rival.profile?.nickname ?? "?"}</p>
             <p className="truncate font-mono text-[15px] font-black">{formatMetric(metric, rival.value)}</p>
           </div>
-          <Avatar src={rival.profile?.avatar_url} className="grid h-9 w-9 flex-none place-items-center overflow-hidden rounded-full bg-surface-2" />
+          <UserAvatar userId={rival.profile?.id} src={rival.profile?.avatar_url} className="grid h-9 w-9 flex-none place-items-center overflow-hidden rounded-full bg-surface-2" />
         </div>
       </div>
       <div className="mt-3 h-2 overflow-hidden rounded-full bg-surface-3">

@@ -216,7 +216,7 @@ export function ResultView({
         <ResultOverview
           mine={
             myRanked
-              ? { rank: myRanked.rank, overall: myRanked.overall, avatarUrl: profileOf(myUserId)?.avatar_url ?? null }
+              ? { rank: myRanked.rank, overall: myRanked.overall, userId: myUserId, avatarUrl: profileOf(myUserId)?.avatar_url ?? null }
               : null
           }
           cells={cells}

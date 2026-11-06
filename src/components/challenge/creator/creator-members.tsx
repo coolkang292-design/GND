@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Avatar } from "@/components/avatar";
+import { UserAvatar } from "@/components/user-avatar";
 import { Icon } from "@/components/ui/icon";
 import { formatMonthDay } from "@/lib/domain/challenge-time";
 import { CREATOR_BASE_PATH } from "@/lib/domain/creator-return";
@@ -172,7 +172,7 @@ export function CreatorMembers({
             href={`${CREATOR_BASE_PATH}/${encodeURIComponent(challenge.id)}/members/${encodeURIComponent(m.id)}`}
             className={`${card} flex min-h-[76px] w-full items-center gap-3 px-3 py-3 text-left`}
           >
-            <Avatar src={m.avatarUrl} label={m.nickname} className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-full bg-surface-2 text-xl" />
+            <UserAvatar userId={m.id} src={m.avatarUrl} label={m.nickname} className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-full bg-surface-2 text-xl" />
             <span className="min-w-0 flex-1">
               <strong className="block truncate text-[15px]">{m.nickname}</strong>
               <span className="mt-0.5 line-clamp-2 text-[12px] text-muted">{memberLine(m, challenge.status)}</span>

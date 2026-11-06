@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Avatar } from "@/components/avatar";
+import { UserAvatar } from "@/components/user-avatar";
 import { UiIcon } from "@/components/ui-icon";
 import {
   getChallengeActivity,
@@ -111,7 +111,7 @@ export function ChallengeActivity({ challengeId }: { challengeId: string }) {
               key={it.session_id}
               className="flex items-center gap-2.5 border-t border-line/60 py-2 first:border-t-0"
             >
-              <Avatar
+              <UserAvatar userId={it.user_id}
                 src={it.avatar_url}
                 className="grid h-8 w-8 flex-none place-items-center overflow-hidden rounded-full bg-surface-2 text-base"
               />
@@ -218,7 +218,7 @@ function ActivityLeaders({
                 {l.rank === 1 && <UiIcon name="crown" size={14} className="text-gold" />}
                 {tied ? `공동 ${l.rank}위` : `${l.rank}위`}
               </span>
-              <Avatar
+              <UserAvatar userId={l.userId}
                 src={l.avatarUrl}
                 className="grid h-7 w-7 flex-none place-items-center overflow-hidden rounded-full bg-surface text-sm"
               />

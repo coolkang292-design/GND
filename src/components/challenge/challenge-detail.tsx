@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { CREATOR_BASE_PATH } from "@/lib/domain/creator-return";
-import { Avatar } from "@/components/avatar";
+import { UserAvatar } from "@/components/user-avatar";
 import { ChallengeActivity } from "@/components/challenge/challenge-activity";
 import { ResultView } from "@/components/challenge/challenge-result";
 import { RecordAnalysis } from "@/components/challenge/result/record-analysis";
@@ -589,7 +589,7 @@ export function ChallengeDetail({
                       aria-label={`${m.nickname} 프로필 보기`}
                       className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
                     >
-                      <Avatar
+                      <UserAvatar userId={m.id}
                         src={m.avatar_url}
                         className="grid h-8 w-8 flex-none place-items-center overflow-hidden rounded-full bg-surface-2 text-base"
                       />
@@ -952,7 +952,7 @@ export function ChallengeDetail({
                   aria-label={`${m.nickname} 프로필 보기`}
                   className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
                 >
-                  <Avatar
+                  <UserAvatar userId={m.id}
                     src={m.avatar_url}
                     className="grid h-8 w-8 flex-none place-items-center overflow-hidden rounded-full bg-surface-2 text-base"
                   />

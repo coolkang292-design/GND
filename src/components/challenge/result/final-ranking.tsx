@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Avatar } from "@/components/avatar";
+import { UserAvatar } from "@/components/user-avatar";
 import { Icon } from "@/components/ui/icon";
 import { MetricSelector, type RankingKey } from "@/components/challenge/competition/metric-selector";
 import {
@@ -95,7 +95,7 @@ export function FinalRanking({
                   )}
                 </span>
                 <span className="flex min-w-0 items-center gap-2">
-                  <Avatar
+                  <UserAvatar userId={r.userId}
                     src={p?.avatar_url}
                     className="grid h-7 w-7 flex-none place-items-center overflow-hidden rounded-full bg-surface-2 text-xs"
                   />

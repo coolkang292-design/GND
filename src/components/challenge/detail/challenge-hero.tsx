@@ -1,4 +1,4 @@
-import { Avatar } from "@/components/avatar";
+import { UserAvatar } from "@/components/user-avatar";
 import { detailArtFor } from "@/lib/domain/challenge-art";
 import { formatPeriod } from "@/lib/domain/challenge-report";
 
@@ -63,7 +63,7 @@ export function ChallengeHero({
           <div className="mt-1 flex items-center gap-2" aria-label={`참여자 ${members.length}명`}>
             <span className="flex -space-x-2">
               {shown.map((m) => (
-                <Avatar
+                <UserAvatar userId={m.id}
                   key={m.id}
                   src={m.avatar_url}
                   className="grid h-7 w-7 place-items-center overflow-hidden rounded-full border-2 border-bg bg-surface-2 text-xs"

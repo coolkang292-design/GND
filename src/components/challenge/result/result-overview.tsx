@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Avatar } from "@/components/avatar";
+import { UserAvatar } from "@/components/user-avatar";
 import { Icon } from "@/components/ui/icon";
 
 export type MetricCell = { key: string; label: string; value: string; rank: number | null };
@@ -18,7 +18,7 @@ export function ResultOverview({
   onOpenFinal,
 }: {
   /** 목표를 안 건 사람은 null — 종합 점수가 없다 */
-  mine: { rank: number; overall: number; avatarUrl: string | null } | null;
+  mine: { rank: number; overall: number; userId: string; avatarUrl: string | null } | null;
   cells: MetricCell[];
   podium: ReactNode;
   onOpenFinal: () => void;
@@ -39,7 +39,7 @@ export function ResultOverview({
             <div className="flex flex-col items-center">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/gnd/decorations/crown-64.webp" alt="" width={30} height={30} className="-mb-1 h-[30px] w-[30px]" />
-              <Avatar
+              <UserAvatar userId={mine.userId}
                 src={mine.avatarUrl}
                 className="grid h-[60px] w-[60px] place-items-center overflow-hidden rounded-full border-2 border-gold bg-surface-2 text-xl"
               />

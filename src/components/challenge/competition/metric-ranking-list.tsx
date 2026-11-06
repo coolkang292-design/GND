@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Avatar } from "@/components/avatar";
+import { UserAvatar } from "@/components/user-avatar";
 import { Icon } from "@/components/ui/icon";
 import { pinMine } from "@/lib/domain/challenge-metrics";
 
@@ -71,7 +71,7 @@ export function MetricRankingList({
                   <span className="font-mono text-[14px] font-extrabold text-muted">{l.rank ?? "-"}</span>
                 )}
               </span>
-              <Avatar
+              <UserAvatar userId={l.userId}
                 src={p?.avatar_url}
                 className="grid h-8 w-8 flex-none place-items-center overflow-hidden rounded-full bg-surface-2 text-sm"
               />

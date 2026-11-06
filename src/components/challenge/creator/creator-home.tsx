@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Avatar } from "@/components/avatar";
+import { UserAvatar } from "@/components/user-avatar";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { challengeInviteUrl } from "@/lib/domain/challenge-invite";
 import { CREATOR_BASE_PATH, isDemoChallenge } from "@/lib/domain/creator-return";
@@ -232,7 +232,7 @@ export function CreatorHome({
           <ul className="mt-2 divide-y divide-line">
             {recent.map((a) => (
               <li key={`${a.kind}-${a.userId}-${a.when}`} className="flex items-center gap-3 py-2.5">
-                <Avatar src={a.avatarUrl} label={a.nickname} className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full bg-surface-2 text-lg" />
+                <UserAvatar userId={a.userId} src={a.avatarUrl} label={a.nickname} className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full bg-surface-2 text-lg" />
                 <p className="min-w-0 flex-1 text-[13px]">
                   <strong>{a.nickname}</strong>님이{" "}
                   {a.kind === "join" ? "챌린지에 새로 참여했어요." : "운동 인증을 완료했어요."}

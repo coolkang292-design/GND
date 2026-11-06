@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Avatar } from "@/components/avatar";
+import { UserAvatar } from "@/components/user-avatar";
 import type { ChallengeParticipantProfile } from "@/lib/challenge";
 import type { rankParticipants } from "@/lib/domain/goal-score";
 
@@ -117,7 +117,7 @@ export function RankingPodium({
                       className="absolute inset-0 h-full w-full scale-[1.18] object-contain"
                     />
                   )}
-                  <Avatar
+                  <UserAvatar userId={r.userId}
                     src={p?.avatar_url}
                     className={`relative grid place-items-center overflow-hidden rounded-full border-2 bg-surface-2 text-xl ${
                       mine ? "border-accent" : tier.border
