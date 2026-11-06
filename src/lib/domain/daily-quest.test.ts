@@ -3,6 +3,7 @@ import {
   QUEST_EYEBROW,
   QUEST_PUSH_TITLE,
   dailyQuestCopy,
+  planQuestCopy,
   questNamesLine,
   questPushCopy,
   shouldAutoSetQuest,
@@ -136,5 +137,25 @@ describe("questPushCopy — 알림", () => {
     for (const kind of ["repeat", "walk", "interval"] as const) {
       expect(questPushCopy(kind, TODAY).body).toContain(`최대 +${MAX_DAILY_WORKOUT_XP_NOW} XP`);
     }
+  });
+});
+
+describe("planQuestCopy — 인터벌·프로그램 계획을 퀘스트 카드로", () => {
+  it("인터벌 계획: 코스 요약과 '계획한' 문구, 거짓 약속 없음", () => {
+    const copy = planQuestCopy({ interval: true, title: null, detail: "푸시업 · 버드독", streak: 3 });
+    expect(copy.title).toBe("오늘은 전신 인터벌이에요");
+    expect(copy.headline[1]).toBe("오늘 인터벌 완료");
+    expect(copy.lead).toBe("오늘 계획한 인터벌예요 · 푸시업 · 버드독");
+    expect(copy.hooks).toEqual([expect.stringContaining("최대"), "🔥 4일 연속"]);
+  });
+
+  it("프로그램 회차: 제목을 쓰고, 없으면 기본 제목", () => {
+    expect(planQuestCopy({ interval: false, title: "3주차 1회차", detail: "스쿼트", streak: null }).title).toBe("3주차 1회차");
+    expect(planQuestCopy({ interval: false, title: null, detail: "", streak: null }).title).toBe("오늘 프로그램 회차");
+  });
+
+  it("연속 일수가 모르면 줄을 빼고, 끊겼으면 숫자를 말하지 않는다", () => {
+    expect(planQuestCopy({ interval: true, title: null, detail: "", streak: null }).hooks).toHaveLength(1);
+    expect(planQuestCopy({ interval: true, title: null, detail: "", streak: 0 }).hooks[1]).toBe("🔥 다시 1일");
   });
 });

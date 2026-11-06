@@ -194,6 +194,36 @@ export function dailyQuestCopy(input: {
 }
 
 /**
+ * 달력에 **인터벌·프로그램 회차 계획**이 있는 날의 퀘스트 카드 문구 (사용자 지시 2026-11-07).
+ * 일반 계획은 운동 목록이 곧 카드지만 이 둘은 구조가 달라 목록에 못 담기 — 같은 카드 모양으로
+ * 계획을 보여 준다. 사용자가 직접 정한 계획이므로 "세팅해 뒀어요"가 아니라 "계획한"이라고 말한다.
+ *
+ * @param detail 종목 요약 한 줄 (인터벌: 코스 요약, 프로그램: 종목 이름들)
+ */
+export function planQuestCopy(input: {
+  interval: boolean;
+  /** 프로그램 회차의 제목 (없으면 기본 문구) */
+  title: string | null;
+  detail: string;
+  streak: number | null;
+}): QuestCopy {
+  const hooks: string[] = [`⚡ 최대 +${MAX_DAILY_WORKOUT_XP_NOW} XP`];
+  if (input.streak !== null) {
+    hooks.push(input.streak > 0 ? `🔥 ${input.streak + 1}일 연속` : "🔥 다시 1일");
+  }
+  const kindLabel = input.interval ? "인터벌" : "프로그램";
+  return {
+    eyebrow: QUEST_EYEBROW,
+    title: input.interval ? "오늘은 전신 인터벌이에요" : (input.title ?? "오늘 프로그램 회차"),
+    headline: ["이 퀘스트 하나면", `오늘 ${kindLabel} 완료`],
+    lead: input.detail
+      ? `오늘 계획한 ${kindLabel}예요 · ${input.detail}`
+      : `오늘 계획한 ${kindLabel}예요`,
+    hooks,
+  };
+}
+
+/**
  * 오늘 목록을 **자동으로 세팅해도 되는가** — `repeat`(지난 운동)와 `walk`(걷기).
  * 열자마자 목록이 차 있어야 "운동 시작" 한 번으로 시작한다(사용자 지시 2026-11-06).
  *

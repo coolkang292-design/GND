@@ -111,6 +111,7 @@ import {
   asTabataMinutes,
   completeIntervalBlock,
   hasIntervalFollowUps,
+  intervalPlanLine,
   intervalBlockNames,
   intervalBlockPending,
   isIntervalBlockExercise,
@@ -122,6 +123,7 @@ import {
   withoutIntervalBlock,
   type TabataMinutes,
 } from "@/lib/domain/tabata";
+import { isGeneralPlan } from "@/lib/domain/day-plan";
 import { SITUATIONS } from "@/lib/domain/recommended-exercises";
 import {
   pickSuggestionKindWhenReady,
@@ -243,7 +245,7 @@ import {
 } from "@/lib/day-plan-store";
 import { TodayPlanCards } from "@/components/record/today-plan-cards";
 import { DailyQuestCard } from "@/components/record/daily-quest-card";
-import { dailyQuestCopy, shouldAutoSetQuest } from "@/lib/domain/daily-quest";
+import { dailyQuestCopy, planQuestCopy, shouldAutoSetQuest } from "@/lib/domain/daily-quest";
 import { shouldShowTodayCards } from "@/lib/domain/record-layout";
 import { pickChallengeExercises, pickChallengeFocus } from "@/lib/challenge-quest";
 import { useMyCharacterFullSrc } from "@/lib/character-variant";
@@ -1787,26 +1789,20 @@ function WorkoutScreen({ userId }: { userId: string }) {
    */
   /**
    * 퀘스트 카드 아래 **다른 방법 타일**을 고르면 퀘스트와 분리된 새 목록으로 시작한다 (사용자 지시
-   * 2026-11-07). 퀘스트 목록이든, 내가 건드려 오늘 계획에 묶인 목록이든 비운다.
+   * 2026-11-07). 단 **고르기 전에는 아무것도 바꾸지 않는다** — 선택 화면에서 뒤로 가거나 닫으면
+   * 퀘스트 카드가 그대로다 (사용자 지시 2026-11-07 "뒤로 가기로 해서 퀘스트 카드는 유지").
    *
-   * ⚠️ **오늘 계획(달력 행)은 지우지 않는다.** 목록과의 연결만 끊는다 — 달력에는 그대로 남는다.
-   * ⚠️ 비운 목록에 계획이 다시 채워지거나(`load`) 새로 고른 운동이 계획에 합쳐지는(`absorb`) 일을
-   *    막으려고 이 날은 계획 자동 저장·불러오기를 끈다(`customToday`).
+   * 여기서는 지금 목록의 키만 적어 두고 선택 화면을 연다. 새 운동이 **실제로 담기는 순간**
+   * (아래 effect) 퀘스트·계획 목록을 비우고 내 방법 모드로 넘어간다.
+   *
+   * ⚠️ **오늘 계획(달력 행)은 지우지 않는다.** 목록과의 연결만 끊는다.
+   * ⚠️ 이 날은 계획 자동 저장·불러오기를 끈다(`customToday`) — 비운 목록에 계획이 다시 채워지거나
+   *    고른 운동이 계획에 합쳐지는 일을 막는다.
    */
   function startCustomList(mode: "hub" | "past" | "routine") {
     const d = draftRef.current;
     if (active || d.startedAtMs !== null) return;
-    setCustomMode(true);
-    setDraft((current) => ({
-      ...current,
-      exercises: [],
-      scheduledPlanId: null,
-      sourceSessionId: null,
-      effortMessage: null,
-      program: null,
-      tabataMinutes: null,
-      suggestedForDayKey: null,
-    }));
+    pendingCustomRef.current = { keys: new Set(d.exercises.map((exercise) => exercise.key)) };
     void openExercisePicker(mode);
   }
 
@@ -3622,6 +3618,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
     }
   });
   const customTodayRef = useRef(customToday);
+  /** 타일로 선택 화면을 연 뒤 아직 아무것도 안 고른 상태 — 그때 목록에 있던 운동 키 */
+  const pendingCustomRef = useRef<{ keys: Set<string> } | null>(null);
   function setCustomMode(on: boolean) {
     customTodayRef.current = on;
     setCustomToday(on);
@@ -3632,6 +3630,35 @@ function WorkoutScreen({ userId }: { userId: string }) {
       /* 저장소를 못 써도 이 화면에서는 동작한다 */
     }
   }
+
+  // 타일로 연 선택 화면에서 새 운동이 담기면 → 퀘스트·계획 목록은 빼고 고른 것만 남긴다
+  useEffect(() => {
+    const pending = pendingCustomRef.current;
+    if (!pending) return;
+    if (!draft.exercises.some((exercise) => !pending.keys.has(exercise.key))) return;
+    pendingCustomRef.current = null;
+    setCustomMode(true);
+    setDraft((current) => ({
+      ...current,
+      exercises: current.exercises.filter((exercise) => !pending.keys.has(exercise.key)),
+      scheduledPlanId: null,
+      sourceSessionId: null,
+      effortMessage: null,
+      program: null,
+      tabataMinutes: null,
+      suggestedForDayKey: null,
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft.exercises]);
+
+  // 아무것도 안 고르고 선택 화면을 닫았으면 표시를 거둔다 (닫은 직후 담기는 길이 있어 잠깐 기다린다)
+  useEffect(() => {
+    if (pickerOpen || tabataOpen) return;
+    const timer = window.setTimeout(() => {
+      pendingCustomRef.current = null;
+    }, 1500);
+    return () => window.clearTimeout(timer);
+  }, [pickerOpen, tabataOpen]);
   useEffect(() => {
     if (questAutoRef.current) return;
     // 알림(`?suggest=1`)으로 들어왔으면 위 (2)번 경로가 이미 담는다 — 여기서 또 담으면
@@ -4378,16 +4405,65 @@ function WorkoutScreen({ userId }: { userId: string }) {
             일반 계획은 아래 목록 자체다. 운동 중에는 안 보인다 — 진행 중인 세션 위에
             또 시작할 자리를 주면 "이미 운동 중이에요"만 보게 된다.
           */}
-          {!active && (
-            <TodayPlanCards
-              plans={todayPlans}
-              disabled={busy}
-              onStart={(plan) => {
-                // 인터벌은 시트를 연다(바로 시작 안 함, 2026-08-25), 프로그램은 바로 시작
-                void handleLoadPlan(plan, plan.tabataMinutes ? undefined : { startNow: true });
-              }}
-            />
-          )}
+          {/*
+            인터벌·프로그램 계획은 **퀘스트 카드 모양으로** 보인다 (사용자 지시 2026-11-07).
+            퀘스트가 올 수 있는 날(운동 전·내 방법 모드 아님)에만 — 아니면 예전 계획 카드 그대로.
+          */}
+          {!active &&
+            (!didWorkoutToday && !customToday && isEmpty ? (
+              todayPlans
+                .filter((plan) => !isGeneralPlan(plan))
+                .map((plan) => {
+                  const interval = Boolean(plan.tabataMinutes);
+                  const names = plan.exercises.map((item) => item.name);
+                  return (
+                    <DailyQuestCard
+                      key={plan.id}
+                      heroImage={questHeroSrc}
+                      exercises={names.map((name) => ({ name }))}
+                      quest={planQuestCopy({
+                        interval,
+                        title: plan.title,
+                        detail: interval ? intervalPlanLine(names) : names.join(" · "),
+                        streak: todayStatus?.streak ?? null,
+                      })}
+                    >
+                      <button
+                        type="button"
+                        data-priority="primary"
+                        data-testid={interval ? "today-interval-start" : "today-program-start"}
+                        disabled={busy}
+                        onClick={() => {
+                          // 인터벌은 시트를 연다(바로 시작 안 함, 2026-08-25), 프로그램은 바로 시작
+                          void handleLoadPlan(plan, interval ? undefined : { startNow: true });
+                        }}
+                        className="relative mt-3.5 h-14 w-full rounded-full bg-accent text-[16px] font-black text-accent-ink disabled:opacity-60"
+                      >
+                        {interval ? "퀘스트 확인하기" : "퀘스트 시작하기"}
+                      </button>
+                      <StartOptions
+                        withQuest
+                        hasHistory={hasHistory}
+                        showInterval={!interval}
+                        showRoutine={(routines?.length ?? 0) > 0}
+                        onLoadRecent={() => startCustomList("past")}
+                        onApplySecondary={() => void applySuggestion("interval")}
+                        onAdd={() => startCustomList("hub")}
+                        onLoadRoutine={() => startCustomList("routine")}
+                      />
+                    </DailyQuestCard>
+                  );
+                })
+            ) : (
+              <TodayPlanCards
+                plans={todayPlans}
+                disabled={busy}
+                onStart={(plan) => {
+                  // 인터벌은 시트를 연다(바로 시작 안 함, 2026-08-25), 프로그램은 바로 시작
+                  void handleLoadPlan(plan, plan.tabataMinutes ? undefined : { startNow: true });
+                }}
+              />
+            ))}
 
           {/*
         등록된 운동이 0개면 볼륨·휴식·시작·타바타·복구 안내를 **하나도** 안
