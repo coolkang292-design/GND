@@ -3,14 +3,17 @@
 import Image from "next/image";
 import { UiIcon } from "@/components/ui-icon";
 import { getStageGroups } from "@/lib/domain/progression";
+import { characterSrc, type CharacterVariant } from "@/lib/character-variant";
 
 /** 다음 단계 미리보기 — 실루엣 캐릭터 + 해금 조건. 최고 단계면 렌더하지 않는다. */
 export function NextStagePreview({
   currentStage,
   totalXp,
+  variant = "male",
 }: {
   currentStage: number;
   totalXp: number;
+  variant?: CharacterVariant;
 }) {
   const next = getStageGroups()[currentStage]; // 0-index → 다음 단계
   if (!next) return null;
@@ -23,7 +26,7 @@ export function NextStagePreview({
       <div className="mt-3 flex items-center gap-3.5">
         <div className="relative flex-none overflow-hidden rounded-card-sm">
           <Image
-            src={next.characterPath}
+            src={characterSrc(next.characterPath, variant)}
             alt={`${next.stageName} 캐릭터 실루엣`}
             width={72}
             height={96}

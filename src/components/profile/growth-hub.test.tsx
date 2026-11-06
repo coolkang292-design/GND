@@ -16,6 +16,7 @@ function summary(over: Partial<ProgressSummary> = {}): ProgressSummary {
     currentStage: 1,
     stageName: "개노답",
     characterPath: "/characters/char-1.png",
+    characterVariant: "male",
     nextLevelRequiredXp: 800,
     xpToNextLevel: 60,
     levelProgressPercent: 70,
