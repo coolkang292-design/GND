@@ -243,6 +243,7 @@ import {
 } from "@/lib/day-plan-store";
 import { TodayPlanCards } from "@/components/record/today-plan-cards";
 import { DailyQuestCard } from "@/components/record/daily-quest-card";
+import type { QuestPreviewItem } from "@/components/record/quest-exercise-preview";
 import { dailyQuestCopy, shouldAutoSetQuest } from "@/lib/domain/daily-quest";
 import { shouldShowTodayCards } from "@/lib/domain/record-layout";
 import { pickChallengeExercises, pickChallengeFocus } from "@/lib/challenge-quest";
@@ -3446,6 +3447,29 @@ function WorkoutScreen({ userId }: { userId: string }) {
     [challengeGoals],
   );
 
+  async function previewQuestExercises(): Promise<QuestPreviewItem[]> {
+    if (!questKind) return [];
+    if (challengeFocus && questKind !== "interval") {
+      if (challengeFocus.kind === "interval") {
+        return tabataPickFromNames(INTERVAL_SUGGESTION_NAMES, catalog).map((item) => ({ name: item.name, detail: "4분 인터벌" }));
+      }
+      let recentNames: string[] = [];
+      try {
+        const sessions = await getCompletedSessions(userId);
+        recentNames = sessions.filter((s) => s.tabataMinutes === null).flatMap((s) => s.exerciseNames).slice(0, 60);
+      } catch { /* 실제 시작 로직과 동일하게 카탈로그로 폴백 */ }
+      const chosen = pickChallengeExercises(challengeFocus.kind, catalog, recentNames);
+      if (chosen.length > 0) return chosen.map((item) => ({ name: item.name }));
+    }
+    if (questKind === "interval") return tabataPickFromNames(INTERVAL_SUGGESTION_NAMES, catalog).map((item) => ({ name: item.name, detail: "4분 인터벌" }));
+    if (questKind === "walk") return catalog.filter((item) => item.name === "걷기").map((item) => ({ name: item.name, detail: "10분 걷기" }));
+    const sessions = await getCompletedSessions(userId);
+    const recent = sessions[0];
+    if (!recent) return [];
+    if (recent.tabataMinutes !== null) return tabataPickFromNames(INTERVAL_SUGGESTION_NAMES, catalog).map((item) => ({ name: item.name, detail: "4분 인터벌" }));
+    return recent.exerciseNames.map((name) => ({ name }));
+  }
+
   /**
    * 오늘 카드의 "오늘의 운동" 한 줄 (2026-08-19).
    *
@@ -4364,6 +4388,10 @@ function WorkoutScreen({ userId }: { userId: string }) {
           {/* 오늘의 퀘스트 — 자동 세팅된 목록이 있을 때. 버튼은 없다: 아래 시작 버튼이 퀘스트 시작이다 */}
           {!isEmpty && !active && !didWorkoutToday && (
               <DailyQuestCard
+                exercises={draft.exercises.map((exercise) => ({
+                  name: exercise.name,
+                  detail: draft.tabataMinutes ? `${draft.tabataMinutes}분 인터벌` : `${exercise.sets.length}세트`,
+                }))}
                 quest={dailyQuestCopy({
                   kind:
                     draft.exercises.length === 1 && draft.exercises[0].name === "걷기"
