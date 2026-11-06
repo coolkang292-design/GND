@@ -6,6 +6,8 @@ import {
   secondaryKind,
   type SuggestionKind,
 } from "@/lib/domain/workout-suggestion";
+import type { QuestCopy } from "@/lib/domain/daily-quest";
+import { DailyQuestCard } from "@/components/record/daily-quest-card";
 
 /**
  * 등록된 운동이 0개일 때의 기록 화면 (사용자 지시 2026-08-06).
@@ -23,6 +25,7 @@ export function RecordEmptyState({
   routineCount = 0,
   suggestionKind = null,
   suggestionBody = "",
+  quest = null,
   onApplySuggestion,
   onApplySecondary,
 }: {
@@ -50,6 +53,11 @@ export function RecordEmptyState({
   suggestionKind?: SuggestionKind | null;
   /** 알림 본문과 **같은 말**이어야 한다 — `suggestionCopy`가 준다 */
   suggestionBody?: string;
+  /**
+   * 오늘의 퀘스트 문구 (2026-11-06). 있으면 제안 카드가 "퀘스트가 도착했어요"로
+   * 그려진다 — 같은 제안, 말만 다르다. 없으면 옛 카드(`suggestionBody`)다.
+   */
+  quest?: QuestCopy | null;
   onApplySuggestion?: () => void;
   /** 보조 제안(4분 인터벌) — 담기가 아니라 **시작**이다 */
   onApplySecondary?: () => void;
@@ -58,7 +66,35 @@ export function RecordEmptyState({
     <section>
       {/* ⚠️⚠️ 제안이 알림 링크에만 살면 **앱 아이콘으로 들어온 사람은 아무것도
           못 본다.** 이 카드가 그 구멍을 막는다 (설계 C2). */}
-      {suggestionKind && onApplySuggestion && (
+      {suggestionKind && onApplySuggestion && quest && (
+        <div data-testid="suggestion-card" className="mb-3">
+          <DailyQuestCard quest={quest}>
+            <button
+              type="button"
+              data-priority="primary"
+              onClick={onApplySuggestion}
+              className="mt-3 h-14 w-full rounded-card bg-accent text-[15px] font-extrabold text-accent-ink"
+            >
+              {suggestionKind === "walk"
+                ? "퀘스트 시작 · 10분 걷기 담기"
+                : suggestionKind === "repeat"
+                  ? "퀘스트 받기 · 지난번 그대로 담기"
+                  : "퀘스트 시작 · 4분 인터벌"}
+            </button>
+            {secondaryKind(suggestionKind) === "interval" && onApplySecondary && (
+              <button
+                type="button"
+                data-priority="secondary"
+                onClick={onApplySecondary}
+                className="mt-2 h-12 w-full rounded-card border border-accent/50 bg-transparent text-sm font-bold text-accent"
+              >
+                시간 없으면 · 4분 인터벌 시작
+              </button>
+            )}
+          </DailyQuestCard>
+        </div>
+      )}
+      {suggestionKind && onApplySuggestion && !quest && (
         <div
           data-testid="suggestion-card"
           className="mb-3 rounded-card border border-accent/50 bg-accent-weak/30 p-4"

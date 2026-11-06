@@ -30,6 +30,45 @@ describe("RecordEmptyState — 등록 0개 화면 (사용자 지시 2026-08-06)"
     expect(getByText("최근 운동 불러오기")).toBeTruthy();
   });
 
+  it("퀘스트가 있으면 '도착했어요' 카드 + 혜택 + 받기 버튼이 하나로 그려진다", () => {
+    const onApply = vi.fn();
+    const { container, getByText, getAllByTestId } = render(
+      <RecordEmptyState
+        hasHistory
+        onAdd={vi.fn()}
+        onLoadRecent={vi.fn()}
+        suggestionKind="repeat"
+        quest={{
+          eyebrow: "🎯 오늘의 퀘스트가 도착했어요",
+          title: "지난번 그 운동, 오늘 한 번 더!",
+          lead: "지난 운동으로 오늘 목록을 세팅할게요",
+          hooks: ["⚡ 클리어하면 최대 +160 XP", "🔥 6일 연속 달성"],
+        }}
+        onApplySuggestion={onApply}
+      />,
+    );
+    expect(getAllByTestId("suggestion-card")).toHaveLength(1);
+    expect(container.textContent).toContain("오늘의 퀘스트가 도착했어요");
+    expect(container.textContent).toContain("최대 +160 XP");
+    fireEvent.click(getByText("퀘스트 받기 · 지난번 그대로 담기"));
+    expect(onApply).toHaveBeenCalledTimes(1);
+  });
+
+  it("퀘스트가 없으면 옛 제안 카드 그대로 (회귀)", () => {
+    const { container, getByText } = render(
+      <RecordEmptyState
+        hasHistory
+        onAdd={vi.fn()}
+        onLoadRecent={vi.fn()}
+        suggestionKind="repeat"
+        suggestionBody="지난번 그대로 담아 뒀어요"
+        onApplySuggestion={vi.fn()}
+      />,
+    );
+    expect(getByText("지난번 그대로 담기")).toBeTruthy();
+    expect(container.textContent).not.toContain("퀘스트가 도착");
+  });
+
   it("두 버튼이 서로 다른 핸들러로 간다", () => {
     const onAdd = vi.fn();
     const onLoadRecent = vi.fn();

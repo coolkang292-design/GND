@@ -242,6 +242,8 @@ import {
   settlePlanAfterWorkout,
 } from "@/lib/day-plan-store";
 import { TodayPlanCards } from "@/components/record/today-plan-cards";
+import { DailyQuestCard } from "@/components/record/daily-quest-card";
+import { dailyQuestCopy, shouldAutoSetQuest } from "@/lib/domain/daily-quest";
 import { isGeneralPlan } from "@/lib/domain/day-plan";
 import {
   cancelWorkout,
@@ -3511,6 +3513,44 @@ function WorkoutScreen({ userId }: { userId: string }) {
     // applySuggestion은 렌더마다 새로 만들어진다. ref가 한 번만 돌게 막는다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [suggestionKind]);
+
+  // (3) 오늘의 퀘스트 (2026-11-06) — 계획 없는 날, 지난 운동으로 오늘 목록을 **자동 세팅**한다.
+  //     하루 한 번(이 기기), 목록이 비었고 운동 전일 때만. 달력 계획은 만들지 않는다
+  //     (`decidePlanPush`가 제안 draft를 쓰지 않는다). 규칙은 `shouldAutoSetQuest`.
+  const questAutoRef = useRef(false);
+  useEffect(() => {
+    if (questAutoRef.current) return;
+    // 알림(`?suggest=1`)으로 들어왔으면 위 (2)번 경로가 이미 담는다 — 여기서 또 담으면
+    // 비동기 조회가 끝나기 전이라 목록이 아직 비어 보여 **두 번 담긴다**.
+    if (suggestRequestedRef.current || suggestConsumedRef.current) return;
+    const todayKey = dayKey(new Date(), resolveTimeZone());
+    const storageKey = `gnd-quest-auto:${todayKey}`;
+    let doneToday = false;
+    try {
+      doneToday = window.localStorage.getItem(storageKey) === "1";
+    } catch {
+      /* 저장소를 못 읽으면 이 마운트에서만 한 번 — 아래 ref가 막는다 */
+    }
+    if (
+      !shouldAutoSetQuest({
+        kind: suggestionKind,
+        draftExerciseCount: draftRef.current.exercises.length,
+        workoutStarted: draftRef.current.startedAtMs !== null,
+        alreadyDoneToday: doneToday,
+      })
+    ) {
+      return;
+    }
+    questAutoRef.current = true;
+    try {
+      window.localStorage.setItem(storageKey, "1");
+    } catch {
+      /* 무시 */
+    }
+    void applySuggestion(suggestionKind!);
+    // applySuggestion은 렌더마다 새로 만들어진다. ref와 하루 한 번 표식이 막는다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [suggestionKind]);
   // 팝업 열림은 `active`에서 파생한다 — 별도 저장 없음 (설계 ②)
   /*
     인터벌 중에는 근력 오버레이를 내린다 (사용자 지시 2026-08-13).
@@ -4238,6 +4278,15 @@ function WorkoutScreen({ userId }: { userId: string }) {
               onLoadRoutine={() => void openExercisePicker("routine")}
               routineCount={routines?.length ?? 0}
               suggestionKind={suggestionKind}
+              quest={
+                suggestionKind
+                  ? dailyQuestCopy({
+                      kind: suggestionKind,
+                      todayKey: dayKey(new Date(), resolveTimeZone()),
+                      streak: todayStatus?.streak ?? null,
+                    })
+                  : null
+              }
               suggestionBody={
                 suggestionKind
                   ? // ⚠️ 스트릭 0을 넘긴다. 카드는 `body`만 쓰는데 `body`는 스트릭에
@@ -4255,6 +4304,29 @@ function WorkoutScreen({ userId }: { userId: string }) {
               onApplySecondary={() => void applySuggestion("interval")}
             />
           )}
+
+          {/* 오늘의 퀘스트 — 자동 세팅된 목록이 있을 때. 버튼은 없다: 아래 시작 버튼이 퀘스트 시작이다 */}
+          {!isEmpty &&
+            !active &&
+            !didWorkoutToday &&
+            draft.suggestedForDayKey === dayKey(new Date(), resolveTimeZone()) && (
+              <DailyQuestCard
+                quest={dailyQuestCopy({
+                  kind:
+                    draft.exercises.length === 1 && draft.exercises[0].name === "걷기"
+                      ? "walk"
+                      : "repeat",
+                  todayKey: dayKey(new Date(), resolveTimeZone()),
+                  streak: todayStatus?.streak ?? null,
+                  names: draft.exercises.map((e) => e.name),
+                  applied: true,
+                })}
+              >
+                <p className="mt-3 text-[12px] font-bold text-accent">
+                  아래 [운동 시작]만 누르면 퀘스트 시작!
+                </p>
+              </DailyQuestCard>
+            )}
 
           {/* 세션 헤더 (§10) */}
           {!isEmpty && (

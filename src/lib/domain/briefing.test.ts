@@ -125,7 +125,9 @@ describe("buildBriefings — 평소 시작 30분 전", () => {
 
 describe("buildBriefings — 제목(스트릭 단계)", () => {
   it("d1 단계: 🔥 접두 + 스트릭 수 포함 (브리핑용 조립)", () => {
-    const { briefings } = buildBriefings([user({})], new Map(), NOW);
+    // 2026-11-06: 계획 없는 날은 제안이 "오늘의 퀘스트" 제목을 가져간다. 이 단언은 스트릭
+    // 제목 조립을 보는 것이므로 오늘 계획이 있는 경우로 고정한다(아래 expired와 같다).
+    const { briefings } = buildBriefings([user({ hasPlanToday: true })], new Map(), NOW);
     expect(briefings[0].title.startsWith("🔥 ")).toBe(true);
     expect(briefings[0].title).toContain("1일"); // 4일 전 1회 운동 → 스트릭 1
   });
@@ -222,9 +224,11 @@ describe("buildBriefings — 계획 없는 날 제안", () => {
     );
     expect(skipped).toHaveLength(0);
     expect(briefings).toHaveLength(1);
-    expect(briefings[0].title).toContain("10분");
+    // 2026-11-06 — 제안 알림은 "오늘의 퀘스트가 도착했어요"다. 무엇을 하는지는 본문이 말한다.
+    expect(briefings[0].title).toBe("🎯 오늘의 퀘스트가 도착했어요");
     expect(briefings[0].type).toBe("workout_suggestion");
-    expect(briefings[0].body).not.toBeNull();
+    expect(briefings[0].body).toContain("10분");
+    expect(briefings[0].body).toContain("+160 XP");
   });
 
   /**
@@ -263,7 +267,10 @@ describe("buildBriefings — 계획 없는 날 제안", () => {
   it("이력 있는 사람은 지난 운동 제안을 받는다", () => {
     const { briefings } = buildBriefings([user({})], new Map(), NOW);
     expect(briefings[0].type).toBe("workout_suggestion");
-    expect(briefings[0].body).toContain("4분");
+    expect(briefings[0].title).toContain("오늘의 퀘스트가 도착했어요");
+    // 지난 운동 제안은 열면 목록이 세팅돼 있고, 최대 XP를 혜택으로 말한다
+    expect(briefings[0].body).toContain("열면 운동이 세팅돼 있어요");
+    expect(briefings[0].body).toContain("최대 +160 XP");
   });
 
   /**
@@ -313,5 +320,6 @@ describe("buildBriefings — 계획 없는 날 제안", () => {
     );
     expect(briefings[0].type).toBe("workout_suggestion");
     expect(briefings[0].title).not.toContain("0일");
+    expect(briefings[0].body ?? "").not.toContain("0일");
   });
 });

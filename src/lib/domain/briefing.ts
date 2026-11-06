@@ -17,7 +17,8 @@ import {
   estimateNotifyMinute,
   isDue,
 } from "./notify-time";
-import { pickSuggestionKind, suggestionCopy } from "./workout-suggestion";
+import { pickSuggestionKind } from "./workout-suggestion";
+import { questPushCopy } from "./daily-quest";
 import type { StreakStage } from "./streak";
 
 export const DEFAULT_BRIEF_HOUR = 9;
@@ -163,7 +164,9 @@ export function buildBriefings(
 
     const stage = streakStage(keys, todayKey);
     const streak = currentStreak(keys, todayKey);
-    const copy = kind ? suggestionCopy(kind, todayKey, streak) : null;
+    // 제안이 있는 날은 "오늘의 퀘스트가 도착했어요"로 보낸다 (2026-11-06) — 누르면 기록 탭이
+    // 열리고 운동 목록이 세팅돼 있다. 같은 말을 화면 카드(`dailyQuestCopy`)도 한다.
+    const copy = kind ? questPushCopy(kind, todayKey) : null;
 
     briefings.push({
       userId: u.userId,
