@@ -78,7 +78,7 @@ describe("CrewCard — 크루 정체성과 초대만 남는다", () => {
       expect(screen.getByText("친구 초대하기")).toBeTruthy(),
     );
     // 무엇에 대한 초대인지는 접힌 상태에서도 말해야 한다 (2026-08-07 사용자 질문)
-    expect(container.innerHTML).toContain("GND 앱에 친구를 부르는 링크");
+    expect(container.innerHTML).toContain("개노답 챌린지 앱에 친구를 부르는 링크");
     // 상세는 접혀 있다
     expect(container.innerHTML).not.toContain("닉네임만 정하면");
     expect(container.innerHTML).not.toContain("카카오나 구글을 연결");

@@ -190,7 +190,7 @@ export function rankParticipants(
 
 /** 시상대 등급 카피 (표시 전용, §6·§20) */
 export function gndLabel(rank: number, total: number): string {
-  if (rank === 1) return "GND 탈출!";
+  if (rank === 1) return "개노답 탈출!";
   if (total >= 2 && rank === total) return "개노답 확정";
-  return "GND 탈출중";
+  return "개노답 탈출중";
 }

@@ -199,7 +199,7 @@ export default function AuthCallbackPage() {
           exitHref === "/onboarding"
             ? "가입 화면으로 돌아가기"
             : exitHref === APP_LANDING_PATH
-              ? "GND로 돌아가기"
+              ? "개노답 챌린지로 돌아가기"
               : "계정 화면으로 돌아가기"
         }
       />

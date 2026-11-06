@@ -44,7 +44,7 @@ export function PointSummary({
         <div className="flex flex-col items-center gap-1">
           <Icon name="award" size={20} className="text-gold" />
           <p className="text-[19px] font-black tabular-nums">{balance.toLocaleString()}</p>
-          <p className="text-[11px] text-muted">GND 포인트</p>
+          <p className="text-[11px] text-muted">개노답 챌린지 포인트</p>
         </div>
         <div className="flex flex-col items-center gap-1">
           <Icon name="spark" size={20} className="text-accent" />

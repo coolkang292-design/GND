@@ -101,7 +101,7 @@ export function CrewCard() {
         </button>
       </div>
       <p className="mt-1 text-xs text-muted">
-        <b className="text-text">GND 앱에 친구를 부르는 링크</b>예요.
+        <b className="text-text">개노답 챌린지 앱에 친구를 부르는 링크</b>예요.
       </p>
 
       {showDetail && (
@@ -126,7 +126,7 @@ export function CrewCard() {
           {/* ⚠️ 2026-08-08에 "이 크루에 바로 들어와요" → "바로 친구가 돼요"로
               고쳤다. 0061 전에는 링크가 실제로 그룹에 넣었고, 지금은 친구를 맺는다.
               문구를 안 고치면 화면이 거짓말을 한다. */}
-          <p>친구가 링크를 열면 GND가 켜지고 바로 친구가 돼요.</p>
+          <p>친구가 링크를 열면 개노답 챌린지가 켜지고 바로 친구가 돼요.</p>
           <p>
             닉네임만 정하면 바로 시작해요. 다만 그 계정은 그 브라우저에만 있어서,
             데이터를 지우면 기록·XP·배지가 사라져요. 지키려면{" "}

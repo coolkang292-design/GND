@@ -85,8 +85,8 @@ describe("InviteSheet — 초대 링크", () => {
     // 태그를 걷어내고 "조건 → 결과" 순서로 단언한다 — 조건절을 빼고 단정문으로
     // 되돌리면 두 정규식이 모두 깨진다.
     const text = html("host", "setup").replace(/<[^>]*>/g, "");
-    expect(text).toMatch(/이미 GND를 쓰는 사람[^.]*서로 크루가 되지 않아요/);
-    expect(text).toMatch(/GND가 처음인 사람[^.]*나와 친구가 돼요/);
+    expect(text).toMatch(/이미 개노답 챌린지를 쓰는 사람[^.]*서로 크루가 되지 않아요/);
+    expect(text).toMatch(/개노답 챌린지가 처음인 사람[^.]*나와 친구가 돼요/);
     expect(text).toContain("이 챌린지 안에서만");
   });
 });

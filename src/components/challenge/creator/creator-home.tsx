@@ -53,7 +53,7 @@ export function CreatorHome({
     const url = challengeInviteUrl(window.location.origin, challenge.invite_code, viewerId);
     try {
       if (navigator.share) {
-        await navigator.share({ title: challenge.name, text: "GND 운동 챌린지에 함께해요", url });
+        await navigator.share({ title: challenge.name, text: "개노답 운동 챌린지에 함께해요", url });
         setNotice("초대 링크를 공유했어요");
       } else {
         await navigator.clipboard.writeText(url);

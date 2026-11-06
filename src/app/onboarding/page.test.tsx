@@ -293,7 +293,7 @@ describe("OnboardingPage 모드 2 — 제공자에서 돌아옴 (신원 있음)"
     // 2026-08-10 사용자 지시로 교체된 문구. 옛 `반가워요!`가 다시 들어오면
     // 여기서 잡힌다 — 두 문구가 섞여 화면마다 갈리는 것을 막는 선이다.
     expect(
-      screen.getByRole("heading", { name: /GND 탈출 게임 시작!/ }),
+      screen.getByRole("heading", { name: /개노답 챌린지 시작!/ }),
     ).not.toBeNull();
     expect(screen.getByRole("heading", { name: /닉네임부터 정하세요/ })).not.toBeNull();
     expect(
@@ -595,7 +595,7 @@ describe("OnboardingPage 친구 초대 링크 모드", () => {
     expect(mocks.redeemInviteCode).toHaveBeenCalledWith("GND-7FDVC");
     expect(screen.getByText(/낭만송곳니/)).not.toBeNull();
     expect(screen.queryByText(/크루 참여 완료/)).toBeNull();
-    expect(screen.queryByText(/의 GND 챌린지에 함께해요/)).toBeNull();
+    expect(screen.queryByText(/의 개노답 챌린지에 함께해요/)).toBeNull();
     // 다 썼으므로 이제 지운다 — 안 지우면 다음 가입이 같은 코드를 또 쓴다.
     expect(mocks.clearPendingInvite).toHaveBeenCalledOnce();
   });

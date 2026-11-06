@@ -61,7 +61,7 @@ export const STAGE_DESCRIPTIONS: Record<number, { name: string; desc: string }> 
   4: { name: "꾸준러", desc: "빠지지 않고 나와요. 운동이 습관으로 붙었어요." },
   5: { name: "불꽃러", desc: "운동에 불이 붙었어요. 불꽃 연속 기록의 주인공이에요." },
   6: { name: "대장", desc: "내 루틴을 직접 짜고 크루를 이끌어요." },
-  7: { name: "전설", desc: "GND를 완전히 탈출했어요. 운동이 곧 나예요." },
+  7: { name: "전설", desc: "개노답을 완전히 탈출했어요. 운동이 곧 나예요." },
 };
 
 export interface StageGroup {

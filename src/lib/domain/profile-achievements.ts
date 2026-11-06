@@ -116,8 +116,8 @@ export function buildAchievementHistory({
     events.push({
       id: "joined",
       type: "joined",
-      title: "GND 시작",
-      detail: "가입 · GND와 함께한 첫날",
+      title: "개노답 챌린지 시작",
+      detail: "가입 · 개노답 챌린지와 함께한 첫날",
       at: joinedAt,
     });
   }

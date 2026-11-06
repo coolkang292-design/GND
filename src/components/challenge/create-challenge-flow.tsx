@@ -46,7 +46,7 @@ const AUDIENCES: readonly {
   title: string;
   sub: string;
 }[] = [
-  { key: "public", icon: "users", title: "누구나 참여", sub: "GND에서 참가자를 모집해요" },
+  { key: "public", icon: "users", title: "누구나 참여", sub: "개노답 챌린지에서 참가자를 모집해요" },
   { key: "friends", icon: "handshake", title: "아는 사람끼리", sub: "링크를 공유해서 친구를 초대해요" },
   { key: "solo", icon: "person", title: "나 혼자 먼저", sub: "나중에 사람을 초대할 수 있어요" },
 ];

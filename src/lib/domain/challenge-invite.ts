@@ -162,7 +162,7 @@ export function inviteSharePayload(
   url: string,
 ): { title: string; text: string; url: string } {
   return {
-    title: `GND · ${challengeName}`,
+    title: `개노답 챌린지 · ${challengeName}`,
     // ⚠️ 본문에 주소를 **한 번 더** 넣는다. 공유 대상 앱이 `url` 필드를 무시하고
     //    `text`만 싣는 경우가 있어서, 안 넣으면 받는 사람에게 링크 없는 초대말만
     //    간다 — 초대가 통째로 무의미해진다.
