@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { CharacterImage } from "@/components/character-image";
 import { useEffect, useRef, useState } from "react";
 import { Avatar } from "@/components/avatar";
 import { ImageLightbox } from "@/components/image-lightbox";
@@ -113,7 +114,7 @@ export function MemberProfileBody({
   return (
     <>
       <div className="mt-4 flex items-center gap-3.5">
-        <Image
+        <CharacterImage
           src={profile.characterPath}
           alt={`${profile.stageName} 캐릭터`}
           width={96}

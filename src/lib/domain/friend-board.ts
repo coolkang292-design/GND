@@ -12,6 +12,7 @@
  */
 
 import { getLevelProgress } from "./progression";
+import { characterSrc, type CharacterVariant } from "./character-variant";
 import { currentStreak, workoutDayKeys } from "./streak";
 import { dayKey, weekRange } from "./time";
 
@@ -143,6 +144,8 @@ export type FriendCrewInput = {
   nickname: string;
   avatarUrl: string | null;
   totalXp: number;
+  /** 없으면 male — 외형 조회가 실패해도 목록은 그려야 한다 */
+  characterVariant?: CharacterVariant;
 };
 
 /**
@@ -197,7 +200,10 @@ function assembleRow(
     avatarUrl: member.avatarUrl,
     totalXp: member.totalXp,
     level: progress.currentLevel,
-    characterPath: progress.characterPath,
+    characterPath: characterSrc(
+      progress.characterPath,
+      member.characterVariant ?? "male",
+    ),
     stageName: progress.stageName,
     badgeCount: badge === undefined ? null : badge.total,
     badgeKeys: badge?.showcaseKeys ?? [],

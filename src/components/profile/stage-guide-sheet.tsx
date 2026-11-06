@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import { CharacterImage } from "@/components/character-image";
 import { UiIcon } from "@/components/ui-icon";
 import { useEffect, useRef } from "react";
 import { getStageGroups } from "@/lib/domain/progression";
@@ -73,7 +73,7 @@ export function StageGuideSheet({
                 }`}
               >
                 <div className="relative flex-none overflow-hidden rounded-card-sm">
-                  <Image
+                  <CharacterImage
                     src={characterSrc(g.characterPath, variant)}
                     alt={`${g.stageName} 캐릭터`}
                     width={56}

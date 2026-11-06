@@ -2,6 +2,7 @@
 
 import { WorkoutCompleteStamp } from "@/components/record/workout-complete-stamp";
 import Image from "next/image";
+import { CharacterImage } from "@/components/character-image";
 import Link from "next/link";
 import { Avatar } from "@/components/avatar";
 import { Chip, type ChipDot } from "@/components/ui/chip";
@@ -213,7 +214,7 @@ export function PersonalTodayCard({
             className="h-[60px] w-[60px] flex-none overflow-hidden rounded-full border-2 border-line-strong bg-surface"
           />
         ) : summary ? (
-          <Image
+          <CharacterImage
             src={summary.characterPath}
             alt={`${summary.stageName} 캐릭터`}
             width={60}

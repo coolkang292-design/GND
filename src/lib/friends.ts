@@ -1,4 +1,5 @@
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { getCharacterVariants } from "@/lib/character-variant";
 import { getBadgeCatalog } from "@/lib/badges";
 import { getMyCrew } from "@/lib/crew-link";
 import { getCrewMemberProfile } from "@/lib/progression";
@@ -46,11 +47,13 @@ export async function getFriendBoardBase(
   meId: string,
 ): Promise<FriendBoardBase> {
   const crewMembers = await getMyCrew();
+  const variants = await getCharacterVariants(crewMembers.map((m) => m.id));
   const crew: FriendCrewInput[] = crewMembers.map((m) => ({
     id: m.id,
     nickname: m.nickname,
     avatarUrl: m.avatarUrl,
     totalXp: m.totalXp,
+    characterVariant: variants.get(m.id),
   }));
   if (crew.length === 0) {
     // 친구가 없으면 화면이 카드 안에서 친구 초대 안내를 그린다 — 내 행 한 줄만

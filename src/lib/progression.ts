@@ -3,6 +3,7 @@ import { getLevelProgress } from "@/lib/domain/progression";
 import type { EarnedBadge } from "@/lib/domain/badges";
 import {
   characterSrc,
+  getCharacterVariants,
   getMyCharacterVariant,
   normalizeCharacterVariant,
   type CharacterVariant,
@@ -201,6 +202,7 @@ export async function getCrewMemberProfile(
   if (error) throw error;
 
   const row = (data ?? {}) as CrewProfileRow;
+  const variant = (await getCharacterVariants([targetId])).get(targetId) ?? "male";
   const totalXp = row.totalXp ?? 0;
   const p = getLevelProgress(totalXp);
   return {
@@ -208,7 +210,7 @@ export async function getCrewMemberProfile(
     currentLevel: p.currentLevel,
     currentStage: p.currentStageIndex,
     stageName: p.stageName,
-    characterPath: p.characterPath,
+    characterPath: characterSrc(p.characterPath, variant),
     nextLevelRequiredXp: p.nextLevelRequiredXp,
     xpToNextLevel: p.xpToNextLevel,
     levelProgressPercent: p.percent,

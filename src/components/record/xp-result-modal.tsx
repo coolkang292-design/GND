@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { CharacterImage } from "@/components/character-image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getStageGroups, STAGE_DESCRIPTIONS } from "@/lib/domain/progression";
 import type { XpEvent } from "@/lib/domain/xp-events";
@@ -160,7 +161,7 @@ function EventBody({ event }: { event: XpEvent }) {
           단계 진화! 🎉
         </h2>
         <div className="mt-3 flex items-center justify-center gap-3">
-          <Image
+          <CharacterImage
             src={characterSrc(from.characterPath, variant)}
             alt={`${from.stageName} 캐릭터`}
             width={72}
@@ -171,7 +172,7 @@ function EventBody({ event }: { event: XpEvent }) {
           <span aria-hidden className="text-xl text-accent">
             →
           </span>
-          <Image
+          <CharacterImage
             src={characterSrc(to.characterPath, variant)}
             alt={`${to.stageName} 캐릭터`}
             width={96}

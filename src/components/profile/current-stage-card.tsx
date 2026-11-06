@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import { CharacterImage } from "@/components/character-image";
 import { STAGE_DESCRIPTIONS } from "@/lib/domain/progression";
 import type { ProgressSummary } from "@/lib/progression";
 
@@ -32,7 +32,7 @@ export function CurrentStageCard({
       </div>
 
       <div className="mt-3 flex items-center gap-3.5">
-        <Image
+        <CharacterImage
           src={summary.characterPath}
           alt={`${summary.stageName} 캐릭터`}
           width={96}

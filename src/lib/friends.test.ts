@@ -41,6 +41,26 @@ function queryBuilder(rows: unknown[]) {
   return { builder, calls };
 }
 
+/**
+ * `from()` 라우팅 — 세션 질의 빌더와 **프로필(외형) 질의**를 갈라 준다.
+ * 외형 조회(getCharacterVariants)도 `.in()`을 쓰므로 한 빌더를 공유하면
+ * "세션 질의의 in 인자"를 단언하는 테스트가 외형 질의에 오염된다.
+ */
+function routeFrom(
+  sessionBuilder: unknown,
+  profileRows: { id: string; character_variant: string }[] = [],
+) {
+  mocks.from.mockImplementation((table: string) =>
+    table === "profiles"
+      ? {
+          select: () => ({
+            in: () => Promise.resolve({ data: profileRows, error: null }),
+          }),
+        }
+      : sessionBuilder,
+  );
+}
+
 function sessionRow(userId: string, completedAt: string, minutes = 30) {
   return { user_id: userId, completed_at: completedAt, duration_minutes: minutes };
 }
@@ -94,7 +114,7 @@ describe("getFriendBoardBase — 친구 세션 질의", () => {
    */
   it("공개(group) 완료 세션만 센다 — 친구와 같은 자로 재기 위해서다", async () => {
     const { builder, calls } = queryBuilder([sessionRow("f1", "2026-08-06T02:00:00Z")]);
-    mocks.from.mockReturnValue(builder);
+    routeFrom(builder);
 
     await getFriendBoardBase("me");
 
@@ -114,7 +134,7 @@ describe("getFriendBoardBase — 친구 세션 질의", () => {
    */
   it("내 id와 친구 id를 한 질의로 함께 받는다", async () => {
     const { builder, calls } = queryBuilder([]);
-    mocks.from.mockReturnValue(builder);
+    routeFrom(builder);
 
     await getFriendBoardBase("me");
 
@@ -127,9 +147,36 @@ describe("getFriendBoardBase — 친구 세션 질의", () => {
     expect(inArgs[1]).toContain("f1");
   });
 
+  it("친구의 character_variant를 읽어 크루 입력에 싣는다 (female → 여성 캐릭터)", async () => {
+    const { builder } = queryBuilder([]);
+    routeFrom(builder, [{ id: "f1", character_variant: "female" }]);
+
+    const base = await getFriendBoardBase("me");
+
+    expect(base.crew[0].characterVariant).toBe("female");
+  });
+
+  it("외형 조회가 실패해도 목록은 그린다 (variant 없음 = male)", async () => {
+    const { builder } = queryBuilder([]);
+    mocks.from.mockImplementation((table: string) =>
+      table === "profiles"
+        ? {
+            select: () => ({
+              in: () => Promise.resolve({ data: null, error: { message: "x" } }),
+            }),
+          }
+        : builder,
+    );
+
+    const base = await getFriendBoardBase("me");
+
+    expect(base.crew).toHaveLength(1);
+    expect(base.crew[0].characterVariant).toBeUndefined();
+  });
+
   it("행 상한을 명시한다 — 잘렸는지 알아야 숫자가 조용히 틀리지 않는다", async () => {
     const { builder, calls } = queryBuilder([]);
-    mocks.from.mockReturnValue(builder);
+    routeFrom(builder);
 
     await getFriendBoardBase("me");
 
@@ -140,7 +187,7 @@ describe("getFriendBoardBase — 친구 세션 질의", () => {
 
   it("상한에 못 미치면 truncated가 false다", async () => {
     const { builder } = queryBuilder([sessionRow("f1", "2026-08-06T02:00:00Z")]);
-    mocks.from.mockReturnValue(builder);
+    routeFrom(builder);
 
     const base = await getFriendBoardBase("me");
     expect(base.truncated).toBe(false);
@@ -152,14 +199,14 @@ describe("getFriendBoardBase — 친구 세션 질의", () => {
       sessionRow("f1", "2026-08-06T02:00:00Z"),
     );
     const { builder } = queryBuilder(rows);
-    mocks.from.mockReturnValue(builder);
+    routeFrom(builder);
 
     expect((await getFriendBoardBase("me")).truncated).toBe(true);
   });
 
   it("찌른 기록을 그대로 실어 보낸다 — 앱을 다시 켜도 잠금이 유지된다", async () => {
     const { builder } = queryBuilder([]);
-    mocks.from.mockReturnValue(builder);
+    routeFrom(builder);
 
     expect((await getFriendBoardBase("me")).poked.has("f1")).toBe(true);
   });

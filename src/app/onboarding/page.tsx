@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Image from "next/image";
+import { CharacterImage } from "@/components/character-image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { APP_LANDING_PATH } from "@/lib/domain/landing";
@@ -640,7 +640,7 @@ function CharacterPicker({
                   : "border-line-strong bg-surface/70 opacity-80"
               }`}
             >
-              <Image
+              <CharacterImage
                 src={characterSrc("/characters/char-1.png", v)}
                 alt={`${CHARACTER_NAMES[v]} 캐릭터`}
                 width={90}

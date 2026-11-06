@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import { CharacterImage } from "@/components/character-image";
 import Link from "next/link";
 import { MAX_DAILY_WORKOUT_XP_NOW } from "@/lib/domain/xp";
 import type { ProgressSummary } from "@/lib/progression";
@@ -14,7 +14,7 @@ export function CharacterCard({ summary }: { summary: ProgressSummary }) {
       className="block rounded-card border border-line bg-surface p-4 shadow-card"
     >
       <div className="flex items-center gap-3">
-        <Image
+        <CharacterImage
           src={summary.characterPath}
           alt={`${summary.stageName} 캐릭터`}
           width={64}

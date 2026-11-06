@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import { CharacterImage } from "@/components/character-image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
@@ -119,7 +119,7 @@ function FriendRowItem({
               className="h-11 w-11 flex-none overflow-hidden rounded-full border border-line-strong bg-surface"
             />
           ) : (
-            <Image
+            <CharacterImage
               src={row.characterPath}
               alt={`${row.stageName} 캐릭터`}
               width={44}

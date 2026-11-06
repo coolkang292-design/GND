@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import { CharacterImage } from "@/components/character-image";
 import { UiIcon } from "@/components/ui-icon";
 import { getStageGroups } from "@/lib/domain/progression";
 import { characterSrc, type CharacterVariant } from "@/lib/character-variant";
@@ -57,7 +57,7 @@ export function StageCarousel({
                 }`}
               >
                 <div className="relative overflow-hidden rounded-[9px]">
-                  <Image
+                  <CharacterImage
                     src={characterSrc(g.characterPath, variant)}
                     alt=""
                     width={64}

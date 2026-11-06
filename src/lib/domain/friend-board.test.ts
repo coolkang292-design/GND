@@ -535,3 +535,20 @@ describe("formatTotalMinutes — 누적이라 값이 크다", () => {
     expect(formatTotalMinutes(90.4)).toBe("1시간");
   });
 });
+
+describe("buildFriendRows — 캐릭터 외형", () => {
+  it("female이면 여성 캐릭터 경로, 없으면 기존 경로", () => {
+    const rows = buildFriendRows({
+      crew: [
+        { id: "a", nickname: "여", avatarUrl: null, totalXp: 1500, characterVariant: "female" },
+        { id: "b", nickname: "남", avatarUrl: null, totalXp: 1500 },
+      ],
+      activity: new Map(),
+      badges: new Map(),
+      activeUserIds: new Set(),
+    });
+    const byId = Object.fromEntries(rows.map((r) => [r.userId, r.characterPath]));
+    expect(byId.a).toBe("/characters/female/char-2.png");
+    expect(byId.b).toBe("/characters/char-2.png");
+  });
+});

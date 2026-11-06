@@ -1,31 +1,41 @@
 import { useEffect, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import {
+  normalizeCharacterVariant,
+  type CharacterVariant,
+} from "@/lib/domain/character-variant";
+
+export {
+  CHARACTER_NAMES,
+  CHARACTER_VARIANTS,
+  characterSrc,
+  normalizeCharacterVariant,
+  type CharacterVariant,
+} from "@/lib/domain/character-variant";
 
 /**
- * 캐릭터 외형. `profiles.character_variant` (기본 'male').
- * 레벨·XP·단계 계산과 무관하다 — 이미지 경로만 바꾼다.
+ * 다른 사람들의 외형. `profiles` SELECT 정책이 본인·크루·같은 그룹에게 열려 있어
+ * 새 DB 작업이 필요 없다. **실패하면 빈 맵** — 호출부는 male로 그린다(기존 동작).
  */
-export type CharacterVariant = "male" | "female";
-
-/** 선택 화면·프로필에 보이는 캐릭터 이름. 단계 이름(개노답…)과는 별개다. */
-export const CHARACTER_NAMES: Record<CharacterVariant, string> = {
-  male: "무쇠",
-  female: "하루",
-};
-
-export const CHARACTER_VARIANTS: CharacterVariant[] = ["male", "female"];
-
-export function normalizeCharacterVariant(v: unknown): CharacterVariant {
-  return v === "female" ? "female" : "male";
-}
-
-/**
- * `/characters/char-N.png` → female이면 `/characters/female/char-N.png`.
- * male이거나 모르는 경로면 그대로 둔다.
- */
-export function characterSrc(path: string, variant: CharacterVariant): string {
-  if (variant !== "female") return path;
-  return path.replace(/^\/characters\/(char-\d+\.png)$/, "/characters/female/$1");
+export async function getCharacterVariants(
+  ids: string[],
+): Promise<Map<string, CharacterVariant>> {
+  const out = new Map<string, CharacterVariant>();
+  if (ids.length === 0) return out;
+  try {
+    const supabase = getSupabaseBrowserClient();
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, character_variant")
+      .in("id", ids);
+    if (error) return out;
+    for (const r of (data ?? []) as { id: string; character_variant?: unknown }[]) {
+      out.set(r.id, normalizeCharacterVariant(r.character_variant));
+    }
+  } catch {
+    /* 외형은 장식이다 — 실패해도 화면을 막지 않는다 */
+  }
+  return out;
 }
 
 /** 내 `character_variant`. RLS로 본인 행만 보인다. 실패하면 male(기존 동작). */
