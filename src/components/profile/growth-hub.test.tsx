@@ -43,7 +43,7 @@ describe("CurrentStageCard", () => {
         summary={summary({
           currentLevel: 35,
           currentStage: 7,
-          stageName: "전설이개",
+          stageName: "전설",
           nextLevelRequiredXp: null,
           xpToNextLevel: 0,
           levelProgressPercent: 100,
@@ -111,7 +111,7 @@ describe("NextStagePreview", () => {
     const html = renderToStaticMarkup(
       <NextStagePreview currentStage={1} totalXp={740} />,
     );
-    expect(html).toContain("눈떴개");
+    expect(html).toContain("꿈틀러");
     expect(html).toContain("Lv.6 달성 시 해금");
     expect(html).toContain("260 XP 남음"); // 1000 - 740
   });
@@ -139,7 +139,7 @@ describe("GrowthTimeline", () => {
     const html = renderToStaticMarkup(
       <GrowthTimeline currentLevel={4} totalXp={740} />,
     );
-    expect(html).toContain("눈떴개 진화"); // Lv.6
+    expect(html).toContain("꿈틀러 진화"); // Lv.6
   });
 });
 
@@ -150,18 +150,18 @@ describe("StageGuideSheet — '7단계 안내'가 실제로 설명한다", () =>
     );
     for (const name of [
       "개노답",
-      "눈떴개",
-      "일단하개",
-      "물고가개",
-      "미쳐보개",
-      "판을짜개",
-      "전설이개",
+      "꿈틀러",
+      "시동러",
+      "꾸준러",
+      "불꽃러",
+      "대장",
+      "전설",
     ]) {
       expect(html).toContain(name);
     }
     expect(html).toContain("Lv.1~5");
     expect(html).toContain("Lv.31~35");
-    expect(html).toContain("생각은 많지만 아직 움직이지 않는 상태");
+    expect(html).toContain("생각만 많고 아직 안 움직여요");
     expect(html).toContain("레벨 5개마다 한 단계씩 진화");
   });
 
@@ -170,7 +170,7 @@ describe("StageGuideSheet — '7단계 안내'가 실제로 설명한다", () =>
       <StageGuideSheet currentStage={1} totalXp={110} onClose={() => {}} />,
     );
     expect(html).toContain("현재");
-    expect(html).toContain("890 XP 남음"); // 눈떴개 1000 - 110
+    expect(html).toContain("890 XP 남음"); // 꿈틀러 1000 - 110
   });
 
   it("접근성: dialog 역할과 제목 연결", () => {

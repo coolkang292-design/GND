@@ -11,17 +11,17 @@ describe("LEVEL_DEFS", () => {
   it("35개, 오름차순 컷", () => {
     expect(LEVEL_DEFS).toHaveLength(35);
     expect(LEVEL_DEFS[0]).toMatchObject({ level: 1, requiredTotalXp: 0, stageName: "개노답" });
-    expect(LEVEL_DEFS[34]).toMatchObject({ level: 35, requiredTotalXp: 26000, stageName: "전설이개" });
+    expect(LEVEL_DEFS[34]).toMatchObject({ level: 35, requiredTotalXp: 26000, stageName: "전설" });
   });
 });
 
 describe("getLevelFromTotalXp", () => {
   it.each([
     [0, 1, "개노답"], [199, 1, "개노답"], [200, 2, "개노답"],
-    [800, 5, "개노답"], [1000, 6, "눈떴개"], [2999, 10, "눈떴개"],
-    [3000, 11, "일단하개"], [6000, 16, "물고가개"], [10000, 21, "미쳐보개"],
-    [15000, 26, "판을짜개"], [21000, 31, "전설이개"], [26000, 35, "전설이개"],
-    [99999, 35, "전설이개"],
+    [800, 5, "개노답"], [1000, 6, "꿈틀러"], [2999, 10, "꿈틀러"],
+    [3000, 11, "시동러"], [6000, 16, "꾸준러"], [10000, 21, "불꽃러"],
+    [15000, 26, "대장"], [21000, 31, "전설"], [26000, 35, "전설"],
+    [99999, 35, "전설"],
   ])("%i XP → Lv.%i %s", (xp, level, stage) => {
     const d = getLevelFromTotalXp(xp);
     expect(d.level).toBe(level);
@@ -65,7 +65,7 @@ describe("getStageGroups — 성장 허브 7단계", () => {
     });
     expect(groups[6]).toMatchObject({
       stageIndex: 7,
-      stageName: "전설이개",
+      stageName: "전설",
       startLevel: 31,
       endLevel: 35,
       requiredTotalXp: 21000,

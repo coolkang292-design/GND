@@ -3571,3 +3571,10 @@ Storage 버킷도 SQL로 생성 가능했음(`insert into storage.buckets`, 0005
 - DB·마이그레이션 변경 없음, 알림 발송 없음. 운영 로그인 계정 화면과 iPhone 실기기는 미검증. 테스트 브라우저 CJK 글꼴 부족으로 한국어 가독성은 검증하지 못함.
 - 런타임 오류 조회는 기존 배포의 /api/push/notify url.parse deprecation 경고만 반환했으며, 신규 배포에 한정한 관측 증거로 해석하지 않음.
 - 다음 액션: 사용자 iPhone에서 앱 재실행 후 홈과 기록 달력의 작은 도장 가독성 확인.
+
+## 2026-11-06 — 캐릭터 외형·가입 선택·단계 이름 재구성
+- 여성 캐릭터(하루) 7종 `public/characters/female/char-N.png`, 남성은 무쇠. `profiles.character_variant`(0121, 기본 male)로 경로만 고른다. 레벨·XP 무관
+- 가입 화면(`/onboarding`)에서 캐릭터를 고른다. 프로필 편집은 외형을 덮어쓰지 않는다
+- 단계 이름 재구성: 개노답(유지) · 꿈틀러 · 시동러 · 꾸준러 · 불꽃러 · 대장 · 전설. `stage_key`·레벨·XP 불변, `level_definitions.stage_name` 7행 갱신(0122)
+- 옛 알림 23건(`notifications`)의 본문에는 옛 이름이 그대로 남는다 — 과거 기록이라 고치지 않았다
+- 크루 프로필 시트·친구 보드는 아직 남성 캐릭터로 나온다(RPC 수정 필요)

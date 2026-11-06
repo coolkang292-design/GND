@@ -615,10 +615,10 @@ function CharacterPicker({
         탈출 파트너를 고르세요
       </p>
       {/* 선택한 캐릭터 이름이 문구에 들어간다 — 고르는 순간 "내 캐릭터"가 되는 느낌.
-          단계 이름(개노답→전설이개)은 domain/progression의 STAGES와 같다. */}
+          단계 이름(개노답→전설)은 domain/progression의 STAGES와 같다. */}
       <p className="mt-1 text-[12.5px] leading-snug text-text/80">
         운동할수록 <span className="font-extrabold text-accent">{CHARACTER_NAMES[value]}</span>
-        도 쑥쑥! 개노답에서 전설이개까지 7단계 진화!
+        도 쑥쑥! 개노답에서 전설까지 7단계 진화!
       </p>
       <div
         role="radiogroup"

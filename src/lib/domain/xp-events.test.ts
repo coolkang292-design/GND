@@ -44,7 +44,7 @@ describe("buildXpEvents", () => {
       newStage: 2,
       levelUp: true,
       stageUp: true,
-      unlockedRewards: [{ key: "stage_evolve_2", label: "눈떴개 캐릭터 진화" }],
+      unlockedRewards: [{ key: "stage_evolve_2", label: "꿈틀러 캐릭터 진화" }],
     });
     expect(events.map((e) => e.type)).toEqual([
       "xp",

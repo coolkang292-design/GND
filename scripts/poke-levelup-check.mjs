@@ -289,7 +289,7 @@ try {
   );
 
   // ── 0029: 단계 진화는 문구가 다르다 ───────────────────────
-  // Lv.6 컷 = 1000 XP(2단계 눈떴개). 990에서 운동 1건이면 넘는다.
+  // Lv.6 컷 = 1000 XP(2단계 꿈틀러). 990에서 운동 1건이면 넘는다.
   await seedProgress(D.id, 990, 5, 1);
   const dDone = await completeWorkout(D, groupId);
   check(

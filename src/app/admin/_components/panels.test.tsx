@@ -311,7 +311,7 @@ describe("GrowthPanel", () => {
     const html = renderToStaticMarkup(
       <GrowthPanel
         data={{
-          stageDistribution: [{ stageName: "일단하개", count: 2 }],
+          stageDistribution: [{ stageName: "시동러", count: 2 }],
           xpByReason: [
             { reason: "workout_completed", label: "운동 완료", total: 1400 },
             { reason: "workout_photo", label: "인증 사진", total: 30 },

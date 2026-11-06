@@ -113,7 +113,7 @@ console.log("\n── 7) DB ↔ TS 미러 일치 ──");
 // TS와 동일 공식으로 기대값 생성 (progression.ts 미러)
 const CUTS = [0,200,400,600,800,1000,1400,1800,2200,2600,3000,3600,4200,4800,5400,6000,6800,7600,8400,9200,10000,11000,12000,13000,14000,15000,16200,17400,18600,19800,21000,22250,23500,24750,26000];
 const STAGE_KEYS = ["gaenodap","nuntteotgae","ildanhagae","mulgogagae","michyeobogae","paneuljjagae","jeonseorigae"];
-const STAGE_NAMES = ["개노답","눈떴개","일단하개","물고가개","미쳐보개","판을짜개","전설이개"];
+const STAGE_NAMES = ["개노답","꿈틀러","시동러","꾸준러","불꽃러","대장","전설"];
 let mismatch = 0;
 for (const d of defs.json) {
   const i = d.level - 1;

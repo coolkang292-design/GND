@@ -64,12 +64,12 @@ low detail, blurry
 | # | 단계 | 레벨 | 핵심 상태 | 지배 색 | 조명/분위기 | 불꽃 |
 |---|---|---|---|---|---|---|
 | 1 | 개노답 | 1~5 | 무기력·후회, 안 움직임 | 무채색 회색 | 어둡고 침침, 뒷골목 | 꺼짐 |
-| 2 | 눈떴개 | 6~10 | 깨달음·첫 행동 | 차가운 청록 | 새벽빛 한 줄기 | 점화(작게) |
-| 3 | 일단하개 | 11~15 | 실행·습관 시작 | 초록 | 활동적, 아침 | 성장 |
-| 4 | 물고가개 | 16~20 | 몰입·끈기 | 보라·남색 | 집중, 실내 조명 | 강렬 |
-| 5 | 미쳐보개 | 21~25 | 한계 돌파 | 보라+번개 | 폭발적, 스파크 | 폭발 |
-| 6 | 판을짜개 | 26~30 | 창조·시스템·확장 | 주황·황금 | 도시 야경, 따뜻함 | 확산 |
-| 7 | 전설이개 | 31~35 | 영향력·유산 | 황금빛 | 장엄, 스카이라인 | 영원 |
+| 2 | 꿈틀러 | 6~10 | 깨달음·첫 행동 | 차가운 청록 | 새벽빛 한 줄기 | 점화(작게) |
+| 3 | 시동러 | 11~15 | 실행·습관 시작 | 초록 | 활동적, 아침 | 성장 |
+| 4 | 꾸준러 | 16~20 | 몰입·끈기 | 보라·남색 | 집중, 실내 조명 | 강렬 |
+| 5 | 불꽃러 | 21~25 | 한계 돌파 | 보라+번개 | 폭발적, 스파크 | 폭발 |
+| 6 | 대장 | 26~30 | 창조·시스템·확장 | 주황·황금 | 도시 야경, 따뜻함 | 확산 |
+| 7 | 전설 | 31~35 | 영향력·유산 | 황금빛 | 장엄, 스카이라인 | 영원 |
 
 ---
 
@@ -81,27 +81,27 @@ low detail, blurry
 - **[영문]** `..., wearing a worn gray hoodie, slouched and sitting on dirty concrete steps in a dark grimy back alley, defeated hopeless expression, dull desaturated grey palette, cold dim lighting, no fire, graffiti wall background`
 - **[한글]** 낡은 회색 후드, 더러운 뒷골목 계단에 웅크려 앉음. 무기력·후회. 채도 낮은 회색, 불꽃 없음.
 
-### 02. 눈떴개 (Lv.6~10) — `char-2.png`
+### 02. 꿈틀러 (Lv.6~10) — `char-2.png`
 - **[영문]** `..., wearing a plain office shirt, standing up for the first time in a dim office at dawn, awakening determined look, first faint spark of fire in the background, cool teal palette with a single beam of morning light`
 - **[한글]** 평범한 셔츠, 어스름한 새벽 사무실에서 처음 일어섬. 깨달음·결심. 청록 톤 + 새벽빛 한 줄기, 작은 불씨 점화.
 
-### 03. 일단하개 (Lv.11~15) — `char-3.png`
+### 03. 시동러 (Lv.11~15) — `char-3.png`
 - **[영문]** `..., in athletic workout clothes, mid-stride running/starting to move with open notebook nearby, energetic focused expression, growing warm fire glow, fresh green and morning palette, active dynamic pose`
 - **[한글]** 운동복, 막 달리기 시작하는 역동적 자세, 옆에 노트. 실행·습관. 초록 톤, 커지는 불꽃.
 
-### 04. 물고가개 (Lv.16~20) — `char-4.png`
+### 04. 꾸준러 (Lv.16~20) — `char-4.png`
 - **[영문]** `..., focused at a desk gripping a single goal, intense unwavering stare, biting-down determination, deep purple and navy palette, strong indoor spotlight, bright intense flame accent`
 - **[한글]** 책상 앞, 목표 하나를 문 듯한 강렬한 응시. 몰입·끈기. 보라·남색, 강렬한 불꽃.
 
-### 05. 미쳐보개 (Lv.21~25) — `char-5.png`
+### 05. 불꽃러 (Lv.21~25) — `char-5.png`
 - **[영문]** `..., mid heavy workout lifting a dumbbell, explosive obsessed intensity, sweat and motion, lightning and electric sparks around, vivid purple palette with crackling energy, flame bursting`
 - **[한글]** 덤벨을 드는 격렬한 순간, 번개·스파크. 한계 돌파. 강한 보라 + 번개, 폭발하는 불꽃.
 
-### 06. 판을짜개 (Lv.26~30) — `char-6.png`
+### 06. 대장 (Lv.26~30) — `char-6.png`
 - **[영문]** `..., in a sharp dark suit standing before a laptop and city lights, confident leader creating systems, warm orange and gold palette, glowing city night skyline background, fire spreading warmly`
 - **[한글]** 세련된 정장, 노트북·도시 불빛 앞의 리더. 창조·확장. 주황·황금 야경, 번져가는 불꽃.
 
-### 07. 전설이개 (Lv.31~35) — `char-7.png`
+### 07. 전설 (Lv.31~35) — `char-7.png`
 - **[영문]** `..., in a luxurious suit atop a skyscraper overlooking a golden city skyline, legendary commanding aura, radiant golden light, majestic epic atmosphere, eternal glowing flame, legacy and influence`
 - **[한글]** 고급 정장, 마천루 위에서 황금빛 도시를 내려다봄. 영향력·유산. 찬란한 황금빛, 영원한 불꽃.
 

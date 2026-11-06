@@ -24,7 +24,7 @@ function profile(over: Partial<CrewMemberProfile> = {}): CrewMemberProfile {
     totalXp: 7220,
     currentLevel: 17,
     currentStage: 4,
-    stageName: "물고가개",
+    stageName: "꾸준러",
     characterPath: "/characters/char-4.png",
     nextLevelRequiredXp: 7600,
     xpToNextLevel: 380,
@@ -55,7 +55,7 @@ describe("MemberProfileBody — 레벨", () => {
     const html = renderToStaticMarkup(
       <MemberProfileBody profile={profile()} catalog={CATALOG} />,
     );
-    expect(html).toContain("물고가개 Lv.17");
+    expect(html).toContain("꾸준러 Lv.17");
     expect(html).toContain("누적 7,220 XP");
     expect(html).toContain('aria-valuenow="53"'); // 52.5 반올림
     expect(html).toContain("다음 레벨까지 380 XP");

@@ -49,7 +49,7 @@ describe("XpResultModal", () => {
       ...base,
       levelUp: true,
       stageUp: true,
-      unlockedRewards: [{ key: "stage_evolve_2", label: "눈떴개 캐릭터 진화" }],
+      unlockedRewards: [{ key: "stage_evolve_2", label: "꿈틀러 캐릭터 진화" }],
     });
     expect(html).toContain("1 / 4");
     expect(html).toContain("+160 XP");

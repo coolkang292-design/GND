@@ -174,7 +174,7 @@ describe("소개·링크 편집 입구", () => {
       totalXp: 100,
       currentLevel: 2,
       currentStage: 1,
-      stageName: "눈떴개",
+      stageName: "꿈틀러",
       characterPath: "/characters/char-01.png",
       nextLevelRequiredXp: 200,
       xpToNextLevel: 100,

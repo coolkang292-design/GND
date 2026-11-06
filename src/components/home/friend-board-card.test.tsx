@@ -354,9 +354,9 @@ describe("FriendBoardBody — 한 행이 말하는 것", () => {
   });
 
   it("단계명을 앞, 레벨을 뒤에 한 알약으로 적는다", () => {
-    // 1000 XP = Lv.6 → 6~10레벨은 2단계 '눈떴개'
+    // 1000 XP = Lv.6 → 6~10레벨은 2단계 '꿈틀러'
     renderBody(rowsOf([{ id: "u1", nickname: "친구하나", totalXp: 1000 }]));
-    expect(screen.getByText("눈떴개 Lv.6")).toBeTruthy();
+    expect(screen.getByText("꿈틀러 Lv.6")).toBeTruthy();
     expect(screen.queryByText("Lv.6")).toBeNull();
   });
 

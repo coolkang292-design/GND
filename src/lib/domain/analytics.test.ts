@@ -557,7 +557,7 @@ describe("buildUserRows", () => {
     expect(rows[0].nickname).toBe("오뎅끼");
     expect(rows[0].workoutsInPeriod).toBe(2);
     expect(rows[0].streakDays).toBe(2);
-    expect(rows[0].stageName).toBe("일단하개"); // 3000 XP = Lv.11 = 3단계
+    expect(rows[0].stageName).toBe("시동러"); // 3000 XP = Lv.11 = 3단계
     expect(rows[0].level).toBe(11);
     expect(rows[0].status).toBe("활성");
   });
