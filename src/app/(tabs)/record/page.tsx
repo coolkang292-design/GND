@@ -4882,6 +4882,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
 
           <TabataSheet
             open={tabataOpen}
+            userId={userId}
             onPlayingChange={setIntervalPlaying}
             openPickerOnMount={tabataPrefill?.openPicker}
             catalog={catalog}

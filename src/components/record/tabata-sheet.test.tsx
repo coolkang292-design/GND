@@ -16,6 +16,7 @@ import { TabataSheet } from "./tabata-sheet";
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
 });
 
 function item(
@@ -65,6 +66,10 @@ const FOUR = CATALOG.filter(
 
 function setup(
   over: {
+    userId?: string | null;
+    onComplete?: () => Promise<void>;
+    onClose?: () => void;
+    onCancelWorkout?: () => Promise<void>;
     pastSessions?: CalendarSession[];
     initialPicked?: CatalogExercise[];
     initialMinutes?: TabataMinutes;
@@ -78,17 +83,18 @@ function setup(
   return render(
     <TabataSheet
       open
+      userId={over.userId}
       catalog={CATALOG}
       pastSessions={over.pastSessions ?? []}
       pastLoading={false}
       initialPicked={over.initialPicked}
       initialMinutes={over.initialMinutes}
       followUpNames={over.followUpNames}
-      onClose={vi.fn()}
+      onClose={over.onClose ?? vi.fn()}
       onCreateCustom={vi.fn()}
       onBegin={over.onBegin ?? vi.fn()}
-      onComplete={vi.fn()}
-      onCancelWorkout={vi.fn()}
+      onComplete={over.onComplete ?? vi.fn()}
+      onCancelWorkout={over.onCancelWorkout ?? vi.fn()}
     />,
   );
 }
@@ -130,6 +136,83 @@ describe("TabataSheet — 예정표에서 열어도 바로 시작하지 않는�
     fireEvent.click(screen.getByRole("button", { name: "전신 인터벌 시작" }));
 
     await waitFor(() => expect(onBegin).toHaveBeenCalledWith(FOUR, 16));
+  });
+});
+
+describe("TabataSheet — 지정 계정의 Dynamite 음원", () => {
+  it("코스 변경은 대상 계정의 음원만 바꾸고 자동 재생하지 않는다", () => {
+    vi.stubEnv("NEXT_PUBLIC_INTERVAL_DYNAMITE_USER_IDS", "user-a,user-b,user-c");
+    const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
+    const { container } = setup({ userId: "user-a", initialPicked: FOUR });
+    expect(screen.getByText("배경음: Dynamite (Tabata)")).toBeTruthy();
+    for (const minutes of [4, 8, 16]) {
+      fireEvent.click(screen.getByRole("button", { name: `${minutes}분` }));
+      expect(container.querySelector("audio")?.getAttribute("src")).toBe(
+        `/audio/tabata-${minutes}min-dynamite-v1.mp3`,
+      );
+    }
+    expect(play).not.toHaveBeenCalled();
+  });
+
+  it("일반 계정은 기존 음원을 쓴다", () => {
+    vi.stubEnv("NEXT_PUBLIC_INTERVAL_DYNAMITE_USER_IDS", "user-a,user-b,user-c");
+    const { container } = setup({ userId: "other-user" });
+    expect(container.querySelector("audio")?.getAttribute("src")).toBe(
+      "/audio/tabata-4min-total-body-v3.mp3",
+    );
+    expect(screen.queryByText(/배경음:/)).toBeNull();
+  });
+
+  it("재생 위치로 운동·휴식을 표시하고 일시정지·재개·완료를 연결한다", async () => {
+    vi.stubEnv("NEXT_PUBLIC_INTERVAL_DYNAMITE_USER_IDS", "user-a");
+    const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
+    const pause = vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
+    const paused = vi.spyOn(HTMLMediaElement.prototype, "paused", "get").mockReturnValue(false);
+    const onComplete = vi.fn().mockResolvedValue(undefined);
+    const onClose = vi.fn();
+    const { container } = setup({
+      userId: "user-a", initialPicked: FOUR,
+      onBegin: vi.fn().mockResolvedValue(true), onComplete, onClose,
+    });
+    fireEvent.click(screen.getByRole("button", { name: "전신 인터벌 시작" }));
+    await waitFor(() => expect(screen.getByTestId("interval-session-overlay")).toBeTruthy());
+    const audio = container.querySelector("audio")!;
+    audio.currentTime = 13;
+    fireEvent.timeUpdate(audio);
+    expect(screen.getByTestId("interval-countdown").textContent).toBe("20");
+    audio.currentTime = 33;
+    fireEvent.timeUpdate(audio);
+    expect(screen.getByTestId("interval-countdown").textContent).toBe("10");
+    fireEvent.click(screen.getByRole("button", { name: "일시정지" }));
+    expect(pause).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("status").textContent).toContain("음악도 함께 멈췄어요");
+    paused.mockReturnValue(true);
+    fireEvent.click(screen.getByRole("button", { name: "이어서 하기" }));
+    expect(play).toHaveBeenCalledTimes(2);
+    fireEvent.ended(audio);
+    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("중단하면 음원을 멈추고 처음으로 되돌린다", async () => {
+    vi.stubEnv("NEXT_PUBLIC_INTERVAL_DYNAMITE_USER_IDS", "user-a");
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
+    const pause = vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const onCancelWorkout = vi.fn().mockResolvedValue(undefined);
+    const { container } = setup({
+      userId: "user-a", initialPicked: FOUR,
+      onBegin: vi.fn().mockResolvedValue(true), onCancelWorkout,
+    });
+    fireEvent.click(screen.getByRole("button", { name: "전신 인터벌 시작" }));
+    await waitFor(() => expect(screen.getByTestId("interval-session-overlay")).toBeTruthy());
+    const audio = container.querySelector("audio")!;
+    audio.currentTime = 30;
+    fireEvent.click(screen.getByRole("button", { name: "중단하기" }));
+    await waitFor(() => expect(onCancelWorkout).toHaveBeenCalledTimes(1));
+    expect(pause).toHaveBeenCalledTimes(1);
+    expect(audio.currentTime).toBe(0);
+    await waitFor(() => expect(screen.queryByTestId("interval-session-overlay")).toBeNull());
   });
 });
 

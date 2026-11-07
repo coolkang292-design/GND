@@ -12,7 +12,7 @@ import {
   intervalTotalRounds,
   intervalTotalSeconds,
 } from "./interval-cue";
-import { TABATA_ROUND_SECONDS, TABATA_TRACKS } from "./tabata";
+import { DYNAMITE_TABATA_TRACKS, TABATA_ROUND_SECONDS, TABATA_TRACKS } from "./tabata";
 
 describe("인터벌 진행 판정", () => {
   it("한 블록은 13초 준비 + 8라운드 × 30초이고 파일은 250초다", () => {
@@ -169,7 +169,7 @@ describe("인터벌 진행 판정", () => {
    */
   it("음원 파일 길이가 블록 계산과 맞는다", () => {
     const dir = join(process.cwd(), "public", "audio");
-    for (const track of TABATA_TRACKS) {
+    for (const track of [...TABATA_TRACKS, ...DYNAMITE_TABATA_TRACKS]) {
       const bytes = statSync(join(dir, track.src.replace("/audio/", ""))).size;
       const expected = intervalTotalSeconds(track.minutes);
       // 128kbps CBR 기준 초당 16KB. 길이가 절반이나 두 배로 어긋나면 잡힌다.

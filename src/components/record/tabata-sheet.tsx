@@ -37,6 +37,8 @@ export function TabataSheet({ open, ...props }: TabataProps & { open: boolean })
 }
 
 type TabataProps = {
+  /** 로그인한 계정의 음원 설정에 사용한다. 없으면 기본 음원이다. */
+  userId?: string | null;
   catalog: CatalogExercise[];
   onClose: () => void;
   onCreateCustom: (input: {
@@ -106,6 +108,7 @@ type TabataProps = {
 };
 
 function TabataSheetBody({
+  userId,
   catalog,
   onClose,
   onCreateCustom,
@@ -139,7 +142,7 @@ function TabataSheetBody({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const wakeLockRef = useRef<{ release: () => Promise<void> } | null>(null);
 
-  const track = tabataTrackForMinutes(minutes) ?? TABATA_TRACKS[0];
+  const track = tabataTrackForMinutes(minutes, userId) ?? TABATA_TRACKS[0];
 
   /**
    * 고르기 화면에는 **맨몸 종목만** 올린다 (사용자 지시 2026-08-13).
@@ -367,6 +370,11 @@ function TabataSheetBody({
             <p className="mt-1 text-xs font-bold text-muted">
               {INTERVAL_COPY.description}
             </p>
+            {track.musicTitle && !onPlan && (
+              <p className="mt-1 text-xs font-bold text-accent">
+                배경음: {track.musicTitle}
+              </p>
+            )}
             <p className="mt-1 text-xs text-muted">
               코스와 구성 운동 {TABATA_EXERCISE_COUNT}개를 고르고{" "}
               {onPlan ? "저장하세요" : "시작하세요"}.

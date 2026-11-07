@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CatalogExercise } from "@/lib/types";
 import type { LocalExercise } from "@/lib/workout";
 
@@ -252,6 +252,32 @@ describe("tabataResumeFromSession — 지난 기록을 타바타로 되살린다
 });
 
 describe("타바타 코스", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("지정한 세 계정만 코스별 Dynamite 음원을 쓴다", () => {
+    const users = ["user-a", "user-b", "user-c"];
+    vi.stubEnv("NEXT_PUBLIC_INTERVAL_DYNAMITE_USER_IDS", ` ${users.join(", ")} `);
+    for (const userId of users) {
+      for (const minutes of [4, 8, 16]) {
+        expect(tabataTrackForMinutes(minutes, userId)).toMatchObject({
+          src: `/audio/tabata-${minutes}min-dynamite-v1.mp3`,
+          minutes,
+          musicTitle: "Dynamite (Tabata)",
+        });
+      }
+    }
+  });
+
+  it("다른 계정·미로그인·설정 누락은 기존 음원을 쓴다", () => {
+    vi.stubEnv("NEXT_PUBLIC_INTERVAL_DYNAMITE_USER_IDS", "user-a,user-b,user-c");
+    for (const userId of ["user-a-extra", "other-user", "", null, undefined]) {
+      expect(tabataTrackForMinutes(4, userId)).toBe(TABATA_TRACKS[0]);
+    }
+    expect(tabataTrackForMinutes(5, "user-a")).toBeNull();
+    vi.stubEnv("NEXT_PUBLIC_INTERVAL_DYNAMITE_USER_IDS", "");
+    expect(tabataTrackForMinutes(4, "user-a")).toBe(TABATA_TRACKS[0]);
+  });
+
   it("4·8·16분 코스가 각자의 음원을 가진다", () => {
     expect(TABATA_TRACKS.map((t) => t.minutes)).toEqual([4, 8, 16]);
     expect(new Set(TABATA_TRACKS.map((t) => t.src)).size).toBe(3);

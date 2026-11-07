@@ -29,6 +29,8 @@ export type TabataTrack = {
   title: string;
   src: string;
   minutes: TabataMinutes;
+  /** 별도 배경음을 쓰는 코스의 표시 이름 */
+  musicTitle?: string;
 };
 
 /**
@@ -62,8 +64,29 @@ export const TABATA_TRACKS: readonly TabataTrack[] = [
   },
 ] as const;
 
-export function tabataTrackForMinutes(minutes: number): TabataTrack | null {
-  return TABATA_TRACKS.find((track) => track.minutes === minutes) ?? null;
+/** 기본 음원과 같은 13초 준비·250초 블록으로 보정한 파일들이다. */
+export const DYNAMITE_TABATA_TRACKS: readonly TabataTrack[] = TABATA_TRACKS.map(
+  (track) => ({
+    ...track,
+    id: `dynamite-${track.minutes}min`,
+    src: `/audio/tabata-${track.minutes}min-dynamite-v1.mp3`,
+    musicTitle: "Dynamite (Tabata)",
+  }),
+);
+
+export function tabataTrackForMinutes(
+  minutes: number,
+  userId?: string | null,
+): TabataTrack | null {
+  // 계정별 재생 취향 설정이다. 인증·접근 권한 검사로 사용하지 않는다.
+  // 실제 계정 고유번호는 코드 대신 gitignore 대상 .env.local에서 관리한다.
+  const selectedUserIds = (
+    process.env.NEXT_PUBLIC_INTERVAL_DYNAMITE_USER_IDS ?? ""
+  ).split(",").map((id) => id.trim()).filter(Boolean);
+  const tracks = userId && selectedUserIds.includes(userId)
+    ? DYNAMITE_TABATA_TRACKS
+    : TABATA_TRACKS;
+  return tracks.find((track) => track.minutes === minutes) ?? null;
 }
 
 /**

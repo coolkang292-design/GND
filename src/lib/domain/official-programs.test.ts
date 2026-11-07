@@ -35,7 +35,7 @@ const catalogForFirstProgram = (): CatalogExercise[] => [
   created_at: "2026-08-12T00:00:00.000Z",
 }));
 
-describe("개노답 챌린지 공식 프로그램 카탈로그", () => {
+describe("GND 공식 프로그램 카탈로그", () => {
   it("카탈로그에 없는 종목을 중복 없이 프로그램 최초 등장 순서로 모두 알린다", () => {
     expect(() => resolveProgram(STRENGTH_PROGRAMS[0], [])).toThrowError(
       "program_exercise_missing:바벨 백스쿼트,벤치프레스,시티드 로우,숄더프레스,사이드 레터럴 레이즈,루마니안 데드리프트,랫풀다운,인클라인 벤치프레스,페이스풀,덤벨 컬,레그프레스,덤벨 벤치프레스,바벨 로우,덤벨 레터럴 레이즈,케이블 푸시다운",
