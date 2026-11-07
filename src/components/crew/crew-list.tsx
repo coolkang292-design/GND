@@ -1,6 +1,7 @@
 "use client";
 
 import { Avatar } from "@/components/avatar";
+import { UserAvatar } from "@/components/user-avatar";
 import { getLevelProgress } from "@/lib/domain/progression";
 import type { CrewMember, CrewRequest } from "@/lib/domain/crew-link";
 
@@ -87,7 +88,7 @@ export function CrewList({
                 onClick={() => onSelect(m)}
                 className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
               >
-                <Avatar
+                <UserAvatar userId={m.id}
                   src={m.avatarUrl}
                   className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-line/40 text-lg"
                 />

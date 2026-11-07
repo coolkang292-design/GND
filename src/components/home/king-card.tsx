@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Avatar } from "@/components/avatar";
+import { UserAvatar } from "@/components/user-avatar";
 import { useAuth } from "@/components/auth-provider";
 import { UiIcon } from "@/components/ui-icon";
 import { DEFAULT_TIMEZONE } from "@/lib/domain/time";
@@ -157,7 +157,7 @@ export function KingCard({
                 >
                   {/* ⚠️ 옛 판은 박스 없이 `text-lg`만 줬다. 사진이 오면 높이가
                       0이 되므로 **명시적인 h/w가 필요하다** (2026-08-19). */}
-                  <Avatar
+                  <UserAvatar userId={m.id}
                     src={m.avatar_url}
                     className="flex h-7 w-7 flex-none items-center justify-center overflow-hidden rounded-full text-lg"
                   />
@@ -221,7 +221,7 @@ export function KingCard({
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50">
           <div className="w-full max-w-md rounded-t-[22px] bg-surface p-5 pb-8">
             <div className="flex items-center gap-3">
-              <Avatar
+              <UserAvatar userId={perf.who.id}
                 src={perf.who.avatar_url}
                 label={`${perf.who.nickname}님 프로필 사진`}
                 className="flex h-10 w-10 flex-none items-center justify-center overflow-hidden rounded-full text-3xl"

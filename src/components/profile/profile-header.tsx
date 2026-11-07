@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Avatar } from "@/components/avatar";
+import { UserAvatar } from "@/components/user-avatar";
 import { useAuth } from "@/components/auth-provider";
 import { Icon } from "@/components/ui/icon";
 import { getMyProfile } from "@/lib/crew";
@@ -44,7 +44,7 @@ export function ProfileHeader({ onEdit }: { onEdit: () => void }) {
 
   return (
     <section className="flex items-center gap-3.5 rounded-card border border-line-strong bg-surface p-4 shadow-card">
-      <Avatar
+      <UserAvatar userId={userId}
         src={profile?.avatarUrl}
         label={profile ? `${profile.nickname}님 프로필 사진` : undefined}
         className="flex h-16 w-16 flex-none items-center justify-center overflow-hidden rounded-full border-2 border-line-strong bg-surface-2 text-3xl"
