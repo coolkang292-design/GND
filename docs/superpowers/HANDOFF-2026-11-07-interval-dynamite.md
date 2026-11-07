@@ -1,10 +1,10 @@
 # 인터벌 계정별 Dynamite 음원 — 2026-11-07
 
-상태: **로컬 구현·검증 완료 / 푸시·운영 배포 승인 전**.
+상태: **운영 배포 완료 / 운영 음원·계정 설정·준비 화면 확인 완료**.
 
 ## 코드와 대상
 
-- 기준: `origin/main`의 `c41b151`. 브랜치 `feat/interval-dynamite`, 폴더 `.worktrees/interval-dynamite`. 이 기록과 기능을 같은 커밋으로 관리한다.
+- 기준: `origin/main`의 `c41b151`. 구현 브랜치 `feat/interval-dynamite`, 폴더 `.worktrees/interval-dynamite`. 기능 커밋 `6bd1b86`, 새소식 포함 운영 코드 커밋 `3329db6`. 배포 결과는 후속 문서 커밋으로 기록한다.
 - 기존 루트의 `feat/posthog-funnel` 및 미추적 파일은 보존했다. 초기 구현을 옮긴 후 루트의 추적 파일 변경은 원래 내용으로 복구했고 `git diff`와 staged diff 모두 0이다.
 - 운영 프로필을 읽기 전용으로 조회했다. 사용자가 쓴 `스칼렛또`의 실제 등록 표기는 `스칼레또`다. 나머지 대상은 오뎅끼데스까·낭만송곳니다.
 - 실제 고유번호는 `.env.local`의 `NEXT_PUBLIC_INTERVAL_DYNAMITE_USER_IDS`에만 설정했다. 루트와 작업 폴더에 설정되어 있으며 Git에 넣지 않는다. 계정 인증·권한 코드는 바꾸지 않았다.
@@ -39,17 +39,29 @@
 - 390×844 화면에서 배경음 제목·시간 버튼·시작 버튼을 확인했다. 스크린샷: 루트 `artifacts/interval-audio/interval-dynamite-390.png`(Git 제외).
 - 검사 페이지는 빌드 전에 제거하고, 개발 서버도 종료했다. 로그·PCM·초기 시안은 루트 `artifacts/interval-audio/`에 보존했다. 일부 내장 브라우저 검사 탭은 확인창 처리 오류로 자동 정리를 하지 못했다.
 
-## 배포할 때
+## 운영 배포 결과
 
-1. 사용자의 푸시·운영 배포 승인을 각각 확인한다. 현재 배포하지 않았으며 운영 동작은 바뀌지 않았다.
+- 사용자가 개발 서버를 직접 확인한 뒤 2026-11-07 운영 배포를 다시 승인했다. 검증한 기능과 새소식만 로컬 `main`에 fast-forward하고 GitHub에 푸시했다. 배포 직전 fetch 비교 `0 0`.
+- 로컬 `main`의 `3329db6`을 `git archive`로 만든 깨끗한 복사본(`%TEMP%/gnd-interval-production-20261107`)에서 CLI `--prod --yes --scope gnd4`로 배포했다. GitHub 자동 운영 배포는 계속 차단한다.
+- 프로젝트 `gnd` / 팀 `gnd4`. **dpl_4uNMXJBS9EHNsL3hqxtMfExm6QCa READY**, `https://gnd-lcpjw7axn-gnd4.vercel.app` → **https://gnd-one.vercel.app**.
+- `NEXT_PUBLIC_INTERVAL_DYNAMITE_USER_IDS`를 Vercel **Production 전용 Config**로 등록했다. 로컬의 세 고유번호와 정확히 일치함을 확인했다. 다른 환경변수는 바꾸지 않았다. 배포 dry-run에서 실제 `.env` 파일 업로드가 0개임을 확인했다.
+- 배포 직전 검사: lint 오류0/기존경고5, typecheck 통과, CI 모드 전체4,536개 통과/1개 건너뜀, 깨끗한 main 복사본 build 통과. 새소식 관련16개와 개발 `/whats-new` 화면도 확인했다.
+- 운영 파일3개 HTTP200·audio/mpeg, 4/8/16분 각각 **로컬 SHA-256 일치 3/3**. 운영 `/record`의 실제 JS20개에서 계정 목록 전체·음원 제목·새 파일 경로, `/whats-new`의 새 안내를 확인했다.
+- **로그인된 대상 계정의 운영 화면을 Chrome에서 직접 확인했다.** 기록 → `4분 인터벌 바로 시작` → 준비 화면의 `배경음: Dynamite (Tabata)`를 확인하고 4/8/16분을 눌러 각 새 파일과 duration 250/500/1000초·error=null·paused=true를 확인했다. 운동 시작은 누르지 않아 운영 운동 기록은 만들지 않았다.
+- 운영390×844 스크린샷: 루트 `artifacts/interval-audio/production-interval-390.png`. 파일·번들 검사 결과는 같은 폴더 `production-verification.json`. 비밀값·실제 고유번호는 보고서에 쓰지 않았다.
+- DB 변경·실사용자 알림 발송 없음. 사용자 요청으로 띄운 개발 서버(`localhost:3000`, 구현 브랜치)는 켜 둔 상태다.
+
+## 이후 재배포 주의
+
+1. 이후 변경의 푸시·운영 배포 승인을 각각 확인한다. 이번 배포는 위와 같이 완료했다.
 2. 새 커밋만 로컬 main에 반영한다. 기존 feat/posthog-funnel의 미배포 변경을 합치지 않는다.
 3. **Vercel Production 빌드 환경에도** `NEXT_PUBLIC_INTERVAL_DYNAMITE_USER_IDS`를 안전하게 설정해야 한다. 로컬 `.env.local`은 기본 업로드 제외 대상이므로 파일 복사만으로 클라우드 빌드에 전달됐다고 가정하지 않는다. 값은 로컬 파일에서 읽고 로그·PR·커밋에 쓰지 않는다. 설정이 빠지면 정상적으로 기존 음원으로 돌아간다.
 4. 검증된 로컬 main의 깨끗한 복사본으로 프로젝트 지정 CLI 방식(`--scope gnd4`)으로 배포한다. 소스·배경음 3개·계정별 선택과 운영 화면을 다시 확인한다. 실사용자 알림은 발송하지 않는다.
 
 ## 미검증
 
-- 실제 세 사용자로 로그인한 화면, DB 운동 기록 저장(기존 코드는 유지), 실제 iPhone·잠금/백그라운드·무음 스위치·스피커 출력.
+- 세 계정 모두의 개별 로그인 화면(현재 로그인된 대상 계정 한 개는 운영 준비 화면 확인), DB 운동 기록 저장(기존 코드는 유지), 실제 iPhone·잠금/백그라운드·무음 스위치·스피커 출력.
 - 음성 카운트다운과 화면의 세밀한 청감 오차. 보정 근거는 Whisper 타임스탬프와 기존20/10초 구조이며, 사람의 전체 곡 청취 검수는 하지 않았다.
 - 음원의 앱 사용 권리. 기술 구현이 이용 허락을 의미하지 않는다.
 
-다음 할 일: 커밋 내용을 제시하고 푸시 여부를 확인한다. 운영 배포는 별도 승인 후 진행한다.
+다음 할 일: 대상 계정의 실제 폰에서 앱을 다시 열어 배경음 재생을 확인한다.
