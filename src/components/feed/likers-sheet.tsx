@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { Avatar } from "@/components/avatar";
+import { UserAvatar } from "@/components/user-avatar";
 import type { CommentAuthor, People } from "@/components/feed/comment-thread";
 
 /**
@@ -78,7 +78,7 @@ export function LikersSheet({
               const tappable = Boolean(onAuthorTap && who && id !== viewerId);
               const inner = (
                 <>
-                  <Avatar
+                  <UserAvatar userId={id}
                     src={who?.avatarUrl ?? null}
                     className="flex h-8 w-8 flex-none items-center justify-center overflow-hidden rounded-full bg-surface-2 text-base"
                   />

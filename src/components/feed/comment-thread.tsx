@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Avatar } from "@/components/avatar";
+import { UserAvatar } from "@/components/user-avatar";
 import {
   CHEER_TALLY_EMOJI,
   COMMENT_MAX_LENGTH,
@@ -145,7 +145,7 @@ function CommentLine({
         onAuthorTap={onAuthorTap}
         className="mt-0.5 flex-none"
       >
-        <Avatar
+        <UserAvatar userId={comment.senderId}
           src={who?.avatarUrl ?? null}
           className={`flex items-center justify-center overflow-hidden rounded-full bg-surface-2 ${
             isReply ? "h-5 w-5 text-[10px]" : "h-6 w-6 text-xs"

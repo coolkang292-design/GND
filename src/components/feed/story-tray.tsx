@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { Avatar } from "@/components/avatar";
+import { UserAvatar } from "@/components/user-avatar";
 import { CheerActions } from "@/components/feed/cheer-actions";
 import { useActiveCrewSessions } from "@/lib/hooks/use-active-crew-sessions";
 import type { ActiveCrewSession } from "@/lib/social";
@@ -48,7 +48,7 @@ export function StoryTray() {
                 >
                   {/* 초록 링 = 진행 중. 인스타 스토리와 같은 신호라 배우지 않아도 읽힌다. */}
                   <span className="rounded-full border-2 border-accent p-[2.5px]">
-                    <Avatar
+                    <UserAvatar userId={s.userId}
                       src={s.avatarUrl}
                       className="flex h-[52px] w-[52px] items-center justify-center overflow-hidden rounded-full bg-surface-2 text-2xl"
                     />
@@ -109,7 +109,7 @@ function StoryCheerSheet({
         <div className="flex flex-col gap-1 px-5 pb-5">
           <div className="flex items-center gap-2.5">
             <span className="relative flex h-11 w-11 flex-none">
-              <Avatar
+              <UserAvatar userId={session.userId}
                 src={session.avatarUrl}
                 className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-surface-2 text-xl"
               />

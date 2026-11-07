@@ -1,6 +1,6 @@
 "use client";
 
-import { Avatar } from "@/components/avatar";
+import { UserAvatar } from "@/components/user-avatar";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { CaptionPicker } from "@/components/feed/caption-picker";
@@ -349,7 +349,7 @@ function CardFooter({
         >
           <span className="flex flex-none -space-x-2">
             {item.likers.slice(0, 3).map((id) => (
-              <Avatar
+              <UserAvatar userId={id}
                 key={id}
                 src={item.people.get(id)?.avatarUrl ?? null}
                 className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full border-2 border-surface bg-surface-3 text-[11px]"
@@ -518,7 +518,7 @@ export function FeedItemCard({
               aria-label={`${item.nickname} 프로필 보기`}
               className="flex min-w-0 items-center gap-2.5 text-left"
             >
-              <Avatar
+              <UserAvatar userId={item.userId}
                 src={item.avatarUrl}
                 className="flex h-10 w-10 flex-none items-center justify-center overflow-hidden rounded-full border-2 border-white/25 bg-white/15 text-lg"
               />
@@ -580,7 +580,7 @@ export function FeedItemCard({
           aria-label={`${item.nickname} 프로필 보기`}
           className="flex min-w-0 items-center gap-2.5 text-left"
         >
-          <Avatar
+          <UserAvatar userId={item.userId}
             src={item.avatarUrl}
             className="flex h-10 w-10 flex-none items-center justify-center overflow-hidden rounded-full border-2 border-line-strong bg-surface-2 text-lg"
           />

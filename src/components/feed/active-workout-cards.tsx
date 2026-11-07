@@ -1,6 +1,6 @@
 "use client";
 
-import { Avatar } from "@/components/avatar";
+import { UserAvatar } from "@/components/user-avatar";
 import { useAuth } from "@/components/auth-provider";
 import { CheerActions } from "@/components/feed/cheer-actions";
 import { useActiveCrewSessions } from "@/lib/hooks/use-active-crew-sessions";
@@ -58,7 +58,7 @@ function ActiveWorkoutCard({
         {/* ⚠️ 초록 점은 아바타의 **형제**다. `<Avatar>` 안에 넣을 수 없어서
             (사진일 때 img 하나만 그린다) 바깥 relative 칸으로 감쌌다. */}
         <span className="relative flex h-9 w-9 flex-none">
-          <Avatar
+          <UserAvatar userId={session.userId}
             src={session.avatarUrl}
             className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-surface-2 text-lg"
           />
