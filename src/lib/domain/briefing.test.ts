@@ -16,7 +16,7 @@ function user(over: Partial<BriefingUser>): BriefingUser {
   return {
     userId: "me",
     timezone: TZ,
-    completedAts: [kst("2026-07-14T19:00:00")], // 4일 전 → d1
+    completedAts: [kst("2026-07-15T19:00:00")], // 3일 전 → d1
     // 기본값은 **추정 불가**(표본 미달)다. 그래야 이 파일의 옛 단언들이
     // 09:00 폴백 위에서 그대로 성립한다 — 시각 판정이 아니라 문구·dedupe를 보는 테스트다.
     startedAts: [],
@@ -129,7 +129,7 @@ describe("buildBriefings — 제목(스트릭 단계)", () => {
     // 제목 조립을 보는 것이므로 오늘 계획이 있는 경우로 고정한다(아래 expired와 같다).
     const { briefings } = buildBriefings([user({ hasPlanToday: true })], new Map(), NOW);
     expect(briefings[0].title.startsWith("🔥 ")).toBe(true);
-    expect(briefings[0].title).toContain("1일"); // 4일 전 1회 운동 → 스트릭 1
+    expect(briefings[0].title).toContain("1일"); // 3일 전 1회 운동 → 스트릭 1
   });
   it("expired: 소멸 유저도 재점화 카피로 발송", () => {
     // 2026-08-16: 계획 없는 날은 제안이 제목을 가져간다(아래 "계획 없는 날 제안"
@@ -180,7 +180,7 @@ describe("buildBriefings — 본문·dedupe_key", () => {
    * 같은지도 그대로 본다(옛 단언의 목적).
    */
   it("제안이 없는 날의 본문은 홈 카드와 같은 '오늘의 한 줄'이다", () => {
-    // 기본 픽스처 = 4일 전 운동(d1), 스트릭 1일, todayKey 2026-07-18
+    // 기본 픽스처 = 3일 전 운동(d1), 스트릭 1일, todayKey 2026-07-18
     const line = dailyMessage({
       stage: "d1",
       streak: 1,

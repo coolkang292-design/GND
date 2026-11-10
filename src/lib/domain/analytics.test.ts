@@ -509,14 +509,15 @@ describe("userStatus", () => {
 });
 
 describe("churnRisk", () => {
-  // 경계 5일 = STREAK_EXPIRY_DAYS. 앱이 불꽃을 보여주는 사용자가
+  // 경계 4일 = STREAK_EXPIRY_DAYS. 앱이 불꽃을 보여주는 사용자가
   // 관리자 화면에서 "위험"으로 뜨면 두 화면이 어긋난다.
-  it("스트릭이 살아있는 5일 미만은 낮음", () => {
+  it("스트릭이 살아있는 4일 미만은 낮음", () => {
     expect(churnRisk(0)).toBe("낮음");
-    expect(churnRisk(4)).toBe("낮음");
+    expect(churnRisk(3)).toBe("낮음");
   });
 
-  it("5~13일은 중간", () => {
+  it("4~13일은 중간", () => {
+    expect(churnRisk(4)).toBe("중간");
     expect(churnRisk(5)).toBe("중간");
     expect(churnRisk(13)).toBe("중간");
   });

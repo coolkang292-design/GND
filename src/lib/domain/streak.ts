@@ -1,18 +1,20 @@
 /**
  * 스트릭(불꽃) 도메인 순수 함수 (§8·§16 streak.ts).
- * 하루 1회+ 완료 = 운동일(사용자 tz). 5일 연속 미운동 시 소멸, 그 전엔 유지.
+ * 하루 1회+ 완료 = 운동일(사용자 tz). 3일을 쉬면 4일째에 소멸, 그 전엔 유지.
+ * (마지막 운동일 D → D+1~D+3 휴식 → D+4에 꺼진다. 2026-11-11 사용자 지시, 이전 5일)
  * 오늘 미완료여도 오늘이 안 끝났으면 즉시 끊지 않는다 → 날짜 차이로만 판정.
+ *
+ * ⚠️ DB `current_streak_days`(0124)의 임계값과 **같은 값**이어야 한다.
  */
 
 import { dayKey } from "./time";
 
-export const STREAK_EXPIRY_DAYS = 5;
+export const STREAK_EXPIRY_DAYS = 4;
 
 export type StreakStage =
   | "none" // 운동 기록 없음
   | "today_done" // 오늘 완료
-  | "d4" // 소멸까지 4일
-  | "d3"
+  | "d3" // 소멸까지 3일 (어제가 마지막 운동)
   | "d2"
   | "d1" // 오늘 안 하면 내일 소멸
   | "expired"; // 소멸
@@ -33,8 +35,8 @@ function daysBetween(fromKey: string, toKey: string): number {
 
 /**
  * 현재 스트릭 = 가장 최근 사슬의 운동일 수.
- * 운동일 사이 간격이 5일 미만이면 사슬이 이어지고,
- * 마지막 운동일로부터 오늘까지 5일 이상 지났으면 소멸(0).
+ * 운동일 사이 간격이 4일 미만이면 사슬이 이어지고,
+ * 마지막 운동일로부터 오늘까지 4일 이상 지났으면 소멸(0).
  */
 export function currentStreak(dayKeys: string[], todayKey: string): number {
   const keys = [...dayKeys].sort();
@@ -61,7 +63,7 @@ export function daysSinceLastWorkout(
   return last ? daysBetween(last, todayKey) : null;
 }
 
-/** 단계 판정: 오늘완료 / D-4 ~ D-1 / 소멸 (§8 6단계 중 카피 제외 판정부) */
+/** 단계 판정: 오늘완료 / D-3 ~ D-1 / 소멸 (§8 단계 중 카피 제외 판정부) */
 export function streakStage(dayKeys: string[], todayKey: string): StreakStage {
   const last = [...dayKeys].sort().at(-1);
   if (!last) return "none";
@@ -69,6 +71,6 @@ export function streakStage(dayKeys: string[], todayKey: string): StreakStage {
   const gap = daysBetween(last, todayKey);
   if (gap <= 0) return "today_done";
   if (gap >= STREAK_EXPIRY_DAYS) return "expired";
-  // gap 1→d4, 2→d3, 3→d2, 4→d1
+  // gap 1→d3, 2→d2, 3→d1
   return `d${STREAK_EXPIRY_DAYS - gap}` as StreakStage;
 }

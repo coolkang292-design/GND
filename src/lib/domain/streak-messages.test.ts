@@ -14,17 +14,17 @@ import {
 } from "./streak-messages";
 import { daysSinceLastWorkout, streakStage } from "./streak";
 
-describe("d4 카피 — 어제는 '운동한 날'이지 '쉰 날'이 아니다", () => {
-  it("d4는 마지막 운동이 어제인 상태다", () => {
+describe("d3 카피 — 어제는 '운동한 날'이지 '쉰 날'이 아니다", () => {
+  it("d3은 마지막 운동이 어제인 상태다", () => {
     // 이 전제가 깨지면 아래 문구 규칙도 다시 봐야 한다.
-    expect(streakStage(["2026-07-22"], "2026-07-23")).toBe("d4");
+    expect(streakStage(["2026-07-22"], "2026-07-23")).toBe("d3");
     expect(daysSinceLastWorkout(["2026-07-22"], "2026-07-23")).toBe(1);
   });
 
   it("어느 변형도 어제를 쉰 날로 단정하지 않는다", () => {
     // 2026-07-23 사용자 신고: 어제 운동했는데 "어제 쉬셨다?"가 떴다.
     // 로테이션되므로 세 변형 전부를 검사한다.
-    const variants = STAGE_MESSAGES.d4 ?? [];
+    const variants = STAGE_MESSAGES.d3 ?? [];
     expect(variants.length).toBeGreaterThan(0);
     for (const make of variants) {
       const msg = make(2);
@@ -38,24 +38,23 @@ describe("d4 카피 — 어제는 '운동한 날'이지 '쉰 날'이 아니다",
         expect(msg).not.toContain(banned);
       }
       expect(msg).toContain("2일"); // 스트릭 수는 계속 정확히 찌른다
-      expect(msg).toContain("D-4");
+      expect(msg).toContain("D-3");
     }
   });
 });
 
 describe("나머지 단계는 쉰 일수를 정확히 말한다", () => {
-  // d3=2일째, d2=3일째, d1=4일째(오늘 포함) — gap과 일치해야 한다.
+  // d2=2일째, d1=3일째(오늘 포함) — gap과 일치해야 한다.
   it.each([
-    ["d3", "2026-07-21", 2],
-    ["d2", "2026-07-20", 3],
-    ["d1", "2026-07-19", 4],
+    ["d2", "2026-07-21", 2],
+    ["d1", "2026-07-20", 3],
   ] as const)("%s = gap %i", (stage, lastDay, gap) => {
     expect(streakStage([lastDay], "2026-07-23")).toBe(stage);
     expect(daysSinceLastWorkout([lastDay], "2026-07-23")).toBe(gap);
   });
 
   it("d1은 '오늘 안 하면 리셋'이 맞다 (내일이면 소멸)", () => {
-    expect(streakStage(["2026-07-19"], "2026-07-24")).toBe("expired");
+    expect(streakStage(["2026-07-20"], "2026-07-24")).toBe("expired");
     for (const make of STAGE_MESSAGES.d1 ?? []) {
       expect(make(5)).toContain("D-1");
     }
@@ -69,7 +68,7 @@ describe("나머지 단계는 쉰 일수를 정확히 말한다", () => {
  * 부드럽게 다듬다가 **잃을 양을 빼 버리는 것**을 막는 것이 이 describe의 목적이다.
  */
 describe("스트릭 경고 — 숫자와 남은 날을 사실대로 말한다", () => {
-  const STAGES = ["d4", "d3", "d2", "d1"] as const;
+  const STAGES = ["d3", "d2", "d1"] as const;
 
   it("모든 단계가 잃을 일수(n)를 문구 안에 적는다", () => {
     for (const stage of STAGES) {
@@ -86,18 +85,18 @@ describe("스트릭 경고 — 숫자와 남은 날을 사실대로 말한다", 
   it("모든 단계가 남은 시간을 D-N으로 못 박는다", () => {
     for (const stage of STAGES) {
       for (const make of STAGE_MESSAGES[stage] ?? []) {
-        expect(make(7)).toMatch(/D-[1-4]/);
+        expect(make(7)).toMatch(/D-[1-3]/);
       }
     }
   });
 
   /**
-   * ⚠️ **사실을 넘는 위협을 쓰지 않는다.** 이 앱의 스트릭은 5일 유예다
-   * (`STREAK_EXPIRY_DAYS = 5`). 어제 운동한 사람(d4)에게 "오늘 안 하면 리셋"은
+   * ⚠️ **사실을 넘는 위협을 쓰지 않는다.** 이 앱의 스트릭은 3일 유예다
+   * (`STREAK_EXPIRY_DAYS = 4`). 어제 운동한 사람(d3)에게 "오늘 안 하면 리셋"은
    * 거짓말이고, 한 번 거짓말한 경고는 다음에도 안 믿긴다.
    */
-  it("d4~d2는 오늘 소멸한다고 말하지 않는다 — 아직 여유가 있다", () => {
-    for (const stage of ["d4", "d3", "d2"] as const) {
+  it("d3~d2는 오늘 소멸한다고 말하지 않는다 — 아직 여유가 있다", () => {
+    for (const stage of ["d3", "d2"] as const) {
       for (const make of STAGE_MESSAGES[stage] ?? []) {
         const msg = make(7);
         expect(msg).not.toContain("오늘 안 하면");
@@ -155,8 +154,8 @@ describe("스트릭 경고 — 숫자와 남은 날을 사실대로 말한다", 
  */
 describe("동기 조합 — 단계마다 다른 기제", () => {
   /** 목표 구배: 다음 한 칸(n+1)을 보여준다 — 위협이 거짓인 단계의 지렛대 */
-  it("d4는 위협 대신 다음 숫자(n+1)를 보여준다", () => {
-    const variants = STAGE_MESSAGES.d4 ?? [];
+  it("d3은 위협 대신 다음 숫자(n+1)를 보여준다", () => {
+    const variants = STAGE_MESSAGES.d3 ?? [];
     expect(variants.length).toBeGreaterThan(0);
     for (const make of variants) {
       expect(make(7)).toContain("8일"); // n+1
@@ -164,18 +163,16 @@ describe("동기 조합 — 단계마다 다른 기제", () => {
   });
 
   /** 보유 효과·매몰 노력: 이미 **가진** 것과 들인 수고를 상기시킨다 */
-  it("d3은 이미 쌓은 것을 상기시킨다", () => {
-    for (const make of STAGE_MESSAGES.d3 ?? []) {
+  it("d2는 이미 쌓은 것을 상기시킨다", () => {
+    for (const make of STAGE_MESSAGES.d2 ?? []) {
       expect(make(7)).toMatch(/당신|쌓|기다리|주인/);
     }
   });
 
   /** 자기효능: 잃을 양만 말하고 문턱을 안 낮추면 "어차피 못 해"로 간다 */
-  it("d2·d1은 잃을 양과 함께 할 수 있다는 신호를 준다", () => {
-    for (const stage of ["d2", "d1"] as const) {
-      for (const make of STAGE_MESSAGES[stage] ?? []) {
-        expect(make(7)).toMatch(/30분|한 번|지금|됩니다|지킵니다/);
-      }
+  it("d1은 잃을 양과 함께 할 수 있다는 신호를 준다", () => {
+    for (const make of STAGE_MESSAGES.d1 ?? []) {
+      expect(make(7)).toMatch(/30분|한 번|지금|됩니다|지킵니다/);
     }
   });
 
@@ -216,8 +213,8 @@ describe("동기 조합 — 단계마다 다른 기제", () => {
  * 갈래**다. 위험을 말하지 않고, 지금 하고 있는 반복 자체를 성공의 재료로 되돌려
  * 준다. 셋을 한 곳에 섞으면 같은 자리에서 같은 말이 두 번 나온다(2026-07-23 사고).
  *
- * ⚠️⚠️ **"매일"이라고 말하면 거짓말이다.** 이 앱의 스트릭은 5일 유예라
- * (`STREAK_EXPIRY_DAYS = 5`) 사흘 쉬어도 이어진다. `11일째`는 "11일 동안 하루도
+ * ⚠️⚠️ **"매일"이라고 말하면 거짓말이다.** 이 앱의 스트릭은 3일 유예라
+ * (`STREAK_EXPIRY_DAYS = 4`) 사흘 쉬어도 이어진다. `11일째`는 "11일 동안 하루도
  * 안 빠졌다"가 아니라 "11번의 운동이 끊기지 않고 이어졌다"는 뜻이다.
  * 문구를 다듬다가 이 선을 넘으면 화면이 사용자에게 없던 성실을 씌운다.
  */
@@ -231,7 +228,7 @@ describe("반복·지속 한 줄 — 성공은 반복에서 나온다", () => {
     }
   });
 
-  it("어느 변형도 매일 했다고 단정하지 않는다 — 5일 유예가 있다", () => {
+  it("어느 변형도 매일 했다고 단정하지 않는다 — 3일 유예가 있다", () => {
     for (const make of ALL) {
       const msg = make(11);
       for (const banned of [
@@ -283,7 +280,7 @@ describe("반복·지속 한 줄 — 성공은 반복에서 나온다", () => {
    * 불구하고 극복할 수 있다는 메시지 위주로"*.
    */
   it("위험한 사람에게는 겁이 아니라 회복을 말한다", () => {
-    for (const stage of ["d4", "d3", "d2", "d1"] as const) {
+    for (const stage of ["d3", "d2", "d1"] as const) {
       const line = dailyMessage({ stage, streak: 11, todayKey: "2026-08-21" });
       expect(AT_RISK_MESSAGES.map((make) => make(11))).toContain(line);
       // 잃을 양·남은 날을 말하는 것은 **경고 배너**의 몫이다. 여기까지 겁주면

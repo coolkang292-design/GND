@@ -24,7 +24,7 @@ const NOW = new Date("2026-08-21T03:00:00Z");
 const YESTERDAY = new Date("2026-08-20T03:00:00Z");
 /** 2026-08-21(금) 10:00 KST — 오늘 이미 운동한 상태 */
 const TODAY = new Date("2026-08-21T01:00:00Z");
-/** 2026-08-10(월) — 5일 유예(`STREAK_EXPIRY_DAYS`)를 넘겨 **이미 소멸**한 기록 */
+/** 2026-08-10(월) — 3일 유예(`STREAK_EXPIRY_DAYS`)를 넘겨 **이미 소멸**한 기록 */
 const LONG_AGO = new Date("2026-08-10T03:00:00Z");
 
 /** 640 XP = Lv.4(개노답). 다음 레벨까지 남은 XP가 0이 아니라 진행바가 보인다. */
@@ -388,7 +388,7 @@ describe("PersonalTodayCard — 프로필로 가는 길과 아바타", () => {
  *
  * ⚠️ **문구를 통째로 박지 마라.** `pickByDay`가 `todayKey`로 변형을 고르므로 `now`를
  * 고정하면 결정적이긴 하지만, 문장을 그대로 단언하면 카피를 다듬는 순간 깨진다.
- * 여기서 지키려는 것은 **단계 표식**(`소멸 D-4`)과 **잃을 숫자**가 화면에 나온다는 것뿐이다.
+ * 여기서 지키려는 것은 **단계 표식**(`소멸 D-3`)과 **잃을 숫자**가 화면에 나온다는 것뿐이다.
  */
 /**
  * 최근 7일 점 (2026-08-21 사용자 지시로 추가).
@@ -448,16 +448,16 @@ describe("PersonalTodayCard — 스트릭 한 줄", () => {
    * 같은 자리에서 두 번 몰아붙이게 된다 — 그래서 두 줄은 **다른 갈래**여야 한다.
    */
   it("경고가 뜨는 날에는 회복을 말한다 — 경고와 다른 갈래다", () => {
-    renderCard({ completedAts: [YESTERDAY], status: "idle" }); // d4 → 경고
+    renderCard({ completedAts: [YESTERDAY], status: "idle" }); // d3 → 경고
     const line = dailyMessage({
-      stage: "d4",
+      stage: "d3",
       streak: 1,
       todayKey: "2026-08-21",
     });
     expect(AT_RISK_MESSAGES.map((make) => make(1))).toContain(line);
     expect(screen.getByText(line)).toBeTruthy();
     // 겁주는 쪽은 경고 배너 하나뿐이다
-    expect(screen.getByRole("alert").textContent).toContain("소멸 D-4");
+    expect(screen.getByRole("alert").textContent).toContain("소멸 D-3");
     expect(line).not.toContain("소멸");
   });
 
@@ -524,7 +524,7 @@ describe("PersonalTodayCard — 스트릭 소멸 경고", () => {
   it("스트릭이 끊길 위험이면 소멸 경고를 띄운다", () => {
     renderCard({ completedAts: [YESTERDAY], status: "idle" });
     const warn = screen.getByRole("alert");
-    expect(warn.textContent).toContain("소멸 D-4");
+    expect(warn.textContent).toContain("소멸 D-3");
     expect(warn.textContent).toContain("1일"); // 잃을 스트릭이 문구에 들어간다
   });
 

@@ -179,7 +179,7 @@ function maxBy(
 
 export function bestRecords(totals: ReadonlyMap<string, DayTotals>): BestRecords {
   return {
-    // 마일스톤과 같은 함수 — 달력상 하루도 안 빠진 날 수(앱 스트릭 5일 유예와 다르다)
+    // 마일스톤과 같은 함수 — 달력상 하루도 안 빠진 날 수(앱 스트릭 3일 유예와 다르다)
     longestStreak: longestConsecutiveDays([...totals.keys()]),
     maxMinutes: maxBy(totals, (t) => t.minutes),
     maxCardioKm: maxBy(totals, (t) => t.cardioKm),

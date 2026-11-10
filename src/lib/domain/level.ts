@@ -4,7 +4,12 @@
  * 운동일 간격 5일+(스트릭 소멸 규칙 재사용) → -1. 범위 1~5, 표시 전용(순위 점수 무관).
  */
 
-import { STREAK_EXPIRY_DAYS } from "./streak";
+/**
+ * 챌린지 레벨-1 공백 기준(일). 스트릭 소멸선(`STREAK_EXPIRY_DAYS`)은 2026-11-11에
+ * 5→4로 줄었지만 챌린지 레벨 규칙은 그대로 5일이다 — 진행 중 챌린지 규칙을 소급해서
+ * 바꾸지 않는다. 그래서 상수를 스트릭과 분리했다.
+ */
+const STREAK_EXPIRY_DAYS = 5;
 
 export const LEVEL_MIN = 1;
 export const LEVEL_MAX = 5;

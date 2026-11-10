@@ -20,7 +20,7 @@ const h = { apikey: KEY, Authorization: `Bearer ${KEY}`, "Content-Type": "applic
 const get = async (p) => (await fetch(`${URL}${p}`, { headers: h })).json();
 
 // src/lib/domain/streak.ts의 규칙을 그대로 옮긴 것 — 여기를 고치면 저기도 고쳐야 한다
-const EXPIRY = 5;
+const EXPIRY = 4; // streak.ts STREAK_EXPIRY_DAYS · SQL current_streak_days(0124)와 같은 값
 function daysBetween(a, b) {
   const u = (k) => {
     const [y, m, d] = k.split("-").map(Number);

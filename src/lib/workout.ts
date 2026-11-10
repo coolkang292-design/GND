@@ -1594,6 +1594,63 @@ export async function getTodayWorkoutTotals(
   };
 }
 
+export type TodayCompletedSession = {
+  id: string;
+  completedAt: Date;
+  durationMinutes: number | null;
+  /** 완료 화면에서 고른 한마디(`workout_sessions.title`). 없으면 null */
+  title: string | null;
+  exerciseNames: string[];
+};
+
+/**
+ * 오늘(tz 기준 0시~) 완료한 내 세션 목록 — 기록 탭 "오늘 한 운동" 용 (2026-11-11).
+ *
+ * 같은 날 운동을 또 기록해도 **앞의 운동이 화면에서 사라지지 않게** 하려는 것이다.
+ * 데이터 모델은 이미 하루 여러 세션을 허용한다(운동일은 날짜로 중복 제거, 피드는 세션
+ * 1건당 카드 1장). 모자랐던 건 완료 직후 화면이 비워져 방금 한 운동이 안 보인다는 것.
+ *
+ * ⚠️ `getCompletedSessions`(전체 이력)를 쓰지 않는다 — 오늘 것만 `completed_at` 범위로 좁힌다.
+ * 실패하면 던진다 — 부르는 쪽이 빈 배열로 떨어뜨려 목록만 안 그린다.
+ */
+export async function getTodayCompletedSessions(
+  userId: string,
+  now: Date,
+  timeZone: string,
+): Promise<TodayCompletedSession[]> {
+  const supabase = getSupabaseBrowserClient();
+  const { start, end } = dayRange(now, timeZone);
+  const { data, error } = await supabase
+    .from("workout_sessions")
+    .select(
+      "id, completed_at, duration_minutes, title, workout_exercises(exercise_name, sort_order)",
+    )
+    .eq("user_id", userId)
+    .eq("status", "completed")
+    .is("deleted_at", null)
+    .gte("completed_at", start.toISOString())
+    .lt("completed_at", end.toISOString())
+    .order("completed_at", { ascending: true });
+  if (error) throw error;
+
+  type Row = {
+    id: string;
+    completed_at: string;
+    duration_minutes: number | null;
+    title: string | null;
+    workout_exercises: { exercise_name: string; sort_order: number }[] | null;
+  };
+  return ((data ?? []) as Row[]).map((r) => ({
+    id: r.id,
+    completedAt: new Date(r.completed_at),
+    durationMinutes: r.duration_minutes ?? null,
+    title: r.title ?? null,
+    exerciseNames: [...(r.workout_exercises ?? [])]
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map((e) => e.exercise_name),
+  }));
+}
+
 /**
  * 완료 세션의 **날짜와 분만** — 기록 화면 오늘 카드용 (2026-08-19).
  *

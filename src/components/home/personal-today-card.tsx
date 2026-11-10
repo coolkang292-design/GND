@@ -166,7 +166,7 @@ export function PersonalTodayCard({
   const streak = currentStreak(keys, todayKey);
   /**
    * 소멸 경고 — 판정은 `STAGE_MESSAGES`(d4~d1에만 값)가 한다. **조건을 손으로 붙이지 마라.**
-   * 이 앱의 스트릭은 5일 유예라 "오늘 안 하면 리셋"은 거짓말이다(`streak-messages.ts`).
+   * 이 앱의 스트릭은 3일 유예라 "오늘 안 하면 리셋"은 거짓말이다(`streak-messages.ts`).
    */
   const stage = streakStage(keys, todayKey);
   const warning =

@@ -20,6 +20,7 @@ import {
   type ConfiguredPick,
 } from "@/components/record/exercise-picker";
 import { RecordEmptyState, StartOptions } from "@/components/record/record-empty-state";
+import { TodayCompletedList } from "@/components/record/today-completed-list";
 import { ExerciseReorderSheet } from "@/components/record/exercise-reorder-sheet";
 import { IdlePauseModal } from "@/components/record/idle-pause-modal";
 import { RoutineSaveSheet } from "@/components/record/routine-save-sheet";
@@ -272,6 +273,8 @@ import {
   getSessionCopySource,
   getSessionExerciseStructure,
   getCompletedSessionMinutes,
+  getTodayCompletedSessions,
+  type TodayCompletedSession,
   getSuggestionFacts,
   hasCompletedHistory,
   loadDraft,
@@ -624,6 +627,19 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const [todayPlanExists, setTodayPlanExists] = useState(false);
   /** 오늘 이미 완료한 세션이 있나 */
   const [didWorkoutToday, setDidWorkoutToday] = useState(false);
+  /** 오늘 완료한 세션 목록 (2026-11-11) — 같은 날 추가 기록해도 앞 운동이 안 사라지게 */
+  const [todaySessions, setTodaySessions] = useState<TodayCompletedSession[]>(
+    [],
+  );
+  const refreshTodaySessions = useCallback(async () => {
+    try {
+      setTodaySessions(
+        await getTodayCompletedSessions(userId, new Date(), resolveTimeZone()),
+      );
+    } catch {
+      // 목록만 안 뜬다 — 기록은 그대로 된다
+    }
+  }, [userId]);
   /** 가장 최근 완료 세션이 인터벌이었나 */
   const [lastSessionWasInterval, setLastSessionWasInterval] = useState(false);
   /** 가입일 (`"YYYY-MM-DD"`) — 신규 걷기 창 판정 */
@@ -1397,6 +1413,16 @@ function WorkoutScreen({ userId }: { userId: string }) {
           });
       } catch {
         // 누적 카드만 안 뜬다
+      }
+      try {
+        const today = await getTodayCompletedSessions(
+          userId,
+          new Date(),
+          resolveTimeZone(),
+        );
+        if (!cancelled) setTodaySessions(today);
+      } catch {
+        // 오늘 한 운동 목록만 안 뜬다
       }
       try {
         const facts = await getSuggestionFacts(userId);
@@ -3306,6 +3332,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
         다시 조회하지 않는 이유: 완료했다는 것을 이 자리가 이미 알고 있다.
       */
       setDidWorkoutToday(true);
+      void refreshTodaySessions(); // 방금 끝낸 운동을 목록에 올린다
       // 완료 직후 다시 운동을 준비할 때 방금 기록도 목록에 포함한다.
       setPastLoaded(false);
       setPastSessions([]);
@@ -4492,6 +4519,20 @@ function WorkoutScreen({ userId }: { userId: string }) {
         그린다 (사용자 지시 2026-08-06). 여기서 중요한 건 무엇을 더 그리느냐가
         아니라 무엇을 **안 그리느냐**다 — 지금 할 일은 하나다.
       */}
+          {/* 오늘 이미 한 운동 (2026-11-11) — 운동 중에는 안 그린다(진행 중 화면이 말한다) */}
+          {!active && todaySessions.length > 0 && (
+            <TodayCompletedList
+              sessions={todaySessions}
+              timeZone={resolveTimeZone()}
+              onTitleChange={(id, next) =>
+                setTodaySessions((prev) =>
+                  prev.map((x) => (x.id === id ? { ...x, title: next } : x)),
+                )
+              }
+              onToast={showToast}
+            />
+          )}
+
           {isEmpty && (
             <RecordEmptyState
               hasHistory={hasHistory}

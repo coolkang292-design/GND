@@ -19,7 +19,7 @@ describe("TodayStatusCard — 미완료", () => {
       <TodayStatusCard
         {...base}
         didWorkoutToday={false}
-        stage="d4"
+        stage="d3"
         gap={1}
         bars={weeklyBars([], TODAY, TZ)}
       />,
@@ -36,7 +36,7 @@ describe("TodayStatusCard — 미완료", () => {
       <TodayStatusCard
         {...base}
         didWorkoutToday={false}
-        stage="d4"
+        stage="d3"
         gap={1}
         bars={weeklyBars([], TODAY, TZ)}
         todayLine="4분 인터벌"
@@ -51,7 +51,7 @@ describe("TodayStatusCard — 미완료", () => {
       <TodayStatusCard
         {...base}
         didWorkoutToday={false}
-        stage="d4"
+        stage="d3"
         gap={1}
         bars={weeklyBars([], TODAY, TZ)}
       />,
@@ -64,7 +64,7 @@ describe("TodayStatusCard — 미완료", () => {
       <TodayStatusCard
         {...base}
         didWorkoutToday={false}
-        stage="d4"
+        stage="d3"
         gap={1}
         streak={5}
         bars={weeklyBars([], TODAY, TZ)}
