@@ -1,10 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { rankForChallenge } from "@/lib/domain/challenge-ranking";
 import { DEFAULT_TIMEZONE, dayKey } from "@/lib/domain/time";
 import { cardioKindOf } from "@/lib/domain/cardio-kind";
 import {
   plannedDaysForPeriod,
-  rankParticipants,
   scoreParticipant,
   type GoalType,
   type ParticipantInput,
@@ -1481,17 +1481,15 @@ export async function getActiveChallengeRanking(
     .filter((p) => p.status !== "invited")
     .map((p) => p.user_id);
 
-  const stats = await getPeriodStatsByUser(
-    ch.id,
-    ch.start_date,
-    ch.end_date,
-    DEFAULT_TIMEZONE,
-    client,
-  );
+  // 세션 행 한 번으로 실적(`foldPeriodStats`)과 동점용 횟수·시간(v2)을 같이 만든다
+  const rows = await getChallengePeriodSessions(ch.id, client);
+  const stats = foldPeriodStats(rows, ch.start_date, ch.end_date, DEFAULT_TIMEZONE);
   const days = inclusiveDays(ch.start_date, ch.end_date);
 
-  const list = rankParticipants(
-    userIds.map((uid) =>
+  // ⚠️ 순위는 `rankForChallenge` 한 곳 — scoring_version(0127)으로 v1/v2를 가른다
+  const list = rankForChallenge({
+    scoringVersion: ch.scoring_version,
+    inputs: userIds.map((uid) =>
       buildParticipantInput({
         userId: uid,
         goals: goals.filter((g) => g.user_id === uid),
@@ -1499,7 +1497,11 @@ export async function getActiveChallengeRanking(
         periodDays: days,
       }),
     ),
-  );
+    rows,
+    startDate: ch.start_date,
+    endDate: ch.end_date,
+    timeZone: DEFAULT_TIMEZONE,
+  });
   return { name: ch.name, list };
 }
 

@@ -851,6 +851,10 @@ function ChallengeScreen({ userId }: { userId: string }) {
           prevGoals={prevGoals}
           justJoined={goalSheet.justJoined}
           requireConsent={challenge.status === "setup"}
+          scoringVersion={challenge.scoring_version}
+          minDetailGoals={
+            challenge.scoring_version === 2 && challenge.status === "setup" ? 2 : 0
+          }
           busy={busy}
           onSubmit={(v) => void handleSaveGoals(v)}
           onClose={() => setGoalSheet(null)}

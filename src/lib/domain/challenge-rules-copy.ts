@@ -53,11 +53,15 @@ export function scoreFormula(): string {
 }
 
 /** 목표를 더 추가하면 — 좋은 점과 조심할 점을 **둘 다** 말한다 */
-export function addGoalAdvice(): { good: string; careful: string } {
+export function addGoalAdvice(scoringVersion = 1): { good: string; careful: string } {
   return {
     good:
       `100%로 채운 목표마다 보너스 +${COMPLETED_GOAL_BONUS_PER}점을 받아요. ` +
-      `보너스는 ${COMPLETED_GOAL_BONUS_MAX}개까지만 늘어나요.`,
+      `보너스는 ${COMPLETED_GOAL_BONUS_MAX}개까지만 늘어나요.` +
+      // 랭킹 v2: 기본 점수가 같을 때 설정한 목표 수가 첫 번째 기준이다
+      (scoringVersion === 2
+        ? " 그리고 점수가 같을 땐 목표를 더 많이 설정한 사람이 앞서요."
+        : ""),
     careful:
       "목표가 많을수록 못 채운 목표도 평균에 들어가 점수가 내려가요. 채울 수 있는 만큼만 정하세요.",
   };
@@ -75,6 +79,36 @@ export const TIE_BREAKERS: readonly string[] = [
 ];
 
 export const TIE_FINAL = "그래도 같으면 공동 순위예요.";
+
+/**
+ * 랭킹 v2(`challenges.scoring_version = 2`)의 동점 순서 — `goal-score-v2.ts`의 `rankParticipantsV2`와
+ * **같은 순서**다(테스트가 묶는다). 기본 점수가 소수 둘째 자리까지 같을 때만 이 순서로 가린다.
+ */
+export const TIE_BREAKERS_V2: readonly string[] = [
+  "목표를 더 많이 설정한 사람",
+  "운동 시간이 더 긴 사람",
+  "운동 횟수가 더 많은 사람",
+];
+export const TIE_STEPS_V2: readonly string[] = ["목표 수", "운동 시간", "운동 횟수"];
+
+/** 챌린지 점수 규칙 버전에 맞는 동점 설명 묶음 */
+export function tieRules(scoringVersion: number): {
+  steps: readonly string[];
+  breakers: readonly string[];
+  intro: string;
+} {
+  return scoringVersion === 2
+    ? {
+        steps: TIE_STEPS_V2,
+        breakers: TIE_BREAKERS_V2,
+        intro: "점수가 같을 때만 위에서부터 먼저 높은 사람이 이겨요",
+      }
+    : {
+        steps: TIE_STEPS,
+        breakers: TIE_BREAKERS,
+        intro: "위에서부터 먼저 높은 사람이 이겨요",
+      };
+}
 
 /** 동점 사다리용 **짧은 이름** — `TIE_BREAKERS`와 같은 순서·같은 개수다 (인포그래픽 칸에 들어가는 글자) */
 export const TIE_STEPS: readonly string[] = [
@@ -101,8 +135,13 @@ export function bonusChips(): { per: number; max: number } {
 export function mustKnow(input: {
   photoRequired: boolean;
   startDate: string;
+  scoringVersion?: number;
 }): string[] {
   const lines: string[] = [];
+  // 랭킹 v2 챌린지는 시작 전에 목표를 기본 포함 3개 이상 세워야 한다 (`minDetailGoals`)
+  if (input.scoringVersion === 2) {
+    lines.push("기본 목표를 포함해 목표를 3개 이상 정해야 시작할 수 있어요.");
+  }
   if (input.photoRequired) {
     lines.push("사진을 올린 운동만 기록으로 세요. 사진이 없으면 점수에 안 들어가요.");
   }

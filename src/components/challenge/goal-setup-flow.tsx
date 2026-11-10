@@ -225,6 +225,8 @@ export function GoalSetupFlow({
   prevGoals,
   justJoined = false,
   requireConsent = false,
+  minDetailGoals = 0,
+  scoringVersion = 1,
   busy,
   onSubmit,
   onClose,
@@ -247,6 +249,13 @@ export function GoalSetupFlow({
    * 시작 전(setup) 챌린지에 참여할 때만 켠다. 시작한 뒤 목표를 올리는 화면에는 필요 없다.
    */
   requireConsent?: boolean;
+  /**
+   * 세부 목표 최소 개수 — 랭킹 v2(`scoring_version` 2) 챌린지의 setup 동안만 2.
+   * 기본 목표를 합쳐 3개 이상이어야 시작할 수 있다. 0이면 제한 없음(v1 · 시작 후 편집).
+   */
+  minDetailGoals?: number;
+  /** 이 챌린지의 점수·동점 규칙 버전 — 최종 확인 화면의 설명이 버전을 따른다 (1=기존, 2=랭킹 v2) */
+  scoringVersion?: number;
   busy: boolean;
   onSubmit: (value: {
     goals: GoalDraft[];
@@ -288,6 +297,8 @@ export function GoalSetupFlow({
 
   const usedTypes = new Set(details.map((d) => d.type));
   const atMax = details.length >= MAX_DETAIL_GOALS;
+  const needMore = details.length < minDetailGoals;
+  const needMoreHint = `기본 목표를 포함해 ${minDetailGoals + 1}개 이상 설정해 주세요. 목표를 더 많이 설정하면 기본 점수가 같을 때 유리해요.`;
 
   const [agreed, setAgreed] = useState(false);
   const [finalDrafts, setFinalDrafts] = useState<BuildGoalDraftsResult | null>(null);
@@ -295,6 +306,10 @@ export function GoalSetupFlow({
   /** 목표 확인 화면의 대표 버튼 — 동의 단계가 있으면 거기로, 없으면 바로 저장 */
   function submit() {
     setNotice(null);
+    if (needMore) {
+      setNotice(needMoreHint);
+      return;
+    }
     const r = buildGoalDrafts({ weeklyDays, periodDays, details });
     if (!r.ok) {
       setNotice(reasonMessage(r.reason));
@@ -558,8 +573,8 @@ export function GoalSetupFlow({
         footer={footer(
           requireConsent ? "다음 · 점수 규칙 확인" : "이 목표로 시작하기",
           submit,
-          false,
-          startLine,
+          needMore,
+          needMore ? needMoreHint : startLine,
           true,
         )}
       >
@@ -1103,6 +1118,7 @@ export function GoalSetupFlow({
           startDate={startDate}
           endDate={endDate}
           photoRequired={photoRequired}
+          scoringVersion={scoringVersion}
           agreed={agreed}
           onAgreedChange={setAgreed}
         />
@@ -1119,8 +1135,8 @@ export function GoalSetupFlow({
       footer={footer(
         requireConsent ? "다음 · 점수 규칙 확인" : "이 목표로 시작하기",
         submit,
-        false,
-        startLine,
+        needMore,
+        needMore ? needMoreHint : startLine,
         true,
       )}
     >

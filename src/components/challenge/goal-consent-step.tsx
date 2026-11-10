@@ -3,15 +3,14 @@
 import { GOAL_TYPE_META, goalLabel, type GoalDraft } from "@/lib/challenge";
 import {
   CONSENT_LABEL,
-  TIE_BREAKERS,
   TIE_FINAL,
-  TIE_STEPS,
   addGoalAdvice,
   bonusChips,
   mustKnow,
   scoreBarSplit,
   scoreCards,
   scoreFormula,
+  tieRules,
 } from "@/lib/domain/challenge-rules-copy";
 import { formatMonthDay } from "@/lib/domain/challenge-time";
 
@@ -53,6 +52,7 @@ export function GoalConsentStep({
   startDate,
   endDate,
   photoRequired,
+  scoringVersion = 1,
   agreed,
   onAgreedChange,
 }: {
@@ -60,10 +60,13 @@ export function GoalConsentStep({
   startDate: string;
   endDate: string;
   photoRequired: boolean;
+  /** 이 챌린지의 점수·동점 규칙 버전 (1=기존, 2=랭킹 v2) */
+  scoringVersion?: number;
   agreed: boolean;
   onAgreedChange: (next: boolean) => void;
 }) {
-  const advice = addGoalAdvice();
+  const advice = addGoalAdvice(scoringVersion);
+  const tie = tieRules(scoringVersion);
   const split = scoreBarSplit();
   const bonus = bonusChips();
 
@@ -152,7 +155,10 @@ export function GoalConsentStep({
           <div className="rounded-card-sm border border-accent/50 bg-accent/10 px-3 py-2.5">
             <p className="text-[12px] font-extrabold text-accent">좋은 점</p>
             <p className="mt-1 font-mono text-[18px] font-extrabold">+{bonus.per}점</p>
-            <p className="text-[11.5px] leading-4 text-muted">100% 채운 목표마다</p>
+            <p className="text-[11.5px] leading-4 text-muted">
+              100% 채운 목표마다
+              {scoringVersion === 2 && " · 동점이면 목표 많은 쪽이 앞서요"}
+            </p>
           </div>
           <div className="rounded-card-sm border border-warn/50 bg-warn/10 px-3 py-2.5">
             <p className="text-[12px] font-extrabold text-warn">조심할 점</p>
@@ -181,7 +187,7 @@ export function GoalConsentStep({
       {/* ④ 동점 — 사다리 */}
       <Section id="consent-tie" title="점수가 같으면?">
         <ol className="flex items-start justify-between gap-1">
-          {TIE_STEPS.map((label, i) => (
+          {tie.steps.map((label, i) => (
             <li key={label} className="flex flex-1 flex-col items-center gap-1 text-center">
               <span className="grid h-7 w-7 place-items-center rounded-full bg-accent font-mono text-[13px] font-extrabold text-accent-ink">
                 {i + 1}
@@ -191,14 +197,14 @@ export function GoalConsentStep({
           ))}
         </ol>
         <p className="mt-2 text-center text-[11.5px] text-muted">
-          위에서부터 먼저 높은 사람이 이겨요 · {TIE_FINAL}
+          {tie.intro} · {TIE_FINAL}
         </p>
         <details className="mt-2 rounded-card-sm border border-line bg-surface-2 px-3 py-2">
           <summary className="cursor-pointer text-[12px] font-bold text-muted">
             자세히 보기
           </summary>
           <ol className="mt-2 flex flex-col gap-1 text-[11.5px] leading-5">
-            {TIE_BREAKERS.map((t, i) => (
+            {tie.breakers.map((t, i) => (
               <li key={t} className="flex gap-2">
                 <span className="flex-none font-extrabold text-accent">{i + 1}.</span>
                 <span>{t}</span>
@@ -211,7 +217,7 @@ export function GoalConsentStep({
       {/* ⑤ 약속 */}
       <Section id="consent-know" title="꼭 알아두세요">
         <ul className="flex flex-col gap-1.5 text-[12px] leading-5">
-          {mustKnow({ photoRequired, startDate }).map((line) => (
+          {mustKnow({ photoRequired, startDate, scoringVersion }).map((line) => (
             <li
               key={line}
               className="flex gap-2 rounded-card-sm border border-line bg-surface-2 px-3 py-2"

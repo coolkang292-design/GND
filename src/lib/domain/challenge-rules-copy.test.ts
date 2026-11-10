@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   TIE_BREAKERS,
+  TIE_BREAKERS_V2,
+  TIE_STEPS_V2,
   addGoalAdvice,
   mustKnow,
   scoreCards,
   scoreFormula,
+  tieRules,
 } from "./challenge-rules-copy";
+import { rankParticipantsV2, type ParticipantInputV2 } from "./goal-score-v2";
 import {
   COMPLETED_GOAL_BONUS_MAX,
   COMPLETED_GOAL_BONUS_PER,
@@ -86,5 +90,56 @@ describe("꼭 알아둘 약속", () => {
     const t = mustKnow({ photoRequired: false, startDate: "2026-11-14" }).join("\n");
     expect(t).toContain("올리는 것만");
     expect(t).not.toContain("언제든지");
+  });
+});
+
+describe("랭킹 v2 동점 설명 — rankParticipantsV2와 같은 순서 (scoring_version 2)", () => {
+  const goal = (type: "workout_days" | "weight_days" | "bodyweight_days", target: number, actual: number) => ({
+    type,
+    target,
+    actual,
+  });
+  const p = (over: Partial<ParticipantInputV2> & { userId: string }): ParticipantInputV2 => ({
+    goals: [goal("workout_days", 10, 10)],
+    workoutDays: 10,
+    plannedDays: 10,
+    allGoalsCompletedAtMs: 1000,
+    workoutSessions: 10,
+    workoutMinutes: 300,
+    minutesComplete: true,
+    ...over,
+  });
+
+  it("v2 설명은 세 단계(목표 수 → 운동 시간 → 운동 횟수)다", () => {
+    expect(TIE_BREAKERS_V2).toHaveLength(3);
+    expect(TIE_STEPS_V2).toHaveLength(3);
+    expect(tieRules(2).breakers).toBe(TIE_BREAKERS_V2);
+    expect(tieRules(1).breakers).toBe(TIE_BREAKERS); // 옛 챌린지는 옛 설명
+  });
+
+  it("기본 점수가 같으면 ① 목표를 더 많이 설정한 사람이 앞선다 (설명 첫 줄)", () => {
+    // 두 사람 모두 기본 점수 103.00: 1개 100%+꾸준함 100 / 2개 100%+꾸준함 85
+    const one = p({ userId: "one", goals: [goal("workout_days", 10, 10)] });
+    const two = p({
+      userId: "two",
+      goals: [goal("workout_days", 10, 10), goal("weight_days", 8, 8)],
+      workoutDays: 8.5,
+    });
+    const r = rankParticipantsV2([one, two]);
+    expect(r[0].baseScore).toBe(r[1].baseScore); // 먼저 동점이어야 설명이 맞는 상황이다
+    expect(r.map((x) => x.userId)).toEqual(["two", "one"]);
+    expect(TIE_BREAKERS_V2[0]).toContain("목표");
+  });
+
+  it("v2 목표 추가 안내는 동점일 때 유리하다는 말을 더한다 — v1에는 없다", () => {
+    expect(addGoalAdvice(2).good).toContain("목표를 더 많이 설정한 사람이 앞서요");
+    expect(addGoalAdvice(1).good).not.toContain("앞서요");
+  });
+
+  it("v2 챌린지는 목표 3개 이상 필요하다고 알린다 (minDetailGoals 규칙과 같은 말)", () => {
+    const v2 = mustKnow({ photoRequired: false, startDate: "2026-11-14", scoringVersion: 2 });
+    const v1 = mustKnow({ photoRequired: false, startDate: "2026-11-14", scoringVersion: 1 });
+    expect(v2.some((l) => l.includes("3개 이상"))).toBe(true);
+    expect(v1.some((l) => l.includes("3개 이상"))).toBe(false);
   });
 });

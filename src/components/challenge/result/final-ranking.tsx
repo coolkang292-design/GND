@@ -10,7 +10,8 @@ import {
   rankMetric,
   type MetricTotals,
 } from "@/lib/domain/challenge-metrics";
-import type { RankedParticipant } from "@/lib/domain/goal-score";
+import type { RankedEntry } from "@/lib/domain/challenge-ranking";
+import { formatScoreV2, tieKindLabel } from "@/lib/domain/goal-score-v2";
 
 const MEDAL: Record<1 | 2 | 3, string> = {
   1: "bg-gold text-accent-ink",
@@ -18,7 +19,7 @@ const MEDAL: Record<1 | 2 | 3, string> = {
   3: "bg-bronze text-accent-ink",
 };
 
-type Row = { userId: string; rank: number | null; value: string };
+type Row = { userId: string; rank: number | null; value: string; sub?: string };
 
 /**
  * 종료 화면 `최종 랭킹` 탭 — 최종 시안 4번 (2026-10-07).
@@ -36,7 +37,7 @@ export function FinalRanking({
   certifyNote,
   onDiscover,
 }: {
-  overall: RankedParticipant[];
+  overall: RankedEntry[];
   totals: ReadonlyMap<string, MetricTotals>;
   minutesAvailable: boolean;
   myUserId: string;
@@ -49,7 +50,13 @@ export function FinalRanking({
   const [key, setKey] = useState<RankingKey>("overall");
   const rows: Row[] =
     key === "overall"
-      ? overall.map((r) => ({ userId: r.userId, rank: r.rank, value: r.overall.toFixed(1) }))
+      ? overall.map((r) => ({
+          userId: r.userId,
+          rank: r.rank,
+          value: r.v2 ? formatScoreV2(r.v2) : r.overall.toFixed(1),
+          // v2 동점자만: 기본 점수 + 가산점 + 어떤 기준으로 갈렸는지
+          sub: r.v2 && r.v2.tieGroupSize > 1 ? (tieKindLabel(r.v2) ?? undefined) : undefined,
+        }))
       : rankMetric(totals, key).map((r) => ({
           userId: r.userId,
           rank: r.rank,
@@ -105,6 +112,11 @@ export function FinalRanking({
                 </span>
                 <span className={`text-right font-mono text-[14px] font-extrabold ${mine ? "text-accent" : ""}`}>
                   {r.value}
+                  {r.sub && (
+                    <span data-testid="tie-kind" className="block font-sans text-[9.5px] leading-tight font-bold text-muted">
+                      {r.sub}
+                    </span>
+                  )}
                 </span>
                 <span className="text-right text-[10.5px] leading-tight text-muted">
                   {t ? `${formatMetric("sessions", t.sessions)}` : "-"}

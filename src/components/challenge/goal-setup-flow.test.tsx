@@ -542,10 +542,60 @@ describe("최종 확인 · 동의 (2026-11-11) — 규칙을 읽고 동의해야
     expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(false);
   });
 
+  it("랭킹 v2 챌린지는 동점 순서를 '목표 수 → 운동 시간 → 운동 횟수'로 설명한다", () => {
+    renderFlow({ requireConsent: true, scoringVersion: 2 });
+    fireEvent.click(next());
+    const text = screen.getByTestId("goal-consent-step").textContent ?? "";
+    expect(text).toContain("목표 수");
+    expect(text).toContain("운동 시간");
+    expect(text).toContain("운동 횟수");
+    expect(text).toContain("점수가 같을 때만");
+    expect(text).toContain("3개 이상"); // v2는 목표 3개 이상이 시작 조건이다
+  });
+
+  it("옛 규칙(v1) 챌린지는 옛 동점 순서를 설명한다 — 진행 중인 경기에 새 규칙을 말하면 거짓이다", () => {
+    renderFlow({ requireConsent: true, scoringVersion: 1 });
+    fireEvent.click(next());
+    const text = screen.getByTestId("goal-consent-step").textContent ?? "";
+    expect(text).toContain("달성 평균");
+    expect(text).not.toContain("3개 이상");
+  });
+
   it("동의 단계를 안 켜면(시작 후 목표 올리기) 예전처럼 바로 저장한다", () => {
     const { onSubmit } = renderFlow();
     fireEvent.click(cta());
     expect(onSubmit).toHaveBeenCalledTimes(1);
     expect(onSubmit.mock.calls[0][0].consented).toBeUndefined();
+  });
+});
+
+describe("랭킹 v2 — 세부 목표 최소 개수", () => {
+  it("minDetailGoals=2에서 세부 목표 1개면 시작 버튼이 잠기고 3개 이상 안내가 뜬다", () => {
+    const { onSubmit } = renderFlow({
+      minDetailGoals: 2,
+      myGoals: [
+        goal({ goal_type: "workout_days", target_value: 12 }),
+        goal({ goal_type: "weight_days", target_value: 8, qualifier: 1 }),
+      ],
+    });
+    const start = screen.getByRole("button", { name: /이 목표로 시작하기/ });
+    expect((start as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getAllByText(/3개 이상 설정해 주세요/).length).toBeGreaterThan(0);
+    fireEvent.click(start);
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("세부 목표 2개면 시작할 수 있다", () => {
+    const two = renderFlow({
+      minDetailGoals: 2,
+      myGoals: [
+        goal({ goal_type: "workout_days", target_value: 12 }),
+        goal({ goal_type: "weight_days", target_value: 8, qualifier: 1 }),
+        goal({ goal_type: "bodyweight_days", target_value: 8, qualifier: 1 }),
+      ],
+    });
+    expect((screen.getByRole("button", { name: /이 목표로 시작하기/ }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: /이 목표로 시작하기/ }));
+    expect(two.onSubmit).toHaveBeenCalledTimes(1);
   });
 });

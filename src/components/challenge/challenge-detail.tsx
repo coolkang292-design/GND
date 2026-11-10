@@ -38,7 +38,6 @@ import {
 } from "@/lib/domain/challenge-time";
 import {
   goalRate,
-  rankParticipants,
   scoreParticipant,
   type GoalType,
   type ParticipantInput,
@@ -47,6 +46,7 @@ import { challengeLevel, levelLabel } from "@/lib/domain/level";
 import { challengeDayProgress, primaryActionOf } from "@/lib/domain/my-challenges";
 import { challengeMilestones, type ChallengeMilestone } from "@/lib/domain/challenge-milestones";
 import { currentStreak, workoutDayKeys } from "@/lib/domain/streak";
+import { rankForChallenge } from "@/lib/domain/challenge-ranking";
 import { DEFAULT_TIMEZONE } from "@/lib/domain/time";
 import type { UserGoal } from "@/lib/types";
 
@@ -287,7 +287,14 @@ export function ChallengeDetail({
    */
   const liveRanked =
     challenge.status === "active" && challenge.live_ranking
-      ? rankParticipants(participantInputs)
+      ? rankForChallenge({
+          scoringVersion: challenge.scoring_version,
+          inputs: participantInputs,
+          rows: sessionRows ?? [],
+          startDate: challenge.start_date,
+          endDate: challenge.end_date,
+          timeZone: DEFAULT_TIMEZONE,
+        })
       : null;
   const myRank = liveRanked?.find((r) => r.userId === userId)?.rank ?? null;
   /** 오늘 이 챌린지 기간 운동일에 들어갔는가 — 서버 집계(`stats`)와 같은 원천 */

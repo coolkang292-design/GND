@@ -25,9 +25,12 @@ import {
   minutesKnown,
   rankMetric,
 } from "@/lib/domain/challenge-metrics";
-import { rankParticipants, type ParticipantInput } from "@/lib/domain/goal-score";
+import type { ParticipantInput } from "@/lib/domain/goal-score";
+import { rankForChallenge } from "@/lib/domain/challenge-ranking";
 import type { UserGoal } from "@/lib/types";
+import { formatScoreV2, tieBreakShareLine } from "@/lib/domain/goal-score-v2";
 import { FinalRanking } from "./result/final-ranking";
+import { ScoreExplanation } from "./result/score-explanation";
 import { RecordAnalysis } from "./result/record-analysis";
 import { ResultHeader } from "./result/result-header";
 import { ResultOverview, type MetricCell } from "./result/result-overview";
@@ -60,6 +63,8 @@ export function ResultView({
     start_date: string;
     end_date: string;
     recruit_image_url: string | null;
+    /** 점수·동점 규칙 버전 (0122) — 없으면 1 */
+    scoring_version?: number;
   };
   /** 참가자 명단 전원(목표 없는 사람 포함) — 히어로·종목 랭킹 */
   members: readonly ChallengeParticipantProfile[];
@@ -84,7 +89,18 @@ export function ResultView({
   const [shareNote, setShareNote] = useState<string | null>(null);
   const { start_date: start, end_date: end } = challenge;
   const periodDays = inclusiveDays(start, end);
-  const ranked = useMemo(() => rankParticipants(participants), [participants]);
+  const ranked = useMemo(
+    () =>
+      rankForChallenge({
+        scoringVersion: challenge.scoring_version,
+        inputs: participants,
+        rows: sessionRows,
+        startDate: start,
+        endDate: end,
+        timeZone,
+      }),
+    [challenge.scoring_version, participants, sessionRows, start, end, timeZone],
+  );
   const total = ranked.length;
   const memberIds = useMemo(() => members.map((m) => m.id), [members]);
   const minutesOk = minutesKnown(sessionRows);
@@ -148,6 +164,9 @@ export function ResultView({
       rank: myRanked.rank,
       total,
       overall: myRanked.overall,
+      // v2: 기본 점수 + 동점 판정 한 줄 (내 숫자만)
+      scoreText: myRanked.v2 ? `기본 점수 ${myRanked.v2.baseScore.toFixed(2)}점` : undefined,
+      tieNote: (myRanked.v2 && tieBreakShareLine(myRanked.v2)) || undefined,
       workoutDays: participants.find((p) => p.userId === myUserId)?.workoutDays ?? 0,
       periodDays,
       records: t
@@ -216,8 +235,29 @@ export function ResultView({
         <ResultOverview
           mine={
             myRanked
-              ? { rank: myRanked.rank, overall: myRanked.overall, userId: myUserId, avatarUrl: profileOf(myUserId)?.avatar_url ?? null }
+              ? {
+                  rank: myRanked.rank,
+                  overall: myRanked.overall,
+                  userId: myUserId,
+                  avatarUrl: profileOf(myUserId)?.avatar_url ?? null,
+                  scoreText: myRanked.v2 ? formatScoreV2(myRanked.v2) : undefined,
+                  tieLine:
+                    myRanked.v2 && myRanked.v2.tieBonusUnits > 0
+                      ? `기본 ${myRanked.v2.baseScore.toFixed(2)}점 + 동점 가산 ${(myRanked.v2.tieBonusUnits / 1_000_000).toFixed(6)}점`
+                      : undefined,
+                }
               : null
+          }
+          explanation={
+            myRanked?.v2 ? (
+              <ScoreExplanation
+                me={myRanked}
+                all={ranked}
+                myGoals={goals.filter((g) => g.user_id === myUserId)}
+                nameOf={(id) => (id === myUserId ? "나" : (profileOf(id)?.nickname ?? "?"))}
+                plannedDays={participants.find((p) => p.userId === myUserId)?.plannedDays ?? 0}
+              />
+            ) : undefined
           }
           cells={cells}
           podium={podium}
