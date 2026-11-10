@@ -990,3 +990,44 @@ describe("foldPeriodStats — 유산소 규칙 v2 (사이클 분리)", () => {
     expect(actualForGoal(s, "cycle_time") / 257).toBeCloseTo(0.165, 3);
   });
 });
+
+/**
+ * 사이클 운동은 **사이클 목표를 세운 사람에게만** 목표와 연결된다 (사용자 지시 2026-11-11).
+ * 새 규칙 챌린지(시작일 ≥ 11/12)에서 사이클 기록은 거리·유산소 시간에 들어가지 않고,
+ * `cycle_time` 목표가 있을 때만 사이클 시간으로 쌓인다.
+ */
+describe("사이클 운동 ↔ 목표 연결 — 사이클 목표를 세운 사람만", () => {
+  const ride: PeriodSessionRow = {
+    userId: "u1",
+    completedAt: "2026-11-13T10:00:00+09:00", // 새 규칙 챌린지 기간
+    exercises: [
+      {
+        exerciseType: "cardio",
+        exerciseName: "사이클",
+        bodyPart: "유산소",
+        sets: [
+          { weightKg: null, reps: null, distanceMeters: 8000, durationSeconds: 20 * 60, isCompleted: true },
+        ],
+      },
+    ],
+  };
+  const goal = (goal_type: "cardio_distance" | "cardio_time" | "cycle_time" | "workout_days", target_value: number) =>
+    ({ goal_type, target_value }) as const;
+  const gainOf = (goals: ReturnType<typeof goal>[], type: string) =>
+    sessionGoalContribution({ session: ride, goals, timeZone: "Asia/Seoul" }).find(
+      (g) => g.type === type,
+    )?.delta;
+
+  it("사이클 목표가 없는 사람: 거리·유산소 시간에는 0이다 (연결되지 않는다)", () => {
+    const goals = [goal("workout_days", 12), goal("cardio_distance", 45), goal("cardio_time", 300)];
+    expect(gainOf(goals, "cardio_distance")).toBe(0);
+    expect(gainOf(goals, "cardio_time")).toBe(0);
+    // 운동한 날(종목 무관)에는 그대로 센다 — 이동수단에 중립이다
+    expect(gainOf(goals, "workout_days")).toBe(1);
+  });
+
+  it("사이클 목표를 세운 사람: 사이클 시간에 20분이 쌓인다", () => {
+    const goals = [goal("workout_days", 12), goal("cycle_time", 257)];
+    expect(gainOf(goals, "cycle_time")).toBe(20);
+  });
+});

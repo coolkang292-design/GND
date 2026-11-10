@@ -11,7 +11,7 @@ import { GoalConsentStep } from "@/components/challenge/goal-consent-step";
 import { NumberField } from "@/components/challenge/number-field";
 import { UiIcon } from "@/components/ui-icon";
 import { recordFunnelEvent } from "@/lib/analytics-events";
-import type { GoalDraft } from "@/lib/challenge";
+import { CARDIO_RULES_V2_FROM, type GoalDraft } from "@/lib/challenge";
 import { formatMonthDay, inclusiveDays } from "@/lib/domain/challenge-time";
 import {
   DETAIL_CATEGORIES,
@@ -742,6 +742,21 @@ export function GoalSetupFlow({
     const basis: GoalBasis = g.basis ?? "week";
     const basisChoices = basisChoicesFor(g.type);
 
+    /** 지표를 바꾼다 — 기준(주/하루)·기본값·주 횟수를 그 지표에 맞게 다시 연다 */
+    function pickType(t: DetailGoalType) {
+      const nextBasis = defaultBasisFor(t);
+      const d = detailDefaults(t, nextBasis);
+      setGoal({
+        type: t,
+        basis: nextBasis,
+        perWeek: d.perWeek,
+        qualifier: null,
+        // 유산소는 "주 몇 회"를 같이 받는다 (D12).
+        // 처음 값은 기본 목표의 주 N회 — 대부분 그대로 쓴다.
+        weeklyCount: hasWeeklyCount(t) ? weeklyDays : undefined,
+      });
+    }
+
     /*
       기준을 바꿀 때 **숫자도 같이 환산한다** (2026-09-18).
       "주 10km"에서 하루로 바꿨는데 10이 그대로면 주 40km가 된다 — 사용자는
@@ -776,6 +791,103 @@ export function GoalSetupFlow({
           line2={CATEGORY_HERO_LINES[category][1]}
         />
 
+        {category === "cardio" && (
+          /*
+            유산소는 **두 단계**로 고른다 (사용자 제안 2026-11-11 — "거리·시간·사이클 시간이 한 줄에 있으면
+            헷갈린다, 카테고리를 구분하고 목표를 정하자"). ① 어떤 운동인가요? ② 무엇으로 겨룰까요?
+            사이클은 거리가 아니라 시간으로만 겨루므로 ②가 따로 없다.
+          */
+          <>
+            <p className="text-[16px] font-extrabold">어떤 운동인가요?</p>
+            <div className="mt-2 grid grid-cols-2 gap-2" role="radiogroup" aria-label="운동 종류">
+              {(
+                [
+                  { key: "walk", label: "걷기·달리기 등", sub: "거리나 시간으로 겨뤄요", cycle: false },
+                  { key: "cycle", label: "사이클", sub: "시간으로 겨뤄요", cycle: true },
+                ] as const
+              ).map((k) => {
+                const on = k.cycle ? g.type === "cycle_time" : g.type !== "cycle_time";
+                const editingThis = (t: string) =>
+                  draft.index !== null && details[draft.index]?.type === t;
+                const taken = k.cycle
+                  ? usedTypes.has("cycle_time") && !editingThis("cycle_time")
+                  : ["cardio_distance", "cardio_time"].every(
+                      (t) => usedTypes.has(t as DetailGoalType) && !editingThis(t),
+                    );
+                return (
+                  <button
+                    key={k.key}
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    disabled={taken}
+                    onClick={() => {
+                      if (on) return;
+                      // 걷기·달리기로 돌아올 때는 아직 안 쓴 쪽(거리 먼저)으로 연다
+                      const t: DetailGoalType = k.cycle
+                        ? "cycle_time"
+                        : usedTypes.has("cardio_distance") && !editingThis("cardio_distance")
+                          ? "cardio_time"
+                          : "cardio_distance";
+                      pickType(t);
+                    }}
+                    className={`flex flex-col items-start rounded-card-sm border px-3 py-2.5 text-left disabled:opacity-40 ${
+                      on ? "border-accent bg-accent/15" : "border-line bg-surface-2"
+                    }`}
+                  >
+                    <span className={`text-[14px] font-extrabold ${on ? "text-accent" : ""}`}>
+                      {k.label}
+                    </span>
+                    <span className="mt-0.5 text-[11.5px] text-muted">{k.sub}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {g.type === "cycle_time" ? (
+              <p className="mt-3 rounded-card-sm bg-surface-2 px-3 py-2 text-[12px] text-muted">
+                사이클은 거리 대신 <span className="font-extrabold text-text">시간(분)</span>으로
+                겨뤄요. 걷기·달리기와 따로 계산돼서 더 공정해요.
+              </p>
+            ) : (
+              <>
+                <p className="mt-4 text-[14px] font-extrabold">무엇으로 겨룰까요?</p>
+                <div className="mt-2 flex gap-1.5" role="radiogroup" aria-label="목표 기준">
+                  {metrics
+                    .filter((m) => m.type !== "cycle_time")
+                    .map((m) => {
+                      const on = g.type === m.type;
+                      const taken =
+                        usedTypes.has(m.type) &&
+                        !(draft.index !== null && details[draft.index]?.type === m.type);
+                      return (
+                        <button
+                          key={m.type}
+                          type="button"
+                          role="radio"
+                          aria-checked={on}
+                          disabled={taken}
+                          onClick={() => pickType(m.type as DetailGoalType)}
+                          className={`h-10 flex-1 rounded-card-sm border text-[13px] font-bold disabled:opacity-40 ${
+                            on ? "border-accent bg-accent/15 text-accent" : "border-line bg-surface-2"
+                          }`}
+                        >
+                          {m.label}
+                        </button>
+                      );
+                    })}
+                </div>
+                {startDate >= CARDIO_RULES_V2_FROM && (
+                  <p className="mt-2 text-[11.5px] leading-4 text-muted">
+                    거리는 걷기·달리기만, 시간은 사이클을 뺀 모든 유산소가 들어가요.
+                  </p>
+                )}
+              </>
+            )}
+          </>
+        )}
+        {category !== "cardio" && (
+          <>
         <p className="text-[16px] font-extrabold">무엇을 기준으로 할까요?</p>
         <div className="mt-2 flex gap-1.5" role="radiogroup" aria-label="목표 기준">
           {metrics.map((m) => {
@@ -811,6 +923,9 @@ export function GoalSetupFlow({
             );
           })}
         </div>
+
+          </>
+        )}
 
         <div className="mt-4 rounded-card border border-line bg-surface-2 p-3">
           <div className="flex items-center justify-between gap-2">

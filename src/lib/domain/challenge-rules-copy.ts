@@ -76,6 +76,27 @@ export const TIE_BREAKERS: readonly string[] = [
 
 export const TIE_FINAL = "그래도 같으면 공동 순위예요.";
 
+/** 동점 사다리용 **짧은 이름** — `TIE_BREAKERS`와 같은 순서·같은 개수다 (인포그래픽 칸에 들어가는 글자) */
+export const TIE_STEPS: readonly string[] = [
+  "달성 평균",
+  "꾸준함",
+  "먼저 완료",
+  "완료 목표 수",
+];
+
+/** 점수 막대의 두 칸 비중(%) — 계산 상수에서 읽는다 */
+export function scoreBarSplit(): { achievement: number; participation: number } {
+  return {
+    achievement: pct(ACHIEVEMENT_WEIGHT),
+    participation: pct(PARTICIPATION_WEIGHT),
+  };
+}
+
+/** 보너스 칩 — "+3" 이 최대 몇 개까지 붙는지 */
+export function bonusChips(): { per: number; max: number } {
+  return { per: COMPLETED_GOAL_BONUS_PER, max: COMPLETED_GOAL_BONUS_MAX };
+}
+
 /** 꼭 알아둘 약속들 */
 export function mustKnow(input: {
   photoRequired: boolean;
