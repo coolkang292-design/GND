@@ -2,6 +2,8 @@
 // 실행: node scripts/broadcast-release.mjs            (DRY RUN — 대상·문구만 출력)
 //       node scripts/broadcast-release.mjs --send     (실제 insert → 트리거가 푸시 발송)
 //       node scripts/broadcast-release.mjs --send --force  (이미 보냈어도 강행)
+//       --release=<id>        맨 앞이 아닌 릴리스를 지정 (다른 세션이 맨 앞에 항목을 추가해도 안 바뀐다)
+//       --audience=challenge   진행 중·설정 단계 챌린지의 참가자(joined)에게만 (기본은 전 사용자)
 //
 // 문구는 src/lib/domain/release-notes.data.json의 맨 앞(최신) 항목에서 자동으로 읽는다.
 // 즉 새 기능 배포 절차 = ① 그 json 맨 앞에 항목 추가 → ② 이 스크립트 한 번.
@@ -15,7 +17,9 @@ import { readFileSync } from "node:fs";
 const NOTES = JSON.parse(
   readFileSync(new URL("../src/lib/domain/release-notes.data.json", import.meta.url), "utf8"),
 );
-const release = NOTES[0];
+const releaseArg = process.argv.find((a) => a.startsWith("--release="))?.slice("--release=".length);
+const release = releaseArg ? NOTES.find((n) => n.id === releaseArg) : NOTES[0];
+if (releaseArg && !release) throw new Error(`릴리스 id를 찾을 수 없음: ${releaseArg}`);
 if (!release) throw new Error("release-notes.data.json이 비어 있음");
 
 const TYPE = "app_update";
@@ -25,6 +29,7 @@ const BODY = release.summary;
 
 const send = process.argv.includes("--send");
 const force = process.argv.includes("--force");
+const challengeOnly = process.argv.includes("--audience=challenge");
 
 const env = Object.fromEntries(
   readFileSync(".env.local", "utf8").split(/\r?\n/).filter((l) => l.includes("="))
@@ -46,7 +51,22 @@ console.log(`본문: ${BODY}`);
 const EXCLUDED_NICKNAMES = new Set(["repro-mry7tyx0", "test"]);
 
 const allProfiles = await get("/rest/v1/profiles?select=id,nickname&order=nickname");
-const profiles = allProfiles.filter((p) => !EXCLUDED_NICKNAMES.has(p.nickname));
+// --audience=challenge: 규칙이 바뀐 사람(진행 중·설정 단계 챌린지 참가자)에게만
+let audience = null;
+if (challengeOnly) {
+  const chs = await get("/rest/v1/challenges?status=in.(setup,active)&select=id");
+  if (!Array.isArray(chs)) throw new Error("챌린지 조회 실패");
+  const ids = chs.map((c) => c.id);
+  const parts = ids.length
+    ? await get(`/rest/v1/challenge_participants?challenge_id=in.(${ids.join(",")})&status=eq.joined&select=user_id`)
+    : [];
+  if (!Array.isArray(parts)) throw new Error("참가자 조회 실패");
+  audience = new Set(parts.map((x) => x.user_id));
+  console.log(`대상 범위: 진행 중·설정 단계 챌린지 ${ids.length}개의 참가자 ${audience.size}명`);
+}
+const profiles = allProfiles.filter(
+  (p) => !EXCLUDED_NICKNAMES.has(p.nickname) && (audience === null || audience.has(p.id)),
+);
 const skipped = allProfiles.filter((p) => EXCLUDED_NICKNAMES.has(p.nickname));
 
 console.log(`대상 ${profiles.length}명: ${profiles.map((p) => p.nickname).join(", ")}`);
