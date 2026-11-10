@@ -874,9 +874,13 @@ export type PeriodStats = {
  * 로잉·줄넘기·요가 같은 기타 유산소는 시간만 잰다. 이전에 시작한 챌린지는 옛 규칙 그대로다 —
  * 진행 중인 경기의 점수를 소급해서 바꾸지 않는다.
  *
+ * 2026-11-11 사용자 지시("유산소 거리는 사이클로 한 건 제외해야지")로 **11/12 → 11/3**으로 당겼다.
+ * 11월 챌린지(11/3 시작)를 새 규칙으로 다시 계산하기 위해서다. 그 외 진행 중 챌린지(9/21·10/27 시작)는
+ * 그대로다 — 운영 실측으로 11/3 이후 시작한 챌린지는 11월 챌린지뿐이었다.
+ *
  * ⚠️ 날짜를 올리거나 내리면 그 날짜 사이에 시작하는 챌린지의 점수가 달라진다. 바꾸지 마라.
  */
-export const CARDIO_RULES_V2_FROM = "2026-11-12";
+export const CARDIO_RULES_V2_FROM = "2026-11-03";
 
 export const EMPTY_STATS: PeriodStats = {
   workoutDays: 0,
@@ -1144,7 +1148,7 @@ export function foldPeriodStats(
           // 사이클 시간은 어느 버전에서든 센다 — `cycle_time` 목표를 진행 중인 챌린지에도 줄 수 있다
           if (kind === "cycle") entry.cycleTimeMin += min;
           if (!cardioV2) {
-            // 옛 규칙(시작일 < 2026-11-12): 유산소 전부를 거리·시간에 그대로 합친다
+            // 옛 규칙(시작일 < 2026-11-03): 유산소 전부를 거리·시간에 그대로 합친다
             entry.cardioDistanceKm += km;
             entry.cardioTimeMin += min;
           } else if (kind === "distance") {

@@ -952,19 +952,19 @@ describe("foldPeriodStats — 유산소 규칙 v2 (사이클 분리)", () => {
     cardio("걷기", 18.8, 176.1 * 60, `${walkDay}T10:00:00+09:00`),
     cardio("사이클", 16, 42.5 * 60, `${cycleDay}T10:00:00+09:00`),
   ];
-  const rows = mk("2026-11-04", "2026-11-09"); // 11/3 시작 챌린지 (옛 규칙)
-  const rowsV2 = mk("2026-11-13", "2026-11-15"); // 11/12 이후 시작 챌린지 (새 규칙)
+  const rows = mk("2026-10-28", "2026-10-30"); // 10/27 시작 챌린지 (옛 규칙)
+  const rowsV2 = mk("2026-11-04", "2026-11-09"); // 11/3 시작 챌린지 = 11월 챌린지 (새 규칙)
 
-  it("옛 규칙(시작일 < 11/12): 사이클 거리가 유산소 거리에 합쳐진다 — 진행 중 챌린지는 그대로", () => {
-    const s = foldPeriodStats(rows, "2026-11-03", "2026-12-02", "Asia/Seoul").get("u1")!;
+  it("옛 규칙(시작일 < 11/3): 사이클 거리가 유산소 거리에 합쳐진다 — 그 전에 시작한 챌린지는 그대로", () => {
+    const s = foldPeriodStats(rows, "2026-10-27", "2026-11-23", "Asia/Seoul").get("u1")!;
     expect(s.cardioDistanceKm).toBeCloseTo(34.8, 5);
     expect(s.cardioDistanceKm / 45).toBeCloseTo(0.773, 3); // 77.3%
     // 사이클 시간은 옛 규칙에서도 따로 센다 (진행 중 챌린지에 cycle_time 목표를 줄 수 있다)
     expect(s.cycleTimeMin).toBeCloseTo(42.5, 5);
   });
 
-  it("새 규칙(시작일 ≥ 11/12): 거리는 걷기만, 사이클은 cycle_time 한 곳에서만", () => {
-    const s = foldPeriodStats(rowsV2, "2026-11-12", "2026-12-10", "Asia/Seoul").get("u1")!;
+  it("새 규칙(시작일 ≥ 11/3): 거리는 걷기만, 사이클은 cycle_time 한 곳에서만 — 11월 챌린지(낭만송곳니 실측)", () => {
+    const s = foldPeriodStats(rowsV2, "2026-11-03", "2026-12-02", "Asia/Seoul").get("u1")!;
     expect(s.cardioDistanceKm).toBeCloseTo(18.8, 5);
     expect(s.cardioDistanceKm / 45).toBeCloseTo(0.418, 3); // 41.8%
     expect(s.cycleTimeMin).toBeCloseTo(42.5, 5);
@@ -977,14 +977,14 @@ describe("foldPeriodStats — 유산소 규칙 v2 (사이클 분리)", () => {
       cardio("로잉", 2, 600, "2026-11-13T10:00:00+09:00"),
       cardio("평일", 19.3, 4560, "2026-11-14T10:00:00+09:00"),
     ];
-    const s = foldPeriodStats(other, "2026-11-12", "2026-12-10", "Asia/Seoul").get("u1")!;
+    const s = foldPeriodStats(other, "2026-11-03", "2026-12-10", "Asia/Seoul").get("u1")!;
     expect(s.cardioDistanceKm).toBe(0);
     expect(s.cardioTimeMin).toBeCloseTo(10 + 76, 5);
     expect(s.cycleTimeMin).toBe(0);
   });
 
   it("actualForGoal은 cycle_time을 cycleTimeMin으로 읽는다", () => {
-    const s = foldPeriodStats(rows, "2026-11-03", "2026-12-02", "Asia/Seoul").get("u1")!;
+    const s = foldPeriodStats(rowsV2, "2026-11-03", "2026-12-02", "Asia/Seoul").get("u1")!;
     expect(actualForGoal(s, "cycle_time")).toBeCloseTo(42.5, 5);
     // 목표 257분이면 달성률은 16.5% — 걷기 거리로 채운 77.3%보다 크게 낮다
     expect(actualForGoal(s, "cycle_time") / 257).toBeCloseTo(0.165, 3);
@@ -993,7 +993,7 @@ describe("foldPeriodStats — 유산소 규칙 v2 (사이클 분리)", () => {
 
 /**
  * 사이클 운동은 **사이클 목표를 세운 사람에게만** 목표와 연결된다 (사용자 지시 2026-11-11).
- * 새 규칙 챌린지(시작일 ≥ 11/12)에서 사이클 기록은 거리·유산소 시간에 들어가지 않고,
+ * 새 규칙 챌린지(시작일 ≥ 11/3)에서 사이클 기록은 거리·유산소 시간에 들어가지 않고,
  * `cycle_time` 목표가 있을 때만 사이클 시간으로 쌓인다.
  */
 describe("사이클 운동 ↔ 목표 연결 — 사이클 목표를 세운 사람만", () => {
