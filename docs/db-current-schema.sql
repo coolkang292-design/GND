@@ -7,7 +7,7 @@
 -- 쓰는 법: 함수·정책의 '현행' 정의가 필요할 때 마이그레이션 51개를
 -- 뒤지지 말고 이 파일을 검색하라. 마이그레이션을 적용한 뒤에는 다시 뽑아라.
 --
--- 함수 104개 · 정책 86개 · 인덱스 105개
+-- 함수 107개 · 정책 87개 · 인덱스 107개
 
 -- ════════════════════════════════════════════════════════════
 -- 함수
@@ -854,6 +854,68 @@ AS $function$
   )
 $function$;
 
+-- ── claim_workout_stamp ──
+CREATE OR REPLACE FUNCTION public.claim_workout_stamp(p_session_id uuid)
+ RETURNS TABLE(stamp_date date, stamp_variant text, newly_awarded boolean)
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_uid uuid := (SELECT auth.uid());
+  v_completed timestamptz;
+  v_tz text;
+  v_day date;
+  v_variant text;
+  v_rows integer;
+  v_entropy bytea;
+  v_roll integer;
+BEGIN
+  IF v_uid IS NULL THEN RETURN; END IF;
+  SELECT s.completed_at, p.timezone INTO v_completed, v_tz
+    FROM public.workout_sessions s JOIN public.profiles p ON p.id = s.user_id
+   WHERE s.id = p_session_id AND s.user_id = v_uid
+     AND s.status = 'completed' AND s.deleted_at IS NULL AND s.completed_at IS NOT NULL;
+  IF NOT FOUND THEN RETURN; END IF;
+  IF v_completed < (SELECT r.launched_at FROM public.workout_stamp_release r WHERE r.singleton) THEN RETURN; END IF;
+  v_day := (v_completed AT TIME ZONE v_tz)::date;
+
+  SELECT c.variant INTO v_variant FROM public.workout_stamp_colors c
+   WHERE c.user_id = v_uid AND c.workout_date = v_day;
+  IF FOUND THEN
+    RETURN QUERY SELECT v_day, v_variant, false;
+    RETURN;
+  END IF;
+
+  -- All first-ever workout DAYS get orange, irrespective of sessions on that day.
+  IF NOT EXISTS (
+    SELECT 1 FROM public.workout_sessions s
+     WHERE s.user_id = v_uid AND s.status = 'completed' AND s.deleted_at IS NULL
+       AND s.completed_at IS NOT NULL
+       AND (s.completed_at AT TIME ZONE v_tz)::date < v_day
+  ) THEN
+    v_variant := 'orange';
+  ELSE
+    v_entropy := extensions.gen_random_bytes(4);
+    v_roll := ((get_byte(v_entropy,0)::bigint*16777216
+      +get_byte(v_entropy,1)::bigint*65536
+      +get_byte(v_entropy,2)::bigint*256
+      +get_byte(v_entropy,3)::bigint)%100)::integer;
+    v_variant := CASE WHEN v_roll < 70 THEN 'basic'
+                      WHEN v_roll < 95 THEN 'orange'
+                      ELSE 'gold' END;
+  END IF;
+
+  INSERT INTO public.workout_stamp_colors(user_id,workout_date,variant,awarded_session_id)
+  VALUES (v_uid,v_day,v_variant,p_session_id)
+  ON CONFLICT (user_id,workout_date) DO NOTHING;
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+  SELECT c.variant INTO v_variant FROM public.workout_stamp_colors c
+   WHERE c.user_id = v_uid AND c.workout_date = v_day;
+  RETURN QUERY SELECT v_day, v_variant, (v_rows = 1);
+END;
+$function$;
+
 -- ── clear_profile_invited_by_on_insert ──
 CREATE OR REPLACE FUNCTION public.clear_profile_invited_by_on_insert()
  RETURNS trigger
@@ -1649,7 +1711,7 @@ begin
   where user_id = p_user_id and status = 'completed'
     and deleted_at is null and completed_at is not null;
 
-  if v_last is null or (v_today - v_last) >= 5 then
+  if v_last is null or (v_today - v_last) >= 4 then
     return 0;
   end if;
 
@@ -1660,7 +1722,7 @@ begin
       and deleted_at is null and completed_at is not null
     order by d desc
   loop
-    if v_prev is not null and (v_prev - r.d) >= 5 then
+    if v_prev is not null and (v_prev - r.d) >= 4 then
       exit;
     end if;
     v_count := v_count + 1;
@@ -1668,7 +1730,8 @@ begin
   end loop;
 
   return v_count;
-end $function$;
+end;
+$function$;
 
 -- ── decline_challenge_invite ──
 CREATE OR REPLACE FUNCTION public.decline_challenge_invite(p_challenge_id uuid)
@@ -2160,6 +2223,27 @@ begin
 
   return v_rows;
 end $function$;
+
+-- ── get_character_faces ──
+CREATE OR REPLACE FUNCTION public.get_character_faces(p_user_ids uuid[])
+ RETURNS TABLE(user_id uuid, stage smallint, variant text)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+  select p.id,
+         coalesce(up.current_stage, 1)::smallint,
+         p.character_variant
+  from public.profiles p
+  left join public.user_progress up on up.user_id = p.id
+  where (select auth.uid()) is not null
+    and cardinality(p_user_ids) <= 200
+    and p.id = any (p_user_ids)
+    and (
+      p.id = (select auth.uid())
+      or not public.is_blocked_between((select auth.uid()), p.id)
+    )
+$function$;
 
 -- ── get_crew_member_profile ──
 CREATE OR REPLACE FUNCTION public.get_crew_member_profile(p_target_id uuid)
@@ -4374,6 +4458,55 @@ AS $function$
   )
 $function$;
 
+-- ── set_live_workout_exercise_names ──
+CREATE OR REPLACE FUNCTION public.set_live_workout_exercise_names(p_session_id uuid, p_exercise_names text[])
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  v_uid uuid := auth.uid();
+begin
+  if v_uid is null then
+    raise exception 'not_authenticated';
+  end if;
+
+  if p_exercise_names is null
+     or cardinality(p_exercise_names) > 30
+     or exists (
+       select 1 from unnest(p_exercise_names) as n(name)
+       where n.name is null
+          or char_length(btrim(n.name)) = 0
+          or char_length(n.name) > 40
+     )
+  then
+    raise exception 'invalid_exercise_names';
+  end if;
+
+  -- Crucial: an authenticated user may ONLY update their own active session.
+  if not exists (
+    select 1 from public.workout_sessions s
+    where s.id = p_session_id
+      and s.user_id = v_uid
+      and s.status = 'active'
+      and s.deleted_at is null
+  ) then
+    raise exception 'session_not_active_or_not_owner';
+  end if;
+
+  update public.workout_events e
+  set exercise_names = p_exercise_names
+  where e.session_id = p_session_id
+    and e.user_id = v_uid
+    and e.event_type = 'workout_started';
+
+  if not found then
+    raise exception 'start_event_not_found';
+  end if;
+end;
+$function$;
+
 -- ── set_recruit_opened_at ──
 CREATE OR REPLACE FUNCTION public.set_recruit_opened_at()
  RETURNS trigger
@@ -5149,6 +5282,9 @@ $function$;
 -- sets_update_own  [UPDATE]  roles=public
 --   using  : owns_workout_exercise(workout_exercise_id)
 --   check  : owns_workout_exercise(workout_exercise_id)
+-- ── workout_stamp_colors ──
+-- workout_stamp_colors_select_own  [SELECT]  roles=authenticated
+--   using  : (user_id = ( SELECT auth.uid() AS uid))
 -- ── xp_transactions ──
 -- xp_transactions_own_select  [SELECT]  roles=authenticated
 --   using  : (user_id = auth.uid())
@@ -5258,6 +5394,8 @@ $function$;
 -- CREATE INDEX workout_sessions_user_completed ON public.workout_sessions USING btree (user_id, completed_at DESC) WHERE (status = 'completed'::text);
 -- CREATE UNIQUE INDEX workout_sets_pkey ON public.workout_sets USING btree (id);
 -- CREATE UNIQUE INDEX workout_sets_workout_exercise_id_set_number_key ON public.workout_sets USING btree (workout_exercise_id, set_number);
+-- CREATE UNIQUE INDEX workout_stamp_colors_pkey ON public.workout_stamp_colors USING btree (user_id, workout_date);
+-- CREATE UNIQUE INDEX workout_stamp_release_pkey ON public.workout_stamp_release USING btree (singleton);
 -- CREATE UNIQUE INDEX xp_daily_workout_reward_unique ON public.xp_transactions USING btree (user_id, effective_date, reward_group) WHERE ((transaction_type = 'earn'::text) AND (reward_group = 'daily_workout'::text));
 -- CREATE UNIQUE INDEX xp_transactions_pkey ON public.xp_transactions USING btree (id);
 -- CREATE UNIQUE INDEX xp_transactions_source_unique ON public.xp_transactions USING btree (user_id, reason, source_type, source_id) WHERE (transaction_type = 'earn'::text);
