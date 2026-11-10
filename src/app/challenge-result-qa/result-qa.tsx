@@ -23,13 +23,27 @@ const NAMES = ["나", "스칼레또", "낭만송곳니", "아라짱", "운동하
  * state=active: 진행 중 상세(히어로·탭·랭킹 탭·랭킹 화면) / state=ended: 종료 결과 화면.
  * min=0: 0117 적용 전 응답(운동 시간 키 없음)을 흉내 낸다.
  */
-export function ResultQA({ count, state, withMinutes }: { count: number; state: "active" | "ended"; withMinutes: boolean }) {
+export function ResultQA({
+  count,
+  state,
+  withMinutes,
+  scoringVersion = 1,
+  tie = false,
+}: {
+  count: number;
+  state: "active" | "ended";
+  withMinutes: boolean;
+  scoringVersion?: 1 | 2;
+  /** 나와 p1을 같은 기록·같은 달성률로 만들고, 나에게만 목표 1개를 더 준다 → 기본 점수 동점, 목표 수로 갈린다 */
+  tie?: boolean;
+}) {
   const [activeTab, setActiveTab] = useState<"overview" | "ranking" | "feed" | "mission">("ranking");
   const [rankingView, setRankingView] = useState<RankingKey | null>(null);
   const users = Array.from({ length: count }, (_, i) => (i === 0 ? "me" : `p${i}`));
   const lastDay = state === "ended" ? 28 : 20;
   const rows: PeriodSessionRow[] = [];
-  users.forEach((u, ui) => {
+  users.forEach((u, ui0) => {
+    const ui = tie && ui0 === 1 ? 0 : ui0; // tie: p1은 나와 같은 기록 패턴
     for (let d = 1; d <= lastDay; d++) {
       if ((d + ui) % ((ui % 5) + 2) === 0) continue;
       rows.push({
@@ -61,7 +75,16 @@ export function ResultQA({ count, state, withMinutes }: { count: number; state: 
   });
   const goal = (user_id: string, goal_type: string, target_value: number, unit: string): UserGoal =>
     ({ id: `${user_id}-${goal_type}`, user_id, goal_type, target_value, qualifier: null, planned_days: 4, unit }) as unknown as UserGoal;
-  const goals = users.flatMap((u) => [goal(u, "workout_days", 20, "일"), goal(u, "cardio_distance", 30, "km"), goal(u, "weight_days", 18, "일")]);
+  const goals = users.flatMap((u) =>
+    tie && (u === "me" || u === "p1")
+      ? [
+          goal(u, "workout_days", 1, "일"),
+          goal(u, "cardio_distance", 1, "km"),
+          goal(u, "weight_days", 1, "일"),
+          ...(u === "me" ? [goal(u, "cardio_time", 1, "분")] : []),
+        ]
+      : [goal(u, "workout_days", 20, "일"), goal(u, "cardio_distance", 30, "km"), goal(u, "weight_days", 18, "일")],
+  );
   // 실제 화면과 같은 길로 조립한다 — 세션 행 → foldPeriodStats → buildParticipantInput
   const endKey = state === "ended" ? "2026-09-28" : "2026-09-30";
   const stats = foldPeriodStats(rows, "2026-09-01", endKey, "Asia/Seoul");
@@ -81,7 +104,7 @@ export function ResultQA({ count, state, withMinutes }: { count: number; state: 
     planDate: `2026-09-${String(d).padStart(2, "0")}`,
     setCount: 6 + (d % 5),
   }));
-  const challenge = { id: `qa-${count}`, name: "9월 개노답 탈출 챌린지", start_date: "2026-09-01", end_date: "2026-09-30", recruit_image_url: null };
+  const challenge = { id: `qa-${count}`, name: "9월 개노답 탈출 챌린지", start_date: "2026-09-01", end_date: "2026-09-30", recruit_image_url: null, scoring_version: scoringVersion };
 
   if (state === "ended") {
     return (

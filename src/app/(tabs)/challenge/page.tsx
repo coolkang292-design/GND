@@ -833,6 +833,9 @@ function ChallengeScreen({ userId }: { userId: string }) {
           myGoals={myGoals}
           prevGoals={prevGoals}
           justJoined={goalSheet.justJoined}
+          minDetailGoals={
+            challenge.scoring_version === 2 && challenge.status === "setup" ? 2 : 0
+          }
           busy={busy}
           onSubmit={(v) => void handleSaveGoals(v)}
           onClose={() => setGoalSheet(null)}

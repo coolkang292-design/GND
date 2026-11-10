@@ -494,3 +494,34 @@ describe("방장 챌린지 취소하기", () => {
     expect(screen.queryByRole("button", { name: "챌린지 취소하기" })).toBeNull();
   });
 });
+
+describe("랭킹 v2 — 세부 목표 최소 개수", () => {
+  it("minDetailGoals=2에서 세부 목표 1개면 시작 버튼이 잠기고 3개 이상 안내가 뜬다", () => {
+    const { onSubmit } = renderFlow({
+      minDetailGoals: 2,
+      myGoals: [
+        goal({ goal_type: "workout_days", target_value: 12 }),
+        goal({ goal_type: "weight_days", target_value: 8, qualifier: 1 }),
+      ],
+    });
+    const start = screen.getByRole("button", { name: /이 목표로 시작하기/ });
+    expect((start as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getAllByText(/3개 이상 설정해 주세요/).length).toBeGreaterThan(0);
+    fireEvent.click(start);
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("세부 목표 2개면 시작할 수 있다", () => {
+    const two = renderFlow({
+      minDetailGoals: 2,
+      myGoals: [
+        goal({ goal_type: "workout_days", target_value: 12 }),
+        goal({ goal_type: "weight_days", target_value: 8, qualifier: 1 }),
+        goal({ goal_type: "bodyweight_days", target_value: 8, qualifier: 1 }),
+      ],
+    });
+    expect((screen.getByRole("button", { name: /이 목표로 시작하기/ }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: /이 목표로 시작하기/ }));
+    expect(two.onSubmit).toHaveBeenCalledTimes(1);
+  });
+});

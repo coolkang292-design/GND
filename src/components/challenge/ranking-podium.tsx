@@ -3,9 +3,11 @@
 import type { ReactNode } from "react";
 import { UserAvatar } from "@/components/user-avatar";
 import type { ChallengeParticipantProfile } from "@/lib/challenge";
-import type { rankParticipants } from "@/lib/domain/goal-score";
+import type { RankedParticipant } from "@/lib/domain/goal-score";
+import { formatScoreV2, type RankedParticipantV2 } from "@/lib/domain/goal-score-v2";
 
-type Ranked = ReturnType<typeof rankParticipants>[number];
+/** v1 순위 모양 + (v2 챌린지면) v2 상세 — `rankForChallenge`가 준다 */
+type Ranked = RankedParticipant & { v2?: RankedParticipantV2 | null };
 
 /**
  * TOP 3 시상대 — Performance Social 시안의 `실시간 랭킹` 카드 (2026-10-05).
@@ -128,7 +130,7 @@ export function RankingPodium({
                   {mine ? "나" : (p?.nickname ?? "?")}
                 </span>
                 <span className={`mt-0.5 text-[15px] font-black tabular-nums ${r.rank === 1 ? "text-gold" : "text-text"}`}>
-                  {r.overall.toFixed(1)}
+                  {r.v2 ? formatScoreV2(r.v2) : r.overall.toFixed(1)}
                   <span className="ml-0.5 text-[10.5px] font-bold text-muted">점</span>
                 </span>
                 {secondary && <span className="text-[10.5px] text-muted">{secondary}</span>}

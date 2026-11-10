@@ -223,6 +223,7 @@ export function GoalSetupFlow({
   myGoals,
   prevGoals,
   justJoined = false,
+  minDetailGoals = 0,
   busy,
   onSubmit,
   onClose,
@@ -240,6 +241,11 @@ export function GoalSetupFlow({
   prevGoals: readonly UserGoal[] | null;
   /** 방금 참가했다 — 첫 줄에 축하를 붙인다 (시안 5번) */
   justJoined?: boolean;
+  /**
+   * 세부 목표 최소 개수 — 랭킹 v2(`scoring_version` 2) 챌린지의 setup 동안만 2.
+   * 기본 목표를 합쳐 3개 이상이어야 시작할 수 있다. 0이면 제한 없음(v1 · 시작 후 편집).
+   */
+  minDetailGoals?: number;
   busy: boolean;
   onSubmit: (value: { goals: GoalDraft[]; plannedDays: number }) => void;
   onClose: () => void;
@@ -276,9 +282,15 @@ export function GoalSetupFlow({
 
   const usedTypes = new Set(details.map((d) => d.type));
   const atMax = details.length >= MAX_DETAIL_GOALS;
+  const needMore = details.length < minDetailGoals;
+  const needMoreHint = `기본 목표를 포함해 ${minDetailGoals + 1}개 이상 설정해 주세요. 목표를 더 많이 설정하면 기본 점수가 같을 때 유리해요.`;
 
   function submit() {
     setNotice(null);
+    if (needMore) {
+      setNotice(needMoreHint);
+      return;
+    }
     const r = buildGoalDrafts({ weeklyDays, periodDays, details });
     if (!r.ok) {
       setNotice(reasonMessage(r.reason));
@@ -523,7 +535,7 @@ export function GoalSetupFlow({
             onClose={onClose}
           />
         }
-        footer={footer("이 목표로 시작하기", submit, false, startLine, true)}
+        footer={footer("이 목표로 시작하기", submit, needMore, needMore ? needMoreHint : startLine, true)}
       >
         {justJoined && <JoinedBanner challengeName={challengeName} />}
 
@@ -935,7 +947,7 @@ export function GoalSetupFlow({
       titleId={TITLE_ID}
       onClose={onClose}
       header={<SheetHeader titleId={TITLE_ID} title="내 목표 확인" onClose={onClose} />}
-      footer={footer("이 목표로 시작하기", submit, false, startLine, true)}
+      footer={footer("이 목표로 시작하기", submit, needMore, needMore ? needMoreHint : startLine, true)}
     >
       <GoalHero hero="review" line1="좋은 오늘이" line2="더 나은 내일을 만듭니다" />
 

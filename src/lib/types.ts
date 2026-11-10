@@ -18,6 +18,12 @@ export type Challenge = {
    */
   photo_required: boolean;
   status: "setup" | "active" | "ended" | "cancelled";
+  /**
+   * 점수·동점 규칙 버전 (0122). 1 = 기존, 2 = 기본 점수 우선 + 동점자 가산점.
+   * ⚠️ 옵셔널이다 — 0122 적용 전 응답이나 옛 목에는 없다. 없으면 1로 취급한다
+   *    (`isScoringV2`가 2일 때만 v2). 서버가 정하고 클라이언트는 바꿀 수 없다.
+   */
+  scoring_version?: number;
   created_by: string;
   created_at: string;
   /**

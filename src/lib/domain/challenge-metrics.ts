@@ -86,6 +86,31 @@ export function metricTotalsByUser(
   return out;
 }
 
+/**
+ * 시간 기록이 없는(null) 또는 0분 이하인 완료 세션 수 — v2 동점 판정이 "이 사람의 운동 시간을
+ * 믿어도 되나"를 알기 위한 것이다. 거르는 조건(명단·기간)은 `metricTotalsByUser`와 **같다**.
+ * ⚠️ 0분은 "실제로 0분 운동"이 아니라 "시간이 안 잡힌 세션"으로 본다(서버가 완료 때 계산하는
+ *    값이라 0이면 시작·종료 시각이 없던 것). 그래서 시간 합계에는 이미 안 더해진다(위 `> 0`).
+ */
+export function sessionsMissingMinutesByUser(
+  rows: readonly MetricRow[],
+  memberIds: readonly string[],
+  startDate: string,
+  endKey: string,
+  timeZone: string,
+): Map<string, number> {
+  const out = new Map<string, number>(memberIds.map((id) => [id, 0]));
+  for (const r of rows) {
+    if (!out.has(r.userId)) continue;
+    const k = dayKey(new Date(r.completedAt), timeZone);
+    if (k < startDate || k > endKey) continue;
+    if (r.durationMinutes == null || r.durationMinutes <= 0) {
+      out.set(r.userId, (out.get(r.userId) ?? 0) + 1);
+    }
+  }
+  return out;
+}
+
 export type MetricRank = { userId: string; value: number; rank: number | null };
 
 const EPS = 1e-9;

@@ -16,12 +16,24 @@ export function ResultOverview({
   cells,
   podium,
   onOpenFinal,
+  explanation,
 }: {
   /** 목표를 안 건 사람은 null — 종합 점수가 없다 */
-  mine: { rank: number; overall: number; userId: string; avatarUrl: string | null } | null;
+  mine: {
+    rank: number;
+    overall: number;
+    userId: string;
+    avatarUrl: string | null;
+    /** v2: 표시 점수 문자열(기본 소수 둘째 / 가산점이 있으면 여섯째 자리). 없으면 v1 `overall.toFixed(1)` */
+    scoreText?: string;
+    /** v2 동점자: `기본 95.25점 + 동점 가산점 0.009000점` */
+    tieLine?: string;
+  } | null;
   cells: MetricCell[];
   podium: ReactNode;
   onOpenFinal: () => void;
+  /** v2 점수 설명·동점 카드 — 내 결과 카드 바로 아래 */
+  explanation?: ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-3">
@@ -47,10 +59,19 @@ export function ResultOverview({
             </div>
             <div className="text-center">
               <p className="text-[12px] text-muted">종합 점수</p>
-              <p className={`font-mono text-[28px] leading-tight font-black ${mine.rank === 1 ? "text-gold" : "text-text"}`}>
-                {mine.overall.toFixed(1)}
+              <p
+                className={`font-mono leading-tight font-black ${
+                  (mine.scoreText ?? "").length > 7 ? "text-[17px]" : "text-[28px]"
+                } ${mine.rank === 1 ? "text-gold" : "text-text"}`}
+              >
+                {mine.scoreText ?? mine.overall.toFixed(1)}
                 <span className="ml-0.5 text-[14px]">점</span>
               </p>
+              {mine.tieLine && (
+                <p data-testid="tie-line" className="text-[10.5px] leading-tight text-muted">
+                  {mine.tieLine}
+                </p>
+              )}
             </div>
           </div>
         ) : (
@@ -74,6 +95,8 @@ export function ResultOverview({
           ))}
         </div>
       </section>
+
+      {explanation}
 
       <section className="rounded-card border border-line-strong bg-surface px-2 pt-3 pb-3 shadow-card">
         <h3 className="mb-1 px-2 text-[15px] font-extrabold">최종 TOP 3</h3>

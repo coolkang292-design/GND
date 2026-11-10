@@ -293,10 +293,15 @@ export function resultShareText(input: {
   periodDays: number;
   /** 최종 랭킹 `챌린지 기록 인증` — 종목 기록 한 줄 */
   records?: string;
+  /** v2: 종합 점수 자리에 쓸 문구(예: `기본 95.25점`). 없으면 v1 `종합 X.X점` */
+  scoreText?: string;
+  /** v2: 동점 판정 한 줄(`tieBreakShareLine`) */
+  tieNote?: string;
 }): string {
   return [
     `개노답 챌린지 「${input.challengeName}」 결과`,
-    `${input.total}명 중 ${input.rank}위 · 종합 ${input.overall.toFixed(1)}점`,
+    `${input.total}명 중 ${input.rank}위 · ${input.scoreText ?? `종합 ${input.overall.toFixed(1)}점`}`,
+    ...(input.tieNote ? [input.tieNote] : []),
     `${input.periodDays}일 중 ${input.workoutDays}일 운동했어요`,
     ...(input.records ? [input.records] : []),
   ].join("\n");
