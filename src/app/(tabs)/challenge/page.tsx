@@ -490,7 +490,11 @@ function ChallengeScreen({ userId }: { userId: string }) {
 
   // ── 행동 ──────────────────────────────────────────────────────────────
 
-  async function handleSaveGoals(v: { goals: GoalDraft[]; plannedDays: number }) {
+  async function handleSaveGoals(v: {
+    goals: GoalDraft[];
+    plannedDays: number;
+    consented?: boolean;
+  }) {
     if (!challenge) return;
     setBusy(true);
     try {
@@ -503,10 +507,23 @@ function ChallengeScreen({ userId }: { userId: string }) {
         plannedDays: v.plannedDays,
       });
       setGoalSheet(null);
+      // 최종 동의까지 마쳤으면 목표 승인도 이어서 한다 (2026-11-11). 다른 참가자가 아직 목표를
+      // 안 정했으면 서버가 `kpi_incomplete`로 막는다 — 그건 실패가 아니라 "나중에"라서 안내만 한다.
+      let approvalLine: string | null = null;
+      if (v.consented) {
+        try {
+          await approveChallengeGoals(challenge.id);
+        } catch (e) {
+          approvalLine = String(e instanceof Error ? e.message : e).includes("kpi_incomplete")
+            ? "목표를 정했어요 — 다른 참가자가 목표를 정하면 동의가 이어서 완료돼요"
+            : null;
+        }
+      }
       showToast(
-        challenge.start_date > todayKey
-          ? `목표를 정했어요 — ${formatMonthDay(challenge.start_date)}에 시작하면 알려드릴게요 🏁`
-          : "목표를 정했어요 — 곧 시작해요 🏁",
+        approvalLine ??
+          (challenge.start_date > todayKey
+            ? `목표를 정하고 동의했어요 — ${formatMonthDay(challenge.start_date)}에 시작하면 알려드릴게요 🏁`
+            : "목표를 정하고 동의했어요 — 곧 시작해요 🏁"),
       );
       reload();
     } catch (e) {
@@ -833,6 +850,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
           myGoals={myGoals}
           prevGoals={prevGoals}
           justJoined={goalSheet.justJoined}
+          requireConsent={challenge.status === "setup"}
           busy={busy}
           onSubmit={(v) => void handleSaveGoals(v)}
           onClose={() => setGoalSheet(null)}

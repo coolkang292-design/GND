@@ -494,3 +494,58 @@ describe("방장 챌린지 취소하기", () => {
     expect(screen.queryByRole("button", { name: "챌린지 취소하기" })).toBeNull();
   });
 });
+
+describe("최종 확인 · 동의 (2026-11-11) — 규칙을 읽고 동의해야 참여가 끝난다", () => {
+  const next = () => screen.getByRole("button", { name: "다음 · 점수 규칙 확인" });
+  const join = () => screen.getByRole("button", { name: "동의하고 참여하기" });
+
+  it("동의 단계를 켜면 확인 화면의 버튼이 '다음'으로 바뀌고, 눌러도 아직 저장되지 않는다", () => {
+    const { onSubmit } = renderFlow({ requireConsent: true });
+    fireEvent.click(next());
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByTestId("goal-consent-step")).toBeTruthy();
+  });
+
+  it("내가 정한 목표·점수 계산·목표 추가·동점·약속을 모두 보여 준다", () => {
+    renderFlow({ requireConsent: true });
+    fireEvent.click(next());
+    const text = screen.getByTestId("goal-consent-step").textContent ?? "";
+    expect(text).toContain("내가 정한 목표");
+    expect(text).toContain("운동한 날"); // 기본 목표 한 줄
+    expect(text).toContain("점수는 이렇게 계산돼요");
+    expect(text).toContain("목표를 더 추가하면?");
+    expect(text).toContain("점수가 같으면?");
+    expect(text).toContain("공동 순위");
+    expect(text).toContain("꼭 알아두세요");
+  });
+
+  it("동의 체크 전에는 참여 버튼이 잠겨 있고, 체크하면 consented와 함께 저장한다", () => {
+    const { onSubmit } = renderFlow({ requireConsent: true });
+    fireEvent.click(next());
+    expect((join() as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(join()); // 잠긴 버튼 — 아무 일도 없어야 한다 (부정 확인)
+    expect(onSubmit).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("checkbox"));
+    expect((join() as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(join());
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({ consented: true });
+  });
+
+  it("뒤로 가면 목표 확인 화면으로 돌아오고, 다시 들어오면 동의는 풀려 있다", () => {
+    renderFlow({ requireConsent: true });
+    fireEvent.click(next());
+    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(screen.getByRole("button", { name: /뒤로/ }));
+    fireEvent.click(next());
+    expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(false);
+  });
+
+  it("동의 단계를 안 켜면(시작 후 목표 올리기) 예전처럼 바로 저장한다", () => {
+    const { onSubmit } = renderFlow();
+    fireEvent.click(cta());
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit.mock.calls[0][0].consented).toBeUndefined();
+  });
+});

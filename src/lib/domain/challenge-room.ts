@@ -58,6 +58,7 @@ const FLOOR_STEP: Record<GoalType, number> = {
   tabata_count: 1,
   cardio_distance: 0.1,
   cardio_time: 0.1,
+  cycle_time: 0.1, // 2026-11-11 사이클 누적 시간
   bodyweight_time: 0.1,
   volume: 0, // 하한 없음
   workout_days: 1, // 0108

@@ -522,10 +522,11 @@ describe("세부 목표 개수 — 기본 빼고 3개 (사용자 결정 2026-09-
 
 
 describe("유산소 주 몇 회 — cardio_days는 거리·시간에 딸려 온다 (D12)", () => {
-  it("⛔ 따로 고르는 지표가 아니다 — 유산소 탭은 거리·시간 둘뿐", () => {
+  it("⛔ 따로 고르는 횟수 지표는 없다 — 유산소 탭은 거리·시간·사이클 시간뿐 (cardio_days 없음)", () => {
     expect(DETAIL_METRICS.cardio.map((m) => [m.type, m.label])).toEqual([
       ["cardio_distance", "거리"],
       ["cardio_time", "시간"],
+      ["cycle_time", "사이클 시간"],
     ]);
     expect(Object.values(DETAIL_METRICS).flat().map((m) => m.type)).not.toContain(
       "cardio_days",
@@ -671,5 +672,22 @@ describe("유산소 주 몇 회 — cardio_days는 거리·시간에 딸려 온�
         FOUR_WEEKS,
       ),
     ).toBe("주 4회면 한 주에 약 12km · 4주 동안 48km");
+  });
+});
+
+describe("사이클 시간 목표 (2026-11-11) — 하루 20분 × 주 3회 = 누적 분", () => {
+  it("하루 기준으로 20분을 고르면 주 3회 × 기간 주수만큼의 누적 분이 된다", () => {
+    expect(basisChoicesFor("cycle_time")).toContain("day");
+    const r = buildGoalDrafts({
+      weeklyDays: 3,
+      periodDays: 30,
+      details: [{ type: "cycle_time", perWeek: 20, basis: "day" }],
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const goal = r.goals.find((g) => g.type === "cycle_time");
+    // 하루 20분 × 주 3회 × (30일 ÷ 7) = 257.1 → 257분. 앱이 이 입력으로 만드는 값이고,
+    // 운영 11월 챌린지 교체값(0128)도 **같은 257**이어야 한다 (같은 사실을 두 곳에 두지 않는다)
+    expect(goal?.target).toBe(257);
   });
 });

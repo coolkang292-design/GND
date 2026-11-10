@@ -99,6 +99,9 @@ export const DETAIL_METRICS: Record<
   cardio: [
     { type: "cardio_distance", label: "거리" },
     { type: "cardio_time", label: "시간" },
+    // 사이클은 거리가 아니라 누적 시간으로 잰다 (2026-11-11). 새 규칙 챌린지에서 거리·시간에는
+    // 사이클이 안 들어가므로(`CARDIO_RULES_V2_FROM`) 사이클 운동은 이 목표로 따로 세운다.
+    { type: "cycle_time", label: "사이클 시간" },
   ],
   bodyweight: [
     { type: "bodyweight_reps", label: "운동 횟수" },
@@ -143,6 +146,7 @@ const DETAIL_DEFAULTS: Record<
   weight_days: { perWeek: 2, step: 1 },
   cardio_distance: { perWeek: 10, step: 1, perDay: 3, dayStep: 0.5 },
   cardio_time: { perWeek: 120, step: 10, perDay: 30, dayStep: 5 },
+  cycle_time: { perWeek: 60, step: 10, perDay: 20, dayStep: 5 },
   cardio_days: { perWeek: 2, step: 1 },
   bodyweight_reps: { perWeek: 100, step: 10 },
   bodyweight_time: { perWeek: 30, step: 5 },

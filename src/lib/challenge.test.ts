@@ -35,6 +35,7 @@ const STATS: PeriodStats = {
   volumeKg: 3000,
   cardioDistanceKm: 12,
   cardioTimeMin: 90,
+  cycleTimeMin: 0,
   bodyweightReps: 180,
   bodyweightTimeMin: 24,
   tabataCount: 0,
@@ -912,5 +913,80 @@ describe("myScoreTrend", () => {
     expect(myScoreTrend({ rows: [...rows, row("2026-09-02T01:00:00Z", "u2")], ...args })).toEqual(
       myScoreTrend({ rows, ...args }),
     );
+  });
+});
+
+/**
+ * 유산소 집계 규칙 v2 (2026-11-11) — 사이클은 거리가 아니라 시간으로 잰다.
+ *
+ * 기준 숫자는 **운영 실측**이다: 낭만송곳니 11/3~10, 걷기 4회 18.8km·사이클 2회 16.0km(42.5분).
+ * 옛 규칙에서는 합쳐서 (18.8+16)/45 = 77.3%, 걷기만 인정하면 18.8/45 = 41.8%.
+ */
+describe("foldPeriodStats — 유산소 규칙 v2 (사이클 분리)", () => {
+  const cardio = (
+    name: string,
+    km: number,
+    sec: number,
+    at: string,
+  ): PeriodSessionRow => ({
+    userId: "u1",
+    completedAt: at,
+    exercises: [
+      {
+        exerciseType: "cardio",
+        exerciseName: name,
+        bodyPart: "유산소",
+        sets: [
+          {
+            weightKg: null,
+            reps: null,
+            distanceMeters: km * 1000,
+            durationSeconds: sec,
+            isCompleted: true,
+          },
+        ],
+      },
+    ],
+  });
+  const mk = (walkDay: string, cycleDay: string) => [
+    cardio("걷기", 18.8, 176.1 * 60, `${walkDay}T10:00:00+09:00`),
+    cardio("사이클", 16, 42.5 * 60, `${cycleDay}T10:00:00+09:00`),
+  ];
+  const rows = mk("2026-11-04", "2026-11-09"); // 11/3 시작 챌린지 (옛 규칙)
+  const rowsV2 = mk("2026-11-13", "2026-11-15"); // 11/12 이후 시작 챌린지 (새 규칙)
+
+  it("옛 규칙(시작일 < 11/12): 사이클 거리가 유산소 거리에 합쳐진다 — 진행 중 챌린지는 그대로", () => {
+    const s = foldPeriodStats(rows, "2026-11-03", "2026-12-02", "Asia/Seoul").get("u1")!;
+    expect(s.cardioDistanceKm).toBeCloseTo(34.8, 5);
+    expect(s.cardioDistanceKm / 45).toBeCloseTo(0.773, 3); // 77.3%
+    // 사이클 시간은 옛 규칙에서도 따로 센다 (진행 중 챌린지에 cycle_time 목표를 줄 수 있다)
+    expect(s.cycleTimeMin).toBeCloseTo(42.5, 5);
+  });
+
+  it("새 규칙(시작일 ≥ 11/12): 거리는 걷기만, 사이클은 cycle_time 한 곳에서만", () => {
+    const s = foldPeriodStats(rowsV2, "2026-11-12", "2026-12-10", "Asia/Seoul").get("u1")!;
+    expect(s.cardioDistanceKm).toBeCloseTo(18.8, 5);
+    expect(s.cardioDistanceKm / 45).toBeCloseTo(0.418, 3); // 41.8%
+    expect(s.cycleTimeMin).toBeCloseTo(42.5, 5);
+    // 사이클 시간이 유산소 시간에도 들어가면 같은 운동으로 보너스를 두 번 받는다
+    expect(s.cardioTimeMin).toBeCloseTo(176.1, 5);
+  });
+
+  it("새 규칙: 로잉·줄넘기·요가·사용자 종목은 시간만 센다 (거리 제외)", () => {
+    const other = [
+      cardio("로잉", 2, 600, "2026-11-13T10:00:00+09:00"),
+      cardio("평일", 19.3, 4560, "2026-11-14T10:00:00+09:00"),
+    ];
+    const s = foldPeriodStats(other, "2026-11-12", "2026-12-10", "Asia/Seoul").get("u1")!;
+    expect(s.cardioDistanceKm).toBe(0);
+    expect(s.cardioTimeMin).toBeCloseTo(10 + 76, 5);
+    expect(s.cycleTimeMin).toBe(0);
+  });
+
+  it("actualForGoal은 cycle_time을 cycleTimeMin으로 읽는다", () => {
+    const s = foldPeriodStats(rows, "2026-11-03", "2026-12-02", "Asia/Seoul").get("u1")!;
+    expect(actualForGoal(s, "cycle_time")).toBeCloseTo(42.5, 5);
+    // 목표 257분이면 달성률은 16.5% — 걷기 거리로 채운 77.3%보다 크게 낮다
+    expect(actualForGoal(s, "cycle_time") / 257).toBeCloseTo(0.165, 3);
   });
 });

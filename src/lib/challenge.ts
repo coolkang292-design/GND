@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { DEFAULT_TIMEZONE, dayKey } from "@/lib/domain/time";
+import { cardioKindOf } from "@/lib/domain/cardio-kind";
 import {
   plannedDaysForPeriod,
   rankParticipants,
@@ -36,6 +37,9 @@ export const GOAL_TYPE_META: Record<
   weight_days: { label: "웨이트 운동일", unit: "일", defaultTarget: 12, category: "weight" },
   cardio_distance: { label: "유산소 거리", unit: "km", defaultTarget: 20, category: "cardio" },
   cardio_time: { label: "유산소 시간", unit: "분", defaultTarget: 600, category: "cardio" },
+  // 2026-11-11 — 사이클은 거리가 아니라 **누적 시간**으로 잰다. 같은 km라도 걷기·달리기와 같은 노력이
+  // 아니라서, 거리 목표에 섞으면 사이클로 목표를 빨리 채운다 (`domain/cardio-kind.ts`).
+  cycle_time: { label: "사이클 시간", unit: "분", defaultTarget: 160, category: "cardio" },
   // 0111 — "유산소를 주 몇 회". 유산소만 일수형이 없어서 그 목표를 못 세웠다.
   //
   // ⚠️ 라벨은 **값과 맞아야 한다.** `target_value`는 기간 전체의 **날 수**다
@@ -837,6 +841,8 @@ export type PeriodStats = {
   volumeKg: number; // 레거시 표시용
   cardioDistanceKm: number;
   cardioTimeMin: number;
+  /** 사이클·실내자전거 시간(분) — `cycle_time` 판정. 두 규칙 버전 모두에서 센다 */
+  cycleTimeMin: number;
   bodyweightReps: number;
   bodyweightTimeMin: number;
   /** 기간 내 타바타 표식 세션 수 — tabata_count 판정 (0019) */
@@ -861,6 +867,17 @@ export type PeriodStats = {
   cardioKindsByDay: Record<string, number>;
 };
 
+/**
+ * 유산소 집계 규칙 v2가 적용되는 **챌린지 시작일** (2026-11-11 사용자 지시).
+ *
+ * 이 날 **이후에 시작하는** 챌린지부터 `cardio_distance`는 걷기·러닝 거리만, 사이클은 `cycle_time`,
+ * 로잉·줄넘기·요가 같은 기타 유산소는 시간만 잰다. 이전에 시작한 챌린지는 옛 규칙 그대로다 —
+ * 진행 중인 경기의 점수를 소급해서 바꾸지 않는다.
+ *
+ * ⚠️ 날짜를 올리거나 내리면 그 날짜 사이에 시작하는 챌린지의 점수가 달라진다. 바꾸지 마라.
+ */
+export const CARDIO_RULES_V2_FROM = "2026-11-12";
+
 export const EMPTY_STATS: PeriodStats = {
   workoutDays: 0,
   workoutDayKeys: [],
@@ -868,6 +885,7 @@ export const EMPTY_STATS: PeriodStats = {
   volumeKg: 0,
   cardioDistanceKm: 0,
   cardioTimeMin: 0,
+  cycleTimeMin: 0,
   bodyweightReps: 0,
   bodyweightTimeMin: 0,
   tabataCount: 0,
@@ -1074,6 +1092,9 @@ export function foldPeriodStats(
   endDate: string,
   timeZone: string,
 ): Map<string, PeriodStats> {
+  // 유산소 집계 규칙 버전 — **챌린지 시작일**로 정한다. 진행 중인 챌린지의 점수를 규칙을 바꿔서
+  // 소급해 흔들지 않기 위해서다 (돈이 걸린 경기도 있다).
+  const cardioV2 = startDate >= CARDIO_RULES_V2_FROM;
   type Acc = PeriodStats & {
     days: Set<string>;
     weightKinds: Map<string, Set<string>>;
@@ -1117,8 +1138,24 @@ export function foldPeriodStats(
           entry.bodyweightReps += s.reps ?? 0;
           entry.bodyweightTimeMin += (s.durationSeconds ?? 0) / 60;
         } else {
-          entry.cardioDistanceKm += Number(s.distanceMeters ?? 0) / 1000;
-          entry.cardioTimeMin += (s.durationSeconds ?? 0) / 60;
+          const km = Number(s.distanceMeters ?? 0) / 1000;
+          const min = (s.durationSeconds ?? 0) / 60;
+          const kind = cardioKindOf(ex.exerciseName);
+          // 사이클 시간은 어느 버전에서든 센다 — `cycle_time` 목표를 진행 중인 챌린지에도 줄 수 있다
+          if (kind === "cycle") entry.cycleTimeMin += min;
+          if (!cardioV2) {
+            // 옛 규칙(시작일 < 2026-11-12): 유산소 전부를 거리·시간에 그대로 합친다
+            entry.cardioDistanceKm += km;
+            entry.cardioTimeMin += min;
+          } else if (kind === "distance") {
+            // 거리형(걷기·러닝)은 거리와 시간 둘 다
+            entry.cardioDistanceKm += km;
+            entry.cardioTimeMin += min;
+          } else if (kind === "other") {
+            // 거리로 비교할 수 없는 유산소(로잉·줄넘기·요가…)는 시간만
+            entry.cardioTimeMin += min;
+          }
+          // kind === "cycle" (v2): 거리·유산소 시간에서 **뺀다** — 사이클은 `cycle_time` 한 곳에서만 점수가 된다
         }
       }
       if (!hasCompleted) continue;
@@ -1157,6 +1194,7 @@ export function foldPeriodStats(
       volumeKg: e.volumeKg,
       cardioDistanceKm: e.cardioDistanceKm,
       cardioTimeMin: e.cardioTimeMin,
+      cycleTimeMin: e.cycleTimeMin,
       bodyweightReps: e.bodyweightReps,
       bodyweightTimeMin: e.bodyweightTimeMin,
       tabataCount: e.tabataCount,
@@ -1187,6 +1225,8 @@ export function actualForGoal(
       return stats.cardioDistanceKm;
     case "cardio_time":
       return stats.cardioTimeMin;
+    case "cycle_time":
+      return stats.cycleTimeMin;
     case "bodyweight_reps":
       return stats.bodyweightReps;
     case "bodyweight_time":

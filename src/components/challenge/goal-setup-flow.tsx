@@ -7,6 +7,7 @@ import {
   PrimaryButton,
   SheetHeader,
 } from "@/components/challenge/bottom-sheet";
+import { GoalConsentStep } from "@/components/challenge/goal-consent-step";
 import { NumberField } from "@/components/challenge/number-field";
 import { UiIcon } from "@/components/ui-icon";
 import { recordFunnelEvent } from "@/lib/analytics-events";
@@ -42,7 +43,7 @@ import {
 } from "@/lib/domain/challenge-simple-goal";
 import type { UserGoal } from "@/lib/types";
 
-type Step = "basic" | "category" | "metric" | "review";
+type Step = "basic" | "category" | "metric" | "review" | "consent";
 
 const TITLE_ID = "goal-setup-title";
 
@@ -223,6 +224,7 @@ export function GoalSetupFlow({
   myGoals,
   prevGoals,
   justJoined = false,
+  requireConsent = false,
   busy,
   onSubmit,
   onClose,
@@ -240,8 +242,18 @@ export function GoalSetupFlow({
   prevGoals: readonly UserGoal[] | null;
   /** 방금 참가했다 — 첫 줄에 축하를 붙인다 (시안 5번) */
   justJoined?: boolean;
+  /**
+   * 마지막에 **점수 규칙을 설명하고 동의를 받는** 단계를 넣는다 (2026-11-11).
+   * 시작 전(setup) 챌린지에 참여할 때만 켠다. 시작한 뒤 목표를 올리는 화면에는 필요 없다.
+   */
+  requireConsent?: boolean;
   busy: boolean;
-  onSubmit: (value: { goals: GoalDraft[]; plannedDays: number }) => void;
+  onSubmit: (value: {
+    goals: GoalDraft[];
+    plannedDays: number;
+    /** 최종 동의를 마쳤다 — 부르는 쪽이 목표 승인(`approve_challenge_goals`)까지 이어 간다 */
+    consented?: boolean;
+  }) => void;
   onClose: () => void;
   /**
    * 방장만 — 넘기면 시작 버튼 아래에 `챌린지 취소하기`를 그린다 (사용자 지시 2026-10-07).
@@ -277,6 +289,10 @@ export function GoalSetupFlow({
   const usedTypes = new Set(details.map((d) => d.type));
   const atMax = details.length >= MAX_DETAIL_GOALS;
 
+  const [agreed, setAgreed] = useState(false);
+  const [finalDrafts, setFinalDrafts] = useState<BuildGoalDraftsResult | null>(null);
+
+  /** 목표 확인 화면의 대표 버튼 — 동의 단계가 있으면 거기로, 없으면 바로 저장 */
   function submit() {
     setNotice(null);
     const r = buildGoalDrafts({ weeklyDays, periodDays, details });
@@ -284,7 +300,23 @@ export function GoalSetupFlow({
       setNotice(reasonMessage(r.reason));
       return;
     }
+    if (requireConsent) {
+      setFinalDrafts(r);
+      setAgreed(false);
+      setStep("consent");
+      return;
+    }
     onSubmit({ goals: r.goals, plannedDays: r.plannedDays });
+  }
+
+  /** 최종 동의 화면의 버튼 — 동의했을 때만 저장하고 참여한다 */
+  function confirmAndJoin() {
+    if (!agreed || !finalDrafts || !finalDrafts.ok) return;
+    onSubmit({
+      goals: finalDrafts.goals,
+      plannedDays: finalDrafts.plannedDays,
+      consented: true,
+    });
   }
 
   function loadPrev() {
@@ -523,7 +555,13 @@ export function GoalSetupFlow({
             onClose={onClose}
           />
         }
-        footer={footer("이 목표로 시작하기", submit, false, startLine, true)}
+        footer={footer(
+          requireConsent ? "다음 · 점수 규칙 확인" : "이 목표로 시작하기",
+          submit,
+          false,
+          startLine,
+          true,
+        )}
       >
         {justJoined && <JoinedBanner challengeName={challengeName} />}
 
@@ -929,13 +967,47 @@ export function GoalSetupFlow({
     );
   }
 
+  /* ── ⑤ 최종 확인 · 동의 (requireConsent) ─────────────────── */
+  if (step === "consent" && finalDrafts && finalDrafts.ok) {
+    return (
+      <BottomSheet
+        titleId={TITLE_ID}
+        onClose={onClose}
+        header={
+          <SheetHeader
+            titleId={TITLE_ID}
+            title="최종 확인"
+            onBack={() => setStep("review")}
+            onClose={onClose}
+          />
+        }
+        footer={footer("동의하고 참여하기", confirmAndJoin, !agreed)}
+      >
+        <GoalConsentStep
+          goals={finalDrafts.goals}
+          startDate={startDate}
+          endDate={endDate}
+          photoRequired={photoRequired}
+          agreed={agreed}
+          onAgreedChange={setAgreed}
+        />
+      </BottomSheet>
+    );
+  }
+
   /* ── ④ 내 목표 확인 ──────────────────────────────────────── */
   return (
     <BottomSheet
       titleId={TITLE_ID}
       onClose={onClose}
       header={<SheetHeader titleId={TITLE_ID} title="내 목표 확인" onClose={onClose} />}
-      footer={footer("이 목표로 시작하기", submit, false, startLine, true)}
+      footer={footer(
+        requireConsent ? "다음 · 점수 규칙 확인" : "이 목표로 시작하기",
+        submit,
+        false,
+        startLine,
+        true,
+      )}
     >
       <GoalHero hero="review" line1="좋은 오늘이" line2="더 나은 내일을 만듭니다" />
 

@@ -10,6 +10,7 @@ export type GoalType =
   | "weight_days" // 웨이트 운동일 (하루 N종목+)
   | "cardio_distance" // 유산소 거리 km
   | "cardio_time" // 유산소 지속 분
+  | "cycle_time" // 사이클 지속 분 (2026-11-11) — 거리가 아니라 시간으로 잰다
   | "bodyweight_reps" // 맨몸 횟수형 총 반복
   | "bodyweight_time" // 맨몸 시간형 지속 분
   | "bodyweight_days" // 맨몸 운동일 (하루 N종목+)
@@ -49,11 +50,15 @@ export function participationScore(
   return Math.min(workoutDays / plannedDays, 1) * 100;
 }
 
+/** 종합점수에서 달성·참여가 차지하는 비중. 목표 설정 마지막 화면의 설명이 이 값을 그대로 읽는다 */
+export const ACHIEVEMENT_WEIGHT = 0.8;
+export const PARTICIPATION_WEIGHT = 0.2;
+
 export function overallScore(
   achievement: number,
   participation: number,
 ): number {
-  return achievement * 0.8 + participation * 0.2;
+  return achievement * ACHIEVEMENT_WEIGHT + participation * PARTICIPATION_WEIGHT;
 }
 
 /** 완료(100%+) 목표 1개당 보너스 점수, 최대 개수 */
