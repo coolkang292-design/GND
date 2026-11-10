@@ -20,7 +20,7 @@ import {
   type ConfiguredPick,
 } from "@/components/record/exercise-picker";
 import { RecordEmptyState, StartOptions } from "@/components/record/record-empty-state";
-import { TodayCompletedList } from "@/components/record/today-completed-list";
+import { TodayFeedNotice } from "@/components/record/today-feed-notice";
 import { ExerciseReorderSheet } from "@/components/record/exercise-reorder-sheet";
 import { IdlePauseModal } from "@/components/record/idle-pause-modal";
 import { RoutineSaveSheet } from "@/components/record/routine-save-sheet";
@@ -4008,6 +4008,10 @@ function WorkoutScreen({ userId }: { userId: string }) {
     prevVolume !== null ? summary.weightVolumeKg - prevVolume : null;
 
   if (result) {
+    // 오늘 이미 올린 운동이 있으면 그 첫 운동이 오늘 피드 카드의 대표다 (`mergeSameDayFeed`)
+    const firstToday = todaySessions[0];
+    const todayAnchor =
+      firstToday && firstToday.id !== result.sessionId ? firstToday : null;
     /*
       인증 대기면 피드로 보내지 않는다 (2026-10-19 사용자 결정, 시안 STATE 01).
       사진 필수 챌린지에 보탤 몫이 있는데 사진이 없으면 피드 버튼을 빼고, 사진을 올리면
@@ -4136,10 +4140,31 @@ function WorkoutScreen({ userId }: { userId: string }) {
           <p className="mb-1.5 flex items-center gap-1 text-[11px] font-bold text-faint">
             <Icon name="users" size={13} /> 크루 피드 한마디
           </p>
+          {/*
+            같은 날 두 번째 이후 운동 (사용자 지시 2026-11-11): 피드에는 **오늘 올린 카드 하나**에
+            종목이 이어 붙는다(`mergeSameDayFeed`). 그래서 한마디도 오늘 카드(첫 운동)에 붙인다.
+            사진은 이 운동에 그대로 올린다 — 사진 인증이 필요한 챌린지는 **세션마다** 사진을 보기
+            때문이다. 합쳐진 카드에는 두 운동의 사진이 같이 보인다.
+          */}
+          {todayAnchor && (
+            <p
+              data-testid="feed-append-note"
+              className="mb-2 text-[12.5px] leading-5 text-muted"
+            >
+              오늘 올린 피드에 이 운동이 이어서 추가됐어요
+            </p>
+          )}
           <CaptionPicker
-            sessionId={result.sessionId}
-            caption={resultCaption}
-            onSaved={setResultCaption}
+            sessionId={todayAnchor ? todayAnchor.id : result.sessionId}
+            caption={todayAnchor ? todayAnchor.title : resultCaption}
+            onSaved={(next) => {
+              if (!todayAnchor) return setResultCaption(next);
+              setTodaySessions((prev) =>
+                prev.map((x) =>
+                  x.id === todayAnchor.id ? { ...x, title: next } : x,
+                ),
+              );
+            }}
             onToast={showToast}
             variant="complete"
           />
@@ -4519,19 +4544,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
         그린다 (사용자 지시 2026-08-06). 여기서 중요한 건 무엇을 더 그리느냐가
         아니라 무엇을 **안 그리느냐**다 — 지금 할 일은 하나다.
       */}
-          {/* 오늘 이미 한 운동 (2026-11-11) — 운동 중에는 안 그린다(진행 중 화면이 말한다) */}
-          {!active && todaySessions.length > 0 && (
-            <TodayCompletedList
-              sessions={todaySessions}
-              timeZone={resolveTimeZone()}
-              onTitleChange={(id, next) =>
-                setTodaySessions((prev) =>
-                  prev.map((x) => (x.id === id ? { ...x, title: next } : x)),
-                )
-              }
-              onToast={showToast}
-            />
-          )}
+          {/* 오늘 이미 올린 운동이 있으면, 추가 운동이 그 피드에 합쳐진다고 시작 전에 알린다 */}
+          {!active && <TodayFeedNotice count={todaySessions.length} />}
 
           {isEmpty && (
             <RecordEmptyState

@@ -12,7 +12,7 @@ import {
 import {
   deleteMyComment,
   editMyComment,
-  getSessionThread,
+  getMergedSessionThread,
   postSessionComment,
   SocialError,
 } from "@/lib/social";
@@ -253,13 +253,17 @@ function AuthorTap({
 
 export function CommentThread({
   sessionId,
+  sessionIds,
   viewerId,
   thread,
   people,
   onThreadChange,
   onAuthorTap,
 }: {
+  /** 댓글이 달리는 곳 — 같은 날 묶인 카드면 **대표(첫 운동) 세션**이다 */
   sessionId: string;
+  /** 이 카드에 묶인 세션 전부. 갱신할 때 전부 읽어야 둘째 운동의 댓글이 안 사라진다 */
+  sessionIds?: string[];
   viewerId: string;
   thread: SessionThread;
   people: People;
@@ -280,7 +284,9 @@ export function CommentThread({
 
   async function refresh() {
     try {
-      onThreadChange(await getSessionThread(sessionId));
+      onThreadChange(
+        await getMergedSessionThread(sessionIds ?? [sessionId]),
+      );
     } catch {
       /* 갱신 실패는 화면을 막지 않는다 — 다음 로드에서 맞춰진다 */
     }

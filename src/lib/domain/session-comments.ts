@@ -194,3 +194,26 @@ export function threadPreview(
 
 /** `cheers.message`의 CHECK가 200자다 (0082에서 30 → 200) */
 export const COMMENT_MAX_LENGTH = 200;
+
+/**
+ * 여러 세션의 스레드를 하나로 합친다 — 같은 날 운동을 한 피드 카드로 묶었을 때(2026-11-11).
+ * 최상위 댓글은 시간순(오래된 것 → 최신)으로 섞고, 말 없는 응원은 종류별로 합산한다.
+ * 답글은 부모 댓글 안에 이미 들어 있어서 그대로 따라간다.
+ */
+export function mergeThreads(threads: SessionThread[]): SessionThread {
+  if (threads.length === 1) return threads[0];
+  const comments = threads
+    .flatMap((t) => t.comments)
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  const tally = new Map<SessionCheerType, number>();
+  for (const t of threads) {
+    for (const c of t.cheerTally) {
+      tally.set(c.type, (tally.get(c.type) ?? 0) + c.count);
+    }
+  }
+  return {
+    comments,
+    cheerTally: [...tally].map(([type, count]) => ({ type, count })),
+    cheerTotal: threads.reduce((sum, t) => sum + t.cheerTotal, 0),
+  };
+}

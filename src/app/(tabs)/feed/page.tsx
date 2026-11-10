@@ -21,6 +21,7 @@ import { FeedItemCard } from "@/components/feed/feed-item";
 import { NotificationBell } from "@/components/notification-bell";
 import { feedDateLabel, groupByDay } from "@/lib/domain/social";
 import { dayKey, resolveTimeZone } from "@/lib/domain/time";
+import { mergeSameDayFeed } from "@/lib/domain/feed-merge";
 import {
   FEED_PAGE_SIZE,
   getCrewFeed,
@@ -114,7 +115,8 @@ export default function FeedPage() {
         // 그룹 유무로 피드 전체를 접던 가드를 없앴다.
         const page = await getCrewFeed(userId!);
         if (cancelled) return;
-        setItems(page);
+        // 같은 날 운동은 첫 운동 카드 하나로 묶는다 (2026-11-11). 더 불러올지는 **묶기 전** 개수로 본다
+        setItems(mergeSameDayFeed(page, resolveTimeZone()));
         setHasMore(page.length === FEED_PAGE_SIZE);
       } finally {
         if (!cancelled) setReady(true);
@@ -160,7 +162,7 @@ export default function FeedPage() {
     () =>
       groupByDay(
         // 상단에 고정한 것은 목록에서 뺀다 — 안 그러면 같은 카드가 둘이다
-        pinnedId ? items.filter((i) => i.sessionId !== pinnedId) : items,
+        pinnedId ? items.filter((i) => !i.sessionIds.includes(pinnedId)) : items,
         dateRef.tz,
       ),
     [items, dateRef, pinnedId],
@@ -193,9 +195,12 @@ export default function FeedPage() {
     if (!userId || items.length === 0) return;
     setLoadingMore(true);
     try {
-      const before = items[items.length - 1].completedAt.toISOString();
+      // 묶인 카드의 `completedAt`은 가장 늦은 운동이다 — 커서는 **가장 이른** 시각이어야 겹치지 않는다
+      const before = items[items.length - 1].cursorAt.toISOString();
       const page = await getCrewFeed(userId, before);
-      setItems((prev) => [...prev, ...page]);
+      setItems((prev) =>
+        mergeSameDayFeed([...prev, ...page], resolveTimeZone()),
+      );
       setHasMore(page.length === FEED_PAGE_SIZE);
     } finally {
       setLoadingMore(false);

@@ -47,6 +47,8 @@ function feedItem(
   return {
     breakdown,
     sessionId: "session-1",
+    sessionIds: ["session-1"],
+    cursorAt: new Date("2026-07-18T21:20:00+09:00"),
     userId: "friend-1",
     nickname: "오빙크",
     avatarUrl: "🙂",

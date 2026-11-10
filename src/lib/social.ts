@@ -18,6 +18,7 @@ import { getActiveChallengeRanking } from "@/lib/challenge";
 import { summarizeVolume, type VolumeSummary } from "@/lib/domain/volume";
 import {
   EMPTY_SESSION_THREAD,
+  mergeThreads,
   foldSessionThread,
   type SessionCheerRow,
   type SessionCheerType,
@@ -166,7 +167,16 @@ export function toSocialError(error: { message?: string }): SocialError {
 // ── 그룹 피드 (§9: 크루 공개 completed 최신순) ────────────────
 
 export type FeedItem = {
+  /**
+   * 이 카드의 **대표 세션** — 좋아요·댓글·한마디·사진이 붙는 곳.
+   * 같은 사람이 같은 날 운동을 여러 번 했으면 카드 하나로 묶이고(`mergeSameDayFeed`),
+   * 대표는 **그날 첫 운동**이다 (사용자 지시 2026-11-11 "기존 피드에 추가").
+   */
   sessionId: string;
+  /** 이 카드에 묶인 세션 전부 (대표가 첫 번째). 안 묶였으면 `[sessionId]` */
+  sessionIds: string[];
+  /** 무한 스크롤 커서 — 묶인 세션 중 **가장 오래된** 완료 시각. `completedAt`은 가장 늦은 것이다 */
+  cursorAt: Date;
   userId: string;
   nickname: string;
   avatarUrl: string | null;
@@ -417,6 +427,8 @@ export async function getCrewFeed(
     const reaction = reactions.get(r.id);
     return {
       sessionId: r.id,
+      sessionIds: [r.id],
+      cursorAt: new Date(r.completed_at),
       userId: r.user_id,
       nickname: profile?.nickname ?? "크루원",
       avatarUrl: profile?.avatar_url ?? null,
@@ -534,6 +546,19 @@ export async function getSessionThread(
 ): Promise<SessionThread> {
   const threads = await fetchSessionThreads([sessionId]);
   return threads.get(sessionId) ?? EMPTY_SESSION_THREAD;
+}
+
+/**
+ * 같은 날 묶인 카드의 스레드 — 묶인 세션 **전부**를 읽어 합친다.
+ * 대표 세션만 읽으면 갱신하는 순간 둘째 운동에 달렸던 댓글이 카드에서 사라진다.
+ */
+export async function getMergedSessionThread(
+  sessionIds: string[],
+): Promise<SessionThread> {
+  const threads = await fetchSessionThreads(sessionIds);
+  return mergeThreads(
+    sessionIds.map((id) => threads.get(id) ?? EMPTY_SESSION_THREAD),
+  );
 }
 
 /**

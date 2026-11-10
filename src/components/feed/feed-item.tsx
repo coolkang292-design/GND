@@ -4,6 +4,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { CaptionPicker } from "@/components/feed/caption-picker";
+import { FeedPhotoEditor } from "@/components/feed/feed-photo-editor";
 import {
   CommentThread,
   type CommentAuthor,
@@ -234,10 +235,12 @@ export function WorkoutSummary({
 function Caption({
   item,
   isMine,
+  userId,
   onItemChange,
 }: {
   item: FeedItem;
   isMine: boolean;
+  userId: string;
   onItemChange?: (next: FeedItem) => void;
 }) {
   const editable = isMine && onItemChange !== undefined;
@@ -254,6 +257,14 @@ function Caption({
           sessionId={item.sessionId}
           caption={item.title}
           onSaved={(next) => onItemChange!({ ...item, title: next })}
+        />
+      )}
+      {/* 사진 추가·삭제 — 오늘 올린 내 카드만 (2026-11-11) */}
+      {editable && (
+        <FeedPhotoEditor
+          item={item}
+          userId={userId}
+          onItemChange={onItemChange!}
         />
       )}
     </div>
@@ -307,6 +318,7 @@ function CardFooter({
       <Caption
         item={item}
         isMine={item.userId === userId}
+        userId={userId}
         onItemChange={onItemChange}
       />
 
@@ -391,6 +403,7 @@ function CardFooter({
       {showComments && onItemChange && (
         <CommentThread
           sessionId={item.sessionId}
+          sessionIds={item.sessionIds}
           viewerId={userId}
           thread={item.thread}
           people={item.people}
