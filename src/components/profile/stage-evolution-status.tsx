@@ -25,7 +25,7 @@ export function StageEvolutionStatusView({ status }: { status: StageGateStatus }
 
   const target = getStageGroups()[status.nextStage - 1];
   const m = buildEvolutionCardModel(status);
-  return <section className="rounded-card border border-line bg-surface p-4 shadow-card" data-testid="server-evolution-status">
+  return <section className="break-keep rounded-card border border-line bg-surface p-4 shadow-card" data-testid="server-evolution-status">
     <h2 className="text-[15px] font-extrabold">다음 진화 · {target.stageName}</h2>
     <p className="mt-2 flex items-center gap-1.5 text-[13px] font-bold text-accent">
       {m.celebrate && <span className="evo-pop inline-flex h-5 w-5 flex-none items-center justify-center rounded-full bg-accent text-accent-ink">
@@ -44,11 +44,11 @@ export function StageEvolutionStatusView({ status }: { status: StageGateStatus }
 
     {m.tiles.length > 0 && <ul className="mt-4 grid grid-cols-2 gap-2.5">
       {m.tiles.map(t => <li key={t.key} data-tone={t.tone} className={`relative min-w-0 rounded-card-sm border p-3 ${TILE[t.tone]}`}>
-        {t.badge && <span data-testid="evo-badge" className={`absolute -top-2 right-2.5 rounded-full px-2 py-0.5 text-[11px] font-extrabold ${BADGE[t.tone]}`}>{t.badge}</span>}
+        {t.badge && <span data-testid="evo-badge" className={`absolute -top-2 right-2.5 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-extrabold ${BADGE[t.tone]}`}>{t.badge}</span>}
         <p className="text-[12px] text-muted">{t.label}</p>
         <p className={`mt-0.5 text-[22px] font-extrabold leading-tight ${VALUE[t.tone]}`}>{t.value}</p>
         {t.tone === "met"
-          ? <p className="mt-0.5 flex items-center gap-1 text-[12px] font-bold text-accent"><Icon name="check" size={12} strokeWidth={2.6} />목표 달성</p>
+          ? <p className="mt-0.5 flex items-center gap-1 whitespace-nowrap text-[12px] font-bold text-accent"><Icon name="check" size={12} strokeWidth={2.6} />목표 달성</p>
           : <p className="mt-0.5 text-[12px] text-muted">{t.target}</p>}
       </li>)}
     </ul>}

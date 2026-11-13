@@ -89,7 +89,8 @@ function alternateOf(a: GateAlternate): CardAlternate {
 
 export function buildEvolutionCardModel(status: StageGateStatus): EvolutionCardModel {
   const error = status.state === "error";
-  const alt = error ? null : status.alternate ?? null;
+  // 오류 중에는 숨기고, 성장 경로로 이미 통과했으면 쓰지 않은 대체 경로도 숨긴다
+  const alt = error || (status.state === "eligible" && status.path === "growth") ? null : status.alternate ?? null;
   const viaAlternate = status.state === "eligible" && status.path === "alternate";
 
   const hidden = new Set<GateCondition["key"]>();

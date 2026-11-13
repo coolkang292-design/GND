@@ -138,6 +138,11 @@ describe("서버 판정을 그대로 쓰고 숨길 것은 숨긴다", () => {
     const m = buildEvolutionCardModel(status({ conditions: growth, alternate: { kind: "days", current: 70, required: 90, met: false, exemptsSteady: true } }));
     expect(m.alternate).toMatchObject({ met: false, percent: 77, valueText: "70 / 90일", note: "꾸준함은 따로 채우지 않아도 돼요" });
   });
+  it("성장 경로로 이미 통과(eligible)했으면 쓰지 않은 대체 경로는 숨긴다", () => {
+    const alt = { kind: "days" as const, current: 71, required: 90, met: false, exemptsSteady: true };
+    expect(buildEvolutionCardModel(status({ state: "eligible", path: "growth", conditions: [c("xp", 21, 21, true)], alternate: alt })).alternate).toBeNull();
+    expect(buildEvolutionCardModel(status({ state: "blocked", conditions: [c("xp", 19, 21, false)], alternate: alt })).alternate).not.toBeNull();
+  });
   it("꾸준함 조건이 있으면 설명 footnote 플래그", () => {
     expect(buildEvolutionCardModel(status({ conditions: [c("steady", 0, 1, false)] })).steadyNote).toBe(true);
     expect(buildEvolutionCardModel(status({ conditions: [c("days", 1, 36, false)] })).steadyNote).toBe(false);
