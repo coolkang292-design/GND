@@ -39,17 +39,22 @@
 | `src/lib/domain/level-growth-copy.ts` (+test) | 표시 문구(재촉 문구 없음) |
 | `src/lib/level-growth.ts` (+test) | `getMyStageGrowth({userId, level})` — 본인 데이터만, `range` 페이징(상한 초과 시 던짐), RPC·기준선 테이블 미사용 |
 | `src/components/profile/level-growth-card.tsx` (+2 test) | '내 성장 · N단계' 카드. 상위 3개 + 토글, 종합 % 없음 |
-| `src/lib/flags.ts`, `growth-hub.tsx`, `growth-hub.flag.client.test.tsx` | `NEXT_PUBLIC_GROWTH_V2=1`일 때만 성장 허브에 카드. **미커밋 — 에이전트 작업 중이었다.** `git status`로 확인할 것 |
-| `src/lib/domain/level-growth.live.test.ts` | 실데이터 기존/신규 비교표(읽기 전용, `GROWTH_LIVE_NICK` 없으면 skip). **미커밋·미실행** |
+| `src/lib/flags.ts`, `growth-hub.tsx`, `growth-hub.flag.client.test.tsx` | `NEXT_PUBLIC_GROWTH_V2=1`일 때만 성장 허브에 카드(커밋 `c7e83aa`) |
+| `src/lib/domain/level-growth.live.test.ts` | 실데이터 기존/신규 비교표(읽기 전용, `GROWTH_LIVE_NICK` 없으면 skip, `--silent=false`로 실행해야 표가 보인다). 커밋·실행 완료(`24e3a27`) |
 
 건드리지 않은 것(검토로 확인): `evolution-status-card.tsx` · `evolution.ts` · `evolution-growth.ts` · `evolution-guidance.ts` · 서버 진화 로직.
 
 ## 5. 남은 일 (순서대로)
 
-1. `git status`/`git log`로 구현 에이전트의 마지막 작업(플래그 배선 커밋)이 끝났는지 확인. 끝났으면 직접 `pnpm vitest run src/lib/domain/level-growth src/lib/level-growth.test.ts src/components/profile src/lib/domain/evolution.test.ts` + `pnpm typecheck`.
-2. **실데이터 비교표**: `GROWTH_LIVE_NICK=오뎅끼데스까 pnpm vitest run src/lib/domain/level-growth.live.test.ts` → 출력을 계획서 맨 아래 "검증 기록"에 붙이고 커밋.
-   예상(손계산): Lv.19 = 4단계, 진입 2026-10-08 이전 최고 vs 이후 최고. 숄더 프레스 16kg×17(25.07)이 직전 최고 21.87 대비 **+14.6%** 등 — 지시서 5.1절 예시와 같은 값이어야 한다. 마운틴 클라이머·점핑잭·트레드밀은 표에 **없어야** 한다.
-3. **개발 서버 화면 확인**(필수, 건너뛰면 배포 금지): 워크트리에는 `.claude/launch.json`이 없다(`settings.json`만). `NEXT_PUBLIC_GROWTH_V2=1`로 `pnpm dev` 해야 카드가 보인다 — `preview_start`용 launch.json을 만들거나 사용자가 터미널에서 띄운다. 확인할 것: 카드 1개 · 성장 종목 수·목록이 DB 계산과 일치 · 인터벌/유산소 종목 **없음** · 토글 열림/접힘 · 플래그를 끄면 카드 **없음**(부정 확인) · 375px 레이아웃. 픽스처 A(`dev-fixture-a@gnd.local`, Lv.10=2단계)는 성장 기록이 거의 없을 수 있다 → 오뎅끼데스까 수치는 비교표와 DB 대조로 보완. 실사용자 계정 비밀번호는 받지 않는다.
+완료(2026-11-13): ① 에이전트 수정 직접 검증(19개 파일 151건 통과·typecheck) ② 실데이터 비교표(계획서 "검증 기록" 절) ③ 개발 서버 화면 확인 — **픽스처 A(헬스장주주, Lv.10=2단계)**로 확인: 카드 1개, 진화 카드 바로 아래, 성장 0종목·비교 불가 9종목이 SQL 대조와 **일치**(인터벌·유산소 종목 없음), 토글 열림/접힘 동작, 플래그를 끄면 카드 0개·기존 진화 카드 그대로.
+
+개발 서버: `.claude/launch.json`은 **원본 폴더(`C:\Users\SAMSUNG\workout-app\.claude\launch.json`)**에 `gnd-growth-v2`(포트 3700) 항목을 추가했다(gitignore 대상). 환경변수는 `.env*`를 Claude가 못 쓰므로 임시 래퍼(`…\scratchpad\dev-growth-v2.mjs`, 기본 `NEXT_PUBLIC_GROWTH_V2=1`)로 주입한다 — 새 세션에서는 이 파일이 없을 수 있으니 같은 방식으로 다시 만들거나 사용자가 터미널에서 `NEXT_PUBLIC_GROWTH_V2=1 pnpm dev -p 3700`을 띄운다. 로그인은 사용자가 패널에서 직접 해야 한다(비밀번호를 Claude가 입력할 수 없다). `/profile` 직접 진입은 `/record`로 보내지므로 하단 탭 '내 정보'를 눌러 들어가고, 카드는 접힌 '내 성장 상세' 안에 있다.
+
+**남은 화면 확인**: 성장 기록이 실제로 있는 계정(픽스처 B 근육은퇴근중 3단계 — Lv.11에서 +10% 1종목 예상, 또는 오뎅끼데스까)으로 '성장한 운동' 목록·상위 3개·+% 표시를 눈으로 확인할 것. 단위 테스트로만 검증됐다.
+
+1. (완료) 에이전트 수정 검증.
+2. (완료) 실데이터 비교표.
+3. (일부 완료) 개발 서버 화면 확인 — 위 참고.
 4. `pnpm lint` · `pnpm test`(전체) · `pnpm build` · `pnpm verify:regression --tier readonly`(순차, accounts 티어와 동시 금지). `xp-test`(accounts 티어, 운영에 익명 계정 생성)는 아직 안 돌렸다 — 돌린 뒤 `node scripts/dev-fixture.mjs status`로 남은 프로필을 센다(기준 8개).
 5. `PROGRESS.md` · `release-notes.data.json`(배포 **전에** 넣는다) · `pnpm db:snapshot`.
 6. 사용자에게 보고 → 승인 후 `main` 병합 → 푸시(배포 승인에 포함) → 배포(CLAUDE.md §배포 절차, `--scope gnd4`) → 운영 환경변수 `NEXT_PUBLIC_GROWTH_V2` 추가 여부는 별도 판단. **지금까지 푸시·배포·`--send` 발송 없음.**
