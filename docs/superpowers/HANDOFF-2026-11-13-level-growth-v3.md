@@ -1,6 +1,7 @@
 # 인수인계 — '내 성장' v3 + 진화 조건 설계 (2026-11-13)
 
-> 최신 상태: **후속 평균·유산소 계산과 UI 1차 구현/검증 완료(§11) · 서버 진화는 여전히 XP 기준 · 서버 기준 선택 답변 대기 · 푸시·배포 안 함 · 기존 운영 DB 0131·0132 유지**
+> **먼저 §12(2026-11-13 15:40 현황 점검·이어서 할 일)를 읽어라.** 그 앞의 절은 시간순 기록이고 일부 낡았다.
+> 최신 상태: **커밋 `759e260`까지 = 계산·평균·유산소·UI 1차 완료(§11). 그 위에 다른 세션이 남긴 미커밋 WIP(서버 진화 판정 초안 0133~0136 + 실제 단계 표시 UI)가 있고 14:18에 멈췄으며 현재 typecheck 2건·테스트 4건이 실패한다(§12). 서버 진화는 여전히 XP 기준, 운영 DB는 0131·0132만, 푸시·배포 안 함.**
 > 브랜치 `feat/level-growth-v2` (워크트리 `C:\Users\SAMSUNG\workout-app\.worktrees\level-growth-v2`, 기준 `main` `ae4ac8b`)
 > 설계: `docs/superpowers/specs/2026-11-13-evolution-gate-design.md` · 구현된 v3의 계획: `docs/superpowers/plans/2026-11-13-level-growth-v2.md` · 최신 후속 요청과 평균 방식 계획: `docs/superpowers/plans/2026-11-13-evolution-gate-implementation.md`
 
@@ -118,3 +119,62 @@
 - 최종 검증: lint오류0/기존경고5, typecheck, 전체 **300파일 통과/3파일skip ·4,755통과/3skip**, GROWTH_V2=1 build 통과, readonly 회귀7종0실패. 임시 페이지 제거 후 남았던Next개발타입 캐시는 서버 재시작으로 해결. 개발 서버 `http://localhost:3700`, 이 작업의 실행 세션31290으로 켜 둠.
 - **아직 안 한 것:** 새 서버 테이블/스냅샷·진화 보류·SQL 판정·기존XP함수 변경·알림시점 변경·새 정책의 두 계정 전이 확인·운영 배포. 기존0131/0132 외 DB 적용 없음. 모바일 실기기 미검증. 사용자 선택대로 푸시하지 않음.
 - **현재 질문 대기:** 기존 습관표(꾸준러36일12주~전설156일60주), 평균5/8/12/15%, N비율15/20/25/30%, M하루이상, 미션은후속으로 분리하는1차안과 습관완화안 중 선택을 요청했다. 답변 없이 운영 규칙을 확정하지 않는다. 다음은 답변 반영 후 서버 구조·판정 구현이며 실제DB적용은 별도 승인.
+
+## 12. 현황 점검과 이어서 할 일 (2026-11-13 15:40, Claude가 직접 확인)
+
+### 12.1 지금 어디까지 왔나
+
+| 구분 | 상태 | 근거 |
+|---|---|---|
+| 커밋된 작업 | 계산 엔진·점프 제외·상위 N종목 평균·유산소 성장·카드·시동러까지 XP 안내·실제 단계 표시 일부 (`…759e260`) | `git log`, §11 |
+| **미커밋 WIP** | 서버 진화 판정 초안(`supabase/migrations/0133~0136`) + 이를 보여 주는 UI + 로컬 SQL 시험 | `git status` (아래 12.2). **다른 세션(커밋자 `MK Kang`)이 14:00~14:18에 만들고 멈췄다** — 파일 수정 시각 기준, 지금은 15:36. 활성 세션 없음(`ListAgents`) |
+| 운영 DB | **0131·0132만 적용.** 0133~0136은 **미적용 초안** | MCP 조회: `stage_evolution_rules/settings`·`user_stage_history`·`stage_growth_baselines` 테이블 없음, `*stage_evolution*`·`evaluate_stage*` 함수 없음, `apply_xp_and_progress`+`complete_workout_v2` 본문 해시 `9aab554e…` **불변**, `user_level_history` 55행·XP 원장 259건·XP 합계 21,020 **불변** |
+| 서버 진화 판정 | **여전히 XP만** (사용자 화면의 "3가지 모두" 문구는 서버가 강제하지 않는다) | §2, 설계 문서 §2 |
+| 푸시·배포 | **안 함** (사용자가 로컬 보관 선택) | PROGRESS.md |
+
+현재 검사 결과(15:36, 이 워크트리):
+- `pnpm typecheck` **실패 2건**: `growth-hub.test.tsx:61` `LevelRewards`에 `gated` prop 없음, `:207` `StageCarousel`에 `gated` prop 없음.
+- `pnpm vitest run …`(성장·진화·프로필 25파일) **4건 실패 / 164 통과 / 3 skip**:
+  - `growth-hub.test.tsx` 2건 — 위 `gated` 기능을 **테스트만 먼저 써 놓고 구현하지 않은** red 상태 (`LevelRewards`: 실제 단계보다 높은 캐릭터 보상은 "진화 조건 충족 시"로 표기 / `StageCarousel`: 서버 ON이면 "레벨 5개마다" 대신 "꾸준러부터는 진화 조건").
+  - `growth-hub.flag.client.test.tsx` 2건 — `GrowthHub`가 새로 `refreshMyStageEvolution()`을 부르는데 이 테스트는 그 모듈을 mock하지 않아 깨진다 (`stub-evolution`/`level-growth-card`를 못 찾음).
+
+### 12.2 미커밋 파일(이 세션에서 건드리지 않았다)
+
+| 파일 | 내용 |
+|---|---|
+| `supabase/migrations/0133_stage_evolution_foundation.sql` (198줄) | 설정(`enabled=false`)·규칙·`user_stage_history`·`stage_growth_baselines`, 비공개 스키마 `gnd_evolution`. 헤더: "미적용 초안" |
+| `0134_stage_evolution_evaluator.sql` (174줄) | 판정 내부 함수 + 공개 RPC(`get_my_stage_evolution_status`/`refresh_my_stage_evolution`) |
+| `0135_stage_evolution_bootstrap.sql` (22줄) | 기존 사용자 이력 초기화 (현재 단계 유지) |
+| `0136_stage_evolution_integration.sql` (277줄) | **`apply_xp_and_progress`를 `create or replace`로 바꿔** 단계 판정·알림 연결. 헤더: "XP/레벨/보상/유효성 산식 유지, 운영 적용은 기존 함수 변경 승인 후" |
+| `scripts/evolution-gate-audit.mjs`, `scripts/evolution-gate-check.mjs`, `scripts/fixtures/evolution-gate-schema.sql` | 로컬 메모리 PostgreSQL 영향 분석·시험(운영은 GET만). 결과: `docs/superpowers/evolution-gate-server-audit-2026-11-13.md` (7명 전원 `blocked`/또는 XP 부족, 진행도 조회 전후 불변) |
+| `src/lib/domain/evolution-gate.sql.test.ts`, `src/lib/stage-evolution.ts`(+test), `src/components/profile/stage-evolution-status.tsx`(+test) | 서버 판정 JSON 계약·클라이언트 RPC 래퍼·표시 컴포넌트 |
+| 수정: `evolution-gate.ts`(+test), `evolution-status-card.tsx`, `growth-hub.tsx`(+test), `level-growth-card.tsx`(+test), `growth-timeline.tsx`, `next-stage-preview.tsx`, `stage-guide-sheet.tsx` | 서버 모드면 `gateStatus`로 서버 판정을 표시, 실제 단계 기준 표기 |
+| ⚠️ `src/app/evolution-server-qa/` (`page.tsx`, `fixtures.json`) | **임시 QA 페이지.** 이전 기록(PROGRESS·§11)에는 "제거했다"고 돼 있는데 14:14에 **다시 만들어졌다.** 커밋·배포하면 안 된다 |
+
+### 12.3 이어서 할 일 (순서대로)
+
+1. **WIP를 먼저 초록으로 만든다**
+   a. `level-rewards.tsx`의 `LevelRewards`에 `gated` prop 구현 — `growth-hub.test.tsx`의 새 테스트가 요구하는 동작(`gated`이고 보상이 `stage_evolve_N`이며 N이 실제 `currentStage`보다 크면 "진화 조건 충족 시", 다른 XP 보상은 "해금됨" 그대로).
+   b. `stage-carousel.tsx`의 `StageCarousel`에 `gated` prop 구현 — `gated`면 "레벨 5개마다" 문구를 빼고 "꾸준러부터는 진화 조건" 안내.
+   c. `growth-hub.flag.client.test.tsx`에 `vi.mock("@/lib/stage-evolution", …)`(`refreshMyStageEvolution` → `null` = 서버 미설치) 추가 후 다시 통과시킨다.
+   d. `pnpm typecheck` 0건 → `pnpm vitest run src/components/profile src/lib/domain src/lib/level-growth.test.ts src/lib/stage-evolution.test.ts` 통과.
+   e. **`src/app/evolution-server-qa/` 삭제.** 삭제 후 `pnpm build`에 `/evolution-server-qa`가 없는지 확인.
+   f. 파일을 지정해 커밋(`git add .` 금지). 마이그레이션 0133~0136은 아직 **커밋 여부도 사용자와 정한다**(미적용 초안이라 커밋해도 운영에는 영향 없음).
+2. **서버 SQL 초안 검토** — 적용하지 않는다.
+   - `src/lib/domain/evolution-gate.sql.test.ts`·`scripts/evolution-gate-check.mjs`로 로컬 메모리 PostgreSQL 시험이 지금도 통과하는지 확인.
+   - 0136이 바꾸는 `apply_xp_and_progress`·`complete_workout_v2`를 **적용 직전 MCP로 현행 정의를 다시 읽어** 본문 차이를 보여 준다(`docs/db-current-schema.sql` 또는 옛 마이그레이션을 베끼지 않는다). 현재 해시 `9aab554e…`가 그대로여야 초안의 전제가 맞다.
+   - 마이그레이션 번호는 `0132` 다음 기준(0133~)이다. 다른 브랜치가 같은 번호를 쓰지 않았는지 적용 직전에 확인.
+3. **사용자 결정을 받는다**(받기 전에는 서버 적용 금지) — 설계 문서 §8과 계획서 §2 표:
+   - `apply_xp_and_progress` 변경 **예외 승인**(지시서 8절 금지 조항과 충돌). 거절하면 0136 방식은 불가하고 대안(별도 함수·트리거)을 다시 설계한다.
+   - 습관표(꾸준러 36일·12주 ~ 전설 156일·60주)와 평균 목표 +5/+8/+12/+15%, N 비율 15/20/25/30%, M 최소 기록 일수(1일/2일), 미션을 이번에 넣을지 후속으로 분리할지, 대체 경로(운동일 1.5배) 범위, 점프 임계값(+100%).
+   - 진화 카드 ③ 칸 처리(§6 질문 7)는 WIP가 `gateStatus`로 서버 판정을 표시하는 쪽으로 이미 진행 중 — 이 방향을 채택하는지 확인.
+4. **적용·검증·배포는 계획서 `plans/2026-11-13-evolution-gate-implementation.md` Task 8~9 순서**를 따른다: 개발 서버 화면(두 계정 필요 시) → lint·typecheck·전체 test·build·`verify:regression --tier readonly`(순차) → 사용자 승인 후 DB 적용(MCP, 객체 재조회, `pnpm db:snapshot`) → 앱 배포(서버 규칙은 **OFF 유지**) → 규칙 활성화는 별도 승인.
+
+### 12.4 주의
+
+- **이 인수인계서에는 두 세션의 기록이 섞여 있다.** §1~9 = Claude 세션(`GND 캐릭터 진화로직 현황 검토`), §10~11·계획서 `evolution-gate-implementation.md`·PROGRESS의 후속 항목 = 다른 세션(`MK Kang` 커밋). 수치·검증은 어느 쪽이 했는지 확인하고 쓸 것. §8의 "미검증" 목록 중 전체 test/lint/build는 §11에 한 번 통과한 기록이 있으나, **그 뒤 WIP가 생겨 현재는 깨져 있다.**
+- 운영 DB 변경은 **0131·0132뿐**이다(위 12.1 조회로 재확인). 새 객체·함수 변경·알림 발송·푸시·배포 없음.
+- 개발 서버: `.claude/launch.json`(원본 폴더, gitignore)의 `gnd-growth-v2`(포트 3700, `NEXT_PUBLIC_GROWTH_V2=1` 래퍼 — 임시 스크립트 경로는 세션 임시 폴더라 사라졌을 수 있다)는 앞서 Claude가 띄웠고 지금도 떠 있을 수 있다. §11은 "개발 서버 3700 켜 둠(세션 31290)"이라고 적었으니 **어느 프로세스가 3700을 쓰는지 확인하고 중복 기동하지 말 것.**
+- `.env.local`은 Claude가 읽거나 복사할 수 없다(권한 차단). 필요하면 사용자에게 복사를 부탁한다. 이 워크트리에는 이미 복사돼 있다.
+- 실사용자 계정(오뎅끼데스까)의 비밀번호는 받지 않는다. 화면 확인은 사용자가 패널에서 직접 로그인한다.
+- 진화 서버 규칙을 켜는 것은 되돌리기 어렵다(알림·단계 이력). **적용 전 전원 시뮬레이션 → 설정 변경 SQL 제시 → 별도 승인**을 건너뛰지 않는다.
