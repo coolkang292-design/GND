@@ -53,6 +53,7 @@ export async function getFriendBoardBase(
     nickname: m.nickname,
     avatarUrl: m.avatarUrl,
     totalXp: m.totalXp,
+    ...(m.currentStage === undefined ? {} : { currentStage: m.currentStage }),
     characterVariant: variants.get(m.id),
   }));
   if (crew.length === 0) {

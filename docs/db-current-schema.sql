@@ -7,7 +7,7 @@
 -- 쓰는 법: 함수·정책의 '현행' 정의가 필요할 때 마이그레이션 51개를
 -- 뒤지지 말고 이 파일을 검색하라. 마이그레이션을 적용한 뒤에는 다시 뽑아라.
 --
--- 함수 107개 · 정책 87개 · 인덱스 107개
+-- 함수 109개 · 정책 89개 · 인덱스 111개
 
 -- ════════════════════════════════════════════════════════════
 -- 함수
@@ -2013,6 +2013,44 @@ begin
   return c;
 end $function$;
 
+-- ── freeze_level_baselines ──
+CREATE OR REPLACE FUNCTION public.freeze_level_baselines(p_level integer, p_metric_version text, p_rows jsonb)
+ RETURNS integer
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_uid uuid := auth.uid();
+  v_hist user_level_history;
+  v_n integer := 0;
+begin
+  if v_uid is null then raise exception 'not_authenticated'; end if;
+
+  select * into v_hist from user_level_history
+  where user_id = v_uid and level = p_level for update;
+  if not found then raise exception 'level_entry_not_found'; end if;
+  if v_hist.baseline_frozen_at is not null then return 0; end if;
+
+  if jsonb_typeof(p_rows) <> 'array' or jsonb_array_length(p_rows) > 200 then
+    raise exception 'invalid_rows';
+  end if;
+
+  insert into level_growth_baselines
+    (user_id, target_level, exercise_key, metric_type, baseline_value, sample_count, samples,
+     baseline_window_start, baseline_window_end, level_entered_at, metric_version)
+  select v_uid, p_level, r->>'exercise_key', r->>'metric_type',
+         (r->>'baseline_value')::numeric, jsonb_array_length(r->'samples'), r->'samples',
+         v_hist.entered_at - interval '60 days', v_hist.entered_at, v_hist.entered_at,
+         p_metric_version
+  from jsonb_array_elements(p_rows) r
+  on conflict (user_id, target_level, exercise_key, metric_type, metric_version) do nothing;
+  get diagnostics v_n = row_count;
+
+  update user_level_history set baseline_frozen_at = now() where id = v_hist.id;
+  return v_n;
+end $function$;
+
 -- ── freeze_profile_attribution ──
 CREATE OR REPLACE FUNCTION public.freeze_profile_attribution()
  RETURNS trigger
@@ -3823,6 +3861,34 @@ begin
                             'parent_id', c.parent_id);
 end $function$;
 
+-- ── record_level_entry ──
+CREATE OR REPLACE FUNCTION public.record_level_entry()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_tx uuid;
+begin
+  if new.current_level > old.current_level then
+    begin
+      select id into v_tx from xp_transactions
+      where user_id = new.user_id
+      order by created_at desc, id desc limit 1;
+
+      insert into user_level_history
+        (user_id, level, entered_at, entry_xp, source_transaction_id, history_source)
+      select new.user_id, g, now(), new.total_xp, v_tx, 'actual'
+      from generate_series(old.current_level + 1, new.current_level) g
+      on conflict (user_id, level) do nothing;
+    exception when others then
+      raise warning 'record_level_entry failed for %: %', new.user_id, sqlerrm;
+    end;
+  end if;
+  return new;
+end $function$;
+
 -- ── reject_crew_request ──
 CREATE OR REPLACE FUNCTION public.reject_crew_request(p_request_id uuid)
  RETURNS jsonb
@@ -5112,6 +5178,9 @@ $function$;
 -- ── level_definitions ──
 -- level_definitions_read  [SELECT]  roles=authenticated
 --   using  : true
+-- ── level_growth_baselines ──
+-- level_growth_baselines_own_select  [SELECT]  roles=public
+--   using  : (user_id = auth.uid())
 -- ── notification_settings ──
 -- notif_settings_own  [ALL]  roles=authenticated
 --   using  : (user_id = auth.uid())
@@ -5191,6 +5260,9 @@ $function$;
 -- goals_update_own_setup  [UPDATE]  roles=public
 --   using  : ((user_id = ( SELECT auth.uid() AS uid)) AND (challenge_in_setup(challenge_id) OR challenge_is_active(challenge_id)))
 --   check  : ((user_id = ( SELECT auth.uid() AS uid)) AND (challenge_in_setup(challenge_id) OR challenge_is_active(challenge_id)))
+-- ── user_level_history ──
+-- user_level_history_own_select  [SELECT]  roles=public
+--   using  : (user_id = auth.uid())
 -- ── user_progress ──
 -- user_progress_own_select  [SELECT]  roles=authenticated
 --   using  : (user_id = auth.uid())
@@ -5332,6 +5404,8 @@ $function$;
 -- CREATE UNIQUE INDEX groups_pkey ON public.groups USING btree (id);
 -- CREATE UNIQUE INDEX level_definitions_pkey ON public.level_definitions USING btree (level);
 -- CREATE UNIQUE INDEX level_definitions_required_xp_unique ON public.level_definitions USING btree (required_total_xp);
+-- CREATE UNIQUE INDEX level_growth_baselines_pkey ON public.level_growth_baselines USING btree (id);
+-- CREATE UNIQUE INDEX level_growth_baselines_user_id_target_level_exercise_key_me_key ON public.level_growth_baselines USING btree (user_id, target_level, exercise_key, metric_type, metric_version);
 -- CREATE UNIQUE INDEX notification_settings_pkey ON public.notification_settings USING btree (user_id);
 -- CREATE UNIQUE INDEX notifications_dedupe_key_uidx ON public.notifications USING btree (dedupe_key);
 -- CREATE UNIQUE INDEX notifications_pkey ON public.notifications USING btree (id);
@@ -5365,6 +5439,8 @@ $function$;
 -- CREATE UNIQUE INDEX user_blocks_pkey ON public.user_blocks USING btree (blocker_id, blocked_id);
 -- CREATE UNIQUE INDEX user_goals_pkey ON public.user_goals USING btree (id);
 -- CREATE UNIQUE INDEX user_goals_user_id_challenge_id_goal_type_key ON public.user_goals USING btree (user_id, challenge_id, goal_type);
+-- CREATE UNIQUE INDEX user_level_history_pkey ON public.user_level_history USING btree (id);
+-- CREATE UNIQUE INDEX user_level_history_user_id_level_key ON public.user_level_history USING btree (user_id, level);
 -- CREATE UNIQUE INDEX user_progress_pkey ON public.user_progress USING btree (user_id);
 -- CREATE UNIQUE INDEX user_reports_one_open_per_pair ON public.user_reports USING btree (reporter_id, target_id) WHERE (status = 'open'::text);
 -- CREATE INDEX user_reports_open_idx ON public.user_reports USING btree (created_at DESC) WHERE (status = 'open'::text);

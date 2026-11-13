@@ -43,6 +43,14 @@ describe("level-growth-copy", () => {
     );
   });
 
+  it("유산소는 거리·시간과 비교 조건을 표시하며 kg나 유지시간으로 오해시키지 않는다", () => {
+    const before = { weight: null, reps: null, seconds: 1800, distanceMeters: 3000 };
+    const after = { ...before, distanceMeters: 3300 };
+    expect(fmtSample("c", before)).toBe("3km · 30분");
+    expect(growthLine({ ...rec, kind: "c", baselineBest: before, currentBest: after,
+      cardioComparison: "distance_at_same_time" })).toBe("같은 시간 거리: 3km · 30분 → 3.3km · 30분");
+  });
+
   it("빈 상태·비교 불가 문구 — 더 세게 들라고 재촉하지 않는다", () => {
     expect(EMPTY_GROWTH_COPY).toBe(
       "아직 이번 단계에서 성장한 운동이 없어요. 지난 단계의 최고 기록을 넘기면 여기에 나타나요.",

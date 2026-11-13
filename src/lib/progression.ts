@@ -1,5 +1,5 @@
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { getLevelProgress } from "@/lib/domain/progression";
+import { getLevelProgress, getStageGroups } from "@/lib/domain/progression";
 import type { EarnedBadge } from "@/lib/domain/badges";
 import {
   characterSrc,
@@ -12,6 +12,12 @@ import {
 /** Asia/Seoul 기준 오늘(YYYY-MM-DD). */
 function todayKst(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+}
+
+function actualStage(index: number) {
+  const stage = getStageGroups()[index - 1];
+  if (!stage || stage.stageIndex !== index) throw new Error("invalid progression stage");
+  return stage;
 }
 
 export interface ProgressSummary {
@@ -57,12 +63,13 @@ export async function getProgressSummary(): Promise<ProgressSummary> {
 
   const totalXp = data?.total_xp ?? 0; // data null = 신규 사용자
   const p = getLevelProgress(totalXp);
+  const stage = actualStage(data?.current_stage ?? p.currentStageIndex);
   return {
     totalXp,
     currentLevel: p.currentLevel,
-    currentStage: p.currentStageIndex,
-    stageName: p.stageName,
-    characterPath: characterSrc(p.characterPath, variant),
+    currentStage: stage.stageIndex,
+    stageName: stage.stageName,
+    characterPath: characterSrc(stage.characterPath, variant),
     characterVariant: variant,
     nextLevelRequiredXp: p.nextLevelRequiredXp,
     xpToNextLevel: p.xpToNextLevel,
@@ -191,8 +198,8 @@ type CrewProfileRow = {
  * 크루원 한 명의 레벨·배지 (0026 정의자 RPC).
  * 크루가 아니면 RPC가 'not_crew'를 raise한다 — 호출부가 문구를 고른다.
  *
- * 레벨·단계는 RPC가 준 캐시값 대신 total_xp로 다시 계산한다. 내 정보 화면
- * (getProgressSummary)과 같은 함수를 써야 두 화면의 숫자가 어긋나지 않는다.
+ * 레벨은 XP로 계산하고 캐릭터 단계는 서버의 실제 단계를 따른다.
+ * 단계가 진화 대기 중이면 XP만으로 이미 진화한 모습을 표시하지 않는다.
  */
 export async function getCrewMemberProfile(
   targetId: string,
@@ -207,12 +214,13 @@ export async function getCrewMemberProfile(
   const variant = (await getCharacterVariants([targetId])).get(targetId) ?? "male";
   const totalXp = row.totalXp ?? 0;
   const p = getLevelProgress(totalXp);
+  const stage = actualStage(row.currentStage ?? p.currentStageIndex);
   return {
     totalXp,
     currentLevel: p.currentLevel,
-    currentStage: p.currentStageIndex,
-    stageName: p.stageName,
-    characterPath: characterSrc(p.characterPath, variant),
+    currentStage: stage.stageIndex,
+    stageName: stage.stageName,
+    characterPath: characterSrc(stage.characterPath, variant),
     characterVariant: variant,
     nextLevelRequiredXp: p.nextLevelRequiredXp,
     xpToNextLevel: p.xpToNextLevel,

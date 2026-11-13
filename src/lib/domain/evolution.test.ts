@@ -39,33 +39,32 @@ describe("daysBetween", () => {
 });
 
 describe("evaluateEvolution — 3중 조건", () => {
-  it("XP 충분, 운동일수 부족 → 진화 불가", () => {
+  it("꿈틀러 진입은 운동일수가 부족해도 XP만 충족하면 가능", () => {
     const s = evaluateEvolution({
       totalXp: XP_FOR.lv6, currentStage: 1, today: TODAY,
       workoutDays: days(5, 40), growth: NO_GROWTH,
     });
     expect(cond(s, "xp").met).toBe(true);
-    expect(cond(s, "days").met).toBe(false);
-    expect(s.allMet).toBe(false);
+    expect(s.conditions.map(c => c.key)).toEqual(["xp"]);
+    expect(s.allMet).toBe(true);
   });
 
-  it("XP 충분, 기간 부족 → 진화 불가 (6일 운동이지만 첫 운동이 1주 전)", () => {
+  it("초기 단계는 경과 기간으로 진화를 막지 않는다", () => {
     const s = evaluateEvolution({
       totalXp: XP_FOR.lv6, currentStage: 1, today: TODAY,
       workoutDays: [ago(7), ago(6), ago(5), ago(4), ago(3), ago(2)], growth: NO_GROWTH,
     });
-    expect(cond(s, "days").met).toBe(true);
-    expect(cond(s, "weeks").met).toBe(false);
-    expect(s.allMet).toBe(false);
+    expect(s.conditions.map(c => c.key)).toEqual(["xp"]);
+    expect(s.allMet).toBe(true);
   });
 
-  it("2단계는 성장 조건이 없다 — XP·6일·2주면 진화", () => {
+  it("2단계는 XP만 요구한다", () => {
     const s = evaluateEvolution({
       totalXp: XP_FOR.lv6, currentStage: 1, today: TODAY,
       workoutDays: [ago(16), ago(14), ago(12), ago(10), ago(8), ago(6)], growth: NO_GROWTH,
     });
     expect(s.nextStage).toBe(2);
-    expect(s.conditions.map((c) => c.key)).toEqual(["xp", "days", "weeks"]);
+    expect(s.conditions.map((c) => c.key)).toEqual(["xp"]);
     expect(s.allMet).toBe(true);
   });
 
@@ -148,7 +147,7 @@ describe("evaluateEvolution — 3중 조건", () => {
 
   it("같은 날 여러 번 기록해도 운동일은 1일", () => {
     const s = evaluateEvolution({
-      totalXp: XP_FOR.lv6, currentStage: 1, today: TODAY,
+      totalXp: XP_FOR.lv16, currentStage: 3, today: TODAY,
       workoutDays: [ago(20), ago(20), ago(20), ago(20), ago(20), ago(20)], growth: NO_GROWTH,
     });
     expect(cond(s, "days").current).toBe(1);
@@ -162,15 +161,13 @@ describe("evaluateEvolution — 3중 조건", () => {
     expect(s.allMet).toBe(false);
   });
 
-  it("3단계는 기준선만 요구한다 — 기준선 없으면 '측정 준비 중'", () => {
+  it("시동러 진입도 성장 기준이 없어도 XP만 충족하면 가능", () => {
     const s = evaluateEvolution({
       totalXp: XP_FOR.lv11, currentStage: 2, today: TODAY,
       workoutDays: days(18, 100), growth: growth(null, 0),
     });
-    expect(cond(s, "growth").preparing).toBe(true);
-    // 기준선 없음 → 대체 경로(27일)가 적용돼 18일로는 부족
-    expect(cond(s, "days").required).toBe(27);
-    expect(s.allMet).toBe(false);
+    expect(s.conditions.map(c => c.key)).toEqual(["xp"]);
+    expect(s.allMet).toBe(true);
   });
 
   it("최종 7단계는 다음 진화가 없다", () => {
@@ -183,7 +180,7 @@ describe("evaluateEvolution — 3중 조건", () => {
 
   it("미래 날짜 기록은 세지 않는다", () => {
     const s = evaluateEvolution({
-      totalXp: XP_FOR.lv6, currentStage: 1, today: TODAY,
+      totalXp: XP_FOR.lv16, currentStage: 3, today: TODAY,
       workoutDays: ["2026-11-20", "2026-11-21"], growth: NO_GROWTH,
     });
     expect(cond(s, "days").current).toBe(0);

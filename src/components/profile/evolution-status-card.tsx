@@ -14,6 +14,7 @@ import type {
   EvolutionStatus,
 } from "@/lib/domain/evolution";
 import { getMyEvolutionStatus } from "@/lib/evolution";
+import { GROWTH_V2 } from "@/lib/flags";
 
 function fmtPct(v: number): string {
   return `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
@@ -273,13 +274,20 @@ type GlanceRow = { c: EvolutionCondition; label: string; value: string; need: st
  * + 오늘 운동 시작하기]. 말은 초등학생도 알 수 있게 쓴다.
  */
 export function EvolutionStatusView({
-  status,
+  status: incomingStatus,
   variant = "male",
+  separateGrowth = GROWTH_V2,
 }: {
   status: EvolutionStatus;
   /** 단계 얼굴 이미지의 남·여 — 없으면 남성 */
   variant?: CharacterVariant;
+  /** 새 성장 카드는 별도 목표다. 서버가 XP만 적용하는 동안 옛 3중 조건을 실제 규칙처럼 안내하지 않는다. */
+  separateGrowth?: boolean;
 }) {
+  const visibleConditions = separateGrowth ? incomingStatus.conditions.filter(c => c.key === "xp") : incomingStatus.conditions;
+  const status = separateGrowth
+    ? { ...incomingStatus, conditions: visibleConditions, allMet: visibleConditions.every(c => c.met) }
+    : incomingStatus;
   const groups = getStageGroups();
 
   if (status.nextStage === null) {
@@ -385,7 +393,10 @@ export function EvolutionStatusView({
 
         <h3 className="mt-4 text-[14px] font-extrabold">다음엔 이렇게 진화해요</h3>
         <p className="mt-0.5 text-[11.5px] text-muted">
-          아래 {cardCount}가지를 모두 채우면 진화할 수 있어요.
+          {status.nextStage <= 3
+            ? "시동러까지는 경험치만으로 진화해요."
+            : separateGrowth ? "현재 진화는 경험치 기준이에요. 아래에서 성장 목표도 확인해 보세요."
+            : `아래 ${cardCount}가지를 모두 채우면 진화할 수 있어요.`}
         </p>
 
         {/* ① 경험치 레벨 */}
@@ -504,7 +515,9 @@ export function EvolutionStatusView({
           </ul>
         )}
         <p className="mt-3 border-t border-line/60 pt-2.5 text-[11px] leading-snug text-muted">
-          경험치는 입장권이에요. 꾸준히 운동하고, 예전의 내가 더 세지면 진화해요!
+          {status.nextStage <= 3 || separateGrowth
+            ? "경험치가 쌓이면 다음 모습으로 진화해요. "
+            : "경험치는 입장권이에요. 꾸준히 운동하고, 예전의 내가 더 세지면 진화해요! "}
           한번 진화한 모습은 운동을 쉬어도 그대로예요.
         </p>
         <Link

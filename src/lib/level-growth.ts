@@ -53,11 +53,15 @@ export async function getMyStageGrowth(input: {
    */
   userId: string;
   level: number;
+  /** 실제 캐릭터 단계. 레벨이 높아도 진화 대기 중이면 이 단계를 사용한다. */
+  currentStage?: number;
 }): Promise<StageGrowthResult> {
   const def = LEVEL_DEFS[Math.min(Math.max(Math.trunc(input.level), 1), MAX_LEVEL) - 1];
   const stages = getStageGroups();
-  const stage = stages[def.stageIndex - 1];
-  const prevStage = def.stageIndex > 1 ? stages[def.stageIndex - 2] : null;
+  const stageIndex = input.currentStage ?? def.stageIndex;
+  const stage = stages[stageIndex - 1];
+  if (!stage || stage.stageIndex !== stageIndex) throw new Error("invalid growth stage");
+  const prevStage = stageIndex > 1 ? stages[stageIndex - 2] : null;
   const noBaseline = {
     state: "no_baseline" as const,
     level: input.level,
@@ -86,7 +90,7 @@ export async function getMyStageGrowth(input: {
   // 신호가 없다. 그래서 `range`로 1000행씩 끝까지 읽고, 상한에 닿으면 부분 데이터로 계산하지 않고 던진다.
   // 진입 이하(기준선 쪽)와 이후(현재 쪽)는 따로 읽어 한쪽이 다른 쪽을 밀어내지 못하게 한다.
   const sessionSelect =
-    "id, completed_at, tabata_minutes, workout_exercises(exercise_name, exercise_type, sort_order, workout_sets(weight_kg, reps, duration_seconds, is_completed))";
+    "id, completed_at, tabata_minutes, workout_exercises(exercise_name, exercise_type, sort_order, workout_sets(weight_kg, reps, duration_seconds, distance_meters, is_completed))";
   const base = () =>
     supabase
       .from("workout_sessions")

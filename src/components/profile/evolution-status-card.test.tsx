@@ -79,22 +79,22 @@ describe("EvolutionStatusView — 쉬운 말", () => {
     expect(growth.tips![0]).toContain("벤치프레스: 4번 기록했어요 → 2번만 더 하면 잴 수 있어요");
   });
 
-  it("3단계는 '예전의 나 기록 만들기'로 풀어 쓴다 (+1.0% / +1.0% 같은 숫자를 쓰지 않는다)", () => {
+  it("시동러 진입까지는 XP만 표시하고 습관·성장 조건을 요구하지 않는다", () => {
     const early: ExerciseGrowth = { ...bench, dayCount: 2, growthPct: null };
     const unmet = evaluateEvolution({
       totalXp: 3000, currentStage: 2, today: TODAY, workoutDays: days(30, 120),
       growth: { measuredCount: 0, baselineCount: 0, value: null, exercises: [early] },
     });
-    const row = conditionRow(unmet.conditions.find((c) => c.key === "growth")!);
-    expect(row.label).toBe("예전의 나 기록 만들기");
-    expect(row.value).toBe("아직 재는 중");
-    expect(remainingItems(unmet).some((i) => i.text.includes("'예전의 나' 기록을 만들어요"))).toBe(true);
+    expect(unmet.conditions.map(c => c.key)).toEqual(["xp"]);
+    const html = renderToStaticMarkup(<EvolutionStatusView status={unmet} />);
+    expect(html).toContain("시동러까지는 경험치만으로 진화해요");
+    expect(html).not.toContain("운동 습관");
+    expect(html).not.toContain("예전의 나 기록 만들기");
 
     const met = evaluateEvolution({
       totalXp: 3000, currentStage: 2, today: TODAY, workoutDays: days(30, 120), growth: g(null),
     });
-    const metRow = conditionRow(met.conditions.find((c) => c.key === "growth")!);
-    expect(metRow.value).toBe("완료");
+    expect(met.allMet).toBe(true);
     expect(renderToStaticMarkup(<EvolutionStatusView status={met} />)).not.toContain("+1.0%");
   });
 

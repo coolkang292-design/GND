@@ -8,16 +8,17 @@
  *   같거나 낮으면 기록을 만들지 않고 "변함없음"으로만 센다. 진입 전 기록이 없던 종목은 "비교 불가"다.
  *   기준선은 단계 안에서 움직이지 않는다. 다음 단계에 들어가면 그 시점 최고 기록으로 다시 잡는다.
  *
- * 종합 %는 만들지 않는다 — 오른 종목만 골라 평균 내면 부풀려지기 때문이다.
+ * 진화 평가 평균은 상위 N종목 합/N. 부족한 자리는 0%이며 최소 N종목도 별도로 충족해야 한다.
  *
  * 지표(종목마다 하나):
  *   w 중량+반복 → 추정 1RM = 무게 × (1 + 반복/30), 반복 1~30회 세트만
  *   r 맨몸 반복 → 하루 최대 반복 수
  *   t 시간 유지 → 하루 최장 시간(초)
+ *   c 유산소 → 같은 시간의 거리 / 같은 속도의 시간 증가 (한 종목 한 표)
  *
  * 넣지 않는 것:
  *   - 인터벌 블록(인터벌 세션의 sort_order 0~3). 그 `reps`는 라운드 수다 (tabata.ts)
- *   - 유산소(exercise_type = cardio). 오래 뛴 것이 세진 것은 아니다
+ *   - 거리·시간이 없거나 조건을 맞출 수 없는 유산소 기록
  *   - 미완료 세트, 무게 0으로 적힌 중량 종목
  *
  * ⚠️ 이 값은 **아무것도 해금하지 않는다.** 진화는 서버가 XP로만 판정한다.
@@ -25,16 +26,18 @@
  */
 import { isIntervalBlockIndex } from "./tabata";
 import { DEFAULT_TIMEZONE, dayKey } from "./time";
+import { compareCardioPerformances, type CardioComparison, type CardioPerformance } from "./cardio-growth";
 
 export const E1RM_MIN_REPS = 1;
 export const E1RM_MAX_REPS = 30;
 
-export type MetricKind = "w" | "r" | "t";
+export type MetricKind = "w" | "r" | "t" | "c";
 
 export type RawSet = {
   weight_kg: number | null;
   reps: number | null;
   duration_seconds: number | null;
+  distance_meters?: number | string | null;
   is_completed: boolean | null;
 };
 export type RawExercise = {
@@ -49,7 +52,7 @@ export type RawSession = {
   workout_exercises: RawExercise[] | null;
 };
 
-export type BestSet = { weight: number | null; reps: number | null; seconds: number | null };
+export type BestSet = { weight: number | null; reps: number | null; seconds: number | null; distanceMeters?: number };
 /** 하루의 대표 수행능력 */
 export type DaySample = { day: string; value: number; best: BestSet };
 /** 세션 하나에서 종목 하나가 낸 지표 */
@@ -96,10 +99,26 @@ export function toMetricPoints(
     const at = Date.parse(s.completed_at);
     if (!Number.isFinite(at)) continue;
     const day = dayKey(new Date(at), timeZone);
+    const cardioTotals = new Map<string, { distanceMeters: number; seconds: number; valid: boolean }>();
     for (const ex of s.workout_exercises ?? []) {
       if (isIntervalBlockIndex(s.tabata_minutes, ex.sort_order)) continue;
       const exerciseKey = ex.exercise_name.trim();
       if (!exerciseKey) continue;
+      if (ex.exercise_type === "cardio") {
+        const completed = (ex.workout_sets ?? []).filter(set => set.is_completed !== false);
+        if (completed.length === 0) continue;
+        const total = cardioTotals.get(exerciseKey) ?? { distanceMeters: 0, seconds: 0, valid: true };
+        if (completed.some(set =>
+          !Number.isFinite(Number(set.distance_meters)) || Number(set.distance_meters) <= 0 ||
+          !Number.isFinite(set.duration_seconds) || (set.duration_seconds ?? 0) <= 0)) {
+          total.valid = false;
+        } else {
+          total.distanceMeters += completed.reduce((sum, set) => sum + Number(set.distance_meters), 0);
+          total.seconds += completed.reduce((sum, set) => sum + (set.duration_seconds ?? 0), 0);
+        }
+        cardioTotals.set(exerciseKey, total);
+        continue;
+      }
       const bestByKind = new Map<MetricKind, { value: number; best: BestSet }>();
       for (const set of ex.workout_sets ?? []) {
         const m = setMetric(set, ex.exercise_type);
@@ -112,6 +131,11 @@ export function toMetricPoints(
       const top = bestByKind.get(kind) as { value: number; best: BestSet };
       points.push({ exerciseKey, kind, day, completedAtMs: at, value: top.value, best: top.best });
     }
+    for (const [exerciseKey, total] of cardioTotals) {
+      if (!total.valid || !Number.isFinite(total.distanceMeters) || !Number.isFinite(total.seconds)) continue;
+      points.push({ exerciseKey, kind: "c", day, completedAtMs: at, value: total.distanceMeters,
+        best: { weight: null, reps: null, seconds: total.seconds, distanceMeters: total.distanceMeters } });
+    }
   }
   return points;
 }
@@ -121,7 +145,7 @@ export function toMetricPoints(
 export const MAX_PLAUSIBLE_GROWTH_PCT = 100;
 
 /** no_baseline: 진입 전 기록이 없다 · jump: 기준보다 2배를 넘게 뛰어 비교하지 않는다 */
-export type UnmatchedReason = "no_baseline" | "jump";
+export type UnmatchedReason = "no_baseline" | "jump" | "cardio_condition";
 
 export type GrowthRecord = {
   exerciseKey: string;
@@ -135,6 +159,7 @@ export type GrowthRecord = {
   currentBest: BestSet;
   /** 항상 0보다 크다. 반올림하지 않은 값 */
   growthPct: number;
+  cardioComparison?: CardioComparison;
 };
 
 export type StageGrowth = {
@@ -169,13 +194,23 @@ export function computeStageGrowth(input: {
   const base = new Map<string, Best & { exerciseKey: string; kind: MetricKind }>();
   const cur = new Map<string, Best & { exerciseKey: string; kind: MetricKind }>();
   const prevStage = new Set<string>();
+  const cardioBefore = new Map<string, CardioPerformance[]>();
+  const cardioAfter = new Map<string, CardioPerformance[]>();
 
   for (const p of input.points) {
     const key = `${p.exerciseKey}::${p.kind}`;
-    const target = p.completedAtMs <= entry ? base : cur;
-    target.set(key, { ...better(target.get(key), p), exerciseKey: p.exerciseKey, kind: p.kind });
+    if (p.kind === "c") {
+      const target = p.completedAtMs <= entry ? cardioBefore : cardioAfter;
+      const list = target.get(p.exerciseKey) ?? [];
+      list.push({ day: p.day, completedAtMs: p.completedAtMs,
+        distanceMeters: p.best.distanceMeters as number, durationSeconds: p.best.seconds as number });
+      target.set(p.exerciseKey, list);
+    } else {
+      const target = p.completedAtMs <= entry ? base : cur;
+      target.set(key, { ...better(target.get(key), p), exerciseKey: p.exerciseKey, kind: p.kind });
+    }
     if (prevEntry !== null && p.completedAtMs > prevEntry && p.completedAtMs <= entry) {
-      prevStage.add(key);
+      prevStage.add(p.exerciseKey);
     }
   }
 
@@ -210,6 +245,34 @@ export function computeStageGrowth(input: {
       });
     }
   }
+  for (const [exerciseKey, current] of cardioAfter) {
+    const baseline = cardioBefore.get(exerciseKey);
+    if (!baseline?.length) {
+      unmatched.push({ exerciseKey, kind: "c", reason: "no_baseline" });
+      continue;
+    }
+    const comparison = compareCardioPerformances(baseline, current);
+    if (!comparison.comparable) {
+      unmatched.push({ exerciseKey, kind: "c", reason: "cardio_condition" });
+      continue;
+    }
+    const g = comparison.best;
+    if (g && g.growthPct > MAX_PLAUSIBLE_GROWTH_PCT + 1e-6) {
+      unmatched.push({ exerciseKey, kind: "c", reason: "jump" });
+      continue;
+    }
+    comparableCount++;
+    if (g) {
+      const isDistance = g.comparison === "distance_at_same_time";
+      const sample = (p: CardioPerformance): BestSet => ({ weight: null, reps: null,
+        seconds: p.durationSeconds, distanceMeters: p.distanceMeters });
+      growths.push({ exerciseKey, kind: "c", growthPct: g.growthPct, cardioComparison: g.comparison,
+        baseline: isDistance ? g.baseline.distanceMeters : g.baseline.durationSeconds,
+        current: isDistance ? g.current.distanceMeters : g.current.durationSeconds,
+        baselineDay: g.baseline.day, currentDay: g.current.day,
+        baselineBest: sample(g.baseline), currentBest: sample(g.current) });
+    }
+  }
   growths.sort(
     (a, b) =>
       b.growthPct - a.growthPct ||
@@ -224,4 +287,20 @@ export function computeStageGrowth(input: {
     comparableCount,
     previousStageExerciseCount: prevEntry === null ? null : prevStage.size,
   };
+}
+
+/** 필요 N개를 분모로 고정한다. 비교불가·변함없음이 분모를 줄이지 않으며 한 종목은 한 표다. */
+export function computeEvolutionGrowthScore(summary: StageGrowth, requiredCount: number) {
+  if (!Number.isInteger(requiredCount) || requiredCount < 1) throw new RangeError("requiredCount must be a positive integer");
+  const seen = new Set<string>();
+  const selected = [...summary.growths]
+    .filter(g => Number.isFinite(g.growthPct) && g.growthPct > 0)
+    .sort((a, b) => b.growthPct - a.growthPct || (a.exerciseKey < b.exerciseKey ? -1 : a.exerciseKey > b.exerciseKey ? 1 : 0))
+    .filter(g => {
+      if (seen.has(g.exerciseKey)) return false;
+      seen.add(g.exerciseKey);
+      return true;
+    }).slice(0, requiredCount);
+  return { selected, requiredCount, filledCount: selected.length, countMet: selected.length === requiredCount,
+    averagePct: selected.reduce((sum, g) => sum + g.growthPct, 0) / requiredCount };
 }

@@ -11,7 +11,7 @@
  *    "누구를 지금 콕 찌를 수 있나"다. 자세한 이유는 설계 §6.2.
  */
 
-import { getLevelProgress } from "./progression";
+import { getLevelProgress, getStageGroups } from "./progression";
 import { characterSrc, type CharacterVariant } from "./character-variant";
 import { currentStreak, workoutDayKeys } from "./streak";
 import { dayKey, weekRange } from "./time";
@@ -144,6 +144,8 @@ export type FriendCrewInput = {
   nickname: string;
   avatarUrl: string | null;
   totalXp: number;
+  /** 서버의 실제 캐릭터 단계. 이전 응답과의 호환을 위해 optional. */
+  currentStage?: number;
   /** 없으면 male — 외형 조회가 실패해도 목록은 그려야 한다 */
   characterVariant?: CharacterVariant;
 };
@@ -193,6 +195,9 @@ function assembleRow(
   const activity = source.activity.get(member.id) ?? EMPTY_ACTIVITY;
   const badge = source.badges.get(member.id);
   const progress = getLevelProgress(member.totalXp);
+  const stageIndex = member.currentStage ?? progress.currentStageIndex;
+  const stage = getStageGroups()[stageIndex - 1];
+  if (!stage || stage.stageIndex !== stageIndex) throw new Error("invalid friend stage");
   return {
     ...activity,
     userId: member.id,
@@ -201,10 +206,10 @@ function assembleRow(
     totalXp: member.totalXp,
     level: progress.currentLevel,
     characterPath: characterSrc(
-      progress.characterPath,
+      stage.characterPath,
       member.characterVariant ?? "male",
     ),
-    stageName: progress.stageName,
+    stageName: stage.stageName,
     badgeCount: badge === undefined ? null : badge.total,
     badgeKeys: badge?.showcaseKeys ?? [],
     status: friendStatus(

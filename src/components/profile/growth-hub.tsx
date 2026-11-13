@@ -199,7 +199,7 @@ export function GrowthHub() {
         variant={summary.characterVariant}
       />
 
-      {GROWTH_V2 && <LevelGrowthCard userId={userId as string} level={summary.currentLevel} />}
+      {GROWTH_V2 && <LevelGrowthCard userId={userId as string} level={summary.currentLevel} currentStage={summary.currentStage} />}
 
       <PointSummary balance={balance} streakDays={streakDays} />
 

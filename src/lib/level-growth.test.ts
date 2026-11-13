@@ -91,6 +91,21 @@ beforeEach(() => {
 });
 
 describe("getMyStageGrowth", () => {
+  it("레벨이21이어도 실제3단계면 Lv.11 진입 기준을 읽는다", async () => {
+    const t = wire([{ level: 11, entered_at: ENTERED }, { level: 6, entered_at: PREV_ENTERED }]);
+    const result = await getMyStageGrowth({ userId: "me", level: 21, currentStage: 3 });
+    expect(t.hist.calls).toContainEqual({ method: "in", args: ["level", [11, 6]] });
+    expect(result.stageIndex).toBe(3);
+    expect(result.stageName).toBe("시동러");
+  });
+  it("유산소 성장을 위해 거리도 읽되 본인 기록 필터를 유지한다", async () => {
+    const t = wire(HISTORY);
+    await getMyStageGrowth({ userId: "me", level: 18 });
+    for (const calls of t.sessionCalls) {
+      expect(String(calls.find(c => c.method === "select")?.args[0])).toContain("distance_meters");
+      expect(calls).toContainEqual({ method: "eq", args: ["user_id", "me"] });
+    }
+  });
   it("1단계(Lv.1~5)는 비교할 이전 기록이 없어 no_baseline — 조회도 하지 않는다", async () => {
     wire(HISTORY);
     const r = await getMyStageGrowth({ userId: "me", level: 3 });

@@ -434,6 +434,15 @@ describe("pokeableFriendCount — 안내 문구용", () => {
 });
 
 describe("캐릭터 이미지 — 프로필 이모지가 아니라 현재 레벨", () => {
+  it("서버가4단계라고 주면 XP가Lv.21이어도 홈 크루에 꾸준러를 표시한다", () => {
+    const [row] = buildFriendRows({
+      crew: [{ id: "held", nickname: "진화 대기", avatarUrl: null, totalXp: 10000, currentStage: 4 }],
+      activity: new Map(), badges: new Map(), activeUserIds: new Set(),
+    });
+    expect(row.level).toBe(21);
+    expect(row.characterPath).toBe("/characters/char-4.png");
+    expect(row.stageName).toBe("꾸준러");
+  });
   it("레벨에 맞는 캐릭터 경로와 단계 이름을 함께 준다", () => {
     const [low] = buildFriendRows({
       crew: [{ id: "a", nickname: "가나", avatarUrl: "🐵", totalXp: 0 }],

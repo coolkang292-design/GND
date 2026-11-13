@@ -29,8 +29,8 @@ export type StageRequirement = {
 
 /** 목표 단계(2~7)별 진화 기준. 사용자 확정표(2026-11-06). */
 export const EVOLUTION_REQUIREMENTS: Record<number, StageRequirement> = {
-  2: { minLevel: 6, days: 6, weeks: 2, growthPct: null },
-  3: { minLevel: 11, days: 18, weeks: 6, growthPct: 0 },
+  2: { minLevel: 6, days: 0, weeks: 0, growthPct: null },
+  3: { minLevel: 11, days: 0, weeks: 0, growthPct: null },
   4: { minLevel: 16, days: 36, weeks: 12, growthPct: 5 },
   5: { minLevel: 21, days: 60, weeks: 24, growthPct: 8 },
   6: { minLevel: 26, days: 100, weeks: 40, growthPct: 12, recent: { windowDays: 28, days: 8 } },
@@ -139,6 +139,13 @@ export function evaluateEvolution(input: EvolutionInput): EvolutionStatus {
       conditions: [],
       allMet: false,
     };
+  }
+
+  // 사용자 결정(2026-11-13): 시동러까지는 기존 XP 진화. 꾸준러 진입부터 추가 조건.
+  if (next <= 3) {
+    const met = level >= req.minLevel;
+    return { currentStage: input.currentStage, nextStage: next, level, allMet: met,
+      conditions: [{ key: "xp", met, current: level, required: req.minLevel, progress: ratio(level, req.minLevel) }] };
   }
 
   const uniqueDays = [...new Set(input.workoutDays)]

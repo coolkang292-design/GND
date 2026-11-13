@@ -49,7 +49,7 @@ describe("getMyEvolutionStatus — 본인 기록만 읽는다", () => {
     ]);
     mocks.from.mockReturnValue(b);
 
-    const s = await getMyEvolutionStatus({ userId: "me", totalXp: 1000, currentStage: 1 });
+    const s = await getMyEvolutionStatus({ userId: "me", totalXp: 6000, currentStage: 3 });
 
     expect(s.conditions.find((c) => c.key === "days")?.current).toBe(1);
   });

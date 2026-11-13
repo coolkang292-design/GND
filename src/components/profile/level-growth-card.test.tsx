@@ -37,6 +37,22 @@ const html = (r: StageGrowthResult, open = false) =>
   renderToStaticMarkup(<LevelGrowthView result={r} defaultOpen={open} />).replace(/<!-- -->/g, "");
 
 describe("LevelGrowthView", () => {
+  it("다음 단계 필요4종목에 성장3개면 빈자리0을 포함한 평균과3/4를 표시한다", () => {
+    const out = html(ready(summary({ previousStageExerciseCount: 18,
+      growths: [rec("벤치", 10), rec("스쿼트", 8), rec("풀업", 6)] })));
+    expect(out).toContain("진화 평가 평균");
+    expect(out).toContain("+6.0%");
+    expect(out).toContain("성장 종목 3 / 4");
+    expect(out).toContain("0.0%");
+    expect(out).toContain("상위 4종목 기준");
+    expect(out).toContain("현재 진화는 경험치 기준이에요");
+  });
+  it("시동러 진입까지는 성장 평균을 진화 조건으로 표시하지 않는다", () => {
+    const r = ready(summary({ previousStageExerciseCount: 18, growths: [rec("벤치", 10)] }));
+    const out = html({ ...r, stageIndex: 2, stageName: "꿈틀러", level: 10 });
+    expect(out).toContain("시동러까지는 경험치만으로 진화해요");
+    expect(out).not.toContain("진화 평가 평균");
+  });
   it("제목은 단계 이름, 기준 문구, 성장한 종목 수 — 종합 %는 없다", () => {
     const out = html(ready(summary({ growths: [rec("벤치", 10), rec("스쿼트", 5)] })));
     expect(out).toContain("내 성장 · 4단계 꾸준러");
