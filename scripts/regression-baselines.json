@@ -214,6 +214,13 @@
       "core": false,
       "what": "운영 집계 경로(get_challenge_period_sessions RPC)가 참가자 기준으로 맞는지 실 DB 대조. 읽기 전용."
     },
+    "level-history-parity-check": {
+      "assertions": 26,
+      "source": "measured",
+      "tier": "readonly",
+      "core": false,
+      "what": "레벨 진입 이력(user_level_history) ↔ user_progress ↔ 레벨 컷 전원 대조. 이력 트리거가 조용히 실패한 것을 잡는다. 읽기 전용."
+    },
     "streak-parity-check": {
       "assertions": null,
       "source": "no-count",
