@@ -255,3 +255,18 @@ TDD로 한다: 먼저 실패하는 시험을 쓴다. 현재 `main`에 없는 진
 - **켜는 순간 단계가 바뀌는 사람은 없다.** 실제 단계가 XP 단계와 전원 같고(보류·앞선 사용자 없음), 오류 상태 0명.
 - 켜면 달라지는 것은 **앞으로 꾸준러(4단계) 이상으로 올라갈 때**뿐이다. 시동러까지(1→2, 2→3)는 지금과 동일하게 XP만.
 - 표본 7명 중 실사용자는 4명(오뎅끼·스칼레또·낭만송곳니·헬스장주주). 영구 진행 불가 유형(성장 필수인데 기록·대체 경로 모두 불가)은 발견되지 않았다. 다만 성장 기록이 거의 없는 사용자(구간의 약 80%)는 대체 경로(4단계 운동 54일, 5단계 90일)에 의존한다.
+
+## 13. 병합·푸시·배포 기록 (2026-11-13, 사용자 승인) — 서버 규칙은 꺼진 채
+
+- **병합:** 로컬 `main`을 `feat/level-growth-v2`(`2b8a990`)로 fast-forward. `main`을 체크아웃한 작업 트리(`character-image-deploy-20261105`)에 있던 추적되지 않는 `2026-11-13-level-growth-v2.md`는 브랜치 쪽이 상위 버전임을 확인하고 백업(세션 scratchpad) 후 제거.
+- **푸시:** 세션의 자동 권한 분류기가 `git push`를 거부해 **사용자가 직접 푸시**. 이후 `git fetch`로 원격 `main`=`2b8a990`, 기본 브랜치 `main` 확인(ahead/behind 0/0). 36커밋·62파일, 바이너리·시크릿 없음.
+- **배포:** 검증된 `main`의 `git archive` 복사본(1,719파일)에 `.vercel`을 넣고 `npx vercel@latest --prod --yes --scope gnd4`. 배포 `gnd-jz3d7z2gj-gnd4.vercel.app` Ready(1m), 별칭 `https://gnd-one.vercel.app`.
+- **프로덕션 실물 확인(번들을 직접 받아 grep):** 35개 청크 중 새 문구가 들어감 — "연속 4주 중 3주에서 주 2일 이상"·"성장 대신 운동한 날"·"성장 대신 꾸준함"·"진화 판정을 다시 확인하고 있어요"(각 2파일), "시동러까지는 경험치로, 꾸준러부터는"·`get_my_stage_evolution_status`·`refresh_my_stage_evolution`·`stage_evolution_settings`(각 1파일). 임시 QA 페이지 `/evolution-server-qa`는 404. `/onboarding`·`/login`·`/whats-new` 200.
+- **환경변수:** `NEXT_PUBLIC_GROWTH_V2`는 운영에 **설정하지 않음**(카드는 서버 규칙이 켜질 때만 노출). 릴리스 노트는 넣지 않았다(규칙이 꺼진 채라 사용자 화면 변화가 1→2·2→3 안내 문구 정정뿐).
+- **배포 후 DB:** `enabled=false`, `user_progress` 7행·XP 21,020·원장 259·알림 2,178·단계 이력 16·오류 0 — 배포 전과 동일.
+- **하지 않은 것 / [미검증]:** 규칙 활성화(`enabled=true`), 운영에서 규칙을 켠 화면과 운동 완료 동작, 실기기(iOS·Android) 확인, 릴리스 노트·알림 발송.
+
+### 다음: 규칙 활성화 (별도 승인)
+1. 전원 시뮬레이션은 §12에 있음(켜도 즉시 단계 바뀌는 사람 없음). 켜기 직전에 한 번 더 돌린다.
+2. 설정 변경 SQL(`update public.stage_evolution_settings set enabled=true`)을 보여 주고 승인을 받는다. 되돌리기는 `enabled=false`(단계 이력은 남는다).
+3. 켠 직후: `get_my_stage_evolution_status`(mode가 `gated`/`xp_only`)·오류 테이블·알림 수를 확인하고, 운동 완료 한 건으로 단계 유지/진화를 본다(두 계정 필요 시 픽스처 A·B).
