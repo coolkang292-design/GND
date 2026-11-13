@@ -14,6 +14,7 @@ import type {
   EvolutionStatus,
 } from "@/lib/domain/evolution";
 import { getMyEvolutionStatus } from "@/lib/evolution";
+import { getMyStageEvolutionStatus } from "@/lib/stage-evolution";
 import { GROWTH_V2 } from "@/lib/flags";
 import type { StageGateStatus } from "@/lib/domain/evolution-gate";
 import { StageEvolutionStatusView } from "./stage-evolution-status";
@@ -548,13 +549,38 @@ export function EvolutionStatusCard({
   currentStage: number;
   /** 단계 얼굴 이미지의 남·여 */
   variant?: CharacterVariant;
+  /**
+   * 서버 진화 판정. 성장 허브는 이미 조회해 넘긴다(null = 서버 미설치/꺼짐).
+   * 넘기지 않으면(undefined, 예: 프로필 시트) 이 카드가 스스로 읽기 전용으로 조회한다 —
+   * 서버 규칙이 켜져 있는데 옛 수치(+2.5%/+8.0%·24주)를 보여 주지 않기 위해서다.
+   */
   gateStatus?: StageGateStatus | null;
 }) {
   const [status, setStatus] = useState<EvolutionStatus | null>(null);
   const [failed, setFailed] = useState(false);
+  // undefined = 아직 조회 전/중, null = 서버 판정 없음(옛 카드), 객체 = 서버 판정
+  const [ownGate, setOwnGate] = useState<StageGateStatus | null | undefined>(undefined);
+  const selfFetch = gateStatus === undefined;
+  const gate: StageGateStatus | null | undefined = selfFetch ? ownGate : gateStatus;
 
   useEffect(() => {
-    if (gateStatus && gateStatus.mode !== "legacy_xp") return;
+    if (!selfFetch) return;
+    let cancelled = false;
+    getMyStageEvolutionStatus()
+      .then((g) => {
+        if (!cancelled) setOwnGate(g);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selfFetch, userId, currentStage]);
+
+  useEffect(() => {
+    // 서버 판정 조회가 끝나기 전에는 옛 계산을 시작하지 않는다.
+    if (gate === undefined || (gate && gate.mode !== "legacy_xp")) return;
     let cancelled = false;
     getMyEvolutionStatus({ userId, totalXp, currentStage })
       .then((s) => {
@@ -566,9 +592,9 @@ export function EvolutionStatusCard({
     return () => {
       cancelled = true;
     };
-  }, [userId, totalXp, currentStage, gateStatus]);
+  }, [userId, totalXp, currentStage, gate]);
 
-  if (gateStatus && gateStatus.mode !== "legacy_xp") return <StageEvolutionStatusView status={gateStatus} />;
+  if (gate && gate.mode !== "legacy_xp") return <StageEvolutionStatusView status={gate} />;
 
   if (failed) {
     return (
@@ -581,7 +607,7 @@ export function EvolutionStatusCard({
       </section>
     );
   }
-  if (!status) {
+  if (gate === undefined || !status) {
     return (
       <section
         aria-busy="true"

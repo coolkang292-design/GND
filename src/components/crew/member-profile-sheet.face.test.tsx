@@ -24,6 +24,10 @@ vi.mock("@/lib/profile-views", () => ({
 vi.mock("@/lib/evolution", () => ({
   getMyEvolutionStatus: mocks.getMyEvolutionStatus,
 }));
+// 시트의 진화 카드는 서버 판정을 스스로 조회한다. 이 시험은 서버 규칙이 없는 상태(null → 옛 카드)를 본다.
+vi.mock("@/lib/stage-evolution", () => ({
+  getMyStageEvolutionStatus: async () => null,
+}));
 
 import { MemberProfileSheet } from "./member-profile-sheet";
 import { evolutionAvatarSrc } from "@/lib/domain/character-variant";
