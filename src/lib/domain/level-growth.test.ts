@@ -376,3 +376,66 @@ describe("computeStageGrowth — 진입 시점까지의 종목별 최고 기록 
     expect(r.growths.map((g) => g.exerciseKey)).toEqual(["푸시업", "벤치"]);
   });
 });
+
+describe("computeStageGrowth — 보강 (부동소수·경계·결정성)", () => {
+  const sw = (day: string, kg: number, reps: number) =>
+    sess(day, [{ name: "벤치", sets: [{ weight_kg: kg, reps }] }]);
+
+  it("추정 1RM이 수학적으로 같은 조합(55kg×30 = 100kg×3)은 부동소수 잡음으로 성장 기록을 만들지 않는다", () => {
+    const r = grow([sw("2026-10-20", 55, 30), sw("2026-11-05", 100, 3)], ENTRY);
+    expect(r.growths).toEqual([]);
+    expect(r.unchangedCount).toBe(1);
+    // 방향을 뒤집어도 마찬가지
+    const rev = grow([sw("2026-10-20", 100, 3), sw("2026-11-05", 55, 30)], ENTRY);
+    expect(rev.growths).toEqual([]);
+  });
+
+  it("108kg×5 와 90kg×12 도 같은 e1RM(126)이라 성장이 아니다", () => {
+    expect(grow([sw("2026-10-20", 108, 5), sw("2026-11-05", 90, 12)], ENTRY).growths).toEqual([]);
+    expect(grow([sw("2026-10-20", 90, 12), sw("2026-11-05", 108, 5)], ENTRY).growths).toEqual([]);
+  });
+
+  it("진짜 성장은 여전히 잡는다 (100kg×3 → 100kg×4)", () => {
+    const r = grow([sw("2026-10-20", 100, 3), sw("2026-11-05", 100, 4)], ENTRY);
+    expect(r.growths).toHaveLength(1);
+    expect(r.growths[0].growthPct).toBeGreaterThan(0.1);
+  });
+
+  it("이전 단계 구간은 (이전 진입, 현재 진입]: 이전 진입 시각 정각은 제외, 현재 진입 정각은 포함", () => {
+    const prev = "2026-10-01T00:00:00.000Z";
+    const at = (iso: string, name: string): RawSession => ({
+      ...sess("2026-10-15", [{ name, sets: [{ weight_kg: 50, reps: 5 }] }]),
+      completed_at: iso,
+    });
+    const onlyPrevEdge = grow([at(prev, "A")], ENTRY, prev);
+    expect(onlyPrevEdge.previousStageExerciseCount).toBe(0);
+    const justAfterPrev = grow([at("2026-10-01T00:00:01.000Z", "A")], ENTRY, prev);
+    expect(justAfterPrev.previousStageExerciseCount).toBe(1);
+    const onEntry = grow([at(ENTRY, "A")], ENTRY, prev);
+    expect(onEntry.previousStageExerciseCount).toBe(1);
+    const afterEntry = grow([at("2026-11-01T00:00:01.000Z", "A")], ENTRY, prev);
+    expect(afterEntry.previousStageExerciseCount).toBe(0);
+  });
+
+  it("최고 기록이 같으면 입력 순서와 무관하게 더 이른 날을 쓴다", () => {
+    const a = grow([bench("2026-10-10", 60), bench("2026-10-20", 60), bench("2026-11-05", 66), bench("2026-11-09", 66)], ENTRY);
+    const b = grow([bench("2026-11-09", 66), bench("2026-11-05", 66), bench("2026-10-20", 60), bench("2026-10-10", 60)], ENTRY);
+    for (const r of [a, b]) {
+      expect(r.growths[0].baselineDay).toBe("2026-10-10");
+      expect(r.growths[0].currentDay).toBe("2026-11-05");
+    }
+  });
+
+  it("성장률이 같으면 종목 이름 오름차순, 입력 순서와 무관", () => {
+    const mk = (names: string[]) =>
+      grow(
+        [
+          sess("2026-10-20", names.map((name) => ({ name, type: "bodyweight", sets: [{ reps: 20 }] }))),
+          sess("2026-11-05", names.map((name) => ({ name, type: "bodyweight", sets: [{ reps: 22 }] }))),
+        ],
+        ENTRY,
+      ).growths.map((g) => g.exerciseKey);
+    expect(mk(["다", "가", "나"])).toEqual(["가", "나", "다"]);
+    expect(mk(["나", "다", "가"])).toEqual(["가", "나", "다"]);
+  });
+});

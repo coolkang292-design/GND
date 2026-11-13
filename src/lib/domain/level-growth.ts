@@ -62,6 +62,11 @@ export type MetricPoint = DaySample & {
 /** 한 종목에 지표가 둘 이상 잡히면 이 순서로 하나만 쓴다 */
 const KIND_PRIORITY: MetricKind[] = ["w", "r", "t"];
 
+/** 부동소수 잡음 제거 — 55×(1+30/30)와 100×(1+3/30)처럼 수학적으로 같은 값이 다르게 비교되지 않게 한다 */
+function round10(v: number): number {
+  return Math.round(v * 1e10) / 1e10;
+}
+
 function setMetric(
   s: RawSet,
   exerciseType: string | null,
@@ -73,7 +78,7 @@ function setMetric(
   const d = s.duration_seconds ?? 0;
   if (w > 0) {
     if (r < E1RM_MIN_REPS || r > E1RM_MAX_REPS) return null;
-    return { kind: "w", value: w * (1 + r / 30), best: { weight: w, reps: r, seconds: null } };
+    return { kind: "w", value: round10(w * (1 + r / 30)), best: { weight: w, reps: r, seconds: null } };
   }
   // 무게 0으로 적힌 중량 종목(밴드 등)은 부하를 몰라 비교할 수 없다
   if (exerciseType === "weight") return null;
@@ -142,8 +147,9 @@ export type StageGrowth = {
 type Best = { value: number; day: string; best: BestSet };
 
 function better(prev: Best | undefined, p: MetricPoint): Best {
-  // 같은 값이면 먼저 한 날을 유지한다
-  return prev && prev.value >= p.value ? prev : { value: p.value, day: p.day, best: p.best };
+  // 최고 값이 같으면 더 이른 날을 유지한다 (입력 순서와 무관하게 결정적)
+  if (prev && (prev.value > p.value || (prev.value === p.value && prev.day <= p.day))) return prev;
+  return { value: p.value, day: p.day, best: p.best };
 }
 
 export function computeStageGrowth(input: {
@@ -191,7 +197,12 @@ export function computeStageGrowth(input: {
       });
     }
   }
-  growths.sort((a, b) => b.growthPct - a.growthPct);
+  growths.sort(
+    (a, b) =>
+      b.growthPct - a.growthPct ||
+      (a.exerciseKey < b.exerciseKey ? -1 : a.exerciseKey > b.exerciseKey ? 1 : 0) ||
+      (a.kind < b.kind ? -1 : a.kind > b.kind ? 1 : 0),
+  );
 
   return {
     growths,

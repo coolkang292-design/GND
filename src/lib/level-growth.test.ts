@@ -21,10 +21,12 @@ function builder(result: Result | ((calls: Call[]) => Result)) {
       return b;
     };
   }
-  b.limit = (...args: unknown[]) => {
-    calls.push({ method: "limit", args });
-    return Promise.resolve(typeof result === "function" ? result(calls) : result);
-  };
+  for (const end of ["limit", "range"]) {
+    b[end] = (...args: unknown[]) => {
+      calls.push({ method: end, args });
+      return Promise.resolve(typeof result === "function" ? result(calls) : result);
+    };
+  }
   return { b, calls };
 }
 
@@ -46,7 +48,19 @@ const HISTORY = [
   { level: 11, entered_at: PREV_ENTERED },
 ];
 
-function wire(history: unknown, opts: { historyError?: unknown; sessionError?: "before" | "after" } = {}) {
+type Side = "before" | "after";
+const FULL_PAGE = (n: number) =>
+  Array.from({ length: n }, (_, i) => session("2026-10-01", 50 + (i % 5), `종목${i}`));
+
+function wire(
+  history: unknown,
+  opts: {
+    historyError?: unknown;
+    sessionError?: Side;
+    /** side와 요청한 from으로 그 쪽 페이지 행을 정한다 (기본: 짧은 한 페이지) */
+    page?: (side: Side, from: number) => unknown[];
+  } = {},
+) {
   const sessionCalls: Call[][] = [];
   const hist = builder({ data: history, error: opts.historyError ?? null });
   mocks.from.mockImplementation((name: string) => {
@@ -57,7 +71,11 @@ function wire(history: unknown, opts: { historyError?: unknown; sessionError?: "
         if (opts.sessionError === (isBefore ? "before" : "after")) {
           return { data: null, error: { message: "sess-boom" } };
         }
-        return { data: isBefore ? BEFORE : AFTER, error: null };
+        const side: Side = isBefore ? "before" : "after";
+        const range = calls.find((c) => c.method === "range");
+        const from = range ? (range.args[0] as number) : 0;
+        const rows = opts.page ? opts.page(side, from) : side === "before" ? BEFORE : AFTER;
+        return { data: rows, error: null };
       });
       sessionCalls.push(t.calls);
       return t.b;
@@ -105,7 +123,7 @@ describe("getMyStageGrowth", () => {
     await expect(getMyStageGrowth({ userId: "me", level: 18 })).rejects.toEqual({ message: "boom" });
   });
 
-  it("세션은 두 쿼리로 나눠 읽는다 — 둘 다 본인 id로 거르고 최신순 정렬 뒤 limit", async () => {
+  it("세션은 두 쿼리로 나눠 읽는다 — 둘 다 본인 id로 거르고 최신순(동률은 id) 정렬 뒤 range", async () => {
     const t = wire(HISTORY);
     await getMyStageGrowth({ userId: "me", level: 18 });
     expect(t.sessionCalls).toHaveLength(2);
@@ -119,17 +137,56 @@ describe("getMyStageGrowth", () => {
       expect(calls).toContainEqual({ method: "eq", args: ["status", "completed"] });
       expect(calls).toContainEqual({ method: "is", args: ["deleted_at", null] });
       expect(calls).toContainEqual({ method: "order", args: ["completed_at", { ascending: false }] });
-      // order는 limit보다 먼저여야 한다 (정렬 뒤에 자른다)
+      expect(calls).toContainEqual({ method: "order", args: ["id", { ascending: false }] });
+      expect(calls).toContainEqual({ method: "range", args: [0, 999] });
+      expect(calls.some((c) => c.method === "limit")).toBe(false);
+      // order는 range보다 먼저여야 한다 (정렬 뒤에 자른다)
       const names = calls.map((c) => c.method);
-      expect(names.indexOf("order")).toBeLessThan(names.indexOf("limit"));
+      expect(names.lastIndexOf("order")).toBeLessThan(names.indexOf("range"));
     }
     // 기준선 쪽: 진입 시각 이하 (기간 제한 없음 — gt 조건이 없다)
     expect(before).toContainEqual({ method: "lte", args: ["completed_at", ENTERED] });
     expect(before.some((c) => c.method === "gt")).toBe(false);
-    expect(before).toContainEqual({ method: "limit", args: [2000] });
     // 현재 쪽: 진입 시각 이후
     expect(after).toContainEqual({ method: "gt", args: ["completed_at", ENTERED] });
-    expect(after).toContainEqual({ method: "limit", args: [1000] });
+  });
+
+  it("한 페이지가 1000행으로 꽉 차면 다음 페이지를 요청하고, 짧은 페이지에서 멈춘다", async () => {
+    const t = wire(HISTORY, {
+      page: (side, from) => (side === "before" ? (from === 0 ? FULL_PAGE(1000) : BEFORE) : AFTER),
+    });
+    const r = await getMyStageGrowth({ userId: "me", level: 18 });
+    const beforeCalls = t.sessionCalls.filter((c) => c.some((x) => x.method === "lte"));
+    expect(beforeCalls).toHaveLength(2);
+    const ranges = beforeCalls.map((c) => c.find((x) => x.method === "range")!.args);
+    expect(ranges).toEqual([
+      [0, 999],
+      [1000, 1999],
+    ]);
+    // 페이지마다 본인 필터·정렬이 붙는다
+    for (const calls of beforeCalls) {
+      expect(calls).toContainEqual({ method: "eq", args: ["user_id", "me"] });
+      expect(calls).toContainEqual({ method: "order", args: ["completed_at", { ascending: false }] });
+      expect(calls).toContainEqual({ method: "lte", args: ["completed_at", ENTERED] });
+    }
+    // 현재 쪽은 짧은 페이지라 한 번만
+    expect(t.sessionCalls.filter((c) => !c.some((x) => x.method === "lte"))).toHaveLength(1);
+    // 둘째 페이지의 기록(벤치 60)이 계산에 들어갔다
+    if (r.state !== "ready") throw new Error("ready가 아니다");
+    expect(r.summary.growths[0].baselineBest.weight).toBe(60);
+  });
+
+  it("정확히 1000행인 페이지 뒤에 빈 페이지가 와도 정상 종료한다", async () => {
+    wire(HISTORY, { page: (side, from) => (side === "before" ? (from === 0 ? FULL_PAGE(1000) : []) : AFTER) });
+    const r = await getMyStageGrowth({ userId: "me", level: 18 });
+    expect(r.state).toBe("ready");
+  });
+
+  it("페이지 상한(20)까지 계속 꽉 차면 일부 데이터로 계산하지 않고 던진다", async () => {
+    const t = wire(HISTORY, { page: () => FULL_PAGE(1000) });
+    await expect(getMyStageGrowth({ userId: "me", level: 18 })).rejects.toThrow();
+    const perSide = t.sessionCalls.filter((c) => c.some((x) => x.method === "lte")).length;
+    expect(perSide).toBe(20);
   });
 
   it("두 세션 쿼리 중 하나가 실패해도 던진다", async () => {

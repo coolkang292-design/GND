@@ -22,6 +22,24 @@ export type StageGrowthResult =
 
 type HistoryRow = { level: number; entered_at: string };
 
+const PAGE_SIZE = 1000;
+const MAX_PAGES = 20;
+
+/** `range`로 끝까지 읽는다. 상한까지 계속 꽉 차면 일부 데이터로 계산하지 않도록 던진다. */
+async function fetchAllPages<T>(
+  page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>,
+): Promise<T[]> {
+  const rows: T[] = [];
+  for (let i = 0; i < MAX_PAGES; i++) {
+    const { data, error } = await page(i * PAGE_SIZE, (i + 1) * PAGE_SIZE - 1);
+    if (error) throw error;
+    const got = data ?? [];
+    rows.push(...got);
+    if (got.length < PAGE_SIZE) return rows;
+  }
+  throw new Error(`level-growth: 세션이 ${MAX_PAGES * PAGE_SIZE}건을 넘어 일부만으로는 계산하지 않는다`);
+}
+
 /**
  * 현재 단계의 '내 성장' — 본인 기록만 읽는다. 서버 함수·기준선 테이블은 쓰지 않는다.
  *
@@ -64,33 +82,35 @@ export async function getMyStageGrowth(input: {
   const prevEntry = rows.find((r) => r.level === prevStage.startLevel) ?? null;
   const enteredAtMs = Date.parse(entry.entered_at);
 
-  // ⚠️ 한 번에 읽으면 `limit`이 어느 쪽을 자를지 모른다. 진입 이하(기준선 쪽)와 이후(현재 쪽)를
-  // 따로, 최신순으로 읽어 한쪽이 다른 쪽을 밀어내지 못하게 한다. 기준선은 기간 제한이 없어 넉넉히 읽는다.
+  // ⚠️ PostgREST는 `max_rows`(기본 1000)로 `limit`을 조용히 깎을 수 있다 — 기준선이 일부 기록만으로 계산돼도
+  // 신호가 없다. 그래서 `range`로 1000행씩 끝까지 읽고, 상한에 닿으면 부분 데이터로 계산하지 않고 던진다.
+  // 진입 이하(기준선 쪽)와 이후(현재 쪽)는 따로 읽어 한쪽이 다른 쪽을 밀어내지 못하게 한다.
   const sessionSelect =
-    "completed_at, tabata_minutes, workout_exercises(exercise_name, exercise_type, sort_order, workout_sets(weight_kg, reps, duration_seconds, is_completed))";
-  const [beforeRes, afterRes] = await Promise.all([
+    "id, completed_at, tabata_minutes, workout_exercises(exercise_name, exercise_type, sort_order, workout_sets(weight_kg, reps, duration_seconds, is_completed))";
+  const base = () =>
     supabase
       .from("workout_sessions")
       .select(sessionSelect)
       .eq("user_id", input.userId)
       .eq("status", "completed")
-      .is("deleted_at", null)
-      .lte("completed_at", entry.entered_at)
-      .order("completed_at", { ascending: false })
-      .limit(2000),
-    supabase
-      .from("workout_sessions")
-      .select(sessionSelect)
-      .eq("user_id", input.userId)
-      .eq("status", "completed")
-      .is("deleted_at", null)
-      .gt("completed_at", entry.entered_at)
-      .order("completed_at", { ascending: false })
-      .limit(1000),
+      .is("deleted_at", null);
+  const [before, after] = await Promise.all([
+    fetchAllPages((from, to) =>
+      base()
+        .lte("completed_at", entry.entered_at)
+        .order("completed_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(from, to),
+    ),
+    fetchAllPages((from, to) =>
+      base()
+        .gt("completed_at", entry.entered_at)
+        .order("completed_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(from, to),
+    ),
   ]);
-  if (beforeRes.error) throw beforeRes.error;
-  if (afterRes.error) throw afterRes.error;
-  const sessions = [...(beforeRes.data ?? []), ...(afterRes.data ?? [])];
+  const sessions = [...before, ...after];
 
   return {
     state: "ready",
