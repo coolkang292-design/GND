@@ -5,6 +5,7 @@ import { useAuth } from "@/components/auth-provider";
 import { CurrentStageCard } from "@/components/profile/current-stage-card";
 import { EvolutionStatusCard } from "@/components/profile/evolution-status-card";
 import { GrowthTimeline } from "@/components/profile/growth-timeline";
+import { LevelGrowthCard } from "@/components/profile/level-growth-card";
 import { LevelRewards } from "@/components/profile/level-rewards";
 import { NextStagePreview } from "@/components/profile/next-stage-preview";
 import { StageCarousel } from "@/components/profile/stage-carousel";
@@ -34,6 +35,7 @@ import {
 import { badgeShelf, type BadgeMetricKey, type BadgeShelfItem } from "@/lib/domain/badges";
 import { currentStreak, workoutDayKeys } from "@/lib/domain/streak";
 import { DEFAULT_TIMEZONE, dayKey } from "@/lib/domain/time";
+import { GROWTH_V2 } from "@/lib/flags";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   getLevelRewards,
@@ -196,6 +198,8 @@ export function GrowthHub() {
         currentStage={summary.currentStage}
         variant={summary.characterVariant}
       />
+
+      {GROWTH_V2 && <LevelGrowthCard userId={userId as string} level={summary.currentLevel} />}
 
       <PointSummary balance={balance} streakDays={streakDays} />
 

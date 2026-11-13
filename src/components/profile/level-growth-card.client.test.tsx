@@ -41,7 +41,7 @@ describe("LevelGrowthCard", () => {
   it("불러오는 동안 자리표시, 끝나면 결과", async () => {
     mocks.getMyStageGrowth.mockResolvedValue(NO_BASE);
     const { container } = render(<LevelGrowthCard userId="me" level={3} />);
-    expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
+    expect(container.querySelector('[aria-busy="true"][aria-label="내 성장"]')).not.toBeNull();
     await waitFor(() => expect(screen.getByText("측정 준비 중")).toBeDefined());
     expect(container.querySelector('[aria-busy="true"]')).toBeNull();
     expect(mocks.getMyStageGrowth).toHaveBeenCalledWith({ userId: "me", level: 3 });
@@ -65,6 +65,7 @@ describe("LevelGrowthCard", () => {
     mocks.getMyStageGrowth.mockRejectedValueOnce(new Error("boom"));
     render(<LevelGrowthCard userId="me" level={17} />);
     await waitFor(() => expect(screen.getByText(/내 성장을 불러오지 못했어요/)).toBeDefined());
+    expect(screen.getByLabelText("내 성장")).toBeDefined();
     expect(mocks.getMyStageGrowth).toHaveBeenCalledTimes(1);
   });
 

@@ -94,7 +94,7 @@ export function LevelGrowthView({
           data-testid="growth-toggle"
           className="mt-3 flex h-11 w-full items-center justify-center gap-1.5 rounded-full border border-line-strong text-[13px] font-extrabold"
         >
-          <Icon name="ranking" size={16} />
+          <Icon name="level" size={16} />
           {open ? "성장 기록 접기" : "성장 기록 모두 보기"}
         </button>
       )}
@@ -158,7 +158,7 @@ export function LevelGrowthCard({ userId, level }: { userId: string; level: numb
 
   if (current && "failed" in current) {
     return (
-      <section className="rounded-card border border-line bg-surface p-4 shadow-card">
+      <section aria-label="내 성장" className="rounded-card border border-line bg-surface p-4 shadow-card">
         <h2 className="text-[15px] font-extrabold">내 성장</h2>
         <p className="mt-1 text-[11.5px] text-muted">
           내 성장을 불러오지 못했어요. 잠시 뒤 다시 열어 주세요. 운동 기록은 그대로 안전해요.
@@ -170,6 +170,7 @@ export function LevelGrowthCard({ userId, level }: { userId: string; level: numb
     return (
       <section
         aria-busy="true"
+        aria-label="내 성장"
         className="h-36 animate-pulse rounded-card border border-line bg-surface shadow-card"
       />
     );
