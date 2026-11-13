@@ -62,19 +62,36 @@ export async function getMyLevelGrowth(input: {
   const enteredAtMs = Date.parse(row.entered_at);
   const since = new Date(enteredAtMs - BASELINE_WINDOW_DAYS * DAY_MS).toISOString();
 
-  const { data: sessions, error: sessionError } = await supabase
-    .from("workout_sessions")
-    .select(
-      "completed_at, tabata_minutes, workout_exercises(exercise_name, exercise_type, sort_order, workout_sets(weight_kg, reps, duration_seconds, is_completed))",
-    )
-    .eq("user_id", input.userId)
-    .eq("status", "completed")
-    .is("deleted_at", null)
-    .gt("completed_at", since)
-    .limit(1000);
-  if (sessionError) throw sessionError;
+  // ⚠️ 한 번에 읽으면 `limit`이 어느 쪽을 자를지 모른다. 기준선은 레벨마다 한 번 고정돼 영영 남으므로
+  // 진입 전(기준선 쪽)과 진입 후(현재 쪽)를 따로, 최신순으로 읽어 한쪽이 다른 쪽을 밀어내지 못하게 한다.
+  const sessionSelect =
+    "completed_at, tabata_minutes, workout_exercises(exercise_name, exercise_type, sort_order, workout_sets(weight_kg, reps, duration_seconds, is_completed))";
+  const [beforeRes, afterRes] = await Promise.all([
+    supabase
+      .from("workout_sessions")
+      .select(sessionSelect)
+      .eq("user_id", input.userId)
+      .eq("status", "completed")
+      .is("deleted_at", null)
+      .gt("completed_at", since)
+      .lte("completed_at", row.entered_at)
+      .order("completed_at", { ascending: false })
+      .limit(1000),
+    supabase
+      .from("workout_sessions")
+      .select(sessionSelect)
+      .eq("user_id", input.userId)
+      .eq("status", "completed")
+      .is("deleted_at", null)
+      .gt("completed_at", row.entered_at)
+      .order("completed_at", { ascending: false })
+      .limit(1000),
+  ]);
+  if (beforeRes.error) throw beforeRes.error;
+  if (afterRes.error) throw afterRes.error;
+  const sessions = [...(beforeRes.data ?? []), ...(afterRes.data ?? [])];
 
-  const points = toMetricPoints((sessions ?? []) as unknown as RawSession[]);
+  const points = toMetricPoints(sessions as unknown as RawSession[]);
 
   let baselines: Baseline[];
   if (row.baseline_frozen_at) {

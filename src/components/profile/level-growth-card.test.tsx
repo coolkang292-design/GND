@@ -1,7 +1,12 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { LevelGrowthView } from "./level-growth-card";
-import type { ExerciseLevelGrowth, LevelGrowthSummary } from "@/lib/domain/level-growth";
+import {
+  CONFIRM_DAYS,
+  MIN_CONFIRMED_EXERCISES,
+  type ExerciseLevelGrowth,
+  type LevelGrowthSummary,
+} from "@/lib/domain/level-growth";
 
 const day = (d: string, value: number) => ({ day: d, value, best: { weight: 16, reps: 12, seconds: null } });
 const ex = (over: Partial<ExerciseLevelGrowth>): ExerciseLevelGrowth => ({
@@ -80,5 +85,34 @@ describe("LevelGrowthView", () => {
     const out = renderToStaticMarkup(<LevelGrowthView result={{ state: "no_entry", level: 1 }} />);
     expect(out).toContain("측정 준비 중");
     expect(out).toContain("레벨이 오르면");
+  });
+
+  it("접혀 있으면 종목 행이 없고, defaultOpen이면 있다", () => {
+    const s = summary({ exercises: [ex({})], provisionalCount: 1 });
+    expect(html(s, false)).not.toContain("growth-exercise");
+    expect(html(s, false)).not.toContain("덤벨 숄더 프레스");
+    expect(html(s, true)).toContain("growth-exercise");
+  });
+
+  it("확정 수치가 있으면 잠정 참고 줄은 없다", () => {
+    const out = html(summary({ value: 5.04, confirmedCount: 3, provisionalValue: 4.0, provisionalCount: 3 }));
+    expect(out).not.toContain("참고");
+    expect(out).not.toContain("growth-provisional");
+  });
+
+  it("확정 조건 안내는 상수를 따른다", () => {
+    const out = html(summary({}));
+    const text = out.replace(/<!-- -->/g, "");
+    expect(text).toContain(`${CONFIRM_DAYS}일 기록한 종목이 ${MIN_CONFIRMED_EXERCISES}개 이상`);
+  });
+
+  it("기준 기록이 비어 있으면 '아직'이 아니라 못 찾았다고 적는다", () => {
+    const out = html(
+      summary({ exercises: [ex({ baselineSamples: [], currentSamples: [] })], provisionalCount: 1 }),
+      true,
+    );
+    expect(out).toContain("기준 기록을 찾지 못했어요");
+    expect(out).toContain("아직 기록이 없어요"); // 현재 레벨 쪽만
+    expect(out.match(/아직 기록이 없어요/g)).toHaveLength(1);
   });
 });

@@ -2,7 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { Icon } from "@/components/ui/icon";
-import type { DaySample, ExerciseLevelGrowth, MetricKind } from "@/lib/domain/level-growth";
+import {
+  CONFIRM_DAYS,
+  MIN_CONFIRMED_EXERCISES,
+  type DaySample,
+  type ExerciseLevelGrowth,
+  type MetricKind,
+} from "@/lib/domain/level-growth";
 import {
   exerciseLine,
   fmtGrowthPct,
@@ -17,12 +23,22 @@ function shortDay(day: string): string {
   return `${Number(m)}/${Number(d)}`;
 }
 
-function SampleList({ label, kind, samples }: { label: string; kind: MetricKind; samples: DaySample[] }) {
+function SampleList({
+  label,
+  kind,
+  samples,
+  emptyText,
+}: {
+  label: string;
+  kind: MetricKind;
+  samples: DaySample[];
+  emptyText: string;
+}) {
   return (
     <div className="mt-2">
       <p className="text-[11px] font-bold text-muted">{label}</p>
       {samples.length === 0 ? (
-        <p className="text-[12px] text-muted">아직 기록이 없어요</p>
+        <p className="text-[12px] text-muted">{emptyText}</p>
       ) : (
         <ul className="mt-0.5 flex flex-col gap-0.5">
           {samples.map((s) => (
@@ -53,8 +69,16 @@ function ExerciseRow({ e, level }: { e: ExerciseLevelGrowth; level: number }) {
           {e.growthPct === null ? "—" : fmtGrowthPct(e.growthPct)}
         </span>
       </div>
-      <SampleList label={`Lv.${level} 진입 전 기준 기록`} kind={e.kind} samples={e.baselineSamples} />
-      <SampleList label={`Lv.${level}에서 한 기록`} kind={e.kind} samples={e.currentSamples} />
+      <SampleList
+        label={`Lv.${level} 진입 전 기준 기록`} kind={e.kind} samples={e.baselineSamples}
+        emptyText="기준 기록을 찾지 못했어요"
+      />
+      <SampleList
+        label={`Lv.${level}에서 한 기록`}
+        kind={e.kind}
+        samples={e.currentSamples}
+        emptyText="아직 기록이 없어요"
+      />
       <p className="mt-2 text-[11.5px] leading-snug text-muted">{exerciseLine(e)}</p>
     </li>
   );
@@ -121,7 +145,8 @@ export function LevelGrowthView({
       </p>
       {s.value === null && (
         <p className="mt-1 text-[11.5px] leading-snug text-muted">
-          같은 운동을 이 레벨에서 3일 기록한 종목이 2개 이상이면 수치가 확정돼요.
+          같은 운동을 이 레벨에서 {CONFIRM_DAYS}일 기록한 종목이 {MIN_CONFIRMED_EXERCISES}개 이상이면 수치가
+          확정돼요.
         </p>
       )}
 
@@ -163,24 +188,30 @@ export function LevelGrowthView({
 
 /** 성장 허브용 — 본인 기록을 읽어 현재 레벨의 성장을 그린다 */
 export function LevelGrowthCard({ userId, level }: { userId: string; level: number }) {
-  const [result, setResult] = useState<LevelGrowthResult | null>(null);
-  const [failed, setFailed] = useState(false);
+  // 결과·실패에 어느 (userId, level) 것인지 키를 붙인다. 키가 현재와 다르면 옛 값이므로 무시한다 —
+  // effect 안에서 setState로 초기화하지 않아도 사용자·레벨이 바뀔 때 옛 결과/실패가 남지 않는다.
+  const key = `${userId}:${level}`;
+  const [state, setState] = useState<
+    { key: string; result: LevelGrowthResult } | { key: string; failed: true } | null
+  >(null);
 
   useEffect(() => {
     let cancelled = false;
     getMyLevelGrowth({ userId, level })
-      .then((r) => {
-        if (!cancelled) setResult(r);
+      .then((result) => {
+        if (!cancelled) setState({ key, result });
       })
       .catch(() => {
-        if (!cancelled) setFailed(true);
+        if (!cancelled) setState({ key, failed: true });
       });
     return () => {
       cancelled = true;
     };
-  }, [userId, level]);
+  }, [userId, level, key]);
 
-  if (failed) {
+  const current = state && state.key === key ? state : null;
+
+  if (current && "failed" in current) {
     return (
       <section className="rounded-card border border-line bg-surface p-4 shadow-card">
         <h2 className="text-[15px] font-extrabold">내 성장 · Lv.{level}</h2>
@@ -190,7 +221,7 @@ export function LevelGrowthCard({ userId, level }: { userId: string; level: numb
       </section>
     );
   }
-  if (!result) {
+  if (!current) {
     return (
       <section
         aria-busy="true"
@@ -198,5 +229,5 @@ export function LevelGrowthCard({ userId, level }: { userId: string; level: numb
       />
     );
   }
-  return <LevelGrowthView result={result} />;
+  return <LevelGrowthView result={current.result} />;
 }
