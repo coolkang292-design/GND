@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  computeBaselines,
-  computeLevelGrowth,
-  median,
+  computeStageGrowth,
   toMetricPoints,
   type RawSession,
   type RawSet,
@@ -137,234 +135,244 @@ describe("toMetricPoints — 무엇을 성장 지표로 치는가", () => {
   });
 });
 
-const ENTERED = Date.parse("2026-11-09T00:00:00.000Z");
-const bench = (day: string, kg: number, reps = 10) =>
-  sess(day, [{ name: "벤치", sets: [{ weight_kg: kg, reps }] }]);
-const e1 = (kg: number, reps = 10) => kg * (1 + reps / 30);
 
-describe("computeBaselines — 레벨 진입 전 기준선", () => {
-  it("진입 전 최근 3개 운동일의 중앙값이다", () => {
-    const b = computeBaselines(
-      toMetricPoints([
-        bench("2026-10-01", 50),
-        bench("2026-10-10", 60),
-        bench("2026-10-20", 62),
-        bench("2026-11-01", 58),
-      ]),
-      ENTERED,
-    );
-    expect(b).toHaveLength(1);
-    expect(b[0].samples.map((s) => s.day)).toEqual(["2026-10-10", "2026-10-20", "2026-11-01"]);
-    expect(b[0].value).toBeCloseTo(e1(60), 6);
-  });
-
-  it("3일 미만이면 기준선을 만들지 않는다", () => {
-    const b = computeBaselines(toMetricPoints([bench("2026-10-20", 60), bench("2026-11-01", 60)]), ENTERED);
-    expect(b).toEqual([]);
-  });
-
-  it("같은 날 두 번 한 것은 1일이고 그날 최고 기록을 쓴다", () => {
-    const b = computeBaselines(
-      toMetricPoints([
-        bench("2026-10-20", 60),
-        bench("2026-10-20", 70),
-        bench("2026-11-01", 60),
-      ]),
-      ENTERED,
-    );
-    expect(b).toEqual([]);
-  });
-
-  it("같은 날 두 번 한 것은 그날 더 센 기록 하나로 접는다 (순서와 무관)", () => {
-    const strong = (d: string) => [bench(d, 60), bench(d, 70)];
-    const weak = (d: string) => [bench(d, 70), bench(d, 60)];
-    for (const first of [strong, weak]) {
-      const b = computeBaselines(
-        toMetricPoints([
-          ...first("2026-10-10"),
-          ...first("2026-10-20"),
-          ...first("2026-11-01"),
-        ]),
-        ENTERED,
-      );
-      expect(b[0].samples.map((s) => s.value)).toEqual([e1(70), e1(70), e1(70)]);
-    }
-  });
-
-  it("창 경계: 정확히 60일 전은 밖, 1초 안쪽은 안", () => {
-    const edge = ENTERED - 60 * 86_400_000;
-    const at = (ms: number, kg: number): RawSession => ({
-      ...bench("2026-01-01", kg),
-      completed_at: new Date(ms).toISOString(),
-    });
-    const base = [bench("2026-10-20", 60), bench("2026-11-01", 60)];
-    const out = computeBaselines(toMetricPoints([...base, at(edge, 60)]), ENTERED);
-    const inn = computeBaselines(toMetricPoints([...base, at(edge + 1000, 60)]), ENTERED);
-    expect(out).toEqual([]);
-    expect(inn).toHaveLength(1);
-  });
-
-  it("날짜는 KST로 센다 (UTC 15:00 이후는 다음 날)", () => {
-    const late = (day: string): RawSession => ({
-      ...bench("2026-01-01", 60),
-      completed_at: `${day}T16:00:00.000Z`,
-    });
-    const p = toMetricPoints([late("2026-10-20")]);
-    expect(p[0].day).toBe("2026-10-21");
-  });
-
-  it("median은 빈 입력을 NaN으로 흘리지 않고 던진다", () => {
-    expect(() => median([])).toThrow();
-    expect(median([1, 3, 2])).toBe(2);
-    expect(median([1, 2, 3, 4])).toBe(2.5);
-  });
-
-  it("60일보다 오래된 기록은 쓰지 않는다 (창을 늘리지 않는다)", () => {
-    const b = computeBaselines(
-      toMetricPoints([bench("2026-08-01", 60), bench("2026-10-20", 60), bench("2026-11-01", 60)]),
-      ENTERED,
-    );
-    expect(b).toEqual([]);
-  });
-
-  it("레벨업을 일으킨 세션(완료 시각 = 진입 시각)은 기준선에 든다", () => {
-    const b = computeBaselines(
-      toMetricPoints([bench("2026-10-20", 60), bench("2026-11-01", 60), bench("2026-11-09", 66)]),
-      ENTERED,
-    );
-    expect(b[0].samples.map((s) => s.day)).toContain("2026-11-09");
-  });
-
-  it("진입 뒤 기록은 기준선을 바꾸지 않는다", () => {
-    const before = [bench("2026-10-10", 60), bench("2026-10-20", 60), bench("2026-11-01", 60)];
-    const a = computeBaselines(toMetricPoints(before), ENTERED);
-    const b = computeBaselines(toMetricPoints([...before, bench("2026-11-12", 90)]), ENTERED);
-    expect(b).toEqual(a);
-  });
-
-  it("다음 레벨에 들어가면 그 시점 기준으로 새 기준선이 나온다", () => {
-    const all = toMetricPoints([
-      bench("2026-10-10", 60),
-      bench("2026-10-20", 60),
-      bench("2026-11-01", 60),
-      bench("2026-11-12", 66),
-      bench("2026-11-15", 66),
-    ]);
-    const next = computeBaselines(all, Date.parse("2026-11-16T00:00:00.000Z"));
-    expect(next[0].value).toBeCloseTo(e1(66), 6);
-  });
-});
-
-const squat = (day: string, kg: number) =>
-  sess(day, [{ name: "스쿼트", sets: [{ weight_kg: kg, reps: 10 }] }]);
-const BEFORE = [
-  bench("2026-10-10", 60), bench("2026-10-20", 60), bench("2026-11-01", 60),
-  squat("2026-10-11", 100), squat("2026-10-21", 100), squat("2026-11-02", 100),
-];
-function grow(after: RawSession[]) {
-  const points = toMetricPoints([...BEFORE, ...after]);
-  return computeLevelGrowth({
-    baselines: computeBaselines(points, ENTERED),
-    points,
-    enteredAtMs: ENTERED,
+/** 세션들을 지표로 바꿔 단계 성장을 계산한다 */
+function grow(sessions: RawSession[], entered: string, previous: string | null = null) {
+  return computeStageGrowth({
+    points: toMetricPoints(sessions),
+    stageEnteredAtMs: Date.parse(entered),
+    previousStageEnteredAtMs: previous === null ? null : Date.parse(previous),
   });
 }
-const of = (g: ReturnType<typeof grow>, name: string) =>
-  g.exercises.find((e) => e.exerciseKey === name)!;
+const bench = (day: string, kg: number, reps = 10) =>
+  sess(day, [{ name: "벤치", sets: [{ weight_kg: kg, reps }] }]);
+const ENTRY = "2026-11-01T00:00:00.000Z";
 
-describe("computeLevelGrowth — 기준선 대비 성장률", () => {
-  it("같으면 0%, +10%는 +10%, -10%는 -10%", () => {
-    expect(of(grow([bench("2026-11-10", 60)]), "벤치").growthPct).toBeCloseTo(0, 6);
-    expect(of(grow([bench("2026-11-10", 66)]), "벤치").growthPct).toBeCloseTo(10, 6);
-    expect(of(grow([bench("2026-11-10", 54)]), "벤치").growthPct).toBeCloseTo(-10, 6);
+describe("computeStageGrowth — 진입 시점까지의 종목별 최고 기록 대비", () => {
+  it("60kg×10 → 66kg×10 은 정확히 +10% 성장 기록", () => {
+    const r = grow([bench("2026-10-20", 60), bench("2026-11-05", 66)], ENTRY);
+    expect(r.growths).toHaveLength(1);
+    const g = r.growths[0];
+    expect(g.exerciseKey).toBe("벤치");
+    expect(g.kind).toBe("w");
+    expect(g.growthPct).toBeCloseTo(10, 9);
+    expect(g.baseline).toBeCloseTo(60 * (1 + 10 / 30), 9);
+    expect(g.current).toBeCloseTo(66 * (1 + 10 / 30), 9);
+    expect(g.baselineDay).toBe("2026-10-20");
+    expect(g.currentDay).toBe("2026-11-05");
+    expect(g.baselineBest).toEqual({ weight: 60, reps: 10, seconds: null });
+    expect(g.currentBest).toEqual({ weight: 66, reps: 10, seconds: null });
+    expect(r.comparableCount).toBe(1);
+    expect(r.unchangedCount).toBe(0);
   });
 
-  it("현재 레벨 기록이 없으면 0%가 아니라 null(대기)", () => {
-    const e = of(grow([]), "벤치");
-    expect(e.status).toBe("waiting");
-    expect(e.growthPct).toBeNull();
-    expect(e.current).toBeNull();
+  it("같으면 성장 기록이 없고 변함없음으로 센다", () => {
+    const r = grow([bench("2026-10-20", 60), bench("2026-11-05", 60)], ENTRY);
+    expect(r.growths).toEqual([]);
+    expect(r.unchangedCount).toBe(1);
+    expect(r.comparableCount).toBe(1);
   });
 
-  it("1~2일은 잠정, 3일부터 확정", () => {
-    expect(of(grow([bench("2026-11-10", 66)]), "벤치").status).toBe("provisional");
-    expect(of(grow([bench("2026-11-10", 66), bench("2026-11-11", 66)]), "벤치").status).toBe("provisional");
-    expect(
-      of(grow([bench("2026-11-10", 66), bench("2026-11-11", 66), bench("2026-11-12", 66)]), "벤치").status,
-    ).toBe("confirmed");
+  it("더 낮아도 성장 기록이 없다 (음수 기록을 만들지 않는다)", () => {
+    const r = grow([bench("2026-10-20", 60), bench("2026-11-05", 50)], ENTRY);
+    expect(r.growths).toEqual([]);
+    expect(r.unchangedCount).toBe(1);
   });
 
-  it("현재값은 현재 레벨의 최근 3일 중앙값이다", () => {
-    const e = of(
-      grow([bench("2026-11-10", 50), bench("2026-11-11", 66), bench("2026-11-12", 66), bench("2026-11-13", 72)]),
-      "벤치",
+  it("기준선은 단계 안에서 움직이지 않는다: 60 → 66 → 70 은 60 대비 +16.7%", () => {
+    const r = grow(
+      [bench("2026-10-20", 60), bench("2026-11-05", 66), bench("2026-11-10", 70)],
+      ENTRY,
     );
-    expect(e.currentSamples.map((s) => s.day)).toEqual(["2026-11-11", "2026-11-12", "2026-11-13"]);
-    expect(e.growthPct).toBeCloseTo(10, 6);
-    expect(e.currentDayCount).toBe(4);
+    expect(r.growths).toHaveLength(1);
+    expect(r.growths[0].growthPct).toBeCloseTo((70 / 60 - 1) * 100, 9);
+    expect(r.growths[0].growthPct).toBeCloseTo(16.6667, 3);
+    expect(r.growths[0].baselineDay).toBe("2026-10-20");
   });
 
-  it("확정 종목이 2개 미만이면 종합은 null, 잠정 참고값은 따로 준다", () => {
-    const g = grow([bench("2026-11-10", 66), squat("2026-11-10", 104)]);
-    expect(g.value).toBeNull();
-    expect(g.confirmedCount).toBe(0);
-    expect(g.provisionalValue).toBeCloseTo(7, 6); // median(+10, +4)
-    expect(g.provisionalCount).toBe(2);
+  it("진입 전에 기록이 없던 종목은 비교 불가 목록에 들고 성장 기록에는 없다", () => {
+    const r = grow(
+      [
+        bench("2026-10-20", 60),
+        bench("2026-11-05", 66),
+        sess("2026-11-06", [{ name: "스쿼트", sets: [{ weight_kg: 80, reps: 5 }] }]),
+      ],
+      ENTRY,
+    );
+    expect(r.growths.map((g) => g.exerciseKey)).toEqual(["벤치"]);
+    expect(r.unmatched).toEqual([{ exerciseKey: "스쿼트", kind: "w" }]);
+    expect(r.comparableCount).toBe(1);
   });
 
-  it("확정 2종목 이상이면 종합 = 확정 종목만의 중앙값 (0%·음수도 포함)", () => {
-    const three = (f: (d: string) => RawSession) => ["2026-11-10", "2026-11-11", "2026-11-12"].map(f);
-    const g = grow([...three((d) => bench(d, 60)), ...three((d) => squat(d, 90))]);
-    expect(g.confirmedCount).toBe(2);
-    expect(g.value).toBeCloseTo(-5, 6); // median(0, -10)
-    expect(g.provisionalValue).toBeNull();
-  });
-
-  it("하한도 -30%로 막는다", () => {
-    const three = (f: (d: string) => RawSession) => ["2026-11-10", "2026-11-11", "2026-11-12"].map(f);
-    const g = grow([...three((d) => bench(d, 20)), ...three((d) => squat(d, 30))]);
-    expect(of(g, "벤치").growthPct).toBeCloseTo(-66.7, 1);
-    expect(g.value).toBeCloseTo(-30, 6);
-  });
-
-  it("현재 레벨에서 같은 날 두 번 한 것도 1일로 센다", () => {
-    const g = grow([bench("2026-11-10", 60), bench("2026-11-10", 66)]);
-    expect(of(g, "벤치").currentDayCount).toBe(1);
-    expect(of(g, "벤치").growthPct).toBeCloseTo(10, 6);
-  });
-
-  it("종합에는 ±30% 상한을 걸지만 종목 상세는 실제 값이다", () => {
-    const three = (f: (d: string) => RawSession) => ["2026-11-10", "2026-11-11", "2026-11-12"].map(f);
-    const g = grow([...three((d) => bench(d, 120)), ...three((d) => squat(d, 200))]);
-    expect(of(g, "벤치").growthPct).toBeCloseTo(100, 6);
-    expect(g.value).toBeCloseTo(30, 6);
-  });
-
-  it("기준선이 없는 종목은 0%가 아니라 비교 불가 목록에 든다", () => {
-    const g = grow([sess("2026-11-10", [{ name: "덤벨 벤치프레스", sets: [{ weight_kg: 12, reps: 12 }] }])]);
-    expect(g.exercises.find((e) => e.exerciseKey === "덤벨 벤치프레스")).toBeUndefined();
-    expect(g.unmatched).toEqual([{ exerciseKey: "덤벨 벤치프레스", kind: "w", currentDayCount: 1 }]);
-  });
-
-  it("현재 레벨의 인터벌 블록은 성장률을 만들지 않는다", () => {
-    const g = grow([
+  it("인터벌 블록만 한 종목은 어디에도 나오지 않는다", () => {
+    const tabata = (day: string) =>
       sess(
-        "2026-11-10",
+        day,
         [
-          { name: "벤치", type: "weight", sets: [{ weight_kg: 0, reps: 4 }] },
-          { name: "b", type: "bodyweight", sets: [{ reps: 4 }] },
-          { name: "c", type: "bodyweight", sets: [{ reps: 4 }] },
-          { name: "d", type: "bodyweight", sets: [{ reps: 4 }] },
+          { name: "마운틴 클라이머", type: "bodyweight", sets: [{ reps: 4 }] },
+          { name: "점핑잭", type: "bodyweight", sets: [{ reps: 4 }] },
+          { name: "푸시업", type: "bodyweight", sets: [{ reps: 4 }] },
+          { name: "버드독", type: "bodyweight", sets: [{ reps: 4 }] },
         ],
         8,
-      ),
-    ]);
-    expect(of(g, "벤치").status).toBe("waiting");
-    expect(g.unmatched).toEqual([]);
+      );
+    const r = grow([tabata("2026-10-20"), tabata("2026-11-05")], ENTRY);
+    expect(r.growths).toEqual([]);
+    expect(r.unmatched).toEqual([]);
+    expect(r.comparableCount).toBe(0);
+    expect(r.unchangedCount).toBe(0);
   });
 
-  it("진입 시각과 같은 순간에 끝난 세션은 현재 기록이 아니다", () => {
-    const g = grow([bench("2026-11-09", 90)]);
-    expect(of(g, "벤치").currentDayCount).toBe(0);
+  it("유산소는 어디에도 나오지 않는다", () => {
+    const run = (day: string, sec: number) =>
+      sess(day, [{ name: "트레드밀", type: "cardio", sets: [{ duration_seconds: sec }] }]);
+    const r = grow([run("2026-10-20", 600), run("2026-11-05", 1800)], ENTRY);
+    expect(r.growths).toEqual([]);
+    expect(r.unmatched).toEqual([]);
+    expect(r.comparableCount).toBe(0);
+  });
+
+  it("진입 시각과 같은 순간에 끝난 세션은 기준선, 1초 뒤는 현재", () => {
+    const at = (iso: string, kg: number): RawSession => ({
+      ...bench("2026-11-01", kg),
+      completed_at: iso,
+    });
+    const r = grow(
+      [at("2026-11-01T00:00:00.000Z", 60), at("2026-11-01T00:00:01.000Z", 66)],
+      ENTRY,
+    );
+    expect(r.growths).toHaveLength(1);
+    expect(r.growths[0].baselineBest.weight).toBe(60);
+    expect(r.growths[0].currentBest.weight).toBe(66);
+    // 정확히 진입 시각의 기록만 있으면 현재 기록이 없어 비교 대상이 아니다
+    const only = grow([at("2026-11-01T00:00:00.000Z", 60)], ENTRY);
+    expect(only.growths).toEqual([]);
+    expect(only.comparableCount).toBe(0);
+    expect(only.unmatched).toEqual([]);
+  });
+
+  it("다음 단계 진입 때 그 시점 최고 기록으로 기준선을 다시 잡는다", () => {
+    const sessions = [bench("2026-10-20", 60), bench("2026-11-05", 66), bench("2026-11-20", 68)];
+    const first = grow(sessions, ENTRY);
+    expect(first.growths[0].growthPct).toBeCloseTo((68 / 60 - 1) * 100, 9);
+    const second = grow(sessions, "2026-11-10T00:00:00.000Z", ENTRY);
+    expect(second.growths).toHaveLength(1);
+    expect(second.growths[0].baselineBest.weight).toBe(66);
+    expect(second.growths[0].baselineDay).toBe("2026-11-05");
+    expect(second.growths[0].growthPct).toBeCloseTo((68 / 66 - 1) * 100, 9);
+    // 새 단계에서 더 오르지 않았다면 앞 단계의 +10%는 더 이상 세지 않는다
+    const third = grow(
+      [bench("2026-10-20", 60), bench("2026-11-05", 66)],
+      "2026-11-10T00:00:00.000Z",
+      ENTRY,
+    );
+    expect(third.growths).toEqual([]);
+  });
+
+  it("같은 날 여러 번 한 것은 그날 최고 기록 하나", () => {
+    const r = grow(
+      [
+        bench("2026-10-20", 60),
+        bench("2026-10-20", 55),
+        bench("2026-11-05", 62),
+        bench("2026-11-05", 66),
+      ],
+      ENTRY,
+    );
+    expect(r.growths[0].baselineBest.weight).toBe(60);
+    expect(r.growths[0].currentBest.weight).toBe(66);
+    expect(r.growths[0].growthPct).toBeCloseTo(10, 9);
+  });
+
+  it("이름이 같아도 지표가 다르면(중량 vs 맨몸 반복) 합치지 않는다", () => {
+    const r = grow(
+      [
+        sess("2026-10-20", [{ name: "딥스", type: "weight", sets: [{ weight_kg: 20, reps: 10 }] }]),
+        sess("2026-11-05", [{ name: "딥스", type: "bodyweight", sets: [{ reps: 30 }] }]),
+      ],
+      ENTRY,
+    );
+    expect(r.growths).toEqual([]);
+    expect(r.comparableCount).toBe(0);
+    expect(r.unmatched).toEqual([{ exerciseKey: "딥스", kind: "r" }]);
+  });
+
+  it("같은 무게에서 반복이 늘어도 성장이다 (16kg×12 → 16kg×17)", () => {
+    const r = grow([bench("2026-10-20", 16, 12), bench("2026-11-05", 16, 17)], ENTRY);
+    expect(r.growths).toHaveLength(1);
+    expect(r.growths[0].growthPct).toBeCloseTo(((1 + 17 / 30) / (1 + 12 / 30) - 1) * 100, 9);
+    expect(r.growths[0].currentBest).toEqual({ weight: 16, reps: 17, seconds: null });
+  });
+
+  it("맨몸 반복·시간 유지도 같은 규칙으로 비교한다", () => {
+    const r = grow(
+      [
+        sess("2026-10-20", [
+          { name: "푸시업", type: "bodyweight", sets: [{ reps: 20 }] },
+          { name: "플랭크", type: "bodyweight", sets: [{ duration_seconds: 60 }] },
+        ]),
+        sess("2026-11-05", [
+          { name: "푸시업", type: "bodyweight", sets: [{ reps: 25 }] },
+          { name: "플랭크", type: "bodyweight", sets: [{ duration_seconds: 90 }] },
+        ]),
+      ],
+      ENTRY,
+    );
+    const by = Object.fromEntries(r.growths.map((g) => [g.exerciseKey, g.growthPct]));
+    expect(by["푸시업"]).toBeCloseTo(25, 9);
+    expect(by["플랭크"]).toBeCloseTo(50, 9);
+  });
+
+  it("이전 단계 종목 수: 이전 진입 이후 ~ 현재 진입 이하 구간의 서로 다른 종목", () => {
+    const prev = "2026-10-01T00:00:00.000Z";
+    const r = grow(
+      [
+        // 이전 단계 이전: 세지 않는다
+        sess("2026-09-20", [{ name: "데드리프트", sets: [{ weight_kg: 100, reps: 5 }] }]),
+        // 이전 단계 구간
+        bench("2026-10-10", 60),
+        bench("2026-10-20", 62),
+        sess("2026-10-21", [{ name: "스쿼트", sets: [{ weight_kg: 80, reps: 5 }] }]),
+        sess("2026-10-22", [{ name: "푸시업", type: "bodyweight", sets: [{ reps: 20 }] }]),
+        // 현재 단계: 세지 않는다
+        sess("2026-11-05", [{ name: "풀업", type: "bodyweight", sets: [{ reps: 8 }] }]),
+      ],
+      ENTRY,
+      prev,
+    );
+    expect(r.previousStageExerciseCount).toBe(3);
+  });
+
+  it("이전 단계 진입 시각이 없으면 previousStageExerciseCount는 null", () => {
+    const r = grow([bench("2026-10-20", 60)], ENTRY, null);
+    expect(r.previousStageExerciseCount).toBeNull();
+  });
+
+  it("빈 입력이면 빈 목록이고 NaN이 없다", () => {
+    const r = grow([], ENTRY, "2026-10-01T00:00:00.000Z");
+    expect(r).toEqual({
+      growths: [],
+      unchangedCount: 0,
+      unmatched: [],
+      comparableCount: 0,
+      previousStageExerciseCount: 0,
+    });
+  });
+
+  it("성장 기록은 성장률 큰 순으로 정렬한다", () => {
+    const r = grow(
+      [
+        sess("2026-10-20", [
+          { name: "벤치", sets: [{ weight_kg: 60, reps: 10 }] },
+          { name: "푸시업", type: "bodyweight", sets: [{ reps: 20 }] },
+        ]),
+        sess("2026-11-05", [
+          { name: "벤치", sets: [{ weight_kg: 63, reps: 10 }] },
+          { name: "푸시업", type: "bodyweight", sets: [{ reps: 30 }] },
+        ]),
+      ],
+      ENTRY,
+    );
+    expect(r.growths.map((g) => g.exerciseKey)).toEqual(["푸시업", "벤치"]);
   });
 });

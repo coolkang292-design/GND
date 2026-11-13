@@ -1,17 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { exerciseLine, fmtGrowthPct, fmtSample, statusLabel } from "./level-growth-copy";
-import type { ExerciseLevelGrowth } from "./level-growth";
+import {
+  EMPTY_GROWTH_COPY,
+  UNMATCHED_COPY,
+  fmtGrowthPct,
+  fmtSample,
+  growthLine,
+} from "./level-growth-copy";
+import type { GrowthRecord } from "./level-growth";
 
-const base: ExerciseLevelGrowth = {
-  exerciseKey: "덤벨 숄더 프레스",
+const rec: GrowthRecord = {
+  exerciseKey: "벤치",
   kind: "w",
-  baseline: 20,
-  baselineSamples: [],
-  current: 20,
-  currentSamples: [],
-  currentDayCount: 3,
-  growthPct: 0,
-  status: "confirmed",
+  baseline: 80,
+  baselineDay: "2026-10-20",
+  baselineBest: { weight: 60, reps: 10, seconds: null },
+  current: 88,
+  currentDay: "2026-11-05",
+  currentBest: { weight: 66, reps: 10, seconds: null },
+  growthPct: 10,
 };
 
 describe("level-growth-copy", () => {
@@ -29,28 +35,20 @@ describe("level-growth-copy", () => {
     expect(fmtSample("t", { weight: null, reps: null, seconds: 75 })).toBe("75초");
   });
 
-  it("기록이 모자라면 며칠 더 필요한지 말한다", () => {
-    expect(exerciseLine({ ...base, status: "provisional", currentDayCount: 1 })).toBe(
-      "2일 더 기록하면 성장률을 확정할 수 있어요.",
-    );
-    expect(exerciseLine({ ...base, status: "waiting", currentDayCount: 0, growthPct: null, current: null })).toBe(
-      "3일 더 기록하면 성장률을 확정할 수 있어요.",
+  it("성장 기록 한 줄은 기준 → 지금", () => {
+    expect(growthLine(rec)).toBe("이전 단계 최고 기록 60kg × 10회 → 지금 66kg × 10회");
+    expect(growthLine({ ...rec, kind: "r", baselineBest: { weight: null, reps: 20, seconds: null }, currentBest: { weight: null, reps: 25, seconds: null } })).toBe(
+      "이전 단계 최고 기록 20회 → 지금 25회",
     );
   });
 
-  it("확정이면 같음·향상·하락을 말한다 — 중량을 올리라고 재촉하지 않는다", () => {
-    expect(exerciseLine(base)).toBe("이전 레벨과 같은 수준을 유지하고 있어요.");
-    expect(exerciseLine({ ...base, growthPct: 5 })).toBe("이전 레벨보다 더 무거운 중량을 들어 올렸어요.");
-    expect(exerciseLine({ ...base, kind: "r", growthPct: 5 })).toBe("이전 레벨보다 더 많이 반복했어요.");
-    expect(exerciseLine({ ...base, kind: "t", growthPct: 5 })).toBe("이전 레벨보다 더 오래 버텼어요.");
-    expect(exerciseLine({ ...base, growthPct: -5 })).toBe(
-      "최근 기록이 기준보다 낮아요. 다음 운동에서 다시 비교해 보세요.",
+  it("빈 상태·비교 불가 문구 — 더 세게 들라고 재촉하지 않는다", () => {
+    expect(EMPTY_GROWTH_COPY).toBe(
+      "아직 이번 단계에서 성장한 운동이 없어요. 지난 단계의 최고 기록을 넘기면 여기에 나타나요.",
     );
-  });
-
-  it("상태 이름", () => {
-    expect(statusLabel("confirmed")).toBe("확정");
-    expect(statusLabel("provisional")).toBe("잠정");
-    expect(statusLabel("waiting")).toBe("기록 대기");
+    expect(UNMATCHED_COPY).toBe("아직 비교할 이전 기록이 없어요. 다음 단계부터 비교해 드려요.");
+    for (const t of [EMPTY_GROWTH_COPY, UNMATCHED_COPY, growthLine(rec)]) {
+      expect(t).not.toMatch(/더 무겁|힘내|도전해|올려 보/);
+    }
   });
 });

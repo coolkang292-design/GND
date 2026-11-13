@@ -1,39 +1,31 @@
 /**
- * '내 성장' v2.1 — 레벨 진입 기준선 대비 성장률 (순수 계산 · 읽기 전용).
+ * '내 성장' v3 — 단계 진입 시점까지의 종목별 최고 기록 대비 성장 기록 (순수 계산 · 읽기 전용).
  *
- * 원칙: **현재 레벨에 들어오기 직전의 나**와 비교한다.
- *   기준선 = 레벨 진입 전 60일 안, 같은 종목 최근 3개 운동일의 중앙값 (진입 후 고정)
- *   현재   = 현재 레벨에서 같은 종목 최근 3개 운동일의 중앙값
- *   성장률 = (현재 - 기준선) / 기준선 × 100
+ * 단계(stage) = 레벨 5개 = 캐릭터 형태 하나. 진화는 새 단계에 들어갈 때 일어난다.
+ *   기준선 = 단계 진입 시각 **이하**에 같은 종목에서 낸 최고 기록 (기간 제한·최소 일수 없음)
+ *   현재   = 단계 진입 시각 **이후** 같은 종목 최고 기록
+ *   현재 > 기준선일 때만 성장 기록: 성장률 = (현재 - 기준선) / 기준선 × 100
+ *   같거나 낮으면 기록을 만들지 않고 "변함없음"으로만 센다. 진입 전 기록이 없던 종목은 "비교 불가"다.
+ *   기준선은 단계 안에서 움직이지 않는다. 다음 단계에 들어가면 그 시점 최고 기록으로 다시 잡는다.
+ *
+ * 종합 %는 만들지 않는다 — 오른 종목만 골라 평균 내면 부풀려지기 때문이다.
  *
  * 지표(종목마다 하나):
  *   w 중량+반복 → 추정 1RM = 무게 × (1 + 반복/30), 반복 1~30회 세트만
  *   r 맨몸 반복 → 하루 최대 반복 수
  *   t 시간 유지 → 하루 최장 시간(초)
  *
- * 넣지 않는 것 (0%가 아니라 "비교 불가"다):
+ * 넣지 않는 것:
  *   - 인터벌 블록(인터벌 세션의 sort_order 0~3). 그 `reps`는 라운드 수다 (tabata.ts)
  *   - 유산소(exercise_type = cardio). 오래 뛴 것이 세진 것은 아니다
  *   - 미완료 세트, 무게 0으로 적힌 중량 종목
  *
  * ⚠️ 이 값은 **아무것도 해금하지 않는다.** 진화는 서버가 XP로만 판정한다.
- *    성장률을 진화 조건으로 쓰게 되면 기준선 계산을 서버로 옮겨야 한다
- *    (지금은 클라이언트가 계산한 값을 freeze_level_baselines RPC가 받아 고정한다).
+ *    `previousStageExerciseCount`는 나중에 진화 조건에 쓸 자료로 계산만 해 둔다.
  */
 import { isIntervalBlockIndex } from "./tabata";
-import { DAY_MS, DEFAULT_TIMEZONE, dayKey } from "./time";
+import { DEFAULT_TIMEZONE, dayKey } from "./time";
 
-/** 산식을 바꾸면 올린다 — 기준선 행의 고유키에 들어간다 */
-export const METRIC_VERSION = "growth_v2.1";
-export const BASELINE_WINDOW_DAYS = 60;
-/** 기준선·현재값에 쓰는 운동일 수 */
-export const SAMPLE_DAYS = 3;
-/** 현재 레벨에서 이만큼 기록해야 확정 */
-export const CONFIRM_DAYS = 3;
-/** 종합 성장률을 확정하려면 확정 종목이 최소 이만큼 */
-export const MIN_CONFIRMED_EXERCISES = 2;
-/** 종합(중앙값)에 넣을 때만 적용하는 상·하한. 상세에는 실제 값을 보여 준다 */
-export const GROWTH_CAP_PCT = 30;
 export const E1RM_MIN_REPS = 1;
 export const E1RM_MAX_REPS = 30;
 
@@ -119,151 +111,93 @@ export function toMetricPoints(
   return points;
 }
 
-export function median(values: number[]): number {
-  // 빈 배열은 NaN이 화면까지 새는 것을 막으려고 여기서 던진다 (호출부는 길이를 먼저 본다)
-  if (values.length === 0) throw new Error("median: empty input");
-  const s = [...values].sort((a, b) => a - b);
-  const m = Math.floor(s.length / 2);
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-}
 
-type Group = { exerciseKey: string; kind: MetricKind; days: DaySample[] };
-
-/** 종목+지표별로 묶고, 같은 날은 최고 기록 하나로 접어 날짜 오름차순으로 돌려준다 */
-function groupByExercise(points: readonly MetricPoint[]): Map<string, Group> {
-  const byDay = new Map<string, { exerciseKey: string; kind: MetricKind; days: Map<string, DaySample> }>();
-  for (const p of points) {
-    const key = `${p.exerciseKey}::${p.kind}`;
-    const g = byDay.get(key) ?? { exerciseKey: p.exerciseKey, kind: p.kind, days: new Map() };
-    const prev = g.days.get(p.day);
-    if (!prev || p.value > prev.value) g.days.set(p.day, { day: p.day, value: p.value, best: p.best });
-    byDay.set(key, g);
-  }
-  const out = new Map<string, Group>();
-  for (const [key, g] of byDay) {
-    out.set(key, {
-      exerciseKey: g.exerciseKey,
-      kind: g.kind,
-      days: [...g.days.values()].sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0)),
-    });
-  }
-  return out;
-}
-
-export type Baseline = {
+export type GrowthRecord = {
   exerciseKey: string;
   kind: MetricKind;
-  /** 기준 수행능력 — 반올림하지 않은 값 */
-  value: number;
-  /** 기준으로 쓴 운동일 3개 (날짜 오름차순) */
-  samples: DaySample[];
-};
-
-export function baselineKey(b: { exerciseKey: string; kind: MetricKind }): string {
-  return `${b.exerciseKey}::${b.kind}`;
-}
-
-/**
- * 레벨 진입 시점의 기준선. `completedAt <= enteredAt`인 기록만 본다 —
- * 레벨업을 일으킨 운동은 이전 레벨에서 한 것이라 기준선이다.
- */
-export function computeBaselines(points: readonly MetricPoint[], enteredAtMs: number): Baseline[] {
-  const from = enteredAtMs - BASELINE_WINDOW_DAYS * DAY_MS;
-  const inWindow = points.filter((p) => p.completedAtMs <= enteredAtMs && p.completedAtMs > from);
-  const out: Baseline[] = [];
-  for (const g of groupByExercise(inWindow).values()) {
-    if (g.days.length < SAMPLE_DAYS) continue;
-    const samples = g.days.slice(-SAMPLE_DAYS);
-    out.push({
-      exerciseKey: g.exerciseKey,
-      kind: g.kind,
-      value: median(samples.map((s) => s.value)),
-      samples,
-    });
-  }
-  return out;
-}
-
-export type GrowthStatus = "waiting" | "provisional" | "confirmed";
-
-export type ExerciseLevelGrowth = {
-  exerciseKey: string;
-  kind: MetricKind;
+  /** 기준 수행능력(지표 값) — 반올림하지 않는다 */
   baseline: number;
-  baselineSamples: DaySample[];
-  /** 현재 레벨 기록이 없으면 null */
-  current: number | null;
-  /** 현재값에 쓴 운동일 (최대 3개, 날짜 오름차순) */
-  currentSamples: DaySample[];
-  /** 현재 레벨에서 이 종목을 기록한 날 수 */
-  currentDayCount: number;
-  /** 상한 없는 실제 %. 현재 기록이 없으면 null — 0이 아니다 */
-  growthPct: number | null;
-  status: GrowthStatus;
+  baselineDay: string;
+  baselineBest: BestSet;
+  current: number;
+  currentDay: string;
+  currentBest: BestSet;
+  /** 항상 0보다 크다. 반올림하지 않은 값 */
+  growthPct: number;
 };
 
-export type LevelGrowthSummary = {
-  /** 기준선이 있는 종목 전부 (현재 기록이 없어도 든다) */
-  exercises: ExerciseLevelGrowth[];
-  confirmedCount: number;
-  /** 확정 종목 성장률(±30% 캡)의 중앙값. 확정 종목이 2개 미만이면 null = "측정 준비 중" */
-  value: number | null;
-  /** 성장률이 나온(1일 이상) 종목 수 — 잠정 포함 */
-  provisionalCount: number;
-  /** `value`가 없을 때만 주는 참고값. 확정 수치와 섞어 쓰지 않는다 */
-  provisionalValue: number | null;
-  /** 현재 레벨에서 했지만 기준선이 없어 비교할 수 없는 종목 */
-  unmatched: { exerciseKey: string; kind: MetricKind; currentDayCount: number }[];
+export type StageGrowth = {
+  /** 기준선을 넘은 종목, 성장률 큰 순 */
+  growths: GrowthRecord[];
+  /** 기준선과 현재 기록이 모두 있는데 넘지 못한 종목 수 */
+  unchangedCount: number;
+  /** 이번 단계에서 했지만 진입 전 기록이 없어 비교할 수 없는 종목 */
+  unmatched: { exerciseKey: string; kind: MetricKind }[];
+  /** 기준선과 현재 기록이 모두 있는 종목 수 */
+  comparableCount: number;
+  /** 이전 단계 구간에서 기록한 서로 다른 종목 수. 이전 단계 진입 시각이 없으면 null */
+  previousStageExerciseCount: number | null;
 };
 
-function capped(pct: number): number {
-  return Math.max(-GROWTH_CAP_PCT, Math.min(GROWTH_CAP_PCT, pct));
+type Best = { value: number; day: string; best: BestSet };
+
+function better(prev: Best | undefined, p: MetricPoint): Best {
+  // 같은 값이면 먼저 한 날을 유지한다
+  return prev && prev.value >= p.value ? prev : { value: p.value, day: p.day, best: p.best };
 }
 
-export function computeLevelGrowth(input: {
-  baselines: readonly Baseline[];
+export function computeStageGrowth(input: {
   points: readonly MetricPoint[];
-  enteredAtMs: number;
-}): LevelGrowthSummary {
-  const current = groupByExercise(input.points.filter((p) => p.completedAtMs > input.enteredAtMs));
-  const known = new Set(input.baselines.map(baselineKey));
+  /** 현재 단계 첫 레벨의 진입 시각 (ms). 이 시각과 같은 순간까지는 기준선이다 */
+  stageEnteredAtMs: number;
+  /** 이전 단계 첫 레벨의 진입 시각. 없으면 null */
+  previousStageEnteredAtMs: number | null;
+}): StageGrowth {
+  const { stageEnteredAtMs: entry, previousStageEnteredAtMs: prevEntry } = input;
+  const base = new Map<string, Best & { exerciseKey: string; kind: MetricKind }>();
+  const cur = new Map<string, Best & { exerciseKey: string; kind: MetricKind }>();
+  const prevStage = new Set<string>();
 
-  const exercises: ExerciseLevelGrowth[] = input.baselines.map((b) => {
-    const g = current.get(baselineKey(b));
-    const dayCount = g?.days.length ?? 0;
-    const samples = g ? g.days.slice(-SAMPLE_DAYS) : [];
-    const cur = samples.length > 0 ? median(samples.map((s) => s.value)) : null;
-    return {
-      exerciseKey: b.exerciseKey,
-      kind: b.kind,
-      baseline: b.value,
-      baselineSamples: b.samples,
-      current: cur,
-      currentSamples: samples,
-      currentDayCount: dayCount,
-      growthPct: cur !== null && b.value > 0 ? ((cur - b.value) / b.value) * 100 : null,
-      status: dayCount >= CONFIRM_DAYS ? "confirmed" : dayCount > 0 ? "provisional" : "waiting",
-    };
-  });
+  for (const p of input.points) {
+    const key = `${p.exerciseKey}::${p.kind}`;
+    const target = p.completedAtMs <= entry ? base : cur;
+    target.set(key, { ...better(target.get(key), p), exerciseKey: p.exerciseKey, kind: p.kind });
+    if (prevEntry !== null && p.completedAtMs > prevEntry && p.completedAtMs <= entry) {
+      prevStage.add(key);
+    }
+  }
 
-  const measured = exercises.filter((e) => e.growthPct !== null);
-  const confirmed = measured.filter((e) => e.status === "confirmed");
-  const value =
-    confirmed.length >= MIN_CONFIRMED_EXERCISES
-      ? median(confirmed.map((e) => capped(e.growthPct as number)))
-      : null;
+  const growths: GrowthRecord[] = [];
+  const unmatched: StageGrowth["unmatched"] = [];
+  let comparableCount = 0;
+  for (const [key, c] of cur) {
+    const b = base.get(key);
+    if (!b) {
+      unmatched.push({ exerciseKey: c.exerciseKey, kind: c.kind });
+      continue;
+    }
+    comparableCount += 1;
+    if (c.value > b.value && b.value > 0) {
+      growths.push({
+        exerciseKey: c.exerciseKey,
+        kind: c.kind,
+        baseline: b.value,
+        baselineDay: b.day,
+        baselineBest: b.best,
+        current: c.value,
+        currentDay: c.day,
+        currentBest: c.best,
+        growthPct: ((c.value - b.value) / b.value) * 100,
+      });
+    }
+  }
+  growths.sort((a, b) => b.growthPct - a.growthPct);
 
   return {
-    exercises,
-    confirmedCount: confirmed.length,
-    value,
-    provisionalCount: measured.length,
-    provisionalValue:
-      value === null && measured.length >= MIN_CONFIRMED_EXERCISES
-        ? median(measured.map((e) => capped(e.growthPct as number)))
-        : null,
-    unmatched: [...current.entries()]
-      .filter(([key]) => !known.has(key))
-      .map(([, g]) => ({ exerciseKey: g.exerciseKey, kind: g.kind, currentDayCount: g.days.length })),
+    growths,
+    unchangedCount: comparableCount - growths.length,
+    unmatched,
+    comparableCount,
+    previousStageExerciseCount: prevEntry === null ? null : prevStage.size,
   };
 }

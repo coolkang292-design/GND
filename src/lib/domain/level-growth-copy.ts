@@ -1,14 +1,8 @@
 /**
- * '내 성장' v2.1 표시 문구. 숫자를 올리라고 재촉하는 말은 쓰지 않는다 —
- * 성장률을 높이려고 무리하게 중량을 올리게 만들면 안 된다 (작업지시서 §7.3).
+ * '내 성장' v3 표시 문구. 숫자를 올리라고 재촉하는 말은 쓰지 않는다 —
+ * 성장 기록을 늘리려고 무리하게 중량을 올리게 만들면 안 된다 (작업지시서 §7.3).
  */
-import {
-  CONFIRM_DAYS,
-  type BestSet,
-  type ExerciseLevelGrowth,
-  type GrowthStatus,
-  type MetricKind,
-} from "./level-growth";
+import type { BestSet, GrowthRecord, MetricKind } from "./level-growth";
 
 /** 화면에서 0.0%로 보이는 범위는 "같다"로 친다 */
 const SAME_BAND_PCT = 0.05;
@@ -28,21 +22,12 @@ export function fmtSample(kind: MetricKind, best: BestSet): string {
   return `${best.seconds ?? 0}초`;
 }
 
-export function statusLabel(status: GrowthStatus): string {
-  return status === "confirmed" ? "확정" : status === "provisional" ? "잠정" : "기록 대기";
+/** 성장 기록 한 줄: 기준 → 지금 */
+export function growthLine(g: GrowthRecord): string {
+  return `이전 단계 최고 기록 ${fmtSample(g.kind, g.baselineBest)} → 지금 ${fmtSample(g.kind, g.currentBest)}`;
 }
 
-const UP: Record<MetricKind, string> = {
-  w: "이전 레벨보다 더 무거운 중량을 들어 올렸어요.",
-  r: "이전 레벨보다 더 많이 반복했어요.",
-  t: "이전 레벨보다 더 오래 버텼어요.",
-};
+export const EMPTY_GROWTH_COPY =
+  "아직 이번 단계에서 성장한 운동이 없어요. 지난 단계의 최고 기록을 넘기면 여기에 나타나요.";
 
-export function exerciseLine(e: ExerciseLevelGrowth): string {
-  if (e.status !== "confirmed" || e.growthPct === null) {
-    return `${CONFIRM_DAYS - e.currentDayCount}일 더 기록하면 성장률을 확정할 수 있어요.`;
-  }
-  if (Math.abs(e.growthPct) < SAME_BAND_PCT) return "이전 레벨과 같은 수준을 유지하고 있어요.";
-  if (e.growthPct > 0) return UP[e.kind];
-  return "최근 기록이 기준보다 낮아요. 다음 운동에서 다시 비교해 보세요.";
-}
+export const UNMATCHED_COPY = "아직 비교할 이전 기록이 없어요. 다음 단계부터 비교해 드려요.";
