@@ -21,7 +21,7 @@
  *    (지금은 클라이언트가 계산한 값을 freeze_level_baselines RPC가 받아 고정한다).
  */
 import { isIntervalBlockIndex } from "./tabata";
-import { DEFAULT_TIMEZONE, dayKey } from "./time";
+import { DAY_MS, DEFAULT_TIMEZONE, dayKey } from "./time";
 
 /** 산식을 바꾸면 올린다 — 기준선 행의 고유키에 들어간다 */
 export const METRIC_VERSION = "growth_v2.1";
@@ -36,8 +36,6 @@ export const MIN_CONFIRMED_EXERCISES = 2;
 export const GROWTH_CAP_PCT = 30;
 export const E1RM_MIN_REPS = 1;
 export const E1RM_MAX_REPS = 30;
-
-const DAY_MS = 86_400_000;
 
 export type MetricKind = "w" | "r" | "t";
 
@@ -122,6 +120,8 @@ export function toMetricPoints(
 }
 
 export function median(values: number[]): number {
+  // 빈 배열은 NaN이 화면까지 새는 것을 막으려고 여기서 던진다 (호출부는 길이를 먼저 본다)
+  if (values.length === 0) throw new Error("median: empty input");
   const s = [...values].sort((a, b) => a - b);
   const m = Math.floor(s.length / 2);
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
@@ -144,7 +144,7 @@ function groupByExercise(points: readonly MetricPoint[]): Map<string, Group> {
     out.set(key, {
       exerciseKey: g.exerciseKey,
       kind: g.kind,
-      days: [...g.days.values()].sort((a, b) => (a.day < b.day ? -1 : 1)),
+      days: [...g.days.values()].sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0)),
     });
   }
   return out;

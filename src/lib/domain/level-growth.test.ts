@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   computeBaselines,
   computeLevelGrowth,
+  median,
   toMetricPoints,
   type RawSession,
   type RawSet,
@@ -174,6 +175,50 @@ describe("computeBaselines — 레벨 진입 전 기준선", () => {
     expect(b).toEqual([]);
   });
 
+  it("같은 날 두 번 한 것은 그날 더 센 기록 하나로 접는다 (순서와 무관)", () => {
+    const strong = (d: string) => [bench(d, 60), bench(d, 70)];
+    const weak = (d: string) => [bench(d, 70), bench(d, 60)];
+    for (const first of [strong, weak]) {
+      const b = computeBaselines(
+        toMetricPoints([
+          ...first("2026-10-10"),
+          ...first("2026-10-20"),
+          ...first("2026-11-01"),
+        ]),
+        ENTERED,
+      );
+      expect(b[0].samples.map((s) => s.value)).toEqual([e1(70), e1(70), e1(70)]);
+    }
+  });
+
+  it("창 경계: 정확히 60일 전은 밖, 1초 안쪽은 안", () => {
+    const edge = ENTERED - 60 * 86_400_000;
+    const at = (ms: number, kg: number): RawSession => ({
+      ...bench("2026-01-01", kg),
+      completed_at: new Date(ms).toISOString(),
+    });
+    const base = [bench("2026-10-20", 60), bench("2026-11-01", 60)];
+    const out = computeBaselines(toMetricPoints([...base, at(edge, 60)]), ENTERED);
+    const inn = computeBaselines(toMetricPoints([...base, at(edge + 1000, 60)]), ENTERED);
+    expect(out).toEqual([]);
+    expect(inn).toHaveLength(1);
+  });
+
+  it("날짜는 KST로 센다 (UTC 15:00 이후는 다음 날)", () => {
+    const late = (day: string): RawSession => ({
+      ...bench("2026-01-01", 60),
+      completed_at: `${day}T16:00:00.000Z`,
+    });
+    const p = toMetricPoints([late("2026-10-20")]);
+    expect(p[0].day).toBe("2026-10-21");
+  });
+
+  it("median은 빈 입력을 NaN으로 흘리지 않고 던진다", () => {
+    expect(() => median([])).toThrow();
+    expect(median([1, 3, 2])).toBe(2);
+    expect(median([1, 2, 3, 4])).toBe(2.5);
+  });
+
   it("60일보다 오래된 기록은 쓰지 않는다 (창을 늘리지 않는다)", () => {
     const b = computeBaselines(
       toMetricPoints([bench("2026-08-01", 60), bench("2026-10-20", 60), bench("2026-11-01", 60)]),
@@ -273,6 +318,19 @@ describe("computeLevelGrowth — 기준선 대비 성장률", () => {
     expect(g.confirmedCount).toBe(2);
     expect(g.value).toBeCloseTo(-5, 6); // median(0, -10)
     expect(g.provisionalValue).toBeNull();
+  });
+
+  it("하한도 -30%로 막는다", () => {
+    const three = (f: (d: string) => RawSession) => ["2026-11-10", "2026-11-11", "2026-11-12"].map(f);
+    const g = grow([...three((d) => bench(d, 20)), ...three((d) => squat(d, 30))]);
+    expect(of(g, "벤치").growthPct).toBeCloseTo(-66.7, 1);
+    expect(g.value).toBeCloseTo(-30, 6);
+  });
+
+  it("현재 레벨에서 같은 날 두 번 한 것도 1일로 센다", () => {
+    const g = grow([bench("2026-11-10", 60), bench("2026-11-10", 66)]);
+    expect(of(g, "벤치").currentDayCount).toBe(1);
+    expect(of(g, "벤치").growthPct).toBeCloseTo(10, 6);
   });
 
   it("종합에는 ±30% 상한을 걸지만 종목 상세는 실제 값이다", () => {
