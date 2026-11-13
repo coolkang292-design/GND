@@ -900,6 +900,8 @@ export const EMPTY_STATS: PeriodStats = {
 
 /** foldPeriodStats 입력 — DB 조회를 정규화한 순수 표현 */
 export type PeriodSessionRow = {
+  /** 0138 이후 서버 운동 ID. 구형 응답은 없으므로 개별 기여분을 확정하지 않는다. */
+  sessionId?: string;
   userId: string;
   completedAt: string;
   /**
@@ -982,6 +984,7 @@ export function toPeriodSessionRow(input: {
 }
 
 type ChallengePeriodSessionRpcRow = {
+  session_id?: string;
   user_id: string;
   completed_at: string;
   duration_minutes?: number | null;
@@ -1015,6 +1018,7 @@ export function normalizeChallengePeriodSessions(
   return data.map((row: unknown) => {
     if (
       !isPlainObject(row) ||
+      (row.session_id !== undefined && (typeof row.session_id !== "string" || row.session_id.length === 0)) ||
       typeof row.user_id !== "string" ||
       typeof row.completed_at !== "string" ||
       !isNullableNumber(row.tabata_minutes) ||
@@ -1053,6 +1057,7 @@ export function normalizeChallengePeriodSessions(
 
     const validRow = row as unknown as ChallengePeriodSessionRpcRow;
     return {
+      ...(validRow.session_id !== undefined ? { sessionId: validRow.session_id } : {}),
       userId: validRow.user_id,
       completedAt: validRow.completed_at,
       // 키를 늘 넣으면 0117 전 응답이 null로 바뀌어 기존 단언과 부딪친다 — 있을 때만

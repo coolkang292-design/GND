@@ -142,6 +142,7 @@ function ChallengeScreen({ userId }: { userId: string }) {
 
   const openId = useSyncExternalStore(subscribeUrl, () => readParam("open"), () => null);
   const goalParam = useSyncExternalStore(subscribeUrl, () => readParam("goal"), () => null);
+  const rankingParam = useSyncExternalStore(subscribeUrl, () => readParam("ranking"), () => null);
   /** 목록에서 상세로 **우리가** 밀어 넣었는가 — 그렇다면 ←는 history.back()이다 */
   const pushedFromList = useRef(false);
 
@@ -685,6 +686,8 @@ function ChallengeScreen({ userId }: { userId: string }) {
           <p className="pt-10 text-center text-sm text-muted">불러오는 중…</p>
         ) : challenge ? (
           <ChallengeDetail
+            key={`${challenge.id}:${rankingParam === "overall" ? "overall" : "detail"}`}
+            openOverallRanking={rankingParam === "overall"}
             challenge={challenge}
             userId={userId}
             todayKey={todayKey}

@@ -160,7 +160,10 @@ export function ChallengeDetail({
   onProfile,
   onDiscover,
   onGoalRaised,
+  openOverallRanking = false,
 }: {
+  /** 운동 완료 카드에서 같은 종합점수 순위로 바로 연결한다. 비공개 방은 무시한다. */
+  openOverallRanking?: boolean;
   challenge: MyChallenge;
   userId: string;
   todayKey: string;
@@ -204,7 +207,9 @@ export function ChallengeDetail({
   /** 진행 중 상세 탭 — 최종 시안(2026-10-07)은 `랭킹`이 첫 화면이다 */
   const [activeTab, setActiveTab] = useState<ActiveTab>("ranking");
   /** 진행 중 `챌린지 랭킹` 하위 화면 — 열려 있으면 처음 고를 지표 */
-  const [rankingView, setRankingView] = useState<RankingKey | null>(null);
+  const [rankingView, setRankingView] = useState<RankingKey | null>(() =>
+    openOverallRanking && challenge.status === "active" && challenge.myStatus === "joined" && challenge.live_ranking ? "overall" : null,
+  );
 
   const isHost = challenge.created_by === userId;
   const invited = challenge.myStatus === "invited";

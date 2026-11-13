@@ -2229,6 +2229,7 @@ begin
   select coalesce(jsonb_agg(row), '[]'::jsonb) into v_rows
   from (
     select jsonb_build_object(
+      'session_id', s.id,
       'user_id', s.user_id,
       'completed_at', s.completed_at,
       'duration_minutes', s.duration_minutes,

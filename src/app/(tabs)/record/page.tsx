@@ -98,13 +98,11 @@ import {
 import {
   getChallengeGoals,
   getMyChallenges,
-  getPeriodStatsByUser,
-  actualForGoal,
-  goalLabel,
   goalCategories,
   sessionGoalContribution,
   toPeriodSessionRow,
   type GoalContribution,
+  type FinishedDraftExercise,
 } from "@/lib/challenge";
 import { getLevelRewards, getProgressSummary } from "@/lib/progression";
 import {
@@ -203,8 +201,9 @@ import {
   completedWorkoutFeedPath,
   feedPathAfterProof,
 } from "@/lib/domain/achievement-moment";
-import { VerifiedChallengeProofCard } from "@/components/record/verified-challenge-proof-card";
-import { hasPendingChallengeProof, type ActiveChallengeContext, type ChallengeConfirmation } from "@/lib/domain/challenge-confirmation";
+import { ChallengeWorkoutResultCard, ChallengePlanFeedback } from "@/components/record/challenge-workout-feedback";
+import { applyChallengePlanAddition } from "@/lib/domain/challenge-plan-addition";
+import { hasPendingChallengeProof, type ActiveChallengeContext } from "@/lib/domain/challenge-confirmation";
 import { CompletionDetails } from "@/components/record/completion-details";
 import { pickNextCompletionHero } from "@/lib/completion-hero-pick";
 import { captionForEffort } from "@/lib/domain/session-caption";
@@ -690,10 +689,6 @@ function WorkoutScreen({ userId }: { userId: string }) {
   );
   const [challengePhotoRequired, setChallengePhotoRequired] = useState(false);
   const [activeChallengeContexts, setActiveChallengeContexts] = useState<ActiveChallengeContext[]>([]);
-  const [challengeConfirmations, setChallengeConfirmations] = useState<{
-    scope: string;
-    data: Record<string, ChallengeConfirmation>;
-  } | null>(null);
   /** 완료 화면에서 인증사진을 올렸는가 — 기여 문구가 "쌓여요"→"쌓였어요"로 바뀐다 */
   const [resultPhotoDone, setResultPhotoDone] = useState(false);
   /**
@@ -1486,7 +1481,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
    */
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    let loadGeneration = 0;
+    const loadContexts = async () => {
+      const generation = ++loadGeneration;
       try {
         const active = (await getMyChallenges(userId)).filter(
           (c) => c.status === "active" && c.myStatus === "joined",
@@ -1498,10 +1495,11 @@ function WorkoutScreen({ userId }: { userId: string }) {
             startDate: challenge.start_date,
             endDate: challenge.end_date,
             photoRequired: Boolean(challenge.photo_required),
+            liveRanking: challenge.live_ranking === true,
             goals: (await getChallengeGoals(challenge.id)).filter((g) => g.user_id === userId),
           })),
         );
-        if (cancelled) return;
+        if (cancelled || generation !== loadGeneration) return;
         const contexts = loaded
           .filter((entry): entry is PromiseFulfilledResult<ActiveChallengeContext> => entry.status === "fulfilled")
           .map((entry) => entry.value);
@@ -1513,9 +1511,16 @@ function WorkoutScreen({ userId }: { userId: string }) {
       } catch {
         // 챌린지가 없거나 못 읽어도 기록은 그대로 돼야 한다
       }
-    })();
+    };
+    const onVisible = () => { if (document.visibilityState === "visible") void loadContexts(); };
+    const onFocus = () => { void loadContexts(); };
+    void loadContexts();
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       cancelled = true;
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [userId]);
 
@@ -1744,6 +1749,20 @@ function WorkoutScreen({ userId }: { userId: string }) {
         ? `'${picks[0].item.name}' 추가됨`
         : `운동 ${picks.length}개 추가됨`,
     );
+  }
+
+  function addChallengeSuggestion(addition: FinishedDraftExercise): boolean {
+    const current = draftRef.current;
+    if (current.sessionId || current.tabataMinutes || current.program) return false;
+    const exercises = applyChallengePlanAddition(current.exercises, addition, catalog);
+    if (!exercises) {
+      showToast("지금 계획에 추가할 수 없는 종목이에요. 운동 목록에서 직접 골라 주세요.");
+      return false;
+    }
+    markActivity();
+    setDraft({ ...current, exercises, suggestedForDayKey: null });
+    showToast(`${addition.name} 추가분을 계획에 담았어요`);
+    return true;
   }
 
   async function loadLastExercise(exercise: LocalExercise) {
@@ -3940,49 +3959,6 @@ function WorkoutScreen({ userId }: { userId: string }) {
   }, [result?.sessionId]);
 
 
-  // Read-only confirmation after completion and whenever photo proof changes.
-  // RPC returns period totals without session IDs; never claim this particular
-  // workout gained +N based solely on the resulting total.
-  useEffect(() => {
-    if (!result) return;
-    let cancelled = false;
-    const scope = result.sessionId + ":" + resultPhotoDone;
-    for (const { context } of result.challengeResults) {
-      if (context.photoRequired && !resultPhotoDone) continue;
-      void getPeriodStatsByUser(
-        context.id, context.startDate, context.endDate, DEFAULT_TIMEZONE,
-      )
-        .then((statsByUser) => {
-          if (cancelled) return;
-          const stats = statsByUser.get(userId);
-          const totals = context.goals.map((goal) => ({
-            type: goal.goal_type,
-            label: goalLabel(goal.goal_type, goal.qualifier),
-            value: stats ? actualForGoal(stats, goal.goal_type, goal.qualifier) : 0,
-            unit: goal.unit ?? "",
-            target: Number(goal.target_value),
-          }));
-          setChallengeConfirmations((prev) => ({
-            scope,
-            data: {
-              ...(prev?.scope === scope ? prev.data : {}),
-              [context.id]: { status: "confirmed", totals },
-            },
-          }));
-        })
-        .catch(() => {
-          if (!cancelled) setChallengeConfirmations((prev) => ({
-            scope,
-            data: {
-              ...(prev?.scope === scope ? prev.data : {}),
-              [context.id]: { status: "unavailable" },
-            },
-          }));
-        });
-    }
-    return () => { cancelled = true; };
-  }, [result, resultPhotoDone, userId]);
-
   // 멈춰 있던 시간은 경과 시간에서 뺀다. 정지 중에는 정지 시작 시점에 멈춰 있다.
   const elapsedSec =
     active && draft.startedAtMs
@@ -4018,8 +3994,6 @@ function WorkoutScreen({ userId }: { userId: string }) {
       (`resultPhotoDone`) 그 자리에서 다시 생긴다. 비공개는 원래부터 `feedPath`가 null이다.
     */
     const proofPending = hasPendingChallengeProof(result.challengeResults, resultPhotoDone);
-    const scopedConfirmations = challengeConfirmations?.scope === result.sessionId + ":" + resultPhotoDone
-      ? challengeConfirmations.data : {};
     const feedPath = feedPathAfterProof(result.feedPath, proofPending);
     // ⚠️ 방금 끝낸 운동을 **합쳐서** 센다. `sessionMinutes`는 완료 전에 읽은
     //    값이라 오늘 첫 운동이면 오늘이 빠져 있다. 같은 날 두 번째면 하루로 합쳐진다
@@ -4080,13 +4054,13 @@ function WorkoutScreen({ userId }: { userId: string }) {
         {result.challengeResults.length > 0 && (
           <section className="flex flex-col gap-2" aria-label="챌린지별 실적">
             {result.challengeResults.map(({ context, gains }) => (
-              <VerifiedChallengeProofCard
+              <ChallengeWorkoutResultCard
                 key={context.id}
-                name={context.name}
-                photoRequired={context.photoRequired}
+                userId={userId}
+                sessionId={result.sessionId}
+                context={context}
                 photoDone={resultPhotoDone}
                 gains={gains}
-                confirmation={scopedConfirmations[context.id] ?? { status: "checking" }}
               />
             ))}
           </section>
@@ -4672,6 +4646,10 @@ function WorkoutScreen({ userId }: { userId: string }) {
             </button>
           )}
 
+          {/* 계획 목록이 퀘스트 카드 안에 접혀 있어도 예상 점수는 계획 바로 아래에서 보인다. */}
+          {!active && !draft.tabataMinutes && !draft.program && (
+            <ChallengePlanFeedback userId={userId} contexts={activeChallengeContexts} exercises={draft.exercises} onAdd={addChallengeSuggestion} />
+          )}
           {/* 퀘스트 카드가 떠 있으면 접힌다 — `contents`라 목록 화면일 때 레이아웃은 그대로다 */}
           <div className={questListCollapsed ? "hidden" : "contents"}>
           {/* 세션 헤더 (§10) */}

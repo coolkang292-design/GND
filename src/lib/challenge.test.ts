@@ -121,6 +121,16 @@ describe("actualForGoal", () => {
 });
 
 describe("normalizeChallengePeriodSessions", () => {
+  it("보여 주는 운동 기여분을 특정할 수 있게 서버 세션 ID를 보존한다", () => {
+    const row = { user_id: "me", completed_at: "2026-11-13T03:00:00Z", tabata_minutes: null, workout_exercises: [] };
+    expect(normalizeChallengePeriodSessions([{ ...row, session_id: "workout-123" }])[0].sessionId).toBe("workout-123");
+    expect(normalizeChallengePeriodSessions([row])[0].sessionId).toBeUndefined();
+  });
+
+  it("잘못된 세션 ID 응답은 기여분 계산에 사용하지 않는다", () => {
+    const row = { user_id: "me", completed_at: "2026-11-13T03:00:00Z", tabata_minutes: null, workout_exercises: [] };
+    expect(() => normalizeChallengePeriodSessions([{ ...row, session_id: 123 }])).toThrow("invalid_challenge_period_sessions");
+  });
   const validRpcRow = {
     user_id: "u1",
     completed_at: "2026-07-31T03:00:00Z",

@@ -9,6 +9,8 @@ export type ActiveChallengeContext = {
   startDate: string;
   endDate: string;
   photoRequired: boolean;
+  /** 계획 점수는 공개 설정이 확인된 챌린지만 표시한다. 구형 자료는 숨김. */
+  liveRanking?: boolean;
   goals: UserGoal[];
 };
 
