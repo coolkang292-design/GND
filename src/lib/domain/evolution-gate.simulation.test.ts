@@ -2,9 +2,9 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { computeStageGrowth, computeEvolutionGrowthScore, toMetricPoints, type RawSession } from "./level-growth";
-import { getStageGrowthGoal } from "./evolution-gate";
+import { getStageGrowthGoal, STAGE_RULES, countSteadyWindows } from "./evolution-gate";
 import { getStageGroups } from "./progression";
-import { EVOLUTION_REQUIREMENTS, daysBetween } from "./evolution";
+import { daysBetween } from "./evolution";
 import { DEFAULT_TIMEZONE, dayKey } from "./time";
 
 describe.skipIf(process.env.EVOLUTION_GATE_SIMULATION !== "1")("진화 규칙 전원 영향 분석(읽기 전용)", () => {
@@ -52,7 +52,8 @@ describe.skipIf(process.env.EVOLUTION_GATE_SIMULATION !== "1")("진화 규칙 �
       const score = goal.mode === "growth_preview" ? computeEvolutionGrowthScore(growth, goal.requiredCount) : null;
       const days = [...new Set(sessions.map(s => dayKey(new Date(s.completed_at), DEFAULT_TIMEZONE)))].sort();
       const elapsedWeeks = days.length ? Math.floor(daysBetween(days[0], dayKey(new Date(), DEFAULT_TIMEZONE)) / 7) : 0;
-      const requirement = goal.nextStage ? EVOLUTION_REQUIREMENTS[goal.nextStage] : null;
+      const rule = goal.nextStage ? STAGE_RULES[goal.nextStage] : null;
+      const steady = countSteadyWindows(days, dayKey(new Date(entry.entered_at), DEFAULT_TIMEZONE), dayKey(new Date(), DEFAULT_TIMEZONE));
       rows.push({ 사용자: nickname, 레벨: p.current_level, 현재단계: p.current_stage,
         다음진화: goal.nextStage ?? "최종", M: growth.previousStageExerciseCount ?? "—",
         N: goal.mode === "growth_preview" ? goal.requiredCount : "—", 성장: growth.growths.length,
@@ -64,7 +65,8 @@ describe.skipIf(process.env.EVOLUTION_GATE_SIMULATION !== "1")("진화 규칙 �
         유산소성장: growth.growths.filter(g => g.kind === "c").length,
         유산소조건불일치: growth.unmatched.filter(g => g.reason === "cardio_condition").length,
         운동일: days.length, 경과주: elapsedWeeks,
-        초안필요일: requirement?.days ?? "—", 초안필요주: requirement?.weeks ?? "—",
+        필요일: rule?.habit?.kind === "days" ? rule.habit.required : "—", 필요주: rule?.habit?.kind === "weeks" ? rule.habit.required : "—",
+        꾸준함: rule && rule.steadyRequired > 0 ? `${steady}/${rule.steadyRequired}` : "—",
       });
     }
     console.table(rows);

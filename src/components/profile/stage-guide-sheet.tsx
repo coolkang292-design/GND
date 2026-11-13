@@ -58,7 +58,7 @@ export function StageGuideSheet({
           7단계 캐릭터 진화
         </h3>
         <p className="mt-1 flex-none text-center text-[11.5px] text-muted">
-          {gated ? "시동러까지는 경험치로, 꾸준러부터는 경험치와 운동 습관·성장 조건을 모두 채우면 진화해요."
+          {gated ? "시동러까지는 경험치로, 꾸준러부터는 경험치와 운동 습관에 더해 성장 기록(또는 대체 경로)을 채우면 진화해요."
             : "레벨 5개마다 한 단계씩 진화해요. 운동을 완료해 XP를 쌓으면 캐릭터가 단계별로 바뀝니다."}
         </p>
 

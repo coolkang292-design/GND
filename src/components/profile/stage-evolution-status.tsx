@@ -4,17 +4,24 @@ import type { GateCondition, StageGateStatus } from "@/lib/domain/evolution-gate
 
 const labels: Record<GateCondition["key"], string> = {
   xp: "경험치 레벨", days: "운동한 날", weeks: "운동 시작 후", recent: "최근 운동",
-  growth_count: "성장 종목", growth_average: "진화 평가 평균",
+  growth_count: "성장 종목", growth_average: "진화 평가 평균", steady: "꾸준함",
 };
 function value(c: GateCondition) {
   if (c.current === null || c.required === null) return "기준 확인 중";
   const unit = c.key === "growth_average" ? "%" : c.key === "growth_count" ? "종목"
-    : c.key === "weeks" ? "주" : c.key === "xp" ? "레벨" : "일";
+    : c.key === "weeks" ? "주" : c.key === "xp" ? "레벨" : c.key === "steady" ? "회" : "일";
   const current = c.key === "growth_average" ? Number(c.current.toFixed(1)) : c.current;
   return `${current} / ${c.required}${unit}`;
 }
 
 /** 판정은 서버 값만 사용한다. 화면에서 평균을 다시 계산해 met/state를 덮어쓰지 않는다. */
+function alternateText(a: NonNullable<StageGateStatus["alternate"]>) {
+  const cur = a.current ?? 0;
+  return a.kind === "days"
+    ? `성장 대신 운동한 날 ${cur} / ${a.required}일${a.exemptsSteady ? " (꾸준함은 따로 채우지 않아도 돼요)" : ""}`
+    : `성장 대신 꾸준함 ${cur} / ${a.required}회`;
+}
+
 export function StageEvolutionStatusView({ status }: { status: StageGateStatus }) {
   if (status.nextStage === null) return <section className="rounded-card border border-line bg-surface p-4 shadow-card">
     <h2 className="text-[15px] font-extrabold">최종 단계에 도달했어요</h2>
@@ -32,7 +39,7 @@ export function StageEvolutionStatusView({ status }: { status: StageGateStatus }
     </p>
     <p className="mt-1 text-[11.5px] text-muted">
       {status.nextStage <= 3 ? "시동러까지는 경험치만으로 진화해요."
-        : "경험치·운동 습관·성장 종목 수·평균 목표를 모두 채우면 진화해요."}
+        : "경험치와 운동 습관을 채우고, 성장 기록 또는 아래 대체 경로 중 하나를 채우면 진화해요."}
     </p>
     <ul className="mt-3 flex flex-col gap-2.5">
       {conditions.map(c => <li key={c.key} className="flex items-center justify-between gap-3 text-[12px]">
@@ -40,6 +47,10 @@ export function StageEvolutionStatusView({ status }: { status: StageGateStatus }
         <span className={c.met ? "font-bold text-accent" : "font-bold"}>{value(c)}</span>
       </li>)}
     </ul>
+    {status.alternate && status.state !== "error" && <p data-testid="alternate-path" className="mt-2.5 flex items-center justify-between gap-3 text-[12px] text-muted">
+      <span>{status.alternate.met ? "✓ " : "○ "}{alternateText(status.alternate)}</span>
+    </p>}
+    {conditions.some(c => c.key === "steady") && <p className="mt-2 text-[11px] text-muted">꾸준함은 연속 4주 중 3주에서 주 2일 이상 운동하면 1회로 세요.</p>}
     <p className="mt-3 border-t border-line pt-2 text-[11px] text-muted">한번 진화한 모습은 운동을 쉬어도 그대로예요.</p>
     <Link href="/record" className="mt-3 flex h-12 items-center justify-center rounded-full bg-accent text-sm font-extrabold text-accent-ink">오늘 운동 시작하기</Link>
   </section>;
