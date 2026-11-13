@@ -6,7 +6,8 @@ import type { GateAlternate, GateCondition, StageGateStatus } from "./evolution-
  */
 export type Tone = "met" | "over" | "big";
 export type CardTile = { key: GateCondition["key"]; label: string; value: string; target: string; tone: Tone; badge: string | null };
-export type CardRow = { key: GateCondition["key"]; label: string; valueText: string; percent: number; hint: string };
+/** known=false: 서버가 값을 아직 주지 않음 — 막대를 그리지 않는다(0%로 보이면 안 된다) */
+export type CardRow = { key: GateCondition["key"]; label: string; valueText: string; percent: number; hint: string; known: boolean };
 export type CardAlternate = { text: string; valueText: string; percent: number; met: boolean; note: string | null };
 export type EvolutionCardModel = {
   headline: string;
@@ -109,12 +110,12 @@ export function buildEvolutionCardModel(status: StageGateStatus): EvolutionCardM
         tiles.push({ key: c.key, label: labelOf(c), value: valueOf(c.key, c.current), target: targetOf(c.key, c.required), tone, badge });
       } else {
         const percent = c.required > 0 ? Math.max(0, Math.min(99, Math.floor((c.current / c.required) * 100))) : 0;
-        rows.push({ key: c.key, label: labelOf(c), valueText: `${valueOf(c.key, c.current)} → ${valueOf(c.key, c.required)}`, percent, hint: hintOf(known) });
+        rows.push({ key: c.key, label: labelOf(c), valueText: `${valueOf(c.key, c.current)} → ${valueOf(c.key, c.required)}`, percent, hint: hintOf(known), known: true });
       }
     } else if (c.met) {
       tiles.push({ key: c.key, label: labelOf(c), value: "달성", target: "", tone: "met", badge: null });
     } else {
-      rows.push({ key: c.key, label: labelOf(c), valueText: "기준 확인 중", percent: 0, hint: "" });
+      rows.push({ key: c.key, label: labelOf(c), valueText: "기준 확인 중", percent: 0, hint: "", known: false });
     }
   }
 

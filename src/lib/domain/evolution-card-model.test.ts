@@ -56,7 +56,8 @@ describe("남은 조건은 막대 줄, 0%·100%를 속이지 않는다", () => {
     const s = status({ state: "needs_baseline", conditions: [c("growth_count", null, null, false)] });
     const m = buildEvolutionCardModel(s);
     expect(m.tiles).toHaveLength(0);
-    expect(m.rows[0]).toMatchObject({ valueText: "기준 확인 중", percent: 0, hint: "" });
+    expect(m.rows[0]).toMatchObject({ valueText: "기준 확인 중", percent: 0, hint: "", known: false });
+    expect(buildEvolutionCardModel(status({ conditions: [c("xp", 19, 21, false)] })).rows[0].known).toBe(true);
     expect(m.headline).toBe("성장 비교 기준을 확인 중이에요.");
   });
   it("조건별 힌트: 운동일·경과 주·최근 운동·성장 종목·평균·꾸준함", () => {
