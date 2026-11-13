@@ -91,7 +91,7 @@ describe.skipIf(!NICK)("level-growth v3 실데이터 비교", () => {
         v1: pct(v1Of.get(g.exerciseKey)),
       })),
     );
-    console.log("비교 불가(진입 전 기록 없음):", v3.unmatched.map((u) => u.exerciseKey).join(", ") || "없음");
+    console.log("비교 제외(사유):", v3.unmatched.map((u) => `${u.exerciseKey}(${u.reason === "jump" ? "점프" : "진입 전 기록 없음"})`).join(", ") || "없음");
     const v3Names = new Set(points.map((p) => p.exerciseKey));
     const v1Only = (v1.exercises ?? []).map((e) => e.exercise.trim()).filter((n) => !v3Names.has(n));
     console.log("v1에만 있던 종목(인터벌 라운드·유산소 시간 등):", v1Only.join(", ") || "없음");

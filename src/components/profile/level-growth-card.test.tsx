@@ -92,12 +92,12 @@ describe("LevelGrowthView", () => {
   });
 
   it("비교 불가 종목은 펼치면 0%가 아니라 별도 구역에 적는다", () => {
-    const s = summary({ unmatched: [{ exerciseKey: "덤벨 벤치프레스", kind: "w" }] });
+    const s = summary({ unmatched: [{ exerciseKey: "덤벨 벤치프레스", kind: "w", reason: "no_baseline" as const }] });
     const closed = html(ready(s), false);
     expect(closed).not.toContain("덤벨 벤치프레스");
     expect(closed).toContain("growth-toggle");
     const out = html(ready(s), true);
-    expect(out).toContain("비교할 이전 기록이 없는 운동");
+    expect(out).toContain("이번 단계에서 비교하지 않는 운동");
     expect(out).toContain("덤벨 벤치프레스");
     expect(out).toContain("아직 비교할 이전 기록이 없어요. 다음 단계부터 비교해 드려요.");
     expect(out).not.toMatch(/0\.0%/);
@@ -110,5 +110,24 @@ describe("LevelGrowthView", () => {
     expect(out).toContain("다음 진화 이후부터");
     expect(out).not.toMatch(/\d+\.\d%/);
     expect(out).not.toContain("얼마나 세졌나");
+  });
+
+  it("비교하지 않는 운동 구역: 사유별 문구가 나오고 성장 종목 수에는 들지 않는다", () => {
+    const s = summary({
+      growths: [rec("벤치", 10)],
+      unmatched: [
+        { exerciseKey: "오버헤드 프레스", kind: "w", reason: "jump" },
+        { exerciseKey: "스쿼트", kind: "w", reason: "no_baseline" },
+      ],
+    });
+    const out = html(ready(s), true);
+    expect(out).toContain("이번 단계에서 비교하지 않는 운동");
+    expect(out).toContain("오버헤드 프레스");
+    expect(out).toContain("기록 차이가 너무 커서(기구나 무게 입력이 달라졌을 수 있어요)");
+    expect(out).toContain("아직 비교할 이전 기록이 없어요. 다음 단계부터 비교해 드려요.");
+    expect(out).toContain("성장한 운동 1종목");
+    expect(out.match(/data-testid="growth-record"/g)).toHaveLength(1);
+    expect(out.match(/data-testid="growth-unmatched"/g)).toHaveLength(2);
+    expect(out).not.toContain("비교할 이전 기록이 없는 운동");
   });
 });

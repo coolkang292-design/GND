@@ -117,6 +117,12 @@ export function toMetricPoints(
 }
 
 
+/** 기준 대비 이만큼(%)을 넘는 증가는 성장 기록으로 세지 않는다 (정확히 이 값은 성장) */
+export const MAX_PLAUSIBLE_GROWTH_PCT = 100;
+
+/** no_baseline: 진입 전 기록이 없다 · jump: 기준보다 2배를 넘게 뛰어 비교하지 않는다 */
+export type UnmatchedReason = "no_baseline" | "jump";
+
 export type GrowthRecord = {
   exerciseKey: string;
   kind: MetricKind;
@@ -137,7 +143,7 @@ export type StageGrowth = {
   /** 기준선과 현재 기록이 모두 있는데 넘지 못한 종목 수 */
   unchangedCount: number;
   /** 이번 단계에서 했지만 진입 전 기록이 없어 비교할 수 없는 종목 */
-  unmatched: { exerciseKey: string; kind: MetricKind }[];
+  unmatched: { exerciseKey: string; kind: MetricKind; reason: UnmatchedReason }[];
   /** 기준선과 현재 기록이 모두 있는 종목 수 */
   comparableCount: number;
   /** 이전 단계 구간에서 기록한 서로 다른 종목 수. 이전 단계 진입 시각이 없으면 null */
@@ -179,7 +185,14 @@ export function computeStageGrowth(input: {
   for (const [key, c] of cur) {
     const b = base.get(key);
     if (!b) {
-      unmatched.push({ exerciseKey: c.exerciseKey, kind: c.kind });
+      unmatched.push({ exerciseKey: c.exerciseKey, kind: c.kind, reason: "no_baseline" });
+      continue;
+    }
+    const pct = b.value > 0 ? ((c.value - b.value) / b.value) * 100 : 0;
+    // 기준의 2배를 넘는 점프는 기구·무게 입력이 달라진 것일 가능성이 커 성장으로 세지 않는다.
+    // 정확히 +100%는 성장이다 (반올림 오차 때문에 아주 작은 여유를 둔다).
+    if (pct > MAX_PLAUSIBLE_GROWTH_PCT + 1e-6) {
+      unmatched.push({ exerciseKey: c.exerciseKey, kind: c.kind, reason: "jump" });
       continue;
     }
     comparableCount += 1;
@@ -193,7 +206,7 @@ export function computeStageGrowth(input: {
         current: c.value,
         currentDay: c.day,
         currentBest: c.best,
-        growthPct: ((c.value - b.value) / b.value) * 100,
+        growthPct: pct,
       });
     }
   }

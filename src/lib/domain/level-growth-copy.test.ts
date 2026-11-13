@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   EMPTY_GROWTH_COPY,
+  JUMP_COPY,
   UNMATCHED_COPY,
   fmtGrowthPct,
   fmtSample,
@@ -47,7 +48,8 @@ describe("level-growth-copy", () => {
       "아직 이번 단계에서 성장한 운동이 없어요. 지난 단계의 최고 기록을 넘기면 여기에 나타나요.",
     );
     expect(UNMATCHED_COPY).toBe("아직 비교할 이전 기록이 없어요. 다음 단계부터 비교해 드려요.");
-    for (const t of [EMPTY_GROWTH_COPY, UNMATCHED_COPY, growthLine(rec)]) {
+    expect(JUMP_COPY).toBe("기록 차이가 너무 커서(기구나 무게 입력이 달라졌을 수 있어요) 이번 단계에서는 비교하지 않아요. 다음 단계부터 지금 기록을 기준으로 비교해요.");
+    for (const t of [EMPTY_GROWTH_COPY, UNMATCHED_COPY, JUMP_COPY, growthLine(rec)]) {
       expect(t).not.toMatch(/더 무겁|힘내|도전해|올려 보/);
     }
   });

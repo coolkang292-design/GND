@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  MAX_PLAUSIBLE_GROWTH_PCT,
   computeStageGrowth,
   toMetricPoints,
   type RawSession,
@@ -200,7 +201,7 @@ describe("computeStageGrowth — 진입 시점까지의 종목별 최고 기록 
       ENTRY,
     );
     expect(r.growths.map((g) => g.exerciseKey)).toEqual(["벤치"]);
-    expect(r.unmatched).toEqual([{ exerciseKey: "스쿼트", kind: "w" }]);
+    expect(r.unmatched).toEqual([{ exerciseKey: "스쿼트", kind: "w", reason: "no_baseline" }]);
     expect(r.comparableCount).toBe(1);
   });
 
@@ -294,7 +295,7 @@ describe("computeStageGrowth — 진입 시점까지의 종목별 최고 기록 
     );
     expect(r.growths).toEqual([]);
     expect(r.comparableCount).toBe(0);
-    expect(r.unmatched).toEqual([{ exerciseKey: "딥스", kind: "r" }]);
+    expect(r.unmatched).toEqual([{ exerciseKey: "딥스", kind: "r", reason: "no_baseline" }]);
   });
 
   it("같은 무게에서 반복이 늘어도 성장이다 (16kg×12 → 16kg×17)", () => {
@@ -437,5 +438,75 @@ describe("computeStageGrowth — 보강 (부동소수·경계·결정성)", () =
       ).growths.map((g) => g.exerciseKey);
     expect(mk(["다", "가", "나"])).toEqual(["가", "나", "다"]);
     expect(mk(["나", "다", "가"])).toEqual(["가", "나", "다"]);
+  });
+});
+
+describe("computeStageGrowth — 비현실적 점프(+100% 초과) 제외", () => {
+  const w = (day: string, kg: number, reps = 10) =>
+    sess(day, [{ name: "오버헤드 프레스", sets: [{ weight_kg: kg, reps }] }]);
+
+  it("상한 상수는 100", () => {
+    expect(MAX_PLAUSIBLE_GROWTH_PCT).toBe(100);
+  });
+
+  it("정확히 +100%(20kg → 40kg, 같은 반복)는 성장 기록이다", () => {
+    const r = grow([w("2026-10-20", 20), w("2026-11-05", 40)], ENTRY);
+    expect(r.growths).toHaveLength(1);
+    expect(r.growths[0].growthPct).toBeCloseTo(100, 9);
+    expect(r.unmatched).toEqual([]);
+    expect(r.comparableCount).toBe(1);
+  });
+
+  it("10kg×10 → 25kg×10 (+150%)은 기록이 아니라 jump로 비교 제외되고, 비교·변함없음 수에 들지 않는다", () => {
+    const r = grow([w("2026-10-20", 10), w("2026-11-05", 25)], ENTRY);
+    expect(r.growths).toEqual([]);
+    expect(r.unmatched).toEqual([{ exerciseKey: "오버헤드 프레스", kind: "w", reason: "jump" }]);
+    expect(r.comparableCount).toBe(0);
+    expect(r.unchangedCount).toBe(0);
+  });
+
+  it("맨몸 반복 5 → 11 (+120%)도 jump", () => {
+    const r = grow(
+      [
+        sess("2026-10-20", [{ name: "풀업", type: "bodyweight", sets: [{ reps: 5 }] }]),
+        sess("2026-11-05", [{ name: "풀업", type: "bodyweight", sets: [{ reps: 11 }] }]),
+      ],
+      ENTRY,
+    );
+    expect(r.growths).toEqual([]);
+    expect(r.unmatched).toEqual([{ exerciseKey: "풀업", kind: "r", reason: "jump" }]);
+  });
+
+  it("보통 성장(60 → 66)은 그대로 +10%이고 jump 종목과 섞여도 영향이 없다", () => {
+    const r = grow(
+      [
+        bench("2026-10-20", 60),
+        bench("2026-11-05", 66),
+        w("2026-10-20", 10),
+        w("2026-11-05", 25),
+      ],
+      ENTRY,
+    );
+    expect(r.growths.map((g) => g.exerciseKey)).toEqual(["벤치"]);
+    expect(r.growths[0].growthPct).toBeCloseTo(10, 9);
+    expect(r.comparableCount).toBe(1);
+    expect(r.unmatched.map((u) => u.reason)).toEqual(["jump"]);
+  });
+
+  it("비교 불가 사유: 진입 전 기록이 없으면 no_baseline", () => {
+    const r = grow([w("2026-11-05", 25)], ENTRY);
+    expect(r.unmatched).toEqual([{ exerciseKey: "오버헤드 프레스", kind: "w", reason: "no_baseline" }]);
+  });
+
+  it("다음 단계 진입 때 25kg이 새 기준선이 되어, 27.5kg×10은 +10% 성장 기록", () => {
+    const sessions = [w("2026-10-20", 10), w("2026-11-05", 25), w("2026-11-20", 27.5)];
+    const stage1 = grow(sessions, ENTRY);
+    expect(stage1.growths).toEqual([]); // 27.5 vs 10 = +175% → 여전히 jump
+    expect(stage1.unmatched[0].reason).toBe("jump");
+    const stage2 = grow(sessions, "2026-11-10T00:00:00.000Z", ENTRY);
+    expect(stage2.unmatched).toEqual([]);
+    expect(stage2.growths).toHaveLength(1);
+    expect(stage2.growths[0].baselineBest.weight).toBe(25);
+    expect(stage2.growths[0].growthPct).toBeCloseTo(10, 9);
   });
 });

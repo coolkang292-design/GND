@@ -5,6 +5,7 @@ import { Icon } from "@/components/ui/icon";
 import type { GrowthRecord } from "@/lib/domain/level-growth";
 import {
   EMPTY_GROWTH_COPY,
+  JUMP_COPY,
   UNMATCHED_COPY,
   fmtGrowthPct,
   growthLine,
@@ -110,7 +111,7 @@ export function LevelGrowthView({
           )}
           {s.unmatched.length > 0 && (
             <div data-testid="growth-unmatched-section">
-              <p className="text-[11px] font-bold text-muted">비교할 이전 기록이 없는 운동</p>
+              <p className="text-[11px] font-bold text-muted">이번 단계에서 비교하지 않는 운동</p>
               <ul className="mt-1 flex flex-col gap-2">
                 {s.unmatched.map((u) => (
                   <li
@@ -119,7 +120,7 @@ export function LevelGrowthView({
                     data-testid="growth-unmatched"
                   >
                     <p className="text-[13px] font-extrabold">{u.exerciseKey}</p>
-                    <p className="mt-1 text-[11.5px] leading-snug text-muted">{UNMATCHED_COPY}</p>
+                    <p className="mt-1 text-[11.5px] leading-snug text-muted">{u.reason === "jump" ? JUMP_COPY : UNMATCHED_COPY}</p>
                   </li>
                 ))}
               </ul>
