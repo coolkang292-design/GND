@@ -17,11 +17,13 @@ export function StageGuideSheet({
   totalXp,
   variant = "male",
   onClose,
+  gated = false,
 }: {
   currentStage: number;
   totalXp: number;
   variant?: CharacterVariant;
   onClose: () => void;
+  gated?: boolean;
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
   const groups = getStageGroups();
@@ -56,8 +58,8 @@ export function StageGuideSheet({
           7단계 캐릭터 진화
         </h3>
         <p className="mt-1 flex-none text-center text-[11.5px] text-muted">
-          레벨 5개마다 한 단계씩 진화해요. 운동을 완료해 XP를 쌓으면 캐릭터가
-          단계별로 바뀝니다.
+          {gated ? "시동러까지는 경험치로, 꾸준러부터는 경험치와 운동 습관·성장 조건을 모두 채우면 진화해요."
+            : "레벨 5개마다 한 단계씩 진화해요. 운동을 완료해 XP를 쌓으면 캐릭터가 단계별로 바뀝니다."}
         </p>
 
         <ul className="mt-3 min-h-0 flex-1 overflow-y-auto">
@@ -113,6 +115,7 @@ export function StageGuideSheet({
                   <p className="mt-1 text-[10.5px] text-faint">
                     Lv.{g.startLevel}~{g.endLevel} · 누적{" "}
                     {g.requiredTotalXp.toLocaleString()} XP부터
+                    {gated && g.stageIndex >= 4 && " · 진화 조건 충족 필요"}
                     {locked && xpLeft > 0 && (
                       <span className="font-bold text-accent">
                         {" "}

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { parseStageGateStatus } from "./evolution-gate";
 import { getStageGrowthGoal } from "./evolution-gate";
 
 describe("진화 성장 목표", () => {
@@ -17,5 +18,13 @@ describe("진화 성장 목표", () => {
   });
   it("최종 단계에는 다음 성장 관문을 만들지 않는다", () => {
     expect(getStageGrowthGoal(7, 18)).toEqual({ mode: "complete", nextStage: null });
+  });
+});
+
+describe("서버 계약 검증", () => {
+  it("누락/비정상 상태를 정상 미달로 읽지 않는다", () => {
+    for (const bad of [null, {}, { mode: "gated", currentStage: 0 }, { mode: "gated", state: "success" }]) {
+      expect(() => parseStageGateStatus(bad)).toThrow("invalid stage evolution");
+    }
   });
 });

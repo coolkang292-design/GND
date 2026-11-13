@@ -36,6 +36,8 @@ import { badgeShelf, type BadgeMetricKey, type BadgeShelfItem } from "@/lib/doma
 import { currentStreak, workoutDayKeys } from "@/lib/domain/streak";
 import { DEFAULT_TIMEZONE, dayKey } from "@/lib/domain/time";
 import { GROWTH_V2 } from "@/lib/flags";
+import { refreshMyStageEvolution } from "@/lib/stage-evolution";
+import type { StageGateStatus } from "@/lib/domain/evolution-gate";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   getLevelRewards,
@@ -49,6 +51,7 @@ import {
 } from "@/lib/progression";
 
 interface HubData {
+  gateStatus: StageGateStatus | null;
   summary: ProgressSummary;
   rewards: LevelReward[];
   unlocks: Set<string>;
@@ -80,6 +83,7 @@ export function GrowthHub() {
     (async () => {
       try {
         const supabase = getSupabaseBrowserClient();
+        const gateStatus = await refreshMyStageEvolution();
         const [summary, rewards, unlocks, transactions, wallet, pointTransactions, catalog, earned, sessions, metrics, crewProfile] =
           await Promise.all([
             getProgressSummary(),
@@ -109,7 +113,7 @@ export function GrowthHub() {
         );
         if (!cancelled)
           setData({
-            summary, rewards, unlocks, transactions, pointTransactions,
+            summary, rewards, unlocks, transactions, pointTransactions, gateStatus,
             balance: wallet.balance,
             streakDays,
             workoutCount: crewProfile.workoutCount,
@@ -165,7 +169,8 @@ export function GrowthHub() {
     );
   }
 
-  const { summary, rewards, unlocks, transactions, pointTransactions, balance, streakDays, workoutCount, history, shelf, achievements } = data;
+  const { summary, rewards, unlocks, transactions, pointTransactions, balance, streakDays, workoutCount, history, shelf, achievements, gateStatus } = data;
+  const gated = Boolean(gateStatus && gateStatus.mode !== "legacy_xp");
 
   return (
     <>
@@ -185,6 +190,7 @@ export function GrowthHub() {
         currentStage={summary.currentStage}
         variant={summary.characterVariant}
         onHelpClick={() => setStageGuideOpen(true)}
+        gated={gated}
       />
 
       <CurrentStageCard
@@ -193,13 +199,14 @@ export function GrowthHub() {
       />
 
       <EvolutionStatusCard
+        gateStatus={gateStatus}
         userId={userId as string}
         totalXp={summary.totalXp}
         currentStage={summary.currentStage}
         variant={summary.characterVariant}
       />
 
-      {GROWTH_V2 && <LevelGrowthCard userId={userId as string} level={summary.currentLevel} currentStage={summary.currentStage} />}
+      {(GROWTH_V2 || gated) && <LevelGrowthCard userId={userId as string} level={summary.currentLevel} currentStage={summary.currentStage} gateStatus={gateStatus} />}
 
       <PointSummary balance={balance} streakDays={streakDays} />
 
@@ -210,15 +217,18 @@ export function GrowthHub() {
         unlocks={unlocks}
         currentLevel={summary.currentLevel}
         currentStage={summary.currentStage}
+        gated={gated}
       />
 
       <NextStagePreview
+        gated={gated}
         currentStage={summary.currentStage}
         totalXp={summary.totalXp}
         variant={summary.characterVariant}
       />
 
       <GrowthTimeline
+        currentStage={gated ? summary.currentStage : undefined}
         currentLevel={summary.currentLevel}
         totalXp={summary.totalXp}
       />
@@ -245,6 +255,7 @@ export function GrowthHub() {
 
       {stageGuideOpen && (
         <StageGuideSheet
+          gated={gated}
           currentStage={summary.currentStage}
           totalXp={summary.totalXp}
           variant={summary.characterVariant}

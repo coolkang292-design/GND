@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { LevelGrowthView } from "./level-growth-card";
 import type { GrowthRecord, StageGrowth } from "@/lib/domain/level-growth";
 import type { StageGrowthResult } from "@/lib/level-growth";
+import type { StageGateStatus } from "@/lib/domain/evolution-gate";
 
 const rec = (name: string, pct: number, over: Partial<GrowthRecord> = {}): GrowthRecord => ({
   exerciseKey: name,
@@ -35,6 +36,18 @@ const ready = (s: StageGrowth): StageGrowthResult => ({
 /** 정적 렌더가 텍스트 노드 사이에 넣는 주석을 걷어 낸다 */
 const html = (r: StageGrowthResult, open = false) =>
   renderToStaticMarkup(<LevelGrowthView result={r} defaultOpen={open} />).replace(/<!-- -->/g, "");
+
+it("활성 모드는 서버 N·평균을 그대로 표시하고 초안 계산으로 덮지 않는다", () => {
+  const s = summary({ growths: [rec("벤치", 20)], previousStageExerciseCount: 5 });
+  const server: StageGateStatus = { mode: "gated", ruleVersion: "v1", currentStage: 4, currentLevel: 21,
+    stageEnteredAt: "2026-08-01T00:00:00Z", nextStage: 5, state: "blocked", path: "growth",
+    growthMetric: "top_n_zero_padded_mean", averageGrowthPct: 5, comparableCount: 1,
+    requiredGrowthCount: 4, filledGrowthCount: 1, conditions: [{ key: "growth_average", current: 5, required: 8, met: false }],
+    growthSummary: s, selectedGrowths: s.growths };
+  const out=renderToStaticMarkup(<LevelGrowthView result={ready(s)} serverStatus={server} />).replace(/<!-- -->/g, "");
+  expect(out).toContain("진화 평가 평균 +5.0%");expect(out).toContain("성장 종목 1 / 4");
+  expect(out).not.toContain("미리보기");expect(out).not.toContain("현재 진화는 경험치 기준");
+});
 
 describe("LevelGrowthView", () => {
   it("다음 단계 필요4종목에 성장3개면 빈자리0을 포함한 평균과3/4를 표시한다", () => {

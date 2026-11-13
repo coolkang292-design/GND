@@ -17,13 +17,18 @@ export function LevelRewards({
   unlocks,
   currentLevel,
   currentStage,
+  gated = false,
+  defaultShowAll = false,
 }: {
   rewards: LevelReward[];
   unlocks: Set<string>;
   currentLevel: number;
   currentStage: number;
+  /** 서버 진화 판정이 켜져 있으면 XP 레벨만으로 상위 단계 캐릭터를 해금됐다고 쓰지 않는다. */
+  gated?: boolean;
+  defaultShowAll?: boolean;
 }) {
-  const [showAll, setShowAll] = useState(false);
+  const [showAll, setShowAll] = useState(defaultShowAll);
   const stage = getStageGroups()[currentStage - 1];
 
   const visible = rewards
@@ -55,8 +60,12 @@ export function LevelRewards({
       <ul className="mt-2.5 flex flex-col">
         {visible.map((r) => {
           const pending = r.rewardStatus === "coming_soon";
+          const evolveMatch = /^stage_evolve_(\d+)$/.exec(r.rewardKey as string);
+          const awaitingEvolution =
+            gated && evolveMatch !== null && Number(evolveMatch[1]) > currentStage;
           const reached =
-            unlocks.has(r.rewardKey as string) || currentLevel >= r.level;
+            !awaitingEvolution &&
+            (unlocks.has(r.rewardKey as string) || currentLevel >= r.level);
           return (
             <li
               key={r.level}
@@ -97,7 +106,13 @@ export function LevelRewards({
                       : "bg-surface-2 text-muted"
                 }`}
               >
-                {pending ? "준비 중" : reached ? "해금됨" : `Lv.${r.level} 달성 시`}
+                {pending
+                  ? "준비 중"
+                  : awaitingEvolution
+                    ? "진화 조건 충족 시"
+                    : reached
+                      ? "해금됨"
+                      : `Lv.${r.level} 달성 시`}
               </span>
             </li>
           );

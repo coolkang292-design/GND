@@ -16,9 +16,11 @@ const WINDOW_AFTER = 4;
 export function GrowthTimeline({
   currentLevel,
   totalXp,
+  currentStage,
 }: {
   currentLevel: number;
   totalXp: number;
+  currentStage?: number;
 }) {
   const [showAll, setShowAll] = useState(false);
 
@@ -46,7 +48,7 @@ export function GrowthTimeline({
         {visible.map((d, i) => {
           const done = d.level < currentLevel;
           const current = d.level === currentLevel;
-          const prev = visible[i - 1];
+          const prev = LEVEL_DEFS[d.level - 2];
           const evolves = !prev || prev.stageIndex !== d.stageIndex;
           return (
             <li key={d.level} className="flex gap-3">
@@ -86,7 +88,7 @@ export function GrowthTimeline({
                   Lv.{d.level}
                   {evolves && (
                     <span className="ml-1.5 rounded-full bg-surface-2 px-1.5 py-0.5 text-[10px] font-extrabold text-muted">
-                      {d.stageName} 진화
+                      {currentStage === undefined ? `${d.stageName} 진화` : d.stageIndex <= currentStage ? `${d.stageName} 진화 완료` : `${d.stageName} 진화 목표`}
                     </span>
                   )}
                   {current && (

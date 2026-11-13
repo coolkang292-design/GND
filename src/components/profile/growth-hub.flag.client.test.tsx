@@ -31,6 +31,11 @@ vi.mock("@/lib/progression", () => ({
   getRecentXpTransactions: async () => [],
   getCrewMemberProfile: async () => ({ workoutCount: 0, joinedAt: null, levelUps: [], badges: [] }),
 }));
+// 서버 진화 판정 미설치(null) 상태 — 이 테스트는 플래그 카드의 유무만 본다
+vi.mock("@/lib/stage-evolution", () => ({
+  refreshMyStageEvolution: async () => null,
+  getMyStageEvolutionStatus: async () => null,
+}));
 vi.mock("@/lib/points", () => ({
   getMyWallet: async () => ({ balance: 0 }),
   getRecentPointTransactions: async () => [],

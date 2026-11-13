@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { computeEvolutionGrowthScore, type GrowthRecord } from "@/lib/domain/level-growth";
-import { getStageGrowthGoal } from "@/lib/domain/evolution-gate";
+import { getStageGrowthGoal, type StageGateStatus } from "@/lib/domain/evolution-gate";
+import { getStageGroups } from "@/lib/domain/progression";
 import {
   EMPTY_GROWTH_COPY,
   CARDIO_CONDITION_COPY,
@@ -39,9 +40,11 @@ function titleOf(result: { stageIndex: number; stageName: string }): string {
 export function LevelGrowthView({
   result,
   defaultOpen = false,
+  serverStatus,
 }: {
   result: StageGrowthResult;
   defaultOpen?: boolean;
+  serverStatus?: StageGateStatus;
 }) {
   const [open, setOpen] = useState(defaultOpen);
 
@@ -60,8 +63,13 @@ export function LevelGrowthView({
   }
 
   const s = result.summary;
-  const goal = getStageGrowthGoal(result.stageIndex, s.previousStageExerciseCount);
-  const score = goal.mode === "growth_preview" ? computeEvolutionGrowthScore(s, goal.requiredCount) : null;
+  const goal = serverStatus && serverStatus.requiredGrowthCount !== null
+    ? { mode: "growth_preview" as const, requiredCount: serverStatus.requiredGrowthCount,
+      averageTargetPct: serverStatus.conditions.find(c => c.key === "growth_average")?.required ?? 0 }
+    : getStageGrowthGoal(result.stageIndex, s.previousStageExerciseCount);
+  const score = serverStatus ? serverStatus.averageGrowthPct === null ? null : {
+    selected: serverStatus.selectedGrowths, averagePct: serverStatus.averageGrowthPct, filledCount: serverStatus.filledGrowthCount,
+  } : goal.mode === "growth_preview" ? computeEvolutionGrowthScore(s, goal.requiredCount) : null;
   const top = s.growths.slice(0, TOP_VISIBLE);
   const rest = s.growths.slice(TOP_VISIBLE);
   const hasMore = rest.length > 0 || s.unmatched.length > 0;
@@ -72,13 +80,14 @@ export function LevelGrowthView({
       <p className="mt-1 text-[12px] leading-snug text-muted">
         기준: {result.stageIndex}단계에 들어올 때까지의 종목별 최고 기록
       </p>
+      <p className="mt-1 text-[11px] text-muted">기구가 바뀌면 기구가 표시된 다른 종목 이름으로 기록해 주세요.</p>
 
       {goal.mode === "xp_only" && (
         <p className="mt-3 text-[12px] font-bold text-accent">시동러까지는 경험치만으로 진화해요.</p>
       )}
       {goal.mode === "growth_preview" && score && (
         <div className="mt-3 rounded-2xl border border-accent/30 bg-accent-weak/30 p-3" data-testid="growth-goal-preview">
-          <p className="text-[11px] font-bold text-muted">성장 목표 미리보기 · 상위 {goal.requiredCount}종목 기준</p>
+          <p className="text-[11px] font-bold text-muted">{serverStatus ? "진화 성장 목표" : "성장 목표 미리보기"} · 상위 {goal.requiredCount}종목 기준</p>
           <p className="mt-1 text-[18px] font-black text-accent" data-testid="growth-average">
             진화 평가 평균 {fmtGrowthPct(score.averagePct)}
           </p>
@@ -96,7 +105,7 @@ export function LevelGrowthView({
             ))}
           </ul>
           <p className="mt-2 text-[11px] leading-snug text-muted">
-            부족한 자리는 0%로 계산해요. 종목 수와 평균 목표를 모두 채워야 해요. 현재 진화는 경험치 기준이에요.
+            부족한 자리는 0%로 계산해요. 종목 수와 평균 목표를 모두 채워야 해요.{!serverStatus && " 현재 진화는 경험치 기준이에요."}
           </p>
         </div>
       )}
@@ -167,15 +176,19 @@ export function LevelGrowthView({
 }
 
 /** 성장 허브용 — 본인 기록을 읽어 현재 단계의 성장을 그린다 */
-export function LevelGrowthCard({ userId, level, currentStage }: { userId: string; level: number; currentStage?: number }) {
+export function LevelGrowthCard({ userId, level, currentStage, gateStatus }: {
+  userId: string; level: number; currentStage?: number; gateStatus?: StageGateStatus | null;
+}) {
   // 결과·실패에 어느 (userId, level) 것인지 키를 붙인다. 키가 현재와 다르면 옛 값이므로 무시한다 —
   // effect 안에서 setState로 초기화하지 않아도 사용자·레벨이 바뀔 때 옛 결과/실패가 남지 않는다.
-  const key = `${userId}:${level}:${currentStage ?? "xp"}`;
+  const server = gateStatus && gateStatus.mode !== "legacy_xp" ? gateStatus : null;
+  const key = `${userId}:${level}:${currentStage ?? "xp"}:${server?.ruleVersion ?? "preview"}:${server?.stageEnteredAt ?? ""}`;
   const [state, setState] = useState<
     { key: string; result: StageGrowthResult } | { key: string; failed: true } | null
   >(null);
 
   useEffect(() => {
+    if (server) return;
     let cancelled = false;
     getMyStageGrowth({ userId, level, ...(currentStage === undefined ? {} : { currentStage }) })
       .then((result) => {
@@ -187,7 +200,14 @@ export function LevelGrowthCard({ userId, level, currentStage }: { userId: strin
     return () => {
       cancelled = true;
     };
-  }, [userId, level, currentStage, key]);
+  }, [userId, level, currentStage, key, server]);
+
+  if (server) {
+    if (server.state === "error" || !server.growthSummary || !server.stageEnteredAt) return null; // 서버 현황 카드가 기준 준비/초기XP/장애를 안내한다.
+    const stage = getStageGroups()[server.currentStage - 1];
+    return <LevelGrowthView result={{ state: "ready", level: server.currentLevel, stageIndex: server.currentStage,
+      stageName: stage.stageName, enteredAt: server.stageEnteredAt, summary: server.growthSummary }} serverStatus={server} />;
+  }
 
   const current = state && state.key === key ? state : null;
 

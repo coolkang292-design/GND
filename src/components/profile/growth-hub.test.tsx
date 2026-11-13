@@ -57,6 +57,14 @@ describe("CurrentStageCard", () => {
 });
 
 describe("LevelRewards — 修正2 준비 중 혜택", () => {
+  it("XP 레벨이 높아도 실제 단계보다 높은 캐릭터는 해금됐다고 쓰지 않는다", () => {
+    const html=renderToStaticMarkup(<LevelRewards currentLevel={21} currentStage={4} gated defaultShowAll
+      rewards={[{level:21,rewardKey:"stage_evolve_5",rewardLabel:"불꽃러 캐릭터 진화",rewardStatus:"active"},
+        {level:21,rewardKey:"other_xp_reward",rewardLabel:"경험치 보상",rewardStatus:"active"}]}
+      unlocks={new Set(["stage_evolve_5","other_xp_reward"])} />);
+    expect(html).toContain("진화 조건 충족 시");
+    expect(html.slice(html.indexOf("경험치 보상"))).toContain("해금됨");
+  });
   const rewards: LevelReward[] = [
     { level: 1, rewardKey: "a_done", rewardLabel: "해금된 보상", rewardStatus: "active" },
     { level: 3, rewardKey: "b_soon", rewardLabel: "아직 없는 기능", rewardStatus: "coming_soon" },
@@ -107,6 +115,16 @@ describe("LevelRewards — 修正2 준비 중 혜택", () => {
 });
 
 describe("NextStagePreview", () => {
+  it("타임라인의 잘린 첫 행을 진화 시점으로 표시하지 않는다", () => {
+    const html = renderToStaticMarkup(<GrowthTimeline currentLevel={21} totalXp={10000} currentStage={4} />);
+    expect(html).not.toContain("꾸준러 진화 완료");
+    expect(html).toContain("불꽃러 진화 목표");
+  });
+  it("서버 관문이 켜진 꾸준러 이후는 XP만으로 해금한다고 쓰지 않는다", () => {
+    const html = renderToStaticMarkup(<NextStagePreview currentStage={4} totalXp={10000} gated />);
+    expect(html).toContain("Lv.21 이상 + 진화 조건");
+    expect(html).not.toContain("달성 시 해금");
+  });
   it("다음 단계와 해금 조건·남은 XP를 보여준다", () => {
     const html = renderToStaticMarkup(
       <NextStagePreview currentStage={1} totalXp={740} />,
@@ -185,6 +203,10 @@ describe("StageGuideSheet — '7단계 안내'가 실제로 설명한다", () =>
 });
 
 describe("StageCarousel", () => {
+  it("서버 ON에서는 5레벨마다 자동 진화라고 쓰지 않는다", () => {
+    const html=renderToStaticMarkup(<StageCarousel currentStage={4} gated onHelpClick={()=>{}}/>);
+    expect(html).not.toContain("레벨 5개마다");expect(html).toContain("꾸준러부터는 진화 조건");
+  });
   it("헤더 ? 버튼으로 안내를 열 수 있다", () => {
     const html = renderToStaticMarkup(
       <StageCarousel currentStage={1} onHelpClick={() => {}} />,

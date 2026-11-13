@@ -15,6 +15,8 @@ import type {
 } from "@/lib/domain/evolution";
 import { getMyEvolutionStatus } from "@/lib/evolution";
 import { GROWTH_V2 } from "@/lib/flags";
+import type { StageGateStatus } from "@/lib/domain/evolution-gate";
+import { StageEvolutionStatusView } from "./stage-evolution-status";
 
 function fmtPct(v: number): string {
   return `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
@@ -539,17 +541,20 @@ export function EvolutionStatusCard({
   totalXp,
   currentStage,
   variant = "male",
+  gateStatus,
 }: {
   userId: string;
   totalXp: number;
   currentStage: number;
   /** 단계 얼굴 이미지의 남·여 */
   variant?: CharacterVariant;
+  gateStatus?: StageGateStatus | null;
 }) {
   const [status, setStatus] = useState<EvolutionStatus | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
+    if (gateStatus && gateStatus.mode !== "legacy_xp") return;
     let cancelled = false;
     getMyEvolutionStatus({ userId, totalXp, currentStage })
       .then((s) => {
@@ -561,7 +566,9 @@ export function EvolutionStatusCard({
     return () => {
       cancelled = true;
     };
-  }, [userId, totalXp, currentStage]);
+  }, [userId, totalXp, currentStage, gateStatus]);
+
+  if (gateStatus && gateStatus.mode !== "legacy_xp") return <StageEvolutionStatusView status={gateStatus} />;
 
   if (failed) {
     return (

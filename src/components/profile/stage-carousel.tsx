@@ -13,10 +13,13 @@ export function StageCarousel({
   currentStage,
   variant = "male",
   onHelpClick,
+  gated = false,
 }: {
   currentStage: number;
   variant?: CharacterVariant;
   onHelpClick: () => void;
+  /** 서버 진화 판정이 켜져 있으면 "레벨 5개마다 자동 진화" 문구를 쓰지 않는다. */
+  gated?: boolean;
 }) {
   const groups = getStageGroups();
 
@@ -34,7 +37,9 @@ export function StageCarousel({
         </button>
       </div>
       <p className="mt-0.5 text-[11px] text-muted">
-        레벨 5개마다 한 단계씩 진화해요. 총 7단계.
+        {gated
+          ? "시동러까지는 경험치로, 꾸준러부터는 진화 조건을 채워야 해요. 총 7단계."
+          : "레벨 5개마다 한 단계씩 진화해요. 총 7단계."}
       </p>
 
       <ul className="-mx-4 mt-3 flex gap-2.5 overflow-x-auto px-4 pb-1">

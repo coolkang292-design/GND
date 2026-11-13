@@ -10,10 +10,12 @@ export function NextStagePreview({
   currentStage,
   totalXp,
   variant = "male",
+  gated = false,
 }: {
   currentStage: number;
   totalXp: number;
   variant?: CharacterVariant;
+  gated?: boolean;
 }) {
   const next = getStageGroups()[currentStage]; // 0-index → 다음 단계
   if (!next) return null;
@@ -47,7 +49,7 @@ export function NextStagePreview({
             {next.description}
           </p>
           <p className="mt-1.5 text-[11.5px] font-bold text-accent">
-            Lv.{next.startLevel} 달성 시 해금
+            {gated && next.stageIndex >= 4 ? `Lv.${next.startLevel} 이상 + 진화 조건` : `Lv.${next.startLevel} 달성 시 해금`}
             {xpLeft > 0 && ` · ${xpLeft.toLocaleString()} XP 남음`}
           </p>
         </div>
