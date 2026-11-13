@@ -1,118 +1,114 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { LevelGrowthView } from "./level-growth-card";
-import {
-  CONFIRM_DAYS,
-  MIN_CONFIRMED_EXERCISES,
-  type ExerciseLevelGrowth,
-  type LevelGrowthSummary,
-} from "@/lib/domain/level-growth";
+import type { GrowthRecord, StageGrowth } from "@/lib/domain/level-growth";
+import type { StageGrowthResult } from "@/lib/level-growth";
 
-const day = (d: string, value: number) => ({ day: d, value, best: { weight: 16, reps: 12, seconds: null } });
-const ex = (over: Partial<ExerciseLevelGrowth>): ExerciseLevelGrowth => ({
-  exerciseKey: "덤벨 숄더 프레스",
+const rec = (name: string, pct: number, over: Partial<GrowthRecord> = {}): GrowthRecord => ({
+  exerciseKey: name,
   kind: "w",
-  baseline: 23.33,
-  baselineSamples: [day("2026-10-16", 23.33), day("2026-10-24", 23.33), day("2026-11-07", 21.87)],
-  current: 25.07,
-  currentSamples: [day("2026-11-13", 25.07)],
-  currentDayCount: 1,
-  growthPct: 7.44,
-  status: "provisional",
+  baseline: 80,
+  baselineDay: "2026-10-16",
+  baselineBest: { weight: 60, reps: 10, seconds: null },
+  current: 88,
+  currentDay: "2026-11-13",
+  currentBest: { weight: 66, reps: 10, seconds: null },
+  growthPct: pct,
   ...over,
 });
-const summary = (over: Partial<LevelGrowthSummary>): LevelGrowthSummary => ({
-  exercises: [],
-  confirmedCount: 0,
-  value: null,
-  provisionalCount: 0,
-  provisionalValue: null,
+const summary = (over: Partial<StageGrowth>): StageGrowth => ({
+  growths: [],
+  unchangedCount: 0,
   unmatched: [],
+  comparableCount: 0,
+  previousStageExerciseCount: null,
   ...over,
 });
-const html = (s: LevelGrowthSummary, open = false) =>
-  renderToStaticMarkup(
-    <LevelGrowthView result={{ state: "ready", level: 19, enteredAt: "2026-11-08T23:22:08Z", summary: s }} defaultOpen={open} />,
-  );
+const ready = (s: StageGrowth): StageGrowthResult => ({
+  state: "ready",
+  level: 17,
+  stageIndex: 4,
+  stageName: "꾸준러",
+  enteredAt: "2026-11-01T00:00:00Z",
+  summary: s,
+});
+/** 정적 렌더가 텍스트 노드 사이에 넣는 주석을 걷어 낸다 */
+const html = (r: StageGrowthResult, open = false) =>
+  renderToStaticMarkup(<LevelGrowthView result={r} defaultOpen={open} />).replace(/<!-- -->/g, "");
 
 describe("LevelGrowthView", () => {
-  it("확정 수치가 있으면 그 값과 비교 종목 수를 보여 준다", () => {
-    const out = html(summary({ value: 5.04, confirmedCount: 3 }));
-    expect(out).toContain("내 성장 · Lv.19");
+  it("제목은 단계 이름, 기준 문구, 성장한 종목 수 — 종합 %는 없다", () => {
+    const out = html(ready(summary({ growths: [rec("벤치", 10), rec("스쿼트", 5)] })));
+    expect(out).toContain("내 성장 · 4단계 꾸준러");
+    expect(out).toContain("기준: 4단계에 들어올 때까지의 종목별 최고 기록");
+    expect(out).toContain("성장한 운동 2종목");
+    expect(out).toContain("+10.0%");
     expect(out).toContain("+5.0%");
-    expect(out).toContain("기준: Lv.19 진입 전 운동 기록");
-    expect(out).toContain("비교한 운동: 3종목");
+    expect(out).toContain("이전 단계 최고 기록 60kg × 10회 → 지금 66kg × 10회");
+    expect(out).not.toContain("growth-value");
     expect(out).not.toContain("측정 준비 중");
   });
 
-  it("확정이 없으면 '측정 준비 중'이고, 잠정값은 참고라고 밝힌다", () => {
-    const out = html(summary({ provisionalValue: 4.0, provisionalCount: 3 }));
-    expect(out).toContain("측정 준비 중");
-    expect(out).toContain("참고");
-    expect(out).toContain("+4.0%");
+  it("옛 문구(얼마나 세졌나)와 확정·잠정 표기는 없다", () => {
+    const out = html(ready(summary({ growths: [rec("벤치", 10)] })), true);
+    expect(out).not.toContain("얼마나 세졌나");
+    expect(out).not.toContain("잠정");
+    expect(out).not.toContain("확정");
   });
 
-  it("잠정값도 없으면 숫자를 하나도 쓰지 않는다", () => {
-    const out = html(summary({}));
-    expect(out).toContain("측정 준비 중");
+  it("성장한 운동이 없으면 빈 상태 문구만 있고 숫자를 쓰지 않는다", () => {
+    const out = html(ready(summary({ comparableCount: 2, unchangedCount: 2 })));
+    expect(out).toContain(
+      "아직 이번 단계에서 성장한 운동이 없어요. 지난 단계의 최고 기록을 넘기면 여기에 나타나요.",
+    );
+    expect(out).not.toContain("성장한 운동 0종목");
     expect(out).not.toMatch(/[+-]?\d+\.\d%/);
+    expect(out).not.toContain("growth-toggle");
   });
 
-  it("옛 문구(얼마나 세졌나)는 없다", () => {
-    expect(html(summary({ value: 5, confirmedCount: 2 }))).not.toContain("얼마나 세졌나");
+  it("상위 3개는 접혀 있어도 보이고, 나머지는 펼쳐야 보인다", () => {
+    const s = summary({
+      growths: [rec("A운동", 40), rec("B운동", 30), rec("C운동", 20), rec("D운동", 10), rec("E운동", 5)],
+    });
+    const closed = html(ready(s), false);
+    expect(closed.match(/data-testid="growth-record"/g)).toHaveLength(3);
+    expect(closed).toContain("A운동");
+    expect(closed).toContain("C운동");
+    expect(closed).not.toContain("D운동");
+    expect(closed).toContain("성장 기록 모두 보기");
+    expect(closed).toContain('aria-expanded="false"');
+    expect(closed).toContain("h-11");
+
+    const open = html(ready(s), true);
+    expect(open.match(/data-testid="growth-record"/g)).toHaveLength(5);
+    expect(open).toContain("E운동");
+    expect(open).toContain("성장 기록 접기");
+    expect(open).toContain('aria-expanded="true"');
   });
 
-  it("펼치면 종목별 기준·현재·날짜·상태가 보인다", () => {
-    const out = html(summary({ exercises: [ex({})], provisionalCount: 1 }), true);
-    expect(out).toContain("덤벨 숄더 프레스");
-    expect(out).toContain("잠정");
-    expect(out).toContain("+7.4%");
-    expect(out).toContain("10/16");
-    expect(out).toContain("11/13");
-    expect(out).toContain("2일 더 기록하면 성장률을 확정할 수 있어요.");
+  it("3개 이하이고 비교 불가도 없으면 토글이 없다", () => {
+    const out = html(ready(summary({ growths: [rec("A운동", 10)] })));
+    expect(out).not.toContain("growth-toggle");
   });
 
-  it("기준선이 없는 새 종목은 0%가 아니라 비교 불가로 적는다", () => {
-    const out = html(
-      summary({ unmatched: [{ exerciseKey: "덤벨 벤치프레스", kind: "w", currentDayCount: 1 }] }),
-      true,
-    );
+  it("비교 불가 종목은 펼치면 0%가 아니라 별도 구역에 적는다", () => {
+    const s = summary({ unmatched: [{ exerciseKey: "덤벨 벤치프레스", kind: "w" }] });
+    const closed = html(ready(s), false);
+    expect(closed).not.toContain("덤벨 벤치프레스");
+    expect(closed).toContain("growth-toggle");
+    const out = html(ready(s), true);
+    expect(out).toContain("비교할 이전 기록이 없는 운동");
     expect(out).toContain("덤벨 벤치프레스");
-    expect(out).toContain("아직 비교할 기준 기록이 없어요");
+    expect(out).toContain("아직 비교할 이전 기록이 없어요. 다음 단계부터 비교해 드려요.");
+    expect(out).not.toMatch(/0\.0%/);
   });
 
-  it("레벨 진입 이력이 없으면 준비 중만 보인다", () => {
-    const out = renderToStaticMarkup(<LevelGrowthView result={{ state: "no_entry", level: 1 }} />);
+  it("기준선이 없으면(no_baseline) 준비 중 문구만 보이고 숫자가 없다", () => {
+    const out = html({ state: "no_baseline", level: 3, stageIndex: 1, stageName: "개노답" });
+    expect(out).toContain("내 성장 · 1단계 개노답");
     expect(out).toContain("측정 준비 중");
-    expect(out).toContain("레벨이 오르면");
-  });
-
-  it("접혀 있으면 종목 행이 없고, defaultOpen이면 있다", () => {
-    const s = summary({ exercises: [ex({})], provisionalCount: 1 });
-    expect(html(s, false)).not.toContain("growth-exercise");
-    expect(html(s, false)).not.toContain("덤벨 숄더 프레스");
-    expect(html(s, true)).toContain("growth-exercise");
-  });
-
-  it("확정 수치가 있으면 잠정 참고 줄은 없다", () => {
-    const out = html(summary({ value: 5.04, confirmedCount: 3, provisionalValue: 4.0, provisionalCount: 3 }));
-    expect(out).not.toContain("참고");
-    expect(out).not.toContain("growth-provisional");
-  });
-
-  it("확정 조건 안내는 상수를 따른다", () => {
-    const out = html(summary({}));
-    const text = out.replace(/<!-- -->/g, "");
-    expect(text).toContain(`${CONFIRM_DAYS}일 기록한 종목이 ${MIN_CONFIRMED_EXERCISES}개 이상`);
-  });
-
-  it("기준 기록이 비어 있으면 '아직'이 아니라 못 찾았다고 적는다", () => {
-    const out = html(
-      summary({ exercises: [ex({ baselineSamples: [], currentSamples: [] })], provisionalCount: 1 }),
-      true,
-    );
-    expect(out).toContain("기준 기록을 찾지 못했어요");
-    expect(out).toContain("아직 기록이 없어요"); // 현재 레벨 쪽만
-    expect(out.match(/아직 기록이 없어요/g)).toHaveLength(1);
+    expect(out).toContain("다음 진화 이후부터");
+    expect(out).not.toMatch(/\d+\.\d%/);
+    expect(out).not.toContain("얼마나 세졌나");
   });
 });
