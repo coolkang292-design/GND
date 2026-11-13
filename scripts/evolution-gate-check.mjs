@@ -51,7 +51,7 @@ try {
     const source=old.match(new RegExp(`CREATE OR REPLACE FUNCTION public\\.${name}\\([\\s\\S]*?\\$function\\$;`,'i'))?.[0];
     assert.ok(source,`현행 ${name} 정의`); await db.exec(source);
   }
-  for(const name of ['0133_stage_evolution_foundation','0134_stage_evolution_evaluator','0135_stage_evolution_bootstrap','0136_stage_evolution_integration']) await db.exec(read(`supabase/migrations/${name}.sql`));
+  for(const name of ['0133_stage_evolution_foundation','0134_stage_evolution_evaluator','0135_stage_evolution_bootstrap','0136_stage_evolution_integration','0137_stage_rules_average_percent_units']) await db.exec(read(`supabase/migrations/${name}.sql`));
   if (process.argv.includes('--mutation-denominator')) {
     const source=read('supabase/migrations/0133_stage_evolution_foundation.sql').match(/create function gnd_evolution.score_points[\s\S]*?end \$\$;/)?.[0];
     assert.ok(source);await db.exec(source.replace('create function','create or replace function').replace('/p_n into mean','/greatest(n_filled,1) into mean'));
@@ -81,6 +81,11 @@ try {
     for(const [name,days,since,today,expected] of vectors)
       await check(`꾸준함 ${name} → ${expected}`,async()=>assert.equal((await one('select gnd_evolution.steady_count($1::date[],$2::date,$3::date) v',[days,since,today])).v,expected));
   }
+  // 평균 목표는 퍼센트 단위다(3·5·8·10). 계산된 평균(averagePct)도 퍼센트라서 소수(0.03)로 저장하면 +0.03%로 판정된다.
+  await check('규칙표 평균 목표는 퍼센트 단위(3·5·8·10)',async()=>{
+    const rows=(await db.query("select target_stage,average_pct::float a from public.stage_evolution_rules where mode='gated' order by 1")).rows;
+    assert.deepEqual(rows.map(r=>[r.target_stage,r.a]),[[4,3],[5,5],[6,8],[7,10]]);
+  });
   await check('초기 설정은 OFF',async()=>assert.equal((await one('select enabled from public.stage_evolution_settings')).enabled,false));
   await check('필요4·성장3 평균6%·수 미달',async()=>{const s=await score(['a','b','c'].map(n=>point(n,100)),[point('a',110),point('b',108),point('c',106)],4);assert.equal(s.averagePct,6);assert.equal(s.countMet,false);});
   await check('+20/+10/+1/+1 → 4개·평균8%',async()=>{const s=await score(['a','b','c','d'].map(n=>point(n,100)),[120,110,101,101].map((v,i)=>point('abcd'[i],v)),4);assert.equal(s.averagePct,8);assert.equal(s.countMet,true);});
@@ -154,6 +159,7 @@ try {
   await db.query('delete from public.user_stage_history where user_id=$1',[A]);await db.query('select gnd_evolution.bootstrap_user($1)',[A]);
   for(let i=0;i<36;i++) await session(new Date(Date.UTC(2026,7,2+i)).toISOString().slice(0,10),{a:110});
   await check('XP+습관+성장 → eligible',async()=>assert.equal((await status()).state,'eligible'));
+  await check('판정 JSON의 평균 목표는 퍼센트 단위(화면에 그대로 표시)',async()=>{const c=(await status()).conditions.find(c=>c.key==='growth_average');assert.equal(c.required,3);assert.ok(c.current>=3);});
   await check('재판정 실제 단계상승·알림1개·이력1개',async()=>{const r=await refresh();assert.equal(r.currentStage,4);assert.equal((await one('select count(*)::int n from public.notifications')).n,1);assert.equal((await one('select count(*)::int n from public.user_stage_history where user_id=$1 and stage=4',[A])).n,1);});
   await check('재판정 반복은 단계·알림 중복 없음',async()=>{await Promise.all([refresh(),refresh()]);assert.equal((await one('select current_stage s from public.user_progress where user_id=$1',[A])).s,4);assert.equal((await one('select count(*)::int n from public.notifications')).n,1);});
   await check('새 단계 시각·기준 실제 진화시각 사용',async()=>{const r=await one('select entered_at,history_source from public.user_stage_history where user_id=$1 and stage=4',[A]);assert.equal(r.history_source,'actual');assert.ok(new Date(r.entered_at)>new Date(entry));const s=await status();assert.equal(s.filledGrowthCount,0);});
