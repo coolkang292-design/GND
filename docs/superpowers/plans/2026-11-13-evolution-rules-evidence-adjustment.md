@@ -193,3 +193,33 @@ TDD로 한다: 먼저 실패하는 시험을 쓴다. 현재 `main`에 없는 진
 ### 9.5 알려진 사소한 점
 - 통과(eligible) 상태에서도 사용하지 않은 대체 경로 행이 ○(미충족)로 남는다. 혼동 소지가 있으면 통과 시 대체 경로 행을 숨기거나 "(선택)"을 붙일 수 있다(미적용).
 - 검증 중 개발 서버 접속으로 운영에 익명 계정 1개가 자동 생성됐다(앱의 기존 동작, 프로필 없음·무해, 삭제하지 않음). 기준 프로필 수는 변하지 않는다.
+
+## 10. 운영 DB 적용 기록 (2026-11-13, 사용자 승인) — 규칙은 꺼진 채
+
+**적용한 것:** 0133 → 0134 → 0135 → 0136을 MCP `apply_migration`으로 순서대로 적용(이름 `stage_evolution_{foundation_0133,evaluator_0134,bootstrap_0135,integration_0136}`). **`stage_evolution_settings.enabled=false`** 이므로 기존 XP 진화가 그대로 동작한다. 푸시·배포·알림 발송 없음.
+
+### 10.1 적용 전
+- `apply_xp_and_progress`·`complete_workout_v2` 현행 정의 해시가 검토 때(`749058be…`)와 동일함을 재확인. 새 객체 없음.
+- 롤백 SQL을 만들고(`docs/superpowers/evolution-gate-rollback-0133-0136.sql`, 기존 함수 정의는 스냅샷 본문이 운영과 md5 일치함을 확인해 사용) **PGlite에서 적용→롤백 리허설**: 함수 본문이 원본과 동일하게 복원되고 새 객체 0개.
+
+### 10.2 적용 후 재조회 (객체로 확인, "명령 성공"이 아님)
+| 항목 | 결과 |
+|---|---|
+| 새 테이블 5개 | 전부 RLS ON. authenticated에는 4개 테이블 SELECT만(`stage_evolution_errors`는 권한·정책 없음), anon 없음 |
+| 규칙표 | 6행이 확정 수치와 동일(2·3 XP만 / 4: 36일·+3%·15%·대체 54일 / 5: 60일·+5%·20%·꾸준함1·대체 90일 면제 / 6: 40주·+8%·25%·꾸준함2·28중8·대체 미션4 / 7: 60주·+10%·30%·꾸준함3·42중12·대체 미션6) |
+| 설정 | `enabled=false`, `rule_version=stage_growth_v1` |
+| 함수 본문 | `gnd_evolution` 9개·공개 RPC 2개·`bootstrap_user`·`apply_xp_and_progress`·`complete_workout_v2`의 DB `md5(prosrc)`가 **마이그레이션 파일 본문 md5와 전부 일치** |
+| 권한 | 내부 함수는 anon·authenticated 실행 불가·스키마 USAGE 없음. 공개 RPC 2개만 authenticated 실행 가능(`security definer`, `search_path=''`). `apply_xp_and_progress`는 authenticated 불가(변경 전과 동일), `complete_workout_v2`는 authenticated 가능(동일) |
+| 0135 결과 | 사용자 7명 전원 초기화, `user_stage_history` 16행(grandfathered 7·legacy_xp 9 = 현재 단계 수의 합), 기준선 94행, 오류 0 |
+| **불변식** | `user_progress` 7행·XP 합 21,020·레벨 합 62·단계 합 16(사용자별 값 전부 동일), XP 원장 259건/21,020, 알림 2,178, 레벨 이력 55, 세션 293/완료 264 — **적용 전후 동일** |
+| 실데이터 계산 | 규칙을 켜지 않고 내부 함수를 직접 호출해 확인: 오뎅끼데스까 M19·N4·성장 4종목·평균 15.9023%·운동 71일·꾸준함 1 / 스칼레또 M4·N1·평균 10%·29일·꾸준함 0 — 앞선 TS·`pg_temp` 분석과 **일치**. 공개 RPC `get_my_stage_evolution_status`는 `mode:'legacy_xp'`(기존 화면 유지) |
+| 호출자 | `award_workout_photo_xp`·`complete_workout_v2` 정상(반환 키 불변) |
+| 보안 advisor | 새 객체 관련 6건 — 모두 의도된 설계: 오류 테이블 정책 없음(서버 전용), RPC 2개 authenticated 실행(앱 전체 동일 패턴 86건), 4개 SELECT 정책이 익명 로그인 사용자 포함(동일 패턴 51건). anon이 실행 가능한 새 함수 없음 |
+| 스냅샷 | `pnpm db:snapshot` 갱신: 함수 109→111, 정책 89→93, 인덱스 111→116 |
+
+### 10.3 아직 하지 않은 것 / [미검증]
+- **규칙 활성화(`enabled=true`)는 하지 않았다.** 켜기 전에 전원 시뮬레이션 → 설정 변경 SQL 제시 → 별도 승인.
+- 개발 서버에서 **실제 서버 SQL로** 진화 카드를 다시 확인하지 않았다(이전 화면 검증은 시나리오 응답 기준). 다음 단계.
+- 규칙을 켠 상태에서 `apply_xp_and_progress`·`complete_workout_v2`를 실제 운동으로 실행한 결과는 PGlite 시험(64건)으로만 확인. 운영에서는 미실행.
+- 푸시·`main` 병합·배포·릴리스 노트·실기기 확인 미실시.
+- 롤백(`evolution-gate-rollback-0133-0136.sql`)은 `drop`을 포함하므로 실행 전 승인이 필요하다. 규칙을 켠 뒤의 롤백은 단계 복원을 별도로 검토해야 한다.

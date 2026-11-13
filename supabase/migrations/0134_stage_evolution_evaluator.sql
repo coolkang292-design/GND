@@ -1,4 +1,5 @@
--- 미적용 초안. 내부 함수는 비공개 스키마, 공개 RPC는 auth.uid() 본인만 사용.
+-- 운영 적용 2026-11-13(MCP, 사용자 승인). settings.enabled=false: 규칙은 꺼져 있고 기존 XP 진화가 유지된다. 롤백: docs/superpowers/evolution-gate-rollback-0133-0136.sql
+-- 내부 함수는 비공개 스키마, 공개 RPC는 auth.uid() 본인만 사용.
 -- 꾸준함 횟수(2026-11-13 확정): 연속 4개 달력 주(월~일) 중 3주 이상에서 서로 다른 운동일이 2일 이상이면 1회.
 -- 구간은 겹치지 않게 앞에서부터 센다. 구간 마지막 주가 오늘이 속한 주를 넘으면 세지 않는다.
 -- p_days는 Asia/Seoul 날짜, p_since는 현재 단계 진입 날짜(이전 날짜는 세지 않음). TS countSteadyWindows와 독립 구현.

@@ -1,4 +1,5 @@
--- 운영 적용 별도 승인. 기존 단계/레벨/XP를 바꾸거나 알림을 만들지 않는다.
+-- 운영 적용 2026-11-13(MCP, 사용자 승인). settings.enabled=false: 규칙은 꺼져 있고 기존 XP 진화가 유지된다. 롤백: docs/superpowers/evolution-gate-rollback-0133-0136.sql
+-- 기존 단계/레벨/XP를 바꾸거나 알림을 만들지 않는다. 적용 결과: 사용자 7명, user_stage_history 16행(grandfathered 7·legacy_xp 9), 오류 0.
 create function gnd_evolution.bootstrap_user(p_user_id uuid)
 returns boolean language plpgsql set search_path='' as $$
 declare stage int; entry timestamptz; current_stage int; all_ready boolean:=true;

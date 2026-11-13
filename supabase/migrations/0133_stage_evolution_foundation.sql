@@ -1,4 +1,5 @@
--- 미적용 초안. 운영 적용은 별도 승인. 새 규칙 기본 OFF, 기존 XP/캐릭터를 변경하지 않는다.
+-- 운영 적용 2026-11-13(MCP, 사용자 승인). settings.enabled=false: 규칙은 꺼져 있고 기존 XP 진화가 유지된다. 롤백: docs/superpowers/evolution-gate-rollback-0133-0136.sql
+-- 새 규칙 기본 OFF, 기존 XP/캐릭터를 변경하지 않는다.
 create schema gnd_evolution;
 revoke all on schema gnd_evolution from public, anon, authenticated;
 

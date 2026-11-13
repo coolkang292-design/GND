@@ -1,5 +1,5 @@
--- 미적용 초안. 2026-11-13 MCP 현행 정의에서 XP/레벨/보상/유효성 산식은 유지하고 단계 판정·알림만 연결.
--- 운영 적용은 기존 함수 변경 승인 후. enabled=false 동안 기존 XP 진화 유지.
+-- 운영 적용 2026-11-13(MCP, 사용자 승인). settings.enabled=false: 규칙은 꺼져 있고 기존 XP 진화가 유지된다. 롤백: docs/superpowers/evolution-gate-rollback-0133-0136.sql
+-- 2026-11-13 MCP 현행 정의에서 XP/레벨/보상/유효성 산식은 유지하고 단계 판정·알림만 연결. enabled=false 동안 기존 XP 진화 유지.
 CREATE OR REPLACE FUNCTION public.apply_xp_and_progress(p_user_id uuid, p_amount integer, p_reason text, p_reward_group text, p_source_type text, p_source_id text, p_effective_date date, p_metadata jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
