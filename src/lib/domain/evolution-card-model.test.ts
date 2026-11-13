@@ -49,6 +49,8 @@ describe("남은 조건은 막대 줄, 0%·100%를 속이지 않는다", () => {
   });
   it("거의 다 찬 값(4.97/5)도 미달이면 99%로 고정", () => {
     expect(row(status({ conditions: [c("growth_average", 4.97, 5, false)] }), "growth_average")!.percent).toBe(99);
+    // 반올림하면 100%가 되는 값(99.8%)도 미달이면 99%여야 한다 — 100%는 달성(타일)만 표현한다
+    expect(row(status({ conditions: [c("growth_average", 4.999, 5, false)] }), "growth_average")!.percent).toBe(99);
   });
   it("값이 null이면 '기준 확인 중'·0%이며 타일이 되지 않는다", () => {
     const s = status({ state: "needs_baseline", conditions: [c("growth_count", null, null, false)] });
