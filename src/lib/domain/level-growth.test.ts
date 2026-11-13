@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   computeBaselines,
+  computeLevelGrowth,
   toMetricPoints,
   type RawSession,
   type RawSet,
@@ -206,5 +207,106 @@ describe("computeBaselines — 레벨 진입 전 기준선", () => {
     ]);
     const next = computeBaselines(all, Date.parse("2026-11-16T00:00:00.000Z"));
     expect(next[0].value).toBeCloseTo(e1(66), 6);
+  });
+});
+
+const squat = (day: string, kg: number) =>
+  sess(day, [{ name: "스쿼트", sets: [{ weight_kg: kg, reps: 10 }] }]);
+const BEFORE = [
+  bench("2026-10-10", 60), bench("2026-10-20", 60), bench("2026-11-01", 60),
+  squat("2026-10-11", 100), squat("2026-10-21", 100), squat("2026-11-02", 100),
+];
+function grow(after: RawSession[]) {
+  const points = toMetricPoints([...BEFORE, ...after]);
+  return computeLevelGrowth({
+    baselines: computeBaselines(points, ENTERED),
+    points,
+    enteredAtMs: ENTERED,
+  });
+}
+const of = (g: ReturnType<typeof grow>, name: string) =>
+  g.exercises.find((e) => e.exerciseKey === name)!;
+
+describe("computeLevelGrowth — 기준선 대비 성장률", () => {
+  it("같으면 0%, +10%는 +10%, -10%는 -10%", () => {
+    expect(of(grow([bench("2026-11-10", 60)]), "벤치").growthPct).toBeCloseTo(0, 6);
+    expect(of(grow([bench("2026-11-10", 66)]), "벤치").growthPct).toBeCloseTo(10, 6);
+    expect(of(grow([bench("2026-11-10", 54)]), "벤치").growthPct).toBeCloseTo(-10, 6);
+  });
+
+  it("현재 레벨 기록이 없으면 0%가 아니라 null(대기)", () => {
+    const e = of(grow([]), "벤치");
+    expect(e.status).toBe("waiting");
+    expect(e.growthPct).toBeNull();
+    expect(e.current).toBeNull();
+  });
+
+  it("1~2일은 잠정, 3일부터 확정", () => {
+    expect(of(grow([bench("2026-11-10", 66)]), "벤치").status).toBe("provisional");
+    expect(of(grow([bench("2026-11-10", 66), bench("2026-11-11", 66)]), "벤치").status).toBe("provisional");
+    expect(
+      of(grow([bench("2026-11-10", 66), bench("2026-11-11", 66), bench("2026-11-12", 66)]), "벤치").status,
+    ).toBe("confirmed");
+  });
+
+  it("현재값은 현재 레벨의 최근 3일 중앙값이다", () => {
+    const e = of(
+      grow([bench("2026-11-10", 50), bench("2026-11-11", 66), bench("2026-11-12", 66), bench("2026-11-13", 72)]),
+      "벤치",
+    );
+    expect(e.currentSamples.map((s) => s.day)).toEqual(["2026-11-11", "2026-11-12", "2026-11-13"]);
+    expect(e.growthPct).toBeCloseTo(10, 6);
+    expect(e.currentDayCount).toBe(4);
+  });
+
+  it("확정 종목이 2개 미만이면 종합은 null, 잠정 참고값은 따로 준다", () => {
+    const g = grow([bench("2026-11-10", 66), squat("2026-11-10", 104)]);
+    expect(g.value).toBeNull();
+    expect(g.confirmedCount).toBe(0);
+    expect(g.provisionalValue).toBeCloseTo(7, 6); // median(+10, +4)
+    expect(g.provisionalCount).toBe(2);
+  });
+
+  it("확정 2종목 이상이면 종합 = 확정 종목만의 중앙값 (0%·음수도 포함)", () => {
+    const three = (f: (d: string) => RawSession) => ["2026-11-10", "2026-11-11", "2026-11-12"].map(f);
+    const g = grow([...three((d) => bench(d, 60)), ...three((d) => squat(d, 90))]);
+    expect(g.confirmedCount).toBe(2);
+    expect(g.value).toBeCloseTo(-5, 6); // median(0, -10)
+    expect(g.provisionalValue).toBeNull();
+  });
+
+  it("종합에는 ±30% 상한을 걸지만 종목 상세는 실제 값이다", () => {
+    const three = (f: (d: string) => RawSession) => ["2026-11-10", "2026-11-11", "2026-11-12"].map(f);
+    const g = grow([...three((d) => bench(d, 120)), ...three((d) => squat(d, 200))]);
+    expect(of(g, "벤치").growthPct).toBeCloseTo(100, 6);
+    expect(g.value).toBeCloseTo(30, 6);
+  });
+
+  it("기준선이 없는 종목은 0%가 아니라 비교 불가 목록에 든다", () => {
+    const g = grow([sess("2026-11-10", [{ name: "덤벨 벤치프레스", sets: [{ weight_kg: 12, reps: 12 }] }])]);
+    expect(g.exercises.find((e) => e.exerciseKey === "덤벨 벤치프레스")).toBeUndefined();
+    expect(g.unmatched).toEqual([{ exerciseKey: "덤벨 벤치프레스", kind: "w", currentDayCount: 1 }]);
+  });
+
+  it("현재 레벨의 인터벌 블록은 성장률을 만들지 않는다", () => {
+    const g = grow([
+      sess(
+        "2026-11-10",
+        [
+          { name: "벤치", type: "weight", sets: [{ weight_kg: 0, reps: 4 }] },
+          { name: "b", type: "bodyweight", sets: [{ reps: 4 }] },
+          { name: "c", type: "bodyweight", sets: [{ reps: 4 }] },
+          { name: "d", type: "bodyweight", sets: [{ reps: 4 }] },
+        ],
+        8,
+      ),
+    ]);
+    expect(of(g, "벤치").status).toBe("waiting");
+    expect(g.unmatched).toEqual([]);
+  });
+
+  it("진입 시각과 같은 순간에 끝난 세션은 현재 기록이 아니다", () => {
+    const g = grow([bench("2026-11-09", 90)]);
+    expect(of(g, "벤치").currentDayCount).toBe(0);
   });
 });

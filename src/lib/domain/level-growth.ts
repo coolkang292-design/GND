@@ -183,3 +183,87 @@ export function computeBaselines(points: readonly MetricPoint[], enteredAtMs: nu
   }
   return out;
 }
+
+export type GrowthStatus = "waiting" | "provisional" | "confirmed";
+
+export type ExerciseLevelGrowth = {
+  exerciseKey: string;
+  kind: MetricKind;
+  baseline: number;
+  baselineSamples: DaySample[];
+  /** 현재 레벨 기록이 없으면 null */
+  current: number | null;
+  /** 현재값에 쓴 운동일 (최대 3개, 날짜 오름차순) */
+  currentSamples: DaySample[];
+  /** 현재 레벨에서 이 종목을 기록한 날 수 */
+  currentDayCount: number;
+  /** 상한 없는 실제 %. 현재 기록이 없으면 null — 0이 아니다 */
+  growthPct: number | null;
+  status: GrowthStatus;
+};
+
+export type LevelGrowthSummary = {
+  /** 기준선이 있는 종목 전부 (현재 기록이 없어도 든다) */
+  exercises: ExerciseLevelGrowth[];
+  confirmedCount: number;
+  /** 확정 종목 성장률(±30% 캡)의 중앙값. 확정 종목이 2개 미만이면 null = "측정 준비 중" */
+  value: number | null;
+  /** 성장률이 나온(1일 이상) 종목 수 — 잠정 포함 */
+  provisionalCount: number;
+  /** `value`가 없을 때만 주는 참고값. 확정 수치와 섞어 쓰지 않는다 */
+  provisionalValue: number | null;
+  /** 현재 레벨에서 했지만 기준선이 없어 비교할 수 없는 종목 */
+  unmatched: { exerciseKey: string; kind: MetricKind; currentDayCount: number }[];
+};
+
+function capped(pct: number): number {
+  return Math.max(-GROWTH_CAP_PCT, Math.min(GROWTH_CAP_PCT, pct));
+}
+
+export function computeLevelGrowth(input: {
+  baselines: readonly Baseline[];
+  points: readonly MetricPoint[];
+  enteredAtMs: number;
+}): LevelGrowthSummary {
+  const current = groupByExercise(input.points.filter((p) => p.completedAtMs > input.enteredAtMs));
+  const known = new Set(input.baselines.map(baselineKey));
+
+  const exercises: ExerciseLevelGrowth[] = input.baselines.map((b) => {
+    const g = current.get(baselineKey(b));
+    const dayCount = g?.days.length ?? 0;
+    const samples = g ? g.days.slice(-SAMPLE_DAYS) : [];
+    const cur = samples.length > 0 ? median(samples.map((s) => s.value)) : null;
+    return {
+      exerciseKey: b.exerciseKey,
+      kind: b.kind,
+      baseline: b.value,
+      baselineSamples: b.samples,
+      current: cur,
+      currentSamples: samples,
+      currentDayCount: dayCount,
+      growthPct: cur !== null && b.value > 0 ? ((cur - b.value) / b.value) * 100 : null,
+      status: dayCount >= CONFIRM_DAYS ? "confirmed" : dayCount > 0 ? "provisional" : "waiting",
+    };
+  });
+
+  const measured = exercises.filter((e) => e.growthPct !== null);
+  const confirmed = measured.filter((e) => e.status === "confirmed");
+  const value =
+    confirmed.length >= MIN_CONFIRMED_EXERCISES
+      ? median(confirmed.map((e) => capped(e.growthPct as number)))
+      : null;
+
+  return {
+    exercises,
+    confirmedCount: confirmed.length,
+    value,
+    provisionalCount: measured.length,
+    provisionalValue:
+      value === null && measured.length >= MIN_CONFIRMED_EXERCISES
+        ? median(measured.map((e) => capped(e.growthPct as number)))
+        : null,
+    unmatched: [...current.entries()]
+      .filter(([key]) => !known.has(key))
+      .map(([, g]) => ({ exerciseKey: g.exerciseKey, kind: g.kind, currentDayCount: g.days.length })),
+  };
+}
