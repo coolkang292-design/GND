@@ -270,3 +270,14 @@ TDD로 한다: 먼저 실패하는 시험을 쓴다. 현재 `main`에 없는 진
 1. 전원 시뮬레이션은 §12에 있음(켜도 즉시 단계 바뀌는 사람 없음). 켜기 직전에 한 번 더 돌린다.
 2. 설정 변경 SQL(`update public.stage_evolution_settings set enabled=true`)을 보여 주고 승인을 받는다. 되돌리기는 `enabled=false`(단계 이력은 남는다).
 3. 켠 직후: `get_my_stage_evolution_status`(mode가 `gated`/`xp_only`)·오류 테이블·알림 수를 확인하고, 운동 완료 한 건으로 단계 유지/진화를 본다(두 계정 필요 시 픽스처 A·B).
+
+## 14. 서버 규칙 활성화 기록 (2026-11-13, 사용자 승인) — `enabled=true`
+
+- **실행한 SQL(이 한 줄뿐):** `update public.stage_evolution_settings set enabled = true where singleton;` — 승인 전에 SQL·영향·되돌리기·켠 직후 확인 계획을 보여 주고 마지막 승인을 받았다.
+- **켜기 직전 점검(읽기 전용):** 전원 시뮬레이션 재실행 — 7명 전원 실제 단계 = XP 단계, 켜는 순간 진화할 사람 없음, 오류 0, 최근 3시간 완료 운동 0. 오뎅끼데스까 `gated`(부족: 경험치 19/21뿐), 스칼레또 `gated`(경험치·운동일 29/36), 근육은퇴근중 `gated`, 나머지 4명 `xp_only`.
+- **켠 직후 재조회:** `enabled=true`. 사용자별 XP·레벨·단계 불변(`user_progress` 7행·XP 21,020·레벨 합 62·단계 합 16), 원장 259/21,020, 알림 2,178, 단계 이력 16, 오류 0, `apply_xp_and_progress`·`complete_workout_v2` 본문 해시 불변.
+- **실제 공개 RPC 응답:** 오뎅끼데스까 `mode:gated`·`state:blocked`·조건 xp 19/21 ✗·days 71/60 ✓·growth_count 4/4 ✓·growth_average 15.9/5 ✓·steady 1/1 ✓·대체 71/90일. 픽스처 A(헬스장주주) `mode:xp_only`·xp 10/11.
+- **화면(개발 서버, 중계는 시나리오 없이 패스스루 = 실제 서버 응답만):** 헬스장주주 '내 정보'에 서버 카드 "다음 진화 · 시동러 · 경험치 10/11레벨"이 뜨고, 옛 "레벨 5개마다 한 단계씩" 문구는 사라짐. `get_my_stage_evolution_status`·`refresh_my_stage_evolution` 전부 200. 콘솔 오류는 검증용 중계가 웹소켓(realtime)을 지원하지 않아서 난 것(운영 무관). 화면 확인 중 호출된 `refresh`가 데이터를 바꾸지 않음을 재조회로 확인(알림·이력·오류·마지막 진화 시각 불변).
+- **되돌리기:** `update public.stage_evolution_settings set enabled = false where singleton;` — 판정이 다시 꺼지고 기존 XP 진화로 돌아간다. 켜 둔 동안 일어난 진화(단계·알림·이력)는 남는다.
+- **앞으로 지켜볼 것:** (1) 오뎅끼데스까가 Lv.21에 도달할 때 불꽃러로 진화하는지·크루 알림이 정확히 1건인지, (2) 4단계 이상 진화가 조건 없이 통과되지 않는지, (3) `stage_evolution_errors` 증가 여부, (4) 운동 완료 응답 시간(켜면 완료마다 기록 전체를 훑는다).
+- **[미검증]:** 운영에서 규칙을 켠 상태의 실제 운동 완료·진화 발생 한 건, 두 계정 알림 전이, 실기기(iOS·Android).
