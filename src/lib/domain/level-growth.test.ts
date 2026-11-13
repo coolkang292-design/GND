@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { toMetricPoints, type RawSession, type RawSet } from "./level-growth";
+import {
+  computeBaselines,
+  toMetricPoints,
+  type RawSession,
+  type RawSet,
+} from "./level-growth";
 
 /** 그 날 09:00 KST에 끝난 세션 */
 export function sess(
@@ -127,5 +132,79 @@ describe("toMetricPoints — 무엇을 성장 지표로 치는가", () => {
       ]),
     ]);
     expect(p.map((x) => x.exerciseKey)).toEqual(["벤치", "인클라인 벤치"]);
+  });
+});
+
+const ENTERED = Date.parse("2026-11-09T00:00:00.000Z");
+const bench = (day: string, kg: number, reps = 10) =>
+  sess(day, [{ name: "벤치", sets: [{ weight_kg: kg, reps }] }]);
+const e1 = (kg: number, reps = 10) => kg * (1 + reps / 30);
+
+describe("computeBaselines — 레벨 진입 전 기준선", () => {
+  it("진입 전 최근 3개 운동일의 중앙값이다", () => {
+    const b = computeBaselines(
+      toMetricPoints([
+        bench("2026-10-01", 50),
+        bench("2026-10-10", 60),
+        bench("2026-10-20", 62),
+        bench("2026-11-01", 58),
+      ]),
+      ENTERED,
+    );
+    expect(b).toHaveLength(1);
+    expect(b[0].samples.map((s) => s.day)).toEqual(["2026-10-10", "2026-10-20", "2026-11-01"]);
+    expect(b[0].value).toBeCloseTo(e1(60), 6);
+  });
+
+  it("3일 미만이면 기준선을 만들지 않는다", () => {
+    const b = computeBaselines(toMetricPoints([bench("2026-10-20", 60), bench("2026-11-01", 60)]), ENTERED);
+    expect(b).toEqual([]);
+  });
+
+  it("같은 날 두 번 한 것은 1일이고 그날 최고 기록을 쓴다", () => {
+    const b = computeBaselines(
+      toMetricPoints([
+        bench("2026-10-20", 60),
+        bench("2026-10-20", 70),
+        bench("2026-11-01", 60),
+      ]),
+      ENTERED,
+    );
+    expect(b).toEqual([]);
+  });
+
+  it("60일보다 오래된 기록은 쓰지 않는다 (창을 늘리지 않는다)", () => {
+    const b = computeBaselines(
+      toMetricPoints([bench("2026-08-01", 60), bench("2026-10-20", 60), bench("2026-11-01", 60)]),
+      ENTERED,
+    );
+    expect(b).toEqual([]);
+  });
+
+  it("레벨업을 일으킨 세션(완료 시각 = 진입 시각)은 기준선에 든다", () => {
+    const b = computeBaselines(
+      toMetricPoints([bench("2026-10-20", 60), bench("2026-11-01", 60), bench("2026-11-09", 66)]),
+      ENTERED,
+    );
+    expect(b[0].samples.map((s) => s.day)).toContain("2026-11-09");
+  });
+
+  it("진입 뒤 기록은 기준선을 바꾸지 않는다", () => {
+    const before = [bench("2026-10-10", 60), bench("2026-10-20", 60), bench("2026-11-01", 60)];
+    const a = computeBaselines(toMetricPoints(before), ENTERED);
+    const b = computeBaselines(toMetricPoints([...before, bench("2026-11-12", 90)]), ENTERED);
+    expect(b).toEqual(a);
+  });
+
+  it("다음 레벨에 들어가면 그 시점 기준으로 새 기준선이 나온다", () => {
+    const all = toMetricPoints([
+      bench("2026-10-10", 60),
+      bench("2026-10-20", 60),
+      bench("2026-11-01", 60),
+      bench("2026-11-12", 66),
+      bench("2026-11-15", 66),
+    ]);
+    const next = computeBaselines(all, Date.parse("2026-11-16T00:00:00.000Z"));
+    expect(next[0].value).toBeCloseTo(e1(66), 6);
   });
 });

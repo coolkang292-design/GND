@@ -120,3 +120,66 @@ export function toMetricPoints(
   }
   return points;
 }
+
+export function median(values: number[]): number {
+  const s = [...values].sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+type Group = { exerciseKey: string; kind: MetricKind; days: DaySample[] };
+
+/** 종목+지표별로 묶고, 같은 날은 최고 기록 하나로 접어 날짜 오름차순으로 돌려준다 */
+function groupByExercise(points: readonly MetricPoint[]): Map<string, Group> {
+  const byDay = new Map<string, { exerciseKey: string; kind: MetricKind; days: Map<string, DaySample> }>();
+  for (const p of points) {
+    const key = `${p.exerciseKey}::${p.kind}`;
+    const g = byDay.get(key) ?? { exerciseKey: p.exerciseKey, kind: p.kind, days: new Map() };
+    const prev = g.days.get(p.day);
+    if (!prev || p.value > prev.value) g.days.set(p.day, { day: p.day, value: p.value, best: p.best });
+    byDay.set(key, g);
+  }
+  const out = new Map<string, Group>();
+  for (const [key, g] of byDay) {
+    out.set(key, {
+      exerciseKey: g.exerciseKey,
+      kind: g.kind,
+      days: [...g.days.values()].sort((a, b) => (a.day < b.day ? -1 : 1)),
+    });
+  }
+  return out;
+}
+
+export type Baseline = {
+  exerciseKey: string;
+  kind: MetricKind;
+  /** 기준 수행능력 — 반올림하지 않은 값 */
+  value: number;
+  /** 기준으로 쓴 운동일 3개 (날짜 오름차순) */
+  samples: DaySample[];
+};
+
+export function baselineKey(b: { exerciseKey: string; kind: MetricKind }): string {
+  return `${b.exerciseKey}::${b.kind}`;
+}
+
+/**
+ * 레벨 진입 시점의 기준선. `completedAt <= enteredAt`인 기록만 본다 —
+ * 레벨업을 일으킨 운동은 이전 레벨에서 한 것이라 기준선이다.
+ */
+export function computeBaselines(points: readonly MetricPoint[], enteredAtMs: number): Baseline[] {
+  const from = enteredAtMs - BASELINE_WINDOW_DAYS * DAY_MS;
+  const inWindow = points.filter((p) => p.completedAtMs <= enteredAtMs && p.completedAtMs > from);
+  const out: Baseline[] = [];
+  for (const g of groupByExercise(inWindow).values()) {
+    if (g.days.length < SAMPLE_DAYS) continue;
+    const samples = g.days.slice(-SAMPLE_DAYS);
+    out.push({
+      exerciseKey: g.exerciseKey,
+      kind: g.kind,
+      value: median(samples.map((s) => s.value)),
+      samples,
+    });
+  }
+  return out;
+}
