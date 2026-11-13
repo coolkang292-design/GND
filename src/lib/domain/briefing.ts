@@ -18,7 +18,7 @@ import {
   isDue,
 } from "./notify-time";
 import { pickSuggestionKind } from "./workout-suggestion";
-import { questPushCopy } from "./daily-quest";
+import { QUEST_PUSH_TITLE, questPushCopy } from "./daily-quest";
 import type { StreakStage } from "./streak";
 
 export const DEFAULT_BRIEF_HOUR = 9;
@@ -171,8 +171,21 @@ export function buildBriefings(
     briefings.push({
       userId: u.userId,
       type: copy ? "workout_suggestion" : "morning_briefing",
-      // 제안이 있으면 제안이 제목을 가져간다. 없으면 지금 그대로 스트릭 문구.
-      title: copy ? copy.title : briefingTitle(stage, streak, todayKey),
+      /*
+        제목 — 제안이 있으면 제안이 가져간다. 제안이 없어도 **오늘 운동을 아직 안 한**
+        사람(= 오늘 계획이 있는 날)은 같은 "퀘스트 도착" 제목이다 (2026-11-14 사용자
+        지시: "계획 있는 날도", 제목만). 본문과 유형은 그대로다.
+
+        ⚠️ `today_done`은 제외한다 — 이미 운동한 사람에게 "퀘스트가 도착했어요"는 거짓이다.
+           그 사람은 예전처럼 칭찬 문구를 받는다.
+        ⚠️ 유형은 `morning_briefing`(→ /home)으로 남긴다. `workout_suggestion`으로 바꾸면
+           푸시 목적지(`/record?suggest=1`)와 분석 집계(`analytics-engagement`)가 같이 바뀐다.
+      */
+      title: copy
+        ? copy.title
+        : stage === "today_done"
+          ? briefingTitle(stage, streak, todayKey)
+          : QUEST_PUSH_TITLE,
       /*
         본문 — 제안이 있으면 제안이 채우고, 없으면 **홈 `나의 오늘` 카드와 같은
         한 줄**이 들어간다 (2026-08-21 사용자 지시: *"해당 메시지는 각 크루에게

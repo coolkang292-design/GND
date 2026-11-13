@@ -4,6 +4,7 @@ import {
   DEFAULT_BRIEF_HOUR,
   type BriefingUser,
 } from "./briefing";
+import { QUEST_PUSH_TITLE } from "./daily-quest";
 import { MIN_SESSIONS_FOR_ESTIMATE } from "./notify-time";
 import { dailyMessage } from "./streak-messages";
 
@@ -124,17 +125,24 @@ describe("buildBriefings — 평소 시작 30분 전", () => {
 });
 
 describe("buildBriefings — 제목(스트릭 단계)", () => {
-  it("d1 단계: 🔥 접두 + 스트릭 수 포함 (브리핑용 조립)", () => {
-    // 2026-11-06: 계획 없는 날은 제안이 "오늘의 퀘스트" 제목을 가져간다. 이 단언은 스트릭
-    // 제목 조립을 보는 것이므로 오늘 계획이 있는 경우로 고정한다(아래 expired와 같다).
+  /**
+   * 2026-11-14 — 오늘 계획이 있는 날도 제목은 "오늘의 퀘스트가 도착했어요"다
+   * (사용자 지시: 제목만 바꾸고 본문은 그대로). 스트릭 상태 제목은 사라지고
+   * 본문(`dailyMessage`)과 유형(`morning_briefing` → /home)은 그대로다.
+   */
+  it("계획 있는 날(d1): 제목은 퀘스트 도착, 본문·유형은 그대로", () => {
     const { briefings } = buildBriefings([user({ hasPlanToday: true })], new Map(), NOW);
-    expect(briefings[0].title.startsWith("🔥 ")).toBe(true);
-    expect(briefings[0].title).toContain("1일"); // 3일 전 1회 운동 → 스트릭 1
+    expect(briefings[0].title).toBe(QUEST_PUSH_TITLE);
+    expect(briefings[0].type).toBe("morning_briefing");
+    expect(briefings[0].body).toBe(
+      dailyMessage({
+        stage: "d1",
+        streak: 1, // 3일 전 1회 운동 → 스트릭 1
+        todayKey: "2026-07-18",
+      }),
+    );
   });
-  it("expired: 소멸 유저도 재점화 카피로 발송", () => {
-    // 2026-08-16: 계획 없는 날은 제안이 제목을 가져간다(아래 "계획 없는 날 제안"
-    // describe). 이 단언은 원래 스트릭 문구 조립 자체를 보는 것이므로,
-    // 제안이 끼어들지 않도록 오늘 계획이 있는 경우로 고정한다.
+  it("계획 있는 날(expired): 소멸 유저도 퀘스트 도착 제목으로 발송", () => {
     const { briefings } = buildBriefings(
       [
         user({
@@ -146,15 +154,17 @@ describe("buildBriefings — 제목(스트릭 단계)", () => {
       NOW,
     );
     expect(briefings).toHaveLength(1);
-    expect(briefings[0].title).toContain("불꽃");
+    expect(briefings[0].title).toBe(QUEST_PUSH_TITLE);
+    expect(briefings[0].title).not.toContain("불꽃");
   });
-  it("today_done: 오늘 이미 완료면 칭찬 카피", () => {
+  it("today_done: 오늘 이미 완료면 칭찬 카피 (퀘스트 제목이 아니다)", () => {
     const { briefings } = buildBriefings(
       [user({ completedAts: [kst("2026-07-18T07:00:00")] })],
       new Map(),
       NOW,
     );
     expect(briefings[0].title).toContain("오늘 완료");
+    expect(briefings[0].title).not.toBe(QUEST_PUSH_TITLE);
   });
   it("로테이션 결정성: 같은 입력이면 같은 제목", () => {
     const a = buildBriefings([user({})], new Map(), NOW).briefings[0].title;
