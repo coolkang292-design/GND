@@ -80,15 +80,14 @@ export async function loadCreatorView(
   challenge: HostChallenge,
   options: { recentLimit?: number; daily?: boolean } = {},
 ): Promise<{ snapshot: CreatorSnapshot; recent: CreatorActivityView[]; daily: DailyProofRate[] }> {
-  const { data: participantData, error } = await db
-    .from("challenge_participants")
-    .select("user_id,role,status,joined_at")
-    .eq("challenge_id", challenge.id);
-  if (error) throw new Error("Creator participants could not be loaded");
-  const participants = (participantData ?? []) as CreatorParticipant[];
-
+  // 참가자 조회를 나머지와 **같은 왕복**에 태운다. 예전엔 이 조회가 끝나야 RPC 4개를
+  // 시작해 서버→DB 왕복이 한 번 더 직렬로 붙었다. 이 RPC들은 참가자 목록에 의존하지 않는다.
   const tracked = challenge.status === "active" || challenge.status === "ended";
-  const [profiles, goals, sessions, activity] = await Promise.all([
+  const [participantResult, profiles, goals, sessions, activity] = await Promise.all([
+    db
+      .from("challenge_participants")
+      .select("user_id,role,status,joined_at")
+      .eq("challenge_id", challenge.id),
     getChallengeParticipantProfiles(challenge.id, db),
     getChallengeGoals(challenge.id, db),
     tracked ? getChallengePeriodSessions(challenge.id, db) : Promise.resolve([]),
@@ -97,6 +96,8 @@ export async function loadCreatorView(
       ? getChallengeActivity(challenge.id, db)
       : Promise.resolve([]),
   ]);
+  if (participantResult.error) throw new Error("Creator participants could not be loaded");
+  const participants = (participantResult.data ?? []) as CreatorParticipant[];
 
   const todayKey = dayKey(new Date(), DEFAULT_TIMEZONE);
   const snapshot = buildCreatorSnapshot({
