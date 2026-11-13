@@ -45,7 +45,8 @@ describe("EvolutionStatusCard — gateStatus를 넘기지 않는 호출처(프�
     mocks.getStatus.mockResolvedValue(gated);
     render(<EvolutionStatusCard {...base} />);
     await waitFor(() => expect(screen.getByTestId("server-evolution-status")).toBeDefined());
-    expect(screen.getByText(/15\.9 \/ 5%/)).toBeDefined();
+    expect(screen.getByText("+15.9%")).toBeDefined();
+    expect(screen.getByText("목표 +5%")).toBeDefined();
     expect(mocks.legacy).not.toHaveBeenCalled();
   });
 

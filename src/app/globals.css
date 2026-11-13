@@ -307,3 +307,14 @@ main:has(> div > [data-testid="tab-backdrop"]) .fixed .bg-surface-2 {
   .gnd-stamp-impact {opacity:1;}
   .gnd-stamp-impact-ring,.gnd-stamp-impact-word {display:none;}
 }
+
+/* 진화 카드: 조건을 모두 채웠을 때 체크가 한 번만 살짝 커진다. 반복·꽃가루 없음. */
+@keyframes evo-pop {
+  0% {transform:scale(.6);opacity:0;}
+  60% {transform:scale(1.18);opacity:1;}
+  100% {transform:scale(1);opacity:1;}
+}
+.evo-pop {animation:evo-pop 500ms ease-out 1 both;}
+@media (prefers-reduced-motion: reduce) {
+  .evo-pop {animation:none;}
+}
