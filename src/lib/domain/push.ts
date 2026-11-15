@@ -92,6 +92,10 @@ const PUSH_URL_BY_TYPE: Record<string, string> = {
   // 2026-08-16 — 계획 없는 날 제안. 기록 탭이 `?suggest`를 읽어 종목을 담고
   // 주소에서 지운다(`record/page.tsx`). 값 자체엔 의미가 없다 — 존재 플래그다.
   workout_suggestion: "/record?suggest=1",
+  // 2026-11-15 — 챌린지 순위가 **내려간** 사람. 기록 탭이 `?suggest=overtake`를 읽고,
+  // 오늘 계획이 없을 때만 추월 제안 운동을 담는다(계획이 있으면 아무것도 안 담는다).
+  // ⚠️ 이 Record는 exhaustive가 아니다 — 빠지면 `/home`으로 조용히 떨어진다.
+  rank_drop: "/record?suggest=overtake",
 };
 
 const DEFAULT_PUSH_URL = "/home";

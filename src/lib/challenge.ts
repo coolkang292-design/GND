@@ -1471,6 +1471,30 @@ export async function getActiveChallengeRanking(
   challengeId: string,
   client?: SupabaseClient,
 ): Promise<ChallengeRanking | null> {
+  const standing = await getActiveChallengeStanding(challengeId, client);
+  return standing ? { name: standing.name, list: standing.list } : null;
+}
+
+/**
+ * `getActiveChallengeRanking` + 채점 입력·참가 상태.
+ *
+ * 등수 변동 알림(0139)이 "밀린 사람에게 무엇을 하면 다시 앞서는지"를 말하려면
+ * 순위표뿐 아니라 **채점 입력(목표·실적)** 이 필요해서 같은 조립에서 함께 돌려준다.
+ * 조립을 두 벌로 만들면 알림의 등수가 화면과 갈라진다 — 그래서 순위 함수가 이걸 부른다.
+ */
+export async function getActiveChallengeStanding(
+  challengeId: string,
+  client?: SupabaseClient,
+): Promise<
+  | (ChallengeRanking & {
+      inputs: Record<string, ParticipantInput>;
+      joinedUserIds: string[];
+      rankWith: (
+        inputs: readonly ParticipantInput[],
+      ) => { userId: string; rank: number }[];
+    })
+  | null
+> {
   const supabase = client ?? getSupabaseBrowserClient();
   const { data: ch, error } = await supabase
     .from("challenges")
@@ -1496,22 +1520,33 @@ export async function getActiveChallengeRanking(
   const days = inclusiveDays(ch.start_date, ch.end_date);
 
   // ⚠️ 순위는 `rankForChallenge` 한 곳 — scoring_version(0127)으로 v1/v2를 가른다
-  const list = rankForChallenge({
-    scoringVersion: ch.scoring_version,
-    inputs: userIds.map((uid) =>
-      buildParticipantInput({
-        userId: uid,
-        goals: goals.filter((g) => g.user_id === uid),
-        stats: stats.get(uid) ?? EMPTY_STATS,
-        periodDays: days,
-      }),
-    ),
-    rows,
-    startDate: ch.start_date,
-    endDate: ch.end_date,
-    timeZone: DEFAULT_TIMEZONE,
-  });
-  return { name: ch.name, list };
+  const inputList = userIds.map((uid) =>
+    buildParticipantInput({
+      userId: uid,
+      goals: goals.filter((g) => g.user_id === uid),
+      stats: stats.get(uid) ?? EMPTY_STATS,
+      periodDays: days,
+    }),
+  );
+  const rankWith = (inputs: readonly ParticipantInput[]) =>
+    rankForChallenge({
+      scoringVersion: ch.scoring_version,
+      inputs,
+      rows,
+      startDate: ch.start_date,
+      endDate: ch.end_date,
+      timeZone: DEFAULT_TIMEZONE,
+    });
+  return {
+    name: ch.name,
+    list: rankWith(inputList),
+    inputs: Object.fromEntries(inputList.map((p) => [p.userId, p])),
+    joinedUserIds: participants
+      .filter((p) => p.status === "joined")
+      .map((p) => p.user_id),
+    // 등수 변동 알림의 "탈환" 시뮬레이션이 **같은 순위 함수**로 재도록 건넨다(v1/v2 공통)
+    rankWith,
+  };
 }
 
 // ── 성과 열람 지정 (0040) ─────────────────────────────────────

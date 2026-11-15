@@ -57,6 +57,27 @@ export function pickChallengeFocus(
   return { kind, goalLabel: labelOf(firstByKind.get(kind)!) };
 }
 
+/**
+ * 목표 **종류 하나**가 가리키는 분류 — 등수 변동 알림(`rank_drop`)이 "이 목표를 채우면
+ * 탈환할 수 있어요"라고 말한 그 분류로 담기 위한 것이다 (2026-11-15).
+ *
+ * ⚠️ `pickChallengeFocus`는 목표가 여러 분류면 **날짜로 돌려** 한 분류씩 낸다. 알림이
+ *    "유산소 거리"를 말했는데 그날 순번이 맨몸이면 알림과 담긴 운동이 따로 논다 — 그래서
+ *    알림으로 들어온 경우만 이 값으로 **고정**한다. 종목을 안 가리는 목표(주 N회)나
+ *    모르는 종류는 `null`(= 평소 순번 퀘스트).
+ */
+export function focusForGoalType(goalType: string | null | undefined): QuestFocus | null {
+  if (!goalType || !(goalType in GOAL_TYPE_META)) return null;
+  const meta = GOAL_TYPE_META[goalType as keyof typeof GOAL_TYPE_META];
+  const kind: QuestFocusKind | null =
+    goalType === "tabata_count"
+      ? "interval"
+      : meta.category === "any"
+        ? null
+        : (meta.category as QuestFocusKind);
+  return kind ? { kind, goalLabel: meta.label } : null;
+}
+
 /** 분류별로 먼저 권하는 종목 — 이름이 카탈로그에 있으면 그것부터 */
 const PREFERRED: Record<Exclude<QuestFocusKind, "interval">, readonly string[]> = {
   weight: ["스쿼트", "벤치프레스", "랫풀다운", "데드리프트", "숄더 프레스"],

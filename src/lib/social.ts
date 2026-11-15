@@ -61,7 +61,8 @@ export type NotificationRow = {
     | "workout_suggestion" // 0078 — 계획 없는 날 운동 제안
     | "comment_received" // 0082 — 내 운동(또는 내가 댓글 단 운동)에 새 댓글
     | "challenge_cancelled" // 0088 — 방장이 챌린지를 취소했다
-    | "challenge_joined"; // 0088 — 공개 모집에 새 참가자 (방장에게만)
+    | "challenge_joined" // 0088 — 공개 모집에 새 참가자 (방장에게만)
+    | "rank_drop"; // 0140 — 챌린지 순위가 내려갔다 (누르면 추월 제안 운동을 담는다)
   reference_id: string | null;
   title: string;
   body: string | null;
@@ -1042,4 +1043,26 @@ export async function getCrewPerformance(
           }
         : null,
   };
+}
+
+/**
+ * 가장 최근 `rank_drop` 알림이 가리킨 **목표 종류** (0140).
+ *
+ * 기록 탭이 `?suggest=overtake`로 열렸을 때 무엇을 담을지 정하는 재료다.
+ * 내 알림 행만 읽는다(RLS). 알림이 없거나 meta가 비면 `null` — 부르는 쪽이 평소 제안으로 대체한다.
+ *
+ * ⚠️ 종목이 아니라 목표 **종류**만 돌려준다. 종목은 화면이 그때 정한다
+ *    (`overtakeSuggestionKind` 주석 참조).
+ */
+export async function getLatestRankDropGoalType(): Promise<string | null> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("notifications")
+    .select("meta")
+    .eq("type", "rank_drop")
+    .order("created_at", { ascending: false })
+    .limit(1);
+  if (error) throw error;
+  const meta = (data ?? [])[0]?.meta as { goal_type?: unknown } | null | undefined;
+  return typeof meta?.goal_type === "string" ? meta.goal_type : null;
 }

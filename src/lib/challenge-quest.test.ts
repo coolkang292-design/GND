@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pickChallengeExercises, pickChallengeFocus } from "./challenge-quest";
+import { focusForGoalType, pickChallengeExercises, pickChallengeFocus } from "./challenge-quest";
 import { dailyQuestCopy } from "./domain/daily-quest";
 import type { CatalogExercise, UserGoal } from "./types";
 import type { GoalType } from "./domain/goal-score";
@@ -142,5 +142,34 @@ describe("dailyQuestCopy — 챌린지 목표 반영", () => {
     const c = dailyQuestCopy({ kind: "repeat", todayKey: "2026-11-06", streak: 3 });
     expect(c.lead).toBe("지난 운동을 바탕으로 추천했어요");
     expect(c.headline[1]).toBe("오늘 운동 완료");
+  });
+});
+
+describe("focusForGoalType — 순위 하락 알림이 겨냥한 목표 분류 (2026-11-15)", () => {
+  it("목표 종류 → 분류: 유산소·맨몸·웨이트·인터벌", () => {
+    expect(focusForGoalType("cardio_distance")?.kind).toBe("cardio");
+    expect(focusForGoalType("cardio_time")?.kind).toBe("cardio");
+    expect(focusForGoalType("bodyweight_reps")?.kind).toBe("bodyweight");
+    expect(focusForGoalType("weight_reps")?.kind).toBe("weight");
+    expect(focusForGoalType("tabata_count")?.kind).toBe("interval");
+  });
+
+  it("종목을 안 가리는 목표·모르는 종류·빈 값은 null — 평소 순번 퀘스트로 간다", () => {
+    expect(focusForGoalType("workout_days")).toBeNull();
+    expect(focusForGoalType("nope")).toBeNull();
+    expect(focusForGoalType(null)).toBeNull();
+    expect(focusForGoalType(undefined)).toBeNull();
+  });
+
+  it("날짜 순번과 무관하다 — 같은 목표면 어떤 날이든 같은 분류", () => {
+    // pickChallengeFocus는 날짜로 돈다. 알림은 날짜가 아니라 목표로 고정해야 한다.
+    const goals = [goal("weight_reps"), goal("cardio_distance")];
+    const kinds = new Set(
+      ["2026-11-14", "2026-11-15", "2026-11-16", "2026-11-17"].map(
+        (d) => pickChallengeFocus(goals, d)?.kind,
+      ),
+    );
+    expect(kinds.size).toBeGreaterThan(1); // 순번은 돈다
+    expect(focusForGoalType("cardio_distance")?.kind).toBe("cardio");
   });
 });

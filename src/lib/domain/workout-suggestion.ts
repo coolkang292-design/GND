@@ -138,6 +138,41 @@ export function secondaryKind(primary: SuggestionKind): SuggestionKind | null {
   return primary === "repeat" ? "interval" : null;
 }
 
+/**
+ * 순위가 **내려간** 사람의 알림(`rank_drop`)을 눌렀을 때 무엇을 담을까 (2026-11-15).
+ *
+ * `base`는 화면이 평소처럼 계산한 `pickSuggestionKind` 결과다 — 이 함수는 그 위에
+ * **종류만 바꿀 수 있고, 제안 여부는 바꾸지 못한다.**
+ *
+ * ⚠️⚠️ **`base`가 `null`이면 `null`이다.** 오늘 계획이 있거나(`hasPlanToday`) 이미 운동한
+ *    사람에게는 세팅하지 않는다(사용자 결정). 이 함수가 그 가드를 우회하면 계획을
+ *    덮어쓰는 사고가 난다 — 그래서 목표 종류만 보고 새로 제안을 만들지 않는다.
+ *
+ * 목표 → 담는 것 (1차):
+ *   · `tabata_count`        → 4분 인터벌 시트
+ *   · `cardio_*`            → 걷기(유산소 종목)
+ *   · 그 외                  → `base` 그대로 (지난 운동 등)
+ * 목표량(예: 4km)을 세트에 미리 채우는 것은 2차다.
+ *
+ * ⚠️ 서버가 종목을 싣지 않는다 — 목표 **종류**만 받는다. 종목까지 싣으면 알림이
+ *    저장된 뒤 사용자가 운동을 하나 더 해도 옛 제안이 그대로 온다(위 `pickSuggestionKind`).
+ */
+export function overtakeSuggestionKind(
+  base: SuggestionKind | null,
+  goalType: string | null,
+): SuggestionKind | null {
+  if (base === null) return null;
+  if (goalType === "tabata_count") return "interval";
+  if (
+    goalType === "cardio_distance" ||
+    goalType === "cardio_time" ||
+    goalType === "cardio_days"
+  ) {
+    return "walk";
+  }
+  return base;
+}
+
 export type SuggestionCopy = { title: string; body: string };
 
 /**

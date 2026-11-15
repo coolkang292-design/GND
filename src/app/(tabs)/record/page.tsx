@@ -125,11 +125,13 @@ import {
 import { isGeneralPlan } from "@/lib/domain/day-plan";
 import { SITUATIONS } from "@/lib/domain/recommended-exercises";
 import {
+  overtakeSuggestionKind,
   pickSuggestionKindWhenReady,
   shouldApplySuggestion,
   suggestionCopy,
   type SuggestionKind,
 } from "@/lib/domain/workout-suggestion";
+import { getLatestRankDropGoalType } from "@/lib/social";
 import { takeCalendarView } from "@/lib/record-view";
 import { moveItem } from "@/lib/domain/reorder";
 import {
@@ -245,9 +247,14 @@ import {
 } from "@/lib/day-plan-store";
 import { TodayPlanCards } from "@/components/record/today-plan-cards";
 import { DailyQuestCard } from "@/components/record/daily-quest-card";
-import { dailyQuestCopy, planQuestCopy, shouldAutoSetQuest } from "@/lib/domain/daily-quest";
+import {
+  dailyQuestCopy,
+  planQuestCopy,
+  shouldAutoSetQuest,
+  type QuestFocus,
+} from "@/lib/domain/daily-quest";
 import { shouldShowTodayCards } from "@/lib/domain/record-layout";
-import { pickChallengeExercises, pickChallengeFocus } from "@/lib/challenge-quest";
+import { focusForGoalType, pickChallengeExercises, pickChallengeFocus } from "@/lib/challenge-quest";
 import { useMyCharacterFullSrc } from "@/lib/character-variant";
 import {
   cancelWorkout,
@@ -1877,9 +1884,18 @@ function WorkoutScreen({ userId }: { userId: string }) {
    * ⚠️ **인터벌만 목록에 담지 않는다.** 담으면 음원도 코스도 없는 맨몸 4개가 된다
    *    (`tabata.ts`의 `tabataResumeFromSession` 주석에 그 옛 버그가 적혀 있다).
    */
-  async function applySuggestion(requested: SuggestionKind): Promise<void> {
+  async function applySuggestion(
+    requested: SuggestionKind,
+    /**
+     * 순위 하락 알림이 겨냥한 목표의 분류 (2026-11-15). 있으면 **날짜 순번(`challengeFocus`)을
+     * 대신한다** — 알림이 "유산소 거리"를 말했는데 오늘 순번이 맨몸이면 알림과 담긴 운동이
+     * 따로 논다. 없으면(`null`) 평소 퀘스트 그대로다.
+     */
+    focusOverride: QuestFocus | null = null,
+  ): Promise<void> {
     const todayKey = dayKey(new Date(), resolveTimeZone());
     let kind: SuggestionKind = requested;
+    const focus = focusOverride ?? challengeFocus;
 
     /*
       진행 중인 챌린지가 있으면 **그 목표에 쌓이는 운동**을 먼저 제안한다 (사용자 지시
@@ -1889,8 +1905,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
       ⚠️ 이미 인터벌을 요청한 경우(보조 "4분 인터벌")는 그대로 인터벌이다 — 사용자가 고른 것을
          덮지 않는다. 오늘의 목표가 인터벌(타바타 횟수)이면 인터벌 시트를 연다.
     */
-    if (challengeFocus && requested !== "interval") {
-      if (challengeFocus.kind === "interval") {
+    if (focus && requested !== "interval") {
+      if (focus.kind === "interval") {
         kind = "interval";
       } else {
         // 내가 해 온 그 분류의 종목(최근 순)을 우선 — 못 읽으면 추천 이름·카탈로그 순
@@ -1904,7 +1920,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
         } catch {
           /* 이력을 못 읽어도 퀘스트는 나간다 */
         }
-        const items = pickChallengeExercises(challengeFocus.kind, catalog, recentNames);
+        const items = pickChallengeExercises(focus.kind, catalog, recentNames);
         if (items.length > 0) {
           addExercises(items);
           setDraft((current) => ({ ...current, suggestedForDayKey: todayKey }));
@@ -3560,6 +3576,19 @@ function WorkoutScreen({ userId }: { userId: string }) {
    */
   const suggestRequestedRef = useRef(false);
   const suggestConsumedRef = useRef(false);
+  /*
+    챌린지 순위가 내려간 사람의 알림(`rank_drop`)으로 들어왔나 — `?suggest=overtake` (2026-11-15).
+
+    ⚠️ **담을지 말지는 평소 `?suggest`와 같은 가드가 정한다**(`suggestionKind`가 null이면
+       — 오늘 계획이 있거나 이미 운동했거나 — 아무것도 안 담는다). 이 표식은 **종류만**
+       바꾼다(`overtakeSuggestionKind`). 계획이 있는 날 이 경로가 종목을 덮어쓰면 안 된다.
+    ⚠️ 무엇을 겨냥한 제안이었는지는 알림의 meta(목표 종류)에서 읽는다. `undefined` =
+       아직 못 읽음 → 읽을 때까지 기다린다. 못 읽으면(`null`) 평소 제안으로 대체한다.
+  */
+  const overtakeRequestedRef = useRef(false);
+  const [overtakeGoal, setOvertakeGoal] = useState<string | null | undefined>(
+    undefined,
+  );
 
   /*
     피드의 `이 운동 따라하기` — `/record?copy=<sessionId>` (2026-08-31).
@@ -3582,6 +3611,12 @@ function WorkoutScreen({ userId }: { userId: string }) {
     const hasSuggest = params.has("suggest");
     if (!hasSuggest && !copyId) return;
     if (hasSuggest) suggestRequestedRef.current = true;
+    if (params.get("suggest") === "overtake") {
+      overtakeRequestedRef.current = true;
+      getLatestRankDropGoalType()
+        .then((goal) => setOvertakeGoal(goal))
+        .catch(() => setOvertakeGoal(null));
+    }
     if (copyId) copyRequestedRef.current = copyId;
     window.history.replaceState({}, "", window.location.pathname);
   }, []);
@@ -3623,13 +3658,19 @@ function WorkoutScreen({ userId }: { userId: string }) {
 
   // (2) 제안이 정해지면 **그때** 담는다. 한 번만.
   useEffect(() => {
+    // 순위가 내려간 알림이면 목표 종류를 읽을 때까지 기다린다(못 읽으면 null로 대체).
+    if (overtakeRequestedRef.current && overtakeGoal === undefined) return;
     // 판정은 `shouldApplySuggestion`이 한다 — 규칙이 화면에 흩어져 있으면
     // 테스트가 못 잡는다. 그 함수의 주석이 왜 두 단계인지 설명한다.
+    // ⚠️ 종류만 바뀐다. `suggestionKind`가 null(계획 있음·이미 운동함)이면 그대로 null이다.
+    const kind = overtakeRequestedRef.current
+      ? overtakeSuggestionKind(suggestionKind, overtakeGoal ?? null)
+      : suggestionKind;
     if (
       !shouldApplySuggestion({
         requested: suggestRequestedRef.current,
         consumed: suggestConsumedRef.current,
-        kind: suggestionKind,
+        kind,
         draftExerciseCount: draftRef.current.exercises.length,
         workoutStarted: draftRef.current.startedAtMs !== null,
       })
@@ -3637,10 +3678,13 @@ function WorkoutScreen({ userId }: { userId: string }) {
       return;
     }
     suggestConsumedRef.current = true;
-    void applySuggestion(suggestionKind!);
+    void applySuggestion(
+      kind!,
+      overtakeRequestedRef.current ? focusForGoalType(overtakeGoal) : null,
+    );
     // applySuggestion은 렌더마다 새로 만들어진다. ref가 한 번만 돌게 막는다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [suggestionKind]);
+  }, [suggestionKind, overtakeGoal]);
 
   // (3) 오늘의 퀘스트 (2026-11-06) — 계획 없는 날, 지난 운동으로 오늘 목록을 **자동 세팅**한다.
   //     하루 한 번(이 기기), 목록이 비었고 운동 전일 때만. 달력 계획은 만들지 않는다

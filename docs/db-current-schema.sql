@@ -7,7 +7,7 @@
 -- 쓰는 법: 함수·정책의 '현행' 정의가 필요할 때 마이그레이션 51개를
 -- 뒤지지 말고 이 파일을 검색하라. 마이그레이션을 적용한 뒤에는 다시 뽑아라.
 --
--- 함수 111개 · 정책 93개 · 인덱스 116개
+-- 함수 113개 · 정책 93개 · 인덱스 117개
 
 -- ════════════════════════════════════════════════════════════
 -- 함수
@@ -855,6 +855,45 @@ AS $function$
   select exists (
     select 1 from challenges where id = cid and status = 'active'
   )
+$function$;
+
+-- ── claim_rank_snapshot ──
+CREATE OR REPLACE FUNCTION public.claim_rank_snapshot(p_challenge_id uuid, p_next jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  v_prev jsonb;
+begin
+  perform 1 from public.challenges where id = p_challenge_id for update;
+  if not found then
+    return '[]'::jsonb;
+  end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'user_id', s.user_id,
+           'rank', s.rank,
+           'notified_at', s.notified_at)), '[]'::jsonb)
+    into v_prev
+    from public.challenge_rank_snapshots s
+   where s.challenge_id = p_challenge_id;
+
+  insert into public.challenge_rank_snapshots (challenge_id, user_id, rank, updated_at)
+  select p_challenge_id, (e->>'user_id')::uuid, (e->>'rank')::int, now()
+    from jsonb_array_elements(p_next) e
+  on conflict (challenge_id, user_id)
+  do update set rank = excluded.rank, updated_at = now();
+
+  delete from public.challenge_rank_snapshots s
+   where s.challenge_id = p_challenge_id
+     and s.user_id not in (
+       select (e->>'user_id')::uuid from jsonb_array_elements(p_next) e
+     );
+
+  return v_prev;
+end;
 $function$;
 
 -- ── claim_workout_stamp ──
@@ -1786,6 +1825,27 @@ begin
     );
   exception when others then
     null; -- 푸시 실패는 알림 저장에 영향 없음
+  end;
+  return new;
+end;
+$function$;
+
+-- ── dispatch_rank_check ──
+CREATE OR REPLACE FUNCTION public.dispatch_rank_check()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+begin
+  begin
+    perform net.http_post(
+      url := 'https://gnd-one.vercel.app/api/challenge/rank-check',
+      body := jsonb_build_object('session_id', new.id),
+      headers := '{"Content-Type": "application/json"}'::jsonb
+    );
+  exception when others then
+    null;
   end;
   return new;
 end;
@@ -5437,6 +5497,7 @@ $function$;
 -- CREATE UNIQUE INDEX challenge_participants_pkey ON public.challenge_participants USING btree (challenge_id, user_id);
 -- CREATE INDEX challenge_participants_user_idx ON public.challenge_participants USING btree (user_id, status);
 -- CREATE UNIQUE INDEX challenge_peek_picks_pkey ON public.challenge_peek_picks USING btree (viewer_id, challenge_id, pick_date);
+-- CREATE UNIQUE INDEX challenge_rank_snapshots_pkey ON public.challenge_rank_snapshots USING btree (challenge_id, user_id);
 -- CREATE INDEX challenges_discoverable_idx ON public.challenges USING btree (start_date, created_at DESC) WHERE (discoverable AND (status = 'setup'::text));
 -- CREATE UNIQUE INDEX challenges_invite_code_key ON public.challenges USING btree (invite_code) WHERE (invite_code IS NOT NULL);
 -- CREATE UNIQUE INDEX challenges_one_open_recruit_per_host ON public.challenges USING btree (created_by) WHERE (discoverable AND (status = 'setup'::text));

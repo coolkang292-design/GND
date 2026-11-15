@@ -44,6 +44,7 @@ const TYPE_ICON: Record<NotificationRow["type"], string> = {
   comment_received: "💬", // 0082 — 게시물에 댓글
   challenge_cancelled: "💤", // 0088 — 방장이 취소
   challenge_joined: "🙌", // 0088 — 공개 모집에 새 참가자
+  rank_drop: "📉", // 0140 — 챌린지 순위가 내려갔어요
 };
 
 /** 🔔 + 미읽음 뱃지 + 알림함 바텀시트 (§9 알림함 — durable 저장 원천) */
@@ -161,7 +162,13 @@ export function NotificationBell() {
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-bold">{n.title}</p>
                       {n.body && (
-                        <p className="mt-0.5 truncate text-xs text-muted">
+                        <p
+                          className={`mt-0.5 text-xs text-muted ${
+                            // 순위 알림은 본문이 "나는 M위 · 이걸 하면 N위 탈환"까지 이어져 한 줄에
+                            // 안 들어간다 — 잘리면 핵심(탈환 제안)이 사라지므로 3줄까지 보여 준다.
+                            n.type === "rank_drop" ? "line-clamp-3" : "truncate"
+                          }`}
+                        >
                           {n.body}
                         </p>
                       )}

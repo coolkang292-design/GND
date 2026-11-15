@@ -27,7 +27,7 @@ const TOGGLES: {
   { key: "morning_brief", label: "아침 브리핑", desc: "매일 오전 9시 스트릭 브리핑 ☀️" },
   { key: "cheers", label: "응원", desc: "크루가 보낸 응원 📣" },
   { key: "pokes", label: "찌르기", desc: "오늘 미운동 시 크루의 콕 👉" },
-  { key: "ranks", label: "순위", desc: "챌린지 종료·시상대 🏁" },
+  { key: "ranks", label: "순위", desc: "챌린지 순위 변동·종료·시상대 🏁" },
   { key: "record_views", label: "성과 열람", desc: "꾸준왕이 내 성과를 볼 때 👀" },
 ];
 
