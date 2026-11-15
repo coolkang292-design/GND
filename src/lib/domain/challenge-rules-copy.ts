@@ -44,13 +44,14 @@ export function scoreCards(scoringVersion = 1): RuleCard[] {
         `최대 ${COMPLETED_GOAL_BONUS_MAX}개까지(+${bonusMax}점)예요.`,
     },
   ];
-  // 랭킹 v2: 기본 점수(위 세 덩어리)는 만점에서 멈추지만 활동 점수는 운동할수록 계속 오른다
+  // 랭킹 v2: 기본 점수(위 세 덩어리)는 만점에서 멈춘다. 활동 점수는 **최종 발표 때만** 더한다(진행 중 순위는 기본 점수만)
   if (scoringVersion === 2) {
     cards.push({
-      title: "④ 운동 활동 점수 (계속 올라가요)",
+      title: "④ 최종 발표 때 더해지는 활동 점수",
       body:
         `${ACTIVITY_RULE_TEXT}이에요. ` +
-        "목표를 다 채운 뒤에도 운동할수록 점수가 올라가고, 총점이 높은 순서대로 순위가 정해져요.",
+        "진행 중에는 기본 점수로만 순위를 매기고, 챌린지가 끝나면 활동 점수를 더한 총점으로 최종 순위를 발표해요. " +
+        "목표를 다 채운 뒤에도 운동할수록 유리해요.",
     });
   }
   return cards;
@@ -60,7 +61,7 @@ export function scoreCards(scoringVersion = 1): RuleCard[] {
 export function scoreFormula(scoringVersion = 1): string {
   if (scoringVersion === 2) {
     return (
-      `총점 = (달성 평균 × ${ACHIEVEMENT_WEIGHT} + 꾸준함 × ${PARTICIPATION_WEIGHT} + 보너스) + 활동 점수`
+      `최종 발표 총점 = (달성 평균 × ${ACHIEVEMENT_WEIGHT} + 꾸준함 × ${PARTICIPATION_WEIGHT} + 보너스) + 활동 점수 (진행 중에는 괄호 안만)`
     );
   }
   return (

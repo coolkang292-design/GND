@@ -39,9 +39,15 @@ export const TIE_BREAK_RULE_TEXT = "운동한 날 수 → 운동 횟수 → 운�
 /**
  * 활동 점수 환산 비율 (사용자 결정 2026-11-16): **1일 = 1점 · 1회 = 1점 · 60분 = 1점**.
  *
- * 총점 = 기본 점수(목표 달성 + 참여율 + 완료 보너스, 만점에서 멈춘다) + 활동 점수(계속 오른다).
+ * 최종 점수 = 기본 점수(목표 달성 + 참여율 + 완료 보너스, 만점에서 멈춘다) + 활동 점수(계속 오른다).
  * 목표를 다 채운 뒤에도 운동할수록 점수가 오르게 하려는 장치다. 목표와 무관한 **실제 운동량**이라
  * 목표를 낮게 거는 이득이 없다.
+ *
+ * ⛔⛔ **활동 점수는 최종 발표(종료 후)에만 더한다. 진행 중에는 기본 점수만으로 순위를 매긴다**
+ *    (사용자 결정 2026-11-16 — 같은 날 기간 중에도 더하게 만들었다가 "점수가 갑자기 106점이 됐다"는
+ *    지적으로 되돌렸다). `rankParticipantsV2(list, { includeActivity })`의 스위치가 그 규칙이다.
+ *    호출하는 쪽이 챌린지 상태(`ended` 여부)로 정한다 — 기본값이 최종 발표(true)이니 진행 중 화면은
+ *    반드시 false를 넘겨야 한다.
  *
  * ⚠️ 비율을 바꾸면 화면 문구(`challenge-rules-copy.ts`의 `ACTIVITY_RULE_TEXT`)도 이 상수에서 읽어 따라온다.
  * ⚠️ 운동한 날은 참여율(20%)에도 들어 있다. 이중 반영이지만 의도다(꾸준함을 두 번 보상).
@@ -174,8 +180,13 @@ export type RankedParticipantV2 = {
   baseScore: number;
   /** 활동 점수(점) — 운동한 날·횟수·시간 환산 */
   activityScore: number;
-  /** 총점(점, 소수 둘째 자리) = 기본 + 활동. 순위의 기준 */
+  /**
+   * 순위의 기준이 되는 점수(점, 소수 둘째 자리). 최종 발표면 기본 + 활동, **진행 중이면 기본 점수만**.
+   * 화면이 "총점"이라 부를 때는 `activityIncluded`가 true일 때뿐이다.
+   */
   totalScore: number;
+  /** 활동 점수를 이 순위에 더했나 — 진행 중(false)에는 활동 점수를 보여주지도 않는다 */
+  activityIncluded: boolean;
   tieGroupSize: number;
   tieBonusUnits: number;
   finalScoreUnits: number;
@@ -259,7 +270,11 @@ function decidingKind(ms: Metrics[], useMinutes: boolean): TieBreakKind {
   return "all_equal";
 }
 
-export function rankParticipantsV2(list: readonly ParticipantInputV2[]): RankedParticipantV2[] {
+export function rankParticipantsV2(
+  list: readonly ParticipantInputV2[],
+  opts: { includeActivity?: boolean } = {},
+): RankedParticipantV2[] {
+  const includeActivity = opts.includeActivity ?? true;
   const items = list.map((p) => {
     const breakdown = buildScoreBreakdown(p);
     return { userId: p.userId, breakdown };
@@ -267,10 +282,11 @@ export function rankParticipantsV2(list: readonly ParticipantInputV2[]): RankedP
 
   const groups = new Map<number, typeof items>();
   for (const it of items) {
-    // 총점(기본 + 활동)이 같은 사람끼리만 동점 그룹이다
-    const g = groups.get(it.breakdown.totalScoreCents) ?? [];
+    // 순위 점수(최종 발표면 기본 + 활동, 진행 중이면 기본만)가 같은 사람끼리만 동점 그룹이다
+    const key = includeActivity ? it.breakdown.totalScoreCents : it.breakdown.baseScoreCents;
+    const g = groups.get(key) ?? [];
     g.push(it);
-    groups.set(it.breakdown.totalScoreCents, g);
+    groups.set(key, g);
   }
 
   const out: RankedParticipantV2[] = [];
@@ -310,6 +326,7 @@ export function rankParticipantsV2(list: readonly ParticipantInputV2[]): RankedP
         baseScore: m.breakdown.baseScoreCents / 100,
         activityScore: m.breakdown.activity.total,
         totalScore: cents / 100,
+        activityIncluded: includeActivity,
         tieGroupSize: members.length,
         tieBonusUnits,
         finalScoreUnits,
@@ -398,7 +415,7 @@ export function buildTieBreakExplanation(
   const group = me.tieBreak.groupUserIds
     .map((id) => all.find((r) => r.userId === id))
     .filter((r): r is RankedParticipantV2 => r !== undefined);
-  const base = `총점은 ${me.totalScore.toFixed(2)}점으로 같았어요.`;
+  const base = `${me.activityIncluded ? "총점" : "기본 점수"}는 ${me.totalScore.toFixed(2)}점으로 같았어요.`;
   const title = "동점이었지만, 여기서 승부가 갈렸어요";
   const list = (f: (r: RankedParticipantV2) => string) =>
     group.map((r) => `${nameOf(r.userId)} ${f(r)}`).join(", ");
@@ -438,7 +455,7 @@ export function buildTieBreakExplanation(
       return {
         title,
         lines: [
-          "총점부터 운동한 날 수, 운동 횟수, 운동 시간까지 모두 같아요.",
+          `${me.activityIncluded ? "총점" : "기본 점수"}부터 운동한 날 수, 운동 횟수, 운동 시간까지 모두 같아요.`,
           ...(me.tieBreak.minutesSkipped
             ? ["일부 운동 시간 기록을 확인할 수 없어 운동 시간은 비교하지 못했어요."]
             : []),

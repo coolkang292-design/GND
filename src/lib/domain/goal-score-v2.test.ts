@@ -170,6 +170,40 @@ describe("활동 점수: 1일=1점 · 1회=1점 · 60분=1점", () => {
   });
 });
 
+describe("기간 중에는 기본 점수만 · 활동 점수는 최종 발표에서만 (includeActivity)", () => {
+  it("진행 중: 활동량이 아무리 많아도 기본 점수가 높은 쪽이 앞선다", () => {
+    const list = [
+      p("steady", { ratePct: 60, workoutDays: 20, sessions: 30, minutes: 1800 }),
+      p("goal", { ratePct: 100, workoutDays: 10, sessions: 10, minutes: 300 }),
+    ];
+    const live = rankParticipantsV2(list, { includeActivity: false });
+    expect(live.find((x) => x.userId === "goal")!.rank).toBe(1);
+    const fin = rankParticipantsV2(list, { includeActivity: true });
+    expect(fin.find((x) => x.userId === "steady")!.rank).toBe(1); // 같은 기록, 최종 발표에서만 뒤집힌다
+  });
+  it("진행 중 점수는 기본 점수 그대로이고 활동 점수는 순위 점수에 안 들어간다", () => {
+    const r = rankParticipantsV2([p("A", { ratePct: 80, workoutDays: 12, sessions: 8, minutes: 600 })], { includeActivity: false })[0];
+    expect(r.totalScore).toBe(r.baseScore);
+    expect(r.activityIncluded).toBe(false);
+    expect(r.activityScore).toBeGreaterThan(0); // 계산은 해 두되 화면이 쓰지 않는다
+    expect(r.finalScoreUnits).toBe(Math.round(r.baseScore * 100) * 10000 + r.tieBonusUnits);
+  });
+  it("진행 중 동점: 기본 점수가 같으면 날 수 → 횟수 → 시간으로 가른다", () => {
+    const r = rankParticipantsV2(
+      [p("A", { ratePct: 80, workoutDays: 12, sessions: 0 }), p("B", { ratePct: 80, workoutDays: 11, sessions: 40, minutes: 9000 })],
+      { includeActivity: false },
+    );
+    expect(r.find((x) => x.userId === "A")!.rank).toBe(1);
+    expect(r[0].tieBreak.kind).toBe("days");
+    expect(buildTieBreakExplanation(r.find((x) => x.userId === "A")!, r, (id) => id)!.lines.join(" ")).toContain("기본 점수는");
+  });
+  it("includeActivity를 생략하면 최종 발표(true)로 본다", () => {
+    const r = rankParticipantsV2([p("A", { ratePct: 80, sessions: 5 })])[0];
+    expect(r.activityIncluded).toBe(true);
+    expect(r.totalScore).toBeCloseTo(r.baseScore + r.activityScore, 5);
+  });
+});
+
 describe("지시서 §3.7 사례 (총점이 같을 때만 동점 규칙)", () => {
   // 총점을 같게 만들기 위해 달성률·참여율·활동 점수 합을 동일하게 둔다.
   const same = { ratePct: 80 };

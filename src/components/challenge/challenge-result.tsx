@@ -93,6 +93,8 @@ export function ResultView({
     () =>
       rankForChallenge({
         scoringVersion: challenge.scoring_version,
+        // 종료된 챌린지의 최종 발표 — 기본 점수 + 활동 점수
+        includeActivity: true,
         inputs: participants,
         rows: sessionRows,
         startDate: start,

@@ -137,10 +137,12 @@ describe("랭킹 v2 동점 설명 — rankParticipantsV2와 같은 순서 (scori
     expect(TIE_BREAKERS_V2[0]).toContain("운동한 날");
   });
 
-  it("v2는 활동 점수 카드와 총점 공식을 더한다 — v1에는 없다", () => {
+  it("v2는 '최종 발표 때 더해지는' 활동 점수 카드와 공식을 더한다 — v1에는 없다", () => {
     const v2 = scoreCards(2);
     expect(v2).toHaveLength(scoreCards(1).length + 1);
+    expect(v2[v2.length - 1].title).toContain("최종 발표 때");
     expect(v2[v2.length - 1].body).toContain("운동한 날 1일에 1점 · 운동 1회에 1점 · 운동 60분에 1점");
+    expect(v2[v2.length - 1].body).toContain("진행 중에는 기본 점수로만");
     expect(scoreFormula(2)).toContain("활동 점수");
     expect(scoreFormula(1)).not.toContain("활동 점수");
   });

@@ -934,6 +934,7 @@ describe("myScoreTrend", () => {
     const stats = foldPeriodStats(rows, "2026-09-01", "2026-09-14", "Asia/Seoul").get("u1")!;
     const [ranked] = rankForChallenge({
       scoringVersion: 2,
+      includeActivity: true, // 성장 추이 선은 결과(최종 발표) 화면 — 시상대와 같은 자
       inputs: [buildParticipantInput({ userId: "u1", goals: [goal], stats, periodDays: 14 })],
       rows,
       startDate: "2026-09-01",

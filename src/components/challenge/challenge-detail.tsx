@@ -294,6 +294,8 @@ export function ChallengeDetail({
     challenge.status === "active" && challenge.live_ranking
       ? rankForChallenge({
           scoringVersion: challenge.scoring_version,
+          // 진행 중에는 기본 점수만 — 활동 점수는 최종 발표(종료 후 결과 화면)에서만 더한다
+          includeActivity: false,
           inputs: participantInputs,
           rows: sessionRows ?? [],
           startDate: challenge.start_date,

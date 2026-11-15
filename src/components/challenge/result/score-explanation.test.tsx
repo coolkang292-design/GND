@@ -19,7 +19,8 @@ const mk = (userId: string, types: ParticipantInput["goals"][number]["type"][]):
 });
 const goal = (t: UserGoal["goal_type"]): UserGoal =>
   ({ id: t, user_id: "A", challenge_id: "c", group_id: "g", goal_type: t, target_value: 10, unit: "회", planned_days: 3, qualifier: null, created_at: "", updated_at: "" }) as UserGoal;
-const base = { startDate: "2026-11-01", endDate: "2026-11-28", timeZone: "Asia/Seoul" } as const;
+// 결과 설명은 최종 발표 화면이다 — 활동 점수를 더한다
+const base = { startDate: "2026-11-01", endDate: "2026-11-28", timeZone: "Asia/Seoul", includeActivity: true } as const;
 
 /** 사람마다 완료 세션 n개를 기간 안에 만든다 — 시간 기록은 없다(활동 점수는 날·횟수만 센다) */
 function sessionRows(counts: Record<string, number>) {

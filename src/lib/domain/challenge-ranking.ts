@@ -30,13 +30,19 @@ export function isScoringV2(version: number | null | undefined): boolean {
 
 export function rankForChallenge(input: {
   scoringVersion: number | null | undefined;
+  /**
+   * 활동 점수를 순위에 더하나 — **최종 발표(종료된 챌린지)만 true**. 진행 중에는 기본 점수만으로 매긴다
+   * (사용자 결정 2026-11-16). 일부러 필수로 뒀다: 빠뜨리면 컴파일이 막아서, 진행 중 화면에 활동 점수가
+   * 새는 사고(2026-11-16에 운영에서 났다)를 막는다.
+   */
+  includeActivity: boolean;
   inputs: readonly ParticipantInput[];
   rows: readonly MetricRow[];
   startDate: string;
   endDate: string;
   timeZone: string;
 }): RankedEntry[] {
-  const { scoringVersion, inputs, rows, startDate, endDate, timeZone } = input;
+  const { scoringVersion, inputs, rows, startDate, endDate, timeZone, includeActivity } = input;
   if (!isScoringV2(scoringVersion)) {
     return rankParticipants([...inputs]).map((r) => ({ ...r, v2: null }));
   }
@@ -56,12 +62,12 @@ export function rankForChallenge(input: {
     };
   });
 
-  return rankParticipantsV2(v2Inputs).map((v) => ({
+  return rankParticipantsV2(v2Inputs, { includeActivity }).map((v) => ({
     userId: v.userId,
     rank: v.rank,
     achievement: v.breakdown.achievementRate,
     participation: v.breakdown.participationRate,
-    // 표시용 `overall`은 **총점**(기본 + 활동, 소수 둘째 자리) — 순위가 이 값으로 정해진다.
+    // 표시용 `overall`은 순위 점수 — 최종 발표면 총점(기본 + 활동), 진행 중이면 기본 점수만.
     // 기본/활동/동점 가산점은 `v2`에서 따로 읽는다.
     overall: v.totalScore,
     completedGoalCount: v.breakdown.completedGoalCount,

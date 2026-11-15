@@ -1543,6 +1543,8 @@ export async function getActiveChallengeStanding(
   const rankWith = (inputs: readonly ParticipantInput[]) =>
     rankForChallenge({
       scoringVersion: ch.scoring_version,
+      // 진행 중 순위 — 기본 점수만. 활동 점수는 최종 발표(종료 후)에서만 더한다
+      includeActivity: false,
       inputs,
       rows,
       startDate: ch.start_date,

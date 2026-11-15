@@ -12,11 +12,11 @@ import { VerifiedChallengeProofCard } from "./verified-challenge-proof-card";
 
 const points = (n: number) => n.toFixed(2);
 
-/** 목표를 모두 채워 점수가 더 안 오를 때 — 동점 규칙과 내 위치, 우승하려면 무엇을 할지 */
+/** 목표를 모두 채워 기본 점수가 더 안 오를 때 — 동점 규칙과 내 위치, 최종 발표 때 더해지는 활동 점수 안내 */
 function WinGuidanceBox({ guidance }: { guidance: WinGuidance }) {
   return (
     <div data-testid="win-guidance" className="mt-3 rounded-xl bg-accent-weak p-3">
-      <p className="text-[13px] font-extrabold">목표를 모두 채웠어요 — 이제 활동 점수로 우승을 노려요</p>
+      <p className="text-[13px] font-extrabold">목표를 모두 채웠어요 — 최종 발표 때 활동 점수가 더해져요</p>
       <p className="mt-1 text-xs text-muted">{guidance.rule}</p>
       <p className="mt-2 text-xs font-bold">{guidance.standing}</p>
       {guidance.action && <p className="mt-1 text-xs font-bold text-accent">{guidance.action}</p>}
