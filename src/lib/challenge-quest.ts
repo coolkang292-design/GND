@@ -78,6 +78,25 @@ export function focusForGoalType(goalType: string | null | undefined): QuestFocu
   return kind ? { kind, goalLabel: meta.label } : null;
 }
 
+/**
+ * 챌린지 목표 분류로 담을 것인가 (2026-11-15).
+ *
+ * ⚠️⚠️ **`requested === "interval"`이 곧 "사용자가 인터벌을 골랐다"가 아니다.**
+ *    `pickSuggestionKind`는 ① 챌린지 참가자인데 기록이 없을 때 ② 마지막 운동이 인터벌일 때
+ *    스스로 `"interval"`을 낸다. 이걸 사용자의 선택으로 취급하면 챌린지 참가자는 계획 없는 날
+ *    **목표와 무관한 4분 인터벌**을 받는다(웨이트·유산소 목표인데도). 실제 사용자 지적.
+ *    진짜 선택은 `보조 버튼 "4분 인터벌 시작"`(`explicit`)뿐이다 — 그것만 덮지 않는다.
+ */
+export function shouldUseChallengeFocus(input: {
+  focus: QuestFocus | null;
+  requested: "walk" | "repeat" | "interval";
+  /** 사용자가 보조 버튼으로 인터벌을 직접 골랐다 */
+  explicitInterval: boolean;
+}): boolean {
+  if (!input.focus) return false;
+  return !(input.requested === "interval" && input.explicitInterval);
+}
+
 /** 분류별로 먼저 권하는 종목 — 이름이 카탈로그에 있으면 그것부터 */
 const PREFERRED: Record<Exclude<QuestFocusKind, "interval">, readonly string[]> = {
   weight: ["스쿼트", "벤치프레스", "랫풀다운", "데드리프트", "숄더 프레스"],

@@ -254,7 +254,12 @@ import {
   type QuestFocus,
 } from "@/lib/domain/daily-quest";
 import { shouldShowTodayCards } from "@/lib/domain/record-layout";
-import { focusForGoalType, pickChallengeExercises, pickChallengeFocus } from "@/lib/challenge-quest";
+import {
+  focusForGoalType,
+  pickChallengeExercises,
+  pickChallengeFocus,
+  shouldUseChallengeFocus,
+} from "@/lib/challenge-quest";
 import { useMyCharacterFullSrc } from "@/lib/character-variant";
 import {
   cancelWorkout,
@@ -1892,6 +1897,11 @@ function WorkoutScreen({ userId }: { userId: string }) {
      * 따로 논다. 없으면(`null`) 평소 퀘스트 그대로다.
      */
     focusOverride: QuestFocus | null = null,
+    /**
+     * 사용자가 보조 버튼 "4분 인터벌 시작"으로 인터벌을 **직접** 골랐다. 자동 판정이 낸
+     * `"interval"`(기록 없음·마지막이 인터벌)은 해당 없다 — 그건 챌린지 목표를 따른다.
+     */
+    explicitInterval = false,
   ): Promise<void> {
     const todayKey = dayKey(new Date(), resolveTimeZone());
     let kind: SuggestionKind = requested;
@@ -1905,7 +1915,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
       ⚠️ 이미 인터벌을 요청한 경우(보조 "4분 인터벌")는 그대로 인터벌이다 — 사용자가 고른 것을
          덮지 않는다. 오늘의 목표가 인터벌(타바타 횟수)이면 인터벌 시트를 연다.
     */
-    if (focus && requested !== "interval") {
+    if (focus && shouldUseChallengeFocus({ focus, requested, explicitInterval })) {
       if (focus.kind === "interval") {
         kind = "interval";
       } else {
@@ -1970,7 +1980,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
     //    `factsReady`로 그 창을 막았지만, 타이밍에 기대는 가정을 코드에 남기지
     //    않는다. 담기면 음원도 코스도 없는 맨몸 4개가 된다.
     if (recent.tabataMinutes !== null) {
-      await applySuggestion("interval");
+      await applySuggestion("interval", null, true);
       return;
     }
     setPastSessions(sessions);
@@ -4538,7 +4548,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
                           showInterval={!interval}
                           showRoutine={(routines?.length ?? 0) > 0}
                           onLoadRecent={() => startCustomList("past")}
-                          onApplySecondary={() => void applySuggestion("interval")}
+                          onApplySecondary={() => void applySuggestion("interval", null, true)}
                           onAdd={() => startCustomList("hub")}
                           onLoadRoutine={() => startCustomList("routine")}
                         />
@@ -4629,7 +4639,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
                 setQuestListOpen(true);
                 void applySuggestion(questKind);
               }}
-              onApplySecondary={() => void applySuggestion("interval")}
+              onApplySecondary={() => void applySuggestion("interval", null, true)}
             />
           )}
 
@@ -4668,7 +4678,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
                     showInterval
                     showRoutine={(routines?.length ?? 0) > 0}
                     onLoadRecent={() => startCustomList("past")}
-                    onApplySecondary={() => void applySuggestion("interval")}
+                    onApplySecondary={() => void applySuggestion("interval", null, true)}
                     onAdd={() => startCustomList("hub")}
                     onLoadRoutine={() => startCustomList("routine")}
                   />

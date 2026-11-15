@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { focusForGoalType, pickChallengeExercises, pickChallengeFocus } from "./challenge-quest";
+import {
+  focusForGoalType,
+  pickChallengeExercises,
+  pickChallengeFocus,
+  shouldUseChallengeFocus,
+} from "./challenge-quest";
 import { dailyQuestCopy } from "./domain/daily-quest";
 import type { CatalogExercise, UserGoal } from "./types";
 import type { GoalType } from "./domain/goal-score";
@@ -171,5 +176,23 @@ describe("focusForGoalType — 순위 하락 알림이 겨냥한 목표 분류 (
     );
     expect(kinds.size).toBeGreaterThan(1); // 순번은 돈다
     expect(focusForGoalType("cardio_distance")?.kind).toBe("cardio");
+  });
+});
+
+describe("shouldUseChallengeFocus — 자동 인터벌이 챌린지 목표를 덮지 않는다 (2026-11-15)", () => {
+  const focus = { kind: "weight", goalLabel: "웨이트 횟수 300회" } as const;
+
+  it("챌린지 목표가 있으면 자동 판정이 낸 interval도 목표 분류를 따른다(기록 없음·마지막이 인터벌)", () => {
+    expect(shouldUseChallengeFocus({ focus, requested: "interval", explicitInterval: false })).toBe(true);
+    expect(shouldUseChallengeFocus({ focus, requested: "repeat", explicitInterval: false })).toBe(true);
+    expect(shouldUseChallengeFocus({ focus, requested: "walk", explicitInterval: false })).toBe(true);
+  });
+
+  it("사용자가 '4분 인터벌 시작'을 직접 눌렀으면 덮지 않는다", () => {
+    expect(shouldUseChallengeFocus({ focus, requested: "interval", explicitInterval: true })).toBe(false);
+  });
+
+  it("챌린지 목표가 없으면 쓰지 않는다 — 기존 퀘스트(지난 운동·걷기·인터벌)", () => {
+    expect(shouldUseChallengeFocus({ focus: null, requested: "interval", explicitInterval: false })).toBe(false);
   });
 });
