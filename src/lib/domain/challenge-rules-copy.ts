@@ -4,6 +4,7 @@ import {
   COMPLETED_GOAL_BONUS_PER,
   PARTICIPATION_WEIGHT,
 } from "./goal-score";
+import { ACTIVITY_RULE_TEXT } from "./goal-score-v2";
 import { CARDIO_RULES_V2_FROM } from "@/lib/challenge";
 
 /**
@@ -23,9 +24,9 @@ const pct = (n: number) => Math.round(n * 100);
 export type RuleCard = { title: string; body: string };
 
 /** 점수가 어떻게 나오는지 — 세 덩어리 */
-export function scoreCards(): RuleCard[] {
+export function scoreCards(scoringVersion = 1): RuleCard[] {
   const bonusMax = COMPLETED_GOAL_BONUS_PER * COMPLETED_GOAL_BONUS_MAX;
-  return [
+  const cards: RuleCard[] = [
     {
       title: `① 목표 달성 ${pct(ACHIEVEMENT_WEIGHT)}점`,
       body:
@@ -43,10 +44,25 @@ export function scoreCards(): RuleCard[] {
         `최대 ${COMPLETED_GOAL_BONUS_MAX}개까지(+${bonusMax}점)예요.`,
     },
   ];
+  // 랭킹 v2: 기본 점수(위 세 덩어리)는 만점에서 멈추지만 활동 점수는 운동할수록 계속 오른다
+  if (scoringVersion === 2) {
+    cards.push({
+      title: "④ 운동 활동 점수 (계속 올라가요)",
+      body:
+        `${ACTIVITY_RULE_TEXT}이에요. ` +
+        "목표를 다 채운 뒤에도 운동할수록 점수가 올라가고, 총점이 높은 순서대로 순위가 정해져요.",
+    });
+  }
+  return cards;
 }
 
 /** 한 줄 공식 — 카드를 읽은 뒤 정리용 */
-export function scoreFormula(): string {
+export function scoreFormula(scoringVersion = 1): string {
+  if (scoringVersion === 2) {
+    return (
+      `총점 = (달성 평균 × ${ACHIEVEMENT_WEIGHT} + 꾸준함 × ${PARTICIPATION_WEIGHT} + 보너스) + 활동 점수`
+    );
+  }
   return (
     `종합점수 = 달성 평균 × ${ACHIEVEMENT_WEIGHT} + 꾸준함 × ${PARTICIPATION_WEIGHT} + 보너스`
   );
@@ -58,9 +74,9 @@ export function addGoalAdvice(scoringVersion = 1): { good: string; careful: stri
     good:
       `100%로 채운 목표마다 보너스 +${COMPLETED_GOAL_BONUS_PER}점을 받아요. ` +
       `보너스는 ${COMPLETED_GOAL_BONUS_MAX}개까지만 늘어나요.` +
-      // 랭킹 v2: 기본 점수가 같을 때 설정한 목표 수가 첫 번째 기준이다
+      // 랭킹 v2: 동점은 꾸준함(운동한 날 수 → 횟수 → 시간)으로 가른다 — 목표 수는 동점 기준이 아니다
       (scoringVersion === 2
-        ? " 그리고 점수가 같을 땐 목표를 더 많이 설정한 사람이 앞서요."
+        ? " 점수가 같을 땐 목표 수가 아니라 운동한 날 수·횟수·시간으로 가려요."
         : ""),
     careful:
       "목표가 많을수록 못 채운 목표도 평균에 들어가 점수가 내려가요. 채울 수 있는 만큼만 정하세요.",
@@ -85,11 +101,11 @@ export const TIE_FINAL = "그래도 같으면 공동 순위예요.";
  * **같은 순서**다(테스트가 묶는다). 기본 점수가 소수 둘째 자리까지 같을 때만 이 순서로 가린다.
  */
 export const TIE_BREAKERS_V2: readonly string[] = [
-  "목표를 더 많이 설정한 사람",
-  "운동 시간이 더 긴 사람",
+  "운동한 날이 더 많은 사람",
   "운동 횟수가 더 많은 사람",
+  "운동 시간이 더 긴 사람",
 ];
-export const TIE_STEPS_V2: readonly string[] = ["목표 수", "운동 시간", "운동 횟수"];
+export const TIE_STEPS_V2: readonly string[] = ["운동한 날 수", "운동 횟수", "운동 시간"];
 
 /** 챌린지 점수 규칙 버전에 맞는 동점 설명 묶음 */
 export function tieRules(scoringVersion: number): {

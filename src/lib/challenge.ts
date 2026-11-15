@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { rankForChallenge } from "@/lib/domain/challenge-ranking";
+import { isScoringV2, rankForChallenge } from "@/lib/domain/challenge-ranking";
+import { metricTotalsByUser } from "@/lib/domain/challenge-metrics";
+import { calculateActivityPoints } from "@/lib/domain/goal-score-v2";
 import { DEFAULT_TIMEZONE, dayKey } from "@/lib/domain/time";
 import { cardioKindOf } from "@/lib/domain/cardio-kind";
 import {
@@ -1375,6 +1377,10 @@ export function buildParticipantInput(input: {
  * ⚠️ 점수를 따로 조립하지 않는다. `foldPeriodStats` → `buildParticipantInput` →
  *    `scoreParticipant`, 순위표와 같은 길이다. 그래서 마지막 점이 시상대 점수와 같다
  *    (테스트가 묶는다). 기간 일수는 **전체 기간** — 1주차 점수는 "4주 목표 중 1주 치"로 잰다.
+ *
+ * ⚠️ 랭킹 v2(`scoringVersion = 2`)는 순위가 **총점(기본 + 활동)**이라, 이 선도 활동 점수를 더한다.
+ *    안 더하면 마지막 점(기본 점수)이 시상대 점수(총점)와 갈라진다. 활동 점수의 재료(날·횟수·시간)는
+ *    순위표와 같은 `foldPeriodStats`·`metricTotalsByUser`에서 온다.
  */
 export function myScoreTrend(input: {
   rows: readonly PeriodSessionRow[];
@@ -1383,20 +1389,26 @@ export function myScoreTrend(input: {
   startDate: string;
   endDate: string;
   timeZone: string;
+  scoringVersion?: number | null;
 }): { label: string; overall: number }[] {
   const mine = input.rows.filter((r) => r.userId === input.userId);
   const periodDays = inclusiveDays(input.startDate, input.endDate);
-  const scoreUntil = (endKey: string) =>
-    scoreParticipant(
-      buildParticipantInput({
-        userId: input.userId,
-        goals: input.goals,
-        stats:
-          foldPeriodStats(mine, input.startDate, endKey, input.timeZone).get(input.userId) ??
-          EMPTY_STATS,
-        periodDays,
-      }),
+  const v2 = isScoringV2(input.scoringVersion);
+  const scoreUntil = (endKey: string) => {
+    const stats =
+      foldPeriodStats(mine, input.startDate, endKey, input.timeZone).get(input.userId) ?? EMPTY_STATS;
+    const base = scoreParticipant(
+      buildParticipantInput({ userId: input.userId, goals: input.goals, stats, periodDays }),
     ).overall;
+    if (!v2) return base;
+    const t = metricTotalsByUser(mine, [input.userId], input.startDate, endKey, input.timeZone).get(input.userId);
+    const activity = calculateActivityPoints({
+      days: stats.workoutDays,
+      sessions: t?.sessions ?? 0,
+      minutes: t?.minutes ?? 0,
+    });
+    return base + activity.total;
+  };
   return [
     { label: "시작", overall: 0 },
     ...weekCutoffs(input.startDate, input.endDate).map((c) => ({

@@ -19,6 +19,7 @@ import {
   type PeriodSessionRow,
   type PeriodStats,
 } from "@/lib/challenge";
+import { rankForChallenge } from "@/lib/domain/challenge-ranking";
 import type { UserGoal } from "@/lib/types";
 import { rankParticipants } from "@/lib/domain/goal-score";
 
@@ -923,6 +924,24 @@ describe("myScoreTrend", () => {
     expect(myScoreTrend({ rows: [...rows, row("2026-09-02T01:00:00Z", "u2")], ...args })).toEqual(
       myScoreTrend({ rows, ...args }),
     );
+  });
+
+  it("랭킹 v2는 활동 점수를 더해 마지막 점이 시상대 총점과 같다", () => {
+    const trend = myScoreTrend({ rows, ...args, scoringVersion: 2 });
+    const v1 = myScoreTrend({ rows, ...args });
+    // 운동한 날 4일 + 4회 = 활동 8점이 더해진다(시간 기록은 없다)
+    expect(trend[2].overall - v1[2].overall).toBeCloseTo(8, 9);
+    const stats = foldPeriodStats(rows, "2026-09-01", "2026-09-14", "Asia/Seoul").get("u1")!;
+    const [ranked] = rankForChallenge({
+      scoringVersion: 2,
+      inputs: [buildParticipantInput({ userId: "u1", goals: [goal], stats, periodDays: 14 })],
+      rows,
+      startDate: "2026-09-01",
+      endDate: "2026-09-14",
+      timeZone: "Asia/Seoul",
+    });
+    expect(trend[2].overall).toBeCloseTo(ranked.overall, 2);
+    expect(trend[1].overall).toBeLessThan(trend[2].overall);
   });
 });
 

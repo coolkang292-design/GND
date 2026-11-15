@@ -4,7 +4,9 @@
  * 순서가 전부다:
  *   ① 기본 점수(v1 `scoreParticipant`의 overall, 0.01점 단위)로 먼저 가른다.
  *   ② 기본 점수가 **같은 사람끼리만** 동점 그룹을 만든다. 혼자인 사람은 가산점 0.
- *   ③ 그룹 안에서 (설정 목표 수 → 운동 시간 → 운동 횟수) 순으로 **사전식** 비교한다.
+ *   ③ 그룹 안에서 (운동한 날 수 → 운동 횟수 → 운동 시간) 순으로 **사전식** 비교한다.
+ *      꾸준함을 먼저 본다(사용자 결정 2026-11-16). 설정 목표 수는 이미 완료 보너스로 점수에 들어가
+ *      있어 동점 기준에서 뺐다. 순서를 바꾸면 `TIE_BREAK_RULE_TEXT`·`challenge-rules-copy.ts`도 같이.
  *   ④ 가산점은 0 이상 0.009 이하라서 0.01점의 기본 점수 차이를 절대 뒤집지 못한다.
  *
  * ⚠️ v1 `goal-score.ts`는 한 줄도 건드리지 않는다. 기본 점수는 `scoreParticipant`를 그대로 부른다 —
@@ -27,6 +29,56 @@ export const TIE_BONUS_MAX_UNITS = 9000;
 export const UNITS_PER_CENT = 10000;
 export const UNITS_PER_POINT = 1_000_000;
 export const SCORING_VERSION_V2 = 2;
+
+/**
+ * 동점 순서를 사람 말로 — `compareTieBreakMetrics`와 **같은 순서**다. 화면 안내(우승 안내 등)가
+ * 이 상수를 읽는다. 순서를 바꾸면 비교 함수와 이 문구를 같이 바꾼다(테스트가 묶는다).
+ */
+export const TIE_BREAK_RULE_TEXT = "운동한 날 수 → 운동 횟수 → 운동 시간";
+
+/**
+ * 활동 점수 환산 비율 (사용자 결정 2026-11-16): **1일 = 1점 · 1회 = 1점 · 60분 = 1점**.
+ *
+ * 총점 = 기본 점수(목표 달성 + 참여율 + 완료 보너스, 만점에서 멈춘다) + 활동 점수(계속 오른다).
+ * 목표를 다 채운 뒤에도 운동할수록 점수가 오르게 하려는 장치다. 목표와 무관한 **실제 운동량**이라
+ * 목표를 낮게 거는 이득이 없다.
+ *
+ * ⚠️ 비율을 바꾸면 화면 문구(`challenge-rules-copy.ts`의 `ACTIVITY_RULE_TEXT`)도 이 상수에서 읽어 따라온다.
+ * ⚠️ 운동한 날은 참여율(20%)에도 들어 있다. 이중 반영이지만 의도다(꾸준함을 두 번 보상).
+ */
+export const ACTIVITY_POINT_PER_DAY = 1;
+export const ACTIVITY_POINT_PER_SESSION = 1;
+export const ACTIVITY_MINUTES_PER_POINT = 60;
+
+/** 화면용 환산 비율 한 줄 — 상수에서 만든다(비율을 바꾸면 문구가 따라온다) */
+export const ACTIVITY_RULE_TEXT = `운동한 날 1일에 ${ACTIVITY_POINT_PER_DAY}점 · 운동 1회에 ${ACTIVITY_POINT_PER_SESSION}점 · 운동 ${ACTIVITY_MINUTES_PER_POINT}분에 1점`;
+
+export type ActivityPoints = {
+  /** 점수(점, 소수 둘째 자리) */
+  days: number;
+  sessions: number;
+  minutes: number;
+  total: number;
+  /** 합계(센트, 정수) — 순위 비교는 이 값으로 한다 */
+  cents: number;
+};
+
+const nonNegative = (n: number) => (Number.isFinite(n) && n > 0 ? n : 0);
+
+/** 운동한 날·횟수·시간 → 활동 점수. 비교는 정수(센트)로 한다 */
+export function calculateActivityPoints(a: { days: number; sessions: number; minutes: number }): ActivityPoints {
+  const daysCents = Math.round(nonNegative(a.days) * ACTIVITY_POINT_PER_DAY * 100);
+  const sessionsCents = Math.round(nonNegative(a.sessions) * ACTIVITY_POINT_PER_SESSION * 100);
+  const minutesCents = toCents(nonNegative(a.minutes) / ACTIVITY_MINUTES_PER_POINT);
+  const cents = daysCents + sessionsCents + minutesCents;
+  return {
+    days: daysCents / 100,
+    sessions: sessionsCents / 100,
+    minutes: minutesCents / 100,
+    total: cents / 100,
+    cents,
+  };
+}
 
 export type ParticipantInputV2 = ParticipantInput & {
   /** 인증 완료 운동 세션 수 (`metricTotalsByUser`의 sessions) */
@@ -78,9 +130,9 @@ export type GoalContributionV2 = {
 
 export type TieBreakKind =
   | "none" // 동점 아님
-  | "goals" // 설정 목표 수로 갈림
-  | "minutes" // 운동 시간으로 갈림
+  | "days" // 운동한 날 수로 갈림
   | "sessions" // 운동 횟수로 갈림
+  | "minutes" // 운동 시간으로 갈림
   | "all_equal"; // 전부 같다 → 공동
 
 export type TieBreakInfo = {
@@ -100,8 +152,15 @@ export type ScoreBreakdown = {
   completedGoalCount: number;
   completionBonus: number;
   baseScoreRaw: number;
+  /** 기본 점수(센트) — 목표 달성 + 참여율 + 완료 보너스. 만점에서 멈춘다 */
   baseScoreCents: number;
+  /** 활동 점수 — 운동한 날·횟수·시간 환산 */
+  activity: ActivityPoints;
+  /** 총점(센트) = 기본 + 활동. 순위는 이 값으로 정해진다 */
+  totalScoreCents: number;
   configuredGoalCount: number;
+  /** 챌린지 기간에 운동한 날 수 — 계획일을 넘긴 날도 센다(참여율과 달리 100%에서 막지 않는다) */
+  workoutDays: number;
   workoutMinutes: number;
   workoutSessions: number;
   minutesComplete: boolean;
@@ -111,8 +170,12 @@ export type ScoreBreakdown = {
 export type RankedParticipantV2 = {
   userId: string;
   rank: number;
-  /** 기본 점수(점, 소수 둘째 자리) */
+  /** 기본 점수(점, 소수 둘째 자리) — 목표 달성 + 참여율 + 완료 보너스 */
   baseScore: number;
+  /** 활동 점수(점) — 운동한 날·횟수·시간 환산 */
+  activityScore: number;
+  /** 총점(점, 소수 둘째 자리) = 기본 + 활동. 순위의 기준 */
+  totalScore: number;
   tieGroupSize: number;
   tieBonusUnits: number;
   finalScoreUnits: number;
@@ -125,6 +188,11 @@ export type RankedParticipantV2 = {
 export function buildScoreBreakdown(p: ParticipantInputV2): ScoreBreakdown {
   const s = scoreParticipant(p);
   const baseScoreCents = toCents(s.overall);
+  const activity = calculateActivityPoints({
+    days: p.workoutDays,
+    sessions: p.workoutSessions,
+    minutes: p.workoutMinutes,
+  });
   const achievementPart = s.achievement * 0.8;
   const participationPart = s.participation * 0.2;
   const bonus = completedGoalBonus(s.completedGoalCount);
@@ -152,7 +220,10 @@ export function buildScoreBreakdown(p: ParticipantInputV2): ScoreBreakdown {
     completionBonus: b / 100,
     baseScoreRaw: s.overall,
     baseScoreCents,
+    activity,
+    totalScoreCents: baseScoreCents + activity.cents,
     configuredGoalCount: getConfiguredGoalCount(p.goals),
+    workoutDays: p.workoutDays,
     workoutMinutes: p.workoutMinutes,
     workoutSessions: p.workoutSessions,
     minutesComplete: p.minutesComplete,
@@ -161,13 +232,15 @@ export function buildScoreBreakdown(p: ParticipantInputV2): ScoreBreakdown {
 }
 
 /** 동점 그룹 안의 비교 키. 시간은 그룹에 누락이 있으면 비교에서 뺀다 */
-type Metrics = { goals: number; minutes: number; sessions: number };
+type Metrics = { days: number; sessions: number; minutes: number };
 const EPS = 1e-9;
 
+/** 운동한 날 수 → 운동 횟수 → 운동 시간 (`TIE_BREAK_RULE_TEXT`와 같은 순서). 음수 = a가 앞 */
 export function compareTieBreakMetrics(a: Metrics, b: Metrics, useMinutes: boolean): number {
-  if (a.goals !== b.goals) return b.goals - a.goals;
+  if (a.days !== b.days) return b.days - a.days;
+  if (a.sessions !== b.sessions) return b.sessions - a.sessions;
   if (useMinutes && Math.abs(a.minutes - b.minutes) > EPS) return b.minutes - a.minutes;
-  return b.sessions - a.sessions;
+  return 0;
 }
 
 /** 등급 수 K, 0부터 시작하는 등급 인덱스 i → 가산점 단위. K=1이면 0 */
@@ -180,9 +253,9 @@ export function calculateTieBonusUnits(levelCount: number, levelIndex: number): 
 function decidingKind(ms: Metrics[], useMinutes: boolean): TieBreakKind {
   const differs = (f: (m: Metrics) => number) =>
     ms.some((m) => Math.abs(f(m) - f(ms[0])) > EPS);
-  if (differs((m) => m.goals)) return "goals";
-  if (useMinutes && differs((m) => m.minutes)) return "minutes";
+  if (differs((m) => m.days)) return "days";
   if (differs((m) => m.sessions)) return "sessions";
+  if (useMinutes && differs((m) => m.minutes)) return "minutes";
   return "all_equal";
 }
 
@@ -194,17 +267,18 @@ export function rankParticipantsV2(list: readonly ParticipantInputV2[]): RankedP
 
   const groups = new Map<number, typeof items>();
   for (const it of items) {
-    const g = groups.get(it.breakdown.baseScoreCents) ?? [];
+    // 총점(기본 + 활동)이 같은 사람끼리만 동점 그룹이다
+    const g = groups.get(it.breakdown.totalScoreCents) ?? [];
     g.push(it);
-    groups.set(it.breakdown.baseScoreCents, g);
+    groups.set(it.breakdown.totalScoreCents, g);
   }
 
   const out: RankedParticipantV2[] = [];
   for (const [cents, members] of groups) {
     const metrics = (m: (typeof items)[number]): Metrics => ({
-      goals: m.breakdown.configuredGoalCount,
-      minutes: m.breakdown.workoutMinutes,
+      days: m.breakdown.workoutDays,
       sessions: m.breakdown.workoutSessions,
+      minutes: m.breakdown.workoutMinutes,
     });
     const tied = members.length >= 2;
     // 그룹 중 한 명이라도 시간 기록이 비면 아무도 시간으로 비교하지 않는다 — 불완전한 쪽이 억울하지 않게
@@ -233,7 +307,9 @@ export function rankParticipantsV2(list: readonly ParticipantInputV2[]): RankedP
       out.push({
         userId: m.userId,
         rank: 0,
-        baseScore: cents / 100,
+        baseScore: m.breakdown.baseScoreCents / 100,
+        activityScore: m.breakdown.activity.total,
+        totalScore: cents / 100,
         tieGroupSize: members.length,
         tieBonusUnits,
         finalScoreUnits,
@@ -254,19 +330,19 @@ export function rankParticipantsV2(list: readonly ParticipantInputV2[]): RankedP
 }
 
 /** 순위표 한 줄 — 값 → 소수 둘째(일반) / 여섯째(가산점이 있는 동점자) 자리 */
-export function formatScoreV2(r: Pick<RankedParticipantV2, "baseScore" | "tieBonusUnits" | "finalScore">): string {
-  return r.tieBonusUnits > 0 ? r.finalScore.toFixed(6) : r.baseScore.toFixed(2);
+export function formatScoreV2(r: Pick<RankedParticipantV2, "totalScore" | "tieBonusUnits" | "finalScore">): string {
+  return r.tieBonusUnits > 0 ? r.finalScore.toFixed(6) : r.totalScore.toFixed(2);
 }
 
 /** 순위표 한 줄 꼬리표 — 동점 그룹에 있을 때만 (없으면 null) */
 export function tieKindLabel(r: Pick<RankedParticipantV2, "tieBreak">): string | null {
   switch (r.tieBreak.kind) {
-    case "goals":
-      return "목표 수 우선으로 결정";
-    case "minutes":
-      return "운동 시간 우선으로 결정";
+    case "days":
+      return "운동한 날 수 우선으로 결정";
     case "sessions":
       return "운동 횟수 우선으로 결정";
+    case "minutes":
+      return "운동 시간 우선으로 결정";
     case "all_equal":
       return "모든 기준이 같아 공동 순위";
     default:
@@ -282,12 +358,12 @@ export function tieBreakShareLine(r: RankedParticipantV2): string | null {
   if (r.tieBonusUnits <= 0) return null;
   const b = r.breakdown;
   switch (r.tieBreak.kind) {
-    case "goals":
-      return `동점 판정: 목표 ${b.configuredGoalCount}개 설정으로 앞섰어요`;
-    case "minutes":
-      return `동점 판정: 운동 ${Math.round(b.workoutMinutes)}분으로 앞섰어요`;
+    case "days":
+      return `동점 판정: 운동한 날 ${b.workoutDays}일로 앞섰어요`;
     case "sessions":
       return `동점 판정: 운동 ${b.workoutSessions}회로 앞섰어요`;
+    case "minutes":
+      return `동점 판정: 운동 ${Math.round(b.workoutMinutes)}분으로 앞섰어요`;
     default:
       return null;
   }
@@ -322,33 +398,20 @@ export function buildTieBreakExplanation(
   const group = me.tieBreak.groupUserIds
     .map((id) => all.find((r) => r.userId === id))
     .filter((r): r is RankedParticipantV2 => r !== undefined);
-  const base = `기본 점수는 ${me.baseScore.toFixed(2)}점으로 같았어요.`;
+  const base = `총점은 ${me.totalScore.toFixed(2)}점으로 같았어요.`;
   const title = "동점이었지만, 여기서 승부가 갈렸어요";
   const list = (f: (r: RankedParticipantV2) => string) =>
     group.map((r) => `${nameOf(r.userId)} ${f(r)}`).join(", ");
-  const skipped = me.tieBreak.minutesSkipped
-    ? ["일부 운동 시간 기록을 확인할 수 없어, 다음 기준인 운동 횟수로 순위를 결정했어요."]
-    : [];
   const winners = group.filter((r) => r.rank === Math.min(...group.map((g) => g.rank)));
   const winnerSubject = subjectOf(winners.map((r) => nameOf(r.userId)));
   switch (me.tieBreak.kind) {
-    case "goals":
+    case "days":
       return {
         title,
         lines: [
           base,
-          `설정한 목표는 ${list((r) => `${r.breakdown.configuredGoalCount}개`)}예요.`,
-          `더 많은 목표에 도전한 ${winnerSubject} 동점 판정에서 앞섰어요.`,
-        ],
-      };
-    case "minutes":
-      return {
-        title,
-        lines: [
-          base,
-          "설정한 목표 수는 같았어요.",
-          `운동 시간은 ${list((r) => `${Math.round(r.breakdown.workoutMinutes)}분`)}이에요.`,
-          `더 오래 운동한 ${winnerSubject} 앞섰어요.`,
+          `운동한 날은 ${list((r) => `${r.breakdown.workoutDays}일`)}이에요.`,
+          `더 꾸준히 운동한 ${winnerSubject} 동점 판정에서 앞섰어요.`,
         ],
       };
     case "sessions":
@@ -356,17 +419,29 @@ export function buildTieBreakExplanation(
         title,
         lines: [
           base,
-          ...skipped,
-          me.tieBreak.minutesSkipped ? "설정한 목표 수는 같았어요." : "목표 수와 운동 시간까지 같았어요.",
+          "운동한 날 수는 같았어요.",
           `운동 횟수는 ${list((r) => `${r.breakdown.workoutSessions}회`)}예요.`,
           `운동을 더 많이 완료한 ${winnerSubject} 앞섰어요.`,
+        ],
+      };
+    case "minutes":
+      return {
+        title,
+        lines: [
+          base,
+          "운동한 날 수와 운동 횟수는 같았어요.",
+          `운동 시간은 ${list((r) => `${Math.round(r.breakdown.workoutMinutes)}분`)}이에요.`,
+          `더 오래 운동한 ${winnerSubject} 앞섰어요.`,
         ],
       };
     case "all_equal":
       return {
         title,
         lines: [
-          "기본 점수부터 목표 수, 운동 시간, 운동 횟수까지 모두 같아요.",
+          "총점부터 운동한 날 수, 운동 횟수, 운동 시간까지 모두 같아요.",
+          ...(me.tieBreak.minutesSkipped
+            ? ["일부 운동 시간 기록을 확인할 수 없어 운동 시간은 비교하지 못했어요."]
+            : []),
           `공동 ${me.rank}위예요.`,
         ],
       };

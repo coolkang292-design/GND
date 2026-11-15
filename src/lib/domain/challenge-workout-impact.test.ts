@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { buildParticipantInput, EMPTY_STATS, foldPeriodStats, type MyChallenge, type PeriodSessionRow } from "@/lib/challenge";
 import type { UserGoal } from "@/lib/types";
 import { rankForChallenge } from "./challenge-ranking";
-import { calculateWorkoutImpact, forecastWorkout, recommendWorkoutAdditions, type ChallengeScoreSnapshot } from "./challenge-workout-impact";
+import { calculateWorkoutImpact, forecastWorkout, recommendWorkoutAdditions, winGuidance, type ChallengeScoreSnapshot } from "./challenge-workout-impact";
+import { ACTIVITY_RULE_TEXT, TIE_BREAK_RULE_TEXT } from "./goal-score-v2";
 
 function goal(type: UserGoal["goal_type"], target = 100, userId = "A", qualifier: number | null = null): UserGoal {
   return { id: `${userId}-${type}`, user_id: userId, challenge_id: "ch", group_id: "g", goal_type: type, target_value: target, planned_days: 1, qualifier, unit: null, created_at: "", updated_at: "" };
@@ -44,17 +45,31 @@ describe("workout impact: current records with/without a session", () => {
     s.challenge.scoring_version = version;
     const stats = foldPeriodStats(s.rows, s.challenge.start_date, s.challenge.end_date, s.timeZone);
     const ranking = rankForChallenge({ scoringVersion: version, inputs: s.participantIds.map((userId) => buildParticipantInput({ userId, goals: s.goals.filter((g) => g.user_id === userId), stats: stats.get(userId) ?? EMPTY_STATS, periodDays: 7 })), rows: s.rows, startDate: s.challenge.start_date, endDate: s.challenge.end_date, timeZone: s.timeZone });
-    expect(calculateWorkoutImpact(s, "A", "second")?.afterScore).toBe(Number(ranking.find((r) => r.userId === "A")!.overall.toFixed(2)));
+    // 기본 점수는 v1·v2가 같은 자다. v2의 `overall`은 총점(기본 + 활동)이라 기본 점수는 `v2.baseScore`에서 읽는다
+    const mine = ranking.find((r) => r.userId === "A")!;
+    expect(calculateWorkoutImpact(s, "A", "second")?.afterScore).toBe(Number((mine.v2 ? mine.v2.baseScore : mine.overall).toFixed(2)));
   });
-  it("re-ranks a v2 tie even when basic score stays the same", () => {
+  it("활동 점수가 오르면 기본 점수가 그대로여도 순위가 바뀐다 — 동점 탓으로 말하지 않는다", () => {
     const s = snapshot([goal("workout_days", 1), goal("workout_days", 1, "B")], [row("a"), row("b", [], "B"), row("second")]);
     const result = calculateWorkoutImpact(s, "A", "second")!;
-    expect(result.delta).toBe(0);
-    expect(result.beforeRank).toBe(1);
+    expect(result.delta).toBe(0); // 기본 점수는 만점에서 멈춘다
+    expect(result.activityDelta).toBe(1.16); // 운동 1회(1점) + 시간 10분→20분(0.17→0.33점)
+    expect(result.totalDelta).toBe(1.16);
+    expect(result.afterTotal).toBeGreaterThan(result.beforeTotal);
+    expect(result.beforeRank).toBe(1); // 처음엔 B와 같은 총점이라 공동 1위
     expect(result.afterRank).toBe(1);
-    expect(result.tieReason).toBeTruthy();
+    expect(result.tieReason).toBeNull(); // 이제 총점이 달라 동점이 아니다
     s.rows[0].durationMinutes = 5;
     expect(calculateWorkoutImpact(s, "A", "second")).toMatchObject({ beforeRank: 2, afterRank: 1, delta: 0 });
+  });
+  it("총점이 같아지는 순간 동점 사유를 알려준다", () => {
+    // B는 같은 날 두 번, A는 한 번 → 운동 하나를 더하면 총점이 같아져 공동 순위가 된다
+    const s = snapshot([goal("workout_days", 1), goal("workout_days", 1, "B")], [row("a"), row("b1", [], "B"), row("b2", [], "B"), row("second")]);
+    const result = calculateWorkoutImpact(s, "A", "second")!;
+    expect(result.delta).toBe(0);
+    expect(result.beforeRank).toBe(2);
+    expect(result.afterRank).toBe(1);
+    expect(result.tieReason).toBeTruthy();
   });
   it("uses cycle time and excludes cycle distance from Nov 3 starts", () => {
     const s = snapshot([goal("cycle_time", 40), goal("cardio_distance", 20)], [row("cycle", [exercise("사이클", "cardio", 0, 20, 10)])]);
@@ -185,5 +200,96 @@ describe("plan forecast and bounded additions", () => {
     expect(forecastWorkout(s, "A", empty)).toBeNull();
     s.participantIds = ["B"];
     expect(forecastWorkout(s, "A", row("plan"))).toBeNull();
+  });
+});
+
+describe("winGuidance: 목표를 모두 채운 뒤 우승 안내", () => {
+  const mins = (r: PeriodSessionRow, minutes: number | null): PeriodSessionRow => ({ ...r, durationMinutes: minutes });
+  const day = (id: string, user: string, date: string, minutes: number | null = 10) =>
+    mins(row(id, [exercise()], user, date), minutes);
+  /** 둘 다 "운동한 날 1일" 목표(계획일 1)를 채운 상태 — 기본 점수는 같고 활동 점수로 갈린다 */
+  const both = (rows: PeriodSessionRow[]) => snapshot([goal("workout_days", 1), goal("workout_days", 1, "B")], rows);
+
+  it("목표가 남아 있으면 안내하지 않는다 (추가 점수 안내가 맡는다)", () => {
+    expect(winGuidance(snapshot([goal("weight_reps", 100)], [row("a")]), "A")).toBeNull();
+  });
+  it("참여율이 아직 100%가 아니면 안내하지 않는다 — 운동일을 더하면 기본 점수가 오른다", () => {
+    const s = snapshot([{ ...goal("workout_days", 1), planned_days: 5 }], [row("a")]);
+    expect(winGuidance(s, "A")).toBeNull();
+  });
+  it("v1 챌린지·실시간 랭킹을 끈 방은 안내하지 않는다", () => {
+    const s = both([day("a", "A", "2026-11-13"), day("b", "B", "2026-11-13")]);
+    s.challenge.scoring_version = 1;
+    expect(winGuidance(s, "A")).toBeNull();
+    s.challenge.scoring_version = 2;
+    s.challenge.live_ranking = false;
+    expect(winGuidance(s, "A")).toBeNull();
+  });
+  it("규칙 문구는 환산 비율과 동점 규칙 상수에서 온다", () => {
+    const g = winGuidance(both([day("a", "A", "2026-11-13"), day("b", "B", "2026-11-13")]), "A")!;
+    expect(g.rule).toContain(TIE_BREAK_RULE_TEXT);
+    expect(g.rule).toContain(ACTIVITY_RULE_TEXT);
+  });
+  it("비교할 참가자가 없으면 그렇다고 말한다", () => {
+    const s = both([day("a", "A", "2026-11-13")]);
+    s.participantIds = ["A"];
+    const g = winGuidance(s, "A")!;
+    expect(g.standing).toContain("비교할 참가자가 없어요");
+    expect(g.action).toContain("활동 점수가 계속 올라요");
+  });
+  it("1위면 점수 차이와 지키는 법을 말한다", () => {
+    const rows = [day("a1", "A", "2026-11-13"), day("a2", "A", "2026-11-14"), day("b", "B", "2026-11-13")];
+    const g = winGuidance(both(rows), "A")!;
+    expect(g.standing).toContain("1위예요");
+    expect(g.standing).toContain("2.16점 차이로 앞서 있어요"); // A 4.33점 − B 2.17점
+    expect(g.action).toContain("지키려면");
+    expect(g.action).toContain("약 3점"); // 새로운 날에 60분 = 1일 + 1회 + 60분
+  });
+  it("뒤지면 앞서기 위해 몇 점이 더 필요한지 말한다", () => {
+    const rows = [day("a", "A", "2026-11-13"), day("b1", "B", "2026-11-13"), day("b2", "B", "2026-11-14")];
+    const g = winGuidance(both(rows), "A")!;
+    expect(g.standing).toContain("2위예요");
+    expect(g.standing).toContain("2.16점 앞서요");
+    expect(g.action).toContain("2.17점 이상");
+  });
+  it("총점이 같으면 운동한 날 수로 가른다 — 뒤지면 며칠이 더 필요한지", () => {
+    // A: 2일·2회·10분, B: 1일·3회·10분 → 둘 다 4.17점
+    const rows = [day("a1", "A", "2026-11-13", 5), day("a2", "A", "2026-11-14", 5), day("b1", "B", "2026-11-13", 3), day("b2", "B", "2026-11-13", 3), day("b3", "B", "2026-11-13", 4)];
+    const ahead = winGuidance(both(rows), "A")!;
+    expect(ahead.standing).toContain("총점이 같은 참가자 1명 중 앞서 있어요");
+    expect(ahead.standing).toContain("운동한 날 수");
+    const behind = winGuidance(both(rows), "B")!;
+    expect(behind.standing).toContain("운동한 날 수에서 먼저 앞서요");
+    expect(behind.action).toContain("2일");
+  });
+  it("날 수가 같으면 운동 횟수로 가른다", () => {
+    // A: 1일·2회·10분(3.17점), B: 1일·1회·70분(1+1+1.17 = 3.17점)
+    const rows = [day("a1", "A", "2026-11-13", 5), day("a2", "A", "2026-11-13", 5), day("b", "B", "2026-11-13", 70)];
+    const behind = winGuidance(both(rows), "B")!;
+    expect(behind.standing).toContain("운동 횟수에서 먼저 앞서요");
+    expect(behind.action).toContain("2회");
+  });
+  it("날·횟수가 같고 시간이 0.01점 안쪽으로만 다르면 운동 시간으로 가른다", () => {
+    const rows = [day("a", "A", "2026-11-13", 10), day("b", "B", "2026-11-13", 10.2)];
+    const g = winGuidance(both(rows), "B")!;
+    expect(g.standing).toContain("앞서 있어요 (운동 시간 기준)");
+  });
+  it("계획을 넣으면 그 계획을 마친 뒤의 순위로 안내한다", () => {
+    const rows = [day("a", "A", "2026-11-13", 10), day("b1", "B", "2026-11-13", 10), day("b2", "B", "2026-11-13", 10)];
+    const before = winGuidance(both(rows), "A")!;
+    expect(before.standing).toContain("2위예요");
+    const plan = day("plan", "A", "2026-11-14", 60);
+    const after = winGuidance(both(rows), "A", plan)!;
+    expect(after.standing).toContain("이 계획을 마치면");
+    expect(after.standing).toContain("1위예요");
+  });
+  it("모든 기준이 같으면 공동 순위라고 말한다", () => {
+    const g = winGuidance(both([day("a", "A", "2026-11-13"), day("b", "B", "2026-11-13")]), "A")!;
+    expect(g.standing).toContain("공동 순위");
+  });
+  it("일부 시간 기록이 비면 시간은 비교하지 않는다고 알린다", () => {
+    const g = winGuidance(both([day("a", "A", "2026-11-13", null), day("b", "B", "2026-11-13", null)]), "A")!;
+    expect(g.standing).toContain("운동 시간은 비교하지 않아요");
+    expect(g.standing).toContain("공동 순위");
   });
 });

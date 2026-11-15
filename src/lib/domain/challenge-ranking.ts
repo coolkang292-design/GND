@@ -61,8 +61,9 @@ export function rankForChallenge(input: {
     rank: v.rank,
     achievement: v.breakdown.achievementRate,
     participation: v.breakdown.participationRate,
-    // 표시용 `overall`은 기본 점수(소수 둘째 자리). 가산점은 `v2`에서 따로 읽는다.
-    overall: v.baseScore,
+    // 표시용 `overall`은 **총점**(기본 + 활동, 소수 둘째 자리) — 순위가 이 값으로 정해진다.
+    // 기본/활동/동점 가산점은 `v2`에서 따로 읽는다.
+    overall: v.totalScore,
     completedGoalCount: v.breakdown.completedGoalCount,
     v2: v,
   }));

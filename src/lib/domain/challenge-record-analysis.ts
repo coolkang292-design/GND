@@ -54,6 +54,8 @@ export function buildMyRecordReport(input: {
    *  weekly targets must still come from full weeks (5/7, not 3/3 on day 3). */
   periodEndDate?: string;
   timeZone: string;
+  /** 점수 규칙 버전 — v2면 성장 선에 활동 점수도 더한다(시상대 점수와 같은 자) */
+  scoringVersion?: number | null;
   finalized: boolean;
   ranked?: RankedParticipant | null;
   total?: number;
@@ -85,7 +87,7 @@ export function buildMyRecordReport(input: {
     trend: finalized
       ? myScoreTrend({
           rows, userId, goals: personalGoals,
-          startDate, endDate, timeZone,
+          startDate, endDate, timeZone, scoringVersion: input.scoringVersion,
         })
       : [],
     // Weeks that have started by endDate, each with its full-period target.

@@ -298,7 +298,7 @@ export function GoalSetupFlow({
   const usedTypes = new Set(details.map((d) => d.type));
   const atMax = details.length >= MAX_DETAIL_GOALS;
   const needMore = details.length < minDetailGoals;
-  const needMoreHint = `기본 목표를 포함해 ${minDetailGoals + 1}개 이상 설정해 주세요. 목표를 더 많이 설정하면 기본 점수가 같을 때 유리해요.`;
+  const needMoreHint = `기본 목표를 포함해 ${minDetailGoals + 1}개 이상 설정해 주세요. 100%로 채운 목표마다 보너스 점수를 받아요.`;
 
   const [agreed, setAgreed] = useState(false);
   const [finalDrafts, setFinalDrafts] = useState<BuildGoalDraftsResult | null>(null);

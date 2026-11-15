@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { GOAL_TYPE_META, goalLabel } from "@/lib/challenge";
 import type { RankedEntry } from "@/lib/domain/challenge-ranking";
-import { buildTieBreakExplanation } from "@/lib/domain/goal-score-v2";
+import { ACTIVITY_RULE_TEXT, buildTieBreakExplanation } from "@/lib/domain/goal-score-v2";
 import type { UserGoal } from "@/lib/types";
 
 const pt = (n: number) => `${n.toFixed(2)}점`;
@@ -87,6 +87,19 @@ export function ScoreExplanation({
         </dl>
         <p className="mt-3 border-t border-line pt-3 text-[12.5px] font-bold" data-testid="base-sum">
           세 점수를 더해 기본 점수 {pt(v2.baseScore)}을 받았어요.
+        </p>
+        <div className="mt-3">
+          <p className="flex justify-between text-[13.5px] font-extrabold">
+            <span>운동 활동 점수</span>
+            <span className="font-mono" data-testid="pts-activity">+{pt(b.activity.total)}</span>
+          </p>
+          <p className="text-[12px] text-muted" data-testid="activity-detail">
+            운동한 날 {num(b.workoutDays)}일 +{num(b.activity.days)} · 운동 {num(b.workoutSessions)}회 +{num(b.activity.sessions)} · 운동 시간 {num(b.workoutMinutes)}분 +{num(b.activity.minutes)}
+          </p>
+          <p className="text-[11.5px] text-muted">{ACTIVITY_RULE_TEXT}이에요. 목표를 다 채운 뒤에도 운동할수록 계속 올라요.</p>
+        </div>
+        <p className="mt-3 border-t border-line pt-3 text-[12.5px] font-bold" data-testid="total-sum">
+          기본 점수와 활동 점수를 더해 총점 {pt(v2.totalScore)}이에요.
           {v2.tieBonusUnits > 0 && ` 동점 가산 +${(v2.tieBonusUnits / 1_000_000).toFixed(6)}점이 더해져 최종 ${v2.finalScore.toFixed(6)}점이에요.`}
         </p>
 
@@ -126,7 +139,7 @@ export function ScoreExplanation({
             })}
             <li className="px-1 text-[11.5px] text-muted">
               설정한 목표는 {b.configuredGoalCount}개예요
-              {hasAuto ? " (추가 평가 항목은 빼고 센 값이에요)" : ""}. 기본 점수가 같을 때 목표를 더 많이 설정한 쪽이 유리해요.
+              {hasAuto ? " (추가 평가 항목은 빼고 센 값이에요)" : ""}. 목표를 더 많이 채울수록 완료 보너스로 기본 점수에 반영돼요.
             </li>
           </ul>
         )}

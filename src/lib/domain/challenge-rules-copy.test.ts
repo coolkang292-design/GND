@@ -110,30 +110,45 @@ describe("랭킹 v2 동점 설명 — rankParticipantsV2와 같은 순서 (scori
     ...over,
   });
 
-  it("v2 설명은 세 단계(목표 수 → 운동 시간 → 운동 횟수)다", () => {
+  it("v2 설명은 세 단계(운동한 날 수 → 운동 횟수 → 운동 시간)다", () => {
     expect(TIE_BREAKERS_V2).toHaveLength(3);
     expect(TIE_STEPS_V2).toHaveLength(3);
     expect(tieRules(2).breakers).toBe(TIE_BREAKERS_V2);
     expect(tieRules(1).breakers).toBe(TIE_BREAKERS); // 옛 챌린지는 옛 설명
   });
 
-  it("기본 점수가 같으면 ① 목표를 더 많이 설정한 사람이 앞선다 (설명 첫 줄)", () => {
-    // 두 사람 모두 기본 점수 103.00: 1개 100%+꾸준함 100 / 2개 100%+꾸준함 85
-    const one = p({ userId: "one", goals: [goal("workout_days", 10, 10)] });
-    const two = p({
-      userId: "two",
+  it("기본 점수가 같으면 ① 운동한 날이 더 많은 사람이 앞선다 — 목표를 더 많이 걸어도 소용없다 (설명 첫 줄)", () => {
+    // 두 사람 모두 달성 100%·참여율 100%(계획일 10 이상). 목표 수는 many가 더 많지만 날은 적다.
+    const few = p({ userId: "few", goals: [goal("workout_days", 10, 10)], workoutDays: 12 });
+    const many = p({
+      userId: "many",
       goals: [goal("workout_days", 10, 10), goal("weight_days", 8, 8)],
-      workoutDays: 8.5,
+      workoutDays: 10,
     });
-    const r = rankParticipantsV2([one, two]);
-    expect(r[0].baseScore).toBe(r[1].baseScore); // 먼저 동점이어야 설명이 맞는 상황이다
-    expect(r.map((x) => x.userId)).toEqual(["two", "one"]);
-    expect(TIE_BREAKERS_V2[0]).toContain("목표");
+    const r = rankParticipantsV2([few, many]);
+    // 완료 보너스(개당 +3)가 달라 기본 점수가 갈리면 이 사례가 성립하지 않는다 — 같은 개수로 맞춘다
+    const same = rankParticipantsV2([
+      p({ userId: "few", goals: [goal("workout_days", 10, 10), goal("weight_days", 8, 8)], workoutDays: 12 }),
+      p({ userId: "many", goals: [goal("workout_days", 10, 10), goal("weight_days", 8, 8)], workoutDays: 10 }),
+    ]);
+    expect(same[0].baseScore).toBe(same[1].baseScore); // 먼저 동점이어야 설명이 맞는 상황이다
+    expect(same.map((x) => x.userId)).toEqual(["few", "many"]);
+    expect(r[0].baseScore).not.toBe(r[1].baseScore); // 목표 수 차이는 보너스로 이미 점수에 들어 있다
+    expect(TIE_BREAKERS_V2[0]).toContain("운동한 날");
   });
 
-  it("v2 목표 추가 안내는 동점일 때 유리하다는 말을 더한다 — v1에는 없다", () => {
-    expect(addGoalAdvice(2).good).toContain("목표를 더 많이 설정한 사람이 앞서요");
-    expect(addGoalAdvice(1).good).not.toContain("앞서요");
+  it("v2는 활동 점수 카드와 총점 공식을 더한다 — v1에는 없다", () => {
+    const v2 = scoreCards(2);
+    expect(v2).toHaveLength(scoreCards(1).length + 1);
+    expect(v2[v2.length - 1].body).toContain("운동한 날 1일에 1점 · 운동 1회에 1점 · 운동 60분에 1점");
+    expect(scoreFormula(2)).toContain("활동 점수");
+    expect(scoreFormula(1)).not.toContain("활동 점수");
+  });
+
+  it("v2 목표 추가 안내는 동점이 목표 수가 아니라 꾸준함으로 갈린다고 말한다 — v1에는 없다", () => {
+    expect(addGoalAdvice(2).good).toContain("목표 수가 아니라 운동한 날 수·횟수·시간");
+    expect(addGoalAdvice(2).good).not.toContain("목표를 더 많이 설정한 사람이 앞서요");
+    expect(addGoalAdvice(1).good).not.toContain("운동한 날 수");
   });
 
   it("v2 챌린지는 목표 3개 이상 필요하다고 알린다 (minDetailGoals 규칙과 같은 말)", () => {

@@ -542,13 +542,14 @@ describe("최종 확인 · 동의 (2026-11-11) — 규칙을 읽고 동의해야
     expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(false);
   });
 
-  it("랭킹 v2 챌린지는 동점 순서를 '목표 수 → 운동 시간 → 운동 횟수'로 설명한다", () => {
+  it("랭킹 v2 챌린지는 동점 순서를 '운동한 날 수 → 운동 횟수 → 운동 시간'으로 설명한다", () => {
     renderFlow({ requireConsent: true, scoringVersion: 2 });
     fireEvent.click(next());
     const text = screen.getByTestId("goal-consent-step").textContent ?? "";
-    expect(text).toContain("목표 수");
-    expect(text).toContain("운동 시간");
+    expect(text).toContain("운동한 날 수");
     expect(text).toContain("운동 횟수");
+    expect(text).toContain("운동 시간");
+    expect(text.indexOf("운동한 날 수")).toBeLessThan(text.indexOf("운동 횟수"));
     expect(text).toContain("점수가 같을 때만");
     expect(text).toContain("3개 이상"); // v2는 목표 3개 이상이 시작 조건이다
   });

@@ -35,15 +35,29 @@ describe("rankForChallenge", () => {
     const v2 = rankForChallenge({ scoringVersion: 2, inputs, rows: [], ...base });
     for (const r of v2) {
       const same = v1.find((x) => x.userId === r.userId)!;
-      expect(r.overall).toBeCloseTo(same.overall, 1);
+      // 기본 점수는 v1과 같다. `overall`(표시 점수)은 거기에 활동 점수를 더한 총점이다
+      expect(r.v2!.baseScore).toBeCloseTo(same.overall, 1);
+      expect(r.overall).toBeCloseTo(r.v2!.baseScore + r.v2!.activityScore, 5);
       expect(r.achievement).toBeCloseTo(same.achievement, 9);
     }
   });
 
-  it("v2 동점: 목표 수가 많은 쪽이 앞선다 (v1은 같은 입력에서 목표 수를 안 본다)", () => {
+  it("v2: 운동한 날이 많은 쪽이 활동 점수로 앞선다 — 목표 수는 순위 기준이 아니다", () => {
+    // 계획일(10) 이상이라 참여율은 둘 다 100%. 목표 수는 B가 많지만 날은 A가 많다.
+    const inputs = [
+      { ...input("A", [...T3]), workoutDays: 12 },
+      { ...input("B", [...T4]), workoutDays: 11 },
+    ];
+    const r = rankForChallenge({ scoringVersion: 2, inputs, rows: [], ...base });
+    expect(r.find((x) => x.userId === "A")!.rank).toBe(1);
+    expect(r.find((x) => x.userId === "B")!.rank).toBe(2);
+    expect(r.find((x) => x.userId === "A")!.v2!.activityScore).toBe(12);
+  });
+
+  it("v2 동점: 날 수가 같으면 목표 수가 달라도 공동 순위다", () => {
     const inputs = [input("A", [...T3]), input("B", [...T4])];
     const r = rankForChallenge({ scoringVersion: 2, inputs, rows: [], ...base });
-    expect(r.find((x) => x.userId === "B")!.rank).toBe(1);
+    expect(r.map((x) => x.rank)).toEqual([1, 1]);
   });
 
   it("세션 행에서 횟수·시간을 가져온다 — 시간이 0분인 세션이 있으면 그 사람 때문에 시간 비교를 건너뛴다", () => {
@@ -60,10 +74,11 @@ describe("rankForChallenge", () => {
     expect(a.v2!.breakdown.workoutMinutes).toBe(60);
     expect(a.v2!.breakdown.minutesComplete).toBe(false);
     expect(b.v2!.breakdown.minutesComplete).toBe(true);
-    // 시간은 건너뛰고 횟수(2 > 1)로 A가 앞선다. 시간만 봤다면 A(60)도 앞서지만 이유가 다르다
+    // 활동 점수: A = 날 5 + 2회 + 60분(1점) = 8점, B = 날 5 + 1회 + 10분(0.17점) = 6.17점 → 총점으로 A가 앞선다
+    expect(a.v2!.activityScore).toBe(8);
+    expect(b.v2!.activityScore).toBe(6.17);
     expect(a.rank).toBe(1);
-    expect(a.v2!.tieBreak.kind).toBe("sessions");
-    expect(a.v2!.tieBreak.minutesSkipped).toBe(true);
+    expect(a.v2!.tieBreak.kind).toBe("none");
   });
 
   it("기간 밖·명단 밖 세션은 세지 않는다", () => {

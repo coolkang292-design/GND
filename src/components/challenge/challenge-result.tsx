@@ -136,11 +136,12 @@ export function ResultView({
       startDate: start,
       endDate: end,
       timeZone,
+      scoringVersion: challenge.scoring_version,
       finalized: true,
       ranked: myRanked,
       total,
     });
-  }, [myRanked, participants, goals, sessionRows, plans, myUserId, start, end, timeZone, total]);
+  }, [myRanked, participants, goals, sessionRows, plans, myUserId, start, end, timeZone, total, challenge.scoring_version]);
 
   // 결과 요약의 종목 4칸 — 값 + 내 순위
   const cells: MetricCell[] = METRICS.map((m) => {
@@ -164,8 +165,8 @@ export function ResultView({
       rank: myRanked.rank,
       total,
       overall: myRanked.overall,
-      // v2: 기본 점수 + 동점 판정 한 줄 (내 숫자만)
-      scoreText: myRanked.v2 ? `기본 점수 ${myRanked.v2.baseScore.toFixed(2)}점` : undefined,
+      // v2: 총점(기본 + 활동) + 동점 판정 한 줄 (내 숫자만)
+      scoreText: myRanked.v2 ? `총점 ${myRanked.v2.totalScore.toFixed(2)}점` : undefined,
       tieNote: (myRanked.v2 && tieBreakShareLine(myRanked.v2)) || undefined,
       workoutDays: participants.find((p) => p.userId === myUserId)?.workoutDays ?? 0,
       periodDays,
@@ -243,7 +244,7 @@ export function ResultView({
                   scoreText: myRanked.v2 ? formatScoreV2(myRanked.v2) : undefined,
                   tieLine:
                     myRanked.v2 && myRanked.v2.tieBonusUnits > 0
-                      ? `기본 ${myRanked.v2.baseScore.toFixed(2)}점 + 동점 가산 ${(myRanked.v2.tieBonusUnits / 1_000_000).toFixed(6)}점`
+                      ? `총점 ${myRanked.v2.totalScore.toFixed(2)}점 + 동점 가산 ${(myRanked.v2.tieBonusUnits / 1_000_000).toFixed(6)}점`
                       : undefined,
                 }
               : null

@@ -138,14 +138,14 @@ export function GoalConsentStep({
             자세히 보기
           </summary>
           <ul className="mt-2 flex flex-col gap-2">
-            {scoreCards().map((c) => (
+            {scoreCards(scoringVersion).map((c) => (
               <li key={c.title}>
                 <p className="text-[12px] font-extrabold">{c.title}</p>
                 <p className="text-[11.5px] leading-5 text-muted">{c.body}</p>
               </li>
             ))}
           </ul>
-          <p className="mt-2 text-[11.5px] font-bold text-accent">{scoreFormula()}</p>
+          <p className="mt-2 text-[11.5px] font-bold text-accent">{scoreFormula(scoringVersion)}</p>
         </details>
       </Section>
 
@@ -157,7 +157,7 @@ export function GoalConsentStep({
             <p className="mt-1 font-mono text-[18px] font-extrabold">+{bonus.per}점</p>
             <p className="text-[11.5px] leading-4 text-muted">
               100% 채운 목표마다
-              {scoringVersion === 2 && " · 동점이면 목표 많은 쪽이 앞서요"}
+              {scoringVersion === 2 && " · 동점이면 꾸준히 운동한 쪽이 앞서요"}
             </p>
           </div>
           <div className="rounded-card-sm border border-warn/50 bg-warn/10 px-3 py-2.5">

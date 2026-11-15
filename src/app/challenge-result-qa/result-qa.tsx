@@ -34,7 +34,7 @@ export function ResultQA({
   state: "active" | "ended";
   withMinutes: boolean;
   scoringVersion?: 1 | 2;
-  /** 나와 p1을 같은 기록·같은 달성률로 만들고, 나에게만 목표 1개를 더 준다 → 기본 점수 동점, 목표 수로 갈린다 */
+  /** 나와 p1을 같은 기록 패턴·같은 달성률로 만들고 나에게만 목표 1개를 더 준다 → 총점이 정확히 같아 공동 순위(동점 규칙으로도 안 갈린다). 목표 수는 동점 기준이 아니다 */
   tie?: boolean;
 }) {
   const [activeTab, setActiveTab] = useState<"overview" | "ranking" | "feed" | "mission">("ranking");

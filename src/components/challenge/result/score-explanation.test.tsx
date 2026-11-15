@@ -21,8 +21,15 @@ const goal = (t: UserGoal["goal_type"]): UserGoal =>
   ({ id: t, user_id: "A", challenge_id: "c", group_id: "g", goal_type: t, target_value: 10, unit: "회", planned_days: 3, qualifier: null, created_at: "", updated_at: "" }) as UserGoal;
 const base = { startDate: "2026-11-01", endDate: "2026-11-28", timeZone: "Asia/Seoul" } as const;
 
-function renderFor(inputs: ParticipantInput[]) {
-  const ranked = rankForChallenge({ scoringVersion: 2, inputs, rows: [], ...base });
+/** 사람마다 완료 세션 n개를 기간 안에 만든다 — 시간 기록은 없다(활동 점수는 날·횟수만 센다) */
+function sessionRows(counts: Record<string, number>) {
+  return Object.entries(counts).flatMap(([userId, n]) =>
+    Array.from({ length: n }, () => ({ userId, completedAt: "2026-11-05T03:00:00.000Z", durationMinutes: 0, exercises: [] as never[] })),
+  );
+}
+
+function renderFor(inputs: ParticipantInput[], sessions: Record<string, number> = {}) {
+  const ranked = rankForChallenge({ scoringVersion: 2, inputs, rows: sessionRows(sessions), ...base });
   const me = ranked.find((r) => r.userId === "A")!;
   render(
     <ScoreExplanation
@@ -49,11 +56,25 @@ describe("ScoreExplanation", () => {
     expect(screen.queryByTestId("tie-break-card")).toBeNull();
   });
 
-  it("동점이면 실제 개수가 든 사유 카드가 뜬다", () => {
-    renderFor([mk("A", ["workout_days", "cardio_time"]), mk("B", ["workout_days"])]);
+  it("활동 점수와 총점이 따로 보인다", () => {
+    const me = renderFor([
+      { ...mk("A", ["workout_days", "cardio_time"]), workoutDays: 12 },
+      { ...mk("B", ["workout_days", "cardio_time"]), workoutDays: 11 },
+    ]);
+    expect(screen.getByTestId("pts-activity").textContent).toContain("12.00점");
+    expect(screen.getByTestId("activity-detail").textContent).toContain("운동한 날 12일 +12");
+    expect(screen.getByTestId("total-sum").textContent).toContain(`총점 ${me.v2!.totalScore.toFixed(2)}점`);
+  });
+
+  it("총점이 같으면 실제 운동한 날 수가 든 사유 카드가 뜬다", () => {
+    // 날 12 + 횟수 8 = 날 11 + 횟수 9 = 20점 — 총점이 같아야 동점 카드가 뜬다
+    renderFor([
+      { ...mk("A", ["workout_days", "cardio_time"]), workoutDays: 12 },
+      { ...mk("B", ["workout_days", "cardio_time"]), workoutDays: 11 },
+    ], { A: 8, B: 9 });
     const card = screen.getByTestId("tie-break-card");
-    expect(card.textContent).toContain("2개");
-    expect(card.textContent).toContain("1개");
+    expect(card.textContent).toContain("12일");
+    expect(card.textContent).toContain("11일");
   });
 
   it("목표별 점수는 눌러야 펼쳐지고, 자동 유산소 줄을 따로 안내한다", () => {
