@@ -12,6 +12,11 @@ import type { CatalogExercise } from "@/lib/types";
 import type { CalendarSession } from "@/lib/workout";
 import type { TabataMinutes } from "@/lib/domain/tabata";
 import { TabataSheet } from "./tabata-sheet";
+import { loadChallengeScoreSnapshot } from "@/lib/challenge-workout-feedback";
+import type { ChallengeScoreSnapshot } from "@/lib/domain/challenge-workout-impact";
+import type { ActiveChallengeContext } from "@/lib/domain/challenge-confirmation";
+
+vi.mock("@/lib/challenge-workout-feedback", () => ({ loadChallengeScoreSnapshot: vi.fn() }));
 
 afterEach(() => {
   cleanup();
@@ -74,6 +79,8 @@ function setup(
     initialPicked?: CatalogExercise[];
     initialMinutes?: TabataMinutes;
     followUpNames?: readonly string[];
+    challengeContexts?: readonly ActiveChallengeContext[];
+    onPlan?: (picked: CatalogExercise[], minutes: TabataMinutes) => Promise<boolean>;
     onBegin?: (
       picked: CatalogExercise[],
       minutes: TabataMinutes,
@@ -90,6 +97,8 @@ function setup(
       initialPicked={over.initialPicked}
       initialMinutes={over.initialMinutes}
       followUpNames={over.followUpNames}
+      challengeContexts={over.challengeContexts}
+      onPlan={over.onPlan}
       onClose={over.onClose ?? vi.fn()}
       onCreateCustom={vi.fn()}
       onBegin={over.onBegin ?? vi.fn()}
@@ -334,5 +343,38 @@ describe("TabataSheet — 인터벌 뒤 이어하기 (2026-09-29)", () => {
     setup({ initialPicked: FOUR, initialMinutes: 8, followUpNames: ["흉추 익스텐션"], onBegin });
     fireEvent.click(screen.getByRole("button", { name: "전신 인터벌 시작" }));
     await waitFor(() => expect(onBegin).toHaveBeenCalledWith(FOUR, 8));
+  });
+});
+
+/**
+ * 챌린지 참가자는 인터벌을 **시작하기 전에** 예상 점수를 본다 (사용자 지시 2026-11-17).
+ * 인터벌은 시트의 시작 버튼 하나로만 시작되므로 이 카드가 시작 전 유일한 확인 자리다.
+ */
+describe("TabataSheet — 시작 전 챌린지 예상 점수 (2026-11-17)", () => {
+  const goal = { id: "g", user_id: "me", challenge_id: "c", goal_type: "bodyweight_reps", target_value: 100, planned_days: 2, qualifier: null, unit: "회" } as ChallengeScoreSnapshot["goals"][number];
+  const context: ActiveChallengeContext = { id: "c", name: "함께 운동", startDate: "2000-01-01", endDate: "2999-12-31", photoRequired: false, goals: [goal], liveRanking: true };
+  const snapshot = { challenge: { id: "c", name: "함께 운동", status: "active", myStatus: "joined", live_ranking: true, photo_required: false, scoring_version: 2, start_date: "2000-01-01", end_date: "2999-12-31" }, goals: [goal], participantIds: ["me", "other"], rows: [], timeZone: "Asia/Seoul" } as unknown as ChallengeScoreSnapshot;
+  const headline = () => Number((document.body.textContent ?? "").match(/예상 \+([\d.]+)점/)?.[1]);
+
+  it("시작 버튼 앞에 인터벌 예상 점수가 뜨고, 코스를 바꾸면 점수가 바뀐다", async () => {
+    vi.mocked(loadChallengeScoreSnapshot).mockResolvedValue(snapshot);
+    setup({ userId: "me", initialPicked: FOUR, initialMinutes: 4, challengeContexts: [context] });
+    expect(await screen.findByText("이 인터벌을 마치면")).toBeTruthy();
+    const p4 = headline();
+    expect(p4).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: "8분" }));
+    await waitFor(() => expect(headline()).toBeGreaterThan(p4));
+    expect(screen.getByRole("button", { name: "전신 인터벌 시작" })).toBeTruthy();
+  });
+  it("참여 중인 챌린지가 없으면 카드가 없다", () => {
+    vi.mocked(loadChallengeScoreSnapshot).mockClear();
+    setup({ userId: "me", initialPicked: FOUR, challengeContexts: [] });
+    expect(screen.queryByText("이 인터벌을 마치면")).toBeNull();
+    expect(loadChallengeScoreSnapshot).not.toHaveBeenCalled();
+  });
+  it("계획 저장 모드(달력)에서는 보여주지 않는다 — 시작하는 화면이 아니다", () => {
+    vi.mocked(loadChallengeScoreSnapshot).mockResolvedValue(snapshot);
+    setup({ userId: "me", initialPicked: FOUR, challengeContexts: [context], onPlan: vi.fn() });
+    expect(screen.queryByText("이 인터벌을 마치면")).toBeNull();
   });
 });

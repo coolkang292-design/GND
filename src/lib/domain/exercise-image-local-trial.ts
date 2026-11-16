@@ -6,7 +6,7 @@ const TRIAL_IDS: Record<string, string> = {
   "체스트프레스 머신": "486fa05a-f354-45c9-a3c9-934b38f91f9c",
   "덤벨 레터럴 레이즈": "e1c75ef2-12bb-4fce-8435-e617618f1d37",
   "바벨 로우": "d0862f4a-f9f1-4411-ad3c-15e904085afc",
-  "사이클": "84acc89a-ee72-40a8-8d64-93fcc410904b",
+  "싸이클": "84acc89a-ee72-40a8-8d64-93fcc410904b",
 };
 
 export function localTrialImage(name: string, broken = false): string | undefined {

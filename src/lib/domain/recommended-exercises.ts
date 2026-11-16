@@ -59,7 +59,7 @@ export const EXERCISE_NOTES: Record<string, string> = {
   // 유산소
   걷기: "가장 부담 없이 시작할 수 있는 유산소예요",
   트레드밀: "속도를 스스로 정할 수 있어 시작하기 편해요",
-  사이클: "앉아서 해 무릎 부담이 적은 유산소예요",
+  싸이클: "앉아서 해 무릎 부담이 적은 유산소예요",
   로잉: "상·하체를 함께 쓰는 전신 유산소예요",
 };
 
@@ -234,7 +234,7 @@ export const SITUATIONS: readonly Situation[] = [
     iconSrc: "/ui-icons/situ-cardio.webp",
     icon: "situ-cardio",
     photo: "/program-assets/lower.webp",
-    names: ["걷기", "트레드밀", "사이클", "로잉"],
+    names: ["걷기", "트레드밀", "싸이클", "로잉"],
   },
 ];
 
@@ -255,7 +255,7 @@ const CHALLENGE_POOL: readonly string[] = [
   "인버티드 로우",
   "걷기",
   "트레드밀",
-  "사이클",
+  "싸이클",
 ];
 
 // ── 해석 ───────────────────────────────────────────────────────

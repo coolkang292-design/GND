@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { cardioKindOf } from "./cardio-kind";
 
-describe("cardioKindOf — 유산소를 거리·사이클·기타로 가른다", () => {
+describe("cardioKindOf — 유산소를 거리·싸이클·기타로 가른다", () => {
   it.each([
     ["걷기", "distance"],
     ["러닝", "distance"],
     ["트레드밀", "distance"],
-    ["사이클", "cycle"],
+    ["싸이클", "cycle"],
     ["실내자전거", "cycle"],
     ["스피닝", "cycle"],
     ["로잉", "other"],
@@ -22,7 +22,7 @@ describe("cardioKindOf — 유산소를 거리·사이클·기타로 가른다",
     expect(cardioKindOf("")).toBe("other");
   });
 
-  it("사이클이 걷기·러닝 글자보다 먼저 걸린다", () => {
+  it("싸이클이 걷기·러닝 글자보다 먼저 걸린다", () => {
     expect(cardioKindOf("러닝 바이크")).toBe("cycle");
   });
 });

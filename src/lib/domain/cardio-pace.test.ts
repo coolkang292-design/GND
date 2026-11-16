@@ -73,11 +73,11 @@ describe("isPaceExercise", () => {
   });
 
   /**
-   * 사이클은 km/h, 로잉은 500m당 시간을 쓴다. 분/km를 붙이면 **틀린 정보**다.
+   * 싸이클은 km/h, 로잉은 500m당 시간을 쓴다. 분/km를 붙이면 **틀린 정보**다.
    * 줄넘기는 거리가 없다.
    */
-  it("사이클·로잉·줄넘기는 아니다", () => {
-    expect(cardio("사이클")).toBe(false);
+  it("싸이클·로잉·줄넘기는 아니다", () => {
+    expect(cardio("싸이클")).toBe(false);
     expect(cardio("로잉")).toBe(false);
     expect(cardio("줄넘기")).toBe(false);
   });
@@ -110,10 +110,10 @@ describe("cardioPaceLabel", () => {
     ).toBe("6'17\"/km");
   });
 
-  it("사이클이면 null", () => {
+  it("싸이클이면 null", () => {
     expect(
       cardioPaceLabel({
-        name: "사이클",
+        name: "싸이클",
         exerciseType: "cardio",
         durationSec: 1_800,
         distanceKm: 10,

@@ -82,8 +82,8 @@ describe("꼭 알아둘 약속", () => {
   });
 
   it("새 유산소 규칙은 11/3 이후 시작하는 챌린지에만 말한다 — 그 전에 시작한 챌린지에는 거짓이다", () => {
-    expect(mustKnow({ photoRequired: false, startDate: "2026-10-27" }).join("\n")).not.toContain("사이클");
-    expect(mustKnow({ photoRequired: false, startDate: "2026-11-14" }).join("\n")).toContain("사이클 시간");
+    expect(mustKnow({ photoRequired: false, startDate: "2026-10-27" }).join("\n")).not.toContain("싸이클");
+    expect(mustKnow({ photoRequired: false, startDate: "2026-11-14" }).join("\n")).toContain("싸이클 시간");
   });
 
   it("시작 후에는 올리기만 된다고 말한다 — '언제든지'는 거짓이다", () => {

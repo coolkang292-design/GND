@@ -74,6 +74,46 @@ describe("운동 전후 챌린지 안내", () => {
   });
 });
 
+describe("인터벌은 시작하기 전에 예상 점수를 보여준다", () => {
+  // 인터벌 4종 — 종목마다 코스가 정한 횟수(4분=2회, 8분=4회)로 기록된다 (`tabataRepsForMinutes`)
+  const interval = (reps: number): LocalExercise[] => ["버피", "마운틴 클라이머", "점핑잭", "스쿼트 점프"].map((name, i) => ({ key: `t${i}`, name, bodyPart: "코어", exerciseType: "bodyweight", measure: "reps", isCustom: false, sets: [newSet({ reps })] }));
+  const now = new Date("2026-11-13T04:00:00Z");
+  const empty = { ...snapshot, rows: [] } as ChallengeScoreSnapshot;
+  const points = () => Number((document.body.textContent ?? "").match(/예상 \+([\d.]+)점/)?.[1]);
+  it("인터벌 문구로 예상 점수를 보여주고 추가 제안 버튼은 없다", async () => {
+    vi.mocked(loadChallengeScoreSnapshot).mockResolvedValue(empty);
+    render(<ChallengePlanFeedback userId="me" contexts={[context]} exercises={interval(2)} tabataMinutes={4} now={now} />);
+    expect(await screen.findByText("이 인터벌을 마치면")).toBeTruthy();
+    expect(points()).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: "계획에 추가" })).toBeNull();
+  });
+  it("코스(분)가 바뀌면 예상 점수도 바뀐다 — 8분이 4분보다 크다", async () => {
+    vi.mocked(loadChallengeScoreSnapshot).mockResolvedValue(empty);
+    const four = render(<ChallengePlanFeedback userId="me" contexts={[context]} exercises={interval(2)} tabataMinutes={4} now={now} />);
+    await screen.findByText("이 인터벌을 마치면");
+    const p4 = points();
+    four.unmount();
+    render(<ChallengePlanFeedback userId="me" contexts={[context]} exercises={interval(4)} tabataMinutes={8} now={now} />);
+    await screen.findByText("이 인터벌을 마치면");
+    expect(points()).toBeGreaterThan(p4);
+  });
+  it("종목을 아직 안 골랐어도 인터벌 횟수·시간 점수는 보여준다", async () => {
+    vi.mocked(loadChallengeScoreSnapshot).mockResolvedValue({ ...empty, goals: [{ ...goal, goal_type: "tabata_count", target_value: 4 }] } as ChallengeScoreSnapshot);
+    render(<ChallengePlanFeedback userId="me" contexts={[{ ...context, goals: [{ ...goal, goal_type: "tabata_count", target_value: 4 }] }]} exercises={[]} tabataMinutes={4} now={now} />);
+    expect(await screen.findByText("이 인터벌을 마치면")).toBeTruthy();
+    expect(points()).toBeGreaterThan(0);
+  });
+  it("종목도 없고 인터벌도 아니면 아무것도 안 그린다 (기존 동작)", () => {
+    const { container } = render(<ChallengePlanFeedback userId="me" contexts={[context]} exercises={[]} onAdd={vi.fn()} />);
+    expect(container.textContent).toBe("");
+  });
+  it("비공개 챌린지는 인터벌에서도 점수를 보여주지 않는다", () => {
+    const { container } = render(<ChallengePlanFeedback userId="me" contexts={[{ ...context, liveRanking: false }]} exercises={interval(2)} tabataMinutes={4} now={now} />);
+    expect(container.textContent).toBe("");
+    expect(loadChallengeScoreSnapshot).not.toHaveBeenCalled();
+  });
+});
+
 describe("진행 중에는 활동 점수를 보여주지 않는다 (최종 발표 때만 더한다)", () => {
   it("운동을 마쳐도 활동 점수·총점 줄이 없다", async () => {
     render(<ChallengeWorkoutResultCard userId="me" sessionId="s" context={context} gains={gains} photoDone/>);

@@ -72,7 +72,7 @@ describe("pickChallengeExercises — 담을 종목", () => {
     ex("2", "스쿼트", "weight"),
     ex("3", "랫풀다운", "weight"),
     ex("4", "러닝", "cardio"),
-    ex("5", "사이클", "cardio"),
+    ex("5", "싸이클", "cardio"),
     ex("6", "푸시업", "bodyweight"),
     ex("7", "플랭크", "bodyweight"),
   ];

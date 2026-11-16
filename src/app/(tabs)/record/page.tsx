@@ -1773,7 +1773,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
     }
     markActivity();
     setDraft({ ...current, exercises, suggestedForDayKey: null });
-    showToast(`${addition.name} 추가분을 계획에 담았어요`);
+    showToast(addition.exerciseType === "cardio" && current.exercises.some((ex) => ex.name === addition.name && ex.exerciseType === "cardio")
+      ? `${addition.name} 추가분을 기존 기록에 더했어요`
+      : `${addition.name} 추가분을 계획에 담았어요`);
     return true;
   }
 
@@ -4970,6 +4972,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
           <TabataSheet
             open={tabataOpen}
             userId={userId}
+            challengeContexts={activeChallengeContexts}
             onPlayingChange={setIntervalPlaying}
             openPickerOnMount={tabataPrefill?.openPicker}
             catalog={catalog}

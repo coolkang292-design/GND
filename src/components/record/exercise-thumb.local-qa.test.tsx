@@ -12,11 +12,11 @@ afterEach(() => { cleanup(); vi.unstubAllEnvs(); });
 
 it("never enables trial image paths in production, even with the flag", () => {
   vi.stubEnv("NODE_ENV", "production"); vi.stubEnv("NEXT_PUBLIC_EXERCISE_IMAGE_LOCAL_QA", "1");
-  expect(localTrialImage("사이클")).toBeUndefined();
+  expect(localTrialImage("싸이클")).toBeUndefined();
 });
 it("requires explicit opt-in in development", () => {
   vi.stubEnv("NODE_ENV", "development"); vi.stubEnv("NEXT_PUBLIC_EXERCISE_IMAGE_LOCAL_QA", "");
-  expect(localTrialImage("사이클")).toBeUndefined();
+  expect(localTrialImage("싸이클")).toBeUndefined();
 });
 it("keeps the exercise row and switches to a body-part image after load error", () => {
   vi.stubEnv("NODE_ENV", "development"); vi.stubEnv("NEXT_PUBLIC_EXERCISE_IMAGE_LOCAL_QA", "1");
@@ -24,6 +24,6 @@ it("keeps the exercise row and switches to a body-part image after load error", 
   fireEvent.error(container.querySelector("img")!);
   expect(container.querySelector("img")!.getAttribute("src")).toBe("/ui-icons/part-chest.webp");
   expect(container.querySelector("img")!.parentElement!.className).toContain("h-12 w-12");
-  rerender(<ExerciseThumbTile name="사이클" bodyPart="유산소" />);
+  rerender(<ExerciseThumbTile name="싸이클" bodyPart="유산소" />);
   expect(container.querySelector("img")!.getAttribute("src")).toContain("84acc89a");
 });

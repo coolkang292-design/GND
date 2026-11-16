@@ -99,9 +99,9 @@ export const DETAIL_METRICS: Record<
   cardio: [
     { type: "cardio_distance", label: "거리" },
     { type: "cardio_time", label: "시간" },
-    // 사이클은 거리가 아니라 누적 시간으로 잰다 (2026-11-11). 새 규칙 챌린지에서 거리·시간에는
-    // 사이클이 안 들어가므로(`CARDIO_RULES_V2_FROM`) 사이클 운동은 이 목표로 따로 세운다.
-    { type: "cycle_time", label: "사이클 시간" },
+    // 싸이클은 거리가 아니라 누적 시간으로 잰다 (2026-11-11). 새 규칙 챌린지에서 거리·시간에는
+    // 싸이클이 안 들어가므로(`CARDIO_RULES_V2_FROM`) 싸이클 운동은 이 목표로 따로 세운다.
+    { type: "cycle_time", label: "싸이클 시간" },
   ],
   bodyweight: [
     { type: "bodyweight_reps", label: "운동 횟수" },

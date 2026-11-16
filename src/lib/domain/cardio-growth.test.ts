@@ -29,8 +29,8 @@ describe("유산소 성장 — 같은 조건의 성과", () => {
     expect(result.growths[0]).toMatchObject({ exerciseKey: "트레드밀", kind: "c", cardioComparison: "distance_at_same_time" });
     expect(result.growths[0].growthPct).toBeCloseTo(10, 9);
   });
-  it("사이클30분9km→33분9.9km는 같은 속도로 시간10% 성장", () => {
-    const result = grow([session("2026-10-10", 9000, 1800, "사이클"), session("2026-11-10", 9900, 1980, "사이클")]);
+  it("싸이클30분9km→33분9.9km는 같은 속도로 시간10% 성장", () => {
+    const result = grow([session("2026-10-10", 9000, 1800, "싸이클"), session("2026-11-10", 9900, 1980, "싸이클")]);
     expect(result.growths).toHaveLength(1);
     expect(result.growths[0]).toMatchObject({ kind: "c", cardioComparison: "time_at_same_speed" });
     expect(result.growths[0].growthPct).toBeCloseTo(10, 9);
@@ -48,9 +48,9 @@ describe("유산소 성장 — 같은 조건의 성과", () => {
   it("거리가 없는 시간 기록은 속도 확인이 불가능해 성장에 쓰지 않는다", () => {
     expect(toMetricPoints([session("2026-10-10", null, 1800)])).toEqual([]);
   });
-  it("같은 사이클의 여러 수행은 한 성장 종목으로만 센다", () => {
-    const result = grow([session("2026-10-10", 9000, 1800, "사이클"),
-      session("2026-11-10", 9900, 1800, "사이클"), session("2026-11-11", 10800, 1800, "사이클")]);
+  it("같은 싸이클의 여러 수행은 한 성장 종목으로만 센다", () => {
+    const result = grow([session("2026-10-10", 9000, 1800, "싸이클"),
+      session("2026-11-10", 9900, 1800, "싸이클"), session("2026-11-11", 10800, 1800, "싸이클")]);
     expect(result.growths).toHaveLength(1);
     expect(result.growths[0].growthPct).toBeCloseTo(20, 9);
     expect(result.previousStageExerciseCount).toBe(1);

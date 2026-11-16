@@ -25,7 +25,7 @@ describe.skipIf(!process.env.GND_PGLITE_MODULE)("SQL·TS 독립 계산 대조", 
               { weight_kg: null, reps: stage ? 12 : 10, duration_seconds: null, is_completed: true }] },
             { exercise_name: "플랭크", exercise_type: "time", sort_order: 2, workout_sets: [
               { weight_kg: null, reps: null, duration_seconds: stage ? 66 : 60, is_completed: true }] },
-            { exercise_name: "사이클", exercise_type: "cardio", sort_order: 3, workout_sets: [
+            { exercise_name: "싸이클", exercise_type: "cardio", sort_order: 3, workout_sets: [
               { weight_kg: null, reps: null, duration_seconds: stage ? 1980 : 1800, distance_meters: stage ? 9900 : 9000, is_completed: true }] },
             { exercise_name: "누락유산소", exercise_type: "cardio", sort_order: 4, workout_sets: [
               { weight_kg: null, reps: null, duration_seconds: 1800, distance_meters: 5000, is_completed: true },

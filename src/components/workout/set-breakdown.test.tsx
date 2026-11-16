@@ -193,8 +193,8 @@ describe("SetBreakdown", () => {
       expect(text(render([run("트레드밀", false)]))).not.toContain("/km");
     });
 
-    it("사이클에는 붙이지 않는다 — 분/km는 사이클의 단위가 아니다", () => {
-      expect(text(render([run("사이클", true)]))).not.toContain("/km");
+    it("싸이클에는 붙이지 않는다 — 분/km는 싸이클의 단위가 아니다", () => {
+      expect(text(render([run("싸이클", true)]))).not.toContain("/km");
     });
   });
 });

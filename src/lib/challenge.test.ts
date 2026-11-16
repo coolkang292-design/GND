@@ -947,12 +947,12 @@ describe("myScoreTrend", () => {
 });
 
 /**
- * 유산소 집계 규칙 v2 (2026-11-11) — 사이클은 거리가 아니라 시간으로 잰다.
+ * 유산소 집계 규칙 v2 (2026-11-11) — 싸이클은 거리가 아니라 시간으로 잰다.
  *
- * 기준 숫자는 **운영 실측**이다: 낭만송곳니 11/3~10, 걷기 4회 18.8km·사이클 2회 16.0km(42.5분).
+ * 기준 숫자는 **운영 실측**이다: 낭만송곳니 11/3~10, 걷기 4회 18.8km·싸이클 2회 16.0km(42.5분).
  * 옛 규칙에서는 합쳐서 (18.8+16)/45 = 77.3%, 걷기만 인정하면 18.8/45 = 41.8%.
  */
-describe("foldPeriodStats — 유산소 규칙 v2 (사이클 분리)", () => {
+describe("foldPeriodStats — 유산소 규칙 v2 (싸이클 분리)", () => {
   const cardio = (
     name: string,
     km: number,
@@ -980,25 +980,25 @@ describe("foldPeriodStats — 유산소 규칙 v2 (사이클 분리)", () => {
   });
   const mk = (walkDay: string, cycleDay: string) => [
     cardio("걷기", 18.8, 176.1 * 60, `${walkDay}T10:00:00+09:00`),
-    cardio("사이클", 16, 42.5 * 60, `${cycleDay}T10:00:00+09:00`),
+    cardio("싸이클", 16, 42.5 * 60, `${cycleDay}T10:00:00+09:00`),
   ];
   const rows = mk("2026-10-28", "2026-10-30"); // 10/27 시작 챌린지 (옛 규칙)
   const rowsV2 = mk("2026-11-04", "2026-11-09"); // 11/3 시작 챌린지 = 11월 챌린지 (새 규칙)
 
-  it("옛 규칙(시작일 < 11/3): 사이클 거리가 유산소 거리에 합쳐진다 — 그 전에 시작한 챌린지는 그대로", () => {
+  it("옛 규칙(시작일 < 11/3): 싸이클 거리가 유산소 거리에 합쳐진다 — 그 전에 시작한 챌린지는 그대로", () => {
     const s = foldPeriodStats(rows, "2026-10-27", "2026-11-23", "Asia/Seoul").get("u1")!;
     expect(s.cardioDistanceKm).toBeCloseTo(34.8, 5);
     expect(s.cardioDistanceKm / 45).toBeCloseTo(0.773, 3); // 77.3%
-    // 사이클 시간은 옛 규칙에서도 따로 센다 (진행 중 챌린지에 cycle_time 목표를 줄 수 있다)
+    // 싸이클 시간은 옛 규칙에서도 따로 센다 (진행 중 챌린지에 cycle_time 목표를 줄 수 있다)
     expect(s.cycleTimeMin).toBeCloseTo(42.5, 5);
   });
 
-  it("새 규칙(시작일 ≥ 11/3): 거리는 걷기만, 사이클은 cycle_time 한 곳에서만 — 11월 챌린지(낭만송곳니 실측)", () => {
+  it("새 규칙(시작일 ≥ 11/3): 거리는 걷기만, 싸이클은 cycle_time 한 곳에서만 — 11월 챌린지(낭만송곳니 실측)", () => {
     const s = foldPeriodStats(rowsV2, "2026-11-03", "2026-12-02", "Asia/Seoul").get("u1")!;
     expect(s.cardioDistanceKm).toBeCloseTo(18.8, 5);
     expect(s.cardioDistanceKm / 45).toBeCloseTo(0.418, 3); // 41.8%
     expect(s.cycleTimeMin).toBeCloseTo(42.5, 5);
-    // 사이클 시간이 유산소 시간에도 들어가면 같은 운동으로 보너스를 두 번 받는다
+    // 싸이클 시간이 유산소 시간에도 들어가면 같은 운동으로 보너스를 두 번 받는다
     expect(s.cardioTimeMin).toBeCloseTo(176.1, 5);
   });
 
@@ -1022,18 +1022,18 @@ describe("foldPeriodStats — 유산소 규칙 v2 (사이클 분리)", () => {
 });
 
 /**
- * 사이클 운동은 **사이클 목표를 세운 사람에게만** 목표와 연결된다 (사용자 지시 2026-11-11).
- * 새 규칙 챌린지(시작일 ≥ 11/3)에서 사이클 기록은 거리·유산소 시간에 들어가지 않고,
- * `cycle_time` 목표가 있을 때만 사이클 시간으로 쌓인다.
+ * 싸이클 운동은 **싸이클 목표를 세운 사람에게만** 목표와 연결된다 (사용자 지시 2026-11-11).
+ * 새 규칙 챌린지(시작일 ≥ 11/3)에서 싸이클 기록은 거리·유산소 시간에 들어가지 않고,
+ * `cycle_time` 목표가 있을 때만 싸이클 시간으로 쌓인다.
  */
-describe("사이클 운동 ↔ 목표 연결 — 사이클 목표를 세운 사람만", () => {
+describe("싸이클 운동 ↔ 목표 연결 — 싸이클 목표를 세운 사람만", () => {
   const ride: PeriodSessionRow = {
     userId: "u1",
     completedAt: "2026-11-13T10:00:00+09:00", // 새 규칙 챌린지 기간
     exercises: [
       {
         exerciseType: "cardio",
-        exerciseName: "사이클",
+        exerciseName: "싸이클",
         bodyPart: "유산소",
         sets: [
           { weightKg: null, reps: null, distanceMeters: 8000, durationSeconds: 20 * 60, isCompleted: true },
@@ -1048,7 +1048,7 @@ describe("사이클 운동 ↔ 목표 연결 — 사이클 목표를 세운 사�
       (g) => g.type === type,
     )?.delta;
 
-  it("사이클 목표가 없는 사람: 거리·유산소 시간에는 0이다 (연결되지 않는다)", () => {
+  it("싸이클 목표가 없는 사람: 거리·유산소 시간에는 0이다 (연결되지 않는다)", () => {
     const goals = [goal("workout_days", 12), goal("cardio_distance", 45), goal("cardio_time", 300)];
     expect(gainOf(goals, "cardio_distance")).toBe(0);
     expect(gainOf(goals, "cardio_time")).toBe(0);
@@ -1056,7 +1056,7 @@ describe("사이클 운동 ↔ 목표 연결 — 사이클 목표를 세운 사�
     expect(gainOf(goals, "workout_days")).toBe(1);
   });
 
-  it("사이클 목표를 세운 사람: 사이클 시간에 20분이 쌓인다", () => {
+  it("싸이클 목표를 세운 사람: 싸이클 시간에 20분이 쌓인다", () => {
     const goals = [goal("workout_days", 12), goal("cycle_time", 257)];
     expect(gainOf(goals, "cycle_time")).toBe(20);
   });

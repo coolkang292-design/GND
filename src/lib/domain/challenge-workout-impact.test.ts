@@ -72,7 +72,7 @@ describe("workout impact: current records with/without a session", () => {
     expect(result.tieReason).toBeTruthy();
   });
   it("uses cycle time and excludes cycle distance from Nov 3 starts", () => {
-    const s = snapshot([goal("cycle_time", 40), goal("cardio_distance", 20)], [row("cycle", [exercise("사이클", "cardio", 0, 20, 10)])]);
+    const s = snapshot([goal("cycle_time", 40), goal("cardio_distance", 20)], [row("cycle", [exercise("싸이클", "cardio", 0, 20, 10)])]);
     const changes = calculateWorkoutImpact(s, "A", "cycle")!.goalChanges;
     expect(changes.find((g) => g.type === "cycle_time")?.delta).toBe(20);
     expect(changes.find((g) => g.type === "cardio_distance")?.delta).toBe(0);
@@ -146,17 +146,34 @@ describe("plan forecast and bounded additions", () => {
   });
   it("bounds time and distance additions to 25% of familiar doses and absolute caps", () => {
     const time = snapshot([goal("cycle_time", 1000)]);
-    const timeSuggestion = recommendWorkoutAdditions(time, "A", row("plan", [exercise("사이클", "cardio", 0, 20)]))[0];
+    const timeSuggestion = recommendWorkoutAdditions(time, "A", row("plan", [exercise("싸이클", "cardio", 0, 20)]))[0];
     expect(timeSuggestion.exercise.sets[0].durationMin).toBeLessThanOrEqual(5);
     const distance = snapshot([goal("cardio_distance", 100)]);
     const distanceSuggestion = recommendWorkoutAdditions(distance, "A", row("plan", [exercise("러닝", "cardio", 0, 0, 8)]))[0];
     expect(distanceSuggestion.exercise.sets[0].distanceKm).toBeLessThanOrEqual(1);
     const short = recommendWorkoutAdditions(distance, "A", row("plan", [exercise("걷기", "cardio", 0, 0, 2)]))[0];
     expect(short.exercise.sets[0].distanceKm).toBeLessThanOrEqual(0.5);
-    const long = recommendWorkoutAdditions(time, "A", row("plan", [exercise("사이클", "cardio", 0, 120)]))[0];
+    const long = recommendWorkoutAdditions(time, "A", row("plan", [exercise("싸이클", "cardio", 0, 120)]))[0];
     expect(long.exercise.sets[0].durationMin).toBeLessThanOrEqual(10);
     const reps = recommendWorkoutAdditions(snapshot([goal("weight_reps", 1000)]), "A", row("plan", [exercise("스쿼트", "weight", 6)]))[0];
     expect(reps.exercise.sets[0].reps).toBeLessThanOrEqual(6);
+  });
+  it("유산소 제안은 기존 값에 더해지는 문구로 보여 주고, 웨이트는 기존 문구를 유지한다", () => {
+    const time = snapshot([goal("cycle_time", 1000)]);
+    const cardio = recommendWorkoutAdditions(time, "A", row("plan", [exercise("싸이클", "cardio", 0, 40)]))[0];
+    const added = cardio.exercise.sets[0].durationMin;
+    expect(cardio.label).toBe(`싸이클 +${added}분 (40분 → ${Math.round((40 + added) * 100) / 100}분)`);
+    const weight = recommendWorkoutAdditions(snapshot([goal("weight_reps", 1000)]), "A", row("plan", [exercise("스쿼트", "weight", 6)]))[0];
+    expect(weight.label).toBe(`스쿼트 ${weight.exercise.sets[0].reps}회 추가`);
+  });
+  it("유산소 제안의 예상 점수는 합쳐 담은 계획의 예상 점수와 같다 (시뮬레이션 = 실제 적용)", () => {
+    const s = snapshot([goal("cycle_time", 60)]);
+    const plan = row("plan", [exercise("싸이클", "cardio", 0, 50)]);
+    const suggestion = recommendWorkoutAdditions(s, "A", plan)[0];
+    const added = suggestion.exercise.sets[0].durationMin;
+    const merged = row("plan", [exercise("싸이클", "cardio", 0, 50 + added)]);
+    const forecast = forecastWorkout(s, "A", merged);
+    expect(forecast?.afterScore).toBe(suggestion.afterScore);
   });
   it("uses a smaller precise addition when it completes the goal and preserves its bonus", () => {
     const s = snapshot([goal("cardio_distance", 8.1)]);

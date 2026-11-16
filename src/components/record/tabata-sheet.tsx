@@ -3,10 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { UiIcon } from "@/components/ui-icon";
 import { IntervalSessionOverlay } from "./interval-session-overlay";
+import { ChallengePlanFeedback } from "./challenge-workout-feedback";
+import type { ActiveChallengeContext } from "@/lib/domain/challenge-confirmation";
 import {
   INTERVAL_COPY,
   TABATA_EXERCISE_COUNT,
   TABATA_TRACKS,
+  tabataDraftExercises,
   tabataPickFromNames,
   tabataRepsForMinutes,
   tabataTrackForMinutes,
@@ -19,7 +22,7 @@ import type {
   CatalogExercise,
   ExerciseType,
 } from "@/lib/types";
-import type { CalendarSession } from "@/lib/workout";
+import { localId, type CalendarSession } from "@/lib/workout";
 import { ExercisePicker } from "./exercise-picker";
 
 type WakeLockNavigator = Navigator & {
@@ -39,6 +42,11 @@ export function TabataSheet({ open, ...props }: TabataProps & { open: boolean })
 type TabataProps = {
   /** 로그인한 계정의 음원 설정에 사용한다. 없으면 기본 음원이다. */
   userId?: string | null;
+  /**
+   * 참여 중인 챌린지 — 있으면 **시작 전에** 이 인터벌의 예상 점수를 보여 준다 (사용자 지시 2026-11-17).
+   * 인터벌은 이 시트의 시작 버튼 하나로만 시작되므로 여기가 시작 전 유일한 확인 자리다.
+   */
+  challengeContexts?: readonly ActiveChallengeContext[];
   catalog: CatalogExercise[];
   onClose: () => void;
   onCreateCustom: (input: {
@@ -109,6 +117,7 @@ type TabataProps = {
 
 function TabataSheetBody({
   userId,
+  challengeContexts = [],
   catalog,
   onClose,
   onCreateCustom,
@@ -143,6 +152,11 @@ function TabataSheetBody({
   const wakeLockRef = useRef<{ release: () => Promise<void> } | null>(null);
 
   const track = tabataTrackForMinutes(minutes, userId) ?? TABATA_TRACKS[0];
+  // 예상 점수는 코스가 정한 횟수로 계산한다 — 실제 기록(`tabataDraftExercises`)과 같은 모양이라야 숫자가 맞다
+  const forecastExercises = useMemo(
+    () => tabataDraftExercises(picked, localId, minutes),
+    [picked, minutes],
+  );
 
   /**
    * 고르기 화면에는 **맨몸 종목만** 올린다 (사용자 지시 2026-08-13).
@@ -460,6 +474,23 @@ function TabataSheetBody({
             <p className="mt-1.5 text-center text-[11px] text-muted">
               지난 기록·내 루틴에서 지난번 구성을 그대로 불러올 수 있어요
             </p>
+
+            {/* 시작 버튼 바로 앞 — 누르기 전에 "이걸 하면 몇 점"을 본다. 계획 저장 화면은 시작하는 곳이 아니라 뺀다 */}
+            {!onPlan && userId && challengeContexts.length > 0 && (
+              <div className="mt-3 flex flex-col gap-2">
+                <ChallengePlanFeedback
+                  userId={userId}
+                  contexts={challengeContexts}
+                  exercises={forecastExercises}
+                  tabataMinutes={minutes}
+                />
+                {picked.length < TABATA_EXERCISE_COUNT && (
+                  <p className="text-center text-[11px] text-muted">
+                    운동 {TABATA_EXERCISE_COUNT}개를 모두 고르면 종목 점수까지 정확해져요
+                  </p>
+                )}
+              </div>
+            )}
 
             {pickError && (
               <p className="mt-2 rounded-card-sm border border-line bg-surface-2 px-3 py-2 text-xs text-warn">

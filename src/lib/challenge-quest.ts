@@ -100,7 +100,7 @@ export function shouldUseChallengeFocus(input: {
 /** 분류별로 먼저 권하는 종목 — 이름이 카탈로그에 있으면 그것부터 */
 const PREFERRED: Record<Exclude<QuestFocusKind, "interval">, readonly string[]> = {
   weight: ["스쿼트", "벤치프레스", "랫풀다운", "데드리프트", "숄더 프레스"],
-  cardio: ["러닝", "트레드밀", "걷기", "사이클"],
+  cardio: ["러닝", "트레드밀", "걷기", "싸이클"],
   bodyweight: ["푸시업", "스쿼트", "플랭크", "런지", "풀업"],
 };
 

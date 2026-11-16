@@ -94,9 +94,11 @@ export function ChallengeWorkoutResultCard({ userId, sessionId, context, gains, 
   );
 }
 
-function PlanCard({ userId, context, exercises, onAdd, now }: {
-  userId:string; context:ActiveChallengeContext; exercises:readonly LocalExercise[]; onAdd:(exercise:FinishedDraftExercise)=>boolean|void; now?:Date;
+function PlanCard({ userId, context, exercises, onAdd, now, tabataMinutes }: {
+  userId:string; context:ActiveChallengeContext; exercises:readonly LocalExercise[]; onAdd?:(exercise:FinishedDraftExercise)=>boolean|void; now?:Date; tabataMinutes?:number|null;
 }) {
+  // 인터벌(타바타)이면 코스 분수가 기록에 실린다 — 시작 전에 "이걸 하면 몇 점"을 보여 주는 카드다
+  const interval=Boolean(tabataMinutes);
   const {read,refresh}=useSnapshot(userId,context.id,"plan");
   const [usedNames,setUsedNames]=useState<string[]>([]);
   const [plannedAt,setPlannedAt]=useState(()=>now?.getTime()??Date.now());
@@ -106,27 +108,28 @@ function PlanCard({ userId, context, exercises, onAdd, now }: {
     window.addEventListener("focus",onFocus); document.addEventListener("visibilitychange",onVisible);
     return ()=>{window.removeEventListener("focus",onFocus);document.removeEventListener("visibilitychange",onVisible);};
   },[refresh,now]);
-  const plan=useMemo(()=>toPeriodSessionRow({userId,completedAtMs:plannedAt,tabataMinutes:null,exercises:exercises.map((ex)=>({...ex,sets:ex.sets.map((s)=>({...s,done:true,durationMin:durationSecondsOf(s)/60}))}))}),[userId,exercises,plannedAt]);
+  const plan=useMemo(()=>toPeriodSessionRow({userId,completedAtMs:plannedAt,tabataMinutes:tabataMinutes??null,exercises:exercises.map((ex)=>({...ex,sets:ex.sets.map((s)=>({...s,done:true,durationMin:durationSecondsOf(s)/60}))}))}),[userId,exercises,plannedAt,tabataMinutes]);
   const forecast=read?.snapshot ? forecastWorkout(read.snapshot,userId,plan):null;
   const guidance=read?.snapshot && forecast ? winGuidance(read.snapshot,userId,plan):null;
-  const suggestions=useMemo(()=>read?.snapshot && usedNames.length<2 ? recommendWorkoutAdditions(read.snapshot,userId,plan).filter((s)=>!usedNames.includes(s.exercise.name)):[],[read,plan,userId,usedNames]);
+  const suggestions=useMemo(()=>onAdd && !interval && read?.snapshot && usedNames.length<2 ? recommendWorkoutAdditions(read.snapshot,userId,plan).filter((s)=>!usedNames.includes(s.exercise.name)):[],[read,plan,userId,usedNames,onAdd,interval]);
   if(read && !read.error && !forecast) return null;
   return <section className="rounded-card border border-accent/30 bg-surface p-4" aria-label={`${context.name} 계획 예상 점수`}>
     <p className="text-xs font-extrabold text-muted">{read?.snapshot?.challenge.name??context.name}</p>
     {!read ? <p className="mt-2 text-sm text-muted" role="status">계획의 예상 점수를 확인하고 있어요…</p> : read.error ? <><p className="mt-2 text-sm text-muted">예상 점수를 불러오지 못했어요. 운동은 그대로 진행할 수 있어요.</p><button type="button" className="tap-44 text-xs font-bold text-accent" onClick={refresh}>다시 확인</button></> : forecast && <>
-      <p className="mt-3 text-sm font-bold">이 계획을 완료하면</p>
+      <p className="mt-3 text-sm font-bold">{interval?"이 인터벌을 마치면":"이 계획을 완료하면"}</p>
       <p className="mt-1 font-mono text-[25px] font-black text-accent">예상 +{points(forecast.totalDelta)}점</p>
       <p className="mt-1 text-xs text-muted">기본 점수 +{points(forecast.delta)} ({points(forecast.beforeScore)} → {points(forecast.afterScore)}점)</p>
       {forecast.activityDelta > 0 && <p data-testid="activity-forecast" className="mt-1 text-xs font-bold">활동 점수 <span className="font-mono text-accent">+{points(forecast.activityDelta)}점</span> <span className="font-normal text-muted">· 총점 {points(forecast.beforeTotal)} → {points(forecast.afterTotal)}점</span></p>}
       {forecast.reason && <p className="mt-2 text-xs text-muted">{forecast.reason}</p>}
       {guidance && <WinGuidanceBox guidance={guidance}/>}
-      {suggestions.length>0 && <div className="mt-3 space-y-2 border-t border-line pt-3">{suggestions.map((suggestion)=><div key={suggestion.id} className="rounded-xl bg-accent-weak p-3"><p className="text-[13px] font-extrabold">{suggestion.label}</p><p className="mt-1 text-xs text-muted">현재 계획보다 <b className="text-accent">+{points(suggestion.extraPoints)}점 더</b> · 최종 예상 {points(suggestion.afterScore)}점</p><button type="button" className="mt-2 min-h-11 rounded-xl border border-accent/40 px-4 text-xs font-extrabold text-accent" onClick={()=>{if(onAdd(suggestion.exercise)!==false)setUsedNames((names)=>[...names,suggestion.exercise.name]);}}>계획에 추가</button></div>)}</div>}
-      <p className="mt-3 text-[11px] leading-relaxed text-faint">{context.photoRequired?"계획대로 완료하고 사진 인증했을 때의 예상 점수예요.":"계획대로 완료했을 때의 예상 점수예요."} 추가 제안은 각각 하나를 적용한 경우예요. 무리하지 않는 범위에서 선택하세요.</p>
+      {suggestions.length>0 && <div className="mt-3 space-y-2 border-t border-line pt-3">{suggestions.map((suggestion)=><div key={suggestion.id} className="rounded-xl bg-accent-weak p-3"><p className="text-[13px] font-extrabold">{suggestion.label}</p><p className="mt-1 text-xs text-muted">현재 계획보다 <b className="text-accent">+{points(suggestion.extraPoints)}점 더</b> · 최종 예상 {points(suggestion.afterScore)}점</p><button type="button" className="mt-2 min-h-11 rounded-xl border border-accent/40 px-4 text-xs font-extrabold text-accent" onClick={()=>{if(onAdd?.(suggestion.exercise)!==false)setUsedNames((names)=>[...names,suggestion.exercise.name]);}}>계획에 추가</button></div>)}</div>}
+      <p className="mt-3 text-[11px] leading-relaxed text-faint">{interval?(context.photoRequired?"끝까지 하고 사진 인증했을 때의 예상 점수예요.":"끝까지 했을 때의 예상 점수예요."):(context.photoRequired?"계획대로 완료하고 사진 인증했을 때의 예상 점수예요.":"계획대로 완료했을 때의 예상 점수예요.")}{!interval&&" 추가 제안은 각각 하나를 적용한 경우예요. 무리하지 않는 범위에서 선택하세요."}</p>
     </>}
   </section>;
 }
 
-export function ChallengePlanFeedback({userId,contexts,exercises,onAdd,now}:{userId:string;contexts:readonly ActiveChallengeContext[];exercises:readonly LocalExercise[];onAdd:(exercise:FinishedDraftExercise)=>boolean|void;now?:Date}) {
-  if(exercises.length===0) return null;
-  return <>{contexts.filter((c)=>c.liveRanking===true && c.goals.length>0).map((context)=><PlanCard key={context.id} userId={userId} context={context} exercises={exercises} onAdd={onAdd} now={now}/>)}</>;
+export function ChallengePlanFeedback({userId,contexts,exercises,onAdd,now,tabataMinutes}:{userId:string;contexts:readonly ActiveChallengeContext[];exercises:readonly LocalExercise[];onAdd?:(exercise:FinishedDraftExercise)=>boolean|void;now?:Date;tabataMinutes?:number|null}) {
+  // 인터벌은 종목을 아직 안 골랐어도 코스 분수만으로 횟수·시간 점수가 생긴다
+  if(exercises.length===0 && !tabataMinutes) return null;
+  return <>{contexts.filter((c)=>c.liveRanking===true && c.goals.length>0).map((context)=><PlanCard key={context.id} userId={userId} context={context} exercises={exercises} onAdd={onAdd} now={now} tabataMinutes={tabataMinutes}/>)}</>;
 }

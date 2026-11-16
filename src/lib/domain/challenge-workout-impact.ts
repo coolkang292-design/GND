@@ -176,6 +176,16 @@ function mergeAddition(plan: PeriodSessionRow, extra: FinishedDraftExercise): Pe
     sets: extra.sets.map((s) => ({ weightKg: s.weightKg, reps: s.reps, durationSeconds: s.durationMin * 60, distanceMeters: s.distanceKm * 1000, isCompleted: true })) };
   const same = (ex: ExerciseRow) => ex.exerciseName === added.exerciseName && ex.exerciseType === added.exerciseType;
   const firstMatch = plan.exercises.findIndex(same);
+  // 유산소는 새 세트가 아니라 마지막 세트의 시간·거리에 더한다 — `applyChallengePlanAddition`(실제 적용)과 같은 규칙.
+  // 둘이 어긋나면 화면의 예상 점수와 담은 뒤의 점수가 달라진다. (일치 테스트: challenge-workout-impact.test.ts)
+  if (firstMatch >= 0 && added.exerciseType === "cardio" && plan.exercises[firstMatch].sets.length > 0) {
+    const target = plan.exercises[firstMatch];
+    const last = target.sets[target.sets.length - 1];
+    const merged = { ...last,
+      durationSeconds: nonNegative(last.durationSeconds) + added.sets.reduce((sum, s) => sum + nonNegative(s.durationSeconds), 0),
+      distanceMeters: nonNegative(last.distanceMeters) + added.sets.reduce((sum, s) => sum + nonNegative(s.distanceMeters), 0) };
+    return { ...plan, exercises: plan.exercises.map((ex, index) => index === firstMatch ? { ...ex, sets: [...ex.sets.slice(0, -1), merged] } : ex) };
+  }
   return { ...plan, exercises: firstMatch >= 0
     ? plan.exercises.map((ex, index) => index === firstMatch ? { ...ex, sets: [...ex.sets, ...added.sets] } : ex)
     : [...plan.exercises, added] };
@@ -216,7 +226,14 @@ export function recommendWorkoutAdditions(snapshot: ChallengeScoreSnapshot, user
         else low = middle + 1;
       }
       const amount = round(low * dose.step);
-      const candidate = { id: `${key}:${dose.field}`, label: `${ex.exerciseName} ${amount}${dose.unit} 추가`,
+      // 유산소는 기존 값에 더해진다 — 얼마에서 얼마가 되는지 그대로 보여 준다 (싸이클 +5분 (50분 → 55분))
+      const planned = completed.exercises.find((p) => p.exerciseName === ex.exerciseName && p.exerciseType === ex.exerciseType);
+      const current = !planned || ex.exerciseType !== "cardio" || dose.field === "reps" ? null
+        : round(planned.sets.reduce((sum, s) => sum + (dose.field === "durationMin" ? nonNegative(s.durationSeconds) / 60 : nonNegative(s.distanceMeters) / 1000), 0));
+      const label = current !== null && current > 0
+        ? `${ex.exerciseName} +${amount}${dose.unit} (${current}${dose.unit} → ${round(current + amount)}${dose.unit})`
+        : `${ex.exerciseName} ${amount}${dose.unit} 추가`;
+      const candidate = { id: `${key}:${dose.field}`, label,
         extraPoints: (top - base) / 100, afterScore: top / 100, exercise: addition(ex, dose, amount) };
       if (!best || candidate.extraPoints > best.extraPoints) best = candidate;
     }

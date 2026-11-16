@@ -808,9 +808,9 @@ export function GoalSetupFlow({
 
         {category === "cardio" && (
           /*
-            유산소는 **두 단계**로 고른다 (사용자 제안 2026-11-11 — "거리·시간·사이클 시간이 한 줄에 있으면
+            유산소는 **두 단계**로 고른다 (사용자 제안 2026-11-11 — "거리·시간·싸이클 시간이 한 줄에 있으면
             헷갈린다, 카테고리를 구분하고 목표를 정하자"). ① 어떤 운동인가요? ② 무엇으로 겨룰까요?
-            사이클은 거리가 아니라 시간으로만 겨루므로 ②가 따로 없다.
+            싸이클은 거리가 아니라 시간으로만 겨루므로 ②가 따로 없다.
           */
           <>
             <p className="text-[16px] font-extrabold">어떤 운동인가요?</p>
@@ -818,7 +818,7 @@ export function GoalSetupFlow({
               {(
                 [
                   { key: "walk", label: "걷기·달리기 등", sub: "거리나 시간으로 겨뤄요", cycle: false },
-                  { key: "cycle", label: "사이클", sub: "시간으로 겨뤄요", cycle: true },
+                  { key: "cycle", label: "싸이클", sub: "시간으로 겨뤄요", cycle: true },
                 ] as const
               ).map((k) => {
                 const on = k.cycle ? g.type === "cycle_time" : g.type !== "cycle_time";
@@ -861,7 +861,7 @@ export function GoalSetupFlow({
 
             {g.type === "cycle_time" ? (
               <p className="mt-3 rounded-card-sm bg-surface-2 px-3 py-2 text-[12px] text-muted">
-                사이클은 거리 대신 <span className="font-extrabold text-text">시간(분)</span>으로
+                싸이클은 거리 대신 <span className="font-extrabold text-text">시간(분)</span>으로
                 겨뤄요. 걷기·달리기와 따로 계산돼서 더 공정해요.
               </p>
             ) : (
@@ -894,7 +894,7 @@ export function GoalSetupFlow({
                 </div>
                 {startDate >= CARDIO_RULES_V2_FROM && (
                   <p className="mt-2 text-[11.5px] leading-4 text-muted">
-                    거리는 걷기·달리기만, 시간은 사이클을 뺀 모든 유산소가 들어가요.
+                    거리는 걷기·달리기만, 시간은 싸이클을 뺀 모든 유산소가 들어가요.
                   </p>
                 )}
               </>

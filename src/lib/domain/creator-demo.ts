@@ -87,7 +87,7 @@ function routine(d: number, cardio: boolean, rnd: () => number): Exercise[] {
   const cardioRun: Exercise[] = cardio && d % 2 === 0
     ? [[
         { exerciseType: "cardio", exerciseName: "러닝", bodyPart: null, sets: [{ ...blank, distanceMeters: 3000 + Math.round(rnd() * 3000), durationSeconds: 1500 + Math.round(rnd() * 900) }] },
-        { exerciseType: "cardio", exerciseName: "사이클", bodyPart: null, sets: [{ ...blank, distanceMeters: 8000 + Math.round(rnd() * 6000), durationSeconds: 1800 }] },
+        { exerciseType: "cardio", exerciseName: "싸이클", bodyPart: null, sets: [{ ...blank, distanceMeters: 8000 + Math.round(rnd() * 6000), durationSeconds: 1800 }] },
         { exerciseType: "cardio", exerciseName: "수영", bodyPart: null, sets: [{ ...blank, distanceMeters: 800, durationSeconds: 1500 + Math.round(rnd() * 600) }] },
       ][d % 3] as Exercise]
     : [];
