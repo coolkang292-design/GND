@@ -359,3 +359,26 @@ export function coachSessionRows<R extends { sort_order: number | null }>(
   );
   return kept.length > 0 ? kept : [...rows];
 }
+
+
+/**
+ * 인터벌 시트의 "오늘 계획으로 저장"이 **어느 계획에 쓸지** (사용자 지시 2026-11-17).
+ *
+ * - 예정표에서 연 시트(`prefillPlanId`)면 그 계획을 고친다. 그 계획이 이미 없으면 새로 만든다.
+ * - 퀘스트·`4분 인터벌`처럼 계획 없이 연 시트는, 오늘 인터벌 계획이 **정확히 하나**일 때만 그걸 고친다 —
+ *   같은 날 인터벌 카드가 둘이 되지 않게. 둘 이상이면 어느 것인지 모르니 새로 만든다(엉뚱한 계획을 덮지 않는다).
+ * - 일반 계획(`tabataMinutes` 없음)은 건드리지 않는다.
+ */
+export function intervalSaveTarget(
+  todayPlans: readonly { id: string; tabataMinutes: number | null }[],
+  prefillPlanId?: string | null,
+): { kind: "update"; planId: string } | { kind: "create" } {
+  if (prefillPlanId && todayPlans.some((plan) => plan.id === prefillPlanId)) {
+    return { kind: "update", planId: prefillPlanId };
+  }
+  const intervals = todayPlans.filter((plan) => plan.tabataMinutes);
+  if (!prefillPlanId && intervals.length === 1) {
+    return { kind: "update", planId: intervals[0].id };
+  }
+  return { kind: "create" };
+}

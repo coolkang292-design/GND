@@ -14,6 +14,7 @@ import {
   intervalBlockNames,
   intervalBlockPending,
   intervalPlanLine,
+  intervalSaveTarget,
   isIntervalBlockExercise,
   isIntervalBlockIndex,
   mergeRecentSessions,
@@ -467,5 +468,35 @@ describe("AI 코치가 분석할 이번 세션 종목 (2026-09-29, 개발 서버
   it("일반 세션은 건드리지 않는다", () => {
     const rows = [row("벤치프레스", 0), row("랫풀다운", 1)];
     expect(coachSessionRows(null, rows)).toEqual(rows);
+  });
+});
+
+/**
+ * 인터벌 시트에서 "오늘 계획으로 저장" — 어느 계획에 쓸지 (사용자 지시 2026-11-17).
+ * 시작하지 않고 닫으면 바꾼 종목이 사라졌다. 저장하면 오늘 카드(`오늘은 전신 인터벌이에요`)가 그 구성이 된다.
+ */
+describe("intervalSaveTarget — 저장할 인터벌 계획 고르기", () => {
+  const interval = (id: string) => ({ id, tabataMinutes: 8 });
+  const general = (id: string) => ({ id, tabataMinutes: null });
+
+  it("예정표에서 연 시트면 그 계획을 고친다", () => {
+    expect(intervalSaveTarget([interval("a"), interval("b")], "b")).toEqual({ kind: "update", planId: "b" });
+  });
+
+  it("열었던 계획이 이미 없어졌으면 새로 만든다 (고칠 대상이 없다)", () => {
+    expect(intervalSaveTarget([interval("a")], "gone")).toEqual({ kind: "create" });
+  });
+
+  it("계획 없이 연 시트(퀘스트·4분 인터벌)인데 오늘 인터벌 계획이 정확히 하나면 그걸 고친다 — 같은 카드가 둘이 되지 않게", () => {
+    expect(intervalSaveTarget([general("g"), interval("a")], null)).toEqual({ kind: "update", planId: "a" });
+  });
+
+  it("오늘 인터벌 계획이 없으면 새로 만든다 — 일반 계획은 건드리지 않는다", () => {
+    expect(intervalSaveTarget([general("g")], null)).toEqual({ kind: "create" });
+    expect(intervalSaveTarget([], undefined)).toEqual({ kind: "create" });
+  });
+
+  it("오늘 인터벌 계획이 둘 이상이고 어느 것인지 모르면 새로 만든다 — 엉뚱한 계획을 덮어쓰지 않는다", () => {
+    expect(intervalSaveTarget([interval("a"), interval("b")], null)).toEqual({ kind: "create" });
   });
 });

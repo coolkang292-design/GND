@@ -113,6 +113,7 @@ import {
   intervalPlanLine,
   intervalBlockNames,
   intervalBlockPending,
+  intervalSaveTarget,
   isIntervalBlockExercise,
   isIntervalBlockIndex,
   splitIntervalPlan,
@@ -2828,6 +2829,64 @@ function WorkoutScreen({ userId }: { userId: string }) {
 
   // ── 타바타 모드 (설계 2026-07-19) — 시작/자동완료/취소를 기존 세션 흐름에 위임 ──
 
+  /**
+   * 인터벌 시트의 "오늘 계획으로 저장만 하기" (사용자 지시 2026-11-17).
+   *
+   * 종목을 바꾸고 시작하지 않고 닫으면 바꾼 구성이 사라졌다 — 저장 버튼이 없어서 적용이 안 된 줄 알았다.
+   * 음원·세션은 건드리지 않고 오늘 날짜의 인터벌 계획만 만들거나 고친다(`intervalSaveTarget`이 대상을 정한다).
+   * 세트는 **코스가 정한다**(`tabataDraftExercises`) — 일반 계획처럼 3세트 10회로 저장하면 인터벌이 아니게 된다.
+   * 이어하기(5번째~)는 고치는 계획에 있던 것을 **뒤에 그대로 붙여** 보존한다(달력의 `saveIntervalPlan`과 같다).
+   */
+  async function saveTodayIntervalPlan(
+    picked: CatalogExercise[],
+    minutes: TabataMinutes,
+  ): Promise<boolean> {
+    try {
+      const planDate = dayKey(new Date(), resolveTimeZone());
+      const target = intervalSaveTarget(todayPlans, tabataPrefill?.planId);
+      const existing =
+        target.kind === "update"
+          ? todayPlans.find((plan) => plan.id === target.planId)
+          : undefined;
+      const followUps = existing
+        ? splitIntervalPlan(existing.exercises).followUps
+        : (tabataPrefill?.followUps ?? []);
+      const exercises = [
+        ...toPlanExercises(tabataDraftExercises(picked, localId, minutes)),
+        ...followUps,
+      ];
+      const saved =
+        target.kind === "update"
+          ? await updateWorkoutPlan({
+              planId: target.planId,
+              sourceSessionId: existing?.sourceSessionId ?? null,
+              exercises,
+              tabataMinutes: minutes,
+            })
+          : await createWorkoutPlan({
+              userId,
+              planDate,
+              sourceSessionId: null,
+              exercises,
+              tabataMinutes: minutes,
+            });
+      // 카드(`오늘은 전신 인터벌이에요`)가 바로 이 구성으로 바뀐다 — id로 갈아 끼운다(0101)
+      setTodayPlans((current) => [
+        ...current.filter((plan) => plan.id !== saved.id),
+        saved,
+      ]);
+      showToast(
+        target.kind === "update"
+          ? "오늘 인터벌 계획을 바꿨어요"
+          : "오늘 인터벌 계획으로 저장했어요",
+      );
+      return true;
+    } catch (e) {
+      showToast(errorMessage(e));
+      return false;
+    }
+  }
+
   async function beginTabata(
     picked: CatalogExercise[],
     minutes: TabataMinutes,
@@ -4982,6 +5041,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
             }}
             onCreateCustom={handleCreateCustom}
             onBegin={beginTabata}
+            onSaveToday={saveTodayIntervalPlan}
             onComplete={completeTabata}
             onCancelWorkout={cancelTabata}
             pastSessions={pastSessions}

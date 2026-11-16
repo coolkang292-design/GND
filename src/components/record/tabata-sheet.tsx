@@ -113,6 +113,15 @@ type TabataProps = {
   ) => Promise<boolean>;
   /** 계획 모드에서 버튼에 쓸 날짜 문구 — 예: `8월 14일` */
   planDateLabel?: string;
+  /**
+   * **오늘 계획으로 저장만 한다** (사용자 지시 2026-11-17) — 음원·세션 없이 지금 고른 종목·코스를
+   * 오늘의 인터벌 계획으로 남긴다. 저장되면 true, 실패하면 false(시트를 닫지 않는다).
+   *
+   * ⚠️ `onPlan`(달력의 날짜 지정 저장)과 다르다: 이쪽은 **시작하는 화면**에 붙는 두 번째 버튼이다.
+   *    시작하지 않고 닫으면 바꾼 종목이 사라졌고, 저장 버튼이 없어서 적용이 안 된 줄 알았다.
+   *    `onPlan`이 있는 계획 모드에서는 그 자체가 저장 버튼이라 이 버튼을 내지 않는다.
+   */
+  onSaveToday?: (picked: CatalogExercise[], minutes: TabataMinutes) => Promise<boolean>;
 };
 
 function TabataSheetBody({
@@ -134,6 +143,7 @@ function TabataSheetBody({
   followUpNames = [],
   openPickerOnMount,
   onPlan,
+  onSaveToday,
   planDateLabel = "",
 }: TabataProps) {
   // 시트는 닫으면 언마운트된다 — 예약된 값은 초기값으로 넣으면 되고,
@@ -292,6 +302,18 @@ function TabataSheetBody({
     setPickError(null);
     try {
       if (await onPlan(picked, minutes)) onClose();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** 시작하지 않고 오늘의 인터벌 계획으로만 저장한다 — 성공하면 시트를 닫는다 */
+  async function saveToday() {
+    if (!onSaveToday || busy || picked.length !== TABATA_EXERCISE_COUNT) return;
+    setBusy(true);
+    setPickError(null);
+    try {
+      if (await onSaveToday(picked, minutes)) onClose();
     } finally {
       setBusy(false);
     }
@@ -524,6 +546,17 @@ function TabataSheetBody({
                   ? `${planDateLabel} 예정표로 저장`
                   : INTERVAL_COPY.start}
             </button>
+            {/* 시작과 따로 저장 — 컨디션이 안 맞는 날도 구성은 남겨 두고 싶다. 계획 모드는 위 버튼이 저장이다 */}
+            {onSaveToday && !onPlan && (
+              <button
+                type="button"
+                onClick={() => void saveToday()}
+                disabled={busy || picked.length !== TABATA_EXERCISE_COUNT}
+                className="mt-2 h-11 rounded-card border border-accent/50 bg-surface text-sm font-extrabold text-accent disabled:opacity-50"
+              >
+                오늘 계획으로 저장만 하기
+              </button>
+            )}
           </div>
         </>
       ) : (

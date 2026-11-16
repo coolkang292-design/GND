@@ -81,6 +81,7 @@ function setup(
     followUpNames?: readonly string[];
     challengeContexts?: readonly ActiveChallengeContext[];
     onPlan?: (picked: CatalogExercise[], minutes: TabataMinutes) => Promise<boolean>;
+    onSaveToday?: (picked: CatalogExercise[], minutes: TabataMinutes) => Promise<boolean>;
     onBegin?: (
       picked: CatalogExercise[],
       minutes: TabataMinutes,
@@ -99,6 +100,7 @@ function setup(
       followUpNames={over.followUpNames}
       challengeContexts={over.challengeContexts}
       onPlan={over.onPlan}
+      onSaveToday={over.onSaveToday}
       onClose={over.onClose ?? vi.fn()}
       onCreateCustom={vi.fn()}
       onBegin={over.onBegin ?? vi.fn()}
@@ -376,5 +378,53 @@ describe("TabataSheet — 시작 전 챌린지 예상 점수 (2026-11-17)", () =
     vi.mocked(loadChallengeScoreSnapshot).mockResolvedValue(snapshot);
     setup({ userId: "me", initialPicked: FOUR, challengeContexts: [context], onPlan: vi.fn() });
     expect(screen.queryByText("이 인터벌을 마치면")).toBeNull();
+  });
+});
+
+/**
+ * 인터벌 시트의 "오늘 계획으로 저장" (사용자 지시 2026-11-17).
+ * 종목을 바꾸고 시작하지 않고 닫으면 바꾼 구성이 사라졌다 — 시작과 따로 저장할 수 있어야 한다.
+ */
+describe("TabataSheet — 오늘 계획으로 저장 (2026-11-17)", () => {
+  const SAVE = "오늘 계획으로 저장만 하기";
+
+  it("저장 동작이 연결된 시트에만 버튼이 있다 — 달력 계획 모드·옛 호출에는 없다", () => {
+    setup({ initialPicked: FOUR });
+    expect(screen.queryByRole("button", { name: SAVE })).toBeNull(); // 옛 호출
+    cleanup();
+    setup({ initialPicked: FOUR, onSaveToday: vi.fn(), onPlan: vi.fn() });
+    expect(screen.queryByRole("button", { name: SAVE })).toBeNull(); // 계획 모드는 이미 저장 버튼이다
+    cleanup();
+    setup({ initialPicked: FOUR, onSaveToday: vi.fn() });
+    expect(screen.getByRole("button", { name: SAVE })).toBeTruthy();
+  });
+
+  it("4개를 다 고르기 전에는 잠겨 있다 — 인터벌은 4개가 한 구성이다", () => {
+    setup({ initialPicked: FOUR.slice(0, 3), onSaveToday: vi.fn() });
+    expect((screen.getByRole("button", { name: SAVE }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("누르면 고른 종목·코스로 저장을 부르고, 성공하면 시트를 닫는다 — 시작은 하지 않는다", async () => {
+    const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
+    const onSaveToday = vi.fn().mockResolvedValue(true);
+    const onBegin = vi.fn().mockResolvedValue(true);
+    const onClose = vi.fn();
+    setup({ initialPicked: FOUR, initialMinutes: 4, onSaveToday, onBegin, onClose });
+    fireEvent.click(screen.getByRole("button", { name: "16분" }));
+    fireEvent.click(screen.getByRole("button", { name: SAVE }));
+    await waitFor(() => expect(onSaveToday).toHaveBeenCalledWith(FOUR, 16));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(onBegin).not.toHaveBeenCalled();
+    expect(play).not.toHaveBeenCalled(); // 부정 확인: 음원이 켜지지 않았다
+  });
+
+  it("저장에 실패하면 시트를 닫지 않는다 — 바꾼 구성을 잃지 않게", async () => {
+    const onSaveToday = vi.fn().mockResolvedValue(false);
+    const onClose = vi.fn();
+    setup({ initialPicked: FOUR, onSaveToday, onClose });
+    fireEvent.click(screen.getByRole("button", { name: SAVE }));
+    await waitFor(() => expect(onSaveToday).toHaveBeenCalled());
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: SAVE })).toBeTruthy();
   });
 });
