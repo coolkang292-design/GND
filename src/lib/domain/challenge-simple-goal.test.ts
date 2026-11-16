@@ -18,6 +18,7 @@ import {
   prefillBasisFor,
   splitGoalsForEdit,
   weekPreview,
+  planPreview,
 } from "./challenge-simple-goal";
 
 const FOUR_WEEKS = 28;
@@ -689,5 +690,80 @@ describe("싸이클 시간 목표 (2026-11-11) — 하루 20분 × 주 3회 = �
     // 하루 20분 × 주 3회 × (30일 ÷ 7) = 257.1 → 257분. 앱이 이 입력으로 만드는 값이고,
     // 운영 11월 챌린지 교체값(0128)도 **같은 257**이어야 한다 (같은 사실을 두 곳에 두지 않는다)
     expect(goal?.target).toBe(257);
+  });
+});
+
+/**
+ * 진행 예시를 **내가 세운 계획대로** 보여 준다 (사용자 지시 2026-11-17).
+ * 요일은 쓰지 않는다 — "주 N회"는 아무 요일에나 해도 되는 목표라서 월·수·금으로 못 박으면 거짓이다.
+ */
+describe("planPreview — 내 계획대로 보는 진행 예시", () => {
+  const weight2 = { type: "weight_days" as const, perWeek: 2, qualifier: 1 };
+
+  it("칸은 요일이 아니라 주 N회만큼이고, 마지막 한 칸만 남는다", () => {
+    const p = planPreview(3, [weight2]);
+    expect(p.slots).toHaveLength(3);
+    expect(p.slots.map((s) => s.done)).toEqual([true, true, false]);
+    expect(p.slots.map((s) => s.index)).toEqual([1, 2, 3]);
+    expect(p.done).toBe(2);
+    expect(p.target).toBe(3);
+    expect(p.caption).toBe("한 번만 더 하면 이번 주 목표 달성!");
+  });
+
+  it("웨이트 운동일 주 2일은 3칸 중 첫 칸과 마지막 칸에 고르게 붙는다", () => {
+    const p = planPreview(3, [weight2]);
+    expect(p.slots.map((s) => s.tags)).toEqual([["웨이트"], [], ["웨이트"]]);
+  });
+
+  it("목표가 칸보다 많아도 칸 수까지만 붙는다 — 주 3회인데 웨이트 5일이면 3칸 모두", () => {
+    const p = planPreview(3, [{ type: "weight_days", perWeek: 5, qualifier: 1 }]);
+    expect(p.slots.map((s) => s.tags)).toEqual([["웨이트"], ["웨이트"], ["웨이트"]]);
+  });
+
+  it("세부 목표가 없으면 태그도 합계 줄도 없다", () => {
+    const p = planPreview(3, []);
+    expect(p.slots.every((s) => s.tags.length === 0)).toBe(true);
+    expect(p.lines).toEqual([]);
+  });
+
+  it("이번 주 합계 줄은 목표 화면에 보이는 글자(`detailGoalText`)와 같다", () => {
+    const cardio = { type: "cardio_time" as const, perWeek: 90, basis: "week" as const, weeklyCount: 2 };
+    const p = planPreview(3, [weight2, cardio]);
+    expect(p.lines).toEqual([detailGoalText(weight2), detailGoalText(cardio)]);
+    expect(p.lines[0].value).toContain("주 2일");
+    expect(p.lines[1].value).toContain("주 90분");
+  });
+
+  it("유산소는 '주 몇 회'를 정했을 때만 그 횟수만큼 칸에 붙는다", () => {
+    const cardio = { type: "cardio_time" as const, perWeek: 90, basis: "week" as const, weeklyCount: 2 };
+    const withCount = planPreview(4, [cardio]);
+    expect(withCount.slots.filter((s) => s.tags.includes("유산소"))).toHaveLength(2);
+    const noCount = planPreview(4, [{ type: "cardio_time", perWeek: 90, basis: "week" }]);
+    expect(noCount.slots.some((s) => s.tags.length > 0)).toBe(false);
+  });
+
+  it("횟수·분량 목표(맨몸 횟수 등)는 칸에 안 붙이고 합계 줄로만 말한다", () => {
+    const reps = { type: "bodyweight_reps" as const, perWeek: 100, basis: "week" as const };
+    const p = planPreview(3, [reps]);
+    expect(p.slots.some((s) => s.tags.length > 0)).toBe(false);
+    expect(p.lines).toHaveLength(1);
+  });
+
+  it("인터벌 횟수는 '인터벌' 태그로 붙는다", () => {
+    const p = planPreview(3, [{ type: "tabata_count", perWeek: 3, qualifier: null }]);
+    expect(p.slots.map((s) => s.tags)).toEqual([["인터벌"], ["인터벌"], ["인터벌"]]);
+  });
+
+  it("주 1회는 0 / 1이고 '한 번만 하면' — 기존 규칙 그대로", () => {
+    const p = planPreview(1, [weight2]);
+    expect(p.done).toBe(0);
+    expect(p.slots).toHaveLength(1);
+    expect(p.slots[0].done).toBe(false);
+    expect(p.caption).toBe("한 번만 하면 이번 주 목표 달성!");
+  });
+
+  it("칸마다 요일 글자가 없다 — 특정 요일을 지목하지 않는다", () => {
+    const text = JSON.stringify(planPreview(3, [weight2]));
+    for (const w of WEEK_LABELS) expect(text).not.toContain(`"${w}"`);
   });
 });

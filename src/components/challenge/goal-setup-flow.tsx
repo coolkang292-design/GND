@@ -19,7 +19,6 @@ import {
   MAX_DETAIL_GOALS,
   MAX_WEEKLY_DAYS,
   MIN_WEEKLY_DAYS,
-  WEEK_LABELS,
   WEEKLY_DAY_CHOICES,
   buildGoalDrafts,
   detailCategoryOf,
@@ -34,7 +33,7 @@ import {
   isDaysMetric,
   perSessionHint,
   splitGoalsForEdit,
-  weekPreview,
+  planPreview,
   type BuildGoalDraftsResult,
   type DetailCategoryKey,
   type DetailGoalInput,
@@ -482,16 +481,19 @@ export function GoalSetupFlow({
   );
 
   /*
-    시안 ④의 **진행 예시** 카드 (2026-09-18 사용자 결정으로 추가).
+    시안 ④의 **진행 예시** 카드 (2026-09-18 사용자 결정으로 추가, 2026-11-17 "내가 세운 계획대로"로 바꿨다).
 
     ⚠️⚠️ **실적이 아니다.** 여기는 목표를 세우는 자리라 이번 챌린지 기록이 아직
-       없다. 채워진 칸은 `weekPreview`가 `주 N회 - 1`로 고정한 **예시**다.
+       없다. 채워진 칸은 `planPreview`가 `주 N회 - 1`로 고정한 **예시**다.
        ⛔ 실제 세션 수를 끌어오지 마라 — 시트가 저장 전에 네트워크를 한 번 더
          때리게 되고, 그 조회가 늦으면 카드가 빈 채로 깜빡인다.
+    ⛔ **요일을 쓰지 않는다.** "주 N회"는 아무 요일에나 해도 되는 목표라서 칸은 `1회차 · 2회차`다.
+       칸에 붙는 `웨이트`·`유산소` 같은 말은 내가 정한 세부 목표에서 온다(`planPreview`).
     그래서 제목을 `진행 예시`로 두고 `aria-hidden`으로 동그라미를 읽지 않게 한다 —
     스크린 리더에는 옆의 `2 / 3 완료`와 아래 한 줄이면 충분하다.
   */
-  const preview = weekPreview(weeklyDays);
+  const preview = planPreview(weeklyDays, details);
+  const nextSlot = preview.slots.findIndex((slot) => !slot.done);
   const weekPreviewCard = (
     <section className="mt-4 rounded-card border border-line bg-surface-2 px-3.5 py-3">
       <div className="flex items-baseline justify-between gap-2">
@@ -503,22 +505,42 @@ export function GoalSetupFlow({
           {preview.done} / {preview.target} 완료
         </span>
       </div>
-      <ul aria-hidden className="mt-2.5 flex items-center justify-between gap-1">
-        {preview.days.map((done, i) => (
-          <li key={WEEK_LABELS[i]} className="flex flex-1 flex-col items-center gap-1">
+      <ul aria-hidden className="mt-2.5 flex items-start justify-between gap-1">
+        {preview.slots.map((slot, i) => (
+          <li key={slot.index} className="flex min-w-0 flex-1 flex-col items-center gap-1">
             <span
               className={`grid h-7 w-7 place-items-center rounded-full text-[13px] font-extrabold ${
-                done
+                slot.done
                   ? "bg-accent text-accent-ink"
-                  : "border border-line text-transparent"
+                  : i === nextSlot
+                    ? "border-2 border-accent text-transparent"
+                    : "border border-line text-transparent"
               }`}
             >
               ✓
             </span>
-            <span className="text-[10.5px] text-faint">{WEEK_LABELS[i]}</span>
+            <span className="text-[10.5px] text-faint">{slot.index}회차</span>
+            {slot.tags.length > 0 && (
+              <span className="break-keep text-center text-[10px] font-bold leading-3 text-muted">
+                {slot.tags.join(" · ")}
+              </span>
+            )}
           </li>
         ))}
       </ul>
+      {preview.lines.length > 0 && (
+        <div className="mt-3 border-t border-line pt-2.5" data-testid="plan-preview-lines">
+          <p className="text-[11px] font-extrabold text-muted">이번 주 합계</p>
+          <div className="mt-1 flex flex-col gap-1">
+            {preview.lines.map((line) => (
+              <p key={line.title} className="flex items-baseline justify-between gap-2 text-[12px]">
+                <span className="font-bold">{line.title}</span>
+                <span className="text-right text-muted">{line.value}</span>
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
       <p className="mt-2 text-center text-[11.5px] font-bold text-accent">
         {preview.caption}
       </p>
@@ -1119,6 +1141,7 @@ export function GoalSetupFlow({
           endDate={endDate}
           photoRequired={photoRequired}
           scoringVersion={scoringVersion}
+          weeklyDays={finalDrafts.plannedDays}
           agreed={agreed}
           onAgreedChange={setAgreed}
         />

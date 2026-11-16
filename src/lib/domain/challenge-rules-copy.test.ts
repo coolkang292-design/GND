@@ -4,6 +4,8 @@ import {
   TIE_BREAKERS_V2,
   TIE_STEPS_V2,
   addGoalAdvice,
+  goalPointGuide,
+  stageGuide,
   mustKnow,
   scoreCards,
   scoreFormula,
@@ -13,6 +15,8 @@ import { rankParticipantsV2, type ParticipantInputV2 } from "./goal-score-v2";
 import {
   COMPLETED_GOAL_BONUS_MAX,
   COMPLETED_GOAL_BONUS_PER,
+  achievementScore,
+  ACHIEVEMENT_WEIGHT,
   overallScore,
   rankParticipants,
   type ParticipantInput,
@@ -158,5 +162,77 @@ describe("랭킹 v2 동점 설명 — rankParticipantsV2와 같은 순서 (scori
     const v1 = mustKnow({ photoRequired: false, startDate: "2026-11-14", scoringVersion: 1 });
     expect(v2.some((l) => l.includes("3개 이상"))).toBe(true);
     expect(v1.some((l) => l.includes("3개 이상"))).toBe(false);
+  });
+});
+
+/**
+ * 목표를 세운 뒤 마지막 설명 — "내 목표로는 이렇게 올라요" (사용자 지시 2026-11-17).
+ * 화면의 숫자가 실제 점수 계산(`achievementScore`)과 같은지를 **계산 함수로** 묶는다.
+ */
+describe("내 목표별 점수 안내 — 실제 계산과 같은 숫자", () => {
+  // 나(오뎅끼데스까)의 11월 챌린지 목표 5개와 같은 모양
+  const goals = [
+    { type: "cardio_days" as const, target: 13, qualifier: 1 },
+    { type: "cardio_time" as const, target: 386 },
+    { type: "tabata_count" as const, target: 13 },
+    { type: "weight_days" as const, target: 13, qualifier: 3 },
+    { type: "workout_days" as const, target: 13 },
+  ];
+  const guide = goalPointGuide({ goals, weeklyDays: 3, periodDays: 30, scoringVersion: 2 });
+
+  it("목표 하나를 예시 만큼 올리면 실제 종합점수가 그만큼 오른다 (일수형 1일 = 80÷5÷13 = 1.2)", () => {
+    const row = guide.rows.find((r) => r.type === "tabata_count")!;
+    const scored = (actual: number) =>
+      achievementScore(goals.map((g) => ({ type: g.type, target: g.target, actual: g.type === "tabata_count" ? actual : 0 }))) *
+      ACHIEVEMENT_WEIGHT;
+    expect(row.points).toBeCloseTo(scored(1) - scored(0), 1);
+    expect(row.points).toBe(1.2);
+  });
+
+  it("시간 목표는 30분 기준, 거리 목표는 5km 기준으로 말한다", () => {
+    expect(guide.rows.find((r) => r.type === "cardio_time")!.amount).toBe("30분");
+    const withDistance = goalPointGuide({ goals: [{ type: "cardio_distance", target: 45 }], weeklyDays: 3, periodDays: 30, scoringVersion: 2 });
+    expect(withDistance.rows[0].amount).toBe("5km");
+    // 목표 1개면 80점 ÷ 1 ÷ 45km × 5km
+    expect(withDistance.rows[0].points).toBeCloseTo(((80 / 45) * 5), 1);
+  });
+
+  it("목표를 넘는 만큼은 안 오르므로 예시가 목표보다 크면 목표까지만 센다", () => {
+    const small = goalPointGuide({ goals: [{ type: "cardio_time", target: 20 }], weeklyDays: 3, periodDays: 30, scoringVersion: 2 });
+    expect(small.rows[0].points).toBe(80); // 30분 예시가 목표 20분을 넘어도 100%까지만
+  });
+
+  it("작은 목표일수록 한 번에 더 크게 오른다 — 초보자가 바로 느끼는 점수", () => {
+    const easy = goalPointGuide({ goals: [{ type: "workout_days", target: 4 }], weeklyDays: 1, periodDays: 28, scoringVersion: 2 });
+    const hard = goalPointGuide({ goals: [{ type: "workout_days", target: 13 }], weeklyDays: 3, periodDays: 30, scoringVersion: 2 });
+    expect(easy.rows[0].points).toBeGreaterThan(hard.rows[0].points);
+  });
+
+  it("하루 평균은 (달성 80 + 꾸준함 20) ÷ 계획한 날 수 — 주 3회 × 30일 = 13일이면 약 7.7점", () => {
+    expect(guide.plannedDays).toBe(13);
+    expect(guide.perDay).toBe(7.7);
+    expect(guide.baseMax).toBe(100 + COMPLETED_GOAL_BONUS_PER * COMPLETED_GOAL_BONUS_MAX);
+  });
+
+  it("목표가 없으면 아무 줄도 만들지 않는다", () => {
+    expect(goalPointGuide({ goals: [], weeklyDays: 3, periodDays: 30, scoringVersion: 2 }).rows).toEqual([]);
+  });
+});
+
+describe("진행 중 / 최종 발표 단계 안내 — 최신 규칙(활동 점수는 최종 발표 때만)", () => {
+  it("v2는 진행 중에는 기본 점수만, 최종 발표에는 활동 점수가 더해진다고 말한다", () => {
+    const stages = stageGuide(2);
+    expect(stages).toHaveLength(2);
+    expect(stages[0].when).toBe("진행 중");
+    expect(stages[0].text).toContain("109점"); // 100 + 보너스 최대 9 — 상수에서 온다
+    expect(stages[0].text).not.toContain("활동 점수");
+    expect(stages[1].when).toBe("최종 발표");
+    expect(stages[1].text).toContain("활동 점수");
+    expect(stages[1].text).toContain("운동한 날 1일에 1점");
+  });
+
+  it("v1(옛 규칙)은 활동 점수를 말하지 않는다 — 진행 중인 경기에 새 규칙을 말하면 거짓이다", () => {
+    const stages = stageGuide(1);
+    expect(stages.map((x) => x.text).join(" ")).not.toContain("활동 점수");
   });
 });

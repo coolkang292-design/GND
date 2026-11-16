@@ -156,8 +156,9 @@ describe("세부 목표 — 완전히 선택이다", () => {
     const { onSubmit } = renderFlow();
     addCardioDistance();
     expect(screen.getByText("주 3회 운동")).toBeTruthy();
-    expect(screen.getByText("유산소 거리")).toBeTruthy();
-    expect(screen.getByText("하루 3km · 주 3회")).toBeTruthy();
+    // 목록과 '이번 주 합계'에 같은 이름이 한 번씩 보인다 (2026-11-17)
+    expect(screen.getAllByText("유산소 거리").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("하루 3km · 주 3회").length).toBeGreaterThan(0);
     fireEvent.click(cta());
     expect(onSubmit).toHaveBeenCalledWith({
       goals: [
@@ -293,15 +294,17 @@ describe("편집 — 저장된 목표를 그대로 보여준다", () => {
       ],
     });
     expect(screen.getByText("주 4회 운동")).toBeTruthy();
-    expect(screen.getByText("웨이트 총 운동량")).toBeTruthy();
-    expect(screen.getByText("주 12,000kg")).toBeTruthy();
+    // 목록과 '이번 주 합계'에 같은 이름이 한 번씩 보인다 (2026-11-17)
+    expect(screen.getAllByText("웨이트 총 운동량").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("주 12,000kg").length).toBeGreaterThan(0);
   });
 
   it("옛 목표(workout_days 없음)도 버리지 않고 세부 목표로 보여준다", () => {
     const { onSubmit } = renderFlow({
       myGoals: [goal({ goal_type: "weight_days", target_value: 12, planned_days: 5, qualifier: 3 })],
     });
-    expect(screen.getByText("웨이트 운동 일수")).toBeTruthy();
+    // 목록과 '이번 주 합계'에 같은 이름이 한 번씩 보인다 (2026-11-17)
+    expect(screen.getAllByText("웨이트 운동 일수").length).toBeGreaterThan(0);
     fireEvent.click(cta());
     expect(onSubmit.mock.calls[0][0]).toEqual({
       goals: [
@@ -462,7 +465,42 @@ describe("진행 예시 — 시안 ④ (2026-09-18 추가)", () => {
     openReview(3);
     const card = screen.getByText("진행 예시").closest("section");
     expect(card?.querySelector("ul")?.getAttribute("aria-hidden")).toBe("true");
-    expect(card?.querySelectorAll("li")).toHaveLength(7);
+    // 요일 7칸이 아니라 내 주 N회만큼이다 (2026-11-17)
+    expect(card?.querySelectorAll("li")).toHaveLength(3);
+  });
+
+  it("요일이 아니라 1회차·2회차·3회차로 보인다 — 아무 요일에나 해도 되는 목표다", () => {
+    openReview(3);
+    const card = screen.getByText("진행 예시").closest("section");
+    const t = card?.textContent ?? "";
+    expect(t).toContain("1회차");
+    expect(t).toContain("3회차");
+    for (const w of ["월", "화", "수", "목", "금", "토", "일"]) {
+      expect(card?.querySelector("ul")?.textContent).not.toContain(w);
+    }
+  });
+
+  it("내가 정한 세부 목표가 칸에 붙고 이번 주 합계로 보인다 (웨이트 운동일 주 2일)", () => {
+    renderFlow({
+      myGoals: [
+        goal({ goal_type: "workout_days", target_value: 12, planned_days: 3 }),
+        goal({ goal_type: "weight_days", target_value: 8, planned_days: 3, qualifier: 1 }),
+      ],
+    });
+    const card = screen.getByText("진행 예시").closest("section");
+    const slots = Array.from(card?.querySelectorAll("ul li") ?? []).map((li) => li.textContent);
+    expect(slots).toHaveLength(3);
+    expect(slots[0]).toContain("웨이트");
+    expect(slots[1]).not.toContain("웨이트");
+    expect(slots[2]).toContain("웨이트");
+    const lines = screen.getByTestId("plan-preview-lines").textContent ?? "";
+    expect(lines).toContain("이번 주 합계");
+    expect(lines).toContain("주 2일");
+  });
+
+  it("세부 목표가 없으면 합계 줄이 없다", () => {
+    renderFlow({ myGoals: [goal({ goal_type: "workout_days", target_value: 12, planned_days: 3 })] });
+    expect(screen.queryByTestId("plan-preview-lines")).toBeNull();
   });
 });
 
@@ -598,5 +636,42 @@ describe("랭킹 v2 — 세부 목표 최소 개수", () => {
     expect((screen.getByRole("button", { name: /이 목표로 시작하기/ }) as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: /이 목표로 시작하기/ }));
     expect(two.onSubmit).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("최종 확인 — 내 목표로는 이렇게 올라요 + 최신 규칙 (2026-11-17)", () => {
+  const next = () => screen.getByRole("button", { name: "다음 · 점수 규칙 확인" });
+  const text = () => screen.getByTestId("goal-consent-step").textContent ?? "";
+
+  it("내 목표로 운동 한 번이 몇 점인지와 하루 평균을 숫자로 보여 준다", () => {
+    renderFlow({ requireConsent: true, scoringVersion: 2 });
+    fireEvent.click(next());
+    expect(text()).toContain("내 목표로는 이렇게 올라요");
+    // 기본 목표 하나(운동한 날 12일): 80점 ÷ 12일 = +6.7점 · 하루 평균 100점 ÷ 12일 = +8.3점
+    expect(screen.getByTestId("per-goal-points").textContent).toContain("+6.7점");
+    expect(screen.getByTestId("per-day-points").textContent).toBe("+8.3점");
+  });
+
+  it("v2는 '진행 중 = 기본 점수 / 최종 발표 = 활동 점수 추가'를 눈에 보이는 자리에서 말한다", () => {
+    renderFlow({ requireConsent: true, scoringVersion: 2 });
+    fireEvent.click(next());
+    const stages = screen.getByTestId("consent-stages").textContent ?? "";
+    expect(stages).toContain("진행 중");
+    expect(stages).toContain("최종 발표");
+    expect(stages).toContain("활동 점수");
+    expect(stages).toContain("109점");
+  });
+
+  it("옛 규칙(v1)은 활동 점수를 말하지 않는다", () => {
+    renderFlow({ requireConsent: true, scoringVersion: 1 });
+    fireEvent.click(next());
+    expect(screen.getByTestId("consent-stages").textContent).not.toContain("활동 점수");
+  });
+
+  it("목표 입력 단계에는 이 설명이 없다 — 계산 설명은 마지막 단계에만 (기존 규칙)", () => {
+    renderFlow({ requireConsent: true, scoringVersion: 2 });
+    const before = document.body.textContent ?? "";
+    expect(before).not.toContain("내 목표로는 이렇게 올라요");
+    expect(before).not.toContain("활동 점수");
   });
 });

@@ -3,9 +3,11 @@ import {
   COMPLETED_GOAL_BONUS_MAX,
   COMPLETED_GOAL_BONUS_PER,
   PARTICIPATION_WEIGHT,
+  plannedDaysForPeriod,
+  type GoalType,
 } from "./goal-score";
 import { ACTIVITY_RULE_TEXT } from "./goal-score-v2";
-import { CARDIO_RULES_V2_FROM } from "@/lib/challenge";
+import { CARDIO_RULES_V2_FROM, goalLabel } from "@/lib/challenge";
 
 /**
  * 챌린지 **참여 전 최종 확인** 화면의 설명 문구 (사용자 지시 2026-11-11:
@@ -67,6 +69,99 @@ export function scoreFormula(scoringVersion = 1): string {
   return (
     `종합점수 = 달성 평균 × ${ACHIEVEMENT_WEIGHT} + 꾸준함 × ${PARTICIPATION_WEIGHT} + 보너스`
   );
+}
+
+/**
+ * 진행 중 / 최종 발표 — 순위가 **언제 무엇으로** 정해지는지 (사용자 지시 2026-11-17).
+ *
+ * ⚠️ 활동 점수는 **최종 발표 때만** 더한다(2026-11-16 결정). v1(옛 규칙) 챌린지에는 활동 점수가 없다 —
+ *    진행 중인 경기에 새 규칙을 말하면 거짓이다. 숫자는 상수에서 읽는다.
+ */
+export function stageGuide(scoringVersion = 1): { when: string; text: string }[] {
+  const baseMax = baseScoreMax();
+  if (scoringVersion === 2) {
+    return [
+      { when: "진행 중", text: `기본 점수로 순위를 매겨요 (최대 ${baseMax}점)` },
+      {
+        when: "최종 발표",
+        text: `기본 점수에 활동 점수(${ACTIVITY_RULE_TEXT})를 더해 최종 순위를 발표해요`,
+      },
+    ];
+  }
+  return [{ when: "진행 중·최종", text: `종합점수로 순위를 매겨요 (최대 ${baseMax}점)` }];
+}
+
+/** 기본 점수의 최대치 — 달성 80 + 꾸준함 20 + 보너스(+3 × 최대 3개). 활동 점수는 포함하지 않는다 */
+function baseScoreMax(): number {
+  return (
+    pct(ACHIEVEMENT_WEIGHT) +
+    pct(PARTICIPATION_WEIGHT) +
+    COMPLETED_GOAL_BONUS_PER * COMPLETED_GOAL_BONUS_MAX
+  );
+}
+
+/** 목표 한 줄이 "한 번에" 얼마나 올리는지 보여 줄 **예시 분량** — 초보자가 감을 잡는 단위다 */
+const EXAMPLE_AMOUNT: Record<GoalType, { n: number; unit: string }> = {
+  weight_days: { n: 1, unit: "일" },
+  cardio_days: { n: 1, unit: "일" },
+  bodyweight_days: { n: 1, unit: "일" },
+  workout_days: { n: 1, unit: "일" },
+  tabata_count: { n: 1, unit: "회" },
+  cardio_time: { n: 30, unit: "분" },
+  cycle_time: { n: 30, unit: "분" },
+  bodyweight_time: { n: 30, unit: "분" },
+  cardio_distance: { n: 5, unit: "km" },
+  weight_reps: { n: 50, unit: "회" },
+  bodyweight_reps: { n: 50, unit: "회" },
+  volume: { n: 1000, unit: "kg" },
+};
+
+export type GoalPointRow = {
+  type: GoalType;
+  label: string;
+  /** 예시 분량 — `30분` · `1일` */
+  amount: string;
+  /** 그만큼 했을 때 오르는 점수(소수 첫째 자리) */
+  points: number;
+};
+
+const round1 = (n: number) => Math.round(n * 10) / 10;
+
+/**
+ * 목표를 다 세운 **마지막 설명 단계**의 "내 목표로는 이렇게 올라요" (사용자 지시 2026-11-17).
+ *
+ * 한 목표가 100%가 되면 (달성 80 ÷ 목표 수)점이다(`achievementScore`가 평균이므로). 그래서 예시 분량이
+ * 목표에서 차지하는 비율에 그 값을 곱하면 **운동 한 번의 점수**가 나온다. 목표를 작게 잡을수록 크게 오른다 —
+ * 초보자가 운동할 때마다 점수가 눈에 띄게 오르는 것이 의도다(사용자 판단 2026-11-17).
+ *
+ * ⚠️ 하루 평균은 어림값이다: 달성 80 + 꾸준함 20을 계획한 날 수로 나눈다. 보너스·활동 점수는 포함하지 않는다.
+ * ⚠️ 100%까지만 인정되므로 예시가 목표보다 크면 목표까지만 센다 (`achievementScore`와 같다).
+ */
+export function goalPointGuide(input: {
+  goals: readonly { type: GoalType; target: number; qualifier?: number | null }[];
+  weeklyDays: number;
+  periodDays: number;
+  scoringVersion?: number;
+}): { rows: GoalPointRow[]; plannedDays: number; perDay: number; baseMax: number } {
+  const count = input.goals.length;
+  const perGoal = count > 0 ? (ACHIEVEMENT_WEIGHT * 100) / count : 0;
+  const rows: GoalPointRow[] = input.goals.map((g) => {
+    const ex = EXAMPLE_AMOUNT[g.type];
+    const rate = g.target > 0 ? Math.min(ex.n / g.target, 1) : 0;
+    return {
+      type: g.type,
+      label: goalLabel(g.type, g.qualifier),
+      amount: `${ex.n.toLocaleString("ko-KR")}${ex.unit}`,
+      points: round1(rate * perGoal),
+    };
+  });
+  const plannedDays = plannedDaysForPeriod(input.weeklyDays, input.periodDays);
+  return {
+    rows,
+    plannedDays,
+    perDay: round1((pct(ACHIEVEMENT_WEIGHT) + pct(PARTICIPATION_WEIGHT)) / plannedDays),
+    baseMax: baseScoreMax(),
+  };
 }
 
 /** 목표를 더 추가하면 — 좋은 점과 조심할 점을 **둘 다** 말한다 */

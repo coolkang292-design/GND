@@ -6,13 +6,15 @@ import {
   TIE_FINAL,
   addGoalAdvice,
   bonusChips,
+  goalPointGuide,
   mustKnow,
   scoreBarSplit,
   scoreCards,
   scoreFormula,
+  stageGuide,
   tieRules,
 } from "@/lib/domain/challenge-rules-copy";
-import { formatMonthDay } from "@/lib/domain/challenge-time";
+import { formatMonthDay, inclusiveDays } from "@/lib/domain/challenge-time";
 
 /**
  * 참여 전 **최종 확인** (사용자 지시 2026-11-11) — 글이 아니라 **그림**으로 먼저 말한다.
@@ -53,6 +55,7 @@ export function GoalConsentStep({
   endDate,
   photoRequired,
   scoringVersion = 1,
+  weeklyDays,
   agreed,
   onAgreedChange,
 }: {
@@ -62,6 +65,8 @@ export function GoalConsentStep({
   photoRequired: boolean;
   /** 이 챌린지의 점수·동점 규칙 버전 (1=기존, 2=랭킹 v2) */
   scoringVersion?: number;
+  /** 주 N회 계획 — "하루 평균 몇 점"을 계산하는 데 쓴다. 없으면 그 줄은 빼고 목표별 안내만 보인다 */
+  weeklyDays?: number;
   agreed: boolean;
   onAgreedChange: (next: boolean) => void;
 }) {
@@ -69,6 +74,13 @@ export function GoalConsentStep({
   const tie = tieRules(scoringVersion);
   const split = scoreBarSplit();
   const bonus = bonusChips();
+  const stages = stageGuide(scoringVersion);
+  const guide = goalPointGuide({
+    goals,
+    weeklyDays: weeklyDays ?? 0,
+    periodDays: inclusiveDays(startDate, endDate),
+    scoringVersion,
+  });
 
   return (
     <div className="flex flex-col gap-5" data-testid="goal-consent-step">
@@ -133,6 +145,20 @@ export function GoalConsentStep({
           </span>
           <span className="whitespace-nowrap text-[11.5px] text-muted">목표 100% 채울 때마다</span>
         </div>
+        {/* 순위가 언제 무엇으로 정해지는지 — 활동 점수는 최종 발표 때만 더해진다(2026-11-16 결정) */}
+        <ol className="mt-2.5 flex flex-col gap-1.5" data-testid="consent-stages">
+          {stages.map((st) => (
+            <li
+              key={st.when}
+              className="flex items-start gap-2 rounded-card-sm border border-line bg-surface-2 px-3 py-2"
+            >
+              <span className="flex-none rounded-full bg-accent px-2 py-0.5 text-[11px] font-extrabold text-accent-ink">
+                {st.when}
+              </span>
+              <span className="text-[12px] font-bold leading-5">{st.text}</span>
+            </li>
+          ))}
+        </ol>
         <details className="mt-2 rounded-card-sm border border-line bg-surface-2 px-3 py-2">
           <summary className="cursor-pointer text-[12px] font-bold text-muted">
             자세히 보기
@@ -148,6 +174,42 @@ export function GoalConsentStep({
           <p className="mt-2 text-[11.5px] font-bold text-accent">{scoreFormula(scoringVersion)}</p>
         </details>
       </Section>
+
+      {/* ②-2 내 목표로는 이렇게 올라요 — 운동 한 번이 몇 점인지 내 숫자로 말한다 (사용자 지시 2026-11-17) */}
+      {guide.rows.length > 0 && (
+        <Section id="consent-per-workout" title="내 목표로는 이렇게 올라요">
+          {weeklyDays ? (
+            <div className="rounded-card-sm border border-accent/50 bg-accent/10 px-3 py-2.5">
+              <p className="text-[11.5px] font-bold text-muted">
+                계획한 {guide.plannedDays}일을 모두 채우면, 운동하는 날마다 평균
+              </p>
+              <p className="mt-0.5 font-mono text-[22px] font-extrabold text-accent" data-testid="per-day-points">
+                +{guide.perDay}점
+              </p>
+            </div>
+          ) : null}
+          <ul className="mt-2 flex flex-col gap-1.5" data-testid="per-goal-points">
+            {guide.rows.map((r) => (
+              <li
+                key={r.type}
+                className="flex items-center justify-between gap-2 rounded-card-sm border border-line bg-surface-2 px-3 py-2"
+              >
+                <span className="min-w-0 text-[12px] font-bold leading-4">
+                  {r.label}
+                  <span className="ml-1 text-muted">{r.amount}</span>
+                </span>
+                <span className="flex-none font-mono text-[14px] font-extrabold text-accent">
+                  +{r.points}점
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-[11.5px] leading-5 text-muted">
+            목표를 100% 채우면 그 목표는 더 오르지 않아요. 목표를 다 채울 때마다 보너스 +{bonus.per}점이 따로 붙고,
+            기본 점수는 최대 {guide.baseMax}점이에요.
+          </p>
+        </Section>
+      )}
 
       {/* ③ 목표를 더하면 — 좋은 점 / 조심할 점 */}
       <Section id="consent-add" title="목표를 더 추가하면?">

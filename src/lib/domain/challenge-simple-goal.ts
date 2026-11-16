@@ -566,3 +566,78 @@ export function weekPreview(weeklyDays: number): WeekPreview {
         : "한 번만 더 하면 이번 주 목표 달성!",
   };
 }
+
+
+/**
+ * 진행 예시를 **내가 세운 계획대로** 보여 준다 (사용자 지시 2026-11-17, 형태는 "회차"로 정했다).
+ *
+ * ⛔ **요일을 쓰지 않는다.** "주 N회"는 아무 요일에나 해도 되는 목표다 — 월·수·금으로 못 박으면 그 요일에 못 하면
+ *    목표가 틀어진 줄 안다(`weekPreview` 주석의 같은 이유). 그래서 칸은 `1회차 · 2회차 · 3회차`다.
+ * ⚠️ **실적이 아니다**(`weekPreview`와 같다). 채워진 칸은 `주 N회 - 1`로 고정한 예시다.
+ *
+ * 칸에는 **횟수로 말할 수 있는 세부 목표**만 붙인다: 일수형(웨이트·맨몸·유산소 운동일) · 인터벌 횟수 ·
+ * "주 몇 회"를 정한 유산소. 분량형(횟수·거리·시간·운동량)은 한 회차에 못 박을 수 없으니 합계 줄(`lines`)로만 말한다.
+ * 합계 줄은 목표 화면에 보이는 글자(`detailGoalText`)를 그대로 쓴다 — 두 곳이 갈리지 않게.
+ */
+export type PlanPreviewSlot = {
+  /** 1부터 — "1회차" */
+  index: number;
+  done: boolean;
+  /** 이 회차에 할 운동 종류 — 웨이트·유산소·맨몸·인터벌·싸이클 */
+  tags: string[];
+};
+
+export type PlanPreview = {
+  slots: PlanPreviewSlot[];
+  done: number;
+  target: number;
+  caption: string;
+  /** "이번 주 합계" — 세부 목표 한 줄씩 */
+  lines: { title: string; value: string }[];
+};
+
+/** 운동 종류 짧은 이름 — 칸 안에 들어가야 해서 짧다 */
+function planTagOf(type: DetailGoalType): string {
+  if (type === "tabata_count") return "인터벌";
+  if (type === "cycle_time") return "싸이클";
+  const cat = detailCategoryOf(type);
+  return cat === "weight" ? "웨이트" : cat === "cardio" ? "유산소" : "맨몸";
+}
+
+/** 칸에 붙일 주간 횟수 — 칸에 못 박을 수 없는 목표는 null */
+function planCountOf(d: DetailGoalInput): number | null {
+  if (isDaysMetric(d.type) || d.type === "tabata_count") return d.perWeek > 0 ? Math.round(d.perWeek) : null;
+  return cardioWeeklyOf(d);
+}
+
+/** k개를 n칸에 **고르게** — n=3,k=2 → [0,2]. 한쪽으로 몰리지 않는다 */
+function spreadSlots(n: number, k: number): number[] {
+  const count = Math.min(Math.max(0, k), n);
+  if (count === 0) return [];
+  if (count === 1) return [0];
+  return Array.from({ length: count }, (_, i) => Math.round((i * (n - 1)) / (count - 1)));
+}
+
+export function planPreview(weeklyDays: number, details: readonly DetailGoalInput[]): PlanPreview {
+  const base = weekPreview(weeklyDays);
+  const slots: PlanPreviewSlot[] = Array.from({ length: base.target }, (_, i) => ({
+    index: i + 1,
+    done: i < base.done,
+    tags: [],
+  }));
+  for (const d of details) {
+    const k = planCountOf(d);
+    if (k === null) continue;
+    for (const at of spreadSlots(slots.length, k)) {
+      const tag = planTagOf(d.type);
+      if (!slots[at].tags.includes(tag)) slots[at].tags.push(tag);
+    }
+  }
+  return {
+    slots,
+    done: base.done,
+    target: base.target,
+    caption: base.caption,
+    lines: details.map((d) => detailGoalText(d)),
+  };
+}
