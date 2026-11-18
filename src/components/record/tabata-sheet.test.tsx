@@ -159,7 +159,7 @@ describe("TabataSheet — 지정 계정의 Dynamite 음원", () => {
     for (const minutes of [4, 8, 16]) {
       fireEvent.click(screen.getByRole("button", { name: `${minutes}분` }));
       expect(container.querySelector("audio")?.getAttribute("src")).toBe(
-        `/audio/tabata-${minutes}min-dynamite-v1.mp3`,
+        "/audio/tabata-4min-dynamite-v1.mp3",
       );
     }
     expect(play).not.toHaveBeenCalled();
@@ -203,6 +203,108 @@ describe("TabataSheet — 지정 계정의 Dynamite 음원", () => {
     fireEvent.ended(audio);
     await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1));
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * 8·16분은 4분 파일 하나를 `audio.loop`로 돌린다 (2026-11-19). 이 테스트가 지키는 것:
+   * ① 마지막 블록 전엔 loop가 켜져 있고 ② 파일이 되감기면 **다음 블록의 라운드**를 그리고
+   * ③ 마지막 블록에서는 loop가 꺼져 끝에서 ended가 온다. ①~③ 중 하나라도 빠지면
+   * 두 번째 블록의 화면이 첫 블록을 반복하거나, 끝에서 음악이 다시 시작된다.
+   */
+  it("8분: 파일이 되감기면 두 번째 블록의 라운드를 그리고, 마지막 블록은 loop를 끈다", async () => {
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
+    const { container } = setup({
+      initialPicked: FOUR,
+      initialMinutes: 8,
+      onBegin: vi.fn().mockResolvedValue(true),
+    });
+    fireEvent.click(screen.getByRole("button", { name: "전신 인터벌 시작" }));
+    await waitFor(() => expect(screen.getByTestId("interval-session-overlay")).toBeTruthy());
+    const audio = container.querySelector("audio")!;
+
+    // 첫 블록: 8라운드째, loop 켜짐
+    expect(audio.loop).toBe(true);
+    audio.currentTime = 240;
+    fireEvent.timeUpdate(audio);
+    expect(screen.getByTestId("interval-round").textContent).toBe("8라운드 / 16라운드");
+
+    // 파일이 처음으로 되감김 → 두 번째 블록의 준비, 9라운드
+    audio.currentTime = 0.4;
+    fireEvent.timeUpdate(audio);
+    expect(screen.getByTestId("interval-round").textContent).toBe("9라운드 / 16라운드");
+    // 마지막 블록이므로 loop가 꺼진다
+    expect(audio.loop).toBe(false);
+
+    audio.currentTime = 13; // 두 번째 블록 첫 운동
+    fireEvent.timeUpdate(audio);
+    expect(screen.getByTestId("interval-countdown").textContent).toBe("20");
+    expect(screen.getByTestId("interval-round").textContent).toBe("9라운드 / 16라운드");
+  });
+
+  it("16분: 블록이 3번 되감겨야 마지막 블록이고 그때 loop가 꺼진다", async () => {
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
+    const { container } = setup({
+      initialPicked: FOUR,
+      initialMinutes: 16,
+      onBegin: vi.fn().mockResolvedValue(true),
+    });
+    fireEvent.click(screen.getByRole("button", { name: "전신 인터벌 시작" }));
+    await waitFor(() => expect(screen.getByTestId("interval-session-overlay")).toBeTruthy());
+    const audio = container.querySelector("audio")!;
+
+    const wrap = (end = 249.9) => {
+      audio.currentTime = end;
+      fireEvent.timeUpdate(audio);
+      audio.currentTime = 0.3;
+      fireEvent.timeUpdate(audio);
+    };
+    wrap();
+    expect(screen.getByTestId("interval-round").textContent).toBe("9라운드 / 32라운드");
+    expect(audio.loop).toBe(true);
+    wrap();
+    expect(screen.getByTestId("interval-round").textContent).toBe("17라운드 / 32라운드");
+    expect(audio.loop).toBe(true);
+    wrap();
+    expect(screen.getByTestId("interval-round").textContent).toBe("25라운드 / 32라운드");
+    expect(audio.loop).toBe(false);
+  });
+
+  it("4분: 반복하지 않는다 (loop 꺼짐)", async () => {
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
+    const { container } = setup({
+      initialPicked: FOUR,
+      onBegin: vi.fn().mockResolvedValue(true),
+    });
+    fireEvent.click(screen.getByRole("button", { name: "전신 인터벌 시작" }));
+    await waitFor(() => expect(screen.getByTestId("interval-session-overlay")).toBeTruthy());
+    expect(container.querySelector("audio")!.loop).toBe(false);
+  });
+
+  it("중단 뒤 다시 시작하면 블록 번호가 0부터다 (되돌린 currentTime을 되감김으로 세지 않는다)", async () => {
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
+    vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const { container } = setup({
+      initialPicked: FOUR,
+      initialMinutes: 8,
+      onBegin: vi.fn().mockResolvedValue(true),
+      onCancelWorkout: vi.fn().mockResolvedValue(undefined),
+    });
+    fireEvent.click(screen.getByRole("button", { name: "전신 인터벌 시작" }));
+    await waitFor(() => expect(screen.getByTestId("interval-session-overlay")).toBeTruthy());
+    const audio = container.querySelector("audio")!;
+    audio.currentTime = 100;
+    fireEvent.timeUpdate(audio);
+    fireEvent.click(screen.getByRole("button", { name: "중단하기" }));
+    await waitFor(() => expect(screen.queryByTestId("interval-session-overlay")).toBeNull());
+    audio.currentTime = 0;
+    fireEvent.timeUpdate(audio); // 중단이 되돌린 값이 늦게 도착한 경우
+
+    fireEvent.click(screen.getByRole("button", { name: "전신 인터벌 시작" }));
+    await waitFor(() => expect(screen.getByTestId("interval-session-overlay")).toBeTruthy());
+    audio.currentTime = 20;
+    fireEvent.timeUpdate(audio);
+    expect(screen.getByTestId("interval-round").textContent).toBe("1라운드 / 16라운드");
   });
 
   it("중단하면 음원을 멈추고 처음으로 되돌린다", async () => {

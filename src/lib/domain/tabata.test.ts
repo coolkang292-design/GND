@@ -3,6 +3,7 @@ import type { CatalogExercise } from "@/lib/types";
 import type { LocalExercise } from "@/lib/workout";
 
 import {
+  DYNAMITE_TABATA_TRACKS,
   INTERVAL_COPY,
   TABATA_EXERCISE_COUNT,
   TABATA_ROUND_SECONDS,
@@ -261,7 +262,8 @@ describe("타바타 코스", () => {
     for (const userId of users) {
       for (const minutes of [4, 8, 16]) {
         expect(tabataTrackForMinutes(minutes, userId)).toMatchObject({
-          src: `/audio/tabata-${minutes}min-dynamite-v1.mp3`,
+          // 8·16분도 4분 파일 하나를 반복한다 (2026-11-19)
+          src: "/audio/tabata-4min-dynamite-v1.mp3",
           minutes,
           musicTitle: "Dynamite (Tabata)",
         });
@@ -279,9 +281,10 @@ describe("타바타 코스", () => {
     expect(tabataTrackForMinutes(4, "user-a")).toBe(TABATA_TRACKS[0]);
   });
 
-  it("4·8·16분 코스가 각자의 음원을 가진다", () => {
+  it("4·8·16분 코스가 4분 음원 하나를 함께 쓴다 (반복 재생, 2026-11-19)", () => {
     expect(TABATA_TRACKS.map((t) => t.minutes)).toEqual([4, 8, 16]);
-    expect(new Set(TABATA_TRACKS.map((t) => t.src)).size).toBe(3);
+    expect(new Set(TABATA_TRACKS.map((t) => t.src)).size).toBe(1);
+    expect(new Set(DYNAMITE_TABATA_TRACKS.map((t) => t.src)).size).toBe(1);
     for (const track of TABATA_TRACKS) {
       expect(track.src).toMatch(/^\/audio\/tabata-.*\.mp3$/);
     }
@@ -289,8 +292,9 @@ describe("타바타 코스", () => {
 
   it("분수로 코스를 찾는다", () => {
     expect(tabataTrackForMinutes(8)?.src).toBe(
-      "/audio/tabata-8min-total-body-v3.mp3",
+      "/audio/tabata-4min-total-body-v3.mp3",
     );
+    expect(tabataTrackForMinutes(8)?.minutes).toBe(8);
     expect(tabataTrackForMinutes(5)).toBeNull();
   });
 

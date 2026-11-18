@@ -41,35 +41,42 @@ export type TabataTrack = {
  *    같은 이름으로 덮으면 브라우저·CDN이 **옛 파일을 계속 쓴다** — 고쳐 놓고도 안 맞는다.
  * `-v3` (2026-10-24, GND#22 배포 용량): v2를 256→128kbps로만 다시 인코딩했다(48kHz 스테레오).
  *    56MB → 28MB. 디코딩 길이는 원본과 같고, 준비·이음매·끝 15곳 상호상관 어긋남 0.0ms.
+ * `4분 파일 반복` (2026-11-19, 배포 용량): 8·16분 파일은 4분 블록의 **그대로 반복**이라
+ *    따로 두지 않는다. 세 코스가 같은 4분 파일을 가리키고, 시트가 `audio.loop`로 돌린다
+ *    (`interval-loop.ts`). 56MB → 8MB. 4분 파일은 이름·내용이 그대로라 캐시 문제가 없다.
+ *    ⚠️ 8·16분 전용 파일을 다시 만들지 마라 — `src`가 같아도 `minutes`가 블록 수를 정한다.
  * 추가는 여기 한 줄 (권리 확인된 사용자 제작 음원만).
  */
+const TOTAL_BODY_BLOCK_SRC = "/audio/tabata-4min-total-body-v3.mp3";
+const DYNAMITE_BLOCK_SRC = "/audio/tabata-4min-dynamite-v1.mp3";
+
 export const TABATA_TRACKS: readonly TabataTrack[] = [
   {
     id: "total-body-4min",
     title: "4분 전신",
-    src: "/audio/tabata-4min-total-body-v3.mp3",
+    src: TOTAL_BODY_BLOCK_SRC,
     minutes: 4,
   },
   {
     id: "total-body-8min",
     title: "8분 전신 (2회 반복)",
-    src: "/audio/tabata-8min-total-body-v3.mp3",
+    src: TOTAL_BODY_BLOCK_SRC,
     minutes: 8,
   },
   {
     id: "total-body-16min",
     title: "16분 전신 (4회 반복)",
-    src: "/audio/tabata-16min-total-body-v3.mp3",
+    src: TOTAL_BODY_BLOCK_SRC,
     minutes: 16,
   },
 ] as const;
 
-/** 기본 음원과 같은 13초 준비·250초 블록으로 보정한 파일들이다. */
+/** 기본 음원과 같은 13초 준비·250초 블록으로 보정한 4분 파일을 반복한다. */
 export const DYNAMITE_TABATA_TRACKS: readonly TabataTrack[] = TABATA_TRACKS.map(
   (track) => ({
     ...track,
     id: `dynamite-${track.minutes}min`,
-    src: `/audio/tabata-${track.minutes}min-dynamite-v1.mp3`,
+    src: DYNAMITE_BLOCK_SRC,
     musicTitle: "Dynamite (Tabata)",
   }),
 );

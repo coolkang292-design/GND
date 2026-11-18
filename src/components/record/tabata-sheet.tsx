@@ -16,6 +16,12 @@ import {
   type TabataMinutes,
   type TabataTrack,
 } from "@/lib/domain/tabata";
+import {
+  advanceLoopBlock,
+  cumulativeIntervalElapsed,
+  intervalBlockCount,
+  shouldLoopAudio,
+} from "@/lib/domain/interval-loop";
 import type { WorkoutRoutine } from "@/lib/routines";
 import type {
   BodyPart,
@@ -160,8 +166,22 @@ function TabataSheetBody({
   const [playError, setPlayError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const wakeLockRef = useRef<{ release: () => Promise<void> } | null>(null);
+  /**
+   * 반복 재생 상태 (2026-11-19). 8·16분은 4분 파일을 `audio.loop`로 돌리므로
+   * 파일 위치(0~250)만으로는 몇 번째 블록인지 모른다 — 되감김을 세어 둔다.
+   * 시작·중단에서 반드시 0으로 되돌린다: 되돌리지 않으면 `currentTime = 0`이
+   * 되감김으로 읽혀 블록이 올라간다.
+   */
+  const loopBlockRef = useRef(0);
+  const loopPrevTimeRef = useRef(0);
 
   const track = tabataTrackForMinutes(minutes, userId) ?? TABATA_TRACKS[0];
+  const totalBlocks = intervalBlockCount(minutes);
+
+  function resetLoopState() {
+    loopBlockRef.current = 0;
+    loopPrevTimeRef.current = 0;
+  }
   // 예상 점수는 코스가 정한 횟수로 계산한다 — 실제 기록(`tabataDraftExercises`)과 같은 모양이라야 숫자가 맞다
   const forecastExercises = useMemo(
     () => tabataDraftExercises(picked, localId, minutes),
@@ -220,12 +240,15 @@ function TabataSheetBody({
     try {
       const audio = audioRef.current;
       if (!audio) return;
+      resetLoopState();
+      audio.loop = shouldLoopAudio(0, totalBlocks);
       // iOS는 사용자 제스처 안에서 play()가 시작돼야 한다 — 세션 생성보다 먼저.
       await audio.play();
       const ok = await onBegin(picked, minutes);
       if (!ok) {
         audio.pause();
         audio.currentTime = 0;
+        resetLoopState();
         return;
       }
       await acquireWakeLock();
@@ -350,6 +373,7 @@ function TabataSheetBody({
         audio.pause();
         audio.currentTime = 0;
       }
+      resetLoopState();
       await releaseWakeLock();
       await onCancelWorkout();
       setElapsed(0);
@@ -375,7 +399,22 @@ function TabataSheetBody({
         preload="metadata"
         onTimeUpdate={(e) => {
           const el = e.currentTarget;
-          setElapsed(el.currentTime);
+          // 재생 중에만 블록을 센다 — 고르는 화면의 되감김은 세지 않는다
+          if (phase === "playing") {
+            const next = advanceLoopBlock({
+              block: loopBlockRef.current,
+              totalBlocks,
+              prevTime: loopPrevTimeRef.current,
+              currentTime: el.currentTime,
+            });
+            if (next !== loopBlockRef.current) {
+              loopBlockRef.current = next;
+              // 마지막 블록은 loop를 꺼서 끝에서 ended가 오게 한다
+              el.loop = shouldLoopAudio(next, totalBlocks);
+            }
+          }
+          loopPrevTimeRef.current = el.currentTime;
+          setElapsed(cumulativeIntervalElapsed(loopBlockRef.current, el.currentTime));
         }}
         onEnded={() => void handleEnded()}
       />

@@ -166,15 +166,23 @@ describe("인터벌 진행 판정", () => {
    *
    * 2026-10-24 `-v3`: 256→128kbps CBR로 다시 인코딩했다(GND#22 배포 용량). 그래서
    * 초당 바이트 상수를 바꿨다. 비트레이트를 또 바꾸면 이 상수도 같이 바꿔야 한다.
+   *
+   * 2026-11-19: 8·16분 파일을 없앴다. 모든 코스가 **4분 파일 하나(= 블록 1개, 250초)**
+   * 를 반복하므로, 트랙마다 코스 전체 길이가 아니라 **블록 길이**와 대조한다.
    */
-  it("음원 파일 길이가 블록 계산과 맞는다", () => {
+  it("음원 파일 길이가 블록 길이(250초)와 맞는다", () => {
     const dir = join(process.cwd(), "public", "audio");
-    for (const track of [...TABATA_TRACKS, ...DYNAMITE_TABATA_TRACKS]) {
-      const bytes = statSync(join(dir, track.src.replace("/audio/", ""))).size;
-      const expected = intervalTotalSeconds(track.minutes);
+    const files = new Set(
+      [...TABATA_TRACKS, ...DYNAMITE_TABATA_TRACKS].map((t) => t.src),
+    );
+    expect(files.size).toBe(2); // 일반·Dynamite 각 1개
+    for (const src of files) {
+      const bytes = statSync(join(dir, src.replace("/audio/", ""))).size;
       // 128kbps CBR 기준 초당 16KB. 길이가 절반이나 두 배로 어긋나면 잡힌다.
       const approxSeconds = bytes / 16_000;
-      expect(Math.abs(approxSeconds - expected)).toBeLessThan(expected * 0.05);
+      expect(Math.abs(approxSeconds - INTERVAL_BLOCK_SECONDS)).toBeLessThan(
+        INTERVAL_BLOCK_SECONDS * 0.05,
+      );
     }
   });
 });
