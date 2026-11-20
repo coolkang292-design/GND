@@ -30,6 +30,8 @@ const item = (
   photos: [],
   streak: 1,
   recordNote: null,
+  progressNote: null,
+  progressEvent: null,
   tabataMinutes: null,
   breakdown: [],
   reactions: { fire: 0, clap: 0, like: 0 },
@@ -173,5 +175,68 @@ describe("mergeSameDayFeed — 같은 사람·같은 날은 카드 하나", () =
     expect(again).toHaveLength(1);
     expect([...again[0].sessionIds].sort()).toEqual(["early", "late", "mid"]);
     expect(again[0].sessionId).toBe("early");
+  });
+});
+
+describe("mergeSameDayFeed — 레벨업·진화 표시(progressNote, 0142)", () => {
+  it("묶인 카드에 두 번째 운동의 레벨업이 있어도 카드에 남는다 — 알림이 두 번째 운동을 가리켜도 보인다", () => {
+    const merged = mergeSameDayFeed(
+      [
+        item("late", "a", A_EVENING, { progressNote: "⬆️ Lv.4 → Lv.5 레벨업" }),
+        item("early", "a", A_MORNING),
+      ],
+      TZ,
+    );
+    expect(merged).toHaveLength(1);
+    expect(merged[0].sessionIds).toEqual(["early", "late"]);
+    expect(merged[0].progressNote).toBe("⬆️ Lv.4 → Lv.5 레벨업");
+  });
+
+  it("두 운동에 각각 있으면 ' / '로 이어 붙이고 같은 문구는 한 번만 쓴다", () => {
+    const merged = mergeSameDayFeed(
+      [
+        item("late", "a", A_EVENING, { progressNote: "🎉 시동러 단계로 진화! (Lv.5)" }),
+        item("early", "a", A_MORNING, { progressNote: "⬆️ Lv.4 → Lv.5 레벨업" }),
+      ],
+      TZ,
+    );
+    expect(merged[0].progressNote).toBe("⬆️ Lv.4 → Lv.5 레벨업 / 🎉 시동러 단계로 진화! (Lv.5)");
+    const same = mergeSameDayFeed(
+      [item("l", "a", A_EVENING, { progressNote: "x" }), item("e", "a", A_MORNING, { progressNote: "x" })],
+      TZ,
+    );
+    expect(same[0].progressNote).toBe("x");
+  });
+
+  it("아무 운동에도 없으면 null이다 (부정 확인)", () => {
+    const merged = mergeSameDayFeed([item("l", "a", A_EVENING), item("e", "a", A_MORNING)], TZ);
+    expect(merged[0].progressNote).toBeNull();
+  });
+});
+
+describe("mergeSameDayFeed — 레벨업·진화 배지 값(progressEvent, 0143)", () => {
+  const lv = { kind: "level_up" as const, level: 5, prevLevel: 4, stage: 2, stageName: "꿈틀러", prevStage: 2, prevStageName: "꿈틀러" };
+  const ev = { kind: "evolution" as const, level: 6, prevLevel: 5, stage: 3, stageName: "시동러", prevStage: 2, prevStageName: "꿈틀러" };
+
+  it("같은 날 두 운동에 각각 있으면 더 큰 사건(진화) 하나만 배지로 남는다", () => {
+    const merged = mergeSameDayFeed(
+      [item("late", "a", A_EVENING, { progressEvent: ev }), item("early", "a", A_MORNING, { progressEvent: lv })],
+      TZ,
+    );
+    expect(merged).toHaveLength(1);
+    expect(merged[0].progressEvent).toEqual(ev);
+  });
+
+  it("한 운동에만 있어도 묶인 카드에 남는다", () => {
+    const merged = mergeSameDayFeed(
+      [item("late", "a", A_EVENING), item("early", "a", A_MORNING, { progressEvent: lv })],
+      TZ,
+    );
+    expect(merged[0].progressEvent).toEqual(lv);
+  });
+
+  it("없으면 null이다 (부정 확인)", () => {
+    const merged = mergeSameDayFeed([item("l", "a", A_EVENING), item("e", "a", A_MORNING)], TZ);
+    expect(merged[0].progressEvent).toBeNull();
   });
 });

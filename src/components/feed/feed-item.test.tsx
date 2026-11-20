@@ -69,6 +69,8 @@ function feedItem(
       : [],
     streak: 3,
     recordNote: null,
+    progressNote: null,
+    progressEvent: null,
     tabataMinutes: null,
     reactions: { fire: 1, clap: 0, like: 0 },
     myReactions: new Set(),
@@ -110,6 +112,86 @@ describe("FeedItemCard", () => {
       <FeedItemCard item={feedItem(null)} userId="me" onProfileClick={() => {}} />,
     );
     expect(html).toContain('aria-label="오빙크 프로필 보기"');
+  });
+});
+
+describe("FeedItemCard — 레벨업·진화 표시 (0142, 2026-11-20)", () => {
+  const withNote = (photoUrl: string | null, progressNote: string | null) => ({
+    ...feedItem(photoUrl),
+    progressNote,
+  });
+  const render = (item: ReturnType<typeof feedItem>) =>
+    renderToStaticMarkup(<FeedItemCard item={item} userId="me" onProfileClick={() => {}} />);
+
+  it("일반 카드에 레벨업 문구가 보인다", () => {
+    const html = render(withNote(null, "⬆️ Lv.4 → Lv.5 레벨업"));
+    expect(html).toContain('data-testid="feed-progress-note"');
+    expect(html).toContain("⬆️ Lv.4 → Lv.5 레벨업");
+  });
+
+  it("사진 카드에도 진화 문구가 보인다 — 알림이 가리키는 게시물이 사진 카드여도 표시가 있다", () => {
+    const html = render(withNote("https://example.com/workout.jpg", "🎉 시동러 단계로 진화! (Lv.5)"));
+    expect(html).toContain('data-testid="feed-progress-note"');
+    expect(html).toContain("🎉 시동러 단계로 진화! (Lv.5)");
+  });
+
+  it("레벨업·진화가 없으면 표시가 없다 (부정 확인)", () => {
+    expect(render(withNote(null, null))).not.toContain("feed-progress-note");
+    expect(render(withNote("https://example.com/workout.jpg", null))).not.toContain("feed-progress-note");
+  });
+
+  it("기록 갱신과 함께 있으면 둘 다 보인다 — 서로 덮지 않는다", () => {
+    const html = render({ ...withNote(null, "⬆️ Lv.4 → Lv.5 레벨업"), recordNote: "벤치프레스 5kg 더 들었어요" });
+    expect(html).toContain("feed-progress-note");
+    expect(html).toContain("기록 갱신");
+    expect(html).toContain("벤치프레스 5kg 더 들었어요");
+  });
+});
+
+describe("FeedItemCard — 캐릭터 진화 배지 (0143, 시안 '피드 도착')", () => {
+  const event = {
+    kind: "evolution" as const, level: 16, prevLevel: 15, stage: 4, stageName: "꾸준러", prevStage: 3, prevStageName: "시동러",
+  };
+  const withEvent = (photoUrl: string | null) => ({
+    ...feedItem(photoUrl),
+    progressNote: "🎉 꾸준러 단계로 진화! (Lv.16)",
+    progressEvent: event,
+  });
+  const render = (item: ReturnType<typeof feedItem>) =>
+    renderToStaticMarkup(<FeedItemCard item={item} userId="me" onProfileClick={() => {}} />).replace(/%2F/gi, "/");
+
+  it("사진 카드도 사진 위가 아니라 본문(숫자 줄 아래)에 배지가 나온다 — 사진 없는 카드와 같은 모양", () => {
+    const h = render(withEvent("https://example.com/workout.jpg"));
+    expect(h.match(/data-testid="progress-badge"/g)).toHaveLength(1); // 배지는 한 번만
+    expect(h).toContain("꾸준러");
+    expect(h).toContain("Lv.16 달성");
+    // 사진 위에 겹치는 래퍼가 없다 (부정 확인)
+    expect(h).not.toContain("absolute inset-x-0 top-[72px]");
+    expect(h).not.toContain("backdrop-blur");
+    // 본문 배지는 운동 숫자 줄(전체 볼륨) 뒤, 운동 목록 앞에 있다
+    expect(h.indexOf("전체 볼륨")).toBeLessThan(h.indexOf('data-testid="progress-badge"'));
+    expect(h.indexOf('data-testid="progress-badge"')).toBeLessThan(h.indexOf("운동 상세"));
+    expect(h).not.toContain("feed-progress-note"); // 글자 칩과 겹쳐 쓰지 않는다
+  });
+
+  it("사진 없는 카드: 본문에 같은 배지(inline)가 들어간다", () => {
+    const h = render(withEvent(null));
+    expect(h).toContain("꾸준러");
+    expect(h).toContain("Lv.16 달성");
+    expect(h.match(/data-testid="progress-badge"/g)).toHaveLength(1);
+    expect(h).not.toContain("feed-progress-note");
+  });
+
+  it("이벤트 값이 없고 글자 문구만 있으면(0142 때 값) 글자 칩으로 보인다 — 아무것도 안 사라진다", () => {
+    const h = render({ ...feedItem(null), progressNote: "⬆️ Lv.4 → Lv.5 레벨업", progressEvent: null });
+    expect(h).toContain("feed-progress-note");
+    expect(h).not.toContain('data-testid="progress-badge"');
+  });
+
+  it("둘 다 없으면 아무 표시도 없다 (부정 확인)", () => {
+    const h = render(feedItem("https://example.com/workout.jpg"));
+    expect(h).not.toContain("progress-badge");
+    expect(h).not.toContain("feed-progress-note");
   });
 });
 

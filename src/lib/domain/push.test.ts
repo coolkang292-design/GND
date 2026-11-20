@@ -28,7 +28,8 @@ describe("pushPayloadFor", () => {
     // ⚠️ 2026-08-14 정정: `/record` → `/profile`. 배지 진열대가 `GrowthHub`로
     //    들어가면서 내 정보 탭으로 옮겨졌는데 라우팅만 안 따라왔었다.
     ["badge_earned", "/profile"],
-    ["level_up", "/profile"],
+    // 0142: 크루원의 레벨업·진화 — 게시물이 없는 옛 알림도 내 정보가 아니라 피드로 간다
+    ["level_up", "/feed"],
     ["rank_change", "/challenge"],
     ["challenge_started", "/challenge"],
     ["challenge_ended", "/challenge"],
@@ -169,7 +170,7 @@ describe("rank_drop — 순위가 내려간 사람 (0140)", () => {
  * 달았는지 사용자가 찾을 수 없다. 대화가 왕복하지 않는다.
  */
 describe("게시물 딥링크 (reference_id)", () => {
-  it.each(["comment_received", "reaction_received", "record_beaten"])(
+  it.each(["comment_received", "reaction_received", "record_beaten", "level_up"])(
     "%s는 그 세션으로 보낸다",
     (type) => {
       expect(
@@ -291,5 +292,37 @@ describe("챌린지 딥링크 (0088)", () => {
         referenceId: CID,
       }).url,
     ).toBe(`/feed?session=${CID}`);
+  });
+});
+
+/**
+ * 0142 — 레벨업·진화 알림은 **그 운동 게시물**로 간다 (사용자 요청 2026-11-20).
+ * 크루원이 받는 알림이라 내 정보 탭(`/profile`)으로 보내면 누가 무엇을 했는지 볼 곳이 없었다.
+ */
+describe("level_up — 레벨업·진화는 해당 피드 게시물로 (0142)", () => {
+  const ID = "11111111-2222-3333-4444-555555555555";
+  const level = (referenceId?: string | null) =>
+    pushPayloadFor({ type: "level_up", title: "t", body: "b", referenceId }).url;
+
+  it("게시물이 있으면 그 게시물로 간다 — 내 정보 탭이 아니다 (부정 확인)", () => {
+    expect(level(ID)).toBe(`/feed?session=${ID}`);
+    expect(level(ID)).not.toContain("/profile");
+  });
+
+  it("게시물이 없으면(0142 이전 알림 143건·비공개 운동) 피드 맨 위로 간다", () => {
+    expect(level()).toBe("/feed");
+    expect(level(null)).toBe("/feed");
+  });
+
+  it("기록 갱신(이전보다 좋아짐)도 같은 길이다 — 그 게시물로 간다", () => {
+    expect(
+      pushPayloadFor({ type: "record_beaten", title: "t", body: "b", referenceId: ID }).url,
+    ).toBe(`/feed?session=${ID}`);
+  });
+
+  it("배지 알림은 그대로 내 정보 탭이다 — 레벨업만 바뀌었다", () => {
+    expect(
+      pushPayloadFor({ type: "badge_earned", title: "t", body: "b", referenceId: ID }).url,
+    ).toBe("/profile");
   });
 });

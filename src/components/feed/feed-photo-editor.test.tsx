@@ -26,6 +26,8 @@ function item(completedAt: Date): FeedItem {
     photos: [],
     streak: 1,
     recordNote: null,
+    progressNote: null,
+    progressEvent: null,
     tabataMinutes: null,
     breakdown: [],
     reactions: { fire: 0, clap: 0, like: 0 },

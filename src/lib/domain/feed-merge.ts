@@ -1,3 +1,4 @@
+import { mergeProgressEvents } from "./progress-event";
 import type { FeedItem } from "@/lib/social";
 import { dayKey } from "./time";
 import { mergeThreads } from "./session-comments";
@@ -60,6 +61,10 @@ function mergeGroup(group: FeedItem[]): FeedItem {
   const notes = unique(
     sorted.map((i) => i.recordNote).filter((n): n is string => Boolean(n)),
   );
+  // 레벨업·진화 문구 (0142) — 두 번째 운동에서 올라도 묶인 카드에 남는다. 알림이 어느 운동을 가리키든 보인다
+  const progressNotes = unique(
+    sorted.map((i) => i.progressNote).filter((n): n is string => Boolean(n)),
+  );
   const tabata = sorted
     .map((i) => i.tabataMinutes)
     .filter((n): n is number => typeof n === "number");
@@ -83,6 +88,9 @@ function mergeGroup(group: FeedItem[]): FeedItem {
     photos: sorted.flatMap((i) => i.photos),
     streak: Math.max(...sorted.map((i) => i.streak)),
     recordNote: notes.length ? notes.join(" / ") : null,
+    progressNote: progressNotes.length ? progressNotes.join(" / ") : null,
+    // 배지는 묶음 중 **가장 큰 사건 하나** — 진화 > 레벨업, 같으면 레벨이 높은 쪽 (글자 문구는 전부 잇는다)
+    progressEvent: mergeProgressEvents(sorted.map((i) => i.progressEvent)),
     tabataMinutes: tabata.length ? tabata.reduce((a, b) => a + b, 0) : null,
     breakdown: sorted.flatMap((i) => i.breakdown),
     reactions,

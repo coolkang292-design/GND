@@ -44,6 +44,11 @@ const SESSION_DEEP_LINK_TYPES = new Set([
   "comment_received", // 0082
   "reaction_received",
   "record_beaten",
+  // 0142 — 크루원의 레벨업·진화. `notify_progress`가 그 사건을 일으킨 운동 게시물의 id를 넣는다.
+  // 그 게시물에 `progress_note`("⬆️ Lv.4 → Lv.5 레벨업")가 붙어 피드 카드에 보인다.
+  // ⚠️ 0142 이전 알림 143건과 크루에게 안 보이는(비공개) 운동의 알림은 `reference_id`가 없다 →
+  //    아래 `PUSH_URL_BY_TYPE.level_up`(/feed)으로 떨어진다.
+  "level_up",
 ]);
 
 // 알림 유형별 푸시 탭 이동 목적지 (설계 §3)
@@ -57,8 +62,9 @@ const PUSH_URL_BY_TYPE: Record<string, string> = {
   //    들어가면서 **내 정보 탭으로 옮겨졌다.** 라우팅만 안 따라와서, 알림은
   //    "내 정보에서 확인해 보세요"라고 말하면서 기록 탭으로 보내고 있었다.
   badge_earned: "/profile",
-  // 크루의 레벨업 — 성장 허브가 내 정보 탭에 있다 (0029)
-  level_up: "/profile",
+  // 크루의 레벨업·진화 (0029). ⚠️ 2026-11-20(0142): `/profile` → `/feed`. 이 알림은 **크루원**이 받는다 —
+  // 내 정보 탭으로 보내면 누가 무엇을 했는지 볼 곳이 없었다. 게시물이 있으면 아래에서 `?session=`이 붙는다.
+  level_up: "/feed",
   rank_change: "/challenge",
   challenge_started: "/challenge",
   challenge_ended: "/challenge",

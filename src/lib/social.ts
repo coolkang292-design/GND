@@ -1,3 +1,4 @@
+import { parseProgressEvent, type ProgressEvent } from "@/lib/domain/progress-event";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   activeSessionIds,
@@ -196,6 +197,17 @@ export type FeedItem = {
   photos: SessionPhoto[];
   streak: number;
   recordNote: string | null; // 🏅 기록 갱신 문구 (0018)
+  /**
+   * ⬆️/🎉 이 운동으로 레벨업·진화했을 때의 문구 (0142, 2026-11-20).
+   * `gnd_evolution.notify_progress`가 쓰고, 크루에게 가는 레벨업·진화 알림이 이 게시물을 가리킨다.
+   * 일반 사용자는 이 칸을 못 고친다(열 단위 UPDATE 권한) — 가짜 표시가 붙지 않는다.
+   */
+  progressNote: string | null;
+  /**
+   * 같은 사건의 **구조화된 값** (0143) — 피드 카드의 캐릭터 진화 배지가 읽는다.
+   * 값이 없거나 모양이 틀리면 null이고, 그때 카드는 `progressNote` 글자 칩으로 돌아간다.
+   */
+  progressEvent: ProgressEvent | null;
   tabataMinutes: number | null; // 🔥 타바타 코스 분수 (0019)
   /** 종목·세트 상세 (2026-08-04) — 이미 받아 오던 행을 버리지 않고 남긴 것 */
   breakdown: BreakdownExercise[];
@@ -232,6 +244,8 @@ type FeedSessionRow = {
   completed_at: string;
   duration_minutes: number | null;
   record_note?: string | null; // 0018 적용 전에는 컬럼이 없을 수 있음
+  progress_note?: string | null; // 0142
+  progress_event?: unknown; // 0143 — jsonb, `parseProgressEvent`로 모양을 확인한다
   tabata_minutes?: number | null; // 0019
 
   workout_exercises: FeedExerciseRow[] | null;
@@ -348,7 +362,7 @@ export async function getCrewFeed(
   let query = supabase
     .from("workout_sessions")
     .select(
-      `id, user_id, title, completed_at, duration_minutes, record_note, tabata_minutes, workout_exercises(exercise_name, exercise_type, measure, sort_order, workout_sets(set_number, weight_kg, reps, duration_seconds, distance_meters, is_completed)), ${imagesEmbed}`,
+      `id, user_id, title, completed_at, duration_minutes, record_note, progress_note, progress_event, tabata_minutes, workout_exercises(exercise_name, exercise_type, measure, sort_order, workout_sets(set_number, weight_kg, reps, duration_seconds, distance_meters, is_completed)), ${imagesEmbed}`,
     )
     .in("user_id", visibleIds)
     .eq("status", "completed")
@@ -443,6 +457,8 @@ export async function getCrewFeed(
       photos: photosBySession.get(r.id) ?? [],
       streak: streaks.get(r.user_id) ?? 0,
       recordNote: r.record_note ?? null,
+      progressNote: r.progress_note ?? null,
+      progressEvent: parseProgressEvent(r.progress_event),
       tabataMinutes: r.tabata_minutes ?? null,
       breakdown: toFeedBreakdown(r.workout_exercises),
       reactions: reaction?.counts ?? { fire: 0, clap: 0, like: 0 },

@@ -1,3 +1,4 @@
+import type { ProgressEvent } from "./progress-event";
 import type { BreakdownExercise } from "@/components/workout/set-breakdown";
 import type { VolumeSummary } from "./volume";
 import { durationSecondsOf, formatDurationAmount } from "./set-timer";
@@ -15,6 +16,12 @@ export type WorkoutSummaryInput = {
   breakdown: BreakdownExercise[];
   exerciseNames: string[];
   recordNote: string | null;
+  /** 레벨업·진화 문구 (0142) — 피드 카드만 쓴다. 다른 화면의 입력에는 없어도 된다 */
+  progressNote?: string | null;
+  /** 레벨업·진화 배지 값 (0143) — 피드 카드만 쓴다 */
+  progressEvent?: ProgressEvent | null;
+  /** 게시물 주인 — 배지의 캐릭터 외형(남/여)을 고른다. 피드 밖 화면의 입력에는 없어도 된다 */
+  userId?: string;
   tabataMinutes: number | null;
 };
 

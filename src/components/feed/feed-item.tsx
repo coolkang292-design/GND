@@ -1,6 +1,7 @@
 "use client";
 
 import { UserAvatar } from "@/components/user-avatar";
+import { ProgressBadge } from "./progress-badge";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { CaptionPicker } from "@/components/feed/caption-picker";
@@ -94,6 +95,9 @@ export function WorkoutSummary({
   canCopy?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
+  // 레벨업·진화: 구조화된 값(0143)이 있으면 캐릭터 배지, 없고 글자 문구만 있으면(0142) 예전 글자 칩.
+  const progressBadge = item.progressEvent ?? null;
+  const progressChip = !item.progressEvent ? item.progressNote : null;
   const cells = feedStatCells(item);
   const rows = item.breakdown;
   const hidden = Math.max(0, rows.length - VISIBLE_EXERCISES);
@@ -127,7 +131,7 @@ export function WorkoutSummary({
       {/* 인터벌·기록 갱신 줄 (2026-10-05 사용자 지시 "색상 팔레트에 맞게").
           금색·라임 테두리 알약을 걷고 숫자 줄·운동 목록과 **같은 상자 톤**(어두운 바탕 +
           얇은 회색 테두리 + 흰 글자)으로 맞췄다. 색은 아이콘 하나에만 — 라임. */}
-      {(item.tabataMinutes || item.recordNote) && (
+      {(item.tabataMinutes || item.recordNote || progressBadge || progressChip) && (
         <div className="mt-2 flex flex-col gap-1.5">
           {item.tabataMinutes && (
             <p className="flex items-center gap-2 rounded-card-sm border border-line bg-surface-2/60 px-3 py-2 text-[12.5px]">
@@ -142,6 +146,17 @@ export function WorkoutSummary({
                 <span className="font-extrabold">기록 갱신</span>
                 <span className="text-muted"> · {item.recordNote}</span>
               </span>
+            </p>
+          )}
+          {/* 레벨업·진화 (0142·0143) — 알림을 누르면 이 카드로 온다 */}
+          {progressBadge && <ProgressBadge event={progressBadge} userId={item.userId} />}
+          {progressChip && (
+            <p
+              data-testid="feed-progress-note"
+              className="flex items-start gap-2 rounded-card-sm border border-line bg-surface-2/60 px-3 py-2 text-[12.5px] leading-snug"
+            >
+              <Icon name="spark" size={16} className="mt-px flex-none text-accent" />
+              <span className="min-w-0 font-extrabold">{progressChip}</span>
             </p>
           )}
         </div>
