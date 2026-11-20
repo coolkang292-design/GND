@@ -93,7 +93,7 @@ describe("진행 중 챌린지 랭킹 화면", () => {
   });
 });
 
-describe("종합 점수 줄을 누르면 목표 점수와 활동 점수가 따로 펼쳐진다 (진행 중 실시간 랭킹, 2026-11-20)", () => {
+describe("종합 점수 줄을 누르면 목표 점수·활동 점수·최종 합산 점수가 펼쳐진다 (진행 중 실시간 랭킹, 2026-11-20)", () => {
   const input = (userId: string, workoutDays: number, plannedDays: number, actual: number): ParticipantInput => ({
     userId,
     goals: [{ type: "workout_days", target: 10, actual }],
@@ -102,11 +102,10 @@ describe("종합 점수 줄을 누르면 목표 점수와 활동 점수가 따�
   });
   // 운동 횟수·시간은 세션 기록에서 온다: 나 3회 × 60분 = 180분, p1 2회 × 30분 = 60분
   const sessions = [session("me", 1, 60), session("me", 2, 60), session("me", 3, 60), session("p1", 1, 30), session("p1", 2, 30)];
-  // 진행 중 화면과 같은 길 — includeActivity: false (활동 점수는 순위에 종료 후에만 더한다)
+  // 진행 중 화면과 같은 길 — 활동 점수도 총점에 더한다 (2026-11-20 결정, 11/16의 "종료 후에만"을 되돌림)
   const live = (inputs: ParticipantInput[]) =>
     rankForChallenge({
       scoringVersion: 2,
-      includeActivity: false,
       inputs,
       rows: sessions,
       startDate: "2026-09-01",
@@ -125,10 +124,11 @@ describe("종합 점수 줄을 누르면 목표 점수와 활동 점수가 따�
     expect(screen.queryByTestId("live-score-detail")).toBeNull();
   });
 
-  it("순위표의 점수는 기본 점수 그대로다 — 활동 점수가 섞여 숫자가 튀지 않는다 (68.0점, 91점이 아니다)", () => {
+  it("순위표의 점수는 최종 합산 점수다 — 목표 점수 68.0이 아니라 활동 점수 23을 더한 91.0점", () => {
     open();
-    expect(screen.getByText("68.0점")).toBeTruthy(); // 48 + 20 + 0
-    expect(screen.queryByText("91.0점")).toBeNull(); // 68 + 활동 23
+    expect(screen.getByText("91.0점")).toBeTruthy(); // 48 + 20 + 0 + 활동 23
+    expect(screen.queryByText("68.0점")).toBeNull(); // 활동 점수를 뺀 옛 숫자는 순위표에 없다
+    expect(screen.getByText("82.6점")).toBeTruthy(); // p1: 76.62 + 활동 6
   });
 
   it("목표 점수 칸: 목표별 '달성 ÷ 목표 = 달성률'과 평균·참여·보너스가 내 기록으로 풀린다", () => {
@@ -158,12 +158,16 @@ describe("종합 점수 줄을 누르면 목표 점수와 활동 점수가 따�
     expect(a).toContain("활동 점수 합계 +23.00점");
   });
 
-  it("활동 점수는 순위에 아직 안 더해진다고 분명히 말한다", () => {
+  it("최종 합산 점수 칸: 목표 점수 + 활동 점수 = 순위표 숫자, 그리고 옛 '아직 반영 안 돼요' 안내는 없다", () => {
     open();
     fireEvent.click(screen.getByRole("button", { name: "나 점수 계산 보기" }));
-    const a = text("live-activity-score");
-    expect(a).toContain("챌린지가 끝난 뒤 순위에 더해져요");
-    expect(a).toContain("지금은 순위에 반영되지 않아요");
+    const f = text("live-final-score");
+    expect(f).toContain("최종 합산 점수 91.00점");
+    expect(f).toContain("목표 점수 68.00 + 활동 점수 23.00");
+    expect(f).toContain("순위는 이 점수로 정해져요");
+    const all = text("live-score-detail");
+    expect(all).not.toContain("지금은 순위에 반영되지 않아요");
+    expect(all).not.toContain("끝난 뒤 순위에 더해져요");
   });
 
   it("다른 참가자 줄도 같은 방식 — 그 사람 기록(3일 / 2회 / 60분)으로 풀린다", () => {
@@ -178,6 +182,7 @@ describe("종합 점수 줄을 누르면 목표 점수와 활동 점수가 따�
     expect(a).toContain("운동한 날 3일 × 1점 = +3점");
     expect(a).toContain("운동 2회 × 1점 = +2점");
     expect(a).toContain("운동 시간 60분 ÷ 60 = +1점");
+    expect(text("live-final-score")).toContain("최종 합산 점수 82.62점"); // 76.62 + 6
   });
 
   it("다시 누르면 접히고, 두 줄을 동시에 펼칠 수 있다", () => {

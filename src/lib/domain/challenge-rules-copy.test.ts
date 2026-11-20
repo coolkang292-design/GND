@@ -141,12 +141,10 @@ describe("랭킹 v2 동점 설명 — rankParticipantsV2와 같은 순서 (scori
     expect(TIE_BREAKERS_V2[0]).toContain("운동한 날");
   });
 
-  it("v2는 '최종 발표 때 더해지는' 활동 점수 카드와 공식을 더한다 — v1에는 없다", () => {
+  it("v2는 활동 점수 카드와 총점 공식을 더한다 — v1에는 없다", () => {
     const v2 = scoreCards(2);
     expect(v2).toHaveLength(scoreCards(1).length + 1);
-    expect(v2[v2.length - 1].title).toContain("최종 발표 때");
     expect(v2[v2.length - 1].body).toContain("운동한 날 1일에 1점 · 운동 1회에 1점 · 운동 60분에 1점");
-    expect(v2[v2.length - 1].body).toContain("진행 중에는 기본 점수로만");
     expect(scoreFormula(2)).toContain("활동 점수");
     expect(scoreFormula(1)).not.toContain("활동 점수");
   });
@@ -219,16 +217,22 @@ describe("내 목표별 점수 안내 — 실제 계산과 같은 숫자", () =>
   });
 });
 
-describe("진행 중 / 최종 발표 단계 안내 — 최신 규칙(활동 점수는 최종 발표 때만)", () => {
-  it("v2는 진행 중에는 기본 점수만, 최종 발표에는 활동 점수가 더해진다고 말한다", () => {
+describe("진행 중 / 최종 발표 단계 안내 — 활동 점수는 진행 중에도 총점에 더한다 (2026-11-20)", () => {
+  it("v2는 진행 중에도 최종에도 '기본 점수 + 활동 점수 = 총점'으로 순위를 매긴다고 말한다", () => {
     const stages = stageGuide(2);
     expect(stages).toHaveLength(2);
-    expect(stages[0].when).toBe("진행 중");
+    expect(stages[0].when).toBe("진행 중·최종");
     expect(stages[0].text).toContain("109점"); // 100 + 보너스 최대 9 — 상수에서 온다
-    expect(stages[0].text).not.toContain("활동 점수");
-    expect(stages[1].when).toBe("최종 발표");
-    expect(stages[1].text).toContain("활동 점수");
-    expect(stages[1].text).toContain("운동한 날 1일에 1점");
+    expect(stages[0].text).toContain("총점");
+    expect(stages[0].text).toContain("운동한 날 1일에 1점");
+    expect(stages[1].text).toContain("계속");
+  });
+
+  it("옛 안내('진행 중에는 기본 점수로만', '최종 발표 때만')는 없어졌다 — 제거는 부정 확인으로 묶는다", () => {
+    const all = stageGuide(2).map((x) => `${x.when} ${x.text}`).join(" ");
+    expect(all).not.toContain("기본 점수로 순위를 매겨요");
+    expect(all).not.toContain("최종 발표 때만");
+    expect(stageGuide(2).some((x) => x.when === "진행 중")).toBe(false);
   });
 
   it("v1(옛 규칙)은 활동 점수를 말하지 않는다 — 진행 중인 경기에 새 규칙을 말하면 거짓이다", () => {

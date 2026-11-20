@@ -12,14 +12,14 @@ const num = (n: number) => String(Math.round(n * 100) / 100);
 
 /**
  * 진행 중 `종합 점수 랭킹` 줄을 눌렀을 때 펼쳐지는 점수 풀이 (2026-11-20, 사용자 요청).
- * **목표 점수**와 **활동 점수**를 따로 나눠, 각각 그 사람의 실제 기록을 넣은 계산을 보여준다.
- * 나·다른 참가자 모두 같은 모양이다 — 실시간 랭킹 방은 이미 모두의 종합 점수와 종목별 기록을 공개한다.
+ * **목표 점수**와 **활동 점수**를 따로 풀고, 맨 아래에 둘을 더한 **최종 합산 점수**를 보여준다.
+ * 각 칸은 그 사람의 실제 기록을 넣은 계산이다. 나·다른 참가자 모두 같은 모양이다 — 실시간 랭킹 방은
+ * 이미 모두의 종합 점수와 종목별 기록을 공개한다.
  *
  * ⚠️ 여기서 점수를 계산하지 않는다. 모든 숫자는 `rankForChallenge`가 만든 `v2.breakdown`에서 온다
  *    (`ScoreExplanation`과 같은 원천). 화면이 따로 계산하면 순위와 설명이 갈린다.
- * ⛔ 활동 점수는 **순위에 더하지 않는다**(사용자 결정 2026-11-16 — 기간 중에 더하면 "점수가 갑자기
- *    106점이 됐다"는 지적이 있었다). 여기서는 지금 기록으로 얼마인지만 따로 보여주고,
- *    "종료 후 순위에 더해진다 · 지금은 반영되지 않는다"를 같이 말한다. 순위표 숫자는 기본 점수 그대로다.
+ * ⚠️ 2026-11-20 결정: 활동 점수는 진행 중에도 **총점에 더한다**(11/16의 "최종 발표 때만"을 되돌렸다).
+ *    그래서 순위표 숫자(`v2.totalScore`)가 곧 맨 아래 "최종 합산 점수"다 — 두 숫자가 다르면 버그다.
  * ⚠️ 운동한 날은 `breakdown.workoutDays`(실제 일수)를 쓴다. 참여율에서 거꾸로 계산하면 계획 13일에
  *    17일을 해도 13일로 보인다(참여율은 100%에서 멈춘다).
  * ⚠️ 목표 이름은 종류 이름만 쓴다. 다른 참가자의 `하루 N종목+` 조건은 이 화면이 모른다 —
@@ -83,7 +83,7 @@ export function LiveScoreDetail({ v2 }: { v2: RankedParticipantV2 }) {
         </p>
       </section>
 
-      {/* ── 활동 점수 (종료 후 순위에 더해진다) ──────────────── */}
+      {/* ── 활동 점수 (총점에 더해진다) ────────────────────── */}
       <section data-testid="live-activity-score" className="rounded-card-sm bg-surface-2 px-3 py-2.5">
         <h4 className="text-[13px] font-extrabold">활동 점수</h4>
         <p className="text-[11px] text-muted">목표와 상관없이 실제로 운동한 만큼 쌓이는 점수예요</p>
@@ -110,9 +110,18 @@ export function LiveScoreDetail({ v2 }: { v2: RankedParticipantV2 }) {
         <p className="mt-2 flex justify-between border-t border-line pt-2 text-[12.5px] font-extrabold">
           <span>활동 점수 합계 +{pt(a.total)}점</span>
         </p>
-        <p className="mt-1 text-[11px] text-muted">
-          활동 점수는 챌린지가 끝난 뒤 순위에 더해져요. 지금은 순위에 반영되지 않아요.
+        <p className="mt-1 text-[11px] text-muted">활동 점수는 목표를 다 채운 뒤에도 운동할수록 계속 올라요.</p>
+      </section>
+
+      {/* ── 최종 합산 점수 = 순위표 숫자 ───────────────────── */}
+      <section data-testid="live-final-score" className="rounded-card-sm border border-accent/50 bg-accent/10 px-3 py-2.5">
+        <p className="flex justify-between text-[13px] font-extrabold">
+          <span>최종 합산 점수 {pt(v2.totalScore)}점</span>
         </p>
+        <p className="mt-0.5 text-[11.5px] text-muted">
+          목표 점수 {pt(v2.baseScore)} + 활동 점수 {pt(a.total)}
+        </p>
+        <p className="mt-0.5 text-[11px] text-muted">순위는 이 점수로 정해져요.</p>
       </section>
     </div>
   );

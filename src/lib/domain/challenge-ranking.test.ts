@@ -17,8 +17,7 @@ const row = (userId: string, day: string, durationMinutes: number | null): Metri
   exercises: [],
 });
 
-// 기본은 최종 발표(활동 점수 포함). 진행 중 동작은 아래 `live` 테스트에서 따로 본다
-const base = { startDate: "2026-11-01", endDate: "2026-11-28", timeZone: "Asia/Seoul", includeActivity: true } as const;
+const base = { startDate: "2026-11-01", endDate: "2026-11-28", timeZone: "Asia/Seoul" } as const;
 const T3 = ["workout_days", "weight_days", "bodyweight_days"] as const;
 const T4 = ["workout_days", "weight_days", "bodyweight_days", "cardio_time"] as const;
 
@@ -80,36 +79,6 @@ describe("rankForChallenge", () => {
     expect(b.v2!.activityScore).toBe(6.17);
     expect(a.rank).toBe(1);
     expect(a.v2!.tieBreak.kind).toBe("none");
-  });
-
-  it("진행 중(includeActivity false)에는 기본 점수만으로 순위가 정해지고 overall도 기본 점수다", () => {
-    const inputs = [
-      { ...input("A", [...T3]), workoutDays: 12 },
-      { ...input("B", [...T3]), workoutDays: 11 },
-    ];
-    const live = rankForChallenge({ scoringVersion: 2, inputs, rows: [], ...base, includeActivity: false });
-    const fin = rankForChallenge({ scoringVersion: 2, inputs, rows: [], ...base, includeActivity: true });
-    for (const r of live) {
-      expect(r.overall).toBe(r.v2!.baseScore); // 활동 점수가 점수에 새지 않는다
-      expect(r.v2!.activityIncluded).toBe(false);
-    }
-    // 최종 발표는 같은 기록에 활동 점수(날 12·11점)가 더해진다
-    for (const r of fin) {
-      expect(r.overall).toBeCloseTo(r.v2!.baseScore + r.v2!.activityScore, 5);
-      expect(r.v2!.activityIncluded).toBe(true);
-    }
-    expect(fin.find((x) => x.userId === "A")!.overall).toBeGreaterThan(live.find((x) => x.userId === "A")!.overall);
-  });
-
-  it("진행 중 동점은 날 수 → 횟수 → 시간으로 가른다 (기본 점수가 같을 때)", () => {
-    const inputs = [
-      { ...input("A", [...T3]), workoutDays: 12 },
-      { ...input("B", [...T4]), workoutDays: 11 },
-    ];
-    const live = rankForChallenge({ scoringVersion: 2, inputs, rows: [], ...base, includeActivity: false });
-    expect(live.find((x) => x.userId === "A")!.rank).toBe(1);
-    expect(live.find((x) => x.userId === "B")!.rank).toBe(2);
-    expect(live[0].v2!.tieBreak.kind).toBe("days");
   });
 
   it("기간 밖·명단 밖 세션은 세지 않는다", () => {

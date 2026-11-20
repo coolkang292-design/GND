@@ -652,14 +652,17 @@ describe("최종 확인 — 내 목표로는 이렇게 올라요 + 최신 규칙
     expect(screen.getByTestId("per-day-points").textContent).toBe("+8.3점");
   });
 
-  it("v2는 '진행 중 = 기본 점수 / 최종 발표 = 활동 점수 추가'를 눈에 보이는 자리에서 말한다", () => {
+  it("v2는 '진행 중에도 기본 점수 + 활동 점수 = 총점으로 순위'를 눈에 보이는 자리에서 말한다", () => {
     renderFlow({ requireConsent: true, scoringVersion: 2 });
     fireEvent.click(next());
     const stages = screen.getByTestId("consent-stages").textContent ?? "";
-    expect(stages).toContain("진행 중");
-    expect(stages).toContain("최종 발표");
+    expect(stages).toContain("진행 중·최종");
     expect(stages).toContain("활동 점수");
+    expect(stages).toContain("총점");
     expect(stages).toContain("109점");
+    // 옛 안내는 사라졌다
+    expect(stages).not.toContain("최종 발표 때만");
+    expect(stages).not.toContain("기본 점수로 순위를 매겨요");
   });
 
   it("옛 규칙(v1)은 활동 점수를 말하지 않는다", () => {

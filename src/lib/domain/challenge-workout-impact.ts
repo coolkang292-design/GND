@@ -68,10 +68,8 @@ function inPeriod(snapshot: ChallengeScoreSnapshot, row: PeriodSessionRow): bool
 function evaluate(snapshot: ChallengeScoreSnapshot, rows: PeriodSessionRow[], userId: string) {
   const ch = snapshot.challenge;
   const stats = foldPeriodStats(rows, ch.start_date, ch.end_date, snapshot.timeZone);
-  // 이 안내는 진행 중 챌린지에서만 뜬다(`enabled`가 active를 요구한다) — 활동 점수는 최종 발표에서만 더한다
   const ranking = rankForChallenge({
     scoringVersion: ch.scoring_version,
-    includeActivity: false,
     inputs: [...new Set(snapshot.participantIds)].map((id) => buildParticipantInput({
       userId: id, goals: goalsFor(snapshot, id), stats: stats.get(id) ?? EMPTY_STATS,
       periodDays: inclusiveDays(ch.start_date, ch.end_date),
@@ -83,13 +81,12 @@ function evaluate(snapshot: ChallengeScoreSnapshot, rows: PeriodSessionRow[], us
 function cents(entry: RankedEntry): number {
   return entry.v2?.breakdown.baseScoreCents ?? toCents(entry.overall);
 }
-/** 순위 점수 — 활동 점수를 더하는 최종 발표면 총점, 진행 중이면 기본 점수와 같다 */
+/** 총점(기본 + 활동) — 순위의 기준. v2가 아니면 기본 점수와 같다 */
 function totalCents(entry: RankedEntry): number {
-  return entry.v2 ? Math.round(entry.v2.totalScore * 100) : cents(entry);
+  return entry.v2?.breakdown.totalScoreCents ?? cents(entry);
 }
-/** 순위에 더해진 활동 점수 — 진행 중(`activityIncluded` false)에는 0이라 화면이 활동 점수를 말하지 않는다 */
 function activityCents(entry: RankedEntry): number {
-  return entry.v2?.activityIncluded ? entry.v2.breakdown.activity.cents : 0;
+  return entry.v2?.breakdown.activity.cents ?? 0;
 }
 function compareRows(snapshot: ChallengeScoreSnapshot, userId: string, beforeRows: PeriodSessionRow[], afterRows: PeriodSessionRow[]): WorkoutImpact {
   const before = evaluate(snapshot, beforeRows, userId);
@@ -269,11 +266,8 @@ function firstDifference(a: RankedParticipantV2, b: RankedParticipantV2, useMinu
 }
 
 /**
- * 목표를 **모두** 채우고 참여율도 100%라 **기본 점수가 더 오르지 않을 때**의 안내.
- *
- * ⛔ 진행 중에는 순위가 **기본 점수만**으로 정해진다 — 활동 점수(1일·1회·60분당 1점)는 **최종 발표 때
- *    더해진다**(사용자 결정 2026-11-16). 그래서 안내도 (1) 기본 점수가 같은 사람과의 동점 규칙 위치,
- *    (2) "최종 발표 때 활동 점수가 더해진다"는 사실을 말한다. 지금 활동 점수를 보여주거나 합산하지 않는다.
+ * 목표를 **모두** 채우고 참여율도 100%라 **기본 점수가 더 오르지 않을 때**의 우승 안내.
+ * 이제는 활동 점수(1일·1회·60분당 1점)가 총점을 계속 올린다 — 안내는 그 총점 경쟁을 말한다.
  *
  * ⚠️ 문구는 동점 규칙(`TIE_BREAK_RULE_TEXT`·`compareTieBreakMetrics`)과 환산 비율(`ACTIVITY_*` 상수)에서
  *    읽는다 — 숫자를 따로 적으면 규칙을 바꿀 때 안내만 거짓이 된다.
@@ -295,14 +289,14 @@ export function winGuidance(snapshot: ChallengeScoreSnapshot, userId: string, pl
   if (!allDone || me.breakdown.participationRate < 100 - 1e-9) return null;
 
   const prefix = completed ? "이 계획을 마치면 " : "지금 ";
+  const rule = `총점은 기본 점수에 활동 점수(${ACTIVITY_RULE_TEXT})를 더해요. 총점이 같으면 ${TIE_BREAK_RULE_TEXT} 순서로 가려요.`;
   // 새로운 날에 60분 운동하면 / 같은 날 한 번 더 하면 — 환산 비율에서 계산한다
   const perHour = 60 / ACTIVITY_MINUTES_PER_POINT;
   const newDay = round(ACTIVITY_POINT_PER_DAY + ACTIVITY_POINT_PER_SESSION + perHour);
-  const rule =
-    `기본 점수가 같으면 ${TIE_BREAK_RULE_TEXT} 순서로 가려요. 최종 발표 때는 활동 점수(${ACTIVITY_RULE_TEXT})가 더해져요.`;
-  const finalNote = `최종 발표 때 활동 점수가 더해지니 운동을 이어가면 유리해요. 새로운 날에 60분 운동하면 약 ${newDay}점이에요.`;
+  const sameDay = round(ACTIVITY_POINT_PER_SESSION + perHour);
+  const perWorkout = `새로운 날에 60분 운동하면 약 ${newDay}점, 같은 날 한 번 더 하면 약 ${sameDay}점이 쌓여요.`;
 
-  // ① 기본 점수가 정확히 같은 사람이 있으면 — 진행 중 순위는 동점 규칙으로 가른다
+  // ① 총점이 정확히 같은 사람이 있으면 — 동점 규칙으로 가른다
   const tied = me.tieBreak.groupUserIds
     .filter((id) => id !== userId)
     .map((id) => now.ranking.find((r) => r.userId === id)?.v2)
@@ -317,8 +311,8 @@ export function winGuidance(snapshot: ChallengeScoreSnapshot, userId: string, pl
     if (!criterion) {
       return {
         rule,
-        standing: `${prefix}기본 점수가 같은 참가자 ${n}명과 모든 기준이 같아 공동 순위예요.${skipped}`,
-        action: `운동 기록을 하나만 더 쌓아도 단독으로 앞설 수 있어요. ${finalNote}`,
+        standing: `${prefix}총점이 같은 참가자 ${n}명과 모든 기준이 같아 공동 순위예요.${skipped}`,
+        action: `운동 기록을 하나만 더 쌓아도 단독으로 앞설 수 있어요. ${perWorkout}`,
       };
     }
     const gap = Math.abs(metricOf(me, criterion) - metricOf(lead, criterion));
@@ -326,8 +320,8 @@ export function winGuidance(snapshot: ChallengeScoreSnapshot, userId: string, pl
     if (me.finalScoreUnits > lead.finalScoreUnits) {
       return {
         rule,
-        standing: `${prefix}기본 점수가 같은 참가자 ${n}명 중 앞서 있어요 (${label} 기준).${skipped}`,
-        action: `${label}에서 ${unitText(criterion, Math.round(gap * 10) / 10)} 앞서 있어요. 이 기록을 이어가면 지금 순위를 지킬 수 있어요. ${finalNote}`,
+        standing: `${prefix}총점이 같은 참가자 ${n}명 중 앞서 있어요 (${label} 기준).${skipped}`,
+        action: `${label}에서 ${unitText(criterion, Math.round(gap * 10) / 10)} 앞서 있어요. 이 기록을 이어가면 우승을 지킬 수 있어요.`,
       };
     }
     // 정수 기록이 같아지면 다음 기준으로 넘어가므로, 확실히 앞서려면 차이보다 하나 더 필요하다
@@ -340,15 +334,36 @@ export function winGuidance(snapshot: ChallengeScoreSnapshot, userId: string, pl
           : `운동 시간을 ${need}분 이상 더 기록하면`;
     return {
       rule,
-      standing: `${prefix}기본 점수가 같은 참가자 ${n}명이 ${label}에서 먼저 앞서요.${skipped}`,
-      action: `${todo} 앞설 수 있어요. ${finalNote}`,
+      standing: `${prefix}총점이 같은 참가자 ${n}명이 ${label}에서 먼저 앞서요.${skipped}`,
+      action: `${todo} 앞설 수 있어요.`,
     };
   }
 
-  // ② 기본 점수가 다르면 — 지금 순위는 더 못 바꾼다. 최종 발표의 활동 점수를 알린다
+  // ② 총점이 다르면 — 점수 차이와 필요한 만큼을 말한다
+  const rivals = now.ranking
+    .filter((r) => r.userId !== userId && r.v2)
+    .map((r) => r.v2 as RankedParticipantV2)
+    .sort((a, b) => b.finalScoreUnits - a.finalScoreUnits);
+  if (rivals.length === 0) {
+    return {
+      rule,
+      standing: `${prefix}비교할 참가자가 없어요.`,
+      action: `운동할수록 활동 점수가 계속 올라요. ${perWorkout}`,
+    };
+  }
+  const lead = rivals[0];
+  const diffCents = Math.abs(lead.breakdown.totalScoreCents - me.breakdown.totalScoreCents);
+  if (me.finalScoreUnits > lead.finalScoreUnits) {
+    return {
+      rule,
+      standing: `${prefix}${me.rank}위예요. 다음 순위와 ${round(diffCents / 100).toFixed(2)}점 차이로 앞서 있어요.`,
+      action: `이 차이를 지키려면 운동을 이어가세요. ${perWorkout}`,
+    };
+  }
+  const needPoints = ((diffCents + 1) / 100).toFixed(2);
   return {
     rule,
-    standing: `${prefix}${me.rank}위예요. 기본 점수는 더 오르지 않아요.`,
-    action: finalNote,
+    standing: `${prefix}${me.rank}위예요. 위 순위가 ${round(diffCents / 100).toFixed(2)}점 앞서요.`,
+    action: `${needPoints}점 이상 더 쌓으면 앞설 수 있어요. ${perWorkout}`,
   };
 }

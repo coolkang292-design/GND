@@ -46,14 +46,13 @@ export function scoreCards(scoringVersion = 1): RuleCard[] {
         `최대 ${COMPLETED_GOAL_BONUS_MAX}개까지(+${bonusMax}점)예요.`,
     },
   ];
-  // 랭킹 v2: 기본 점수(위 세 덩어리)는 만점에서 멈춘다. 활동 점수는 **최종 발표 때만** 더한다(진행 중 순위는 기본 점수만)
+  // 랭킹 v2: 기본 점수(위 세 덩어리)는 만점에서 멈추지만 활동 점수는 운동할수록 계속 오른다
   if (scoringVersion === 2) {
     cards.push({
-      title: "④ 최종 발표 때 더해지는 활동 점수",
+      title: "④ 운동 활동 점수 (계속 올라가요)",
       body:
         `${ACTIVITY_RULE_TEXT}이에요. ` +
-        "진행 중에는 기본 점수로만 순위를 매기고, 챌린지가 끝나면 활동 점수를 더한 총점으로 최종 순위를 발표해요. " +
-        "목표를 다 채운 뒤에도 운동할수록 유리해요.",
+        "목표를 다 채운 뒤에도 운동할수록 점수가 올라가고, 총점이 높은 순서대로 순위가 정해져요.",
     });
   }
   return cards;
@@ -63,7 +62,7 @@ export function scoreCards(scoringVersion = 1): RuleCard[] {
 export function scoreFormula(scoringVersion = 1): string {
   if (scoringVersion === 2) {
     return (
-      `최종 발표 총점 = (달성 평균 × ${ACHIEVEMENT_WEIGHT} + 꾸준함 × ${PARTICIPATION_WEIGHT} + 보너스) + 활동 점수 (진행 중에는 괄호 안만)`
+      `총점 = (달성 평균 × ${ACHIEVEMENT_WEIGHT} + 꾸준함 × ${PARTICIPATION_WEIGHT} + 보너스) + 활동 점수`
     );
   }
   return (
@@ -72,20 +71,21 @@ export function scoreFormula(scoringVersion = 1): string {
 }
 
 /**
- * 진행 중 / 최종 발표 — 순위가 **언제 무엇으로** 정해지는지 (사용자 지시 2026-11-17).
+ * 진행 중 / 최종 발표 — 순위가 **언제 무엇으로** 정해지는지 (사용자 지시 2026-11-17, 2026-11-20 개정).
  *
- * ⚠️ 활동 점수는 **최종 발표 때만** 더한다(2026-11-16 결정). v1(옛 규칙) 챌린지에는 활동 점수가 없다 —
- *    진행 중인 경기에 새 규칙을 말하면 거짓이다. 숫자는 상수에서 읽는다.
+ * ⚠️ 2026-11-20: 활동 점수를 **진행 중에도** 총점에 더한다(사용자 결정 — 11/16의 "최종 발표 때만"을 되돌렸다).
+ *    그래서 단계가 갈리지 않는다: 진행 중이든 최종이든 순위는 **기본 점수 + 활동 점수 = 총점**이다.
+ * ⚠️ v1(옛 규칙) 챌린지에는 활동 점수가 없다 — 진행 중인 경기에 새 규칙을 말하면 거짓이다. 숫자는 상수에서 읽는다.
  */
 export function stageGuide(scoringVersion = 1): { when: string; text: string }[] {
   const baseMax = baseScoreMax();
   if (scoringVersion === 2) {
     return [
-      { when: "진행 중", text: `기본 점수로 순위를 매겨요 (최대 ${baseMax}점)` },
       {
-        when: "최종 발표",
-        text: `기본 점수에 활동 점수(${ACTIVITY_RULE_TEXT})를 더해 최종 순위를 발표해요`,
+        when: "진행 중·최종",
+        text: `기본 점수(최대 ${baseMax}점)에 활동 점수(${ACTIVITY_RULE_TEXT})를 더한 총점으로 순위를 매겨요`,
       },
+      { when: "활동 점수", text: "목표를 다 채운 뒤에도 운동할수록 계속 올라가요" },
     ];
   }
   return [{ when: "진행 중·최종", text: `종합점수로 순위를 매겨요 (최대 ${baseMax}점)` }];

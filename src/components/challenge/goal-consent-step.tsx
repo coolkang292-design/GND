@@ -145,7 +145,7 @@ export function GoalConsentStep({
           </span>
           <span className="whitespace-nowrap text-[11.5px] text-muted">목표 100% 채울 때마다</span>
         </div>
-        {/* 순위가 언제 무엇으로 정해지는지 — 활동 점수는 최종 발표 때만 더해진다(2026-11-16 결정) */}
+        {/* 순위가 무엇으로 정해지는지 — 활동 점수는 진행 중에도 총점에 더한다(2026-11-20 결정, 11/16을 되돌림) */}
         <ol className="mt-2.5 flex flex-col gap-1.5" data-testid="consent-stages">
           {stages.map((st) => (
             <li

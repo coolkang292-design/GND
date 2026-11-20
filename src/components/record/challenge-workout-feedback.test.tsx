@@ -114,31 +114,33 @@ describe("인터벌은 시작하기 전에 예상 점수를 보여준다", () =>
   });
 });
 
-describe("진행 중에는 활동 점수를 보여주지 않는다 (최종 발표 때만 더한다)", () => {
-  it("운동을 마쳐도 활동 점수·총점 줄이 없다", async () => {
+describe("활동 점수 표시 (1일·1회·60분당 1점)", () => {
+  it("운동을 마치면 오른 활동 점수와 총점 변화를 보여준다", async () => {
     render(<ChallengeWorkoutResultCard userId="me" sessionId="s" context={context} gains={gains} photoDone/>);
-    expect(await screen.findByText(/이번 운동으로 기본 점수/)).toBeTruthy();
-    expect(screen.queryByTestId("activity-gain")).toBeNull();
-    expect(document.body.textContent).not.toMatch(/활동 점수 \+|총점/);
+    const box = await screen.findByTestId("activity-gain");
+    expect(box.textContent).toContain("+2.17점"); // 1일 + 1회 + 10분(0.17)
+    expect(box.textContent).toContain("총점");
   });
-  it("계획 카드도 기본 점수만 말한다 — 큰 숫자는 기본 점수 증가분이다", async () => {
+  it("계획을 완료하면 얼마나 오르는지도 보여준다", async () => {
     render(<ChallengePlanFeedback userId="me" contexts={[context]} exercises={[exercise]} onAdd={vi.fn()} now={new Date("2026-11-13T04:00:00Z")} />);
-    expect(await screen.findByText("이 계획을 완료하면")).toBeTruthy();
-    expect(screen.queryByTestId("activity-forecast")).toBeNull();
-    expect(document.body.textContent).not.toMatch(/활동 점수 \+|총점/);
+    const box = await screen.findByTestId("activity-forecast");
+    expect(box.textContent).toContain("활동 점수");
+    expect(box.textContent).toContain("총점");
   });
-  it("큰 숫자(예상 +N점)가 기본 점수 증가분과 같다 — 활동 점수가 섞이지 않는다", async () => {
+  it("큰 숫자는 기본 점수만이 아니라 활동 점수까지 더한 총점 증가분이다", async () => {
     render(<ChallengePlanFeedback userId="me" contexts={[context]} exercises={[exercise]} onAdd={vi.fn()} now={new Date("2026-11-13T04:00:00Z")} />);
-    await screen.findByText("이 계획을 완료하면");
+    const activity = await screen.findByTestId("activity-forecast");
     const text = document.body.textContent ?? "";
-    const headline = Number(text.match(/예상 \+([\d.]+)점/)?.[1]);
-    const base = Number(text.match(/기본 점수 \+([\d.]+)/)?.[1]);
-    expect(base).toBeGreaterThan(0);
-    expect(headline).toBeCloseTo(base, 2);
+    const num = (re: RegExp) => Number(text.match(re)?.[1]);
+    const headline = num(/예상 \+([\d.]+)점/);
+    const base = num(/기본 점수 \+([\d.]+)/);
+    const act = Number(activity.textContent!.match(/활동 점수 \+([\d.]+)점/)?.[1]);
+    expect(act).toBeGreaterThan(0);
+    expect(headline).toBeCloseTo(base + act, 2);
   });
 });
 
-describe("목표를 모두 채운 뒤 안내", () => {
+describe("목표를 모두 채운 뒤 우승 안내", () => {
   // 목표(5회)를 이미 채웠고 계획일(주 1회 × 7일 = 1일)도 채웠다 → 기본 점수는 더 오르지 않는다
   const doneGoal = { ...goal, target_value: 5, planned_days: 1 };
   const done = { ...snapshot, challenge: { ...snapshot.challenge, start_date: "2026-11-13", end_date: "2026-11-19" }, goals: [doneGoal] } as ChallengeScoreSnapshot;
@@ -146,7 +148,7 @@ describe("목표를 모두 채운 뒤 안내", () => {
     vi.mocked(loadChallengeScoreSnapshot).mockResolvedValue(done);
     render(<ChallengeWorkoutResultCard userId="me" sessionId="s" context={{ ...context, goals: [doneGoal] }} gains={gains} photoDone/>);
     const box = await screen.findByTestId("win-guidance");
-    expect(box.textContent).toContain("최종 발표 때 활동 점수가 더해져요");
+    expect(box.textContent).toContain("우승");
     expect(box.textContent).toContain("운동한 날 수 → 운동 횟수 → 운동 시간");
   });
   it("계획 카드에도 같은 안내가 뜬다", async () => {
