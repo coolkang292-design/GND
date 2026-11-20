@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { UserAvatar } from "@/components/user-avatar";
 import { Icon } from "@/components/ui/icon";
 import { pinMine } from "@/lib/domain/challenge-metrics";
@@ -13,6 +13,8 @@ export type RankingLine = {
   value: string;
   /** 값 아래 작은 줄(최종 랭킹의 `28회 · 603분`) */
   sub?: string;
+  /** 있으면 줄을 눌러 펼친다 — 종합 점수가 어떻게 나왔는지(`LiveScoreDetail`). 없으면 눌리지 않는 줄 */
+  detail?: ReactNode;
 };
 
 const MEDAL: Record<1 | 2 | 3, string> = {
@@ -20,6 +22,46 @@ const MEDAL: Record<1 | 2 | 3, string> = {
   2: "bg-silver text-accent-ink",
   3: "bg-bronze text-accent-ink",
 };
+
+/** 한 줄의 내용(순위 · 아바타 · 이름 · 값) — 눌러서 펼치는 줄과 아닌 줄이 똑같이 그린다 */
+function LineContent({
+  line: l,
+  mine,
+  avatarUrl,
+  nickname,
+}: {
+  line: RankingLine;
+  mine: boolean;
+  avatarUrl: string | null | undefined;
+  nickname: string | undefined;
+}) {
+  return (
+    <>
+      <span className="grid w-7 flex-none place-items-center">
+        {l.rank !== null && l.rank <= 3 ? (
+          <span className={`grid h-6 w-6 place-items-center rounded-full font-mono text-[12px] font-black ${MEDAL[l.rank as 1 | 2 | 3]}`}>
+            {l.rank}
+          </span>
+        ) : (
+          <span className="font-mono text-[14px] font-extrabold text-muted">{l.rank ?? "-"}</span>
+        )}
+      </span>
+      <UserAvatar userId={l.userId}
+        src={avatarUrl}
+        className="grid h-8 w-8 flex-none place-items-center overflow-hidden rounded-full bg-surface-2 text-sm"
+      />
+      <span className={`min-w-0 flex-1 truncate text-[13.5px] font-bold ${mine ? "text-accent" : ""}`}>
+        {mine ? "나" : (nickname ?? "?")}
+      </span>
+      <span className="flex flex-col items-end">
+        <span className={`font-mono text-[14px] font-extrabold ${mine ? "text-accent" : ""}`}>
+          {l.rank === null && !l.sub ? "기록 없음" : l.value}
+        </span>
+        {l.sub && <span className="text-[10.5px] text-muted">{l.sub}</span>}
+      </span>
+    </>
+  );
+}
 
 /**
  * 최종 시안의 순위 목록 — 1~3위 메달, 내 줄 라임, 기록 없음 `-`.
@@ -42,6 +84,15 @@ export function MetricRankingList({
   expandable?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  // 점수 풀이를 펼친 줄 — 여러 줄을 동시에 펼칠 수 있다(내 줄과 1위를 나란히 비교)
+  const [detailOpen, setDetailOpen] = useState<ReadonlySet<string>>(new Set());
+  const toggleDetail = (id: string) =>
+    setDetailOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   const { rows, pinned } = open ? { rows: [...lines], pinned: false } : pinMine(lines, myUserId, limit);
   return (
     <div>
@@ -58,32 +109,31 @@ export function MetricRankingList({
               key={l.userId}
               data-testid="ranking-line"
               data-mine={mine || undefined}
-              className={`flex items-center gap-2.5 rounded-[12px] px-2.5 py-2 ${
+              className={`rounded-[12px] ${
                 mine ? "border border-accent bg-accent-weak" : "border border-transparent"
               }`}
             >
-              <span className="grid w-7 flex-none place-items-center">
-                {l.rank !== null && l.rank <= 3 ? (
-                  <span className={`grid h-6 w-6 place-items-center rounded-full font-mono text-[12px] font-black ${MEDAL[l.rank as 1 | 2 | 3]}`}>
-                    {l.rank}
-                  </span>
-                ) : (
-                  <span className="font-mono text-[14px] font-extrabold text-muted">{l.rank ?? "-"}</span>
-                )}
-              </span>
-              <UserAvatar userId={l.userId}
-                src={p?.avatar_url}
-                className="grid h-8 w-8 flex-none place-items-center overflow-hidden rounded-full bg-surface-2 text-sm"
-              />
-              <span className={`min-w-0 flex-1 truncate text-[13.5px] font-bold ${mine ? "text-accent" : ""}`}>
-                {mine ? "나" : (p?.nickname ?? "?")}
-              </span>
-              <span className="flex flex-col items-end">
-                <span className={`font-mono text-[14px] font-extrabold ${mine ? "text-accent" : ""}`}>
-                  {l.rank === null && !l.sub ? "기록 없음" : l.value}
-                </span>
-                {l.sub && <span className="text-[10.5px] text-muted">{l.sub}</span>}
-              </span>
+              {l.detail !== undefined ? (
+                <button
+                  type="button"
+                  onClick={() => toggleDetail(l.userId)}
+                  aria-expanded={detailOpen.has(l.userId)}
+                  aria-label={`${mine ? "나" : (p?.nickname ?? "참가자")} 점수 계산 ${detailOpen.has(l.userId) ? "접기" : "보기"}`}
+                  className="flex w-full items-center gap-2.5 px-2.5 py-2 text-left"
+                >
+                  <LineContent line={l} mine={mine} avatarUrl={p?.avatar_url} nickname={p?.nickname} />
+                  <Icon
+                    name="chevron"
+                    size={14}
+                    className={`flex-none text-muted ${detailOpen.has(l.userId) ? "-rotate-90" : "rotate-90"}`}
+                  />
+                </button>
+              ) : (
+                <div className="flex items-center gap-2.5 px-2.5 py-2">
+                  <LineContent line={l} mine={mine} avatarUrl={p?.avatar_url} nickname={p?.nickname} />
+                </div>
+              )}
+              {l.detail !== undefined && detailOpen.has(l.userId) && l.detail}
             </li>,
           ];
         })}

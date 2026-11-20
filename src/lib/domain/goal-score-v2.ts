@@ -167,6 +167,11 @@ export type ScoreBreakdown = {
   configuredGoalCount: number;
   /** 챌린지 기간에 운동한 날 수 — 계획일을 넘긴 날도 센다(참여율과 달리 100%에서 막지 않는다) */
   workoutDays: number;
+  /**
+   * 계획한 운동일 수 — 참여 점수의 분모 (2026-11-20). 화면이 "실제 17일 / 계획 13일"을 말하려면
+   * 필요하다. 참여율(`participationRate`)은 100%에서 멈추므로 거기서 거꾸로 계산하면 17일이 13일로 보인다.
+   */
+  plannedDays: number;
   workoutMinutes: number;
   workoutSessions: number;
   minutesComplete: boolean;
@@ -235,6 +240,7 @@ export function buildScoreBreakdown(p: ParticipantInputV2): ScoreBreakdown {
     totalScoreCents: baseScoreCents + activity.cents,
     configuredGoalCount: getConfiguredGoalCount(p.goals),
     workoutDays: p.workoutDays,
+    plannedDays: p.plannedDays,
     workoutMinutes: p.workoutMinutes,
     workoutSessions: p.workoutSessions,
     minutesComplete: p.minutesComplete,

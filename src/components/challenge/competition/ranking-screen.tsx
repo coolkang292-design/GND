@@ -20,6 +20,8 @@ import {
 import { inclusiveDays } from "@/lib/domain/challenge-time";
 import { addDaysToDateKey } from "@/lib/domain/workout-plan";
 import type { RankedParticipant } from "@/lib/domain/goal-score";
+import type { RankedParticipantV2 } from "@/lib/domain/goal-score-v2";
+import { LiveScoreDetail } from "./live-score-detail";
 import { MetricDailyChart } from "./metric-daily-chart";
 import { MetricRankingList } from "./metric-ranking-list";
 import { MetricSelector, type RankingKey } from "./metric-selector";
@@ -55,7 +57,8 @@ export function RankingScreen({
   timeZone: string;
   myGoals: readonly { goal_type: string; target_value: number | string }[];
   initial: RankingKey;
-  overallRanked: RankedParticipant[] | null;
+  /** `rankForChallenge`의 결과(`RankedEntry`) — v2면 `v2`에 항목별 점수가 있다. 없으면 줄을 펼치지 않는다 */
+  overallRanked: (RankedParticipant & { v2?: RankedParticipantV2 | null })[] | null;
   onBack: () => void;
 }) {
   const [key, setKey] = useState<RankingKey>(overallRanked || initial !== "overall" ? initial : "sessions");
@@ -97,10 +100,17 @@ export function RankingScreen({
         {key === "overall" && overallRanked ? (
           <>
             <h3 className="text-[16px] font-extrabold">종합 점수 랭킹</h3>
-            <p className="mt-1 text-[12px] text-muted">방장이 실시간 공개를 켠 방이에요. 점수는 종료 때 확정돼요.</p>
+            <p className="mt-1 text-[12px] text-muted">방장이 실시간 공개를 켠 방이에요. 점수는 종료 때 확정돼요. 줄을 누르면 점수 계산을 볼 수 있어요.</p>
             <div className="mt-3">
               <MetricRankingList
-                lines={overallRanked.map((r) => ({ userId: r.userId, rank: r.rank, value: `${r.overall.toFixed(1)}점` }))}
+                lines={overallRanked.map((r) => ({
+                  userId: r.userId,
+                  rank: r.rank,
+                  value: `${r.overall.toFixed(1)}점`,
+                  // 줄을 누르면 점수 풀이가 펼쳐진다 (나·다른 참가자 동일, 2026-11-20).
+                  // v2 정보가 없는 옛(v1) 줄은 점수를 지어내지 않으려고 펼치지 않는다.
+                  detail: r.v2 ? <LiveScoreDetail v2={r.v2} /> : undefined,
+                }))}
                 myUserId={myUserId}
                 profileOf={profileOf}
                 limit={10}

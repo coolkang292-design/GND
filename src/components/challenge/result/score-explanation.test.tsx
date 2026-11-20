@@ -29,7 +29,7 @@ function sessionRows(counts: Record<string, number>) {
   );
 }
 
-function renderFor(inputs: ParticipantInput[], sessions: Record<string, number> = {}) {
+function renderFor(inputs: ParticipantInput[], sessions: Record<string, number> = {}, plannedDays = 10) {
   const ranked = rankForChallenge({ scoringVersion: 2, inputs, rows: sessionRows(sessions), ...base });
   const me = ranked.find((r) => r.userId === "A")!;
   render(
@@ -38,7 +38,7 @@ function renderFor(inputs: ParticipantInput[], sessions: Record<string, number> 
       all={ranked}
       myGoals={[goal("workout_days"), goal("cardio_time")]}
       nameOf={(id) => (id === "A" ? "나" : id)}
-      plannedDays={10}
+      plannedDays={plannedDays}
     />,
   );
   return me;
@@ -86,5 +86,48 @@ describe("ScoreExplanation", () => {
     expect(list.querySelectorAll("li").length).toBe(4); // 목표 3 + 안내 1
     expect(list.textContent).toContain("추가 평가 항목");
     expect(list.textContent).toContain("설정한 목표는 2개");
+  });
+
+  describe("참여 점수 설명은 실제 운동한 날을 그대로 말한다 (2026-11-20)", () => {
+    // 계획 13일을 넘겨 17일 운동 → 참여율은 100%에서 멈춘다. 예전 코드는 참여율에서 거꾸로 계산해 13일로 보였다.
+    const over = () =>
+      renderFor(
+        [
+          { ...mk("A", ["workout_days", "cardio_time"]), workoutDays: 17, plannedDays: 13 },
+          { ...mk("B", ["workout_days"]), workoutDays: 3, plannedDays: 13 },
+        ],
+        {},
+        13,
+      );
+
+    it("17일 운동 · 계획 13일 → '실제 17일 / 계획 13일 · 참여점수 20점'", () => {
+      over();
+      const txt = screen.getByTestId("participation-detail").textContent ?? "";
+      expect(txt).toContain("실제 17일 / 계획 13일");
+      expect(txt).toContain("참여점수 20점");
+      expect(screen.getByTestId("pts-participation").textContent).toContain("20.00점");
+    });
+
+    it("계획을 넘겨도 13일로 줄여 말하지 않는다 (부정 확인)", () => {
+      over();
+      const txt = screen.getByTestId("participation-detail").textContent ?? "";
+      expect(txt).not.toContain("실제 13일");
+      expect(txt).not.toContain("13일 운동했어요");
+    });
+
+    it("계획보다 적게 하면 실제 일수와 비율 점수가 그대로 나온다 (3일 / 13일 → 4.62점)", () => {
+      renderFor(
+        [
+          { ...mk("A", ["workout_days"]), workoutDays: 3, plannedDays: 13 },
+          { ...mk("B", ["workout_days"]), workoutDays: 17, plannedDays: 13 },
+        ],
+        {},
+        13,
+      );
+      const txt = screen.getByTestId("participation-detail").textContent ?? "";
+      expect(txt).toContain("실제 3일 / 계획 13일");
+      expect(txt).toContain("참여점수 4.62점");
+      expect(txt).not.toContain("만점"); // 못 채웠는데 만점이라고 하면 안 된다
+    });
   });
 });

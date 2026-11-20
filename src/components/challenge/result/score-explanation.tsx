@@ -69,8 +69,14 @@ export function ScoreExplanation({
               <span>운동 참여</span>
               <span className="font-mono" data-testid="pts-participation">+{pt(b.participationPoints)}</span>
             </dt>
-            <dd className="text-[12px] text-muted">
-              계획한 {plannedDays}일 중 {Math.round((b.participationRate / 100) * plannedDays)}일 운동했어요.
+            {/*
+              ⚠️ 운동일을 참여율에서 거꾸로 계산하지 마라 (2026-11-20). 참여율은 100%에서 멈추므로
+                 계획 13일에 17일을 해도 13일로 보였다. 실제 일수는 `b.workoutDays`에 이미 있다.
+                 점수(+pt)는 그대로 `participationPoints` — 여기서는 표시 문구만 바꾼다.
+            */}
+            <dd className="text-[12px] text-muted" data-testid="participation-detail">
+              실제 {num(b.workoutDays)}일 / 계획 {plannedDays}일 · 참여점수 {num(b.participationPoints)}점
+              {b.workoutDays > plannedDays && " (계획을 넘겨도 참여점수는 만점에서 멈춰요)"}
             </dd>
           </div>
           <div>
