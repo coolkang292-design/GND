@@ -5,6 +5,7 @@ import {
   clampFocusIndex,
   clampSetFocus,
   ensurePendingFocus,
+  focusAfterAddSet,
   type FocusExercise,
 } from "./focus-exercise";
 
@@ -236,5 +237,61 @@ describe("ensurePendingFocus — 목록이 바뀐 뒤 성한 자리로", () => {
       exerciseIndex: 0,
       setIndex: 0,
     });
+  });
+});
+
+/**
+ * 운동 중에 세트를 **더한** 뒤 초점 (2026-11-22, 오뎅끼데스까님 11/21 기록에서 신고).
+ *
+ * 랫풀다운(1세트)을 끝내면 초점은 DY 로우 머신으로 넘어간다. 그때 랫풀다운에 1세트를 더했는데
+ * 초점이 DY에 그대로라서, 휴식 화면은 "다음 운동: 랫풀다운"이라면서 휴식이 끝나면 DY가 떴다.
+ * 랫풀다운을 하고 `이 세트 완료`를 누르면 **DY가 완료 처리**됐다.
+ */
+describe("focusAfterAddSet — 이미 지나온 종목에 세트를 더하면 그 세트가 다음이다", () => {
+  // 랫풀다운 1세트 완료, DY 1세트 남음. 초점은 DY(1, 0)
+  const before = [ex("랫풀다운", [true]), ex("DY 로우 머신", [false])];
+  const focusOnDy = { exerciseIndex: 1, setIndex: 0 };
+
+  it("지나온 종목(초점 앞)에 더하면 초점이 새 세트로 간다 — 어제 증상", () => {
+    expect(focusAfterAddSet(before, focusOnDy, 0)).toEqual({
+      exerciseIndex: 0,
+      setIndex: 1,
+    });
+  });
+
+  it("그 세트를 끝내면 원래 하려던 DY로 이어진다 (순서가 깨지지 않는다)", () => {
+    const after = [ex("랫풀다운", [true, true]), ex("DY 로우 머신", [false])];
+    expect(advanceSetFocus(after, { exerciseIndex: 0, setIndex: 1 })).toEqual({
+      exerciseIndex: 1,
+      setIndex: 0,
+    });
+  });
+
+  it("뒤 종목에 더하면 지금 하던 자리를 건드리지 않는다", () => {
+    const list = [ex("A", [false]), ex("B", [false])];
+    expect(focusAfterAddSet(list, { exerciseIndex: 0, setIndex: 0 }, 1)).toEqual({
+      exerciseIndex: 0,
+      setIndex: 0,
+    });
+  });
+
+  it("지금 하는 종목에 더하면, 지금 세트가 안 끝났으면 그대로 둔다", () => {
+    const list = [ex("A", [true, false, false])];
+    expect(focusAfterAddSet(list, { exerciseIndex: 0, setIndex: 1 }, 0)).toEqual({
+      exerciseIndex: 0,
+      setIndex: 1,
+    });
+  });
+
+  it("지금 하는 종목의 마지막 세트를 끝낸 자리에서 더하면 새 세트로 간다", () => {
+    const list = [ex("A", [true, true])];
+    expect(focusAfterAddSet(list, { exerciseIndex: 0, setIndex: 1 }, 0)).toEqual({
+      exerciseIndex: 0,
+      setIndex: 2,
+    });
+  });
+
+  it("없는 종목이면 초점을 그대로 둔다", () => {
+    expect(focusAfterAddSet(before, focusOnDy, 9)).toEqual(focusOnDy);
   });
 });

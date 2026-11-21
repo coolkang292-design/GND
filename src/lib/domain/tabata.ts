@@ -22,6 +22,22 @@ export const INTERVAL_COPY = {
   followUpAfterEnd: (count: number) => `음원이 끝나면 이어서 ${count}종목을 해요.`,
   followUpStart: "인터벌 끝! 숨 고르고 이어서 해요 💪",
   blockLocked: "인터벌 종목은 운동 중에 빼거나 옮길 수 없어요",
+  leadingLocked: "인터벌 앞의 운동은 시작한 뒤에 뺄 수 없어요",
+  removeViaCard: "인터벌은 목록의 인터벌 카드에서 통째로 뺄 수 있어요",
+  // ── 운동 목록 안의 인터벌 (설계 2026-11-22) ──
+  addToList: "운동 목록에 담기",
+  addToListHint: "웨이트·유산소와 순서를 정해 한 번에 해요",
+  onlyOnce: "인터벌은 한 번만 담을 수 있어요",
+  alreadyInList: "이미 인터벌이 담겨 있어요. 목록의 인터벌을 눌러 코스를 바꾸세요",
+  blockCardTitle: (minutes: number) => `전신 인터벌 ${minutes}분`,
+  blockCardStart: "인터벌 시작",
+  blockCardDone: "인터벌 완료",
+  blockMoveUp: "위로",
+  blockMoveDown: "아래로",
+  blockRemove: "인터벌 빼기",
+  inSessionLead: "코스와 구성은 정해졌어요. 준비되면 시작하세요. 끝나면 다음 운동으로 이어져요.",
+  leaveConfirm: "인터벌을 멈추고 운동 목록으로 돌아갈까요? 다시 시작할 수 있어요.",
+  leave: "목록으로 돌아가기",
 } as const;
 
 export type TabataTrack = {
@@ -110,7 +126,12 @@ export function tabataTrackForMinutes(
  */
 export function tabataResumeFromSession(input: {
   session:
-    | { tabataMinutes: number | null; exerciseNames: readonly string[] }
+    | {
+        tabataMinutes: number | null;
+        exerciseNames: readonly string[];
+        /** 비어 있으면 0 (2026-11-22 이전 기록) */
+        intervalStartIndex?: number | null;
+      }
     | undefined;
   catalog: CatalogExercise[];
 }): { minutes: TabataMinutes; picked: CatalogExercise[] } | null {
@@ -118,7 +139,10 @@ export function tabataResumeFromSession(input: {
   if (!minutes || !input.session) return null;
   // 인터벌 세션의 5번째부터는 이어하기 종목이다 — 블록만 대조한다 (2026-09-29)
   const picked = tabataPickFromNames(
-    intervalBlockNames(input.session.exerciseNames),
+    intervalBlockNames(
+      input.session.exerciseNames,
+      input.session.intervalStartIndex,
+    ),
     input.catalog,
   );
   return picked.length > 0 ? { minutes, picked } : null;
@@ -214,29 +238,53 @@ export function tabataPickFromNames(
   return picked;
 }
 
-// ── 인터벌 뒤 이어하기 (설계 2026-09-29 §4) ─────────────────────────
+// ── 인터벌 블록 위치 (설계 2026-09-29 §4, 2026-11-22 시작 위치 추가) ─────────
 //
-// `tabata_minutes`가 있는 계획·draft·세션에서 **0~3번 = 인터벌 블록**,
-// 4번~ = 음원이 끝난 뒤 같은 세션에서 이어서 하는 일반 종목이다.
-// 계획은 ChatGPT가 DB에 직접 쓰고(`docs/chatgpt-plan-rules.md`), draft·세션은
-// 앱이 쓴다. 세션은 `saveSessionExercises`가 draft 순서대로 `sort_order: i`를
-// 넣으므로 이 규칙이 저장까지 이어진다.
+// `tabata_minutes`가 있는 계획·draft·세션에서 **블록 = 인터벌 4종목**이다.
+// 블록이 어디서 시작하는지는 `startIndex`(= `workout_sessions.interval_start_index`)가
+// 말한다. **비어 있으면 0** — 2026-11-22 이전 기록 전부가 이 모양이고, 그때의
+// "0~3번 = 블록, 4번~ = 이어하기" 규칙과 결과가 **같아야** 한다.
+// 계획(`workout_plans`)은 ChatGPT가 DB에 직접 쓰므로(`docs/chatgpt-plan-rules.md`)
+// 시작 위치를 싣지 않는다 — 계획은 언제나 0이다.
+//
+// 세션은 `saveSessionExercises`가 draft 순서대로 `sort_order: i`를 넣으므로
+// 이 규칙이 저장까지 이어진다. 그래서 운동 중에는 블록을 가로질러 종목을 옮기지 못한다.
 //
 // ⚠️ 숫자 4를 다른 파일에 쓰지 마라. 여기 함수들을 거친다.
 
-/** 인터벌 계획·세션의 종목 이름 중 **블록만** — 카탈로그 대조는 이것만 한다 */
-export function intervalBlockNames(names: readonly string[]): string[] {
-  return names.slice(0, TABATA_EXERCISE_COUNT);
+/** DB·draft의 시작 위치를 쓸 수 있는 값으로 — 비어 있거나 이상하면 0 */
+export function normalizeIntervalStartIndex(value: unknown): number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0
+    ? value
+    : 0;
 }
 
-/** 인터벌 계획을 블록과 이어하기로 가른다. 4개 이하면 이어하기가 없다 */
-export function splitIntervalPlan<T>(exercises: readonly T[]): {
+/** 인터벌 계획·세션의 종목 이름 중 **블록만** — 카탈로그 대조는 이것만 한다 */
+export function intervalBlockNames(
+  names: readonly string[],
+  startIndex?: number | null,
+): string[] {
+  const start = normalizeIntervalStartIndex(startIndex);
+  return names.slice(start, start + TABATA_EXERCISE_COUNT);
+}
+
+/**
+ * 인터벌을 앞(leading)·블록(block)·뒤(followUps)로 가른다.
+ * 시작 위치가 0이면 leading은 비고, 4개 이하면 followUps도 빈다.
+ */
+export function splitIntervalPlan<T>(
+  exercises: readonly T[],
+  startIndex?: number | null,
+): {
+  leading: T[];
   block: T[];
   followUps: T[];
 } {
+  const start = normalizeIntervalStartIndex(startIndex);
   return {
-    block: exercises.slice(0, TABATA_EXERCISE_COUNT),
-    followUps: exercises.slice(TABATA_EXERCISE_COUNT),
+    leading: exercises.slice(0, start),
+    block: exercises.slice(start, start + TABATA_EXERCISE_COUNT),
+    followUps: exercises.slice(start + TABATA_EXERCISE_COUNT),
   };
 }
 
@@ -251,10 +299,12 @@ export function splitIntervalPlan<T>(exercises: readonly T[]): {
 export function isIntervalBlockIndex(
   tabataMinutes: number | null | undefined,
   index: number | null | undefined,
+  startIndex?: number | null,
 ): boolean {
   if (tabataMinutes === null || tabataMinutes === undefined) return false;
   if (index === null || index === undefined) return true;
-  return index < TABATA_EXERCISE_COUNT;
+  const start = normalizeIntervalStartIndex(startIndex);
+  return index >= start && index < start + TABATA_EXERCISE_COUNT;
 }
 
 /**
@@ -266,44 +316,67 @@ export function isIntervalBlockIndex(
 export function withoutIntervalBlock<T>(
   tabataMinutes: number | null | undefined,
   exercises: readonly T[],
+  startIndex?: number | null,
 ): T[] {
   return exercises.filter(
-    (_, index) => !isIntervalBlockIndex(tabataMinutes, index),
+    (_, index) => !isIntervalBlockIndex(tabataMinutes, index, startIndex),
   );
 }
 
 type IntervalDraftLike = {
   tabataMinutes: number | null;
+  /** 비어 있으면 0 — 옛 draft·옛 세션 */
+  intervalStartIndex?: number | null;
   exercises: readonly { key: string; sets: readonly { done: boolean }[] }[];
 };
 
-/** 음원이 끝난 뒤 이어서 할 종목이 있는가 */
+const hasUndone = (exercise: { sets: readonly { done: boolean }[] }) =>
+  exercise.sets.some((set) => !set.done);
+
+/**
+ * 음원이 끝난 뒤 **블록 밖에 아직 할 종목이 있는가** — 있으면 운동을 끝내지 않는다.
+ *
+ * 예전에는 "5번째 종목이 있는가"였다. 시작 위치가 생기면서 블록 앞 종목도 있을
+ * 수 있어, **안 한 세트가 남은 블록 밖 종목**으로 바꿨다. 앞 종목을 다 하고 인터벌이
+ * 마지막이면 여기서 false가 되어 음원이 끝나는 순간 운동이 끝난다.
+ */
 export function hasIntervalFollowUps(draft: IntervalDraftLike): boolean {
-  return (
-    draft.tabataMinutes !== null &&
-    draft.exercises.length > TABATA_EXERCISE_COUNT
+  if (draft.tabataMinutes === null) return false;
+  return draft.exercises.some(
+    (exercise, index) =>
+      !isIntervalBlockIndex(draft.tabataMinutes, index, draft.intervalStartIndex) &&
+      hasUndone(exercise),
   );
 }
 
 /**
- * 인터벌 블록이 아직 안 끝났는가 — 무동작 감지를 끄는 조건이다.
+ * 인터벌 **차례**인가 — 무동작 감지를 끄는 조건이다.
  *
- * 예전에는 "인터벌 세션이면" 세션 **내내** 껐다. 이어하기는 사람이 세트를
- * 누르는 일반 운동이라 그동안은 감지가 켜져 있어야 한다.
+ * 블록에 안 끝난 세트가 있고, 블록 **앞**에 안 끝난 종목이 없을 때만 true다.
+ * 앞 종목(웨이트 등)을 하는 동안은 사람이 세트를 누르므로 감지가 켜져 있어야 한다.
+ * 이어하기도 마찬가지다 — 블록이 끝난 뒤에는 감지가 켜진다.
+ *
+ * ⚠️ 앞 종목을 건너뛰고 인터벌을 시작하는 경우는 이 함수로 못 잡는다. 화면이
+ *    음원이 도는 동안(`intervalPlaying`)을 따로 더해서 끈다.
  */
 export function intervalBlockPending(draft: IntervalDraftLike): boolean {
   if (draft.tabataMinutes === null) return false;
+  const start = normalizeIntervalStartIndex(draft.intervalStartIndex);
+  const leadingPending = draft.exercises.slice(0, start).some(hasUndone);
+  if (leadingPending) return false;
   return draft.exercises
-    .slice(0, TABATA_EXERCISE_COUNT)
-    .some((exercise) => exercise.sets.some((set) => !set.done));
+    .slice(start, start + TABATA_EXERCISE_COUNT)
+    .some(hasUndone);
 }
 
-/** 음원이 끝났다 — 블록 4종의 세트만 완료로. 이어하기는 건드리지 않는다 */
+/** 음원이 끝났다 — 블록 4종의 세트만 완료로. 앞·뒤 종목은 건드리지 않는다 */
 export function completeIntervalBlock(
   exercises: readonly LocalExercise[],
+  startIndex?: number | null,
 ): LocalExercise[] {
+  const start = normalizeIntervalStartIndex(startIndex);
   return exercises.map((exercise, index) =>
-    index < TABATA_EXERCISE_COUNT
+    index >= start && index < start + TABATA_EXERCISE_COUNT
       ? { ...exercise, sets: exercise.sets.map((set) => ({ ...set, done: true })) }
       : exercise,
   );
@@ -313,19 +386,184 @@ export function completeIntervalBlock(
  * 운동 중 이 종목이 인터벌 블록인가 — 빼기·건너뛰기·옮기기를 막는 데 쓴다.
  *
  * 블록이 빠지거나 자리를 바꾸면 저장되는 `sort_order`가 밀려서 이어하기
- * 종목이 0~3번에 들어가고, 그 기록은 영영 "인터벌"로 취급된다.
+ * 종목이 블록 자리에 들어가고, 그 기록은 영영 "인터벌"로 취급된다.
  */
 export function isIntervalBlockExercise(
-  draft: { tabataMinutes: number | null; exercises: readonly { key: string }[] },
+  draft: {
+    tabataMinutes: number | null;
+    intervalStartIndex?: number | null;
+    exercises: readonly { key: string }[];
+  },
   exKey: string,
 ): boolean {
   const index = draft.exercises.findIndex((exercise) => exercise.key === exKey);
-  return index >= 0 && isIntervalBlockIndex(draft.tabataMinutes, index);
+  return (
+    index >= 0 &&
+    isIntervalBlockIndex(draft.tabataMinutes, index, draft.intervalStartIndex)
+  );
+}
+
+/**
+ * 종목 하나를 `from` → `to`로 옮겨도 되는가 (운동 중·준비 중 공통).
+ *
+ * 블록 종목은 못 옮기고, **블록 건너편으로도 못 옮긴다** — 건너가면 블록 앞뒤 종목 수가
+ * 바뀌어 저장된 시작 위치가 어긋난다. 블록 전체를 옮기는 것은 `moveIntervalBlock`.
+ */
+export function canMoveAcrossIntervalBlock(
+  tabataMinutes: number | null | undefined,
+  startIndex: number | null | undefined,
+  from: number,
+  to: number,
+): boolean {
+  if (tabataMinutes === null || tabataMinutes === undefined) return true;
+  if (
+    isIntervalBlockIndex(tabataMinutes, from, startIndex) ||
+    isIntervalBlockIndex(tabataMinutes, to, startIndex)
+  ) {
+    return false;
+  }
+  const start = normalizeIntervalStartIndex(startIndex);
+  const end = start + TABATA_EXERCISE_COUNT;
+  return (from < start && to < start) || (from >= end && to >= end);
+}
+
+/**
+ * 인터벌 블록을 **통째로** 새 위치로 옮긴다 (시작 전 준비 목록용).
+ *
+ * `toStart`는 옮긴 뒤 블록의 시작 위치다. 범위를 벗어나면 가장자리로 맞춘다.
+ * 종목 목록과 새 시작 위치를 함께 돌려준다 — 둘이 어긋나면 안 되므로 한 번에 계산한다.
+ */
+export function moveIntervalBlock<T>(
+  exercises: readonly T[],
+  startIndex: number | null | undefined,
+  toStart: number,
+): { exercises: T[]; startIndex: number } {
+  const start = normalizeIntervalStartIndex(startIndex);
+  const block = exercises.slice(start, start + TABATA_EXERCISE_COUNT);
+  const rest = [
+    ...exercises.slice(0, start),
+    ...exercises.slice(start + TABATA_EXERCISE_COUNT),
+  ];
+  const target = Math.min(Math.max(Math.trunc(toStart), 0), rest.length);
+  return {
+    exercises: [...rest.slice(0, target), ...block, ...rest.slice(target)],
+    startIndex: target,
+  };
+}
+
+/**
+ * 시작 전 준비 목록에서 종목 하나를 `from` → `to`로 옮긴다 — **블록이 깨지지 않게**.
+ *
+ * - 블록 **밖** 종목끼리 같은 쪽에서 옮기면 그냥 옮긴다.
+ * - 블록 밖 종목이 블록을 건너가면 블록의 시작 위치가 한 칸 바뀐다 (새 위치를 같이 돌려준다).
+ * - 블록 종목을 옮기면 **블록 전체**가 따라 움직인다 (낱개로 떼지 못한다).
+ * - 종목이 블록 한가운데로 들어가게 되는 이동은 `null` (막는다).
+ *
+ * 운동을 **시작한 뒤에는 쓰지 않는다** — 저장되는 시작 위치(DB)가 이미 정해졌다.
+ * 그때는 `canMoveAcrossIntervalBlock`으로 같은 쪽 이동만 허용한다.
+ */
+export function reorderWithIntervalBlock<T>(
+  exercises: readonly T[],
+  startIndex: number | null | undefined,
+  from: number,
+  to: number,
+): { exercises: T[]; startIndex: number } | null {
+  const start = normalizeIntervalStartIndex(startIndex);
+  const end = start + TABATA_EXERCISE_COUNT;
+  if (from < 0 || from >= exercises.length || to < 0 || to >= exercises.length) {
+    return null;
+  }
+  if (from === to) return { exercises: [...exercises], startIndex: start };
+
+  const fromInBlock = from >= start && from < end;
+  const toInBlock = to >= start && to < end;
+
+  if (fromInBlock) {
+    // 블록 안에서 자리를 바꾸는 것은 막는다 (블록 안의 순서는 코스가 정한다)
+    if (toInBlock) return null;
+    return moveIntervalBlock(exercises, start, to < start ? to : to - (TABATA_EXERCISE_COUNT - 1));
+  }
+
+  const moved = [...exercises];
+  const [item] = moved.splice(from, 1);
+  moved.splice(to, 0, item);
+  const blockFirst = exercises[start];
+  const newStart = blockFirst === undefined ? start : moved.indexOf(blockFirst);
+  // 블록이 한 덩어리로 남았는지 확인 — 종목이 블록 사이로 끼어들면 막는다
+  for (let i = 0; i < TABATA_EXERCISE_COUNT; i += 1) {
+    if (blockFirst !== undefined && moved[newStart + i] !== exercises[start + i]) {
+      return null;
+    }
+  }
+  return { exercises: moved, startIndex: newStart };
+}
+
+/**
+ * 시작 전 목록에서 `removeIndex` 자리의 종목을 뺀 뒤의 **블록 시작 위치**.
+ * 블록 앞의 종목을 빼면 블록이 한 칸 앞으로 당겨진다. (블록 종목 자체는 못 뺀다.)
+ */
+export function startIndexAfterRemoval(
+  startIndex: number | null | undefined,
+  removeIndex: number,
+): number {
+  const start = normalizeIntervalStartIndex(startIndex);
+  return removeIndex >= 0 && removeIndex < start ? start - 1 : start;
+}
+
+/**
+ * 이 종목이 인터벌 블록 **앞**에 있는가.
+ *
+ * 운동을 시작한 뒤에는 이런 종목을 빼면 안 된다 — 빼면 저장되는 `sort_order`가 한 칸씩 당겨져
+ * DB에 적힌 시작 위치와 어긋난다(블록 첫 종목이 앞 종목으로 읽힌다).
+ */
+export function isBeforeIntervalBlock(
+  draft: {
+    tabataMinutes: number | null;
+    intervalStartIndex?: number | null;
+    exercises: readonly { key: string }[];
+  },
+  exKey: string,
+): boolean {
+  if (draft.tabataMinutes === null) return false;
+  const index = draft.exercises.findIndex((exercise) => exercise.key === exKey);
+  return index >= 0 && index < normalizeIntervalStartIndex(draft.intervalStartIndex);
+}
+
+/**
+ * 인터벌 블록이 **카드 한 장**으로 묶여 보일 때, 그 뒤 종목 카드의 번호(0부터).
+ *
+ * 블록 4종목이 번호 없는 카드 한 장이 되므로 뒤 종목은 4칸씩 당겨 센다.
+ * 안 당기면 `벤치프레스 1 · (인터벌) · 트레드밀 6 · 런지 7`처럼 번호가 건너뛴다.
+ */
+export function cardNumberIndex(
+  index: number,
+  startIndex: number | null | undefined,
+): number {
+  const end = normalizeIntervalStartIndex(startIndex) + TABATA_EXERCISE_COUNT;
+  return index >= end ? index - TABATA_EXERCISE_COUNT : index;
+}
+
+/**
+ * 루틴(`workout_routines`)에 함께 저장할 코스 분수.
+ *
+ * 루틴·계획·지난 기록은 "앞 4개가 블록"인 모양만 안다(시작 위치를 싣지 않는다). 블록이
+ * 가운데나 뒤에 있는 목록을 분수와 함께 저장하면 나중에 불러올 때 **웨이트가 인터벌 블록으로
+ * 읽힌다.** 그래서 시작 위치가 0이 아니면 분수를 빼고 일반 루틴으로 저장한다.
+ */
+export function routineTabataMinutes(
+  tabataMinutes: number | null | undefined,
+  startIndex: number | null | undefined,
+): number | null {
+  if (tabataMinutes === null || tabataMinutes === undefined) return null;
+  return normalizeIntervalStartIndex(startIndex) === 0 ? tabataMinutes : null;
 }
 
 /** 배너·카드의 한 줄 — `푸시업 · 버드독 · 데드버그 · 크런치 · 이어서 4종목` */
-export function intervalPlanLine(names: readonly string[]): string {
-  const { block, followUps } = splitIntervalPlan(names);
+export function intervalPlanLine(
+  names: readonly string[],
+  startIndex?: number | null,
+): string {
+  const { block, followUps } = splitIntervalPlan(names, startIndex);
   const head = block.join(" · ");
   return followUps.length > 0
     ? `${head} · ${INTERVAL_COPY.followUpCount(followUps.length)}`
@@ -360,9 +598,10 @@ export function mergeRecentSessions<S extends { completed_at: string }>(
 export function coachSessionRows<R extends { sort_order: number | null }>(
   tabataMinutes: number | null | undefined,
   rows: readonly R[],
+  startIndex?: number | null,
 ): R[] {
   const kept = rows.filter(
-    (row) => !isIntervalBlockIndex(tabataMinutes, row.sort_order),
+    (row) => !isIntervalBlockIndex(tabataMinutes, row.sort_order, startIndex),
   );
   return kept.length > 0 ? kept : [...rows];
 }

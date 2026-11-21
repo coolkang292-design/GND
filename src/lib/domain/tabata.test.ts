@@ -9,6 +9,13 @@ import {
   TABATA_ROUND_SECONDS,
   TABATA_TRACKS,
   asTabataMinutes,
+  canMoveAcrossIntervalBlock,
+  cardNumberIndex,
+  routineTabataMinutes,
+  moveIntervalBlock,
+  reorderWithIntervalBlock,
+  startIndexAfterRemoval,
+  isBeforeIntervalBlock,
   coachSessionRows,
   completeIntervalBlock,
   hasIntervalFollowUps,
@@ -337,11 +344,12 @@ describe("인터벌 블록 = 앞 4개 (2026-09-29)", () => {
   it("계획을 인터벌 4개와 이어하기로 가른다", () => {
     const names = ["리버스 런지", "Scapular Push-up Plus", "마운틴 클라이머", "점핑잭", "흉추 익스텐션", "YTW"];
     expect(splitIntervalPlan(names)).toEqual({
+      leading: [],
       block: ["리버스 런지", "Scapular Push-up Plus", "마운틴 클라이머", "점핑잭"],
       followUps: ["흉추 익스텐션", "YTW"],
     });
     expect(splitIntervalPlan(names.slice(0, 4)).followUps).toEqual([]);
-    expect(splitIntervalPlan(names.slice(0, 3))).toEqual({ block: names.slice(0, 3), followUps: [] });
+    expect(splitIntervalPlan(names.slice(0, 3))).toEqual({ leading: [], block: names.slice(0, 3), followUps: [] });
   });
 
   it("카탈로그 대조는 앞 4개 이름만 — 없는 이름을 뒤에서 채우지 않는다 (수요일 재현)", () => {
@@ -502,5 +510,266 @@ describe("intervalSaveTarget — 저장할 인터벌 계획 고르기", () => {
 
   it("오늘 인터벌 계획이 둘 이상이고 어느 것인지 모르면 새로 만든다 — 엉뚱한 계획을 덮어쓰지 않는다", () => {
     expect(intervalSaveTarget([interval("a"), interval("b")], null)).toEqual({ kind: "create" });
+  });
+});
+
+// ── 인터벌 시작 위치 (설계 2026-11-22) ─────────────────────────────
+// 인터벌 4종은 순서표 어디서든 시작할 수 있다. 시작 위치를 안 주면 0 — 지금까지의
+// "앞 4개" 규칙과 결과가 **완전히 같아야** 옛 기록 56건이 그대로 읽힌다.
+describe("인터벌 시작 위치 — 옛 규칙(0)과 같다", () => {
+  const names = ["a", "b", "c", "d", "e", "f"];
+
+  it("시작 위치를 안 주면 앞 4개가 블록이다 (옛 동작 그대로)", () => {
+    expect(isIntervalBlockIndex(8, 0)).toBe(true);
+    expect(isIntervalBlockIndex(8, 3)).toBe(true);
+    expect(isIntervalBlockIndex(8, 4)).toBe(false);
+    expect(intervalBlockNames(names)).toEqual(["a", "b", "c", "d"]);
+    expect(splitIntervalPlan(names).block).toEqual(["a", "b", "c", "d"]);
+    expect(splitIntervalPlan(names).followUps).toEqual(["e", "f"]);
+    expect(splitIntervalPlan(names).leading).toEqual([]);
+  });
+
+  it("시작 위치가 null·undefined여도 0과 같다 (DB의 빈 칸)", () => {
+    expect(isIntervalBlockIndex(8, 0, null)).toBe(true);
+    expect(isIntervalBlockIndex(8, 4, undefined)).toBe(false);
+  });
+});
+
+describe("인터벌 시작 위치 — 가운데·맨 뒤", () => {
+  it("2번부터 시작하면 2~5번이 블록이다", () => {
+    expect(isIntervalBlockIndex(8, 1, 2)).toBe(false);
+    expect(isIntervalBlockIndex(8, 2, 2)).toBe(true);
+    expect(isIntervalBlockIndex(8, 5, 2)).toBe(true);
+    expect(isIntervalBlockIndex(8, 6, 2)).toBe(false);
+  });
+
+  it("인터벌 세션이 아니면 위치와 상관없이 블록이 아니다", () => {
+    expect(isIntervalBlockIndex(null, 2, 2)).toBe(false);
+    expect(isIntervalBlockIndex(undefined, 2, 2)).toBe(false);
+  });
+
+  it("자리(sort_order)를 모르면 블록으로 본다 — 모르면 기록 비교에서 빼는 쪽이 안전", () => {
+    expect(isIntervalBlockIndex(8, null, 2)).toBe(true);
+  });
+
+  it("이름 목록을 앞·블록·뒤로 가른다", () => {
+    const names = ["w1", "w2", "a", "b", "c", "d", "x"];
+    expect(intervalBlockNames(names, 2)).toEqual(["a", "b", "c", "d"]);
+    expect(splitIntervalPlan(names, 2)).toEqual({
+      leading: ["w1", "w2"],
+      block: ["a", "b", "c", "d"],
+      followUps: ["x"],
+    });
+  });
+
+  it("기록 비교에서는 블록만 뺀다 — 앞·뒤 웨이트는 남는다", () => {
+    const rows = ["w1", "w2", "a", "b", "c", "d", "x"];
+    expect(withoutIntervalBlock(8, rows, 2)).toEqual(["w1", "w2", "x"]);
+    expect(withoutIntervalBlock(null, rows, 2)).toEqual(rows);
+  });
+
+  it("AI 코치도 블록만 뺀다", () => {
+    const rows = [0, 1, 2, 3, 4, 5, 6].map((sort_order) => ({ sort_order }));
+    expect(coachSessionRows(8, rows, 2).map((r) => r.sort_order)).toEqual([0, 1, 6]);
+  });
+});
+
+describe("인터벌 시작 위치 — 운동 중 흐름", () => {
+  const ex = (names: string[], done: boolean) =>
+    names.map((n) => localExercise(n, [done]));
+  const draftOf = (start: number, leadingDone: boolean) => ({
+    tabataMinutes: 8,
+    intervalStartIndex: start,
+    exercises: [
+      ...ex(["w1", "w2"], leadingDone),
+      ...ex(["a", "b", "c", "d"], false),
+    ],
+  });
+
+  it("블록이 남았을 때만 무동작 감지를 끈다 — 앞 웨이트가 진행 중이면 감지는 켜져 있다", () => {
+    expect(intervalBlockPending(draftOf(2, true))).toBe(true);
+    // 블록 차례가 되기 전에도 '블록이 아직 안 끝남'이지만, 앞 종목이 남아 있으면
+    // 사람이 세트를 누르는 중이므로 감지를 꺼선 안 된다
+    expect(intervalBlockPending(draftOf(2, false))).toBe(false);
+    expect(intervalBlockPending(draftOf(2, true))).toBe(true);
+  });
+
+  it("블록이 끝나면 블록 4종만 완료로 — 앞 종목은 건드리지 않는다", () => {
+    const out = completeIntervalBlock(draftOf(2, false).exercises, 2);
+    expect(out.slice(0, 2).every((e) => e.sets.every((s) => !s.done))).toBe(true);
+    expect(out.slice(2).every((e) => e.sets.every((s) => s.done))).toBe(true);
+  });
+
+  it("블록 밖에 아직 할 종목이 있으면 음원이 끝나도 운동을 끝내지 않는다", () => {
+    expect(hasIntervalFollowUps(draftOf(2, false))).toBe(true);
+    // 앞 종목을 다 하고 인터벌이 마지막이면 — 끝낸다
+    expect(hasIntervalFollowUps(draftOf(2, true))).toBe(false);
+    // 순수 인터벌
+    expect(
+      hasIntervalFollowUps({
+        tabataMinutes: 8,
+        intervalStartIndex: 0,
+        exercises: ex(["a", "b", "c", "d"], false),
+      }),
+    ).toBe(false);
+  });
+
+  it("옛 모양(앞 4개 + 이어하기)은 시작 위치 없이도 이어하기로 본다", () => {
+    expect(
+      hasIntervalFollowUps({
+        tabataMinutes: 8,
+        exercises: [...ex(["a", "b", "c", "d"], false), ...ex(["e"], false)],
+      }),
+    ).toBe(true);
+  });
+
+  it("운동 중 블록 종목은 빼거나 옮길 수 없다 — 앞·뒤 종목은 된다", () => {
+    const draft = draftOf(2, true);
+    expect(isIntervalBlockExercise(draft, "k-w1")).toBe(false);
+    expect(isIntervalBlockExercise(draft, "k-a")).toBe(true);
+    expect(isIntervalBlockExercise(draft, "k-d")).toBe(true);
+  });
+});
+
+describe("블록을 가로지르는 이동 막기 (순서가 곧 규칙이라서)", () => {
+  it("종목을 블록 건너편으로 옮기면 시작 위치가 어긋나므로 막는다", () => {
+    // w1 w2 [a b c d] x   (start 2)
+    expect(canMoveAcrossIntervalBlock(8, 2, 0, 1)).toBe(true); // 앞쪽끼리
+    expect(canMoveAcrossIntervalBlock(8, 2, 6, 6)).toBe(true); // 제자리
+    expect(canMoveAcrossIntervalBlock(8, 2, 0, 6)).toBe(false); // 앞 → 뒤 (블록 건넘)
+    expect(canMoveAcrossIntervalBlock(8, 2, 6, 0)).toBe(false); // 뒤 → 앞
+    expect(canMoveAcrossIntervalBlock(8, 2, 3, 0)).toBe(false); // 블록 종목은 못 움직임
+    expect(canMoveAcrossIntervalBlock(null, 0, 0, 5)).toBe(true); // 일반 운동은 자유
+  });
+});
+
+describe("블록을 통째로 옮기기 — 시작 위치만 바뀐다", () => {
+  it("블록을 한 칸 뒤로", () => {
+    const list = ["w1", "w2", "a", "b", "c", "d", "x"];
+    expect(moveIntervalBlock(list, 2, 3)).toEqual({
+      exercises: ["w1", "w2", "x", "a", "b", "c", "d"],
+      startIndex: 3,
+    });
+  });
+
+  it("블록을 맨 앞으로", () => {
+    const list = ["w1", "w2", "a", "b", "c", "d"];
+    expect(moveIntervalBlock(list, 2, 0)).toEqual({
+      exercises: ["a", "b", "c", "d", "w1", "w2"],
+      startIndex: 0,
+    });
+  });
+
+  it("범위를 벗어난 위치는 가장자리로 맞춘다", () => {
+    const list = ["w1", "a", "b", "c", "d"];
+    expect(moveIntervalBlock(list, 1, 99).startIndex).toBe(1); // 이미 맨 뒤
+    expect(moveIntervalBlock(list, 1, -5).startIndex).toBe(0);
+  });
+});
+
+describe("준비 목록 옮기기 — 블록이 깨지지 않는다", () => {
+  // w1 w2 [a b c d] x
+  const items = ["w1", "w2", "a", "b", "c", "d", "x"].map((name) => ({ name }));
+  const names = (list: readonly { name: string }[]) => list.map((i) => i.name);
+
+  it("블록 앞쪽끼리는 그냥 옮긴다 — 시작 위치 그대로", () => {
+    const out = reorderWithIntervalBlock(items, 2, 0, 1)!;
+    expect(names(out.exercises)).toEqual(["w2", "w1", "a", "b", "c", "d", "x"]);
+    expect(out.startIndex).toBe(2);
+  });
+
+  it("뒤 종목이 블록 건너편 앞으로 가면 블록이 한 칸 밀린다", () => {
+    const out = reorderWithIntervalBlock(items, 2, 6, 1)!;
+    expect(names(out.exercises)).toEqual(["w1", "x", "w2", "a", "b", "c", "d"]);
+    expect(out.startIndex).toBe(3);
+  });
+
+  it("앞 종목이 블록 건너편 뒤로 가면 블록이 한 칸 당겨진다", () => {
+    const out = reorderWithIntervalBlock(items, 2, 0, 6)!;
+    expect(names(out.exercises)).toEqual(["w2", "a", "b", "c", "d", "x", "w1"]);
+    expect(out.startIndex).toBe(1);
+  });
+
+  it("종목이 블록 한가운데로 들어가는 이동은 막는다", () => {
+    expect(reorderWithIntervalBlock(items, 2, 0, 3)).toBeNull();
+    expect(reorderWithIntervalBlock(items, 2, 6, 4)).toBeNull();
+  });
+
+  it("블록 종목을 끌면 블록 전체가 따라간다", () => {
+    // b(3)를 맨 위로 → 블록이 맨 앞
+    const up = reorderWithIntervalBlock(items, 2, 3, 0)!;
+    expect(names(up.exercises)).toEqual(["a", "b", "c", "d", "w1", "w2", "x"]);
+    expect(up.startIndex).toBe(0);
+    // b(3)를 맨 뒤 x 자리로 → 블록이 x 뒤
+    const down = reorderWithIntervalBlock(items, 2, 3, 6)!;
+    expect(names(down.exercises)).toEqual(["w1", "w2", "x", "a", "b", "c", "d"]);
+    expect(down.startIndex).toBe(3);
+  });
+
+  it("블록 안에서 자리를 바꾸는 것은 막는다", () => {
+    expect(reorderWithIntervalBlock(items, 2, 2, 4)).toBeNull();
+  });
+
+  it("범위 밖이거나 제자리면 안전하게 처리한다", () => {
+    expect(reorderWithIntervalBlock(items, 2, -1, 3)).toBeNull();
+    expect(reorderWithIntervalBlock(items, 2, 0, 99)).toBeNull();
+    expect(reorderWithIntervalBlock(items, 2, 4, 4)!.startIndex).toBe(2);
+  });
+
+  it("시작 위치가 0인 옛 모양도 같은 규칙이다 (인터벌 + 이어하기)", () => {
+    const old = ["a", "b", "c", "d", "e", "f"].map((name) => ({ name }));
+    const out = reorderWithIntervalBlock(old, undefined, 5, 4)!;
+    expect(names(out.exercises)).toEqual(["a", "b", "c", "d", "f", "e"]);
+    expect(out.startIndex).toBe(0);
+  });
+});
+
+describe("종목을 뺄 때 블록 위치", () => {
+  it("블록 앞 종목을 빼면 시작 위치가 한 칸 당겨진다", () => {
+    expect(startIndexAfterRemoval(2, 0)).toBe(1);
+    expect(startIndexAfterRemoval(2, 1)).toBe(1);
+  });
+  it("블록 뒤 종목을 빼면 그대로", () => {
+    expect(startIndexAfterRemoval(2, 6)).toBe(2);
+    expect(startIndexAfterRemoval(undefined, 5)).toBe(0);
+  });
+
+  it("블록 앞 종목인지 알아본다 — 시작한 뒤에는 이런 종목을 뺄 수 없다", () => {
+    const draft = {
+      tabataMinutes: 8,
+      intervalStartIndex: 2,
+      exercises: ["w1", "w2", "a", "b", "c", "d", "x"].map((n) => ({ key: "k-" + n })),
+    };
+    expect(isBeforeIntervalBlock(draft, "k-w1")).toBe(true);
+    expect(isBeforeIntervalBlock(draft, "k-w2")).toBe(true);
+    expect(isBeforeIntervalBlock(draft, "k-a")).toBe(false);
+    expect(isBeforeIntervalBlock(draft, "k-x")).toBe(false);
+    expect(isBeforeIntervalBlock({ ...draft, tabataMinutes: null }, "k-w1")).toBe(false);
+    // 시작 위치 0이면 앞 종목이 없다 — 옛 인터벌 세션에서 이어하기를 빼도 되는 이유
+    expect(isBeforeIntervalBlock({ ...draft, intervalStartIndex: 0 }, "k-x")).toBe(false);
+  });
+});
+
+describe("목록에서 인터벌이 카드 한 장일 때 — 번호와 저장 (2026-11-22 개발 서버 확인에서 발견)", () => {
+  it("블록 뒤 종목은 4칸 당겨 센다 — 번호가 1, 6, 7로 건너뛰지 않는다", () => {
+    // 벤치프레스(0) [인터벌 1~4] 트레드밀(5) 런지(6)
+    expect(cardNumberIndex(0, 1)).toBe(0);
+    expect(cardNumberIndex(5, 1)).toBe(1);
+    expect(cardNumberIndex(6, 1)).toBe(2);
+  });
+
+  it("블록이 맨 앞이면 뒤 종목이 0번부터 센다, 블록 앞 종목은 그대로", () => {
+    expect(cardNumberIndex(4, 0)).toBe(0);
+    expect(cardNumberIndex(5, undefined)).toBe(1);
+    expect(cardNumberIndex(1, 2)).toBe(1);
+  });
+
+  it("루틴에는 블록이 맨 앞일 때만 코스 분수를 싣는다 — 아니면 웨이트가 인터벌로 읽힌다", () => {
+    expect(routineTabataMinutes(8, 0)).toBe(8);
+    expect(routineTabataMinutes(8, undefined)).toBe(8);
+    expect(routineTabataMinutes(8, null)).toBe(8);
+    expect(routineTabataMinutes(8, 1)).toBeNull();
+    expect(routineTabataMinutes(8, 3)).toBeNull();
+    expect(routineTabataMinutes(null, 2)).toBeNull();
   });
 });

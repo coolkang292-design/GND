@@ -49,6 +49,8 @@ export type RawExercise = {
 export type RawSession = {
   completed_at: string;
   tabata_minutes: number | null;
+  /** 인터벌 블록 시작 위치 (0144). 없으면 0 */
+  interval_start_index?: number | null;
   workout_exercises: RawExercise[] | null;
 };
 
@@ -101,7 +103,7 @@ export function toMetricPoints(
     const day = dayKey(new Date(at), timeZone);
     const cardioTotals = new Map<string, { distanceMeters: number; seconds: number; valid: boolean }>();
     for (const ex of s.workout_exercises ?? []) {
-      if (isIntervalBlockIndex(s.tabata_minutes, ex.sort_order)) continue;
+      if (isIntervalBlockIndex(s.tabata_minutes, ex.sort_order, s.interval_start_index)) continue;
       const exerciseKey = ex.exercise_name.trim();
       if (!exerciseKey) continue;
       if (ex.exercise_type === "cardio") {

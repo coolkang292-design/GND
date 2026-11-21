@@ -12,7 +12,11 @@ import {
   type SavedSetTimer,
 } from "@/lib/domain/set-timer-restore";
 import { dayKey, dayRange, resolveTimeZone } from "@/lib/domain/time";
-import { isIntervalBlockIndex, mergeRecentSessions } from "@/lib/domain/tabata";
+import {
+  isIntervalBlockIndex,
+  mergeRecentSessions,
+  normalizeIntervalStartIndex,
+} from "@/lib/domain/tabata";
 import { firstWorkoutImagePath, workoutImageList } from "@/lib/domain/social";
 import {
   capturedAtForPhotos,
@@ -145,6 +149,14 @@ export type WorkoutDraft = {
   pausedAtMs: number | null; // 지금 정지 중이면 그 시작 시각
   lastActivityMs: number | null; // 마지막 동작 시각
   tabataMinutes: number | null; // 타바타 세션이면 그 분수 — 무동작 감지 제외 판정용
+  /**
+   * 인터벌 블록(4종목)이 목록의 몇 번째부터인가 (0144, 2026-11-22). 없으면 0.
+   *
+   * ⚠️ **선택 칸이다 — 버전을 올리지 않았다.** 이 칸이 생기기 전 draft는 모두 "0번부터"이고,
+   *    비어 있으면 0으로 읽으므로 승격 코드가 필요 없다(`normalizeIntervalStartIndex`).
+   *    세션을 만들 때 한 번 DB에 적히고(`createDraftSession`), 그 뒤로는 바뀌지 않는다.
+   */
+  intervalStartIndex?: number;
   /** 공식 프로그램 회차면 그 메타 (0067). 일반 운동은 null */
   program: ProgramDraftMeta | null;
   /**
@@ -465,6 +477,8 @@ export async function createDraftSession(input: {
   timezone: string;
   /** 타바타 코스 분수 (4|8|16) — 일반 운동은 생략 (0019) */
   tabataMinutes?: number;
+  /** 인터벌 블록의 시작 위치 (0144). `tabataMinutes`가 있을 때만 쓴다. 0이면 생략해도 같다 */
+  intervalStartIndex?: number;
   /**
    * 공식 프로그램 회차면 그 메타 (0067).
    *
@@ -481,6 +495,11 @@ export async function createDraftSession(input: {
       group_id: input.groupId,
       timezone: input.timezone,
       ...(input.tabataMinutes ? { tabata_minutes: input.tabataMinutes } : {}),
+      // 0144 — 인터벌이 아니면 DB check가 막으므로 `tabataMinutes`와 함께일 때만 보낸다.
+      // 0이면 보내지 않는다: 빈 칸 = 0번부터라, 옛 앱·새 앱이 같은 행을 만든다.
+      ...(input.tabataMinutes && normalizeIntervalStartIndex(input.intervalStartIndex) > 0
+        ? { interval_start_index: normalizeIntervalStartIndex(input.intervalStartIndex) }
+        : {}),
       ...(input.program
         ? {
             program_enrollment_id: input.program.enrollmentId,
@@ -688,11 +707,12 @@ export async function getPreviousExerciseRecords(
     id: string;
     completed_at: string;
     tabata_minutes: number | null;
+    interval_start_index: number | null;
   };
   const recent = (interval: boolean) => {
     const query = supabase
       .from("workout_sessions")
-      .select("id, completed_at, tabata_minutes")
+      .select("id, completed_at, tabata_minutes, interval_start_index")
       .eq("user_id", userId)
       .eq("status", "completed")
       .is("deleted_at", null)
@@ -716,6 +736,7 @@ export async function getPreviousExerciseRecords(
   const sessionIds = sessions.map((s) => s.id);
   if (sessionIds.length === 0) return result;
   const tabataOf = new Map(sessions.map((s) => [s.id, s.tabata_minutes]));
+  const startOf = new Map(sessions.map((s) => [s.id, s.interval_start_index]));
 
   const { data: exercises, error: eErr } = await supabase
     .from("workout_exercises")
@@ -740,7 +761,15 @@ export async function getPreviousExerciseRecords(
 
   for (const row of (exercises ?? []) as Row[]) {
     // 인터벌 블록 행은 라운드 수라 비교하지 않는다 — 이어하기(4번~)만 쓴다
-    if (isIntervalBlockIndex(tabataOf.get(row.session_id), row.sort_order)) continue;
+    if (
+      isIntervalBlockIndex(
+        tabataOf.get(row.session_id),
+        row.sort_order,
+        startOf.get(row.session_id),
+      )
+    ) {
+      continue;
+    }
     const rank = recencyOf.get(row.session_id);
     if (rank === undefined) continue;
 
@@ -1436,6 +1465,8 @@ export type CalendarSession = CompletedSession & {
   exerciseNames: string[];
   recordNote: string | null; // 🏅 기록 갱신 문구 (0018)
   tabataMinutes: number | null; // 🔥 타바타 코스 분수 (0019)
+  /** 인터벌 블록이 몇 번째부터인가 (0144). 없거나 null이면 0 — 옛 기록 */
+  intervalStartIndex?: number | null;
   /**
    * 이 세션에 붙은 사진 수 (0103) — `LatePhotoButton`을 그릴지 정한다.
    *
@@ -1696,7 +1727,7 @@ export async function getCompletedSessions(
     .select(
       // workout_images(id) — 사진 **수**만 세려고 붙인다 (0103). 별도 질의를
       // 만들지 않는다. `!inner`가 아니므로 사진 없는 세션도 그대로 온다.
-      "id, completed_at, duration_minutes, verification_status, record_note, tabata_minutes, workout_exercises(exercise_name, sort_order), workout_images(id)",
+      "id, completed_at, duration_minutes, verification_status, record_note, tabata_minutes, interval_start_index, workout_exercises(exercise_name, sort_order), workout_images(id)",
     )
     .eq("user_id", userId)
     .eq("status", "completed")
@@ -1712,6 +1743,7 @@ export async function getCompletedSessions(
     verification_status: CompletedSession["verification"];
     record_note?: string | null; // 0018 적용 전에는 컬럼이 없을 수 있음
     tabata_minutes?: number | null; // 0019
+    interval_start_index?: number | null; // 0144
     workout_exercises: { exercise_name: string; sort_order: number }[] | null;
     workout_images: { id: string }[] | { id: string } | null;
   };
@@ -1726,6 +1758,7 @@ export async function getCompletedSessions(
       .map((e) => e.exercise_name),
     recordNote: r.record_note ?? null,
     tabataMinutes: r.tabata_minutes ?? null,
+    intervalStartIndex: r.interval_start_index ?? null,
     photoCount: workoutImageList(r.workout_images).length,
   }));
 }

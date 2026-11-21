@@ -82,6 +82,9 @@ function setup(
     challengeContexts?: readonly ActiveChallengeContext[];
     onPlan?: (picked: CatalogExercise[], minutes: TabataMinutes) => Promise<boolean>;
     onSaveToday?: (picked: CatalogExercise[], minutes: TabataMinutes) => Promise<boolean>;
+    onAddToList?: (picked: CatalogExercise[], minutes: TabataMinutes) => boolean;
+    inSession?: boolean;
+    onLeave?: () => void;
     onBegin?: (
       picked: CatalogExercise[],
       minutes: TabataMinutes,
@@ -101,6 +104,9 @@ function setup(
       challengeContexts={over.challengeContexts}
       onPlan={over.onPlan}
       onSaveToday={over.onSaveToday}
+      onAddToList={over.onAddToList}
+      inSession={over.inSession}
+      onLeave={over.onLeave}
       onClose={over.onClose ?? vi.fn()}
       onCreateCustom={vi.fn()}
       onBegin={over.onBegin ?? vi.fn()}
@@ -296,6 +302,7 @@ describe("TabataSheet — 지정 계정의 Dynamite 음원", () => {
     audio.currentTime = 100;
     fireEvent.timeUpdate(audio);
     fireEvent.click(screen.getByRole("button", { name: "중단하기" }));
+    fireEvent.click(await screen.findByTestId("interval-stop-confirm"));
     await waitFor(() => expect(screen.queryByTestId("interval-session-overlay")).toBeNull());
     audio.currentTime = 0;
     fireEvent.timeUpdate(audio); // 중단이 되돌린 값이 늦게 도착한 경우
@@ -322,6 +329,7 @@ describe("TabataSheet — 지정 계정의 Dynamite 음원", () => {
     const audio = container.querySelector("audio")!;
     audio.currentTime = 30;
     fireEvent.click(screen.getByRole("button", { name: "중단하기" }));
+    fireEvent.click(await screen.findByTestId("interval-stop-confirm"));
     await waitFor(() => expect(onCancelWorkout).toHaveBeenCalledTimes(1));
     expect(pause).toHaveBeenCalledTimes(1);
     expect(audio.currentTime).toBe(0);
@@ -349,18 +357,27 @@ describe("TabataSheet — 운동 고르기 배선 (2026-08-06)", () => {
 
   it("진행 중단 확인도 전신 인터벌 명칭으로 안내한다", async () => {
     vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
+    // ⚠️ `window.confirm`을 쓰지 않는다 — 앱 안 브라우저는 확인창을 띄우지 않고 곧바로 false를
+    //    돌려줘서 중단 버튼이 아무 일도 안 했다 (2026-11-22). false로 막아 두고도 확인창이 떠야 한다.
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const onCancelWorkout = vi.fn().mockResolvedValue(undefined);
     setup({
       initialPicked: FOUR,
       onBegin: vi.fn().mockResolvedValue(true),
+      onCancelWorkout,
     });
 
     fireEvent.click(screen.getByRole("button", { name: "전신 인터벌 시작" }));
     fireEvent.click(await screen.findByRole("button", { name: "중단하기" }));
 
-    expect(confirm).toHaveBeenCalledWith(
-      "전신 인터벌을 중단할까요? 운동은 기록되지 않아요.",
-    );
+    const dialog = await screen.findByTestId("interval-stop-dialog");
+    expect(dialog.textContent).toContain("전신 인터벌을 중단할까요? 운동은 기록되지 않아요.");
+    expect(confirm).not.toHaveBeenCalled();
+    // 계속하기를 누르면 닫히고 아무것도 취소되지 않는다
+    fireEvent.click(screen.getByTestId("interval-stop-cancel"));
+    expect(screen.queryByTestId("interval-stop-dialog")).toBeNull();
+    expect(onCancelWorkout).not.toHaveBeenCalled();
+    expect(screen.getByTestId("interval-session-overlay")).toBeTruthy();
   });
 
   /*
@@ -528,5 +545,89 @@ describe("TabataSheet — 오늘 계획으로 저장 (2026-11-17)", () => {
     await waitFor(() => expect(onSaveToday).toHaveBeenCalled());
     expect(onClose).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: SAVE })).toBeTruthy();
+  });
+});
+
+describe("TabataSheet — 운동 목록에 담기 (설계 2026-11-22)", () => {
+  const ADD = "interval-add-to-list";
+
+  it("연결된 시트에만 버튼이 있다 — 계획 모드·운동 중에는 없다", () => {
+    setup({ initialPicked: FOUR });
+    expect(screen.queryByTestId(ADD)).toBeNull();
+    cleanup();
+    setup({ initialPicked: FOUR, onAddToList: vi.fn(() => true) });
+    expect(screen.getByTestId(ADD)).toBeTruthy();
+    cleanup();
+    setup({ initialPicked: FOUR, onAddToList: vi.fn(() => true), onPlan: vi.fn() });
+    expect(screen.queryByTestId(ADD)).toBeNull();
+    cleanup();
+    setup({ initialPicked: FOUR, onAddToList: vi.fn(() => true), inSession: true });
+    expect(screen.queryByTestId(ADD)).toBeNull();
+  });
+
+  it("4개를 다 고르기 전에는 잠겨 있다", () => {
+    setup({ initialPicked: FOUR.slice(0, 3), onAddToList: vi.fn(() => true) });
+    expect((screen.getByTestId(ADD) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("누르면 고른 종목·코스를 넘기고, 담기면 시트를 닫는다 — 세션은 만들지 않는다", () => {
+    const onAddToList = vi.fn(() => true);
+    const onClose = vi.fn();
+    const onBegin = vi.fn();
+    setup({ initialPicked: FOUR, initialMinutes: 8, onAddToList, onClose, onBegin });
+    fireEvent.click(screen.getByTestId(ADD));
+    expect(onAddToList).toHaveBeenCalledWith(FOUR, 8);
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onBegin).not.toHaveBeenCalled();
+  });
+
+  it("못 담았으면(false) 시트를 닫지 않는다", () => {
+    const onClose = vi.fn();
+    setup({ initialPicked: FOUR, onAddToList: vi.fn(() => false), onClose });
+    fireEvent.click(screen.getByTestId(ADD));
+    expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+describe("TabataSheet — 운동 중 인터벌 차례 (inSession, 설계 2026-11-22)", () => {
+  it("코스·구성을 바꿀 수 없다 — 목록이 정했다", () => {
+    setup({ initialPicked: FOUR, initialMinutes: 8, inSession: true });
+    expect(screen.getByTestId("interval-in-session-lead")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "4분" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByRole("button", { name: /빼기/ })).toBeNull();
+    expect(screen.queryByText(/운동 고르기/)).toBeNull();
+    expect(screen.queryByText("오늘 계획으로 저장만 하기")).toBeNull();
+    // 시작 버튼은 그대로 있다
+    expect(screen.getByRole("button", { name: "전신 인터벌 시작" })).toBeTruthy();
+  });
+
+  it("재생 중 중단해도 운동 전체를 취소하지 않고 목록으로 돌아간다", async () => {
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
+    const pause = vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const onCancelWorkout = vi.fn().mockResolvedValue(undefined);
+    const onLeave = vi.fn();
+    setup({
+      initialPicked: FOUR,
+      inSession: true,
+      onBegin: vi.fn().mockResolvedValue(true),
+      onCancelWorkout,
+      onLeave,
+    });
+    fireEvent.click(screen.getByRole("button", { name: "전신 인터벌 시작" }));
+    await waitFor(() => expect(screen.getByTestId("interval-session-overlay")).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "중단하기" }));
+    fireEvent.click(await screen.findByTestId("interval-stop-confirm"));
+    await waitFor(() => expect(onLeave).toHaveBeenCalledTimes(1));
+    // ⚠️ 이게 이 테스트의 핵심이다 — 앞서 한 웨이트 기록이 날아가면 안 된다
+    expect(onCancelWorkout).not.toHaveBeenCalled();
+    expect(pause).toHaveBeenCalled();
+  });
+
+  it("목록으로 돌아가기 버튼이 시트를 닫는다", () => {
+    const onClose = vi.fn();
+    setup({ initialPicked: FOUR, inSession: true, onClose });
+    fireEvent.click(screen.getByRole("button", { name: "목록으로 돌아가기" }));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

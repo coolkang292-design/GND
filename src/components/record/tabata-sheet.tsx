@@ -128,6 +128,23 @@ type TabataProps = {
    *    `onPlan`이 있는 계획 모드에서는 그 자체가 저장 버튼이라 이 버튼을 내지 않는다.
    */
   onSaveToday?: (picked: CatalogExercise[], minutes: TabataMinutes) => Promise<boolean>;
+  /**
+   * **운동 목록에 담기만 한다** (설계 2026-11-22) — 시작하지 않고 지금 고른 종목·코스를
+   * 준비 목록 안의 **인터벌 덩어리**로 넣는다. 웨이트·유산소와 순서를 정한 뒤 한 번에 시작한다.
+   * 담기면 true(시트를 닫는다), 못 담으면 false(닫지 않는다).
+   * 계획 모드(`onPlan`)·운동 중(`inSession`)에는 내지 않는다.
+   */
+  onAddToList?: (picked: CatalogExercise[], minutes: TabataMinutes) => boolean;
+  /**
+   * **이미 시작한 운동 안에서 인터벌 차례가 된 경우** (설계 2026-11-22).
+   *
+   * 코스·구성은 목록에서 정해졌으므로 **바꾸지 못한다**(바꾸면 저장 순서가 어긋난다).
+   * 세션은 이미 있으므로 `onBegin`은 세션을 만들지 않는다. 재생 중 멈추면 **운동 전체를
+   * 취소하지 않고** 목록으로 돌아간다(`onLeave`) — 앞서 한 웨이트 기록을 지키려고.
+   */
+  inSession?: boolean;
+  /** `inSession`에서 인터벌을 멈추고 목록으로 돌아간다 */
+  onLeave?: () => void;
 };
 
 function TabataSheetBody({
@@ -150,6 +167,9 @@ function TabataSheetBody({
   openPickerOnMount,
   onPlan,
   onSaveToday,
+  onAddToList,
+  inSession = false,
+  onLeave,
   planDateLabel = "",
 }: TabataProps) {
   // 시트는 닫으면 언마운트된다 — 예약된 값은 초기값으로 넣으면 되고,
@@ -164,6 +184,12 @@ function TabataSheetBody({
   const [paused, setPaused] = useState(false);
   const [busy, setBusy] = useState(false);
   const [playError, setPlayError] = useState<string | null>(null);
+  /**
+   * 중단 확인 (2026-11-22). 예전에는 `window.confirm`이었는데, 앱 안 브라우저·일부 홈 화면 앱은
+   * 확인창을 **띄우지 않고 곧바로 "아니오"를 돌려준다** — 중단 버튼이 눌러도 아무 일이 없었다.
+   * 앱이 직접 그리는 확인창은 어디서나 뜬다.
+   */
+  const [confirmStop, setConfirmStop] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const wakeLockRef = useRef<{ release: () => Promise<void> } | null>(null);
   /**
@@ -342,6 +368,11 @@ function TabataSheetBody({
     }
   }
 
+  function addToList() {
+    if (!onAddToList || picked.length !== TABATA_EXERCISE_COUNT) return;
+    if (onAddToList(picked, minutes)) onClose();
+  }
+
   function togglePause() {
     const audio = audioRef.current;
     if (!audio || phase !== "playing") return;
@@ -363,9 +394,14 @@ function TabataSheetBody({
     onClose();
   }
 
+  function requestStop() {
+    if (busy) return;
+    setConfirmStop(true);
+  }
+
   async function stop() {
     if (busy) return;
-    if (!window.confirm(INTERVAL_COPY.stopConfirm)) return;
+    setConfirmStop(false);
     setBusy(true);
     try {
       const audio = audioRef.current;
@@ -375,6 +411,15 @@ function TabataSheetBody({
       }
       resetLoopState();
       await releaseWakeLock();
+      if (inSession) {
+        // 운동 전체를 취소하지 않는다 — 앞서 한 기록이 있다. 목록으로 돌아가 다시 시작할 수 있다
+        setElapsed(0);
+        setPaused(false);
+        setPhase("setup");
+        onPlayingChange?.(false);
+        onLeave?.();
+        return;
+      }
       await onCancelWorkout();
       setElapsed(0);
       setPaused(false);
@@ -433,7 +478,8 @@ function TabataSheetBody({
             onClick={onClose}
             aria-hidden
           />
-          <div className="fixed inset-x-0 bottom-0 z-50 flex max-h-[88dvh] flex-col overflow-y-auto rounded-t-[22px] border-t border-line bg-surface p-5">
+          <div // `[&>*]:shrink-0` — 세로 flex 안에서 자식이 눌려 줄어들면 버튼이 22px로 찌그러진다 (2026-11-22)
+            className="fixed inset-x-0 bottom-0 z-50 flex max-h-[88dvh] flex-col overflow-y-auto rounded-t-[22px] border-t border-line bg-surface p-5 [&>*]:shrink-0">
             <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
             {/* 옛 표기는 `🔥`였다 (2026-08-07 2차 시안으로 교체) — 운동 추가 허브의
                 `타바타로 바로 시작` 카드와 **같은 그림**(불붙은 스톱워치)이라야
@@ -450,6 +496,15 @@ function TabataSheetBody({
                 배경음: {track.musicTitle}
               </p>
             )}
+            {inSession ? (
+              <p className="mt-1 text-xs text-muted" data-testid="interval-in-session-lead">
+                {INTERVAL_COPY.inSessionLead}
+                <b className="text-accent">
+                  {" "}
+                  종목마다 {tabataRepsForMinutes(minutes)}회로 기록돼요.
+                </b>
+              </p>
+            ) : (
             <p className="mt-1 text-xs text-muted">
               코스와 구성 운동 {TABATA_EXERCISE_COUNT}개를 고르고{" "}
               {onPlan ? "저장하세요" : "시작하세요"}.
@@ -463,6 +518,7 @@ function TabataSheetBody({
                 종목마다 {tabataRepsForMinutes(minutes)}회로 기록돼요.
               </b>
             </p>
+            )}
 
             {/*
               고르는 것이 **시간**임을 글자로 적는다 (사용자 지시 2026-08-25).
@@ -476,12 +532,13 @@ function TabataSheetBody({
                 <button
                   key={t.id}
                   onClick={() => setMinutes(t.minutes)}
+                  disabled={inSession}
                   aria-pressed={minutes === t.minutes}
                   className={`h-11 flex-1 rounded-card-sm text-sm font-extrabold ${
                     minutes === t.minutes
                       ? "bg-accent text-accent-ink"
                       : "border border-line bg-surface-2 text-muted"
-                  }`}
+                  } disabled:opacity-60`}
                 >
                   {t.minutes}분
                 </button>
@@ -498,6 +555,7 @@ function TabataSheetBody({
                     <span className="text-muted">{item.body_part} | </span>
                     {item.name}
                   </p>
+                  {!inSession && (
                   <button
                     onClick={() => {
                       setPicked((cur) => cur.filter((p) => p.id !== item.id));
@@ -508,6 +566,7 @@ function TabataSheetBody({
                   >
                     ✕
                   </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -526,6 +585,8 @@ function TabataSheetBody({
               </div>
             )}
 
+            {!inSession && (
+              <>
             <button
               onClick={() => setPickerOpen(true)}
               className="mt-2 h-11 rounded-card border border-line bg-surface text-sm font-bold text-accent"
@@ -535,6 +596,8 @@ function TabataSheetBody({
             <p className="mt-1.5 text-center text-[11px] text-muted">
               지난 기록·내 루틴에서 지난번 구성을 그대로 불러올 수 있어요
             </p>
+              </>
+            )}
 
             {/* 시작 버튼 바로 앞 — 누르기 전에 "이걸 하면 몇 점"을 본다. 계획 저장 화면은 시작하는 곳이 아니라 뺀다 */}
             {!onPlan && userId && challengeContexts.length > 0 && (
@@ -586,7 +649,30 @@ function TabataSheetBody({
                   : INTERVAL_COPY.start}
             </button>
             {/* 시작과 따로 저장 — 컨디션이 안 맞는 날도 구성은 남겨 두고 싶다. 계획 모드는 위 버튼이 저장이다 */}
-            {onSaveToday && !onPlan && (
+            {onAddToList && !onPlan && !inSession && (
+              <button
+                type="button"
+                data-testid="interval-add-to-list"
+                onClick={addToList}
+                disabled={busy || picked.length !== TABATA_EXERCISE_COUNT}
+                className="mt-2 h-11 rounded-card border border-accent/50 bg-surface text-sm font-extrabold text-accent disabled:opacity-50"
+              >
+                {INTERVAL_COPY.addToList}
+                <span className="ml-1 text-[11px] font-bold text-muted">
+                  {INTERVAL_COPY.addToListHint}
+                </span>
+              </button>
+            )}
+            {inSession && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="mt-2 h-11 rounded-card border border-line bg-surface text-sm font-bold text-muted"
+              >
+                {INTERVAL_COPY.leave}
+              </button>
+            )}
+            {onSaveToday && !onPlan && !inSession && (
               <button
                 type="button"
                 onClick={() => void saveToday()}
@@ -611,8 +697,41 @@ function TabataSheetBody({
           elapsedSeconds={elapsed}
           paused={paused}
           onTogglePause={togglePause}
-          onStop={() => void stop()}
+          onStop={requestStop}
         />
+      )}
+
+      {confirmStop && phase === "playing" && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          data-testid="interval-stop-dialog"
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-5"
+        >
+          <div className="w-full max-w-sm rounded-card border border-line bg-surface p-5">
+            <p className="text-[15px] font-extrabold leading-snug">
+              {inSession ? INTERVAL_COPY.leaveConfirm : INTERVAL_COPY.stopConfirm}
+            </p>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                data-testid="interval-stop-cancel"
+                onClick={() => setConfirmStop(false)}
+                className="min-h-12 rounded-card border border-line bg-surface-2 text-sm font-extrabold"
+              >
+                계속하기
+              </button>
+              <button
+                type="button"
+                data-testid="interval-stop-confirm"
+                onClick={() => void stop()}
+                className="min-h-12 rounded-card bg-warn text-sm font-extrabold text-black"
+              >
+                {inSession ? INTERVAL_COPY.leave : "중단하기"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/*

@@ -137,15 +137,23 @@ export function createSupabaseFeedbackDeps(input: {
       // `coachSessionRows` 주석). 그래서 세션의 인터벌 표시도 같이 읽는다.
       const [exercises, session] = await Promise.all([
         user.from("workout_exercises").select(EXERCISE_SELECT).eq("session_id", sessionId),
-        user.from("workout_sessions").select("tabata_minutes").eq("id", sessionId).maybeSingle(),
+        user
+          .from("workout_sessions")
+          .select("tabata_minutes, interval_start_index")
+          .eq("id", sessionId)
+          .maybeSingle(),
       ]);
       if (exercises.error) throw exercises.error;
       if (session.error) throw session.error;
-      const tabataMinutes =
-        (session.data as { tabata_minutes: number | null } | null)?.tabata_minutes ?? null;
+      const sessionRow = session.data as {
+        tabata_minutes: number | null;
+        interval_start_index: number | null;
+      } | null;
+      const tabataMinutes = sessionRow?.tabata_minutes ?? null;
       return coachSessionRows(
         tabataMinutes,
         (exercises.data ?? []) as unknown as ExerciseRow[],
+        sessionRow?.interval_start_index,
       )
         .sort(bySortOrder)
         .map(toAnalysisExercise);
@@ -163,11 +171,12 @@ export function createSupabaseFeedbackDeps(input: {
         id: string;
         completed_at: string;
         tabata_minutes: number | null;
+        interval_start_index: number | null;
       };
       const recent = (interval: boolean) => {
         const query = user
           .from("workout_sessions")
-          .select("id, completed_at, tabata_minutes")
+          .select("id, completed_at, tabata_minutes, interval_start_index")
           .eq("user_id", userId)
           .eq("status", "completed")
           .is("deleted_at", null)
@@ -190,6 +199,7 @@ export function createSupabaseFeedbackDeps(input: {
       );
       if (rows.length === 0) return [];
       const tabataOf = new Map(rows.map((r) => [r.id, r.tabata_minutes]));
+      const startOf = new Map(rows.map((r) => [r.id, r.interval_start_index]));
 
       const { data: exercises, error: exError } = await user
         .from("workout_exercises")
@@ -202,7 +212,13 @@ export function createSupabaseFeedbackDeps(input: {
 
       const bySession = new Map<string, ExerciseRow[]>();
       for (const row of (exercises ?? []) as unknown as ExerciseRow[]) {
-        if (isIntervalBlockIndex(tabataOf.get(row.session_id!), row.sort_order)) {
+        if (
+          isIntervalBlockIndex(
+            tabataOf.get(row.session_id!),
+            row.sort_order,
+            startOf.get(row.session_id!),
+          )
+        ) {
           continue;
         }
         const list = bySession.get(row.session_id!) ?? [];

@@ -112,6 +112,39 @@ export function advanceSetFocus(
 }
 
 /**
+ * 운동 중에 `exerciseIndex` 종목에 세트를 **더하기 직전**의 목록으로, 더한 뒤 초점을 정한다
+ * (2026-11-22, 오뎅끼데스까님 11/21 기록).
+ *
+ * 문제: 랫풀다운(1세트)을 끝내면 초점은 뒤 종목(DY 로우 머신)으로 넘어간다. 그 뒤 랫풀다운에
+ * 세트를 더해도 초점이 DY에 남아, 휴식 화면은 "다음 운동: 랫풀다운"(`nextUpSet` = 목록 순서의
+ * 첫 미완료)이라고 하면서 휴식이 끝나면 **DY가 떴고**, 랫풀다운을 하고 `이 세트 완료`를 누르면
+ * DY가 완료 처리됐다. 같은 "다음"을 두 규칙이 다르게 말한 것이다.
+ *
+ * 규칙: 이미 **지나온** 종목에 더했으면 그 새 세트로 간다 — 더했다는 것은 그것을 하겠다는 뜻이다.
+ * 끝내면 `advanceSetFocus`가 원래 하려던 뒤 종목으로 이어 준다. 지금 종목의 마지막 세트를 끝낸
+ * 자리에서 더했을 때도 새 세트로 간다. 뒤 종목에 더했거나 지금 세트가 진행 중이면 건드리지 않는다.
+ */
+export function focusAfterAddSet(
+  exercisesBefore: FocusExercise[],
+  focus: SetFocus,
+  exerciseIndex: number,
+): SetFocus {
+  const target = exercisesBefore[exerciseIndex];
+  if (!target) return focus;
+  const newSetIndex = target.sets.length; // 더하면 맨 뒤에 붙는다
+  const current = clampSetFocus(exercisesBefore, focus);
+
+  if (exerciseIndex < current.exerciseIndex) {
+    return { exerciseIndex, setIndex: newSetIndex };
+  }
+  if (exerciseIndex === current.exerciseIndex) {
+    const focusedSet = exercisesBefore[current.exerciseIndex]?.sets[current.setIndex];
+    if (focusedSet?.done) return { exerciseIndex, setIndex: newSetIndex };
+  }
+  return focus;
+}
+
+/**
  * **목록이 바뀐 뒤** 초점을 성한 자리로 데려온다 (2026-08-09, 사용자 신고
  * "A 계정에서 운동완료 버튼이 안눌림").
  *

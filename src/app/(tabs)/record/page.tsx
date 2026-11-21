@@ -15,6 +15,7 @@ import { useAuth } from "@/components/auth-provider";
 import { CalendarView } from "@/components/record/calendar-view";
 import { CoachCard } from "@/components/record/coach-card";
 import { ExerciseCard } from "@/components/record/exercise-card";
+import { IntervalBlockCard } from "@/components/record/interval-block-card";
 import {
   ExercisePicker,
   type ConfiguredPick,
@@ -107,16 +108,24 @@ import {
 import { getLevelRewards, getProgressSummary } from "@/lib/progression";
 import {
   INTERVAL_COPY,
+  TABATA_EXERCISE_COUNT,
   asTabataMinutes,
+  canMoveAcrossIntervalBlock,
   completeIntervalBlock,
   hasIntervalFollowUps,
   intervalPlanLine,
   intervalBlockNames,
   intervalBlockPending,
-  intervalSaveTarget,
+  isBeforeIntervalBlock,
+  cardNumberIndex,
   isIntervalBlockExercise,
   isIntervalBlockIndex,
+  moveIntervalBlock,
+  routineTabataMinutes,
+  normalizeIntervalStartIndex,
+  reorderWithIntervalBlock,
   splitIntervalPlan,
+  startIndexAfterRemoval,
   tabataDraftExercises,
   tabataPickFromNames,
   tabataResumeFromSession,
@@ -147,6 +156,7 @@ import {
 import {
   advanceSetFocus,
   ensurePendingFocus,
+  focusAfterAddSet,
   clampSetFocus,
 } from "@/lib/domain/focus-exercise";
 import {
@@ -386,6 +396,11 @@ type TabataPrefill = {
    * 계획의 5번째부터다(`splitIntervalPlan`). 없으면 순수 인터벌.
    */
   followUps?: PlanExercise[];
+  /**
+   * 이미 시작한 운동 안에서 인터벌 **차례**가 되어 연 시트 (설계 2026-11-22).
+   * 코스·구성은 목록이 정했고, 세션은 이미 있다.
+   */
+  inSession?: boolean;
 };
 
 function errorMessage(e: unknown): string {
@@ -602,6 +617,12 @@ function WorkoutScreen({ userId }: { userId: string }) {
     null,
   );
   const tabataMinutesRef = useRef<number | null>(null);
+  /**
+   * 인터벌 차례에 시트를 닫고 목록으로 돌아온 블록 — 같은 블록에서는 시트를 다시 자동으로
+   * 열지 않는다(사람이 `인터벌 시작`을 눌러야 한다). 키가 `세션:시작위치`라서 **새 운동이면
+   * 저절로 풀린다** — effect 안에서 되돌리는 setState가 필요 없다.
+   */
+  const [deferredBlockKey, setDeferredBlockKey] = useState<string | null>(null);
   const [pastSessions, setPastSessions] = useState<CalendarSession[]>([]);
   const [pastLoading, setPastLoading] = useState(false);
   const [pastLoaded, setPastLoaded] = useState(false);
@@ -998,7 +1019,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
         exercises: draft.exercises,
         // 인터벌 **블록이 남아 있는 동안만** 끈다 (2026-09-29). 예전에는 인터벌
         // 세션 내내 껐는데, 이어하기는 사람이 세트를 누르는 일반 운동이다.
-        isTabata: intervalBlockPending(draft),
+        // 음원이 도는 동안(`intervalPlaying`)도 끈다 — 앞 종목을 건너뛰고 인터벌을 시작해도
+        // 화면을 안 만지는 것이 무동작 정지로 잡히면 안 된다 (2026-11-22)
+        isTabata: intervalBlockPending(draft) || intervalPlaying,
       }),
       lastRestEndsAtMs,
       snapshot: {
@@ -1652,6 +1675,11 @@ function WorkoutScreen({ userId }: { userId: string }) {
       showToast(INTERVAL_COPY.blockLocked);
       return;
     }
+    // 블록 앞 종목도 못 뺀다 — 빼면 저장 순서가 당겨져 DB의 시작 위치와 어긋난다 (2026-11-22)
+    if (isBeforeIntervalBlock(draftRef.current, exKey)) {
+      showToast(INTERVAL_COPY.leadingLocked);
+      return;
+    }
     const name = target.name;
     const doneCount = target.sets.filter((set) => set.done).length;
 
@@ -2209,7 +2237,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
         userId,
         name,
         exercises,
-        tabataMinutes: draft.tabataMinutes ?? null,
+        // 블록이 맨 앞이 아니면 분수를 싣지 않는다 — 루틴은 시작 위치를 모른다 (2026-11-22)
+        tabataMinutes: routineTabataMinutes(draft.tabataMinutes, draft.intervalStartIndex),
       });
       setRoutines((current) => [saved, ...(current ?? [])]);
       showToast(`'${saved.name}' 루틴을 저장했어요`);
@@ -2648,6 +2677,19 @@ function WorkoutScreen({ userId }: { userId: string }) {
   }
 
   function addSet(exKey: string) {
+    // 운동 중이면 초점도 정한다 — 지나온 종목에 더하면 그 세트가 다음이다 (`focusAfterAddSet`).
+    // ⚠️ 안 하면 "다음 운동: A"라면서 화면은 B가 떠서, A를 하고 누른 완료가 B에 찍힌다 (2026-11-22)
+    if (active) {
+      const before = draftRef.current.exercises;
+      const exIndex = before.findIndex((ex) => ex.key === exKey);
+      const moved = focusAfterAddSet(
+        before,
+        { exerciseIndex: focusIndex, setIndex: focusSetIndex },
+        exIndex,
+      );
+      setFocusIndex(moved.exerciseIndex);
+      setFocusSetIndex(moved.setIndex);
+    }
     updateExercise(exKey, (ex) => {
       const last = ex.sets.at(-1);
       // 새 세트는 직전값 복사 (§10)
@@ -2698,14 +2740,24 @@ function WorkoutScreen({ userId }: { userId: string }) {
   function removeExercise(exKey: string) {
     // 블록이 빠지면 저장 순서가 밀려 이어하기가 0~3번(= 인터벌)으로 기록된다
     if (isIntervalBlockExercise(draftRef.current, exKey)) {
-      showToast(INTERVAL_COPY.blockLocked);
+      // 시작 전에는 목록의 인터벌 카드에서 통째로 뺀다 (낱개로 빼면 4종목이 깨진다)
+      showToast(active ? INTERVAL_COPY.blockLocked : INTERVAL_COPY.removeViaCard);
       return;
     }
+    // 시작한 뒤에는 블록 앞 종목을 못 뺀다. 시작 전에는 뺀 만큼 블록 위치를 당긴다 (2026-11-22)
+    if (active && isBeforeIntervalBlock(draftRef.current, exKey)) {
+      showToast(INTERVAL_COPY.leadingLocked);
+      return;
+    }
+    const removedIndex = draftRef.current.exercises.findIndex((ex) => ex.key === exKey);
     markActivity();
     const next = draftRef.current.exercises.filter((ex) => ex.key !== exKey);
     setDraft((d) => ({
       ...d,
       exercises: d.exercises.filter((ex) => ex.key !== exKey),
+      ...(d.tabataMinutes !== null
+        ? { intervalStartIndex: startIndexAfterRemoval(d.intervalStartIndex, removedIndex) }
+        : {}),
       // 사용자가 목록을 건드렸다 — 이제 본인 것이므로 자정 만료 대상이 아니다
       suggestedForDayKey: null,
     }));
@@ -2829,69 +2881,19 @@ function WorkoutScreen({ userId }: { userId: string }) {
 
   // ── 타바타 모드 (설계 2026-07-19) — 시작/자동완료/취소를 기존 세션 흐름에 위임 ──
 
-  /**
-   * 인터벌 시트의 "오늘 계획으로 저장만 하기" (사용자 지시 2026-11-17).
-   *
-   * 종목을 바꾸고 시작하지 않고 닫으면 바꾼 구성이 사라졌다 — 저장 버튼이 없어서 적용이 안 된 줄 알았다.
-   * 음원·세션은 건드리지 않고 오늘 날짜의 인터벌 계획만 만들거나 고친다(`intervalSaveTarget`이 대상을 정한다).
-   * 세트는 **코스가 정한다**(`tabataDraftExercises`) — 일반 계획처럼 3세트 10회로 저장하면 인터벌이 아니게 된다.
-   * 이어하기(5번째~)는 고치는 계획에 있던 것을 **뒤에 그대로 붙여** 보존한다(달력의 `saveIntervalPlan`과 같다).
-   */
-  async function saveTodayIntervalPlan(
-    picked: CatalogExercise[],
-    minutes: TabataMinutes,
-  ): Promise<boolean> {
-    try {
-      const planDate = dayKey(new Date(), resolveTimeZone());
-      const target = intervalSaveTarget(todayPlans, tabataPrefill?.planId);
-      const existing =
-        target.kind === "update"
-          ? todayPlans.find((plan) => plan.id === target.planId)
-          : undefined;
-      const followUps = existing
-        ? splitIntervalPlan(existing.exercises).followUps
-        : (tabataPrefill?.followUps ?? []);
-      const exercises = [
-        ...toPlanExercises(tabataDraftExercises(picked, localId, minutes)),
-        ...followUps,
-      ];
-      const saved =
-        target.kind === "update"
-          ? await updateWorkoutPlan({
-              planId: target.planId,
-              sourceSessionId: existing?.sourceSessionId ?? null,
-              exercises,
-              tabataMinutes: minutes,
-            })
-          : await createWorkoutPlan({
-              userId,
-              planDate,
-              sourceSessionId: null,
-              exercises,
-              tabataMinutes: minutes,
-            });
-      // 카드(`오늘은 전신 인터벌이에요`)가 바로 이 구성으로 바뀐다 — id로 갈아 끼운다(0101)
-      setTodayPlans((current) => [
-        ...current.filter((plan) => plan.id !== saved.id),
-        saved,
-      ]);
-      showToast(
-        target.kind === "update"
-          ? "오늘 인터벌 계획을 바꿨어요"
-          : "오늘 인터벌 계획으로 저장했어요",
-      );
-      return true;
-    } catch (e) {
-      showToast(errorMessage(e));
-      return false;
-    }
-  }
-
   async function beginTabata(
     picked: CatalogExercise[],
     minutes: TabataMinutes,
   ): Promise<boolean> {
     if (active) {
+      // 인터벌 **차례**에 연 시트는 새 세션을 만들지 않는다 — 이미 있는 세션에서 음원만 돈다 (2026-11-22)
+      if (sheetPrefill?.inSession && intervalBlockPending(draftRef.current)) {
+        // 자동으로 열린 시트였다면 이제 사람이 시작했다 — 시트를 `tabataPrefill`로 붙들어 재생 내내 연다
+        setTabataPrefill(sheetPrefill);
+        setTabataOpen(true);
+        markActivity();
+        return true;
+      }
       showToast("이미 운동 중이에요");
       return false;
     }
@@ -2942,10 +2944,14 @@ function WorkoutScreen({ userId }: { userId: string }) {
         시트는 `handleEnded`가 이 뒤에 닫는다. `onPlayingChange(false)`가 먼저
         불려 `intervalPlaying`이 false라 운동중 화면이 바로 뜬다.
       */
-      const exercises = completeIntervalBlock(current.exercises);
-      setDraft((d) => ({ ...d, exercises: completeIntervalBlock(d.exercises) }));
+      const blockStart = current.intervalStartIndex;
+      const exercises = completeIntervalBlock(current.exercises, blockStart);
+      setDraft((d) => ({
+        ...d,
+        exercises: completeIntervalBlock(d.exercises, d.intervalStartIndex),
+      }));
       markActivity();
-      const lastBlock = splitIntervalPlan(exercises).block.at(-1);
+      const lastBlock = splitIntervalPlan(exercises, blockStart).block.at(-1);
       const lastSet = lastBlock?.sets.at(-1);
       if (lastBlock && lastSet) {
         startRest(
@@ -2975,6 +2981,91 @@ function WorkoutScreen({ userId }: { userId: string }) {
       // 세션 취소 실패해도 로컬 초기화는 진행 — 다음 시작 시 대사로 복구됨
     }
     setDraft(emptyDraft(d.restSeconds));
+  }
+
+  // ── 운동 목록 안의 인터벌 (설계 2026-11-22) ──────────────────────────
+
+  /**
+   * 인터벌 시트가 고른 종목·코스를 **준비 목록에 인터벌 덩어리로 담는다** (시작하지 않는다).
+   * 목록 맨 뒤에 붙고, 순서는 목록에서 옮긴다. 담긴 위치가 `intervalStartIndex`다.
+   * 한 목록에 인터벌은 하나다.
+   */
+  function addIntervalToList(picked: CatalogExercise[], minutes: TabataMinutes): boolean {
+    const current = draftRef.current;
+    if (active) {
+      showToast("운동 중에는 인터벌을 목록에 담을 수 없어요");
+      return false;
+    }
+    if (current.tabataMinutes !== null) {
+      showToast(INTERVAL_COPY.alreadyInList);
+      return false;
+    }
+    if (current.program) {
+      showToast("프로그램 운동에는 인터벌을 담을 수 없어요");
+      return false;
+    }
+    const block = tabataDraftExercises(picked, localId, minutes);
+    setDraft((d) => ({
+      ...d,
+      exercises: [...d.exercises, ...block],
+      tabataMinutes: minutes,
+      intervalStartIndex: d.exercises.length,
+      suggestedForDayKey: null,
+    }));
+    showToast(`전신 인터벌 ${minutes}분을 담았어요`);
+    return true;
+  }
+
+  /** 시작 전: 인터벌 덩어리를 위(-1)·아래(+1)로 한 칸 옮긴다 */
+  function shiftIntervalBlock(direction: -1 | 1) {
+    if (active) return;
+    setDraft((d) => {
+      if (d.tabataMinutes === null) return d;
+      const start = normalizeIntervalStartIndex(d.intervalStartIndex);
+      const moved = moveIntervalBlock(d.exercises, start, start + direction);
+      return { ...d, exercises: moved.exercises, intervalStartIndex: moved.startIndex };
+    });
+  }
+
+  /** 시작 전: 인터벌 덩어리를 통째로 뺀다 (낱개로 빼면 4종목이 깨진다) */
+  function removeIntervalBlock() {
+    if (active) return;
+    setDraft((d) => {
+      if (d.tabataMinutes === null) return d;
+      return {
+        ...d,
+        exercises: d.exercises.filter(
+          (_, index) => !isIntervalBlockIndex(d.tabataMinutes, index, d.intervalStartIndex),
+        ),
+        tabataMinutes: null,
+        intervalStartIndex: undefined,
+      };
+    });
+  }
+
+  /**
+   * 운동 중 **인터벌 차례** — 목록이 정한 코스·종목으로 인터벌 시트를 연다.
+   * 세션은 이미 있으므로 새로 만들지 않는다(`beginTabata`의 `inSession` 길).
+   * `manual`이면 사람이 카드의 `인터벌 시작`을 눌러 연 것이라 보류 표시를 푼다.
+   */
+  async function openIntervalInSession() {
+    const prefill = inSessionIntervalPrefill();
+    if (!prefill || tabataOpen) return;
+    setDeferredBlockKey(null);
+    await openTabataSheet(prefill);
+  }
+
+  /** 지금 draft의 인터벌 블록으로 만든 시트 채움 값. 코스·종목을 못 찾으면 null */
+  function inSessionIntervalPrefill(): TabataPrefill | null {
+    const minutes = asTabataMinutes(draft.tabataMinutes);
+    if (!minutes) return null;
+    const picked = tabataPickFromNames(
+      intervalBlockNames(draft.exercises.map((ex) => ex.name), draft.intervalStartIndex),
+      catalog,
+    );
+    return picked.length === TABATA_EXERCISE_COUNT
+      ? { picked, minutes, inSession: true }
+      : null;
   }
 
   /**
@@ -3228,7 +3319,12 @@ function WorkoutScreen({ userId }: { userId: string }) {
         const s = await createDraftSession({
           groupId,
           timezone: tz,
-          tabataMinutes: tabataMinutesRef.current ?? undefined,
+          // 목록에 인터벌을 담아 시작하면 draft가 분수와 시작 위치를 들고 있다 (2026-11-22)
+          tabataMinutes: tabataMinutesRef.current ?? draft.tabataMinutes ?? undefined,
+          intervalStartIndex:
+            (tabataMinutesRef.current ?? draft.tabataMinutes) !== null
+              ? normalizeIntervalStartIndex(draft.intervalStartIndex)
+              : undefined,
           // 0067 — insert 시점이 이 값을 넣을 수 있는 유일한 순간이다
           program: draft.program,
         });
@@ -3353,7 +3449,11 @@ function WorkoutScreen({ userId }: { userId: string }) {
           수(8분 = 각 4)라, 지난 일반 기록이 그보다 작으면 가짜 갱신이 뜬다.
           순수 인터벌이면 비교할 것이 없어 아래가 빈손으로 끝난다.
         */
-        const comparable = withoutIntervalBlock(draft.tabataMinutes, draft.exercises);
+        const comparable = withoutIntervalBlock(
+          draft.tabataMinutes,
+          draft.exercises,
+          draft.intervalStartIndex,
+        );
         const names = comparable.map((ex) => ex.name);
         const previousByName = await getPreviousExerciseRecords(
           userId,
@@ -3870,8 +3970,38 @@ function WorkoutScreen({ userId }: { userId: string }) {
     인터벌은 세트를 입력하는 운동이 아니다. 두 화면이 겹치면 전체화면 뒤로
     ± 버튼과 `현재 세트 1 / 1`이 비친다 — 사용자가 잡았다.
   */
-  const overlayOpen = active && !minimized && !intervalPlaying;
+  /*
+    **인터벌 차례** (설계 2026-11-22) — 시작한 운동에서 앞 종목을 다 했고 블록이 남았다.
+    이때는 근력 오버레이가 인터벌 종목의 `± 횟수`를 보여 주면 안 된다. 인터벌은 음악이 진행한다.
+    그래서 오버레이를 내리고 인터벌 시트를 연다. 맨 앞 인터벌(옛 모양)도 같은 길이다.
+  */
+  const blockPrefill = inSessionIntervalPrefill();
+  // 코스·종목을 카탈로그에서 못 찾으면(`blockPrefill`이 null) 인터벌 차례로 치지 않는다 —
+  // 오버레이를 그대로 두어야 사람이 직접 세트를 누를 수 있다. 시트가 못 열리는데 오버레이까지 내리면 갇힌다.
+  const intervalTurn =
+    active &&
+    draft.tabataMinutes !== null &&
+    blockPrefill !== null &&
+    intervalBlockPending(draft);
+  const intervalBlockKey = active
+    ? `${draft.sessionId}:${normalizeIntervalStartIndex(draft.intervalStartIndex)}`
+    : null;
+  const overlayOpen = active && !minimized && !intervalPlaying && !intervalTurn;
   const nextUp = nextUpSet(draft.exercises);
+  /*
+    인터벌 차례의 시트는 **effect로 열지 않고 렌더에서 도출한다** — 효과 안의 `setState`는
+    `react-hooks/set-state-in-effect`가 막고 연쇄 렌더를 만든다. 차례이고, 시트가 안 열려 있고, 사람이
+    한 번 닫은 블록이 아니면 열린 것으로 본다. 재생이 시작되면 `beginTabata`가 이 값을
+    `tabataPrefill`로 옮겨 시트를 계속 연다(`inSession` 유지 — 재생 중 중단이 운동 전체를 취소하지 않게).
+  */
+  const autoIntervalPrefill =
+    intervalTurn &&
+    !tabataOpen &&
+    !intervalPlaying &&
+    !(deferredBlockKey !== null && deferredBlockKey === intervalBlockKey)
+      ? blockPrefill
+      : null;
+  const sheetPrefill = tabataPrefill ?? autoIntervalPrefill;
 
   /*
     지난번 같은 번호 세트와 견준 결과 (설계 2026-08-24 §3).
@@ -3951,12 +4081,42 @@ function WorkoutScreen({ userId }: { userId: string }) {
     return exercise && id ? { id, bodyPart: exercise.bodyPart } : null;
   }
   const focusedSet = focusedExercise?.sets[setFocus.setIndex] ?? null;
-  const exerciseCards = draft.exercises.map((ex, i) => (
+  const blockStart =
+    draft.tabataMinutes !== null && asTabataMinutes(draft.tabataMinutes) !== null
+      ? normalizeIntervalStartIndex(draft.intervalStartIndex)
+      : -1;
+  const blockEnd = blockStart + TABATA_EXERCISE_COUNT;
+  // 블록이 4종목 다 있을 때만 한 장 카드로 묶는다 — 모자라면(깨진 draft) 낱개로 보여 준다
+  const blockGrouped = blockStart >= 0 && draft.exercises.length >= blockEnd;
+  const blockExercises = blockGrouped ? draft.exercises.slice(blockStart, blockEnd) : [];
+  const blockDone =
+    blockGrouped && blockExercises.every((ex) => ex.sets.every((set) => set.done));
+  const exerciseCards = draft.exercises.flatMap((ex, i) =>
+    blockGrouped && i >= blockStart && i < blockEnd
+      ? i === blockStart
+        ? [
+            <IntervalBlockCard
+              key={`interval-block-${ex.key}`}
+              minutes={asTabataMinutes(draft.tabataMinutes) as TabataMinutes}
+              names={blockExercises.map((exercise) => exercise.name)}
+              done={blockDone}
+              onStart={intervalTurn ? () => void openIntervalInSession() : undefined}
+              onMoveUp={!active && blockStart > 0 ? () => shiftIntervalBlock(-1) : undefined}
+              onMoveDown={
+                !active && blockEnd < draft.exercises.length
+                  ? () => shiftIntervalBlock(1)
+                  : undefined
+              }
+              onRemove={!active ? removeIntervalBlock : undefined}
+            />,
+          ]
+        : []
+      : [
     <ExerciseCard
       key={ex.key}
       exercise={ex}
       imageId={imageIdForAddedExercise(ex, catalog)}
-      index={i}
+      index={blockGrouped ? cardNumberIndex(i, draft.intervalStartIndex) : i}
       active={active}
       loadingLast={loadingExerciseKey === ex.key}
       loadLastDisabled={loadingExerciseKey !== null}
@@ -3968,8 +4128,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
       onRemoveExercise={() => removeExercise(ex.key)}
       onLongPress={() => setReorderOpen(true)}
       onOpenGuide={setGuideExerciseName}
-    />
-  ));
+    />,
+      ],
+  );
   /*
     세트 시계 (2026-08-28).
 
@@ -4708,9 +4869,13 @@ function WorkoutScreen({ userId }: { userId: string }) {
           {questCardShown && !questListOpen && (
               <DailyQuestCard
                 heroImage={questHeroSrc}
-                exercises={draft.exercises.map((exercise) => ({
+                exercises={draft.exercises.map((exercise, index) => ({
                   name: exercise.name,
-                  detail: draft.tabataMinutes ? `${draft.tabataMinutes}분 인터벌` : `${exercise.sets.length}세트`,
+                  // 인터벌 **블록 종목만** 분수를 단다 — 목록에 웨이트와 섞이면 웨이트까지
+                  // "N분 인터벌"로 적혔다 (2026-11-22)
+                  detail: isIntervalBlockIndex(draft.tabataMinutes, index, draft.intervalStartIndex)
+                    ? `${draft.tabataMinutes}분 인터벌`
+                    : `${exercise.sets.length}세트`,
                   imageId: imageIdForAddedExercise({ name: exercise.name, isCustom: exercise.isCustom }),
                 }))}
                 quest={dailyQuestCopy({
@@ -4887,11 +5052,35 @@ function WorkoutScreen({ userId }: { userId: string }) {
             <ExerciseReorderSheet
               exercises={draft.exercises}
               onMove={(from, to) => {
-                // 인터벌 블록은 자리를 옮기지 않는다 — 앞 4개가 곧 인터벌이다 (2026-09-29)
-                const tabata = draftRef.current.tabataMinutes;
+                const current = draftRef.current;
+                if (current.tabataMinutes !== null && !active) {
+                  // 시작 전: 블록은 덩어리로 움직이고, 블록을 건너가면 시작 위치가 같이 바뀐다 (2026-11-22)
+                  const moved = reorderWithIntervalBlock(
+                    current.exercises,
+                    current.intervalStartIndex,
+                    from,
+                    to,
+                  );
+                  if (!moved) {
+                    showToast(INTERVAL_COPY.blockLocked);
+                    return;
+                  }
+                  setDraft((d) => ({
+                    ...d,
+                    exercises: moved.exercises,
+                    intervalStartIndex: moved.startIndex,
+                  }));
+                  return;
+                }
+                // 시작한 뒤: 블록은 자리를 옮기지 않고, 블록을 가로질러 옮기지도 않는다 —
+                // 저장 순서(sort_order)가 DB에 적힌 시작 위치와 어긋난다 (2026-09-29, 11-22)
                 if (
-                  isIntervalBlockIndex(tabata, from) ||
-                  isIntervalBlockIndex(tabata, to)
+                  !canMoveAcrossIntervalBlock(
+                    current.tabataMinutes,
+                    current.intervalStartIndex,
+                    from,
+                    to,
+                  )
                 ) {
                   showToast(INTERVAL_COPY.blockLocked);
                   return;
@@ -5029,28 +5218,37 @@ function WorkoutScreen({ userId }: { userId: string }) {
           )}
 
           <TabataSheet
-            open={tabataOpen}
+            open={tabataOpen || autoIntervalPrefill !== null}
             userId={userId}
             challengeContexts={activeChallengeContexts}
             onPlayingChange={setIntervalPlaying}
-            openPickerOnMount={tabataPrefill?.openPicker}
+            openPickerOnMount={sheetPrefill?.openPicker}
             catalog={catalog}
             onClose={() => {
+              // 인터벌 차례에 열었다가 그냥 닫으면 같은 블록에서는 자동으로 다시 열지 않는다
+              if (sheetPrefill?.inSession) setDeferredBlockKey(intervalBlockKey);
               setTabataOpen(false);
               setTabataPrefill(null);
             }}
+            inSession={sheetPrefill?.inSession === true}
+            onLeave={() => {
+              setDeferredBlockKey(intervalBlockKey);
+              setIntervalPlaying(false);
+              setTabataOpen(false);
+              setTabataPrefill(null);
+            }}
+            onAddToList={addIntervalToList}
             onCreateCustom={handleCreateCustom}
             onBegin={beginTabata}
-            onSaveToday={saveTodayIntervalPlan}
             onComplete={completeTabata}
             onCancelWorkout={cancelTabata}
             pastSessions={pastSessions}
             pastLoading={pastLoading}
             routines={routines ?? undefined}
             routinesLoading={routinesLoading}
-            initialPicked={tabataPrefill?.picked}
-            initialMinutes={tabataPrefill?.minutes}
-            followUpNames={tabataPrefill?.followUps?.map((exercise) => exercise.name)}
+            initialPicked={sheetPrefill?.picked}
+            initialMinutes={sheetPrefill?.minutes}
+            followUpNames={sheetPrefill?.followUps?.map((exercise) => exercise.name)}
           />
 
           {/*
