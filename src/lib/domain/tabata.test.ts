@@ -22,6 +22,7 @@ import {
   intervalBlockNames,
   intervalBlockPending,
   intervalPlanLine,
+  intervalFollowUpLine,
   intervalSaveTarget,
   isIntervalBlockExercise,
   isIntervalBlockIndex,
@@ -771,5 +772,23 @@ describe("목록에서 인터벌이 카드 한 장일 때 — 번호와 저장 (
     expect(routineTabataMinutes(8, 1)).toBeNull();
     expect(routineTabataMinutes(8, 3)).toBeNull();
     expect(routineTabataMinutes(null, 2)).toBeNull();
+  });
+});
+
+describe("인터벌 카드의 '이어서' 줄 — 뒤 종목 이름을 보여 준다 (2026-11-22)", () => {
+  // 합친 계획(인터벌 4 + 웨이트 8)이 카드에는 "이어서 8종목"으로만 보여서 웨이트가 사라진 것처럼 읽혔다
+  const names = ["a", "b", "c", "d", "w1", "w2", "w3", "w4", "w5", "w6", "w7", "w8"];
+
+  it("이어하기가 없으면 줄이 없다", () => {
+    expect(intervalFollowUpLine(["a", "b", "c", "d"])).toBeNull();
+    expect(intervalFollowUpLine([])).toBeNull();
+  });
+
+  it("앞 4종목만 이름으로 보여 주고 나머지는 개수로 줄인다", () => {
+    expect(intervalFollowUpLine(names)).toBe("이어서 w1 · w2 · w3 · w4 외 4종목");
+  });
+
+  it("4종목 이하면 전부 이름으로 보여 준다", () => {
+    expect(intervalFollowUpLine(["a", "b", "c", "d", "w1", "w2"])).toBe("이어서 w1 · w2");
   });
 });

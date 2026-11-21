@@ -113,6 +113,7 @@ import {
   canMoveAcrossIntervalBlock,
   completeIntervalBlock,
   hasIntervalFollowUps,
+  intervalFollowUpLine,
   intervalPlanLine,
   intervalBlockNames,
   intervalBlockPending,
@@ -256,7 +257,6 @@ import {
   consolidateDayPlans,
   settlePlanAfterWorkout,
 } from "@/lib/day-plan-store";
-import { TodayPlanCards } from "@/components/record/today-plan-cards";
 import { DailyQuestCard } from "@/components/record/daily-quest-card";
 import {
   dailyQuestCopy,
@@ -3005,13 +3005,25 @@ function WorkoutScreen({ userId }: { userId: string }) {
       return false;
     }
     const block = tabataDraftExercises(picked, localId, minutes);
-    setDraft((d) => ({
-      ...d,
-      exercises: [...d.exercises, ...block],
-      tabataMinutes: minutes,
-      intervalStartIndex: d.exercises.length,
-      suggestedForDayKey: null,
-    }));
+    // 계획에서 연 시트면 그 계획의 **이어하기 종목(웨이트 등)과 계획 id도 함께** 담는다 —
+    // 안 담으면 인터벌 4종만 목록에 남고 웨이트가 사라진 것처럼 보였다 (2026-11-22).
+    // 계획 id는 완료하면 그 계획이 정리되도록 묶는다(`beginTabata`와 같다). 인터벌 draft는 pull이 건드리지 않는다.
+    const followUps = toDraftExercises(sheetPrefill?.followUps ?? [], localId);
+    const planId = sheetPrefill?.planId ?? null;
+    setDraft((d) => {
+      // 계획에서 연 시트인데 목록이 **앱이 담아 준 제안**(`suggestedForDayKey`)뿐이면 그 제안은
+      // 치우고 계획을 담는다 — 안 치우면 제안 3종이 계획 앞에 붙어 "계획과 다른 목록"이 된다
+      // (B 계정 확인 2026-11-22). 사용자가 직접 담은 목록이면 뒤에 붙인다.
+      const base = planId !== null && d.suggestedForDayKey !== null ? [] : d.exercises;
+      return {
+        ...d,
+        exercises: [...base, ...block, ...followUps],
+        tabataMinutes: minutes,
+        intervalStartIndex: base.length,
+        scheduledPlanId: d.scheduledPlanId ?? planId,
+        suggestedForDayKey: null,
+      };
+    });
     showToast(`전신 인터벌 ${minutes}분을 담았어요`);
     return true;
   }
@@ -4580,12 +4592,27 @@ function WorkoutScreen({ userId }: { userId: string }) {
    * 목록에 담겨 "내 계획"으로, 없으면 지난 기록으로 자동 세팅한 목록이 카드가 된다.
    * ⚠️ 접을 때는 `hidden`으로 **그리기만 막는다** — 언마운트하면 입력 중이던 세트가 사라진다.
    */
+  /*
+    **오늘의 인터벌·프로그램 계획이 있으면 퀘스트 카드는 그 계획 하나다** (사용자 지시 2026-11-22
+    "모든 운동 제안과 계획은 퀘스트 시작하기에서 이루어진다").
+
+    예전에는 계획이 작은 줄 카드로, 목록(앱이 담아 준 제안 등)이 큰 퀘스트 카드로 **같이** 떠서 같은 인터벌이
+    카드 둘로 보이고 헷갈렸다. 이제 목록이 비었거나 앱이 담아 준 제안뿐이면 계획이 퀘스트 카드가 되고
+    그 제안 목록은 접는다. 사용자가 직접 담은 목록이나 이미 인터벌을 든 목록(`tabataMinutes`)이면 그 목록이
+    퀘스트 카드이고 계획 카드는 내지 않는다 — 계획은 달력에서 시작한다.
+  */
+  const planQuestShown =
+    !active &&
+    draft.tabataMinutes === null &&
+    (draft.exercises.length === 0 || draft.suggestedForDayKey !== null) &&
+    todayPlans.some((plan) => !isGeneralPlan(plan));
   const questCardShown =
     !(customToday && draft.scheduledPlanId === null) &&
     draft.exercises.length > 0 &&
     !active &&
-    !didWorkoutToday;
-  const questListCollapsed = questCardShown && !questListOpen;
+    !didWorkoutToday &&
+    !planQuestShown;
+  const questListCollapsed = (questCardShown && !questListOpen) || planQuestShown;
   // 퀘스트 카드가 떠 있을 땐 카드의 [퀘스트 시작]이 시작이다 — 하단 고정 버튼은 목록 화면에서만
   const fixedStartVisible = showFixedStart && !questListCollapsed;
 
@@ -4736,34 +4763,44 @@ function WorkoutScreen({ userId }: { userId: string }) {
             인터벌·프로그램 계획은 **퀘스트 카드 모양으로** 보인다 (사용자 지시 2026-11-07).
             퀘스트가 올 수 있는 날(운동 전·목록이 빈 상태)에만 — 아니면 예전 계획 카드 그대로.
           */}
-          {!active &&
-            (!didWorkoutToday && isEmpty ? (
-              todayPlans
-                .filter((plan) => !isGeneralPlan(plan))
-                .map((plan) => {
-                  const interval = Boolean(plan.tabataMinutes);
-                  const names = plan.exercises.map((item) => item.name);
-                  return (
-                    <DailyQuestCard
-                      key={plan.id}
-                      testId={interval ? "today-interval-card" : "today-program-card"}
-                      heroImage={questHeroSrc}
-                      exercises={names.map((name) => ({
-                        name,
-                        imageId: imageIdForAddedExercise({ name, isCustom: false }),
-                      }))}
-                      quest={planQuestCopy({
-                        interval,
-                        title: plan.title,
-                        detail: interval ? intervalPlanLine(names) : names.join(" · "),
-                        streak: todayStatus?.streak ?? null,
-                      })}
-                      busy={busy}
-                      onStart={() => {
-                        // 인터벌은 시트를 연다(바로 시작 안 함, 2026-08-25), 프로그램은 바로 시작
-                        void handleLoadPlan(plan, interval ? undefined : { startNow: true });
-                      }}
-                      options={
+          {/* 계획 카드는 퀘스트 카드 하나다 — 규칙은 `planQuestShown` 주석 (2026-11-22) */}
+          {planQuestShown &&
+            todayPlans
+              .filter((plan) => !isGeneralPlan(plan))
+              .map((plan) => {
+                const interval = Boolean(plan.tabataMinutes);
+                const names = plan.exercises.map((item) => item.name);
+                // 인터벌 뒤에 이어 붙인 종목(웨이트 등)의 이름 — "이어서 8종목"만 적으면 웨이트가
+                // 사라진 것처럼 읽혔다 (2026-11-22)
+                const followUpLine = interval ? intervalFollowUpLine(names) : null;
+                return (
+                  <DailyQuestCard
+                    key={plan.id}
+                    testId={interval ? "today-interval-card" : "today-program-card"}
+                    heroImage={questHeroSrc}
+                    exercises={names.map((name) => ({
+                      name,
+                      imageId: imageIdForAddedExercise({ name, isCustom: false }),
+                    }))}
+                    quest={planQuestCopy({
+                      interval,
+                      title: plan.title,
+                      detail: interval
+                        ? followUpLine
+                          ? `${intervalBlockNames(names).join(" · ")} · ${followUpLine}`
+                          : intervalPlanLine(names)
+                        : names.join(" · "),
+                      streak: todayStatus?.streak ?? null,
+                    })}
+                    busy={busy}
+                    onStart={() => {
+                      // 인터벌은 시트를 연다(바로 시작 안 함, 2026-08-25), 프로그램은 바로 시작
+                      void handleLoadPlan(plan, interval ? undefined : { startNow: true });
+                    }}
+                    options={
+                      // 운동 전·목록이 빈 날에만 `다른 방법` 타일을 낸다. 오늘 이미 운동했거나 목록이
+                      // 있는 날에도 계획은 **같은 퀘스트 카드의 [퀘스트 시작하기]로** 시작한다 (사용자 지시 2026-11-22)
+                      !didWorkoutToday ? (
                         <StartOptions
                           withQuest
                           hasHistory={hasHistory}
@@ -4774,20 +4811,11 @@ function WorkoutScreen({ userId }: { userId: string }) {
                           onAdd={() => startCustomList("hub")}
                           onLoadRoutine={() => startCustomList("routine")}
                         />
-                      }
-                    />
-                  );
-                })
-            ) : (
-              <TodayPlanCards
-                plans={todayPlans}
-                disabled={busy}
-                onStart={(plan) => {
-                  // 인터벌은 시트를 연다(바로 시작 안 함, 2026-08-25), 프로그램은 바로 시작
-                  void handleLoadPlan(plan, plan.tabataMinutes ? undefined : { startNow: true });
-                }}
-              />
-            ))}
+                      ) : undefined
+                    }
+                  />
+                );
+              })}
 
           {/*
         등록된 운동이 0개면 볼륨·휴식·시작·타바타·복구 안내를 **하나도** 안

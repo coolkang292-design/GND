@@ -571,6 +571,24 @@ export function intervalPlanLine(
 }
 
 /**
+ * 인터벌 카드의 **이어서 줄** — 블록 뒤 종목의 이름 (2026-11-22).
+ *
+ * 한 줄 카드는 "… · 이어서 8종목"으로만 말해서, 인터벌 계획 뒤에 웨이트를 이어 붙인 계획이
+ * **웨이트가 사라지고 인터벌만 남은 것처럼** 보였다(사용자 신고). 앞 4개만 이름으로 적고 나머지는
+ * 개수로 줄인다. 이어하기가 없으면 null.
+ */
+export function intervalFollowUpLine(
+  names: readonly string[],
+  startIndex?: number | null,
+): string | null {
+  const { followUps } = splitIntervalPlan(names, startIndex);
+  if (followUps.length === 0) return null;
+  const shown = followUps.slice(0, 4).join(" · ");
+  const rest = followUps.length - 4;
+  return rest > 0 ? `이어서 ${shown} 외 ${rest}종목` : `이어서 ${shown}`;
+}
+
+/**
  * 일반 세션 조회와 인터벌 세션 조회를 최신순 하나로 (2026-09-29).
  *
  * 둘을 **따로** 조회하는 이유: 한 조회로 합치면 인터벌 세션이 한도(20·40)를
