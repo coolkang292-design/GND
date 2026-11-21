@@ -2895,18 +2895,21 @@ function WorkoutScreen({ userId }: { userId: string }) {
       showToast("이미 운동 중이에요");
       return false;
     }
-    if (
-      draftRef.current.exercises.length > 0 &&
-      !window.confirm("준비 중인 운동 목록을 지우고 전신 인터벌을 시작할까요?")
-    ) {
+    // 준비 중인 웨이트·유산소는 버리지 않고 인터벌 뒤에 이어서 수행한다.
+    // 인터벌 4종목은 현재 저장 규칙상 반드시 맨 앞에 있어야 한다.
+    // 이미 시작한 세션의 중간에 끼워 넣는 기능은 별도 저장 규칙이 필요하다.
+    const existing = draftRef.current;
+    if (existing.tabataMinutes != null) {
+      showToast("인터벌은 한 세션에 한 번만 추가할 수 있어요");
       return false;
     }
-    // 예정표에서 연 타바타면 그 계획 id를 이어받는다 (2026-08-05). emptyDraft로
-    // 갈아엎으면서 버리면 타바타를 완료해도 예정표가 그대로 남는다.
-    const scheduledPlanId = tabataPrefill?.planId ?? null;
-    // 인터벌 뒤 이어하기 (2026-09-29) — 블록 뒤에 붙인다. 순서가 곧 규칙이다
-    // (`saveSessionExercises`가 이 순서로 sort_order를 넣는다).
-    const followUps = toDraftExercises(tabataPrefill?.followUps ?? [], localId);
+    const scheduledPlanId = tabataPrefill?.planId ?? existing.scheduledPlanId ?? null;
+    const plannedFollowUps = toDraftExercises(tabataPrefill?.followUps ?? [], localId);
+    const existingNames = new Set(existing.exercises.map((exercise) => exercise.name.trim().toLowerCase()));
+    const followUps = [
+      ...existing.exercises,
+      ...plannedFollowUps.filter((exercise) => !existingNames.has(exercise.name.trim().toLowerCase())),
+    ];
     setDraft((d) => ({
       ...emptyDraft(d.restSeconds),
       exercises: [...tabataDraftExercises(picked, localId, minutes), ...followUps],
