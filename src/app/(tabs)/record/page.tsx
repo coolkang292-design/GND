@@ -118,6 +118,7 @@ import {
   intervalBlockNames,
   intervalBlockPending,
   isBeforeIntervalBlock,
+  isBlockOnlyCopyOfPlan,
   cardNumberIndex,
   isIntervalBlockExercise,
   isIntervalBlockIndex,
@@ -2899,6 +2900,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
     }
     if (
       draftRef.current.exercises.length > 0 &&
+      // 계획의 인터벌 4종만 든 옛 복사본은 계획으로 갈아 끼워도 잃는 것이 없다 — 묻지 않는다
+      !(staleCopyPlan !== null && tabataPrefill?.planId === staleCopyPlan.id) &&
       !window.confirm("준비 중인 운동 목록을 지우고 전신 인터벌을 시작할까요?")
     ) {
       return false;
@@ -2996,7 +2999,10 @@ function WorkoutScreen({ userId }: { userId: string }) {
       showToast("운동 중에는 인터벌을 목록에 담을 수 없어요");
       return false;
     }
-    if (current.tabataMinutes !== null) {
+    // 계획의 인터벌 4종만 든 옛 복사본이면 계획 전체로 갈아 끼운다 (`staleCopyPlan`)
+    const replacingStale =
+      staleCopyPlan !== null && sheetPrefill?.planId === staleCopyPlan.id;
+    if (current.tabataMinutes !== null && !replacingStale) {
       showToast(INTERVAL_COPY.alreadyInList);
       return false;
     }
@@ -3014,7 +3020,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
       // 계획에서 연 시트인데 목록이 **앱이 담아 준 제안**(`suggestedForDayKey`)뿐이면 그 제안은
       // 치우고 계획을 담는다 — 안 치우면 제안 3종이 계획 앞에 붙어 "계획과 다른 목록"이 된다
       // (B 계정 확인 2026-11-22). 사용자가 직접 담은 목록이면 뒤에 붙인다.
-      const base = planId !== null && d.suggestedForDayKey !== null ? [] : d.exercises;
+      const base =
+        replacingStale || (planId !== null && d.suggestedForDayKey !== null) ? [] : d.exercises;
       return {
         ...d,
         exercises: [...base, ...block, ...followUps],
@@ -3139,6 +3146,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
       if (
         current.exercises.length > 0 &&
         current.scheduledPlanId === null &&
+        staleCopyPlan?.id !== plan.id &&
         !window.confirm("준비 중인 운동 목록을 지우고 예정표로 바꿀까요?")
       ) {
         return false;
@@ -4601,11 +4609,40 @@ function WorkoutScreen({ userId }: { userId: string }) {
     그 제안 목록은 접는다. 사용자가 직접 담은 목록이나 이미 인터벌을 든 목록(`tabataMinutes`)이면 그 목록이
     퀘스트 카드이고 계획 카드는 내지 않는다 — 계획은 달력에서 시작한다.
   */
+  /*
+    폰 목록이 계획의 인터벌 4종만 담은 **옛 복사본**이면(`isBlockOnlyCopyOfPlan`) 그 계획을 퀘스트 카드로
+    다시 보인다 — 이어하기(웨이트)를 잃은 목록이 4종 카드로 남아 있던 것을 고친다 (2026-11-22).
+  */
+  const staleCopyPlan =
+    !active &&
+    draft.tabataMinutes !== null &&
+    draft.scheduledPlanId === null &&
+    normalizeIntervalStartIndex(draft.intervalStartIndex) === 0
+      ? (todayPlans.find(
+          (plan) =>
+            plan.tabataMinutes &&
+            isBlockOnlyCopyOfPlan(
+              draft.exercises.map((exercise) => exercise.name),
+              plan.exercises.map((exercise) => exercise.name),
+            ),
+        ) ?? null)
+      : null;
   const planQuestShown =
     !active &&
-    draft.tabataMinutes === null &&
-    (draft.exercises.length === 0 || draft.suggestedForDayKey !== null) &&
+    ((draft.tabataMinutes === null &&
+      (draft.exercises.length === 0 || draft.suggestedForDayKey !== null)) ||
+      staleCopyPlan !== null) &&
     todayPlans.some((plan) => !isGeneralPlan(plan));
+  /** 퀘스트 카드가 된 계획 — 예상 점수 카드와 시작이 이 계획을 쓴다 */
+  const questPlan = planQuestShown
+    ? (todayPlans.find((plan) => !isGeneralPlan(plan)) ?? null)
+    : null;
+  // 예상 점수 카드용 — 키는 **계획 id + 순번**으로 정해 렌더마다 같다(`localId`는 매번 달라 카드가 흔들린다).
+  // 훅이 아니다: 이 컴포넌트는 위에서 일찍 반환하는 갈래가 있어 여기서 `useMemo`를 못 쓴다
+  let questPlanKeySeq = 0;
+  const questPlanExercises = questPlan
+    ? toDraftExercises(questPlan.exercises, () => `qp-${questPlan.id}-${questPlanKeySeq++}`)
+    : [];
   const questCardShown =
     !(customToday && draft.scheduledPlanId === null) &&
     draft.exercises.length > 0 &&
@@ -4955,8 +4992,29 @@ function WorkoutScreen({ userId }: { userId: string }) {
           )}
 
           {/* 계획 목록이 퀘스트 카드 안에 접혀 있어도 예상 점수는 계획 바로 아래에서 보인다. */}
-          {!active && !draft.tabataMinutes && !draft.program && (
-            <ChallengePlanFeedback userId={userId} contexts={activeChallengeContexts} exercises={draft.exercises} onAdd={addChallengeSuggestion} />
+          {/*
+            계획이 퀘스트 카드면 **그 계획의** 예상 점수를 보인다 (사용자 신고 2026-11-22 "몇 점을 얻을 수
+            있는지 카드가 안 보임"). 인터벌이 든 목록도 코스 분수와 함께 보인다 — 예전에는 `tabataMinutes`가
+            있으면 통째로 숨겼다. 점수는 위치와 상관없이 종목·코스로 계산한다.
+          */}
+          {questPlan ? (
+            <ChallengePlanFeedback
+              userId={userId}
+              contexts={activeChallengeContexts}
+              exercises={questPlanExercises}
+              tabataMinutes={questPlan.tabataMinutes}
+            />
+          ) : (
+            !active &&
+            !draft.program && (
+              <ChallengePlanFeedback
+                userId={userId}
+                contexts={activeChallengeContexts}
+                exercises={draft.exercises}
+                tabataMinutes={draft.tabataMinutes}
+                onAdd={draft.tabataMinutes ? undefined : addChallengeSuggestion}
+              />
+            )
           )}
           {/* 퀘스트 카드가 떠 있으면 접힌다 — `contents`라 목록 화면일 때 레이아웃은 그대로다 */}
           <div className={questListCollapsed ? "hidden" : "contents"}>

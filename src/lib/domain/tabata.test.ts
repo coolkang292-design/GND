@@ -22,6 +22,7 @@ import {
   intervalBlockNames,
   intervalBlockPending,
   intervalPlanLine,
+  isBlockOnlyCopyOfPlan,
   intervalFollowUpLine,
   intervalSaveTarget,
   isIntervalBlockExercise,
@@ -790,5 +791,30 @@ describe("인터벌 카드의 '이어서' 줄 — 뒤 종목 이름을 보여 �
 
   it("4종목 이하면 전부 이름으로 보여 준다", () => {
     expect(intervalFollowUpLine(["a", "b", "c", "d", "w1", "w2"])).toBe("이어서 w1 · w2");
+  });
+});
+
+describe("폰 목록이 계획의 앞 4종(인터벌)만 담은 옛 복사본인가 (2026-11-22, 오뎅끼데스까님 폰)", () => {
+  const plan = ["a", "b", "c", "d", "w1", "w2", "w3"];
+
+  it("계획의 인터벌 4종과 같고 목록에 그 4종뿐이면 옛 복사본이다", () => {
+    expect(isBlockOnlyCopyOfPlan(["a", "b", "c", "d"], plan)).toBe(true);
+  });
+
+  it("목록에 다른 종목이 더 있으면 아니다 — 사용자가 직접 만든 목록", () => {
+    expect(isBlockOnlyCopyOfPlan(["a", "b", "c", "d", "x"], plan)).toBe(false);
+  });
+
+  it("4종이 계획과 다르면 아니다 (이름·순서)", () => {
+    expect(isBlockOnlyCopyOfPlan(["a", "b", "c", "z"], plan)).toBe(false);
+    expect(isBlockOnlyCopyOfPlan(["b", "a", "c", "d"], plan)).toBe(false);
+  });
+
+  it("계획에 이어하기가 없으면 아니다 — 잃은 것이 없다", () => {
+    expect(isBlockOnlyCopyOfPlan(["a", "b", "c", "d"], ["a", "b", "c", "d"])).toBe(false);
+  });
+
+  it("목록이 4종보다 적으면 아니다", () => {
+    expect(isBlockOnlyCopyOfPlan(["a", "b"], plan)).toBe(false);
   });
 });

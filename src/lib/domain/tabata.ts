@@ -571,6 +571,23 @@ export function intervalPlanLine(
 }
 
 /**
+ * 폰의 운동 목록이 **오늘 인터벌 계획의 앞 4종(블록)만 담은 옛 복사본**인가 (2026-11-22).
+ *
+ * 이어하기를 담기 전 버전에서 '운동 목록에 담기'를 누르면 계획의 인터벌 4종만 목록에 들어갔다
+ * (오뎅끼데스까님 폰: 계획은 12종인데 목록·카드는 4종). 계획이 가진 이어하기(웨이트 등)를 잃은
+ * 상태라서, 이 목록은 **계획으로 갈아 끼워도 잃는 것이 없다**. 사용자가 직접 종목을 더했거나
+ * 4종이 다르면 아니다 — 그 목록은 건드리지 않는다.
+ */
+export function isBlockOnlyCopyOfPlan(
+  draftNames: readonly string[],
+  planNames: readonly string[],
+): boolean {
+  if (draftNames.length !== TABATA_EXERCISE_COUNT) return false;
+  if (planNames.length <= TABATA_EXERCISE_COUNT) return false;
+  return intervalBlockNames(planNames).every((name, index) => name === draftNames[index]);
+}
+
+/**
  * 인터벌 카드의 **이어서 줄** — 블록 뒤 종목의 이름 (2026-11-22).
  *
  * 한 줄 카드는 "… · 이어서 8종목"으로만 말해서, 인터벌 계획 뒤에 웨이트를 이어 붙인 계획이
