@@ -911,6 +911,11 @@ export type PeriodSessionRow = {
    * 0117 전 응답·로컬 draft 변환에는 없다. **점수 계산에 쓰지 않는다.**
    */
   durationMinutes?: number | null;
+  /**
+   * 운동 시작 시각 (0144). '운동 횟수' 쪼개기 규칙(`session-gap.ts`)에만 쓴다 —
+   * 0144 전 응답·로컬 draft 변환에는 없고, 없으면 규칙 대상이 아니다.
+   */
+  startedAt?: string | null;
   /** 타바타 코스 분수 (0019) — 일반 세션은 생략/null */
   tabataMinutes?: number | null;
   exercises: {
@@ -962,6 +967,8 @@ export type FinishedDraftExercise = {
 export function toPeriodSessionRow(input: {
   userId: string;
   completedAtMs: number;
+  /** 운동 시작 시각 — 주면 '운동 횟수' 쪼개기 규칙이 이 운동에도 적용된다(예상 점수용). 완료 화면 기여 계산은 안 준다 */
+  startedAtMs?: number;
   exercises: readonly FinishedDraftExercise[];
   /** 타바타 세션이면 코스 분수 (4|8|16), 일반 운동이면 null */
   tabataMinutes: number | null;
@@ -969,6 +976,7 @@ export function toPeriodSessionRow(input: {
   return {
     userId: input.userId,
     completedAt: new Date(input.completedAtMs).toISOString(),
+    ...(input.startedAtMs !== undefined ? { startedAt: new Date(input.startedAtMs).toISOString() } : {}),
     tabataMinutes: input.tabataMinutes,
     exercises: input.exercises.map((ex) => ({
       exerciseType: ex.exerciseType,
@@ -990,6 +998,7 @@ type ChallengePeriodSessionRpcRow = {
   user_id: string;
   completed_at: string;
   duration_minutes?: number | null;
+  started_at?: string | null;
   tabata_minutes: number | null;
   workout_exercises:
     | {
@@ -1025,6 +1034,7 @@ export function normalizeChallengePeriodSessions(
       typeof row.completed_at !== "string" ||
       !isNullableNumber(row.tabata_minutes) ||
       (row.duration_minutes !== undefined && !isNullableNumber(row.duration_minutes)) ||
+      (row.started_at !== undefined && row.started_at !== null && typeof row.started_at !== "string") ||
       (row.workout_exercises !== null && !Array.isArray(row.workout_exercises))
     ) {
       throw new Error("invalid_challenge_period_sessions");
@@ -1066,6 +1076,7 @@ export function normalizeChallengePeriodSessions(
       ...(validRow.duration_minutes !== undefined
         ? { durationMinutes: validRow.duration_minutes }
         : {}),
+      ...(validRow.started_at ? { startedAt: validRow.started_at } : {}),
       tabataMinutes: validRow.tabata_minutes,
       exercises: (validRow.workout_exercises ?? []).map((exercise) => ({
         exerciseType: exercise.exercise_type,

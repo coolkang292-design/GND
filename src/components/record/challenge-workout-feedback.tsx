@@ -23,6 +23,44 @@ function WinGuidanceBox({ guidance }: { guidance: WinGuidance }) {
     </div>
   );
 }
+/**
+ * 1시간 규칙으로 '운동 횟수'에서 빠졌을 때, 화면 아래에 잠깐 떴다 사라지는 안내 (사용자 선택, 2026-11-22).
+ * 결과 카드 안의 글자 상자만으로는 놓칠 수 있어서 한 번 더 알려준다. 운동 직후의 흐름을 끊지 않도록
+ * 확인 버튼 없는 작은 알림으로 4초 뒤 스스로 사라진다.
+ * 같은 운동(sessionId)에는 한 번만 뜬다 — 카드가 다시 그려져도 반복되지 않게 sessionStorage에 기록한다.
+ */
+function SessionGapToast({ sessionId }: { sessionId: string }) {
+  const key = `gnd:session-gap-toast:${sessionId}`;
+  // 읽기만 한다(개발 모드에서 두 번 실행돼도 안전). 기록은 아래 effect에서 한다.
+  const [open, setOpen] = useState(() => {
+    try {
+      return !sessionStorage.getItem(key);
+    } catch {
+      return true; // 저장소를 못 써도 안내는 보여준다
+    }
+  });
+  useEffect(() => {
+    if (!open) return;
+    try {
+      sessionStorage.setItem(key, "1");
+    } catch {
+      /* 무시 */
+    }
+    const t = setTimeout(() => setOpen(false), 4000);
+    return () => clearTimeout(t);
+  }, [open, key]);
+  if (!open) return null;
+  return (
+    <div
+      role="status"
+      data-testid="session-gap-toast"
+      className="pointer-events-none fixed inset-x-4 bottom-24 z-50 mx-auto max-w-sm rounded-2xl border border-warn/40 bg-surface px-4 py-3 text-center text-[13px] font-bold leading-snug text-warn shadow-lg"
+    >
+      1시간 안에 이어 한 운동은 &lsquo;운동 횟수&rsquo;에 더해지지 않아요
+    </div>
+  );
+}
+
 type ReadState = { key: string; snapshot: ChallengeScoreSnapshot | null; error: boolean };
 
 function useSnapshot(userId: string, challengeId: string, scope: string, enabled = true) {
@@ -82,6 +120,8 @@ export function ChallengeWorkoutResultCard({ userId, sessionId, context, gains, 
             <b className="text-lg">{impact.beforeRank}위 → {impact.afterRank}위</b>
             <span className="text-xs font-bold text-accent">{movement > 0 ? `${movement}계단 상승` : movement < 0 ? `${-movement}계단 하락` : "순위 유지"}</span>
           </div>
+          {!impact.sessionCounted && <SessionGapToast sessionId={sessionId} />}
+          {!impact.sessionCounted && <p data-testid="session-gap-notice" className="mt-2 rounded-xl bg-warn/10 p-3 text-xs font-bold leading-relaxed text-warn">이번 운동은 앞선 운동이 끝나고 1시간이 지나기 전에 시작해서 &lsquo;운동 횟수&rsquo;에는 더해지지 않았어요. 운동 시간·거리·무게는 그대로 반영됐어요.</p>}
           {impact.reason && <p className="mt-2 text-xs leading-relaxed text-muted">{impact.reason}</p>}
           {impact.tieReason && <p className="mt-2 text-xs leading-relaxed text-muted">{impact.tieReason}</p>}
           {guidance && <WinGuidanceBox guidance={guidance} />}
@@ -108,7 +148,7 @@ function PlanCard({ userId, context, exercises, onAdd, now, tabataMinutes }: {
     window.addEventListener("focus",onFocus); document.addEventListener("visibilitychange",onVisible);
     return ()=>{window.removeEventListener("focus",onFocus);document.removeEventListener("visibilitychange",onVisible);};
   },[refresh,now]);
-  const plan=useMemo(()=>toPeriodSessionRow({userId,completedAtMs:plannedAt,tabataMinutes:tabataMinutes??null,exercises:exercises.map((ex)=>({...ex,sets:ex.sets.map((s)=>({...s,done:true,durationMin:durationSecondsOf(s)/60}))}))}),[userId,exercises,plannedAt,tabataMinutes]);
+  const plan=useMemo(()=>toPeriodSessionRow({userId,completedAtMs:plannedAt,startedAtMs:plannedAt,tabataMinutes:tabataMinutes??null,exercises:exercises.map((ex)=>({...ex,sets:ex.sets.map((s)=>({...s,done:true,durationMin:durationSecondsOf(s)/60}))}))}),[userId,exercises,plannedAt,tabataMinutes]);
   const forecast=read?.snapshot ? forecastWorkout(read.snapshot,userId,plan):null;
   const guidance=read?.snapshot && forecast ? winGuidance(read.snapshot,userId,plan):null;
   const suggestions=useMemo(()=>onAdd && !interval && read?.snapshot && usedNames.length<2 ? recommendWorkoutAdditions(read.snapshot,userId,plan).filter((s)=>!usedNames.includes(s.exercise.name)):[],[read,plan,userId,usedNames,onAdd,interval]);
@@ -120,6 +160,7 @@ function PlanCard({ userId, context, exercises, onAdd, now, tabataMinutes }: {
       <p className="mt-1 font-mono text-[25px] font-black text-accent">예상 +{points(forecast.totalDelta)}점</p>
       <p className="mt-1 text-xs text-muted">기본 점수 +{points(forecast.delta)} ({points(forecast.beforeScore)} → {points(forecast.afterScore)}점)</p>
       {forecast.activityDelta > 0 && <p data-testid="activity-forecast" className="mt-1 text-xs font-bold">활동 점수 <span className="font-mono text-accent">+{points(forecast.activityDelta)}점</span> <span className="font-normal text-muted">· 총점 {points(forecast.beforeTotal)} → {points(forecast.afterTotal)}점</span></p>}
+      {!forecast.sessionCounted && <p data-testid="session-gap-forecast-notice" className="mt-2 rounded-xl bg-warn/10 p-3 text-xs font-bold leading-relaxed text-warn">앞선 운동이 끝나고 1시간이 지나기 전이라, 이 운동은 &lsquo;운동 횟수&rsquo;에 더해지지 않아요. 예상 점수에도 횟수 점수는 빠져 있어요.</p>}
       {forecast.reason && <p className="mt-2 text-xs text-muted">{forecast.reason}</p>}
       {guidance && <WinGuidanceBox guidance={guidance}/>}
       {suggestions.length>0 && <div className="mt-3 space-y-2 border-t border-line pt-3">{suggestions.map((suggestion)=><div key={suggestion.id} className="rounded-xl bg-accent-weak p-3"><p className="text-[13px] font-extrabold">{suggestion.label}</p><p className="mt-1 text-xs text-muted">현재 계획보다 <b className="text-accent">+{points(suggestion.extraPoints)}점 더</b> · 최종 예상 {points(suggestion.afterScore)}점</p><button type="button" className="mt-2 min-h-11 rounded-xl border border-accent/40 px-4 text-xs font-extrabold text-accent" onClick={()=>{if(onAdd?.(suggestion.exercise)!==false)setUsedNames((names)=>[...names,suggestion.exercise.name]);}}>계획에 추가</button></div>)}</div>}

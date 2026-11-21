@@ -302,3 +302,66 @@ describe("goalPace — 같은 지표 목표가 있을 때만 하루 페이스", 
     expect(goalPace([], "minutes", 30)).toBeNull();
   });
 });
+
+describe("metricTotalsByUser — 1시간 안에 이어 한 운동은 '횟수'에서만 뺀다 (session-gap)", () => {
+  // 규칙 시작(2026-11-22 06:00 KST = 11-21 21:00Z) 이후의 운동
+  const withStart = (userId: string, startIso: string, endIso: string, min: number, km: number): MetricRow => ({
+    ...row(userId, endIso, { min, km }),
+    startedAt: startIso,
+  });
+  const ST = "2026-11-01";
+  const EN = "2026-11-30";
+
+  it("끝난 뒤 30분 만에 시작한 두 번째는 횟수만 빠지고 시간·거리는 그대로 쌓인다", () => {
+    const m = metricTotalsByUser(
+      [
+        withStart("a", "2026-11-22T01:00:00Z", "2026-11-22T01:30:00Z", 30, 2),
+        withStart("a", "2026-11-22T02:00:00Z", "2026-11-22T02:30:00Z", 30, 3),
+      ],
+      ["a"],
+      ST,
+      EN,
+      TZ,
+    );
+    expect(m.get("a")).toMatchObject({ sessions: 1, minutes: 60, cardioKm: 5 });
+  });
+
+  it("끝난 뒤 61분 만에 시작하면 둘 다 센다", () => {
+    const m = metricTotalsByUser(
+      [
+        withStart("a", "2026-11-22T01:00:00Z", "2026-11-22T01:30:00Z", 30, 0),
+        withStart("a", "2026-11-22T02:31:00Z", "2026-11-22T03:00:00Z", 30, 0),
+      ],
+      ["a"],
+      ST,
+      EN,
+      TZ,
+    );
+    expect(m.get("a")?.sessions).toBe(2);
+  });
+
+  it("이전 기록은 그대로다 — 규칙 시작 전에 시작한 운동은 10분 간격이어도 다 센다", () => {
+    const m = metricTotalsByUser(
+      [
+        withStart("a", "2026-11-10T01:00:00Z", "2026-11-10T01:30:00Z", 30, 0),
+        withStart("a", "2026-11-10T01:40:00Z", "2026-11-10T02:10:00Z", 30, 0),
+      ],
+      ["a"],
+      ST,
+      EN,
+      TZ,
+    );
+    expect(m.get("a")?.sessions).toBe(2);
+  });
+
+  it("시작 시각이 없는 행(옛 응답)은 예전처럼 센다", () => {
+    const m = metricTotalsByUser(
+      [row("a", "2026-11-22T01:30:00Z"), row("a", "2026-11-22T01:50:00Z")],
+      ["a"],
+      ST,
+      EN,
+      TZ,
+    );
+    expect(m.get("a")?.sessions).toBe(2);
+  });
+});

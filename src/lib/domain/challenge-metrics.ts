@@ -14,6 +14,7 @@
  * ⚠️ 참가자는 2명~수십 명이다(사용자 지시 2026-10-07). 목록은 `pinMine`으로 줄 수를 묶는다.
  */
 import { inclusiveDays } from "./challenge-time";
+import { uncountedSessions } from "./session-gap";
 import { dayKey } from "./time";
 import { addDaysToDateKey } from "./workout-plan";
 
@@ -21,7 +22,7 @@ export type MetricKey = "sessions" | "minutes" | "cardioKm" | "volumeKg";
 export type MetricTotals = Record<MetricKey, number>;
 
 export const METRICS: readonly { key: MetricKey; label: string; unit: string; help: string }[] = [
-  { key: "sessions", label: "운동 횟수", unit: "회", help: "챌린지 기간에 완료한 운동 수예요." },
+  { key: "sessions", label: "운동 횟수", unit: "회", help: "챌린지 기간에 완료한 운동 수예요. 앞선 운동이 끝나고 1시간이 지나기 전에 시작한 운동은 횟수에 더해지지 않아요." },
   { key: "minutes", label: "운동 시간", unit: "분", help: "완료한 운동의 기록 시간을 모두 더했어요." },
   { key: "cardioKm", label: "유산소 거리", unit: "km", help: "완료한 유산소 세트의 거리를 모두 더했어요." },
   { key: "volumeKg", label: "웨이트 볼륨", unit: "kg", help: "완료한 웨이트 세트의 무게 × 횟수를 모두 더했어요." },
@@ -35,6 +36,8 @@ export function metricMeta(key: MetricKey) {
 export type MetricRow = {
   userId: string;
   completedAt: string;
+  /** 0144 — 서버가 주는 시작 시각. 없으면(옛 응답·로컬 draft) 쪼개기 규칙 대상이 아니다 */
+  startedAt?: string | null;
   durationMinutes?: number | null;
   exercises: readonly {
     exerciseType: "weight" | "bodyweight" | "cardio";
@@ -65,12 +68,14 @@ export function metricTotalsByUser(
   timeZone: string,
 ): Map<string, MetricTotals> {
   const out = new Map<string, MetricTotals>(memberIds.map((id) => [id, { ...ZERO }]));
+  const uncounted = uncountedSessions(rows);
   for (const r of rows) {
     const total = out.get(r.userId);
     if (!total) continue;
     const k = dayKey(new Date(r.completedAt), timeZone);
     if (k < startDate || k > endKey) continue;
-    total.sessions += 1;
+    // 1시간 안에 이어 한 운동은 '횟수'에서만 뺀다 — 시간·거리·볼륨은 그대로 더한다 (session-gap.ts)
+    if (!uncounted.has(r)) total.sessions += 1;
     if (r.durationMinutes != null && r.durationMinutes > 0) total.minutes += r.durationMinutes;
     for (const ex of r.exercises) {
       for (const s of ex.sets) {

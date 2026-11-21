@@ -5,6 +5,7 @@ import {
   ACTIVITY_POINT_PER_SESSION,
   type RankedParticipantV2,
 } from "@/lib/domain/goal-score-v2";
+import { SESSION_GAP_NOTICE } from "@/lib/domain/session-gap";
 
 const pt = (n: number) => n.toFixed(2);
 /** 소수 둘째 자리까지, 뒤의 0은 뗀다 (20 → "20", 4.62 → "4.62") */
@@ -111,6 +112,7 @@ export function LiveScoreDetail({ v2 }: { v2: RankedParticipantV2 }) {
           <span>활동 점수 합계 +{pt(a.total)}점</span>
         </p>
         <p className="mt-1 text-[11px] text-muted">활동 점수는 목표를 다 채운 뒤에도 운동할수록 계속 올라요.</p>
+        <p data-testid="session-gap-rule" className="mt-1 text-[11px] text-muted">{SESSION_GAP_NOTICE}</p>
       </section>
 
       {/* ── 최종 합산 점수 = 순위표 숫자 ───────────────────── */}

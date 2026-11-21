@@ -2290,6 +2290,7 @@ begin
   from (
     select jsonb_build_object(
       'session_id', s.id,
+      'started_at', s.started_at,
       'user_id', s.user_id,
       'completed_at', s.completed_at,
       'duration_minutes', s.duration_minutes,
@@ -2322,7 +2323,6 @@ begin
       and s.deleted_at is null
       and s.completed_at >= (c.start_date - 1)::timestamptz
       and s.completed_at <  (c.end_date + 2)::timestamptz
-      -- 사진 인증 필수 챌린지는 사진 있는 세션만 (앱의 workout_images!inner와 같다)
       and (
         not c.photo_required
         or exists (

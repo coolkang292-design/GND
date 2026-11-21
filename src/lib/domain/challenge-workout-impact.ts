@@ -11,6 +11,7 @@ import {
   ACTIVITY_MINUTES_PER_POINT, ACTIVITY_POINT_PER_DAY, ACTIVITY_POINT_PER_SESSION, ACTIVITY_RULE_TEXT,
   TIE_BREAK_RULE_TEXT, tieKindLabel, toCents, type RankedParticipantV2,
 } from "./goal-score-v2";
+import { SESSION_GAP_NOTICE, uncountedSessions } from "./session-gap";
 import { withoutIntervalBlock } from "./tabata";
 import { dayKey } from "./time";
 
@@ -37,8 +38,10 @@ export type WorkoutImpact = {
   beforeTotal: number;
   afterTotal: number;
   totalDelta: number;
+  /** 이 운동이 '운동 횟수'로 인정되나 — 앞선 운동이 끝나고 1시간 안에 시작했으면 false (session-gap.ts) */
+  sessionCounted: boolean;
 };
-export type WorkoutForecast = Pick<WorkoutImpact, "beforeScore" | "afterScore" | "delta" | "reason" | "activityDelta" | "beforeTotal" | "afterTotal" | "totalDelta">;
+export type WorkoutForecast = Pick<WorkoutImpact, "beforeScore" | "afterScore" | "delta" | "reason" | "activityDelta" | "beforeTotal" | "afterTotal" | "totalDelta" | "sessionCounted">;
 export type WorkoutSuggestion = {
   id: string;
   label: string;
@@ -88,7 +91,7 @@ function totalCents(entry: RankedEntry): number {
 function activityCents(entry: RankedEntry): number {
   return entry.v2?.breakdown.activity.cents ?? 0;
 }
-function compareRows(snapshot: ChallengeScoreSnapshot, userId: string, beforeRows: PeriodSessionRow[], afterRows: PeriodSessionRow[]): WorkoutImpact {
+function compareRows(snapshot: ChallengeScoreSnapshot, userId: string, beforeRows: PeriodSessionRow[], afterRows: PeriodSessionRow[]): Omit<WorkoutImpact, "sessionCounted"> {
   const before = evaluate(snapshot, beforeRows, userId);
   const after = evaluate(snapshot, afterRows, userId);
   const delta = (cents(after.entry) - cents(before.entry)) / 100;
@@ -124,7 +127,8 @@ export function calculateWorkoutImpact(snapshot: ChallengeScoreSnapshot, userId:
   if (!enabled(snapshot, userId) || !sessionId) return null;
   const target = snapshot.rows.find((r) => r.sessionId === sessionId);
   if (!target || target.userId !== userId || !inPeriod(snapshot, target)) return null;
-  return compareRows(snapshot, userId, snapshot.rows.filter((r) => r.sessionId !== sessionId), snapshot.rows);
+  return { ...compareRows(snapshot, userId, snapshot.rows.filter((r) => r.sessionId !== sessionId), snapshot.rows),
+    sessionCounted: !uncountedSessions(snapshot.rows).has(target) };
 }
 
 function completeExercises(exercises: PeriodSessionRow["exercises"]): PeriodSessionRow["exercises"] {
@@ -147,8 +151,10 @@ function completedPlan(snapshot: ChallengeScoreSnapshot, userId: string, plan: P
 export function forecastWorkout(snapshot: ChallengeScoreSnapshot, userId: string, plan: PeriodSessionRow): WorkoutForecast | null {
   const completed = completedPlan(snapshot, userId, plan);
   if (!completed) return null;
-  const { beforeScore, afterScore, delta, reason, activityDelta, beforeTotal, afterTotal, totalDelta } = compareRows(snapshot, userId, snapshot.rows, [...snapshot.rows, completed]);
-  return { beforeScore, afterScore, delta, reason, activityDelta, beforeTotal, afterTotal, totalDelta };
+  const afterRows = [...snapshot.rows, completed];
+  const { beforeScore, afterScore, delta, reason, activityDelta, beforeTotal, afterTotal, totalDelta } = compareRows(snapshot, userId, snapshot.rows, afterRows);
+  return { beforeScore, afterScore, delta, reason, activityDelta, beforeTotal, afterTotal, totalDelta,
+    sessionCounted: !uncountedSessions(afterRows).has(completed) };
 }
 
 type ExerciseRow = PeriodSessionRow["exercises"][number];
@@ -294,7 +300,7 @@ export function winGuidance(snapshot: ChallengeScoreSnapshot, userId: string, pl
   const perHour = 60 / ACTIVITY_MINUTES_PER_POINT;
   const newDay = round(ACTIVITY_POINT_PER_DAY + ACTIVITY_POINT_PER_SESSION + perHour);
   const sameDay = round(ACTIVITY_POINT_PER_SESSION + perHour);
-  const perWorkout = `새로운 날에 60분 운동하면 약 ${newDay}점, 같은 날 한 번 더 하면 약 ${sameDay}점이 쌓여요.`;
+  const perWorkout = `새로운 날에 60분 운동하면 약 ${newDay}점, 같은 날 한 번 더 하면 약 ${sameDay}점이 쌓여요. (${SESSION_GAP_NOTICE})`;
 
   // ① 총점이 정확히 같은 사람이 있으면 — 동점 규칙으로 가른다
   const tied = me.tieBreak.groupUserIds

@@ -15,12 +15,15 @@
 import { longestConsecutiveDays } from "./challenge-milestones";
 import { inclusiveDays } from "./challenge-time";
 import { getLevelFromTotalXp, getLevelProgress } from "./progression";
+import { uncountedSessions } from "./session-gap";
 import { dayKey } from "./time";
 import { addDaysToDateKey } from "./workout-plan";
 
 /** `PeriodSessionRow`가 그대로 들어온다 — 필요한 모양만 구조적으로 받는다 */
 export type ReportSessionInput = {
   completedAt: string;
+  /** 0144 — 쪼개기 규칙용 시작 시각. 없으면 규칙 대상이 아니다 */
+  startedAt?: string | null;
   durationMinutes?: number | null;
   exercises: readonly {
     exerciseType: "weight" | "bodyweight" | "cardio";
@@ -50,7 +53,10 @@ export function dailyTotals(
   timeZone: string,
 ): Map<string, DayTotals> {
   const out = new Map<string, DayTotals>();
-  for (const s of sessions) {
+  // '운동 횟수'와 같은 규칙 — 순위와 내 차트가 갈리면 안 된다. 입력은 한 사람의 세션이다.
+  const gapRows = sessions.map((s) => ({ userId: "", startedAt: s.startedAt, completedAt: s.completedAt }));
+  const uncounted = uncountedSessions(gapRows);
+  for (const [i, s] of sessions.entries()) {
     const key = dayKey(new Date(s.completedAt), timeZone);
     if (key < startDate || key > endDate) continue;
     const t = out.get(key) ?? {
@@ -61,7 +67,7 @@ export function dailyTotals(
       cardioKm: 0,
       volumeKg: 0,
     };
-    t.sessions += 1;
+    if (!uncounted.has(gapRows[i])) t.sessions += 1;
     if (s.durationMinutes != null && s.durationMinutes > 0) {
       t.minutes = (t.minutes ?? 0) + s.durationMinutes;
     }

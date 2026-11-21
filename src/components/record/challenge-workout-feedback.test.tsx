@@ -74,6 +74,42 @@ describe("운동 전후 챌린지 안내", () => {
   });
 });
 
+describe("1시간 규칙으로 횟수에서 빠진 운동은 작은 알림을 한 번 띄운다", () => {
+  const ex = [{ exerciseName: "푸시업", exerciseType: "bodyweight", bodyPart: "가슴", sets: [{ weightKg: 0, reps: 10, distanceMeters: 0, durationSeconds: 0, isCompleted: true }] }];
+  // 규칙 시작(2026-11-22 06:00 KST = 11-21 21:00Z) 이후의 두 운동. 앞 운동이 01:30Z에 끝나고 20분 뒤(01:50Z)에 이어 시작한다.
+  const gapSnapshot = (secondStart: string, secondEnd = "2026-11-22T02:10:00Z") => ({
+    ...snapshot,
+    rows: [
+      { sessionId: "p", userId: "me", startedAt: "2026-11-22T01:00:00Z", completedAt: "2026-11-22T01:30:00Z", durationMinutes: 30, exercises: ex },
+      { sessionId: "s", userId: "me", startedAt: secondStart, completedAt: secondEnd, durationMinutes: 20, exercises: ex },
+    ],
+  }) as ChallengeScoreSnapshot;
+  beforeEach(() => { try { sessionStorage.clear(); } catch { /* 무시 */ } });
+
+  it("20분 뒤 이어 한 운동이면 알림이 뜬다", async () => {
+    vi.mocked(loadChallengeScoreSnapshot).mockResolvedValue(gapSnapshot("2026-11-22T01:50:00Z"));
+    render(<ChallengeWorkoutResultCard userId="me" sessionId="s" context={context} gains={gains} photoDone/>);
+    expect(await screen.findByTestId("session-gap-notice")).toBeTruthy();
+    expect((await screen.findByTestId("session-gap-toast")).textContent).toMatch(/1시간 안에 이어 한 운동/);
+  });
+  it("같은 운동에는 카드를 다시 그려도 알림이 반복되지 않는다", async () => {
+    vi.mocked(loadChallengeScoreSnapshot).mockResolvedValue(gapSnapshot("2026-11-22T01:50:00Z"));
+    const first = render(<ChallengeWorkoutResultCard userId="me" sessionId="s" context={context} gains={gains} photoDone/>);
+    await screen.findByTestId("session-gap-toast");
+    first.unmount();
+    render(<ChallengeWorkoutResultCard userId="me" sessionId="s" context={context} gains={gains} photoDone/>);
+    await screen.findByTestId("session-gap-notice");
+    expect(screen.queryByTestId("session-gap-toast")).toBeNull();
+  });
+  it("1시간 넘게 쉬고 한 운동이면 알림이 없다", async () => {
+    vi.mocked(loadChallengeScoreSnapshot).mockResolvedValue(gapSnapshot("2026-11-22T02:40:00Z", "2026-11-22T03:00:00Z"));
+    render(<ChallengeWorkoutResultCard userId="me" sessionId="s" context={context} gains={gains} photoDone/>);
+    await screen.findByText(/이번 운동으로 기본 점수/);
+    expect(screen.queryByTestId("session-gap-toast")).toBeNull();
+    expect(screen.queryByTestId("session-gap-notice")).toBeNull();
+  });
+});
+
 describe("인터벌은 시작하기 전에 예상 점수를 보여준다", () => {
   // 인터벌 4종 — 종목마다 코스가 정한 횟수(4분=2회, 8분=4회)로 기록된다 (`tabataRepsForMinutes`)
   const interval = (reps: number): LocalExercise[] => ["버피", "마운틴 클라이머", "점핑잭", "스쿼트 점프"].map((name, i) => ({ key: `t${i}`, name, bodyPart: "코어", exerciseType: "bodyweight", measure: "reps", isCustom: false, sets: [newSet({ reps })] }));
