@@ -140,6 +140,7 @@ function SetTimerCard({
   onStart,
   onStop,
   onChangeSeconds,
+  countdownSeconds,
 }: {
   field: AmountField;
   seconds: number;
@@ -153,6 +154,7 @@ function SetTimerCard({
   onStop: () => void;
   /** 유산소의 수동 입력만 연결한다. 시간형 맨몸의 기존 측정 카드는 유지한다. */
   onChangeSeconds?: (seconds: number) => void;
+  countdownSeconds?: number | null;
 }) {
   const amount = field.format ? field.format(seconds) : `${seconds}${field.unit}`;
   /*
@@ -205,6 +207,11 @@ function SetTimerCard({
             onChange={(remainder) => onChangeSeconds(Math.floor(seconds / 60) * 60 + remainder)}
           />
         </div>
+      )}
+      {!running && countdownSeconds !== null && countdownSeconds !== undefined && (
+        <p role="status" className="mt-2 text-center text-xs font-bold text-accent">
+          {countdownSeconds}초 뒤 자동 시작 · 시작 비프음
+        </p>
       )}
       {running ? (
         <button
@@ -301,6 +308,7 @@ export function ActiveSessionOverlay({
   finishSaveError = false,
   paused,
   busy,
+  onPauseSession,
   canReplaceExercise,
   previousHint,
   onChallengeReps,
@@ -314,6 +322,7 @@ export function ActiveSessionOverlay({
   timerRunning,
   timerSeconds,
   timerTargetSeconds,
+  cardioCountdownSeconds,
   onStartTimer,
   onStopTimer,
   paceLabel,
@@ -372,6 +381,7 @@ export function ActiveSessionOverlay({
   finishSaveError?: boolean;
   paused: boolean;
   busy: boolean;
+  onPauseSession: () => void;
   /**
    * 지금 종목을 **다른 종목으로** 바꿀 수 있는가 (`canReplaceExercise`).
    *
@@ -414,6 +424,7 @@ export function ActiveSessionOverlay({
   timerSeconds: number;
   /** 계획·설정이 정한 목표 초. `0`이면 목표 없음 — 그때는 알림도 없다 */
   timerTargetSeconds: number;
+  cardioCountdownSeconds?: number | null;
   onStartTimer: () => void;
   /** 멈춘다. 홀드(시간 칸 하나뿐)면 부모가 세트 완료까지 같이 한다 */
   onStopTimer: () => void;
@@ -540,12 +551,21 @@ export function ActiveSessionOverlay({
               {!busy && !completionStamp ? photoSlot : null}
             </div>
             {/* 경과 시간 — 시안처럼 오른쪽 위. ⚠️ 휴식 타이머보다 작게 둔다(아래 주석) */}
+            <div className="flex flex-none items-center gap-2">
+              {!paused && !busy && !allDone && (
+                <button type="button" onClick={onPauseSession}
+                  className="rounded-lg border border-line px-2 py-1.5 text-[12px] font-bold text-fg"
+                  aria-label="전체 운동 일시정지">
+                  ⏸ 일시정지
+                </button>
+              )}
             <p
               aria-label={`운동 경과 시간 ${elapsedLabel}`}
               className="flex-none text-[26px] leading-none font-black tracking-tight tabular-nums"
             >
               {elapsedLabel}
             </p>
+            </div>
           </div>
 
           {/*
@@ -956,6 +976,7 @@ export function ActiveSessionOverlay({
                       busy={busy}
                       onStart={onStartTimer}
                       onStop={onStopTimer}
+                      countdownSeconds={cardioCountdownSeconds}
                       onChangeSeconds={(seconds) => onChangeAmount(field.key, seconds)}
                     />
                   ) : (
