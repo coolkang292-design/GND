@@ -10,6 +10,7 @@ export type IdleGuardSnapshot = {
   pausedSeconds: number;
   pausedAtMs: number | null;
   lastActivityMs: number | null;
+  pauseReason?: "manual" | "idle" | null;
 };
 
 type UseIdleGuardInput = {
@@ -81,8 +82,23 @@ export function useIdleGuard({
       }),
       pausedAtMs: null,
       lastActivityMs: now,
+      pauseReason: null,
     });
   }, []);
+
+  /** 수동 일시정지는 유산소라도 즉시 세션 전체 시간에 적용한다. */
+  const pauseManually = useCallback(() => {
+    if (!active) return;
+    const current = snapshotRef.current;
+    if (current.pausedAtMs !== null) return;
+    const next: IdleGuardSnapshot = {
+      ...current,
+      pausedAtMs: Date.now(),
+      pauseReason: "manual",
+    };
+    snapshotRef.current = next;
+    onChangeRef.current(next);
+  }, [active]);
 
   /** 종료 시 서버로 보낼 누적 정지 시간 — 정지 중이면 그 구간까지 포함한다 */
   const totalPausedSeconds = useCallback(
@@ -132,6 +148,7 @@ export function useIdleGuard({
       onChangeRef.current({
         ...current,
         pausedAtMs: idlePauseStartMs(current.lastActivityMs, lastRestEndsAtMs),
+        pauseReason: "idle",
       });
     };
 
@@ -155,6 +172,7 @@ export function useIdleGuard({
     nowMs,
     markActivity,
     resumeFromPause,
+    pauseManually,
     totalPausedSeconds,
   };
 }
