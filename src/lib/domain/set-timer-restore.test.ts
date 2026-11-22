@@ -36,6 +36,7 @@ function saved(over: Partial<SavedSetTimer> = {}): SavedSetTimer {
     setIndex: 0,
     startedAtMs: NOW - 20 * 60_000,
     targetSec: 30 * 60,
+    pauseBaselineSeconds: 0,
     ...over,
   };
 }
@@ -54,6 +55,10 @@ function restore(
 }
 
 describe("restoreSetTimer", () => {
+  it("이전에 정지한 시간을 복구 후에도 유지한다", () => {
+    expect(restore({ saved: saved({ pauseBaselineSeconds: 120 }) })?.pauseBaselineSeconds).toBe(120);
+  });
+
   /**
    * 이 테스트가 "저장은 되는데 화면에 안 뜨는" 사고를 잡는다.
    *
@@ -67,6 +72,7 @@ describe("restoreSetTimer", () => {
       setIndex: 0,
       startedAtMs: NOW - 20 * 60_000,
       targetSec: 30 * 60,
+      pauseBaselineSeconds: 0,
       goalAlreadyPassed: false,
     });
   });
