@@ -113,6 +113,34 @@ describe("유산소 자동시작 및 전체 일시정지 UI", () => {
     expect(screen.getByRole("status").textContent).toContain("5초 뒤 자동 시작");
   });
 
+  it("자동 시작 취소 버튼을 누르면 취소 함수가 호출된다", () => {
+    const onCancelAuto = vi.fn();
+    render(
+      <ActiveSessionOverlay
+        {...inputProps}
+        exerciseName="런닝머신"
+        fields={amountFields("cardio", null)}
+        cardioCountdownSeconds={3}
+        onCancelCardioAutoStart={onCancelAuto}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "자동 시작 취소" }));
+    expect(onCancelAuto).toHaveBeenCalledTimes(1);
+  });
+
+  it("카운트다운이 없으면 자동 시작 취소 버튼도 없다", () => {
+    render(
+      <ActiveSessionOverlay
+        {...inputProps}
+        exerciseName="런닝머신"
+        fields={amountFields("cardio", null)}
+        cardioCountdownSeconds={null}
+        onCancelCardioAutoStart={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: "자동 시작 취소" })).toBeNull();
+  });
+
   it("전체 일시정지 버튼을 누르면 세션 중지 함수가 호출된다", () => {
     const onPause = vi.fn();
     render(<ActiveSessionOverlay {...inputProps} onPauseSession={onPause} />);

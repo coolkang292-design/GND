@@ -141,6 +141,7 @@ function SetTimerCard({
   onStop,
   onChangeSeconds,
   countdownSeconds,
+  onCancelAutoStart,
 }: {
   field: AmountField;
   seconds: number;
@@ -155,6 +156,8 @@ function SetTimerCard({
   /** 유산소의 수동 입력만 연결한다. 시간형 맨몸의 기존 측정 카드는 유지한다. */
   onChangeSeconds?: (seconds: number) => void;
   countdownSeconds?: number | null;
+  /** 이 세트만 5초 자동 시작을 끈다. 직접 ▶ 시작은 그대로 쓸 수 있다. */
+  onCancelAutoStart?: () => void;
 }) {
   const amount = field.format ? field.format(seconds) : `${seconds}${field.unit}`;
   /*
@@ -209,9 +212,21 @@ function SetTimerCard({
         </div>
       )}
       {!running && countdownSeconds !== null && countdownSeconds !== undefined && (
-        <p role="status" className="mt-2 text-center text-xs font-bold text-accent">
-          {countdownSeconds}초 뒤 자동 시작 · 시작 비프음
-        </p>
+        <div className="mt-2 flex flex-col items-center gap-1.5">
+          <p role="status" className="text-center text-xs font-bold text-accent">
+            {countdownSeconds}초 뒤 자동 시작 · 시작 비프음
+          </p>
+          {onCancelAutoStart && (
+            <button
+              type="button"
+              onClick={onCancelAutoStart}
+              disabled={busy}
+              className="h-8 whitespace-nowrap rounded-full border border-line px-3 text-[11px] font-bold text-muted disabled:opacity-60"
+            >
+              자동 시작 취소
+            </button>
+          )}
+        </div>
       )}
       {running ? (
         <button
@@ -323,6 +338,7 @@ export function ActiveSessionOverlay({
   timerSeconds,
   timerTargetSeconds,
   cardioCountdownSeconds,
+  onCancelCardioAutoStart,
   onStartTimer,
   onStopTimer,
   paceLabel,
@@ -425,6 +441,7 @@ export function ActiveSessionOverlay({
   /** 계획·설정이 정한 목표 초. `0`이면 목표 없음 — 그때는 알림도 없다 */
   timerTargetSeconds: number;
   cardioCountdownSeconds?: number | null;
+  onCancelCardioAutoStart?: () => void;
   onStartTimer: () => void;
   /** 멈춘다. 홀드(시간 칸 하나뿐)면 부모가 세트 완료까지 같이 한다 */
   onStopTimer: () => void;
@@ -977,6 +994,7 @@ export function ActiveSessionOverlay({
                       onStart={onStartTimer}
                       onStop={onStopTimer}
                       countdownSeconds={cardioCountdownSeconds}
+                      onCancelAutoStart={onCancelCardioAutoStart}
                       onChangeSeconds={(seconds) => onChangeAmount(field.key, seconds)}
                     />
                   ) : (

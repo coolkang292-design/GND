@@ -23,6 +23,7 @@ export function IdlePauseModal({
   busy,
   onResume,
   onFinish,
+  onCancel,
 }: {
   /** 지금까지 멈춰 있던 시간(초) */
   pausedSeconds: number;
@@ -30,6 +31,8 @@ export function IdlePauseModal({
   busy: boolean;
   onResume: () => void;
   onFinish: () => void;
+  /** 이번 운동 기록을 통째로 버린다. 확인창은 부모가 띄운다. */
+  onCancel?: () => void;
 }) {
   const resumeRef = useRef<HTMLButtonElement>(null);
 
@@ -78,6 +81,16 @@ export function IdlePauseModal({
         >
           {busy ? "처리 중…" : "운동 종료하고 기록"}
         </button>
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={busy}
+            className="mt-2 h-11 w-full rounded-card text-[13px] font-bold text-faint disabled:opacity-60"
+          >
+            운동 취소 (기록 안 남김)
+          </button>
+        )}
       </div>
     </>
   );

@@ -4291,6 +4291,18 @@ function WorkoutScreen({ userId }: { userId: string }) {
     [focusedExercise, focusedSet, setFocus.setIndex, timerFocusKey, userId, setDraft, markActivity],
   );
 
+  /** 이 세트만 자동 시작을 끈다. "이미 처리한 세트"로 적어 두면 재진입해도 다시 켜지지 않는다. */
+  const cancelCardioAutoStart = useCallback(() => {
+    if (!cardioSetKey) return;
+    cardioAutoDeadlineRef.current = null;
+    setDraft((previous) => ({
+      ...previous,
+      cardioAutoStartedKeys: (previous.cardioAutoStartedKeys ?? []).includes(cardioSetKey)
+        ? previous.cardioAutoStartedKeys
+        : [...(previous.cardioAutoStartedKeys ?? []), cardioSetKey],
+    }));
+  }, [cardioSetKey, setDraft]);
+
   useEffect(() => {
     if (!cardioAutoKey) {
       cardioAutoDeadlineRef.current = null;
@@ -5736,6 +5748,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
         timerSeconds={timerSeconds}
         timerTargetSeconds={timerRunning && timer ? timer.targetSec : timerTargetSeconds}
         cardioCountdownSeconds={cardioCountdownSeconds}
+        onCancelCardioAutoStart={cancelCardioAutoStart}
         onStartTimer={() => startFocusedTimer("manual")}
         onStopTimer={() => {
           if (!focusedExercise || !focusedSet) return;
@@ -5837,6 +5850,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
           busy={busy}
           onResume={resumeFromPause}
           onFinish={() => void handleFinish()}
+          onCancel={() => void handleCancel()}
         />
       )}
     </div>
