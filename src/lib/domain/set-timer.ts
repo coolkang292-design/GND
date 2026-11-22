@@ -45,23 +45,27 @@ export const DEFAULT_HOLD_SECONDS = 30;
 export type SetTimerPhase = "idle" | "running";
 
 /**
- * 시작 시각으로부터 지금까지 흐른 초.
- *
- * ⚠️ **틱을 세지 않고 시각을 뺀다.** 브라우저는 백그라운드에서 타이머를 늦춘다 —
- * 이 저장소는 그 값을 이미 치렀다(`use-rest-countdown.ts` 주석: *"90초 휴식이
- * 5분이 됐다"*). 폰을 주머니에 넣고 뛰어도 초는 실제 시간대로 흐른다.
- *
- * ⚠️ **무동작 정지(`pausedSeconds`)를 빼지 않는다.** 세션 경과 시간
- * (`activeElapsedSeconds`)과 다른 점이고, 일부러 다르다. 매달리거나 뛰는 동안
- * 화면을 안 만지는 것이 **정상**이라 5분 무동작 정지가 걸리는데, 그걸 빼면
- * 진짜 30분 뛴 러닝이 5분으로 기록된다.
+ * 세트 시작 이후의 실제 진행 시간.
+ * 전체 세션의 일시정지 구간을 빼되, 이 세트가 시작되기 전의 정지 시간은 빼지 않는다.
+ * 기존 호출부에는 정지 필드가 없으므로 이전과 동일하게 동작한다.
  */
 export function setTimerSeconds(input: {
   startedAtMs: number | null;
   nowMs: number;
+  pausedSeconds?: number;
+  pausedAtMs?: number | null;
+  pauseBaselineSeconds?: number;
 }): number {
   if (input.startedAtMs === null) return 0;
-  return Math.max(0, Math.floor((input.nowMs - input.startedAtMs) / 1_000));
+  const until = input.pausedAtMs ?? input.nowMs;
+  const pausedAfterStart = Math.max(
+    0,
+    (input.pausedSeconds ?? 0) - (input.pauseBaselineSeconds ?? 0),
+  );
+  return Math.max(
+    0,
+    Math.floor((until - input.startedAtMs) / 1_000) - pausedAfterStart,
+  );
 }
 
 /**
