@@ -598,6 +598,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
      * 따라다녀서 **영영 도달하지 않는다.**
      */
     targetSec: number;
+    pauseBaselineSeconds: number;
   } | null>(() =>
     restoredTimer
       ? {
@@ -608,6 +609,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
             true,
           ),
           targetSec: restoredTimer.targetSec,
+          pauseBaselineSeconds: restoredTimer.pauseBaselineSeconds,
         }
       : null,
   );
@@ -822,6 +824,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
    * 되살린 시계가 이미 목표를 지났으면 **낸 것으로 치고 시작한다** (2026-09-23).
    * 화면을 켰을 뿐인데 "삐"가 나면 방금 목표에 닿은 것으로 오해한다.
    */
+  const cardioAutoDeadlineRef = useRef<{ key: string; endsAtMs: number } | null>(null);
   const goalBeepedRef = useRef<string | null>(
     restoredTimer?.goalAlreadyPassed
       ? goalBeepKey(
@@ -1024,7 +1027,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
     },
     [setDraft],
   );
-  const { paused, nowMs, markActivity, resumeFromPause, totalPausedSeconds } =
+  const { paused, nowMs, markActivity, resumeFromPause, pauseManually, totalPausedSeconds } =
     useIdleGuard({
       active,
       guarded: shouldGuardIdle({
@@ -1040,6 +1043,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
         pausedSeconds: draft.pausedSeconds,
         pausedAtMs: draft.pausedAtMs,
         lastActivityMs: draft.lastActivityMs,
+        pauseReason: draft.pauseReason,
       },
       onChange: handleIdleChange,
     });
@@ -2458,6 +2462,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
         durationSec: setTimerSeconds({
           startedAtMs: timer.startedAtMs,
           nowMs: Date.now(),
+          pausedSeconds: draftRef.current.pausedSeconds,
+          pausedAtMs: draftRef.current.pausedAtMs,
+          pauseBaselineSeconds: timer.pauseBaselineSeconds,
         }),
       });
     }
@@ -3344,6 +3351,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
       showToast("운동을 먼저 추가하세요");
       return;
     }
+    // Start 버튼은 사용자 조작이므로 5초 뒤 알림음을 위해 오디오를 미리 활성화한다.
+    prepareRestCountdownAudio();
     setBusy(true);
     try {
       let sessionId = draft.sessionId;
@@ -4221,9 +4230,101 @@ function WorkoutScreen({ userId }: { userId: string }) {
     ? amountFields(focusedExercise.exerciseType, focusedExercise.measure)
     : [];
   const timerRunning = timer !== null && timer.focusKey === timerFocusKey;
+
+  // ── 유산소 진입 5초 뒤 자동 타이머 (2026-11-22) ──────────────────
+  // 자동 시작은 세트마다 한 번. 중단한 타이머가 재진입만으로 다시 켜지지 않게 draft에 기억한다.
+  const cardioSetKey =
+    focusedExercise && focusedSet
+      ? `${focusedExercise.key}:${focusedSet.key}`
+      : null;
+  const cardioAutoKey =
+    active &&
+    overlayOpen &&
+    !paused &&
+    !busy &&
+    !timerRunning &&
+    focusedExercise?.exerciseType === "cardio" &&
+    focusedSet !== null &&
+    !focusedSet.done &&
+    cardioSetKey !== null &&
+    !(draft.cardioAutoStartedKeys ?? []).includes(cardioSetKey)
+      ? `${draft.sessionId}:${cardioSetKey}`
+      : null;
+
+  const startFocusedTimer = useCallback(
+    (source: "auto" | "manual", scheduledAtMs?: number) => {
+      const current = draftRef.current;
+      if (!current.sessionId || current.startedAtMs === null || current.pausedAtMs !== null) return;
+      if (!focusedExercise || !focusedSet || focusedSet.done) return;
+      const liveExercise = current.exercises.find((ex) => ex.key === focusedExercise.key);
+      if (!liveExercise?.sets.some((set) => set.key === focusedSet.key && !set.done)) return;
+      const key = `${focusedExercise.key}:${focusedSet.key}`;
+      if (source === "auto" && (current.cardioAutoStartedKeys ?? []).includes(key)) return;
+
+      if (source === "manual") prepareRestCountdownAudio();
+      markActivity();
+      const startedAtMs = scheduledAtMs ?? Date.now();
+      const targetSec = durationSecondsOf(focusedSet);
+      const pauseBaselineSeconds = current.pausedSeconds;
+      setTimer({ startedAtMs, focusKey: timerFocusKey, targetSec, pauseBaselineSeconds });
+      saveSetTimer(userId, {
+        sessionId: current.sessionId,
+        exerciseKey: focusedExercise.key,
+        setIndex: setFocus.setIndex,
+        startedAtMs,
+        targetSec,
+        pauseBaselineSeconds,
+      });
+      if (focusedExercise.exerciseType === "cardio") {
+        setDraft((previous) => ({
+          ...previous,
+          cardioAutoStartedKeys: (previous.cardioAutoStartedKeys ?? []).includes(key)
+            ? previous.cardioAutoStartedKeys
+            : [...(previous.cardioAutoStartedKeys ?? []), key],
+        }));
+      }
+      if (source === "auto") {
+        // 이미 준비된 오디오가 동작 가능하면 삐 소리. iOS 차단 시에도 시간은 시작된다.
+        playRestCountdownBeep({ durationSeconds: 0.35 });
+      }
+    },
+    [focusedExercise, focusedSet, setFocus.setIndex, timerFocusKey, userId, setDraft, markActivity],
+  );
+
+  useEffect(() => {
+    if (!cardioAutoKey) {
+      cardioAutoDeadlineRef.current = null;
+      return;
+    }
+    const endsAtMs = Date.now() + 5_000;
+    cardioAutoDeadlineRef.current = { key: cardioAutoKey, endsAtMs };
+    const timeoutId = window.setTimeout(() => {
+      if (cardioAutoDeadlineRef.current?.key !== cardioAutoKey) return;
+      cardioAutoDeadlineRef.current = null;
+      // iOS에서 화면이 잠들어 타이머 콜백이 늦게 실행돼도 실제 시작 예정시각을 적용한다.
+      startFocusedTimer("auto", endsAtMs);
+    }, 5_000);
+    return () => {
+      window.clearTimeout(timeoutId);
+      if (cardioAutoDeadlineRef.current?.key === cardioAutoKey) {
+        cardioAutoDeadlineRef.current = null;
+      }
+    };
+  }, [cardioAutoKey, startFocusedTimer]);
+  const cardioCountdownSeconds =
+    cardioAutoKey && cardioAutoDeadlineRef.current?.key === cardioAutoKey
+      ? Math.max(1, Math.ceil((cardioAutoDeadlineRef.current.endsAtMs - nowMs) / 1_000))
+      : cardioAutoKey ? 5 : null;
+
   const timerSeconds =
     timer !== null && timerRunning
-      ? setTimerSeconds({ startedAtMs: timer.startedAtMs, nowMs })
+      ? setTimerSeconds({
+          startedAtMs: timer.startedAtMs,
+          nowMs,
+          pausedSeconds: draft.pausedSeconds,
+          pausedAtMs: draft.pausedAtMs,
+          pauseBaselineSeconds: timer.pauseBaselineSeconds,
+        })
       : focusedSet
         ? durationSecondsOf(focusedSet)
         : 0;
@@ -5597,6 +5698,10 @@ function WorkoutScreen({ userId }: { userId: string }) {
         finishSaveError={finishSaveError}
         paused={paused}
         busy={busy}
+        onPauseSession={() => {
+          stopRest();
+          pauseManually();
+        }}
         onChangeAmount={(key, value) => {
           if (!focusedExercise) return;
           changeAmountInSet(focusedExercise.key, setFocus.setIndex, key, value);
@@ -5630,29 +5735,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
         timerRunning={timerRunning}
         timerSeconds={timerSeconds}
         timerTargetSeconds={timerRunning && timer ? timer.targetSec : timerTargetSeconds}
-        onStartTimer={() => {
-          markActivity();
-          /*
-            ⚠️ **여기서 오디오를 깨워야 한다.** 브라우저는 사용자 제스처 뒤에만
-            소리를 허용한다 — `▶ 시작` 탭이 그 제스처다. 목표 도달 시점에
-            처음 부르면 그때는 제스처가 없어 아무 소리도 안 난다.
-          */
-          prepareRestCountdownAudio();
-          const startedAtMs = Date.now();
-          const targetSec = focusedSet ? durationSecondsOf(focusedSet) : 0;
-          setTimer({ startedAtMs, focusKey: timerFocusKey, targetSec });
-          // 새로고침·앱 재시작에도 살아남게 (2026-09-23). 순번이 아니라
-          // 종목 key로 적는다 — 되살릴 때 순서가 바뀌어 있어도 찾아간다.
-          if (focusedExercise && draft.sessionId) {
-            saveSetTimer(userId, {
-              sessionId: draft.sessionId,
-              exerciseKey: focusedExercise.key,
-              setIndex: setFocus.setIndex,
-              startedAtMs,
-              targetSec,
-            });
-          }
-        }}
+        cardioCountdownSeconds={cardioCountdownSeconds}
+        onStartTimer={() => startFocusedTimer("manual")}
         onStopTimer={() => {
           if (!focusedExercise || !focusedSet) return;
           finishTimedSet(focusedExercise, setFocus.setIndex);
@@ -5749,6 +5833,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
       {paused && (
         <IdlePauseModal
           pausedSeconds={pausedForSec}
+          manual={draft.pauseReason === "manual"}
           busy={busy}
           onResume={resumeFromPause}
           onFinish={() => void handleFinish()}
