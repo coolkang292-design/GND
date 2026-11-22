@@ -100,6 +100,27 @@ const renderInput = (o: Partial<typeof inputProps> = {}) =>
 const renderRest = (o: Partial<typeof restProps> = {}) =>
   render(<ActiveSessionOverlay {...restProps} {...o} />);
 
+describe("유산소 자동시작 및 전체 일시정지 UI", () => {
+  it("유산소 진입 시 5초 자동 시작 안내가 보인다", () => {
+    render(
+      <ActiveSessionOverlay
+        {...inputProps}
+        exerciseName="런닝머신"
+        fields={amountFields("cardio", null)}
+        cardioCountdownSeconds={5}
+      />,
+    );
+    expect(screen.getByRole("status").textContent).toContain("5초 뒤 자동 시작");
+  });
+
+  it("전체 일시정지 버튼을 누르면 세션 중지 함수가 호출된다", () => {
+    const onPause = vi.fn();
+    render(<ActiveSessionOverlay {...inputProps} onPauseSession={onPause} />);
+    fireEvent.click(screen.getByRole("button", { name: "전체 운동 일시정지" }));
+    expect(onPause).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("시간 수동 기록 — 측정 시작 없이 입력", () => {
   function ManualTimed({ onComplete, onStart = vi.fn(), fields = amountFields("cardio", null) }: {
     onComplete: (values: SetValues) => void;
