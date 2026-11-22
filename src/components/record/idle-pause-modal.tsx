@@ -19,12 +19,14 @@ function formatDuration(totalSeconds: number): string {
  */
 export function IdlePauseModal({
   pausedSeconds,
+  manual = false,
   busy,
   onResume,
   onFinish,
 }: {
   /** 지금까지 멈춰 있던 시간(초) */
   pausedSeconds: number;
+  manual?: boolean;
   busy: boolean;
   onResume: () => void;
   onFinish: () => void;
@@ -47,11 +49,12 @@ export function IdlePauseModal({
       >
         <div className="text-4xl">⏸️</div>
         <h2 id="idle-pause-title" className="mt-2 text-lg font-extrabold">
-          운동 시간을 멈췄어요
+          {manual ? "전체 운동 일시정지 중" : "운동 시간을 멈췄어요"}
         </h2>
         <p id="idle-pause-body" className="mt-1.5 text-[12.5px] leading-5 text-muted">
-          {Math.round(IDLE_LIMIT_SECONDS / 60)}분 동안 아무 기록이 없어서 시간
-          카운팅을 정지했어요. 멈춘 시간은 오늘 운동 시간에 포함되지 않아요.
+          {manual
+            ? "일시정지 중에는 전체 운동시간과 진행 중인 종목의 시간이 함께 멈춥니다."
+            : `${Math.round(IDLE_LIMIT_SECONDS / 60)}분 동안 아무 기록이 없어서 시간 카운팅을 정지했어요. 멈춘 시간은 오늘 운동 시간에 포함되지 않아요.`}
         </p>
         <p className="mt-3 font-mono text-3xl font-extrabold text-warn">
           {formatDuration(pausedSeconds)}
