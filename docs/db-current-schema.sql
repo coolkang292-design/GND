@@ -259,7 +259,7 @@ CREATE OR REPLACE FUNCTION public.apply_xp_and_progress(p_user_id uuid, p_amount
 AS $function$
 declare
   v_inserted boolean := false;
-  v_gate jsonb; v_i int;
+  v_gate jsonb; v_settle jsonb; v_i int;
   v_prev_xp int; v_new_xp int;
   v_prev_level int; v_new_level int;
   v_prev_stage int; v_new_stage int;
@@ -279,7 +279,6 @@ begin
       on conflict(user_id) do update set error_code=excluded.error_code,phase=excluded.phase,occurred_at=now();
   end;
 
-  -- 1) 원장 insert (중복 방지 인덱스가 병렬/재시도 방어)
   begin
     insert into xp_transactions
       (user_id, amount, transaction_type, reason, reward_group,
@@ -289,7 +288,7 @@ begin
     v_inserted := true;
     v_new_xp := v_prev_xp + p_amount;
   exception when unique_violation then
-    v_inserted := false; -- 이미 지급됨 → 진행 변경 없음
+    v_inserted := false;
   end;
 
   if not v_inserted then
@@ -299,68 +298,70 @@ begin
       'levelUp', false, 'stageUp', false, 'unlockedRewards', '[]'::jsonb);
   end if;
 
-  -- 2) 레벨/단계 재계산 (컷 = level_definitions)
-  select level, stage_index into v_new_level, v_new_stage
-  from level_definitions where required_total_xp <= v_new_xp
-  order by required_total_xp desc limit 1;
-
-  -- 서버 규칙 ON에서는 XP 레벨과 캐릭터 단계를 분리한다.
   if (select enabled from public.stage_evolution_settings where singleton) then
-    v_new_stage := v_prev_stage;
-  else
-    v_new_stage := greatest(v_prev_stage,v_new_stage);
-  end if;
-
-  update user_progress set
-    total_xp = v_new_xp, current_level = v_new_level, current_stage = v_new_stage,
-    last_level_up_at = case when v_new_level > v_prev_level then now() else last_level_up_at end,
-    last_stage_up_at = case when v_new_stage > v_prev_stage then now() else last_stage_up_at end,
-    updated_at = now()
-  where user_id = p_user_id;
-
-  if (select enabled from public.stage_evolution_settings where singleton) then
+    update user_progress set total_xp = v_new_xp, updated_at = now() where user_id = p_user_id;
     v_gate := gnd_evolution.safe_evaluate(p_user_id);
     v_new_stage := (v_gate->>'currentStage')::int;
-  elsif v_new_stage > v_prev_stage then
     begin
-      for v_i in (v_prev_stage+1)..v_new_stage loop
-        perform gnd_evolution.freeze_stage(p_user_id,v_i,now(),'actual');
-      end loop;
+      v_settle := gnd_evolution.settle_level(p_user_id);
     exception when others then
-      insert into public.stage_evolution_errors(user_id,error_code,phase) values(p_user_id,sqlstate,'legacy_freeze')
+      insert into public.stage_evolution_errors(user_id,error_code,phase) values(p_user_id,sqlstate,'settle')
         on conflict(user_id) do update set error_code=excluded.error_code,phase=excluded.phase,occurred_at=now();
     end;
-  end if;
+    select current_level into v_new_level from user_progress where user_id = p_user_id;
+    v_unlocked := coalesce(v_gate->'unlockedRewards', '[]'::jsonb) || coalesce(v_settle->'unlocked', '[]'::jsonb);
+  else
+    select level, stage_index into v_new_level, v_new_stage
+    from level_definitions where required_total_xp <= v_new_xp
+    order by required_total_xp desc limit 1;
+    v_new_stage := greatest(v_prev_stage,v_new_stage);
 
-  -- 3) 통과한 레벨 보상 (prev < lv <= new) — 한 번에 여러 레벨도 모두 지급
-  for v_reward in
-    select level, reward_key, reward_label from level_definitions
-    where level > v_prev_level and level <= v_new_level and reward_key is not null
-    order by level asc
-  loop
-    insert into user_unlocks (user_id, unlock_key, source_level)
-    values (p_user_id, v_reward.reward_key, v_reward.level)
-    on conflict (user_id, unlock_key) do nothing;
-    get diagnostics v_new_unlock = row_count;
+    update user_progress set
+      total_xp = v_new_xp, current_level = v_new_level, current_stage = v_new_stage,
+      last_level_up_at = case when v_new_level > v_prev_level then now() else last_level_up_at end,
+      last_stage_up_at = case when v_new_stage > v_prev_stage then now() else last_stage_up_at end,
+      updated_at = now()
+    where user_id = p_user_id;
 
-    if v_new_unlock > 0 then
-      v_unlocked := v_unlocked || jsonb_build_object('key', v_reward.reward_key, 'label', v_reward.reward_label);
+    if v_new_stage > v_prev_stage then
+      begin
+        for v_i in (v_prev_stage+1)..v_new_stage loop
+          perform gnd_evolution.freeze_stage(p_user_id,v_i,now(),'actual');
+        end loop;
+      exception when others then
+        insert into public.stage_evolution_errors(user_id,error_code,phase) values(p_user_id,sqlstate,'legacy_freeze')
+          on conflict(user_id) do update set error_code=excluded.error_code,phase=excluded.phase,occurred_at=now();
+      end;
+    end if;
 
-      if v_reward.reward_key like 'streak_shield%' or v_reward.reward_key = 'eternal_flame' then
-        v_shield_amt := case when v_reward.level >= 31 then 3 when v_reward.level >= 25 then 2 else 1 end;
-        insert into streak_shield_transactions (user_id, amount, reason, source_type, source_id)
-        values (p_user_id, v_shield_amt, 'level_reward', 'level', v_reward.level::text)
-        on conflict (user_id, reason, source_type, source_id) do nothing;
-        get diagnostics v_shield_ins = row_count;
-        if v_shield_ins > 0 then
-          update user_progress set streak_shield_count = streak_shield_count + v_shield_amt
-          where user_id = p_user_id;
+    for v_reward in
+      select level, reward_key, reward_label from level_definitions
+      where level > v_prev_level and level <= v_new_level and reward_key is not null
+      order by level asc
+    loop
+      insert into user_unlocks (user_id, unlock_key, source_level)
+      values (p_user_id, v_reward.reward_key, v_reward.level)
+      on conflict (user_id, unlock_key) do nothing;
+      get diagnostics v_new_unlock = row_count;
+
+      if v_new_unlock > 0 then
+        v_unlocked := v_unlocked || jsonb_build_object('key', v_reward.reward_key, 'label', v_reward.reward_label);
+
+        if v_reward.reward_key like 'streak_shield%' or v_reward.reward_key = 'eternal_flame' then
+          v_shield_amt := case when v_reward.level >= 31 then 3 when v_reward.level >= 25 then 2 else 1 end;
+          insert into streak_shield_transactions (user_id, amount, reason, source_type, source_id)
+          values (p_user_id, v_shield_amt, 'level_reward', 'level', v_reward.level::text)
+          on conflict (user_id, reason, source_type, source_id) do nothing;
+          get diagnostics v_shield_ins = row_count;
+          if v_shield_ins > 0 then
+            update user_progress set streak_shield_count = streak_shield_count + v_shield_amt
+            where user_id = p_user_id;
+          end if;
         end if;
       end if;
-    end if;
-  end loop;
+    end loop;
+  end if;
 
-  -- 레벨/단계 동시 상승도 알림은 한 곳에서 한 번만 만든다.
   perform gnd_evolution.notify_progress(p_user_id,v_prev_level,v_new_level,v_prev_stage,v_new_stage);
 
   return jsonb_build_object('inserted', true, 'amount', p_amount,
@@ -1062,7 +1063,7 @@ declare
   v_eff date; v_has_daily boolean;
   v_base int := 0; v_time int := 0; v_plan int := 0; v_rec int := 0; v_photo int := 0;
   v_total int := 0;
-  v_prog jsonb; v_orig int; v_gate jsonb; v_before_stage int; v_level int;
+  v_prog jsonb; v_orig int; v_gate jsonb; v_before_stage int; v_level int; v_new_level int;
   v_streak int; v_mult numeric; v_points int := 0; v_badges jsonb := '[]'::jsonb;
   v_elapsed int; v_paused int;
 begin
@@ -1090,8 +1091,6 @@ begin
     raise exception 'invalid_status:%', s.status;
   end if;
 
-  -- ⬇ 0055: 정지 시간은 클라이언트가 보내는 값이므로 0 ~ 실제 경과초로 클램프한다.
-  --   과대 신고해도 자기 XP만 줄고, 음수 duration은 생기지 않는다.
   v_elapsed := floor(extract(epoch from now() - s.started_at))::int;
   v_paused := least(greatest(coalesce(p_paused_seconds, 0), 0), greatest(v_elapsed, 0));
 
@@ -1124,7 +1123,6 @@ begin
                    when v_dur >= 40 then 20 when v_dur >= 20 then 10 else 0 end;
     if not v_tabata then
       v_plan := 0;
-      -- 0027: 완료 세트는 실적(횟수·시간·거리)이 하나라도 있으면 충족
       v_rec := case when exists (
           select 1 from workout_sets ws join workout_exercises we on we.id = ws.workout_exercise_id
           where we.session_id = p_session_id and ws.is_completed
@@ -1160,18 +1158,17 @@ begin
     into v_prog from user_progress where user_id = s.user_id;
   end if;
 
-  -- 같은 날 두 번째 유효 운동(XP0)도 진화를 재판정한다. 완료 재송신은 앞에서 반환한다.
   if v_total = 0 and v_valid and (select enabled from public.stage_evolution_settings where singleton) then
     select current_stage,current_level into v_before_stage,v_level from public.user_progress
       where user_id=s.user_id for update;
     v_gate := gnd_evolution.safe_evaluate(s.user_id);
+    v_new_level := coalesce((v_gate->>'newLevel')::int, v_level);
     v_prog := v_prog || jsonb_build_object('previousStage',v_before_stage,'newStage',v_gate->'currentStage',
-      'stageUp',v_gate->'stageUp');
-    perform gnd_evolution.notify_progress(s.user_id,v_level,v_level,v_before_stage,(v_gate->>'currentStage')::int);
+      'stageUp',v_gate->'stageUp','newLevel',v_new_level,'levelUp',v_new_level > v_level,
+      'unlockedRewards',coalesce(v_gate->'unlockedRewards','[]'::jsonb));
+    perform gnd_evolution.notify_progress(s.user_id,v_level,v_new_level,v_before_stage,(v_gate->>'currentStage')::int);
   end if;
 
-  -- ⬇ 0032 추가: 운동 포인트. XP와 같은 조건(그날 첫 유효 운동)에서만 준다.
-  --   포인트만 무제한이면 하루에 짧게 여러 번 끊어 하는 악용이 생긴다.
   v_streak := public.current_streak_days(s.user_id);
   v_mult := public.point_multiplier(v_streak);
   if v_total > 0 then
@@ -1181,13 +1178,8 @@ begin
       jsonb_build_object('base', 100, 'streak_days', v_streak));
   end if;
 
-  -- ⬇ 0032 추가: 배지 판정. 포인트 지급 뒤라 배지 보너스가 위에 쌓인다.
   v_badges := public.evaluate_badges(s.user_id);
 
-  -- ⬇ 0065: 열람창 알림. 판정 규칙은 `notify_challenge_peek_unlock`이 갖는다.
-  --   예전에는 이 자리에 조건이 통째로 박혀 있었고 "오늘 포함 5연속"만 봤다 —
-  --   그래서 5일을 채운 뒤로는 연속이 끊길 때까지 **매일** 알림이 갔다.
-  --   viewing-pass.ts의 challengePassStatus와 **같은 판정**이어야 한다.
   perform public.notify_challenge_peek_unlock(s.user_id);
 
   return jsonb_build_object(
@@ -2379,7 +2371,6 @@ declare
   v_meters numeric;
 begin
   if auth.uid() is null then raise exception 'not_authenticated'; end if;
-  -- 0081: 크루 **또는** 같은 챌린지 (0039는 크루만이었다)
   if p_target_id <> auth.uid()
      and not public.is_crew_with(p_target_id)
      and not public.shares_any_challenge_with(p_target_id) then
@@ -2400,51 +2391,18 @@ begin
   from user_badges b
   where b.user_id = p_target_id;
 
-  -- ── 가입일 · 타임존 ────────────────────────────────────────
-  -- 0085: bio·SNS를 **여기 얹는다.** 이 select는 이미 profiles를 읽고 있어서
-  -- 왕복이 늘지 않는다. 별도 조회를 새로 놓으면 문지기가 두 곳으로 갈라진다.
   select p.created_at, coalesce(nullif(p.timezone, ''), 'Asia/Seoul'),
          p.bio, p.instagram_url, p.youtube_url
     into v_joined_at, v_tz, v_bio, v_instagram, v_youtube
   from profiles p where p.id = p_target_id;
 
-  -- ── 레벨업 시점 ────────────────────────────────────────────
-  --
-  -- 전용 기록이 없다. `notifications(type='level_up')`이 있긴 한데 **알림은
-  -- 지워질 수 있어서** 진실로 쓸 수 없다. 대신 `xp_transactions`를 시간순으로
-  -- 되감아 각 레벨 임계를 **처음 넘은 순간**을 찾는다 — 원장이 남아 있는 한 같은
-  -- 답이 나온다.
-  --
-  -- ⚠ 누적합이 항상 오르지는 않는다(`reverse`는 음수다). 그래서 `min(created_at)`이다 —
-  --   "처음 넘은 때"가 레벨업한 때다. 나중에 깎여 내려가도 그 사건은 일어났다.
-  -- ⚠ level 1(required_total_xp = 0)은 뺀다. 그건 레벨업이 아니라 가입이다.
-  with running as (
-    select t.created_at,
-           sum(t.amount) over (
-             order by t.created_at, t.id
-             rows between unbounded preceding and current row
-           ) as total
-    from xp_transactions t
-    where t.user_id = p_target_id
-  )
   select coalesce(
-           jsonb_agg(
-             jsonb_build_object('level', ld.level, 'at', f.at)
-             order by ld.level
-           ), '[]'::jsonb)
+           jsonb_agg(jsonb_build_object('level', h.level, 'at', h.entered_at) order by h.level),
+           '[]'::jsonb)
     into v_level_ups
-  from level_definitions ld
-  cross join lateral (
-    select min(r.created_at) as at from running r
-    where r.total >= ld.required_total_xp
-  ) f
-  where ld.required_total_xp > 0 and f.at is not null;
+  from user_level_history h
+  where h.user_id = p_target_id and h.level > 1;
 
-  -- ── 누적 성과 ──────────────────────────────────────────────
-  --
-  -- ⚠ 완료 판정은 앱의 `getCompletedSessions`와 **같은 세 조건**이다
-  --   (status='completed' · deleted_at is null · completed_at is not null).
-  --   하나라도 빠뜨리면 같은 사람의 숫자가 화면마다 갈린다.
   select count(*),
          coalesce(sum(s.duration_minutes), 0),
          count(distinct (s.completed_at at time zone v_tz)::date)
@@ -2455,7 +2413,6 @@ begin
     and s.deleted_at is null
     and s.completed_at is not null;
 
-  -- ⚠ 완료된 세트만 센다. 담아 놓고 안 한 세트의 거리는 뛴 것이 아니다.
   select coalesce(sum(st.distance_meters), 0)
     into v_meters
   from workout_sessions s
@@ -2471,15 +2428,14 @@ begin
     'totalXp',      coalesce(v_progress.total_xp, 0),
     'currentLevel', coalesce(v_progress.current_level, 1),
     'currentStage', coalesce(v_progress.current_stage, 1),
+    'stageXp',      v_progress.stage_xp,
     'badges',       v_badges,
-    -- 0081부터
     'joinedAt',       v_joined_at,
     'levelUps',       v_level_ups,
     'workoutCount',   coalesce(v_count, 0),
     'totalMinutes',   coalesce(v_minutes, 0),
     'workoutDays',    coalesce(v_days, 0),
     'distanceMeters', coalesce(v_meters, 0),
-    -- 0085 — 소개·SNS. 문지기(본인/크루/같은 챌린지)는 위에서 이미 통과했다.
     'bio',           v_bio,
     'instagramUrl',  v_instagram,
     'youtubeUrl',    v_youtube
@@ -3982,7 +3938,7 @@ CREATE OR REPLACE FUNCTION public.refresh_my_stage_evolution()
  SECURITY DEFINER
  SET search_path TO ''
 AS $function$
-declare s jsonb; level int; previous int;
+declare s jsonb; level int; previous int; v_new_level int;
 begin
   if auth.uid() is null then raise exception 'not_authenticated'; end if;
   insert into public.user_progress(user_id) values(auth.uid()) on conflict(user_id) do nothing;
@@ -3991,8 +3947,10 @@ begin
     return gnd_evolution.stage_status(auth.uid(),now());
   end if;
   s:=gnd_evolution.safe_evaluate(auth.uid());
-  perform gnd_evolution.notify_progress(auth.uid(),level,level,previous,(s->>'currentStage')::int);
-  return gnd_evolution.stage_status(auth.uid(),now())||jsonb_build_object('previousStage',previous,'stageUp',s->'stageUp');
+  v_new_level:=coalesce((s->>'newLevel')::int,level);
+  perform gnd_evolution.notify_progress(auth.uid(),level,v_new_level,previous,(s->>'currentStage')::int);
+  return gnd_evolution.stage_status(auth.uid(),now())||jsonb_build_object('previousStage',previous,'stageUp',s->'stageUp',
+    'previousLevel',level,'newLevel',v_new_level,'unlockedRewards',coalesce(s->'unlockedRewards','[]'::jsonb));
 end $function$;
 
 -- ── reject_crew_request ──
