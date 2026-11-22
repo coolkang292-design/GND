@@ -148,6 +148,10 @@ export type WorkoutDraft = {
   pausedSeconds: number; // 누적 정지 시간(초). 종료 시 서버 duration에서 빠진다
   pausedAtMs: number | null; // 지금 정지 중이면 그 시작 시각
   lastActivityMs: number | null; // 마지막 동작 시각
+  /** 수동 일시정지인지, 5분 무동작 정지인지 (옛 기록에는 없음) */
+  pauseReason?: "manual" | "idle" | null;
+  /** 자동 유산소 타이머가 이미 시작된 세트 — 재진입 시 중복 자동 시작 방지 */
+  cardioAutoStartedKeys?: string[];
   tabataMinutes: number | null; // 타바타 세션이면 그 분수 — 무동작 감지 제외 판정용
   /**
    * 인터벌 블록(4종목)이 목록의 몇 번째부터인가 (0144, 2026-11-22). 없으면 0.
@@ -204,6 +208,8 @@ export function emptyDraft(restSeconds = DEFAULT_REST_SECONDS): WorkoutDraft {
     restSeconds,
     exercises: [],
     ...IDLE_DEFAULTS,
+    pauseReason: null,
+    cardioAutoStartedKeys: [],
     ...PROGRAM_DEFAULTS,
     ...SUGGESTION_DEFAULTS,
   };
@@ -287,7 +293,13 @@ export function loadDraft(userId: string): WorkoutDraft {
       return { ...parsed, version: 7, ...SUGGESTION_DEFAULTS };
     }
     if (parsed.version !== 7) return emptyDraft();
-    return parsed;
+    return {
+      ...parsed,
+      pauseReason: parsed.pauseReason === "manual" ? "manual" : null,
+      cardioAutoStartedKeys: Array.isArray(parsed.cardioAutoStartedKeys)
+        ? parsed.cardioAutoStartedKeys.filter((key): key is string => typeof key === "string")
+        : [],
+    };
   } catch {
     return emptyDraft();
   }
