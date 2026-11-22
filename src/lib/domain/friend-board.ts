@@ -144,6 +144,11 @@ export type FriendCrewInput = {
   nickname: string;
   avatarUrl: string | null;
   totalXp: number;
+  /**
+   * 서버가 정한 레벨. 단계별 경험치 방식에서는 진화 전까지 단계 마지막 레벨에서 멈추므로 누적 경험치로
+   * 다시 계산하면 어긋난다 — **있으면 이 값을 쓴다.** 없으면(옛 응답) 누적 경험치로 계산한다.
+   */
+  currentLevel?: number;
   /** 서버의 실제 캐릭터 단계. 이전 응답과의 호환을 위해 optional. */
   currentStage?: number;
   /** 없으면 male — 외형 조회가 실패해도 목록은 그려야 한다 */
@@ -204,7 +209,7 @@ function assembleRow(
     nickname: member.nickname,
     avatarUrl: member.avatarUrl,
     totalXp: member.totalXp,
-    level: progress.currentLevel,
+    level: member.currentLevel ?? progress.currentLevel,
     characterPath: characterSrc(
       stage.characterPath,
       member.characterVariant ?? "male",

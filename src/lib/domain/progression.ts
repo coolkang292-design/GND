@@ -116,6 +116,11 @@ export interface LevelProgress {
   xpForLevel: number;
   xpToNextLevel: number;
   percent: number; // 0~100
+  /**
+   * 단계별 경험치 방식(`getStageLevelProgress`)에서만 채운다. true = 이 단계의 경험치 양을 다 채워
+   * 레벨이 단계 마지막 레벨에서 멈춘 상태 — 진화 조건을 채워야 다음 레벨로 간다(최고 레벨이 아니다).
+   */
+  capped?: boolean;
 }
 
 export function getLevelProgress(totalXp: number): LevelProgress {
@@ -136,4 +141,83 @@ export function getLevelProgress(totalXp: number): LevelProgress {
     xpIntoLevel, xpForLevel, xpToNextLevel: next.requiredTotalXp - totalXp,
     percent: (xpIntoLevel / xpForLevel) * 100,
   };
+}
+
+// ── 단계별 경험치 방식 (2026-11-22, 사용자 확정) ──────────────────────────────────────────
+//
+// 레벨은 **누적 경험치가 아니라 "현재 단계에서 쌓은 경험치"(stage_xp)** 로 정한다. 단계가 올라갈
+// 때 새 단계의 출발점은 그 순간의 누적 경험치라서(= stage_xp가 0에서 시작) 막혀 있는 동안 넘친
+// 경험치가 다음 단계 조건을 미리 채우지 않는다. 누적 경험치(`total_xp`)는 그대로 계속 쌓인다.
+// 서버 규칙·설계: docs/superpowers/plans/2026-11-22-evolution-mission-and-stage-xp.md §3
+//
+// ⚠️ 서버(`user_progress.stage_xp`)가 null이면 아직 옛 방식이다 — 호출부는 `resolveLevelProgress`를
+//    써서 두 방식을 한 곳에서 가른다.
+
+/** 한 단계에서 채울 경험치 양 — 그 단계 첫 레벨 컷과 다음 단계 첫 레벨 컷의 차. 7단계는 35레벨 컷까지 */
+export function getStageXpWidth(stageIndex: number): number {
+  const first = LEVEL_DEFS.find((d) => d.stageIndex === stageIndex);
+  if (!first) throw new RangeError("invalid stage");
+  const nextFirst = LEVEL_DEFS.find((d) => d.stageIndex === stageIndex + 1);
+  const end = nextFirst ?? LEVEL_DEFS[LEVEL_DEFS.length - 1];
+  return end.requiredTotalXp - first.requiredTotalXp;
+}
+
+/**
+ * 단계 안 레벨/진행도. 한 단계는 5레벨이고 레벨 폭은 균등하다(`단계 양 / 5`, 마지막 7단계만 `/ 4`).
+ * `stageXp`가 단계 양에 닿으면 `capped`(7단계 제외) — 레벨은 단계 마지막 레벨에서 멈춘다.
+ */
+export function getStageLevelProgress(stageIndex: number, stageXp: number): LevelProgress {
+  if (!Number.isFinite(stageXp)) throw new Error("stageXp must be finite");
+  const first = LEVEL_DEFS.find((d) => d.stageIndex === stageIndex);
+  if (!first) throw new RangeError("invalid stage");
+  const xp = Math.max(0, stageXp); // 취소(음수) 적립으로 0 아래로 내려가지 않게
+  const width = getStageXpWidth(stageIndex);
+  const isLastStage = stageIndex === STAGES.length;
+  // 1~6단계는 5레벨이 단계 양을 5등분하고 다음 단계 첫 레벨이 그 끝이다. 마지막(7)단계는 끝이
+  // 35레벨 자체라 4등분이다(31~35레벨, 폭 1250).
+  const step = isLastStage ? width / 4 : width / 5;
+  const index = Math.min(4, Math.floor(xp / step));
+  const level = LEVEL_DEFS[first.level - 1 + index];
+  const capped = !isLastStage && xp >= width;
+  const base = {
+    currentLevel: level.level,
+    currentStageIndex: level.stageIndex,
+    stageName: level.stageName,
+    characterPath: level.characterPath,
+  };
+  if (isLastStage && index === 4) {
+    // 전설(마지막 단계)의 마지막 레벨 = 최고 레벨
+    return { ...base, nextLevelRequiredXp: null, xpIntoLevel: 0, xpForLevel: 0, xpToNextLevel: 0, percent: 100, capped: false };
+  }
+  if (capped) {
+    return { ...base, nextLevelRequiredXp: width, xpIntoLevel: step, xpForLevel: step, xpToNextLevel: 0, percent: 100, capped: true };
+  }
+  const nextThreshold = index === 4 ? width : (index + 1) * step;
+  const xpIntoLevel = xp - index * step;
+  return {
+    ...base,
+    nextLevelRequiredXp: nextThreshold,
+    xpIntoLevel,
+    xpForLevel: step,
+    xpToNextLevel: nextThreshold - xp,
+    percent: (xpIntoLevel / step) * 100,
+    capped: false,
+  };
+}
+
+/**
+ * 레벨 표시의 단일 진입점. 서버가 `stage_xp`를 주면(단계별 경험치 방식) 그 값으로, null/없음이면
+ * **지금까지와 똑같이** 누적 경험치로 계산한다 — 서버 전환 전에는 화면이 하나도 달라지지 않는다.
+ */
+export function resolveLevelProgress(input: {
+  totalXp: number;
+  /** 서버가 인정한 현재 단계(1~7) */
+  stage: number | null | undefined;
+  stageXp: number | null | undefined;
+}): LevelProgress {
+  const { totalXp, stage, stageXp } = input;
+  if (typeof stageXp === "number" && Number.isFinite(stageXp) && Number.isInteger(stage) && (stage as number) >= 1 && (stage as number) <= STAGES.length) {
+    return getStageLevelProgress(stage as number, stageXp);
+  }
+  return getLevelProgress(totalXp);
 }

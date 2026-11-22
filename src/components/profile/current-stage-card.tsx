@@ -1,6 +1,7 @@
 "use client";
 
 import { CharacterImage } from "@/components/character-image";
+import { cappedLevelCaption } from "@/lib/domain/level-caption";
 import { STAGE_DESCRIPTIONS } from "@/lib/domain/progression";
 import type { ProgressSummary } from "@/lib/progression";
 
@@ -73,9 +74,11 @@ export function CurrentStageCard({
         />
       </div>
       <p className="mt-1.5 text-[11.5px] text-muted">
-        {maxed
-          ? "35레벨을 모두 달성했어요. 최고 단계예요"
-          : `다음 레벨까지 ${summary.xpToNextLevel.toLocaleString()} XP`}
+        {summary.levelCapped
+          ? cappedLevelCaption({ totalXp: summary.totalXp })
+          : maxed
+            ? "35레벨을 모두 달성했어요. 최고 단계예요"
+            : `다음 레벨까지 ${summary.xpToNextLevel.toLocaleString()} XP`}
       </p>
     </section>
   );

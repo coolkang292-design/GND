@@ -259,6 +259,9 @@ import {
   settlePlanAfterWorkout,
 } from "@/lib/day-plan-store";
 import { DailyQuestCard } from "@/components/record/daily-quest-card";
+import { EvolutionMissionCard } from "@/components/record/evolution-mission-card";
+import { getMyEvolutionMission, missionPicks } from "@/lib/evolution-mission";
+import type { EvolutionMission } from "@/lib/domain/evolution-mission";
 import {
   dailyQuestCopy,
   planQuestCopy,
@@ -723,6 +726,14 @@ function WorkoutScreen({ userId }: { userId: string }) {
     [challengeGoals],
   );
   const [challengePhotoRequired, setChallengePhotoRequired] = useState(false);
+  /**
+   * 챌린지 조회가 한 번 **성공**했는가 (2026-11-22). `challengeGoals`는 챌린지가 없어도 못 읽어도
+   * `null`이라 "없다"와 "아직 모른다"를 못 가른다 — 모르는 동안 진화 미션을 깜빡 보였다가
+   * 챌린지 퀘스트로 바뀌면 안 된다.
+   */
+  const [challengeLoaded, setChallengeLoaded] = useState(false);
+  /** 챌린지가 없는 날의 진화 미션 — 못 읽으면 null(기록 화면은 그대로) */
+  const [evolutionMission, setEvolutionMission] = useState<EvolutionMission | null>(null);
   const [activeChallengeContexts, setActiveChallengeContexts] = useState<ActiveChallengeContext[]>([]);
   /** 완료 화면에서 인증사진을 올렸는가 — 기여 문구가 "쌓여요"→"쌓였어요"로 바뀐다 */
   const [resultPhotoDone, setResultPhotoDone] = useState(false);
@@ -1541,6 +1552,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
           .filter((entry): entry is PromiseFulfilledResult<ActiveChallengeContext> => entry.status === "fulfilled")
           .map((entry) => entry.value);
         setActiveChallengeContexts(contexts);
+        // 일부라도 못 읽었으면 "챌린지 없음"으로 단정하지 않는다
+        setChallengeLoaded(!loaded.some((entry) => entry.status === "rejected"));
         // Keep the picker/category warnings aware of every joined active challenge.
         setChallengeGoals(loaded.some((entry) => entry.status === "rejected") || contexts.length === 0 ? null : contexts.flatMap((c) => c.goals));
         // Legacy calendar indicator: true if any active challenge needs photo proof.
@@ -3726,6 +3739,50 @@ function WorkoutScreen({ userId }: { userId: string }) {
   );
 
   /**
+   * 챌린지가 없을 때 퀘스트가 겨냥할 것 — **다음 진화** (사용자 지시 2026-11-22).
+   * 챌린지 목표가 있으면 그쪽이 우선이라 읽지도 않는다. 못 읽어도 기록 화면은 산다(카드만 숨는다).
+   */
+  const missionWanted = challengeLoaded && challengeFocus === null;
+  useEffect(() => {
+    if (!missionWanted) return; // 보이는 쪽에서 `shownMission`이 가린다 — 여기서 상태를 지우지 않는다
+    let cancelled = false;
+    void getMyEvolutionMission(dayKey(new Date(), resolveTimeZone()))
+      .then((mission) => {
+        if (!cancelled) setEvolutionMission(mission);
+      })
+      .catch(() => {
+        if (!cancelled) setEvolutionMission(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [missionWanted, userId]);
+
+  /** 챌린지 목표가 생기면 이미 읽은 미션도 가린다 */
+  const shownMission = missionWanted ? evolutionMission : null;
+
+  /** 진화 미션 종목을 목표 세트까지 담고 목록 화면으로 간다. 이미 목록에 있는 종목은 건너뛴다 */
+  function addEvolutionMissionExercises() {
+    if (!shownMission) return;
+    const have = new Set(draftRef.current.exercises.map((e) => e.name.replace(/\s+/g, "").toLowerCase()));
+    const fresh = shownMission.exercises.filter(
+      (e) => !have.has(e.exerciseKey.replace(/\s+/g, "").toLowerCase()),
+    );
+    const { picks, missing } = missionPicks(fresh, catalog);
+    if (picks.length === 0) {
+      showToast(
+        fresh.length === 0
+          ? "이미 목록에 담겨 있어요"
+          : `종목 목록에서 ${missing[0]} 등을 찾지 못했어요. 운동 목록에서 직접 골라 주세요`,
+      );
+      return;
+    }
+    setCustomMode(false);
+    setQuestListOpen(true);
+    addConfiguredExercises(picks);
+  }
+
+  /**
    * 오늘 카드의 "오늘의 운동" 한 줄 (2026-08-19).
    *
    * ⚠️⚠️ **담긴 종목이 있을 때만 말한다.** 처음엔 제안(`suggestionCopy`)까지
@@ -4881,6 +4938,14 @@ function WorkoutScreen({ userId }: { userId: string }) {
               }
               routineCount={routines?.length ?? 0}
               suggestionKind={questKind ?? (emptyListPlan ? "repeat" : null)}
+              missionSlot={
+                questKind && shownMission ? (
+                  <EvolutionMissionCard
+                    mission={shownMission}
+                    onAdd={shownMission.exercises.length > 0 ? addEvolutionMissionExercises : undefined}
+                  />
+                ) : null
+              }
               heroImage={questHeroSrc}
               quest={
                 questKind
@@ -4963,6 +5028,13 @@ function WorkoutScreen({ userId }: { userId: string }) {
                   window.scrollTo({ top: 0 });
                 }}
                 options={
+                  <>
+                  {shownMission && (
+                    <EvolutionMissionCard
+                      mission={shownMission}
+                      onAdd={shownMission.exercises.length > 0 ? addEvolutionMissionExercises : undefined}
+                    />
+                  )}
                   <StartOptions
                     withQuest
                     hasHistory={hasHistory}
@@ -4973,6 +5045,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
                     onAdd={() => startCustomList("hub")}
                     onLoadRoutine={() => startCustomList("routine")}
                   />
+                  </>
                 }
               />
             )}

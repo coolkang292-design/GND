@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { cappedLevelCaption } from "@/lib/domain/level-caption";
 import { CharacterImage } from "@/components/character-image";
 import { useEffect, useRef, useState } from "react";
 import { Avatar } from "@/components/avatar";
@@ -147,9 +148,11 @@ export function MemberProfileBody({
             />
           </div>
           <p className="mt-1.5 text-[11.5px] text-muted">
-            {maxed
-              ? "최고 레벨을 달성했어요 🏆"
-              : `다음 레벨까지 ${profile.xpToNextLevel.toLocaleString()} XP`}
+            {profile.levelCapped
+              ? cappedLevelCaption({ compact: true })
+              : maxed
+                ? "최고 레벨을 달성했어요 🏆"
+                : `다음 레벨까지 ${profile.xpToNextLevel.toLocaleString()} XP`}
           </p>
         </div>
       </div>

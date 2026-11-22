@@ -1,5 +1,5 @@
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { getLevelProgress, getStageGroups } from "@/lib/domain/progression";
+import { getStageGroups, resolveLevelProgress } from "@/lib/domain/progression";
 import type { EarnedBadge } from "@/lib/domain/badges";
 import {
   characterSrc,
@@ -31,6 +31,11 @@ export interface ProgressSummary {
   nextLevelRequiredXp: number | null;
   xpToNextLevel: number;
   levelProgressPercent: number;
+  /**
+   * 단계 경험치를 다 채워 레벨이 단계 마지막 레벨에서 멈춘 상태 (단계별 경험치 방식, 2026-11-22).
+   * 진화 조건을 채워야 다음 레벨로 간다 — 화면은 "최고 레벨"이 아니라 진화 안내를 말한다.
+   */
+  levelCapped?: boolean;
   streakShieldCount: number;
   hasReceivedTodayWorkoutXp: boolean;
 }
@@ -49,7 +54,7 @@ export async function getProgressSummary(): Promise<ProgressSummary> {
   const [{ data, error }, todayXp, variant] = await Promise.all([
     supabase
       .from("user_progress")
-      .select("total_xp, current_stage, streak_shield_count")
+      .select("total_xp, current_stage, stage_xp, streak_shield_count")
       .maybeSingle(),
     supabase
       .from("xp_transactions")
@@ -62,7 +67,12 @@ export async function getProgressSummary(): Promise<ProgressSummary> {
   if (todayXp.error) throw todayXp.error;
 
   const totalXp = data?.total_xp ?? 0; // data null = 신규 사용자
-  const p = getLevelProgress(totalXp);
+  // 서버 `stage_xp`가 null이면 지금처럼 누적 경험치로, 있으면 단계 안 경험치로 레벨을 정한다
+  const p = resolveLevelProgress({
+    totalXp,
+    stage: data?.current_stage ?? null,
+    stageXp: data?.stage_xp ?? null,
+  });
   const stage = actualStage(data?.current_stage ?? p.currentStageIndex);
   return {
     totalXp,
@@ -74,6 +84,7 @@ export async function getProgressSummary(): Promise<ProgressSummary> {
     nextLevelRequiredXp: p.nextLevelRequiredXp,
     xpToNextLevel: p.xpToNextLevel,
     levelProgressPercent: p.percent,
+    levelCapped: p.capped === true,
     streakShieldCount: data?.streak_shield_count ?? 0,
     hasReceivedTodayWorkoutXp: (todayXp.count ?? 0) > 0,
   };
@@ -154,6 +165,8 @@ export interface CrewMemberProfile {
   nextLevelRequiredXp: number | null;
   xpToNextLevel: number;
   levelProgressPercent: number;
+  /** 단계 경험치를 다 채워 레벨이 멈춘 상태 (서버가 `stageXp`를 줄 때만 true가 될 수 있다) */
+  levelCapped?: boolean;
   badges: EarnedBadge[];
   /**
    * 0081부터. **0080 이전 서버에서는 전부 비어 있다** — 마이그레이션을 Run 하기
@@ -179,6 +192,8 @@ type CrewProfileRow = {
   totalXp?: number;
   currentLevel?: number;
   currentStage?: number;
+  /** 단계별 경험치 방식부터. 없으면(`undefined`/`null`) 옛 방식(누적 경험치)으로 그린다 */
+  stageXp?: number | null;
   badges?: { badgeKey: string; periodKey: string; earnedAt: string }[];
   // 0081
   joinedAt?: string | null;
@@ -213,7 +228,11 @@ export async function getCrewMemberProfile(
   const row = (data ?? {}) as CrewProfileRow;
   const variant = (await getCharacterVariants([targetId])).get(targetId) ?? "male";
   const totalXp = row.totalXp ?? 0;
-  const p = getLevelProgress(totalXp);
+  const p = resolveLevelProgress({
+    totalXp,
+    stage: row.currentStage ?? null,
+    stageXp: row.stageXp ?? null,
+  });
   const stage = actualStage(row.currentStage ?? p.currentStageIndex);
   return {
     totalXp,
@@ -225,6 +244,7 @@ export async function getCrewMemberProfile(
     nextLevelRequiredXp: p.nextLevelRequiredXp,
     xpToNextLevel: p.xpToNextLevel,
     levelProgressPercent: p.percent,
+    levelCapped: p.capped === true,
     badges: (row.badges ?? []).map((b) => ({
       badgeKey: b.badgeKey,
       periodKey: b.periodKey,

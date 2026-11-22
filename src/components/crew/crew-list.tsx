@@ -2,7 +2,6 @@
 
 import { Avatar } from "@/components/avatar";
 import { UserAvatar } from "@/components/user-avatar";
-import { getLevelProgress } from "@/lib/domain/progression";
 import type { CrewMember, CrewRequest } from "@/lib/domain/crew-link";
 
 /** 받은 요청 + 내 크루 — 표시 전용. 조회·상태는 /crew 페이지가 맡는다. */
@@ -96,11 +95,11 @@ export function CrewList({
                   <span className="block truncate text-[14px] font-extrabold">
                     {m.nickname}
                   </span>
-                  {/* ⚠️ DB 캐시값 currentLevel이 아니라 total_xp로 다시 계산한다.
-                      홈 친구 목록·프로필 시트가 그렇게 하고 있어서(progression.ts:157),
-                      여기만 캐시값을 쓰면 같은 사람이 화면마다 다른 레벨로 보인다. */}
+                  {/* 서버가 정한 레벨(`currentLevel`)을 쓴다 (2026-11-22). 단계별 경험치 방식에서는
+                      진화 전까지 레벨이 단계 마지막에서 멈추므로 total_xp로 다시 계산하면 어긋난다.
+                      홈 친구 목록(friend-board)도 같은 값을 쓴다 — 화면마다 같은 사람이 같은 레벨로 보인다. */}
                   <span className="block text-[12px] text-muted">
-                    Lv.{getLevelProgress(m.totalXp).currentLevel}
+                    Lv.{m.currentLevel}
                   </span>
                 </span>
               </button>

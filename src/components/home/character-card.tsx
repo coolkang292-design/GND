@@ -1,6 +1,7 @@
 "use client";
 
 import { CharacterImage } from "@/components/character-image";
+import { cappedLevelCaption } from "@/lib/domain/level-caption";
 import Link from "next/link";
 import { MAX_DAILY_WORKOUT_XP_NOW } from "@/lib/domain/xp";
 import type { ProgressSummary } from "@/lib/progression";
@@ -37,9 +38,11 @@ export function CharacterCard({ summary }: { summary: ProgressSummary }) {
             />
           </div>
           <p className="mt-1 text-[11px] text-muted">
-            {summary.nextLevelRequiredXp === null
-              ? "최고 레벨 달성"
-              : `다음 레벨까지 ${summary.xpToNextLevel} XP`}
+            {summary.levelCapped
+              ? cappedLevelCaption({ compact: true })
+              : summary.nextLevelRequiredXp === null
+                ? "최고 레벨 달성"
+                : `다음 레벨까지 ${summary.xpToNextLevel} XP`}
           </p>
           <p className="mt-0.5 text-[11px] font-semibold text-accent">
             {summary.hasReceivedTodayWorkoutXp

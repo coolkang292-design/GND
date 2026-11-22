@@ -40,6 +40,7 @@ export function RecordEmptyState({
   heroImage = null,
   onApplySuggestion,
   onApplySecondary,
+  missionSlot = null,
 }: {
   /**
    * 완료한 운동이 하나라도 있나.
@@ -62,6 +63,11 @@ export function RecordEmptyState({
   onApplySuggestion?: () => void;
   /** 4분 인터벌 — 담기가 아니라 **시작**이다 */
   onApplySecondary?: () => void;
+  /**
+   * 진화 미션 카드 (챌린지가 없는 날, 2026-11-22). 퀘스트 카드와 "다른 방법" 타일 **사이**에 선다.
+   * 퀘스트 문구가 없는 날(계획·완료)에는 안 그린다 — 그날은 미션을 말할 자리가 아니다.
+   */
+  missionSlot?: React.ReactNode;
 }) {
   const hasQuestButton = Boolean(suggestionKind && onApplySuggestion);
   // 인터벌이 이미 주 제안이면 타일에 같은 길을 또 두지 않는다
@@ -83,6 +89,14 @@ export function RecordEmptyState({
   );
 
   if (quest) {
+    const questOptions = missionSlot ? (
+      <>
+        {missionSlot}
+        {options}
+      </>
+    ) : (
+      options
+    );
     return (
       <div data-testid="record-start-card" className="flex flex-col gap-3">
         {hasQuestButton ? (
@@ -90,12 +104,12 @@ export function RecordEmptyState({
             quest={quest}
             heroImage={heroImage}
             onStart={onApplySuggestion!}
-            options={options}
+            options={questOptions}
           />
         ) : (
           <>
             <QuestHero quest={quest} heroImage={heroImage} />
-            {options}
+            {questOptions}
           </>
         )}
       </div>

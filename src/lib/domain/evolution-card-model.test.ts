@@ -152,3 +152,17 @@ describe("서버 판정을 그대로 쓰고 숨길 것은 숨긴다", () => {
     expect(tile(status({ conditions: [c("days", 70, 60, false)] }), "days")).toBeUndefined();
   });
 });
+
+describe("단계 경험치 조건(stage_xp) 표시", () => {
+  it("못 채웠으면 'N XP → M XP'와 쉬운 말 힌트(경험치는 계속 쌓여요)", () => {
+    const r = row(status({ conditions: [c("stage_xp", 1550, 3000, false)] }), "stage_xp")!;
+    expect(r.valueText).toBe("1,550 XP → 3,000 XP");
+    expect(r.label).toBe("이 단계 경험치");
+    expect(r.hint).toContain("1,450 XP");
+    expect(r.hint).toContain("경험치는 계속 쌓여요");
+  });
+  it("채웠으면 달성 타일로 'N XP' · 목표 표시", () => {
+    const t = tile(status({ conditions: [c("stage_xp", 3000, 3000, true)] }), "stage_xp")!;
+    expect(t).toMatchObject({ tone: "met", value: "3,000 XP", target: "목표 3,000 XP" });
+  });
+});

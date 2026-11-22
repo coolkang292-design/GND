@@ -1,6 +1,7 @@
 "use client";
 
 import { WorkoutCompleteStamp } from "@/components/record/workout-complete-stamp";
+import { cappedLevelCaption } from "@/lib/domain/level-caption";
 import Image from "next/image";
 import { CharacterImage } from "@/components/character-image";
 import Link from "next/link";
@@ -264,9 +265,11 @@ export function PersonalTodayCard({
                 />
               </div>
               <span className="flex-none text-[10.5px] text-muted">
-                {summary.nextLevelRequiredXp === null
-                  ? "최고 레벨 달성"
-                  : `다음 레벨까지 ${summary.xpToNextLevel} XP`}
+                {summary.levelCapped
+                  ? cappedLevelCaption({ compact: true })
+                  : summary.nextLevelRequiredXp === null
+                    ? "최고 레벨 달성"
+                    : `다음 레벨까지 ${summary.xpToNextLevel} XP`}
               </span>
             </div>
           ) : (

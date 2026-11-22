@@ -50,10 +50,13 @@ describe.skipIf(process.env.EVOLUTION_GATE_SIMULATION !== "1")("진화 규칙 �
         previousStageEnteredAtMs: previousEntry ? Date.parse(previousEntry.entered_at) : null });
       const goal = getStageGrowthGoal(p.current_stage, growth.previousStageExerciseCount);
       const score = goal.mode === "growth_preview" ? computeEvolutionGrowthScore(growth, goal.requiredCount) : null;
-      const days = [...new Set(sessions.map(s => dayKey(new Date(s.completed_at), DEFAULT_TIMEZONE)))].sort();
-      const elapsedWeeks = days.length ? Math.floor(daysBetween(days[0], dayKey(new Date(), DEFAULT_TIMEZONE)) / 7) : 0;
+      // 2026-11-22부터 습관 조건은 현재 단계 진입 뒤만 센다(서버 0146). 가입 후 전체가 아니다.
+      const sinceKey = dayKey(new Date(entry.entered_at), DEFAULT_TIMEZONE);
+      const allDays = [...new Set(sessions.map(s => dayKey(new Date(s.completed_at), DEFAULT_TIMEZONE)))].sort();
+      const days = allDays.filter(d => d >= sinceKey);
+      const elapsedWeeks = Math.max(0, Math.floor(daysBetween(sinceKey, dayKey(new Date(), DEFAULT_TIMEZONE)) / 7));
       const rule = goal.nextStage ? STAGE_RULES[goal.nextStage] : null;
-      const steady = countSteadyWindows(days, dayKey(new Date(entry.entered_at), DEFAULT_TIMEZONE), dayKey(new Date(), DEFAULT_TIMEZONE));
+      const steady = countSteadyWindows(allDays, sinceKey, dayKey(new Date(), DEFAULT_TIMEZONE));
       rows.push({ 사용자: nickname, 레벨: p.current_level, 현재단계: p.current_stage,
         다음진화: goal.nextStage ?? "최종", M: growth.previousStageExerciseCount ?? "—",
         N: goal.mode === "growth_preview" ? goal.requiredCount : "—", 성장: growth.growths.length,

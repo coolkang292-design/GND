@@ -1,7 +1,12 @@
 import type { GrowthRecord, StageGrowth } from "./level-growth";
+import { getStageXpWidth } from "./progression";
 
 export type GateCondition = {
-  key: "xp" | "days" | "weeks" | "recent" | "growth_count" | "growth_average" | "steady";
+  /**
+   * `xp` = 경험치 **레벨**(옛 방식), `stage_xp` = **이 단계에서 쌓은 경험치**(단계별 경험치 방식, 2026-11-22).
+   * 서버가 전환하기 전에는 `xp`, 전환한 뒤에는 `stage_xp`가 온다 — 앱은 둘 다 읽는다(옛 폰 앱이 깨지지 않게).
+   */
+  key: "xp" | "stage_xp" | "days" | "weeks" | "recent" | "growth_count" | "growth_average" | "steady";
   current: number | null;
   required: number | null;
   met: boolean;
@@ -53,7 +58,7 @@ export function parseStageGateStatus(value: unknown): StageGateStatus {
     !(v.requiredGrowthCount === null || (Number.isInteger(v.requiredGrowthCount) && v.requiredGrowthCount > 0)) ||
     !Array.isArray(v.conditions) || !Array.isArray(v.selectedGrowths)) return fail();
   for (const c of v.conditions) {
-    if (!c || !["xp", "days", "weeks", "recent", "growth_count", "growth_average", "steady"].includes(c.key) ||
+    if (!c || !["xp", "stage_xp", "days", "weeks", "recent", "growth_count", "growth_average", "steady"].includes(c.key) ||
       !finiteOrNull(c.current) || !finiteOrNull(c.required) || typeof c.met !== "boolean") return fail();
   }
   if (v.alternate !== undefined && v.alternate !== null && (typeof v.alternate !== "object" ||
@@ -65,15 +70,18 @@ export function parseStageGateStatus(value: unknown): StageGateStatus {
 }
 
 /**
- * 목표 단계(2~7)별 진화 규칙 — 사용자 확정 2026-11-13.
+ * 목표 단계(2~7)별 진화 규칙 — 2026-11-13 확정, **2026-11-22 개정**(0146·0147).
  * 서버 규칙표(`stage_evolution_rules`, 0133)와 같은 값이어야 한다. 서버(SQL)가 판정하고 이 표는 미리보기·독립 대조용이다.
  * 수치 근거와 한계: docs/superpowers/plans/2026-11-13-evolution-rules-evidence-adjustment.md §1~2
+ *
+ * ⚠️ 2026-11-22부터 **습관 조건(운동일·경과 주·최근 운동)은 "현재 단계에 들어온 뒤"만 센다.**
+ *    옛 값(운동일 36·60, 시작 후 40·60주)은 누적 기준이었다. 근거: docs/superpowers/plans/2026-11-22-evolution-mission-and-stage-xp.md
  */
 export type StageRule = {
   targetStage: number;
   minLevel: number;
   mode: "xp_only" | "gated";
-  /** 4·5단계는 누적 운동일, 6·7단계는 첫 운동 후 경과 주. xp_only면 null */
+  /** 4단계는 단계 안 운동일, 5~7단계는 단계 진입 후 경과 주. xp_only면 null */
   habit: { kind: "days" | "weeks"; required: number } | null;
   /** 6·7단계의 최근 활동: 최근 windowDays일 중 days일 */
   recent: { windowDays: number; days: number } | null;
@@ -93,15 +101,18 @@ export type StageRule = {
 export const STAGE_RULES: Record<number, StageRule> = {
   2: { targetStage: 2, minLevel: 6, mode: "xp_only", habit: null, recent: null, averagePct: null, growthRatio: null, steadyRequired: 0, alternate: null },
   3: { targetStage: 3, minLevel: 11, mode: "xp_only", habit: null, recent: null, averagePct: null, growthRatio: null, steadyRequired: 0, alternate: null },
-  4: { targetStage: 4, minLevel: 16, mode: "gated", habit: { kind: "days", required: 36 }, recent: null,
-    averagePct: 3, growthRatio: 0.15, steadyRequired: 0, alternate: { kind: "days", required: 54, exemptsSteady: false } },
-  5: { targetStage: 5, minLevel: 21, mode: "gated", habit: { kind: "days", required: 60 }, recent: null,
-    averagePct: 5, growthRatio: 0.2, steadyRequired: 1, alternate: { kind: "days", required: 90, exemptsSteady: true } },
-  6: { targetStage: 6, minLevel: 26, mode: "gated", habit: { kind: "weeks", required: 40 }, recent: { windowDays: 28, days: 8 },
+  4: { targetStage: 4, minLevel: 16, mode: "gated", habit: { kind: "days", required: 20 }, recent: null,
+    averagePct: 3, growthRatio: 0.15, steadyRequired: 0, alternate: { kind: "days", required: 30, exemptsSteady: false } },
+  5: { targetStage: 5, minLevel: 21, mode: "gated", habit: { kind: "weeks", required: 10 }, recent: null,
+    averagePct: 5, growthRatio: 0.2, steadyRequired: 1, alternate: { kind: "days", required: 36, exemptsSteady: true } },
+  6: { targetStage: 6, minLevel: 26, mode: "gated", habit: { kind: "weeks", required: 12 }, recent: { windowDays: 28, days: 8 },
     averagePct: 8, growthRatio: 0.25, steadyRequired: 2, alternate: { kind: "steady", required: 4 } },
-  7: { targetStage: 7, minLevel: 31, mode: "gated", habit: { kind: "weeks", required: 60 }, recent: { windowDays: 42, days: 12 },
+  7: { targetStage: 7, minLevel: 31, mode: "gated", habit: { kind: "weeks", required: 20 }, recent: { windowDays: 42, days: 12 },
     averagePct: 10, growthRatio: 0.3, steadyRequired: 3, alternate: { kind: "steady", required: 6 } },
 };
+
+/** 성장 조건이 요구하는 종목 수의 하한 (서버 `stage_status`의 `greatest(3, …)`와 같다) */
+export const MIN_GROWTH_COUNT = 3;
 
 export function getStageGrowthGoal(currentStage: number, previousStageExerciseCount: number | null) {
   if (!Number.isInteger(currentStage) || currentStage < 1 || currentStage > 7) throw new RangeError("invalid currentStage");
@@ -113,7 +124,9 @@ export function getStageGrowthGoal(currentStage: number, previousStageExerciseCo
     return { mode: "needs_baseline" as const, nextStage };
   }
   return { mode: "growth_preview" as const, nextStage,
-    requiredCount: Math.max(1, Math.ceil(previousStageExerciseCount * (rule.growthRatio as number))),
+    // 하한 3 — 이전 단계 종목이 적어 요구가 1개로 줄던 구멍을 막는다(0146). 이전 종목 수보다 많이는 요구하지 않는다.
+    requiredCount: Math.min(previousStageExerciseCount,
+      Math.max(MIN_GROWTH_COUNT, Math.ceil(previousStageExerciseCount * (rule.growthRatio as number)))),
     averageTargetPct: rule.averagePct as number,
   };
 }
@@ -145,9 +158,17 @@ export function countSteadyWindows(days: string[], since: string | null, today: 
 }
 
 export type GateInput = {
-  /** XP 레벨 */
+  /** XP 레벨 (옛 방식) */
   level: number;
-  /** 유효 운동의 Asia/Seoul 날짜(가입 후 전체, 중복 허용) */
+  /**
+   * 이 단계에서 쌓은 경험치(단계별 경험치 방식). **주면** 경험치 조건을 `stage_xp`(필요량 = 현재 단계의
+   * 단계 양, 예: 3단계→4단계는 3000)로 판정하고 `level`은 보지 않는다. 안 주면 옛 레벨 방식.
+   */
+  stageXp?: number;
+  /**
+   * 유효 운동의 Asia/Seoul 날짜(가입 후 전체, 중복 허용). 습관 조건은 이 중 **`stageEnteredDay` 이후만** 센다
+   * (서버는 시각 기준 `completed_at >= entered_at`, 여기는 날짜 기준이라 진입 당일 새벽 운동 1건 차이가 날 수 있다).
+   */
   workoutDays: string[];
   today: string;
   /** 현재 단계 진입 날짜(없으면 꾸준함 0회) */
@@ -168,15 +189,21 @@ export type GateEvaluation = {
 export function evaluateStageGate(targetStage: number, input: GateInput): GateEvaluation {
   const rule = STAGE_RULES[targetStage];
   if (!rule) throw new RangeError("invalid targetStage");
-  const xp: GateCondition = { key: "xp", current: input.level, required: rule.minLevel, met: input.level >= rule.minLevel };
+  const xp: GateCondition = input.stageXp !== undefined
+    ? { key: "stage_xp", current: input.stageXp, required: getStageXpWidth(targetStage - 1), met: input.stageXp >= getStageXpWidth(targetStage - 1) }
+    : { key: "xp", current: input.level, required: rule.minLevel, met: input.level >= rule.minLevel };
   if (rule.mode === "xp_only") {
     return { state: xp.met ? "eligible" : "blocked", path: "growth", conditions: [xp],
       steady: { count: 0, required: 0, met: true }, alternate: null };
   }
   const todayN = dayNumber(input.today);
-  const days = [...new Set(input.workoutDays.map(dayNumber))].filter(n => n <= todayN);
+  // 진입일이 없으면 센 것이 없다(서버: h.entered_at null → 0)
+  const sinceN = input.stageEnteredDay === null ? null : dayNumber(input.stageEnteredDay);
+  const days = sinceN === null
+    ? []
+    : [...new Set(input.workoutDays.map(dayNumber))].filter(n => n >= sinceN && n <= todayN);
   const nDays = days.length;
-  const weeks = nDays === 0 ? 0 : Math.floor((todayN - Math.min(...days)) / 7);
+  const weeks = sinceN === null ? 0 : Math.max(0, Math.floor((todayN - sinceN) / 7));
   const habit = rule.habit as NonNullable<StageRule["habit"]>;
   const conditions: GateCondition[] = [xp, habit.kind === "days"
     ? { key: "days", current: nDays, required: habit.required, met: nDays >= habit.required }
@@ -204,7 +231,7 @@ export function evaluateStageGate(targetStage: number, input: GateInput): GateEv
     alternate = { kind: "steady", current: steadyCount, required: rule.alternate.required, exemptsSteady: false,
       met: steadyCount >= rule.alternate.required };
   }
-  const base = conditions.filter(c => ["xp", "days", "weeks", "recent"].includes(c.key)).every(c => c.met);
+  const base = conditions.filter(c => ["xp", "stage_xp", "days", "weeks", "recent"].includes(c.key)).every(c => c.met);
   const growthPath = growthCountMet && growthAvgMet && steady.met;
   const eligible = base && (growthPath || alternate?.met === true);
   return { state: eligible ? "eligible" : g.required === null ? "needs_baseline" : "blocked",

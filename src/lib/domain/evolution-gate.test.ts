@@ -26,6 +26,11 @@ describe("진화 성장 목표", () => {
     expect(getStageGrowthGoal(5, 18)).toMatchObject({ requiredCount: 5, averageTargetPct: 8 });
     expect(getStageGrowthGoal(6, 18)).toMatchObject({ requiredCount: 6, averageTargetPct: 10 });
   });
+  it("요구 종목 수 하한 3: 이전 단계 종목이 적어도 1개로 줄지 않는다(이전 종목 수가 상한)", () => {
+    expect(getStageGrowthGoal(3, 4)).toMatchObject({ requiredCount: 3 }); // ceil(0.6)=1 → 하한 3
+    expect(getStageGrowthGoal(3, 2)).toMatchObject({ requiredCount: 2 }); // 하한 3이어도 이전 종목 수(2)를 넘지 않는다
+    expect(getStageGrowthGoal(3, 1)).toMatchObject({ requiredCount: 1 });
+  });
   it("M이 없으면 최소1개로 임의 통과시키지 않고 기준 준비 상태", () => {
     expect(getStageGrowthGoal(3, null)).toMatchObject({ mode: "needs_baseline" });
   });
@@ -34,20 +39,20 @@ describe("진화 성장 목표", () => {
   });
 });
 
-describe("규칙표(사용자 확정 2026-11-13)", () => {
-  it("4·5단계는 운동일만, 6·7단계는 경과 주만 습관으로 쓴다", () => {
-    expect(STAGE_RULES[4].habit).toEqual({ kind: "days", required: 36 });
-    expect(STAGE_RULES[5].habit).toEqual({ kind: "days", required: 60 });
-    expect(STAGE_RULES[6].habit).toEqual({ kind: "weeks", required: 40 });
-    expect(STAGE_RULES[7].habit).toEqual({ kind: "weeks", required: 60 });
+describe("규칙표(2026-11-13 확정, 2026-11-22 개정 — 단계 진입 후 기준, 서버 0147과 같은 값)", () => {
+  it("4단계는 단계 안 운동일, 5·6·7단계는 단계 진입 후 경과 주를 습관으로 쓴다", () => {
+    expect(STAGE_RULES[4].habit).toEqual({ kind: "days", required: 20 });
+    expect(STAGE_RULES[5].habit).toEqual({ kind: "weeks", required: 10 });
+    expect(STAGE_RULES[6].habit).toEqual({ kind: "weeks", required: 12 });
+    expect(STAGE_RULES[7].habit).toEqual({ kind: "weeks", required: 20 });
   });
   it("2·3단계는 XP만, 평균·비율·미션·대체 경로가 없다", () => {
     for (const s of [2, 3]) expect(STAGE_RULES[s]).toMatchObject({ mode: "xp_only", habit: null, averagePct: null,
       growthRatio: null, steadyRequired: 0, alternate: null });
   });
-  it("대체 경로: 4=54일, 5=90일(미션 면제), 6=미션4회, 7=미션6회", () => {
-    expect(STAGE_RULES[4].alternate).toEqual({ kind: "days", required: 54, exemptsSteady: false });
-    expect(STAGE_RULES[5].alternate).toEqual({ kind: "days", required: 90, exemptsSteady: true });
+  it("대체 경로: 4=30일, 5=36일(미션 면제), 6=미션4회, 7=미션6회", () => {
+    expect(STAGE_RULES[4].alternate).toEqual({ kind: "days", required: 30, exemptsSteady: false });
+    expect(STAGE_RULES[5].alternate).toEqual({ kind: "days", required: 36, exemptsSteady: true });
     expect(STAGE_RULES[6].alternate).toEqual({ kind: "steady", required: 4 });
     expect(STAGE_RULES[7].alternate).toEqual({ kind: "steady", required: 6 });
   });
@@ -119,57 +124,85 @@ describe("진화 판정 evaluateStageGate", () => {
     expect(evaluateStageGate(3, base({ level: 10, workoutDays: [], growth: { filled: 0, required: null, averagePct: null } })).state).toBe("blocked");
     expect(evaluateStageGate(3, base({ level: 11 })).state).toBe("eligible");
   });
-  it("4단계: 운동 35일 보류, 36일 통과(성장 충족 시)", () => {
-    expect(evaluateStageGate(4, base({ level: 16, workoutDays: end(35) })).state).toBe("blocked");
-    expect(evaluateStageGate(4, base({ level: 16, workoutDays: end(36) })).state).toBe("eligible");
+  it("4단계: 단계 안 운동 19일 보류, 20일 통과(성장 충족 시)", () => {
+    expect(evaluateStageGate(4, base({ level: 16, workoutDays: end(19) })).state).toBe("blocked");
+    expect(evaluateStageGate(4, base({ level: 16, workoutDays: end(20) })).state).toBe("eligible");
   });
-  it("4단계: 경과 주는 보지 않는다(36일이 짧은 기간에 몰려도 통과)", () => {
-    expect(evaluateStageGate(4, base({ level: 16, workoutDays: end(36) })).conditions.map(c => c.key)).not.toContain("weeks");
+  it("4단계: 경과 주는 보지 않는다(20일이 짧은 기간에 몰려도 통과)", () => {
+    expect(evaluateStageGate(4, base({ level: 16, workoutDays: end(20) })).conditions.map(c => c.key)).not.toContain("weeks");
   });
-  it("4단계 대체 경로: 성장 미달이어도 53일 보류, 54일 통과", () => {
+  it("진입 전 운동은 습관에 세지 않는다 — 진화 직후엔 0에서 시작", () => {
+    const entered = day(400 - 9); // 10일 전 진입
+    const before = run(30, day(400 - 9 - 30)); // 진입 전 30일 연속
+    const after = end(10); // 진입 뒤 10일 연속(진입일 포함)
+    const r = evaluateStageGate(4, base({ level: 16, workoutDays: [...before, ...after], stageEnteredDay: entered }));
+    expect(r.conditions.find(c => c.key === "days")).toMatchObject({ current: 10, required: 20, met: false });
+    expect(r.state).toBe("blocked");
+    // 진입일이 없으면(기록 없음) 센 것이 없다
+    expect(evaluateStageGate(4, base({ level: 16, workoutDays: end(30), stageEnteredDay: null })).conditions.find(c => c.key === "days"))
+      .toMatchObject({ current: 0, met: false });
+  });
+  it("4단계 대체 경로: 성장 미달이어도 29일 보류, 30일 통과", () => {
     const weak = { filled: 0, required: 4, averagePct: 0 };
-    expect(evaluateStageGate(4, base({ level: 16, workoutDays: end(53), growth: weak })).state).toBe("blocked");
-    const r = evaluateStageGate(4, base({ level: 16, workoutDays: end(54), growth: weak }));
+    expect(evaluateStageGate(4, base({ level: 16, workoutDays: end(29), growth: weak })).state).toBe("blocked");
+    const r = evaluateStageGate(4, base({ level: 16, workoutDays: end(30), growth: weak }));
     expect(r).toMatchObject({ state: "eligible", path: "alternate" });
   });
-  it("성장 기준이 없어도(M=0) 54일이면 대체 경로로 통과, 아니면 기준 준비 중", () => {
+  it("성장 기준이 없어도(M=0) 30일이면 대체 경로로 통과, 아니면 기준 준비 중", () => {
     const none = { filled: 0, required: null, averagePct: null };
-    expect(evaluateStageGate(4, base({ level: 16, workoutDays: end(40), growth: none })).state).toBe("needs_baseline");
-    expect(evaluateStageGate(4, base({ level: 16, workoutDays: end(54), growth: none })).state).toBe("eligible");
+    expect(evaluateStageGate(4, base({ level: 16, workoutDays: end(25), growth: none })).state).toBe("needs_baseline");
+    expect(evaluateStageGate(4, base({ level: 16, workoutDays: end(30), growth: none })).state).toBe("eligible");
   });
   it("N 부족은 평균이 높아도 보류, 평균 미달도 보류, 반올림 전 값으로 판정", () => {
-    expect(evaluateStageGate(4, base({ level: 16, workoutDays: end(36), growth: { filled: 2, required: 3, averagePct: 50 } })).state).toBe("blocked");
-    expect(evaluateStageGate(4, base({ level: 16, workoutDays: end(36), growth: { filled: 3, required: 3, averagePct: 2.99999 } })).state).toBe("blocked");
-    expect(evaluateStageGate(4, base({ level: 16, workoutDays: end(36), growth: { filled: 3, required: 3, averagePct: 3 } })).state).toBe("eligible");
+    expect(evaluateStageGate(4, base({ level: 16, workoutDays: end(20), growth: { filled: 2, required: 3, averagePct: 50 } })).state).toBe("blocked");
+    expect(evaluateStageGate(4, base({ level: 16, workoutDays: end(20), growth: { filled: 3, required: 3, averagePct: 2.99999 } })).state).toBe("blocked");
+    expect(evaluateStageGate(4, base({ level: 16, workoutDays: end(20), growth: { filled: 3, required: 3, averagePct: 3 } })).state).toBe("eligible");
   });
-  it("5단계: 미션 0회면 성장·운동일을 채워도 보류, 1회면 통과", () => {
-    const sparse = Array.from({ length: 60 }, (_, i) => day(i * 7)); // 주 1일씩 60주 → 운동일 60일이지만 주 2일 미만
+  it("5단계: 진입 후 10주 + 미션 — 미션 0회면 성장을 채워도 보류, 1회면 통과", () => {
+    // 주 1일씩 35주 → 주 2일 미만이라 꾸준함 0회, 운동일 35일은 대체 경로(36일)에 1일 모자란다
+    const sparse = Array.from({ length: 35 }, (_, i) => day(i * 7));
     const late = { today: day(1000) };
     expect(evaluateStageGate(5, base({ level: 21, workoutDays: sparse, ...late })).state).toBe("blocked");
     expect(evaluateStageGate(5, base({ level: 21, workoutDays: sparse, ...late })).steady).toMatchObject({ count: 0, required: 1, met: false });
-    expect(evaluateStageGate(5, base({ level: 21, workoutDays: end(60), stageEnteredDay: day(400 - 59) })).state).toBe("eligible");
+    expect(evaluateStageGate(5, base({ level: 21, workoutDays: end(60), stageEnteredDay: day(400 - 70) })).state).toBe("eligible");
   });
-  it("5단계 대체 경로(90일)는 미션 0회여도 통과(면제), 89일은 보류", () => {
+  it("5단계: 경과 주 9주 보류 / 10주 통과(운동일이 아니라 진입 후 지난 기간)", () => {
+    const w = (weeks: number) => evaluateStageGate(5, base({ level: 21, workoutDays: end(60), stageEnteredDay: day(400 - weeks * 7) }));
+    expect(w(9).conditions.find(c => c.key === "weeks")).toMatchObject({ current: 9, required: 10, met: false });
+    expect(w(9).state).toBe("blocked");
+    expect(w(10).conditions.find(c => c.key === "weeks")).toMatchObject({ current: 10, required: 10, met: true });
+    expect(w(10).conditions.map(c => c.key)).not.toContain("days");
+  });
+  it("5단계 대체 경로(36일)는 미션 0회여도 통과(면제), 35일은 보류", () => {
     const weak = { filled: 0, required: 4, averagePct: 0 };
     const sparse = (n: number) => Array.from({ length: n }, (_, i) => day(i * 7)); // 주 1일 → 꾸준함 0회
     const late = { today: day(1000) };
-    expect(evaluateStageGate(5, base({ level: 21, workoutDays: sparse(89), growth: weak, ...late })).state).toBe("blocked");
-    const r90 = evaluateStageGate(5, base({ level: 21, workoutDays: sparse(90), growth: weak, ...late }));
-    expect(r90).toMatchObject({ state: "eligible", path: "alternate", steady: { count: 0, met: false } });
+    expect(evaluateStageGate(5, base({ level: 21, workoutDays: sparse(35), growth: weak, ...late })).state).toBe("blocked");
+    const r36 = evaluateStageGate(5, base({ level: 21, workoutDays: sparse(36), growth: weak, ...late }));
+    expect(r36).toMatchObject({ state: "eligible", path: "alternate", steady: { count: 0, met: false } });
     // 4단계 대체 경로는 면제가 없다는 대비: 6단계 쪽은 별도 시험
   });
-  it("면제는 5단계 90일 경로에만: 90일이어도 4·6단계 규칙에는 영향 없음", () => {
+  it("면제는 5단계 36일 경로에만: 4·6단계 규칙에는 영향 없음", () => {
     expect(STAGE_RULES[4].alternate).toMatchObject({ exemptsSteady: false });
     expect(STAGE_RULES[6].alternate).toEqual({ kind: "steady", required: 4 });
   });
-  it("6·7단계: 경과 주만 판정(운동일 100/156 조건 없음), 39주 보류/40주 통과", () => {
-    const d = (w: number) => [day(400 - w * 7), ...end(30)]; // 첫 운동이 w주 전 + 최근 30일 연속
-    const r39 = evaluateStageGate(6, base({ level: 26, workoutDays: d(39) }));
-    expect(r39.conditions.map(c => c.key)).not.toContain("days");
-    expect(r39.conditions.find(c => c.key === "weeks")).toMatchObject({ current: 39, required: 40, met: false });
-    expect(r39.state).toBe("blocked");
-    expect(evaluateStageGate(6, base({ level: 26, workoutDays: d(40), stageEnteredDay: day(400 - 60) })).conditions.find(c => c.key === "weeks"))
-      .toMatchObject({ current: 40, met: true });
+  it("6·7단계: 단계 진입 후 경과 주만 판정(운동일 조건 없음), 11주 보류/12주 통과 · 7단계는 20주", () => {
+    const at = (w: number) => ({ workoutDays: end(30), stageEnteredDay: day(400 - w * 7) });
+    const r11 = evaluateStageGate(6, base({ level: 26, ...at(11) }));
+    expect(r11.conditions.map(c => c.key)).not.toContain("days");
+    expect(r11.conditions.find(c => c.key === "weeks")).toMatchObject({ current: 11, required: 12, met: false });
+    expect(r11.state).toBe("blocked");
+    expect(evaluateStageGate(6, base({ level: 26, ...at(12) })).conditions.find(c => c.key === "weeks"))
+      .toMatchObject({ current: 12, met: true });
+    expect(evaluateStageGate(7, base({ level: 31, ...at(19) })).conditions.find(c => c.key === "weeks"))
+      .toMatchObject({ current: 19, required: 20, met: false });
+    expect(evaluateStageGate(7, base({ level: 31, ...at(20) })).conditions.find(c => c.key === "weeks"))
+      .toMatchObject({ current: 20, met: true });
+  });
+  it("6단계 최근 운동은 진화 뒤 새로 센다: 진화 전 22일 + 뒤 2일이면 2/8", () => {
+    const entered = day(400 - 1); // 어제 진화
+    const r = evaluateStageGate(6, base({ level: 26, workoutDays: end(24), stageEnteredDay: entered }));
+    expect(r.conditions.find(c => c.key === "recent")).toMatchObject({ current: 2, required: 8, met: false });
   });
   it("6단계 최근 활동: 28일 중 7일 보류, 8일 통과 / 7단계 42일 중 11/12일", () => {
     const longAgo = day(400 - 41 * 7);
@@ -204,5 +237,43 @@ describe("서버 계약 검증", () => {
     for (const bad of [null, {}, { mode: "gated", currentStage: 0 }, { mode: "gated", state: "success" }]) {
       expect(() => parseStageGateStatus(bad)).toThrow("invalid stage evolution");
     }
+  });
+});
+
+describe("단계별 경험치 조건(stage_xp) — 2026-11-22", () => {
+  const base = (over: Partial<GateInput>): GateInput => ({
+    level: 1, workoutDays: run(30, day(400 - 29)), today: day(400), stageEnteredDay: MON,
+    growth: { filled: 4, required: 4, averagePct: 20 }, ...over,
+  });
+  it("stageXp를 주면 레벨이 아니라 '이 단계에서 쌓은 경험치'로 판정한다 (3→4단계 필요량 3000)", () => {
+    const ok = evaluateStageGate(4, base({ stageXp: 3000 }));
+    expect(ok.conditions[0]).toEqual({ key: "stage_xp", current: 3000, required: 3000, met: true });
+    expect(ok.state).toBe("eligible");
+    const short = evaluateStageGate(4, base({ stageXp: 2999 }));
+    expect(short.conditions[0]).toMatchObject({ key: "stage_xp", met: false });
+    expect(short.state).toBe("blocked");
+  });
+  it("레벨이 아무리 높아도(옛 누적 방식이면 통과할 값) 단계 경험치가 모자라면 막힌다 — 과대 누적 차단", () => {
+    expect(evaluateStageGate(4, base({ level: 35, stageXp: 100 })).state).toBe("blocked");
+  });
+  it("단계별 필요량: 5단계 목표 4000 · 6단계 목표 5000 · 7단계 목표 6000, 2·3단계 목표는 1000·2000", () => {
+    const need = (t: number) => evaluateStageGate(t, base({ stageXp: 0 })).conditions[0].required;
+    expect([2, 3, 4, 5, 6, 7].map(need)).toEqual([1000, 2000, 3000, 4000, 5000, 6000]);
+  });
+  it("2·3단계(경험치만 보는 단계)도 단계 경험치로: 1000 채우면 2단계 진화", () => {
+    expect(evaluateStageGate(2, base({ stageXp: 1000 })).state).toBe("eligible");
+    expect(evaluateStageGate(2, base({ stageXp: 999 })).state).toBe("blocked");
+  });
+  it("stageXp를 안 주면 옛 레벨 방식 그대로", () => {
+    expect(evaluateStageGate(4, base({ level: 16 })).conditions[0]).toMatchObject({ key: "xp", current: 16, required: 16, met: true });
+  });
+  it("서버 계약: stage_xp 조건을 정상으로 읽는다(옛 앱도 새 서버 값을 못 읽어 깨지지 않게)", () => {
+    const status = {
+      mode: "gated", ruleVersion: "stage_growth_v1", currentStage: 3, currentLevel: 13,
+      stageEnteredAt: null, nextStage: 4, state: "blocked", path: "growth", growthMetric: "top_n_zero_padded_mean",
+      averageGrowthPct: null, comparableCount: 0, requiredGrowthCount: null, filledGrowthCount: 0,
+      conditions: [{ key: "stage_xp", current: 1550, required: 3000, met: false }], growthSummary: null, selectedGrowths: [],
+    };
+    expect(parseStageGateStatus(status).conditions[0].key).toBe("stage_xp");
   });
 });

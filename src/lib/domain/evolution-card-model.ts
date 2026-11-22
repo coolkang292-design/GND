@@ -24,11 +24,11 @@ export type EvolutionCardModel = {
 };
 
 const LABEL: Record<GateCondition["key"], string> = {
-  xp: "경험치 레벨", days: "운동한 날", weeks: "운동 시작 후", recent: "최근 운동",
+  xp: "경험치 레벨", stage_xp: "이 단계 경험치", days: "운동한 날", weeks: "운동 시작 후", recent: "최근 운동",
   growth_count: "성장 종목", growth_average: "평균 성장", steady: "꾸준함",
 };
 const UNIT: Record<GateCondition["key"], string> = {
-  xp: "레벨", days: "일", weeks: "주", recent: "일", growth_count: "종목", growth_average: "%", steady: "회",
+  xp: "레벨", stage_xp: "XP", days: "일", weeks: "주", recent: "일", growth_count: "종목", growth_average: "%", steady: "회",
 };
 
 const r1 = (n: number) => Number(n.toFixed(1));
@@ -39,11 +39,13 @@ function labelOf(c: GateCondition) {
 }
 function valueOf(key: GateCondition["key"], n: number) {
   if (key === "xp") return `Lv.${n}`;
+  if (key === "stage_xp") return `${n.toLocaleString("ko-KR")} XP`;
   if (key === "growth_average") return `+${r1(n)}%`;
   return `${n}${UNIT[key]}`;
 }
 function targetOf(key: GateCondition["key"], n: number) {
   if (key === "xp") return `목표 Lv.${n}`;
+  if (key === "stage_xp") return `목표 ${n.toLocaleString("ko-KR")} XP`;
   if (key === "growth_average") return `목표 +${r1(n)}%`;
   return `목표 ${n}${UNIT[key]}`;
 }
@@ -66,6 +68,7 @@ function hintOf(c: GateCondition & { current: number; required: number }): strin
   const n = Math.max(1, Math.ceil(left));
   switch (c.key) {
     case "xp": return `${n}레벨 남았어요`;
+    case "stage_xp": return `${n.toLocaleString("ko-KR")} XP를 더 쌓으면 돼요 · 경험치는 계속 쌓여요`;
     case "days": return `${n}일 더 운동하면 돼요`;
     case "weeks": return `${n}주가 더 지나면 채워져요`;
     case "recent": return c.windowDays ? `최근 ${c.windowDays}일 중 ${n}일 더` : `${n}일 더`;

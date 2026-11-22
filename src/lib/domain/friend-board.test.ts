@@ -132,7 +132,18 @@ describe("buildFriendRows — 행 조립", () => {
     { id: "b", nickname: "나다", avatarUrl: null, totalXp: 0 },
   ];
 
-  it("레벨을 캐시값이 아니라 total_xp로 계산한다", () => {
+  it("서버가 정한 레벨(currentLevel)이 있으면 그것을 쓴다 — 진화 전 레벨이 멈춘 친구(2026-11-22)", () => {
+    const rows = buildFriendRows({
+      // 누적 6900은 옛 방식으로 Lv.17이지만 서버는 3단계 마지막 레벨 15에서 멈춰 있다
+      crew: [{ id: "s", nickname: "멈춤", avatarUrl: null, totalXp: 6900, currentLevel: 15, currentStage: 3 }],
+      activity: new Map(),
+      badges: new Map(),
+      activeUserIds: new Set(),
+    });
+    expect(rows[0].level).toBe(15);
+  });
+
+  it("서버 레벨이 없는 옛 응답은 total_xp로 계산한다(전환 전과 같다)", () => {
     const rows = buildFriendRows({
       crew,
       activity: new Map(),
