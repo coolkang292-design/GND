@@ -46,6 +46,21 @@ function sleepInBackground(ms: number) {
 }
 
 describe("useIdleGuard", () => {
+  it("유산소처럼 무동작 감지가 꺼져 있어도 수동으로 전체를 멈춘다", () => {
+    const { result } = setup({ guarded: false });
+    act(() => vi.advanceTimersByTime(20_000));
+    act(() => result.current.guard.pauseManually());
+    expect(result.current.guard.paused).toBe(true);
+    expect(result.current.snapshot.pauseReason).toBe("manual");
+    expect(result.current.snapshot.pausedAtMs).toBe(T0 + 20_000);
+    act(() => vi.advanceTimersByTime(600_000));
+    expect(result.current.guard.totalPausedSeconds()).toBe(600);
+    act(() => result.current.guard.resumeFromPause());
+    expect(result.current.guard.paused).toBe(false);
+    expect(result.current.snapshot.pauseReason).toBeNull();
+    expect(result.current.snapshot.pausedSeconds).toBe(600);
+  });
+
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(T0);
