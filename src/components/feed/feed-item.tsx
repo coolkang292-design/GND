@@ -16,7 +16,7 @@ import { ImageLightbox } from "@/components/image-lightbox";
 import { PhotoCarousel } from "@/components/feed/photo-carousel";
 import { PhotoStamp } from "@/components/photo-stamp";
 import { Icon } from "@/components/ui/icon";
-import { exerciseSetSummary, feedStatCells, type WorkoutSummaryInput } from "@/lib/domain/feed-card";
+import { allocateExerciseMinutes, exerciseSetSummary, feedStatCells, type WorkoutSummaryInput } from "@/lib/domain/feed-card";
 import { normalizeCaption } from "@/lib/domain/session-caption";
 import {
   latestWorkoutCheer,
@@ -100,6 +100,8 @@ export function WorkoutSummary({
   const progressChip = !item.progressEvent ? item.progressNote : null;
   const cells = feedStatCells(item);
   const rows = item.breakdown;
+  // 종목별 시간 — 전체 운동 시간을 나눈 것이라 합이 위 `MIN` 칸과 맞는다 (2026-11-22)
+  const minutes = allocateExerciseMinutes(rows, item.durationMinutes);
   const hidden = Math.max(0, rows.length - VISIBLE_EXERCISES);
 
   return (
@@ -189,7 +191,9 @@ export function WorkoutSummary({
                   {i + 1}
                 </span>
                 <span className="min-w-0 flex-1 truncate text-[13.5px] font-bold">{ex.name}</span>
-                <span className="flex-none text-[12.5px] text-muted">{exerciseSetSummary(ex)}</span>
+                <span className="flex-none text-[12.5px] text-muted">
+                  {exerciseSetSummary(ex, minutes.get(rows.indexOf(ex)))}
+                </span>
                 <Icon
                   name="chevron"
                   size={15}

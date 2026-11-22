@@ -105,14 +105,89 @@ export function feedStatCells(input: {
   return cells;
 }
 
+/** 직접 잰 시간이 저장되는 종목 — 유산소, 맨몸 시간형 */
+function hasRecordedTime(exercise: BreakdownExercise): boolean {
+  return (
+    exercise.exerciseType === "cardio" ||
+    (exercise.exerciseType === "bodyweight" && exercise.measure === "time")
+  );
+}
+
 /**
- * 운동 한 줄의 오른쪽 요약 — `4세트 × 100kg`.
+ * 종목별 걸린 시간 배분 (2026-11-22 사용자 지시).
+ *
+ * > "각각의 운동이 몇 분이 걸렸는지 표시하고, 합하면 최종 운동시간과 같게"
+ *
+ * 근력 세트에는 시간을 적는 곳이 없다. 그래서 **전체 운동 시간에서 직접 잰 시간
+ * (유산소·맨몸 시간형)을 뺀 나머지**를, 나머지 종목들에 **완료 세트 수 비율**로 나눈다.
+ * 분 단위 정수로 나누고 남는 분은 소수점이 큰 종목부터 준다 — 그래서 합이 정확히 맞는다.
+ *
+ * ⚠️ 잰 값이 아니라 배분한 추정이다. 화면에 `약`을 붙인다.
+ * ⚠️ 직접 잰 시간이 전체 시간 이상이면(기록이 서로 안 맞는 옛 기록) 만들지 않는다.
+ *
+ * @returns 종목 인덱스 → 분. 배분 대상이 아닌 종목은 키가 없다.
+ */
+export function allocateExerciseMinutes(
+  breakdown: BreakdownExercise[],
+  totalMinutes: number,
+): Map<number, number> {
+  const result = new Map<number, number>();
+  if (!(totalMinutes > 0)) return result;
+
+  let recordedSec = 0;
+  const targets: { index: number; weight: number }[] = [];
+  breakdown.forEach((ex, index) => {
+    const done = ex.sets.filter((s) => s.done !== false);
+    if (done.length === 0) return;
+    if (hasRecordedTime(ex)) {
+      recordedSec += done.reduce((sum, s) => sum + durationSecondsOf(s), 0);
+    } else {
+      targets.push({ index, weight: done.length });
+    }
+  });
+
+  const remainingMin = Math.round((totalMinutes * 60 - recordedSec) / 60);
+  if (targets.length === 0 || remainingMin <= 0) return result;
+
+  const weightSum = targets.reduce((sum, t) => sum + t.weight, 0);
+  const shares = targets.map((t) => {
+    const exact = (remainingMin * t.weight) / weightSum;
+    return { index: t.index, floor: Math.floor(exact), frac: exact - Math.floor(exact) };
+  });
+  let leftover = remainingMin - shares.reduce((sum, s) => sum + s.floor, 0);
+  [...shares]
+    .sort((a, b) => b.frac - a.frac || a.index - b.index)
+    .forEach((s) => {
+      if (leftover > 0) {
+        s.floor += 1;
+        leftover -= 1;
+      }
+    });
+  shares.forEach((s) => result.set(s.index, s.floor));
+  return result;
+}
+
+/**
+ * 운동 한 줄의 오른쪽 요약 — `4세트 × 100kg · 약 12분`.
  *
  * - 완료한 세트만 센다(피드는 완료 기록이다. 미완료 세트는 상세를 펼치면 보인다)
  * - 무게·횟수가 세트마다 같으면 `×`, 다르면 `최고`·`총`으로 말한다 — 같지 않은 것을
  *   `×`로 적으면 거짓이 된다
+ * - `allocatedMin`은 `allocateExerciseMinutes`가 배분한 분. 직접 잰 시간이 이미 들어 있는
+ *   종목에는 붙이지 않는다. 0분으로 배분되면 `1분 미만`.
  */
-export function exerciseSetSummary(exercise: BreakdownExercise): string {
+export function exerciseSetSummary(
+  exercise: BreakdownExercise,
+  allocatedMin?: number,
+): string {
+  const base = setSummaryBase(exercise);
+  if (allocatedMin === undefined || hasRecordedTime(exercise) || base === "완료 세트 없음") {
+    return base;
+  }
+  return `${base} · ${allocatedMin > 0 ? `약 ${allocatedMin}분` : "1분 미만"}`;
+}
+
+function setSummaryBase(exercise: BreakdownExercise): string {
   const done = exercise.sets.filter((s) => s.done !== false);
   const n = done.length;
   if (n === 0) return "완료 세트 없음";
