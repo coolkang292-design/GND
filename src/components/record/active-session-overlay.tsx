@@ -381,7 +381,7 @@ export function ActiveSessionOverlay({
   finishSaveError?: boolean;
   paused: boolean;
   busy: boolean;
-  onPauseSession: () => void;
+  onPauseSession?: () => void;
   /**
    * 지금 종목을 **다른 종목으로** 바꿀 수 있는가 (`canReplaceExercise`).
    *
@@ -552,7 +552,7 @@ export function ActiveSessionOverlay({
             </div>
             {/* 경과 시간 — 시안처럼 오른쪽 위. ⚠️ 휴식 타이머보다 작게 둔다(아래 주석) */}
             <div className="flex flex-none items-center gap-2">
-              {!paused && !busy && !allDone && (
+              {!paused && !busy && !allDone && onPauseSession && (
                 <button type="button" onClick={onPauseSession}
                   className="rounded-lg border border-line px-2 py-1.5 text-[12px] font-bold text-fg"
                   aria-label="전체 운동 일시정지">
