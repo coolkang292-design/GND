@@ -11,6 +11,27 @@ import {
 } from "./set-timer";
 
 describe("setTimerSeconds", () => {
+  it("일시정지 중에는 종목 초시계도 멈춘다", () => {
+    expect(setTimerSeconds({
+      startedAtMs: 0, nowMs: 60_000, pausedAtMs: 20_000,
+      pausedSeconds: 0, pauseBaselineSeconds: 0,
+    })).toBe(20);
+  });
+
+  it("재개한 뒤에는 정지했던 시간만 빼고 다시 센다", () => {
+    expect(setTimerSeconds({
+      startedAtMs: 0, nowMs: 60_000, pausedAtMs: null,
+      pausedSeconds: 30, pauseBaselineSeconds: 0,
+    })).toBe(30);
+  });
+
+  it("이 종목 이전에 정지한 시간은 이 종목에서 중복 차감하지 않는다", () => {
+    expect(setTimerSeconds({
+      startedAtMs: 0, nowMs: 60_000, pausedAtMs: null,
+      pausedSeconds: 90, pauseBaselineSeconds: 60,
+    })).toBe(30);
+  });
+
   it("시작 전에는 0이다", () => {
     expect(setTimerSeconds({ startedAtMs: null, nowMs: 1_000_000 })).toBe(0);
   });
