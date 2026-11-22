@@ -44,6 +44,8 @@ export type SavedSetTimer = {
   startedAtMs: number;
   /** 시작할 때 굳힌 목표 초 — 화면의 `timer.targetSec`와 같은 값 */
   targetSec: number;
+  /** 세트 시작 전까지 세션이 정지했던 누적 초 */
+  pauseBaselineSeconds?: number;
 };
 
 export type RestoredSetTimer = {
@@ -51,6 +53,7 @@ export type RestoredSetTimer = {
   setIndex: number;
   startedAtMs: number;
   targetSec: number;
+  pauseBaselineSeconds: number;
   /**
    * 되살린 순간 이미 목표를 지났는가. 지났으면 **목표 비프를 낸 것으로 친다** —
    * 화면을 켰을 뿐인데 "삐"가 나면 목표 도달로 오해한다.
@@ -107,6 +110,7 @@ export function restoreSetTimer(input: {
     setIndex: saved.setIndex,
     startedAtMs: saved.startedAtMs,
     targetSec: saved.targetSec,
+    pauseBaselineSeconds: saved.pauseBaselineSeconds ?? 0,
     goalAlreadyPassed:
       saved.targetSec > 0 && elapsedMs >= saved.targetSec * 1_000,
   };
@@ -124,11 +128,13 @@ export function parseSavedSetTimer(raw: unknown): SavedSetTimer | null {
   if (typeof v.exerciseKey !== "string" || v.exerciseKey === "") return null;
   if (!isCount(v.setIndex)) return null;
   if (!isTime(v.startedAtMs) || !isTime(v.targetSec)) return null;
+  if (v.pauseBaselineSeconds !== undefined && !isCount(v.pauseBaselineSeconds)) return null;
   return {
     sessionId: v.sessionId,
     exerciseKey: v.exerciseKey,
     setIndex: v.setIndex,
     startedAtMs: v.startedAtMs,
     targetSec: v.targetSec,
+    pauseBaselineSeconds: (v.pauseBaselineSeconds as number | undefined) ?? 0,
   };
 }
