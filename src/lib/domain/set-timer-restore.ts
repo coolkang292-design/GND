@@ -135,6 +135,8 @@ export function parseSavedSetTimer(raw: unknown): SavedSetTimer | null {
     setIndex: v.setIndex,
     startedAtMs: v.startedAtMs,
     targetSec: v.targetSec,
-    pauseBaselineSeconds: (v.pauseBaselineSeconds as number | undefined) ?? 0,
+    ...(v.pauseBaselineSeconds === undefined
+      ? {}
+      : { pauseBaselineSeconds: v.pauseBaselineSeconds as number }),
   };
 }
