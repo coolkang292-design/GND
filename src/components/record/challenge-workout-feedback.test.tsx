@@ -133,6 +133,20 @@ describe("인터벌은 시작하기 전에 예상 점수를 보여준다", () =>
     await screen.findByText("이 인터벌을 마치면");
     expect(points()).toBeGreaterThan(p4);
   });
+  it("인터벌 코스 시간은 시간 점수에 들어가고 출처를 보여준다 (예전엔 0점이었다)", async () => {
+    vi.mocked(loadChallengeScoreSnapshot).mockResolvedValue(empty);
+    render(<ChallengePlanFeedback userId="me" contexts={[context]} exercises={interval(4)} tabataMinutes={8} now={now} />);
+    await screen.findByText("이 인터벌을 마치면");
+    expect(screen.getByText("인터벌 8분 기준 예상")).toBeTruthy();
+    expect(screen.getByText("운동시간 (인터벌 8분)")).toBeTruthy();
+    expect(screen.queryByText(/시간 점수 별도/)).toBeNull();
+  });
+  it("시간을 모르는 일반 계획은 '기본 예상 · 시간 점수 별도'로 알린다", async () => {
+    vi.mocked(loadChallengeScoreSnapshot).mockResolvedValue(empty);
+    render(<ChallengePlanFeedback userId="me" contexts={[context]} exercises={[exercise]} onAdd={vi.fn()} now={now} />);
+    expect(await screen.findByText(/시간 점수 별도/)).toBeTruthy();
+    expect(screen.getByTestId("unknown-time-notice")).toBeTruthy();
+  });
   it("종목을 아직 안 골랐어도 인터벌 횟수·시간 점수는 보여준다", async () => {
     vi.mocked(loadChallengeScoreSnapshot).mockResolvedValue({ ...empty, goals: [{ ...goal, goal_type: "tabata_count", target_value: 4 }] } as ChallengeScoreSnapshot);
     render(<ChallengePlanFeedback userId="me" contexts={[{ ...context, goals: [{ ...goal, goal_type: "tabata_count", target_value: 4 }] }]} exercises={[]} tabataMinutes={4} now={now} />);

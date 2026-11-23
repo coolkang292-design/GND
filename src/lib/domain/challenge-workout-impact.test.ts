@@ -182,7 +182,7 @@ describe("plan forecast and bounded additions", () => {
     const added = suggestion.exercise.sets[0].durationMin;
     const merged = row("plan", [exercise("싸이클", "cardio", 0, 50 + added)]);
     const forecast = forecastWorkout(s, "A", merged);
-    expect(forecast?.afterScore).toBe(suggestion.afterScore);
+    expect(forecast?.afterScore).toBe(suggestion!.afterScore);
   });
   it("uses a smaller precise addition when it completes the goal and preserves its bonus", () => {
     const s = snapshot([goal("cardio_distance", 8.1)]);
@@ -317,5 +317,49 @@ describe("winGuidance: 목표를 모두 채운 뒤 우승 안내", () => {
     const g = winGuidance(both([day("a", "A", "2026-11-13", null), day("b", "B", "2026-11-13", null)]), "A")!;
     expect(g.standing).toContain("운동 시간은 비교하지 않아요");
     expect(g.standing).toContain("공동 순위");
+  });
+});
+
+describe("예상 운동시간: 계획의 시간을 기존 점수 계산에 그대로 넣는다", () => {
+  const plan = (minutes?: number, ex = [exercise("풀업", "bodyweight")]): PeriodSessionRow => ({
+    userId: "A", completedAt: "2026-11-14T03:00:00Z", startedAt: "2026-11-14T03:00:00Z", tabataMinutes: null, exercises: ex,
+    ...(minutes === undefined ? {} : { durationMinutes: minutes }),
+  });
+  const base = () => snapshot([goal("weight_reps", 5)], [row("past")]);
+  const c = (n: number) => Math.round(n * 100);
+
+  it("시간이 없으면 시간 점수 0, 있으면 기존 계산기가 그만큼 올린다", () => {
+    const none = forecastWorkout(base(), "A", plan())!;
+    const eight = forecastWorkout(base(), "A", plan(8))!;
+    expect(none.activityParts.minutes).toBe(0);
+    // 기대값은 박지 않고 같은 스냅샷에 실제 행을 넣은 결과와 대조한다
+    const real = snapshot([goal("weight_reps", 5)], [row("past"), { ...plan(8), sessionId: "real" }]);
+    expect(eight.activityParts.minutes).toBe(calculateWorkoutImpact(real, "A", "real")!.activityParts.minutes);
+    expect(eight.activityParts.minutes).toBeGreaterThan(0);
+    expect(c(eight.totalDelta) - c(none.totalDelta)).toBe(c(eight.activityParts.minutes));
+  });
+  it("시간을 넣어도 횟수·날 점수는 그대로 (풀업을 더해도 횟수 이중 계산 없음)", () => {
+    const none = forecastWorkout(base(), "A", plan())!;
+    const withTime = forecastWorkout(base(), "A", plan(8, [exercise("풀업", "bodyweight"), exercise("푸시업", "bodyweight")]))!;
+    expect(withTime.activityParts.sessions).toBe(none.activityParts.sessions);
+    expect(withTime.activityParts.days).toBe(none.activityParts.days);
+  });
+  it("활동 몫(날·횟수·시간)의 합이 활동 점수와 같다", () => {
+    const f = forecastWorkout(base(), "A", plan(8))!;
+    expect(c(f.activityParts.days) + c(f.activityParts.sessions) + c(f.activityParts.minutes)).toBe(c(f.activityDelta));
+  });
+  it("불변: 예상 계산은 실제 기록 계산(순위·점수)을 바꾸지 않는다", () => {
+    const s = base();
+    const before = JSON.stringify(calculateWorkoutImpact(s, "A", "past"));
+    const rowsBefore = JSON.stringify(s.rows);
+    forecastWorkout(s, "A", plan(8));
+    recommendWorkoutAdditions(s, "A", plan(8));
+    expect(JSON.stringify(calculateWorkoutImpact(s, "A", "past"))).toBe(before);
+    expect(JSON.stringify(s.rows)).toBe(rowsBefore);
+  });
+  it("추천은 기본 점수만 비교하므로 예상시간이 있어도 추천 결과가 같다", () => {
+    const s = snapshot([goal("cardio_time", 1000)], [row("past")]);
+    const ex = [exercise("러닝", "cardio", 0, 30, 3)];
+    expect(recommendWorkoutAdditions(s, "A", plan(30, ex))).toEqual(recommendWorkoutAdditions(s, "A", plan(undefined, ex)));
   });
 });

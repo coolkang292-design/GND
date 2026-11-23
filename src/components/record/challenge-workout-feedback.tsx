@@ -7,6 +7,7 @@ import { loadChallengeScoreSnapshot } from "@/lib/challenge-workout-feedback";
 import { calculateWorkoutImpact, forecastWorkout, recommendWorkoutAdditions, winGuidance, type ChallengeScoreSnapshot, type WinGuidance } from "@/lib/domain/challenge-workout-impact";
 import type { ActiveChallengeContext } from "@/lib/domain/challenge-confirmation";
 import { durationSecondsOf } from "@/lib/domain/set-timer";
+import { estimatePlanMinutes } from "@/lib/domain/plan-minutes";
 import type { LocalExercise } from "@/lib/workout";
 import { VerifiedChallengeProofCard } from "./verified-challenge-proof-card";
 
@@ -157,7 +158,10 @@ function PlanCard({ userId, context, exercises, onAdd, now, tabataMinutes }: {
     window.addEventListener("focus",onFocus); document.addEventListener("visibilitychange",onVisible);
     return ()=>{window.removeEventListener("focus",onFocus);document.removeEventListener("visibilitychange",onVisible);};
   },[refresh,now]);
-  const plan=useMemo(()=>toPeriodSessionRow({userId,completedAtMs:plannedAt,startedAtMs:plannedAt,tabataMinutes:tabataMinutes??null,exercises:exercises.map((ex)=>({...ex,sets:ex.sets.map((s)=>({...s,done:true,durationMin:durationSecondsOf(s)/60}))}))}),[userId,exercises,plannedAt,tabataMinutes]);
+  const planned=useMemo(()=>exercises.map((ex)=>({...ex,sets:ex.sets.map((s)=>({...s,done:true,durationMin:durationSecondsOf(s)/60}))})),[exercises]);
+  // 계획에서 확실히 아는 시간(인터벌 코스·유산소)만 시간 점수에 넣는다. 웨이트·풀업은 추정하지 않는다
+  const known=useMemo(()=>estimatePlanMinutes(tabataMinutes,planned.map((ex)=>({exerciseType:ex.exerciseType,sets:ex.sets.map((s)=>({durationSeconds:s.durationMin*60}))}))),[planned,tabataMinutes]);
+  const plan=useMemo(()=>toPeriodSessionRow({userId,completedAtMs:plannedAt,startedAtMs:plannedAt,tabataMinutes:tabataMinutes??null,durationMinutes:known.minutes>0?known.minutes:undefined,exercises:planned}),[userId,planned,plannedAt,tabataMinutes,known.minutes]);
   const forecast=read?.snapshot ? forecastWorkout(read.snapshot,userId,plan):null;
   const guidance=read?.snapshot && forecast ? winGuidance(read.snapshot,userId,plan):null;
   const suggestions=useMemo(()=>onAdd && !interval && read?.snapshot && usedNames.length<2 ? recommendWorkoutAdditions(read.snapshot,userId,plan).filter((s)=>!usedNames.includes(s.exercise.name)):[],[read,plan,userId,usedNames,onAdd,interval]);
@@ -166,9 +170,18 @@ function PlanCard({ userId, context, exercises, onAdd, now, tabataMinutes }: {
     <p className="text-xs font-extrabold text-muted">{read?.snapshot?.challenge.name??context.name}</p>
     {!read ? <p className="mt-2 text-sm text-muted" role="status">계획의 예상 점수를 확인하고 있어요…</p> : read.error ? <><p className="mt-2 text-sm text-muted">예상 점수를 불러오지 못했어요. 운동은 그대로 진행할 수 있어요.</p><button type="button" className="tap-44 text-xs font-bold text-accent" onClick={refresh}>다시 확인</button></> : forecast && <>
       <p className="mt-3 text-sm font-bold">{interval?"이 인터벌을 마치면":"이 계획을 완료하면"}</p>
-      <p className="mt-1 font-mono text-[25px] font-black text-accent">예상 +{points(forecast.totalDelta)}점</p>
+      {known.minutes>0 ? <>
+        <p data-testid="forecast-total" className="mt-1 font-mono text-[25px] font-black text-accent">예상 +{points(forecast.totalDelta)}점</p>
+        <p className="mt-1 text-xs text-muted">{known.sourceLabel} 기준 예상</p>
+      </> : <p data-testid="forecast-total" className="mt-1 font-mono text-[25px] font-black text-accent">기본 예상 +{points(forecast.totalDelta)}점<span className="ml-1 text-sm font-bold text-muted">· 시간 점수 별도</span></p>}
       <p className="mt-1 text-xs text-muted">기본 점수 +{points(forecast.delta)} ({points(forecast.beforeScore)} → {points(forecast.afterScore)}점)</p>
-      {forecast.activityDelta > 0 && <p data-testid="activity-forecast" className="mt-1 text-xs font-bold">활동 점수 <span className="font-mono text-accent">+{points(forecast.activityDelta)}점</span> <span className="font-normal text-muted">· 총점 {points(forecast.beforeTotal)} → {points(forecast.afterTotal)}점</span></p>}
+      {forecast.activityDelta > 0 && <div data-testid="activity-forecast" className="mt-1 space-y-0.5 text-xs">
+        <p className="font-bold">활동 점수 <span className="font-mono text-accent">+{points(forecast.activityDelta)}점</span> <span className="font-normal text-muted">· 총점 {points(forecast.beforeTotal)} → {points(forecast.afterTotal)}점</span></p>
+        <p className="flex justify-between gap-2 text-muted"><span>운동한 날</span><span className="font-mono">+{points(forecast.activityParts.days)}</span></p>
+        <p className="flex justify-between gap-2 text-muted"><span>운동 횟수</span><span className="font-mono">+{points(forecast.activityParts.sessions)}</span></p>
+        <p className="flex justify-between gap-2 text-muted"><span>운동시간{known.sourceLabel?` (${known.sourceLabel})`:""}</span><span className="font-mono">{known.minutes>0?`+${points(forecast.activityParts.minutes)}`:"별도"}</span></p>
+      </div>}
+      {known.hasUnknownTime && <p data-testid="unknown-time-notice" className="mt-1 text-[11px] text-muted">웨이트·맨몸 운동에 걸리는 시간은 미포함이에요. 실제 점수는 운동을 마치고 확정돼요.</p>}
       {!forecast.sessionCounted && <p data-testid="session-gap-forecast-notice" className="mt-2 rounded-xl bg-warn/10 p-3 text-xs font-bold leading-relaxed text-warn">앞선 운동이 끝나고 1시간이 지나기 전이라, 이 운동은 &lsquo;운동 횟수&rsquo;에 더해지지 않아요. 예상 점수에도 횟수 점수는 빠져 있어요.</p>}
       {forecast.reason && <p className="mt-2 text-xs text-muted">{forecast.reason}</p>}
       {guidance && <WinGuidanceBox guidance={guidance}/>}

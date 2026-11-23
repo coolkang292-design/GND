@@ -43,7 +43,7 @@ export type WorkoutImpact = {
   /** 이 운동이 '운동 횟수'로 인정되나 — 앞선 운동이 끝나고 1시간 안에 시작했으면 false (session-gap.ts) */
   sessionCounted: boolean;
 };
-export type WorkoutForecast = Pick<WorkoutImpact, "beforeScore" | "afterScore" | "delta" | "reason" | "activityDelta" | "beforeTotal" | "afterTotal" | "totalDelta" | "sessionCounted">;
+export type WorkoutForecast = Pick<WorkoutImpact, "beforeScore" | "afterScore" | "delta" | "reason" | "activityDelta" | "beforeTotal" | "afterTotal" | "totalDelta" | "sessionCounted" | "activityParts">;
 export type WorkoutSuggestion = {
   id: string;
   label: string;
@@ -159,8 +159,8 @@ export function forecastWorkout(snapshot: ChallengeScoreSnapshot, userId: string
   const completed = completedPlan(snapshot, userId, plan);
   if (!completed) return null;
   const afterRows = [...snapshot.rows, completed];
-  const { beforeScore, afterScore, delta, reason, activityDelta, beforeTotal, afterTotal, totalDelta } = compareRows(snapshot, userId, snapshot.rows, afterRows);
-  return { beforeScore, afterScore, delta, reason, activityDelta, beforeTotal, afterTotal, totalDelta,
+  const { beforeScore, afterScore, delta, reason, activityDelta, activityParts, beforeTotal, afterTotal, totalDelta } = compareRows(snapshot, userId, snapshot.rows, afterRows);
+  return { beforeScore, afterScore, delta, reason, activityDelta, activityParts, beforeTotal, afterTotal, totalDelta,
     sessionCounted: !uncountedSessions(afterRows).has(completed) };
 }
 

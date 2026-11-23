@@ -908,7 +908,9 @@ export type PeriodSessionRow = {
   completedAt: string;
   /**
    * 세션 운동 시간(분, 서버가 완료 때 계산) — 결과 화면 재료 (0117).
-   * 0117 전 응답·로컬 draft 변환에는 없다. **점수 계산에 쓰지 않는다.**
+   * 0117 전 응답·로컬 draft 변환에는 없다.
+   * 활동 점수(v2)의 '운동 시간'이 이 값을 읽는다. 시작 전 예상 점수는 계획에서 아는 시간만
+   * `toPeriodSessionRow({ durationMinutes })`로 넣는다 (`plan-minutes.ts`).
    */
   durationMinutes?: number | null;
   /**
@@ -972,12 +974,15 @@ export function toPeriodSessionRow(input: {
   exercises: readonly FinishedDraftExercise[];
   /** 타바타 세션이면 코스 분수 (4|8|16), 일반 운동이면 null */
   tabataMinutes: number | null;
+  /** 예상 점수용 — 계획에서 확실히 아는 운동시간(분). 안 주면 시간 점수는 0 (완료 화면 기여 계산은 안 준다) */
+  durationMinutes?: number | null;
 }): PeriodSessionRow {
   return {
     userId: input.userId,
     completedAt: new Date(input.completedAtMs).toISOString(),
     ...(input.startedAtMs !== undefined ? { startedAt: new Date(input.startedAtMs).toISOString() } : {}),
     tabataMinutes: input.tabataMinutes,
+    ...(input.durationMinutes !== undefined ? { durationMinutes: input.durationMinutes } : {}),
     exercises: input.exercises.map((ex) => ({
       exerciseType: ex.exerciseType,
       exerciseName: ex.name,
