@@ -34,6 +34,8 @@ export type WorkoutImpact = {
   tieReason: string | null;
   /** 활동 점수(운동한 날·횟수·시간 환산) 변화 — v2가 아니면 0 */
   activityDelta: number;
+  /** 활동 점수를 운동한 날·횟수·시간 몫으로 나눈 증가분(합 = activityDelta) — v2가 아니면 전부 0 */
+  activityParts: { days: number; sessions: number; minutes: number };
   /** 총점(기본 + 활동) 전후 — v2가 아니면 기본 점수와 같다 */
   beforeTotal: number;
   afterTotal: number;
@@ -91,6 +93,9 @@ function totalCents(entry: RankedEntry): number {
 function activityCents(entry: RankedEntry): number {
   return entry.v2?.breakdown.activity.cents ?? 0;
 }
+function activityPart(entry: RankedEntry, key: "days" | "sessions" | "minutes"): number {
+  return Math.round((entry.v2?.breakdown.activity[key] ?? 0) * 100);
+}
 function compareRows(snapshot: ChallengeScoreSnapshot, userId: string, beforeRows: PeriodSessionRow[], afterRows: PeriodSessionRow[]): Omit<WorkoutImpact, "sessionCounted"> {
   const before = evaluate(snapshot, beforeRows, userId);
   const after = evaluate(snapshot, afterRows, userId);
@@ -102,6 +107,8 @@ function compareRows(snapshot: ChallengeScoreSnapshot, userId: string, beforeRow
       before: a, after: b, delta: round(b - a), target: Number(g.target_value) };
   });
   const activityDelta = (activityCents(after.entry) - activityCents(before.entry)) / 100;
+  const part = (k: "days" | "sessions" | "minutes") => (activityPart(after.entry, k) - activityPart(before.entry, k)) / 100;
+  const activityParts = { days: part("days"), sessions: part("sessions"), minutes: part("minutes") };
   const totalDelta = (totalCents(after.entry) - totalCents(before.entry)) / 100;
   let reason: string | null = null;
   if (delta === 0) {
@@ -119,7 +126,7 @@ function compareRows(snapshot: ChallengeScoreSnapshot, userId: string, beforeRow
     : null;
   return { beforeScore: cents(before.entry) / 100, afterScore: cents(after.entry) / 100, delta,
     beforeRank: before.entry.rank, afterRank: after.entry.rank, goalChanges, reason, tieReason,
-    activityDelta, beforeTotal: totalCents(before.entry) / 100, afterTotal: totalCents(after.entry) / 100, totalDelta };
+    activityDelta, activityParts, beforeTotal: totalCents(before.entry) / 100, afterTotal: totalCents(after.entry) / 100, totalDelta };
 }
 
 /** Current records with/without this workout, not a historical snapshot of the prior leaderboard. */

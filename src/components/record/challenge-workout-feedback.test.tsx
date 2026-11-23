@@ -19,32 +19,32 @@ describe("운동 전후 챌린지 안내", () => {
   it("사진 인증 전에는 점수와 순위를 확정하지 않는다", () => {
     render(<ChallengeWorkoutResultCard userId="me" sessionId="s" context={context} gains={gains} photoDone={false}/>);
     expect(screen.getByText("인증 대기")).toBeTruthy();
-    expect(screen.queryByText(/이번 운동으로 기본 점수/)).toBeNull();
+    expect(screen.queryByText(/이번 운동 총 획득 점수/)).toBeNull();
     expect(loadChallengeScoreSnapshot).not.toHaveBeenCalled();
   });
   it("인증 뒤 실제 조회에 포함된 운동만 전후 비교를 보여준다", async () => {
     render(<ChallengeWorkoutResultCard userId="me" sessionId="s" context={context} gains={gains} photoDone/>);
-    expect(await screen.findByText(/이번 운동으로 기본 점수/)).toBeTruthy();
+    expect(await screen.findByText(/이번 운동 총 획득 점수/)).toBeTruthy();
     expect(screen.getByText(/현재 참가자 기록 기준/)).toBeTruthy();
     expect(screen.getByRole("link",{name:"챌린지 랭킹 보기"}).getAttribute("href")).toBe("/challenge?open=c&ranking=overall");
   });
   it("운동 ID가 집계에 없으면 증가량 0으로 단정하지 않는다", async () => {
     render(<ChallengeWorkoutResultCard userId="me" sessionId="missing" context={context} gains={gains} photoDone/>);
     expect(await screen.findByText(/이번 운동의 반영을 확인하지 못했어요/)).toBeTruthy();
-    expect(screen.queryByText(/이번 운동으로 기본 점수/)).toBeNull();
+    expect(screen.queryByText(/이번 운동 총 획득 점수/)).toBeNull();
   });
   it("조회 실패는 운동 저장과 분리하고 다시 시도할 수 있다", async () => {
     vi.mocked(loadChallengeScoreSnapshot).mockRejectedValueOnce(new Error("offline"));
     render(<ChallengeWorkoutResultCard userId="me" sessionId="s" context={context} gains={gains} photoDone/>);
     expect(await screen.findByText(/운동은 저장됐어요/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button",{name:"다시 확인"}));
-    expect(await screen.findByText(/이번 운동으로 기본 점수/)).toBeTruthy();
+    expect(await screen.findByText(/이번 운동 총 획득 점수/)).toBeTruthy();
   });
   it("비공개 설정이면 실제 점수·순위를 노출하지 않는다", async () => {
     vi.mocked(loadChallengeScoreSnapshot).mockResolvedValue({...snapshot,challenge:{...snapshot.challenge,live_ranking:false}});
     render(<ChallengeWorkoutResultCard userId="me" sessionId="s" context={{...context,liveRanking:false}} gains={gains} photoDone/>);
     expect(await screen.findByText(/누적 실적/)).toBeTruthy();
-    expect(screen.queryByText(/이번 운동으로 기본 점수/)).toBeNull();
+    expect(screen.queryByText(/이번 운동 총 획득 점수/)).toBeNull();
   });
   it("비공개 챌린지는 로딩과 실패도 기존 누적 실적 카드로 보여준다", async () => {
     vi.mocked(loadChallengeScoreSnapshot).mockRejectedValue(new Error("offline"));
@@ -104,7 +104,7 @@ describe("1시간 규칙으로 횟수에서 빠진 운동은 작은 알림을 �
   it("1시간 넘게 쉬고 한 운동이면 알림이 없다", async () => {
     vi.mocked(loadChallengeScoreSnapshot).mockResolvedValue(gapSnapshot("2026-11-22T02:40:00Z", "2026-11-22T03:00:00Z"));
     render(<ChallengeWorkoutResultCard userId="me" sessionId="s" context={context} gains={gains} photoDone/>);
-    await screen.findByText(/이번 운동으로 기본 점수/);
+    await screen.findByText(/이번 운동 총 획득 점수/);
     expect(screen.queryByTestId("session-gap-toast")).toBeNull();
     expect(screen.queryByTestId("session-gap-notice")).toBeNull();
   });
@@ -153,9 +153,31 @@ describe("인터벌은 시작하기 전에 예상 점수를 보여준다", () =>
 describe("활동 점수 표시 (1일·1회·60분당 1점)", () => {
   it("운동을 마치면 오른 활동 점수와 총점 변화를 보여준다", async () => {
     render(<ChallengeWorkoutResultCard userId="me" sessionId="s" context={context} gains={gains} photoDone/>);
-    const box = await screen.findByTestId("activity-gain");
-    expect(box.textContent).toContain("+2.17점"); // 1일 + 1회 + 10분(0.17)
-    expect(box.textContent).toContain("총점");
+    const box = await screen.findByTestId("score-breakdown");
+    expect(box.textContent).toContain("+2.17"); // 1일 + 1회 + 10분(0.17)
+    expect(box.textContent).toContain("활동 점수");
+    expect(document.body.textContent).toContain("챌린지 총점");
+  });
+  it("큰 숫자는 기본 점수 + 활동 점수 = 총 획득 점수다 (0.01도 어긋나지 않는다)", async () => {
+    render(<ChallengeWorkoutResultCard userId="me" sessionId="s" context={context} gains={gains} photoDone/>);
+    const total = Number((await screen.findByTestId("total-gain")).textContent!.match(/\+?(-?[\d.]+)/)?.[1]);
+    const box = (await screen.findByTestId("score-breakdown")).textContent!;
+    const base = Number(box.match(/기본 점수\+?(-?[\d.]+)/)?.[1]);
+    const act = Number(box.match(/활동 점수\+?(-?[\d.]+)/)?.[1]);
+    expect(act).toBeGreaterThan(0);
+    expect(Math.round((base + act) * 100)).toBe(Math.round(total * 100));
+  });
+  it("활동 점수 자세히: 운동한 날·횟수·시간 몫의 합이 활동 점수와 같다", async () => {
+    render(<ChallengeWorkoutResultCard userId="me" sessionId="s" context={context} gains={gains} photoDone/>);
+    const detail = (await screen.findByTestId("activity-detail")).textContent!;
+    const parts = [...detail.matchAll(/\+([\d.]+)/g)].map((m) => Math.round(Number(m[1]) * 100));
+    expect(parts).toHaveLength(3);
+    expect(parts.reduce((a, b) => a + b, 0)).toBe(217);
+  });
+  it("옛 제목('이번 운동으로 기본 점수')은 사라졌다", async () => {
+    render(<ChallengeWorkoutResultCard userId="me" sessionId="s" context={context} gains={gains} photoDone/>);
+    await screen.findByTestId("total-gain");
+    expect(screen.queryByText(/이번 운동으로 기본 점수/)).toBeNull();
   });
   it("계획을 완료하면 얼마나 오르는지도 보여준다", async () => {
     render(<ChallengePlanFeedback userId="me" contexts={[context]} exercises={[exercise]} onAdd={vi.fn()} now={new Date("2026-11-13T04:00:00Z")} />);

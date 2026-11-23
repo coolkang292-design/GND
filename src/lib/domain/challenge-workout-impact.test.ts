@@ -49,6 +49,15 @@ describe("workout impact: current records with/without a session", () => {
     const mine = ranking.find((r) => r.userId === "A")!;
     expect(calculateWorkoutImpact(s, "A", "second")?.afterScore).toBe(Number((mine.v2 ? mine.v2.baseScore : mine.overall).toFixed(2)));
   });
+  it("기본 + 활동 = 총점 증가분이고, 활동 몫(날·횟수·시간)의 합이 활동 점수와 같다 (센트 단위로 어긋나지 않는다)", () => {
+    const s = snapshot([goal("weight_reps", 73)], [row("first"), row("second")]);
+    for (const id of ["first", "second"]) {
+      const r = calculateWorkoutImpact(s, "A", id)!;
+      const c = (n: number) => Math.round(n * 100);
+      expect(c(r.delta) + c(r.activityDelta)).toBe(c(r.totalDelta));
+      expect(c(r.activityParts.days) + c(r.activityParts.sessions) + c(r.activityParts.minutes)).toBe(c(r.activityDelta));
+    }
+  });
   it("활동 점수가 오르면 기본 점수가 그대로여도 순위가 바뀐다 — 동점 탓으로 말하지 않는다", () => {
     const s = snapshot([goal("workout_days", 1), goal("workout_days", 1, "B")], [row("a"), row("b", [], "B"), row("second")]);
     const result = calculateWorkoutImpact(s, "A", "second")!;

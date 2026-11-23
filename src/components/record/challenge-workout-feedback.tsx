@@ -107,15 +107,24 @@ export function ChallengeWorkoutResultCard({ userId, sessionId, context, gains, 
         <><p className="mt-2 text-sm text-muted">운동은 저장됐어요. {read.error ? "챌린지 점수를 불러오지 못했어요." : "이번 운동의 반영을 확인하지 못했어요."}</p><button type="button" className="tap-44 mt-2 text-sm font-bold text-accent" onClick={refresh}>다시 확인</button></>
       ) : (
         <>
-          <p className="mt-3 text-[13px] font-bold">이번 운동으로 기본 점수</p>
-          <p className="mt-1 font-mono text-[30px] font-black tracking-tight text-accent">{impact.delta > 0 ? "+" : ""}{points(impact.delta)}<span className="ml-1 text-sm">점</span></p>
-          <p className="text-sm text-muted">{points(impact.beforeScore)}점 → <b className="text-text">{points(impact.afterScore)}점</b></p>
-          {impact.activityDelta > 0 && (
-            <p data-testid="activity-gain" className="mt-2 text-sm font-bold">
-              활동 점수 <span className="font-mono text-accent">+{points(impact.activityDelta)}점</span>
-              <span className="ml-1 text-xs font-normal text-muted">총점 {points(impact.beforeTotal)} → {points(impact.afterTotal)}점</span>
-            </p>
-          )}
+          <p className="mt-3 text-[13px] font-bold">이번 운동 총 획득 점수</p>
+          <p data-testid="total-gain" className="mt-1 font-mono text-[30px] font-black tracking-tight text-accent">{impact.totalDelta > 0 ? "+" : ""}{points(impact.totalDelta)}<span className="ml-1 text-sm">점</span></p>
+          <p className="text-sm text-muted">챌린지 총점 {points(impact.beforeTotal)}점 → <b className="text-text">{points(impact.afterTotal)}점</b></p>
+          <div data-testid="score-breakdown" className="mt-2 space-y-1 rounded-xl border border-line px-3 py-2 text-sm">
+            <p className="flex justify-between gap-2"><span className="font-bold">기본 점수</span><span className="font-mono font-bold text-accent">{impact.delta > 0 ? "+" : ""}{points(impact.delta)}</span></p>
+            <p className="flex justify-between gap-2"><span className="font-bold">활동 점수</span><span className="font-mono font-bold text-accent">{impact.activityDelta > 0 ? "+" : ""}{points(impact.activityDelta)}</span></p>
+            {impact.delta === 0 && <p className="text-xs text-muted">목표를 이미 채워서 기본 점수는 더 오르지 않아요.</p>}
+            {impact.activityDelta > 0 && (
+              <details data-testid="activity-detail" className="text-xs text-muted">
+                <summary className="tap-44 cursor-pointer py-2 font-bold">활동 점수 자세히</summary>
+                <ul className="space-y-1 pb-1">
+                  <li className="flex justify-between gap-2"><span>운동한 날</span><span className="font-mono">+{points(impact.activityParts.days)}</span></li>
+                  <li className="flex justify-between gap-2"><span>운동 횟수</span><span className="font-mono">+{points(impact.activityParts.sessions)}</span></li>
+                  <li className="flex justify-between gap-2"><span>운동 시간</span><span className="font-mono">+{points(impact.activityParts.minutes)}</span></li>
+                </ul>
+              </details>
+            )}
+          </div>
           <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl bg-accent-weak px-3 py-2">
             <b className="text-lg">{impact.beforeRank}위 → {impact.afterRank}위</b>
             <span className="text-xs font-bold text-accent">{movement > 0 ? `${movement}계단 상승` : movement < 0 ? `${-movement}계단 하락` : "순위 유지"}</span>
