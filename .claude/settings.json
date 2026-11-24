@@ -5,6 +5,11 @@
         "hooks": [
           {
             "type": "command",
+            "command": "node scripts/session-truth.mjs",
+            "timeout": 25
+          },
+          {
+            "type": "command",
             "command": "node scripts/bug-reports.mjs --brief",
             "timeout": 20
           }
