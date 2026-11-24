@@ -121,6 +121,33 @@ export function useIdleGuard({
     });
   }, [active]);
 
+  /*
+    감지가 **꺼져 있다 켜지는 순간** 무동작 시계를 그 시각부터 다시 센다
+    (2026-11-25, 8분 인터벌이 5분으로 기록된 사고).
+
+    감지가 꺼진 동안은 마지막 동작 시각이 그대로 얼어 있다. 인터벌 음원이 끝나면
+    앱이 블록 세트를 한꺼번에 완료로 바꾸는데(사람의 동작이 아니다) 그 순간 감지가
+    켜지고, 얼어 있던 "마지막 동작 = 시작 시각"을 읽어 **정지 시작을 5분 지점으로
+    거꾸로 찍었다.** 8분 코스는 약 200초, 16분 코스는 약 11분이 운동 시간에서 빠진다.
+
+    꺼져 있던 구간은 정의상 판정하지 않던 시간이다 — 켜지는 순간이 새 출발점이다.
+    ⚠️ 이미 정지 중이면(pausedAtMs) 건드리지 않는다: 새로고침·감지 토글로 정지를
+    피할 수 없어야 한다. 처음부터 켜진 채 마운트된 경우도 건드리지 않는다
+    (복구된 draft의 마지막 동작 시각을 지키려고 ref를 현재 값으로 시작한다).
+    이 effect는 아래 틱 effect보다 **먼저** 선언해야 한다 — 같은 렌더에서 틱의
+    첫 check()가 갱신된 시각을 읽는다.
+  */
+  const wasGuardedRef = useRef(guarded);
+  useEffect(() => {
+    const turnedOn = guarded && !wasGuardedRef.current;
+    wasGuardedRef.current = guarded;
+    if (!turnedOn || !active) return;
+    if (snapshotRef.current.pausedAtMs !== null) return;
+    const next = { ...snapshotRef.current, lastActivityMs: Date.now() };
+    snapshotRef.current = next;
+    onChangeRef.current(next);
+  }, [active, guarded]);
+
   // 1초 틱 — 화면 갱신 + 무동작 판정. 백그라운드에서 늦어져도 판정은 벽시계라
   // 돌아온 첫 틱(또는 visibilitychange)에서 그대로 잡힌다.
   useEffect(() => {

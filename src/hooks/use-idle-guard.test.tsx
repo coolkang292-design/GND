@@ -183,6 +183,64 @@ describe("useIdleGuard", () => {
     expect(result.current.guard.totalPausedSeconds()).toBe(0);
   });
 
+  // 이어하기 없는 인터벌 (사용자 신고 2026-11-25: 8분 코스가 5분으로 기록됨).
+  // 음원이 끝나면 앱이 블록 세트를 한꺼번에 완료로 바꾸는데, 그건 **사람의 동작이 아니라**
+  // markActivity가 불리지 않는다. 감지가 켜지는 순간 "마지막 동작 = 8분 전 시작"으로 읽혀
+  // 정지 시작이 5분 지점으로 **거꾸로** 찍혀 운동 시간이 깎였다.
+  it("does not back-date a pause when the guard turns on without any activity", () => {
+    const { result, rerender } = renderHook(
+      ({ guarded }) =>
+        useHarness({ active: true, guarded, lastRestEndsAtMs: null }),
+      { initialProps: { guarded: false } }, // 인터벌 음원이 도는 동안 → 감지 꺼짐
+    );
+
+    sleepInBackground(8 * 60_000); // 음원 8분, 화면은 한 번도 안 만짐
+
+    rerender({ guarded: true }); // 음원 종료 → 블록 완료 처리 → 감지가 켜진다
+    act(() => vi.advanceTimersByTime(1_000)); // 다음 틱
+
+    expect(result.current.guard.paused).toBe(false);
+    expect(result.current.snapshot.pausedAtMs).toBeNull();
+    expect(result.current.guard.totalPausedSeconds()).toBe(0);
+  });
+
+  it("counts the idle clock from the moment the guard turns on", () => {
+    const { result, rerender } = renderHook(
+      ({ guarded }) =>
+        useHarness({ active: true, guarded, lastRestEndsAtMs: null }),
+      { initialProps: { guarded: false } },
+    );
+
+    sleepInBackground(8 * 60_000);
+    const turnedOnAt = Date.now();
+    rerender({ guarded: true });
+
+    // 켜진 뒤 한도 직전까지는 정상, 한도에 닿으면 **켜진 시각 기준**으로 정지.
+    act(() => vi.advanceTimersByTime(LIMIT_MS - 1_000));
+    expect(result.current.guard.paused).toBe(false);
+    act(() => vi.advanceTimersByTime(1_000));
+    expect(result.current.guard.paused).toBe(true);
+    expect(result.current.snapshot.pausedAtMs).toBe(turnedOnAt + LIMIT_MS);
+  });
+
+  it("does not let a reload escape a pause that is already running", () => {
+    // 이미 정지 중인 draft는 감지가 (다시) 켜져도 정지 시작 시각을 건드리지 않는다.
+    const { result, rerender } = renderHook(
+      ({ guarded }) =>
+        useHarness({ active: true, guarded, lastRestEndsAtMs: null }),
+      { initialProps: { guarded: true } },
+    );
+    act(() => vi.advanceTimersByTime(LIMIT_MS));
+    expect(result.current.guard.paused).toBe(true);
+    const pausedAt = result.current.snapshot.pausedAtMs;
+
+    rerender({ guarded: false });
+    act(() => vi.advanceTimersByTime(60_000));
+    rerender({ guarded: true });
+
+    expect(result.current.snapshot.pausedAtMs).toBe(pausedAt);
+  });
+
   it("does not count the rest countdown as idle time", () => {
     // 휴식 10분 — 휴식이 도는 동안에는 무동작으로 잡지 않는다.
     const { result } = setup({ lastRestEndsAtMs: T0 + 600_000 });
