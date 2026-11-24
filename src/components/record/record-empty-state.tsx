@@ -25,7 +25,14 @@ export function RecordEmptyState({
   suggestionBody = "",
   onApplySuggestion,
   onApplySecondary,
+  doneToday = false,
 }: {
+  /**
+   * 오늘 이미 운동을 마쳤나 (2026-11-11). true면 "처음이라면"이 아니라 **한 번 더**를
+   * 말한다 — 위에 오늘 한 운동 목록이 있는데 "아직 추가된 운동이 없어요"만 보이면 화면이
+   * 스스로 모순된다.
+   */
+  doneToday?: boolean;
   /**
    * 완료한 운동이 하나라도 있나.
    *
@@ -119,11 +126,23 @@ export function RecordEmptyState({
           className="h-44 w-full object-cover"
         />
         <div className="px-4 pt-4 pb-4">
-          <p className="text-base font-extrabold">아직 추가된 운동이 없어요</p>
+          <p className="text-base font-extrabold">
+            {doneToday ? "오늘 운동을 더 기록할까요?" : "아직 추가된 운동이 없어요"}
+          </p>
           <p className="mt-1.5 text-[12.5px] leading-5 text-muted">
-            운동을 선택하면 세트와 무게를
-            <br />
-            쉽게 기록할 수 있어요
+            {doneToday ? (
+              <>
+                앞의 운동은 그대로 남아 있어요
+                <br />
+                다른 시간에 한 운동을 이어서 기록할 수 있어요
+              </>
+            ) : (
+              <>
+                운동을 선택하면 세트와 무게를
+                <br />
+                쉽게 기록할 수 있어요
+              </>
+            )}
           </p>
 
           <button
@@ -132,7 +151,7 @@ export function RecordEmptyState({
             onClick={onAdd}
             className="mt-4 h-14 w-full rounded-card bg-accent text-[15px] font-extrabold text-accent-ink"
           >
-            운동 계획하기
+            {doneToday ? "운동 추가 기록" : "운동 계획하기"}
           </button>
 
           {hasHistory && (

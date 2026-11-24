@@ -49,11 +49,17 @@ export function participationScore(
   return Math.min(workoutDays / plannedDays, 1) * 100;
 }
 
+/** 종합점수 반영 비율 — 화면의 계산 설명(`scoreBreakdown`)도 이 값을 쓴다 */
+export const ACHIEVEMENT_WEIGHT = 0.8;
+export const PARTICIPATION_WEIGHT = 0.2;
+
 export function overallScore(
   achievement: number,
   participation: number,
 ): number {
-  return achievement * 0.8 + participation * 0.2;
+  return (
+    achievement * ACHIEVEMENT_WEIGHT + participation * PARTICIPATION_WEIGHT
+  );
 }
 
 /** 완료(100%+) 목표 1개당 보너스 점수, 최대 개수 */
@@ -94,6 +100,13 @@ export type RankedParticipant = {
   participation: number;
   overall: number;
   completedGoalCount: number; // 100% 이상 달성한 목표 수
+  /**
+   * 참여점수의 재료 — **실제** 운동한 날과 계획한 날 (2026-11-20).
+   * participation은 100%에서 잘리므로(17일을 해도 계획 13일이면 100%) 비율만 보면
+   * 실제 일수를 알 수 없다. 화면 계산식이 "17일 ÷ 13일"을 말하려면 이 값이 필요하다.
+   */
+  workoutDays: number;
+  plannedDays: number;
 };
 
 const EPSILON = 1e-9;
@@ -135,6 +148,40 @@ export function scoreParticipant(p: ParticipantInput): {
 }
 
 /**
+ * 점수 구성표용 — 종합점수가 어떻게 만들어지는지 항목별로 푼 값 (2026-11-20).
+ *
+ * ⚠️ 계산은 `scoreParticipant` 한 곳이다. 여기서 점수를 다시 조립하지 않고,
+ *    그 결과에 **화면 설명에 필요한 것**(반영 점수·만점·상한 도달 여부)만 얹는다.
+ *
+ * 만점 = 80 + 20 + 완료 보너스 상한. 보너스는 목표가 1개면 최대 +3, 2개 +6,
+ * 3개 이상 +9라서 **내 목표 개수에 따라 만점이 103·106·109로 달라진다.**
+ */
+export function scoreBreakdown(p: ParticipantInput) {
+  const s = scoreParticipant(p);
+  const goalCount = p.goals.length;
+  const bonus = completedGoalBonus(s.completedGoalCount);
+  const bonusMax = completedGoalBonus(goalCount);
+  const bonusMaxCount = Math.min(goalCount, COMPLETED_GOAL_BONUS_MAX);
+  return {
+    achievement: s.achievement,
+    participation: s.participation,
+    achievementPoints: s.achievement * ACHIEVEMENT_WEIGHT,
+    participationPoints: s.participation * PARTICIPATION_WEIGHT,
+    goalCount,
+    completedGoalCount: s.completedGoalCount,
+    workoutDays: p.workoutDays,
+    plannedDays: p.plannedDays,
+    bonus,
+    bonusMax,
+    bonusMaxCount,
+    maxScore: 100 + bonusMax,
+    achievementFull: goalCount > 0 && s.completedGoalCount >= goalCount,
+    participationFull: p.plannedDays > 0 && p.workoutDays >= p.plannedDays,
+    bonusFull: goalCount > 0 && s.completedGoalCount >= bonusMaxCount,
+  };
+}
+
+/**
  * 종합점수 내림차순 + 동점 규칙 (§7):
  * ① 평균 달성률 ② 참여율 ③ 먼저 전 목표 달성한 시각 ④ 완료 목표 수 ⑤ 공동
  */
@@ -145,6 +192,8 @@ export function rankParticipants(
     userId: p.userId,
     ...scoreParticipant(p),
     allGoalsCompletedAtMs: p.allGoalsCompletedAtMs ?? null,
+    workoutDays: p.workoutDays,
+    plannedDays: p.plannedDays,
   }));
 
   // 비교 사슬: 앞 기준이 사실상 같을 때만 다음 기준으로
@@ -184,6 +233,8 @@ export function rankParticipants(
       participation: p.participation,
       overall: p.overall,
       completedGoalCount: p.completedGoalCount,
+      workoutDays: p.workoutDays,
+      plannedDays: p.plannedDays,
     };
   });
 }

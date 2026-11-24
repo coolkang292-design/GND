@@ -20,6 +20,7 @@ import {
 import { inclusiveDays } from "@/lib/domain/challenge-time";
 import { addDaysToDateKey } from "@/lib/domain/workout-plan";
 import type { RankedParticipant } from "@/lib/domain/goal-score";
+import { ScoreDetail } from "@/components/challenge/score-breakdown-card";
 import { MetricDailyChart } from "./metric-daily-chart";
 import { MetricRankingList } from "./metric-ranking-list";
 import { MetricSelector, type RankingKey } from "./metric-selector";
@@ -97,10 +98,25 @@ export function RankingScreen({
         {key === "overall" && overallRanked ? (
           <>
             <h3 className="text-[16px] font-extrabold">종합 점수 랭킹</h3>
-            <p className="mt-1 text-[12px] text-muted">방장이 실시간 공개를 켠 방이에요. 점수는 종료 때 확정돼요.</p>
+            <p className="mt-1 text-[12px] text-muted">방장이 실시간 공개를 켠 방이에요. 점수는 종료 때 확정돼요. 줄을 누르면 점수 계산을 볼 수 있어요.</p>
             <div className="mt-3">
               <MetricRankingList
-                lines={overallRanked.map((r) => ({ userId: r.userId, rank: r.rank, value: `${r.overall.toFixed(1)}점` }))}
+                lines={overallRanked.map((r) => ({
+                  userId: r.userId,
+                  rank: r.rank,
+                  value: `${r.overall.toFixed(1)}점`,
+                  // 줄을 누르면 목표점수·참여점수·보너스 풀이가 펼쳐진다 (나·다른 참가자 동일, 2026-11-20)
+                  detail: (
+                    <ScoreDetail
+                      achievement={r.achievement}
+                      participation={r.participation}
+                      completedGoalCount={r.completedGoalCount}
+                      overall={r.overall}
+                      workoutDays={r.workoutDays}
+                      plannedDays={r.plannedDays}
+                    />
+                  ),
+                }))}
                 myUserId={myUserId}
                 profileOf={profileOf}
                 limit={10}

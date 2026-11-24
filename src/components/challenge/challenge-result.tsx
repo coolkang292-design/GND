@@ -30,7 +30,8 @@ import {
   minutesKnown,
   rankMetric,
 } from "@/lib/domain/challenge-metrics";
-import { goalRate, rankParticipants, type ParticipantInput } from "@/lib/domain/goal-score";
+import { goalRate, rankParticipants, scoreBreakdown, type ParticipantInput } from "@/lib/domain/goal-score";
+import { ScoreBreakdownCard } from "@/components/challenge/score-breakdown-card";
 import type { UserGoal } from "@/lib/types";
 import { FinalRanking } from "./result/final-ranking";
 import { RecordAnalysis, type MyReport } from "./result/record-analysis";
@@ -112,6 +113,7 @@ export function ResultView({
   }, [challenge.id, start, end, timeZone]);
 
   const myRanked = ranked.find((r) => r.userId === myUserId) ?? null;
+  const myInput = participants.find((p) => p.userId === myUserId) ?? null;
 
   const report = useMemo<MyReport | null>(() => {
     const input = participants.find((p) => p.userId === myUserId);
@@ -228,16 +230,20 @@ export function ResultView({
       <DetailTabs tabs={tabs} value={tab} onChange={setTab} />
 
       {tab === "summary" && (
-        <ResultOverview
-          mine={
-            myRanked
-              ? { rank: myRanked.rank, overall: myRanked.overall, avatarUrl: profileOf(myUserId)?.avatar_url ?? null }
-              : null
-          }
-          cells={cells}
-          podium={podium}
-          onOpenFinal={() => setTab("final")}
-        />
+        <>
+          <ResultOverview
+            mine={
+              myRanked
+                ? { rank: myRanked.rank, overall: myRanked.overall, avatarUrl: profileOf(myUserId)?.avatar_url ?? null }
+                : null
+            }
+            cells={cells}
+            podium={podium}
+            onOpenFinal={() => setTab("final")}
+          />
+          {/* 점수 구성표 (2026-11-20) — 종합점수가 어떻게 나왔는지. 목표 있는 사람만 */}
+          {myInput && myInput.goals.length > 0 && <ScoreBreakdownCard b={scoreBreakdown(myInput)} />}
+        </>
       )}
 
       {tab === "final" && (

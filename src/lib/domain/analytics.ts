@@ -391,12 +391,12 @@ export function userStatus(daysSinceLastWorkout: number | null): UserStatus {
 }
 
 /**
- * 경계 5일은 streak.ts의 STREAK_EXPIRY_DAYS와 같다.
+ * 경계 4일은 streak.ts의 STREAK_EXPIRY_DAYS와 같다.
  * 앱이 "불꽃 살아있음"을 보여주는 사용자가 여기서 "위험"으로 뜨면 안 된다.
  */
 export function churnRisk(daysSinceLastWorkout: number | null): ChurnRisk {
   if (daysSinceLastWorkout === null) return "높음";
-  if (daysSinceLastWorkout < 5) return "낮음";
+  if (daysSinceLastWorkout < 4) return "낮음";
   if (daysSinceLastWorkout < 14) return "중간";
   return "높음";
 }

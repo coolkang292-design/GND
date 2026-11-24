@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Avatar } from "@/components/avatar";
 import { Icon } from "@/components/ui/icon";
+import { ScoreDetail } from "@/components/challenge/score-breakdown-card";
 import { MetricSelector, type RankingKey } from "@/components/challenge/competition/metric-selector";
 import {
   formatMetric,
@@ -19,6 +20,8 @@ const MEDAL: Record<1 | 2 | 3, string> = {
 };
 
 type Row = { userId: string; rank: number | null; value: string };
+
+/** 점수 풀이를 펼칠 수 있는 건 종합 점수 탭뿐이다(종목 탭의 값은 점수가 아니다) */
 
 /**
  * 종료 화면 `최종 랭킹` 탭 — 최종 시안 4번 (2026-10-07).
@@ -47,6 +50,15 @@ export function FinalRanking({
   onDiscover: () => void;
 }) {
   const [key, setKey] = useState<RankingKey>("overall");
+  const [detailOpen, setDetailOpen] = useState<ReadonlySet<string>>(new Set());
+  const toggleDetail = (id: string) =>
+    setDetailOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const overallOf = new Map(overall.map((r) => [r.userId, r]));
   const rows: Row[] =
     key === "overall"
       ? overall.map((r) => ({ userId: r.userId, rank: r.rank, value: r.overall.toFixed(1) }))
@@ -68,6 +80,9 @@ export function FinalRanking({
           <span className="text-right">{column}</span>
           <span className="text-right">주요 기록</span>
         </div>
+        {key === "overall" && (
+          <p className="px-3 py-1.5 text-[11px] text-muted">줄을 누르면 점수 계산을 볼 수 있어요.</p>
+        )}
         {key === "minutes" && !minutesAvailable && (
           <p className="px-3 py-2 text-[11.5px] text-muted">운동 시간 집계를 준비 중이에요.</p>
         )}
@@ -76,15 +91,29 @@ export function FinalRanking({
             const mine = r.userId === myUserId;
             const p = profileOf(r.userId);
             const t = totals.get(r.userId);
+            const scored = key === "overall" ? overallOf.get(r.userId) : undefined;
+            const expandedHere = scored !== undefined && detailOpen.has(r.userId);
             return (
               <li
                 key={r.userId}
                 data-testid="final-row"
                 data-mine={mine || undefined}
-                className={`grid grid-cols-[40px_minmax(0,1fr)_76px_64px] items-center gap-1 px-3 py-2 ${
+                className={
                   mine ? "border-y border-accent bg-accent-weak" : "border-b border-line last:border-b-0"
-                }`}
+                }
               >
+                <button
+                  type="button"
+                  disabled={scored === undefined}
+                  onClick={() => toggleDetail(r.userId)}
+                  aria-expanded={scored === undefined ? undefined : expandedHere}
+                  aria-label={
+                    scored === undefined
+                      ? undefined
+                      : `${mine ? "나" : (p?.nickname ?? "참가자")} 점수 계산 ${expandedHere ? "접기" : "보기"}`
+                  }
+                  className="grid w-full grid-cols-[40px_minmax(0,1fr)_76px_64px] items-center gap-1 px-3 py-2 text-left disabled:cursor-default"
+                >
                 <span>
                   {r.rank !== null && r.rank <= 3 ? (
                     <span className={`grid h-6 w-6 place-items-center rounded-full font-mono text-[12px] font-black ${MEDAL[r.rank as 1 | 2 | 3]}`}>
@@ -111,6 +140,17 @@ export function FinalRanking({
                   <br />
                   {t && minutesAvailable ? formatMetric("minutes", t.minutes) : "-"}
                 </span>
+                </button>
+                {expandedHere && scored && (
+                  <ScoreDetail
+                    achievement={scored.achievement}
+                    participation={scored.participation}
+                    completedGoalCount={scored.completedGoalCount}
+                    overall={scored.overall}
+                    workoutDays={scored.workoutDays}
+                    plannedDays={scored.plannedDays}
+                  />
+                )}
               </li>
             );
           })}

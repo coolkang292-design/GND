@@ -17,6 +17,7 @@
  */
 
 import { readAcquisition } from "@/lib/acquisition";
+import { detectClientKind } from "@/lib/domain/client-kind";
 import { trackProduct } from "@/lib/posthog/track";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
@@ -172,6 +173,9 @@ export async function recordFunnelEvent(
       ...attribution,
       // 길이 제약(64)을 넘기면 DB가 통째로 거부한다. 여기서 잘라 둔다.
       error_code: errorCode ? errorCode.slice(0, 64) : null,
+      // 0119 — 접속 환경 분류. 봇을 퍼널에서 빼고 인앱 브라우저 전환율을 보려는 것이다.
+      // ⚠️ 이 컬럼이 DB에 없으면 insert가 통째로 거부된다 → 0119를 앱 배포 전에 적용할 것.
+      client_kind: detectClientKind(),
     });
 
     if (error) {

@@ -8,6 +8,7 @@ import { pendingChallengeInvitePath } from "@/lib/challenge";
 import { APP_LANDING_PATH } from "@/lib/domain/landing";
 import { identityError, linkFailureCode, takeAuthIntent } from "@/lib/identity";
 import { trackProduct } from "@/lib/posthog/track";
+import { recordFunnelEvent } from "@/lib/analytics-events";
 import { awaitAnalyticsIdle } from "@/lib/posthog/client";
 import { linkProviderOf, loginProviderOf } from "@/lib/posthog/provider";
 
@@ -53,7 +54,8 @@ export default function AuthCallbackPage() {
     /**
      * PostHog — 돌아온 결과를 기록한다. 이 화면이 **실제 성공·실패가 드러나는 유일한 지점**이다
      * (온보딩의 `identity_link_failed`는 OAuth 이동 *전* 오류만 잡는다 — `identity_already_exists`는 여기로 온다).
-     * ⚠️ DB(`analytics_events`)에는 쓰지 않는다 — 기존 기록 동작을 바꾸지 않는다.
+     * ⚠️ 링크 **실패**만 DB(`analytics_events.identity_link_failed`)에도 남긴다(2026-11-09).
+     *    성공은 `auth.users.is_anonymous=false`가 이미 안다.
      * ⚠️ 의도를 모르면(저장소 막힘) 아무것도 기록하지 않는다. 추측하지 않는다.
      */
     async function currentUser() {
@@ -68,7 +70,11 @@ export default function AuthCallbackPage() {
       if (intent === null) return;
       const user = await currentUser();
       if (intent === "link") {
-        trackProduct("identity_link_failed", { error_code: code }, { userId: user?.id ?? null });
+        // DB(`analytics_events`)에도 남긴다 — PostHog는 동의가 없으면 비어서, 인앱 브라우저에서
+        // 막힌 사람(동의 배너 전에 떠난 사람)이 통째로 안 보였다. 이 함수가 PostHog 복제도
+        // 같은 이름·같은 속성으로 하므로 `trackProduct`를 따로 부르지 않는다(이중 집계 방지).
+        // 사용자당 평생 1건(unique)이라 온보딩에서 이미 실패를 남겼다면 이 기록은 버려진다.
+        void recordFunnelEvent("identity_link_failed", user?.id ?? null, code);
       } else {
         trackProduct("login_failed", { error_code: code }, { userId: user?.id ?? null });
       }

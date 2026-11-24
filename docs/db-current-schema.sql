@@ -7,7 +7,7 @@
 -- 쓰는 법: 함수·정책의 '현행' 정의가 필요할 때 마이그레이션 51개를
 -- 뒤지지 말고 이 파일을 검색하라. 마이그레이션을 적용한 뒤에는 다시 뽑아라.
 --
--- 함수 104개 · 정책 86개 · 인덱스 105개
+-- 함수 113개 · 정책 93개 · 인덱스 117개
 
 -- ════════════════════════════════════════════════════════════
 -- 함수
@@ -259,6 +259,7 @@ CREATE OR REPLACE FUNCTION public.apply_xp_and_progress(p_user_id uuid, p_amount
 AS $function$
 declare
   v_inserted boolean := false;
+  v_gate jsonb; v_i int;
   v_prev_xp int; v_new_xp int;
   v_prev_level int; v_new_level int;
   v_prev_stage int; v_new_stage int;
@@ -271,6 +272,12 @@ begin
     into v_prev_xp, v_prev_level, v_prev_stage
   from user_progress where user_id = p_user_id for update;
   v_new_xp := v_prev_xp;
+  begin
+    perform gnd_evolution.bootstrap_user(p_user_id);
+  exception when others then
+    insert into public.stage_evolution_errors(user_id,error_code,phase) values(p_user_id,sqlstate,'bootstrap')
+      on conflict(user_id) do update set error_code=excluded.error_code,phase=excluded.phase,occurred_at=now();
+  end;
 
   -- 1) 원장 insert (중복 방지 인덱스가 병렬/재시도 방어)
   begin
@@ -297,12 +304,33 @@ begin
   from level_definitions where required_total_xp <= v_new_xp
   order by required_total_xp desc limit 1;
 
+  -- 서버 규칙 ON에서는 XP 레벨과 캐릭터 단계를 분리한다.
+  if (select enabled from public.stage_evolution_settings where singleton) then
+    v_new_stage := v_prev_stage;
+  else
+    v_new_stage := greatest(v_prev_stage,v_new_stage);
+  end if;
+
   update user_progress set
     total_xp = v_new_xp, current_level = v_new_level, current_stage = v_new_stage,
     last_level_up_at = case when v_new_level > v_prev_level then now() else last_level_up_at end,
     last_stage_up_at = case when v_new_stage > v_prev_stage then now() else last_stage_up_at end,
     updated_at = now()
   where user_id = p_user_id;
+
+  if (select enabled from public.stage_evolution_settings where singleton) then
+    v_gate := gnd_evolution.safe_evaluate(p_user_id);
+    v_new_stage := (v_gate->>'currentStage')::int;
+  elsif v_new_stage > v_prev_stage then
+    begin
+      for v_i in (v_prev_stage+1)..v_new_stage loop
+        perform gnd_evolution.freeze_stage(p_user_id,v_i,now(),'actual');
+      end loop;
+    exception when others then
+      insert into public.stage_evolution_errors(user_id,error_code,phase) values(p_user_id,sqlstate,'legacy_freeze')
+        on conflict(user_id) do update set error_code=excluded.error_code,phase=excluded.phase,occurred_at=now();
+    end;
+  end if;
 
   -- 3) 통과한 레벨 보상 (prev < lv <= new) — 한 번에 여러 레벨도 모두 지급
   for v_reward in
@@ -332,33 +360,8 @@ begin
     end if;
   end loop;
 
-  -- ⬇ 4) 0029: 레벨이 올랐으면 크루 전원에게 알린다.
-  --    크루가 없으면(혼자모드) select가 0행이라 아무 일도 일어나지 않는다.
-  if v_new_level > v_prev_level then
-    select nickname into v_nick from profiles where id = p_user_id;
-    select stage_name into v_stage_name
-    from level_definitions where level = v_new_level;
-
-    if v_new_stage > v_prev_stage then
-      v_title := '🎉 ' || coalesce(v_nick, '크루원') || '님이 진화했어요!';
-      -- 단계명 뒤에 '단계로'를 붙여 받침에 따른 조사 문제를 피한다
-      v_body := 'Lv.' || v_new_level || ' 달성 — '
-                || coalesce(v_stage_name, '다음') || ' 단계로 진화했어요 ✨';
-    else
-      v_title := '⬆️ ' || coalesce(v_nick, '크루원') || '님이 레벨업!';
-      v_body := 'Lv.' || v_prev_level || ' → Lv.' || v_new_level
-                || ' 달성했어요. 축하해주세요 👏';
-    end if;
-
-    -- reference_id는 uuid 컬럼이다. 타입 없는 null을 select 목록에 그대로 두면
-    -- Postgres가 text로 추론해 42804로 죽고, 완료 트랜잭션 전체가 롤백된다.
-    -- 0039로 팬아웃을 바꿔도 이 캐스트는 그대로 둔다.
-    insert into notifications (user_id, actor_id, type, reference_id, title, body)
-    select case when l.user_a = p_user_id then l.user_b else l.user_a end,
-           p_user_id, 'level_up', null::uuid, v_title, v_body
-    from crew_links l                                    -- 0039
-    where p_user_id in (l.user_a, l.user_b);
-  end if;
+  -- 레벨/단계 동시 상승도 알림은 한 곳에서 한 번만 만든다.
+  perform gnd_evolution.notify_progress(p_user_id,v_prev_level,v_new_level,v_prev_stage,v_new_stage);
 
   return jsonb_build_object('inserted', true, 'amount', p_amount,
     'newTotalXp', v_new_xp, 'previousLevel', v_prev_level, 'newLevel', v_new_level,
@@ -854,6 +857,107 @@ AS $function$
   )
 $function$;
 
+-- ── claim_rank_snapshot ──
+CREATE OR REPLACE FUNCTION public.claim_rank_snapshot(p_challenge_id uuid, p_next jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  v_prev jsonb;
+begin
+  perform 1 from public.challenges where id = p_challenge_id for update;
+  if not found then
+    return '[]'::jsonb;
+  end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'user_id', s.user_id,
+           'rank', s.rank,
+           'notified_at', s.notified_at)), '[]'::jsonb)
+    into v_prev
+    from public.challenge_rank_snapshots s
+   where s.challenge_id = p_challenge_id;
+
+  insert into public.challenge_rank_snapshots (challenge_id, user_id, rank, updated_at)
+  select p_challenge_id, (e->>'user_id')::uuid, (e->>'rank')::int, now()
+    from jsonb_array_elements(p_next) e
+  on conflict (challenge_id, user_id)
+  do update set rank = excluded.rank, updated_at = now();
+
+  delete from public.challenge_rank_snapshots s
+   where s.challenge_id = p_challenge_id
+     and s.user_id not in (
+       select (e->>'user_id')::uuid from jsonb_array_elements(p_next) e
+     );
+
+  return v_prev;
+end;
+$function$;
+
+-- ── claim_workout_stamp ──
+CREATE OR REPLACE FUNCTION public.claim_workout_stamp(p_session_id uuid)
+ RETURNS TABLE(stamp_date date, stamp_variant text, newly_awarded boolean)
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_uid uuid := (SELECT auth.uid());
+  v_completed timestamptz;
+  v_tz text;
+  v_day date;
+  v_variant text;
+  v_rows integer;
+  v_entropy bytea;
+  v_roll integer;
+BEGIN
+  IF v_uid IS NULL THEN RETURN; END IF;
+  SELECT s.completed_at, p.timezone INTO v_completed, v_tz
+    FROM public.workout_sessions s JOIN public.profiles p ON p.id = s.user_id
+   WHERE s.id = p_session_id AND s.user_id = v_uid
+     AND s.status = 'completed' AND s.deleted_at IS NULL AND s.completed_at IS NOT NULL;
+  IF NOT FOUND THEN RETURN; END IF;
+  IF v_completed < (SELECT r.launched_at FROM public.workout_stamp_release r WHERE r.singleton) THEN RETURN; END IF;
+  v_day := (v_completed AT TIME ZONE v_tz)::date;
+
+  SELECT c.variant INTO v_variant FROM public.workout_stamp_colors c
+   WHERE c.user_id = v_uid AND c.workout_date = v_day;
+  IF FOUND THEN
+    RETURN QUERY SELECT v_day, v_variant, false;
+    RETURN;
+  END IF;
+
+  -- All first-ever workout DAYS get orange, irrespective of sessions on that day.
+  IF NOT EXISTS (
+    SELECT 1 FROM public.workout_sessions s
+     WHERE s.user_id = v_uid AND s.status = 'completed' AND s.deleted_at IS NULL
+       AND s.completed_at IS NOT NULL
+       AND (s.completed_at AT TIME ZONE v_tz)::date < v_day
+  ) THEN
+    v_variant := 'orange';
+  ELSE
+    v_entropy := extensions.gen_random_bytes(4);
+    v_roll := ((get_byte(v_entropy,0)::bigint*16777216
+      +get_byte(v_entropy,1)::bigint*65536
+      +get_byte(v_entropy,2)::bigint*256
+      +get_byte(v_entropy,3)::bigint)%100)::integer;
+    v_variant := CASE WHEN v_roll < 70 THEN 'basic'
+                      WHEN v_roll < 95 THEN 'orange'
+                      ELSE 'gold' END;
+  END IF;
+
+  INSERT INTO public.workout_stamp_colors(user_id,workout_date,variant,awarded_session_id)
+  VALUES (v_uid,v_day,v_variant,p_session_id)
+  ON CONFLICT (user_id,workout_date) DO NOTHING;
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+  SELECT c.variant INTO v_variant FROM public.workout_stamp_colors c
+   WHERE c.user_id = v_uid AND c.workout_date = v_day;
+  RETURN QUERY SELECT v_day, v_variant, (v_rows = 1);
+END;
+$function$;
+
 -- ── clear_profile_invited_by_on_insert ──
 CREATE OR REPLACE FUNCTION public.clear_profile_invited_by_on_insert()
  RETURNS trigger
@@ -958,7 +1062,7 @@ declare
   v_eff date; v_has_daily boolean;
   v_base int := 0; v_time int := 0; v_plan int := 0; v_rec int := 0; v_photo int := 0;
   v_total int := 0;
-  v_prog jsonb; v_orig int;
+  v_prog jsonb; v_orig int; v_gate jsonb; v_before_stage int; v_level int;
   v_streak int; v_mult numeric; v_points int := 0; v_badges jsonb := '[]'::jsonb;
   v_elapsed int; v_paused int;
 begin
@@ -1054,6 +1158,16 @@ begin
       'newLevel', current_level, 'previousStage', current_stage, 'newStage', current_stage,
       'levelUp', false, 'stageUp', false, 'unlockedRewards', '[]'::jsonb)
     into v_prog from user_progress where user_id = s.user_id;
+  end if;
+
+  -- 같은 날 두 번째 유효 운동(XP0)도 진화를 재판정한다. 완료 재송신은 앞에서 반환한다.
+  if v_total = 0 and v_valid and (select enabled from public.stage_evolution_settings where singleton) then
+    select current_stage,current_level into v_before_stage,v_level from public.user_progress
+      where user_id=s.user_id for update;
+    v_gate := gnd_evolution.safe_evaluate(s.user_id);
+    v_prog := v_prog || jsonb_build_object('previousStage',v_before_stage,'newStage',v_gate->'currentStage',
+      'stageUp',v_gate->'stageUp');
+    perform gnd_evolution.notify_progress(s.user_id,v_level,v_level,v_before_stage,(v_gate->>'currentStage')::int);
   end if;
 
   -- ⬇ 0032 추가: 운동 포인트. XP와 같은 조건(그날 첫 유효 운동)에서만 준다.
@@ -1649,7 +1763,7 @@ begin
   where user_id = p_user_id and status = 'completed'
     and deleted_at is null and completed_at is not null;
 
-  if v_last is null or (v_today - v_last) >= 5 then
+  if v_last is null or (v_today - v_last) >= 4 then
     return 0;
   end if;
 
@@ -1660,7 +1774,7 @@ begin
       and deleted_at is null and completed_at is not null
     order by d desc
   loop
-    if v_prev is not null and (v_prev - r.d) >= 5 then
+    if v_prev is not null and (v_prev - r.d) >= 4 then
       exit;
     end if;
     v_count := v_count + 1;
@@ -1668,7 +1782,8 @@ begin
   end loop;
 
   return v_count;
-end $function$;
+end;
+$function$;
 
 -- ── decline_challenge_invite ──
 CREATE OR REPLACE FUNCTION public.decline_challenge_invite(p_challenge_id uuid)
@@ -1710,6 +1825,27 @@ begin
     );
   exception when others then
     null; -- 푸시 실패는 알림 저장에 영향 없음
+  end;
+  return new;
+end;
+$function$;
+
+-- ── dispatch_rank_check ──
+CREATE OR REPLACE FUNCTION public.dispatch_rank_check()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+begin
+  begin
+    perform net.http_post(
+      url := 'https://gnd-one.vercel.app/api/challenge/rank-check',
+      body := jsonb_build_object('session_id', new.id),
+      headers := '{"Content-Type": "application/json"}'::jsonb
+    );
+  exception when others then
+    null;
   end;
   return new;
 end;
@@ -1950,6 +2086,44 @@ begin
   return c;
 end $function$;
 
+-- ── freeze_level_baselines ──
+CREATE OR REPLACE FUNCTION public.freeze_level_baselines(p_level integer, p_metric_version text, p_rows jsonb)
+ RETURNS integer
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_uid uuid := auth.uid();
+  v_hist user_level_history;
+  v_n integer := 0;
+begin
+  if v_uid is null then raise exception 'not_authenticated'; end if;
+
+  select * into v_hist from user_level_history
+  where user_id = v_uid and level = p_level for update;
+  if not found then raise exception 'level_entry_not_found'; end if;
+  if v_hist.baseline_frozen_at is not null then return 0; end if;
+
+  if jsonb_typeof(p_rows) <> 'array' or jsonb_array_length(p_rows) > 200 then
+    raise exception 'invalid_rows';
+  end if;
+
+  insert into level_growth_baselines
+    (user_id, target_level, exercise_key, metric_type, baseline_value, sample_count, samples,
+     baseline_window_start, baseline_window_end, level_entered_at, metric_version)
+  select v_uid, p_level, r->>'exercise_key', r->>'metric_type',
+         (r->>'baseline_value')::numeric, jsonb_array_length(r->'samples'), r->'samples',
+         v_hist.entered_at - interval '60 days', v_hist.entered_at, v_hist.entered_at,
+         p_metric_version
+  from jsonb_array_elements(p_rows) r
+  on conflict (user_id, target_level, exercise_key, metric_type, metric_version) do nothing;
+  get diagnostics v_n = row_count;
+
+  update user_level_history set baseline_frozen_at = now() where id = v_hist.id;
+  return v_n;
+end $function$;
+
 -- ── freeze_profile_attribution ──
 CREATE OR REPLACE FUNCTION public.freeze_profile_attribution()
  RETURNS trigger
@@ -2115,6 +2289,8 @@ begin
   select coalesce(jsonb_agg(row), '[]'::jsonb) into v_rows
   from (
     select jsonb_build_object(
+      'session_id', s.id,
+      'started_at', s.started_at,
       'user_id', s.user_id,
       'completed_at', s.completed_at,
       'duration_minutes', s.duration_minutes,
@@ -2147,7 +2323,6 @@ begin
       and s.deleted_at is null
       and s.completed_at >= (c.start_date - 1)::timestamptz
       and s.completed_at <  (c.end_date + 2)::timestamptz
-      -- 사진 인증 필수 챌린지는 사진 있는 세션만 (앱의 workout_images!inner와 같다)
       and (
         not c.photo_required
         or exists (
@@ -2160,6 +2335,27 @@ begin
 
   return v_rows;
 end $function$;
+
+-- ── get_character_faces ──
+CREATE OR REPLACE FUNCTION public.get_character_faces(p_user_ids uuid[])
+ RETURNS TABLE(user_id uuid, stage smallint, variant text)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+  select p.id,
+         coalesce(up.current_stage, 1)::smallint,
+         p.character_variant
+  from public.profiles p
+  left join public.user_progress up on up.user_id = p.id
+  where (select auth.uid()) is not null
+    and cardinality(p_user_ids) <= 200
+    and p.id = any (p_user_ids)
+    and (
+      p.id = (select auth.uid())
+      or not public.is_blocked_between((select auth.uid()), p.id)
+    )
+$function$;
 
 -- ── get_crew_member_profile ──
 CREATE OR REPLACE FUNCTION public.get_crew_member_profile(p_target_id uuid)
@@ -2348,6 +2544,18 @@ AS $function$
     and n.actor_id = (select auth.uid())
     and n.created_at > now() - interval '24 hours'
 $function$;
+
+-- ── get_my_stage_evolution_status ──
+CREATE OR REPLACE FUNCTION public.get_my_stage_evolution_status()
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  return gnd_evolution.stage_status(auth.uid(),now());
+end $function$;
 
 -- ── get_session_actor_profiles ──
 CREATE OR REPLACE FUNCTION public.get_session_actor_profiles(p_session_ids uuid[])
@@ -3739,6 +3947,54 @@ begin
                             'parent_id', c.parent_id);
 end $function$;
 
+-- ── record_level_entry ──
+CREATE OR REPLACE FUNCTION public.record_level_entry()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_tx uuid;
+begin
+  if new.current_level > old.current_level then
+    begin
+      select id into v_tx from xp_transactions
+      where user_id = new.user_id
+      order by created_at desc, id desc limit 1;
+
+      insert into user_level_history
+        (user_id, level, entered_at, entry_xp, source_transaction_id, history_source)
+      select new.user_id, g, now(), new.total_xp, v_tx, 'actual'
+      from generate_series(old.current_level + 1, new.current_level) g
+      on conflict (user_id, level) do nothing;
+    exception when others then
+      raise warning 'record_level_entry failed for %: %', new.user_id, sqlerrm;
+    end;
+  end if;
+  return new;
+end $function$;
+
+-- ── refresh_my_stage_evolution ──
+CREATE OR REPLACE FUNCTION public.refresh_my_stage_evolution()
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare s jsonb; level int; previous int;
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  insert into public.user_progress(user_id) values(auth.uid()) on conflict(user_id) do nothing;
+  select current_level,current_stage into level,previous from public.user_progress where user_id=auth.uid() for update;
+  if not (select enabled from public.stage_evolution_settings where singleton) then
+    return gnd_evolution.stage_status(auth.uid(),now());
+  end if;
+  s:=gnd_evolution.safe_evaluate(auth.uid());
+  perform gnd_evolution.notify_progress(auth.uid(),level,level,previous,(s->>'currentStage')::int);
+  return gnd_evolution.stage_status(auth.uid(),now())||jsonb_build_object('previousStage',previous,'stageUp',s->'stageUp');
+end $function$;
+
 -- ── reject_crew_request ──
 CREATE OR REPLACE FUNCTION public.reject_crew_request(p_request_id uuid)
  RETURNS jsonb
@@ -4374,6 +4630,55 @@ AS $function$
   )
 $function$;
 
+-- ── set_live_workout_exercise_names ──
+CREATE OR REPLACE FUNCTION public.set_live_workout_exercise_names(p_session_id uuid, p_exercise_names text[])
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  v_uid uuid := auth.uid();
+begin
+  if v_uid is null then
+    raise exception 'not_authenticated';
+  end if;
+
+  if p_exercise_names is null
+     or cardinality(p_exercise_names) > 30
+     or exists (
+       select 1 from unnest(p_exercise_names) as n(name)
+       where n.name is null
+          or char_length(btrim(n.name)) = 0
+          or char_length(n.name) > 40
+     )
+  then
+    raise exception 'invalid_exercise_names';
+  end if;
+
+  -- Crucial: an authenticated user may ONLY update their own active session.
+  if not exists (
+    select 1 from public.workout_sessions s
+    where s.id = p_session_id
+      and s.user_id = v_uid
+      and s.status = 'active'
+      and s.deleted_at is null
+  ) then
+    raise exception 'session_not_active_or_not_owner';
+  end if;
+
+  update public.workout_events e
+  set exercise_names = p_exercise_names
+  where e.session_id = p_session_id
+    and e.user_id = v_uid
+    and e.event_type = 'workout_started';
+
+  if not found then
+    raise exception 'start_event_not_found';
+  end if;
+end;
+$function$;
+
 -- ── set_recruit_opened_at ──
 CREATE OR REPLACE FUNCTION public.set_recruit_opened_at()
  RETURNS trigger
@@ -4979,6 +5284,9 @@ $function$;
 -- ── level_definitions ──
 -- level_definitions_read  [SELECT]  roles=authenticated
 --   using  : true
+-- ── level_growth_baselines ──
+-- level_growth_baselines_own_select  [SELECT]  roles=public
+--   using  : (user_id = auth.uid())
 -- ── notification_settings ──
 -- notif_settings_own  [ALL]  roles=authenticated
 --   using  : (user_id = auth.uid())
@@ -5029,6 +5337,15 @@ $function$;
 -- ── record_views ──
 -- record_views_select_related  [SELECT]  roles=authenticated
 --   using  : ((viewer_id = auth.uid()) OR (target_id = auth.uid()))
+-- ── stage_evolution_rules ──
+-- stage_evolution_rules_read  [SELECT]  roles=authenticated
+--   using  : true
+-- ── stage_evolution_settings ──
+-- stage_evolution_settings_read  [SELECT]  roles=authenticated
+--   using  : true
+-- ── stage_growth_baselines ──
+-- stage_growth_baselines_own  [SELECT]  roles=authenticated
+--   using  : (user_id = ( SELECT auth.uid() AS uid))
 -- ── streak_shield_transactions ──
 -- streak_shield_own_select  [SELECT]  roles=authenticated
 --   using  : (user_id = auth.uid())
@@ -5058,12 +5375,18 @@ $function$;
 -- goals_update_own_setup  [UPDATE]  roles=public
 --   using  : ((user_id = ( SELECT auth.uid() AS uid)) AND (challenge_in_setup(challenge_id) OR challenge_is_active(challenge_id)))
 --   check  : ((user_id = ( SELECT auth.uid() AS uid)) AND (challenge_in_setup(challenge_id) OR challenge_is_active(challenge_id)))
+-- ── user_level_history ──
+-- user_level_history_own_select  [SELECT]  roles=public
+--   using  : (user_id = auth.uid())
 -- ── user_progress ──
 -- user_progress_own_select  [SELECT]  roles=authenticated
 --   using  : (user_id = auth.uid())
 -- ── user_reports ──
 -- user_reports_select_own  [SELECT]  roles=authenticated
 --   using  : (reporter_id = ( SELECT auth.uid() AS uid))
+-- ── user_stage_history ──
+-- user_stage_history_own  [SELECT]  roles=authenticated
+--   using  : (user_id = ( SELECT auth.uid() AS uid))
 -- ── user_unlocks ──
 -- user_unlocks_own_select  [SELECT]  roles=authenticated
 --   using  : (user_id = auth.uid())
@@ -5149,6 +5472,9 @@ $function$;
 -- sets_update_own  [UPDATE]  roles=public
 --   using  : owns_workout_exercise(workout_exercise_id)
 --   check  : owns_workout_exercise(workout_exercise_id)
+-- ── workout_stamp_colors ──
+-- workout_stamp_colors_select_own  [SELECT]  roles=authenticated
+--   using  : (user_id = ( SELECT auth.uid() AS uid))
 -- ── xp_transactions ──
 -- xp_transactions_own_select  [SELECT]  roles=authenticated
 --   using  : (user_id = auth.uid())
@@ -5171,6 +5497,7 @@ $function$;
 -- CREATE UNIQUE INDEX challenge_participants_pkey ON public.challenge_participants USING btree (challenge_id, user_id);
 -- CREATE INDEX challenge_participants_user_idx ON public.challenge_participants USING btree (user_id, status);
 -- CREATE UNIQUE INDEX challenge_peek_picks_pkey ON public.challenge_peek_picks USING btree (viewer_id, challenge_id, pick_date);
+-- CREATE UNIQUE INDEX challenge_rank_snapshots_pkey ON public.challenge_rank_snapshots USING btree (challenge_id, user_id);
 -- CREATE INDEX challenges_discoverable_idx ON public.challenges USING btree (start_date, created_at DESC) WHERE (discoverable AND (status = 'setup'::text));
 -- CREATE UNIQUE INDEX challenges_invite_code_key ON public.challenges USING btree (invite_code) WHERE (invite_code IS NOT NULL);
 -- CREATE UNIQUE INDEX challenges_one_open_recruit_per_host ON public.challenges USING btree (created_by) WHERE (discoverable AND (status = 'setup'::text));
@@ -5196,6 +5523,8 @@ $function$;
 -- CREATE UNIQUE INDEX groups_pkey ON public.groups USING btree (id);
 -- CREATE UNIQUE INDEX level_definitions_pkey ON public.level_definitions USING btree (level);
 -- CREATE UNIQUE INDEX level_definitions_required_xp_unique ON public.level_definitions USING btree (required_total_xp);
+-- CREATE UNIQUE INDEX level_growth_baselines_pkey ON public.level_growth_baselines USING btree (id);
+-- CREATE UNIQUE INDEX level_growth_baselines_user_id_target_level_exercise_key_me_key ON public.level_growth_baselines USING btree (user_id, target_level, exercise_key, metric_type, metric_version);
 -- CREATE UNIQUE INDEX notification_settings_pkey ON public.notification_settings USING btree (user_id);
 -- CREATE UNIQUE INDEX notifications_dedupe_key_uidx ON public.notifications USING btree (dedupe_key);
 -- CREATE UNIQUE INDEX notifications_pkey ON public.notifications USING btree (id);
@@ -5221,6 +5550,10 @@ $function$;
 -- CREATE UNIQUE INDEX reactions_session_id_user_id_reaction_type_key ON public.reactions USING btree (session_id, user_id, reaction_type);
 -- CREATE INDEX reactions_session_idx ON public.reactions USING btree (session_id);
 -- CREATE UNIQUE INDEX record_views_pkey ON public.record_views USING btree (id);
+-- CREATE UNIQUE INDEX stage_evolution_errors_pkey ON public.stage_evolution_errors USING btree (user_id);
+-- CREATE UNIQUE INDEX stage_evolution_rules_pkey ON public.stage_evolution_rules USING btree (rule_version, target_stage);
+-- CREATE UNIQUE INDEX stage_evolution_settings_pkey ON public.stage_evolution_settings USING btree (singleton);
+-- CREATE UNIQUE INDEX stage_growth_baselines_pkey ON public.stage_growth_baselines USING btree (user_id, stage, exercise_key, metric_kind);
 -- CREATE UNIQUE INDEX streak_shield_source_unique ON public.streak_shield_transactions USING btree (user_id, reason, source_type, source_id);
 -- CREATE UNIQUE INDEX streak_shield_transactions_pkey ON public.streak_shield_transactions USING btree (id);
 -- CREATE UNIQUE INDEX training_profiles_pkey ON public.training_profiles USING btree (user_id);
@@ -5229,10 +5562,13 @@ $function$;
 -- CREATE UNIQUE INDEX user_blocks_pkey ON public.user_blocks USING btree (blocker_id, blocked_id);
 -- CREATE UNIQUE INDEX user_goals_pkey ON public.user_goals USING btree (id);
 -- CREATE UNIQUE INDEX user_goals_user_id_challenge_id_goal_type_key ON public.user_goals USING btree (user_id, challenge_id, goal_type);
+-- CREATE UNIQUE INDEX user_level_history_pkey ON public.user_level_history USING btree (id);
+-- CREATE UNIQUE INDEX user_level_history_user_id_level_key ON public.user_level_history USING btree (user_id, level);
 -- CREATE UNIQUE INDEX user_progress_pkey ON public.user_progress USING btree (user_id);
 -- CREATE UNIQUE INDEX user_reports_one_open_per_pair ON public.user_reports USING btree (reporter_id, target_id) WHERE (status = 'open'::text);
 -- CREATE INDEX user_reports_open_idx ON public.user_reports USING btree (created_at DESC) WHERE (status = 'open'::text);
 -- CREATE UNIQUE INDEX user_reports_pkey ON public.user_reports USING btree (id);
+-- CREATE UNIQUE INDEX user_stage_history_pkey ON public.user_stage_history USING btree (user_id, stage);
 -- CREATE UNIQUE INDEX user_unlocks_pkey ON public.user_unlocks USING btree (user_id, unlock_key);
 -- CREATE UNIQUE INDEX user_wallet_pkey ON public.user_wallet USING btree (user_id);
 -- CREATE UNIQUE INDEX workout_ai_feedback_pkey ON public.workout_ai_feedback USING btree (session_id);
@@ -5258,6 +5594,8 @@ $function$;
 -- CREATE INDEX workout_sessions_user_completed ON public.workout_sessions USING btree (user_id, completed_at DESC) WHERE (status = 'completed'::text);
 -- CREATE UNIQUE INDEX workout_sets_pkey ON public.workout_sets USING btree (id);
 -- CREATE UNIQUE INDEX workout_sets_workout_exercise_id_set_number_key ON public.workout_sets USING btree (workout_exercise_id, set_number);
+-- CREATE UNIQUE INDEX workout_stamp_colors_pkey ON public.workout_stamp_colors USING btree (user_id, workout_date);
+-- CREATE UNIQUE INDEX workout_stamp_release_pkey ON public.workout_stamp_release USING btree (singleton);
 -- CREATE UNIQUE INDEX xp_daily_workout_reward_unique ON public.xp_transactions USING btree (user_id, effective_date, reward_group) WHERE ((transaction_type = 'earn'::text) AND (reward_group = 'daily_workout'::text));
 -- CREATE UNIQUE INDEX xp_transactions_pkey ON public.xp_transactions USING btree (id);
 -- CREATE UNIQUE INDEX xp_transactions_source_unique ON public.xp_transactions USING btree (user_id, reason, source_type, source_id) WHERE (transaction_type = 'earn'::text);

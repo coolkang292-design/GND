@@ -14,7 +14,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("StreakCard — 어제 운동한 사용자(d4)", () => {
+describe("StreakCard — 어제 운동한 사용자(d3)", () => {
   // 어제(7/22)와 그제(7/21) 운동 → 스트릭 2일, 오늘(7/23)은 아직.
   const yesterdayStreak = [kst("2026-07-21"), kst("2026-07-22")];
 
@@ -47,7 +47,7 @@ describe("StreakCard — 어제 운동한 사용자(d4)", () => {
     // 경고 문구가 카드 부제로도 쓰이면 화면에 같은 말이 두 번 나온다
     const occurrences = html.split(warning as string).length - 1;
     expect(occurrences).toBe(1);
-    expect(warning).toContain("소멸 D-4");
+    expect(warning).toContain("소멸 D-3");
   });
 });
 
@@ -57,7 +57,7 @@ describe("StreakCard — 실제로 쉰 경우엔 쉬었다고 말한다", () => 
       <StreakCard completedAts={[kst("2026-07-21")]} />,
     );
     expect(html).toContain("2일째 쉬는 중");
-    expect(html).toContain("소멸 D-3");
+    expect(html).toContain("소멸 D-2");
   });
 
   it("오늘 완료했으면 경고 배너가 없다", () => {

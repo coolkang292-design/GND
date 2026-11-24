@@ -9,6 +9,8 @@ import {
   participationScore,
   plannedDaysForPeriod,
   rankParticipants,
+  scoreBreakdown,
+  scoreParticipant,
   type ParticipantInput,
   type ScoredGoal,
 } from "./goal-score";
@@ -197,5 +199,63 @@ describe("gndLabel — 시상대 등급 (표시용)", () => {
 
   it("1인이면 항상 탈출", () => {
     expect(gndLabel(1, 1)).toBe("GND 탈출!");
+  });
+});
+
+describe("scoreBreakdown — 점수 구성표 (2026-11-20)", () => {
+  const input = (goals: ScoredGoal[], workoutDays: number, plannedDays: number): ParticipantInput => ({
+    userId: "me",
+    goals,
+    workoutDays,
+    plannedDays,
+  });
+
+  it("항목별 반영 점수의 합 + 보너스 = scoreParticipant 종합점수 (자가 일치)", () => {
+    const p = input([g(100, 100), g(100, 50)], 6, 10);
+    const b = scoreBreakdown(p);
+    expect(b.achievement).toBeCloseTo(75);
+    expect(b.achievementPoints).toBeCloseTo(60);
+    expect(b.participationPoints).toBeCloseTo(12);
+    expect(b.bonus).toBe(3);
+    expect(b.achievementPoints + b.participationPoints + b.bonus).toBeCloseTo(
+      scoreParticipant(p).overall,
+    );
+  });
+
+  it("만점은 목표 개수로 달라진다: 1개 103 · 2개 106 · 3개 109 · 5개도 109", () => {
+    const n = (k: number) =>
+      scoreBreakdown(input(Array.from({ length: k }, () => g(10, 0)), 0, 10)).maxScore;
+    expect(n(1)).toBe(103);
+    expect(n(2)).toBe(106);
+    expect(n(3)).toBe(109);
+    expect(n(5)).toBe(109);
+  });
+
+  it("전부 채우면 상한 표시가 모두 켜지고 종합점수가 만점과 같다", () => {
+    const p = input([g(10, 12), g(10, 10)], 10, 10);
+    const b = scoreBreakdown(p);
+    expect(b.achievementFull).toBe(true);
+    expect(b.participationFull).toBe(true);
+    expect(b.bonusFull).toBe(true);
+    expect(scoreParticipant(p).overall).toBeCloseTo(b.maxScore);
+  });
+
+  it("목표를 다 채워도 참여가 모자라면 참여는 아직 오른다", () => {
+    const b = scoreBreakdown(input([g(10, 10)], 3, 10));
+    expect(b.achievementFull).toBe(true);
+    expect(b.participationFull).toBe(false);
+  });
+
+  it("초과 달성해도 보너스는 3개까지만 (목표 5개 모두 달성 → +9)", () => {
+    const b = scoreBreakdown(input(Array.from({ length: 5 }, () => g(10, 99)), 10, 10));
+    expect(b.bonus).toBe(9);
+    expect(b.bonusFull).toBe(true);
+  });
+
+  it("목표가 없으면 아무것도 '가득'이 아니다", () => {
+    const b = scoreBreakdown(input([], 0, 10));
+    expect(b.achievementFull).toBe(false);
+    expect(b.bonusFull).toBe(false);
+    expect(b.maxScore).toBe(100);
   });
 });

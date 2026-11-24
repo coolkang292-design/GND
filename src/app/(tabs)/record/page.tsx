@@ -21,6 +21,7 @@ import {
   type ConfiguredPick,
 } from "@/components/record/exercise-picker";
 import { RecordEmptyState } from "@/components/record/record-empty-state";
+import { TodayCompletedList } from "@/components/record/today-completed-list";
 import { ExerciseReorderSheet } from "@/components/record/exercise-reorder-sheet";
 import { IdlePauseModal } from "@/components/record/idle-pause-modal";
 import { RoutineSaveSheet } from "@/components/record/routine-save-sheet";
@@ -122,11 +123,13 @@ import {
 } from "@/lib/domain/tabata";
 import { SITUATIONS } from "@/lib/domain/recommended-exercises";
 import {
+  overtakeSuggestionKind,
   pickSuggestionKindWhenReady,
   shouldApplySuggestion,
   suggestionCopy,
   type SuggestionKind,
 } from "@/lib/domain/workout-suggestion";
+import { getLatestRankDropGoalType } from "@/lib/social";
 import { takeCalendarView } from "@/lib/record-view";
 import { moveItem } from "@/lib/domain/reorder";
 import {
@@ -246,6 +249,8 @@ import {
   getSessionCopySource,
   getSessionExerciseStructure,
   getCompletedSessionMinutes,
+  getTodayCompletedSessions,
+  type TodayCompletedSession,
   getSuggestionFacts,
   hasCompletedHistory,
   loadDraft,
@@ -599,6 +604,19 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const [todayPlanExists, setTodayPlanExists] = useState(false);
   /** 오늘 이미 완료한 세션이 있나 */
   const [didWorkoutToday, setDidWorkoutToday] = useState(false);
+  /** 오늘 완료한 세션 목록 (2026-11-11) — 같은 날 추가 기록해도 앞 운동이 안 사라지게 */
+  const [todaySessions, setTodaySessions] = useState<TodayCompletedSession[]>(
+    [],
+  );
+  const refreshTodaySessions = useCallback(async () => {
+    try {
+      setTodaySessions(
+        await getTodayCompletedSessions(userId, new Date(), resolveTimeZone()),
+      );
+    } catch {
+      // 목록만 안 뜬다 — 기록은 그대로 된다
+    }
+  }, [userId]);
   /** 가장 최근 완료 세션이 인터벌이었나 */
   const [lastSessionWasInterval, setLastSessionWasInterval] = useState(false);
   /** 가입일 (`"YYYY-MM-DD"`) — 신규 걷기 창 판정 */
@@ -1199,6 +1217,16 @@ function WorkoutScreen({ userId }: { userId: string }) {
           });
       } catch {
         // 누적 카드만 안 뜬다
+      }
+      try {
+        const today = await getTodayCompletedSessions(
+          userId,
+          new Date(),
+          resolveTimeZone(),
+        );
+        if (!cancelled) setTodaySessions(today);
+      } catch {
+        // 오늘 한 운동 목록만 안 뜬다
       }
       try {
         const facts = await getSuggestionFacts(userId);
@@ -2972,6 +3000,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
         다시 조회하지 않는 이유: 완료했다는 것을 이 자리가 이미 알고 있다.
       */
       setDidWorkoutToday(true);
+      void refreshTodaySessions(); // 방금 끝낸 운동을 목록에 올린다
       // 완료 직후 다시 운동을 준비할 때 방금 기록도 목록에 포함한다.
       setPastLoaded(false);
       setPastSessions([]);
@@ -3133,6 +3162,19 @@ function WorkoutScreen({ userId }: { userId: string }) {
    */
   const suggestRequestedRef = useRef(false);
   const suggestConsumedRef = useRef(false);
+  /*
+    챌린지 순위가 내려간 사람의 알림(`rank_drop`)으로 들어왔나 — `?suggest=overtake` (2026-11-15).
+
+    ⚠️ **담을지 말지는 평소 `?suggest`와 같은 가드가 정한다**(`suggestionKind`가 null이면
+       — 오늘 계획이 있거나 이미 운동했거나 — 아무것도 안 담는다). 이 표식은 **종류만**
+       바꾼다(`overtakeSuggestionKind`). 계획이 있는 날 이 경로가 종목을 덮어쓰면 안 된다.
+    ⚠️ 무엇을 겨냥한 제안이었는지는 알림의 meta(목표 종류)에서 읽는다. `undefined` =
+       아직 못 읽음 → 읽을 때까지 기다린다. 못 읽으면(`null`) 평소 제안으로 대체한다.
+  */
+  const overtakeRequestedRef = useRef(false);
+  const [overtakeGoal, setOvertakeGoal] = useState<string | null | undefined>(
+    undefined,
+  );
 
   /*
     피드의 `이 운동 따라하기` — `/record?copy=<sessionId>` (2026-08-31).
@@ -3155,6 +3197,12 @@ function WorkoutScreen({ userId }: { userId: string }) {
     const hasSuggest = params.has("suggest");
     if (!hasSuggest && !copyId) return;
     if (hasSuggest) suggestRequestedRef.current = true;
+    if (params.get("suggest") === "overtake") {
+      overtakeRequestedRef.current = true;
+      getLatestRankDropGoalType()
+        .then((goal) => setOvertakeGoal(goal))
+        .catch(() => setOvertakeGoal(null));
+    }
     if (copyId) copyRequestedRef.current = copyId;
     window.history.replaceState({}, "", window.location.pathname);
   }, []);
@@ -3196,13 +3244,19 @@ function WorkoutScreen({ userId }: { userId: string }) {
 
   // (2) 제안이 정해지면 **그때** 담는다. 한 번만.
   useEffect(() => {
+    // 순위가 내려간 알림이면 목표 종류를 읽을 때까지 기다린다(못 읽으면 null로 대체).
+    if (overtakeRequestedRef.current && overtakeGoal === undefined) return;
     // 판정은 `shouldApplySuggestion`이 한다 — 규칙이 화면에 흩어져 있으면
     // 테스트가 못 잡는다. 그 함수의 주석이 왜 두 단계인지 설명한다.
+    // ⚠️ 종류만 바뀐다. `suggestionKind`가 null(계획 있음·이미 운동함)이면 그대로 null이다.
+    const kind = overtakeRequestedRef.current
+      ? overtakeSuggestionKind(suggestionKind, overtakeGoal ?? null)
+      : suggestionKind;
     if (
       !shouldApplySuggestion({
         requested: suggestRequestedRef.current,
         consumed: suggestConsumedRef.current,
-        kind: suggestionKind,
+        kind,
         draftExerciseCount: draftRef.current.exercises.length,
         workoutStarted: draftRef.current.startedAtMs !== null,
       })
@@ -3210,10 +3264,10 @@ function WorkoutScreen({ userId }: { userId: string }) {
       return;
     }
     suggestConsumedRef.current = true;
-    void applySuggestion(suggestionKind!);
+    void applySuggestion(kind!);
     // applySuggestion은 렌더마다 새로 만들어진다. ref가 한 번만 돌게 막는다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [suggestionKind]);
+  }, [suggestionKind, overtakeGoal]);
   // 팝업 열림은 `active`에서 파생한다 — 별도 저장 없음 (설계 ②)
   /*
     인터벌 중에는 근력 오버레이를 내린다 (사용자 지시 2026-08-13).
@@ -3907,8 +3961,23 @@ function WorkoutScreen({ userId }: { userId: string }) {
         그린다 (사용자 지시 2026-08-06). 여기서 중요한 건 무엇을 더 그리느냐가
         아니라 무엇을 **안 그리느냐**다 — 지금 할 일은 하나다.
       */}
+          {/* 오늘 이미 한 운동 — 운동 중에는 안 그린다(진행 중 화면이 말한다) */}
+          {!active && todaySessions.length > 0 && (
+            <TodayCompletedList
+              sessions={todaySessions}
+              timeZone={resolveTimeZone()}
+              onTitleChange={(id, next) =>
+                setTodaySessions((prev) =>
+                  prev.map((x) => (x.id === id ? { ...x, title: next } : x)),
+                )
+              }
+              onToast={showToast}
+            />
+          )}
+
           {isEmpty && (
             <RecordEmptyState
+              doneToday={todaySessions.length > 0}
               hasHistory={hasHistory}
               onAdd={() => void openExercisePicker("hub")}
               onLoadRecent={() => void openExercisePicker("past")}

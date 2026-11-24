@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   NEW_USER_GRACE_DAYS,
+  overtakeSuggestionKind,
   pickSuggestionKind,
   pickSuggestionKindWhenReady,
   secondaryKind,
@@ -336,5 +337,33 @@ describe("shouldApplySuggestion — 알림 표식을 언제 쓰는가", () => {
     expect(shouldApplySuggestion({ ...BASE, workoutStarted: true })).toBe(
       false,
     );
+  });
+});
+
+describe("overtakeSuggestionKind — 순위가 내려간 사람의 세팅 (2026-11-15)", () => {
+  it("계획이 있거나 이미 운동해서 기본 제안이 null이면 어떤 목표여도 null — 세팅하지 않는다", () => {
+    for (const goal of ["tabata_count", "cardio_distance", "weight_reps", null]) {
+      expect(overtakeSuggestionKind(null, goal)).toBeNull();
+    }
+    // 실제 경로로도: 계획이 있으면 pickSuggestionKind가 null이고, 그 위에서 null이 유지된다
+    const withPlan = pickSuggestionKind({ ...base, hasPlanToday: true });
+    expect(overtakeSuggestionKind(withPlan, "cardio_distance")).toBeNull();
+  });
+
+  it("인터벌 목표는 4분 인터벌 시트로", () => {
+    expect(overtakeSuggestionKind("repeat", "tabata_count")).toBe("interval");
+  });
+
+  it("유산소 목표 셋은 걷기로", () => {
+    for (const g of ["cardio_distance", "cardio_time", "cardio_days"]) {
+      expect(overtakeSuggestionKind("repeat", g)).toBe("walk");
+    }
+  });
+
+  it("그 외 목표·목표 모름은 평소 제안 그대로", () => {
+    expect(overtakeSuggestionKind("repeat", "weight_reps")).toBe("repeat");
+    expect(overtakeSuggestionKind("repeat", "workout_days")).toBe("repeat");
+    expect(overtakeSuggestionKind("repeat", null)).toBe("repeat");
+    expect(overtakeSuggestionKind("walk", null)).toBe("walk");
   });
 });

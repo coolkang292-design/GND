@@ -1,0 +1,36 @@
+{
+  "note": "오뎅끼데스까 2026-11-22 계획 합치기 전 원본. A는 삭제, B는 exercises/title/scheduled_at 변경. 되돌리려면 A를 insert하고 B를 아래 값으로 update.",
+  "planA_deleted": {
+    "id": "6cb7bda9-553a-4d8b-b4e1-d9c2d5e4022e",
+    "user_id": "4fa751c8-8ee6-4e74-bcac-68f963ff032f",
+    "plan_date": "2026-11-22",
+    "title": "85kg 증량 · 11월 챌린지 · 일 LEGS 웨이트 + 트레드밀 60분",
+    "tabata_minutes": null,
+    "scheduled_at": "2026-11-21T22:00:00+00:00",
+    "created_at": "2026-11-11T22:05:31.488051+00:00",
+    "updated_at": "2026-11-19T07:23:56.822207+00:00",
+    "exercises": [
+      {"name":"레그프레스","sets":[{"reps":12,"weightKg":285,"distanceKm":0,"durationMin":0},{"reps":11,"weightKg":285,"distanceKm":0,"durationMin":0},{"reps":10,"weightKg":285,"distanceKm":0,"durationMin":0}],"measure":null,"bodyPart":"하체","isCustom":false,"exerciseType":"weight"},
+      {"name":"루마니안 데드리프트","sets":[{"reps":8,"weightKg":42.5,"distanceKm":0,"durationMin":0},{"reps":8,"weightKg":42.5,"distanceKm":0,"durationMin":0},{"reps":8,"weightKg":42.5,"distanceKm":0,"durationMin":0}],"measure":null,"bodyPart":"하체","isCustom":false,"exerciseType":"weight"},
+      {"name":"불가리안 스플릿 스쿼트","sets":[{"reps":12,"weightKg":12,"distanceKm":0,"durationMin":0},{"reps":12,"weightKg":12,"distanceKm":0,"durationMin":0}],"measure":null,"bodyPart":"하체","isCustom":false,"exerciseType":"weight"},
+      {"name":"레그 컬","sets":[{"reps":14,"weightKg":0,"distanceKm":0,"durationMin":0},{"reps":13,"weightKg":0,"distanceKm":0,"durationMin":0}],"measure":null,"bodyPart":"하체","isCustom":false,"exerciseType":"weight"},
+      {"name":"덤벨 레터럴 레이즈","sets":[{"reps":17,"weightKg":7,"distanceKm":0,"durationMin":0},{"reps":16,"weightKg":7,"distanceKm":0,"durationMin":0}],"measure":null,"bodyPart":"어깨","isCustom":false,"exerciseType":"weight"},
+      {"name":"스탠딩 카프 레이즈","sets":[{"reps":16,"weightKg":0,"distanceKm":0,"durationMin":0},{"reps":15,"weightKg":0,"distanceKm":0,"durationMin":0}],"measure":null,"bodyPart":"하체","isCustom":false,"exerciseType":"weight"},
+      {"name":"데드버그","sets":[{"reps":12,"weightKg":0,"distanceKm":0,"durationMin":0},{"reps":11,"weightKg":0,"distanceKm":0,"durationMin":0}],"measure":"reps","bodyPart":"코어","isCustom":false,"exerciseType":"bodyweight"},
+      {"name":"트레드밀","sets":[{"reps":0,"weightKg":0,"distanceKm":3,"durationMin":60}],"measure":null,"bodyPart":"유산소","isCustom":false,"exerciseType":"cardio"}
+    ]
+  },
+  "planB_before": {
+    "id": "c07714bd-54ea-444f-b27c-3624dd0d176a",
+    "title": "11월 챌린지 · 일 가벼운 인터벌 4분",
+    "tabata_minutes": 4,
+    "scheduled_at": "2026-11-21T23:20:00+00:00",
+    "updated_at": "2026-11-19T02:15:29.964922+00:00",
+    "exercises": [
+      {"name":"데드버그","sets":[{"reps":2,"weightKg":0,"distanceKm":0,"durationMin":0}],"measure":"reps","bodyPart":"코어","isCustom":false,"exerciseType":"bodyweight"},
+      {"name":"버드독","sets":[{"reps":2,"weightKg":0,"distanceKm":0,"durationMin":0}],"measure":"reps","bodyPart":"코어","isCustom":false,"exerciseType":"bodyweight"},
+      {"name":"라잉 Y 레이즈","sets":[{"reps":2,"weightKg":0,"distanceKm":0,"durationMin":0}],"measure":"reps","bodyPart":"어깨","isCustom":false,"exerciseType":"bodyweight"},
+      {"name":"스캐풀러 푸시업 플러스","sets":[{"reps":2,"weightKg":0,"distanceKm":0,"durationMin":0}],"measure":"reps","bodyPart":"어깨","isCustom":false,"exerciseType":"bodyweight"}
+    ]
+  }
+}

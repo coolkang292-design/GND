@@ -142,7 +142,7 @@ describe("FeedItemCard — 기록 상세 펼치기", () => {
       expect(screen.queryByText("45kg 12회")).toBeNull();
       expect(screen.queryByLabelText("1세트 완료")).toBeNull();
       expect(screen.queryByRole("button", { name: /세트 상세 접기/ })).toBeNull();
-      expect(screen.getByText("1세트 × 60kg")).toBeTruthy();
+      expect(screen.getByText(/^1세트 × 60kg · 약 \d+분$/)).toBeTruthy();
       view.unmount();
     }
   });

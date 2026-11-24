@@ -10,6 +10,7 @@ import type { RankingKey } from "@/components/challenge/competition/metric-selec
 import { ChallengeHero } from "@/components/challenge/detail/challenge-hero";
 import { DetailTabs } from "@/components/challenge/detail/detail-tabs";
 import { RaiseGoalSheet } from "@/components/challenge/raise-goal-sheet";
+import { ScoreBreakdownCard } from "@/components/challenge/score-breakdown-card";
 import { Chip } from "@/components/ui/chip";
 import { Icon, type IconName } from "@/components/ui/icon";
 import {
@@ -35,6 +36,7 @@ import {
 import {
   goalRate,
   rankParticipants,
+  scoreBreakdown,
   scoreParticipant,
   type GoalType,
   type ParticipantInput,
@@ -812,6 +814,9 @@ export function ChallengeDetail({
               )}
             </section>
           )}
+
+          {/* 점수 구성표 (2026-11-20) — 종합점수 합계는 그리지 않는다(종료일 공개 유지) */}
+          {me && me.goals.length > 0 && <ScoreBreakdownCard b={scoreBreakdown(me)} />}
 
           {raisingGoals && (
             <RaiseGoalSheet

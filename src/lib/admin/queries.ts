@@ -583,7 +583,7 @@ export async function fetchFunnelDataset(
     await Promise.all([
       db
         .from("analytics_events")
-        .select("user_id,event_name,source,medium,campaign"),
+        .select("user_id,event_name,source,medium,campaign,client_kind"),
       // 0079의 유입 6칸 중 **medium·campaign을 여기서 처음 읽는다** — 인플루언서
       // 구분에 필요하다. 지금까지 컬럼은 채워지는데 화면이 안 읽고 있었다.
       // 0079의 유입 6칸 중 medium·campaign, 그리고 **invited_by**를 읽는다.
@@ -620,6 +620,11 @@ export async function fetchFunnelDataset(
   }
 
   const excluded = new Set(testIds);
+  // 자동화(헤드리스·webdriver)로 분류된 계정도 뺀다 — 2026-11-06~7에 36개가 "유입 증가"로
+  // 잡혔다. 0119 이전 행은 client_kind가 null이라 못 거른다(소급은 별도 백필).
+  for (const e of eventRes.data ?? []) {
+    if (e.client_kind === "automation") excluded.add(e.user_id as string);
+  }
 
   const profileById = new Map(
     (profileRes.data ?? [])

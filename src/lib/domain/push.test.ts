@@ -143,6 +143,25 @@ describe("workout_suggestion — 계획 없는 날 제안", () => {
   });
 });
 
+describe("rank_drop — 순위가 내려간 사람 (0123)", () => {
+  it("기록 탭의 추월 제안으로 보내고 홈으로 떨어지지 않는다", () => {
+    const payload = pushPayloadFor({
+      type: "rank_drop",
+      title: "t",
+      body: "b",
+      referenceId: "11111111-1111-1111-1111-111111111111",
+    });
+    // reference_id(챌린지 id)가 있어도 `/challenge?open=`으로 덮이지 않는다
+    expect(payload.url).toBe("/record?suggest=overtake");
+  });
+
+  it("올라감·그대로(rank_change)는 챌린지 탭 그대로다", () => {
+    expect(pushPayloadFor({ type: "rank_change", title: "t", body: "b" }).url).toBe(
+      "/challenge",
+    );
+  });
+});
+
 /**
  * 0082 — 알림에서 **그 게시물**로 돌아오는 길.
  *
