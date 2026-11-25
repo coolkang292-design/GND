@@ -7,7 +7,7 @@
 -- 쓰는 법: 함수·정책의 '현행' 정의가 필요할 때 마이그레이션 51개를
 -- 뒤지지 말고 이 파일을 검색하라. 마이그레이션을 적용한 뒤에는 다시 뽑아라.
 --
--- 함수 113개 · 정책 93개 · 인덱스 117개
+-- 함수 114개 · 정책 93개 · 인덱스 117개
 
 -- ════════════════════════════════════════════════════════════
 -- 함수
@@ -1840,6 +1840,36 @@ begin
     null;
   end;
   return new;
+end;
+$function$;
+
+-- ── dispatch_rank_check_on_photo ──
+CREATE OR REPLACE FUNCTION public.dispatch_rank_check_on_photo()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  v_session_id uuid := coalesce(new.session_id, old.session_id);
+begin
+  begin
+    if exists (
+      select 1 from public.workout_sessions s
+       where s.id = v_session_id
+         and s.status = 'completed'
+         and s.deleted_at is null
+    ) then
+      perform net.http_post(
+        url := 'https://gnd-one.vercel.app/api/challenge/rank-check',
+        body := jsonb_build_object('session_id', v_session_id),
+        headers := '{"Content-Type": "application/json"}'::jsonb
+      );
+    end if;
+  exception when others then
+    null;
+  end;
+  return null;
 end;
 $function$;
 
