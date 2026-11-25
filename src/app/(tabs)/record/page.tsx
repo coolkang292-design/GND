@@ -22,6 +22,7 @@ import {
 } from "@/components/record/exercise-picker";
 import { RecordEmptyState, StartOptions } from "@/components/record/record-empty-state";
 import { TodayFeedNotice } from "@/components/record/today-feed-notice";
+import { TodayPlanNotice } from "@/components/record/today-plan-notice";
 import { ExerciseReorderSheet } from "@/components/record/exercise-reorder-sheet";
 import { IdlePauseModal } from "@/components/record/idle-pause-modal";
 import { RoutineSaveSheet } from "@/components/record/routine-save-sheet";
@@ -134,7 +135,11 @@ import {
   withoutIntervalBlock,
   type TabataMinutes,
 } from "@/lib/domain/tabata";
-import { isGeneralPlan } from "@/lib/domain/day-plan";
+import {
+  followUpsNotInList,
+  isGeneralPlan,
+  pickCompanionIntervalPlan,
+} from "@/lib/domain/day-plan";
 import { SITUATIONS } from "@/lib/domain/recommended-exercises";
 import {
   overtakeSuggestionKind,
@@ -256,6 +261,7 @@ import {
 import {
   addToDayPlan,
   consolidateDayPlans,
+  settleOtherDayPlans,
   settlePlanAfterWorkout,
 } from "@/lib/day-plan-store";
 import { DailyQuestCard } from "@/components/record/daily-quest-card";
@@ -1321,6 +1327,12 @@ function WorkoutScreen({ userId }: { userId: string }) {
       return;
     }
     if (pull.kind === "load") await handleLoadPlan(pull.plan, { fromSync: true });
+    // 앱이 담아 준 제안 대신 오늘 달력 계획을 퀘스트로 (2026-11-26) — `loadPlanNow`가 목록을
+    // 계획으로 통째로 갈고 제안 표식(`suggestedForDayKey`)을 지운다
+    if (pull.kind === "swap") {
+      const ok = await handleLoadPlan(pull.plan, { fromSync: true });
+      if (ok) showToast("오늘 달력 계획으로 퀘스트를 바꿨어요");
+    }
     // 연결 없이 직접 담은 목록 — 오늘 계획에 합친다 (push의 create가 그 일을 한다).
     // ⚠️ 직접 부른다 — pull은 이미 `enqueuePlanSync` 줄 안에서 돈다. 다시 줄에
     //    세우면 자기 뒤에 서서 교착한다
@@ -3055,6 +3067,54 @@ function WorkoutScreen({ userId }: { userId: string }) {
     return true;
   }
 
+  /**
+   * 오늘 **인터벌 계획을 지금 목록 뒤에 이어 담는다** (사용자 결정 2026-11-26 — 일반+인터벌 계획을
+   * 퀘스트 하나로, 한 번에 이어서). 시트를 거치지 않는다: 퀘스트 카드가 이미 무엇을 할지 보여 줬고,
+   * 몇 분을 할지는 인터벌 차례에 열리는 시트에서 다시 고를 수 있다.
+   *
+   * - 목록이 묶인 계획(일반)은 그대로 묶어 둔다 — 인터벌 계획은 끝낸 뒤 `settleOtherDayPlans`가 정리한다
+   * - 이어하기 종목 중 목록에 이미 있는 이름은 빼고 붙인다(`followUpsNotInList`)
+   * - 담기 전에 기다리던 계획 쓰기를 내보낸다 — 인터벌이 든 목록은 계획에 쓰지 않으므로
+   *   (`decidePlanPush`), 0.6초 안에 고친 세트가 달력에 못 간다
+   */
+  async function mergeIntervalPlanIntoList(plan: WorkoutPlan): Promise<boolean> {
+    const minutes = asTabataMinutes(plan.tabataMinutes);
+    if (!minutes) return false;
+    const { block, followUps } = splitIntervalPlan(plan.exercises);
+    const picked = tabataPickFromNames(
+      block.map((exercise) => exercise.name),
+      catalog,
+    );
+    if (picked.length !== TABATA_EXERCISE_COUNT) {
+      showToast("예정표의 전신 인터벌 종목을 운동 목록에서 찾지 못했어요");
+      return false;
+    }
+    await flushPlanSyncBounded();
+    // 기다리는 사이에 시작했거나 인터벌을 담았으면 손대지 않는다. 판정은 최신 목록(`draftRef`)으로 한다 —
+    // 갱신 함수 안에서 정한 값은 React가 언제 부를지 몰라 돌려줄 답으로 못 쓴다
+    const unchangeable = (d: typeof draftRef.current) =>
+      d.startedAtMs !== null || d.tabataMinutes !== null || Boolean(d.program);
+    if (unchangeable(draftRef.current)) return false;
+    setDraft((d) => {
+      if (unchangeable(d)) return d;
+      const extra = toDraftExercises(
+        followUpsNotInList(
+          d.exercises.map((exercise) => exercise.name),
+          followUps,
+        ),
+        localId,
+      );
+      return {
+        ...d,
+        exercises: [...d.exercises, ...tabataDraftExercises(picked, localId, minutes), ...extra],
+        tabataMinutes: minutes,
+        intervalStartIndex: d.exercises.length,
+        suggestedForDayKey: null,
+      };
+    });
+    return true;
+  }
+
   /** 시작 전: 인터벌 덩어리를 위(-1)·아래(+1)로 한 칸 옮긴다 */
   function shiftIntervalBlock(direction: -1 | 1) {
     if (active) return;
@@ -3246,6 +3306,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
         effortMessage: null,
         exercises,
         program,
+        // 계획을 담았으면 더는 앱의 제안이 아니다 — 안 지우면 push가 이 목록을 계획에 안 쓰고
+        // (`decidePlanPush`), 퀘스트 문구가 "지난 운동으로 세팅해 뒀어요"로 남는다 (2026-11-26)
+        suggestedForDayKey: null,
       }));
       // 이 계획과 맞춘 상태로 적는다 — 안 적으면 다음 쓰기가 같은 내용을 한 번 더 쓴다
       rememberPlanSync({
@@ -3481,6 +3544,28 @@ function WorkoutScreen({ userId }: { userId: string }) {
         } catch {
           planCleanupFailed = true;
         }
+      }
+      // 묶이지 않은 그날 계획도 한 종목만 뺀다 (2026-11-26) — 퀘스트(제안)로 운동했거나
+      // 일반+인터벌을 한 번에 했으면 다른 계획이 달력에 "예정"으로 남았다. 규칙은 `settleOtherDayPlan`.
+      // 날짜는 **시작한 날**이다 — 자정을 넘겨 끝냈다고 새 날 계획을 지우면 안 된다.
+      // 최선 노력이라 실패해도 완료 흐름은 그대로 간다(안내도 띄우지 않는다)
+      try {
+        await settleOtherDayPlans({
+          userId,
+          planDate: dayKey(new Date(draft.startedAtMs ?? Date.now()), resolveTimeZone()),
+          excludeId: draft.scheduledPlanId,
+          regular: withoutIntervalBlock(
+            draft.tabataMinutes,
+            draft.exercises,
+            draft.intervalStartIndex,
+          ),
+          intervalBlock:
+            draft.tabataMinutes !== null
+              ? splitIntervalPlan(draft.exercises, draft.intervalStartIndex).block
+              : null,
+        });
+      } catch (error) {
+        console.warn("[plan-sync] 운동 뒤 오늘 계획 정리 실패", error);
       }
       // 기록 갱신 판정 — 종목마다 그 종목의 직전 기록과 비교한다. 구성이
       // 달라도 성립한다. 판정·RPC 실패는 완료 흐름을 막지 않는다.
@@ -4777,7 +4862,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
     예전에는 계획이 작은 줄 카드로, 목록(앱이 담아 준 제안 등)이 큰 퀘스트 카드로 **같이** 떠서 같은 인터벌이
     카드 둘로 보이고 헷갈렸다. 이제 목록이 비었거나 앱이 담아 준 제안뿐이면 계획이 퀘스트 카드가 되고
     그 제안 목록은 접는다. 사용자가 직접 담은 목록이나 이미 인터벌을 든 목록(`tabataMinutes`)이면 그 목록이
-    퀘스트 카드이고 계획 카드는 내지 않는다 — 계획은 달력에서 시작한다.
+    퀘스트 카드이고 계획 카드는 따로 내지 않는다. 그 대신 오늘 인터벌 계획은 **목록 퀘스트 카드 안에** 함께
+    보이고 [퀘스트 시작하기]가 목록 뒤에 이어 담는다(`companionIntervalPlan`, 2026-11-26).
   */
   /*
     폰 목록이 계획의 인터벌 4종만 담은 **옛 복사본**이면(`isBlockOnlyCopyOfPlan`) 그 계획을 퀘스트 카드로
@@ -4819,6 +4905,51 @@ function WorkoutScreen({ userId }: { userId: string }) {
     !active &&
     !didWorkoutToday &&
     !planQuestShown;
+  /**
+   * 퀘스트 목록 옆에 **같이 담을 오늘 인터벌 계획** (사용자 결정 2026-11-26). 있으면 퀘스트 카드가
+   * 목록과 그 인터벌을 함께 보여 주고, [퀘스트 시작하기]가 인터벌을 목록 뒤에 이어 담는다.
+   * 예전엔 목록이 있으면 인터벌 계획이 퀘스트에서 사라지고 달력에만 남았다.
+   */
+  const companionIntervalPlan = questCardShown
+    ? pickCompanionIntervalPlan({
+        todayPlans,
+        boundPlanId: draft.scheduledPlanId,
+        listHasInterval: draft.tabataMinutes !== null,
+        listIsProgram: Boolean(draft.program),
+      })
+    : null;
+  const companionSplit = companionIntervalPlan
+    ? splitIntervalPlan(companionIntervalPlan.exercises)
+    : null;
+  /** 퀘스트 카드에 보일 운동 — 목록 + (있으면) 이어 담을 인터벌 계획 */
+  const questPreview: { name: string; detail: string; imageId: string | undefined }[] = [
+    ...draft.exercises.map((exercise, index) => ({
+      name: exercise.name,
+      // 인터벌 **블록 종목만** 분수를 단다 — 목록에 웨이트와 섞이면 웨이트까지
+      // "N분 인터벌"로 적혔다 (2026-11-22)
+      detail: isIntervalBlockIndex(draft.tabataMinutes, index, draft.intervalStartIndex)
+        ? `${draft.tabataMinutes}분 인터벌`
+        : `${exercise.sets.length}세트`,
+      imageId: imageIdForAddedExercise({ name: exercise.name, isCustom: exercise.isCustom }),
+    })),
+    ...(companionIntervalPlan && companionSplit
+      ? [
+          ...companionSplit.block.map((exercise) => ({
+            name: exercise.name,
+            detail: `${companionIntervalPlan.tabataMinutes}분 인터벌`,
+            imageId: imageIdForAddedExercise({ name: exercise.name, isCustom: false }),
+          })),
+          ...followUpsNotInList(
+            draft.exercises.map((exercise) => exercise.name),
+            companionSplit.followUps,
+          ).map((exercise) => ({
+            name: exercise.name,
+            detail: `${exercise.sets.length}세트`,
+            imageId: imageIdForAddedExercise({ name: exercise.name, isCustom: exercise.isCustom }),
+          })),
+        ]
+      : []),
+  ];
   const questListCollapsed = (questCardShown && !questListOpen) || planQuestShown;
   // 퀘스트 카드가 떠 있을 땐 카드의 [퀘스트 시작]이 시작이다 — 하단 고정 버튼은 목록 화면에서만
   const fixedStartVisible = showFixedStart && !questListCollapsed;
@@ -4833,6 +4964,18 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const emptyListPlan =
     isEmpty && !active && !didWorkoutToday && !questKind
       ? (todayPlans.find((plan) => isGeneralPlan(plan) && plan.exercises.length > 0) ?? null)
+      : null;
+
+  /**
+   * "내 방법으로 시작"한 날의 달력 계획 (사용자 결정 2026-11-26) — 목록은 내 방법이라 계획을 채우지
+   * 않지만, 계획이 있다는 한 줄(`TodayPlanNotice`)은 보인다. 일반 계획이 먼저, 없으면 인터벌·프로그램.
+   * 목록이 빈 날은 `emptyListPlan`이 퀘스트 카드로 보이므로 여기서는 목록이 있을 때만이다.
+   */
+  const customDayPlan =
+    !active && customToday && draft.scheduledPlanId === null && draft.exercises.length > 0
+      ? (todayPlans.find((plan) => isGeneralPlan(plan) && plan.exercises.length > 0) ??
+        todayPlans.find((plan) => !isGeneralPlan(plan) && plan.exercises.length > 0) ??
+        null)
       : null;
 
   return (
@@ -5032,6 +5175,27 @@ function WorkoutScreen({ userId }: { userId: string }) {
           {/* 오늘 이미 올린 운동이 있으면, 추가 운동이 그 피드에 합쳐진다고 시작 전에 알린다 */}
           {!active && <TodayFeedNotice count={todaySessions.length} />}
 
+          {customDayPlan && (
+            <TodayPlanNotice
+              names={customDayPlan.exercises.map((item) => item.name)}
+              disabled={busy}
+              onStart={() => {
+                const plan = customDayPlan;
+                const general = isGeneralPlan(plan);
+                // 프로그램 회차는 카드와 같이 바로 시작, 인터벌은 시트, 일반 계획은 목록에 담는다.
+                // 내 방법 표시는 **일반 계획을 담은 뒤에만** 끈다 — 확인창에서 취소했거나 인터벌 시트만
+                // 열고 닫았는데 끄면, 남은 내 목록이 다음 읽기에서 오늘 계획에 합쳐진다(`absorb`)
+                const startNow = !general && !plan.tabataMinutes;
+                void handleLoadPlan(plan, startNow ? { startNow: true } : undefined).then((ok) => {
+                  if (!ok || !general) return;
+                  setCustomMode(false);
+                  setQuestListOpen(true);
+                  window.scrollTo({ top: 0 });
+                });
+              }}
+            />
+          )}
+
           {isEmpty && (
             <RecordEmptyState
               hasHistory={hasHistory}
@@ -5112,15 +5276,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
           {questCardShown && !questListOpen && (
               <DailyQuestCard
                 heroImage={questHeroSrc}
-                exercises={draft.exercises.map((exercise, index) => ({
-                  name: exercise.name,
-                  // 인터벌 **블록 종목만** 분수를 단다 — 목록에 웨이트와 섞이면 웨이트까지
-                  // "N분 인터벌"로 적혔다 (2026-11-22)
-                  detail: isIntervalBlockIndex(draft.tabataMinutes, index, draft.intervalStartIndex)
-                    ? `${draft.tabataMinutes}분 인터벌`
-                    : `${exercise.sets.length}세트`,
-                  imageId: imageIdForAddedExercise({ name: exercise.name, isCustom: exercise.isCustom }),
-                }))}
+                // 목록 + 오늘 인터벌 계획(있으면) — 규칙은 `companionIntervalPlan` 주석
+                exercises={questPreview}
                 quest={dailyQuestCopy({
                   kind:
                     draft.exercises.length === 1 && draft.exercises[0].name === "걷기"
@@ -5128,17 +5285,29 @@ function WorkoutScreen({ userId }: { userId: string }) {
                       : "repeat",
                   todayKey: dayKey(new Date(), resolveTimeZone()),
                   streak: todayStatus?.streak ?? null,
-                  names: draft.exercises.map((e) => e.name),
+                  names: questPreview.map((item) => item.name),
                   applied: true,
-                  // 기계가 담은 제안이 아니면(내가 짠 계획·달력 계획) 내 계획이라고 말한다
+                  // 기계가 담은 제안이 아니면(내가 짠 계획·달력 계획) 내 계획이라고 말한다.
+                  // 달력의 인터벌 계획을 같이 담는 날도 내 계획이다
                   planned:
+                    companionIntervalPlan !== null ||
                     draft.suggestedForDayKey !== dayKey(new Date(), resolveTimeZone()),
                   focus: challengeFocus,
                 })}
+                busy={busy}
                 onStart={() => {
-                  // 화면 전환: 카드는 내려가고 운동 목록 + 시작 버튼 화면이 된다
-                  setQuestListOpen(true);
-                  window.scrollTo({ top: 0 });
+                  // 오늘 인터벌 계획이 있으면 먼저 목록 뒤에 이어 담는다 — 한 번의 운동으로 이어서 한다
+                  const open = () => {
+                    // 화면 전환: 카드는 내려가고 운동 목록 + 시작 버튼 화면이 된다
+                    setQuestListOpen(true);
+                    window.scrollTo({ top: 0 });
+                  };
+                  if (!companionIntervalPlan) {
+                    open();
+                    return;
+                  }
+                  // 못 담았어도(종목을 못 찾음 — 안내가 뜬다) 목록 화면은 연다. 일반 계획은 그대로 할 수 있다
+                  void mergeIntervalPlanIntoList(companionIntervalPlan).then(open, open);
                 }}
                 options={
                   <>

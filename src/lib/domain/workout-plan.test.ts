@@ -536,11 +536,44 @@ describe("운동 탭 ↔ 오늘 계획 동기화 (2026-10-05)", () => {
       expect(decidePlanPull({ ...base, draft, todayPlans: [plan()] })).toEqual({ kind: "absorb" });
     });
 
-    it("앱이 담아 준 제안은 합치지 않는다 — 고치기 전까지 계획이 아니다", () => {
+    it("앱이 담아 준 제안뿐이면 오늘 달력 계획으로 바꾼다 — 계획이 제안보다 먼저다 (2026-11-26)", () => {
+      const p = plan();
       expect(
         decidePlanPull({
           ...base,
           draft: { ...draft, suggestedForDayKey: "2026-10-05" },
+          todayPlans: [p],
+        }),
+      ).toEqual({ kind: "swap", plan: p });
+    });
+
+    it("제안뿐인데 오늘 일반 계획이 없으면 그대로 둔다 — 인터벌·프로그램은 카드로 보인다", () => {
+      const suggestion = { ...draft, suggestedForDayKey: "2026-10-05" };
+      expect(decidePlanPull({ ...base, draft: suggestion, todayPlans: [] }).kind).toBe("none");
+      expect(
+        decidePlanPull({
+          ...base,
+          draft: suggestion,
+          todayPlans: [plan({ tabataMinutes: 4 }), plan({ id: "pp", programEnrollmentId: "e1" })],
+        }).kind,
+      ).toBe("none");
+    });
+
+    it("제안이 있어도 다른 날 계획으로는 바꾸지 않는다", () => {
+      expect(
+        decidePlanPull({
+          ...base,
+          draft: { ...draft, suggestedForDayKey: "2026-10-05" },
+          todayPlans: [plan({ planDate: "2026-10-06" })],
+        }).kind,
+      ).toBe("none");
+    });
+
+    it("운동 중인 제안 목록은 계획이 있어도 건드리지 않는다", () => {
+      expect(
+        decidePlanPull({
+          ...base,
+          draft: { ...draft, suggestedForDayKey: "2026-10-05", startedAtMs: 1, sessionId: "s1" },
           todayPlans: [plan()],
         }).kind,
       ).toBe("none");

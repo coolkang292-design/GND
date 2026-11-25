@@ -413,7 +413,17 @@ export type PlanPull<P extends SyncPlan> =
    * (2026-10-13). 예전엔 `none`이었고, 뒤이은 push가 새 행을 만들어 하루 계획이
    * 둘이 됐다.
    */
-  | { kind: "absorb" };
+  | { kind: "absorb" }
+  /**
+   * 목록이 **앱이 담아 준 제안**(퀘스트 자동 세팅)뿐인데 오늘 달력에 일반 계획이 있다 —
+   * 제안을 치우고 계획을 담는다 (사용자 결정 2026-11-26).
+   *
+   * 예전엔 `none`이었다. 아침에 퀘스트가 지난 운동으로 채워진 뒤 달력에서 오늘 계획을
+   * 넣으면, 퀘스트는 계속 제안을 보여 주고 달력은 계획을 보여 줬다. 퀘스트로 운동하면
+   * 계획은 "예정"으로 남았다(운영 10/27~11/25: 계획이 남은 운동일 12일 중 5일은 계획
+   * 종목을 하나도 안 했다). **사용자가 정한 계획이 앱 제안보다 먼저다.**
+   */
+  | { kind: "swap"; plan: P };
 
 function todayCandidate<P extends SyncPlan>(todayPlans: P[]): P | undefined {
   // 일반 계획만 — 인터벌·프로그램 회차는 운동 탭에 카드로 보인다 (2026-10-13)
@@ -481,7 +491,19 @@ export function decidePlanPull<P extends SyncPlan>(input: {
   }
 
   if (draft.exercises.length > 0) {
-    return draft.suggestedForDayKey === null ? { kind: "absorb" } : { kind: "none" };
+    if (draft.suggestedForDayKey === null) return { kind: "absorb" };
+    // 제안뿐인 목록 — 오늘 일반 계획이 있으면 그 계획이 퀘스트다 (`swap` 주석)
+    const planned = todayCandidate(todayPlans);
+    return planned &&
+      shouldAutoLoadTodayPlan({
+        plan: planned,
+        todayKey,
+        draftExerciseCount: 0,
+        draftScheduledPlanId: null,
+        active: false,
+      })
+      ? { kind: "swap", plan: planned }
+      : { kind: "none" };
   }
 
   const plan = todayCandidate(todayPlans);

@@ -11,6 +11,7 @@
  *
  * ⚠️ DB 타입을 모른다 — `@/lib/day-plan-store.ts`가 조합한다.
  */
+import { TABATA_EXERCISE_COUNT } from "./tabata";
 import { normalizedExerciseName } from "./workout-import";
 import type { PlanExercise } from "./workout-plan";
 
@@ -151,4 +152,114 @@ export function remainingAfterWorkout(
       .map((item) => normalizedExerciseName(item.name)),
   );
   return planned.filter((item) => !done.has(normalizedExerciseName(item.name)));
+}
+
+// ── 퀘스트 = 오늘 달력 계획 전부 (사용자 결정 2026-11-26) ─────────────────────
+//
+// 신고: "오늘의 퀘스트 운동과 달력에 등록된 운동이 다르다." 같은 날 일반 계획과 인터벌
+// 계획이 함께 있으면, 일반 계획이 목록(=퀘스트)으로 들어오고 인터벌 계획은 퀘스트에서
+// 사라졌다(인터벌 카드는 목록이 비었을 때만 보였다). 결정: **퀘스트 카드 하나에 둘 다
+// 담고 한 번에 이어서 한다** — 목록 안 인터벌(설계 2026-11-22)을 그대로 쓴다.
+
+/** 인터벌 계획은 앞 4종이 블록, 그 뒤가 이어하기다 (`splitIntervalPlan`, 시작 위치 0) */
+const INTERVAL_BLOCK_SIZE = TABATA_EXERCISE_COUNT;
+
+/**
+ * 오늘 목록과 **함께 퀘스트에 담을 인터벌 계획**. 없으면 null.
+ *
+ * - 목록이 이미 인터벌을 들었으면(`listHasInterval`) 없다 — 한 목록에 인터벌은 하나다
+ * - 프로그램 회차 목록이면 없다 — 회차에는 인터벌을 담지 않는다(`addIntervalToList`와 같다)
+ * - 목록이 묶인 계획 자신이면 없다
+ */
+export function pickCompanionIntervalPlan<P extends DayPlanLike>(input: {
+  todayPlans: P[];
+  boundPlanId: string | null;
+  listHasInterval: boolean;
+  listIsProgram: boolean;
+}): P | null {
+  if (input.listHasInterval || input.listIsProgram) return null;
+  return (
+    input.todayPlans.find(
+      (plan) =>
+        Boolean(plan.tabataMinutes) &&
+        !plan.programEnrollmentId &&
+        plan.id !== input.boundPlanId &&
+        plan.exercises.length >= INTERVAL_BLOCK_SIZE,
+    ) ?? null
+  );
+}
+
+/**
+ * 인터벌 계획의 이어하기 종목 중 **목록에 아직 없는 것만** — 이름이 겹치면 목록 쪽 세트를 남긴다
+ * (`mergePlanExercises`와 같은 규칙).
+ */
+export function followUpsNotInList<T extends { name: string }>(
+  listNames: readonly string[],
+  followUps: readonly T[],
+): T[] {
+  const known = new Set(listNames.map(normalizedExerciseName));
+  const out: T[] = [];
+  for (const item of followUps) {
+    const name = normalizedExerciseName(item.name);
+    if (!name || known.has(name)) continue;
+    known.add(name);
+    out.push(item);
+  }
+  return out;
+}
+
+export type OtherPlanSettle =
+  | { kind: "keep" }
+  | { kind: "delete" }
+  /** 안 한 종목만 남긴다. 인터벌 블록을 끝낸 인터벌 계획은 남은 이어하기만 든 일반 계획이 된다 */
+  | { kind: "update"; exercises: PlanExercise[] };
+
+type WorkoutItem = { name: string; sets: { done: boolean }[] };
+
+function doneNames(items: readonly WorkoutItem[]): Set<string> {
+  return new Set(
+    items
+      .filter((item) => item.sets.some((set) => set.done))
+      .map((item) => normalizedExerciseName(item.name)),
+  );
+}
+
+/**
+ * 운동을 끝낸 뒤 **묶이지 않은** 오늘 계획을 어떻게 할지 (사용자 결정 2026-11-26).
+ *
+ * 예전엔 목록이 묶인 계획 하나만 정리했다(`settlePlanAfterWorkout`). 그래서 퀘스트(제안)로
+ * 운동하거나 일반+인터벌을 한 번에 하면, 한 운동이 달력에 "예정"으로 남았다 — 운영
+ * 10/27~11/25에 계획이 남은 운동일 12일이 있었다.
+ *
+ * - 프로그램 회차는 손대지 않는다 — 회차 진행표가 사라진다(묶인 경우만 정리한다)
+ * - 일반 계획: 인터벌 블록을 **뺀** 운동(`regular`)과 이름을 맞춰, 한 종목을 뺀다.
+ *   블록의 "버피"가 일반 계획의 "버피"를 지우면 안 된다(블록 횟수는 라운드 수다)
+ * - 인터벌 계획: 이 운동에 인터벌 블록이 있고(`intervalBlock`) 계획의 블록 4종을 **다** 했을
+ *   때만 블록을 끝낸 것으로 본다. 그다음 이어하기도 `regular`로 맞춰 남은 것만 남긴다.
+ *   블록을 안 했으면 그대로 둔다 — 블록 일부만 남기면 인터벌이 깨진다
+ */
+export function settleOtherDayPlan(
+  plan: DayPlanLike,
+  workout: { regular: readonly WorkoutItem[]; intervalBlock: readonly WorkoutItem[] | null },
+): OtherPlanSettle {
+  if (plan.programEnrollmentId) return { kind: "keep" };
+  const regularDone = doneNames(workout.regular);
+  const notDone = (items: PlanExercise[]) =>
+    items.filter((item) => !regularDone.has(normalizedExerciseName(item.name)));
+
+  if (!plan.tabataMinutes) {
+    const remaining = notDone(plan.exercises);
+    if (remaining.length === 0) return { kind: "delete" };
+    if (remaining.length === plan.exercises.length) return { kind: "keep" };
+    return { kind: "update", exercises: remaining };
+  }
+
+  if (!workout.intervalBlock) return { kind: "keep" };
+  const blockDone = doneNames(workout.intervalBlock);
+  const block = plan.exercises.slice(0, INTERVAL_BLOCK_SIZE);
+  if (!block.every((item) => blockDone.has(normalizedExerciseName(item.name)))) {
+    return { kind: "keep" };
+  }
+  const remaining = notDone(plan.exercises.slice(INTERVAL_BLOCK_SIZE));
+  return remaining.length === 0 ? { kind: "delete" } : { kind: "update", exercises: remaining };
 }
