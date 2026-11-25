@@ -102,6 +102,17 @@ export function useCharacterFace(userId: string | null | undefined): string | nu
   return userId ? (cache.get(userId) ?? null) : null;
 }
 
+/**
+ * 서버에 묻지 않고 얼굴을 미리 넣어 둔다 (2026-11-26, 예시 화면의 가짜 회원용).
+ * 이미 값이 있으면 덮어쓴다. 진짜 사용자 id를 넣지 마라 — 서버 값보다 이게 이기게 된다.
+ */
+export function primeCharacterFaces(entries: Iterable<[string, string | null]>) {
+  for (const [id, src] of entries) {
+    cache.set(id, src);
+    notify(id);
+  }
+}
+
 /** 테스트용 — 캐시·대기열 초기화 */
 export function __resetCharacterFacesForTest() {
   cache.clear();

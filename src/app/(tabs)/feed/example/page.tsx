@@ -3,10 +3,15 @@
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { useAuth } from "@/components/auth-provider";
-import { Avatar } from "@/components/avatar";
+import { UserAvatar } from "@/components/user-avatar";
 import { FeedItemCard } from "@/components/feed/feed-item";
 import { Icon, type IconName } from "@/components/ui/icon";
-import { buildExampleChallenge, buildExampleFeed } from "@/lib/domain/example-tour";
+import { primeCharacterFaces } from "@/lib/character-faces";
+import {
+  buildExampleChallenge,
+  buildExampleFeed,
+  exampleCharacterFaces,
+} from "@/lib/domain/example-tour";
 
 /**
  * "챌린지는 이렇게 흘러가요" 예시 화면 (2026-11-26).
@@ -23,6 +28,8 @@ export default function ExampleTourPage() {
   const { userId } = useAuth();
   // 기준 시각은 마운트 때 한 번 고정 (렌더 중 Date.now()는 purity 규칙 위반)
   const [story] = useState(() => {
+    // 자식 카드가 그려지기 **전에** 얼굴을 넣어 둬야 첫 화면부터 캐릭터가 뜬다
+    primeCharacterFaces(exampleCharacterFaces());
     const now = new Date();
     return { feed: buildExampleFeed(now), challenge: buildExampleChallenge(now) };
   });
@@ -64,8 +71,9 @@ export default function ExampleTourPage() {
         <div className="mt-3 flex items-center gap-2">
           <span className="flex -space-x-2">
             {challenge.participants.map((p) => (
-              <Avatar
+              <UserAvatar
                 key={p.id}
+                userId={p.id}
                 src={p.avatarUrl}
                 className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border-2 border-surface bg-surface-3 text-sm"
               />
@@ -147,7 +155,8 @@ export default function ExampleTourPage() {
                 >
                   {i + 1}
                 </span>
-                <Avatar
+                <UserAvatar
+                  userId={s.who.id}
                   src={s.who.avatarUrl}
                   className="flex h-7 w-7 flex-none items-center justify-center overflow-hidden rounded-full bg-surface-3 text-xs"
                 />

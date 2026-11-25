@@ -1,7 +1,13 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildExampleChallenge, buildExampleFeed, EXAMPLE_PEOPLE, isExampleId } from "./example-tour";
+import {
+  buildExampleChallenge,
+  buildExampleFeed,
+  EXAMPLE_PEOPLE,
+  exampleCharacterFaces,
+  isExampleId,
+} from "./example-tour";
 
 const NOW = new Date("2026-11-26T06:30:00+09:00");
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -61,5 +67,16 @@ describe("예시 화면 대본", () => {
     const days = Math.round((c.endDate.getTime() - c.startDate.getTime()) / 86_400_000) + 1;
     expect(days).toBe(21);
     expect(c.standings).toHaveLength(c.participants.length);
+  });
+
+  it("예시 회원 6명 모두 진화 캐릭터 얼굴이 있고, 그 그림 파일이 실제로 있다", () => {
+    const faces = exampleCharacterFaces();
+    expect(faces).toHaveLength(Object.keys(EXAMPLE_PEOPLE).length);
+    for (const [id, src] of faces) {
+      expect(src, id).toMatch(/^\/characters\/.*evolution_avatar_0[1-7]\.webp$/);
+      expect(existsSync(join(process.cwd(), "public", src!)), src!).toBe(true);
+    }
+    // 어제 처음 온 사람은 1단계 — 이야기와 맞아야 한다
+    expect(EXAMPLE_PEOPLE.yujin.character.stage).toBe(1);
   });
 });

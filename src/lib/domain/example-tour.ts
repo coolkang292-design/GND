@@ -2,6 +2,7 @@ import type { BreakdownExercise, BreakdownSet } from "@/components/workout/set-b
 import type { FeedItem, ReactionType } from "@/lib/social";
 import { summarizeVolume, type VolumeSet } from "@/lib/domain/volume";
 import type { SessionThread, ThreadComment } from "@/lib/domain/session-comments";
+import { evolutionAvatarSrc, type CharacterVariant } from "@/lib/domain/character-variant";
 
 /**
  * "챌린지는 이렇게 흘러가요" 예시 화면의 대본 (2026-11-26, `/feed/example`).
@@ -22,17 +23,39 @@ import type { SessionThread, ThreadComment } from "@/lib/domain/session-comments
 
 export const EXAMPLE_ID_PREFIX = "example-";
 
-type Person = { id: string; nickname: string; avatarUrl: string };
+type Person = {
+  id: string;
+  nickname: string;
+  /** 얼굴 그림이 안 뜰 때만 보이는 대체 이모지 (진짜 프로필과 같은 규칙) */
+  avatarUrl: string;
+  /**
+   * 진화 캐릭터 (2026-11-26 사용자 지시 "프로필을 캐릭터 진화용으로").
+   * 진짜 회원처럼 프로필 자리에 그 단계의 얼굴이 뜬다. 단계는 이야기에 맞췄다 —
+   * 꾸준한 사람일수록 높고, 어제 처음 온 유진은 1단계.
+   */
+  character: { stage: number; variant: CharacterVariant };
+};
 
 /** 예시 회원 6명 — 닉네임은 실제 회원들처럼 별명으로 */
 export const EXAMPLE_PEOPLE = {
-  jieun: { id: "example-jieun", nickname: "한강새벽런", avatarUrl: "🏃‍♀️" },
-  minsu: { id: "example-minsu", nickname: "하체는배신안함", avatarUrl: "🏋️" },
-  sora: { id: "example-sora", nickname: "폼롤러요정", avatarUrl: "🧘‍♀️" },
-  hyunwoo: { id: "example-hyunwoo", nickname: "퇴근후페달", avatarUrl: "🚴" },
-  yujin: { id: "example-yujin", nickname: "헬린이1일차", avatarUrl: "🌱" },
-  weekend: { id: "example-weekend", nickname: "주말에몰아서", avatarUrl: "😴" },
+  jieun: { id: "example-jieun", nickname: "한강새벽런", avatarUrl: "🏃‍♀️", character: { stage: 4, variant: "female" } },
+  minsu: { id: "example-minsu", nickname: "하체는배신안함", avatarUrl: "🏋️", character: { stage: 5, variant: "male" } },
+  sora: { id: "example-sora", nickname: "폼롤러요정", avatarUrl: "🧘‍♀️", character: { stage: 3, variant: "female" } },
+  hyunwoo: { id: "example-hyunwoo", nickname: "퇴근후페달", avatarUrl: "🚴", character: { stage: 3, variant: "male" } },
+  yujin: { id: "example-yujin", nickname: "헬린이1일차", avatarUrl: "🌱", character: { stage: 1, variant: "female" } },
+  weekend: { id: "example-weekend", nickname: "주말에몰아서", avatarUrl: "😴", character: { stage: 2, variant: "male" } },
 } as const satisfies Record<string, Person>;
+
+/**
+ * 예시 회원의 얼굴 그림 — `primeCharacterFaces`에 넣으면 `UserAvatar`가 서버에 묻지 않고 바로 쓴다.
+ * 경로는 진짜 회원과 같은 `evolutionAvatarSrc`가 만든다.
+ */
+export function exampleCharacterFaces(): [string, string | null][] {
+  return Object.values(EXAMPLE_PEOPLE).map((p) => [
+    p.id,
+    evolutionAvatarSrc(p.character.stage, p.character.variant),
+  ]);
+}
 
 type Key = keyof typeof EXAMPLE_PEOPLE;
 
