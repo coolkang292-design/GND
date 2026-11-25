@@ -48,7 +48,8 @@ Codex 공통 효율·소통·승인 규칙은 전역 `C:\Users\SAMSUNG\.codex\AG
   기능 작업은 `.worktrees/` 아래 작업 복사본에서 하고, 기본 폴더에서 브랜치를 바꾸지 않는다.
   2026-11-25에 기본 폴더가 main보다 256커밋 뒤진 `feat/posthog-funnel`(저장 안 된 변경 68개)에 머물러
   새 세션마다 옛 코드와 옛 규칙서를 읽었다. 그때 남은 변경은 `wip/default-folder-snapshot-20261125`에 보관했다
-- 운영 확인은 **업데이트 소식 대조라 근사치다.** 소식이 없는 수정은 안 보인다 — 그건 운영 번들 문구로 확인한다
+- 운영 확인은 **운영 앱이 직접 말하는 커밋**(`/api/version`, 2026-11-26~)을 `origin/main`과 대조한다.
+  이 엔드포인트가 없는 옛 배포본이면 업데이트 소식 대조(근사치)로 내려가고, 그때는 "(근사치)"가 붙는다
 
 ---
 
@@ -187,6 +188,19 @@ npx vercel@latest --prod --yes --scope gnd4
 두 번째에 막혔으므로, 되더라도 항상 붙여라.**
 
 **2. 배포 후 반드시 실물로 검증한다.** "배포 명령이 성공했다"는 증거가 아니다. 프로덕션에서 파일을 직접 받아 바뀐 코드가 들어갔는지 확인한다.
+
+먼저 **운영 앱이 말하는 커밋**을 본다 (2026-11-26~). `commit`이 배포한 `main`의 해시와 같아야 하고,
+`commitSource`가 `archive`여야 `git archive` 복사본에서 정상으로 해시가 박힌 것이다.
+
+```bash
+curl -s https://gnd-one.vercel.app/api/version   # {"commit":"<main 해시>","commitSource":"archive",...}
+git rev-parse main
+```
+
+- 해시는 `.gitattributes`의 `export-subst`가 `git archive` 때 `src/lib/build-commit.txt`에 박는다.
+  **`git archive`를 거치지 않은 폴더**(워크트리를 그대로 올리는 등)에서 배포하면 이 파일이 비어
+  `commitSource`가 `vercel`(CLI가 보낸 git 정보) 또는 `none`이 된다 — 그때는 해시를 믿지 말고 번들 문구로 확인한다
+- 기능 확인은 여전히 아래처럼 바뀐 문구로 한다. 커밋이 맞아도 그 커밋에 기능이 들어 있는지는 별개다
 
 ```bash
 curl -s https://gnd-one.vercel.app/challenge \

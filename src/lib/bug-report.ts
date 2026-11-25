@@ -1,4 +1,4 @@
-import { BUILD_TIME } from "@/lib/build-info";
+import { BUILD_COMMIT, BUILD_TIME } from "@/lib/build-info";
 import { clearTrail, readTrail } from "@/lib/domain/bug-trail";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -12,7 +12,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
  * **값이 아니라 환경만 담는다.** 운동 기록·닉네임·메모는 넣지 않는다.
  */
 export function collectContext(): Record<string, unknown> {
-  const ctx: Record<string, unknown> = { build: BUILD_TIME };
+  const ctx: Record<string, unknown> = { build: BUILD_TIME, commit: BUILD_COMMIT.slice(0, 12) };
   try {
     if (typeof navigator !== "undefined") {
       ctx.ua = navigator.userAgent?.slice(0, 300);
