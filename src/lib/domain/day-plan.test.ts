@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   datesNeedingMerge,
+  followUpsNotInList,
   isGeneralPlan,
   MAX_PLAN_EXERCISES,
   mergePlanExercises,
+  pickCompanionIntervalPlan,
   pickDayGeneralPlan,
   planDayMerge,
   remainingAfterWorkout,
+  settleOtherDayPlan,
 } from "./day-plan";
 import type { PlanExercise } from "./workout-plan";
 
@@ -202,5 +205,100 @@ describe("remainingAfterWorkout", () => {
         planned.map((e) => ({ name: e.name, sets: [{ done: true }] })),
       ),
     ).toEqual([]);
+  });
+});
+
+describe("퀘스트 = 오늘 계획 전부 (2026-11-26)", () => {
+  const block = [ex("버피"), ex("점프 스쿼트"), ex("마운틴 클라이머"), ex("푸시업")];
+  const interval = plan("iv", { tabataMinutes: 8, exercises: [...block, ex("벤치프레스")] });
+  const done = (name: string) => ({ name, sets: [{ done: true }] });
+  const undone = (name: string) => ({ name, sets: [{ done: false }] });
+
+  describe("pickCompanionIntervalPlan", () => {
+    const base = { boundPlanId: "g", listHasInterval: false, listIsProgram: false };
+
+    it("일반 계획 목록 옆의 인터벌 계획을 고른다", () => {
+      expect(pickCompanionIntervalPlan({ ...base, todayPlans: [plan("g"), interval] })).toBe(interval);
+    });
+
+    it("목록에 이미 인터벌이 있거나 프로그램 회차면 없다", () => {
+      const todayPlans = [plan("g"), interval];
+      expect(pickCompanionIntervalPlan({ ...base, todayPlans, listHasInterval: true })).toBeNull();
+      expect(pickCompanionIntervalPlan({ ...base, todayPlans, listIsProgram: true })).toBeNull();
+    });
+
+    it("인터벌 계획이 없거나 블록이 4종보다 적으면 없다", () => {
+      expect(pickCompanionIntervalPlan({ ...base, todayPlans: [plan("g")] })).toBeNull();
+      const short = plan("s", { tabataMinutes: 4, exercises: [ex("버피")] });
+      expect(pickCompanionIntervalPlan({ ...base, todayPlans: [short] })).toBeNull();
+    });
+  });
+
+  it("followUpsNotInList — 목록에 있는 이름은 빼고 중복도 한 번만", () => {
+    expect(
+      followUpsNotInList(["벤치프레스"], [ex(" 벤치프레스 "), ex("데드리프트"), ex("데드리프트")]).map(
+        (item) => item.name,
+      ),
+    ).toEqual(["데드리프트"]);
+  });
+
+  describe("settleOtherDayPlan", () => {
+    it("일반 계획: 한 종목만 빼고, 다 했으면 지우고, 하나도 안 했으면 둔다", () => {
+      const general = plan("g", { exercises: [ex("스쿼트"), ex("런지")] });
+      expect(settleOtherDayPlan(general, { regular: [done("스쿼트")], intervalBlock: null })).toEqual({
+        kind: "update",
+        exercises: [ex("런지")],
+      });
+      expect(
+        settleOtherDayPlan(general, { regular: [done("스쿼트"), done("런지")], intervalBlock: null }),
+      ).toEqual({ kind: "delete" });
+      expect(
+        settleOtherDayPlan(general, { regular: [undone("스쿼트"), done("풀업")], intervalBlock: null }),
+      ).toEqual({ kind: "keep" });
+    });
+
+    it("일반 계획: 인터벌 블록 안의 같은 이름은 한 것으로 치지 않는다", () => {
+      const general = plan("g", { exercises: [ex("버피")] });
+      expect(
+        settleOtherDayPlan(general, { regular: [], intervalBlock: [done("버피")] }),
+      ).toEqual({ kind: "keep" });
+    });
+
+    it("인터벌 계획: 블록 4종과 이어하기를 다 했으면 지운다", () => {
+      expect(
+        settleOtherDayPlan(interval, {
+          regular: [done("벤치프레스")],
+          intervalBlock: block.map((item) => done(item.name)),
+        }),
+      ).toEqual({ kind: "delete" });
+    });
+
+    it("인터벌 계획: 블록만 했으면 안 한 이어하기만 남긴다", () => {
+      expect(
+        settleOtherDayPlan(interval, {
+          regular: [],
+          intervalBlock: block.map((item) => done(item.name)),
+        }),
+      ).toEqual({ kind: "update", exercises: [ex("벤치프레스")] });
+    });
+
+    it("인터벌 계획: 블록을 안 했거나 다른 블록이면 그대로 둔다", () => {
+      expect(
+        settleOtherDayPlan(interval, { regular: [done("벤치프레스")], intervalBlock: null }),
+      ).toEqual({ kind: "keep" });
+      expect(
+        settleOtherDayPlan(interval, {
+          regular: [],
+          intervalBlock: [done("버피"), done("런지"), done("스쿼트"), done("풀업")],
+        }),
+      ).toEqual({ kind: "keep" });
+    });
+
+    it("프로그램 회차는 손대지 않는다", () => {
+      const program = plan("p", { programEnrollmentId: "e1", exercises: [ex("스쿼트")] });
+      expect(settleOtherDayPlan(program, { regular: [done("스쿼트")], intervalBlock: null })).toEqual({
+        kind: "keep",
+      });
+    });
   });
 });

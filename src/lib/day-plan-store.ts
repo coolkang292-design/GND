@@ -21,6 +21,7 @@ import {
   pickDayGeneralPlan,
   planDayMerge,
   remainingAfterWorkout,
+  settleOtherDayPlan,
 } from "@/lib/domain/day-plan";
 import { errorText } from "@/lib/domain/error-text";
 import type { PlanExercise } from "@/lib/domain/workout-plan";
@@ -242,6 +243,53 @@ export async function settlePlanAfterWorkout(
     if (isPastPlanLocked(error)) return "locked";
     throw error;
   }
+}
+
+/**
+ * 운동을 끝낸 뒤 **목록이 묶이지 않은** 그날 계획도 정리한다 (사용자 결정 2026-11-26).
+ * 규칙은 `settleOtherDayPlan`. 묶인 계획(`excludeId`)은 `settlePlanAfterWorkout`이 맡는다.
+ *
+ * ⚠️ 최선 노력이다. 운동 저장은 이미 끝났다 — 계획 하나를 못 고쳤다고 완료 화면에 오류를
+ *    띄우지 않는다. 지난 계획 잠금(0116)도 정상이라 조용히 넘긴다. 한 계획이 실패해도
+ *    나머지는 정리한다. 돌려주는 값은 정리한 계획 수다.
+ */
+export async function settleOtherDayPlans(input: {
+  userId: string;
+  planDate: string;
+  excludeId: string | null;
+  regular: { name: string; sets: { done: boolean }[] }[];
+  intervalBlock: { name: string; sets: { done: boolean }[] }[] | null;
+}): Promise<number> {
+  const plans = await getWorkoutPlansByDate(input.userId, input.planDate);
+  let settled = 0;
+  for (const plan of plans) {
+    if (plan.id === input.excludeId) continue;
+    const decision = settleOtherDayPlan(plan, {
+      regular: input.regular,
+      intervalBlock: input.intervalBlock,
+    });
+    if (decision.kind === "keep") continue;
+    try {
+      if (decision.kind === "delete") {
+        await deleteWorkoutPlan(plan.id);
+      } else {
+        // 인터벌 계획의 블록을 끝냈으면 남은 이어하기만 든 일반 계획이 된다(`tabataMinutes: null`).
+        // 그날 일반 계획이 이미 있으면 다음 읽기(`consolidateDayPlans`)가 하나로 합친다
+        await updateWorkoutPlan({
+          planId: plan.id,
+          sourceSessionId: plan.sourceSessionId,
+          exercises: decision.exercises,
+          tabataMinutes: null,
+        });
+      }
+      settled += 1;
+    } catch (error) {
+      if (!isPastPlanLocked(error)) {
+        console.warn("[day-plan] 운동 뒤 오늘 계획 정리 실패", error);
+      }
+    }
+  }
+  return settled;
 }
 
 /** `getWorkoutPlans`와 같은 순서: 날짜 → 예정 시각(없으면 먼저) → 만든 순서 */
