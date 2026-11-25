@@ -22,6 +22,11 @@ type Props = {
    *    두 번 친 사람이 자기 좋아요를 지우게 된다.
    */
   likeTrigger?: number;
+  /**
+   * 예시 화면 (2026-11-26) — 하트는 화면에서만 켜지고 꺼진다. **서버에 아무것도 쓰지 않는다.**
+   * 예시 게시물의 세션 id는 진짜가 아니라서 보내 봤자 실패하고, 실패하면 롤백돼 하트가 안 켜진다.
+   */
+  demo?: boolean;
 };
 
 /**
@@ -54,6 +59,7 @@ export function ReactionBar({
   counts,
   myReactions,
   likeTrigger,
+  demo = false,
 }: Props) {
   const [local, setLocal] = useState(() => ({
     counts: { ...counts },
@@ -82,6 +88,7 @@ export function ReactionBar({
       nextMine.add("like");
     }
     setLocal({ counts: nextCounts, mine: nextMine });
+    if (demo) return;
 
     setBusy(true);
     try {
@@ -108,6 +115,7 @@ export function ReactionBar({
       counts: { ...local.counts, like: local.counts.like + 1 },
       mine: new Set(local.mine).add("like"),
     });
+    if (demo) return;
     setBusy(true);
     try {
       await toggleReaction(sessionId, userId, "like", true);

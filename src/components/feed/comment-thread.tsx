@@ -259,6 +259,7 @@ export function CommentThread({
   people,
   onThreadChange,
   onAuthorTap,
+  demo = false,
 }: {
   /** 댓글이 달리는 곳 — 같은 날 묶인 카드면 **대표(첫 운동) 세션**이다 */
   sessionId: string;
@@ -271,6 +272,12 @@ export function CommentThread({
   onThreadChange: (next: SessionThread) => void;
   /** 작성자를 탭했다 (2026-08-31). 없으면 이름이 버튼이 되지 않는다 */
   onAuthorTap?: (author: CommentAuthor) => void;
+  /**
+   * 예시 화면 (2026-11-26) — 읽기만 한다. 입력칸·답글 달기를 그리지 않는다.
+   * 예시 게시물은 진짜 세션이 아니라서 쓰면 서버가 거절한다. 칸을 열어 두면
+   * 사람이 쓰고 나서 실패를 본다 — 처음부터 "예시라서 못 단다"고 말한다.
+   */
+  demo?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -369,7 +376,7 @@ export function CommentThread({
             onAuthorTap={onAuthorTap}
             onDelete={() => void remove(c.id)}
             onEdit={(body) => edit(c.id, body)}
-            onReply={() => startReply(c)}
+            onReply={demo ? undefined : () => startReply(c)}
           />
           {c.replies.map((reply) => (
             <CommentLine
@@ -386,6 +393,12 @@ export function CommentThread({
         </div>
       ))}
 
+      {demo ? (
+        <p className="rounded-card-sm bg-surface-2 px-3 py-2 text-[11.5px] font-bold text-muted">
+          예시 게시물이라 댓글은 달 수 없어요. 챌린지에 참가하면 크루와 이렇게 이야기해요.
+        </p>
+      ) : (
+        <>
       {/* 답글 대상 표시 — 어디에 쓰는 중인지 안 보이면 엉뚱한 데 달린다 */}
       {replyTo && (
         <div className="flex items-center gap-2 rounded-card-sm bg-surface-2 px-2.5 py-1.5">
@@ -423,6 +436,8 @@ export function CommentThread({
           {busy ? "…" : "등록"}
         </button>
       </div>
+        </>
+      )}
 
       {error && <p className="text-[11.5px] font-bold text-accent">{error}</p>}
     </div>

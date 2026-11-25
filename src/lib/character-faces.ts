@@ -62,8 +62,16 @@ async function flush() {
   }
 }
 
+/** 진짜 사용자 id 모양. 예시 화면의 가짜 사람(`example-…`)은 서버에 묻지 않는다 (2026-11-26) */
+const USER_ID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function request(id: string) {
   if (cache.has(id) || queue.has(id)) return;
+  if (!USER_ID_SHAPE.test(id)) {
+    // uuid[] 인자에 넣으면 질의 전체가 400으로 죽어 **같이 묶인 진짜 사람들의 얼굴까지** 안 뜬다
+    cache.set(id, null);
+    return;
+  }
   queue.add(id);
   if (!scheduled) {
     scheduled = true;

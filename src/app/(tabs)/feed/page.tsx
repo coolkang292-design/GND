@@ -29,6 +29,29 @@ import {
 } from "@/lib/social";
 import Image from "next/image";
 import { Icon } from "@/components/ui/icon";
+import Link from "next/link";
+
+/**
+ * 예시 화면 입구 (2026-11-26) — 크루가 0명이면 피드가 비어 챌린지가 어떻게 흘러가는지 볼 길이 없다.
+ * 빈 피드 안(`compact` 아님)과 모집 탭 맨 위(`compact`) 두 곳에서 같은 곳으로 보낸다.
+ */
+function ExampleTourLink({ compact = false }: { compact?: boolean }) {
+  return (
+    <Link
+      href="/feed/example"
+      className={`flex items-center gap-3 rounded-card-sm border border-accent/40 bg-surface-2/60 px-3.5 text-left ${
+        compact ? "py-2.5" : "mt-4 py-3"
+      }`}
+    >
+      <Icon name="eye" size={20} className="flex-none text-accent" />
+      <span className="min-w-0 flex-1">
+        <span className="block text-[13.5px] font-extrabold">챌린지는 이렇게 흘러가요</span>
+        <span className="block text-[11.5px] text-muted">예시로 하루치 피드를 미리 볼 수 있어요</span>
+      </span>
+      <Icon name="chevron" size={16} className="flex-none text-faint" />
+    </Link>
+  );
+}
 
 export default function FeedPage() {
   const { userId, loading, configured } = useAuth();
@@ -56,7 +79,18 @@ export default function FeedPage() {
     ⚠️ 조회는 탭과 **무관하게** 마운트 때 한 번 돈다 — 모집 개수를 탭 배지에
        띄워야 탭이 있는 줄 알고 누른다. 안 보이면 나눈 의미가 사라진다.
   */
-  const [tab, setTab] = useState<FeedTab>("feed");
+  /**
+   * 주소의 `?tab=recruit` (2026-11-26) — 예시 화면(`/feed/example`)의 "모집 중인 챌린지 보러 가기"가
+   * 모집 탭으로 바로 데려온다. 사람이 탭을 누르면 그 선택이 이긴다(`picked`).
+   * ⚠️ `useSearchParams`·effect 안 setState는 이 파일 아래 `pinnedId` 주석과 같은 이유로 안 쓴다.
+   */
+  const tabFromUrl = useSyncExternalStore(
+    () => () => {},
+    () => new URLSearchParams(window.location.search).get("tab") === "recruit",
+    () => false,
+  );
+  const [picked, setTab] = useState<FeedTab | null>(null);
+  const tab: FeedTab = picked ?? (tabFromUrl ? "recruit" : "feed");
   const { items: recruits, setItems: setRecruits } = useDiscoverableChallenges();
 
   /**
@@ -249,7 +283,10 @@ export default function FeedPage() {
       <FeedTabs value={tab} onChange={setTab} recruitCount={recruits.length} />
 
       {tab === "recruit" ? (
-        <DiscoverableChallengeList items={recruits} setItems={setRecruits} />
+        <>
+          <ExampleTourLink compact />
+          <DiscoverableChallengeList items={recruits} setItems={setRecruits} />
+        </>
       ) : (
         <>
       {/* Phase C: 진행 중 크루를 카드 대신 가로 한 줄로. 카드는 1명당 ~180px라
@@ -299,6 +336,7 @@ export default function FeedPage() {
           <p className="mt-1 text-xs text-muted">
             내 정보 › 크루에서 닉네임으로 크루를 추가하면 서로의 운동도 보여요.
           </p>
+          <ExampleTourLink />
         </section>
       ) : (
         <>

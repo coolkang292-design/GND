@@ -75,6 +75,14 @@ type Props = {
    *    프로필 시트가 not_crew일 때 "크루 신청"으로 무너지므로 그대로 넘긴다.
    */
   onAuthorTap?: (author: CommentAuthor) => void;
+  /**
+   * 예시 화면의 가짜 게시물 (2026-11-26, `/feed/example`).
+   *
+   * 진짜 카드와 **같은 부품으로** 그리되 서버에 쓰는 길을 전부 닫는다 — 하트는 화면에서만
+   * 켜지고, 댓글은 읽기만 하고, "이 운동 따라하기"는 안 그린다. 카드 모양을 따로 만들면
+   * 진짜 카드가 바뀔 때 예시만 옛 모양으로 남는다.
+   */
+  demo?: boolean;
 };
 
 /**
@@ -316,10 +324,12 @@ function CardFooter({
   openComments,
   likeTrigger,
   onAuthorTap,
+  demo = false,
 }: {
   item: FeedItem;
   userId: string;
   onItemChange?: (next: FeedItem) => void;
+  demo?: boolean;
   openComments?: boolean;
   /** 사진 더블탭이 올려 보내는 신호 (Phase D) */
   likeTrigger?: number;
@@ -351,6 +361,7 @@ function CardFooter({
           counts={item.reactions}
           myReactions={item.myReactions}
           likeTrigger={likeTrigger}
+          demo={demo}
         />
         <button
           type="button"
@@ -396,7 +407,7 @@ function CardFooter({
 
       {/* 이미 댓글인 운동 중 한마디를 접힌 카드에서도 보여준다.
           새 테이블·복사·네트워크 조회 없이 기존 item.thread만 사용한다. */}
-      {!showComments && liveCheer && onItemChange && (
+      {!showComments && liveCheer && (onItemChange || demo) && (
         <button
           type="button"
           onClick={() => setShowComments(true)}
@@ -419,15 +430,16 @@ function CardFooter({
         </button>
       )}
 
-      {showComments && onItemChange && (
+      {showComments && (onItemChange || demo) && (
         <CommentThread
+          demo={demo}
           sessionId={item.sessionId}
           sessionIds={item.sessionIds}
           viewerId={userId}
           thread={item.thread}
           people={item.people}
           onThreadChange={(thread: SessionThread) =>
-            onItemChange({ ...item, thread })
+            onItemChange?.({ ...item, thread })
           }
           onAuthorTap={onAuthorTap}
         />
@@ -459,6 +471,7 @@ export function FeedItemCard({
   onItemChange,
   openComments,
   onAuthorTap,
+  demo = false,
 }: Props) {
   // Phase D — 사진 상호작용. 사진이 없는 기록에서는 전부 놀고 있다.
   /**
@@ -574,7 +587,7 @@ export function FeedItemCard({
           <CaptionText item={item} onPhoto />
         </PhotoCarousel>
 
-        <WorkoutSummary item={item} isMine={item.userId === userId} />
+        <WorkoutSummary item={item} isMine={item.userId === userId} canCopy={!demo} />
         <CardFooter
           item={item}
           userId={userId}
@@ -582,6 +595,7 @@ export function FeedItemCard({
           openComments={openComments}
           likeTrigger={likeTrigger}
           onAuthorTap={onAuthorTap}
+          demo={demo}
         />
 
         {/* Phase D: 라이트박스는 **이미 만들어져 있었고** 아무도 안 부르고 있었다.
@@ -630,13 +644,14 @@ export function FeedItemCard({
       </div>
 
       <CaptionText item={item} />
-      <WorkoutSummary item={item} isMine={item.userId === userId} />
+      <WorkoutSummary item={item} isMine={item.userId === userId} canCopy={!demo} />
       <CardFooter
         item={item}
         userId={userId}
         onItemChange={onItemChange}
         openComments={openComments}
         onAuthorTap={onAuthorTap}
+        demo={demo}
       />
     </article>
   );
