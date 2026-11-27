@@ -89,12 +89,13 @@ describe("DY row machine: planned gym exercise image", () => {
 });
 
 describe("0118: 운영자가 직접 만든 운동 → 공용 운동 (2026-10-10)", () => {
-  // 같은 ID를 기본 운동으로 바꾼 것 중 그림이 있는 10개 (옛 이름 → 새 이름)
+  // 같은 ID를 기본 운동으로 바꾼 것 중 그림이 있는 종목 (옛 이름 → 새 이름)
   const promoted = [
     ["3d9264b3-b67c-40ee-9385-fad0d8fb786b", "YTW", "인클라인 YTW 레이즈"],
     ["ba21558a-58db-4e58-a055-12309b9a438b", "벤드 레터럴 레이즈", "맨몸 벤트오버 레터럴 레이즈"],
     ["e6a6598d-8597-4d22-8d81-ef2265e0c168", "불가리안 스플릿 스쿼트", "불가리안 스플릿 스쿼트"],
     ["b79eef2a-2e72-4d00-836a-c5559de8669d", "Scapular Push-up Plus", "스캐풀러 푸시업 플러스"],
+    ["ac897fe5-30df-466b-a190-e0a660a545c3", "도어웨이 가슴 스트레칭", "도어웨이 가슴 스트레칭"],
     ["90033d48-4db9-40bd-bd3f-3b8e1cbb55d1", "아이소 레터럴 인클라인 프레스머신", "아이소 레터럴 인클라인 프레스 머신"],
     ["4f47934b-e7a8-4618-8d24-085ebc297dde", "밴드 바이셉 컬", "밴드 바이셉 컬"],
     ["3ac56225-c8be-49bb-9997-5360e651882d", "밴드 풀어파트", "밴드 풀어파트"],
@@ -102,10 +103,9 @@ describe("0118: 운영자가 직접 만든 운동 → 공용 운동 (2026-10-10)
     ["bef0d91e-ea01-4817-b00e-e5978a5bdbe8", "밴드 레터럴 레이즈", "밴드 레터럴 레이즈"],
     ["aaf1b8e3-e12e-4d6f-846c-c1fd2cec768d", "밴드 시티드 로우", "밴드 시티드 로우"],
   ] as const;
-  // 그림 없이 공용이 된 3개
+  // 공용으로 바뀐 뒤 아직 그림을 붙이지 않은 운동
   const promotedNoImage = [
     ["cb431896-1837-45d7-afed-e31cee522974", "흉추 익스텐션"],
-    ["ac897fe5-30df-466b-a190-e0a660a545c3", "도어웨이 가슴 스트레칭"],
     ["b84bb13d-7323-42d4-b97e-f220d261432c", "월 슬라이드"],
   ] as const;
   // 기존 기본 운동으로 합치고 지운 직접 운동
@@ -195,7 +195,7 @@ describe("운동 이미지/1011 — 그림 없던 공용 운동 15개 (2026-10-1
       const id = seedExerciseIdByName(name)!;
       expect(EXERCISE_IMAGES[id].file, name).toBe(id);
     }
-    expect(seedExerciseIdByName("덤벨 런지")).toBeUndefined();
+    expect(seedExerciseIdByName("덤벨 런지")).toBe("63c9cf92-80bd-4d62-9c10-4b442bd44689");
     expect(seedExerciseIdByName("덤벨 스플릿 스쿼트")).toBeUndefined();
   });
 });
