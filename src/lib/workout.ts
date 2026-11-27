@@ -161,6 +161,16 @@ export type WorkoutDraft = {
    *    세션을 만들 때 한 번 DB에 적히고(`createDraftSession`), 그 뒤로는 바뀌지 않는다.
    */
   intervalStartIndex?: number;
+  /**
+   * 목록의 인터벌 블록이 연결된 **오늘 인터벌 계획** (이슈 #33, 2026-11-28).
+   * `undefined` 옛 draft · `null` 목록에서 새로 담음(계획을 만든다) · id 연결됨.
+   * 규칙은 `domain/quest-plan-sync.ts` 머리 주석. 선택 칸이라 버전을 올리지 않았다.
+   */
+  intervalPlanId?: string | null;
+  /** 인터벌 계획에서 온 이어하기 종목의 키 — 그 계획에 다시 쓴다 (출처 유지) */
+  intervalFollowUpKeys?: string[];
+  /** [빼기]로 뺀 인터벌 블록의 계획 — 일반 계획을 먼저 쓴 뒤 지운다. 지우면 비운다 */
+  intervalRemovalPlanId?: string | null;
   /** 공식 프로그램 회차면 그 메타 (0067). 일반 운동은 null */
   program: ProgramDraftMeta | null;
   /**
@@ -348,6 +358,33 @@ export function savePlanSyncMark(userId: string, mark: PlanSyncMark | null): voi
     else localStorage.removeItem(planSyncKey(userId));
   } catch {
     // 저장 실패면 다음 맞춤에서 한 번 더 써 올릴 뿐이다
+  }
+}
+
+/** 인터벌 계획과 마지막으로 맞춘 표식 (이슈 #33) — 일반 계획 표식과 같은 모양, 다른 키 */
+const intervalSyncKey = (userId: string) => `gnd-interval-sync:${userId}`;
+
+export function loadIntervalSyncMark(userId: string): PlanSyncMark | null {
+  try {
+    const raw = localStorage.getItem(intervalSyncKey(userId));
+    if (!raw) return null;
+    const value = JSON.parse(raw) as Partial<PlanSyncMark>;
+    return typeof value.planId === "string" &&
+      typeof value.updatedAt === "string" &&
+      typeof value.json === "string"
+      ? { planId: value.planId, updatedAt: value.updatedAt, json: value.json }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveIntervalSyncMark(userId: string, mark: PlanSyncMark | null): void {
+  try {
+    if (mark) localStorage.setItem(intervalSyncKey(userId), JSON.stringify(mark));
+    else localStorage.removeItem(intervalSyncKey(userId));
+  } catch {
+    // 잃으면 다음 저장에서 한 번 더 써 올릴 뿐이다
   }
 }
 

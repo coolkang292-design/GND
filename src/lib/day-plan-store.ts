@@ -198,7 +198,7 @@ export type SettlePlanResult = "deleted" | "trimmed" | "kept" | "gone" | "locked
  * `PGRST116`은 RLS가 행을 가려 `.single()`이 0행을 받았을 때의 PostgREST 코드다 —
  * 잠긴 계획이 이 모양으로 오기도 한다.
  */
-function isPastPlanLocked(error: unknown): boolean {
+export function isPastPlanLocked(error: unknown): boolean {
   const text = errorText(error);
   if (text.includes("past_plan_locked") || text.includes("past_plan_date")) return true;
   return (

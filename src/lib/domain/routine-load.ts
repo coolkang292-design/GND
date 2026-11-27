@@ -83,6 +83,9 @@ export function buildRoutineReplacement(input: {
     sourceSessionId: null,
     tabataMinutes: null,
     intervalStartIndex: 0,
+    // 인터벌 연결도 푼다 — 루틴으로 바꾼 것은 인터벌을 [빼기]한 것이 아니라 계획은 지우지 않는다
+    intervalPlanId: undefined,
+    intervalFollowUpKeys: [],
     program: null,
     scheduledPlanId: keptPlanId ?? bindPlanId,
   };

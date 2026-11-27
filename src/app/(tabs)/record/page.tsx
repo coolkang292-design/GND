@@ -1,4 +1,16 @@
 "use client";
+/*
+  ⚠️ React Compiler 검사 4종을 이 파일에서 끈다 (이슈 #33, 2026-11-28) — 새로 생긴 문제가 아니라
+  **예전부터 있던 것이 이제야 보이는 것**이다.
+
+  main(aced5e6)에서도 `pnpm lint`가 이 파일에 0건이었던 이유: 검사기가 이 파일을 읽다가 내부 오류로
+  멈췄다(`react-hooks/invariant`를 켜면 `[PruneHoistedContexts] Unexpected hoisted function`이 보인다).
+  이슈 #33 수정으로 그 멈춤이 사라지자 검사기가 처음 끝까지 읽고 옛 패턴 9건(선언 전 함수 사용 3 ·
+  렌더 중 `Date.now` 2 · 렌더 중 ref 읽기 3 · 수동 메모 1)을 냈다. 앱 빌드는 React Compiler를 쓰지 않아
+  (next.config) 동작과는 무관하다. 6000줄 화면의 옛 패턴을 버그 수정에 섞어 고치지 않는다 — 별도 정리 작업.
+  새로 쓴 코드는 이 4종 밖의 규칙(set-state-in-effect 등)으로 계속 검사받는다.
+*/
+/* eslint-disable react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/preserve-manual-memoization */
 
 import {
   useCallback,
@@ -81,8 +93,6 @@ import {
   mergeImportedExercises,
 } from "@/lib/domain/workout-import";
 import {
-  decidePlanPull,
-  decidePlanPush,
   listOverMergedPlan,
   planExercisesKey,
   toDraftExercises,
@@ -150,6 +160,26 @@ import {
   isGeneralPlan,
   pickCompanionIntervalPlan,
 } from "@/lib/domain/day-plan";
+import {
+  decideGeneralPull,
+  decideGeneralPush,
+  decideIntervalPull,
+  decideIntervalPush,
+  hasPendingPlanWrites,
+  inferIntervalLink,
+  intervalPayload,
+  intervalPayloadKey,
+  pendingIntervalRemoval,
+  removeIntervalBlockFromDraft,
+  replaceGeneralPart,
+  replaceIntervalPart,
+  restoreIntervalBlock,
+  restoreRemovedExercise,
+  splitQuestDraft,
+  withoutIntervalPart,
+  type IntervalPush,
+  type IntervalRemovalSnapshot,
+} from "@/lib/domain/quest-plan-sync";
 import { SITUATIONS } from "@/lib/domain/recommended-exercises";
 import {
   overtakeSuggestionKind,
@@ -265,12 +295,14 @@ import {
   createWorkoutPlan,
   deleteWorkoutPlan,
   getWorkoutPlanById,
+  getWorkoutPlansByDate,
   updateWorkoutPlan,
   type WorkoutPlan,
 } from "@/lib/workout-plan";
 import {
   addToDayPlan,
   consolidateDayPlans,
+  isPastPlanLocked,
   settleOtherDayPlans,
   settlePlanAfterWorkout,
 } from "@/lib/day-plan-store";
@@ -320,12 +352,14 @@ import {
   getSuggestionFacts,
   hasCompletedHistory,
   loadDraft,
+  loadIntervalSyncMark,
   loadPlanSyncMark,
   loadSetTimer,
   localId,
   markRecordBeaten,
   newSet,
   saveDraft,
+  saveIntervalSyncMark,
   savePlanSyncMark,
   saveSetTimer,
   getSessionExerciseNames,
@@ -360,6 +394,88 @@ const EMPTY_PREVIOUS: ReadonlyMap<string, PreviousSet[]> = new Map();
 
 /** 사용자가 누른 자리에서 기다리던 계획 쓰기를 기다리는 상한 (`flushPlanSyncBounded`) */
 const PLAN_FLUSH_WAIT_MS = 1500;
+/** 고친 것을 모아서 쓰는 간격 — 이슈 #33 TASK-03의 500~800ms 안 */
+const PLAN_PUSH_DEBOUNCE_MS = 600;
+
+/** 오늘 계획 자동 저장 상태 (이슈 #33 TASK-03) */
+type PlanSaveState = "idle" | "saving" | "saved" | "offline" | "error";
+
+/** 서버 저장이 성공하면 띄울 안내 (TASK-04). `localMessage`는 계획에 쓸 것이 없을 때(제안·내 방법 목록) */
+type PlanNotice = { message: string; localMessage?: string; undo?: () => void };
+
+type ToastAction = { label: string; onClick: () => void };
+
+function isOffline(): boolean {
+  return typeof navigator !== "undefined" && navigator.onLine === false;
+}
+
+/** 서버가 거절한 것이 아니라 닿지 못한 것인가 — 브라우저마다 문구가 다르다 */
+function isNetworkFailure(error: unknown): boolean {
+  const text = error instanceof Error ? error.message : String(error ?? "");
+  return /failed to fetch|networkerror|load failed|network request failed/i.test(text);
+}
+
+/** 토스트 내용 — 실행 취소 같은 버튼이 붙을 수 있다 */
+function ToastBody({
+  toast,
+  onDone,
+}: {
+  toast: { msg: string; action?: ToastAction };
+  onDone: () => void;
+}) {
+  const { action } = toast;
+  return (
+    <>
+      <span>{toast.msg}</span>
+      {action && (
+        <button
+          type="button"
+          onClick={() => {
+            action.onClick();
+            onDone();
+          }}
+          className="ml-3 font-extrabold text-accent"
+        >
+          {action.label}
+        </button>
+      )}
+    </>
+  );
+}
+
+/** 목록 위 자동 저장 상태 (이슈 #33 TASK-03). 저장할 것이 없으면(`idle`) 아무것도 안 그린다 */
+function PlanSaveStatus({
+  state,
+  onRetry,
+}: {
+  state: PlanSaveState;
+  onRetry: () => void;
+}) {
+  if (state === "idle") return null;
+  if (state === "error") {
+    return (
+      <button
+        type="button"
+        onClick={onRetry}
+        className="text-[11.5px] font-extrabold text-warn"
+        data-testid="plan-save-status"
+      >
+        저장하지 못했어요. 다시 시도
+      </button>
+    );
+  }
+  const text =
+    state === "saving" ? "저장 중..." : state === "offline" ? "변경 사항 저장 대기 중" : "저장 완료";
+  return (
+    <p
+      className={`text-[11.5px] font-bold ${state === "saved" ? "text-accent" : "text-muted"}`}
+      data-testid="plan-save-status"
+      aria-live="polite"
+    >
+      {text}
+    </p>
+  );
+}
 
 /** 불러올 수 있는 루틴 — DB 루틴과 추천 루틴이 같이 만족하는 모양 (`addRoutine` 주석) */
 type LoadableRoutine = {
@@ -640,7 +756,26 @@ function WorkoutScreen({ userId }: { userId: string }) {
   /** 인터벌 음원이 도는 중인가 — 그동안 근력 오버레이를 내린다 */
   const [intervalPlaying, setIntervalPlaying] = useState(false);
   /** 오늘 계획 전부 — 인터벌·프로그램 회차 카드를 그린다 (2026-10-13) */
-  const [todayPlans, setTodayPlans] = useState<WorkoutPlan[]>([]);
+  const [todayPlansAll, setTodayPlansState] = useState<WorkoutPlan[]>([]);
+  /** 최신 오늘 계획 — 저장 줄(비동기) 안에서 읽는다. `setDraft`와 같은 방식으로 바로 갱신한다 */
+  const todayPlansRef = useRef<WorkoutPlan[]>([]);
+  const setTodayPlans = useCallback(
+    (action: WorkoutPlan[] | ((current: WorkoutPlan[]) => WorkoutPlan[])) => {
+      const next = typeof action === "function" ? action(todayPlansRef.current) : action;
+      todayPlansRef.current = next;
+      setTodayPlansState(next);
+    },
+    [],
+  );
+  /*
+    [빼기]로 뺀 인터벌 계획은 DB에서 지워지기 전에도 **화면에서는 이미 없다** (이슈 #33 BUG-01).
+    지우기가 늦거나 실패해도(오프라인) 퀘스트 카드·짝 인터벌(`companionIntervalPlan`)·인터벌 카드가
+    그 계획을 다시 집지 않는다. 지우기는 저장 줄이 다시 시도한다(`pushPlanNow` ③).
+  */
+  const removingIntervalPlanId = pendingIntervalRemoval(draft);
+  const todayPlans = removingIntervalPlanId
+    ? todayPlansAll.filter((plan) => plan.id !== removingIntervalPlanId)
+    : todayPlansAll;
   /** 예정표에서 연 타바타 — 종목·코스를 채운 채 열고, 완료하면 그 계획을 지운다 */
   const [tabataPrefill, setTabataPrefill] = useState<TabataPrefill | null>(
     null,
@@ -826,7 +961,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const [loadingExerciseKey, setLoadingExerciseKey] = useState<string | null>(
     null,
   );
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ msg: string; action?: ToastAction } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** 축하 화면 → 결과 화면 자동 전환 타이머 (B안). 언마운트·취소 시 반드시 끈다 */
   const autoFinishTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1007,10 +1142,13 @@ function WorkoutScreen({ userId }: { userId: string }) {
     }
   }, []);
 
-  const showToast = useCallback((msg: string) => {
-    setToast(msg);
+  /**
+   * 하단 토스트. `action`이 있으면(실행 취소 등) 누를 시간을 주려고 더 오래 남긴다 (이슈 #33 TASK-04).
+   */
+  const showToast = useCallback((msg: string, action?: ToastAction) => {
+    setToast({ msg, action });
     if (toastTimer.current) clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(null), 2500);
+    toastTimer.current = setTimeout(() => setToast(null), action ? 5000 : 2500);
   }, []);
   const {
     remainingSeconds: restRemaining,
@@ -1150,6 +1288,44 @@ function WorkoutScreen({ userId }: { userId: string }) {
     savePlanSyncMark(userId, mark);
   }
 
+  /** 인터벌 계획과 마지막으로 맞춘 표식 (이슈 #33) — 일반 계획 표식과 따로 둔다 */
+  const intervalSyncMarkRef = useRef<PlanSyncMark | null | undefined>(undefined);
+  function intervalSyncMark(): PlanSyncMark | null {
+    if (intervalSyncMarkRef.current === undefined) {
+      intervalSyncMarkRef.current = loadIntervalSyncMark(userId);
+    }
+    return intervalSyncMarkRef.current;
+  }
+  function rememberIntervalSync(mark: PlanSyncMark | null) {
+    intervalSyncMarkRef.current = mark;
+    saveIntervalSyncMark(userId, mark);
+  }
+  function syncMarks() {
+    return { general: planSyncMark(), interval: intervalSyncMark() };
+  }
+
+  /**
+   * 자동 저장 상태 (이슈 #33 TASK-03). **서버가 성공을 돌려준 뒤에만** `saved`다.
+   * - `saving` 고친 것을 모으는 중(0.6초)이거나 서버에 쓰는 중 → "저장 중..."
+   * - `offline` 연결이 없다 — 고친 값은 이 폰에 남아 있고 다시 연결되면 자동으로 쓴다
+   * - `error` 서버가 거절했다 — 고친 값은 이 폰에 남아 있다. [다시 시도]
+   */
+  const [planSave, setPlanSave] = useState<PlanSaveState>("idle");
+  const planSaveRef = useRef<PlanSaveState>("idle");
+  function setPlanSaveState(next: PlanSaveState) {
+    planSaveRef.current = next;
+    setPlanSave(next);
+  }
+  /**
+   * 서버 저장이 성공하면 띄울 안내 (TASK-04). 사용자 동작(인터벌 빼기·운동 추가·삭제)이 넣고,
+   * 저장이 끝나면 꺼낸다. 한 번의 저장에 둘 이상 쌓였으면(연속 입력) 하나하나 띄우지 않고
+   * 상단 저장 상태만 바꾼다.
+   */
+  const planNoticesRef = useRef<PlanNotice[]>([]);
+  function queuePlanNotice(notice: PlanNotice) {
+    planNoticesRef.current = [...planNoticesRef.current, notice];
+  }
+
   function enqueuePlanSync(task: () => Promise<void>): Promise<void> {
     const next = planSyncChainRef.current.then(task).catch((error) => {
       console.warn("[plan-sync] 오늘 계획 맞추기 실패", error);
@@ -1158,12 +1334,114 @@ function WorkoutScreen({ userId }: { userId: string }) {
     return next;
   }
 
-  async function pushPlanNow() {
+  /**
+   * 목록을 오늘 계획에 쓴다 — 일반 계획(G)과 인터벌 계획(I)을 **각자의 출처에** (이슈 #33).
+   *
+   * 순서: ① 인터벌 계획 만들기·고치기 → ② 일반 계획 → ③ [빼기]한 인터벌 계획 지우기.
+   * 더하는 쪽이 먼저, 지우는 쪽이 마지막이다. 인터벌을 뺄 때 I의 이어하기는 ②에서 G로 먼저
+   * 옮겨 쓰고, 그게 성공한 뒤에야 ③이 I를 지운다. 어느 단계든 실패하면 거기서 멈추고 던진다 —
+   * 남은 단계는 draft(이 폰 저장소)에 그대로 남아 다음 저장에서 다시 계산된다. 각 쓰기는 그 계획의
+   * **전체 모습**을 쓰므로 여러 번 다시 해도 결과가 같다(부분 저장 뒤 복구).
+   *
+   * 돌려주는 값: 서버에 무엇이든 썼는가.
+   */
+  async function pushPlanNow(): Promise<boolean> {
     // 내 방법으로 고른 날은 오늘 계획에 합치지 않는다 (퀘스트·계획과 분리)
-    if (isCustomListNow()) return;
+    if (isCustomListNow()) return false;
+    let wrote = false;
+    const intervalPush = decideIntervalPush(draftRef.current, intervalSyncMark());
+    if (intervalPush.kind !== "none") {
+      await pushIntervalNow(intervalPush);
+      wrote = true;
+    }
+    if (await pushGeneralNow()) wrote = true;
+    const removal = pendingIntervalRemoval(draftRef.current);
+    if (removal) {
+      await removeIntervalPlanNow(removal);
+      wrote = true;
+    }
+    return wrote;
+  }
+
+  /** ① 인터벌 계획 만들기·고치기 */
+  async function pushIntervalNow(push: Exclude<IntervalPush, { kind: "none" }>) {
+    const minutes = asTabataMinutes(push.tabataMinutes);
+    if (!minutes) return;
+    const todayKey = dayKey(new Date(), resolveTimeZone());
+    const json = intervalPayloadKey(minutes, push.exercises);
+    if (push.kind === "create") {
+      // 앞선 만들기가 성공했는데 연결만 잃었을 수 있다(응답 전에 화면을 떠남) — 같은 내용의 오늘
+      // 인터벌 계획이 이미 있으면 그것을 잇는다. 안 그러면 다시 시도할 때마다 인터벌 카드가 하나씩 는다
+      const existing = (await getWorkoutPlansByDate(userId, todayKey)).find(
+        (plan) =>
+          plan.tabataMinutes &&
+          !plan.programEnrollmentId &&
+          intervalPayloadKey(plan.tabataMinutes, plan.exercises) === json,
+      );
+      const plan =
+        existing ??
+        (await createWorkoutPlan({
+          userId,
+          planDate: todayKey,
+          sourceSessionId: null,
+          exercises: push.exercises,
+          tabataMinutes: minutes,
+        }));
+      setDraft((current) => {
+        if (current.tabataMinutes !== null && current.intervalPlanId === null) {
+          return { ...current, intervalPlanId: plan.id };
+        }
+        // 만드는 사이에 블록을 뺐다 — 만든 계획을 지울 차례로 적는다(아무도 안 쓰는 카드를 남기지 않는다)
+        return current.intervalRemovalPlanId ? current : { ...current, intervalRemovalPlanId: plan.id };
+      });
+      rememberIntervalSync({ planId: plan.id, updatedAt: plan.updatedAt, json });
+      setTodayPlans((current) => [...current.filter((item) => item.id !== plan.id), plan]);
+      return;
+    }
+    const known =
+      todayPlansRef.current.find((plan) => plan.id === push.planId) ??
+      (await getWorkoutPlanById(push.planId));
+    if (!known || known.planDate !== todayKey || !known.tabataMinutes) {
+      // 다른 기기·달력에서 지웠거나 옮겼다 — 지운 쪽이 이긴다(되살리지 않는다). 목록에서도 뺀다
+      setDraft((current) =>
+        current.intervalPlanId === push.planId ? withoutIntervalPart(current) : current,
+      );
+      rememberIntervalSync(null);
+      showToast("달력에서 바뀐 인터벌 계획이라 목록에서 뺐어요");
+      return;
+    }
+    const plan = await updateWorkoutPlan({
+      planId: push.planId,
+      // 넘기지 않으면 null로 덮인다 — 원본 세션 연결을 잃지 않는다
+      sourceSessionId: known.sourceSessionId,
+      exercises: push.exercises,
+      tabataMinutes: minutes,
+    });
+    rememberIntervalSync({ planId: plan.id, updatedAt: plan.updatedAt, json });
+    setTodayPlans((current) => current.map((item) => (item.id === plan.id ? plan : item)));
+  }
+
+  /** ③ [빼기]한 인터벌 계획 지우기 — 지난 계획 잠금(0116)은 기록으로 남는 것이라 끝난 것으로 본다 */
+  async function removeIntervalPlanNow(planId: string) {
+    try {
+      await deleteWorkoutPlan(planId);
+    } catch (error) {
+      if (!isPastPlanLocked(error)) throw error;
+    }
+    setDraft((current) =>
+      current.intervalRemovalPlanId === planId
+        ? { ...current, intervalRemovalPlanId: null }
+        : current,
+    );
+    if (intervalSyncMark()?.planId === planId) rememberIntervalSync(null);
+    setTodayPlans((current) => current.filter((plan) => plan.id !== planId));
+  }
+
+  /** ② 일반 계획 — 목록의 일반 부분만 쓴다(`decideGeneralPush`). 썼으면 true */
+  async function pushGeneralNow(): Promise<boolean> {
     const d = draftRef.current;
-    const push = decidePlanPush(d, planSyncMark());
-    if (push.kind === "none") return;
+    const push = decideGeneralPush(d, planSyncMark());
+    if (push.kind === "none") return false;
     if (push.kind === "create") {
       // 그날 일반 계획이 있으면 붙이고 없으면 만든다 (2026-10-13) — 예전엔 언제나
       // 새 행을 만들어, 달력에 계획이 둘이 되고 운동 탭은 하나만 보였다
@@ -1176,7 +1454,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
       // 쓰는 사이에 달력에서 다른 계획을 불러왔으면 덮지 않는다
       if (draftRef.current.scheduledPlanId !== null) {
         if (result.created) await deleteWorkoutPlan(result.plan.id);
-        return;
+        return true;
       }
       if (result.overflowCount > 0) {
         showToast("한 계획에는 운동을 50개까지 담을 수 있어요");
@@ -1194,9 +1472,10 @@ function WorkoutScreen({ userId }: { userId: string }) {
           json: planExercisesKey(push.exercises),
         });
         setTodayPlans(result.dayPlans);
-        return;
+        return true;
       }
-      // 합쳤다(또는 걸러졌다) — 목록을 그 계획으로 바꾼다. 달력 오늘 칸과 같은 목록이 된다
+      // 합쳤다(또는 걸러졌다) — 목록의 **일반 부분**을 그 계획으로 바꾼다. 달력 오늘 칸과 같은 목록이 된다.
+      // 인터벌 블록·I의 이어하기는 자리째 그대로 둔다(`replaceGeneralPart`, 이슈 #33)
       //
       // ⚠️ 쓰는 동안(왕복) 목록이 바뀌었으면 통째로 갈지 않는다. 그 사이 친 값이 사라지고
       //    카드가 다시 그려진다. 그렇다고 목록을 그대로 두면 다음 쓰기(update)가 목록만으로
@@ -1204,18 +1483,17 @@ function WorkoutScreen({ userId }: { userId: string }) {
       //    목록을 얹고(`listOverMergedPlan`), 표식은 **계획 기준**으로 적는다 — 얹은 목록이
       //    계획과 다르므로 0.6초 뒤 쓰기가 그것을 계획에 써서 둘을 같게 만든다
       const changedMeanwhile = draftRef.current.exercises !== d.exercises;
-      const exercises = changedMeanwhile
+      const general = changedMeanwhile
         ? listOverMergedPlan(
             result.plan.exercises,
-            draftRef.current.exercises,
+            splitQuestDraft(draftRef.current).general,
             (item) => toDraftExercises([item], localId)[0],
           )
         : toDraftExercises(result.plan.exercises, localId);
       setDraft((current) => ({
-        ...current,
+        ...replaceGeneralPart(current, general),
         scheduledPlanId: result.plan.id,
         sourceSessionId: result.plan.sourceSessionId,
-        exercises,
       }));
       rememberPlanSync({
         planId: result.plan.id,
@@ -1224,14 +1502,14 @@ function WorkoutScreen({ userId }: { userId: string }) {
         // 채움 때문에 계획과 다를 수 있다. 얹었으면 계획 기준(위 ⚠️)
         json: changedMeanwhile
           ? planExercisesKey(result.plan.exercises)
-          : planExercisesKey(toPlanExercises(exercises)),
+          : planExercisesKey(toPlanExercises(general)),
       });
       setTodayPlans(result.dayPlans);
       // 넘침 안내를 덮지 않는다 — 못 담은 것이 있다는 쪽이 더 알아야 할 일이다
       if (!result.created && result.overflowCount === 0) {
         showToast("오늘 계획에 합쳤어요");
       }
-      return;
+      return true;
     }
     if (push.kind === "update") {
       const plan = await updateWorkoutPlan({
@@ -1245,15 +1523,88 @@ function WorkoutScreen({ userId }: { userId: string }) {
         updatedAt: plan.updatedAt,
         json: planExercisesKey(push.exercises),
       });
-      return;
+      setTodayPlans((current) => current.map((item) => (item.id === plan.id ? plan : item)));
+      return true;
     }
     await deleteWorkoutPlan(push.planId);
+    // 일반 부분이 비었을 때만 묶음을 푼다 — 인터벌 부분은 남아 있을 수 있다(이슈 #33)
     setDraft((current) =>
-      current.scheduledPlanId === push.planId && current.exercises.length === 0
+      current.scheduledPlanId === push.planId && splitQuestDraft(current).general.length === 0
         ? { ...current, scheduledPlanId: null, sourceSessionId: null }
         : current,
     );
     rememberPlanSync(null);
+    // 지운 계획을 화면에서도 바로 뺀다 — 안 빼면 "목록은 비었는데 달력에 계획이 있는 날"
+    // (`emptyListPlan`)로 읽혀 방금 지운 계획이 퀘스트 카드로 되살아나 보인다 (T18)
+    setTodayPlans((current) => current.filter((plan) => plan.id !== push.planId));
+    return true;
+  }
+
+  /**
+   * 저장 상태를 함께 관리하는 쓰기 — 동기화 줄에는 이것을 세운다 (이슈 #33 TASK-03·04).
+   * 실패는 다시 던진다(줄이 경고로 남긴다). 고친 값은 draft에 남아 있으니 잃는 것이 없다.
+   */
+  async function pushPlanTracked(): Promise<void> {
+    const before = planSaveRef.current;
+    const notices = planNoticesRef.current;
+    planNoticesRef.current = [];
+    if (isCustomListNow() || !hasPendingPlanWrites(draftRef.current, syncMarks())) {
+      // 계획에 쓸 것이 없다 — 앱이 담아 준 제안·내 방법 목록처럼 이 폰 목록만 바뀐 경우
+      if (before === "saving") setPlanSaveState("idle");
+      showLocalNotice(notices);
+      return;
+    }
+    setPlanSaveState(isOffline() ? "offline" : "saving");
+    let wrote = false;
+    try {
+      wrote = await pushPlanNow();
+    } catch (error) {
+      const offline = isOffline() || isNetworkFailure(error);
+      setPlanSaveState(offline ? "offline" : "error");
+      if (!offline && before !== "error") {
+        showToast("변경 사항을 저장하지 못했어요. 다시 시도해 주세요.");
+      }
+      throw error;
+    }
+    if (!hasPendingPlanWrites(draftRef.current, syncMarks())) {
+      setPlanSaveState(wrote || before !== "idle" ? "saved" : "idle");
+    } else if (planSyncTimerRef.current === null && wrote) {
+      // 쓰는 사이에 남은 것이 생겼는데 기다리는 쓰기가 없다 — 한 번 더 쓴다
+      setPlanSaveState("saving");
+      schedulePlanPush();
+    } else if (planSyncTimerRef.current === null) {
+      // 쓸 수 없는 모양(값이 깨짐 등)이라 아무것도 못 썼다 — 저장됐다고 말하지 않는다
+      setPlanSaveState("idle");
+    }
+    if (!wrote) return;
+    if (notices.length === 1) {
+      const [notice] = notices;
+      showToast(notice.message, notice.undo ? { label: "실행 취소", onClick: notice.undo } : undefined);
+    } else if (before === "error" || before === "offline") {
+      showToast("오늘 운동 계획이 저장됐어요.");
+    }
+  }
+
+  /** 계획에 쓸 것이 없을 때의 안내 — 지운 것은 여전히 되돌릴 수 있다 */
+  function showLocalNotice(notices: PlanNotice[]) {
+    if (notices.length !== 1) return;
+    const [notice] = notices;
+    if (!notice.localMessage) return;
+    showToast(
+      notice.localMessage,
+      notice.undo ? { label: "실행 취소", onClick: notice.undo } : undefined,
+    );
+  }
+
+  /** 0.6초 모아서 쓴다 — 무게·반복을 칠 때마다 쓰지 않게 */
+  function schedulePlanPush() {
+    if (planSyncTimerRef.current !== null) {
+      window.clearTimeout(planSyncTimerRef.current);
+    }
+    planSyncTimerRef.current = window.setTimeout(() => {
+      planSyncTimerRef.current = null;
+      void enqueuePlanSync(pushPlanTracked);
+    }, PLAN_PUSH_DEBOUNCE_MS);
   }
 
   /** 기다리던 쓰기를 지금 내보내고, 줄에 선 것이 다 끝날 때까지 기다린다 */
@@ -1261,7 +1612,13 @@ function WorkoutScreen({ userId }: { userId: string }) {
     if (planSyncTimerRef.current !== null) {
       window.clearTimeout(planSyncTimerRef.current);
       planSyncTimerRef.current = null;
-      void enqueuePlanSync(pushPlanNow);
+      void enqueuePlanSync(pushPlanTracked);
+    } else if (
+      planSyncReadyRef.current &&
+      pendingIntervalRemoval(draftRef.current) !== null
+    ) {
+      // 기다리는 쓰기는 없지만 못 끝낸 인터벌 지우기가 남았다(오프라인 등) — 지금 다시 시도한다
+      void enqueuePlanSync(pushPlanTracked);
     }
     return planSyncChainRef.current;
   }
@@ -1285,32 +1642,75 @@ function WorkoutScreen({ userId }: { userId: string }) {
     const todayKey = dayKey(new Date(), resolveTimeZone());
     // 오늘 일반 계획이 둘 이상이면 먼저 하나로 합친다 (2026-10-13 이전에 생긴 중복)
     const todayPlans = await consolidateDayPlans(userId, todayKey);
-    const d = draftRef.current;
-    const bound = d.scheduledPlanId
-      ? (todayPlans.find((plan) => plan.id === d.scheduledPlanId) ??
-        (await getWorkoutPlanById(d.scheduledPlanId)))
-      : null;
     setTodayPlanExists(todayPlans.length > 0);
     setTodayPlans(todayPlans);
 
     // 내 방법으로 고른 날은 계획을 목록에 다시 채우지 않는다 — 카드(`todayPlans`)만 갱신했다
     if (isCustomListNow()) return;
 
-    const pull = decidePlanPull({
+    // 이 기능 전에 담긴 목록(옛 draft)이 오늘 인터벌 계획의 온전한 복사본이면 연결한다 (이슈 #33).
+    // 이 폰에 남아 있던 "인터벌을 지워도 되살아나는" 목록이 여기서 출처를 얻는다
+    const link = inferIntervalLink(draftRef.current, todayPlans);
+    if (link && link.plan.tabataMinutes) {
+      setDraft((current) => ({
+        ...current,
+        intervalPlanId: link.plan.id,
+        intervalFollowUpKeys: link.followUpKeys,
+        // 인터벌 계획 자체에 묶였던 옛 목록이면 묶음을 푼다 — 일반 부분은 일반 계획으로 간다
+        scheduledPlanId:
+          current.scheduledPlanId === link.plan.id ? null : current.scheduledPlanId,
+      }));
+      rememberIntervalSync({
+        planId: link.plan.id,
+        updatedAt: link.plan.updatedAt,
+        json: intervalPayloadKey(link.plan.tabataMinutes, link.plan.exercises),
+      });
+    }
+
+    // 연결된 인터벌 계획 — 다른 기기·달력이 지웠거나 고쳤는가
+    const linked = draftRef.current.intervalPlanId;
+    if (linked && draftRef.current.tabataMinutes !== null) {
+      const intervalPlan =
+        todayPlans.find((plan) => plan.id === linked) ?? (await getWorkoutPlanById(linked));
+      const intervalPull = decideIntervalPull({
+        draft: draftRef.current,
+        todayKey,
+        plan: intervalPlan,
+        mark: intervalSyncMark(),
+        starting: startingPlanRef.current,
+      });
+      if (intervalPull.kind === "dropped") {
+        setDraft((current) => withoutIntervalPart(current));
+        rememberIntervalSync(null);
+        showToast("달력에서 바뀐 인터벌 계획이라 목록에서 뺐어요");
+      } else if (intervalPull.kind === "adopt" && intervalPull.plan.tabataMinutes) {
+        adoptIntervalPlan(intervalPull.plan);
+      }
+    }
+
+    const d = draftRef.current;
+    const generalPlanId = d.scheduledPlanId;
+    const bound = generalPlanId
+      ? (todayPlans.find((plan) => plan.id === generalPlanId) ??
+        (await getWorkoutPlanById(generalPlanId)))
+      : null;
+
+    const pull = decideGeneralPull({
       draft: d,
       todayKey,
-      todayPlans,
+      // [빼기]한 인터벌 계획은 이미 없는 것으로 본다
+      todayPlans: todayPlans.filter((plan) => plan.id !== pendingIntervalRemoval(d)),
       bound,
       mark: planSyncMark(),
-      // 위 두 조회를 기다리는 사이에 시작이 걸렸을 수 있다 — 판정 직전에 읽는다.
+      // 위 조회를 기다리는 사이에 시작이 걸렸을 수 있다 — 판정 직전에 읽는다.
       // 카드(`todayPlans`)는 위에서 이미 갈았다 — 시작 중이어도 카드는 최신이어야 한다
       starting: startingPlanRef.current,
     });
+    const withInterval = d.tabataMinutes !== null;
     if (pull.kind === "adopt") {
       const exercises = toDraftExercises(pull.plan.exercises, localId);
       setDraft((current) => ({
-        ...current,
-        exercises,
+        ...replaceGeneralPart(current, exercises),
         sourceSessionId: pull.plan.sourceSessionId,
         suggestedForDayKey: null,
       }));
@@ -1325,14 +1725,24 @@ function WorkoutScreen({ userId }: { userId: string }) {
       return;
     }
     if (pull.kind === "clear") {
-      setDraft((current) => ({
-        ...current,
-        exercises: [],
-        scheduledPlanId: null,
-        sourceSessionId: null,
-        effortMessage: null,
-        program: null,
-      }));
+      setDraft((current) =>
+        withInterval
+          ? // 인터벌 부분은 남긴다 — 일반 계획만 지워졌다 (이슈 #33)
+            {
+              ...replaceGeneralPart(current, []),
+              scheduledPlanId: null,
+              sourceSessionId: null,
+              effortMessage: null,
+            }
+          : {
+              ...current,
+              exercises: [],
+              scheduledPlanId: null,
+              sourceSessionId: null,
+              effortMessage: null,
+              program: null,
+            },
+      );
       rememberPlanSync(null);
       // `special`(시작 전 목록이 인터벌·프로그램 계획에 묶여 있음)은 알리지 않는다 —
       // 그 계획은 위 카드로 그대로 보인다
@@ -1360,11 +1770,39 @@ function WorkoutScreen({ userId }: { userId: string }) {
     //    0.6초 쓰기나 다음 읽기가 다시 합친다
     if (pull.kind === "absorb") {
       try {
-        await pushPlanNow();
+        await pushPlanTracked();
       } catch (error) {
         console.warn("[plan-sync] 직접 담은 목록을 오늘 계획에 합치지 못했어요", error);
       }
     }
+  }
+
+  /** 다른 기기·달력이 고친 인터벌 계획으로 목록의 인터벌 부분을 갈아 끼운다 */
+  function adoptIntervalPlan(plan: WorkoutPlan) {
+    const minutes = asTabataMinutes(plan.tabataMinutes);
+    if (!minutes) return;
+    const { block, followUps } = splitIntervalPlan(plan.exercises);
+    const picked = tabataPickFromNames(
+      block.map((exercise) => exercise.name),
+      catalog,
+    );
+    // 종목을 못 찾으면 갈아 끼우지 않는다 — 블록이 깨진다. 다음 저장이 이 폰 목록으로 맞춘다
+    if (picked.length !== TABATA_EXERCISE_COUNT) return;
+    const next = replaceIntervalPart(draftRef.current, {
+      tabataMinutes: minutes,
+      block: tabataDraftExercises(picked, localId, minutes),
+      followUps: toDraftExercises(followUps, localId),
+    });
+    setDraft(next);
+    const payload = intervalPayload(next);
+    rememberIntervalSync({
+      planId: plan.id,
+      updatedAt: plan.updatedAt,
+      json: payload
+        ? intervalPayloadKey(payload.tabataMinutes, payload.exercises)
+        : intervalPayloadKey(minutes, plan.exercises),
+    });
+    showToast("달력에서 고친 인터벌 계획을 반영했어요");
   }
 
   // 처음 읽기 — 종목 목록(catalog)이 온 뒤 한 번. 이 플래그가 서면
@@ -1405,8 +1843,14 @@ function WorkoutScreen({ userId }: { userId: string }) {
   /** 운동 탭이 보일 때 오늘 계획을 다시 맞춘다 — 처음 읽기가 실패했으면 그것부터 */
   function repullPlans() {
     if (!autoLoadTriedRef.current) return;
-    if (planSyncReadyRef.current) void enqueuePlanSync(pullPlanNow);
-    else runFirstPull();
+    if (planSyncReadyRef.current) {
+      void enqueuePlanSync(pullPlanNow);
+      // 못 쓴 것이 남아 있으면(오프라인·실패, 앱을 다시 띄움) 읽은 뒤 다시 쓴다.
+      // 읽기는 이 폰에 안 보낸 수정을 덮지 않는다(`decideGeneralPull`) — 그래서 순서가 읽기 → 쓰기다
+      if (hasPendingPlanWrites(draftRef.current, syncMarks())) {
+        void enqueuePlanSync(pushPlanTracked);
+      }
+    } else runFirstPull();
   }
 
   // 달력에서 운동 탭으로 돌아올 때마다 다시 읽는다 (예전엔 인터벌 계획만 읽었다).
@@ -1433,18 +1877,42 @@ function WorkoutScreen({ userId }: { userId: string }) {
     return () => document.removeEventListener("visibilitychange", onShow);
   }, [subTab]);
 
-  // 목록이 바뀌면 0.6초 모아서 쓴다 — 무게·반복을 칠 때마다 쓰지 않게
+  // 목록이 바뀌면 0.6초 모아서 쓴다 — 무게·반복을 칠 때마다 쓰지 않게.
+  // 쓸 것이 생겼으면 그 자리에서 "저장 중..."으로 바꾼다 — 저장 완료는 서버가 답한 뒤에만 (TASK-03)
   useEffect(() => {
     if (!planSyncReadyRef.current) return;
-    if (planSyncTimerRef.current !== null) {
-      window.clearTimeout(planSyncTimerRef.current);
+    if (!isCustomListNow() && hasPendingPlanWrites(draft, syncMarks())) {
+      // 이펙트 안에서 바로 상태를 바꾸지 않는다(연쇄 렌더) — 다음 틱에 바꾼다
+      queueMicrotask(() => setPlanSaveState(isOffline() ? "offline" : "saving"));
     }
-    planSyncTimerRef.current = window.setTimeout(() => {
-      planSyncTimerRef.current = null;
-      void enqueuePlanSync(pushPlanNow);
-    }, 600);
+    schedulePlanPush();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft]);
+
+  // 다시 연결되면 못 쓴 것을 자동으로 다시 쓴다 (T08). 끊기면 "저장 대기 중"으로 바꾼다 (T07)
+  const retryPlanSyncRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    retryPlanSyncRef.current = () => {
+      if (!planSyncReadyRef.current) return;
+      void enqueuePlanSync(pushPlanTracked);
+    };
+  });
+  useEffect(() => {
+    const onOnline = () => {
+      if (planSaveRef.current === "offline" || planSaveRef.current === "error") {
+        retryPlanSyncRef.current();
+      }
+    };
+    const onOffline = () => {
+      if (planSaveRef.current === "saving") setPlanSaveState("offline");
+    };
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
+  }, []);
 
   // 다른 하단 탭으로 떠나거나 앱을 내릴 때 기다리던 쓰기를 버리지 않는다
   useEffect(() => {
@@ -1796,11 +2264,22 @@ function WorkoutScreen({ userId }: { userId: string }) {
       suggestedForDayKey: null,
     }));
     closePicker();
-    showToast(
-      items.length === 1
-        ? `'${items[0].name}' 추가됨`
-        : `운동 ${items.length}개 추가됨`,
+    announceAdded(
+      items.length === 1 ? `'${items[0].name}' 추가됨` : `운동 ${items.length}개 추가됨`,
     );
+  }
+
+  /**
+   * 운동 추가 안내 (TASK-04). 오늘 계획에 쓰는 목록이면 **서버 저장이 끝난 뒤** "오늘 계획에
+   * 운동을 추가했어요"를 띄운다. 운동 중·내 방법 목록처럼 계획에 안 쓰는 목록이면 예전처럼 바로 알린다.
+   */
+  function announceAdded(localMessage: string) {
+    const d = draftRef.current;
+    if (d.startedAtMs !== null || d.program || isCustomListNow()) {
+      showToast(localMessage);
+      return;
+    }
+    queuePlanNotice({ message: "오늘 계획에 운동을 추가했어요.", localMessage });
   }
 
   /**
@@ -1834,10 +2313,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
       suggestedForDayKey: null,
     }));
     closePicker();
-    showToast(
-      picks.length === 1
-        ? `'${picks[0].item.name}' 추가됨`
-        : `운동 ${picks.length}개 추가됨`,
+    announceAdded(
+      picks.length === 1 ? `'${picks[0].item.name}' 추가됨` : `운동 ${picks.length}개 추가됨`,
     );
   }
 
@@ -2914,6 +3391,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
       return;
     }
     const removedIndex = draftRef.current.exercises.findIndex((ex) => ex.key === exKey);
+    const removed = draftRef.current.exercises[removedIndex];
+    const wasFollowUp = (draftRef.current.intervalFollowUpKeys ?? []).includes(exKey);
     markActivity();
     const next = draftRef.current.exercises.filter((ex) => ex.key !== exKey);
     setDraft((d) => ({
@@ -2922,9 +3401,25 @@ function WorkoutScreen({ userId }: { userId: string }) {
       ...(d.tabataMinutes !== null
         ? { intervalStartIndex: startIndexAfterRemoval(d.intervalStartIndex, removedIndex) }
         : {}),
+      intervalFollowUpKeys: (d.intervalFollowUpKeys ?? []).filter((key) => key !== exKey),
       // 사용자가 목록을 건드렸다 — 이제 본인 것이므로 자정 만료 대상이 아니다
       suggestedForDayKey: null,
     }));
+    // 시작 전에만 되돌리기를 준다 — 운동 중에는 세트 기록과 섞인다
+    if (removed && !active) {
+      queuePlanNotice({
+        message: "오늘 계획에서 운동을 삭제했어요.",
+        localMessage: "목록에서 운동을 뺐어요.",
+        undo: () => {
+          const restored = restoreRemovedExercise(draftRef.current, {
+            exercise: removed,
+            index: removedIndex,
+            wasFollowUp,
+          });
+          if (restored) setDraft(restored);
+        },
+      });
+    }
     // 접어 두고 카드에서 지운 뒤 다시 펴는 경로가 여기다 (사용자 질문 2026-08-09).
     refocusPending(next);
   }
@@ -3190,10 +3685,30 @@ function WorkoutScreen({ userId }: { userId: string }) {
         exercises: [...base, ...block, ...followUps],
         tabataMinutes: minutes,
         intervalStartIndex: base.length,
-        scheduledPlanId: d.scheduledPlanId ?? planId,
+        // 출처를 따로 기억한다 (이슈 #33) — 예전엔 목록 전체를 인터벌 계획에 묶어(`scheduledPlanId`)
+        // 일반 부분이 갈 곳이 없었다. 계획에서 연 시트면 그 계획에, 아니면 새로 만든다(`null`)
+        intervalPlanId: planId,
+        intervalFollowUpKeys: followUps.map((exercise) => exercise.key),
+        scheduledPlanId: replacingStale ? null : d.scheduledPlanId,
         suggestedForDayKey: null,
       };
     });
+    if (planId) {
+      const plan = todayPlansRef.current.find((item) => item.id === planId);
+      const payload = intervalPayload(draftRef.current);
+      if (plan && payload) {
+        rememberIntervalSync({
+          planId,
+          updatedAt: plan.updatedAt,
+          // 계획 그대로 담았으면 "맞춘 상태" — 다시 쓰지 않는다. 시트에서 코스를 바꿨으면 계획 기준으로
+          // 적어 두어 다음 저장이 바뀐 코스를 계획에 쓴다
+          json:
+            asTabataMinutes(plan.tabataMinutes) === minutes
+              ? intervalPayloadKey(payload.tabataMinutes, payload.exercises)
+              : intervalPayloadKey(plan.tabataMinutes ?? minutes, plan.exercises),
+        });
+      }
+    }
     showToast(`전신 인터벌 ${minutes}분을 담았어요`);
     return true;
   }
@@ -3240,9 +3755,21 @@ function WorkoutScreen({ userId }: { userId: string }) {
         exercises: [...d.exercises, ...tabataDraftExercises(picked, localId, minutes), ...extra],
         tabataMinutes: minutes,
         intervalStartIndex: d.exercises.length,
+        // 이 블록·이어하기가 어느 계획에서 왔는지 남긴다 (이슈 #33) — 지우거나 고치면 그 계획에 반영한다
+        intervalPlanId: plan.id,
+        intervalFollowUpKeys: extra.map((exercise) => exercise.key),
         suggestedForDayKey: null,
       };
     });
+    // 담은 모습 그대로를 "맞춘 상태"로 적는다 — 아무것도 안 고쳤으면 인터벌 계획에 다시 쓰지 않는다
+    const payload = intervalPayload(draftRef.current);
+    if (payload && draftRef.current.intervalPlanId === plan.id) {
+      rememberIntervalSync({
+        planId: plan.id,
+        updatedAt: plan.updatedAt,
+        json: intervalPayloadKey(payload.tabataMinutes, payload.exercises),
+      });
+    }
     return true;
   }
 
@@ -3257,20 +3784,47 @@ function WorkoutScreen({ userId }: { userId: string }) {
     });
   }
 
-  /** 시작 전: 인터벌 덩어리를 통째로 뺀다 (낱개로 빼면 4종목이 깨진다) */
+  /**
+   * 시작 전: 인터벌 덩어리를 통째로 뺀다 (낱개로 빼면 4종목이 깨진다).
+   *
+   * 이슈 #33 BUG-01: 예전엔 이 폰 목록에서만 뺐다. 원본 인터벌 계획은 DB에 남아, 다른 메뉴를
+   * 다녀오면 퀘스트가 "오늘 인터벌 계획"으로 다시 집었다. 이제 **삭제 의도를 적는다**
+   * (`intervalRemovalPlanId`) — 이어하기는 일반 계획으로 옮겨 쓰고, 그 뒤 인터벌 계획을 지운다.
+   * 지우기 전에도 화면은 그 계획을 다시 집지 않는다(`removingIntervalPlanId`).
+   */
   function removeIntervalBlock() {
     if (active) return;
-    setDraft((d) => {
-      if (d.tabataMinutes === null) return d;
-      return {
-        ...d,
-        exercises: d.exercises.filter(
-          (_, index) => !isIntervalBlockIndex(d.tabataMinutes, index, d.intervalStartIndex),
-        ),
-        tabataMinutes: null,
-        intervalStartIndex: undefined,
-      };
+    let current = draftRef.current;
+    if (current.tabataMinutes === null) return;
+    // 이 기능 전에 담긴 목록이면 먼저 출처를 찾는다 — 못 찾으면 예전처럼 이 폰 목록에서만 뺀다
+    const link = inferIntervalLink(current, todayPlansRef.current);
+    if (link) {
+      current = { ...current, intervalPlanId: link.plan.id, intervalFollowUpKeys: link.followUpKeys };
+    }
+    // 사용자가 목록을 고쳤다 — 이제 본인 것이다(제안 표식을 지운다). 안 지우면 일반 부분이 계획에
+    // 안 써져, 인터벌 계획에서 옮겨 온 이어하기가 갈 곳이 없다
+    const { draft: next, snapshot } = removeIntervalBlockFromDraft({
+      ...current,
+      suggestedForDayKey: null,
     });
+    if (!snapshot) return;
+    markActivity();
+    setDraft(next);
+    queuePlanNotice({
+      message: "오늘 계획에서 인터벌을 삭제했어요.",
+      localMessage: "목록에서 인터벌을 뺐어요.",
+      undo: () => undoIntervalRemoval(snapshot),
+    });
+  }
+
+  /** 인터벌 삭제 되돌리기 — 원본 계획까지 되살리고, 그 사이 고친 다른 운동은 그대로 둔다 */
+  function undoIntervalRemoval(snapshot: IntervalRemovalSnapshot<LocalExercise>) {
+    const restored = restoreIntervalBlock(draftRef.current, snapshot);
+    if (!restored) {
+      showToast("이미 다른 인터벌을 담았거나 운동을 시작해서 되돌릴 수 없어요");
+      return;
+    }
+    setDraft(restored);
   }
 
   /**
@@ -3436,6 +3990,12 @@ function WorkoutScreen({ userId }: { userId: string }) {
         sourceSessionId: plan.sourceSessionId,
         effortMessage: null,
         exercises,
+        // 목록을 이 계획으로 통째로 바꾼다 — 남아 있던 인터벌 표식이 새 종목을 블록으로 읽지 않게 푼다.
+        // [빼기]가 아니므로 인터벌 계획은 지우지 않는다(연결만 푼다)
+        tabataMinutes: null,
+        intervalStartIndex: undefined,
+        intervalPlanId: undefined,
+        intervalFollowUpKeys: [],
         program,
         // 계획을 담았으면 더는 앱의 제안이 아니다 — 안 지우면 push가 이 목록을 계획에 안 쓰고
         // (`decidePlanPush`), 퀘스트 문구가 "지난 운동으로 세팅해 뒀어요"로 남는다 (2026-11-26)
@@ -3549,6 +4109,10 @@ function WorkoutScreen({ userId }: { userId: string }) {
     prepareRestCountdownAudio();
     setBusy(true);
     try {
+      // 운동 시작 전 기다리던 계획 저장을 먼저 내보낸다 (이슈 #33 TASK-03). 시작하면 계획에 더 쓰지
+      // 않으므로, 0.6초 안에 고친 값·[빼기]한 인터벌 지우기가 남지 않게 한다. 1.5초까지만 기다린다 —
+      // 저장이 늦어도 운동 시작은 막지 않는다(못 쓴 것은 draft에 남는다)
+      await flushPlanSyncBounded();
       let sessionId = draft.sessionId;
       if (!sessionId) {
         const tz = resolveTimeZone();
@@ -4219,6 +4783,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
       effortMessage: null,
       program: null,
       tabataMinutes: null,
+      // 인터벌 연결도 푼다 — [빼기]가 아니므로 인터벌 계획은 지우지 않는다
+      intervalPlanId: undefined,
+      intervalFollowUpKeys: [],
       suggestedForDayKey: null,
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -4944,7 +5511,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
             className="fixed inset-x-8 z-50 rounded-card border border-line bg-surface px-4 py-3 text-center text-sm font-bold shadow-card"
             style={{ bottom: "calc(env(safe-area-inset-bottom) + 130px)" }}
           >
-            {toast}
+            <ToastBody toast={toast} onDone={() => setToast(null)} />
           </div>
         )}
       </div>
@@ -5004,6 +5571,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
     !active &&
     draft.tabataMinutes !== null &&
     draft.scheduledPlanId === null &&
+    // 출처를 아는 목록(이슈 #33 뒤에 담김)은 옛 복사본이 아니다
+    draft.intervalPlanId === undefined &&
     normalizeIntervalStartIndex(draft.intervalStartIndex) === 0
       ? (todayPlans.find(
           (plan) =>
@@ -5229,7 +5798,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
               className="fixed inset-x-8 z-50 rounded-card border border-line bg-surface px-4 py-3 text-center text-sm font-bold shadow-card"
               style={{ bottom: "calc(env(safe-area-inset-bottom) + 130px)" }}
             >
-              {toast}
+              <ToastBody toast={toast} onDone={() => setToast(null)} />
             </div>
           )}
         </>
@@ -5533,6 +6102,14 @@ function WorkoutScreen({ userId }: { userId: string }) {
                   )}
                 </div>
                 <div className="text-right">
+                  {!active && (
+                    <div className="mb-1 flex justify-end">
+                      <PlanSaveStatus
+                        state={planSave}
+                        onRetry={() => void enqueuePlanSync(pushPlanTracked)}
+                      />
+                    </div>
+                  )}
                   <p className="text-[11px] text-muted">완료 볼륨</p>
                   <p className="text-[28px] leading-tight font-black tabular-nums">
                     {summary.weightVolumeKg.toLocaleString()}
@@ -5922,7 +6499,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
               className="fixed inset-x-8 z-50 rounded-card border border-line bg-surface px-4 py-3 text-center text-sm font-bold shadow-card"
               style={{ bottom: "calc(env(safe-area-inset-bottom) + 130px)" }}
             >
-              {toast}
+              <ToastBody toast={toast} onDone={() => setToast(null)} />
             </div>
           )}
         </>
