@@ -5,6 +5,7 @@ import {
   filterByRanksSetting,
   planRankChange,
   rankLabel,
+  waitsForPhoto,
   type RankRow,
 } from "./rank-change";
 
@@ -121,6 +122,17 @@ describe("위트 변형 — 어떤 씨앗이든 사실 어구는 그대로 (2026
   });
 });
 
+describe("waitsForPhoto — 사진 필수 방은 사진이 와야 잰다 (2026-11-26 사고)", () => {
+  it("사진 필수 방 + 이 운동에 사진이 아직 없으면 기다린다(재지 않는다)", () => {
+    expect(waitsForPhoto({ photoRequired: true, sessionHasPhoto: false })).toBe(true);
+  });
+  it("사진이 이미 있거나, 사진이 필요 없는 방이면 바로 잰다", () => {
+    expect(waitsForPhoto({ photoRequired: true, sessionHasPhoto: true })).toBe(false);
+    expect(waitsForPhoto({ photoRequired: false, sessionHasPhoto: false })).toBe(false);
+    expect(waitsForPhoto({ photoRequired: null, sessionHasPhoto: false })).toBe(false);
+  });
+});
+
 describe("filterByRanksSetting — 순위 알림을 끈 사람", () => {
   const list = [{ userId: "a" }, { userId: "b" }, { userId: "c" }];
 
@@ -196,6 +208,82 @@ describe("planRankChange", () => {
     });
     expect(plan.notifications.map((n) => n.userId)).toEqual(["b"]);
     expect(plan.snapshot).toEqual([row("b", 1), row("a", 2)]);
+    // ⚠️ 건너뛴 사람의 '알려준 순위'는 바꾸지 않는다 — 쿨다운이 끝나면 전해야 하므로 (2026-11-26 사고)
+    expect(plan.told).toEqual([row("b", 1)]);
+  });
+
+  describe("알려준 순위(told) — 쿨다운에 막힌 변화를 잃지 않는다 (2026-11-26 08:01 사고)", () => {
+    const old = new Date(NOW.getTime() - RANK_CHANGE_COOLDOWN_MS - 1000).toISOString();
+    const recent = new Date(NOW.getTime() - 60_000).toISOString();
+
+    it("쿨다운 중 바뀐 순위는 다음 계산 때 '마지막으로 알려준 순위'와 비교해 전한다", () => {
+      // 08:01:14 전원에게 "오뎅 1위"를 알렸다 → 08:01:28 사진 반영으로 낭만 1위 (쿨다운이라 보류)
+      const held = planRankChange({
+        ...base,
+        nicknames: { o: "오뎅", n: "낭만", s: "스칼" },
+        lastNotifiedAt: { o: recent, n: recent, s: recent },
+        prev: [row("o", 1), row("n", 2), row("s", 3)],
+        told: { o: 1, n: 2, s: 3 },
+        next: [row("n", 1), row("o", 2), row("s", 3)],
+      });
+      expect(held.notifications).toEqual([]);
+      expect(held.told).toEqual([]);
+      expect(held.snapshot).toEqual([row("n", 1), row("o", 2), row("s", 3)]);
+
+      // 쿨다운이 끝난 뒤 아무 일(다른 사람 운동 등)로 다시 잴 때 — 순위 자체는 그 사이 안 바뀌었다
+      const later = planRankChange({
+        ...base,
+        nicknames: { o: "오뎅", n: "낭만", s: "스칼" },
+        lastNotifiedAt: { o: old, n: old, s: old },
+        prev: held.snapshot,
+        told: { o: 1, n: 2, s: 3 },
+        next: [row("n", 1), row("o", 2), row("s", 3)],
+      });
+      const by = Object.fromEntries(later.notifications.map((x) => [x.userId, x]));
+      expect(Object.keys(by).sort()).toEqual(["n", "o"]); // 스칼은 자기 순위도, 새 변동도 없다
+      expect(by.n.title).toBe("📈 5만원빵 · 1위로 올랐어요");
+      expect(by.n.body).toContain("2위 → 1위");
+      // '방금 일어난 일'이 아니므로 "○○님이 N위 됐어요"라고 말하지 않는다
+      expect(by.o.title).toBe("📉 5만원빵 · 2위로 밀렸어요");
+      expect(by.o.type).toBe("rank_drop");
+      expect(later.told).toEqual([row("n", 1), row("o", 2)]);
+    });
+
+    it("새 변동이 있으면 '알려준 순위'를 기준으로 from→to를 말한다", () => {
+      const plan = planRankChange({
+        ...base,
+        prev: [row("a", 2), row("b", 1), row("c", 3)], // 마지막 계산
+        told: { a: 1, b: 2, c: 3 }, // a·b는 예전 순위만 들었다
+        next: [row("c", 1), row("a", 2), row("b", 3)],
+      });
+      const by = Object.fromEntries(plan.notifications.map((x) => [x.userId, x]));
+      expect(by.a.body).toContain("지금 나는 2위예요"); // 들은 1위 → 지금 2위 = 밀림
+      expect(by.a.type).toBe("rank_drop");
+      expect(by.b.title).toBe("📉 5만원빵 · 3위로 밀렸어요");
+      expect(by.c.body).toContain("3위 → 1위");
+    });
+
+    it("새 변동도 없고 모두 들은 순위 그대로면 알림 0건", () => {
+      const plan = planRankChange({
+        ...base,
+        lastNotifiedAt: { a: old, b: old },
+        prev: [row("a", 1), row("b", 2)],
+        told: { a: 1, b: 2 },
+        next: [row("a", 1), row("b", 2)],
+      });
+      expect(plan.notifications).toEqual([]);
+      expect(plan.told).toEqual([]);
+    });
+
+    it("told가 없는 옛 행은 마지막 계산 순위를 들은 것으로 본다(0152 이전 호환)", () => {
+      const plan = planRankChange({
+        ...base,
+        prev: [row("a", 1), row("b", 2)],
+        told: { a: null, b: undefined },
+        next: [row("b", 1), row("a", 2)],
+      });
+      expect(plan.notifications.map((x) => x.userId).sort()).toEqual(["a", "b"]);
+    });
   });
 
   it("쿨다운이 지났으면 다시 보낸다", () => {

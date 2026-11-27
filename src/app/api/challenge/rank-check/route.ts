@@ -6,6 +6,7 @@ import {
 import {
   filterByRanksSetting,
   planRankChange,
+  waitsForPhoto,
   type RankRow,
 } from "@/lib/domain/rank-change";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -15,7 +16,13 @@ export const dynamic = "force-dynamic";
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-type PrevRow = { user_id: string; rank: number; notified_at: string | null };
+type PrevRow = {
+  user_id: string;
+  rank: number;
+  notified_at: string | null;
+  /** 0152 — 마지막으로 알려준 순위. 0152 이전 함수 응답엔 키가 없다 */
+  told_rank?: number | null;
+};
 
 /**
  * 운동 완료 트리거(0139)와 사진 저장·삭제 트리거(0151)가 호출하는 등수 변동 알림 엔드포인트.
@@ -70,7 +77,7 @@ export async function POST(req: Request) {
 
   const { data: rooms, error: roomError } = await admin
     .from("challenges")
-    .select("id")
+    .select("id, photo_required")
     .in("id", challengeIds)
     .eq("status", "active")
     .eq("live_ranking", true);
@@ -78,9 +85,28 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: roomError.message }, { status: 500 });
   }
 
+  // 사진 필수 방이 있으면 이 운동에 사진이 왔는지 본다 (2026-11-26 사고 — 계획서 §10)
+  let sessionHasPhoto = false;
+  if ((rooms ?? []).some((r) => r.photo_required === true)) {
+    const { count, error: photoError } = await admin
+      .from("workout_images")
+      .select("id", { count: "exact", head: true })
+      .eq("session_id", sessionId);
+    if (photoError) {
+      return NextResponse.json({ error: photoError.message }, { status: 500 });
+    }
+    sessionHasPhoto = (count ?? 0) > 0;
+  }
+
   let sent = 0;
+  let waiting = 0;
   for (const room of rooms ?? []) {
     const challengeId = room.id as string;
+    // ⚠️ 스냅샷을 선점하기 **전에** 거른다 — 선점하면 사진 없는 순위가 "직전 순위"로 굳는다
+    if (waitsForPhoto({ photoRequired: room.photo_required as boolean | null, sessionHasPhoto })) {
+      waiting += 1;
+      continue;
+    }
     const standing = await getActiveChallengeStanding(challengeId, admin);
     if (!standing) continue;
 
@@ -128,6 +154,7 @@ export async function POST(req: Request) {
       variantSeed: Math.floor(Date.now() / 60_000),
       challengeName: standing.name,
       prev: prevRows.map((p) => ({ userId: p.user_id, rank: p.rank })),
+      told: Object.fromEntries(prevRows.map((p) => [p.user_id, p.told_rank ?? null])),
       next,
       lastNotifiedAt: Object.fromEntries(
         prevRows.map((p) => [p.user_id, p.notified_at]),
@@ -175,15 +202,24 @@ export async function POST(req: Request) {
     }
     sent += toSend.length;
 
-    await admin
-      .from("challenge_rank_snapshots")
-      .update({ notified_at: new Date().toISOString() })
-      .eq("challenge_id", challengeId)
-      .in(
-        "user_id",
-        toSend.map((n) => n.userId),
-      );
+    // 받은 사람만 — 보낸 시각(쿨다운)과 **알려준 순위**(0152)를 남긴다.
+    // 쿨다운·설정으로 못 받은 사람의 told_rank는 그대로 둔다 → 다음 계산 때 전해진다.
+    const notifiedAt = new Date().toISOString();
+    const toldRank = new Map(plan.told.map((r) => [r.userId, r.rank]));
+    const updates = await Promise.all(
+      toSend.map((n) =>
+        admin
+          .from("challenge_rank_snapshots")
+          .update({ notified_at: notifiedAt, told_rank: toldRank.get(n.userId) ?? null })
+          .eq("challenge_id", challengeId)
+          .eq("user_id", n.userId),
+      ),
+    );
+    const updateError = updates.find((u) => u.error)?.error;
+    if (updateError) {
+      return NextResponse.json({ error: updateError.message }, { status: 500 });
+    }
   }
 
-  return NextResponse.json({ rooms: (rooms ?? []).length, sent });
+  return NextResponse.json({ rooms: (rooms ?? []).length, sent, waiting });
 }

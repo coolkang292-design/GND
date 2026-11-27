@@ -876,7 +876,8 @@ begin
   select coalesce(jsonb_agg(jsonb_build_object(
            'user_id', s.user_id,
            'rank', s.rank,
-           'notified_at', s.notified_at)), '[]'::jsonb)
+           'notified_at', s.notified_at,
+           'told_rank', s.told_rank)), '[]'::jsonb)
     into v_prev
     from public.challenge_rank_snapshots s
    where s.challenge_id = p_challenge_id;

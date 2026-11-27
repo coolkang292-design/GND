@@ -10,6 +10,9 @@
  *    - 그대로인 사람: `📊 순위가 바뀌었어요 · N위 그대로`
  *  · 첫 계산(이전 스냅샷 없음)은 기준선만 저장한다 — 허위 알림 방지.
  *  · 쿨다운 안에 이미 받은 사람은 건너뛴다(스냅샷은 항상 최신으로).
+ *    단, 그 사람의 **들은 순위**(`told_rank`, 0152)는 그대로 둔다 — 쿨다운이 끝난 뒤 다음 계산 때
+ *    "들은 순위 → 지금 순위"로 전한다. 예전엔 스냅샷이 덮여 그 변화가 영영 사라졌다(2026-11-26 08:01).
+ *  · 사진 필수 방은 사진이 와야 잰다(`waitsForPhoto`) — 완료 순간 계산은 방금 운동이 빠진 순위다.
  *
  * ⚠️ 점수를 여기서 다시 계산하지 않는다 — `scoreParticipant`만 쓴다
  *    (goal-score.ts 주석: 점수 조립을 두 벌로 만들면 화면마다 숫자가 갈라진다).
@@ -50,9 +53,30 @@ export type RankChangePlan = {
   notifications: RankChangeNotification[];
   /** 알림을 실제로 보낸 사람 — `notified_at` 갱신 대상 */
   notifiedUserIds: string[];
-  /** 저장할 최신 순위 (전원) */
+  /** 저장할 최신 순위 (전원) — 마지막 **계산** 결과 */
   snapshot: RankRow[];
+  /**
+   * 이번에 알려준 순위 — `told_rank` 갱신 대상(0152). **알림을 받은 사람만** 들어간다.
+   * 쿨다운으로 건너뛴 사람은 빠진다 → 다음 계산 때 "들은 순위 ≠ 지금 순위"로 전해진다.
+   */
+  told: RankRow[];
 };
+
+/**
+ * 사진 필수 방에서 이 운동에 사진이 아직 없으면 **재지 않고 기다린다** (2026-11-26 사고).
+ *
+ * 사진 필수 방은 사진이 있어야 운동이 점수에 들어간다(`get_challenge_period_sessions`).
+ * 완료 순간엔 사진이 아직 없어서(앱이 완료 12~21초 뒤에 올린다) **방금 한 운동이 빠진 순위**가
+ * 나오고, 그 순위로 "밀렸어요"가 나간 뒤 쿨다운이 정정까지 막았다.
+ * 기다리면 사진 저장 트리거(0151)가 다시 부를 때 한 번만 잰다. 스냅샷도 건드리지 않는다.
+ * (사진이 끝내 안 오면 그 운동은 점수에도 안 들어가므로, 잴 것도 없다.)
+ */
+export function waitsForPhoto(input: {
+  photoRequired: boolean | null | undefined;
+  sessionHasPhoto: boolean;
+}): boolean {
+  return input.photoRequired === true && !input.sessionHasPhoto;
+}
 
 /** 공동 순위면 `공동 N위`, 단독이면 `N위` */
 export function rankLabel(rank: number, rows: readonly RankRow[]): string {
@@ -198,8 +222,14 @@ function pickVariant<T>(variants: readonly T[], seed: number): T {
 
 export function planRankChange(input: {
   challengeName: string;
+  /** 마지막 **계산** 순위 — "이번에 새로 바뀐 게 있나"를 가른다 */
   prev: readonly RankRow[];
   next: readonly RankRow[];
+  /**
+   * userId → 그 사람에게 **마지막으로 알려준** 순위(0152 `told_rank`). 없거나 null이면
+   * `prev`(마지막 계산)를 들은 것으로 본다 — 0152 이전 행 호환.
+   */
+  told?: Record<string, number | null | undefined>;
   /** userId → 마지막으로 이 방에서 등수 알림을 보낸 시각(ISO) */
   lastNotifiedAt: Record<string, string | null | undefined>;
   now: Date;
@@ -221,22 +251,34 @@ export function planRankChange(input: {
   const snapshot = next.map((r) => ({ userId: r.userId, rank: r.rank }));
 
   if (prev.length === 0) {
-    return { baseline: true, notifications: [], notifiedUserIds: [], snapshot };
+    return { baseline: true, notifications: [], notifiedUserIds: [], snapshot, told: [] };
   }
 
   const prevRank = new Map(prev.map((r) => [r.userId, r.rank]));
-  // 이전 스냅샷에 없던 사람(새 합류)은 "바뀐 것"으로 치지 않는다.
-  const anyChanged = next.some((r) => {
+  /** 그 사람이 마지막으로 **들은** 순위 — 없으면 마지막 계산 순위(옛 행 호환) */
+  const toldRank = (userId: string): number | undefined =>
+    input.told?.[userId] ?? prevRank.get(userId);
+
+  // ① 이번 계산에서 **새로** 바뀐 게 있나 (마지막 계산 대비).
+  //    이전 스냅샷에 없던 사람(새 합류)은 "바뀐 것"으로 치지 않는다.
+  const freshChange = next.some((r) => {
     const before = prevRank.get(r.userId);
     return before !== undefined && before !== r.rank;
   });
-  if (!anyChanged) {
-    return { baseline: false, notifications: [], notifiedUserIds: [], snapshot };
+  // ② 아니면 쿨다운에 막혀 **못 전한** 변화가 남아 있나 (들은 순위 대비).
+  const pendingFor = (r: RankRow) => {
+    const heard = toldRank(r.userId);
+    return heard !== undefined && heard !== r.rank;
+  };
+  if (!freshChange && !next.some(pendingFor)) {
+    return { baseline: false, notifications: [], notifiedUserIds: [], snapshot, told: [] };
   }
 
   // 이번 변동의 주인공 — 순위가 가장 크게 오른 사람(최고 순위 → 많이 뛴 순).
   // 본인 외 참가자에게는 "○○님이 N위 됐어요"로 이 사람을 알린다.
-  const mover = pickMover(prevRank, next);
+  // ⚠️ **새 변동이 있을 때만** — 쿨다운 뒤 늦게 전하는 소식을 "방금 ○○님이 N위 됐어요"처럼
+  //    말하면 사실이 아니다(2026-11-26 사고). 그때는 내 순위 변화만 말한다.
+  const mover = freshChange ? pickMover(prevRank, next) : null;
   const moverNick = mover ? input.nicknames?.[mover.userId] : undefined;
   const moverLabel = mover ? rankLabel(mover.rank, next) : "";
   const headline = (icon: string, fallback: string) =>
@@ -250,10 +292,13 @@ export function planRankChange(input: {
     if (last && now.getTime() - new Date(last).getTime() < RANK_CHANGE_COOLDOWN_MS) {
       continue;
     }
-    const before = prevRank.get(r.userId);
+    // 비교 기준은 **그 사람이 들은 순위**다 — 못 들은 변화도 여기서 같이 전해진다
+    const before = toldRank(r.userId);
     const label = rankLabel(r.rank, next);
 
     if (before === undefined || before === r.rank) {
+      // 내 순위는 그대로 — 새 변동이 있을 때만 "순위가 바뀌었어요"를 전한다
+      if (!freshChange) continue;
       notifications.push({
         userId: r.userId,
         type: "rank_change",
@@ -286,11 +331,13 @@ export function planRankChange(input: {
     }
   }
 
+  const sent = new Set(notifications.map((n) => n.userId));
   return {
     baseline: false,
     notifications,
     notifiedUserIds: notifications.map((n) => n.userId),
     snapshot,
+    told: snapshot.filter((r) => sent.has(r.userId)),
   };
 }
 
