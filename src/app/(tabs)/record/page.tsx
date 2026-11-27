@@ -26,6 +26,16 @@ import { TodayPlanNotice } from "@/components/record/today-plan-notice";
 import { ExerciseReorderSheet } from "@/components/record/exercise-reorder-sheet";
 import { IdlePauseModal } from "@/components/record/idle-pause-modal";
 import { RoutineSaveSheet } from "@/components/record/routine-save-sheet";
+import {
+  RoutineLoadSheet,
+  type RoutineLoadChoice,
+} from "@/components/record/routine-load-sheet";
+import {
+  buildRoutineReplacement,
+  decideRoutineLoad,
+  routineLoadSummary,
+} from "@/lib/domain/routine-load";
+import { noteTrail } from "@/lib/domain/bug-trail";
 import { ZeroWeightSheet } from "@/components/record/zero-weight-sheet";
 import { shouldAskBodyweight } from "@/lib/domain/zero-weight";
 import { TabataSheet } from "@/components/record/tabata-sheet";
@@ -350,6 +360,13 @@ const EMPTY_PREVIOUS: ReadonlyMap<string, PreviousSet[]> = new Map();
 
 /** 사용자가 누른 자리에서 기다리던 계획 쓰기를 기다리는 상한 (`flushPlanSyncBounded`) */
 const PLAN_FLUSH_WAIT_MS = 1500;
+
+/** 불러올 수 있는 루틴 — DB 루틴과 추천 루틴이 같이 만족하는 모양 (`addRoutine` 주석) */
+type LoadableRoutine = {
+  name: string;
+  exercises: PlanExercise[];
+  tabataMinutes: number | null;
+};
 
 export default function RecordPage() {
   const { userId, loading, configured, error } = useAuth();
@@ -721,6 +738,8 @@ function WorkoutScreen({ userId }: { userId: string }) {
   const [routines, setRoutines] = useState<WorkoutRoutine[] | null>(null);
   const [routinesLoading, setRoutinesLoading] = useState(true);
   const [routineSaveOpen, setRoutineSaveOpen] = useState(false);
+  /** 교체할지 추가할지 묻는 중인 루틴 (2026-11-27). null이면 시트가 닫혀 있다 */
+  const [routineLoadAsk, setRoutineLoadAsk] = useState<LoadableRoutine | null>(null);
   /**
    * 내 챌린지 목표 원본 (2026-08-04). 피커의 '챌린지 미반영' 판정과 완료 화면의
    * 기여 표시가 **같은 목표 묶음**을 쓴다 — 두 번 조회하면 갈라진다.
@@ -2173,11 +2192,15 @@ function WorkoutScreen({ userId }: { userId: string }) {
   // ── 나만의 루틴 (0056) ────────────────────────────────────────────
 
   /**
-   * 루틴 불러오기는 **교체가 아니라 병합**이다.
+   * 루틴 불러오기는 **교체가 기본**이다 (2026-11-27, 회원 신고 → 작업지시서).
    *
-   * '운동 추가' 시트 안에서 일어나는 일이므로 '지난 기록' 탭과 같아야 한다.
-   * (예정표의 `handleLoadPlan`은 "지우고 바꿀까요?"를 묻지만 그건 그날의 계획을
-   * 통째로 여는 별개 흐름이다.)
+   * 예전에는 '지난 기록' 탭과 같은 **병합**이었다. 이름이 겹치면 지금 목록이 이겨서
+   * 데일리(스쿼트 3세트)를 불러도 풀(4세트)이 남았고, 퀘스트 아래 '내 루틴' 타일로 부르면
+   * 겹치는 종목이 통째로 사라졌다 (개발 서버 재현 —
+   * `docs/superpowers/plans/2026-11-27-routine-load-fix.md` §0).
+   *
+   * 어느 길로 갈지는 `decideRoutineLoad`가 정한다 — 빈 목록·퀘스트 제안·타일은 바로 교체,
+   * 사용자가 담은 목록이면 묻고(`RoutineLoadSheet`), 운동 중이면 예전처럼 추가만.
    */
   /**
    * ⚠️ 매개변수 타입이 `WorkoutRoutine`이 아니라 **그보다 좁은 구조**다
@@ -2187,11 +2210,109 @@ function WorkoutScreen({ userId }: { userId: string }) {
    * 태울 수 있다. `WorkoutRoutine`은 구조적으로 이 타입을 만족하므로
    * `onPickRoutine={addRoutine}`은 그대로 통과한다.
    */
-  async function addRoutine(routine: {
-    name: string;
-    exercises: PlanExercise[];
-    tabataMinutes: number | null;
-  }): Promise<boolean> {
+  async function addRoutine(routine: LoadableRoutine): Promise<boolean> {
+    /*
+      인터벌 루틴은 **인터벌로 되살린다** (0074) — 교체·추가 판정보다 먼저다.
+      `mergeRoutine` 안에도 같은 분기가 있지만, 인터벌 루틴이 묻는 시트를 거치면
+      "그대로 불러오기"를 눌렀는데 시트가 하나 더 뜨는 셈이라 여기서 먼저 보낸다.
+    */
+    if (routine.tabataMinutes) return mergeRoutine(routine);
+
+    const current = draftRef.current;
+    // 퀘스트 아래 '내 루틴' 타일로 연 선택 화면 — "내 방법으로 시작"이라 언제나 교체
+    const fromTile = pendingCustomRef.current !== null;
+    const decision = decideRoutineLoad({
+      draft: current,
+      fromTile,
+      hasUnboundTodayPlan: unboundTodayGeneralPlanId() !== null,
+    });
+    noteTrail(
+      "action",
+      "routine_load_requested",
+      `${decision} from=${routineListSource(current)} before=${routineLoadSummary(current.exercises)}`,
+    );
+    if (decision === "ask") {
+      // 고르는 시트는 선택 화면을 닫고 띄운다 — true를 돌려주면 피커가 닫힌다
+      setRoutineLoadAsk(routine);
+      noteTrail("action", "routine_load_conflict", routineLoadSummary(current.exercises));
+      return true;
+    }
+    if (decision === "replace") {
+      // 타일 길은 효과가 계획 묶음을 끊는다(내 방법 모드) — 오늘 계획에 묶지 않는다
+      return replaceWithRoutine(routine, fromTile ? null : unboundTodayGeneralPlanId());
+    }
+    return mergeRoutine(routine);
+  }
+
+  /** 목록이 지금 어디서 왔나 — 흔적용 (이름·값은 남기지 않는다) */
+  function routineListSource(d: WorkoutDraft): string {
+    if (d.exercises.length === 0) return "empty";
+    if (d.suggestedForDayKey !== null) return "suggestion";
+    if (d.scheduledPlanId !== null) return "plan";
+    return "user";
+  }
+
+  /**
+   * 목록이 계획에 안 묶였는데 달력에 있는 **오늘 일반 계획** id. 없으면 null.
+   * 내 방법 모드(`isCustomListNow`)면 계획과 주고받지 않으므로 없는 것으로 본다.
+   */
+  function unboundTodayGeneralPlanId(): string | null {
+    if (draftRef.current.scheduledPlanId !== null || isCustomListNow()) return null;
+    const todayKey = dayKey(new Date(), resolveTimeZone());
+    return (
+      todayPlans.find((plan) => plan.planDate === todayKey && isGeneralPlan(plan))?.id ??
+      null
+    );
+  }
+
+  /** 루틴 그대로 — 목록을 갈아 끼운다. 원본 루틴은 읽기만 한다 */
+  function replaceWithRoutine(
+    routine: LoadableRoutine,
+    bindPlanId: string | null,
+  ): boolean {
+    const before = draftRef.current;
+    // 묻는 사이에 운동이 시작됐으면 갈지 않는다 — 진행 중 기록 보호
+    if (before.sessionId !== null || before.startedAtMs !== null) {
+      void mergeRoutine(routine);
+      return true;
+    }
+    const next = buildRoutineReplacement({
+      draft: before,
+      routine: routine.exercises,
+      makeKey: localId,
+      bindPlanId,
+    });
+    setDraft(next);
+    noteTrail(
+      "action",
+      "routine_load_completed",
+      `replace ${routineLoadSummary(before.exercises)}->${routineLoadSummary(next.exercises)}`,
+    );
+    showToast(`'${routine.name}' 루틴을 그대로 불러왔어요`);
+    return true;
+  }
+
+  function confirmRoutineLoad(choice: RoutineLoadChoice) {
+    const routine = routineLoadAsk;
+    setRoutineLoadAsk(null);
+    if (!routine) return;
+    if (choice === "replace") {
+      replaceWithRoutine(routine, unboundTodayGeneralPlanId());
+      return;
+    }
+    void mergeRoutine(routine);
+  }
+
+  function cancelRoutineLoad() {
+    setRoutineLoadAsk(null);
+    noteTrail("action", "routine_load_cancelled");
+  }
+
+  /**
+   * **현재 목록에 추가하기** — 예전 불러오기 그대로 (겹치는 이름은 지금 목록이 남는다).
+   * 묻는 시트에서 '추가'를 골랐을 때와 운동 중 추가(`add-only`)가 이 길을 탄다.
+   */
+  async function mergeRoutine(routine: LoadableRoutine): Promise<boolean> {
     /*
       인터벌 루틴은 **인터벌로 되살린다** (0074, 사용자 지시 2026-08-13).
       지난 기록 경로(`handleScheduleFromPast`)와 같은 규칙이다 — 같은 운동을
@@ -2217,6 +2338,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
     const merged = mergeImportedExercises(draft.exercises, imported);
 
     if (merged.added.length === 0) {
+      noteTrail("action", "routine_load_failed", "add nothing-new");
       showToast("이 루틴의 운동은 이미 모두 추가되어 있어요");
       return false;
     }
@@ -2226,8 +2348,16 @@ function WorkoutScreen({ userId }: { userId: string }) {
       exercises: mergeImportedExercises(current.exercises, imported).exercises,
       effortMessage: buildEffortMessage(merged.added),
     }));
+    noteTrail(
+      "action",
+      "routine_load_completed",
+      `add +${merged.added.length} skip=${merged.skippedCount}`,
+    );
+    // 겹친 종목은 지금 목록 값이 남는다 — "중복 제외"만으로는 루틴 값이 들어온 줄 안다
     const skipped =
-      merged.skippedCount > 0 ? ` · 중복 ${merged.skippedCount}개 제외` : "";
+      merged.skippedCount > 0
+        ? ` · 이미 있는 ${merged.skippedCount}개는 그대로 뒀어요`
+        : "";
     showToast(
       `'${routine.name}'에서 ${merged.added.length}개 추가했어요${skipped}`,
     );
@@ -2293,6 +2423,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
           item.id === updated.id ? updated : item,
         ),
       );
+      noteTrail("action", "routine_updated", routineLoadSummary(exercises));
       showToast(`'${updated.name}' 루틴의 운동을 바꿨어요`);
       return true;
     } catch (error) {
@@ -5762,6 +5893,12 @@ function WorkoutScreen({ userId }: { userId: string }) {
             onSwitchToBodyweight={() => {
               if (zeroWeightAsk) switchToBodyweight(zeroWeightAsk.exKey);
             }}
+          />
+
+          <RoutineLoadSheet
+            routineName={routineLoadAsk?.name ?? null}
+            onConfirm={confirmRoutineLoad}
+            onCancel={cancelRoutineLoad}
           />
 
           <RoutineSaveSheet
