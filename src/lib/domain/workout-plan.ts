@@ -45,7 +45,11 @@ export type DraftPlanExercise = Omit<PlanExercise, "sets"> & {
 
 type LocalExerciseInput = Omit<PlanExercise, "sets"> & {
   key: string;
-  sets: Array<PlanSet & { key: string; done: boolean }>;
+  /**
+   * `durationSec`은 목록에서 시간을 **초로** 친 세트에만 있다 (세트 시계, 2026-08-28 "초가 진실이다").
+   * 있으면 그것이 진짜 시간이다 — `durationMin`은 0으로 남아 있다.
+   */
+  sets: Array<PlanSet & { key: string; done: boolean; durationSec?: number }>;
 };
 
 const BODY_PARTS = new Set<BodyPart>([
@@ -233,7 +237,16 @@ export function toPlanExercises(exercises: LocalExerciseInput[]): PlanExercise[]
         weightKg: set.weightKg,
         reps: set.reps,
         distanceKm: set.distanceKm,
-        durationMin: set.durationMin,
+        /*
+          시간은 **초 칸이 있으면 초로** 옮긴다 (이슈 #33 TASK-01, 2026-11-28).
+          목록의 시간 입력은 `durationSec`(초)에 쓰고 `durationMin`은 0으로 둔다. 예전엔 분 칸만 옮겨서
+          퀘스트에서 유산소를 30분으로 고쳐도 달력 계획에는 0분이 저장됐다(개발 서버에서 재현).
+          계획 칸은 분이라 초 ÷ 60으로 넣는다 — 다시 목록으로 담을 때 분 × 60으로 같은 초가 된다.
+        */
+        durationMin:
+          typeof set.durationSec === "number" && Number.isFinite(set.durationSec)
+            ? set.durationSec / 60
+            : set.durationMin,
       })),
     })),
   );

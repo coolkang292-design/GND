@@ -261,7 +261,7 @@ import {
   completedWorkoutFeedPath,
   feedPathAfterProof,
 } from "@/lib/domain/achievement-moment";
-import { ChallengeWorkoutResultCard, ChallengePlanFeedback } from "@/components/record/challenge-workout-feedback";
+import { ChallengeWorkoutResultCard, ChallengePlanFeedback, type DayPlanSession } from "@/components/record/challenge-workout-feedback";
 import { applyChallengePlanAddition } from "@/lib/domain/challenge-plan-addition";
 import { hasPendingChallengeProof, type ActiveChallengeContext } from "@/lib/domain/challenge-confirmation";
 import { CompletionDetails } from "@/components/record/completion-details";
@@ -1826,6 +1826,11 @@ function WorkoutScreen({ userId }: { userId: string }) {
         await pullPlanNow();
         setPlansReady(true);
         planSyncReadyRef.current = true;
+        // 앱을 다시 열었는데 지난번에 못 쓴 것이 남아 있으면(오프라인·강제 종료) 바로 다시 쓴다 (이슈 #33 T03·T08).
+        // 예전엔 목록을 한 번 더 고쳐야 쓰기가 돌았다. 읽기는 이 폰에 안 보낸 수정을 덮지 않는다(`decideGeneralPull`)
+        if (hasPendingPlanWrites(draftRef.current, syncMarks())) {
+          void enqueuePlanSync(pushPlanTracked);
+        }
       } finally {
         firstPullRunningRef.current = false;
       }
@@ -5651,6 +5656,58 @@ function WorkoutScreen({ userId }: { userId: string }) {
       : []),
   ];
   const questListCollapsed = (questCardShown && !questListOpen) || planQuestShown;
+
+  /*
+    예상 점수 카드 재료 (이슈 #33 TASK-07·08).
+    - 퀘스트로 **함께** 할 짝 인터벌(아직 목록에 안 담김)은 같은 운동으로 넣는다 — 퀘스트 카드가 보여 주는 그대로
+    - 오늘 **따로** 하는 다른 계획(목록에 묶이지 않은 계획)은 별도 운동으로 넘긴다 → "오늘의 운동을 모두 완료하면"
+    - 키는 계획 id + 순번으로 정해 렌더마다 같다(`questPlanExercises`와 같은 이유)
+  */
+  let forecastKeySeq = 0;
+  const forecastKey = (prefix: string) => () => `fc-${prefix}-${forecastKeySeq++}`;
+  const forecastList =
+    companionIntervalPlan && companionSplit
+      ? {
+          exercises: [
+            ...draft.exercises,
+            ...toDraftExercises(companionSplit.block, forecastKey(companionIntervalPlan.id)),
+            ...toDraftExercises(
+              followUpsNotInList(
+                draft.exercises.map((exercise) => exercise.name),
+                companionSplit.followUps,
+              ),
+              forecastKey(`${companionIntervalPlan.id}-f`),
+            ),
+          ],
+          tabataMinutes: companionIntervalPlan.tabataMinutes,
+          intervalStartIndex: draft.exercises.length,
+        }
+      : {
+          exercises: draft.exercises,
+          tabataMinutes: draft.tabataMinutes,
+          intervalStartIndex: draft.intervalStartIndex ?? 0,
+        };
+  /** 목록(또는 계획 퀘스트)에 이미 담긴 계획 — 별도 운동으로 다시 세지 않는다 */
+  const coveredPlanIds = new Set(
+    [
+      draft.scheduledPlanId,
+      draft.intervalPlanId,
+      companionIntervalPlan?.id,
+      questPlan?.id,
+    ].filter((id): id is string => typeof id === "string"),
+  );
+  const forecastOtherSessions: DayPlanSession[] = (isCustomListNow() ? [] : todayPlans)
+    .filter((plan) => !coveredPlanIds.has(plan.id) && plan.exercises.length > 0)
+    .map((plan) => ({
+      key: plan.id,
+      exercises: toDraftExercises(plan.exercises, forecastKey(plan.id)),
+      tabataMinutes: plan.tabataMinutes,
+      intervalStartIndex: 0,
+      scheduledAt: plan.scheduledAt,
+    }));
+  const forecastScheduledAt =
+    todayPlans.find((plan) => plan.id === (questPlan?.id ?? draft.scheduledPlanId))?.scheduledAt ??
+    null;
   // 퀘스트 카드가 떠 있을 땐 카드의 [퀘스트 시작]이 시작이다 — 하단 고정 버튼은 목록 화면에서만
   const fixedStartVisible = showFixedStart && !questListCollapsed;
 
@@ -6058,6 +6115,9 @@ function WorkoutScreen({ userId }: { userId: string }) {
               contexts={activeChallengeContexts}
               exercises={questPlanExercises}
               tabataMinutes={questPlan.tabataMinutes}
+              restSeconds={draft.restSeconds}
+              scheduledAt={forecastScheduledAt}
+              otherSessions={forecastOtherSessions}
             />
           ) : (
             !active &&
@@ -6065,9 +6125,13 @@ function WorkoutScreen({ userId }: { userId: string }) {
               <ChallengePlanFeedback
                 userId={userId}
                 contexts={activeChallengeContexts}
-                exercises={draft.exercises}
-                tabataMinutes={draft.tabataMinutes}
-                onAdd={draft.tabataMinutes ? undefined : addChallengeSuggestion}
+                exercises={forecastList.exercises}
+                tabataMinutes={forecastList.tabataMinutes}
+                intervalStartIndex={forecastList.intervalStartIndex}
+                restSeconds={draft.restSeconds}
+                scheduledAt={forecastScheduledAt}
+                otherSessions={forecastOtherSessions}
+                onAdd={forecastList.tabataMinutes ? undefined : addChallengeSuggestion}
               />
             )
           )}

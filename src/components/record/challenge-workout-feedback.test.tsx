@@ -137,15 +137,28 @@ describe("인터벌은 시작하기 전에 예상 점수를 보여준다", () =>
     vi.mocked(loadChallengeScoreSnapshot).mockResolvedValue(empty);
     render(<ChallengePlanFeedback userId="me" contexts={[context]} exercises={interval(4)} tabataMinutes={8} now={now} />);
     await screen.findByText("이 인터벌을 마치면");
-    expect(screen.getByText("인터벌 8분 기준 예상")).toBeTruthy();
-    expect(screen.getByText("운동시간 (인터벌 8분)")).toBeTruthy();
+    expect(screen.getByTestId("forecast-minutes").textContent).toBe("인터벌 8분");
+    expect(document.body.textContent).toContain("총 예상 운동시간 8분");
     expect(screen.queryByText(/시간 점수 별도/)).toBeNull();
   });
-  it("시간을 모르는 일반 계획은 '기본 예상 · 시간 점수 별도'로 알린다", async () => {
+  it("이슈 #33: 웨이트·맨몸 계획도 시간을 추정해 시간 점수에 넣고, 근거를 알린다 (예전엔 '시간 점수 별도')", async () => {
     vi.mocked(loadChallengeScoreSnapshot).mockResolvedValue(empty);
     render(<ChallengePlanFeedback userId="me" contexts={[context]} exercises={[exercise]} onAdd={vi.fn()} now={now} />);
-    expect(await screen.findByText(/시간 점수 별도/)).toBeTruthy();
-    expect(screen.getByTestId("unknown-time-notice")).toBeTruthy();
+    expect(await screen.findByText("이 계획을 완료하면")).toBeTruthy();
+    expect(screen.queryByText(/시간 점수 별도/)).toBeNull();
+    expect(screen.getByTestId("forecast-minutes").textContent).toMatch(/^웨이트 약 \d+분$/);
+    // 기록이 없는 스냅샷이라 세트당 (운동 40초 + 휴식 90초)로 어림했다고 알린다
+    expect(screen.getByTestId("strength-estimate-notice").textContent).toContain("최근 기록이 없어");
+    const minutes = Number(screen.getByTestId("activity-forecast").textContent!.match(/운동시간\+([\d.]+)/)?.[1]);
+    expect(minutes).toBeGreaterThan(0);
+  });
+  it("이슈 #33: 지난 기록이 있으면 그 시간을 근거로 추정한다", async () => {
+    // 내 기록: 푸시업 3세트를 6분에 → 세트당 2분. 같은 구성이라 1순위(같은 루틴), 이번 1세트 = 2분
+    const pushups = { exerciseName: "푸시업", exerciseType: "bodyweight" as const, bodyPart: "가슴", sets: Array.from({ length: 3 }, () => ({ weightKg: 0, reps: 10, distanceMeters: 0, durationSeconds: 0, isCompleted: true })) };
+    vi.mocked(loadChallengeScoreSnapshot).mockResolvedValue({ ...snapshot, rows: [{ sessionId: "h", userId: "me", completedAt: "2026-11-12T03:00:00Z", durationMinutes: 6, exercises: [pushups] }] } as ChallengeScoreSnapshot);
+    render(<ChallengePlanFeedback userId="me" contexts={[context]} exercises={[exercise]} onAdd={vi.fn()} now={now} />);
+    expect((await screen.findByTestId("strength-estimate-notice")).textContent).toContain("최근 같은 구성");
+    expect(screen.getByTestId("forecast-minutes").textContent).toBe("웨이트 약 2분");
   });
   it("종목을 아직 안 골랐어도 인터벌 횟수·시간 점수는 보여준다", async () => {
     vi.mocked(loadChallengeScoreSnapshot).mockResolvedValue({ ...empty, goals: [{ ...goal, goal_type: "tabata_count", target_value: 4 }] } as ChallengeScoreSnapshot);
@@ -205,7 +218,7 @@ describe("활동 점수 표시 (1일·1회·60분당 1점)", () => {
     const text = document.body.textContent ?? "";
     const num = (re: RegExp) => Number(text.match(re)?.[1]);
     const headline = num(/예상 \+([\d.]+)점/);
-    const base = num(/기본 점수 \+([\d.]+)/);
+    const base = Number(activity.textContent!.match(/기본 목표\+([\d.]+)/)?.[1]);
     const act = Number(activity.textContent!.match(/활동 점수 \+([\d.]+)점/)?.[1]);
     expect(act).toBeGreaterThan(0);
     expect(headline).toBeCloseTo(base + act, 2);
@@ -233,5 +246,32 @@ describe("목표를 모두 채운 뒤 우승 안내", () => {
     render(<ChallengePlanFeedback userId="me" contexts={[context]} exercises={[exercise]} onAdd={vi.fn()} now={new Date("2026-11-13T04:00:00Z")} />);
     expect(await screen.findByText("이 계획을 완료하면")).toBeTruthy();
     expect(screen.queryByTestId("win-guidance")).toBeNull();
+  });
+});
+
+describe("이슈 #33 하루 전체 예상 점수", () => {
+  const now = new Date("2026-11-13T04:00:00Z");
+  const empty = { ...snapshot, rows: [] } as ChallengeScoreSnapshot;
+  const cardio = (minutes: number): LocalExercise => ({ key: `c${minutes}`, name: "러닝", bodyPart: "유산소", exerciseType: "cardio", measure: "time", isCustom: false, sets: [newSet({ durationMin: minutes, durationSec: minutes * 60 })] });
+  it("오늘 따로 하는 계획이 있으면 '오늘의 운동을 모두 완료하면'으로 합친 예상을 보이고, 운동한 날은 한 번만 센다", async () => {
+    vi.mocked(loadChallengeScoreSnapshot).mockResolvedValue(empty);
+    render(<ChallengePlanFeedback userId="me" contexts={[context]} exercises={[exercise]} now={now}
+      otherSessions={[{ key: "later", exercises: [cardio(30)], tabataMinutes: null, scheduledAt: "2026-11-13T10:00:00Z" }]} />);
+    expect(await screen.findByText("오늘의 운동을 모두 완료하면")).toBeTruthy();
+    const box = screen.getByTestId("activity-forecast").textContent!;
+    expect(box).toContain("운동한 날+1.00");
+    expect(box).toContain("운동 횟수+2.00"); // 6시간 뒤라 둘 다 인정
+    expect(screen.getByTestId("single-plan-forecast").textContent).toContain("이 목록만 하면");
+    expect(screen.getByTestId("forecast-minutes").textContent).toContain("유산소 30분");
+    expect(screen.queryByTestId("day-timing-notice")).toBeNull();
+  });
+  it("예정 시각이 없는 다른 계획은 바로 이어서 한다고 보고 횟수를 보수적으로 계산하고 알린다", async () => {
+    vi.mocked(loadChallengeScoreSnapshot).mockResolvedValue(empty);
+    // 1시간 규칙은 2026-11-22 06:00(KST) 이후 시작한 운동에만 적용된다 — 그 뒤 날짜로 계산한다
+    render(<ChallengePlanFeedback userId="me" contexts={[context]} exercises={[exercise]} now={new Date("2026-11-25T04:00:00Z")}
+      otherSessions={[{ key: "later", exercises: [cardio(30)], tabataMinutes: null, scheduledAt: null }]} />);
+    await screen.findByText("오늘의 운동을 모두 완료하면");
+    expect(screen.getByTestId("activity-forecast").textContent).toContain("운동 횟수+1.00");
+    expect(screen.getByTestId("day-timing-notice")).toBeTruthy();
   });
 });

@@ -31,9 +31,14 @@ const round = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 export function estimatePlanMinutes(
   tabataMinutes: number | null | undefined,
   exercises: readonly PlanExercise[],
+  /**
+   * 목록 안 인터벌 블록의 시작 위치 (이슈 #33). 비우면 0번부터 — 예전 동작.
+   * 웨이트 뒤에 인터벌을 담은 목록(시작 위치 2 등)을 0번부터로 읽으면 웨이트가 블록으로, 블록이 웨이트로 잘못 갈렸다.
+   */
+  intervalStartIndex?: number | null,
 ): PlanMinutes {
   const interval = nonNegative(tabataMinutes);
-  const outside = withoutIntervalBlock(tabataMinutes, exercises);
+  const outside = withoutIntervalBlock(tabataMinutes, exercises, intervalStartIndex);
   const cardioSeconds = outside
     .filter((ex) => ex.exerciseType === "cardio")
     .reduce((sum, ex) => sum + ex.sets.reduce((s, set) => s + nonNegative(set.durationSeconds), 0), 0);

@@ -340,3 +340,15 @@ describe("replaceGeneralPart — 일반 부분만 바꾼다", () => {
     expect(next.intervalStartIndex).toBe(0);
   });
 });
+
+describe("유산소 시간 — 목록은 초(durationSec)에 쓴다", () => {
+  it("퀘스트에서 유산소를 30분(1800초)으로 고치면 계획에 30분으로 쓴다 (예전엔 0분)", () => {
+    const run = { ...ex("트레드밀", { exerciseType: "cardio", reps: 0, weightKg: 0 }) };
+    const timed = { ...run, sets: [{ ...run.sets[0], durationMin: 0, durationSec: 1800 }] };
+    const draft = { ...base, exercises: [bench, timed], scheduledPlanId: "G", tabataMinutes: null, intervalPlanId: undefined };
+    const mark = { planId: "G", updatedAt: "g1", json: planExercisesKey(toPlanExercises([bench, run])) };
+    const push = decideGeneralPush(draft, mark);
+    expect(push.kind).toBe("update");
+    expect(push.kind === "update" && push.exercises[1].sets[0].durationMin).toBe(30);
+  });
+});

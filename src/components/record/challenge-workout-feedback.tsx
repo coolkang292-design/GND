@@ -4,10 +4,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { actualForGoal, foldPeriodStats, goalLabel, GOAL_TYPE_META, toPeriodSessionRow, type FinishedDraftExercise, type GoalContribution } from "@/lib/challenge";
 import { loadChallengeScoreSnapshot } from "@/lib/challenge-workout-feedback";
-import { calculateWorkoutImpact, forecastWorkout, recommendWorkoutAdditions, winGuidance, type ChallengeScoreSnapshot, type WinGuidance } from "@/lib/domain/challenge-workout-impact";
+import { calculateWorkoutImpact, forecastWorkout, forecastWorkouts, recommendWorkoutAdditions, winGuidance, type ChallengeScoreSnapshot, type WinGuidance } from "@/lib/domain/challenge-workout-impact";
+import { hasAssumedTiming, scheduleDaySessions } from "@/lib/domain/day-forecast";
+import { estimateWorkoutMinutes, minutesBreakdownLabel, strengthBasisNotice } from "@/lib/domain/plan-time-estimate";
 import type { ActiveChallengeContext } from "@/lib/domain/challenge-confirmation";
 import { durationSecondsOf } from "@/lib/domain/set-timer";
-import { estimatePlanMinutes } from "@/lib/domain/plan-minutes";
 import type { LocalExercise } from "@/lib/workout";
 import { VerifiedChallengeProofCard } from "./verified-challenge-proof-card";
 
@@ -144,9 +145,43 @@ export function ChallengeWorkoutResultCard({ userId, sessionId, context, gains, 
   );
 }
 
-function PlanCard({ userId, context, exercises, onAdd, now, tabataMinutes }: {
-  userId:string; context:ActiveChallengeContext; exercises:readonly LocalExercise[]; onAdd?:(exercise:FinishedDraftExercise)=>boolean|void; now?:Date; tabataMinutes?:number|null;
-}) {
+/** 같은 날 함께 계산할 다른 계획 (이슈 #33 TASK-07) — 퀘스트 목록과 **따로** 하는 운동 */
+export type DayPlanSession = {
+  key: string;
+  exercises: readonly LocalExercise[];
+  tabataMinutes: number | null;
+  intervalStartIndex?: number | null;
+  /** 예정 시각(ISO). 없으면 앞 운동 직후로 본다 — 횟수 점수를 보수적으로 */
+  scheduledAt: string | null;
+};
+
+type PlanCardProps = {
+  userId: string;
+  context: ActiveChallengeContext;
+  exercises: readonly LocalExercise[];
+  onAdd?: (exercise: FinishedDraftExercise) => boolean | void;
+  now?: Date;
+  tabataMinutes?: number | null;
+  intervalStartIndex?: number | null;
+  /** 세트 사이 휴식 설정(초) — 웨이트 시간 추정의 마지막 단계에 쓴다 */
+  restSeconds?: number;
+  /** 이 목록의 예정 시각(ISO) — 있으면 그때 시작한다고 본다 */
+  scheduledAt?: string | null;
+  /** 오늘 따로 하는 다른 계획 — 있으면 "오늘 운동을 모두 완료하면" 예상을 함께 보인다 */
+  otherSessions?: readonly DayPlanSession[];
+};
+
+/** 계획 종목 → 점수 계산용 완료 세트 (시간은 세트 시계 기준 초) */
+function asPlanned(exercises: readonly LocalExercise[]) {
+  return exercises.map((ex) => ({ ...ex, sets: ex.sets.map((s) => ({ ...s, done: true, durationMin: durationSecondsOf(s) / 60 })) }));
+}
+function asEstimateInput(planned: ReturnType<typeof asPlanned>) {
+  return planned.map((ex) => ({ exerciseType: ex.exerciseType, exerciseName: ex.name, sets: ex.sets.map((s) => ({ durationSeconds: s.durationMin * 60 })) }));
+}
+
+const NO_SESSIONS: readonly DayPlanSession[] = [];
+
+function PlanCard({ userId, context, exercises, onAdd, now, tabataMinutes, intervalStartIndex, restSeconds = 90, scheduledAt = null, otherSessions = NO_SESSIONS }: PlanCardProps) {
   // 인터벌(타바타)이면 코스 분수가 기록에 실린다 — 시작 전에 "이걸 하면 몇 점"을 보여 주는 카드다
   const interval=Boolean(tabataMinutes);
   const {read,refresh}=useSnapshot(userId,context.id,"plan");
@@ -158,41 +193,67 @@ function PlanCard({ userId, context, exercises, onAdd, now, tabataMinutes }: {
     window.addEventListener("focus",onFocus); document.addEventListener("visibilitychange",onVisible);
     return ()=>{window.removeEventListener("focus",onFocus);document.removeEventListener("visibilitychange",onVisible);};
   },[refresh,now]);
-  const planned=useMemo(()=>exercises.map((ex)=>({...ex,sets:ex.sets.map((s)=>({...s,done:true,durationMin:durationSecondsOf(s)/60}))})),[exercises]);
-  // 계획에서 확실히 아는 시간(인터벌 코스·유산소)만 시간 점수에 넣는다. 웨이트·풀업은 추정하지 않는다
-  const known=useMemo(()=>estimatePlanMinutes(tabataMinutes,planned.map((ex)=>({exerciseType:ex.exerciseType,sets:ex.sets.map((s)=>({durationSeconds:s.durationMin*60}))}))),[planned,tabataMinutes]);
-  const plan=useMemo(()=>toPeriodSessionRow({userId,completedAtMs:plannedAt,startedAtMs:plannedAt,tabataMinutes:tabataMinutes??null,durationMinutes:known.minutes>0?known.minutes:undefined,exercises:planned}),[userId,planned,plannedAt,tabataMinutes,known.minutes]);
+  // 웨이트 시간 추정의 근거 — 이 챌린지 기간의 **내** 지난 운동 (이미 읽어 온 스냅샷, 새 조회 없음)
+  const history=useMemo(()=>read?.snapshot ? read.snapshot.rows.filter((r)=>r.userId===userId):[],[read,userId]);
+  const planned=useMemo(()=>asPlanned(exercises),[exercises]);
+  // 인터벌 코스 + 유산소 입력값 + 웨이트 추정 (이슈 #33 TASK-06). 실제 점수는 완료 뒤 서버 시간으로 정해진다
+  const est=useMemo(()=>estimateWorkoutMinutes({exercises:asEstimateInput(planned),tabataMinutes,intervalStartIndex,history,restSeconds}),[planned,tabataMinutes,intervalStartIndex,history,restSeconds]);
+  // 하루 시간표 — 이 목록이 먼저, 다른 계획은 예정 시각 순(없으면 바로 이어서). 화면 진입 시각은 예정이 없을 때만 쓴다
+  const timeline=useMemo(()=>{
+    const others=otherSessions.map((session)=>{
+      const p=asPlanned(session.exercises);
+      const e=estimateWorkoutMinutes({exercises:asEstimateInput(p),tabataMinutes:session.tabataMinutes,intervalStartIndex:session.intervalStartIndex,history,restSeconds});
+      return {item:{planned:p,tabataMinutes:session.tabataMinutes,est:e},minutes:e.totalMinutes,scheduledAtMs:session.scheduledAt?Date.parse(session.scheduledAt):null};
+    }).sort((a,b)=>(a.scheduledAtMs??Number.POSITIVE_INFINITY)-(b.scheduledAtMs??Number.POSITIVE_INFINITY));
+    return scheduleDaySessions(plannedAt,[{item:{planned,tabataMinutes:tabataMinutes??null,est},minutes:est.totalMinutes,scheduledAtMs:scheduledAt?Date.parse(scheduledAt):null},...others]);
+  },[otherSessions,history,restSeconds,plannedAt,planned,tabataMinutes,est,scheduledAt]);
+  const rowOf=useCallback((t:(typeof timeline)[number])=>toPeriodSessionRow({userId,completedAtMs:t.endMs,startedAtMs:t.startMs,tabataMinutes:t.item.tabataMinutes,durationMinutes:t.minutes>0?t.minutes:undefined,exercises:t.item.planned}),[userId]);
+  const plan=useMemo(()=>rowOf(timeline[0]),[rowOf,timeline]);
   const forecast=read?.snapshot ? forecastWorkout(read.snapshot,userId,plan):null;
+  const day=useMemo(()=>read?.snapshot && timeline.length>1 ? forecastWorkouts(read.snapshot,userId,timeline.map(rowOf)):null,[read,timeline,rowOf,userId]);
   const guidance=read?.snapshot && forecast ? winGuidance(read.snapshot,userId,plan):null;
   const suggestions=useMemo(()=>onAdd && !interval && read?.snapshot && usedNames.length<2 ? recommendWorkoutAdditions(read.snapshot,userId,plan).filter((s)=>!usedNames.includes(s.exercise.name)):[],[read,plan,userId,usedNames,onAdd,interval]);
   if(read && !read.error && !forecast) return null;
+  // 화면 숫자는 하루 전체(다른 계획이 있으면) 기준
+  const shown=day??forecast;
+  const ests=timeline.map((t)=>t.item.est);
+  const sum=(pick:(e:typeof est)=>number)=>ests.reduce((total,e)=>total+pick(e),0);
+  const strengthMinutes=sum((e)=>e.strength?.minutes??0);
+  const totalMinutes=Math.round(sum((e)=>e.totalMinutes));
+  const breakdown=minutesBreakdownLabel({intervalMinutes:sum((e)=>e.intervalMinutes),cardioMinutes:sum((e)=>e.cardioMinutes),strengthMinutes});
+  const basis=ests.find((e)=>e.strength)?.strength?.basis??null;
+  const basisNotice=strengthBasisNotice(basis);
+  const timingNotice=day!==null && hasAssumedTiming(timeline);
   return <section className="rounded-card border border-accent/30 bg-surface p-4" aria-label={`${context.name} 계획 예상 점수`}>
     <p className="text-xs font-extrabold text-muted">{read?.snapshot?.challenge.name??context.name}</p>
-    {!read ? <p className="mt-2 text-sm text-muted" role="status">계획의 예상 점수를 확인하고 있어요…</p> : read.error ? <><p className="mt-2 text-sm text-muted">예상 점수를 불러오지 못했어요. 운동은 그대로 진행할 수 있어요.</p><button type="button" className="tap-44 text-xs font-bold text-accent" onClick={refresh}>다시 확인</button></> : forecast && <>
-      <p className="mt-3 text-sm font-bold">{interval?"이 인터벌을 마치면":"이 계획을 완료하면"}</p>
-      {known.minutes>0 ? <>
-        <p data-testid="forecast-total" className="mt-1 font-mono text-[25px] font-black text-accent">예상 +{points(forecast.totalDelta)}점</p>
-        <p className="mt-1 text-xs text-muted">{known.sourceLabel} 기준 예상</p>
-      </> : <p data-testid="forecast-total" className="mt-1 font-mono text-[25px] font-black text-accent">기본 예상 +{points(forecast.totalDelta)}점<span className="ml-1 text-sm font-bold text-muted">· 시간 점수 별도</span></p>}
-      <p className="mt-1 text-xs text-muted">기본 점수 +{points(forecast.delta)} ({points(forecast.beforeScore)} → {points(forecast.afterScore)}점)</p>
-      {forecast.activityDelta > 0 && <div data-testid="activity-forecast" className="mt-1 space-y-0.5 text-xs">
-        <p className="font-bold">활동 점수 <span className="font-mono text-accent">+{points(forecast.activityDelta)}점</span> <span className="font-normal text-muted">· 총점 {points(forecast.beforeTotal)} → {points(forecast.afterTotal)}점</span></p>
-        <p className="flex justify-between gap-2 text-muted"><span>운동한 날</span><span className="font-mono">+{points(forecast.activityParts.days)}</span></p>
-        <p className="flex justify-between gap-2 text-muted"><span>운동 횟수</span><span className="font-mono">+{points(forecast.activityParts.sessions)}</span></p>
-        <p className="flex justify-between gap-2 text-muted"><span>운동시간{known.sourceLabel?` (${known.sourceLabel})`:""}</span><span className="font-mono">{known.minutes>0?`+${points(forecast.activityParts.minutes)}`:"별도"}</span></p>
-      </div>}
-      {known.hasUnknownTime && <p data-testid="unknown-time-notice" className="mt-1 text-[11px] text-muted">웨이트·맨몸 운동에 걸리는 시간은 미포함이에요. 실제 점수는 운동을 마치고 확정돼요.</p>}
-      {!forecast.sessionCounted && <p data-testid="session-gap-forecast-notice" className="mt-2 rounded-xl bg-warn/10 p-3 text-xs font-bold leading-relaxed text-warn">앞선 운동이 끝나고 1시간이 지나기 전이라, 이 운동은 &lsquo;운동 횟수&rsquo;에 더해지지 않아요. 예상 점수에도 횟수 점수는 빠져 있어요.</p>}
-      {forecast.reason && <p className="mt-2 text-xs text-muted">{forecast.reason}</p>}
-      {guidance && <WinGuidanceBox guidance={guidance}/>}
+    {!read ? <p className="mt-2 text-sm text-muted" role="status">계획의 예상 점수를 확인하고 있어요…</p> : read.error ? <><p className="mt-2 text-sm text-muted">예상 점수를 불러오지 못했어요. 운동은 그대로 진행할 수 있어요.</p><button type="button" className="tap-44 text-xs font-bold text-accent" onClick={refresh}>다시 확인</button></> : forecast && shown && <>
+      {/* "인터벌"이라고 부르는 것은 인터벌만 든 목록일 때 — 웨이트·유산소가 섞이면 계획이다 */}
+      <p className="mt-3 text-sm font-bold">{day?"오늘의 운동을 모두 완료하면":interval && !est.strength && est.cardioMinutes===0?"이 인터벌을 마치면":"이 계획을 완료하면"}</p>
+      <p data-testid="forecast-total" className="mt-1 font-mono text-[25px] font-black text-accent">예상 +{points(shown.totalDelta)}점</p>
+      {breakdown && <p data-testid="forecast-minutes" className="mt-1 text-xs text-muted">{breakdown}</p>}
+      {totalMinutes>0 && <p className="text-xs text-muted">총 예상 운동시간 <b className="text-text">{totalMinutes}분</b></p>}
+      <div data-testid="activity-forecast" className="mt-2 space-y-0.5 text-xs">
+        <p className="flex justify-between gap-2 text-muted"><span>기본 목표</span><span className="font-mono">+{points(shown.delta)}</span></p>
+        <p className="flex justify-between gap-2 text-muted"><span>운동한 날</span><span className="font-mono">+{points(shown.activityParts.days)}</span></p>
+        <p className="flex justify-between gap-2 text-muted"><span>운동 횟수</span><span className="font-mono">+{points(shown.activityParts.sessions)}</span></p>
+        <p className="flex justify-between gap-2 text-muted"><span>운동시간</span><span className="font-mono">+{points(shown.activityParts.minutes)}</span></p>
+        <p className="pt-1 font-bold">기본 점수 {points(shown.beforeScore)} → {points(shown.afterScore)}점 · 활동 점수 <span className="font-mono text-accent">+{points(shown.activityDelta)}점</span></p>
+        <p className="font-bold">현재 총점 {points(shown.beforeTotal)}점 → 완료 후 예상 <span className="text-accent">{points(shown.afterTotal)}점</span></p>
+      </div>
+      {day && <p data-testid="single-plan-forecast" className="mt-2 text-xs text-muted">이 목록만 하면 +{points(forecast.totalDelta)}점 · 오늘 남은 다른 계획 {timeline.length-1}개까지 포함한 예상이에요.</p>}
+      {basisNotice && <p data-testid="strength-estimate-notice" className="mt-1 text-[11px] text-muted">{basisNotice}</p>}
+      {timingNotice && <p data-testid="day-timing-notice" className="mt-1 text-[11px] text-muted">예정 시각이 없거나 겹치는 계획은 앞 운동 바로 뒤에 한다고 보고 계산했어요. 1시간 넘게 띄워 하면 운동 횟수 점수가 더 오를 수 있어요.</p>}
+      {!shown.sessionCounted && <p data-testid="session-gap-forecast-notice" className="mt-2 rounded-xl bg-warn/10 p-3 text-xs font-bold leading-relaxed text-warn">앞선 운동이 끝나고 1시간이 지나기 전이라, {day?"일부 운동은":"이 운동은"} &lsquo;운동 횟수&rsquo;에 더해지지 않아요. 예상 점수에도 그 횟수 점수는 빠져 있어요.</p>}
+      {shown.reason && <p className="mt-2 text-xs text-muted">{shown.reason}</p>}
+      {guidance && !day && <WinGuidanceBox guidance={guidance}/>}
       {suggestions.length>0 && <div className="mt-3 space-y-2 border-t border-line pt-3">{suggestions.map((suggestion)=><div key={suggestion.id} className="rounded-xl bg-accent-weak p-3"><p className="text-[13px] font-extrabold">{suggestion.label}</p><p className="mt-1 text-xs text-muted">현재 계획보다 <b className="text-accent">+{points(suggestion.extraPoints)}점 더</b> · 최종 예상 {points(suggestion.afterScore)}점</p><button type="button" className="mt-2 min-h-11 rounded-xl border border-accent/40 px-4 text-xs font-extrabold text-accent" onClick={()=>{if(onAdd?.(suggestion.exercise)!==false)setUsedNames((names)=>[...names,suggestion.exercise.name]);}}>계획에 추가</button></div>)}</div>}
-      <p className="mt-3 text-[11px] leading-relaxed text-faint">{interval?(context.photoRequired?"끝까지 하고 사진 인증했을 때의 예상 점수예요.":"끝까지 했을 때의 예상 점수예요."):(context.photoRequired?"계획대로 완료하고 사진 인증했을 때의 예상 점수예요.":"계획대로 완료했을 때의 예상 점수예요.")}{!interval&&" 추가 제안은 각각 하나를 적용한 경우예요. 무리하지 않는 범위에서 선택하세요."}</p>
+      <p className="mt-3 text-[11px] leading-relaxed text-faint">{interval?(context.photoRequired?"끝까지 하고 사진 인증했을 때의 예상 점수예요.":"끝까지 했을 때의 예상 점수예요."):(context.photoRequired?"계획대로 완료하고 사진 인증했을 때의 예상 점수예요.":"계획대로 완료했을 때의 예상 점수예요.")}{!interval&&suggestions.length>0&&" 추가 제안은 각각 하나를 적용한 경우예요. 무리하지 않는 범위에서 선택하세요."}</p>
     </>}
   </section>;
 }
 
-export function ChallengePlanFeedback({userId,contexts,exercises,onAdd,now,tabataMinutes}:{userId:string;contexts:readonly ActiveChallengeContext[];exercises:readonly LocalExercise[];onAdd?:(exercise:FinishedDraftExercise)=>boolean|void;now?:Date;tabataMinutes?:number|null}) {
+export function ChallengePlanFeedback({userId,contexts,exercises,onAdd,now,tabataMinutes,intervalStartIndex,restSeconds,scheduledAt,otherSessions}:Omit<PlanCardProps,"context">&{contexts:readonly ActiveChallengeContext[]}) {
   // 인터벌은 종목을 아직 안 골랐어도 코스 분수만으로 횟수·시간 점수가 생긴다
   if(exercises.length===0 && !tabataMinutes) return null;
-  return <>{contexts.filter((c)=>c.liveRanking===true && c.goals.length>0).map((context)=><PlanCard key={context.id} userId={userId} context={context} exercises={exercises} onAdd={onAdd} now={now} tabataMinutes={tabataMinutes}/>)}</>;
+  return <>{contexts.filter((c)=>c.liveRanking===true && c.goals.length>0).map((context)=><PlanCard key={context.id} userId={userId} context={context} exercises={exercises} onAdd={onAdd} now={now} tabataMinutes={tabataMinutes} intervalStartIndex={intervalStartIndex} restSeconds={restSeconds} scheduledAt={scheduledAt} otherSessions={otherSessions}/>)}</>;
 }

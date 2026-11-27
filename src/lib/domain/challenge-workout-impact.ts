@@ -156,12 +156,34 @@ function completedPlan(snapshot: ChallengeScoreSnapshot, userId: string, plan: P
 }
 
 export function forecastWorkout(snapshot: ChallengeScoreSnapshot, userId: string, plan: PeriodSessionRow): WorkoutForecast | null {
-  const completed = completedPlan(snapshot, userId, plan);
-  if (!completed) return null;
-  const afterRows = [...snapshot.rows, completed];
+  const day = forecastWorkouts(snapshot, userId, [plan]);
+  if (!day) return null;
+  const { uncountedCount: _uncounted, ...forecast } = day;
+  void _uncounted;
+  return forecast;
+}
+
+/**
+ * 여러 계획을 **모두 끝냈을 때** (이슈 #33 TASK-07 하루 전체 예상 점수).
+ *
+ * 계획마다의 예상 점수를 더하지 않는다 — 같은 날을 두 번 세고(운동한 날), 목표 상한·완료 보너스를 넘겨
+ * 더하게 된다. 대신 가상의 완료 행을 **한꺼번에** 기존 계산기(`compareRows`)에 넣고 지금 총점과의 차이를 본다.
+ * 운동일·목표 상한·보너스 중복은 계산기가 이미 막는다. 1시간 규칙(`uncountedSessions`)도 행의 시작·끝
+ * 시각으로 그대로 적용된다 — 시각은 부르는 쪽이 정한다(`scheduleDaySessions`).
+ *
+ * `sessionCounted`는 **모든** 가상 운동이 횟수에 들어갈 때만 true, `uncountedCount`는 빠지는 수.
+ */
+export function forecastWorkouts(snapshot: ChallengeScoreSnapshot, userId: string, plans: readonly PeriodSessionRow[]): (WorkoutForecast & { uncountedCount: number }) | null {
+  const completed = plans
+    .map((plan) => completedPlan(snapshot, userId, plan))
+    .filter((row): row is PeriodSessionRow => row !== null);
+  if (completed.length === 0) return null;
+  const afterRows = [...snapshot.rows, ...completed];
   const { beforeScore, afterScore, delta, reason, activityDelta, activityParts, beforeTotal, afterTotal, totalDelta } = compareRows(snapshot, userId, snapshot.rows, afterRows);
+  const uncounted = uncountedSessions(afterRows);
+  const uncountedCount = completed.filter((row) => uncounted.has(row)).length;
   return { beforeScore, afterScore, delta, reason, activityDelta, activityParts, beforeTotal, afterTotal, totalDelta,
-    sessionCounted: !uncountedSessions(afterRows).has(completed) };
+    sessionCounted: uncountedCount === 0, uncountedCount };
 }
 
 type ExerciseRow = PeriodSessionRow["exercises"][number];
