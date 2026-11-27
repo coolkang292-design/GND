@@ -137,7 +137,7 @@ describe("ExercisePicker — 전체 화면 진입", () => {
   it("처음부터 검색과 목록이 있고 추천은 접혀 있다", () => {
     const html = renderToStaticMarkup(<ExercisePicker open catalog={CATALOG} pastSessions={SESSIONS} pastLoading={false} onClose={vi.fn()} onPickMany={vi.fn()} onPickPast={vi.fn()} onCreateCustom={vi.fn()} />);
     expect(html).toContain('role="dialog"');
-    expect(html).toContain("운동 직접 고르기");
+    expect(html).toContain("직접 고르기");
     expect(html).toContain("지난 운동");
     expect(html).toContain("🔍 운동 검색 (예: 스쿼트, 벤치)");
     expect(html).not.toContain("⭐ 자주 한 운동");
@@ -290,7 +290,7 @@ describe("ExercisePicker — 내 루틴 (0056 · 2026-08-06 개편)", () => {
       initialMode: "hub",
       routines: [routine("가슴날", "벤치프레스")],
     });
-    expect(getByText("운동 직접 고르기")).toBeTruthy();
+    expect(getByText("직접 고르기")).toBeTruthy();
     expect(getByText("지난 운동")).toBeTruthy();
     expect(getByText("내 루틴")).toBeTruthy();
   });

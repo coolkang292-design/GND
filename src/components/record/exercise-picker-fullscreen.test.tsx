@@ -40,7 +40,7 @@ describe("전체 화면 운동 선택", () => {
     fireEvent.click(screen.getByLabelText("세트 늘리기"));
     fireEvent.click(screen.getByLabelText("고르던 화면으로 돌아가기"));
     fireEvent.click(screen.getByText("지난 운동"));
-    fireEvent.click(screen.getByText("운동 직접 고르기"));
+    fireEvent.click(screen.getByText("직접 고르기"));
     fireEvent.click(screen.getByRole("button", { name: "등" }));
     fireEvent.click(screen.getByText("랫풀다운"));
     fireEvent.click(screen.getByText("운동 2개 바로 추가"));

@@ -384,7 +384,7 @@ describe("CalendarView — 인터벌로 계획하기 (2026-08-13)", () => {
 
     fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 16일,") }));
     fireEvent.click(screen.getByText("➕ 새 운동 계획 만들기"));
-    fireEvent.click(screen.getByText("운동 직접 고르기"));
+    fireEvent.click(screen.getByText("직접 고르기"));
     fireEvent.click(screen.getByText(/상황별 추천/));
     fireEvent.click(screen.getByText("전신 인터벌 할래요"));
 
@@ -405,7 +405,7 @@ describe("CalendarView — 인터벌로 계획하기 (2026-08-13)", () => {
 
     fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 16일,") }));
     fireEvent.click(screen.getByText("➕ 새 운동 계획 만들기"));
-    fireEvent.click(screen.getByText("운동 직접 고르기"));
+    fireEvent.click(screen.getByText("직접 고르기"));
     fireEvent.click(screen.getByText(/상황별 추천/));
     fireEvent.click(screen.getByText("전신 인터벌 할래요"));
     fireEvent.click(screen.getByRole("button", { name: "인터벌로 계획하기" }));
@@ -433,7 +433,7 @@ describe("CalendarView — 인터벌로 계획하기 (2026-08-13)", () => {
 
     fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 16일,") }));
     fireEvent.click(screen.getByText("➕ 새 운동 계획 만들기"));
-    fireEvent.click(screen.getByText("운동 직접 고르기"));
+    fireEvent.click(screen.getByText("직접 고르기"));
     fireEvent.click(screen.getByText(/상황별 추천/));
     fireEvent.click(screen.getByText("전신 인터벌 할래요"));
     fireEvent.click(screen.getByRole("button", { name: "인터벌로 계획하기" }));
@@ -474,7 +474,7 @@ describe("CalendarView — 인터벌로 계획하기 (2026-08-13)", () => {
 
     fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 16일,") }));
     fireEvent.click(screen.getByText("➕ 새 운동 계획 만들기"));
-    fireEvent.click(screen.getByText("운동 직접 고르기"));
+    fireEvent.click(screen.getByText("직접 고르기"));
     fireEvent.click(screen.getByText(/상황별 추천/));
     fireEvent.click(screen.getByText("전신 인터벌 할래요"));
     fireEvent.click(screen.getByRole("button", { name: "인터벌로 계획하기" }));
@@ -1405,7 +1405,7 @@ describe("CalendarView — 계획한 운동 수정 (2026-08-28)", () => {
 
     // 같은 피커지만 제목은 '계획에 더하기'다 (2026-10-05) — 저장이 아니라 편집 목록에 붙는다
     expect(screen.getByText("계획에 운동 더하기")).toBeTruthy();
-    expect(screen.getByText("운동 직접 고르기")).toBeTruthy();
+    expect(screen.getByText("직접 고르기")).toBeTruthy();
   });
 
   it("새 계획 피커는 날짜를 말하고, 담는 버튼도 그 날짜 계획에 담는다 (2026-10-05)", async () => {
@@ -1417,7 +1417,7 @@ describe("CalendarView — 계획한 운동 수정 (2026-08-28)", () => {
     // 옛 제목은 없어야 한다 (부정 확인)
     expect(screen.queryByText("오늘 운동을 어떻게 시작할까요?")).toBeNull();
 
-    fireEvent.click(screen.getByText("운동 직접 고르기"));
+    fireEvent.click(screen.getByText("직접 고르기"));
     fireEvent.click(screen.getByText(BODYWEIGHT_CATALOG[0].name));
     fireEvent.click(screen.getByText("8월 16일 계획에 1개 담기"));
 
@@ -1568,7 +1568,7 @@ describe("CalendarView — 하루 계획 하나 (2026-10-13)", () => {
     fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 16일,") }));
     fireEvent.click(screen.getByText("➕ 이 날 계획에 운동 더하기"));
     expect(screen.getByText("8월 16일 계획에 운동 더하기")).toBeTruthy();
-    fireEvent.click(screen.getByText("운동 직접 고르기"));
+    fireEvent.click(screen.getByText("직접 고르기"));
     fireEvent.click(screen.getByText(BODYWEIGHT_CATALOG[0].name));
     fireEvent.click(screen.getByText("8월 16일 계획에 1개 담기"));
 
@@ -1714,7 +1714,7 @@ describe("CalendarView — 하루 계획 하나 (2026-10-13)", () => {
 
     fireEvent.click(screen.getByRole("button", { name: new RegExp("^8월 16일,") }));
     fireEvent.click(screen.getByText("➕ 이 날 계획에 운동 더하기"));
-    fireEvent.click(screen.getByText("운동 직접 고르기"));
+    fireEvent.click(screen.getByText("직접 고르기"));
     fireEvent.click(screen.getByText(BODYWEIGHT_CATALOG[0].name));
     fireEvent.click(screen.getByText("8월 16일 계획에 1개 담기"));
 

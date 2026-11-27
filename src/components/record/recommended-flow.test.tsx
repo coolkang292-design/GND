@@ -588,16 +588,16 @@ describe("2단계 (2026-10-05)", () => {
     expect(getByText("운동 2개 바로 추가")).toBeTruthy();
   });
 
-  it("검색어를 치면 추천 입구가 접히고 지우면 다시 나온다", () => {
-    const { getByPlaceholderText, queryByText } = picker();
-    const input = getByPlaceholderText("🔍 운동 검색 (예: 스쿼트, 벤치)");
-    expect(queryByText("운동 추천")).toBeTruthy();
+  /*
+    2026-11-27: 추천 입구가 목록 아래 줄에서 **맨 위 탭 줄**('직접 고르기' 옆)로 옮겨졌다.
+    목록 자리를 차지하지 않으므로 검색 중에도 접지 않는다 — 접으면 탭 줄이 글자 칠 때마다 흔들린다.
+  */
+  it("추천 입구는 '직접 고르기' 바로 옆 탭이고 검색 중에도 남는다", () => {
+    const { getByPlaceholderText, getByRole, queryByText } = picker();
+    const tabs = [...getByRole("navigation", { name: "운동을 담는 방법" }).children].map((el) => (el.matches("details") ? el.querySelector("summary") : el)?.textContent?.replace("▾", ""));
+    expect(tabs.slice(0, 2)).toEqual(["직접 고르기", "운동 추천"]);
 
-    fireEvent.change(input, { target: { value: "레그" } });
-    expect(queryByText("운동 추천")).toBeNull();
-    expect(queryByText("상황별 추천")).toBeNull();
-
-    fireEvent.change(input, { target: { value: "" } });
+    fireEvent.change(getByPlaceholderText("🔍 운동 검색 (예: 스쿼트, 벤치)"), { target: { value: "레그" } });
     expect(queryByText("운동 추천")).toBeTruthy();
   });
 
