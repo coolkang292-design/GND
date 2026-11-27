@@ -206,7 +206,7 @@ PostHog 이벤트는 PostHog가 main에 들어올 때 같은 지점에 붙인다
 
 ## 11. 수정 후 확인 결과 (2026-11-27)
 
-**바꾼 것** (커밋 전 — 사용자 실기기 확인 뒤 커밋한다)
+**바꾼 것** (커밋 `9de9bc5`, 릴리스 노트 `e8304f6`)
 - 새 파일 `src/lib/domain/routine-load.ts` — `decideRoutineLoad`(교체/묻기/추가만 판정) · `buildRoutineReplacement`(루틴으로 교체한 draft) · `routineLoadSummary`(흔적용 개수만)
 - 새 파일 `src/components/record/routine-load-sheet.tsx` — "루틴 불러오기" 선택 시트(지시서 문구 그대로, 기본 '그대로')
 - `src/app/(tabs)/record/page.tsx` — `addRoutine`이 판정으로 갈라짐. 예전 병합 본문은 `mergeRoutine`으로 이름만 바꿔 그대로 둠. 추가 시 안내 "이미 있는 N개는 그대로 뒀어요". 동작흔적 `routine_load_requested/completed/conflict/cancelled/failed`, `routine_updated`
@@ -242,3 +242,13 @@ PostHog 이벤트는 PostHog가 main에 들어올 때 같은 지점에 붙인다
 "완료 기록을 고치지 않는다" 원칙대로 **남겨 두었다**. 운동 시작 때 B의 크루(헬스장주주·test·오뎅끼데스까)에게 알림이 갔을 수 있다(사용자 승인 사항).
 운영 프로필 수는 테스트 전후 12개로 같다.
 가짜 시계 때문에 브라우저가 두 번 로그아웃되며 앱이 프로필 없는 익명 계정을 만들었을 수 있다 — CLAUDE.md 규칙대로 지우지 않는다(앱에 안 보이고 해가 없다).
+
+## 12. 배포 기록 (2026-11-27)
+
+- 사용자가 실기기 확인을 생략하고 배포를 승인했다.
+- `pnpm verify:regression`(core 9종): **8종 통과, `poke-levelup-check` 1종 실패(14건 중 5건)**. 레벨업·진화 단언이 11/22 단계별 경험치(`stage_xp`) 변경 뒤 갱신되지 않은 것으로 보이며, 이 수정은 scripts·DB를 건드리지 않아 무관하다고 판단. 사용자가 이를 설명 듣고 **예외로 배포를 승인**했다. 원인 조사·수정은 별도 작업으로 분리.
+- 회귀 실행 뒤 운영 프로필 12개 — 실행 전과 같다.
+- 푸시: `main` `6d10916..e8304f6`, fetch 후 좌우 차이 0·0, 원격 기본 브랜치 `main`.
+- 배포: `git archive main` 복사본 + `.vercel` → `vercel --prod --scope gnd4`.
+- 운영 확인: `/api/version` → `commit e8304f6…`, `commitSource archive`. `/record` 번들 21개에서 `저장된 루틴 그대로 불러오기`·`루틴을 그대로 불러왔어요`·`routine_load_requested` 확인. `/whats-new`에 새 소식 확인. 업데이트 알림 발송은 하지 않음.
+- 롤백: DB 변경이 없으므로 이전 배포(`6d10916`)로 되돌리면 된다.
