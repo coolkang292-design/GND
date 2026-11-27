@@ -352,3 +352,19 @@ describe("유산소 시간 — 목록은 초(durationSec)에 쓴다", () => {
     expect(push.kind === "update" && push.exercises[1].sets[0].durationMin).toBe(30);
   });
 });
+
+describe("T17 다음날 — 다른 날짜 계획은 건드리지 않는다", () => {
+  it("어제 연결된 인터벌 계획은 고치지 않고 오늘 목록에서만 뺀다", () => {
+    const yesterday = plan("I", { planDate: "2026-11-27" });
+    expect(
+      decideIntervalPull({ draft: merged, todayKey: "2026-11-28", plan: yesterday, mark: iMark, starting: false }),
+    ).toEqual({ kind: "dropped" });
+  });
+  it("어제 일반 계획에 묶인 목록은 비우기만 한다(고치지 않는다)", () => {
+    const yesterday = plan("G", { planDate: "2026-11-27" });
+    const pull = decideGeneralPull({
+      draft: merged, todayKey: "2026-11-28", todayPlans: [], bound: yesterday, mark: gMark, starting: false,
+    });
+    expect(pull.kind === "clear" && pull.reason).toBe("stale");
+  });
+});
