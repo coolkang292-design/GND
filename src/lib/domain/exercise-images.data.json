@@ -1336,5 +1336,11 @@
     "file": "f9e47391-f12c-4535-8e30-c73d2900cc41",
     "source": "gnd",
     "origin": "gnd-blue-point-collage-2026-11-27"
+  },
+  "69fe67ed-dbb6-4b5a-8d56-a83ab1d9a726": {
+    "name": "하이퍼 익스텐션",
+    "file": "69fe67ed-dbb6-4b5a-8d56-a83ab1d9a726",
+    "source": "gnd",
+    "origin": "gnd-blue-target-collage-2026-11-27"
   }
 }

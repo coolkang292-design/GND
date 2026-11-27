@@ -161,6 +161,7 @@ MANUAL_SEED_IMAGES = {
     "b62f5018-f2af-42a6-844d-5a6862654eba": ("시티드 덤벨 해머 컬", "gnd-blue-point-collage-2026-11-27"),
     "b36af1fe-a51f-4a52-8b34-2bd8e3472901": ("케이블 힙 어브덕션", "gnd-blue-point-collage-2026-11-27"),
     "f9e47391-f12c-4535-8e30-c73d2900cc41": ("케틀벨 스모 데드리프트", "gnd-blue-point-collage-2026-11-27"),
+    "69fe67ed-dbb6-4b5a-8d56-a83ab1d9a726": ("하이퍼 익스텐션", "gnd-blue-target-collage-2026-11-27"),
 }
 
 
