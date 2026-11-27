@@ -154,7 +154,7 @@ MANUAL_SEED_IMAGES = {
     "ae81bdea-781c-4ed2-836f-9d17181ad16f": ("프론트 스쿼트", "gnd-1011-2026-10-11"),
     "4dfc7f15-f41f-4e2a-a60d-b7f99f4be4fc": ("스티프 레그 데드리프트", "gnd-1011-2026-10-11"),
     "bfe7288b-4287-4720-afd8-30ac5da3d0af": ("원레그 프레스", "gnd-1011-2026-10-11"),
-    # 사용자 콜라주 아래쪽 두 컷을 각각 잘라 320px WebP로 축소했다.
+    # 사용자 콜라주를 종목별로 잘라 320px WebP로 축소했다.
     "63c9cf92-80bd-4d62-9c10-4b442bd44689": ("덤벨 런지", "gnd-blue-muscle-collage-2026-11-27"),
     "ac897fe5-30df-466b-a190-e0a660a545c3": ("도어웨이 가슴 스트레칭", "gnd-blue-muscle-collage-2026-11-27"),
     "ee995d50-e96c-4d9b-86fc-d3c56f1f21c8": ("원암 케이블 레터럴 레이즈", "gnd-muscle-focus-collage-2026-11-27"),
@@ -162,6 +162,10 @@ MANUAL_SEED_IMAGES = {
     "b36af1fe-a51f-4a52-8b34-2bd8e3472901": ("케이블 힙 어브덕션", "gnd-blue-point-collage-2026-11-27"),
     "f9e47391-f12c-4535-8e30-c73d2900cc41": ("케틀벨 스모 데드리프트", "gnd-blue-point-collage-2026-11-27"),
     "69fe67ed-dbb6-4b5a-8d56-a83ab1d9a726": ("하이퍼 익스텐션", "gnd-blue-target-collage-2026-11-27"),
+    "502a19a7-20c5-4432-b25b-6bbcc66390e5": ("덤벨 스모 스쿼트", "gnd-muscle-focus-collage-2026-11-27"),
+    "13c36ce9-c80b-498a-b201-34910a157da2": ("덤벨 스컬 크러셔", "gnd-blue-point-collage-2026-11-27"),
+    "b84bb13d-7323-42d4-b97e-f220d261432c": ("월 슬라이드", "gnd-blue-muscle-collage-2026-11-27"),
+    "cb431896-1837-45d7-afed-e31cee522974": ("흉추 익스텐션", "gnd-blue-muscle-collage-2026-11-27"),
 }
 
 

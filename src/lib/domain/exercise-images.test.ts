@@ -95,18 +95,15 @@ describe("0118: 운영자가 직접 만든 운동 → 공용 운동 (2026-10-10)
     ["ba21558a-58db-4e58-a055-12309b9a438b", "벤드 레터럴 레이즈", "맨몸 벤트오버 레터럴 레이즈"],
     ["e6a6598d-8597-4d22-8d81-ef2265e0c168", "불가리안 스플릿 스쿼트", "불가리안 스플릿 스쿼트"],
     ["b79eef2a-2e72-4d00-836a-c5559de8669d", "Scapular Push-up Plus", "스캐풀러 푸시업 플러스"],
+    ["cb431896-1837-45d7-afed-e31cee522974", "흉추 익스텐션", "흉추 익스텐션"],
     ["ac897fe5-30df-466b-a190-e0a660a545c3", "도어웨이 가슴 스트레칭", "도어웨이 가슴 스트레칭"],
+    ["b84bb13d-7323-42d4-b97e-f220d261432c", "Wall Slide", "월 슬라이드"],
     ["90033d48-4db9-40bd-bd3f-3b8e1cbb55d1", "아이소 레터럴 인클라인 프레스머신", "아이소 레터럴 인클라인 프레스 머신"],
     ["4f47934b-e7a8-4618-8d24-085ebc297dde", "밴드 바이셉 컬", "밴드 바이셉 컬"],
     ["3ac56225-c8be-49bb-9997-5360e651882d", "밴드 풀어파트", "밴드 풀어파트"],
     ["e5835092-9ce2-4cd6-ae4e-e71cde1d7583", "밴드 스쿼트", "밴드 스쿼트"],
     ["bef0d91e-ea01-4817-b00e-e5978a5bdbe8", "밴드 레터럴 레이즈", "밴드 레터럴 레이즈"],
     ["aaf1b8e3-e12e-4d6f-846c-c1fd2cec768d", "밴드 시티드 로우", "밴드 시티드 로우"],
-  ] as const;
-  // 공용으로 바뀐 뒤 아직 그림을 붙이지 않은 운동
-  const promotedNoImage = [
-    ["cb431896-1837-45d7-afed-e31cee522974", "흉추 익스텐션"],
-    ["b84bb13d-7323-42d4-b97e-f220d261432c", "월 슬라이드"],
   ] as const;
   // 기존 기본 운동으로 합치고 지운 직접 운동
   const merged = ["e62f53c9-bb53-4f0d-b89a-9e7ad6fe77b9", "bc0e833c-985d-4cf3-8a01-024a071bcfcd"];
@@ -121,10 +118,6 @@ describe("0118: 운영자가 직접 만든 운동 → 공용 운동 (2026-10-10)
       expect(existsSync(publicPath(`exercise-images/${id}.webp`)), id).toBe(true);
       expect(seedExerciseIdByName(name), id).toBe(id);
       expect(imageIdForAddedExercise({ name, isCustom: false }), id).toBe(id);
-    }
-    for (const [id, name] of promotedNoImage) {
-      expect(SEED_NAME_BY_ID.get(id), id).toBe(name);
-      expect(EXERCISE_IMAGES[id], id).toBeUndefined();
     }
   });
 

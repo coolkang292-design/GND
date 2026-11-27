@@ -1342,5 +1342,29 @@
     "file": "69fe67ed-dbb6-4b5a-8d56-a83ab1d9a726",
     "source": "gnd",
     "origin": "gnd-blue-target-collage-2026-11-27"
+  },
+  "502a19a7-20c5-4432-b25b-6bbcc66390e5": {
+    "name": "덤벨 스모 스쿼트",
+    "file": "502a19a7-20c5-4432-b25b-6bbcc66390e5",
+    "source": "gnd",
+    "origin": "gnd-muscle-focus-collage-2026-11-27"
+  },
+  "13c36ce9-c80b-498a-b201-34910a157da2": {
+    "name": "덤벨 스컬 크러셔",
+    "file": "13c36ce9-c80b-498a-b201-34910a157da2",
+    "source": "gnd",
+    "origin": "gnd-blue-point-collage-2026-11-27"
+  },
+  "b84bb13d-7323-42d4-b97e-f220d261432c": {
+    "name": "월 슬라이드",
+    "file": "b84bb13d-7323-42d4-b97e-f220d261432c",
+    "source": "gnd",
+    "origin": "gnd-blue-muscle-collage-2026-11-27"
+  },
+  "cb431896-1837-45d7-afed-e31cee522974": {
+    "name": "흉추 익스텐션",
+    "file": "cb431896-1837-45d7-afed-e31cee522974",
+    "source": "gnd",
+    "origin": "gnd-blue-muscle-collage-2026-11-27"
   }
 }
