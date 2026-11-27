@@ -1318,5 +1318,23 @@
     "file": "ee995d50-e96c-4d9b-86fc-d3c56f1f21c8",
     "source": "gnd",
     "origin": "gnd-muscle-focus-collage-2026-11-27"
+  },
+  "b62f5018-f2af-42a6-844d-5a6862654eba": {
+    "name": "시티드 덤벨 해머 컬",
+    "file": "b62f5018-f2af-42a6-844d-5a6862654eba",
+    "source": "gnd",
+    "origin": "gnd-blue-point-collage-2026-11-27"
+  },
+  "b36af1fe-a51f-4a52-8b34-2bd8e3472901": {
+    "name": "케이블 힙 어브덕션",
+    "file": "b36af1fe-a51f-4a52-8b34-2bd8e3472901",
+    "source": "gnd",
+    "origin": "gnd-blue-point-collage-2026-11-27"
+  },
+  "f9e47391-f12c-4535-8e30-c73d2900cc41": {
+    "name": "케틀벨 스모 데드리프트",
+    "file": "f9e47391-f12c-4535-8e30-c73d2900cc41",
+    "source": "gnd",
+    "origin": "gnd-blue-point-collage-2026-11-27"
   }
 }

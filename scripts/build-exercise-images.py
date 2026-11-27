@@ -158,6 +158,9 @@ MANUAL_SEED_IMAGES = {
     "63c9cf92-80bd-4d62-9c10-4b442bd44689": ("덤벨 런지", "gnd-blue-muscle-collage-2026-11-27"),
     "ac897fe5-30df-466b-a190-e0a660a545c3": ("도어웨이 가슴 스트레칭", "gnd-blue-muscle-collage-2026-11-27"),
     "ee995d50-e96c-4d9b-86fc-d3c56f1f21c8": ("원암 케이블 레터럴 레이즈", "gnd-muscle-focus-collage-2026-11-27"),
+    "b62f5018-f2af-42a6-844d-5a6862654eba": ("시티드 덤벨 해머 컬", "gnd-blue-point-collage-2026-11-27"),
+    "b36af1fe-a51f-4a52-8b34-2bd8e3472901": ("케이블 힙 어브덕션", "gnd-blue-point-collage-2026-11-27"),
+    "f9e47391-f12c-4535-8e30-c73d2900cc41": ("케틀벨 스모 데드리프트", "gnd-blue-point-collage-2026-11-27"),
 }
 
 
