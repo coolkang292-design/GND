@@ -1312,5 +1312,11 @@
     "file": "ac897fe5-30df-466b-a190-e0a660a545c3",
     "source": "gnd",
     "origin": "gnd-blue-muscle-collage-2026-11-27"
+  },
+  "ee995d50-e96c-4d9b-86fc-d3c56f1f21c8": {
+    "name": "원암 케이블 레터럴 레이즈",
+    "file": "ee995d50-e96c-4d9b-86fc-d3c56f1f21c8",
+    "source": "gnd",
+    "origin": "gnd-muscle-focus-collage-2026-11-27"
   }
 }

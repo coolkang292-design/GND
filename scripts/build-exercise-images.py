@@ -157,6 +157,7 @@ MANUAL_SEED_IMAGES = {
     # 사용자 콜라주 아래쪽 두 컷을 각각 잘라 320px WebP로 축소했다.
     "63c9cf92-80bd-4d62-9c10-4b442bd44689": ("덤벨 런지", "gnd-blue-muscle-collage-2026-11-27"),
     "ac897fe5-30df-466b-a190-e0a660a545c3": ("도어웨이 가슴 스트레칭", "gnd-blue-muscle-collage-2026-11-27"),
+    "ee995d50-e96c-4d9b-86fc-d3c56f1f21c8": ("원암 케이블 레터럴 레이즈", "gnd-muscle-focus-collage-2026-11-27"),
 }
 
 
