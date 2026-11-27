@@ -330,6 +330,14 @@ async function fetchCrewIds(myUserId: string): Promise<string[]> {
   );
 }
 
+/**
+ * 내 크루 id 목록 (2026-11-26) — 피드가 "크루 0명이면 예시를 펼친다"를 정하려고 쓴다.
+ * `getCrewFeed`가 안에서 쓰는 것과 **같은 함수**다. 조건이 갈라지지 않게 따로 만들지 않는다.
+ */
+export function getMyCrewIds(myUserId: string): Promise<string[]> {
+  return fetchCrewIds(myUserId);
+}
+
 export async function getCrewFeed(
   myUserId: string,
   before?: string,

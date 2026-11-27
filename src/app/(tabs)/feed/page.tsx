@@ -25,8 +25,10 @@ import { mergeSameDayFeed } from "@/lib/domain/feed-merge";
 import {
   FEED_PAGE_SIZE,
   getCrewFeed,
+  getMyCrewIds,
   type FeedItem,
 } from "@/lib/social";
+import { ExampleFeedPreview } from "@/components/feed/example-feed-preview";
 import Image from "next/image";
 import { Icon } from "@/components/ui/icon";
 import Link from "next/link";
@@ -104,6 +106,26 @@ export default function FeedPage() {
    * 그냥 피드가 뜨고**, 사용자는 알림이 고장 났다고 생각한다.
    */
   const [pinned, setPinned] = useState<FeedItem | "missing" | null>(null);
+
+  /**
+   * 크루 수 (2026-11-26) — 0명이면 피드에 예시를 펼친다(`ExampleFeedPreview`).
+   * `null`은 아직 모름이다. 모를 때 예시를 그리면 크루가 있는 사람에게도 한 번 깜빡 보인다.
+   * 조회가 실패해도 `null`로 둔다 — 예시는 부가 정보라 틀리게 보여 주느니 안 보여 준다.
+   */
+  const [crewCount, setCrewCount] = useState<number | null>(null);
+  useEffect(() => {
+    if (!configured || loading || !userId) return;
+    let cancelled = false;
+    getMyCrewIds(userId)
+      .then((ids) => {
+        if (!cancelled) setCrewCount(ids.length);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [configured, loading, userId]);
+  const showExample = crewCount === 0;
 
   /**
    * ⚠️ `useSearchParams`를 쓰지 않는다 — Suspense 경계를 요구해 빌드가 깨진다.
@@ -336,7 +358,8 @@ export default function FeedPage() {
           <p className="mt-1 text-xs text-muted">
             내 정보 › 크루에서 닉네임으로 크루를 추가하면 서로의 운동도 보여요.
           </p>
-          <ExampleTourLink />
+          {/* 크루가 0명이면 바로 아래에 예시가 펼쳐져 있다 — 입구를 두 번 그리지 않는다 */}
+          {!showExample && <ExampleTourLink />}
         </section>
       ) : (
         <>
@@ -376,6 +399,9 @@ export default function FeedPage() {
             </button>
           )}
         </>
+      )}
+      {ready && showExample && (
+        <ExampleFeedPreview viewerId={userId!} onOpenRecruit={() => setTab("recruit")} />
       )}
         </>
       )}

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { AFTER_WORKOUT_PATH, APP_LANDING_PATH } from "./domain/landing";
+import { AFTER_WORKOUT_PATH, APP_LANDING_PATH, FIRST_JOIN_PATH } from "./domain/landing";
 
 /**
  * **앱을 켰을 때 떨어지는 자리를 여섯 파일에 흩뿌리지 않는다** (2026-08-19).
@@ -63,5 +63,20 @@ describe("랜딩 주소 단일 원천 (2026-08-19)", () => {
     const record = read("src/app/(tabs)/record/page.tsx");
     expect(record).toContain("AFTER_WORKOUT_PATH");
     expect(record).toContain("router.push(AFTER_WORKOUT_PATH)");
+  });
+
+  /**
+   * 초대 없이 혼자 가입을 마친 사람만 피드로 (2026-11-26 사용자 결정 "가입 직후 한 번만").
+   * 온보딩의 **마지막 출구 하나만** 바뀐다 — 초대 실패 탈출구들은 여전히 랜딩이다.
+   */
+  it("혼자 가입을 마친 직후에만 피드로 간다", () => {
+    expect(FIRST_JOIN_PATH).toBe("/feed");
+    expect(FIRST_JOIN_PATH).not.toBe(APP_LANDING_PATH);
+    const onboarding = read("src/app/onboarding/page.tsx");
+    expect(onboarding.match(/router\.replace\(FIRST_JOIN_PATH\)/g)).toHaveLength(1);
+    // 기존 사용자·초대 실패 경로는 그대로 랜딩
+    expect(onboarding).toContain("pendingChallengeInvitePath() ?? APP_LANDING_PATH");
+    // 설치한 사람의 시작 주소는 바뀌지 않는다
+    expect(read("src/app/manifest.ts")).not.toContain("FIRST_JOIN_PATH");
   });
 });

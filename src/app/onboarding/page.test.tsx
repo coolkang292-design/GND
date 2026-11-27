@@ -204,7 +204,8 @@ describe("OnboardingPage 모드 1 — 처음 (신원 없음)", () => {
         character_variant: "male",
       }),
     );
-    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/record"));
+    // 초대 없이 혼자 가입 → 피드(예시가 펼쳐져 있다). 앱을 다시 켤 때는 여전히 기록이다 (2026-11-26)
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/feed"));
     expect(mocks.linkIdentity).not.toHaveBeenCalled();
     expect(mocks.signInWithOAuth).not.toHaveBeenCalled();
   });

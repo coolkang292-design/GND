@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { CharacterImage } from "@/components/character-image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { APP_LANDING_PATH } from "@/lib/domain/landing";
+import { APP_LANDING_PATH, FIRST_JOIN_PATH } from "@/lib/domain/landing";
 import { useAuth } from "@/components/auth-provider";
 import {
   CHARACTER_NAMES,
@@ -356,7 +356,8 @@ export default function OnboardingPage() {
         }
       }
 
-      router.replace(APP_LANDING_PATH);
+      // 초대 없이 혼자 가입한 사람 — 피드의 예시로 "함께하는 앱"을 먼저 보여 준다 (2026-11-26)
+      router.replace(FIRST_JOIN_PATH);
     } catch (e) {
       setError(e instanceof Error ? e.message : "저장 실패");
     } finally {
