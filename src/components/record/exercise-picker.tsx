@@ -623,6 +623,16 @@ function PickerSheet({
             <WideOnly><div aria-label="운동 부위" className="mb-2 grid flex-none grid-cols-5 gap-1">
               {FILTERS.map((p) => <button key={p} type="button" onClick={() => setPart(p)} aria-pressed={p === part}
                 className={`min-h-11 rounded-card-sm border px-1 text-xs font-bold ${p === part ? 'border-accent bg-accent-weak text-accent' : 'border-line bg-surface-2 text-muted'}`}>{p}</button>)}
+              {/* 부위 9칸 뒤 빈 10번째 칸에 추천 입구를 둔다 (사용자 지시 2026-11-27 — 맨 아래는 눈에 안 띄었다).
+                  검색 중에는 목록이 우선이라 접는다. 메뉴는 아래로 연다 — 위로 열면 검색창을 가린다. */}
+              {!q && <details className="relative">
+                <summary className="flex h-full min-h-11 cursor-pointer list-none items-center justify-center whitespace-nowrap rounded-card-sm border border-accent/50 bg-surface-2 px-0.5 text-xs font-bold tracking-tight text-accent [&::-webkit-details-marker]:hidden">운동 추천<span aria-hidden className="text-[9px]">▾</span></summary>
+                <div className="absolute right-0 top-full z-20 mt-1 w-44 rounded-card border border-line bg-surface p-2 shadow-card">
+                  <button type="button" onClick={() => openRecommendation("situation")} className="min-h-11 w-full rounded-card-sm px-3 text-left text-sm font-bold">상황별 추천</button>
+                  <button type="button" onClick={() => openRecommendation("part")} className="min-h-11 w-full rounded-card-sm px-3 text-left text-sm font-bold">부위별 추천</button>
+                  {presetEntry && presetRoutines.length > 0 && <button type="button" onClick={() => setMode("preset")} className="min-h-11 w-full rounded-card-sm px-3 text-left text-sm font-bold">추천 루틴</button>}
+                </div>
+              </details>}
             </div></WideOnly>
             <div className="mb-1 flex flex-none justify-between text-xs text-muted"><span>운동 {list.length}개</span><span>{pastLoading ? '횟수 불러오는 중…' : frequency.size > 0 ? '빈도순' : '기본순'}</span></div></>}
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
@@ -795,15 +805,7 @@ function PickerSheet({
               ))}
             </div>
 
-            {!customOpen && (!q || programsEntry) && <WideOnly><div className="mt-1 flex flex-none items-center gap-2 border-t border-line pt-1">
-              {!q && <details className="relative min-w-0 flex-1">
-                <summary className="flex min-h-10 cursor-pointer items-center text-xs font-bold text-muted">운동 추천 <span className="ml-1" aria-hidden>⌄</span></summary>
-                <div className="absolute inset-x-0 bottom-full z-20 rounded-card border border-line bg-surface p-2 shadow-card">
-                  <button type="button" onClick={() => openRecommendation("situation")} className="min-h-11 w-full rounded-card-sm px-3 text-left text-sm font-bold">상황별 추천</button>
-                  <button type="button" onClick={() => openRecommendation("part")} className="min-h-11 w-full rounded-card-sm px-3 text-left text-sm font-bold">부위별 추천</button>
-                  {presetEntry && presetRoutines.length > 0 && <button type="button" onClick={() => setMode("preset")} className="min-h-11 w-full rounded-card-sm px-3 text-left text-sm font-bold">추천 루틴</button>}
-                </div>
-              </details>}
+            {!customOpen && programsEntry && <WideOnly><div className="mt-1 flex flex-none items-center gap-2 border-t border-line pt-1">
               {programsEntry && <button type="button" onClick={() => requestImport(() => leavePicker(programsEntry))} className="ml-auto min-h-10 px-2 text-xs font-bold text-accent">프로그램으로 시작하기</button>}
             </div></WideOnly>}
             {!customOpen && <PickActions
