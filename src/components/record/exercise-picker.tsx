@@ -1,10 +1,8 @@
 "use client";
 
-import Image from "next/image";
 import { useMemo, useRef, useState } from "react";
 import {
   exerciseFrequencyMap,
-  frequentCatalogPicks,
   sortByFrequency,
 } from "@/lib/domain/exercise-frequency";
 import {
@@ -32,11 +30,10 @@ import {
   initialSetupEntries,
   type SetupEntry,
 } from "./exercise-setup-sheet";
-import { ExerciseEntryHub } from "./exercise-entry-hub";
 import { ExerciseThumbTile } from "./exercise-thumb";
 import { PickActions } from "./pick-actions";
-import { GndIcon, type GndIconName } from "@/components/ui/gnd-icon";
 import { imagesFirst } from "@/lib/domain/exercise-images";
+import { CompactOnly, FullScreenFlow, WideOnly, leaveFullScreenFlow, type FlowConfirmation } from "./full-screen-flow";
 
 const PARTS: readonly (BodyPart | "전체")[] = [
   "전체",
@@ -61,9 +58,7 @@ export const TYPE_LABEL: Record<ExerciseType, string> = {
 /**
  * 시트 안의 화면 (2026-08-06).
  *
- * `hub`가 기본이다 — 열자마자 카탈로그 목록을 들이밀지 않는다. 그 목록은
- * **찾는 종목의 이름을 이미 아는 사람**의 도구이고, 처음 온 사람은 그 이름을
- * 모른다.
+ * 예전 `hub` 진입도 이제 검색·부위 목록을 바로 연다. 추천은 작은 메뉴로 유지한다.
  */
 type PickerMode =
   | "hub"
@@ -93,13 +88,13 @@ type PickerProps = {
   pastLoading: boolean;
   onClose: () => void;
   /** 선택한 운동 여러 개를 한 번에 추가 (검색 경로 — 기본 세트) */
-  onPickMany: (items: CatalogExercise[]) => void;
+  onPickMany: (items: CatalogExercise[]) => void | Promise<void>;
   /**
    * 세트까지 정해서 추가 (2026-08-06). **넘기면 검색 경로도 이리로 온다**
    * (2026-10-05) — `바로 추가`는 기본 3세트·10회, `세트 조절`은 정한 값으로.
    * `onPickMany`는 이걸 안 넘기는 화면(로컬 이미지 검수)의 대비다.
    */
-  onPickConfigured?: (picks: ConfiguredPick[]) => void;
+  onPickConfigured?: (picks: ConfiguredPick[]) => void | Promise<void>;
   /**
    * `세트 조절` 버튼을 낼지 (기본 true).
    *
@@ -118,7 +113,7 @@ type PickerProps = {
    *   **목록을 통째로 담거나 시작해서** 바꾸기가 아니라 추가가 된다
    */
   replacing?: string | null;
-  /** 진입 화면 제목 — 달력은 "8월 17일 계획 만들기" (없으면 `운동 추가`) */
+  /** 진입 화면 제목 — 달력은 "8월 17일 계획 만들기", 인터벌은 "인터벌 운동 고르기" (없으면 `운동 계획하기`) */
   heading?: { title: string; sub: string };
   /** 담는 버튼 문구 (개수 → 문구) — `PickActions` 참조 */
   addLabel?: (count: number) => string;
@@ -181,7 +176,7 @@ type PickerProps = {
   }) => Promise<CatalogExercise | null>;
 };
 
-/** 운동 추가 바텀시트 — 진입 허브 + 추천/검색/지난 기록/내 루틴 (§10) */
+/** 전체 화면 운동 고르기 — 선택과 저장은 기존 호출 화면이 계속 소유한다. */
 export function ExercisePicker({ open, ...props }: PickerProps & { open: boolean }) {
   // 열 때마다 언마운트→마운트로 검색·필터 상태를 초기화 (effect 내 setState 금지)
   if (!open) return null;
@@ -238,20 +233,25 @@ function PickerSheet({
 
   async function pickPreset(key: string) {
     const preset = presetRoutines.find((p) => p.key === key);
-    if (!preset || !presetEntry) return;
+    if (!preset || !presetEntry || blocked || pendingRef.current) return;
     const exercises = buildPresetRoutineExercises(preset, catalog);
     if (!exercises) return;
+    pendingRef.current = true;
+    setError(null);
     setPresetBusyKey(key);
     try {
       // ⚠️ tabataMinutes는 **null**이다. 값을 넣으면 `addRoutine`이 인터벌로
       //    되살려 사다리가 통째로 사라진다(그 분기가 먼저 걸린다).
       if (await presetEntry({ name: preset.name, exercises, tabataMinutes: null }))
         onClose();
+    } catch {
+      setError("추천 루틴을 불러오지 못했어요. 다시 시도해 주세요.");
     } finally {
+      pendingRef.current = false;
       setPresetBusyKey(null);
     }
   }
-  const [mode, setMode] = useState<PickerMode>(initialMode);
+  const [mode, setMode] = useState<PickerMode>(initialMode === "hub" ? "search" : initialMode);
   const [routineBusyId, setRoutineBusyId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [part, setPart] = useState<(typeof FILTERS)[number]>("전체");
@@ -273,10 +273,6 @@ function PickerSheet({
   const [setupReturnMode, setSetupReturnMode] = useState<
     "situation" | "part" | "search"
   >("search");
-  /** 추천 화면의 ←가 실제 진입점(허브 또는 검색)으로 돌아가게 한다. */
-  const [recommendReturnMode, setRecommendReturnMode] = useState<
-    "hub" | "search"
-  >("hub");
   const [setupEntries, setSetupEntries] = useState<SetupEntry[]>([]);
   const [customOpen, setCustomOpen] = useState(false);
   const [customPart, setCustomPart] = useState<BodyPart>("가슴");
@@ -286,6 +282,12 @@ function PickerSheet({
   const [pastBusyId, setPastBusyId] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
+  const [confirmation, setConfirmation] = useState<FlowConfirmation | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const pendingRef = useRef(false);
+  const blocked = busy || submitting || saving || pastBusyId !== null || routineBusyId !== null || presetBusyKey !== null;
+
 
   // 시트가 열려 있는 동안 고정 — 매 렌더마다 now가 바뀌면 90일 창이 미세하게 흔들린다.
   // 시트는 닫힐 때 언마운트되므로 다음에 열면 새로 계산된다.
@@ -297,50 +299,13 @@ function PickerSheet({
     [pastSessions, openedAt],
   );
 
-  /**
-   * ⭐ 자주 한 운동 — 최근 90일간 완료 세션 수 상위 (2026-08-02).
-   * 검색·부위 필터 중에는 숨긴다(아래 렌더 조건). 필터링과 싸우지 않게.
-   */
-  const frequent = useMemo(
-    () =>
-      frequentCatalogPicks(
-        pastSessions,
-        openedAt,
-        catalog,
-        (item) => item.name,
-      ),
-    [pastSessions, openedAt, catalog],
-  );
-
   const q = query.trim().toLowerCase();
-  /**
-   * 목록도 **사용 횟수 내림차순**이다 (사용자 요청 2026-08-02).
-   *
-   * 전에는 `getExerciseCatalog()`가 준 `created_at` 순(시드 입력 순서)
-   * 그대로였다. 부위를 골라도 그 안에서 많이 한 종목이 위로 오지 않아,
-   * 늘 하는 운동을 매번 목록에서 눈으로 찾아야 했다.
-   *
-   * 동수·0회는 원래 순서를 유지한다 — 카탈로그가 부위별로 묶인 시드
-   * 순서라 이름순으로 흩뜨리면 안 쓰던 종목 찾기가 오히려 어려워진다.
-   *
-   * 그 위에 **그림 있는 운동을 먼저** 올린다 (사용자 지시 2026-10-05). 각 무리
-   * 안의 순서(사용 횟수순)는 그대로다 — 그래서 자주 하는 운동이라도 그림이 없으면
-   * 그림 있는 운동들 아래로 내려간다. 그림이 늘수록 이 차이는 줄어든다.
-   */
-  const list = imagesFirst(
-    sortByFrequency(
-      catalog.filter(
-        (e) =>
-          (part === "전체" ||
-            (part === "맨몸"
-              ? e.exercise_type === "bodyweight"
-              : e.body_part === part)) &&
-          (!q || e.name.toLowerCase().includes(q)),
-      ),
-      frequency,
-      (item) => item.name,
-    ),
-    (item) => item.id,
+  // 빈도 우선, 동수는 그림 유무와 원래 순서. 이력이 없으면 기존 그림 우선 순서다.
+  const list = sortByFrequency(
+    imagesFirst(catalog.filter((e) =>
+      (part === "전체" || (part === "맨몸" ? e.exercise_type === "bodyweight" : e.body_part === part)) &&
+      (!q || e.name.toLowerCase().includes(q))), (item) => item.id),
+    frequency, (item) => item.name,
   );
 
   /**
@@ -365,6 +330,7 @@ function PickerSheet({
   );
 
   function toggleSelect(item: CatalogExercise) {
+    if (blocked || pendingRef.current) return;
     setSelected((prev) => {
       const next = new Map(prev);
       if (next.has(item.id)) next.delete(item.id);
@@ -376,7 +342,6 @@ function PickerSheet({
   }
 
   function openRecommendation(next: "situation" | "part") {
-    setRecommendReturnMode("search");
     setMode(next);
   }
 
@@ -392,23 +357,27 @@ function PickerSheet({
     }));
   }
 
-  function submitEntries(entries: SetupEntry[]) {
-    if (entries.length === 0) return;
-    if (!onPickConfigured) {
-      onPickMany(entries.map((e) => e.item));
-      return;
+  async function submitEntries(entries: SetupEntry[]) {
+    if (entries.length === 0 || blocked || pendingRef.current) return;
+    pendingRef.current = true;
+    setSubmitting(true);
+    setError(null);
+    try {
+      if (!onPickConfigured) await onPickMany(entries.map((e) => e.item));
+      else await onPickConfigured(entries.map(({ item, plan }) => ({
+        item, sets: planToSets(item.exercise_type, item.measure, plan),
+      })));
+    } catch {
+      setError("담지 못했어요. 고른 운동은 그대로예요. 다시 시도해 주세요.");
+    } finally {
+      pendingRef.current = false;
+      setSubmitting(false);
     }
-    onPickConfigured(
-      entries.map(({ item, plan }) => ({
-        item,
-        sets: planToSets(item.exercise_type, item.measure, plan),
-      })),
-    );
   }
 
   /** `바로 추가` — 기본 3세트·10회·무게 운동 중 입력 (사용자 결정 2026-10-05) */
   function addSelected() {
-    submitEntries(currentEntries());
+    void submitEntries(currentEntries());
   }
 
   /** `세트 조절` — 고른 것들을 설정 화면으로 넘긴다 */
@@ -422,29 +391,66 @@ function PickerSheet({
   }
 
   function confirmSetup() {
-    submitEntries(setupEntries);
+    void submitEntries(setupEntries);
   }
 
   /** 세트를 정할 수 있는 화면에서만 `세트 조절`을 낸다 */
   const adjustSets =
     onPickConfigured && setupAdjustable && !replaceMode ? goToSetup : undefined;
 
-  /**
-   * 시트 바깥을 눌러 닫을 때 — 고른 것이 있으면 한 번 묻는다 (2026-10-05).
-   * 바깥 한 번에 고른 것이 말없이 사라지면 그것도 "추가가 안 된다"로 보인다.
-   */
   function requestClose() {
-    if (
-      selected.size > 0 &&
-      !window.confirm(`고른 운동 ${selected.size}개를 담지 않고 닫을까요?`)
-    )
-      return;
-    onClose();
+    if (blocked || pendingRef.current) return;
+    if (selected.size > 0 || customOpen) {
+      setConfirmation({
+        message: selected.size > 0 ? `고른 운동 ${selected.size}개를 담지 않고 닫을까요?` : "만들던 운동을 저장하지 않고 닫을까요?",
+        confirmLabel: "담지 않고 닫기", onConfirm: onClose,
+        onCancel: () => setConfirmation(null),
+      });
+    } else onClose();
+  }
+
+  function requestImport(action: () => void) {
+    if (blocked || pendingRef.current) return;
+    if (selected.size === 0) { action(); return; }
+    setConfirmation({
+      message: `고른 운동 ${selected.size}개 대신 다른 운동을 불러올까요?`,
+      confirmLabel: "다른 운동 불러오기",
+      onCancel: () => setConfirmation(null),
+      onConfirm: () => { setConfirmation(null); action(); },
+    });
+  }
+
+  function leavePicker(action: () => void) {
+    if (blocked || pendingRef.current) return;
+    pendingRef.current = true;
+    setSubmitting(true);
+    leaveFullScreenFlow(() => {
+      pendingRef.current = false;
+      setSubmitting(false);
+      action();
+    });
+  }
+
+  function goBack() {
+    if (blocked) return;
+    if (confirmation) { setConfirmation(null); return; }
+    if (mode === "setup") setMode(setupReturnMode);
+    else if (mode === "situation" || mode === "part" || mode === "preset") setMode("search");
+    else if (customOpen) {
+      if (nameRef.current?.value.trim()) setConfirmation({
+        message: "만들던 운동을 저장하지 않고 돌아갈까요?", confirmLabel: "만들기 취소", cancelLabel: "계속 만들기",
+        onCancel: () => setConfirmation(null), onConfirm: () => { setConfirmation(null); setCustomOpen(false); },
+      });
+      else setCustomOpen(false);
+    }
+    else requestClose();
   }
 
   async function createCustom() {
     const name = (nameRef.current?.value ?? "").trim();
-    if (!name) return;
+    if (!name || blocked || pendingRef.current) return;
+    pendingRef.current = true;
+    setError(null);
     setSaving(true);
     try {
       const created = await onCreateCustom({
@@ -463,34 +469,53 @@ function PickerSheet({
         setCustomOpen(false);
         if (nameRef.current) nameRef.current.value = "";
       }
+    } catch {
+      setError("운동을 만들지 못했어요. 입력한 내용을 확인하고 다시 시도해 주세요.");
     } finally {
+      pendingRef.current = false;
       setSaving(false);
     }
   }
 
   async function pickPast(sessionId: string) {
+    if (blocked || pendingRef.current) return;
+    pendingRef.current = true;
+    setError(null);
     setPastBusyId(sessionId);
     try {
       const added = await onPickPast(sessionId);
       if (added) onClose();
+    } catch {
+      setError("지난 운동을 불러오지 못했어요. 다시 시도해 주세요.");
     } finally {
+      pendingRef.current = false;
       setPastBusyId(null);
     }
   }
 
   async function pickRoutine(routine: WorkoutRoutine) {
-    if (!onPickRoutine) return;
+    if (!onPickRoutine || blocked || pendingRef.current) return;
+    pendingRef.current = true;
+    setError(null);
     setRoutineBusyId(routine.id);
     try {
       if (await onPickRoutine(routine)) onClose();
+    } catch {
+      setError("루틴을 불러오지 못했어요. 다시 시도해 주세요.");
     } finally {
+      pendingRef.current = false;
       setRoutineBusyId(null);
     }
   }
 
   async function removeRoutine(routine: WorkoutRoutine) {
     if (!onDeleteRoutine) return;
-    if (!window.confirm(`'${routine.name}' 루틴을 삭제할까요?`)) return;
+    setConfirmation({ message: `'${routine.name}' 루틴을 삭제할까요?`, confirmLabel: "루틴 삭제", cancelLabel: "취소",
+      onCancel: () => setConfirmation(null), onConfirm: () => { setConfirmation(null); void deleteConfirmedRoutine(routine); } });
+  }
+
+  async function deleteConfirmedRoutine(routine: WorkoutRoutine) {
+    if (!onDeleteRoutine || blocked) return;
     setRoutineBusyId(routine.id);
     try {
       await onDeleteRoutine(routine);
@@ -509,74 +534,76 @@ function PickerSheet({
     }
   }
 
-  /** 허브로 돌아가는 머리글 — 허브에서 온 화면에만 붙인다 */
-  const backHeader = (title: string) => (
-    <div className="mb-2 flex flex-none items-center gap-2">
-      <button
-        type="button"
-        onClick={() => setMode("hub")}
-        aria-label="진입 화면으로 돌아가기"
-        /* ⚠️ 테두리 있는 원으로 그린다 (2026-08-07 사용자 지적 "뒤로가기도 잘보이게").
-           옛 모양은 배경도 테두리도 없는 `text-muted` 글리프 하나여서, 어두운
-           배경에서 **눌 수 있는 것으로 보이지 않았다.** 44px 손가락 표적도
-           확보한다(옛 32px). */
-        className="flex h-11 w-11 flex-none items-center justify-center rounded-full border border-line bg-surface-2 text-lg text-text"
-      >
-        ←
-      </button>
-      <p className="text-sm font-extrabold">{title}</p>
-    </div>
-  );
+  const nestedTitle = customOpen && mode === "search" ? "운동 직접 만들기" : mode === "setup" ? "세트와 횟수 설정"
+    : mode === "situation" ? "상황별 추천" : mode === "part" ? "부위별 추천"
+    : mode === "preset" ? "추천 루틴" : null;
 
   return (
-    <>
-      <div
-        className="fixed inset-0 z-40 bg-black/40"
-        onClick={requestClose}
-        aria-hidden
-      />
-      <div className="fixed inset-x-0 bottom-0 z-50 flex max-h-[82dvh] flex-col rounded-t-[22px] border-t border-line bg-surface p-4 shadow-card">
-        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
-
-        {mode === "hub" ? (
-          <>
-            <h3 className="text-base font-extrabold">
-              {heading?.title ?? "운동 추가"}
-            </h3>
-            <p className="mt-0.5 mb-3 text-[12.5px] text-muted">
-              {heading?.sub ?? "오늘 운동을 어떻게 시작할까요?"}
-            </p>
-            <ExerciseEntryHub
-              hasPast={!replaceMode && pastSessions.length > 0}
-              routineCount={routinesEnabled ? (routines?.length ?? 0) : 0}
-              onPrograms={programsEntry}
-              onSearch={() => setMode("search")}
-              onPast={() => setMode("past")}
-              onRoutine={() => setMode("routine")}
-            />
-          </>
-        ) : mode === "situation" || mode === "part" ? (
+    <FullScreenFlow title={nestedTitle ?? (replaceMode ? `'${replacing}' 바꾸기` : heading?.title ?? "운동 계획하기")}
+      subtitle={nestedTitle ? undefined : heading?.sub}
+      onBack={goBack} onClose={requestClose} busy={blocked} confirmation={confirmation}
+      backLabel={mode === "setup" ? "고르던 화면으로 돌아가기" : mode === "situation" || mode === "part" || mode === "preset" ? "이전 화면으로 돌아가기" : "진입 화면으로 돌아가기"}
+      closeLabel="운동 선택 닫기">
+      <fieldset disabled={blocked} className="flex min-h-0 min-w-0 flex-1 flex-col">
+        {error && <p role="alert" className="mb-2 flex-none rounded-card-sm border border-warn/40 px-3 py-2 text-xs text-warn">{error}</p>}
+        {(mode === "search" || mode === "routine" || mode === "past") && !replaceMode && !customOpen && (<WideOnly>
+          <nav aria-label="운동을 담는 방법" className="mb-2 flex flex-none gap-1 border-b border-line pb-2">
+            {([['search', '운동 직접 고르기'], ...(routinesEnabled ? [['routine', '내 루틴']] : []), ['past', '지난 운동']] as const).map(([key, label]) => (
+              <button key={key} type="button" onClick={() => setMode(key as PickerMode)} aria-current={mode === key ? 'page' : undefined}
+                className={`min-h-10 min-w-0 flex-1 rounded-card-sm px-1 text-xs font-bold ${mode === key ? 'bg-accent-weak text-accent' : 'text-muted'}`}>{label}</button>
+            ))}
+          </nav>
+        </WideOnly>)}
+        {(mode === "search" || mode === "routine" || mode === "past") && !customOpen && (<CompactOnly>
+          <div className="mb-2 flex flex-none gap-2" data-compact-toolbar>
+            {/* 작은 화면에서는 탭·추천 줄이 숨으므로 **모든 입구**가 이 메뉴 하나에 있어야 한다.
+                프로그램은 화면 이동이라 값으로 남기지 않고, 고른 운동이 있으면 먼저 묻는다. */}
+            <select aria-label="운동을 담는 방법 선택" value={mode} onChange={(event) => {
+              const next = event.target.value;
+              if (next === "program") { if (programsEntry) requestImport(() => leavePicker(programsEntry)); return; }
+              setMode(next as PickerMode);
+            }}
+              className="h-11 min-w-0 flex-1 rounded-card-sm border border-line bg-surface-2 px-2 text-base">
+              <option value="search">직접 선택</option>
+              {routinesEnabled && <option value="routine">저장한 루틴</option>}
+              {!replaceMode && <option value="past">지난 운동 불러오기</option>}
+              <option value="situation">상황별 추천</option>
+              <option value="part">부위별 추천</option>
+              {presetEntry && presetRoutines.length > 0 && <option value="preset">추천 루틴</option>}
+              {programsEntry && <option value="program">프로그램으로 시작하기</option>}
+            </select>
+            {mode === "search" && <select aria-label="운동 부위 선택" value={part} onChange={(event) => setPart(event.target.value as (typeof FILTERS)[number])}
+              className="h-11 min-w-0 flex-1 rounded-card-sm border border-line bg-surface-2 px-2 text-base">
+              {FILTERS.map((filter) => <option key={filter} value={filter}>{filter}</option>)}
+            </select>}
+          </div>
+        </CompactOnly>)}
+        {mode === "situation" || mode === "part" ? (
           <RecommendedPicker
             mode={mode}
+            embedded
             catalog={catalog}
             challengeCategories={challengeCategories}
             part={recommendPart}
             onPart={setRecommendPart}
             situation={situation}
             onSituation={setSituation}
-            onStartInterval={intervalEntry}
+            // 인터벌은 같은 화면 안에서 시트를 연다 — 주소 이동이 아니라서 기록 정리를 기다리지
+            // 않는다(기다리면 한 박자 늦게 열린다). 주소가 바뀌는 프로그램만 leavePicker를 쓴다.
+            onStartInterval={intervalEntry ? () => requestImport(intervalEntry) : undefined}
             intervalCta={intervalCta}
             selected={new Set(selected.keys())}
             onToggle={toggleSelect}
-            onBack={() => setMode(recommendReturnMode)}
+            onBack={() => setMode("search")}
             onSearch={() => setMode("search")}
             onAdd={addSelected}
             onAdjust={adjustSets}
             addLabel={pickLabel}
-            busy={busy}
+            busy={blocked}
           />
         ) : mode === "setup" ? (
           <ExerciseSetupSheet
+            embedded
             entries={setupEntries}
             onChange={(index, plan) =>
               setSetupEntries((prev) =>
@@ -586,146 +613,22 @@ function PickerSheet({
             onBack={() => setMode(setupReturnMode)}
             onConfirm={confirmSetup}
             confirmLabel={confirmLabel}
-            busy={busy}
+            busy={blocked}
           />
         ) : mode === "search" ? (
           <>
-            {backHeader(
-              replaceMode ? `'${replacing}' 바꾸기` : "운동 이름 검색",
-            )}
-            <input
-              ref={searchRef}
-              autoFocus
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="🔍 운동 검색 (예: 스쿼트, 벤치)"
-              className="h-16 w-full flex-none rounded-card border-2 border-line bg-bg px-4 text-base outline-none focus:border-accent"
-            />
-
-            {/*
-              ⚠️ 검색창 아래는 **한 스크롤 영역**이다 (2026-10-05 2단계).
-
-              예전에는 빠르게 찾기·자주 한 운동·부위 칩이 고정으로 쌓이고 목록만
-              스크롤됐다. 375×667 기록 탭에서 실측하니 목록 자리가 **43px**(한 줄도
-              안 됨)였다 — 카탈로그를 보려고 열었는데 목록이 거의 안 보였다. 이제
-              위 묶음을 밀어 올리면 목록이 시트를 거의 다 쓴다. 부위 칩은 `sticky`라
-              내려가도 위에 붙어 있다.
-
-              검색어를 치는 동안에는 빠르게 찾기를 아예 접는다 — 찾는 이름이 있으면
-              결과가 먼저고, 폰 키보드가 올라오면 자리가 더 줄어든다.
-            */}
-            <div className="mt-1 min-h-0 flex-1 overflow-y-auto">
-            {!q && (
-            <div className="mt-2">
-              <p className="mb-1.5 text-xs font-bold text-muted">
-                빠르게 찾기
-              </p>
-              {/*
-                메뉴 카드 (2026-10-05 사용자 지시 — '프로그램으로 시작하기'처럼 사진 배경,
-                GND 아이콘 2.0). 높이는 56px로만 키운다 — 시트가 max-h-[82dvh]라 더 키우면
-                아래 카탈로그 목록이 화면 밖으로 밀린다.
-              */}
-              <div className="grid grid-cols-2 gap-2">
-                <QuickFindCard
-                  label="상황별 추천"
-                  icon="hub-situation"
-                  photo="/program-assets/lower-v2.webp"
-                  onClick={() => openRecommendation("situation")}
-                />
-                <QuickFindCard
-                  label="부위별 추천"
-                  icon="hub-part"
-                  photo="/program-assets/arms.webp"
-                  onClick={() => openRecommendation("part")}
-                />
-              </div>
-
-              {/* 추천 루틴 (2026-09-03) — 세트까지 정해진 루틴을 통째로 담는다.
-                  ⚠️ 위 두 칸과 하는 일이 다르다: 상황별·부위별은 **종목만**
-                     고르게 하고 세트는 기본값(3세트 10회)이 붙는다. 이쪽은
-                     세트별 횟수가 다른 사다리라 그 기본값으로는 표현이 안 된다.
-                  ⚠️ 담을 곳이 없는 화면(달력 예정표)에서는 `onPickPreset`을
-                     안 넘기므로 버튼 자체가 안 나온다. */}
-              {presetEntry && presetRoutines.length > 0 && (
-                <QuickFindCard
-                  label="추천 루틴"
-                  icon="routine"
-                  photo="/program-assets/chest.webp"
-                  onClick={() => setMode("preset")}
-                  className="mt-2 w-full"
-                />
-              )}
-            </div>
-            )}
-
-            {/* ⭐ 자주 한 운동 — 검색·부위 필터 중에는 숨긴다 (설계 2026-08-02).
-                세로 목록이 아니라 가로 칩 한 줄이다: 시트가 max-h-[82dvh]라
-                5행짜리 섹션은 카탈로그 목록을 화면 밖으로 밀어낸다. */}
-            {frequent.length > 0 && !q && part === "전체" && (
-              <div className="mt-3">
-                <p className="mb-1.5 text-[11px] font-bold text-muted">
-                  ⭐ 자주 한 운동
-                </p>
-                <div className="flex gap-1.5 overflow-x-auto pb-0.5">
-                  {frequent.map(({ item, count }) => {
-                    const isSelected = selected.has(item.id);
-                    return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => toggleSelect(item)}
-                        aria-pressed={isSelected}
-                        className={`flex flex-none items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold ${
-                          isSelected
-                            ? "border-accent bg-accent text-accent-ink"
-                            : "border-accent/40 bg-accent-weak text-accent"
-                        }`}
-                      >
-                        <span>{item.name}</span>
-                        {/* 유형을 칩에도 붙인다 — 목록 행에만 있어서, 칩으로
-                            담으면 웨이트/맨몸을 볼 기회가 없었다 (신고 0783ca35) */}
-                        <span
-                          className={`rounded px-1 text-[10px] font-bold ${
-                            isSelected
-                              ? "bg-accent-ink/15 text-accent-ink"
-                              : "bg-accent/15 text-accent"
-                          }`}
-                        >
-                          {TYPE_LABEL[item.exercise_type]}
-                        </span>
-                        <span
-                          className={`font-mono text-[10px] ${
-                            isSelected ? "text-accent-ink/80" : "text-accent/70"
-                          }`}
-                        >
-                          {isSelected ? "✓" : `${count}회`}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            <div className="sticky top-0 z-10 mt-1 mb-2 flex gap-1.5 overflow-x-auto bg-surface py-2">
-          {FILTERS.map((p) => (
-            <button
-              key={p}
-              onClick={() => setPart(p)}
-              className={`flex-none rounded-full border px-3 py-1.5 text-xs font-bold ${
-                p === part
-                  ? "border-accent bg-accent-weak text-accent"
-                  : "border-line bg-surface-2 text-muted"
-              }`}
-            >
-              {p}
-            </button>
-          ))}
-            </div>
-
+            {!customOpen && <><input ref={searchRef} value={query} onChange={(e) => setQuery(e.target.value)}
+              aria-label="운동 검색" placeholder="🔍 운동 검색 (예: 스쿼트, 벤치)"
+              className="mb-2 h-11 w-full flex-none rounded-card-sm border border-line bg-bg px-3 text-base outline-none focus:border-accent" />
+            <WideOnly><div aria-label="운동 부위" className="mb-2 grid flex-none grid-cols-5 gap-1">
+              {FILTERS.map((p) => <button key={p} type="button" onClick={() => setPart(p)} aria-pressed={p === part}
+                className={`min-h-11 rounded-card-sm border px-1 text-xs font-bold ${p === part ? 'border-accent bg-accent-weak text-accent' : 'border-line bg-surface-2 text-muted'}`}>{p}</button>)}
+            </div></WideOnly>
+            <div className="mb-1 flex flex-none justify-between text-xs text-muted"><span>운동 {list.length}개</span><span>{pastLoading ? '횟수 불러오는 중…' : frequency.size > 0 ? '빈도순' : '기본순'}</span></div></>}
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
             {/* 챌린지 목표를 아는 경우가 더 구체적이므로 먼저 보여준다.
                 둘을 같이 띄우면 배너가 두 줄이 되어 목록을 밀어낸다. */}
-            {pickedMisses && challengeCategories !== null ? (
+            {!customOpen && (pickedMisses && challengeCategories !== null ? (
               <p className="mb-2 flex-none rounded-card-sm border border-warn/40 bg-surface-2 px-3 py-2 text-[11px] font-bold text-warn">
                 고른 운동 중에 <b>챌린지 성과에는 안 잡혀요</b>가 있어요. 지금
                 챌린지 목표는 <b>{categoriesLabel(challengeCategories)}</b>{" "}
@@ -737,21 +640,31 @@ function PickerSheet({
                 맨몸으로 한 운동은 <b>맨몸</b> 유형을 골라야 챌린지 맨몸 실적에
                 들어가요. 기구·무게를 썼다면 <b>웨이트</b>예요.
               </p>
-            ) : null}
+            ) : null)}
 
-            <div>
+            {!customOpen && <div>
           {list.length > 0 ? (
             list.map((e) => {
               const isSelected = selected.has(e.id);
               return (
                 <button
                   key={e.id}
+                  data-exercise-row
                   onClick={() => toggleSelect(e)}
                   aria-pressed={isSelected}
-                  className={`flex w-full items-center justify-between gap-3 border-b border-line py-2.5 text-left ${
+                  className={`flex w-full items-center justify-between gap-2 border-b border-line py-1.5 text-left ${
                     isSelected ? "bg-accent-weak/40" : ""
                   }`}
                 >
+                  <span
+                    className={`flex h-5 w-5 flex-none items-center justify-center rounded border text-sm font-bold ${
+                      isSelected
+                        ? "border-accent bg-accent text-accent-ink"
+                        : "border-line text-accent"
+                    }`}
+                  >
+                    {isSelected ? "✓" : ""}
+                  </span>
                   <ExerciseThumbTile id={e.id} name={e.name} bodyPart={e.body_part} />
                   <span className="min-w-0 flex-1">
                     <span className="block text-sm font-bold">
@@ -790,15 +703,7 @@ function PickerSheet({
                       )}
                     </span>
                   </span>
-                  <span
-                    className={`flex h-6 w-6 flex-none items-center justify-center rounded-full border text-sm font-bold ${
-                      isSelected
-                        ? "border-accent bg-accent text-accent-ink"
-                        : "border-line text-accent"
-                    }`}
-                  >
-                    {isSelected ? "✓" : "＋"}
-                  </span>
+
                 </button>
               );
             })
@@ -809,7 +714,7 @@ function PickerSheet({
                 : "운동이 없어요."}
             </p>
           )}
-            </div>
+            </div>}
 
             {/*
               '직접 만들기'는 **검색 결과가 없을 때만** 낸다 (사용자 지시 2026-08-06).
@@ -825,15 +730,15 @@ function PickerSheet({
               defaultValue={query.trim()}
               placeholder="예: 케이블 크로스오버"
               maxLength={40}
-              className="mt-1 mb-2 h-10 w-full rounded-card-sm border border-line bg-bg px-3 text-sm outline-none focus:border-accent"
+              className="mt-1 mb-2 h-10 w-full rounded-card-sm border border-line bg-bg px-3 text-base outline-none focus:border-accent"
             />
             <div className="flex gap-2">
-              <div className="flex-1">
+              <div className="min-w-0 flex-1">
                 <label className="text-xs font-bold text-muted">부위</label>
                 <select
                   value={customPart}
                   onChange={(e) => setCustomPart(e.target.value as BodyPart)}
-                  className="mt-1 h-10 w-full rounded-card-sm border border-line bg-bg px-2 text-sm"
+                  className="mt-1 h-11 w-full min-w-0 max-w-full rounded-card-sm border border-line bg-bg px-2 text-base"
                 >
                   {PARTS.slice(1).map((p) => (
                     <option key={p} value={p}>
@@ -842,14 +747,14 @@ function PickerSheet({
                   ))}
                 </select>
               </div>
-              <div className="flex-1">
+              <div className="min-w-0 flex-1">
                 <label className="text-xs font-bold text-muted">유형</label>
                 <select
                   value={customType}
                   onChange={(e) =>
                     setCustomType(e.target.value as ExerciseType)
                   }
-                  className="mt-1 h-10 w-full rounded-card-sm border border-line bg-bg px-2 text-sm"
+                  className="mt-1 h-11 w-full min-w-0 max-w-full rounded-card-sm border border-line bg-bg px-2 text-base"
                 >
                   <option value="weight">웨이트 (kg × 회)</option>
                   <option value="bodyweight">맨몸 (회)</option>
@@ -857,14 +762,14 @@ function PickerSheet({
                 </select>
               </div>
               {customType === "bodyweight" && (
-                <div className="flex-1">
+                <div className="min-w-0 flex-1">
                   <label className="text-xs font-bold text-muted">측정</label>
                   <select
                     value={customMeasure}
                     onChange={(e) =>
                       setCustomMeasure(e.target.value as "reps" | "time")
                     }
-                    className="mt-1 h-10 w-full rounded-card-sm border border-line bg-bg px-2 text-sm"
+                    className="mt-1 h-11 w-full min-w-0 max-w-full rounded-card-sm border border-line bg-bg px-2 text-base"
                   >
                     <option value="reps">횟수 (회)</option>
                     <option value="time">시간 (초) — 플랭크·매달리기처럼</option>
@@ -890,23 +795,33 @@ function PickerSheet({
               ))}
             </div>
 
-            <PickActions
+            {!customOpen && (!q || programsEntry) && <WideOnly><div className="mt-1 flex flex-none items-center gap-2 border-t border-line pt-1">
+              {!q && <details className="relative min-w-0 flex-1">
+                <summary className="flex min-h-10 cursor-pointer items-center text-xs font-bold text-muted">운동 추천 <span className="ml-1" aria-hidden>⌄</span></summary>
+                <div className="absolute inset-x-0 bottom-full z-20 rounded-card border border-line bg-surface p-2 shadow-card">
+                  <button type="button" onClick={() => openRecommendation("situation")} className="min-h-11 w-full rounded-card-sm px-3 text-left text-sm font-bold">상황별 추천</button>
+                  <button type="button" onClick={() => openRecommendation("part")} className="min-h-11 w-full rounded-card-sm px-3 text-left text-sm font-bold">부위별 추천</button>
+                  {presetEntry && presetRoutines.length > 0 && <button type="button" onClick={() => setMode("preset")} className="min-h-11 w-full rounded-card-sm px-3 text-left text-sm font-bold">추천 루틴</button>}
+                </div>
+              </details>}
+              {programsEntry && <button type="button" onClick={() => requestImport(() => leavePicker(programsEntry))} className="ml-auto min-h-10 px-2 text-xs font-bold text-accent">프로그램으로 시작하기</button>}
+            </div></WideOnly>}
+            {!customOpen && <PickActions
               count={selected.size}
               onAdd={addSelected}
               onAdjust={adjustSets}
               addLabel={pickLabel}
-              busy={busy}
-            />
+              busy={blocked}
+            />}
           </>
         ) : mode === "routine" ? (
           <>
-            {backHeader("내 루틴")}
             <div className="min-h-0 flex-1 overflow-y-auto">
               <RoutineList
                 routines={routines ?? []}
                 loading={routinesLoading}
                 busyId={routineBusyId}
-                onPick={(routine) => void pickRoutine(routine)}
+                onPick={(routine) => requestImport(() => void pickRoutine(routine))}
                 onRename={renameRoutine}
                 onDelete={(routine) => void removeRoutine(routine)}
               />
@@ -914,7 +829,6 @@ function PickerSheet({
           </>
         ) : mode === "preset" ? (
           <>
-            {backHeader("추천 루틴")}
             <div className="min-h-0 flex-1 overflow-y-auto">
               <ul className="flex flex-col gap-2 pb-2">
                 {presetRoutines.map((preset) => (
@@ -935,7 +849,7 @@ function PickerSheet({
                     <button
                       type="button"
                       disabled={presetBusyKey !== null}
-                      onClick={() => void pickPreset(preset.key)}
+                      onClick={() => requestImport(() => void pickPreset(preset.key))}
                       className="mt-3 h-11 w-full rounded-full bg-accent text-sm font-extrabold text-accent-ink disabled:opacity-50"
                     >
                       {presetBusyKey === preset.key ? "담는 중…" : "담기"}
@@ -947,7 +861,6 @@ function PickerSheet({
           </>
         ) : (
           <>
-            {backHeader("지난 운동 불러오기")}
             <div className="min-h-0 flex-1 overflow-y-auto">
             {pastLoading ? (
               <p className="py-8 text-center text-sm text-muted">
@@ -981,7 +894,7 @@ function PickerSheet({
                     key={session.id}
                     type="button"
                     disabled={pastBusyId !== null}
-                    onClick={() => void pickPast(session.id)}
+                    onClick={() => requestImport(() => void pickPast(session.id))}
                     className="flex w-full items-center justify-between gap-3 border-b border-line py-3 text-left disabled:opacity-60"
                   >
                     <span className="min-w-0">
@@ -1021,48 +934,7 @@ function PickerSheet({
             </div>
           </>
         )}
-      </div>
-    </>
-  );
-}
-
-/**
- * '빠르게 찾기' 메뉴 카드 — 사진 배경 + GND 아이콘 2.0 (2026-10-05 사용자 지시).
- *
- * '프로그램으로 시작하기' 카드처럼 프로그램 표지 사진을 어둡게 깔고, 왼쪽(아이콘·글자
- * 자리)은 시트 색으로 덮는다. 사진이 안 떠도 아이콘·글자·동작은 그대로다.
- */
-function QuickFindCard({
-  label,
-  icon,
-  photo,
-  onClick,
-  className = "",
-}: {
-  label: string;
-  icon: GndIconName;
-  photo: string;
-  onClick: () => void;
-  className?: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`relative isolate flex min-h-14 items-center justify-center gap-2 overflow-hidden rounded-card-sm border border-white/10 bg-surface-2 px-3 text-sm font-bold text-text transition-[border-color,transform] duration-150 active:scale-[0.98] active:border-accent ${className}`}
-    >
-      <span aria-hidden className="pointer-events-none absolute inset-0 -z-10">
-        <Image
-          src={photo}
-          alt=""
-          fill
-          sizes="240px"
-          className="object-cover object-[50%_30%] opacity-50"
-        />
-        <span className="absolute inset-0 bg-gradient-to-r from-surface-2/90 via-surface-2/60 to-surface-2/30" />
-      </span>
-      <GndIcon name={icon} size={26} className="flex-none" />
-      {label}
-    </button>
+      </fieldset>
+    </FullScreenFlow>
   );
 }

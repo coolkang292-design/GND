@@ -56,6 +56,22 @@ describe("RoutineLoadSheet", () => {
     expect(getAllByRole("radio")[0].getAttribute("aria-checked")).toBe("true");
   });
 
+  it("열리면 초점을 받고 Escape는 루틴 확인만 취소한다", () => {
+    const { getByRole, onCancel, onConfirm } = setup();
+    const dialog = getByRole("dialog");
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  it("전체 화면의 브라우저 뒤로가기 신호로 취소한다", () => {
+    const { onCancel, onConfirm } = setup();
+    window.dispatchEvent(new Event("gnd-fullscreen-back"));
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
   it("취소·바깥 누르기는 아무것도 바꾸지 않고 닫는다", () => {
     const { getByText, getByLabelText, onCancel, onConfirm } = setup();
     fireEvent.click(getByText("취소"));

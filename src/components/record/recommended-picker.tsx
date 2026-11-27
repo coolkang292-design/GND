@@ -60,7 +60,9 @@ export function RecommendedPicker({
   busy,
   onStartInterval,
   intervalCta,
+  embedded = false,
 }: {
+  embedded?: boolean;
   mode: "part" | "situation";
   catalog: CatalogExercise[];
   challengeCategories: ReadonlySet<GoalCategory> | null;
@@ -184,7 +186,7 @@ export function RecommendedPicker({
         />
         <div className="absolute inset-0 bg-gradient-to-b from-surface/30 via-surface/75 to-surface" />
       </div>
-      <button
+      {!embedded && <><button
         type="button"
         onClick={onBack}
         aria-label="이전 화면으로 돌아가기"
@@ -199,7 +201,7 @@ export function RecommendedPicker({
 
       <h3 className="flex-none text-[22px] font-extrabold tracking-tight">
         {byPart ? "부위별 추천" : "상황별 추천"}
-      </h3>
+      </h3></>}
       <p className="mt-1 flex-none text-[12.5px] leading-4 text-muted">
         운동 이름을 몰라도 괜찮아요.
         <br />

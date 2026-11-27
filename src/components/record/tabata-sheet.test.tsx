@@ -394,9 +394,8 @@ describe("TabataSheet — 운동 고르기 배선 (2026-08-06)", () => {
     const { getByText, getAllByText } = setup();
 
     fireEvent.click(getByText("+ 운동 고르기 (0/4)"));
-    // 목록이 바로 뜬다 (2026-08-13) — 추천으로 가려면 허브로 한 번 돌아간다
-    fireEvent.click(screen.getByLabelText("진입 화면으로 돌아가기"));
-    fireEvent.click(getByText("운동 직접 고르기"));
+    // 전체 화면의 작은 추천 메뉴에서 기존 부위별 추천으로 들어간다.
+    fireEvent.click(getByText("운동 추천"));
     fireEvent.click(getByText(/부위별 추천/));
     // 가슴 추천 넷 중 **맨몸은 푸시업뿐**이다 — 나머지는 걸러진다
     // (인터벌 고르기 화면은 맨몸만 보여 준다, 2026-08-13)

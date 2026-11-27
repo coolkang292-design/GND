@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import { FullScreenFlow } from "./full-screen-flow";
 import type { LocalExercise, LocalSet } from "@/lib/workout";
 import type { CatalogExercise } from "@/lib/types";
 import { imageIdForAddedExercise } from "@/lib/domain/exercise-images";
@@ -20,8 +22,7 @@ import { ExerciseCard } from "./exercise-card";
  * ⚠️ 목록은 **달력이 들고 있다.** '＋ 종목 추가'가 여는 `ExercisePicker`가
  *    달력에 있어서, 여기에 상태를 두면 주인이 갈라진다.
  */
-export function PlanEditSheet({
-  open,
+function PlanEditBody({
   dateLabel,
   exercises,
   catalog,
@@ -54,36 +55,23 @@ export function PlanEditSheet({
   onCancel: () => void;
   onSave: () => void;
 }) {
-  // 닫을 때 언마운트 — 다음에 열면 초기 상태 (피커·인터벌 시트와 같은 규약)
-  if (!open) return null;
+  const [initial] = useState(() => JSON.stringify(exercises));
+  const [confirmClose, setConfirmClose] = useState(false);
+  const blocked = busy || loadingKey != null;
+  function requestCancel() {
+    if (blocked) return;
+    if (initial !== JSON.stringify(exercises)) setConfirmClose(true);
+    else onCancel();
+  }
 
   return (
-    <>
-      <div
-        className="fixed inset-0 z-40 bg-black/40"
-        onClick={onCancel}
-        aria-hidden
-      />
-      <div className="fixed inset-x-0 bottom-0 z-50 flex max-h-[82dvh] flex-col rounded-t-[22px] border-t border-line bg-surface p-4 shadow-card">
-        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
-
-        <div className="mb-2 flex flex-none items-center gap-2">
-          <button
-            type="button"
-            onClick={onCancel}
-            aria-label="고치기 취소"
-            className="flex h-8 w-8 items-center justify-center rounded-full text-lg text-muted"
-          >
-            ←
-          </button>
-          <div className="min-w-0">
-            <p className="text-sm font-extrabold">{dateLabel} 예정표 고치기</p>
-            <p className="text-[11.5px] text-muted">
-              종목을 빼거나 더하고, 세트와 무게를 바꿀 수 있어요
-            </p>
-          </div>
-        </div>
-
+    <FullScreenFlow title={`${dateLabel} 예정표 고치기`} onBack={requestCancel} onClose={requestCancel}
+      backLabel="고치기 취소" closeLabel="계획 편집 닫기" busy={blocked}
+      confirmation={confirmClose ? {
+        message: "고친 내용을 저장하지 않고 닫을까요?", confirmLabel: "저장하지 않고 닫기", cancelLabel: "계속 고치기",
+        onCancel: () => setConfirmClose(false), onConfirm: onCancel,
+      } : null}>
+      <fieldset disabled={blocked} className="flex min-h-0 flex-1 flex-col">
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
           {exercises.map((exercise, index) => (
             <ExerciseCard
@@ -95,7 +83,7 @@ export function PlanEditSheet({
               /* 계획에는 "운동 중"이 없다 — 요약 줄이 보이는 쪽이 맞다 */
               active={false}
               loadingLast={loadingKey === exercise.key}
-              loadLastDisabled={busy || loadingKey !== null}
+              loadLastDisabled={blocked}
               onLoadLast={() => onLoadLast(exercise)}
               onUpdateSet={(setIndex, patch) =>
                 onUpdateSet(exercise.key, setIndex, patch)
@@ -130,7 +118,12 @@ export function PlanEditSheet({
         >
           {busy ? "저장 중…" : "이대로 저장하기"}
         </button>
-      </div>
-    </>
+      </fieldset>
+    </FullScreenFlow>
   );
+}
+
+export function PlanEditSheet(props: Parameters<typeof PlanEditBody>[0]) {
+  if (!props.open) return null;
+  return <PlanEditBody {...props} />;
 }

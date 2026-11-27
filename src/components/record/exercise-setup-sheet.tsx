@@ -41,7 +41,9 @@ export function ExerciseSetupSheet({
   onConfirm,
   busy = false,
   confirmLabel,
+  embedded = false,
 }: {
+  embedded?: boolean;
   entries: SetupEntry[];
   onChange: (index: number, plan: SetupPlan) => void;
   onBack: () => void;
@@ -55,7 +57,7 @@ export function ExerciseSetupSheet({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="mb-2 flex flex-none items-center gap-2">
+      {!embedded && <div className="mb-2 flex flex-none items-center gap-2">
         <button
           type="button"
           onClick={onBack}
@@ -73,7 +75,7 @@ export function ExerciseSetupSheet({
             그대로 두고 바로 추가해도 괜찮아요
           </p>
         </div>
-      </div>
+      </div>}
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {entries.map((entry, index) => {

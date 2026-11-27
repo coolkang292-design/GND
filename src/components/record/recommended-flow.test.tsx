@@ -274,29 +274,24 @@ describe("추천과 검색은 선택 목록 하나를 쓴다 (2026-10-05)", () =
     );
   }
 
-  it("고른 것이 있으면 시트 바깥을 눌러도 묻고, 취소하면 안 닫힌다", () => {
+  it("고른 것이 있으면 닫기 전에 앱 안에서 묻고 취소하면 유지한다", () => {
     const onClose = vi.fn();
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
-    const { getByText, container } = withClose(onClose);
-    const backdrop = container.querySelector("div.fixed.inset-0") as HTMLElement;
-
+    const { getByText, getByLabelText, queryByRole } = withClose(onClose);
     fireEvent.click(getByText("체스트프레스 머신"));
-    fireEvent.click(backdrop);
-    expect(confirm).toHaveBeenCalledWith("고른 운동 1개를 담지 않고 닫을까요?");
+    fireEvent.click(getByLabelText("운동 선택 닫기"));
+    expect(queryByRole("alertdialog")).toBeTruthy();
+    fireEvent.click(getByText("계속 고르기"));
     expect(onClose).not.toHaveBeenCalled();
-
-    confirm.mockReturnValue(true);
-    fireEvent.click(backdrop);
+    fireEvent.click(getByLabelText("운동 선택 닫기"));
+    fireEvent.click(getByText("담지 않고 닫기"));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it("아무것도 안 골랐으면 묻지 않고 닫는다", () => {
     const onClose = vi.fn();
-    const confirm = vi.spyOn(window, "confirm");
-    const { container } = withClose(onClose);
-    fireEvent.click(container.querySelector("div.fixed.inset-0") as HTMLElement);
-
-    expect(confirm).not.toHaveBeenCalled();
+    const { getByLabelText, queryByRole } = withClose(onClose);
+    fireEvent.click(getByLabelText("운동 선택 닫기"));
+    expect(queryByRole("alertdialog")).toBeNull();
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
@@ -593,17 +588,17 @@ describe("2단계 (2026-10-05)", () => {
     expect(getByText("운동 2개 바로 추가")).toBeTruthy();
   });
 
-  it("검색어를 치면 빠르게 찾기가 접히고, 지우면 다시 나온다", () => {
+  it("검색어를 치면 추천 입구가 접히고 지우면 다시 나온다", () => {
     const { getByPlaceholderText, queryByText } = picker();
     const input = getByPlaceholderText("🔍 운동 검색 (예: 스쿼트, 벤치)");
-    expect(queryByText("빠르게 찾기")).toBeTruthy();
+    expect(queryByText("운동 추천")).toBeTruthy();
 
     fireEvent.change(input, { target: { value: "레그" } });
-    expect(queryByText("빠르게 찾기")).toBeNull();
+    expect(queryByText("운동 추천")).toBeNull();
     expect(queryByText("상황별 추천")).toBeNull();
 
     fireEvent.change(input, { target: { value: "" } });
-    expect(queryByText("빠르게 찾기")).toBeTruthy();
+    expect(queryByText("운동 추천")).toBeTruthy();
   });
 
   it("저장 중에는 두 버튼이 잠기고 '저장하는 중…'이다", () => {

@@ -1388,6 +1388,9 @@ describe("CalendarView — 계획한 운동 수정 (2026-08-28)", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "랫풀다운 삭제" }));
     fireEvent.click(screen.getByRole("button", { name: "고치기 취소" }));
+    expect(screen.getByRole("alertdialog")).toBeTruthy();
+    expect(mocks.updateWorkoutPlan).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText("저장하지 않고 닫기"));
 
     expect(screen.queryByText("8월 16일 예정표 고치기")).toBeNull();
     expect(mocks.updateWorkoutPlan).not.toHaveBeenCalled();

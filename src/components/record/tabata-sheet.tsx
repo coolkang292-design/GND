@@ -755,6 +755,8 @@ function TabataSheetBody({
              뒤로 가기 한 번이면 닿는다 — 없앤 것이 아니라 한 단계 뒤로 뺐다.
         */
         initialMode="search"
+        // 기본 제목은 '운동 계획하기'다 — 여기는 인터벌 종목을 고르는 자리라 따로 이름을 준다
+        heading={{ title: "인터벌 운동 고르기", sub: "" }}
         pastSessions={pastSessions}
         pastLoading={pastLoading}
         routines={routines}

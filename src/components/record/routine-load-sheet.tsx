@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { FULL_SCREEN_BACK_EVENT } from "./full-screen-flow";
 
 /**
  * 루틴 불러오기 — 교체할지 추가할지 묻는 시트 (2026-11-27, 작업지시서 TASK 05).
@@ -38,6 +39,35 @@ function SheetBody({
   onCancel: () => void;
 }) {
   const [choice, setChoice] = useState<RoutineLoadChoice>("replace");
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    dialog?.focus({ preventScroll: true });
+    function keyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        onCancel();
+      } else if (event.key === "Tab" && dialog) {
+        const buttons = [...dialog.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")];
+        const first = buttons[0];
+        const last = buttons.at(-1);
+        if (event.shiftKey && (document.activeElement === first || !dialog.contains(document.activeElement))) {
+          event.preventDefault(); last?.focus();
+        } else if (!event.shiftKey && (document.activeElement === last || document.activeElement === dialog || !dialog.contains(document.activeElement))) {
+          event.preventDefault(); first?.focus();
+        }
+      }
+    }
+    document.addEventListener("keydown", keyDown);
+    window.addEventListener(FULL_SCREEN_BACK_EVENT, onCancel);
+    return () => {
+      document.removeEventListener("keydown", keyDown);
+      window.removeEventListener(FULL_SCREEN_BACK_EVENT, onCancel);
+      if (previous?.isConnected) previous.focus({ preventScroll: true });
+    };
+  }, [onCancel]);
 
   const options: { value: RoutineLoadChoice; title: string; body: string }[] = [
     {
@@ -57,12 +87,15 @@ function SheetBody({
       <button
         aria-label="닫기"
         onClick={onCancel}
-        className="fixed inset-0 z-40 bg-black/40"
+        className="fixed inset-0 z-[60] bg-black/40"
       />
       <div
+        ref={dialogRef}
         role="dialog"
+        aria-modal="true"
+        tabIndex={-1}
         aria-label="루틴 불러오기"
-        className="fixed inset-x-0 bottom-0 z-50 rounded-t-[20px] border-t border-line bg-surface p-5"
+        className="fixed inset-x-0 bottom-0 z-[70] rounded-t-[20px] border-t border-line bg-surface p-5"
         style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 20px)" }}
       >
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
