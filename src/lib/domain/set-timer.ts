@@ -55,6 +55,13 @@ export function setTimerSeconds(input: {
   pausedSeconds?: number;
   pausedAtMs?: number | null;
   pauseBaselineSeconds?: number;
+  /**
+   * 이 시계를 켜기 전에 **이미 잰 초** (2026-11-28). 없으면 0.
+   *
+   * 트레드밀을 `시간 확정` 뒤 다시 재면 0부터 세어 앞 기록을 덮어썼다.
+   * 이어서 잴 때는 앞 기록 위에 더한다. 값은 `measuredBaseSeconds()`가 정한다.
+   */
+  baseSeconds?: number;
 }): number {
   if (input.startedAtMs === null) return 0;
   const until = input.pausedAtMs ?? input.nowMs;
@@ -62,10 +69,45 @@ export function setTimerSeconds(input: {
     0,
     (input.pausedSeconds ?? 0) - (input.pauseBaselineSeconds ?? 0),
   );
-  return Math.max(
+  const running = Math.max(
     0,
     Math.floor((until - input.startedAtMs) / 1_000) - pausedAfterStart,
   );
+  return Math.max(0, input.baseSeconds ?? 0) + running;
+}
+
+/**
+ * "시계로 잰 적 있는 세트" 표시의 이름 — `종목 key:세트 key`.
+ * 순번이 아니라 key인 이유는 `set-timer-restore.ts`와 같다(순서를 바꿔도 안 섞인다).
+ */
+export function timedMeasureKey(exerciseKey: string, setKey: string): string {
+  return `${exerciseKey}:${setKey}`;
+}
+
+/**
+ * 시계를 다시 켤 때 **어디서부터 이어 세나** (2026-11-28 사장님 확인).
+ *
+ * ## 왜
+ *
+ * 2026-11-28 오전 트레드밀: `■ 정지`를 잠깐 멈춤으로 알고 누른 뒤 다시 재자
+ * 0부터 세었고, 다음 정지에서 **앞에서 뛴 시간을 덮어썼다.** 잰 시간은 사람이
+ * 고치지 않는 한 줄어들면 안 된다.
+ *
+ * ## 왜 세트의 초를 그냥 쓰지 않는가
+ *
+ * 시작 전 세트에 담긴 초는 대개 **계획 목표**(예: 30분)다. 그 위에 더하면
+ * 뛰지도 않은 30분을 얹는다. 그래서 시계가 한 번이라도 굳힌 세트만
+ * (`measuredKeys`) 그 초부터 이어 간다. 굳힌 뒤 사람이 칸을 고쳤으면 고친 값이
+ * 곧 "지금까지 한 것"이라 거기서 잇는다.
+ */
+export function measuredBaseSeconds(input: {
+  exerciseKey: string;
+  set: { key: string; durationSec?: number; durationMin: number };
+  measuredKeys: readonly string[] | undefined;
+}): number {
+  const key = timedMeasureKey(input.exerciseKey, input.set.key);
+  if (!(input.measuredKeys ?? []).includes(key)) return 0;
+  return durationSecondsOf(input.set);
 }
 
 /**

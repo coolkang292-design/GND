@@ -141,3 +141,41 @@ export function skipExercise<E extends FlowExercise>(
     removedExercise: true,
   };
 }
+
+/**
+ * 유산소 세트의 **5초 자동 시작**을 걸어도 되는가 (2026-11-22 자동 시작, 2026-11-28 휴식 조건 추가).
+ *
+ * ## 휴식 중에는 걸지 않는다 — 2026-11-28 사장님 신고
+ *
+ * 앞 종목 마지막 세트를 끝내면 초점이 **곧바로** 트레드밀로 옮겨 가고 휴식이 돈다
+ * (`advanceSetFocus`가 휴식보다 먼저다). 이 조건이 없을 때는 휴식 5초째에 트레드밀
+ * 시계가 몰래 켜져 **휴식 시간이 트레드밀 기록에 섞였다** — 90초 휴식이면 첫 화면이
+ * 이미 `01:25`였다. 휴식 화면은 시계 카드를 가리므로 사람은 그걸 볼 수도 없었다.
+ *
+ * 휴식이 끝나거나 `다음 운동 시작`으로 넘기면 그때부터 5초를 센다.
+ */
+export function cardioAutoStartReady(input: {
+  active: boolean;
+  overlayOpen: boolean;
+  paused: boolean;
+  busy: boolean;
+  timerRunning: boolean;
+  resting: boolean;
+  isCardio: boolean;
+  /** 초점 세트가 있고 아직 안 끝냈는가 */
+  setPending: boolean;
+  /** 이 세트에서 자동 시작을 이미 한 번 걸었거나 사람이 취소했는가 */
+  alreadyAutoStarted: boolean;
+}): boolean {
+  return (
+    input.active &&
+    input.overlayOpen &&
+    !input.paused &&
+    !input.busy &&
+    !input.timerRunning &&
+    !input.resting &&
+    input.isCardio &&
+    input.setPending &&
+    !input.alreadyAutoStarted
+  );
+}

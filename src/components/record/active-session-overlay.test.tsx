@@ -95,8 +95,9 @@ const restProps = {
   } | null,
 };
 
-const renderInput = (o: Partial<typeof inputProps> = {}) =>
-  render(<ActiveSessionOverlay {...inputProps} {...o} />);
+const renderInput = (
+  o: Partial<typeof inputProps> & { onPauseSession?: () => void } = {},
+) => render(<ActiveSessionOverlay {...inputProps} {...o} />);
 const renderRest = (o: Partial<typeof restProps> = {}) =>
   render(<ActiveSessionOverlay {...restProps} {...o} />);
 
@@ -139,6 +140,44 @@ describe("유산소 자동시작 및 전체 일시정지 UI", () => {
       />,
     );
     expect(screen.queryByRole("button", { name: "자동 시작 취소" })).toBeNull();
+  });
+
+  it("유산소 카드의 `⏸ 일시정지`는 맨 위 전체 일시정지와 같은 함수를 부른다", () => {
+    const onPause = vi.fn();
+    const onStop = vi.fn();
+    render(
+      <ActiveSessionOverlay
+        {...inputProps}
+        exerciseName="트레드밀"
+        fields={amountFields("cardio", null)}
+        timerRunning
+        timerSeconds={245}
+        onPauseSession={onPause}
+        onStopTimer={onStop}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "⏸ 일시정지" }));
+    expect(onPause).toHaveBeenCalledTimes(1);
+    // 일시정지는 기록을 확정하지 않는다
+    expect(onStop).not.toHaveBeenCalled();
+  });
+
+  it("시계로 잰 적 있는 유산소는 `▶ 이어서 재기`로 다시 시작한다", () => {
+    const onStart = vi.fn();
+    render(
+      <ActiveSessionOverlay
+        {...inputProps}
+        exerciseName="트레드밀"
+        fields={amountFields("cardio", null)}
+        timerRunning={false}
+        timerSeconds={245}
+        timerResumes
+        onStartTimer={onStart}
+      />,
+    );
+    expect(screen.queryByText("▶ 시간 재기")).toBeNull();
+    fireEvent.click(screen.getByText("▶ 이어서 재기"));
+    expect(onStart).toHaveBeenCalledTimes(1);
   });
 
   it("전체 일시정지 버튼을 누르면 세션 중지 함수가 호출된다", () => {
@@ -346,15 +385,19 @@ describe("ActiveSessionOverlay — 세트 시계", () => {
    * ⚠️ 유산소는 **거리가 남는다.** 정지가 곧 완료면 거리를 넣을 기회가 사라진다.
    * 문구가 `마침`이 되면 안 된다.
    */
-  it("유산소의 정지 버튼은 `■ 정지`다 — 거리를 아직 안 넣었다", () => {
+  it("유산소는 `⏸ 일시정지`와 `■ 시간 확정`으로 나뉜다 — 거리를 아직 안 넣었다", () => {
     renderInput({
       fields: cardioFields,
       values: { ...holdValues, distanceKm: 5, durationSec: 1_960 },
       timerRunning: true,
       timerSeconds: 1_960,
+      onPauseSession: vi.fn(),
     });
 
-    expect(screen.getByText("■ 정지")).toBeTruthy();
+    expect(screen.getByText("■ 시간 확정")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "⏸ 일시정지" })).toBeTruthy();
+    // 2026-11-28: `■ 정지`를 잠깐 멈춤으로 알고 눌러 앞 기록이 지워졌다 — 이 문구는 다시 쓰지 않는다
+    expect(screen.queryByText("■ 정지")).toBeNull();
     expect(screen.queryByText(/마침/)).toBeNull();
     // 거리 스테퍼는 그대로 있어야 한다
     expect(screen.getByLabelText("거리 늘리기")).toBeTruthy();

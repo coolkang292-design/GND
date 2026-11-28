@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   canReplaceExercise,
+  cardioAutoStartReady,
   COMPLETION_AUTO_FINISH_MS,
   STAMP_REVEAL_DURATION_MS,
   overlayMode,
@@ -198,5 +199,45 @@ describe("skipExercise — 종목을 통째로 뺀다", () => {
     expect(out.exercises).toBe(list);
     expect(out.removedExercise).toBe(false);
     expect(out.discardedDoneSets).toBe(0);
+  });
+});
+
+describe("cardioAutoStartReady — 유산소 5초 자동 시작을 걸어도 되나", () => {
+  const ready = {
+    active: true,
+    overlayOpen: true,
+    paused: false,
+    busy: false,
+    timerRunning: false,
+    resting: false,
+    isCardio: true,
+    setPending: true,
+    alreadyAutoStarted: false,
+  };
+
+  it("유산소 세트 화면이 떠 있으면 건다", () => {
+    expect(cardioAutoStartReady(ready)).toBe(true);
+  });
+
+  /**
+   * 2026-11-28 사장님 신고: 앞 종목 마지막 세트를 끝내면 초점이 곧바로
+   * 트레드밀로 옮겨 가고 휴식이 돈다. 휴식 5초째에 트레드밀 시계가 몰래 켜져
+   * **휴식 시간이 트레드밀 기록에 섞였다.** 휴식이 끝난 뒤부터 세야 한다.
+   */
+  it("휴식이 도는 동안에는 걸지 않는다", () => {
+    expect(cardioAutoStartReady({ ...ready, resting: true })).toBe(false);
+  });
+
+  it.each([
+    ["운동 전", { active: false }],
+    ["팝업을 내렸을 때", { overlayOpen: false }],
+    ["일시정지 중", { paused: true }],
+    ["저장 중", { busy: true }],
+    ["이미 재는 중", { timerRunning: true }],
+    ["유산소가 아닐 때", { isCardio: false }],
+    ["끝낸 세트", { setPending: false }],
+    ["이 세트에서 이미 한 번 걸었을 때", { alreadyAutoStarted: true }],
+  ])("%s에는 걸지 않는다", (_label, patch) => {
+    expect(cardioAutoStartReady({ ...ready, ...patch })).toBe(false);
   });
 });

@@ -6,8 +6,10 @@ import {
   formatSetClock,
   formatStepLabel,
   goalReachedBeep,
+  measuredBaseSeconds,
   setTimerSeconds,
   stopFinishesSet,
+  timedMeasureKey,
 } from "./set-timer";
 
 describe("setTimerSeconds", () => {
@@ -58,6 +60,50 @@ describe("setTimerSeconds", () => {
 
   it("시계를 거꾸로 돌려도 음수를 주지 않는다", () => {
     expect(setTimerSeconds({ startedAtMs: 5_000, nowMs: 1_000 })).toBe(0);
+  });
+
+  /**
+   * 2026-11-28 사고: 트레드밀을 `■ 정지` → `▶ 시간 재기` 하면 0부터 다시 세고,
+   * 다음 정지에서 앞 기록을 덮어썼다. 앞에서 잰 초는 **더해져야** 한다.
+   */
+  it("앞에서 잰 초(base)에 이어서 센다", () => {
+    expect(setTimerSeconds({ startedAtMs: 0, nowMs: 60_000, baseSeconds: 300 })).toBe(360);
+  });
+
+  it("이어서 재는 중에 일시정지하면 앞 기록 + 멈추기 전까지만 센다", () => {
+    expect(setTimerSeconds({
+      startedAtMs: 0, nowMs: 90_000, pausedAtMs: 20_000,
+      pausedSeconds: 0, pauseBaselineSeconds: 0, baseSeconds: 300,
+    })).toBe(320);
+  });
+
+  it("시작 전에는 base가 있어도 0이다 — 시계가 안 도는 값은 세트에 있다", () => {
+    expect(setTimerSeconds({ startedAtMs: null, nowMs: 60_000, baseSeconds: 300 })).toBe(0);
+  });
+});
+
+describe("measuredBaseSeconds — 다시 재기를 어디서부터 이어 가나", () => {
+  const set = { key: "s1", durationMin: 30, durationSec: 245 };
+
+  it("시계로 잰 적 있는 세트는 잰 초부터 이어 간다", () => {
+    expect(measuredBaseSeconds({
+      exerciseKey: "ex-tread", set, measuredKeys: [timedMeasureKey("ex-tread", "s1")],
+    })).toBe(245);
+  });
+
+  /** ⚠️ 시작 전 숫자는 **계획 목표**(30분)다. 거기에 더하면 30분을 공짜로 얹는다 */
+  it("잰 적 없는 세트는 계획 목표가 있어도 0부터 센다", () => {
+    expect(measuredBaseSeconds({ exerciseKey: "ex-tread", set, measuredKeys: [] })).toBe(0);
+  });
+
+  it("다른 종목·다른 세트의 표시는 섞이지 않는다", () => {
+    expect(measuredBaseSeconds({
+      exerciseKey: "ex-tread", set, measuredKeys: [timedMeasureKey("ex-bike", "s1"), timedMeasureKey("ex-tread", "s2")],
+    })).toBe(0);
+  });
+
+  it("표시 목록이 없던 옛 draft도 0부터 센다", () => {
+    expect(measuredBaseSeconds({ exerciseKey: "ex-tread", set, measuredKeys: undefined })).toBe(0);
   });
 });
 

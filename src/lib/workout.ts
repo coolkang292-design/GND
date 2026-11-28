@@ -152,6 +152,11 @@ export type WorkoutDraft = {
   pauseReason?: "manual" | "idle" | null;
   /** 자동 유산소 타이머가 이미 시작된 세트 — 재진입 시 중복 자동 시작 방지 */
   cardioAutoStartedKeys?: string[];
+  /**
+   * 세트 시계로 시간을 굳힌 적 있는 세트 — `종목 key:세트 key` (2026-11-28).
+   * 다시 재면 그 초에 이어서 센다(`measuredBaseSeconds`). 옛 draft에는 없다.
+   */
+  timedMeasuredKeys?: string[];
   tabataMinutes: number | null; // 타바타 세션이면 그 분수 — 무동작 감지 제외 판정용
   /**
    * 인터벌 블록(4종목)이 목록의 몇 번째부터인가 (0144, 2026-11-22). 없으면 0.
@@ -220,6 +225,7 @@ export function emptyDraft(restSeconds = DEFAULT_REST_SECONDS): WorkoutDraft {
     ...IDLE_DEFAULTS,
     pauseReason: null,
     cardioAutoStartedKeys: [],
+    timedMeasuredKeys: [],
     ...PROGRAM_DEFAULTS,
     ...SUGGESTION_DEFAULTS,
   };
@@ -308,6 +314,9 @@ export function loadDraft(userId: string): WorkoutDraft {
       pauseReason: parsed.pauseReason === "manual" ? "manual" : null,
       cardioAutoStartedKeys: Array.isArray(parsed.cardioAutoStartedKeys)
         ? parsed.cardioAutoStartedKeys.filter((key): key is string => typeof key === "string")
+        : [],
+      timedMeasuredKeys: Array.isArray(parsed.timedMeasuredKeys)
+        ? parsed.timedMeasuredKeys.filter((key): key is string => typeof key === "string")
         : [],
     };
   } catch {

@@ -46,6 +46,8 @@ export type SavedSetTimer = {
   targetSec: number;
   /** 세트 시작 전까지 세션이 정지했던 누적 초 */
   pauseBaselineSeconds?: number;
+  /** 이 시계를 켜기 전에 이미 잰 초 — 이어서 재기 (2026-11-28). 옛 저장값에는 없다 */
+  baseSeconds?: number;
 };
 
 export type RestoredSetTimer = {
@@ -54,6 +56,7 @@ export type RestoredSetTimer = {
   startedAtMs: number;
   targetSec: number;
   pauseBaselineSeconds: number;
+  baseSeconds: number;
   /**
    * 되살린 순간 이미 목표를 지났는가. 지났으면 **목표 비프를 낸 것으로 친다** —
    * 화면을 켰을 뿐인데 "삐"가 나면 목표 도달로 오해한다.
@@ -105,14 +108,17 @@ export function restoreSetTimer(input: {
   if (elapsedMs < 0) return null;
   if (elapsedMs > MAX_RESTORE_SECONDS * 1_000) return null;
 
+  const baseSeconds = saved.baseSeconds ?? 0;
   return {
     exerciseIndex,
     setIndex: saved.setIndex,
     startedAtMs: saved.startedAtMs,
     targetSec: saved.targetSec,
     pauseBaselineSeconds: saved.pauseBaselineSeconds ?? 0,
+    baseSeconds,
     goalAlreadyPassed:
-      saved.targetSec > 0 && elapsedMs >= saved.targetSec * 1_000,
+      saved.targetSec > 0 &&
+      baseSeconds * 1_000 + elapsedMs >= saved.targetSec * 1_000,
   };
 }
 
@@ -129,6 +135,7 @@ export function parseSavedSetTimer(raw: unknown): SavedSetTimer | null {
   if (!isCount(v.setIndex)) return null;
   if (!isTime(v.startedAtMs) || !isTime(v.targetSec)) return null;
   if (v.pauseBaselineSeconds !== undefined && !isCount(v.pauseBaselineSeconds)) return null;
+  if (v.baseSeconds !== undefined && !isCount(v.baseSeconds)) return null;
   return {
     sessionId: v.sessionId,
     exerciseKey: v.exerciseKey,
@@ -138,5 +145,8 @@ export function parseSavedSetTimer(raw: unknown): SavedSetTimer | null {
     ...(v.pauseBaselineSeconds === undefined
       ? {}
       : { pauseBaselineSeconds: v.pauseBaselineSeconds as number }),
+    ...(v.baseSeconds === undefined
+      ? {}
+      : { baseSeconds: v.baseSeconds as number }),
   };
 }

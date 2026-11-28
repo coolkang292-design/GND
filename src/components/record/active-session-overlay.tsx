@@ -142,6 +142,8 @@ function SetTimerCard({
   onChangeSeconds,
   countdownSeconds,
   onCancelAutoStart,
+  onPause,
+  resumes = false,
 }: {
   field: AmountField;
   seconds: number;
@@ -158,6 +160,13 @@ function SetTimerCard({
   countdownSeconds?: number | null;
   /** 이 세트만 5초 자동 시작을 끈다. 직접 ▶ 시작은 그대로 쓸 수 있다. */
   onCancelAutoStart?: () => void;
+  /**
+   * 유산소의 `⏸ 일시정지` — **맨 위 전체 일시정지와 같은 함수**다 (2026-11-28).
+   * 전체 운동 시간과 이 시계가 함께 멈추고, 기록은 확정하지 않는다.
+   */
+  onPause?: () => void;
+  /** 시계로 잰 적 있는 세트 — 다시 켜면 잰 초에 이어서 센다(`measuredBaseSeconds`) */
+  resumes?: boolean;
 }) {
   const amount = field.format ? field.format(seconds) : `${seconds}${field.unit}`;
   /*
@@ -228,6 +237,28 @@ function SetTimerCard({
           )}
         </div>
       )}
+      {/*
+        유산소가 도는 동안 버튼이 둘이다 (2026-11-28 사장님 확인).
+
+        예전에는 `■ 정지` 하나였고, 그 버튼은 **기록 확정**이었다. 사람은 잠깐
+        멈춤으로 알고 눌렀고 → 다시 재자 0부터 세어 앞 기록이 지워졌고 → 전체
+        운동 시간은 멈추지도 않았다. 멈춤과 확정을 나눈다:
+        - `⏸ 일시정지` = 맨 위 전체 일시정지와 **같은 함수**. 둘이 따로 놀 수 없다
+        - `■ 시간 확정` = 잰 시간을 굳히고 거리를 넣으러 간다
+
+        ⚠️ `■ 정지` 문구를 되살리지 마라. 이 사고를 만든 말이다.
+        ⚠️ 홀드(매달리기)는 그대로 버튼 하나다 — 버티다 놓으면 끝이라 멈출 일이 없다.
+      */}
+      {running && !finishesSet && onPause && (
+        <button
+          type="button"
+          onClick={onPause}
+          disabled={busy}
+          className="mt-2 h-13 w-full rounded-[14px] border border-accent bg-transparent py-3 text-[13px] font-extrabold text-accent disabled:opacity-60"
+        >
+          ⏸ 일시정지
+        </button>
+      )}
       {running ? (
         <button
           type="button"
@@ -235,7 +266,7 @@ function SetTimerCard({
           disabled={busy}
           className="mt-2 h-13 w-full rounded-[14px] bg-accent py-3 text-[13px] font-extrabold text-accent-ink active:bg-accent-press disabled:opacity-60"
         >
-          {finishesSet ? `✓ 마침 · ${amount} 기록` : "■ 정지"}
+          {finishesSet ? `✓ 마침 · ${amount} 기록` : "■ 시간 확정"}
         </button>
       ) : (
         <button
@@ -244,7 +275,7 @@ function SetTimerCard({
           disabled={busy}
           className="mt-2 h-13 w-full rounded-[14px] border border-accent bg-transparent py-3 text-[13px] font-extrabold text-accent disabled:opacity-60"
         >
-          {onChangeSeconds ? "▶ 시간 재기" : "▶ 시작"}
+          {resumes ? "▶ 이어서 재기" : onChangeSeconds ? "▶ 시간 재기" : "▶ 시작"}
         </button>
       )}
     </div>
@@ -337,6 +368,7 @@ export function ActiveSessionOverlay({
   timerRunning,
   timerSeconds,
   timerTargetSeconds,
+  timerResumes = false,
   cardioCountdownSeconds,
   onCancelCardioAutoStart,
   onStartTimer,
@@ -440,6 +472,8 @@ export function ActiveSessionOverlay({
   timerSeconds: number;
   /** 계획·설정이 정한 목표 초. `0`이면 목표 없음 — 그때는 알림도 없다 */
   timerTargetSeconds: number;
+  /** 시계로 잰 적 있는 세트인가 — `▶ 이어서 재기`로 그린다 (2026-11-28) */
+  timerResumes?: boolean;
   cardioCountdownSeconds?: number | null;
   onCancelCardioAutoStart?: () => void;
   onStartTimer: () => void;
@@ -995,6 +1029,8 @@ export function ActiveSessionOverlay({
                       onStop={onStopTimer}
                       countdownSeconds={cardioCountdownSeconds}
                       onCancelAutoStart={onCancelCardioAutoStart}
+                      onPause={paused ? undefined : onPauseSession}
+                      resumes={timerResumes}
                       onChangeSeconds={(seconds) => onChangeAmount(field.key, seconds)}
                     />
                   ) : (

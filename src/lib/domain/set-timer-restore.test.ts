@@ -55,6 +55,25 @@ function restore(
 }
 
 describe("restoreSetTimer", () => {
+  it("앞에서 잰 초(base)를 새로고침 뒤에도 되살린다", () => {
+    expect(restore({ saved: saved({ baseSeconds: 300 }) })?.baseSeconds).toBe(300);
+  });
+
+  it("옛 저장값에는 base가 없다 — 0으로 읽는다", () => {
+    expect(restore()?.baseSeconds).toBe(0);
+  });
+
+  it("앞 기록까지 합쳐 목표를 지났으면 목표 비프를 낸 것으로 친다", () => {
+    // 20분 + 앞 기록 11분 = 31분 > 목표 30분
+    expect(restore({ saved: saved({ baseSeconds: 11 * 60 }) })?.goalAlreadyPassed).toBe(true);
+    expect(restore()?.goalAlreadyPassed).toBe(false);
+  });
+
+  it("base 모양이 틀리면 저장값 전체를 버린다", () => {
+    expect(parseSavedSetTimer({ ...saved(), baseSeconds: -1 })).toBeNull();
+    expect(parseSavedSetTimer({ ...saved(), baseSeconds: 300 })?.baseSeconds).toBe(300);
+  });
+
   it("이전에 정지한 시간을 복구 후에도 유지한다", () => {
     expect(restore({ saved: saved({ pauseBaselineSeconds: 120 }) })?.pauseBaselineSeconds).toBe(120);
   });
@@ -73,6 +92,7 @@ describe("restoreSetTimer", () => {
       startedAtMs: NOW - 20 * 60_000,
       targetSec: 30 * 60,
       pauseBaselineSeconds: 0,
+      baseSeconds: 0,
       goalAlreadyPassed: false,
     });
   });

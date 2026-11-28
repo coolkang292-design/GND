@@ -215,8 +215,10 @@ import {
 import {
   durationSecondsOf,
   goalReachedBeep,
+  measuredBaseSeconds,
   setTimerSeconds,
   stopFinishesSet,
+  timedMeasureKey,
 } from "@/lib/domain/set-timer";
 import {
   restoreSetTimer,
@@ -240,6 +242,7 @@ import {
 } from "@/lib/domain/workout-complete-message";
 import {
   canReplaceExercise,
+  cardioAutoStartReady,
   COMPLETION_AUTO_FINISH_MS,
   STAMP_REVEAL_DURATION_MS,
   overlayMode,
@@ -738,6 +741,11 @@ function WorkoutScreen({ userId }: { userId: string }) {
      */
     targetSec: number;
     pauseBaselineSeconds: number;
+    /**
+     * 켜기 전에 이미 잰 초 — 이어서 재기 (2026-11-28). 켤 때 굳힌다.
+     * `measuredBaseSeconds()`가 정한다: 잰 적 없는 세트는 0이다.
+     */
+    baseSeconds: number;
   } | null>(() =>
     restoredTimer
       ? {
@@ -749,6 +757,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
           ),
           targetSec: restoredTimer.targetSec,
           pauseBaselineSeconds: restoredTimer.pauseBaselineSeconds,
+          baseSeconds: restoredTimer.baseSeconds,
         }
       : null,
   );
@@ -3090,8 +3099,21 @@ function WorkoutScreen({ userId }: { userId: string }) {
           pausedSeconds: draftRef.current.pausedSeconds,
           pausedAtMs: draftRef.current.pausedAtMs,
           pauseBaselineSeconds: timer.pauseBaselineSeconds,
+          baseSeconds: timer.baseSeconds,
         }),
       });
+      // 굳힌 세트로 적어 둔다 — 다시 재면 이 초에 이어서 센다 (2026-11-28).
+      // 안 적으면 다시 잴 때 0부터 세어 앞 기록을 덮어쓴다.
+      const set = exercise.sets[si];
+      if (set) {
+        const measuredKey = timedMeasureKey(exercise.key, set.key);
+        setDraft((previous) => ({
+          ...previous,
+          timedMeasuredKeys: (previous.timedMeasuredKeys ?? []).includes(measuredKey)
+            ? previous.timedMeasuredKeys
+            : [...(previous.timedMeasuredKeys ?? []), measuredKey],
+        }));
+      }
     }
     setTimer(null);
     // 잰 값은 이제 draft에 있다. 운동을 끝내거나 취소하는 경로에서는 지우지
@@ -5025,17 +5047,20 @@ function WorkoutScreen({ userId }: { userId: string }) {
     focusedExercise && focusedSet
       ? `${focusedExercise.key}:${focusedSet.key}`
       : null;
+  // 휴식 중에는 걸지 않는다 — 휴식이 트레드밀 기록에 섞였다 (2026-11-28, `cardioAutoStartReady`)
   const cardioAutoKey =
-    active &&
-    overlayOpen &&
-    !paused &&
-    !busy &&
-    !timerRunning &&
-    focusedExercise?.exerciseType === "cardio" &&
-    focusedSet !== null &&
-    !focusedSet.done &&
     cardioSetKey !== null &&
-    !(draft.cardioAutoStartedKeys ?? []).includes(cardioSetKey)
+    cardioAutoStartReady({
+      active,
+      overlayOpen,
+      paused,
+      busy,
+      timerRunning,
+      resting: restRemaining !== null,
+      isCardio: focusedExercise?.exerciseType === "cardio",
+      setPending: focusedSet !== null && !focusedSet.done,
+      alreadyAutoStarted: (draft.cardioAutoStartedKeys ?? []).includes(cardioSetKey),
+    })
       ? `${draft.sessionId}:${cardioSetKey}`
       : null;
 
@@ -5052,9 +5077,16 @@ function WorkoutScreen({ userId }: { userId: string }) {
       if (source === "manual") prepareRestCountdownAudio();
       markActivity();
       const startedAtMs = scheduledAtMs ?? Date.now();
-      const targetSec = durationSecondsOf(focusedSet);
       const pauseBaselineSeconds = current.pausedSeconds;
-      setTimer({ startedAtMs, focusKey: timerFocusKey, targetSec, pauseBaselineSeconds });
+      const baseSeconds = measuredBaseSeconds({
+        exerciseKey: focusedExercise.key,
+        set: focusedSet,
+        measuredKeys: current.timedMeasuredKeys,
+      });
+      // 이어서 잴 때는 목표가 없다 (2026-11-28). 세트의 초는 이미 **잰 값**이라
+      // 목표로 쓰면 켜자마자 "목표 달성"과 비프가 난다.
+      const targetSec = baseSeconds > 0 ? 0 : durationSecondsOf(focusedSet);
+      setTimer({ startedAtMs, focusKey: timerFocusKey, targetSec, pauseBaselineSeconds, baseSeconds });
       saveSetTimer(userId, {
         sessionId: current.sessionId,
         exerciseKey: focusedExercise.key,
@@ -5062,6 +5094,7 @@ function WorkoutScreen({ userId }: { userId: string }) {
         startedAtMs,
         targetSec,
         pauseBaselineSeconds,
+        baseSeconds,
       });
       if (focusedExercise.exerciseType === "cardio") {
         setDraft((previous) => ({
@@ -5124,10 +5157,18 @@ function WorkoutScreen({ userId }: { userId: string }) {
           pausedSeconds: draft.pausedSeconds,
           pausedAtMs: draft.pausedAtMs,
           pauseBaselineSeconds: timer.pauseBaselineSeconds,
+          baseSeconds: timer.baseSeconds,
         })
       : focusedSet
         ? durationSecondsOf(focusedSet)
         : 0;
+  /** 시계로 굳힌 적 있는 세트 — 버튼이 `▶ 이어서 재기`가 된다 (2026-11-28) */
+  const timerResumes =
+    focusedExercise !== null &&
+    focusedSet !== null &&
+    (draft.timedMeasuredKeys ?? []).includes(
+      timedMeasureKey(focusedExercise.key, focusedSet.key),
+    );
   /** 멈춰 있을 때의 목표 = 세트에 담긴 값 자체 (돌 때는 시작 시점 값을 쓴다) */
   const timerTargetSeconds = focusedSet ? durationSecondsOf(focusedSet) : 0;
   /** 러닝 페이스 (2026-09-23) — 러닝 계열이 아니거나 값이 말이 안 되면 `null` */
@@ -6693,7 +6734,14 @@ function WorkoutScreen({ userId }: { userId: string }) {
         }}
         timerRunning={timerRunning}
         timerSeconds={timerSeconds}
-        timerTargetSeconds={timerRunning && timer ? timer.targetSec : timerTargetSeconds}
+        timerTargetSeconds={
+          timerRunning && timer
+            ? timer.targetSec
+            : timerResumes
+              ? 0 // 잰 값을 "목표"라고 부르지 않는다 (2026-11-28)
+              : timerTargetSeconds
+        }
+        timerResumes={timerResumes}
         cardioCountdownSeconds={cardioCountdownSeconds}
         onCancelCardioAutoStart={cancelCardioAutoStart}
         onStartTimer={() => startFocusedTimer("manual")}
